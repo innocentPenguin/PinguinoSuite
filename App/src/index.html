@@ -216,7 +216,7 @@ pages.dashboard=()=>{
     <div class="row wrap"><div>
       <div class="dim sm">${live.live?(live.simulated===null||live.simulated===undefined?'ON AIR':'ON AIR (TEST)'):'OFFLINE · watching '+esc(S.channel)}</div>
       <h1>${live.live?esc(live.title||'Live'):'Ready when you are'}</h1>
-      <div class="dim sm">${live.live?`${esc(live.game||'')} · live for ${up(live.since)}`:'Modules wake and the mic starts the moment you go live.'}</div></div>
+      <div class="dim sm">${live.live?`${esc(live.game||'')} · live for ${up(live.since)}`:'Listen is always on; everything else wakes the moment you go live.'}</div></div>
       <div class="row sp"><div class="stat">${live.viewers}<small>viewers</small></div></div></div>
   </div>`;
   B.devices=`<div class="card" style="margin-bottom:14px;padding:12px 16px"><div class="devs">${deviceStrip()}</div></div>`;
@@ -227,7 +227,7 @@ pages.dashboard=()=>{
   B.t_prestream=tile('Pre-stream',pr?(pr.fail?pr.fail+' fail':pr.warn?pr.warn+' warn':'All ok'):'—',pr?`${pr.pass} ok · ${pr.warn} warn · ${pr.fail} fail`:'not run yet',pr?(pr.fail?'bad':pr.warn?'warn':'ok'):'','console');
   B.t_errors=tile('Errors (30 min)',errs,errs?'open the Console':'clean',errs?'bad':'ok','console');
   B.listen=`<div class="card"><div class="row"><h3 style="margin:0">PinguinoListen</h3>${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}<span class="sm faint sp">${stats.total||0} lines · ${(stats.corrected||0)+(stats.approved||0)} verified${stats.to_review?` · <span style="color:var(--warn)">${stats.to_review} to review</span>`:''}</span></div>
-        <div style="margin-top:8px">${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim sm">${lm?.state==='running'?'Not listening right now. It starts automatically when you go live.':'PinguinoListen is not running.'}</div>`}</div>
+        <div style="margin-top:8px">${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim sm">${lm?.state==='running'?'Not listening right now: the mic starts with the Suite, so check the microphone in Listen (Console shows why).':'PinguinoListen is not running.'}</div>`}</div>
         <div class="row" style="margin-top:10px"><button class="sm" data-go="m:listen">Open Listen</button><button class="sm" data-go="voice">Voice Studio</button>${st?.listening?'':'<button id="d-listen" class="pri sm">Start listening</button>'}</div></div>`;
   B.activity=`<div class="card"><h3>Activity</h3><div class="evt" style="max-height:260px;overflow:auto">${S.events.slice(-14).reverse().map(e=>`<div>${new Date(e.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} <b class="${e.type==='live'?'lv':e.type==='hook'?'hk':''}">${esc(e.type)}</b> ${esc(e.id||e.state||e.title||'')}</div>`).join('')||'<span class="faint">Nothing yet</span>'}</div></div>`;
   B.modules=`<div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(m.name)}</b> <span class="sm faint">${esc(m.state)}</span></div>${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}${modSwitch(m)}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>`;
