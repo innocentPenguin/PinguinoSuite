@@ -10,9 +10,10 @@ namespace PinguinoHost
     {
         class Def
         {
-            public string File, Key, Label, Hint = ""; public double Min, Max, Step; public bool Bool;
+            public string File, Key, Label, Hint = "", TextDefault = ""; public double Min, Max, Step; public bool Bool, Text;
             public Def(string f, string k, string l, double mn, double mx, double st, string h) { File = f; Key = k; Label = l; Min = mn; Max = mx; Step = st; Hint = h; }
             public Def(string f, string k, string l) { File = f; Key = k; Label = l; Bool = true; }
+            public Def(string f, string k, string l, string dflt, string h) { File = f; Key = k; Label = l; Text = true; TextDefault = dflt; Hint = h; }
         }
         static readonly string[] BotIds = { "core", "chat", "helper" };
         static readonly string[] BotActions = { "PinguinoBot", "PinguinoChat", "PinguinoHelper" };
@@ -23,7 +24,20 @@ namespace PinguinoHost
                     new Def("chat_settings.json", "RandomChance", "Chattiness (chance of chiming in unprompted)", 0, 0.02, 0.0005, "0 = only when addressed"),
                     new Def("chat_settings.json", "UserCooldownSec", "Reply cooldown per viewer (s)", 0, 60, 1, "lower = faster replies"),
                     new Def("chat_settings.json", "FactsInPrompt", "Lore depth (facts remembered per reply)", 0, 30, 1, "more = more personal, more tokens"),
-                    new Def("chat_settings.json", "MaxCallsPerHour", "AI calls per hour (cost cap)", 0, 600, 10, "") },
+                    new Def("chat_settings.json", "MaxCallsPerHour", "AI calls per hour (cost cap)", 0, 600, 10, ""),
+                    new Def("chat_settings.json", "GateEnabled", "Activity gate: only talk when chat allows it"),
+                    new Def("chat_settings.json", "GateQuietPerMin", "Quiet: may chime in at or below (chat lines/min)", 0, 200, 1, "example 5-10"),
+                    new Def("chat_settings.json", "GateBusyPerMin", "Busy: completely silent at or above (lines/min)", 1, 500, 1, "example 50"),
+                    new Def("chat_settings.json", "GateWindowSec", "Gate: counting window (s)", 10, 300, 5, "60 = last minute"),
+                    new Def("chat_settings.json", "GateHysteresisPct", "Gate: margin before it switches back (%)", 0, 50, 1, "stops flapping"),
+                    new Def("chat_settings.json", "GateBusyBlocksReplies", "Busy also stops answers to @mentions"),
+                    new Def("chat_settings.json", "RandomMinGapSec", "Min seconds between unprompted chime-ins", 0, 3600, 30, "cooldown"),
+                    new Def("chat_settings.json", "CountdownEnabled", "Pre-stream countdown"),
+                    new Def("chat_settings.json", "CountdownGoLiveAt", "Daily go-live time (HH:MM, this PC's clock)", "", "empty = no countdown"),
+                    new Def("chat_settings.json", "CountdownOverrideAt", "One-off go-live (HH:MM or yyyy-MM-dd HH:mm)", "", "mods can set it in chat: !golive 17:30"),
+                    new Def("chat_settings.json", "CountdownTimes", "Countdown at (before start)", "15m,10m,5m,1m,30s", "m = minutes, s = seconds, comma separated"),
+                    new Def("chat_settings.json", "CountdownLine", "Countdown wording", "Stream starts in {left}! Grab a snack and get comfy.", "{left} = 15 minutes, {time} = start time"),
+                    new Def("chat_settings.json", "CountdownLineNow", "Wording at the start time", "", "empty = nothing") },
             new[] { new Def("helper_settings.json", "LiveOnly", "Only reply while the stream is live"),
                     new Def("helper_settings.json", "UserCooldownSec", "Reply cooldown per viewer (s)", 0, 120, 1, "lower = faster replies"),
                     new Def("helper_settings.json", "InfoCooldownSec", "Info lookup cooldown (s)", 0, 60, 1, ""),
@@ -32,6 +46,7 @@ namespace PinguinoHost
 
         // The bots' compiled defaults, shown when a key is missing from the settings file (a missing key must never look like 0).
         static readonly System.Collections.Generic.Dictionary<string, double> Dflt = new System.Collections.Generic.Dictionary<string, double> {
+            { "RandomMinGapSec", 600 }, { "GateEnabled", 1 }, { "GateQuietPerMin", 10 }, { "GateBusyPerMin", 50 }, { "GateWindowSec", 60 }, { "GateHysteresisPct", 20 }, { "GateBusyBlocksReplies", 1 }, { "CountdownEnabled", 1 },
             { "RandomChance", 0.001 }, { "FactsInPrompt", 14 }, { "MaxCallsPerHour", 300 },
             { "chat:UserCooldownSec", 3 }, { "helper:UserCooldownSec", 30 }, { "InfoCooldownSec", 8 }, { "MaxAiCallsPerHour", 40 }, { "UseAi", 1 }, { "LiveOnly", 1 } };
         static double DefaultOf(Def d) { double r; return Dflt.TryGetValue(d.File.StartsWith("chat") ? "chat:" + d.Key : "helper:" + d.Key, out r) || Dflt.TryGetValue(d.Key, out r) ? r : 0; }
@@ -58,6 +73,7 @@ namespace PinguinoHost
                 foreach (var d in Defs[i])
                 {
                     var v = LoadFile(d.File)[d.Key];
+                    if (d.Text) { set.Add(new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "text" }, { "hint", d.Hint }, { "value", v == null ? d.TextDefault : (string)v } }); continue; }
                     set.Add(d.Bool ? new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "bool" }, { "value", v != null ? (bool)v : DefaultOf(d) != 0 } }
                                    : new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "num" }, { "min", d.Min }, { "max", d.Max }, { "step", d.Step }, { "hint", d.Hint }, { "value", v == null ? DefaultOf(d) : (double)v } });
                 }
@@ -137,7 +153,8 @@ namespace PinguinoHost
                 {
                     var d = Array.Find(Defs[i], x => x.Key == kv.Key); if (d == null) return new JObject { { "ok", false }, { "error", "unknown setting " + kv.Key } };
                     var f = LoadFile(d.File);
-                    if (d.Bool) f[d.Key] = (bool)kv.Value;
+                    if (d.Text) f[d.Key] = ((string)kv.Value ?? "").Trim();
+                    else if (d.Bool) f[d.Key] = (bool)kv.Value;
                     else { double v = Math.Max(d.Min, Math.Min(d.Max, (double)kv.Value)); f[d.Key] = d.Step >= 1 ? (JToken)(long)Math.Round(v) : (JToken)Math.Round(v, 4); }
                     SaveFile(d.File, f);
                 }

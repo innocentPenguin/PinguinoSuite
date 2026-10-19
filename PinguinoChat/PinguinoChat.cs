@@ -355,6 +355,23 @@ public class CPHInline
         public int RandomMinGapSec { get; set; } = 600;           // never chimes in unprompted more than once per 10 min
         public int MaxCallsPerHour { get; set; } = 300;           // spending safety net
 
+        // ACTIVITY GATE: it only chimes in unprompted while chat is quiet and goes completely silent (no AI calls) while chat is busy.
+        public bool GateEnabled { get; set; } = true;
+        public int GateQuietPerMin { get; set; } = 10;            // at or below this many chat lines per minute: quiet, it may chime in
+        public int GateBusyPerMin { get; set; } = 50;             // at or above this many per minute: busy, it stays completely silent
+        public int GateWindowSec { get; set; } = 60;              // how far back the lines are counted (the rate is scaled to one minute)
+        public int GateHysteresisPct { get; set; } = 20;          // a state is only left after crossing its limit by this much, so it does not flap
+        public bool GateBusyBlocksReplies { get; set; } = true;   // busy also stops answers to @mentions (off = only chime-ins and welcomes stop)
+
+        // COUNTDOWN: before the stream starts it posts "starts in 15 minutes" etc. (needs a go-live time)
+        public bool CountdownEnabled { get; set; } = true;
+        public string CountdownGoLiveAt { get; set; } = "";       // daily go-live time, local PC time, HH:MM ("" = no countdown)
+        public string CountdownOverrideAt { get; set; } = "";     // one-off: "HH:MM" or "yyyy-MM-dd HH:mm" (used instead of the daily time until it has passed; mods can set it with !golive)
+        public string CountdownTimes { get; set; } = "15m,10m,5m,1m,30s";   // when to post, before the start (m = minutes, s = seconds)
+        public string CountdownLine { get; set; } = "Stream starts in {left}! Grab a snack and get comfy.";
+        public string CountdownLineNow { get; set; } = "";        // posted at the start time ("" = nothing)
+        public int CountdownMaxLateSec { get; set; } = 20;        // a message more than this late (restart, Host down) is skipped, not sent
+
         public int MaxReplyChars { get; set; } = 0;               // 0 = no cap: the bot is asked for the SHORTEST reply that does the job and decides the length itself (Twitch's own 500 limit is handled by splitting)
         public string UpdatesFile { get; set; } = @"D:\PinguinoSuite\PinguinoChat\updates.json";   // the update log: what changed in the bot and when (PinguinoChat\add-update.mjs adds entries); the bot knows its own recent updates
         public string OpinionsFile { get; set; } = @"D:\PinguinoSuite\Data\pinguino_opinions.json";   // the bot's own stances (topics it has picked a side on), kept so it stays consistent between viewers
@@ -498,6 +515,7 @@ public class CPHInline
         {
             InitChat();
             _pgPass = false; _pgDefer = false;
+            object tk; if (CPH.TryGetArg("pgTick", out tk) && tk != null && Convert.ToString(tk) == "True") { CountdownTick(); return true; }
             Handle();
         }
         catch (Exception ex)
@@ -623,10 +641,12 @@ public class CPHInline
             if (cmd == "!forgetme" || cmd == "!rememberme" || cmd == "!memory" || (cmd == "!remember" && (arg == "me" || arg == "")))
             { PrivacyCommand(cx, cmd == "!remember" ? "!rememberme" : cmd); return; }
             if (cmd == "!chatbot" && (cx.Mod || cx.Broadcaster)) { AdminToggle(cx, arg); return; }
+            if (cmd == "!golive" && (cx.Mod || cx.Broadcaster)) { GoLiveCommand(cx, arg); return; }
 
             if (!_cfg.Enabled) { _pgPass = true; return; }                  // switched off: the next bot (the helper) may take the message
             RecordEvent(login, text);                                // gifted subs, resubs, bits, follows, raids (announced by the bots / the raiders)
             if (login == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(login) || IsBot(login)) return;
+            if (!PgNoDefer()) GateCount();                           // counts the line for the activity gate (once, not again when the router hands it back)
             if (!IsLive()) { SleepingReply(cx, cmd, replyTo); return; }   // offline: no recording, no AI; only a short "come back when live" when pinged
 
             bool second = PgNoDefer();                               // the router gives the message back after the helper passed on it: it was recorded the first time
@@ -646,6 +666,11 @@ public class CPHInline
             if (!second) LinkThreads(login, text, replyTo);          // people talking to each other share a thread
 
             bool mention = IsMention(text) || (!string.IsNullOrEmpty(replyTo) && (replyTo.ToLower() == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(replyTo)));
+            if (_cfg.GateEnabled && GateState() == "busy" && (!mention || _cfg.GateBusyBlocksReplies))
+            {   // busy chat: completely silent, no AI call; the helper may still take a lobby question
+                lock (_gateLock) { if (mention || _cfg.RandomChance > 0) _gateSkipped++; }
+                _pgPass = true; return;
+            }
             // A lobby / join / register question belongs to the helper: when the router has the helper next in line, hand it over without answering.
             if (mention && PgRouted() && PgNextHas("helper") && !PgNoDefer() && PgHelperTopic(text)) { _pgDefer = true; return; }
             if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
@@ -657,7 +682,7 @@ public class CPHInline
                 if (!quiet && !accept) Miss(login);                                // pinged but the cooldown / hourly cap dropped it: they are still waiting
             }
             else if (!optedOut && _cfg.RandomChance > 0 && ActivePartners().Count == 0 && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
-                     && Now() - _lastRandom >= _cfg.RandomMinGapSec && TakeCooldown(login, true))
+                     && GateAllowsChime() && Now() - _lastRandom >= _cfg.RandomMinGapSec && TakeCooldown(login, true))
             { cx.Random = true; _lastRandom = Now(); accept = true; }
         }
         if (welcome) Say(cx, WelcomeLines[_rng.Next(WelcomeLines.Length)]);
@@ -2324,6 +2349,93 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     }
 
     // Mods: !chatbot status
+    // ---- activity gate ----
+    static readonly object _gateLock = new object();
+    static readonly List<long> _gateLog = new List<long>();
+    static string _gateSt = "normal"; static int _gateSkipped; static bool _chimeOk = true;
+
+    void GateCount() { lock (_gateLock) { long n = Now(); _gateLog.Add(n); _gateLog.RemoveAll(t => n - t > Math.Max(10, _cfg.GateWindowSec) + 5); } }
+    int GateRate()
+    {
+        lock (_gateLock)
+        {
+            long n = Now(); int w = Math.Max(10, _cfg.GateWindowSec);
+            return (int)Math.Round(_gateLog.Count(t => n - t <= w) * 60.0 / w);
+        }
+    }
+    /// <summary>"quiet" (may chime in), "normal" or "busy" (silent); a state is only left after crossing its limit by GateHysteresisPct, so it does not flap.</summary>
+    string GateState()
+    {
+        if (!_cfg.GateEnabled) return "normal";
+        int r = GateRate(); double h = Math.Max(0, _cfg.GateHysteresisPct) / 100.0; int busy = Math.Max(1, _cfg.GateBusyPerMin), quiet = Math.Max(0, _cfg.GateQuietPerMin);
+        lock (_gateLock)
+        {
+            bool wasBusy = _gateSt == "busy";
+            if (r >= busy || (wasBusy && r >= busy * (1 - h))) _gateSt = "busy";
+            else
+            {
+                if (_chimeOk ? r > quiet * (1 + h) : r <= quiet * (1 - h)) _chimeOk = !_chimeOk;
+                _gateSt = _chimeOk ? "quiet" : "normal";
+            }
+            return _gateSt;
+        }
+    }
+    bool GateAllowsChime() { return !_cfg.GateEnabled || GateState() == "quiet"; }
+
+    // ---- countdown (the Host calls this every few seconds with pgTick=True, also while nobody is chatting) ----
+    static readonly HashSet<string> _cdDone = new HashSet<string>();
+    static DateTime? CdTarget(string txt, DateTime now, bool dailyRoll)
+    {
+        txt = (txt ?? "").Trim(); if (txt == "") return null;
+        DateTime dt;
+        if (Regex.IsMatch(txt, @"^\d{1,2}:\d{2}$"))
+        {
+            if (!DateTime.TryParse(now.ToString("yyyy-MM-dd") + " " + txt, out dt)) return null;
+            if (dailyRoll && dt < now.AddSeconds(-5)) dt = dt.AddDays(1);
+            return dt;
+        }
+        return DateTime.TryParse(txt, out dt) ? (DateTime?)dt : null;
+    }
+    static int CdOffsetSec(string t)
+    {
+        t = (t ?? "").Trim().ToLower(); int v; if (t.Length < 2 || !int.TryParse(t.Substring(0, t.Length - 1), out v)) return -1;
+        return t.EndsWith("s") ? v : t.EndsWith("m") ? v * 60 : -1;
+    }
+    static string CdLeft(int sec) { return sec >= 60 && sec % 60 == 0 ? (sec / 60) + (sec == 60 ? " minute" : " minutes") : sec + " seconds"; }
+    void CountdownTick()
+    {
+        if (!_cfg.Enabled || !_cfg.CountdownEnabled) return;
+        DateTime now = DateTime.Now;
+        DateTime? target = CdTarget(_cfg.CountdownOverrideAt, now, false);
+        if (target == null || target.Value < now.AddSeconds(-_cfg.CountdownMaxLateSec - 5)) target = CdTarget(_cfg.CountdownGoLiveAt, now, true);
+        if (target == null) return;
+        bool live = false; try { var j = ReadJson("settings.json"); live = j != null && j["WasLive"] != null && (bool)j["WasLive"]; } catch (Exception) { }
+        if (live) return;
+        double toGo = (target.Value - now).TotalSeconds;
+        var offs = (_cfg.CountdownTimes ?? "").Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(CdOffsetSec).Where(x => x > 0).Distinct().OrderByDescending(x => x).ToList();
+        string tag = target.Value.ToString("yyyyMMddHHmm");
+        foreach (int o in offs.Concat(new[] { 0 }))
+        {
+            string key = tag + "|" + o; double late = o - toGo;   // positive = we are past that moment
+            if (late < 0) continue;
+            lock (_gateLock) { if (_cdDone.Contains(key)) continue; _cdDone.Add(key); }
+            if (late > _cfg.CountdownMaxLateSec) continue;       // missed (Host was down): never send a stale countdown
+            string line = o == 0 ? _cfg.CountdownLineNow : (_cfg.CountdownLine ?? "").Replace("{left}", CdLeft(o)).Replace("{time}", target.Value.ToString("h:mm tt"));
+            if (!string.IsNullOrWhiteSpace(line)) PgSay("chat", line);
+        }
+    }
+    void GoLiveCommand(Ctx c, string arg)
+    {
+        arg = (arg ?? "").Trim();
+        if (arg == "" || arg == "status") { Say(c, "Go-live: daily " + (string.IsNullOrEmpty(_cfg.CountdownGoLiveAt) ? "not set" : _cfg.CountdownGoLiveAt) + ", override " + (string.IsNullOrEmpty(_cfg.CountdownOverrideAt) ? "none" : _cfg.CountdownOverrideAt) + ". Use !golive 17:30 or !golive off."); return; }
+        if (arg == "off" || arg == "clear") _cfg.CountdownOverrideAt = "";
+        else if (CdTarget(arg, DateTime.Now, false) == null) { Say(c, "Usage: !golive HH:MM (or !golive off)"); return; }
+        else _cfg.CountdownOverrideAt = arg;
+        SaveJson("chat_settings.json", _cfg);
+        _cfgStamp = File.GetLastWriteTimeUtc(Path.Combine(_dir, "chat_settings.json"));
+        Say(c, string.IsNullOrEmpty(_cfg.CountdownOverrideAt) ? "Go-live override cleared." : "Countdown set for " + _cfg.CountdownOverrideAt + ".");
+    }
+
     string StatusText()
     {
         long now = Now();
@@ -2331,7 +2443,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         var act = ActivePartners();
         int hushed = _hush.Count(kv => kv.Value > now);
         var last = Updates().LastOrDefault();
-        return "Chat bot " + (_cfg.Enabled ? "ON" : "OFF") + (_live ? ", live" : ", offline") + ". AI calls this hour: " + _callLog.Count + "/" + _cfg.MaxCallsPerHour +
+        return "Chat bot " + (_cfg.Enabled ? "ON" : "OFF") + (_live ? ", live" : ", offline") + ". AI calls this hour: " + _callLog.Count + "/" + _cfg.MaxCallsPerHour + ". Chat " + GateRate() + "/min (" + (_cfg.GateEnabled ? GateState() : "gate off") + ", " + _gateSkipped + " skipped)" +
             ". Talking with " + act.Count + ", hushed: " + hushed + ", studying: " + (_studying ? "yes" : "no") + ", viewers known: " + _viewers.Count +
             ". Last problem: " + (string.IsNullOrEmpty(_lastWarn) ? "none" : _lastWarn) +
             ". Last update: " + (last == null ? "none logged" : UpdateLine(last, false)) + ".";

@@ -69,7 +69,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); CompatWs.Start(); SpotifyAnnounce.Start();
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim);
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -123,6 +123,20 @@ namespace PinguinoHost
                 }
             }
             return ok;
+        }
+
+        /// <summary>every few seconds: lets ChattyPinguino run its time-based jobs (pre-stream countdown) even when nobody is chatting.</summary>
+        public static void StartChatTicker(bool sim)
+        {
+            Task.Run(async () => { await Task.Delay(8000); while (true) { try { if (Lease.MayRun && (sim || HostApi.IrcConnected)) ChatTick(); } catch (Exception) { } await Task.Delay(sim ? 1000 : 5000); } });
+        }
+        public static void ChatTick()
+        {
+            lock (dispatchLock)
+            {
+                cph.Args.Clear(); cph.Args["pgTick"] = true;
+                try { if (cph.Actions.ContainsKey("PinguinoChat")) cph.RunAction("PinguinoChat"); } catch (Exception ex) { Console.WriteLine("ERROR tick: " + ex.Message); }
+            }
         }
 
         // ---------------- dispatch: exactly the Streamer.bot trigger ownership in Docs\TRIGGERS.md ----------------
