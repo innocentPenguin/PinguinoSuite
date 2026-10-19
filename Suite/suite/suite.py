@@ -361,6 +361,10 @@ def process_control():
             f.unlink()
         except OSError:
             continue
+        if f.name == "prestream-run":  # run the pre-stream checks now; the result lands in console/prestream-last.json
+            console_log.log("info", "prestream", "manual run requested (control file)")
+            threading.Thread(target=run_prestream, kwargs={"slot": "manual"}, daemon=True).start()
+            continue
         if not m or action not in ("start", "stop", "restart"):
             continue
         bus.emit("control", id=mid, action=action)
@@ -380,6 +384,12 @@ def run_prestream(slot=None, scheduled=False):
             for m in modules.values()]
     rep = prestream.run_checks(mods, module_token, CONSOLE_DIR, lambda: console_log.errors_since(1800), ROOT, slot, scheduled)
     last_prestream = rep
+    try:  # a script (no app token) can read the latest result from here
+        tmp = CONSOLE_DIR / "prestream-last.json.tmp"
+        tmp.write_text(json.dumps(rep, indent=2), "utf8")
+        os.replace(tmp, CONSOLE_DIR / "prestream-last.json")
+    except OSError:
+        pass
     for i in rep["items"]:
         if i["status"] != "pass":
             console_log.log("error" if i["status"] == "fail" else "warn", "prestream", f"{i['label']}: {i['detail'] or i['status']}", module=i["module"])
@@ -617,6 +627,22 @@ def module_probe(mid: str):
         r = requests.get(m.spec["url"] + m.spec.get("health", "/"), timeout=2)
         return r.json()
     except Exception:
+        raise HTTPException(502, "module not answering")
+
+
+@app.get("/api/modules/{mid}/get")
+def module_get(mid: str, path: str):
+    """GET one of a module's /api/ paths on the UI's behalf (module token attached): lets the app read module data without cross-origin calls."""
+    m = modules.get(mid)
+    if not m:
+        raise HTTPException(404)
+    if not path.startswith("/api/") or ".." in path:
+        raise HTTPException(400, "path must be under /api/")
+    tok = module_token(mid)
+    try:
+        r = requests.get(m.spec["url"] + path, headers={"Authorization": f"Bearer {tok}", "X-Pinguino-Token": tok, "x-link-token": tok}, timeout=5)
+        return Response(r.content, status_code=r.status_code, media_type=r.headers.get("content-type", "application/json"))
+    except requests.RequestException:
         raise HTTPException(502, "module not answering")
 
 

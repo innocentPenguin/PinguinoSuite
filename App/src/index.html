@@ -181,7 +181,7 @@ pages.dashboard=()=>{
   <div class="card" style="margin-bottom:14px;padding:12px 16px"><div class="devs">${deviceStrip()}</div></div>
   <div class="tiles" style="margin-bottom:14px">
     ${tile('Stream',live.live?'LIVE':'Offline',live.live?`${live.viewers} watching`:'waiting for go-live',live.live?'live':'')}
-    ${tile('Chat',M.ok?(M.rate!=null?M.rate+'/min':'—'):'—',M.ok?`queue ${M.queue}`:'Multi is not running','',  'm:multi')}
+    ${tile('Chat',M.ok?(M.rate!=null?M.rate+'/min':'—'):'—',M.ok?`${M.queue} open cards${M.chatters!=null?' · '+M.chatters+' chatters/h':''}`:'Multi is not running','',  'm:multi')}
     ${tile('Devices',ndev+' online',D?'master: '+esc(D.master_name):'this device','', '')}
     ${tile('Modules',run+'/'+tot,down.length?esc(down.map(m=>m.name).join(', '))+' not running':'all healthy',down.length?'warn':'ok')}
     ${tile('Pre-stream',pr?(pr.fail?pr.fail+' fail':pr.warn?pr.warn+' warn':'All ok'):'—',pr?`${pr.pass} ok · ${pr.warn} warn · ${pr.fail} fail`:'not run yet',pr?(pr.fail?'bad':pr.warn?'warn':'ok'):'','console')}
@@ -208,7 +208,9 @@ function deviceStrip(){
   return chips+(D.solo?'<span class="sm faint">Only this device is online. Pair others in Link.</span>':'')+act}
 
 /* Generic module page: any module with a `ui` block in its manifest gets nav entry + this page (see Docs/MODULE_CONTRACT.md). */
-const modOf=r=>S?.modules.find(m=>'m:'+m.id===r);
+/* A module's `ui` may be one block or an array; each block is its own nav entry (route m:<id>, then m:<id>@1, ...). */
+const uiEntries=()=>(S?S.modules:[]).flatMap(m=>[].concat(m.ui||[]).map((ui,i)=>({...m,ui,rid:i?`m:${m.id}@${i}`:'m:'+m.id})));
+const modOf=r=>uiEntries().find(e=>e.rid===r);
 const modSrc=m=>m.url.replace(/\/$/,'')+(m.ui?.path||'/');
 pages.module=r=>{const m=modOf(r);
   if(!m)return `<div class="card" style="max-width:520px"><h3>Module not found</h3><div class="dim">It may have been removed from the registry.</div></div>`;
@@ -414,13 +416,13 @@ const REAL=[['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
 function renderNav(){if(!S)return;
-  const mods=S.modules.filter(m=>m.ui).sort((a,b)=>(a.ui.order??100)-(b.ui.order??100));
+  const mods=uiEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100));
   const replaced=new Set(mods.map(m=>m.ui.replaces).filter(Boolean));
-  const sig=JSON.stringify([mods.map(m=>[m.id,m.name,m.ui,m.state]),[...replaced],route]);
+  const sig=JSON.stringify([mods.map(m=>[m.rid,m.name,m.ui,m.state]),[...replaced],route]);
   if(sig===navSig)return;navSig=sig;
   let h='',sec=null;
   for(const m of mods){const sc=m.ui.section||'Modules';if(sc!==sec){h+=`<h6>${esc(sc)}</h6>`;sec=sc}
-    h+=`<div class="item${route==='m:'+m.id?' on':''}" data-r="m:${esc(m.id)}"><span class="ic">${esc(m.ui.icon||'▣')}</span>${esc(m.ui.nav||m.name)}<span class="dot ${esc(m.state||'')}"></span></div>`}
+    h+=`<div class="item${route===m.rid?' on':''}" data-r="${esc(m.rid)}"><span class="ic">${esc(m.ui.icon||'▣')}</span>${esc(m.ui.nav||m.name)}<span class="dot ${esc(m.state||'')}"></span></div>`}
   h+='<h6>Studio</h6>'+REAL.map(x=>`<div class="item${route===x[0]?' on':''}" data-r="${x[0]}"><span class="ic">${x[1]}</span>${x[2]}</div>`).join('');
   const left=PREVIEWS.filter(x=>!replaced.has(x[0]));
   if(left.length)h+='<h6>Planned</h6>'+left.map(x=>`<div class="item${route===x[0]?' on':''}" data-r="${x[0]}"><span class="ic">${x[1]}</span>${x[2]}<span class="tag prev">preview</span></div>`).join('');
@@ -465,8 +467,9 @@ async function load(){try{S=await (await fetch('/api/state')).json()}catch{retur
   const lm=listenMod();if(lm?.url)LISTEN=lm.url.replace(/\/$/,'');
   $('#navfoot').textContent=`Watching ${S.channel}`;draw()}
 async function loadDevice(){try{D=await (await fetch('/api/device')).json()}catch{return}if(route==='dashboard')draw()}
-async function loadMulti(){try{const m=await (await fetch('/api/modules/multi/probe')).json();const n=Date.now(),inn=m.stats?.in??0;
-  if(M.prev&&n>M.prev.n)M.rate=Math.max(0,Math.round((inn-M.prev.inn)*60000/(n-M.prev.n)));M.prev={n,inn};M.ok=true;M.queue=m.queue??0}catch{M.ok=false;M.rate=null;M.prev=null}if(route==='dashboard')draw()}
+async function loadMulti(){try{const m=await (await fetch('/api/modules/multi/get?path=/api/dashboard')).json();
+  M.ok=true;M.rate=m.rate_per_min??m.last_minute??null;M.queue=m.open_cards??0;M.chatters=m.unique_chatters_hour??null;M.hour=m.messages_last_hour??null}
+  catch{M.ok=false;M.rate=null}if(route==='dashboard')draw()}
 async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status')).json();L.status=st;
   let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}
   L.lines=sid?(await (await fetch(`${LISTEN}/api/segments?session=${sid}&limit=500`)).json()).slice(-5):[]}catch{L.status=null;L.lines=[]}

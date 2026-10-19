@@ -50,11 +50,12 @@
       "always_start": true
     },
     "ui": {
-      "nav": "Multi",
-      "icon": "🧊",
+      "nav": "Chat",
+      "icon": "💬",
       "section": "Modules",
-      "path": "/",
-      "order": 20
+      "path": "/?type=chat",
+      "order": 20,
+      "replaces": "chat"
     }
   },
   {
@@ -66,7 +67,16 @@
       "dotnet",
       "bin/Release/net8.0/PinguinoHost.dll"
     ],
-    "build": ["dotnet", "build", "PinguinoHost.csproj", "-c", "Release", "--nologo", "-v", "q"],
+    "build": [
+      "dotnet",
+      "build",
+      "PinguinoHost.csproj",
+      "-c",
+      "Release",
+      "--nologo",
+      "-v",
+      "q"
+    ],
     "port": 8770,
     "url": "http://127.0.0.1:8770",
     "health": "/api/status",
@@ -77,13 +87,23 @@
       "start_with_suite": true,
       "always_start": true
     },
-    "ui": {
-      "nav": "Bots / Host",
-      "icon": "🤖",
-      "section": "Modules",
-      "path": "/",
-      "order": 30,
-      "replaces": "bots"
-    }
+    "ui": [
+      {
+        "nav": "Bots / Host",
+        "icon": "🤖",
+        "section": "Modules",
+        "path": "/",
+        "order": 30,
+        "replaces": "bots"
+      },
+      {
+        "nav": "Actions & Events",
+        "icon": "⚡",
+        "section": "Modules",
+        "path": "/automations",
+        "order": 35,
+        "replaces": "actions"
+      }
+    ]
   }
 ]
