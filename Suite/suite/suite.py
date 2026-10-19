@@ -5,6 +5,7 @@ import json
 import hmac
 import os
 import secrets
+import shutil
 import signal
 import subprocess
 import sys
@@ -56,15 +57,25 @@ DEFAULT_SETTINGS = {"channel": "innocentpenguin_", "poll_secs": 20, "offline_gra
 # ------------------------------------------------------------------ settings
 def load_settings():
     s = json.loads(json.dumps(DEFAULT_SETTINGS))
-    try:
-        s.update(json.loads(SETTINGS.read_text("utf8")))
-    except Exception:
-        pass
+    for f in (SETTINGS, SETTINGS.with_name(SETTINGS.name + ".bak")):  # corrupt/missing file -> last good backup
+        try:
+            s.update(json.loads(f.read_text("utf8")))
+            break
+        except Exception:
+            continue
     return s
 
 
 def save_settings(s):
-    SETTINGS.write_text(json.dumps(s, indent=2), "utf8")
+    """Atomic write (temp + replace) keeping the previous good file as .bak, so a crash never leaves half a file."""
+    tmp = SETTINGS.with_name(SETTINGS.name + ".tmp")
+    tmp.write_text(json.dumps(s, indent=2), "utf8")
+    if SETTINGS.exists():
+        try:
+            shutil.copyfile(SETTINGS, SETTINGS.with_name(SETTINGS.name + ".bak"))
+        except OSError:
+            pass
+    os.replace(tmp, SETTINGS)
 
 
 # ------------------------------------------------------------------ event bus (the seed of a Streamer.bot-style core)
