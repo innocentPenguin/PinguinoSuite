@@ -137,6 +137,9 @@ body.hopen #hscrim{display:block}body.hopen #hdrawer{transform:none}
 #hdrawer .hf{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
 .hex{font-family:ui-monospace,Consolas,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:8px 0;word-break:break-all}
 .hkeyhelp{flex-basis:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:6px 0}.hkeyhelp ol{margin:4px 0 4px 18px;padding:0}
+.act{display:flex;gap:10px;align-items:baseline;padding:7px 12px;border-bottom:1px solid var(--line)}.act:hover{background:rgba(255,153,0,.05)}
+.act .ai{width:22px;text-align:center;flex:none}.act .at{color:var(--faint);flex:none;min-width:62px}.act .au{font-weight:600}.act .ad{color:var(--dim);word-break:break-word}
+.act.big{background:rgba(255,153,0,.07)}.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{border:1px solid var(--line);border-radius:14px;padding:2px 10px;cursor:pointer;color:var(--dim);font-size:12px}.chip.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .minirow{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}.minirow:last-child{border:0}.minirow .grow{flex:1;min-width:0}
 .col2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:1000px){.col2{grid-template-columns:1fr}}
@@ -153,6 +156,7 @@ body.hopen #hscrim{display:block}body.hopen #hdrawer{transform:none}
   <div id="modnav"></div>
   <h6>System</h6>
   <div class="item" data-r="integrations"><span class="ic">🔌</span>Integrations</div>
+  <div class="item" data-r="activity"><span class="ic">⚡</span>Activity</div>
   <div class="item" data-r="help"><span class="ic">?</span>Help</div>
   <div class="item" data-r="console"><span class="ic">▤</span>Console<span class="cbadge" id="cbadge"></span></div>
   <div class="item" data-r="settings"><span class="ic">⚙</span>Settings</div>
@@ -332,6 +336,33 @@ pages.help=()=>{
   const g={};HP.topics.forEach(t=>(g[t.group||'General']=g[t.group||'General']||[]).push(t));
   return `<div class="dim sm" style="margin-bottom:12px">How each part works, how it was set up, and how to redo it. Everything with a <b style="color:var(--accent)">?</b> in the app opens the same text.</div>
   <div class="grid g2" style="align-items:start">${Object.keys(g).map(n=>`<div class="card"><h3>${esc(n)}</h3>${g[n].map(t=>`<div class="irow clk" data-hk="${esc(t.key)}"><div class="grow"><b>${esc(t.title)}</b></div><span class="faint">›</span></div>`).join('')}</div>`).join('')}</div>`};
+/* ============ Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, message?, detail?}]}) ============ */
+const AT={follow:['➕','Follow'],sub:['⭐','Sub'],resub:['🔁','Resub'],gift:['🎁','Gift'],cheer:['💎','Cheer'],raid:['🚩','Raid'],redeem:['🎟','Redeem'],ban:['⛔','Ban'],timeout:['⏱','Timeout'],clip:['🎬','Clip'],poll:['📊','Poll'],prediction:['🔮','Prediction'],hype:['🔥','Hype train'],shoutout:['📣','Shoutout'],other:['•','Other']};
+const A={items:[],seq:0,types:new Set(),q:'',paused:false,err:null,loaded:false,pending:[]};
+const atype=t=>AT[t]?t:'other';
+const actText=e=>{const n=e.amount!=null&&e.amount!==''?` · ${e.amount}${e.type==='cheer'?' bits':e.type==='raid'?' viewers':e.type==='gift'?' subs':''}`:'';return `${e.tier?'Tier '+e.tier+' ':''}${e.detail||''}${n}${e.message?' — “'+e.message+'”':''}`.trim()};
+pages.activity=()=>`<div class="ctool"><div class="chips" id="a-chips"></div><input type="text" id="a-q" placeholder="Search…" value="${esc(A.q)}"><button class="sm" id="a-pause">${A.paused?'Resume':'Pause'}</button><span class="sm faint sp" id="a-count"></span></div><div class="clog" id="alog" style="max-height:none"></div>`;
+function renderActivity(){const box=$('#alog');if(!box)return;
+  const seen=new Set(A.items.map(e=>atype(e.type)));
+  $('#a-chips').innerHTML=[...seen].sort().map(t=>`<span class="chip ${A.types.has(t)?'on':''}" data-atype="${t}">${AT[t][0]} ${AT[t][1]}</span>`).join('')+(A.types.size?'<span class="chip" data-atype="">Clear</span>':'');
+  const f=A.items.filter(e=>(!A.types.size||A.types.has(atype(e.type)))&&(!A.q||((e.user||'')+' '+actText(e)).toLowerCase().includes(A.q.toLowerCase()))).slice(-500).reverse();
+  box.innerHTML=A.err?`<div class="act"><span class="dim">${esc(A.err)} ${hq('activity')}</span></div>`:f.map(e=>{const t=atype(e.type);return `<div class="act ${['raid','gift','cheer','hype'].includes(t)&&(+e.amount||0)>=10?'big':''}"><span class="ai" title="${AT[t][1]}">${AT[t][0]}</span><span class="at">${tm(e.ts)}</span><span><span class="au">${esc(e.user||'')}</span> <span class="sm faint">${AT[t][1]}</span><div class="ad">${esc(actText(e))}</div></span></div>`}).join('')||`<div class="act"><span class="faint">${A.loaded?'No activity yet. Follows, subs, raids, cheers and redeems show up here live.':'Loading…'}</span></div>`;
+  $('#a-count').textContent=f.length+' events'+(A.paused?' (paused)':'');
+  $$('[data-atype]').forEach(c=>c.onclick=()=>{const t=c.dataset.atype;if(!t)A.types.clear();else A.types.has(t)?A.types.delete(t):A.types.add(t);renderActivity()})}
+async function pollActivity(){
+  try{const r=await fetch(`/api/modules/host/get?path=${encodeURIComponent('/api/activity?since='+A.seq+'&limit=300')}`);
+    if(!r.ok)throw new Error(r.status);const j=await r.json();A.err=null;A.loaded=true;
+    if(j.seq<A.seq){A.items=[];A.seq=0}
+    if(j.items&&j.items.length){const add=j.items.filter(e=>e.seq>A.seq);A.seq=Math.max(A.seq,...add.map(e=>e.seq||0),j.seq||0);
+      if(A.paused)A.pending=A.pending.concat(add);else A.items=A.items.concat(add).slice(-3000)}
+    else if(j.seq)A.seq=Math.max(A.seq,j.seq)}
+  catch(e){A.loaded=true;if(!A.items.length)A.err='The Host is not serving the activity feed yet (is PinguinoHost running, and updated?).'}
+  if(route==='activity')renderActivity()}
+function bindActivity(){
+  $('#a-q').oninput=e=>{A.q=e.target.value;renderActivity()};
+  $('#a-pause').onclick=()=>{A.paused=!A.paused;if(!A.paused){A.items=A.items.concat(A.pending).slice(-3000);A.pending=[]}$('#a-pause').textContent=A.paused?'Resume':'Pause';renderActivity()};
+  pollActivity()}
+setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
 const openExternal=u=>window.__TAURI__?(location.href=u):window.open(u,'_blank');
 pages.integrations=()=>{
   if(I.err)return `<div class="card" style="max-width:520px"><h3>Integrations</h3><div class="dim">${esc(I.err)}</div></div>`;
@@ -549,7 +580,7 @@ function showWizard(){let role='streaming';const el=document.createElement('div'
       D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
 
 /* ============ shell ============ */
-const titles={help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const REAL=[['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
@@ -585,6 +616,7 @@ function draw(force){if(!S)return;renderNav();
 function bind(){
   if(route==='console')bindConsole();
   if(route==='voice')bindVoice();
+  if(route==='activity')bindActivity();
   if(route==='integrations')bindIntegrations();
   if(route==='settings')bindPortable();
   $$('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));

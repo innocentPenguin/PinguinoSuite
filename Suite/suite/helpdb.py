@@ -156,6 +156,9 @@ CATALOG["module_switch"] = H("Module on/off switch and lock", "Each module has a
                               "Modules the Suite needs (Host, Multi) can be switched off too, but only after unlocking. Turning one off stops the bots / chat until you switch it back on.",
                               "To restart a module without changing the switch, use Restart on the dashboard."],
                              fix={"label": "Open Settings", "route": "settings"})
+CATALOG["activity"] = H("How the Activity feed works", "Every event on your channel in one live list: follows, subs, resubs, gifts, cheers, raids, redeems, bans, clips and more. It is served by PinguinoHost.",
+                        ["Click the type chips to filter (Raid, Sub...); search by name or message. Pause freezes the view while you read.", "If it says the Host is not serving the feed: make sure PinguinoHost is on (Settings > Modules) and updated, and that Twitch is connected (Integrations).",
+                         "Big raids, gifts and cheers are highlighted."], fix={"label": "Open Integrations", "route": "integrations"})
 CATALOG["help"] = H("How Help works", "Every ? button and every red / yellow row opens the same kind of panel: what it means, the steps to fix or set it up, and a button to the place to do it.",
                     ["Click any pre-stream row, Integrations row, Console warning / error, module name or key row.", "Green items have instructions too, for setting them up again.", "This page lists all topics."])
 ALIASES["voice"] = "voice_commands"
