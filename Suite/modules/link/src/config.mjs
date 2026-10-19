@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 
 const LEGACY = path.join(os.homedir(), '.pinguinolink');
 // The Suite core sets PINGUINO_DATA_DIR; standalone runs keep using ~/.pinguinolink.
-export const DIR = process.env.PINGUINO_DATA_DIR ? path.resolve(process.env.PINGUINO_DATA_DIR) : LEGACY;
+// PINGUINO_DATA_DIR is shared by every module, so Link keeps its own subfolder (the root already holds other modules' config.json).
+export const DIR = process.env.PINGUINO_DATA_DIR ? path.join(path.resolve(process.env.PINGUINO_DATA_DIR), 'link') : LEGACY;
 const FILE = path.join(DIR, 'config.json');
 
 const DEFAULTS = {

@@ -63,6 +63,7 @@ const eq = (a, b) => {
 /** Token check, constant time. Accepts the module token and the Suite core's PINGUINO_API_TOKEN. */
 function tokenOk(cfg, given) {
   if (!given) return false;
+  given = String(given).replace(/^Bearer /i, '');
   let ok = eq(given, cfg.token);
   const core = process.env.PINGUINO_API_TOKEN;
   if (core && eq(given, core)) ok = true;
@@ -99,9 +100,9 @@ export async function serve(cfg) {
         return res.end(PAGE.replace('__TOKEN__', cfg.token));
       }
       // Pre-stream readiness for the Suite console: no token, no secrets in the output.
-      if (req.method === 'GET' && req.url === '/api/prestream') return json(200, await prestream(cfg));
+      if (req.method === 'GET' && req.url === '/api/prestream') return json(200, { items: await prestream(cfg) });
       // Everything else needs the token, loopback included.
-      if (!tokenOk(cfg, req.headers['x-link-token'])) { log('warn', 'http', `unauthorized ${req.method} ${req.url.split('?')[0]} (401)`); return json(401, { error: 'bad token' }); }
+      if (!tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization)) { log('warn', 'http', `unauthorized ${req.method} ${req.url.split('?')[0]} (401)`); return json(401, { error: 'bad token' }); }
       if (req.method === 'GET' && req.url === '/api/status') {
         const t = await ts.status();
         selfName = t.self?.name || selfName;

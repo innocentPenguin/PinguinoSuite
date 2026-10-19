@@ -12,7 +12,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'plink-'));   // proves PI
 const port = 7800 + Math.floor(Math.random() * 100);
 const base = `http://127.0.0.1:${port}`;
 const child = spawn(process.execPath, [new URL('./cli.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), 'serve'],
-  { env: { ...process.env, PINGUINO_LINK_PORT: String(port), PINGUINO_API_TOKEN: 'selfcheck-core', PINGUINO_DATA_DIR: dataDir, PINGUINO_CONSOLE_DIR: path.join(dataDir, 'console') }, stdio: 'ignore', windowsHide: true });
+  { env: { ...process.env, PINGUINO_LINK_PORT: String(port), PINGUINO_API_TOKEN: 'selfcheck-core', PINGUINO_DATA_DIR: dataDir }, stdio: 'ignore', windowsHide: true });
 
 const results = [];
 const check = (name, ok) => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`); };
@@ -24,19 +24,20 @@ const bin = await ts.resolveBin();
 console.log(`info  tailscale cli: ${bin} (${(await ts.installed()) ? 'found' : 'not installed/reachable; optional'})`);
 
 for (let i = 0; i < 20 && await code('/api/health') !== 200; i++) await new Promise(r => setTimeout(r, 500));
-let tok = ''; try { tok = JSON.parse(fs.readFileSync(path.join(dataDir, 'config.json'), 'utf8')).token; } catch {}
+let tok = ''; try { tok = JSON.parse(fs.readFileSync(path.join(dataDir, 'link', 'config.json'), 'utf8')).token; } catch {}
 check('config written to PINGUINO_DATA_DIR', !!tok);
 check('GET /api/health = 200', await code('/api/health') === 200);
 check('status without token = 401', await code('/api/status') === 401);
 check('status with wrong token = 401', await code('/api/status', { headers: { 'x-link-token': 'nope' } }) === 401);
 check('status with module token = 200', await code('/api/status', { headers: { 'x-link-token': tok } }) === 200);
 check('status with Suite core token = 200', await code('/api/status', { headers: { 'x-link-token': 'selfcheck-core' } }) === 200);
+check('status with Authorization: Bearer core token = 200', await code('/api/status', { headers: { authorization: 'Bearer selfcheck-core' } }) === 200);
 check('loopback POST without token = 401', await code('/api/macro/stop', { method: 'POST' }) === 401);
 check('foreign Origin = 403', await code('/api/macro/x', { method: 'POST', headers: { origin: 'http://evil.example', 'x-link-token': tok } }) === 403);
 const tauri = async o => await code('/api/status', { headers: { origin: o, 'x-link-token': tok } });
 check('Tauri origins allowed (3)', (await Promise.all(['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost'].map(tauri))).every(c => c === 200));
 check('Tauri origin still needs token', await code('/api/status', { headers: { origin: 'tauri://localhost' } }) === 401);
-const ps = await fetch(base + '/api/prestream').then(r => r.ok ? r.json() : null).catch(() => null);
+const ps = await fetch(base + '/api/prestream', { headers: { authorization: 'Bearer selfcheck-core' } }).then(r => r.ok ? r.json() : null).then(j => j?.items).catch(() => null);
 check('prestream: no token needed, valid items', Array.isArray(ps) && ps.length > 0 && ps.every(i => i.id && i.label && ['pass', 'warn', 'fail'].includes(i.status) && typeof i.detail === 'string'));
 check('prestream: no secrets in output', !JSON.stringify(ps).includes(tok) && !JSON.stringify(ps).includes('selfcheck-core'));
 let lines = []; try { lines = fs.readFileSync(path.join(dataDir, 'console', 'link.jsonl'), 'utf8').trim().split(/\r?\n/).map(JSON.parse); } catch {}
