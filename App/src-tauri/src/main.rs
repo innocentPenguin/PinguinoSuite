@@ -132,6 +132,25 @@ fn stop_core(core: &Core) {
     }
 }
 
+/// Navigation guard: the window stays on the shell and on local module pages (127.0.0.1 / localhost).
+/// Any other http(s) address (e.g. Twitch sign-in started by a module) opens in the system browser instead.
+fn nav_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri::plugin::Builder::new("nav-guard")
+        .on_navigation(|webview, url| {
+            let local = match url.scheme() {
+                "http" | "https" => matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("tauri.localhost")),
+                "https+tauri" | "tauri" | "about" | "data" | "blob" => true,
+                _ => false,
+            };
+            if !local && matches!(url.scheme(), "http" | "https") {
+                #[allow(deprecated)]
+                let _ = tauri_plugin_shell::ShellExt::shell(webview).open(url.as_str(), None);
+            }
+            local
+        })
+        .build()
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -148,6 +167,7 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--background"])))
         .plugin(tauri_plugin_shell::init())
+        .plugin(nav_guard())
         .manage(Core { child: Mutex::new(child), token })
         .invoke_handler(tauri::generate_handler![core_config])
         .setup(|app| {
