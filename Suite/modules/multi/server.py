@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 import cards as cards_mod
 import checks
 import config
+import learning
 import secrets_store
 import windows as win
 from connectors.twitch import Twitch
@@ -186,7 +187,29 @@ async def card_action(cid: str, action: str, request: Request):
     c = fn()
     if not c:
         raise HTTPException(404)
+    if action in ("answer", "dismiss", "tier"):
+        await asyncio.to_thread(learning.refresh, store)
     return c
+
+
+# learning (bounded, explainable, resettable) -----------------------------
+@app.get("/api/learning")
+def get_learning():
+    rep = learning.refresh(store)
+    return {"enabled": store.kv_get("learning_enabled", True) is not False,
+            "min_evidence": learning.MIN_EVIDENCE, "rules": rep, "applied": store.kv_get("learned", {})}
+
+
+@app.post("/api/learning/reset")
+def reset_learning():
+    learning.reset(store)
+    return {"ok": True}
+
+
+@app.post("/api/learning/enabled")
+async def set_learning(request: Request):
+    store.kv_set("learning_enabled", bool((await request.json()).get("enabled", True)))
+    return get_learning()
 
 
 # sending (always to ONE explicit platform; never broadcast) --------------

@@ -315,3 +315,34 @@ def test_guard_origin_host_token(monkeypatch):
     assert c.post("/auth/disconnect", headers={"origin": "tauri://localhost"}).status_code == 401      # Tauri origin needs token
     assert c.post("/auth/disconnect", headers={"origin": "tauri://localhost", "authorization": "Bearer tok"}).status_code == 200
     assert "x-frame-options" not in {k.lower() for k in c.get("/").headers}
+
+
+# learning -------------------------------------------------------------
+def _ev(kind, rules, ts, **kw):
+    return dict(kind=kind, rules=rules, ts=ts, **kw)
+
+
+def test_learning_needs_evidence_and_is_bounded():
+    import learning
+    now = time.time()
+    few = [_ev("answered", ["question"], now) for _ in range(3)]
+    assert learning.compute(few, now)["question"]["delta"] == 0
+    many = [_ev("answered", ["question"], now) for _ in range(200)]
+    d = learning.compute(many, now)["question"]["delta"]
+    assert 0 < d <= prio.DEFAULT_RULES["weights"]["question"] * learning.CAP_FRAC
+    neg = [_ev("dismissed", ["link"], now) for _ in range(200)]
+    assert learning.compute(neg, now)["link"]["delta"] < 0
+
+
+def test_learning_decays_and_resets(tmp_path):
+    import learning
+    now = time.time()
+    old = [_ev("answered", ["mention"], now - 200 * 86400) for _ in range(8)]
+    assert learning.compute(old, now)["mention"]["delta"] == 0   # decayed below evidence floor
+    st = Store(tmp_path / "l.db")
+    for _ in range(8):
+        st.log_event("answered", {"rules": ["mention"], "user_id": "u"})
+    assert learning.refresh(st)["mention"]["delta"] > 0
+    assert st.kv_get("learned")["mention"] > 0
+    learning.reset(st)
+    assert learning.refresh(st) == {} and not st.kv_get("learned")

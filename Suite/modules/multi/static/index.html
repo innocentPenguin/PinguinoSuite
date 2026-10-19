@@ -163,6 +163,7 @@ async function renderLauncher() {
   $('#body').innerHTML = `<div class="status"><h4>Twitch</h4><div class="act"><a href="${esc(st.twitch_connect_url)}" target="_blank" rel="noopener"><button type="button">Connect Twitch (log in to the site as the owner first)</button></a> <button id="oc">Open in my browser</button> <button id="ck">Run checks</button> <button id="dc">Disconnect</button></div><div id="checks"><small>Connect link: ${esc(st.twitch_connect_url)}</small></div><h4>Profiles</h4><div class="act">${pf.builtin.concat(pf.saved.filter(p => !pf.builtin.includes(p))).map(p => `<button data-p="${esc(p)}">${esc(p)}</button>`).join('')}</div>
   <h4>Add window</h4><div class="act">${['unified', 'priority', 'missed', 'composer', 'status', 'first'].map(t => `<button data-t="${t}">+ ${t}</button>`).join('')}</div>
   <h4>Windows</h4>${ws.map(w => `<div>${esc(w.type)} ${esc(w.id)} <button data-l="${w.id}">Open</button> <button data-x="${w.id}">Delete</button></div>`).join('') || '<div class="empty">None. Pick a profile.</div>'}
+  <h4>What I learned</h4><div class="act"><button id="ln">Show</button> <button id="lr">Reset learning</button></div><div id="learn"><small>Nudges stay small and need 5+ of your actions per rule.</small></div>
   <div><button id="rs">Restore all</button> <button id="sp">Save current as profile</button></div></div>`;
 }
 document.addEventListener('click', async e => {
@@ -174,6 +175,9 @@ document.addEventListener('click', async e => {
   else if (t.id === 'oc') { await api('/api/open-connect', {b: {}}); return; }
   else if (t.id === 'ck') { const box = $('#checks'); box.textContent = 'Checking...'; const r = await api('/api/checks');
     box.innerHTML = r.checks.map(c => `<div><span class="dot ${c.ok ? 'connected' : 'error'}"></span> <b>${esc(c.label)}</b> ${esc(c.detail)}${c.ok ? '' : `<br><small>Fix: ${esc(c.fix)}</small>`}</div>`).join(''); return; }
+  else if (t.id === 'ln') { const r = await api('/api/learning'); const k = Object.keys(r.rules);
+    $('#learn').innerHTML = k.map(n => { const v = r.rules[n]; return `<div><b>${esc(n)}</b> ${v.delta > 0 ? '+' : ''}${v.delta} pts <small>(${v.n} actions, net ${v.net}, cap ${v.cap}${v.delta ? '' : ', not enough evidence yet'})</small></div>`; }).join('') || '<div class="empty">Nothing learned yet.</div>'; return; }
+  else if (t.id === 'lr') { await api('/api/learning/reset', {b: {}}); $('#learn').innerHTML = '<div class="empty">Learning reset.</div>'; return; }
   else if (t.id === 'dc') await api('/auth/disconnect', {b: {}});
   else if (t.id === 'rs') await api('/api/windows/restore');
   else if (t.id === 'sp') { const n = prompt('Profile name'); if (n) await api('/api/profiles/' + encodeURIComponent(n) + '/save'); }

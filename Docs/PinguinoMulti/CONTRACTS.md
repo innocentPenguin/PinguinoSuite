@@ -24,3 +24,6 @@ Start: owner logged in on the site opens `/auth/twitch/login?multi=1` (broadcast
 
 ## Bots (planned, M4)
 Multi publishes `multi.claim {messageId,userId,ttl}`; Router (`Shared\PinguinoBots.cs.txt` + `sync-shared.mjs`) holds PinguinoChat while a claim is active (default off). Loop guard: Multi tags its sent ids and ignores `bot_accounts`.
+
+## Learning v1
+`GET /api/learning` -> `{enabled, min_evidence, rules:{rule:{delta,evidence,net,n,cap}}, applied}`; `POST /api/learning/reset`; `POST /api/learning/enabled {enabled}`. Evidence from the `events` log: answered +1, dismissed -1, missed -0.5, manual tier up/down +-1; 14-day half-life; a rule needs 5+ actions before it moves; delta clamped to 30% of the rule's default weight (max 12). Deltas are stored in kv `learned` and added by the scorer as part of each reason's points, so explanations still sum to the score. Reset ignores older events.
