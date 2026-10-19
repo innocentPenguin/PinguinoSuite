@@ -82,7 +82,8 @@ try {
   await sleep(300);
   check('log level filters lower levels', fs.readFileSync(path.join(dir, 'console', 'link.jsonl'), 'utf8').split('\n').length === before);
   const page = await fetch(base + '/').then(r => r.text());
-  check('page loads with settings and macro editor', page.includes('id=sdet') && page.includes('id=mdet') && page.includes('/theme.css'));
+  check('page loads with settings, macro editor and readiness', page.includes('id=sdet') && page.includes('id=mdet') && page.includes('id=rdcard') && page.includes('/theme.css'));
+  check('readiness list can be hidden', (await call('POST', '/api/settings', { changes: { 'ui.showReadiness': false } })).status === 200 && (await call('GET', '/api/status')).json.ui.showReadiness === false);
 } finally { child.kill(); try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
 const failed = results.filter(r => !r).length;
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll settings checks passed');

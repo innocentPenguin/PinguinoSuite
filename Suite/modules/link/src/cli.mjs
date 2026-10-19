@@ -52,7 +52,16 @@ switch (cmd) {
   case 'macro':
     if (!args[0]) { console.log(`macros: ${Object.keys(cfg.macros).join(', ')}
 usage: pinguinolink macro <name>`); break; }
-    try { await runMacro(cfg, args[0]); console.log('ok'); } catch (e) { console.error(e.message); process.exit(1); }
+    try {
+      // Prefer the running module: it applies the repeat guard, activity list and device pairing. Fall back to running it directly.
+      const port = Number(process.env.PINGUINO_LINK_PORT) || cfg.port;
+      let r = null;
+      try { r = await fetch(`http://127.0.0.1:${port}/api/macro/${encodeURIComponent(args[0])}`, { method: 'POST', headers: { 'x-link-token': cfg.token }, signal: AbortSignal.timeout(15000) }); } catch {}
+      if (r) {
+        if (r.ok) console.log('ok');
+        else { console.error((await r.json().catch(() => ({}))).error || `Link answered ${r.status}`); process.exit(1); }
+      } else { await runMacro(cfg, args[0]); console.log('ok'); }
+    } catch (e) { console.error(e.message); process.exit(1); }
     break;
   case 'send': {
     const [file, dev] = args;

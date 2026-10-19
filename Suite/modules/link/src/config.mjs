@@ -2,11 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const LEGACY = path.join(os.homedir(), '.pinguinolink');
 // The Suite core sets PINGUINO_DATA_DIR; standalone runs keep using ~/.pinguinolink.
 // PINGUINO_DATA_DIR is shared by every module, so Link keeps its own subfolder (the root already holds other modules' config.json).
-export const DIR = process.env.PINGUINO_DATA_DIR ? path.join(path.resolve(process.env.PINGUINO_DATA_DIR), 'link') : LEGACY;
+// A command run by hand (Stream Deck, terminal) has no PINGUINO_DATA_DIR; inside the Suite tree it must still read the same
+// config as the running module, so it falls back to <Suite>/Data/runtime/link when that folder exists.
+const SUITE_LINK = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'Data', 'runtime', 'link');
+export const DIR = process.env.PINGUINO_DATA_DIR ? path.join(path.resolve(process.env.PINGUINO_DATA_DIR), 'link')
+  : fs.existsSync(path.join(SUITE_LINK, 'config.json')) ? SUITE_LINK : LEGACY;
 const FILE = path.join(DIR, 'config.json');
 
 export const DEFAULTS = {

@@ -32,7 +32,7 @@ async function link(password) {
     return { status: r.status, json: await r.json().catch(() => ({})) };
   };
   for (let i = 0; i < 30; i++) { try { if ((await fetch(base + '/api/health')).ok) break; } catch {} await sleep(300); }
-  return { dir, child, call };
+  return { dir, child, call, port };
 }
 
 const good = await link('pw-secret-1'), bad = await link('bad-secret-2');
@@ -56,6 +56,16 @@ try {
   check('macro stop ends the stream', (await good.call('POST', '/api/macro/stop')).status === 200 && obs.streaming === false);
   check('unknown macro = 500 with a clear message', (await good.call('POST', '/api/macro/nope')).json.error?.includes('unknown macro'));
 
+  // Stream Deck path: the CLI talks to the running module (guards + activity), reading the same config dir
+  const runCli = (...a) => new Promise(res => { const p = spawn(process.execPath, [cli, ...a], { env: { ...process.env, PINGUINO_DATA_DIR: good.dir, PINGUINO_LINK_PORT: String(good.port) }, windowsHide: true }); let out = ''; p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d); p.on('close', c => res({ code: c, out: out.trim() })); });
+  const cl = await runCli('macro', 'brb');
+  check('CLI macro goes through the running module', cl.code === 0 && cl.out === 'ok' && obs.scene === 'BRB', JSON.stringify(cl));
+  check('CLI press shows in the activity list', (await good.call('GET', '/api/activity')).json.items.some(a => a.name === 'brb'));
+  await good.call('POST', '/api/macro/live');
+  const cl2 = await runCli('macro', 'stop');
+  check('CLI shows the guard message and exits 1', cl2.code === 1 && /not streaming/.test(cl2.out), JSON.stringify(cl2));
+  const mcli = (await good.call('GET', '/api/macros')).json.cli;
+  check('macro list exposes the Stream Deck command parts', !!mcli?.node && /cli.mjs$/.test(mcli.script));
   const o2 = (await good.call('GET', '/api/obs')).json;
   check('scene buttons: /api/obs lists scenes when enabled', Array.isArray(o2.scenes) && o2.scenes.includes('BRB'));
   check('scene button switches OBS scene', (await good.call('POST', '/api/scene', { name: 'BRB' })).status === 200 && obs.scene === 'BRB');
@@ -64,6 +74,7 @@ try {
   const act = (await good.call('GET', '/api/activity')).json.items;
   check('activity lists recent actions', act.length > 3 && act.some(a => a.name === 'start' && a.ok) && act.some(a => a.kind === 'scene'));
   await good.call('POST', '/api/settings', { changes: { 'cooldown.macroMs': 800 } });
+  await sleep(900);
   const c1 = await good.call('POST', '/api/macro/live'), c2 = await good.call('POST', '/api/macro/live');
   check('repeat press inside the guard is ignored (429)', c1.status === 200 && c2.status === 429, JSON.stringify([c1.status, c2.status]));
   await sleep(900);

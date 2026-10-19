@@ -25,6 +25,7 @@ input[type=checkbox]{width:18px;height:18px;margin:4px 8px 4px 0;accent-color:va
 <link rel=stylesheet href="__CORE__/theme.css">
 <body><main>
 <h1>🐧 PinguinoLink</h1>
+<div class=card id=rdcard><h3>Readiness</h3><div id=rd class=dim>checking…</div></div>
 <div class=card><h3>Network</h3><div id=s>loading…</div></div>
 <div class=card><h3>Devices</h3><div id=d class=dim>loading…</div><div id=dmsg class=dim></div></div>
 <div class=card><h3>OBS</h3><div id=o class=dim>loading…</div><div id=sc></div></div>
@@ -39,17 +40,18 @@ const H={'x-link-token':'__TOKEN__'};
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $=id=>document.getElementById(id);
 const last={};const setHtml=(id,h)=>{if(last[id]!==h){last[id]=h;$(id).innerHTML=h;}};
-let armed=null,armedAt=0,refreshSec=4,actCount=15;
+let armed=null,armedAt=0,refreshSec=4,actCount=15,showRd=true;
 const isArmed=k=>armed===k&&Date.now()-armedAt<4000;
 const api=async(p,b)=>{const r=await fetch(p,b===undefined?{headers:H}:{method:'POST',headers:Object.assign({'content-type':'application/json'},H),body:JSON.stringify(b)});
 const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||('HTTP '+r.status)),{data:j});return j;};
-function applyUi(u){if(!u)return;refreshSec=u.refreshSec||4;actCount=u.activityCount;$('actcard').style.display=u.activityCount===0?'none':'';document.body.classList.toggle('compact',!!u.compact);
+function applyUi(u){if(!u)return;refreshSec=u.refreshSec||4;actCount=u.activityCount;showRd=u.showReadiness!==false;$('rdcard').style.display=showRd?'':'none';$('actcard').style.display=u.activityCount===0?'none':'';document.body.classList.toggle('compact',!!u.compact);
 if(u.accent)document.documentElement.style.setProperty('--accent',u.accent);else document.documentElement.style.removeProperty('--accent');}
 async function load(){try{const s=await api('/api/status');applyUi(s.ui);
 setHtml('s','Role: <b>'+esc(s.role)+'</b> · '+esc(s.tailscale.state||s.tailscale.error)+'<ul>'+(s.tailscale.peers||[]).map(p=>'<li>'+esc(p.name)+' — '+(p.online?(p.direct?'🟢 direct':'🟡 relayed'):'⚫ offline')+'</li>').join('')+'</ul>');
 setHtml('m',(s.macro_buttons||[]).filter(b=>!b.hidden).map(b=>{const k='m:'+b.name,a=isArmed(k);return '<button class="'+(b.risky?'danger':'')+(a?' armed':'')+'" data-m="'+esc(b.name)+'"'+(b.risky?' data-twice="'+esc(k)+'"':'')+'>'+(a?'Click again: '+esc(b.label):esc((b.icon?b.icon+' ':'')+b.label))+'</button>';}).join('')||'<span class=dim>No macros yet. Open "Edit macros" to add one.</span>');}
 catch(e){$('s').textContent='unavailable: '+e.message;}
 try{const o=await api('/api/obs');setHtml('sc',o.connected&&o.scenes?'<div style="margin-top:8px">'+o.scenes.map(n=>'<button class="sm'+(n===o.scene?' armed':'')+'" data-scene="'+esc(n)+'">'+esc(n)+'</button>').join('')+'</div>':'');setHtml('o',o.connected?'🟢 Connected · scene <b>'+esc(o.scene)+'</b> · '+(o.streaming?'<b style="color:var(--live,#ff4d4f)">● LIVE</b>':'not streaming')+(o.recording?' · ● recording':''):'⚫ '+esc(o.error||'not connected'));}catch(e){$('o').textContent='unavailable: '+e.message;}
+if(showRd)try{const p=await api('/api/prestream');const ic={pass:'<span class=ok>✓</span>',warn:'<span style="color:var(--warn,#e8d44d)">⚠</span>',fail:'<span class=bad>✗</span>'};setHtml('rd','<ul>'+p.items.map(i=>'<li><span>'+(ic[i.status]||'•')+'</span><span class=grow><b>'+esc(i.label)+'</b> <span class=dim>'+esc(i.detail||'')+'</span></span></li>').join('')+'</ul>');}catch(e){$('rd').textContent='readiness unavailable: '+e.message;}
 if(actCount!==0)try{const a=await api('/api/activity');setHtml('act',a.items.length?'<ul>'+a.items.map(i=>'<li><span class=dim>'+new Date(i.t).toLocaleTimeString()+'</span><span class=grow>'+(i.ok?'<span class=ok>✓</span> ':'<span class=bad>✗</span> ')+esc(i.kind)+': <b>'+esc(i.name)+'</b>'+(i.detail?' <span class=dim>'+esc(i.detail)+'</span>':'')+'</span></li>').join('')+'</ul>':'Nothing yet.');}catch(e){}
 try{const d=await api('/api/mesh/status');
 let h='<div>This device: <b>'+esc(d.self.name)+'</b> <span class=dim>('+esc(d.self.os)+')</span></div>';
@@ -92,7 +94,7 @@ function renderMacros(){const M=MC;
 $('me').innerHTML='<datalist id=dl-scene>'+M.scenes.map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist><datalist id=dl-input>'+M.inputs.map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist>'
 +(M.connected?'':'<div class=dim>OBS is not connected here, so scene/input suggestions and "Check" are unavailable.</div>')
 +'<ul>'+M.macros.map((m,i)=>'<li><span class=grow>'+(m.meta.icon?esc(m.meta.icon)+' ':'')+'<b>'+esc(m.name)+'</b>'+(m.meta.label?' <span class=dim>→ '+esc(m.meta.label)+'</span>':'')+(m.risky?' <span class=bad>needs 2 clicks</span>':'')+(m.meta.hidden?' <span class=dim>(hidden)</span>':'')+'<small class=dim>'+m.steps.map(s=>esc(s.kind==='custom'?s.raw:(M.kinds.find(k=>k.kind===s.kind)||{}).label+(s.value?': '+s.value:''))).join(' → ')+'</small><span id="mc-'+esc(m.name)+'"></span></span>'
-+'<button class=sm data-mup="'+esc(m.name)+'">↑</button><button class=sm data-mdown="'+esc(m.name)+'">↓</button><button class=sm data-mcheck="'+esc(m.name)+'">Check</button><button class=sm data-medit="'+esc(m.name)+'">Edit</button><button class="sm danger'+(isArmed('md:'+m.name)?' armed':'')+'" data-mdel="'+esc(m.name)+'" data-twice="md:'+esc(m.name)+'">'+(isArmed('md:'+m.name)?'Click again':'Delete')+'</button></li>').join('')+'</ul>'
++(M.cli?'<button class=sm data-mcli="'+esc(m.name)+'">Stream Deck command</button>':'')+'<button class=sm data-mup="'+esc(m.name)+'">↑</button><button class=sm data-mdown="'+esc(m.name)+'">↓</button><button class=sm data-mcheck="'+esc(m.name)+'">Check</button><button class=sm data-medit="'+esc(m.name)+'">Edit</button><button class="sm danger'+(isArmed('md:'+m.name)?' armed':'')+'" data-mdel="'+esc(m.name)+'" data-twice="md:'+esc(m.name)+'">'+(isArmed('md:'+m.name)?'Click again':'Delete')+'</button></li>').join('')+'</ul>'
 +'<button id=mnew>+ New macro</button><div id=mform></div>';}
 function readForm(f){const g=n=>f.querySelector('[data-f='+n+']');const steps=[...f.querySelectorAll('[data-steps] .row')].map(r=>{const k=r.querySelector('[data-kind]');const v=r.querySelector('[data-val]');return {kind:k.value||k.getAttribute('value')||'custom',value:v?v.value:''};});
 return {name:g('name').value.trim(),label:g('label').value,icon:g('icon').value,hidden:g('hidden').checked,steps};}
@@ -118,6 +120,7 @@ if(t.id==='mnew'){$('mform').innerHTML=macroForm({name:'',steps:[{kind:'scene',v
 if(d.medit){const m=MC.macros.find(x=>x.name===d.medit);$('mform').innerHTML=macroForm(m);return;}
 if(d.mdel){await api('/api/macros/delete',{name:d.mdel});await loadMacros();load();return;}
 if(d.mup||d.mdown){await api('/api/macros/move',{name:d.mup||d.mdown,dir:d.mup?-1:1});await loadMacros();load();return;}
+if(d.mcli){const c='"'+MC.cli.node+'" "'+MC.cli.script+'" macro '+d.mcli;try{await navigator.clipboard.writeText(c);$('mc-'+d.mcli).innerHTML=' <span class=ok>copied</span> <span class=dim>use it in a Stream Deck System > Open action</span>';}catch(e){$('mc-'+d.mcli).innerHTML=' <code>'+esc(c)+'</code>';}return;}
 if(d.mcheck){const r=await api('/api/macros/check',{name:d.mcheck});$('mc-'+d.mcheck).innerHTML=r.ok===null?' <span class=dim>'+esc(r.note)+'</span>':r.ok?' <span class=ok>✓ all names exist in OBS</span>':' <span class=bad>✗ not in OBS: '+esc(r.missing.join(', '))+'</span>';return;}
 const form=t.closest&&t.closest('[data-form]');
 if(form&&d.addstep!==undefined){const rows=form.querySelector('[data-steps]');const n=rows.children.length;rows.insertAdjacentHTML('beforeend',stepRow({kind:'scene',value:''},n));return;}

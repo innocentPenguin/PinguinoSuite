@@ -20,6 +20,7 @@ export const SCHEMA = [
   ] },
   { group: 'This page', fields: [
     { key: 'ui.refreshSec', label: 'Refresh every (seconds)', type: 'number', min: 2, max: 60, def: 4, help: 'How often this page updates itself.' },
+    { key: 'ui.showReadiness', label: 'Show the readiness list', type: 'bool', def: true, help: 'A checklist at the top of the page: OBS, macros, Tailscale and devices, each with a plain-language status.' },
     { key: 'ui.confirmMacros', label: 'Extra macros needing a second click', type: 'list', def: [], help: 'Comma-separated macro names. Anything that starts or stops the stream always needs it.' },
     { key: 'ui.compact', label: 'Compact layout', type: 'bool', def: false, help: 'Tighter spacing so more fits on screen.' },
     { key: 'ui.accent', label: 'Accent colour', type: 'color', def: '', help: 'Hex like #ff9900 for headings and highlights. Blank = the Suite theme.' },

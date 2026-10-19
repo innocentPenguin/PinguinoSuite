@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import * as ts from './tailscale.mjs';
 import { runRequests, obsState, forgetState } from './obs.mjs';
@@ -141,7 +142,7 @@ export async function serve(cfg) {
       if (req.method === 'GET' && req.url === '/api/status') {
         const t = await ts.status();
         selfName = t.self?.name || selfName;
-        return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), macro_buttons: macros.buttons(cfg), ui: { refreshSec: cfg.ui?.refreshSec ?? 4, compact: !!cfg.ui?.compact, accent: cfg.ui?.accent || '', activityCount: cfg.ui?.activityCount ?? 15 }, tailscale: t, peers: mesh.status().peers });
+        return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), macro_buttons: macros.buttons(cfg), ui: { refreshSec: cfg.ui?.refreshSec ?? 4, compact: !!cfg.ui?.compact, accent: cfg.ui?.accent || '', activityCount: cfg.ui?.activityCount ?? 15, showReadiness: cfg.ui?.showReadiness !== false }, tailscale: t, peers: mesh.status().peers });
       }
       if (req.method === 'GET' && req.url === '/api/integrations') {   // Integrations tab (module token)
         const items = (await allItems()).map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail, help: i.help }));
@@ -151,7 +152,7 @@ export async function serve(cfg) {
       if (req.method === 'POST' && req.url === '/api/settings') { const b = await readJson(req); return json(200, settings.apply(cfg, sctx, b.changes, { confirmRole: b.confirm_role === true })); }
       if (req.method === 'GET' && req.url === '/api/macros') {
         const o = cfg.role === 'hub' ? await obsState(await obsConn(cfg)) : { connected: false };
-        return json(200, { macros: macros.list(cfg), kinds: Object.entries(macros.KINDS).map(([kind, k]) => ({ kind, label: k.label, param: k.param || null, risky: !!k.risky })), scenes: o.scenes || [], inputs: o.inputs || [], connected: !!o.connected });
+        return json(200, { macros: macros.list(cfg), kinds: Object.entries(macros.KINDS).map(([kind, k]) => ({ kind, label: k.label, param: k.param || null, risky: !!k.risky })), scenes: o.scenes || [], inputs: o.inputs || [], connected: !!o.connected, cli: { node: process.execPath, script: fileURLToPath(new URL('./cli.mjs', import.meta.url)) } });
       }
       if (req.method === 'POST' && req.url.startsWith('/api/macros/')) {
         const b = await readJson(req), act = req.url.slice('/api/macros/'.length);
