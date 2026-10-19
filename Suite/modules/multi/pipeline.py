@@ -9,6 +9,7 @@ import config
 import ai
 import console_log
 import ding as ding_mod
+import pop as pop_mod
 import dedupe
 from priority import rules as prio
 from models import ChatMessage
@@ -21,6 +22,7 @@ class Pipeline:
         self.rules = prio.load_rules()
         self.advisor = ai.Advisor(store)
         self.ding = ding_mod.Ding(store)
+        self.pop = pop_mod.Pop()
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
         self.stats = {"in": 0, "dupes": 0, "dropped": 0}
 
@@ -43,6 +45,7 @@ class Pipeline:
             return None
         st = config.settings()
         if m.is_self:
+            self.pop.observe(m)
             self.store.add_message(m, prio.Decision(0, "none", []))
             self.emit({"type": "message", "message": dict(m.to_dict(), score=0, tier="none", reasons=[])})
             self.cards.on_own_message(m)
@@ -53,6 +56,7 @@ class Pipeline:
             return None
         self.stats["in"] += 1
         self.ding.observe(m)
+        self.pop.observe(m)
         key = (m.platform, m.user_id)
         hist = self.recent_by_user.setdefault(key, [])
         hist.append((m.ts, m.text, prio.mentions_me(m.text, st["my_names"])))

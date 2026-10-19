@@ -21,14 +21,19 @@ DEFAULTS = {
     "ding_first_ever": False,        # Twitch "first message ever" gets its own (optional) sound
     "ding_sound": r"D:\PinguinoSuite\Data\sounds\new-chatter-bell.wav",   # = Streamer.bot "First TIme System (Bell)" sound
     "ding_first_sound": "",
-    "ding_returning": False,         # a different ding for someone who chatted in an earlier stream
-    "ding_returning_sound": "",       # empty = same sound as the new-chatter ding
-    "ding_returning_volume": 24,
+    "ding_returning": True,         # a different ding for someone who chatted in an earlier stream
+    "ding_returning_sound": r"D:\PinguinoSuite\Data\sounds\first-today-ding.mp3",   # = Streamer.bot "chat (first time today)" at 50 %
+    "ding_returning_volume": 50,
     "ding_master_volume": 100,       # multiplies both ding volumes
     "ding_volume": 24,                # Streamer.bot used 0.24
     "ding_scope": "stream",           # stream = once per person per stream; ever = once per person, forever (Streamer.bot bell)
     "ding_cooldown_s": 1.5,
     "ding_session_gap_h": 6,
+    "pop_platforms": [],             # chat pop (a sound on every message): platforms it is ON for; empty = off
+    "pop_sound": r"D:\PinguinoSuite\Data\sounds\chat-pop.mp3",   # = Streamer.bot "chat" / "chat (yt louder)"
+    "pop_volume": {"twitch": 50, "youtube": 76, "discord": 50},   # Streamer.bot: 0.5 Twitch, 0.76 YouTube
+    "pop_cooldown_s": 0.35,
+    "pop_own": False,                # also pop for my own messages
     "discord_channels": [],          # channel ids Multi reads/sends in (bot token is in Credential Manager)
     "priority_mode": "local",        # local | ai | auto  (AI arrives in M3; local always works)
     "ai_provider": "anthropic",      # anthropic | openai | ollama (key in Credential Manager as ai_key)

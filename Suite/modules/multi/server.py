@@ -507,6 +507,45 @@ async def ding_pick():
     return {"path": path or ""}
 
 
+# chat pop (a sound on every message) ------------------------------------
+@app.get("/api/pop")
+def pop_info():
+    return pipeline.pop.info()
+
+
+@app.post("/api/pop/settings")
+async def pop_settings(request: Request):
+    b = await request.json()
+    patch = {}
+    if "platforms" in b:
+        patch["pop_platforms"] = [p for p in b["platforms"] if p in ("twitch", "youtube", "discord")]
+    if "sound" in b:
+        path = str(b["sound"]).strip().strip('"')
+        if path and not (path.lower().endswith((".mp3", ".wav")) and os.path.isfile(path)):
+            raise HTTPException(400, "choose an existing .mp3 or .wav file")
+        patch["pop_sound"] = path
+    if "volume" in b:
+        cur = dict(config.settings()["pop_volume"])
+        cur.update({k: max(0, min(100, int(v))) for k, v in b["volume"].items() if k in ("twitch", "youtube", "discord")})
+        patch["pop_volume"] = cur
+    if "master_volume" in b:
+        patch["ding_master_volume"] = max(0, min(100, int(b["master_volume"])))
+    if "cooldown_s" in b:
+        patch["pop_cooldown_s"] = max(0.1, min(10.0, float(b["cooldown_s"])))
+    if "own" in b:
+        patch["pop_own"] = bool(b["own"])
+    config.save_settings(patch)
+    console_log.info("pop", "settings changed: on for " + (", ".join(config.settings()["pop_platforms"]) or "nothing"))
+    return pipeline.pop.info()
+
+
+@app.post("/api/pop/test")
+async def pop_test(request: Request):
+    b = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+    pipeline.pop.test(b.get("platform", "twitch"))
+    return {"ok": True}
+
+
 # settings / rules ----------------------------------------------------
 @app.get("/api/settings")
 def get_settings():

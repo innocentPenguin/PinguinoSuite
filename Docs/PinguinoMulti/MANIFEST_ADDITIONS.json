@@ -248,10 +248,24 @@
       "steps": [
         "Off by default: open Multi setup > New-chatter ding, tick Twitch and/or YouTube and press Test.",
         "Choose 'per stream' (the list resets after 6 quiet hours or when you press New stream) or 'ever' (once per person forever, like the old Streamer.bot bell).",
-        "Returning chatters: tick the box to play a different ding when someone who chatted in an earlier stream chats again in this one.",
+        "Returning chatters (default sound: the Streamer.bot 'first time today' ding at 50%): tick the box to play a different ding when someone who chatted in an earlier stream chats again in this one.",
         "Optional: a separate sound for Twitch's 'first message ever' flag. Each sound has its own Test button.",
         "Volumes: one slider for new chatters, one for returning, and a master volume that multiplies both. They are saved in Multi's settings and remembered after restarts.",
         "A burst (raid) plays at most one ding every 1.5 seconds; extra dings wait in a short queue and the rest are skipped.",
+        "Yellow 'sound file is missing': pick an .mp3 or .wav file. Silent on an auxiliary PC: only the master streaming PC plays it."
+      ],
+      "fix": {
+        "label": "Open Multi setup",
+        "route": "m:multi"
+      }
+    },
+    "pop": {
+      "title": "Chat pop sound",
+      "summary": "A short pop on this PC for every chat message, like the Streamer.bot 'chat' sound. Bots never pop, and nothing is written to chat.",
+      "steps": [
+        "Off by default: open Multi setup > Chat pop sound, tick the platforms (Twitch, YouTube, Discord) and press Test.",
+        "Each platform has its own volume (YouTube is louder by default, as in Streamer.bot: Twitch 50%, YouTube 76%). The master volume multiplies them all and is saved in Multi's settings.",
+        "A burst plays at most one pop every 0.35 seconds; extra pops are skipped so it never turns into noise.",
         "Yellow 'sound file is missing': pick an .mp3 or .wav file. Silent on an auxiliary PC: only the master streaming PC plays it."
       ],
       "fix": {

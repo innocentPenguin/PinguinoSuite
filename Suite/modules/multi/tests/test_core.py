@@ -792,3 +792,29 @@ def test_ding_returning_sound_volumes_and_recent_list(tmp_path, monkeypatch):
     s["ding_scope"] = "ever"
     d.new_stream("ever")
     assert d.observe(_m("amy", n=3)) is False                    # 'ever' + no returning toggle: known people stay quiet
+
+
+def test_pop_per_platform_volume_master_rate_limit_and_bots(tmp_path, monkeypatch):
+    import config, pop
+    snd = tmp_path / "pop.mp3"
+    snd.write_bytes(b"p")
+    s = dict(config.DEFAULTS, pop_platforms=["twitch", "youtube"], pop_sound=str(snd), ding_master_volume=50)
+    monkeypatch.setattr(config, "settings", lambda: s)
+    pl = _Player()
+    p = pop.Pop(player=pl, master=lambda: True, start_worker=False)
+    assert p.observe(_m("amy")) and p.observe(_m("yy", platform="youtube"))
+    assert not p.observe(_m("kim", platform="discord"))                       # discord not enabled
+    assert not p.observe(_m("nightbot")) and not p.observe(_m("amy", is_bot=True))
+    assert not p.observe(_m("me", is_self=True)) and not p.observe(_m("innocentpenguin"))   # own messages off by default
+    s["pop_own"] = True
+    assert p.observe(_m("innocentpenguin"))
+    assert not p.observe(_m("x1")) and p.stats["dropped"] == 1                 # queue of 3: a burst cannot pile up
+    assert p.volume_for("twitch") == 25 and p.volume_for("youtube") == 38      # 50/76 percent times master 50 percent
+    while not p.q.empty():
+        p.play_one(p.q.get())
+    assert len(pl.played) == 3 and pl.played[1][1] == 38
+    p.master = lambda: False
+    p._master = (0, True)
+    assert not p.observe(_m("auxuser"))
+    assert config.DEFAULTS["pop_volume"] == {"twitch": 50, "youtube": 76, "discord": 50}
+    assert config.DEFAULTS["ding_returning_volume"] == 50 and config.DEFAULTS["ding_returning"] is True

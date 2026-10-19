@@ -57,7 +57,7 @@ function platformCard(c, setup) {
 }
 
 async function renderLauncher() {
-  const [ws, pf, st, setup, ai, dg] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai'), api('/api/ding')]);
+  const [ws, pf, st, setup, ai, dg, pp] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai'), api('/api/ding'), api('/api/pop')]);
   const s = setup.settings;
   const connected = st.connectors.filter(c => c.status === 'connected').length;
   const step = n => `<span class="n">${n}</span>`;
@@ -107,6 +107,17 @@ async function renderLauncher() {
     <label>At most one ding every (seconds)<input id="dg-gap" type="number" min="0.2" max="30" step="0.1" value="${dg.cooldown_s}" style="width:90px"></label>
     <div class="act"><button class="p" data-act="ding-save">Save</button> <button data-act="ding-reset">New stream (everyone counts as returning)</button></div>
     <small class="mut">${dg.chatters_this_stream} chatter(s) counted this stream, ${dg.known_chatters} known from earlier, ${dg.played} ding(s) played${dg.dropped ? ', ' + dg.dropped + ' skipped during bursts' : ''}.</small></div>
+
+  <h3>Chat pop sound ${T('', 'A short pop on this PC for every chat message. Nothing is written to chat.')}</h3>
+  <div class="box"><small class="mut">Like the Streamer.bot "chat" sound. Bots never pop. Plays on this PC only${pp.master ? '' : ' (this PC is not the master, so it stays silent)'}. Saved and remembered after Multi or the app closes.</small>
+    <div class="row"><b>On for:</b>${['twitch', 'youtube', 'discord'].map(p => `<label class="chk"><input type="checkbox" id="pp-${p}" ${pp.platforms.includes(p) ? 'checked' : ''}> ${p[0].toUpperCase() + p.slice(1)}</label>`).join('')}
+      <label class="chk"><input type="checkbox" id="pp-own" ${pp.own ? 'checked' : ''}> also my own messages</label></div>
+    <label>Sound (.mp3 or .wav) ${pp.sound_exists ? '' : '<b class="tbadc">(file not found)</b>'}<span class="row"><input id="pp-sound" value="${esc(pp.sound)}" style="flex:1"><button data-act="ding-pick" data-target="pp-sound">Choose...</button></span></label>
+    ${['twitch', 'youtube', 'discord'].map(p => `<label>${p[0].toUpperCase() + p.slice(1)} volume <span id="pp-v-${p}-n">${pp.volume[p]}</span>% <button data-act="pop-test" data-platform="${p}" style="margin-left:6px">Test</button><input id="pp-v-${p}" type="range" min="0" max="100" value="${pp.volume[p]}" data-live="pp-v-${p}-n"></label>`).join('')}
+    <label>Master volume for all chat sounds (pop and dings) <span id="pp-mvol-n">${pp.master_volume}</span>%<input id="pp-mvol" type="range" min="0" max="100" value="${pp.master_volume}" data-live="pp-mvol-n"></label>
+    <label>At most one pop every (seconds)<input id="pp-gap" type="number" min="0.1" max="10" step="0.05" value="${pp.cooldown_s}" style="width:90px"></label>
+    <div class="act"><button class="p" data-act="pop-save">Save</button></div>
+    <small class="mut">${pp.played} pop(s) played${pp.dropped ? ', ' + pp.dropped + ' skipped during bursts' : ''}.</small></div>
 
   <h3>Smart features</h3>
   <div class="box"><b>How messages are ranked ${T('', 'Local rules always work with no internet and no account. AI only double-checks borderline messages.')}</b>
@@ -192,6 +203,14 @@ document.addEventListener('click', async e => {
       const j = await r.json().catch(() => ({})); if (!r.ok) { toast(j.detail || 'Could not save', false); return; }
       if (a === 'ding-test') { await fetch('/api/ding/test', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({kind: t.dataset.kind})}); toast('Playing the ' + t.dataset.kind + ' ding on this PC (settings saved)...'); return; }
       toast(plats.length ? 'Saved. Ding is ON for ' + plats.join(' and ') + '.' : 'Saved. Ding is off.'); }
+    else if (a === 'pop-save' || a === 'pop-test') {
+      const plats = ['twitch', 'youtube', 'discord'].filter(p => $('#pp-' + p).checked);
+      const r = await fetch('/api/pop/settings', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({platforms: plats, own: $('#pp-own').checked,
+        sound: v('pp-sound'), volume: {twitch: parseInt(v('pp-v-twitch')), youtube: parseInt(v('pp-v-youtube')), discord: parseInt(v('pp-v-discord'))},
+        master_volume: parseInt(v('pp-mvol')), cooldown_s: parseFloat(v('pp-gap'))})});
+      const j = await r.json().catch(() => ({})); if (!r.ok) { toast(j.detail || 'Could not save', false); return; }
+      if (a === 'pop-test') { await fetch('/api/pop/test', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({platform: t.dataset.platform})}); toast('Playing the ' + t.dataset.platform + ' pop on this PC (settings saved)...'); return; }
+      toast(plats.length ? 'Saved. Chat pop is ON for ' + plats.join(', ') + '.' : 'Saved. Chat pop is off.'); }
     else if (a === 'ding-reset') { await api('/api/ding/reset', {b: {}}); toast('Cleared. Everyone counts as new again.'); }
     else if (a === 'ding-pick') { toast('A file window opened on this PC...'); const r = await api('/api/ding/pick', {b: {}}); if (r.path) $('#' + t.dataset.target).value = r.path; return; }
     else if (a === 'copy-pop') { const i = $('#pop-url'); i.select(); try { await navigator.clipboard.writeText(i.value); toast('Address copied.'); } catch (x) { document.execCommand('copy'); toast('Address selected - press Ctrl+C.'); } return; }

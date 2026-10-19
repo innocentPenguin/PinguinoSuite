@@ -59,6 +59,13 @@ def run(connectors, store, pipeline, inbox):
         add("ding", "New-chatter ding", "warn", "on, but the sound file is missing")
     else:
         add("ding", "New-chatter ding", "pass", "on for " + ", ".join(d["platforms"]) + (" (silent: not the master PC)" if not d["master"] else ""))
+    pp = pipeline.pop.info()
+    if not pp["enabled"]:
+        add("pop", "Chat pop sound", "pass", "off")
+    elif not pp["sound_exists"]:
+        add("pop", "Chat pop sound", "warn", "on, but the sound file is missing")
+    else:
+        add("pop", "Chat pop sound", "pass", "on for " + ", ".join(pp["platforms"]) + (" (silent: not the master PC)" if not pp["master"] else ""))
     for x in out:
         x["help"] = help_text.for_item(x["id"])
     return out
