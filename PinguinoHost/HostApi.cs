@@ -57,7 +57,7 @@ namespace PinguinoHost
                 if (p == "/api/bots" && c.Request.HttpMethod == "GET") { Write(c, Bots().ToString(), "application/json"); return true; }
                 if (p == "/api/bots" && c.Request.HttpMethod == "POST") { Write(c, SaveBot(Body(c)).ToString(), "application/json"); return true; }
                 if (p == "/" || p == "/setup" || p == "/auth") { Write(c, Html, "text/html; charset=utf-8"); return true; }
-                if (p == "/api/prestream" && c.Request.HttpMethod == "GET") { Write(c, Prestream().ToString(), "application/json"); return true; }
+                if (p == "/api/prestream" && c.Request.HttpMethod == "GET") { Write(c, PrestreamCached().ToString(), "application/json"); return true; }
                 if (p == "/api/status") { Write(c, Status().ToString(), "application/json"); return true; }
                 if (p == "/api/config" && c.Request.HttpMethod == "GET") { Write(c, Config().ToString(), "application/json"); return true; }
                 if (p == "/api/config" && c.Request.HttpMethod == "POST") { Write(c, SaveConfig(Body(c)).ToString(), "application/json"); return true; }

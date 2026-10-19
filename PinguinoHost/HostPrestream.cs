@@ -34,7 +34,7 @@ namespace PinguinoHost
         static JObject Prestream()
         {
             var items = new List<JObject>(); var s = Load();
-            var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
             string chan = ((string)s["Channel"] ?? "").Trim();
 
             // 1. live connections
@@ -51,7 +51,7 @@ namespace PinguinoHost
                 var sr = sec[role] as JObject; string t = (string)sr?["UserToken"]; if (string.IsNullOrEmpty(t)) continue;
                 names.Add(role); string c = (string)sr["ClientId"]; checks.Add(Task.Run(() => Validate(http, t, c)));
             }
-            Task.WaitAll(checks.ToArray(), 8000);
+            Task.WaitAll(checks.ToArray(), 3500);
             var vres = new Dictionary<string, JObject>();
             for (int i = 0; i < names.Count; i++) vres[names[i]] = checks[i].IsCompleted ? checks[i].Result : new JObject { { "ok", false }, { "error", "Twitch did not answer in time" } };
 
@@ -88,7 +88,7 @@ namespace PinguinoHost
                     var rq = new HttpRequestMessage(HttpMethod.Get, Helix + "/moderation/moderators?broadcaster_id=" + bid + "&user_id=" + sid);
                     rq.Headers.Add("Authorization", "Bearer " + stok); rq.Headers.Add("Client-Id", cid);
                     var r = http.SendAsync(rq).Result;
-                    if (r.IsSuccessStatusCode) { bool mod = ((JObject.Parse(r.Content.ReadAsStringAsync().Result)["data"] as JArray)?.Count ?? 0) > 0; items.Add(Item("mod", "PinguinoB0t is a channel mod (needed for timeouts)", mod ? "pass" : "warn", mod ? "" : "not a mod: /mod pinguinob0t in chat")); }
+                    if (r.IsSuccessStatusCode) { bool mod = ((JObject.Parse(r.Content.ReadAsStringAsync().Result)["data"] as JArray)?.Count ?? 0) > 0; items.Add(Item("mod", "PinguinoB0t is a channel mod (needed for timeouts)", mod ? "pass" : "fail", mod ? "" : "not a mod: type /mod pinguinob0t in chat")); }
                     else items.Add(Item("mod", "PinguinoB0t is a channel mod (needed for timeouts)", "warn", "cannot check (streamer token lacks moderation:read); verify in chat with /mods"));
                 }
             }
@@ -127,7 +127,19 @@ namespace PinguinoHost
             }
 
             string worst = items.Any(i => (string)i["status"] == "fail") ? "fail" : items.Any(i => (string)i["status"] == "warn") ? "warn" : "pass";
-            return new JObject { { "ok", true }, { "module", "host" }, { "status", worst }, { "ts", DateTime.UtcNow.ToString("o") }, { "checks", new JArray(items) } };
+            return new JObject { { "ok", true }, { "module", "host" }, { "status", worst }, { "ts", DateTime.UtcNow.ToString("o") }, { "items", new JArray(items) } };
         }
+
+        static JObject _psCache; static DateTime _psAt = DateTime.MinValue; static readonly object _psLock = new object();
+        // served from a copy at most 90 s old (the core waits only 5 s); the same report is also written to console\prestream-host.json for the core's file mode
+        public static JObject PrestreamCached() { lock (_psLock) { if (_psCache != null && (DateTime.UtcNow - _psAt).TotalSeconds < 90) return _psCache; } return PrestreamRefresh(); }
+        static JObject PrestreamRefresh()
+        {
+            JObject r; try { r = Prestream(); } catch (Exception ex) { r = new JObject { { "ok", false }, { "status", "fail" }, { "items", new JArray { Item("host", "Host readiness check", "fail", ex.Message) } } }; }
+            lock (_psLock) { _psCache = r; _psAt = DateTime.UtcNow; }
+            try { var d = System.IO.Path.Combine(DataDir, "console"); System.IO.Directory.CreateDirectory(d); var f = System.IO.Path.Combine(d, "prestream-host.json"); var tmp = f + ".tmp"; System.IO.File.WriteAllText(tmp, r.ToString(Newtonsoft.Json.Formatting.None)); if (System.IO.File.Exists(f)) System.IO.File.Replace(tmp, f, null); else System.IO.File.Move(tmp, f); } catch (Exception) { }
+            return r;
+        }
+        public static void StartPrestreamLoop() { Task.Run(async () => { await Task.Delay(4000); while (true) { try { PrestreamRefresh(); } catch (Exception) { } await Task.Delay(120000); } }); }
     }
 }

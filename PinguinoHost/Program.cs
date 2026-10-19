@@ -135,7 +135,7 @@ namespace PinguinoHost
             if (!sim && (s.Value<bool?>("ObsEnabled") ?? true))
             { cph.Obs = new ObsClient(s.Value<string>("ObsHost") ?? "127.0.0.1", s.Value<int?>("ObsPort") ?? 4455, s.Value<string>("ObsPassword") ?? ""); Task.Run(() => cph.Obs.RunForever()); }
             CarryOverApiKey();
-            HostApi.DataDir = dataDir; HostApi.Port = s.Value<int?>("OverlayPort") ?? 8770; HostApi.SimMode = sim; HostApi.ObsConnected = () => cph.ObsIsConnected();
+            HostApi.DataDir = dataDir; HostApi.Port = s.Value<int?>("OverlayPort") ?? 8770; HostApi.SimMode = sim; if (!sim) HostApi.StartPrestreamLoop(); HostApi.ObsConnected = () => cph.ObsIsConnected();
             string overlayDir = null;
             try { var f = Path.Combine(dataDir, "settings.json"); if (File.Exists(f)) overlayDir = JObject.Parse(File.ReadAllText(f)).Value<string>("OverlayDir"); } catch (Exception) { }
             OverlayServer.Start(HostApi.Port, overlayDir, Path.Combine(suite, "PinguinoB0t", "overlays"), dataDir);
