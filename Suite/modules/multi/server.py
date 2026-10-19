@@ -63,6 +63,12 @@ connectors = {}
 shell = win.EdgeShell(f"http://127.0.0.1:{config.PORT}")
 
 
+async def prestream_file_loop():
+    while True:
+        console_log.write_prestream(prestream.run(connectors, store, pipeline, inbox))
+        await asyncio.sleep(120)
+
+
 async def tick_loop():
     n = 0
     while True:
@@ -90,7 +96,7 @@ async def lifespan(app):
     connectors["tiktok"] = tt
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
              asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()),
-             asyncio.create_task(listen_bridge.run(cards, hub.emit))]
+             asyncio.create_task(listen_bridge.run(cards, hub.emit)), asyncio.create_task(prestream_file_loop())]
     yield
     console_log.info("server", "Multi stopping")
     tw.stop = dc.stop = yt.stop = tt.stop = True
@@ -184,8 +190,8 @@ def setup_info():
 
 @app.get("/api/prestream")
 def prestream_checks():
-    """No-token readiness list for the Pinguino Console: [{id,label,status pass|warn|fail,detail}]."""
-    return prestream.run(connectors, store, pipeline, inbox)
+    """Readiness for the Pinguino Console: {ts, items:[{id,label,status pass|warn|fail,detail}]}."""
+    return {"ts": time.time(), "items": prestream.run(connectors, store, pipeline, inbox)}
 
 
 @app.get("/api/messages")

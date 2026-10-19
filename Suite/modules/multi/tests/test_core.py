@@ -548,6 +548,9 @@ def test_console_log_format_and_scrub(tmp_path, monkeypatch):
     rows = [json.loads(x) for x in f.read_text("utf-8").splitlines()]
     assert [r["level"] for r in rows] == ["warn", "info", "info"]
     assert set(rows[0]) == {"ts", "module", "level", "source", "msg"} and rows[0]["module"] == "multi"
+    assert isinstance(rows[0]["ts"], float)
+    console_log.write_prestream([{"id": "a", "label": "A", "status": "pass", "detail": ""}])
+    assert json.loads((f.parent / "prestream-multi.json").read_text("utf-8"))["items"][0]["id"] == "a"
     assert "abc123def456" not in rows[0]["msg"] and "SECRETVALUE" not in rows[0]["msg"]
 
 
@@ -570,7 +573,8 @@ def test_prestream_endpoint_shape_and_no_token_needed():
     import server
     c = TestClient(server.app, base_url="http://127.0.0.1:8766")
     r = c.get("/api/prestream")
-    rows = r.json()
-    assert r.status_code == 200 and rows and all(set(x) == {"id", "label", "status", "detail"} for x in rows)
+    body = r.json()
+    rows = body["items"]
+    assert r.status_code == 200 and isinstance(body["ts"], float) and rows and all(set(x) == {"id", "label", "status", "detail"} for x in rows)
     assert all(x["status"] in ("pass", "warn", "fail") for x in rows)
     assert {"store", "queue", "windows"} <= {x["id"] for x in rows}

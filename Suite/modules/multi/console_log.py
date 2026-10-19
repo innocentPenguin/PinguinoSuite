@@ -10,7 +10,6 @@ from pathlib import Path
 LEVELS = ("debug", "info", "warn", "error")
 _lock = threading.Lock()
 _last = {}
-MAX_BYTES = 2_000_000
 _SECRET = re.compile(r"(?i)(bearer\s+\S+|(?:token|key|secret|password|authorization)[\"']?\s*[=:]\s*\S+|[A-Za-z0-9_\-\.]{32,})")
 
 
@@ -22,7 +21,7 @@ def path():
 
 
 def scrub(s):
-    return _SECRET.sub("<redacted>", str(s))[:400]
+    return _SECRET.sub("<redacted>", str(s))[:1000]
 
 
 def log(level, source, msg, dedupe_s=0):
@@ -38,13 +37,30 @@ def log(level, source, msg, dedupe_s=0):
             _last[k] = now
         p = path()
         p.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "module": "multi", "level": level,
+        line = json.dumps({"ts": round(now, 3), "module": "multi", "level": level,
                            "source": source, "msg": msg}, ensure_ascii=False)
         with _lock:
-            if p.exists() and p.stat().st_size > MAX_BYTES:
-                p.replace(p.with_suffix(".jsonl.1"))
-            with p.open("a", encoding="utf-8") as f:
-                f.write(line + "\n")
+            for attempt in (1, 2):          # the core rotates the file; retry once if that raced our write
+                try:
+                    with p.open("a", encoding="utf-8") as f:
+                        f.write(line + chr(10))
+                    break
+                except OSError:
+                    if attempt == 2:
+                        raise
+                    time.sleep(0.2)
+    except Exception:
+        pass
+
+
+def write_prestream(items):
+    """File fallback for the core's prestream check: whole-file atomic replace of prestream-multi.json."""
+    try:
+        p = path().with_name("prestream-multi.json")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"ts": round(time.time(), 3), "items": items}), "utf-8")
+        tmp.replace(p)
     except Exception:
         pass
 
