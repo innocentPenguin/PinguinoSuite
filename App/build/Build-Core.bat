@@ -10,10 +10,12 @@ if /i not "%1"=="--force" (
 )
 if not exist "%APP%..\Suite\.venv\Scripts\python.exe" ( echo [core] Suite venv missing - run PinguinoApp.bat once first. & exit /b 1 )
 echo [core] freezing...
+for /f %%T in ('powershell -NoProfile -Command "[DateTime]::UtcNow.Ticks"') do set "T0=%%T"
 pushd "%APP%..\Suite"
 .venv\Scripts\python.exe -c "import PyInstaller" 2>nul || .venv\Scripts\python.exe -m pip install -q pyinstaller
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --onefile --name pinguino-core --distpath ..\App\src-tauri\binaries --workpath "%TEMP%\pi_work" --specpath "%TEMP%\pi_spec" suite\suite.py
 set "RC=%errorlevel%"
 popd
 if not "%RC%"=="0" ( echo [core] FAILED & exit /b 1 )
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\Stamp.ps1" "%CORE%" %T0%
 echo [core] built

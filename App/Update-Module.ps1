@@ -4,7 +4,8 @@
 param([Parameter(Mandatory)][string]$Id, [switch]$NoBuild)
 $ErrorActionPreference = 'Stop'
 $suite = Join-Path $PSScriptRoot '..\Suite'
-$specs = @(Get-Content (Join-Path $suite 'modules.json') -Raw | ConvertFrom-Json)
+# PS 5.1 ConvertFrom-Json returns a JSON array as ONE object; ForEach-Object unrolls it into separate specs
+$specs = @(Get-Content (Join-Path $suite 'modules.json') -Raw | ConvertFrom-Json | ForEach-Object { $_ })
 Get-ChildItem (Join-Path $suite 'modules') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
   $mf = Join-Path $_.FullName 'module.json'
   if (Test-Path $mf) { $j = Get-Content $mf -Raw | ConvertFrom-Json; if (-not ($specs | Where-Object id -eq $j.id)) { if (-not $j.cwd) { $j | Add-Member cwd "modules/$($_.Name)" }; $specs += $j } }

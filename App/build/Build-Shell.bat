@@ -23,6 +23,8 @@ if not exist node_modules set "NPM=1"
 if not errorlevel 1 set "NPM=1"
 if "%NPM%"=="1" ( echo [shell] npm install... & call npm install --no-audit --no-fund || ( echo [shell] FAILED & exit /b 1 ) )
 echo [shell] building...
+for /f %%T in ('powershell -NoProfile -Command "[DateTime]::UtcNow.Ticks"') do set "T0=%%T"
 if "%INSTALLER%"=="1" ( call npx tauri build --bundles nsis ) else ( call npx tauri build --no-bundle )
 if errorlevel 1 ( echo [shell] FAILED & exit /b 1 )
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\Stamp.ps1" "%EXE%" %T0%
 echo [shell] built

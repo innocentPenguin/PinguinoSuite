@@ -9,5 +9,7 @@ if /i not "%1"=="--force" (
   if errorlevel 1 ( echo [host] up to date, skipped & exit /b 0 )
 )
 echo [host] building...
+for /f %%T in ('powershell -NoProfile -Command "[DateTime]::UtcNow.Ticks"') do set "T0=%%T"
 dotnet build "%ROOT%\PinguinoHost\PinguinoHost.csproj" -c Release --nologo -v q || ( echo [host] FAILED & exit /b 1 )
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\Stamp.ps1" "%DLL%" %T0%
 echo [host] built
