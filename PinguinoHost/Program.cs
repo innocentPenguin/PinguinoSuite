@@ -41,7 +41,7 @@ namespace PinguinoHost
             suite = Opt("--suite", FindSuite());
             dataDir = Opt("--data", Environment.GetEnvironmentVariable("PINGUINO_DATA_DIR") ?? Environment.GetEnvironmentVariable("BVQ_DATA_DIR") ?? Path.Combine(suite, "Data", "runtime"));
             Directory.CreateDirectory(dataDir);
-            Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dataDir);   // the bots find bots.json, settings.json, routing.log here
+            Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dataDir); Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dataDir);   // the bots find bots.json, bots_secrets.json, settings.json, routing.log here
             var secrets = LoadSecrets();
             string channel = Opt("--channel", secrets.Value<string>("Channel") ?? "");
 

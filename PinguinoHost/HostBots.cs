@@ -61,6 +61,7 @@ namespace PinguinoHost
                 }
                 arr.Add(new JObject {
                     { "id", BotIds[i] }, { "title", (string)b?["Title"] ?? BotActions[i] }, { "action", act },
+                    { "account", (string)b?["Account"] ?? "" }, { "sender", (string)b?["Sender"] ?? "streamerbot" },
                     { "enabled", b == null || (bool?)b["Enabled"] != false }, { "runs", runs },
                     { "lastRunAgoSec", has ? (int?)(DateTime.UtcNow - lr).TotalSeconds : null },
                     { "lastError", err == null ? null : err[1] },

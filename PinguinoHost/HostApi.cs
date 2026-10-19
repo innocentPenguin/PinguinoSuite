@@ -98,9 +98,39 @@ namespace PinguinoHost
             Save(s); return new JObject { { "ok", true }, { "note", "Saved. Restart the PinguinoHost module in the Suite to apply." } };
         }
 
+        // A bot signs in as its OWN Twitch account: its token goes to bots_secrets.json[role] (the Router's helix sender) and bots.json learns the account name.
+        static JObject BotTokenIn(JObject b, string role)
+        {
+            string tok = (string)b["token"]; var s = Load(); string cid = (string)s["ClientId"];
+            string ch = ((string)s["Channel"] ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(tok) || string.IsNullOrEmpty(cid)) return new JObject { { "ok", false }, { "error", "missing token or ClientId" } };
+            if (ch == "") return new JObject { { "ok", false }, { "error", "set the Channel first (setup card), then sign the bot in" } };
+            using (var http = new HttpClient())
+            {
+                JArray Get(string path)
+                {
+                    var rq = new HttpRequestMessage(HttpMethod.Get, Helix + path);
+                    rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("Client-Id", cid);
+                    var r = http.SendAsync(rq).Result;
+                    return r.IsSuccessStatusCode ? JObject.Parse(r.Content.ReadAsStringAsync().Result)["data"] as JArray : null;
+                }
+                var me = Get("/users"); if (me == null || me.Count == 0) return new JObject { { "ok", false }, { "error", "Twitch rejected the token" } };
+                var chan = Get("/users?login=" + Uri.EscapeDataString(ch)); if (chan == null || chan.Count == 0) return new JObject { { "ok", false }, { "error", "channel " + ch + " not found" } };
+                string login = (string)me[0]["login"];
+                var sec = LoadFile("bots_secrets.json");
+                sec[role] = new JObject { { "ClientId", cid }, { "UserToken", tok }, { "SenderId", me[0]["id"] }, { "BroadcasterId", chan[0]["id"] }, { "Login", login } };
+                SaveFile("bots_secrets.json", sec);
+                var reg = LoadFile("bots.json");
+                if (reg["Bots"]?[role] != null) { reg["Bots"][role]["Account"] = login; reg["Bots"][role]["Sender"] = "helix"; SaveFile("bots.json", reg); }
+                return new JObject { { "ok", true }, { "login", login }, { "note", role + " now chats as " + login + "." } };
+            }
+        }
+
         // OAuth callback hands us the token; resolve the account so the user types nothing else.
         static JObject TokenIn(JObject b)
         {
+            string role = ((string)b["role"] ?? "").Trim().ToLowerInvariant();
+            if (role == "core" || role == "chat" || role == "helper") return BotTokenIn(b, role);
             string tok = (string)b["token"]; var s = Load(); string cid = (string)s["ClientId"];
             if (string.IsNullOrEmpty(tok) || string.IsNullOrEmpty(cid)) return new JObject { { "ok", false }, { "error", "missing token or ClientId" } };
             using (var http = new HttpClient())
@@ -157,7 +187,7 @@ details{margin:14px 0}summary{cursor:pointer;color:var(--ice);font-weight:600;pa
 <div class=grid>
 <div class=card><h2>1. Twitch sign-in</h2><p class=sub>Create an app at dev.twitch.tv/console, add redirect URL <code id=redir></code>, paste its Client ID, then sign in. You will leave this page for Twitch and come back.</p>
 <div class=row><label>Client ID</label><input type=text id=ClientId></div>
-<div class=row><button onclick=signin()>Sign in with Twitch</button><small id=tokstate></small></div></div>
+<div class=row><button onclick=signin()>Sign in as streamer</button><small id=tokstate></small></div></div>
 <div class=card><h2>2. Channel and OBS</h2>
 <div class=row><label>Channel</label><input type=text id=Channel placeholder='your login name'></div>
 <div class=row><label>OBS host</label><input type=text id=ObsHost placeholder=127.0.0.1></div>
@@ -179,20 +209,22 @@ function ago(s){return s<90?s+' s':s<5400?Math.round(s/60)+' min':Math.round(s/3
 function fmt(d,v){return d.step<1?(v*100).toFixed(2)+'%':v}
 function draw(){const g=$('bots');g.innerHTML='';BOTS.bots.forEach(b=>{const c=document.createElement('div');c.className='card';
 let h=`<div class=head><b>${esc(b.title)}</b><span class='pill ${b.enabled?'on':'off'}'>${b.enabled?'on':'off'}</span><label class=sw><input type=checkbox ${b.enabled?'checked':''} data-id=${b.id}><i></i></label></div>
+<div class=sub>Speaks as: <b>${b.sender=='helix'&&b.account?esc(b.account):'(shared account)'}</b> <button data-signin=${b.id}>${b.sender=='helix'?'Change account':'Sign in as '+(b.account?esc(b.account):'this bot')}</button></div>
 <div class=sub>${b.runs} runs${b.lastRunAgoSec!=null?', last '+ago(b.lastRunAgoSec)+' ago':', not run yet'}</div>`;
 b.settings.forEach(s=>{if(s.type=='bool')h+=`<div class=chk><input type=checkbox ${s.value?'checked':''} data-id=${b.id} data-k=${s.key}> ${esc(s.label)}</div>`;
 else h+=`<div class=set><label><span>${esc(s.label)}</span><span id=v_${b.id}_${s.key}>${fmt(s,s.value)}</span></label><input type=range min=${s.min} max=${s.max} step=${s.step} value=${s.value} data-id=${b.id} data-k=${s.key} title='${esc(s.hint)}'></div>`});
 if(b.lastError)h+=`<div class=err>${esc(b.lastError)} <small>(${ago(b.lastErrorAgoSec)} ago)</small></div>`;
 c.innerHTML=h;g.appendChild(c)});
+g.querySelectorAll('button[data-signin]').forEach(x=>x.onclick=()=>signin(x.dataset.signin));
 g.querySelectorAll('input').forEach(i=>{
  if(i.type=='range')i.oninput=()=>{busy=Date.now();const d=BOTS.bots.find(b=>b.id==i.dataset.id).settings.find(s=>s.key==i.dataset.k);$('v_'+i.dataset.id+'_'+i.dataset.k).textContent=fmt(d,+i.value)};
  i.onchange=async()=>{busy=Date.now();const b={id:i.dataset.id};if(i.dataset.k){b.settings={};b.settings[i.dataset.k]=i.type=='range'?+i.value:i.checked}else b.enabled=i.checked;
   const r=await j('/api/bots',{method:'POST',body:JSON.stringify(b)});if(!r.ok)alert(r.error);busy=0;bots(true)}})}
 async function bots(force){if(!force&&Date.now()-busy<4000)return;BOTS=await j('/api/bots');$('botnote').textContent=BOTS.routerError?'Router: '+BOTS.routerError:BOTS.note;draw()}
 async function save(){const b={};F.forEach(k=>b[k]=$(k).value);b.ObsPassword=$('ObsPassword').value;const r=await j('/api/config',{method:'POST',body:JSON.stringify(b)});$('msg').textContent=r.note||r.error;$('ObsPassword').value='';load()}
-function signin(){save();const u='https://id.twitch.tv/oauth2/authorize?response_type=token&client_id='+encodeURIComponent($('ClientId').value)+'&redirect_uri='+encodeURIComponent(CFG.redirect)+'&scope='+encodeURIComponent(CFG.scopes);const w=window.open(u,'_blank','noopener');$('msg').textContent=w?'Finish signing in in the new window; this card updates by itself.':'Your browser blocked the new window. Allow pop-ups for this page and try again.'}
+function signin(role){save();const u='https://id.twitch.tv/oauth2/authorize?response_type=token&force_verify=true&state='+encodeURIComponent(role||'')+'&client_id='+encodeURIComponent($('ClientId').value)+'&redirect_uri='+encodeURIComponent(CFG.redirect)+'&scope='+encodeURIComponent(CFG.scopes);const w=window.open(u,'_blank','noopener');$('msg').textContent=w?'Finish signing in in the new window; this card updates by itself.':'Your browser blocked the new window. Allow pop-ups for this page and try again.'}
 async function callback(){const h=new URLSearchParams(location.hash.slice(1));const t=h.get('access_token');if(!t)return;history.replaceState(null,'','/setup');
-const r=await j('/api/token',{method:'POST',body:JSON.stringify({token:t})});document.body.innerHTML=r.ok?'<main><h1>Signed in'+(r.login?' as '+esc(r.login):'')+'</h1><p class=sub>You can close this tab and return to PinguinoSuite.</p></main>':'<main><h1>Sign-in failed</h1><p class=sub>'+esc(r.error||'unknown error')+'</p><p class=sub>Close this tab, then try again from PinguinoSuite.</p></main>'}
+const r=await j('/api/token',{method:'POST',body:JSON.stringify({token:t,role:h.get('state')||''})});document.body.innerHTML=r.ok?'<main><h1>Signed in'+(r.login?' as '+esc(r.login):'')+'</h1><p class=sub>You can close this tab and return to PinguinoSuite.</p></main>':'<main><h1>Sign-in failed</h1><p class=sub>'+esc(r.error||'unknown error')+'</p><p class=sub>Close this tab, then try again from PinguinoSuite.</p></main>'}
 async function tokpoll(){try{const c=await j('/api/config');$('tokstate').textContent=c.hasUserToken?'token saved':'not signed in'}catch(e){}}
 if(location.hash.indexOf('access_token')>=0){callback()}else{load();setInterval(tokpoll,3000);status();bots(true);setInterval(status,3000);setInterval(()=>bots(false),5000)}
 //bots(true);setInterval(status,3000);setInterval(()=>bots(false),5000);

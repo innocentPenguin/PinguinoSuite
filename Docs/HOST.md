@@ -44,3 +44,10 @@ untime\host_secrets.json` (local only) and never sent back to the page (`hasUser
 - Page: Suite dark theme, responsive, no popups; CSP `frame-ancestors` allows self, tauri://localhost, http(s)://tauri.localhost, loopback.
 - Guard: Host must be loopback; Origin must be loopback or Tauri. POSTs: same-origin page is trusted; every other writer (Tauri shell, Stream Deck with Origin, scripts) needs `Authorization: Bearer` or `X-Pinguino-Token` equal to PINGUINO_API_TOKEN / PINGUINO_MODULE_TOKEN (if neither is set, only non-Tauri callers pass). PINGUINO_DATA_DIR is honored.
 - Twitch sign-in navigates the top window to id.twitch.tv (framing is refused), then returns to /auth on 8770.
+
+## Separate chatters per bot
+
+Each bot can speak as its own Twitch account. In the Host page every bot card shows **Speaks as** and a sign-in button.
+Signing in from a card (core / chat / helper) stores that account's token in `bots_secrets.json[role]` and sets `Bots[role].Account` and `Sender:"helix"` in `bots.json`. The Router's `PgSay` then posts through that account.
+The "Sign in as streamer" button in the setup section keeps filling `host_secrets.json` (EventSub, timeouts, fallback speaker).
+Sign in as the bot in a private window or log out of Twitch first (the flow uses `force_verify`). The Channel must be set first. Bots must be mods in the channel for timeouts. A bot without its own account keeps speaking through the shared account.
