@@ -1,0 +1,25 @@
+using System;
+using System.Collections.Generic;
+public class CPHStubBase { public CPHProxy CPH = new CPHProxy(); }
+public class CPHProxy
+{
+    public static List<string> Sent = new List<string>();
+    public static List<string> Whispers = new List<string>();
+    public static bool WhisperOk = true;
+    public static Dictionary<string, object> Args = new Dictionary<string, object>();
+    public void SendMessage(string m, bool useBot = true) { Sent.Add(m); }
+    public bool SendWhisper(string user, string m, bool useBot = true) { if (WhisperOk) Whispers.Add(user + ": " + m); return WhisperOk; }
+    public static List<string> Timeouts = new List<string>();
+    public bool TwitchTimeoutUser(string user, int secs, string reason, bool useBot = false) { Timeouts.Add(user + "|" + secs + "|" + useBot); return true; }
+    public void LogInfo(string m) { Console.WriteLine("INFO " + m); }
+    public void LogWarn(string m) { Console.WriteLine("WARN " + m); }
+    public void LogError(string m) { Console.WriteLine("ERR " + m); }
+    public void LogVerbose(string m) { }
+    public bool TryGetArg<T>(string k, out T v) { object o; if (Args.TryGetValue(k, out o)) { v = (T)o; return true; } v = default(T); return false; }
+
+  public static System.Collections.Generic.Dictionary<string,object> Globals = new System.Collections.Generic.Dictionary<string,object>();
+  public bool SetGlobalVar(string name, object value, bool persisted = true){ Globals[name] = value; return true; }
+  public T GetGlobalVar<T>(string name, bool persisted = true){ object o; return Globals.TryGetValue(name, out o) && o is T ? (T)o : default(T); }
+
+  public void SetArgument(string k, object v){ Args[k] = v; }
+}

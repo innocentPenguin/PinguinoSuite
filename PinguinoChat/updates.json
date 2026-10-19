@@ -1,0 +1,74 @@
+[
+  {
+    "At": "2026-10-18T16:05:00-05:00",
+    "By": "claude",
+    "Title": "PinguinoBot gets a voice and a memory",
+    "Details": "First version of the chat bot: answers when @ed or named, remembers short facts per viewer (by Twitch id), cooldowns, bot/mod/VIP list from the website, only while live. Time approximate."
+  },
+  {
+    "At": "2026-10-18T17:00:00-05:00",
+    "By": "claude",
+    "Title": "Chat logging, stream-start study and opt-outs",
+    "Details": "Chat is logged while live, studied at stream start; !forgetme (no details kept) and !optmeout (name hidden everywhere); !memory whispers what it knows. Time approximate."
+  },
+  {
+    "At": "2026-10-18T22:00:00-05:00",
+    "By": "claude",
+    "Title": "Talks like the community, decides when to answer, fewer broken replies",
+    "Details": "Community voice learned from 7 days of logs; the AI decides whether to answer (no timers), 'hush' when told to chill, conversation focus, teasing, JSON/half-sentence reply fixes, less queue talk. Time approximate."
+  },
+  {
+    "At": "2026-10-19T01:35:00-05:00",
+    "By": "other session",
+    "Title": "Log archive, lore, profiles, timeouts, web search, nicknames, ratings",
+    "Details": "Chat log archive refreshed every 5 minutes, running-joke lore, a profile for every chatter, log search tool, web search, community nicknames, ratings/favorites, mod timeouts on the streamer's order, birthdays (month and day) and states."
+  },
+  {
+    "At": "2026-10-19T03:10:00-05:00",
+    "By": "claude",
+    "Title": "Update log, friendship rules, names and trust, opinions, pronouns, no length cap",
+    "Details": "This update log (the bot knows when it changed). Romantic advances get a 4-step friendly-to-firm ladder ('ily' stays friend talk). Age/bedtime banter allowed (everyone assumed 18+, believed if they say otherwise). Names: community nickname, then the name they asked for, then the bot's own; trusted viewers may rename themselves. Pronouns remembered (bot only). Consistent opinions file. Already-answered replies. No hard length cap (shortest reply that works, split for Twitch). !chatbot status and !chatbot updates for mods."
+  },
+  {
+    "At": "2026-10-19T03:24:52-05:00",
+    "By": "claude",
+    "Title": "Helper split: PinguinoHelper.cs (lobby info, join/register help, actions by confirmation)",
+    "Details": "PinguinoBot is split into chatbot (PinguinoChat.cs), helper (new PinguinoHelper.cs) and game manager (PinguinoBotCore.cs). The helper reads normal chat: tells viewers the private match name/password (from helper_settings.json), explains register/join with the right example (!register YourEpicName), fixes mistyped !register <name>, and registers/joins/leaves/checks position for a viewer after they say yes. It never gets mod rights and only touches the sender's own data. Design in GPT/HELPER_DESIGN.md; tests in tests/helper."
+  },
+  {
+    "At": "2026-10-19T03:26:42-05:00",
+    "By": "claude",
+    "Title": "Long-term history summaries (daily, weekly, monthly highlights per viewer)",
+    "Details": "New GPT/build-summaries.mjs builds daily summaries per stream day, weekly summaries, and monthly highlights per active viewer (interests, highlights, vibe) into GPT/history, incrementally and with the bot's privacy rules. A read hook for PinguinoChat.cs is ready (GPT/HistoryHook.cs.txt) but not wired in yet. First sample built: 2 days, 1 week, 6 viewers (October)."
+  },
+  {
+    "At": "2026-10-19T03:35:33-05:00",
+    "By": "claude",
+    "Title": "Removed !optmeout",
+    "Details": "The !optmeout command is gone; !forgetme and !rememberme remain. Viewers who already used it stay anonymous until !rememberme."
+  },
+  {
+    "At": "2026-10-19T03:39:35-05:00",
+    "By": "claude",
+    "Title": "Chat commands are now collected",
+    "Details": "!commands in the chat logs are counted per day and per viewer (command names only, no AI cost) in GPT/history/commands, so the bot can later replace them. They are still never answered by the AI."
+  },
+  {
+    "At": "2026-10-19T03:40:56-05:00",
+    "By": "claude",
+    "Title": "Sleeps offline",
+    "Details": "The chat bot now sleeps when the stream is offline and, if pinged, says to come back when InnocentPenguin is live with the Twitch link."
+  },
+  {
+    "At": "2026-10-19T03:41:11-05:00",
+    "By": "claude",
+    "Title": "Long-term history is live: full backfill built, hook wired into the chat bot",
+    "Details": "Built the whole backfill (247 daily summaries, 36 weekly, monthly highlights for 162 viewers, 355 files; about 1.4M tokens in, 342 calls). PinguinoChat.cs now adds a [LONG-TERM HISTORY] section for questions about dates, weeks, months or a viewer's interests (not for viewers who used !forgetme or !optmeout). Setting HistoryDir. Run node GPT/build-summaries.mjs again whenever you want new days added (incremental)."
+  },
+  {
+    "At": "2026-10-19T03:53:08-05:00",
+    "By": "claude",
+    "Title": "Three bots: HelperPinguino, PinguinoChat, PinguinoB0t with a router",
+    "Details": "New PinguinoRouter action decides who answers (any bot mention -> chatbot unless it is about what the helper said; ordinary chat -> helper then chatbot). Fallback chains helper->chat->core, chat->helper->core, core->chat->helper. Names, accounts and aliases live in bots.json so each bot is easily renamed; bots without an account speak through the next one. Shared code is copied into the actions by shared/sync-shared.mjs. Not tried in real Streamer.bot yet."
+  }
+]

@@ -1,0 +1,172 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+
+// Checks for the router and the shared bot code (names, aliases, who goes first, fallbacks, who speaks).
+public static class Harness
+{
+    static int fails, passes;
+    static string dir;
+    static void Check(string name, bool ok, string extra = "") { if (ok) passes++; else { fails++; Console.WriteLine("FAIL: " + name + (extra == "" ? "" : "  -> " + extra)); } }
+
+    static void Reset()
+    {
+        CPHProxy.Sent.Clear(); CPHProxy.Runs.Clear(); CPHProxy.Args.Clear(); CPHProxy.Globals.Clear(); CPHProxy.Log.Clear();
+        CPHProxy.Existing = new HashSet<string> { "PinguinoHelper", "PinguinoChat", "PinguinoBot" };
+        CPHProxy.Behaviors.Clear();
+    }
+    static void Chat(string user, string text, string replyTo = null)
+    {
+        CPHProxy.Args.Clear(); CPHProxy.Runs.Clear();
+        CPHProxy.Args["message"] = text; CPHProxy.Args["userName"] = user.ToLower(); CPHProxy.Args["user"] = user;
+        if (replyTo != null) CPHProxy.Args["reply.userName"] = replyTo;
+        new CPHInline().Execute();
+    }
+    static string Runs() { return string.Join(",", CPHProxy.Runs); }
+    static void Registry(string json) { File.WriteAllText(Path.Combine(dir, "bots.json"), json); typeof(CPHInline).GetField("_pgChecked", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue); typeof(CPHInline).GetField("_pgStamp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue); }
+    static void HelperSpoke(string login) { new CPHInline().PgSetHelperContextPublic(login); }
+
+    public static int Main()
+    {
+        dir = Path.Combine(Path.GetTempPath(), "bots_test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dir);
+        Reset();
+
+        // ── defaults: bots.json is created, only the core has an account ──
+        CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        Chat("viewer1", "hello everyone");
+        Check("bots.json is created on first use", File.Exists(Path.Combine(dir, "bots.json")));
+        Check("ordinary chat: helper first, then the chatbot", Runs() == "PinguinoHelper,PinguinoChat", Runs());
+        Reset(); Chat("viewer1", "an older module that reports nothing");
+        Check("a module that reports nothing counts as handled (nothing is answered twice)", Runs() == "PinguinoHelper", Runs());
+
+        // ── who handles it ──
+        Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        Chat("viewer1", "what's the lobby password");
+        Check("the helper handled it: the chatbot is not asked", Runs() == "PinguinoHelper", Runs());
+        Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        Chat("viewer1", "nice play lol");
+        Check("the helper passes: the chatbot gets it", Runs() == "PinguinoHelper,PinguinoChat", Runs());
+        Check("the router marks the message as routed", CPHProxy.Args.ContainsKey("pinguinoRouted"));
+        Check("each module is told who is next", CPHProxy.Args.ContainsKey("pinguinoNext"));
+
+        // ── mentions bring up the chatbot ──
+        foreach (string alias in new[] { "@pinguinob0t", "@PinguinoB0t", "pinguinobot", "@pinguinochat", "@HelperPinguino" })
+        {
+            Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+            Chat("viewer1", alias + " hi there how are you");
+            Check("@ing " + alias + " brings up the chatbot first", Runs() == "PinguinoChat", Runs());
+        }
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "pass"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        Chat("viewer1", "@pinguinob0t hey");
+        Check("the chatbot passes: the helper takes over (chat falls into helper)", Runs() == "PinguinoChat,PinguinoHelper", Runs());
+        // a helper-type question to the chatbot: it defers, the helper answers; if the helper passes, the chatbot gets it back
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "defer"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        Chat("viewer1", "@pinguinob0t what's the code");
+        Check("deferred to the helper, which handles it", Runs() == "PinguinoChat,PinguinoHelper", Runs());
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "defer"; CPHProxy.Behaviors["PinguinoHelper"] = () => "pass";
+        Chat("viewer1", "@pinguinob0t what's the code");
+        Check("nobody took it: the deferring chatbot is asked again and must answer", Runs() == "PinguinoChat,PinguinoHelper,PinguinoChat*", Runs());
+
+        // ── what the helper said ──
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        HelperSpoke("viewer2");
+        Chat("viewer2", "@pinguinob0t yes");
+        Check("@ing a bot with a yes after the helper spoke: the helper first", Runs() == "PinguinoHelper", Runs());
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        HelperSpoke("viewer2");
+        Chat("viewer2", "@pinguinob0t did you see that insane save in the last game, it was unreal");
+        Check("@ing a bot about something unrelated, even right after the helper: the chatbot", Runs() == "PinguinoChat", Runs());
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        HelperSpoke("viewer2");
+        Chat("viewer2", "ok and then");
+        Check("a short follow-up without a mention goes to the helper", Runs() == "PinguinoHelper", Runs());
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        Chat("viewer3", "ok and then");
+        Check("without an open helper conversation the helper still goes first for ordinary chat", Runs() == "PinguinoHelper", Runs());
+
+        // ── commands ──
+        Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        Chat("viewer1", "!join");
+        Check("!commands: helper (mistyped !register), then the chatbot records them", Runs() == "PinguinoHelper,PinguinoChat", Runs());
+
+        // ── fallbacks when a bot is missing or switched off ──
+        Reset(); CPHProxy.Existing.Remove("PinguinoHelper"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        Chat("viewer1", "what's the code");
+        Check("helper action missing in Streamer.bot: helper falls into chat", Runs() == "PinguinoChat" && CPHProxy.Log.Any(l => l.Contains("no action")), Runs());
+        Reset(); CPHProxy.Existing.Remove("PinguinoChat"); CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        Chat("viewer1", "@pinguinob0t hi");
+        Check("chat action missing: chat falls into helper", Runs() == "PinguinoHelper", Runs());
+        Reset(); CPHProxy.Existing.Clear();
+        Chat("viewer1", "@pinguinob0t hi");
+        Check("nothing installed: nothing runs, nothing crashes", Runs() == "" && !CPHProxy.Log.Any(l => l.StartsWith("ERR")), string.Join("|", CPHProxy.Log));
+
+        // ── renaming: only bots.json changes ──
+        Registry("{\"Bots\":{\"core\":{\"Title\":\"Pingu\",\"Account\":\"pingu_bot\",\"Aliases\":[\"pingu\"]},\"helper\":{\"Title\":\"Penny\",\"Account\":\"penny_helps\",\"Aliases\":[\"penny\"],\"Action\":\"Penny\"},\"chat\":{\"Title\":\"Yappy\",\"Account\":\"yappy_bot\",\"Aliases\":[\"yappy\"]}}}");
+        Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["Penny"] = () => "handled";
+        Chat("viewer1", "hey @yappy you there");
+        Check("a renamed bot answers to its new name", Runs() == "PinguinoChat", Runs());
+        Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["Penny"] = () => "handled";
+        Chat("viewer1", "hello world");
+        Check("the helper action name comes from bots.json", Runs() == "Penny", Runs());
+        Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["Penny"] = () => "handled";
+        Chat("viewer1", "@pinguinob0t hi");
+        Check("the old name is just a word now (no mention)", Runs() == "Penny", Runs());
+        Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        CPHProxy.Behaviors["Penny"] = () => "pass";
+        Chat("pingu_bot", "@yappy hi");
+        Check("a message from one of our own accounts never starts anything", Runs() == "");
+        Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["Penny"] = () => "handled";
+        Chat("viewer1", "yes please", "penny_helps");
+        Check("a reply to the helper's account goes to the helper", Runs() == "Penny", Runs());
+        Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["Penny"] = () => "handled";
+        Chat("viewer1", "thanks", "yappy_bot");
+        Check("a reply to the chatbot's account goes to the chatbot", Runs() == "PinguinoChat", Runs());
+
+        // ── switched off in bots.json ──
+        Registry("{\"Bots\":{\"helper\":{\"Enabled\":false}}}");
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        Chat("viewer1", "what's the code");
+        Check("a switched-off helper is skipped", Runs() == "PinguinoChat", Runs());
+        Registry("{\"Bots\":{\"chat\":{\"Enabled\":false}}}");
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        Chat("viewer1", "@pinguinob0t hi");
+        Check("a switched-off chatbot is skipped: the helper takes it", Runs() == "PinguinoHelper", Runs());
+
+        // ── who speaks (PgSay) ──
+        Registry("{}");   // defaults: only the core has an account
+        Reset();
+        var c = new CPHInline();
+        c.SayPublic("helper", "hello"); c.SayPublic("chat", "hi"); c.SayPublic("core", "queue open");
+        Check("with one account everyone speaks through it, text unchanged", CPHProxy.Sent.SequenceEqual(new[] { "hello", "hi", "queue open" }), string.Join("|", CPHProxy.Sent));
+        Check("speaker chains: helper -> chat -> core, chat -> helper -> core, core -> chat -> helper", c.SpeakerPublic("helper") == "core" && c.SpeakerPublic("chat") == "core" && c.SpeakerPublic("core") == "core");
+        Registry("{\"Bots\":{\"chat\":{\"Account\":\"chat_acc\"}}}");
+        Check("a bot with its own account speaks for itself", c.SpeakerPublic("chat") == "chat");
+        Check("the helper falls into the chatbot first (before the core)", c.SpeakerPublic("helper") == "chat");
+        Registry("{\"Bots\":{\"helper\":{\"Account\":\"h_acc\"}}}");
+        Check("the chatbot falls into the helper first", c.SpeakerPublic("chat") == "helper");
+        Registry("{\"Bots\":{\"core\":{\"Account\":\"\"},\"helper\":{\"Account\":\"h_acc\"}}}");
+        Check("the core falls into the chatbot, then the helper", c.SpeakerPublic("core") == "helper");
+        Registry("{\"TagWhenShared\":true,\"Bots\":{\"chat\":{\"Title\":\"Yappy\"}}}");
+        Reset(); c.SayPublic("chat", "hi"); c.SayPublic("core", "ok");
+        Check("with TagWhenShared a borrowed voice is tagged with the bot's name", CPHProxy.Sent.SequenceEqual(new[] { "[Yappy] hi", "ok" }), string.Join("|", CPHProxy.Sent));
+
+        // ── a bot's own account via Twitch's API (fake HTTP) ──
+        Registry("{\"Bots\":{\"chat\":{\"Account\":\"chat_acc\",\"Sender\":\"helix\"}}}");
+        File.WriteAllText(Path.Combine(dir, "bots_secrets.json"), "{\"chat\":{\"ClientId\":\"cid\",\"UserToken\":\"tok\",\"SenderId\":\"123\",\"BroadcasterId\":\"456\"}}");
+        var posts = new List<string>();
+        typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, (Func<string, string, string, string>)((url, auth, body) => { posts.Add(url + " " + auth + " " + body); return "{}"; }));
+        Reset(); c.SayPublic("chat", "from my own account");
+        Check("a helix bot posts through the Twitch API with its own token", posts.Count == 1 && posts[0].Contains("helix/chat/messages") && posts[0].Contains("\"sender_id\":\"123\"") && posts[0].Contains("from my own account") && CPHProxy.Sent.Count == 0, string.Join("|", posts));
+        File.Delete(Path.Combine(dir, "bots_secrets.json"));
+        Reset(); c.SayPublic("chat", "no token");
+        Check("without a token it falls back to the bot account", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "no token", string.Join("|", CPHProxy.Sent));
+
+        Console.WriteLine(fails == 0 ? "ALL " + passes + " BOT ROUTING CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
+        try { Directory.Delete(dir, true); } catch (Exception) { }
+        return fails == 0 ? 0 : 1;
+    }
+}

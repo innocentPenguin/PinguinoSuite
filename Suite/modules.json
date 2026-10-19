@@ -1,0 +1,15 @@
+[
+  {
+    "id": "listen",
+    "name": "PinguinoListen",
+    "desc": "Listens to your mic, transcribes, learns how you talk. Listen-only.",
+    "cwd": "modules/listen",
+    "cmd": ["{py}", "server.py"],
+    "port": 8765,
+    "url": "http://127.0.0.1:8765",
+    "health": "/api/status",
+    "on_live": {"post": "/api/live/auto"},
+    "on_offline": {"post": "/api/live/stop"},
+    "defaults": {"enabled": true, "start_with_suite": true, "react_to_live": true}
+  }
+]

@@ -1,0 +1,31 @@
+# Pinguino Suite root repo — secrets and runtime data never go in git
+Data/*
+!Data/config/
+Data/config/*
+!Data/config/*.example.json
+!Data/*/.gitkeep
+Data/secrets/*
+!Data/secrets/.gitkeep
+Archive/
+.env
+.env.*
+*.env
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+*.log
+*.db
+*.zip
+# PinguinoSite is its own repo (Railway deploy)
+PinguinoSite/
+# Test build copies
+Tests/*/build/
+Tests/*/bin/
+Tests/*/obj/
+Pipeline/.last-rebuild
+Pipeline/.log-agent.alive
+Suite/modules/listen/data/
+*.lnk
+**/bin/
+**/obj/

@@ -1,0 +1,12 @@
+{
+  "name": "pinguinolink",
+  "version": "0.1.0",
+  "description": "Links all your PCs on any network: encrypted mesh, OBS macros, file transfer, self-troubleshooting.",
+  "type": "module",
+  "bin": { "pinguinolink": "src/cli.mjs" },
+  "scripts": {
+    "start": "node src/cli.mjs serve",
+    "doctor": "node src/cli.mjs doctor"
+  },
+  "engines": { "node": ">=22" }
+}

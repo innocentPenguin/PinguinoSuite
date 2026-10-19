@@ -1,0 +1,56 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json.Linq;
+
+public class CPHInline
+{
+//SNIPPET
+    public string TestCall(string q, string s, IEnumerable<string> o, string d, DateTime t) { return HistoryDeepText(q, s, o, d, t); }
+}
+
+public static class Check
+{
+    static int fails, passes;
+    static void Ok(string name, bool ok, string extra = "") { if (ok) passes++; else { fails++; Console.WriteLine("FAIL: " + name + (extra == "" ? "" : "  -> " + extra)); } }
+
+    public static int Main()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "hookcheck_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "daily")); Directory.CreateDirectory(Path.Combine(dir, "weekly")); Directory.CreateDirectory(Path.Combine(dir, "monthly", "alpha"));
+        File.WriteAllText(Path.Combine(dir, "daily", "2026-10-17.json"), "{\"summary\":\"Horror game night.\",\"games\":[\"Rocket League\"],\"topics\":[\"mods\"],\"moments\":[\"19:00 - mod talk\"]}");
+        File.WriteAllText(Path.Combine(dir, "daily", "2026-10-18.json"), "{\"summary\":\"Customs day.\",\"games\":[\"Rocket League\"],\"topics\":[],\"moments\":[]}");
+        File.WriteAllText(Path.Combine(dir, "weekly", "2026-W42.json"), "{\"summary\":\"A busy week.\",\"highlights\":[\"raids on Friday\"]}");
+        File.WriteAllText(Path.Combine(dir, "monthly", "alpha", "2026-08.json"), "{\"login\":\"alpha\",\"month\":\"2026-08\",\"messages\":300,\"interests\":[\"Likes the Cowboys\"],\"highlights\":[\"Won a tourney\"],\"vibe\":\"friendly\"}");
+        File.WriteAllText(Path.Combine(dir, "monthly", "alpha", "2026-09.json"), "{\"login\":\"alpha\",\"month\":\"2026-09\",\"messages\":200,\"interests\":[\"Listens to Brent Faiyaz\"],\"highlights\":[],\"vibe\":\"chill\"}");
+        var c = new CPHInline();
+        var today = new DateTime(2026, 10, 19);
+
+        string r = c.TestCall("what happened on 2026-10-17?", "bob", null, dir, today);
+        Ok("explicit date", r.Contains("Horror game night") && r.Contains("mod talk"), r);
+        r = c.TestCall("what did we do yesterday", "bob", null, dir, today);
+        Ok("yesterday", r.Contains("Customs day"), r);
+        r = c.TestCall("how was the stream last night", "bob", null, dir, today);
+        Ok("last stream = newest daily file", r.Contains("Customs day"), r);
+        r = c.TestCall("what happened last week?", "bob", null, dir, today);
+        Ok("last week = ISO week 42", r.Contains("A busy week") && r.Contains("raids on Friday"), r);
+        r = c.TestCall("what was alpha into in august", "bob", new[] { "alpha" }, dir, today);
+        Ok("a month name gives the person's monthly highlights", r.Contains("Likes the Cowboys") && !r.Contains("Brent"), r);
+        r = c.TestCall("do you remember what i like", "alpha", null, dir, today);
+        Ok("a question about the speaker gives their latest months", r.Contains("Brent Faiyaz") && r.Contains("Cowboys"), r);
+        r = c.TestCall("hello there", "alpha", null, dir, today);
+        Ok("small talk gives nothing", r == "", r);
+        r = c.TestCall("what happened on 2026-01-01", "bob", null, dir, today);
+        Ok("missing day gives nothing", r == "", r);
+        r = c.TestCall("do you remember what i like", "bob", null, dir, today);
+        Ok("a person without files gives nothing", r == "", r);
+        Ok("never longer than 1800 characters", c.TestCall("2026-10-17 2026-10-18 last week august", "alpha", new[] { "alpha" }, dir, today).Length <= 1800);
+
+        try { Directory.Delete(dir, true); } catch (Exception) { }
+        Console.WriteLine(fails == 0 ? "ALL " + passes + " HOOK CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
+        return fails == 0 ? 0 : 1;
+    }
+}

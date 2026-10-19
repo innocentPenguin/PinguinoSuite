@@ -1,0 +1,12 @@
+faster-whisper
+fastapi
+uvicorn[standard]
+sounddevice
+yt-dlp
+numpy
+python-multipart
+requests
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+pystray
+pillow

@@ -1,0 +1,203 @@
+<!doctype html>
+<!--
+  PinguinoBot — PLAYERS overlay (who is in the current game)
+  OBS: Browser source -> tick "Local file" -> pick this file. Size 1920 x 1080.
+  Reads live_state.js (written by PinguinoBotCore into this folder).
+  Preview without the bot: open players.html?demo in a browser.
+
+  Behaviour: when new teams are made it shows BIG in the middle for BIG_SECONDS,
+  then shrinks to a slim bar at the top for the rest of the match.
+  When a winner is recorded, the winning side glows and shows "WINNER".
+  Titles say what is being played (Competitive Customs, Casual Customs, Fortnite Boxfights...). Casual customs in "group" style
+  show ONE "IN-GAME" panel with everybody (no Blue / Orange). The QUEUE overlay (queue.html) stays hidden while this one is up.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Players Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --blue:#2f8cff; --blue2:#0c3b82; --orange:#ff8a1f; --orange2:#8a3a00; --text:#fff; --muted:rgba(255,255,255,.75); }
+  html, body { margin:0; width:1920px; height:1080px; overflow:hidden; background:transparent;
+               font-family:Rubik, Segoe UI, sans-serif; color:var(--text); }
+
+  /* Big reveal: --big-x = horizontal centre, --big-scale = size (1 = full). Kept left of the facecam. */
+  #stage { --big-x:730px; --big-scale:.7; position:absolute; left:var(--big-x); top:50%; transform:translate(-50%,-50%) scale(var(--big-scale));
+           transition:left .8s cubic-bezier(.6,0,.2,1), top .8s cubic-bezier(.6,0,.2,1), transform .8s cubic-bezier(.6,0,.2,1), opacity .5s; opacity:0; }
+  #stage.show { opacity:1; }
+  /* Mini bar: teams sit on EITHER SIDE of the Rocket League scoreboard. --mini-gap = the hole left for the scoreboard (in unscaled px; x0.42 on screen). */
+  #stage { --mini-gap:500px; }
+  /* Same spot as always (62px), unless the roster is tall enough that the bar would be cut off at the top: setMini() then lowers it just enough (--mini-top). */
+  #stage.mini { left:50%; top:var(--mini-top, 62px); transform:translate(-50%,-50%) scale(.42); }
+  #stage.mini .header { opacity:0; max-height:0; margin:0; }
+  #stage.mini .teams { gap:var(--mini-gap); }
+  #stage.mini .vs { opacity:0; width:0; overflow:hidden; }
+
+  .header { text-align:center; margin-bottom:22px; max-height:200px; overflow:hidden; text-shadow:0 4px 12px rgba(0,0,0,.6); transition:opacity .4s, max-height .8s, margin .8s; }
+  .header .sup { font-size:22px; letter-spacing:6px; font-weight:700; color:#bfe9ff; }
+  .header .main { font-size:54px; font-weight:800; letter-spacing:3px; }
+
+  .teams { display:flex; gap:40px; align-items:stretch; transition:gap .8s cubic-bezier(.6,0,.2,1); }
+  .team { width:620px; box-sizing:border-box; border-radius:22px; padding:16px 26px 22px; position:relative;
+          box-shadow:0 14px 40px rgba(0,0,0,.5); transition:box-shadow .5s, transform .5s, filter .5s; }
+  .team.blue { background:linear-gradient(160deg, var(--blue), var(--blue2)); }
+  .team.orange { background:linear-gradient(200deg, var(--orange), var(--orange2)); }
+  .team h2 { margin:0 0 6px; font-size:46px; font-weight:800; letter-spacing:4px; display:flex; justify-content:space-between; align-items:baseline; }  /* only the casual IN-GAME panel still has a heading */
+  .team h2 span { font-size:22px; font-weight:500; color:var(--muted); letter-spacing:1px; }
+  .player { display:flex; align-items:baseline; gap:14px; padding:14px 18px; margin-top:12px; border-radius:12px;
+            background:rgba(0,0,0,.22); font-size:50px; font-weight:800; line-height:1.15; opacity:0; animation:pop .45s forwards; }
+  .player > span:first-child { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .player .epic { margin-left:auto; flex:0 1 auto; max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:22px; font-weight:500; color:var(--muted); }
+  @keyframes pop { from { opacity:0; transform:translateY(16px) scale(.96); } to { opacity:1; transform:none; } }
+
+  .vs { align-self:center; width:90px; text-align:center; transition:opacity .3s, width .8s; font-size:64px; font-weight:800; text-shadow:0 4px 14px rgba(0,0,0,.6); }
+
+  .teams[hidden] { display:none; }
+  .team.group { width:1280px; background:linear-gradient(160deg, #3a2a08, #181a14); border:3px solid rgba(255,153,0,.6); }
+  .team.group h2 { justify-content:center; gap:16px; color:#ff9900; }
+  .gridp { display:grid; grid-template-columns:repeat(var(--cols,3), 1fr); gap:0 16px; }
+  #stage.mini #groupWrap { gap:0; }
+  .team.winner { box-shadow:inset 0 0 0 6px #ffe169, 0 0 50px 8px rgba(255,225,105,.7); }
+  .team.loser { filter:grayscale(.7) brightness(.7); }
+  /* Badge sits INSIDE the team box (in flow) so it is never cut off, whatever the layout or source size. */
+  .crown { width:max-content; margin:0 auto 4px; background:#ffe169; color:#3a2a00;
+           font-weight:800; font-size:28px; line-height:1; letter-spacing:3px; padding:8px 24px; border-radius:999px; display:none; }
+  .team.winner .crown { display:block; animation:pop .5s; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="header"><div class="sup" id="sup">INNOCENTPENGUIN COMMUNITY GAMES</div><div class="main" id="title">MATCH READY</div></div>
+  <div class="teams" id="teams">
+    <div class="team blue" id="blueTeam"><div class="crown">WINNER</div><div id="blue"></div></div>
+    <div class="vs">VS</div>
+    <div class="team orange" id="orangeTeam"><div class="crown">WINNER</div><div id="orange"></div></div>
+  </div>
+  <!-- Casual "group" style: one panel with everybody -->
+  <div class="teams" id="groupWrap" hidden><div class="team group" id="groupTeam"><h2>IN-GAME <span id="groupFmt"></span></h2><div class="gridp" id="groupList"></div></div></div>
+</div>
+
+<script>
+  // ── Settings ─────────────────────────────────────────────
+  var BIG_SECONDS = 15;     // how long the big roster stays before shrinking (0 = never shrink)
+  var SHOW_EPIC = true;     // show Epic names next to Twitch names
+  var HIDE_AFTER_RESULT_SECONDS = 20; // hide this long after a winner is recorded (0 = keep showing)
+
+  var ACT = { competitive:"COMPETITIVE CUSTOMS", casual:"CASUAL CUSTOMS", viewers:"PLAYING WITH VIEWERS",
+              // ACTIVITY KEYS. RL (Rocket League): competitive, casual, koth, viewers | FN (Fortnite): boxfights, zonewars, fnviewers (the FN "viewers"). Overlay titles. Keep every copy of this list in sync: grep for "fnviewers".
+              koth:"KING OF THE HILL", boxfights:"FORTNITE BOXFIGHTS", zonewars:"FORTNITE ZONE WARS", fnviewers:"FORTNITE: PLAYING WITH VIEWERS" };
+  var MODE = { dropshot:"DROPSHOT", rumble:"RUMBLE" };
+  var DEMO = location.search.indexOf("demo") >= 0;
+  var lastTeamsKey = "", lastStatus = "", shrinkTimer = null, hideTimer = null;
+  var stage = document.getElementById("stage");
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
+  // The bot writes Username/Mmr/Epic; accept lowercase too in case that changes.
+  function f(p, k) { return p[k] != null ? p[k] : p[k.charAt(0).toLowerCase() + k.slice(1)]; }
+
+  // Long usernames: shrink to fit the row (down to 50%) instead of clipping.
+  function fitNames() {
+    var els = document.querySelectorAll(".player > span:first-child");
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i]; e.style.fontSize = ""; var base = parseFloat(getComputedStyle(e).fontSize), px = base;
+      while (e.scrollWidth > e.clientWidth + 1 && px > base * 0.5) { px -= 1; e.style.fontSize = px + "px"; }
+    }
+  }
+
+  function playersHtml(list) {
+    return (list || []).map(function (p, i) {
+      var epic = f(p, "Epic");
+      return '<div class="player" style="animation-delay:' + (0.15 + i * 0.12) + 's"><span>' + esc(f(p, "Username")) + '</span>' +
+             (SHOW_EPIC && epic ? '<span class="epic">' + esc(epic) + '</span>' : '') + '</div>';
+    }).join("");
+  }
+
+  // Shrink to the slim bar: place it so its TOP edge sits 12px below the top of the screen whatever the roster height is.
+  function setMini() {
+    stage.classList.add("mini");
+    var box = document.getElementById("groupWrap").hidden ? document.getElementById("teams") : document.getElementById("groupWrap");   // the header collapses, so measure the teams
+    stage.style.setProperty("--mini-top", Math.max(62, 6 + box.offsetHeight * 0.21) + "px");
+  }
+
+  function render(s) {
+    var m = s && s.currentMatch;
+    if (!m) { stage.classList.remove("show"); lastTeamsKey = ""; return; }
+
+    var teamsKey = JSON.stringify([m.id, m.blue, m.orange, m.group, s.activity]);
+    if (teamsKey !== lastTeamsKey) {
+      // New match or reroll: big reveal
+      lastTeamsKey = teamsKey;
+      lastStatus = "";
+      clearTimeout(shrinkTimer); clearTimeout(hideTimer);
+      var fn = s.game === "fortnite";
+      var modeBit = !fn && MODE[s.gameMode] ? " • " + MODE[s.gameMode] : "";
+      document.getElementById("sup").textContent = ACT[s.activity] || "INNOCENTPENGUIN COMMUNITY GAMES";
+      document.getElementById("title").textContent = (m.format || "") + modeBit + " • MATCH #" + m.id;
+      var group = !!m.group;   // casual group style: everybody in ONE panel, no teams
+      document.getElementById("teams").hidden = group;
+      document.getElementById("groupWrap").hidden = !group;
+      if (group) {
+        var all = (m.blue || []).concat(m.orange || []);
+        var size = { "1v1":1, "2v2":2, "3v3":3, "4v4":4 }[m.format] || 3;
+        document.getElementById("groupList").style.setProperty("--cols", size);
+        document.getElementById("groupList").innerHTML = playersHtml(all);
+        document.getElementById("groupFmt").textContent = m.format || "";
+      }
+      document.getElementById("blue").innerHTML = playersHtml(m.blue);
+      document.getElementById("orange").innerHTML = playersHtml(m.orange);
+      fitNames();
+      setWinner(null);
+      stage.classList.remove("mini");
+      stage.classList.add("show");
+      if (BIG_SECONDS > 0) shrinkTimer = setTimeout(setMini, BIG_SECONDS * 1000);
+    }
+
+    if (m.status === "finished" && lastStatus !== "finished" && !m.group) {
+      // Winner just recorded: come back big and celebrate
+      var win = m.winner || (s.lastEvent && s.lastEvent.Type === "match_result" ? s.lastEvent.Detail : guessWinner(s));
+      setWinner(win);
+      document.getElementById("title").textContent = win ? win.toUpperCase() + " WINS!" : "MATCH OVER";
+      stage.classList.remove("mini");
+      stage.classList.add("show");
+      clearTimeout(shrinkTimer);
+      if (HIDE_AFTER_RESULT_SECONDS > 0)
+        hideTimer = setTimeout(function () { stage.classList.remove("show"); }, HIDE_AFTER_RESULT_SECONDS * 1000);
+    }
+    lastStatus = m.status;
+  }
+
+  function guessWinner(s) {
+    var ev = (s.recentEvents || []).filter(function (e) { return e.Type === "match_result"; }).pop();
+    return ev ? ev.Detail : null;
+  }
+
+  function setWinner(team) {
+    var b = document.getElementById("blueTeam"), o = document.getElementById("orangeTeam");
+    b.classList.toggle("winner", team === "blue"); b.classList.toggle("loser", team === "orange");
+    o.classList.toggle("winner", team === "orange"); o.classList.toggle("loser", team === "blue");
+  }
+
+  function poll() {
+    var old = document.getElementById("state");
+    if (old) old.remove();
+    var sc = document.createElement("script");
+    sc.id = "state";
+    sc.src = "live_state.js?t=" + Date.now();
+    sc.onload = function () { render(window.LIVE_STATE); };
+    document.body.appendChild(sc);
+  }
+
+  if (DEMO) {
+    var demo = { currentMatch: { id:7, format:"3v3", status:"live", blueAvg:1120, orangeAvg:1105,
+      blue:[{Username:"penguinfan",Epic:"Penguin Fan"},{Username:"rocketboi",Epic:"RocketBoi"},{Username:"aerialqueen",Epic:"AerialQueen"}],
+      orange:[{Username:"flipreset",Epic:"FlipReset99"},{Username:"boostgoblin",Epic:"Boost Goblin"},{Username:"savemachine",Epic:"SaveMachine"}] } };
+    render(demo);
+    // Demo: winner after 6s
+    setTimeout(function () { demo.currentMatch.status = "finished"; demo.lastEvent = { Type:"match_result", Detail:"orange" }; render(demo); }, 6000);
+  } else {
+    poll();
+    setInterval(poll, 1000);
+  }
+</script>
+</body>
+</html>

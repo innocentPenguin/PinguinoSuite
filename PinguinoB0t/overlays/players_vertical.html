@@ -1,0 +1,134 @@
+<!doctype html>
+<!--
+  PinguinoBot â€” PLAYERS overlay for the VERTICAL layout (fills the empty snowy space at the bottom of the portrait scene)
+  OBS: Browser source -> tick "Local file" -> pick this file. Size about 1080 x 250 (it scales to whatever size you give the source).
+  Reads live_state.js (written by PinguinoBotCore into this folder).
+
+  Blue on the left, Orange on the right, each team's players listed top to bottom. It stays up for the WHOLE match (no timer) and until
+  the next teams replace it; when a winner is recorded the winning team glows gold with a WINNER tag and the other team dims.
+  Nothing shows while there is no match. The normal players.html overlay is separate and unchanged.
+
+  TEST WITHOUT THE BOT (open in a browser):
+    players_vertical.html?demo            3v3 live lineup
+    players_vertical.html?demo=4          4v4 (tallest case)
+    players_vertical.html?demo&win=blue   same, with Blue marked as the winner (or win=orange)
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Players Overlay (vertical)</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Everything is sized from the height of the source (--u = 1/250 of it), so it also fits if you resize the source. */
+  :root { --blue:#2f8cff; --blue2:#0c3b82; --orange:#ff8a1f; --orange2:#8a3a00; --muted:rgba(255,255,255,.75); --u:calc(100vh / 250); }
+  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:transparent; font-family:Rubik, Segoe UI, sans-serif; color:#fff; }
+  #stage { position:absolute; inset:0; display:flex; align-items:stretch; gap:calc(var(--u)*14); padding:calc(var(--u)*8); box-sizing:border-box; opacity:0; transition:opacity .5s; }
+  #stage.show { opacity:1; }
+  .team { position:relative; flex:1 1 0; min-width:0; border-radius:calc(var(--u)*16); padding:calc(var(--u)*8) calc(var(--u)*12); box-sizing:border-box; box-shadow:0 8px 24px rgba(0,0,0,.5); display:flex; flex-direction:column; transition:box-shadow .5s, transform .5s, filter .5s; }
+  .team.blue { background:linear-gradient(160deg, var(--blue), var(--blue2)); }
+  .team.orange { background:linear-gradient(200deg, var(--orange), var(--orange2)); }
+  .list { display:flex; flex-direction:column; gap:calc(var(--u)*4); flex:1; min-height:0; }
+  .p { flex:1 1 0; min-height:0; display:flex; align-items:center; gap:calc(var(--u)*10); padding:0 calc(var(--u)*12); border-radius:calc(var(--u)*9); background:rgba(0,0,0,.24); font-size:calc(var(--u)*var(--fs,34)); line-height:1.05; font-weight:800; box-sizing:border-box; overflow:hidden; }
+  #stage.n3 { --fs:30; } #stage.n4 { --fs:27; } #stage.n5, #stage.n6 { --fs:18; }
+  .p b { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:800; }
+  .p i { font-style:normal; flex:0 1 auto; max-width:30%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:calc(var(--u)*14); font-weight:500; color:var(--muted); }
+  .p.empty { background:transparent; border:1px dashed rgba(255,255,255,.3); color:rgba(255,255,255,.55); font-weight:500; }
+  .vs { align-self:center; font-size:calc(var(--u)*30); font-weight:800; text-shadow:0 3px 10px rgba(0,0,0,.6); }
+  /* Winner: gold glow + WINNER tag; the other team dims. */
+  .team.winner { box-shadow:inset 0 0 0 calc(var(--u)*5) #ffe169, 0 0 calc(var(--u)*24) calc(var(--u)*2) rgba(255,225,105,.7); z-index:1; }
+  .team.loser { filter:grayscale(.7) brightness(.7); }
+  /* The badge lives INSIDE the team box (in flow, above the list) so nothing can be clipped by the source edge. */
+  .crown { display:none; flex:0 0 auto; align-self:center; margin-bottom:calc(var(--u)*4); background:#ffe169; color:#3a2a00; font-weight:800; font-size:calc(var(--u)*20); line-height:1; letter-spacing:calc(var(--u)*3); padding:calc(var(--u)*4) calc(var(--u)*18); border-radius:999px; white-space:nowrap; }
+  .team.winner .crown { display:block; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="team blue" id="blueTeam"><div class="crown">WINNER</div><div class="list" id="blue"></div></div>
+  <div class="vs">VS</div>
+  <div class="team orange" id="orangeTeam"><div class="crown">WINNER</div><div class="list" id="orange"></div></div>
+</div>
+<script>
+  // â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  var SHOW_EPIC = true;      // show the in-game (display) name next to the stream name
+
+  var params = new URLSearchParams(location.search);
+  var DEMO = params.has("demo");
+  var stage = document.getElementById("stage");
+  var lastKey = "";
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
+  function f(p, k) { return p[k] != null ? p[k] : p[k.charAt(0).toLowerCase() + k.slice(1)]; }
+
+  // One row per seat (so the layout never jumps); empty seats are dashed.
+  function rows(list, size) {
+    var out = (list || []).map(function (p) {
+      var epic = f(p, "Epic");
+      return '<div class="p"><b>' + esc(f(p, "Username")) + '</b>' + (SHOW_EPIC && epic ? '<i>' + esc(epic) + '</i>' : '') + '</div>';
+    });
+    while (out.length < size) out.push('<div class="p empty">Empty slot</div>');
+    return out.slice(0, 6).join("");
+  }
+
+  // Shrink a name until it fits its row (long usernames), down to 55% of the base size.
+  function fit() {
+    var bs = document.querySelectorAll(".p b");
+    for (var i = 0; i < bs.length; i++) {
+      var e = bs[i]; e.style.fontSize = ""; var base = parseFloat(getComputedStyle(e).fontSize), px = base;
+      while (e.scrollWidth > e.clientWidth + 1 && px > base * 0.45) { px -= 1; e.style.fontSize = px + "px"; }
+    }
+  }
+  window.addEventListener("resize", function () { lastKey = ""; });
+
+  function winnerOf(s) {
+    if (DEMO) return params.get("win");
+    if (s.currentMatch && s.currentMatch.winner) return s.currentMatch.winner;
+    var ev = s.lastEvent && s.lastEvent.Type === "match_result" ? s.lastEvent : null;
+    if (!ev) ev = (s.recentEvents || []).filter(function (e) { return e.Type === "match_result"; }).pop();
+    return ev ? ev.Detail : null;
+  }
+
+  function render(s) {
+    var m = s && s.currentMatch;
+    if (!m) { stage.classList.remove("show"); lastKey = ""; return; }
+    var key = JSON.stringify([m.id, m.blue, m.orange, s.game]);
+    if (key !== lastKey) {
+      lastKey = key;
+      var size = { "1v1":1, "2v2":2, "3v3":3, "4v4":4 }[m.format] || Math.max((m.blue || []).length, (m.orange || []).length, 1);
+      document.getElementById("blue").innerHTML = rows(m.blue, size);
+      document.getElementById("orange").innerHTML = rows(m.orange, size);
+      stage.className = (stage.className.replace(/n\d/g, '') + ' n' + Math.min(size, 6)).trim();
+      fit();
+
+
+    }
+    var win = m.status === "finished" ? winnerOf(s) : (DEMO ? params.get("win") : null);
+    var b = document.getElementById("blueTeam"), o = document.getElementById("orangeTeam");
+    b.classList.toggle("winner", win === "blue"); b.classList.toggle("loser", win === "orange");
+    o.classList.toggle("winner", win === "orange"); o.classList.toggle("loser", win === "blue");
+    stage.classList.add("show");
+  }
+
+  function poll() {
+    var old = document.getElementById("state");
+    if (old) old.remove();
+    var sc = document.createElement("script");
+    sc.id = "state";
+    sc.src = "live_state.js?t=" + Date.now();
+    sc.onload = function () { render(window.LIVE_STATE); };
+    document.body.appendChild(sc);
+  }
+
+  if (DEMO) {
+    var four = params.get("demo") === "4";
+    var bl = [{Username:"penguinfan",Epic:"Penguin Fan"},{Username:"rocketboi",Epic:"RocketBoi"},{Username:"aerialqueen",Epic:"AerialQueen"},{Username:"youtube-tankjakvcgic4947",Epic:"tankjakvcgic4947"}];
+    var og = [{Username:"flipreset",Epic:"FlipReset99"},{Username:"boostgoblin",Epic:"Boost Goblin"},{Username:"savemachine",Epic:"SaveMachine"},{Username:"innocentpenguin_",Epic:"InnocentPenguin"}];
+    var n = four ? 4 : 3;
+    render({ game:"rocket-league", currentMatch:{ id:7, format:n + "v" + n, status: params.get("win") ? "finished" : "live", blueAvg:1120, orangeAvg:1105, blue:bl.slice(0, n), orange:og.slice(0, n) } });
+  } else {
+    poll();
+    setInterval(poll, 1000);
+  }
+</script>
+</body>
+</html>

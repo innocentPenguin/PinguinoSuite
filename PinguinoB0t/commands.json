@@ -1,0 +1,291 @@
+{
+  "version": 1,
+  "updated": "2026-10-17",
+  "commands": [
+    {
+      "command": "!register",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!register <EpicID>  |  mods: !register @viewer <EpicID>",
+      "description": "Link your Twitch name to your Epic Games name. Mods can register or fix someone else's.",
+      "examples": [
+        "!register CoolPenguin",
+        "!register @viewer123 Cool Penguin"
+      ]
+    },
+    {
+      "command": "!join",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!join",
+      "description": "Join the queue (must be registered, queue must be open).",
+      "examples": [
+        "!join"
+      ]
+    },
+    {
+      "command": "!leave",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!leave",
+      "description": "Leave the queue.",
+      "examples": [
+        "!leave"
+      ]
+    },
+    {
+      "command": "!pos",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!pos",
+      "description": "Show your place in the queue.",
+      "examples": [
+        "!pos"
+      ]
+    },
+    {
+      "command": "!myrank",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!myrank",
+      "description": "Show your MMR on file and where it came from.",
+      "examples": [
+        "!myrank"
+      ]
+    },
+    {
+      "command": "!lobby",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!lobby",
+      "description": "Show the current Blue and Orange teams.",
+      "examples": [
+        "!lobby"
+      ]
+    },
+    {
+      "command": "!stats",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!stats [user]",
+      "description": "Wins, losses and points for you or another player.",
+      "examples": [
+        "!stats",
+        "!stats viewer123"
+      ]
+    },
+    {
+      "command": "!topwins",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!topwins",
+      "description": "Top 5 community-games players by wins (ties broken by points).",
+      "examples": [
+        "!topwins"
+      ]
+    },
+    {
+      "command": "!queue",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone / mods",
+      "usage": "!queue  |  !queue list  |  mods: !queue open | close | clear",
+      "description": "Queue status. Mods open, close, or clear (clear also closes and ends the lobby).",
+      "examples": [
+        "!queue",
+        "!queue list",
+        "!queue open",
+        "!queue clear"
+      ]
+    },
+    {
+      "command": "!balance",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!balance",
+      "description": "Rotate current players out and build new teams from the queue using the current mode.",
+      "examples": [
+        "!balance"
+      ]
+    },
+    {
+      "command": "!match",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!match <clear|fill|queue>",
+      "description": "clear = game over: everyone in the match leaves the queue, nobody is pulled in. fill = make teams from the queue, or fill empty slots. queue = put everyone in the match back at the front of the queue. Website: Clear / Fill / Move all ➜ Queue under the teams.",
+      "examples": [
+        "!match clear",
+        "!match fill",
+        "!match queue"
+      ]
+    },
+    {
+      "command": "!reroll",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!reroll",
+      "description": "Different teams with the same players. Refills anyone kicked/left from the queue.",
+      "examples": [
+        "!reroll"
+      ]
+    },
+    {
+      "command": "!win",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!win <blue|orange>",
+      "description": "Record the winner and award points. A match can only be scored once.",
+      "examples": [
+        "!win blue"
+      ]
+    },
+    {
+      "command": "!next",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!next  |  !next <blue|orange>",
+      "description": "!next = everyone rotates out. !next blue = record Blue win (if not already) and Blue stays on vs new challengers.",
+      "examples": [
+        "!next",
+        "!next orange"
+      ]
+    },
+    {
+      "command": "!mode",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!mode <balanced|random|picks>",
+      "description": "How teams are made.",
+      "examples": [
+        "!mode random"
+      ]
+    },
+    {
+      "command": "!pick",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!pick <names for Blue>  |  !pick auto",
+      "description": "In picks mode, after !balance: listed players go Blue, the rest Orange. 'auto' balances instead.",
+      "examples": [
+        "!pick alice bob carl",
+        "!pick auto"
+      ]
+    },
+    {
+      "command": "!format",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!format <2v2|3v3|4v4>",
+      "description": "Team size for the next match.",
+      "examples": [
+        "!format 2v2"
+      ]
+    },
+    {
+      "command": "!kick",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!kick @user",
+      "description": "Remove someone from the queue. Follow with !reroll if they were in the lobby.",
+      "examples": [
+        "!kick @viewer123"
+      ]
+    },
+    {
+      "command": "!mmr",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!mmr @user",
+      "description": "Look up a player's MMR.",
+      "examples": [
+        "!mmr @viewer123"
+      ]
+    },
+    {
+      "command": "!setmmr",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!setmmr @user <mmr|rank|auto>",
+      "description": "Manually set MMR (number or rank like gc1, c2, d3). 'auto' goes back to Tracker Network.",
+      "examples": [
+        "!setmmr @viewer123 1200",
+        "!setmmr @viewer123 c2",
+        "!setmmr @viewer123 auto"
+      ]
+    },
+    {
+      "command": "!first",
+      "aliases": [],
+      "action": "PinguinoBotFirsts",
+      "category": "Firsts",
+      "who": "everyone",
+      "usage": "!first",
+      "description": "Your First 5 record (1st-5th place counts and total).",
+      "examples": [
+        "!first"
+      ]
+    },
+    {
+      "command": "!firsts",
+      "aliases": [],
+      "action": "PinguinoBotFirsts",
+      "category": "Firsts",
+      "who": "everyone",
+      "usage": "!firsts",
+      "description": "Top 5 First 5 leaderboard.",
+      "examples": [
+        "!firsts"
+      ]
+    },
+    {
+      "command": "(chat message)",
+      "aliases": [],
+      "action": "PinguinoBotFirsts",
+      "category": "Firsts",
+      "who": "automatic",
+      "usage": "Just chat when the game is running",
+      "description": "First 5 unique chatters claim 1st-5th. Payout via !addpoints every 5 min: 15000 / 10500 / 7500 / 4500 / 3000.",
+      "examples": []
+    }
+  ]
+}

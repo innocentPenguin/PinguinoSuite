@@ -1,0 +1,178 @@
+<!doctype html>
+<!--
+  PinguinoB0t — QUEUE overlay (OBS Browser Source), same look as the queue on innocentpenguin.com
+  OBS: Browser source -> tick "Local file" -> pick this file. Size 420 x 760.
+  Reads live_state.js (written by PinguinoBotCore into this folder).
+  Preview without the bot: open queue.html?demo in a browser.
+
+  WHEN IT SHOWS: it pops up for POP_SECONDS only when someone JOINS the queue or someone types !queue (the bot sends a
+  "queue_show" event for !queue / !queue list). Every new join restarts the timer. It never shows while the PLAYERS overlay
+  (players.html: the teams / in-game players) is on screen, so the two are never up at the same time: it stays away while a
+  match is running and for AFTER_RESULT_SECONDS after a result (same number as players.html, HIDE_AFTER_RESULT_SECONDS).
+
+  TITLE: says what is being played (Competitive Customs, Casual Customs, Playing with Viewers, Fortnite Boxfights, Fortnite
+  Zone Wars...) plus the team size and game mode. Ratings show as MMR (Rocket League) or SR (Fortnite) in grey.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Queue Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --orange:#ff9900; --panel:rgba(20,22,17,.94); --line:#36382f; --gold:#ffd166; --tan:#d2b48c; --text:#f5f2eb; --muted:#a9aaa1; --open:#3ee07a; --closed:#ff5a5a; }
+  html, body { margin:0; background:transparent; font-family:Rubik, Segoe UI, sans-serif; color:var(--text); }
+  .card { width:380px; margin:20px; padding:18px 18px 14px; background:var(--panel); border:1px solid var(--line); border-radius:18px;
+          box-shadow:0 10px 30px rgba(0,0,0,.5); transition:opacity .45s, transform .45s; }
+  .card.hidden { opacity:0; transform:translateY(-14px); }
+  .head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .act { font-size:22px; font-weight:800; letter-spacing:.5px; line-height:1.15; text-transform:uppercase; color:#fff; }
+  .sub { margin-top:3px; font-size:14px; color:var(--muted); font-weight:500; letter-spacing:1px; }
+  .sub b { color:var(--orange); }
+  .badge { flex:none; font-weight:800; font-size:13px; padding:5px 12px; border-radius:999px; letter-spacing:1px; }
+  .badge.open { background:var(--open); color:#062312; animation:pulse 2s infinite; }
+  .badge.closed { background:var(--closed); color:#2a0606; }
+  @keyframes pulse { 50% { box-shadow:0 0 0 8px rgba(62,224,122,0); } 0% { box-shadow:0 0 0 0 rgba(62,224,122,.6); } }
+  .meta { margin:10px 0 6px; color:var(--muted); font-size:14px; }
+  .meta b { color:var(--orange); }
+  ol { list-style:none; margin:0; padding:0; }
+  li { display:flex; align-items:center; gap:10px; padding:9px 11px; margin:6px 0; border-radius:12px; border:1px solid var(--line);
+       background:#1c1e18; font-size:19px; font-weight:700; animation:slide .35s ease-out; }
+  li.next { border-color:rgba(255,209,102,.7); background:linear-gradient(90deg, rgba(255,209,102,.18), rgba(255,209,102,.05)); }
+  li.backup { border-color:rgba(210,180,140,.6); background:rgba(210,180,140,.1); }
+  li.streamer { border-color:rgba(233,25,22,.75); }
+  @keyframes slide { from { opacity:0; transform:translateX(-20px); } }
+  .pos { color:var(--orange); font-weight:800; font-size:16px; min-width:30px; }
+  .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .rating { color:#8b8d82; font-size:14px; font-weight:600; flex:none; }
+  .epic { color:var(--muted); font-weight:500; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .epic::before { content:"| "; color:#6d6f63; }
+  .tag { margin-left:auto; flex:none; font-size:11px; font-weight:800; letter-spacing:1px; padding:3px 8px; border-radius:6px; }
+  .tag.next { background:var(--gold); color:#3a2a00; } .tag.backup { background:var(--tan); color:#3a2a00; } .tag.you { background:#e91916; color:#fff; }
+  .empty { padding:14px 4px 10px; color:var(--muted); font-size:17px; }
+  .more { padding:2px 4px 6px; color:var(--muted); font-size:14px; }
+  .foot { margin-top:8px; font-size:13px; color:var(--muted); line-height:1.4; }
+  .foot b { color:var(--text); }
+</style>
+</head>
+<body>
+<div class="card hidden" id="card">
+  <div class="head">
+    <div><div class="act" id="act">CUSTOMS</div><div class="sub" id="sub">QUEUE</div></div>
+    <div class="badge closed" id="badge">CLOSED</div>
+  </div>
+  <div class="meta"><span>Waiting <b id="count">0</b></span> · <span id="spots"></span></div>
+  <ol id="list"></ol>
+  <div class="more" id="more"></div>
+  <div class="foot" id="foot">Type <b>!register</b> then <b>!join</b> in chat</div>
+</div>
+
+<script>
+  // ── Settings ─────────────────────────────────────────────
+  var MAX_ROWS = 10;                 // rows shown before "+N more"
+  var POP_SECONDS = 12;              // how long the card stays after a join or !queue
+  var AFTER_RESULT_SECONDS = 20;     // stay away this long after a result (the players overlay is still up): same as players.html
+  var STREAMER = "innocentpenguin_"; // the streamer's row is marked and not counted in the gold "next up"
+
+  var DEMO = location.search.indexOf("demo") >= 0;
+  var lastKey = "", lastSeq = null, visibleUntil = 0, finishedAt = 0, lastMatchKey = "", lastState = null;
+
+  var ACT = { competitive:"Competitive Customs", casual:"Casual Customs", viewers:"Playing with Viewers",
+              // ACTIVITY KEYS. RL (Rocket League): competitive, casual, koth, viewers | FN (Fortnite): boxfights, zonewars, fnviewers (the FN "viewers"). Overlay titles. Keep every copy of this list in sync: grep for "fnviewers".
+              koth:"King of the Hill", boxfights:"Fortnite Boxfights", zonewars:"Fortnite Zone Wars", fnviewers:"Fortnite: Playing with Viewers" };
+  var MODE = { dropshot:"Dropshot", rumble:"Rumble" };
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
+
+  // Is the players overlay (teams / in-game group) on screen? During a match, and for a while after the result.
+  function playersActive(s) {
+    var m = s && s.currentMatch;
+    if (!m) { finishedAt = 0; lastMatchKey = ""; return false; }
+    if (m.status !== "finished") { finishedAt = 0; return true; }
+    if (!finishedAt) finishedAt = Date.now();
+    return Date.now() - finishedAt < AFTER_RESULT_SECONDS * 1000;
+  }
+
+  // New joins and !queue (event "queue_show") make the card pop up.
+  function watchEvents(s) {
+    var evs = s.recentEvents || [], max = evs.length ? evs[evs.length - 1].Seq : 0;
+    if (lastSeq === null) { lastSeq = max; return; }   // first load: don't pop for old events
+    evs.forEach(function (e) {
+      if (e.Seq <= lastSeq) return;
+      if (e.Type === "queue_show" || (e.Type === "queue_update" && /joined/.test(String(e.Detail || ""))))
+        visibleUntil = Date.now() + POP_SECONDS * 1000;
+    });
+    if (max > lastSeq) lastSeq = max;
+  }
+
+  function draw(s) {
+    var q = s.queue || [];
+    var key = JSON.stringify([s.queueOpen, s.format, s.queue, s.spotsNeeded, s.activity, s.gameMode, s.casualStyle, s.game, s.streamerPlaying]);
+    if (key === lastKey) return;   // only redraw on change, so animations don't replay
+    lastKey = key;
+
+    var fn = s.game === "fortnite", size = { "1v1":1, "2v2":2, "3v3":3, "4v4":4 }[s.format] || 3;
+    var seats = size * 2, gold = seats - (s.streamerPlaying !== false ? 1 : 0);
+    var act = ACT[s.activity] || "Customs queue";
+    var bits = [s.format || ""];
+    if (!fn && MODE[s.gameMode]) bits.push(MODE[s.gameMode]);
+    if (s.activity === "casual") bits.push(s.casualStyle === "teams" ? "Random teams" : "Groups");
+    document.getElementById("act").textContent = act;
+    document.getElementById("sub").innerHTML = "QUEUE · <b>" + bits.filter(Boolean).map(esc).join(" · ") + "</b>";
+    document.getElementById("badge").className = "badge " + (s.queueOpen ? "open" : "closed");
+    document.getElementById("badge").textContent = s.queueOpen ? "OPEN" : "CLOSED";
+    document.getElementById("count").textContent = q.length;
+    document.getElementById("spots").innerHTML = s.spotsNeeded > 0 ? "Need <b>" + s.spotsNeeded + "</b> more" : "<b>Ready!</b>";
+
+    var n = 0;
+    var html = q.slice(0, MAX_ROWS).map(function (e) {
+      var isStreamer = String(e.user || "").toLowerCase() === STREAMER, cls = "", tag = "";
+      if (!isStreamer) { n++; cls = n <= gold ? "next" : n <= gold + 2 ? "backup" : ""; }
+      else cls = "streamer";
+      if (cls === "next") tag = '<span class="tag next">NEXT</span>'; else if (cls === "backup") tag = '<span class="tag backup">BACKUP</span>';
+      else if (isStreamer) tag = '<span class="tag you">STREAMER</span>';
+      return '<li class="' + cls + '"><span class="pos">#' + e.pos + '</span><span class="name">' + esc(e.user) + '</span>' +
+             (e.mmr != null ? '<span class="rating" title="' + (fn ? "SR" : "MMR") + '">' + e.mmr + '</span>' : '') +
+             (e.epic ? '<span class="epic">' + esc(e.epic) + '</span>' : '') + tag + '</li>';
+    }).join("");
+    document.getElementById("list").innerHTML = html || '<div class="empty">Nobody yet — be first!</div>';
+    document.getElementById("more").textContent = q.length > MAX_ROWS ? "+" + (q.length - MAX_ROWS) + " more in line" : "";
+    document.getElementById("foot").innerHTML = "Gold = next " + gold + " up" + (s.streamerPlaying !== false ? " + InnocentPenguin" : "") + " · Tan = 2 backups<br>Type <b>!register</b> then <b>!join</b> in chat";
+  }
+
+  function update() {
+    var s = lastState;
+    if (!s) return;
+    draw(s);
+    var show = Date.now() < visibleUntil && !playersActive(s) && s.activity && s.activity !== "none";
+    document.getElementById("card").classList.toggle("hidden", !show);
+  }
+
+  function render(s) { if (!s) return; lastState = s; watchEvents(s); update(); }
+
+  // Reload live_state.js every second (cache-busted)
+  function poll() {
+    var old = document.getElementById("state");
+    if (old) old.remove();
+    var sc = document.createElement("script");
+    sc.id = "state";
+    sc.src = "live_state.js?t=" + Date.now();
+    sc.onload = function () { render(window.LIVE_STATE); };
+    document.body.appendChild(sc);
+  }
+
+  if (DEMO) {
+    render({ queueOpen:true, format:"3v3", activity:"competitive", gameMode:"standard", game:"rocket-league", streamerPlaying:true, spotsNeeded:0, recentEvents:[], queue:[
+      {pos:1,user:"innocentpenguin_",epic:"InnocentPenguin",mmr:1500}, {pos:2,user:"rlwizard",epic:"rlwizard_RL",mmr:1320},
+      {pos:3,user:"icecube",epic:"icecube_RL",mmr:1100}, {pos:4,user:"averyveryverylongname",epic:"averyveryverylong_RL",mmr:980},
+      {pos:5,user:"snowdrift",epic:"snowdrift_RL",mmr:900}, {pos:6,user:"frostbyte",epic:"frostbyte_RL",mmr:880},
+      {pos:7,user:"glacier",epic:"glacier_RL",mmr:800}, {pos:8,user:"polarbear",epic:"polarbear_RL",mmr:800} ] });
+    visibleUntil = Date.now() + 3600000;   // demo: stay visible
+    update();
+  } else {
+    poll();
+    setInterval(poll, 1000);
+    setInterval(update, 500);   // so the card hides on time between polls
+  }
+</script>
+</body>
+</html>

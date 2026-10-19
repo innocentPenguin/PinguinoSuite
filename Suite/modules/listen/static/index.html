@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PinguinoListen</title>
+<style>
+:root{--bg:#0a0e15;--panel:#131925;--line:#222b3c;--fg:#e8ecf4;--dim:#8b95ab;--acc:#7cc4ff;
+  --warn:#f5d547;--warn-bg:#f5d54733;--bad:#ff5d5d;--bad-bg:#ff5d5d40;--fix:#5fd38d;--ok:#e6e9f0}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1000px 500px at 80% -10%,#15233a55,transparent),var(--bg);color:var(--fg);font:15px/1.5 system-ui,Segoe UI,sans-serif}
+body.embedded header h1{display:none}
+header{display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header h1{font-size:17px;margin:0}
+nav{display:flex;gap:4px}
+nav button{background:none;border:0;color:var(--dim);padding:8px 14px;border-radius:8px;font:inherit;cursor:pointer}
+nav button.on{background:var(--panel);color:var(--fg)}
+#asr{margin-left:auto;font-size:13px;color:var(--dim)}
+main{max-width:1100px;margin:0 auto;padding:22px}
+.ribbon{display:flex;gap:10px;padding:10px 16px;margin-bottom:16px;border-radius:12px;background:#a78bfa14;border:1px dashed #a78bfa66;color:#cdbdfc}
+.wave{display:flex;align-items:center;gap:3px;height:56px}.wave i{width:4px;border-radius:3px;background:linear-gradient(#7cc4ff,#4a9be0);animation:w 1.2s infinite ease-in-out}@keyframes w{50%{transform:scaleY(.35)}}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.bar{height:8px;background:#0e131c;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#2fb98a,#4cd9a0)}
+.pill{display:inline-block;font-size:11px;padding:1px 9px;border-radius:9px;border:1px solid #4cd9a055;color:#4cd9a0}
+.tab{display:none}.tab.on{display:block}
+.panel{background:linear-gradient(180deg,var(--panel),#101622);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+button.b,select,input[type=text],textarea{background:#18202e;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
+button.b{cursor:pointer}button.b:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);color:#0b1020;border-color:var(--acc);font-weight:600}
+button.stop{background:var(--bad);border-color:var(--bad);color:#190808;font-weight:600}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.dim{color:var(--dim);font-size:13px}
+.legend span{padding:1px 8px;border-radius:5px;margin-right:6px;font-size:13px}
+.w-warn{background:var(--warn-bg);color:var(--warn);border-radius:4px;padding:0 2px}
+.w-bad{background:var(--bad-bg);color:var(--bad);border-radius:4px;padding:0 2px;font-weight:600}
+.w-fix{color:var(--fix);border-bottom:1px dashed var(--fix)}
+.seg{display:flex;gap:10px;padding:8px 6px;border-bottom:1px solid var(--line);align-items:flex-start}
+.seg .t{color:var(--dim);font-size:12px;min-width:52px;padding-top:3px;font-variant-numeric:tabular-nums}
+.seg .txt{flex:1;cursor:text}
+.seg .play{background:none;border:0;color:var(--acc);cursor:pointer;font-size:15px;padding:0 4px}
+.badge{font-size:11px;padding:1px 7px;border-radius:9px;border:1px solid var(--line);color:var(--dim)}
+.badge.corrected{color:var(--fix);border-color:var(--fix)}.badge.approved{color:var(--acc);border-color:var(--acc)}
+.seg textarea{width:100%;min-height:54px}
+#feed{max-height:62vh;overflow:auto}
+#meter{height:10px;width:220px;background:#222838;border-radius:6px;overflow:hidden}
+#meter i{display:block;height:100%;width:0;background:var(--fix);transition:width .08s}
+#meter.sp i{background:var(--acc)}
+.card{font-size:26px;line-height:1.7;padding:18px 6px;min-height:90px}
+.card-edit textarea{width:100%;font-size:20px;min-height:90px}
+table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
+progress{width:140px;height:8px}
+.item{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.item .ti{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:9}
+#toast div{background:#222838;border:1px solid var(--line);padding:10px 14px;border-radius:10px;max-width:360px}
+#toast .err{border-color:var(--bad)}
+kbd{background:#222838;border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎙 PinguinoListen</h1>
+  <nav>
+    <button data-tab="live" class="on">Live</button>
+    <button data-tab="learn">Learn</button>
+    <button data-tab="sources">VODs &amp; Clips</button>
+    <button data-tab="vocab">Vocabulary</button>
+    <button data-tab="voiceid">Voice ID <span class="badge">preview</span></button>
+    <button data-tab="cmds">Commands <span class="badge">preview</span></button>
+  </nav>
+  <span id="asr">starting…</span>
+</header>
+<main>
+<div class="panel legend dim">
+  <span class="w-warn">yellow = unsure</span><span class="w-bad">red = very unsure</span><span class="w-fix">green dashed = auto-fixed from what you taught it</span>
+  &nbsp;Listen-only: it transcribes and learns. It does not control anything.
+</div>
+
+<!-- LIVE -->
+<section class="tab on" id="tab-live">
+  <div class="panel">
+    <div class="row">
+      <select id="dev" style="max-width:360px"></select>
+      <button class="b pri" id="go">● Start listening</button>
+      <div id="meter"><i></i></div>
+      <span class="dim" id="live-state"></span>
+    </div>
+    <p class="dim" style="margin:10px 0 0">Click any line to correct it (<kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels). Every correction teaches it.</p>
+  </div>
+  <div class="panel"><div id="feed"><div class="dim">Nothing yet — start listening and talk.</div></div></div>
+</section>
+
+<!-- LEARN -->
+<section class="tab" id="tab-learn">
+  <div class="panel">
+    <div class="row">
+      <label class="dim">Source <select id="l-sess"><option value="">All sources</option></select></label>
+      <label class="dim"><input type="checkbox" id="l-conf"> include confident lines</label>
+      <span class="dim" id="l-left"></span>
+      <button class="b" id="regrade" style="margin-left:auto" title="Re-run what it learned over lines you haven't reviewed">Re-apply learning</button>
+    </div>
+  </div>
+  <div class="panel" id="l-card"></div>
+  <p class="dim"><kbd>Enter</kbd> = looks right / save correction &nbsp; <kbd>Esc</kbd> = skip &nbsp; <kbd>Ctrl</kbd>+<kbd>Space</kbd> = replay. Worst-sounding lines come first.</p>
+</section>
+
+<!-- SOURCES -->
+<section class="tab" id="tab-sources">
+  <div class="panel">
+    <div class="row">
+      <label>Twitch channel <input type="text" id="s-chan" style="width:190px"></label>
+      <button class="b" id="s-refresh">Refresh list</button>
+      <label style="margin-left:auto"><input type="checkbox" id="s-auto"> Auto-learn from new VODs &amp; clips</label>
+    </div>
+  </div>
+  <div class="panel"><b>Add audio</b>
+    <div class="row" style="margin-top:8px">
+      <input type="text" id="s-url" placeholder="Twitch VOD / clip / YouTube URL" style="flex:1;min-width:240px">
+      <button class="b" id="s-url-go">Add URL</button>
+      <input type="file" id="s-file" accept="audio/*,video/*">
+    </div>
+  </div>
+  <div class="panel"><b>Queue &amp; progress</b><div id="jobs" class="dim">—</div></div>
+  <div class="panel"><b>On Twitch</b><div id="tw" class="dim">Press “Refresh list”.</div></div>
+</section>
+
+<!-- VOCAB -->
+<section class="tab" id="tab-vocab">
+  <div class="panel row" id="stats"></div>
+  <div class="panel"><b>Vocabulary</b> <span class="dim">— names/words that bias Whisper toward your speech</span>
+    <div class="row" style="margin:8px 0"><input type="text" id="v-new" placeholder="add a word / name"><button class="b" id="v-add">Add</button></div>
+    <div id="vocab"></div></div>
+  <div class="panel"><b>Replacement rules</b> <span class="dim">— “it keeps hearing X when I say Y”</span>
+    <div class="row" style="margin:8px 0"><input type="text" id="r-wrong" placeholder="it hears"><span>→</span><input type="text" id="r-right" placeholder="I say"><button class="b" id="r-add">Add</button></div>
+    <div id="rules"></div></div>
+</section>
+
+<!-- VOICE ID (preview) -->
+<section class="tab" id="tab-voiceid">
+  <div class="ribbon">✨ <div><b>PREVIEW</b> — planned: it learns your voice from live mic time and verified lines, then only learns from VOD lines that are you. No enrollment.</div></div>
+  <div class="g2">
+    <div class="panel"><b>Your voice profile</b><div class="wave" style="margin:12px 0"><i style="height:20px;animation-delay:0.00s"></i><i style="height:41px;animation-delay:0.05s"></i><i style="height:52px;animation-delay:0.10s"></i><i style="height:48px;animation-delay:0.15s"></i><i style="height:31px;animation-delay:0.20s"></i><i style="height:31px;animation-delay:0.25s"></i><i style="height:48px;animation-delay:0.30s"></i><i style="height:51px;animation-delay:0.35s"></i><i style="height:40px;animation-delay:0.40s"></i><i style="height:21px;animation-delay:0.45s"></i><i style="height:41px;animation-delay:0.50s"></i><i style="height:52px;animation-delay:0.55s"></i><i style="height:47px;animation-delay:0.60s"></i><i style="height:30px;animation-delay:0.65s"></i><i style="height:32px;animation-delay:0.70s"></i><i style="height:48px;animation-delay:0.75s"></i><i style="height:51px;animation-delay:0.80s"></i><i style="height:40px;animation-delay:0.85s"></i><i style="height:21px;animation-delay:0.90s"></i><i style="height:41px;animation-delay:0.95s"></i><i style="height:52px;animation-delay:1.00s"></i><i style="height:47px;animation-delay:1.05s"></i><i style="height:30px;animation-delay:1.10s"></i><i style="height:32px;animation-delay:1.15s"></i><i style="height:48px;animation-delay:1.20s"></i><i style="height:51px;animation-delay:1.25s"></i><i style="height:39px;animation-delay:1.30s"></i><i style="height:22px;animation-delay:1.35s"></i><i style="height:42px;animation-delay:1.40s"></i><i style="height:52px;animation-delay:1.45s"></i><i style="height:47px;animation-delay:1.50s"></i><i style="height:29px;animation-delay:1.55s"></i><i style="height:33px;animation-delay:1.60s"></i><i style="height:49px;animation-delay:1.65s"></i><i style="height:51px;animation-delay:1.70s"></i><i style="height:39px;animation-delay:1.75s"></i><i style="height:22px;animation-delay:1.80s"></i><i style="height:42px;animation-delay:1.85s"></i><i style="height:52px;animation-delay:1.90s"></i><i style="height:46px;animation-delay:1.95s"></i></div>
+      <div class="dim">Built from live mic sessions + lines you verified</div><p>Voice sample so far: <b>3h 12m</b> &nbsp; Match confidence <span class="pill">94%</span></p>
+      <div class="dim">Ready to filter VODs (needs ~10 min)</div><div class="bar"><i style="width:100%"></i></div></div>
+    <div class="panel"><b>VOD lines by speaker</b><p class="dim">Example result for one VOD</p>
+      <div>You <span class="dim">· 61%</span></div><div class="bar"><i style="width:61%"></i></div>
+      <div style="margin-top:10px">Game / others <span class="dim">· 31%</span></div><div class="bar"><i style="width:31%;background:#ff9f43"></i></div>
+      <div style="margin-top:10px">Unsure <span class="dim">· 8%</span></div><div class="bar"><i style="width:8%;background:#f5d547"></i></div>
+      <p class="dim" style="margin-bottom:0">Only “You” lines feed the vocabulary and learn queue.</p></div>
+  </div>
+</section>
+<!-- COMMANDS (preview) -->
+<section class="tab" id="tab-cmds">
+  <div class="ribbon">✨ <div><b>PREVIEW</b> — planned voice commands. For now it only writes words down; nothing here does anything.</div></div>
+  <div class="panel"><b>Listening mode</b> &nbsp; <select><option>Transcribe only (current)</option><option>Wake word</option><option>Push-to-talk</option></select>
+    <table style="margin-top:12px"><tr><th>Phrase</th><th>Would do</th><th>Heard today</th></tr>
+      <tr><td><b>“clip that”</b></td><td class="dim">Create a Twitch clip</td><td>4</td></tr>
+      <tr><td><b>“switch to game”</b></td><td class="dim">OBS → Gameplay scene</td><td>1</td></tr>
+      <tr><td><b>“thanks chat”</b></td><td class="dim">Send a thank-you</td><td>0</td></tr></table></div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const api=async(p,o={})=>{const r=await fetch(p,o.body&&typeof o.body==='object'&&!(o.body instanceof FormData)?{...o,method:o.method||'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o.body)}:o);
+  if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail||m}catch{}throw new Error(m)}return r.json()};
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=t=>{t=Math.max(0,t|0);const h=t/3600|0,m=t%3600/60|0,s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
+function toast(msg,err){const d=document.createElement('div');if(err)d.className='err';d.textContent=msg;$('#toast').append(d);setTimeout(()=>d.remove(),err?8000:4500)}
+
+if(window.self!==window.top)document.body.classList.add("embedded");
+// ---------- tabs
+$$('nav button').forEach(b=>b.onclick=()=>{$$('nav button').forEach(x=>x.classList.toggle('on',x===b));$$('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab-'+b.dataset.tab));
+  ({learn:loadLearn,sources:loadSources,vocab:loadVocab})[b.dataset.tab]?.()});
+
+// ---------- audio
+const player=new Audio();let stopAt=0;
+player.addEventListener('timeupdate',()=>{if(stopAt&&player.currentTime>=stopAt){player.pause();stopAt=0}});
+function play(url,start,end){if(!url)return;stopAt=0;const go=()=>{player.currentTime=Math.max(0,start-.15);stopAt=end+.15;player.play()};
+  if(player.dataset.src!==url){player.dataset.src=url;player.src=url;player.addEventListener('loadedmetadata',go,{once:true});player.load()}else go()}
+
+// ---------- segment rendering
+function wordsHtml(words){return words.map(w=>{const c=w.l==='warn'?'w-warn':w.l==='bad'?'w-bad':w.l==='fix'?'w-fix':'';
+  const tip=w.l==='fix'?'auto-fixed (was: '+esc(w.was||'')+')':'confidence '+Math.round(w.p*100)+'%';
+  return `<span class="${c}" title="${tip}">${esc(w.w)}</span>`}).join(' ')}
+function segEl(seg){
+  const d=document.createElement('div');d.className='seg';d.dataset.id=seg.id;
+  const render=()=>{d.innerHTML=`<span class="t">${fmt(seg.t)}</span><button class="play" title="play">▶</button><div class="txt">${seg.status==='corrected'?esc(seg.text):wordsHtml(seg.words)}</div><span class="badge ${seg.status}">${seg.status==='new'?'':seg.status}</span>`;
+    d.querySelector('.play').onclick=()=>play(seg.audio,seg.start,seg.end);
+    d.querySelector('.txt').onclick=edit};
+  const edit=()=>{if(d.querySelector('textarea'))return;const ta=document.createElement('textarea');ta.value=seg.text;
+    const box=d.querySelector('.txt');box.replaceChildren(ta);ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);
+    ta.onkeydown=async e=>{if(e.key==='Escape'){render()}else if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();
+      try{const r=await api(`/api/segments/${seg.id}/correct`,{body:{text:ta.value}});seg.status=r.status;if(r.status==='corrected')seg.text=ta.value.trim();showLearned(r.learned);render()}catch(x){toast(x.message,1)}}};
+    ta.onblur=()=>setTimeout(()=>{if(d.contains(ta))render()},150)};
+  render();return d}
+function showLearned(l){if(!l)return;const bits=[...l.rules.map(r=>`“${r[0]}” → “${r[1]}”`),...l.vocab.map(v=>`+ ${v}`)];if(bits.length)toast('Learned: '+bits.slice(0,5).join(' · '))}
+
+// ---------- websocket
+let ws;function connect(){ws=new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.type==='asr'){$('#asr').textContent=m.state==='ready'?'● '+m.detail:m.state==='error'?'✖ '+m.detail:'… '+m.detail;$('#asr').style.color=m.state==='ready'?'var(--fix)':m.state==='error'?'var(--bad)':'var(--dim)'}
+    else if(m.type==='level'){$('#meter i').style.width=Math.round(m.rms*100)+'%';$('#meter').classList.toggle('sp',m.speaking)}
+    else if(m.type==='segment'){const f=$('#feed');if(f.querySelector('.dim'))f.innerHTML='';const near=f.scrollHeight-f.scrollTop-f.clientHeight<80;f.append(segEl(m.segment));if(near)f.scrollTop=f.scrollHeight}
+    else if(m.type==='live'){setLive(m.state==='listening')}
+    else if(m.type==='job'){if($('#tab-sources').classList.contains('on'))loadJobs()}
+    else if(m.type==='toast')toast(m.message);else if(m.type==='error')toast(m.message,1)};
+  ws.onclose=()=>setTimeout(connect,1500)}
+connect();
+
+// ---------- live
+let listening=false;
+function setLive(on){listening=on;const b=$('#go');b.textContent=on?'■ Stop':'● Start listening';b.classList.toggle('stop',on);b.classList.toggle('pri',!on);$('#live-state').textContent=on?'listening…':''}
+(async()=>{const [devs,st]=await Promise.all([api('/api/devices'),api('/api/status')]);
+  $('#dev').innerHTML='<option value="">System default mic</option>'+devs.map(d=>`<option value="${d.index}">${esc(d.name)} (${esc(d.api)})</option>`).join('');
+  if(st.settings.device!=null)$('#dev').value=st.settings.device;setLive(st.listening);
+  $('#s-chan').value=st.settings.channel;$('#s-auto').checked=st.settings.autolearn;
+  if(st.live_session)for(const s of await api('/api/segments?session='+st.live_session))$('#feed').append(segEl(s))})();
+$('#go').onclick=async()=>{try{if(listening){await api('/api/live/stop',{method:'POST'});setLive(false)}else{
+  const v=$('#dev').value;await api('/api/live/start',{body:{device:v===''?null:+v}});setLive(true);$('#feed').innerHTML=''}}catch(e){toast(e.message,1)}};
+
+// ---------- learn mode
+let skipped=[],cur=null;
+async function loadLearn(){const ss=await api('/api/sessions');const sel=$('#l-sess'),v=sel.value;
+  sel.innerHTML='<option value="">All sources</option>'+ss.filter(s=>s.segments).map(s=>`<option value="${s.id}">${esc(s.title.slice(0,50))} (${s.to_review} to review)</option>`).join('');sel.value=v;next()}
+$('#l-sess').onchange=()=>{skipped=[];next()};$('#l-conf').onchange=()=>{skipped=[];next()};
+$('#regrade').onclick=async()=>{const r=await api('/api/regrade',{method:'POST'});toast(`Re-applied learning to ${r.updated} lines`);next()};
+async function next(){const q=new URLSearchParams({exclude:skipped.join(','),confident:$('#l-conf').checked});if($('#l-sess').value)q.set('session',$('#l-sess').value);
+  const r=await api('/api/review/next?'+q);cur=r.segment;$('#l-left').textContent=r.left+' left';const c=$('#l-card');
+  if(!cur){c.innerHTML='<div class="dim" style="padding:30px;text-align:center">Nothing left to review here 🎉<br>Listen live, or add a VOD/clip, to get more.</div>';return}
+  c.innerHTML=`<div class="dim">${fmt(cur.t)} · confidence worst-first</div><div class="card">${wordsHtml(cur.words)}</div>
+   <div class="card-edit"><textarea id="l-ta"></textarea></div>
+   <div class="row" style="margin-top:10px"><button class="b" id="l-play">▶ Replay</button><button class="b pri" id="l-ok">Save ↵</button><button class="b" id="l-skip">Skip</button></div>`;
+  const ta=$('#l-ta');ta.value=cur.text;ta.focus();play(cur.audio,cur.start,cur.end);
+  $('#l-play').onclick=()=>play(cur.audio,cur.start,cur.end);$('#l-skip').onclick=skip;$('#l-ok').onclick=save}
+async function save(){if(!cur)return;try{const r=await api(`/api/segments/${cur.id}/correct`,{body:{text:$('#l-ta').value}});showLearned(r.learned);next()}catch(e){toast(e.message,1)}}
+function skip(){if(cur){skipped.push(cur.id);next()}}
+document.addEventListener('keydown',e=>{if(!$('#tab-learn').classList.contains('on')||!cur)return;
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}else if(e.key==='Escape')skip();else if(e.ctrlKey&&e.code==='Space'){e.preventDefault();play(cur.audio,cur.start,cur.end)}});
+
+// ---------- sources
+async function loadSources(){loadJobs()}
+async function loadJobs(){const js=await api('/api/jobs');$('#jobs').innerHTML=js.length?js.map(j=>`<div class="item"><span class="badge">${j.kind}</span><span class="ti" title="${esc(j.title)}">${esc(j.title)}</span>
+  ${j.status==='error'?`<span style="color:var(--bad)" title="${esc(j.error||'')}">error</span>`:j.status==='done'?'<span class="badge corrected">done</span>':`<span class="dim">${j.status}</span><progress max="1" value="${j.progress||0}"></progress>`}</div>`).join(''):'—'}
+$('#s-refresh').onclick=async()=>{$('#tw').textContent='Loading…';try{await api('/api/settings',{body:{channel:$('#s-chan').value.trim()}});const items=await api('/api/twitch');
+  window._tw=items;$('#tw').innerHTML=items.map((i,n)=>`<div class="item"><span class="badge">${i.kind}</span><span class="ti" title="${esc(i.title)}">${esc(i.title)}</span><span class="dim">${fmt(i.duration)} · ${i.created.slice(0,10)}</span>
+   ${i.session?`<span class="badge ${i.session.status==='done'?'corrected':''}">${i.session.status}</span>`:`<button class="b" data-n="${n}">Learn from this</button>`}</div>`).join('')||'Nothing found.';
+  $$('#tw button').forEach(b=>b.onclick=async()=>{const i=window._tw[b.dataset.n];await api('/api/queue',{body:{kind:i.kind,title:i.title,source_id:i.source_id,url:i.url}});b.replaceWith('queued');loadJobs()})}catch(e){$('#tw').textContent='';toast(e.message,1)}};
+$('#s-auto').onchange=async e=>{await api('/api/settings',{body:{autolearn:e.target.checked}});toast(e.target.checked?'Auto-learn on — checking Twitch…':'Auto-learn off')};
+$('#s-url-go').onclick=async()=>{const u=$('#s-url').value.trim();if(!u)return;try{await api('/api/ingest-url',{body:{url:u}});$('#s-url').value='';loadJobs()}catch(e){toast(e.message,1)}};
+$('#s-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;const fd=new FormData();fd.append('file',f);try{await api('/api/upload',{method:'POST',body:fd});toast('Uploaded — transcribing');loadJobs()}catch(x){toast(x.message,1)}e.target.value=''};
+
+// ---------- vocab
+async function loadVocab(){const [v,st]=await Promise.all([api('/api/vocab'),api('/api/status')]);const s=st.stats;
+  $('#stats').innerHTML=`<span><b>${s.total||0}</b> <span class="dim">lines</span></span><span><b>${s.corrected||0}</b> <span class="dim">corrected</span></span><span><b>${s.approved||0}</b> <span class="dim">approved</span></span><span><b>${s.to_review||0}</b> <span class="dim">flagged to review</span></span><span><b>${((s.reviewed_secs||0)/60).toFixed(1)}</b> <span class="dim">min of verified speech (future fine-tune set)</span></span>`;
+  $('#vocab').innerHTML=v.vocab.map(t=>`<span class="badge" style="margin:2px;display:inline-block;font-size:13px">${esc(t.term)} <span class="dim">×${t.count}</span> <a href="#" data-t="${esc(t.term)}" style="color:var(--bad);text-decoration:none">✕</a></span>`).join('')||'<span class="dim">Empty — it fills as you correct.</span>';
+  $('#rules').innerHTML=v.rules.length?'<table>'+v.rules.map(r=>`<tr><td>${esc(r.wrong)}</td><td>→</td><td><b>${esc(r.right)}</b></td><td class="dim">×${r.count}</td><td><a href="#" data-w="${esc(r.wrong)}" style="color:var(--bad);text-decoration:none">remove</a></td></tr>`).join('')+'</table>':'<span class="dim">None yet.</span>';
+  $$('#vocab a').forEach(a=>a.onclick=async e=>{e.preventDefault();await api('/api/vocab?term='+encodeURIComponent(a.dataset.t),{method:'DELETE'});loadVocab()});
+  $$('#rules a').forEach(a=>a.onclick=async e=>{e.preventDefault();await api('/api/rules?wrong='+encodeURIComponent(a.dataset.w),{method:'DELETE'});loadVocab()})}
+$('#v-add').onclick=async()=>{const t=$('#v-new').value.trim();if(t){await api('/api/vocab',{body:{term:t}});$('#v-new').value='';loadVocab()}};
+$('#r-add').onclick=async()=>{const w=$('#r-wrong').value.trim(),r=$('#r-right').value.trim();if(w&&r){await api('/api/rules',{body:{wrong:w,right:r}});$('#r-wrong').value=$('#r-right').value='';loadVocab()}};
+</script>
+</body>
+</html>
