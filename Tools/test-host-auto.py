@@ -39,7 +39,7 @@ def ran(name): return sum(1 for r in runs() if r['action'] == name and not r['te
 try:
     until(lambda: api('/api/status')['name'] == 'PinguinoHost', 30, 'host up')
     seeded = api('/api/automations')['doc']
-    if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 7: fails.append('spotify presets missing or enabled')
+    if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 8: fails.append('spotify presets missing or enabled')
     acts = [
         {'id': 'lurk', 'name': 'Lurk', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!lurk'], 'permission': 'everyone', 'cooldownSec': 30}],
          'steps': [{'type': 'inc_var', 'name': 'lurkers'}, {'type': 'say', 'as': 'core', 'text': 'Enjoy the lurk {user}! total {count}'}]},

@@ -81,7 +81,7 @@ const STEPS={
  obs_request:{label:'OBS: any request (advanced)',f:[['request','Request type','text'],['data','Request data (JSON)','json']]},
  sound:{label:'Play a sound file',f:[['file','Full path to .mp3 / .wav','text'],['volume','Volume 0-1','num']]},
  http:{label:'Call a web / module API',f:[['method','Method','sel',['GET','POST']],['url','URL (this PC, LAN, tailnet or innocentpenguin.com)','text'],['body','Body (JSON)','area'],['say','Say the answer\'s "say" field','bool'],['as','Speak as','sel',BOTS]]},
- module_command:{label:'Send command to a module (e.g. Spotify)',f:[['url','Module URL (…/api/chat-command)','text'],['command','Command name (blank = the typed one)','text'],['as','Speak as','sel',BOTS]]},
+ module_command:{label:'Send command to a module (e.g. Spotify)',f:[['url','Module URL (…/api/chat-command)','text'],['command','Command name (blank = the typed one)','text'],['redeem','Channel point redeem (uses what the viewer typed as the request)','bool'],['as','Speak as','sel',BOTS]]},
  bot_command:{label:'Run a bot command as the streamer',f:[['text','Command text, e.g. !next','text']]},
  timeout:{label:'Time a viewer out',f:[['user','Viewer','text'],['seconds','Seconds','num'],['reason','Reason','text']]},
  set_var:{label:'Set a variable',f:[['name','Name','text'],['value','Value','text'],['persist','Keep after restart','bool']]},

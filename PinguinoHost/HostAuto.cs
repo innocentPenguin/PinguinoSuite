@@ -75,6 +75,15 @@ namespace PinguinoHost
             try
             {
                 var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
+                if (!seeded.Any(x => (string)x == "spotify-redeem"))
+                {
+                    var acts0 = (JArray)doc["actions"];
+                    if (!acts0.OfType<JObject>().Any(x => (string)x["id"] == "spotify-redeem"))
+                        acts0.Add(new JObject { { "id", "spotify-redeem" }, { "name", "Spotify: channel point song request" }, { "group", "Spotify" }, { "enabled", false }, { "importNotes", "preset: set the reward title, enable when the spotify module runs" },
+                            { "triggers", new JArray { new JObject { { "type", "redeem" }, { "title", "Song Request" } } } }, { "conditions", new JArray() },
+                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", "http://127.0.0.1:8771/api/chat-command" }, { "command", "sr" }, { "redeem", true }, { "as", "core" } } } } });
+                    seeded.Add("spotify-redeem"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
+                }
                 if (seeded.Any(x => (string)x == "spotify")) return;
                 const string url = "http://127.0.0.1:8771/api/chat-command";
                 Func<string, string, string[], string, int, int, JObject> mk = (id, cmd, names, perm, cd, ucd) => new JObject {
@@ -392,7 +401,7 @@ namespace PinguinoHost
             {
                 using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(8) })
                 {
-                    var body = new JObject { { "command", cmd }, { "args", ctx.ContainsKey("args") ? ctx["args"] : "" }, { "user", ctx.ContainsKey("userName") ? ctx["userName"] : "" }, { "display", ctx.ContainsKey("display") ? ctx["display"] : "" },
+                    var body = new JObject { { "command", cmd }, { "args", ctx.ContainsKey("args") && ctx["args"] != "" ? ctx["args"] : ctx.ContainsKey("input") ? ctx["input"] : "" }, { "redeem", (bool?)st["redeem"] == true }, { "user", ctx.ContainsKey("userName") ? ctx["userName"] : "" }, { "display", ctx.ContainsKey("display") ? ctx["display"] : "" },
                         { "role", ctx.ContainsKey("role") ? ctx["role"] : "1" }, { "isMod", ctx.ContainsKey("isMod") && ctx["isMod"] == "true" }, { "isSub", ctx.ContainsKey("isSub") && ctx["isSub"] == "true" }, { "msgId", ctx.ContainsKey("msgId") ? ctx["msgId"] : "" } };
                     var rq = new HttpRequestMessage(HttpMethod.Post, u) { Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json") };
                     string tok = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? ""; if (tok != "" && ((IPAddress.TryParse(u.Host, out var ip) && IPAddress.IsLoopback(ip)) || u.Host == "localhost")) rq.Headers.Add("Authorization", "Bearer " + tok);
