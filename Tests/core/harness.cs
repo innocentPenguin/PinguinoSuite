@@ -392,12 +392,14 @@ public static class Harness
         foreach (var n in new[] { "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10", "p11" }) Run(n, "!join");
         Run("mod1", "!balance", "", true);
         var kBlue = Team("blue");
+        var kOrange = Team("orange");
         Run("mod1", "!finish", "blue", true);
         Check((bool)State()["hold"] && (string)State()["currentMatch"]["status"] == "finished" && (string)State()["currentMatch"]["winner"] == "blue", "KOTH on: the public view holds the finished match too");
         Check((string)State()["liveMatch"]["status"] == "live", "KOTH on: the mod view moves on to the next match at once");
         var kNextBlue = State()["liveMatch"]["blue"].Select(x => (string)x["Username"]).ToArray();
         var kNextOrange = State()["liveMatch"]["orange"].Select(x => (string)x["Username"]).ToArray();
         Check(kBlue.All(x => kNextBlue.Contains(x)), "KOTH on: the winners stay together on Blue");
+        Check(kOrange.All(x => Q().Contains(x)), "KOTH on: the losers are recycled to the back of the queue (nobody has to !join again)");
         Check(!kNextOrange.Any(x => kBlue.Contains(x)), "KOTH on: the losers are replaced by challengers");
         Run("mod1", "!koth", "off", true);
         Run("mod1", "!activity", "end", true);

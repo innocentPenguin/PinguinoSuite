@@ -1867,7 +1867,13 @@ public class CPHInline
         int frontPos = _queue.Min(e => e.Position) - 1;
         foreach (var entry in movers)
         {
-            if (IsStreamer(entry.Username))
+            if (recycle)
+            {
+                entry.Status = "waiting";
+                entry.Position = backPos++;
+                entry.GamesPlayedSession++;
+            }
+            else if (IsStreamer(entry.Username))
             {
                 entry.Status = "waiting";
                 entry.Position = frontPos--;
@@ -1913,7 +1919,11 @@ public class CPHInline
     }
 
     int GetTotalSlots(string format)
+        // [NEW][KOTH] King of the Hill recycles names: everyone who played (the streamer too) goes to the BACK of the waiting line instead of
+        // leaving it, so nobody has to !join again and the streamer waits his turn after a loss. (The winners who stay on are made active again by the caller.)
+        bool recycle = IsKothMode();
     {
+        int backPos = _queue.Max(e => e.Position) + 1;
         return GetTeamSize(format) * 2;
     }
 
