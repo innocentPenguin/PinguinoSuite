@@ -13,6 +13,7 @@ import threading
 import time
 import webbrowser
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -24,6 +25,8 @@ from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent))
 import livedetect  # noqa: E402
+import consolelog  # noqa: E402
+import prestream  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -47,6 +50,8 @@ ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "taur
 # Shared data root handed to every module: PINGUINO_DATA_DIR if the user set it, else Data/runtime
 # (the folder that holds bots.json, chat_settings.json, host_secrets.json... and that Host and Pipeline default to).
 DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "runtime")
+console_log = consolelog.Console(Path(DATA_DIR) / "console", LOGS)  # live log stream for the Console page
+CONSOLE_DIR = Path(DATA_DIR) / "console"
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 # UI source: single copy lives in the Tauri app so the two can't drift.
 UI_INDEX = ROOT.parent / "App" / "src" / "index.html"  # only copy of the UI (the old Suite/suite/static copy was retired)
@@ -111,6 +116,21 @@ def tail_lines(path, n):
 
 
 # ------------------------------------------------------------------ event bus (the seed of a Streamer.bot-style core)
+def _event_to_console(ev):
+    """Every core event also goes to the Console (crashes/failures louder than routine state changes)."""
+    t, extra = ev["type"], {k: v for k, v in ev.items() if k not in ("type", "ts", "id")}
+    mid = ev.get("id", "core")
+    lvl = "info"
+    if t == "module":
+        lvl = {"failed": "error", "crashed": "warn"}.get(ev.get("state"), "info")
+    elif t == "hook" and not ev.get("ok"):
+        lvl = "warn"
+    elif t == "prestream":
+        lvl = "error" if ev.get("fail") else "warn" if ev.get("warn") else "info"
+    msg = t + (": " + ", ".join(f"{k}={v}" for k, v in extra.items()) if extra else "")
+    console_log.log(lvl, t, msg, module=mid)
+
+
 class Bus:
     def __init__(self):
         self.clients, self.loop, self.history = set(), None, []
@@ -119,6 +139,7 @@ class Bus:
         ev = {"type": type_, "ts": time.time(), **data}
         self.history = (self.history + [ev])[-200:]
         _jsonl_log(ev)
+        _event_to_console(ev)
         if self.loop:
             asyncio.run_coroutine_threadsafe(self._send(ev), self.loop)
         return ev
@@ -335,11 +356,43 @@ def process_control():
             m.start()
 
 
+last_prestream = {}
+
+
+def run_prestream(slot=None, scheduled=False):
+    """Run all readiness checks, post the result to the Console and the event bus (toast), keep it for /api/prestream."""
+    global last_prestream
+    mods = [{"id": m.id, "spec": m.spec, "state": m.public()["state"], "always_start": bool(m.spec.get("defaults", {}).get("always_start"))}
+            for m in modules.values()]
+    rep = prestream.run_checks(mods, module_token, CONSOLE_DIR, lambda: console_log.errors_since(1800), ROOT, slot, scheduled)
+    last_prestream = rep
+    for i in rep["items"]:
+        if i["status"] != "pass":
+            console_log.log("error" if i["status"] == "fail" else "warn", "prestream", f"{i['label']}: {i['detail'] or i['status']}", module=i["module"])
+    sm = rep["summary"]
+    bus.emit("prestream", slot=slot or "manual", scheduled=scheduled, passed=sm["pass"], warn=sm["warn"], fail=sm["fail"])
+    return rep
+
+
+def prestream_loop():
+    done = set()
+    while True:
+        try:
+            due = prestream.due_slot(datetime.now(timezone.utc), done)
+            if due:
+                done.add(due[1])
+                run_prestream(slot=due[0], scheduled=True)
+        except Exception as e:  # noqa: BLE001
+            console_log.log("error", "prestream", f"scheduler error: {e}")
+        time.sleep(20)
+
+
 def health_loop():
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
     tick = 0
     while True:
         process_control()
+        console_log.ingest(list(modules))
         if tick % 4 == 0:  # health every ~4s, control files every second
             for m in modules.values():
                 m.refresh()
@@ -388,6 +441,7 @@ async def lifespan(app):
             m.start()
     threading.Thread(target=health_loop, daemon=True).start()
     threading.Thread(target=twitch_loop, daemon=True).start()
+    threading.Thread(target=prestream_loop, daemon=True).start()
     bus.emit("suite", state="started")
     yield
     for m in modules.values():
@@ -476,6 +530,22 @@ def module_logs(mid: str, lines: int = 200):
     if mid not in modules:
         raise HTTPException(404)
     return {"id": mid, "lines": tail_lines(LOGS / f"{mid}.log", max(1, min(lines, 2000)))}
+
+
+@app.get("/api/console")
+def console_get(since: int = 0, limit: int = 300, min_level: str = "debug", module: str = "", q: str = ""):
+    return {"seq": console_log.seq, "entries": console_log.query(since, max(1, min(limit, 2000)), min_level, module, q),
+            "errors": console_log.errors_since(1800)}
+
+
+@app.get("/api/prestream")
+def prestream_get():
+    return last_prestream or {"ts": None, "summary": {"pass": 0, "warn": 0, "fail": 0}, "items": []}
+
+
+@app.post("/api/prestream/run")
+def prestream_run():
+    return run_prestream(slot="manual")
 
 
 @app.get("/api/events/log")
