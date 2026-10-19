@@ -618,9 +618,7 @@ def theme_css():
     f = UI_INDEX.parent / "theme.css" if UI_INDEX else None
     if not f or not f.exists():
         raise HTTPException(404)
-    return Response(f.read_text("utf8") + "
-/* this device's personalisation */
-" + prefs_store.css(), media_type="text/css", headers={"Cache-Control": "no-cache"})
+    return Response(f.read_text("utf8") + chr(10) + "/* this device's personalisation */" + chr(10) + prefs_store.css(), media_type="text/css", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/bootstrap.js")

@@ -49,3 +49,10 @@ class PrefsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CoreParses(unittest.TestCase):
+    def test_core_files_compile(self):   # a syntax slip in suite.py once got committed; this catches it without starting the core
+        import ast
+        for f in ("suite.py", "helpdb.py", "prefs.py", "livedetect.py", "device.py", "vault.py", "portable.py", "integrations.py", "prestream.py"):
+            ast.parse((pathlib.Path(__file__).resolve().parents[1] / "suite" / f).read_text("utf8"), f)
