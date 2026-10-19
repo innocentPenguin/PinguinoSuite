@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PinguinoListen</title>
 <style>
-:root{--bg:#0a0e15;--panel:#131925;--line:#222b3c;--fg:#e8ecf4;--dim:#8b95ab;--acc:#7cc4ff;
-  --warn:#f5d547;--warn-bg:#f5d54733;--bad:#ff5d5d;--bad-bg:#ff5d5d40;--fix:#5fd38d;--ok:#e6e9f0}
+:root{--bg:#050505;--panel:#101012;--line:#232326;--fg:#f2f0ec;--dim:#a39f98;--acc:#ff9900;
+  --warn:#e8d44d;--warn-bg:#e8d44d33;--bad:#ff5c5c;--bad-bg:#ff5c5c40;--fix:#5fd38d;--ok:#e6e9f0}
 *{box-sizing:border-box}
-body{margin:0;background:radial-gradient(1000px 500px at 80% -10%,#15233a55,transparent),var(--bg);color:var(--fg);font:15px/1.5 system-ui,Segoe UI,sans-serif}
+body{margin:0;background:radial-gradient(1000px 500px at 80% -10%,#ff990012,transparent),var(--bg);color:var(--fg);font:15px/1.5 system-ui,Segoe UI,sans-serif}
 body.embedded header h1{display:none}
 header{display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
 header h1{font-size:17px;margin:0}
@@ -17,15 +17,15 @@ nav button{background:none;border:0;color:var(--dim);padding:8px 14px;border-rad
 nav button.on{background:var(--panel);color:var(--fg)}
 #asr{margin-left:auto;font-size:13px;color:var(--dim)}
 main{max-width:1100px;margin:0 auto;padding:22px}
-.ribbon{display:flex;gap:10px;padding:10px 16px;margin-bottom:16px;border-radius:12px;background:#a78bfa14;border:1px dashed #a78bfa66;color:#cdbdfc}
-.wave{display:flex;align-items:center;gap:3px;height:56px}.wave i{width:4px;border-radius:3px;background:linear-gradient(#7cc4ff,#4a9be0);animation:w 1.2s infinite ease-in-out}@keyframes w{50%{transform:scaleY(.35)}}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.bar{height:8px;background:#0e131c;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#2fb98a,#4cd9a0)}
-.pill{display:inline-block;font-size:11px;padding:1px 9px;border-radius:9px;border:1px solid #4cd9a055;color:#4cd9a0}
+.ribbon{display:flex;gap:10px;padding:10px 16px;margin-bottom:16px;border-radius:12px;background:#b9a58a14;border:1px dashed #b9a58a66;color:#d9c9ad}
+.wave{display:flex;align-items:center;gap:3px;height:56px}.wave i{width:4px;border-radius:3px;background:linear-gradient(#ff9900,#e68a00);animation:w 1.2s infinite ease-in-out}@keyframes w{50%{transform:scaleY(.35)}}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.bar{height:8px;background:#0a0a0b;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#2fb98a,#3ddc97)}
+.pill{display:inline-block;font-size:11px;padding:1px 9px;border-radius:9px;border:1px solid #3ddc9755;color:#3ddc97}
 .tab{display:none}.tab.on{display:block}
-.panel{background:linear-gradient(180deg,var(--panel),#101622);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
-button.b,select,input[type=text],textarea{background:#18202e;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
+.panel{background:linear-gradient(180deg,var(--panel),#0c0c0e);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+button.b,select,input[type=text],textarea{background:#17171a;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
 button.b{cursor:pointer}button.b:hover{border-color:var(--acc)}
-button.pri{background:var(--acc);color:#0b1020;border-color:var(--acc);font-weight:600}
+button.pri{background:var(--acc);color:#140b00;border-color:var(--acc);font-weight:600}
 button.stop{background:var(--bad);border-color:var(--bad);color:#190808;font-weight:600}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .dim{color:var(--dim);font-size:13px}
@@ -41,7 +41,7 @@ button.stop{background:var(--bad);border-color:var(--bad);color:#190808;font-wei
 .badge.corrected{color:var(--fix);border-color:var(--fix)}.badge.approved{color:var(--acc);border-color:var(--acc)}
 .seg textarea{width:100%;min-height:54px}
 #feed{max-height:62vh;overflow:auto}
-#meter{height:10px;width:220px;background:#222838;border-radius:6px;overflow:hidden}
+#meter{height:10px;width:220px;background:#232326;border-radius:6px;overflow:hidden}
 #meter i{display:block;height:100%;width:0;background:var(--fix);transition:width .08s}
 #meter.sp i{background:var(--acc)}
 .card{font-size:26px;line-height:1.7;padding:18px 6px;min-height:90px}
@@ -51,10 +51,11 @@ progress{width:140px;height:8px}
 .item{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
 .item .ti{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:9}
-#toast div{background:#222838;border:1px solid var(--line);padding:10px 14px;border-radius:10px;max-width:360px}
+#toast div{background:#232326;border:1px solid var(--line);padding:10px 14px;border-radius:10px;max-width:360px}
 #toast .err{border-color:var(--bad)}
-kbd{background:#222838;border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:12px}
+kbd{background:#232326;border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:12px}
 </style>
+<link rel="stylesheet" href="http://127.0.0.1:8760/theme.css">
 </head>
 <body>
 <header>
@@ -143,8 +144,8 @@ kbd{background:#222838;border:1px solid var(--line);border-radius:4px;padding:0 
       <div class="dim">Ready to filter VODs (needs ~10 min)</div><div class="bar"><i style="width:100%"></i></div></div>
     <div class="panel"><b>VOD lines by speaker</b><p class="dim">Example result for one VOD</p>
       <div>You <span class="dim">· 61%</span></div><div class="bar"><i style="width:61%"></i></div>
-      <div style="margin-top:10px">Game / others <span class="dim">· 31%</span></div><div class="bar"><i style="width:31%;background:#ff9f43"></i></div>
-      <div style="margin-top:10px">Unsure <span class="dim">· 8%</span></div><div class="bar"><i style="width:8%;background:#f5d547"></i></div>
+      <div style="margin-top:10px">Game / others <span class="dim">· 31%</span></div><div class="bar"><i style="width:31%;background:#ff9900"></i></div>
+      <div style="margin-top:10px">Unsure <span class="dim">· 8%</span></div><div class="bar"><i style="width:8%;background:#e8d44d"></i></div>
       <p class="dim" style="margin-bottom:0">Only “You” lines feed the vocabulary and learn queue.</p></div>
   </div>
 </section>

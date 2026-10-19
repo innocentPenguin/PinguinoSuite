@@ -552,6 +552,15 @@ def index():
     return HTMLResponse(html.replace("<head>", f'<head><meta name="pinguino-token" content="{TOKEN}">', 1))
 
 
+@app.get("/theme.css")
+def theme_css():
+    """Shared colour tokens (App/src/theme.css): module pages link this so the whole Suite shares one palette. No token needed."""
+    f = UI_INDEX.parent / "theme.css" if UI_INDEX else None
+    if not f or not f.exists():
+        raise HTTPException(404)
+    return Response(f.read_text("utf8"), media_type="text/css", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/bootstrap.js")
 def bootstrap_js():
     """Browser/standalone mode: index.html loads this to attach the per-launch token to API calls."""

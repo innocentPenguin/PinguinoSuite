@@ -153,3 +153,24 @@ Known limit: if the network between devices is cut while both stay online, each 
 - Later (phase 2): Link proxies a peer's module UI (for example the master's Host page) so an auxiliary can control the bots remotely; until then an auxiliary shows "bots run on <master name>".
 
 **Core API (app token):** `GET /api/device` (me, master, devices, pin), `POST /api/device/take` (pin to this device), `POST /api/device/release` (clear the pin), `POST /api/device/config {name, priority, role_pref}`. Module-token endpoints: `/api/device/peer`, `/api/device/streaming`, `/api/device/lease`. Everything is logged to the Console under module `core`, source `device`.
+
+## Theme (shared colours)
+One palette for the whole Suite: near-black surfaces and **penguin orange `#ff9900`**. The tokens live in `App/src/theme.css` (shell and core serve the same file). **Module pages: add this after your own `<style>` (your inline values stay as the fallback when the core is not reachable) and use only the variables, never raw hex:**
+```html
+<link rel="stylesheet" href="http://127.0.0.1:8760/theme.css">
+```
+(Use `PINGUINO_CORE_URL` from your environment if you build the URL on the server side. No token is needed. The core never sends `X-Frame-Options` on it, and it is a plain CSS file, so it works inside the app's iframe.)
+
+| Token | Value | Use |
+|---|---|---|
+| `--bg` / `--bg2` / `--panel` / `--panel2` | `#050505` / `#0a0a0b` / `#101012` / `#17171a` | page / sidebar, inputs / cards / raised controls |
+| `--line` / `--line2` | `#232326` / `#34343a` | hairlines / control borders |
+| `--fg` / `--dim` / `--faint` | `#f2f0ec` / `#a39f98` / `#85827b` | text / secondary text / hints |
+| `--accent` `--accent-hover` `--accent-active` | `#ff9900` `#ffad33` `#e68a00` | primary buttons, active nav, links, focus |
+| `--accent-soft` `--accent-line` | `#ff990022` `#ff990066` | tinted background / border (selected item, chip) |
+| `--on-accent` | `#140b00` | text on an `--accent` fill |
+| `--focus` | `#ffc266` | 2 px focus ring (`:focus-visible` is already styled) |
+| `--ok` `--warn` `--bad` `--live` `--info` | `#3ddc97` `#e8d44d` `#ff5c5c` `#ff4d4f` `#9fb4c7` | pass / warn (yellow, not orange) / fail / on air / neutral |
+| `--r`, `--shadow` | `14px`, … | card radius, elevation |
+
+Legacy names `--ice`, `--ice2`, `--beak`, `--vio`, `--acc` still resolve (to accent / accent-active / accent / muted tag / accent) so older pages recolour automatically; new code should use the `--accent*` names. **Do not reuse `--ok` for ordinary text.** Contrast (WCAG): text and accent on surfaces are 5-18:1 (`--faint` is 5:1); status colours are 6-13:1 on `--panel`. Never rely on colour alone for status: pair it with a word or icon. Reading the tokens in script: `getComputedStyle(document.documentElement).getPropertyValue('--accent')`.

@@ -1,0 +1,36 @@
+/* PinguinoSuite shared theme (v1). Single source for the shell AND every module page.
+   Link it:  <link rel="stylesheet" href="http://127.0.0.1:8760/theme.css">   (the core serves this file; no token needed)
+   Use only these variables for colour, so a future palette change is a one-file edit. Docs/MODULE_CONTRACT.md, "Theme". */
+:root{
+  /* surfaces: near-black, slightly warm; each step up is one layer of elevation */
+  --bg:#050505;          /* page */
+  --bg2:#0a0a0b;        /* sidebar, inputs, wells */
+  --panel:#101012;      /* cards */
+  --panel2:#17171a;     /* raised: buttons, chips, menus */
+  --line:#232326;       /* hairlines */
+  --line2:#34343a;      /* control borders */
+  /* text */
+  --fg:#f2f0ec;         /* primary, 17:1 on --bg */
+  --dim:#a39f98;        /* secondary, 7.5:1 on --panel */
+  --faint:#85827b;      /* hints/disabled, 5:1 on --panel */
+  /* accent: penguin orange */
+  --accent:#ff9900;
+  --accent-hover:#ffad33;
+  --accent-active:#e68a00;
+  --accent-soft:#ff990022;   /* tinted background (active nav, selected chip) */
+  --accent-line:#ff990066;   /* tinted border */
+  --on-accent:#140b00;       /* text on an --accent fill, 9.6:1 */
+  --focus:#ffc266;           /* focus ring (2px outline) */
+  /* status: kept distinct from the orange accent, always pair with an icon or label, never colour alone */
+  --ok:#3ddc97;
+  --warn:#e8d44d;            /* yellow, deliberately not orange */
+  --bad:#ff5c5c;
+  --live:#ff4d4f;
+  --info:#9fb4c7;            /* neutral cool grey for informational pills */
+  --muted-tag:#b9a58a;       /* "preview"/"planned" tags */
+  --r:14px;--shadow:0 10px 30px #000a;
+  /* legacy names used by older module pages; they now resolve to the new palette */
+  --ice:var(--accent);--ice2:var(--accent-active);--beak:var(--accent);--vio:var(--muted-tag);--acc:var(--accent);
+}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+::selection{background:var(--accent-soft)}
