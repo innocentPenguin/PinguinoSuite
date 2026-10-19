@@ -108,6 +108,15 @@ HELP = {
     "timer.jitter_pct": "Randomise the gap by up to this % so it never sounds like a clock.",
     "timer.lines": "What it says, one variant per row (random). {catch} and {time} work.",
     "timer.min_chat": "Only fires when at least this many events/lines were handled since the last one (0 = always).",
+    "persona.stinger": "A short sound played before the voice speaks. Pick a built-in one or one of your own WAV files (Words > Sounds).",
+    "time_rules": "Switch the default persona by time of day (e.g. Sleepy Seal after 22:00). Events and people with their own persona still win.",
+    "time_rule.from": "Start time (24 h). The rule covers from here until 'until', passing midnight if needed.",
+    "milestones": "Celebrate counts: every 10th follower, every 100 bits, every 5th raid. Counted all day even when silent.",
+    "milestone.every": "Fires each time the count passes a multiple of this number.",
+    "milestone.count_by": "'events' counts each follow/sub/raid; 'amount' adds up bits or viewers.",
+    "milestone.scope": "'day' starts again at midnight, 'forever' never resets (until you press Reset counters).",
+    "milestone.lines": "What it says, one per row. Variables: {count} {every} {event} {catch} {time}.",
+    "sounds": "Your own WAV sounds (max 2 MB each, kept in the Speak data folder). Use them as a persona's or an event's sound.",
     "tts.enabled": "Lets people type !tts <text> in chat to have it spoken (the Host runs the command; set it up on Actions & Events). Off by default.",
     "tts.min_role": "Lowest role allowed to use !tts: viewer, sub, vip, mod or broadcaster.",
     "listen.confirm_commands": "When a voice command is heard and fires, say a tiny confirmation. Voice commands stay silent in chat either way.",
@@ -224,6 +233,8 @@ def defaults():
         "platforms": {p: "" for p in PLATFORMS},
         "users": {},
         "nicknames": {},
+        "time_rules": [],
+        "milestones": [],
         "cloud": {"allow": False, "fallback": True, "openai_model": "gpt-4o-mini-tts", "elevenlabs_model": "eleven_turbo_v2_5", "stability": 50},
         "timers": [],
         "limits": {"max_chars": 160, "too_long": "cut", "rate_per_min": 12, "user_cooldown_s": 20, "profanity": "mask", "bad_words": [], "block_links": True,
@@ -237,6 +248,15 @@ def defaults():
         "tts": {"enabled": False, "min_role": "mod"},
         "listen": {"confirm_commands": False, "confirm_text": "Done."},
     }
+
+
+def _sting(v, blank):
+    v = _s(v, 80)
+    if v in STINGERS:
+        return v
+    if re.fullmatch(r"file:[\w .()-]{1,60}\.wav", v, re.I):
+        return v
+    return blank
 
 
 def _clip(v, lo, hi, default):
@@ -285,7 +305,7 @@ def normalize_persona(p, base=None):
         "effects": {k: _i(eff.get(k, b["effects"].get(k, 0)), 0, 100, 0) for k in EFFECTS},
         "catchphrases": _list(p.get("catchphrases", b["catchphrases"]), 30, 100), "catch_chance": _i(p.get("catch_chance", b["catch_chance"]), 0, 100, 0),
         "engine": p.get("engine") if p.get("engine") in ("sapi", "openai", "elevenlabs") else "sapi", "cloud_voice": _s(p.get("cloud_voice", ""), 80), "style": _s(p.get("style", ""), 200),
-        "stinger": p.get("stinger") if p.get("stinger") in STINGERS else "none", "intro": _s(p.get("intro", ""), 100), "outro": _s(p.get("outro", ""), 100),
+        "stinger": _sting(p.get("stinger"), "none"), "intro": _s(p.get("intro", ""), 100), "outro": _s(p.get("outro", ""), 100),
         "templates": {k: _list(v, 20, 240) for k, v in tpl.items() if k in EVENTS},
     }
 
@@ -319,7 +339,7 @@ def normalize(raw):
         e["priority"] = _i(r.get("priority", e["priority"]), 1, 9, 5)
         e["read_message"] = bool(r.get("read_message", e["read_message"]))
         e["only_live"] = bool(r.get("only_live", e["only_live"]))
-        e["stinger"] = r.get("stinger") if r.get("stinger") in STINGERS else ""
+        e["stinger"] = _sting(r.get("stinger"), "")
     for sec, keys in (("roles", ROLES), ("platforms", PLATFORMS)):
         src = raw.get(sec) if isinstance(raw.get(sec), dict) else {}
         for k in keys:
@@ -363,6 +383,18 @@ def normalize(raw):
                     "elevenlabs_model": _s(rc.get("elevenlabs_model", "eleven_turbo_v2_5"), 40) or "eleven_turbo_v2_5", "stability": _i(rc.get("stability", 50), 0, 100, 50)}
     if isinstance(raw.get("nicknames"), dict):
         out["nicknames"] = {_s(k, 40).lower(): _s(v, 40) for k, v in list(raw["nicknames"].items())[:300] if _s(k, 40) and _s(v, 40)}
+    out["time_rules"] = []
+    for i, t in enumerate((raw.get("time_rules") if isinstance(raw.get("time_rules"), list) else [])[:20]):
+        if isinstance(t, dict) and _pid(t.get("persona", "")) in out["personas"]:
+            out["time_rules"].append({"id": _pid(t.get("id") or f"r{i}") or f"r{i}", "from": _hhmm(t.get("from"), "22:00"), "to": _hhmm(t.get("to"), "07:00"), "persona": _pid(t["persona"])})
+    out["milestones"] = []
+    for i, t in enumerate((raw.get("milestones") if isinstance(raw.get("milestones"), list) else [])[:30]):
+        if not isinstance(t, dict):
+            continue
+        pt = _pid(t.get("persona", ""))
+        out["milestones"].append({"id": _pid(t.get("id") or f"m{i}") or f"m{i}", "enabled": bool(t.get("enabled", True)), "event": t.get("event") if t.get("event") in ("follow", "sub", "resub", "gift", "cheer", "raid", "redeem") else "follow",
+                                  "every": _i(t.get("every", 10), 1, 10**7, 10), "count_by": t.get("count_by") if t.get("count_by") in ("events", "amount") else "events",
+                                  "scope": t.get("scope") if t.get("scope") in ("day", "forever") else "day", "persona": pt if pt in out["personas"] else "default", "lines": _list(t.get("lines", []), 20, 240)})
     out["timers"] = []
     for i, t in enumerate((raw.get("timers") if isinstance(raw.get("timers"), list) else [])[:30]):
         if not isinstance(t, dict):

@@ -28,3 +28,6 @@ A new module is a drop-in manifest, discovered at core start: needs a core **rel
 - **Schedule:** spoken reminders (every N min, jitter, needs-activity, persona, random lines). Silent whenever the master is off/muted.
 - **Output device** (e.g. a virtual cable) via sounddevice, nicknames (how a name is said), repeat suppression, spoken voice-command confirmation (`POST /api/event {"kind":"voice_cmd","what":"skip"}`, off by default), Rehearse all, `/api/integrations`, `/api/devices`, `/api/test-cloud`, `/api/timer-fire`.
 - Page uses the Suite theme (`theme.css` tokens + live theme messages).
+
+## Cycle 3 additions
+Milestones (every Nth follow/sub/raid, or every N bits/viewers; daily or forever; counted even while silent; `GET /api/counters`, `POST /api/counters-reset`), persona by time of day, your own WAV sounds as persona/event stingers (`/api/sounds`, `/api/sound-upload` max 2 MB, file names sanitised, only inside `Data\runtime\voice\sounds`), history CSV export (`/api/history.csv`), output-device list de-duplicated.

@@ -416,5 +416,45 @@ class CloudMock(unittest.TestCase):
         self.assertFalse(engine.Cloud(hosts={"openai": "http://127.0.0.1:1", "elevenlabs": "http://127.0.0.1:1"}, key_fetch=lambda n: None).test("openai")["ok"])
 
 
+class Cycle3(unittest.TestCase):
+    def test_milestones(self):
+        b, s, pl = mk()
+        b.reset_counters()
+        b.cfg["milestones"] = config.normalize({"milestones": [{"event": "follow", "every": 3, "lines": ["Number {count}!"], "persona": "default"}]})["milestones"]
+        b.cfg["events"]["follow"]["cooldown_s"] = 0
+        b.cfg["queue"]["merge_similar"] = False
+        for n in ("alice", "bobby", "carol", "dave"):
+            b.handle({"kind": "follow", "user": n})
+        wait(pl, 4)
+        self.assertTrue(any(c[0].startswith("Number 3!") for c in s.calls))
+        self.assertEqual(sum(1 for c in s.calls if c[0].startswith("Number")), 1)
+
+    def test_milestone_by_amount_and_silent_counting(self):
+        b, s, pl = mk(master=False)
+        b.reset_counters()
+        b.cfg["milestones"] = config.normalize({"milestones": [{"event": "cheer", "every": 100, "count_by": "amount", "lines": ["x"], "scope": "forever"}]})["milestones"]
+        b.handle({"kind": "cheer", "user": "a", "amount": 250})
+        self.assertEqual(b._counters()["total"]["cheer:amount"], 250)
+        time.sleep(0.2)
+        self.assertEqual(s.calls, [])
+
+    def test_time_rule(self):
+        b, s, pl = mk()
+        b.cfg["time_rules"] = [{"id": "r", "from": "00:00", "to": "23:59", "persona": "sleepy"}]
+        self.assertEqual(b.persona_for({}, "chat", "x", None, None), "sleepy")
+        b.cfg["roles"]["mod"] = "robot"
+        self.assertEqual(b.persona_for({}, "chat", "x", "mod", None), "robot")
+
+    def test_custom_sound(self):
+        d = tempfile.mkdtemp()
+        open(os.path.join(d, "a.wav"), "wb").write(engine.np_to_wav(np.sin(np.arange(11025) / 5.0).astype(np.float32) * .5, 22050))
+        self.assertGreater(len(engine.load_sound("a.wav", d)), 5000)
+        self.assertEqual(len(engine.load_sound("../a.wav", d)) > 0, True)       # path stripped to the file name inside the folder
+        self.assertEqual(len(engine.load_sound("missing.wav", d)), 0)
+        self.assertEqual(len(engine.load_sound("a.txt", d)), 0)
+        self.assertEqual(config.normalize({"personas": {"x": {"stinger": "file:a.wav"}}})["personas"]["x"]["stinger"], "file:a.wav")
+        self.assertEqual(config.normalize({"personas": {"x": {"stinger": "file:../evil.exe"}}})["personas"]["x"]["stinger"], "none")
+
+
 if __name__ == "__main__":
     unittest.main()

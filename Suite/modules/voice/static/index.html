@@ -51,7 +51,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1p
 <script>
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let DEVS=[],C=null,META=null,ST=null,dirty=false,tab=localStorage.getItem('pv-tab')||'overview',sel=null,LOG=[],PRE=null,vcache=[];
+let SND=[],CNT=null,DEVS=[],C=null,META=null,ST=null,dirty=false,tab=localStorage.getItem('pv-tab')||'overview',sel=null,LOG=[],PRE=null,vcache=[];
 const TABS=[['overview','Overview'],['personas','Personas'],['events','Events'],['schedule','Schedule'],['who','Who & where'],['limits','Limits & queue'],['words','Words'],['presets','Presets'],['log','Log']];
 const api=async(p,b)=>{const r=await fetch(p,b===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
   if((r.headers.get('content-type')||'').includes('audio'))return {blob:await r.blob(),said:decodeURIComponent(r.headers.get('X-Said')||'')};
@@ -111,7 +111,7 @@ V.personas=()=>{const ks=Object.keys(C.personas);if(!sel||!C.personas[sel])sel=C
    ${txt(b+'intro','Always start with','persona.intro',{ph:'e.g. Attention!'})}${txt(b+'outro','Always end with','persona.outro',{ph:'e.g. Over and out.'})}</div>
   <div class="card" style="grid-column:1/-1"><h3>${esc(p.name)}'s own wording <span class="faint">(per event; empty = use the Events tab)</span></h3>${H('persona.templates')}
    <div class="grid">${['follow','sub','resub','gift','cheer','raid','redeem','stream_online','stream_offline'].map(k=>fld(k,'',`<textarea data-p="${b}templates.${k}" data-list="1" rows="2" placeholder="(uses event wording)">${esc((p.templates[k]||[]).join('\n'))}</textarea>`)).join('')}</div></div></div>`};
-const C_stingers=()=>META.stingers.map(s=>[s,s]);
+const C_stingers=()=>[...META.stingers,...SND.map(n=>'file:'+n)].map(s=>[s,s.startsWith('file:')?'🎵 '+s.slice(5):s]);
 V.events=()=>`<div class="grid">${META.events.map(k=>{const e=C.events[k],b='events.'+k+'.';return `<div class="card ${e.enabled?'on':''}"><div class="row"><h3 style="margin:0">${k}</h3><span class="sp"></span>${sw('e-'+k,e.enabled,true).replace('<input','<input data-p="'+b+'enabled" data-redraw="1"')}</div>${H('event.enabled')}
  ${sel_(b+'persona','Who announces','event.persona',pOpts('default (see Who & where)').map(o=>o[0]===''?['default','default persona / role rules']:o))}
  ${fld('What they say','event.templates',`<textarea data-p="${b}templates" data-list="1" rows="4">${esc(e.templates.join('\n'))}</textarea>`)}
@@ -124,6 +124,11 @@ V.schedule=()=>`<div class="row" style="margin-bottom:12px"><button id="addT" cl
  ${fld('Lines','timer.lines',`<textarea data-p="${b}lines" data-list="1" rows="4">${esc(t.lines.join('\n'))}</textarea>`)}
  <div class="row" style="margin-top:10px"><button class="sm" data-tfire="${t.id}">▶ Say one now</button><button class="sm" data-delt="${i}">Delete</button></div></div>`}).join('')||'<div class="dim">No reminders yet. Add one: hydrate, follow reminder, socials…</div>'}</div>`;
 const H_=k=>esc(META.help[k]||'');
+V.schedule0=V.schedule;
+V.schedule=()=>V.schedule0()+`<h3 style="margin:22px 0 4px">Persona by time of day</h3>${H('time_rules')}<div class="grid">${C.time_rules.map((t,i)=>{const b='time_rules.'+i+'.';return `<div class="card"><div class="row"><span class="dim">From</span><input type="time" data-p="${b}from" value="${t.from}" style="width:110px"><span class="dim">until</span><input type="time" data-p="${b}to" value="${t.to}" style="width:110px"></div>${sel_(b+'persona','Persona','',pOpts())}<div class="row" style="margin-top:8px"><button class="sm" data-delr="${i}">Delete</button></div></div>`}).join('')}<div class="card"><button id="addR">＋ Add a time rule</button></div></div>
+ <h3 style="margin:22px 0 4px">Milestones</h3>${H('milestones')}<div class="grid">${C.milestones.map((m,i)=>{const b='milestones.'+i+'.';const n=CNT?(CNT[m.scope==='day'?'daily':'total']||{})[m.event+':'+m.count_by]||0:0;return `<div class="card ${m.enabled?'on':''}"><div class="row"><b>${esc(m.event)} every ${m.every}</b><span class="faint">now ${n}</span><span class="sp"></span>${sw('m'+i,m.enabled,true).replace('<input','<input data-p="'+b+'enabled" data-redraw="1"')}</div>
+ <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">${sel_(b+'event','Event','',['follow','sub','resub','gift','cheer','raid','redeem'])}${num(b+'every','Every','milestone.every',1,1e7)}${sel_(b+'count_by','Count','milestone.count_by',['events','amount'])}${sel_(b+'scope','Reset','milestone.scope',[['day','daily'],['forever','never']])}</div>
+ ${sel_(b+'persona','Who says it','',pOpts('').map(o=>o[0]===''?['default','default persona']:o))}${fld('Lines','milestone.lines',`<textarea data-p="${b}lines" data-list="1" rows="3">${esc(m.lines.join('\n'))}</textarea>`)}<div class="row" style="margin-top:8px"><button class="sm" data-delm="${i}">Delete</button></div></div>`}).join('')}<div class="card"><button id="addM" class="pri">＋ Add a milestone</button> <button id="rcnt" class="sm">Reset counters</button></div></div>`;
 V.who=()=>`<div class="grid"><div class="card"><h3>By role</h3>${H('roles')}${META.roles.map(r=>sel_('roles.'+r,r,'',pOpts('(default)'))).join('')}</div>
  <div class="card"><h3>By platform</h3>${H('platforms')}${META.platforms.map(r=>sel_('platforms.'+r,r,'',pOpts('(default)'))).join('')}</div>
  <div class="card"><h3>By person</h3>${H('users')}<table>${Object.entries(C.users).map(([u,p])=>`<tr><td>${esc(u)}</td><td>${esc(C.personas[p]?.name||p)}</td><td><button class="sm" data-deluser="${esc(u)}">✕</button></td></tr>`).join('')||'<tr><td class="dim">Nobody yet</td></tr>'}</table>
@@ -143,7 +148,8 @@ V.limits=()=>`<div class="grid"><div class="card"><h3>Safety &amp; length</h3>${
 V.words=()=>`<div class="grid"><div class="card"><h3>Pronunciation</h3>${H('pronounce')}<textarea id="pron" rows="9" class="mono">${esc(Object.entries(C.pronounce).map(([k,v])=>k+' = '+v).join('\n'))}</textarea></div>
  <div class="card"><h3>Your bad words</h3>${lst('limits.bad_words','Extra words','limits.bad_words',8)}</div>
  <div class="card"><h3>Never speak these people</h3>${lst('limits.blocked_users','Blocked names','limits.blocked_users',8)}</div>
- <div class="card"><h3>History</h3>${num('history.keep','Lines remembered','history.keep',5,500)}</div>
+ <div class="card"><h3>Sounds</h3>${H('sounds')}<table>${SND.map(n=>`<tr><td>🎵 ${esc(n)}</td><td style="text-align:right"><button class="sm" data-sndp="${esc(n)}">▶</button> <button class="sm" data-sndd="${esc(n)}">✕</button></td></tr>`).join('')||'<tr><td class="dim">No sounds yet</td></tr>'}</table><div class="row" style="margin-top:8px"><input type="file" id="sndUp" accept=".wav,audio/wav"></div></div>
+ <div class="card"><h3>History</h3>${num('history.keep','Lines remembered','history.keep',5,500)}<div class="row" style="margin-top:8px"><a href="/api/history.csv" download><button class="sm">⬇ Export history (CSV)</button></a></div></div>
  <div class="card"><h3>Voice commands</h3>${chk('listen.confirm_commands','Say a short confirmation','listen.confirm_commands')}${txt('listen.confirm_text','Confirmation words','listen.confirm_text')}
   <div class="h" style="margin-top:8px">Voice <i>commands</i> (Voice Studio, "skip the song") stay silent in chat; this only adds spoken feedback on the PC when Listen reports them.</div></div></div>`;
 V.presets=()=>`<div class="grid"><div class="card"><h3>Presets</h3><div class="h">Whole setups you can switch between. A preset never carries the master switch.</div><table id="plist"></table>
@@ -175,6 +181,15 @@ function wire(){
   $$('[data-deluser]').forEach(b=>b.onclick=()=>{delete C.users[b.dataset.deluser];mark();draw()});
   const pr=$('#pron');if(pr)pr.oninput=()=>{C.pronounce={};pr.value.split('\n').forEach(l=>{const i=l.indexOf('=');if(i>0){const k=l.slice(0,i).trim().toLowerCase(),v=l.slice(i+1).trim();if(k&&v)C.pronounce[k]=v}});mark()};
   g('#logref',loadLog);
+  g('#addR',()=>{C.time_rules.push({id:'r'+Math.random().toString(36).slice(2,5),from:'22:00',to:'07:00',persona:C.default_persona});mark();draw()});
+  $$('[data-delr]').forEach(b=>b.onclick=()=>{C.time_rules.splice(+b.dataset.delr,1);mark();draw()});
+  g('#addM',()=>{C.milestones.push({id:'m'+Math.random().toString(36).slice(2,5),enabled:true,event:'follow',every:10,count_by:'events',scope:'day',persona:'default',lines:['That was follower number {count} today! {catch}']});mark();draw()});
+  $$('[data-delm]').forEach(b=>b.onclick=()=>{C.milestones.splice(+b.dataset.delm,1);mark();draw()});
+  g('#rcnt',async()=>{await api('/api/counters-reset',{});CNT=await api('/api/counters');toast('Counters reset');draw()});
+  const su=$('#sndUp');if(su)su.onchange=async e=>{const f=e.target.files[0];if(!f)return;if(f.size>2e6)return toast('Max 2 MB');const buf=new Uint8Array(await f.arrayBuffer());let bin='';buf.forEach(x=>bin+=String.fromCharCode(x));
+    try{const r=await api('/api/sound-upload',{name:f.name,data:btoa(bin)});SND=(await api('/api/sounds')).sounds;toast('Added '+r.name);draw()}catch(x){toast('Could not add: '+x.message)}};
+  $$('[data-sndp]').forEach(b=>b.onclick=async()=>{try{const r=await api('/api/sound-preview',{name:b.dataset.sndp});new Audio(URL.createObjectURL(r.blob)).play()}catch(x){toast(x.message)}});
+  $$('[data-sndd]').forEach(b=>b.onclick=async()=>{if(confirm('Delete '+b.dataset.sndd+'?')){await api('/api/sound-delete',{name:b.dataset.sndd});SND=(await api('/api/sounds')).sounds;draw()}});
   $$('[data-tcloud]').forEach(b=>b.onclick=async()=>{try{const r=await api('/api/test-cloud',{engine:b.dataset.tcloud});toast(r.ok?'Key works ✔':'Not working: '+(r.error||'?'),4000)}catch(e){toast(e.message)}});
   $$('[data-tfire]').forEach(b=>b.onclick=async()=>{if(dirty)await save();say(await api('/api/timer-fire',{id:b.dataset.tfire}))});
   g('#addT',()=>{C.timers.push({id:'t'+Math.random().toString(36).slice(2,6),name:'New reminder',enabled:false,every_min:30,jitter_pct:20,min_chat:0,persona:'default',priority:3,lines:['Remember to drink some water. {catch}']});mark();draw()});
@@ -210,5 +225,5 @@ $('#again').onclick=async()=>say(await api('/api/replay',{}));
 $('#helpbtn').onclick=helpDrawer;$('#save').onclick=save;
 $('#discard').onclick=async()=>{C=(await api('/api/config')).config;dirty=false;$('#savebar').classList.remove('show');draw()};
 (async()=>{try{const r=await api('/api/config');C=r.config;META={help:r.help,events:r.events,roles:r.roles,platforms:r.platforms,effects:r.effects,stingers:r.stingers};
-  try{vcache=(await api('/api/voices')).voices||[]}catch{}try{DEVS=(await api('/api/devices')).devices||[]}catch{}ST=await api('/api/status');draw();setInterval(refresh,2500)}catch(e){$('#main').innerHTML='<div class="card">Pinguino Voice is not answering ('+esc(e.message)+').</div>'}})();
+  try{vcache=(await api('/api/voices')).voices||[]}catch{}try{DEVS=(await api('/api/devices')).devices||[]}catch{}try{SND=(await api('/api/sounds')).sounds||[]}catch{}try{CNT=await api('/api/counters')}catch{}ST=await api('/api/status');draw();setInterval(refresh,2500)}catch(e){$('#main').innerHTML='<div class="card">Pinguino Voice is not answering ('+esc(e.message)+').</div>'}})();
 </script></body></html>

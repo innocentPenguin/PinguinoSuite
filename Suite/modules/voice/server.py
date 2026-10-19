@@ -232,7 +232,7 @@ def p_chat_command(h, b):
 
 def g_prestream(h, q):
     c, st = brain.cfg, brain.state()
-    items = [{"id": "voice-master", "label": "Pinguino Voice", "status": "pass",
+    items = [{"id": "voice-master", "label": "PenguinComm Speak", "status": "pass",
               "detail": {"off": "Switched off (silent, as intended)", "on": "On", "muted": "Muted for a while", "quiet-mute": "Quiet hours (muted)", "quiet-whisper": "Quiet hours (whispering)"}.get(st, st)}]
     from engine import sapi
     v = sapi.voices()
@@ -287,6 +287,72 @@ def g_integrations(h, q):
     return {"items": items}
 
 
+def _sounds_dir():
+    d = cfg.path("sounds")
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def g_sounds(h, q):
+    return {"sounds": sorted(f.name for f in _sounds_dir().glob("*.wav"))}
+
+
+def p_sound_upload(h, b):
+    """{name, data(base64 WAV)}: 2 MB max, .wav only, file name sanitised (no paths)."""
+    import base64
+    import re
+    name = re.sub(r"[^\w .()-]", "", os.path.basename(str(b.get("name") or "sound.wav")))[:60]
+    if not name.lower().endswith(".wav"):
+        name += ".wav"
+    raw = base64.b64decode(str(b.get("data") or ""), validate=False)
+    if not (0 < len(raw) <= 2_000_000):
+        raise ValueError("sound must be under 2 MB")
+    import engine
+    try:
+        engine.wav_to_np(raw)
+    except Exception:
+        raise ValueError("not a readable WAV file")
+    (_sounds_dir() / name).write_bytes(raw)
+    return {"ok": True, "name": name, "stinger": "file:" + name}
+
+
+def p_sound_delete(h, b):
+    import os as _os
+    f = _sounds_dir() / _os.path.basename(str(b.get("name") or ""))
+    f.unlink(missing_ok=True)
+    return {"ok": True}
+
+
+def p_sound_play_preview(h, b):
+    import engine
+    name = str(b.get("name") or "")
+    a = engine.load_sound(name, _sounds_dir())
+    if not len(a):
+        raise ValueError("sound not found or unreadable")
+    return ("audio/wav", engine.np_to_wav(a * (brain.cfg["output"]["volume"] / 100.0)), {})
+
+
+def g_counters(h, q):
+    c = brain._counters()
+    return {"day": c["day"], "daily": c["daily"], "total": c["total"]}
+
+
+def p_counters_reset(h, b):
+    brain.reset_counters()
+    return {"ok": True}
+
+
+def g_history_csv(h, q):
+    import csv
+    import io
+    bio = io.StringIO()
+    w = csv.writer(bio)
+    w.writerow(["time", "event", "user", "result", "detail", "persona", "text"])
+    for r in reversed(brain.tail(500)):
+        w.writerow([time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["ts"])), r.get("kind", ""), r.get("user", ""), r.get("outcome", ""), r.get("detail", ""), r.get("persona", ""), r.get("text", "")])
+    return ("text/csv", bio.getvalue().encode("utf-8-sig"), {"Content-Disposition": 'attachment; filename="speak-history.csv"'})
+
+
 def g_help(h, q):
     return {"help": cfg.STATUS_HELP, "settings": cfg.HELP}
 
@@ -301,9 +367,9 @@ def g_selftest(h, q):
         return {"ok": False, "error": str(e)[:200]}
 
 
-GET = {"/api/devices": g_devices, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
+GET = {"/api/sounds": g_sounds, "/api/counters": g_counters, "/api/history.csv": g_history_csv, "/api/devices": g_devices, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
        "/api/prestream": g_prestream, "/api/help": g_help, "/api/selftest": g_selftest}
-POST = {"/api/test-cloud": p_test_cloud, "/api/timer-fire": p_timer_fire, "/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
+POST = {"/api/sound-upload": p_sound_upload, "/api/sound-delete": p_sound_delete, "/api/sound-preview": p_sound_play_preview, "/api/counters-reset": p_counters_reset, "/api/test-cloud": p_test_cloud, "/api/timer-fire": p_timer_fire, "/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
         "/api/preview": p_preview, "/api/stop": p_stop, "/api/replay": p_replay, "/api/preset": p_preset, "/api/chat-command": p_chat_command}
 PAGES = {"/": "static/index.html"}
 OPEN_POST = {"/api/chat-command"}      # local bots (Host) with no Origin may call this one: it has its own role checks and is silent in chat
@@ -331,7 +397,7 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("content-length") or 0)
-            return json.loads(self.rfile.read(n) or b"{}") if 0 < n < 2_000_000 else {}
+            return json.loads(self.rfile.read(n) or b"{}") if 0 < n < 4_000_000 else {}
         except ValueError:
             return {}
 

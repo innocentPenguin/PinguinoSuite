@@ -80,10 +80,73 @@ class Brain:
     def persona_for(self, ev, kind, user, role, platform):
         c, e = self.cfg, self.cfg["events"].get(kind)
         for cand in ((e or {}).get("persona") if (e or {}).get("persona") != "default" else None,
-                     c["users"].get((user or "").lower()), c["roles"].get(role or ""), c["platforms"].get(platform or ""), c["default_persona"]):
+                     c["users"].get((user or "").lower()), c["roles"].get(role or ""), c["platforms"].get(platform or ""), self._time_rule(), c["default_persona"]):
             if cand and cand in c["personas"]:
                 return cand
         return next(iter(c["personas"]))
+
+    def _time_rule(self):
+        for r in self.cfg["time_rules"]:
+            z = {"enabled": True, "start": r["from"], "end": r["to"]}
+            if textproc.in_quiet({"quiet": z}, self.now()):
+                return r["persona"]
+        return None
+
+    # ------------------------------------------------------------ counters and milestones
+    def _counters(self):
+        day = time.strftime("%Y-%m-%d", time.localtime(self.now()))
+        if getattr(self, "_cnt", None) is None:
+            try:
+                self._cnt = json.loads(cfg.path("counters.json").read_text("utf8"))
+            except (OSError, ValueError):
+                self._cnt = {}
+        c = self._cnt
+        if c.get("day") != day:
+            c["day"], c["daily"] = day, {}
+        c.setdefault("total", {})
+        c.setdefault("daily", {})
+        return c
+
+    def reset_counters(self):
+        self._cnt = {}
+        self._counters()
+        self._save_counters()
+
+    def _save_counters(self):
+        try:
+            cfg.path("counters.json").write_text(json.dumps(self._cnt), "utf8")
+        except OSError:
+            pass
+
+    def _count(self, ev, kind):
+        """Counts a real event and returns the milestones it crossed: [(milestone, count)]."""
+        ms = [m for m in self.cfg["milestones"] if m["enabled"] and m["event"] == kind and m["lines"]]
+        c = self._counters()
+        try:
+            amount = int(float(ev.get("amount") or ev.get("bits") or ev.get("viewers") or 1))
+        except (TypeError, ValueError):
+            amount = 1
+        hits = []
+        for scope in ("daily", "total"):
+            for by in ("events", "amount"):
+                k = f"{kind}:{by}"
+                old = c[scope].get(k, 0)
+                c[scope][k] = old + (1 if by == "events" else amount)
+                for m in ms:
+                    if m["scope"] == ("day" if scope == "daily" else "forever") and m["count_by"] == by and c[scope][k] // m["every"] > old // m["every"]:
+                        hits.append((m, c[scope][k] // m["every"] * m["every"]))
+        self._save_counters()
+        return hits
+
+    def handle(self, ev):
+        res = self._handle(ev)
+        kind = ev.get("kind")
+        if not ev.get("manual") and kind in ("follow", "sub", "resub", "gift", "cheer", "raid", "redeem"):
+            for m, n in self._count(ev, kind):
+                pid = m["persona"] if m["persona"] in self.cfg["personas"] else self.persona_for(ev, kind, "", None, None)
+                line = textproc.render(self.rng.choice(m["lines"]), {"count": n, "every": m["every"], "event": kind}, self.cfg["personas"][pid], self.rng)
+                self._handle({"kind": "milestone", "message": line, "persona": pid, "priority": 6, "manual": True, "user": ""})
+        return res
 
     # ------------------------------------------------------------ log
     def _log(self, rec):
@@ -99,13 +162,13 @@ class Brain:
         return rec
 
     # ------------------------------------------------------------ the pipeline
-    def handle(self, ev):
+    def _handle(self, ev):
         """ev: {kind, user, amount, viewers, bits, tier, what, message, role, platform, text(raw, only for kind=say), priority, live}. Returns a result dict."""
         c = self.cfg
         kind = ev.get("kind") or "chat"
         user = str(ev.get("user") or "")
         base = {"kind": kind, "user": user}
-        if kind not in c["events"] and kind not in ("say", "timer"):
+        if kind not in c["events"] and kind not in ("say", "timer", "milestone"):
             return self._log({**base, "outcome": "ignored", "detail": "unknown event kind"})
         if kind == "voice_cmd":                                    # spoken confirmation of a fired voice command: its own switch under Words
             if not c["listen"]["confirm_commands"]:
@@ -151,14 +214,14 @@ class Brain:
         persona = c["personas"][pid]
         # wording
         msg, why = "", []
-        if ecfg["read_message"] or kind in ("say", "timer", "chat", "command"):
+        if ecfg["read_message"] or kind in ("say", "timer", "milestone", "chat", "command"):
             raw = ev.get("message") if ev.get("message") is not None else ev.get("text")
             if raw:
                 msg, why = textproc.clean_message(raw, c)
                 if msg is None:
                     self.stats["blocked"] += 1
                     return self._log({**base, "outcome": "blocked", "detail": ", ".join(why)})
-        if kind in ("say", "timer"):
+        if kind in ("say", "timer", "milestone"):
             text = msg
         else:
             opts = persona["templates"].get(kind) or ecfg["templates"]
@@ -253,7 +316,7 @@ class Brain:
                 c = self.cfg
                 persona = c["personas"][item["persona"]]
                 wav, secs = engine.render(item["text"], persona, sting=item["sting"], sapi_obj=self.sapi, output_volume=c["output"]["volume"],
-                                          normalize=c["output"]["normalize"], whisper=item["whisper"], cloud_obj=self.cloud, cloud_cfg=c["cloud"])
+                                          normalize=c["output"]["normalize"], whisper=item["whisper"], cloud_obj=self.cloud, cloud_cfg=c["cloud"], sound_dir=cfg.path("sounds"))
                 if self.state() in ("off", "muted", "quiet-mute"):      # switched off while synthesising
                     raise _Silenced()
                 done = self.player.play(wav, secs, c["output"]["device"])
@@ -329,7 +392,7 @@ class Brain:
         text, _ = textproc.finish(text or "", c) if text else (None, [])
         if not text:
             raise ValueError("nothing to say after the safety filters")
-        wav, secs = engine.render(text, persona, sting=persona["stinger"], sapi_obj=self.sapi, output_volume=c["output"]["volume"], normalize=c["output"]["normalize"], cloud_obj=self.cloud, cloud_cfg=c["cloud"])
+        wav, secs = engine.render(text, persona, sting=persona["stinger"], sapi_obj=self.sapi, output_volume=c["output"]["volume"], normalize=c["output"]["normalize"], cloud_obj=self.cloud, cloud_cfg=c["cloud"], sound_dir=cfg.path("sounds"))
         return wav, text
 
     def replay(self):

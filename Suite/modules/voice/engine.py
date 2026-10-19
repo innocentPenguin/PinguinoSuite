@@ -322,6 +322,19 @@ FX = {"echo": fx_echo, "reverb": fx_reverb, "robot": fx_robot, "radio": fx_radio
 FX_ORDER = ["robot", "radio", "distortion", "tremolo", "echo", "reverb"]
 
 
+def load_sound(name, sound_dir):
+    """A user WAV from the sounds folder (file name only, no paths). Silence when missing or unreadable."""
+    try:
+        f = os.path.join(str(sound_dir), os.path.basename(name))
+        if not sound_dir or not f.lower().endswith(".wav") or os.path.getsize(f) > 2_000_000:
+            return np.zeros(0, dtype=np.float32)
+        with open(f, "rb") as fh:
+            a, sr = wav_to_np(fh.read())
+        return (resample(a, sr / SR) if sr != SR else a)[:SR * 8]
+    except Exception:
+        return np.zeros(0, dtype=np.float32)
+
+
 def stinger(name, sr=SR):
     def tone(f, d, v=0.5, kind="sine"):
         t = np.arange(int(sr * d)) / sr
@@ -348,7 +361,7 @@ def stinger(name, sr=SR):
     return np.zeros(0, dtype=np.float32)
 
 
-def render(text, persona, volume=100, extra_gain=1.0, sting="none", sapi_obj=None, output_volume=100, normalize=True, whisper=False, cloud_obj=None, cloud_cfg=None):
+def render(text, persona, volume=100, extra_gain=1.0, sting="none", sapi_obj=None, output_volume=100, normalize=True, whisper=False, cloud_obj=None, cloud_cfg=None, sound_dir=None):
     """Persona + text -> (wav bytes, seconds). Raises RuntimeError when the engine is unavailable.
     Cloud personas are used only when cloud_cfg["allow"] is true; on failure they fall back to the Windows voice when cloud_cfg["fallback"]."""
     sp = sapi_obj or sapi
@@ -378,7 +391,7 @@ def render(text, persona, volume=100, extra_gain=1.0, sting="none", sapi_obj=Non
         peak = float(np.max(np.abs(a))) or 1.0
         a = a / peak * 0.8
     a = a * (persona.get("volume", 100) / 100.0) * (output_volume / 100.0) * extra_gain * (0.25 if whisper else 1.0)
-    st = stinger(sting)
+    st = load_sound(sting[5:], sound_dir) if sting.startswith("file:") else stinger(sting)
     if len(st):
         st = st * (output_volume / 100.0) * extra_gain * (0.25 if whisper else 1.0)
         a = np.concatenate([st, a])
@@ -469,7 +482,12 @@ def devices():
     """Output devices as [{index, name}] (empty list when sounddevice is unavailable)."""
     try:
         import sounddevice as sd
-        return [{"index": i, "name": d["name"]} for i, d in enumerate(sd.query_devices()) if d["max_output_channels"] > 0]
+        out, seen = [], set()
+        for i, d in enumerate(sd.query_devices()):
+            if d["max_output_channels"] > 0 and d["name"] not in seen:
+                seen.add(d["name"])
+                out.append({"index": i, "name": d["name"]})
+        return out
     except Exception:
         return []
 
