@@ -30,6 +30,7 @@ input,textarea,select{background:var(--card);color:var(--fg);border:1px solid va
 h4{margin:6px 8px;font-size:.8em;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
 .empty{color:var(--mut);padding:12px;text-align:center}
 .warn{background:#4a3a14;color:#ffd98a;padding:4px 8px;font-size:.8em}
+body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;height:calc(var(--fs)*1.5 + var(--sp)*2)}
 </style></head><body>
 <header id="hdr"></header><div id="body" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
 <script>
@@ -88,6 +89,7 @@ function addMsg(m) {
   if (!['unified', 'platform', 'first'].includes(W.type) || !pass(m)) return;
   if (W.type === 'first' && !m.first_time) return;
   const f = $('#feed'); if (!f) return;
+  if (chan) { renderLinked(); return; }
   const atEnd = f.scrollTop + f.clientHeight >= f.scrollHeight - 30;
   f.insertAdjacentHTML('beforeend', msgHtml(m));
   while (f.children.length > 500) f.firstChild.remove();
@@ -102,10 +104,34 @@ function render() {
   ({unified: renderFeed, platform: renderFeed, first: renderFeed, priority: renderCards, missed: renderCards,
     composer: renderComposer, status: renderStatus, launcher: renderLauncher}[W.type] || renderFeed)();
 }
+// linked feed: windows in one link_group show ONE continuous sequence. link_order 0 shows the newest rows,
+// order 1 continues with the rows just older, and so on. Capacity (rows) is shared over BroadcastChannel.
+function linkSlice(list, caps, order) {
+  const off = Object.values(caps).filter(c => c.order < order).reduce((a, c) => a + c.rows, 0);
+  const rows = (caps[order] || {rows: 0}).rows;
+  return list.slice(Math.max(0, list.length - off - rows), Math.max(0, list.length - off));
+}
+const peers = {}; let chan = null;
+function feedList() { return msgs.filter(m => pass(m) && (W.type !== 'first' || m.first_time)); }
+function myRows(f) { return Math.max(1, Math.floor(f.clientHeight / (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs')) * 1.5 + (W.spacing || 4) * 2))); }
+function renderLinked() {
+  const f = $('#feed'); if (!f) return;
+  const order = W.link_order || 0, rows = myRows(f);
+  peers[order] = {order, rows}; chan && chan.postMessage({order, rows});
+  f.innerHTML = linkSlice(feedList(), peers, order).map(msgHtml).join('') || '<div class="empty">No messages yet</div>';
+}
+function startLink() {
+  if (!W.link_group || typeof BroadcastChannel === 'undefined') return;
+  document.body.classList.add('linked');
+  chan = new BroadcastChannel('multi-link-' + W.link_group);
+  chan.onmessage = e => { peers[e.data.order] = e.data; renderLinked(); };
+  addEventListener('resize', renderLinked); renderLinked();
+}
 function renderFeed() {
   $('#body').innerHTML = '<div id="feed"></div>';
   const f = $('#feed');
-  f.innerHTML = msgs.filter(m => pass(m) && (W.type !== 'first' || m.first_time)).map(msgHtml).join('') || '<div class="empty">No messages yet</div>';
+  if (W.link_group && W.type !== 'first') { if (!chan) startLink(); else renderLinked(); if (chan) return; }
+  f.innerHTML = feedList().map(msgHtml).join('') || '<div class="empty">No messages yet</div>';
   f.scrollTop = f.scrollHeight;
 }
 function cardHtml(c, kind) {
@@ -125,6 +151,11 @@ function renderCards() {
     : sec('Needs a reply', cards.open.filter(c => pass(c)), 'open') + sec('Answered', cards.answered, 'answered') + (cards.missed.length ? `<h4>Missed: ${cards.missed.length} (open the Missed window)</h4>` : '');
   $('#body').innerHTML = `<div class="cards">${html || '<div class="empty">Nothing needs a reply</div>'}</div>`;
 }
+document.addEventListener('keydown', e => {
+  if (!['priority', 'missed'].includes(W.type) || /INPUT|TEXTAREA/.test(e.target.tagName) || e.ctrlKey || e.altKey) return;
+  const act = {a: 'answer', d: 'dismiss', s: 'snooze'}[e.key.toLowerCase()];
+  if (act) api('/api/hotkey/' + act);
+});
 document.addEventListener('click', async e => {
   const b = e.target.closest('button[data-a]'); if (!b) return;
   const id = b.dataset.id, a = b.dataset.a;

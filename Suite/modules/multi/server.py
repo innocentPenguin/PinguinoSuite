@@ -192,6 +192,20 @@ async def card_action(cid: str, action: str, request: Request):
     return c
 
 
+@app.post("/api/hotkey/{action}")
+async def hotkey(action: str):
+    """Act on the top open card (highest score, newest). Target for global hotkeys, Stream Deck, AutoHotkey."""
+    if action not in ("answer", "dismiss", "snooze"):
+        raise HTTPException(400, "unknown action")
+    opened = sorted((c for c in cards.cards.values() if c["state"] == "open"), key=lambda c: (-c["score"], -c["created"]))
+    if not opened:
+        return {"ok": False, "reason": "no open cards"}
+    cid = opened[0]["id"]
+    c = cards.answer(cid, "hotkey") if action == "answer" else cards.dismiss(cid) if action == "dismiss" else cards.snooze(cid)
+    await asyncio.to_thread(learning.refresh, store)
+    return {"ok": True, "card": c["id"], "state": c["state"]}
+
+
 # learning (bounded, explainable, resettable) -----------------------------
 @app.get("/api/learning")
 def get_learning():

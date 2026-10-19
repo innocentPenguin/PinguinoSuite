@@ -346,3 +346,21 @@ def test_learning_decays_and_resets(tmp_path):
     assert st.kv_get("learned")["mention"] > 0
     learning.reset(st)
     assert learning.refresh(st) == {} and not st.kv_get("learned")
+
+
+# hotkeys + linked feed ---------------------------------------------
+def test_hotkey_acts_on_top_card(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    import server
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    monkeypatch.setattr(server, "store", Store(tmp_path / "h.db"))
+    server.cards.store = server.store
+    server.cards.cards.clear()
+    base = dict(user_id="u", user="u", platform="twitch", text="x", reasons=[], context=[], tier="high", message_id="m",
+                state="open", created=1, updated=1, answered_at=None, answered_via=None, snooze_until=None, faded=False)
+    server.cards.cards["c:a"] = dict(base, id="c:a", score=40)
+    server.cards.cards["c:b"] = dict(base, id="c:b", score=80)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    r = c.post("/api/hotkey/answer", headers={"origin": "http://127.0.0.1:8766"}).json()
+    assert r["ok"] and r["card"] == "c:b" and server.cards.cards["c:b"]["answered_via"] == "hotkey"
+    assert c.post("/api/hotkey/nope", headers={"origin": "http://127.0.0.1:8766"}).status_code == 400
