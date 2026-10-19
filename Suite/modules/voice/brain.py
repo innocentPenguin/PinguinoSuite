@@ -4,6 +4,7 @@ Safety contract: while `master` is off (or muted / quiet-mute) NOTHING is synthe
 with its outcome. Text from viewers is cleaned (secrets, links, profanity, repeats, length) before it can be spoken.
 """
 import json
+import os
 import random
 import threading
 import time
@@ -385,7 +386,10 @@ class Brain:
 
     def _flag(self, on, until):
         try:
-            cfg.path("speaking.json").write_text(json.dumps({"speaking": on, "until": until, "ts": self.now()}), "utf8")
+            f = cfg.path("speaking.json")
+            tmp = f.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"speaking": on, "until": until, "ts": self.now()}), "utf8")
+            os.replace(tmp, f)                       # atomic: Listen may read at any moment
         except OSError:
             pass
 
