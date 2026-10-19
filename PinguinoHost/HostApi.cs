@@ -63,6 +63,15 @@ namespace PinguinoHost
                 if (p == "/api/run" && c.Request.HttpMethod == "POST")   // Stream Deck / hotkeys: {"text":"!next","user":"ivan"} runs as broadcaster
                 { var b = Body(c); string t = (string)b["text"] ?? ""; string u = (string)b["user"] ?? "broadcaster"; if (t == "") { Write(c, "{\"ok\":false,\"error\":\"text required\"}", "application/json"); return true; }
                   System.Threading.Tasks.Task.Run(() => Program.Dispatch(u, t, null, 4, "deck", false, null)); Write(c, "{\"ok\":true}", "application/json"); return true; }
+                if (p == "/api/signin" && c.Request.HttpMethod == "POST")   // opens Twitch's sign-in in the PC's default browser (an embedded window may block pop-ups)
+                {
+                    var b = Body(c); string role = ((string)b["role"] ?? "").Trim().ToLowerInvariant(); var cfg = Config(); string cid = (string)cfg["ClientId"];
+                    if (string.IsNullOrEmpty(cid)) { Write(c, "{\"ok\":false,\"error\":\"paste the Client ID in the setup section first\"}", "application/json"); return true; }
+                    string u = "https://id.twitch.tv/oauth2/authorize?response_type=token&force_verify=true&state=" + Uri.EscapeDataString(role) + "&client_id=" + Uri.EscapeDataString(cid)
+                        + "&redirect_uri=" + Uri.EscapeDataString((string)cfg["redirect"]) + "&scope=" + Uri.EscapeDataString((string)cfg["scopes"]);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true });
+                    Write(c, "{\"ok\":true}", "application/json"); return true;
+                }
                 if (p == "/api/token" && c.Request.HttpMethod == "POST") { Write(c, TokenIn(Body(c)).ToString(), "application/json"); return true; }
                 c.Response.StatusCode = 404;
             }
@@ -222,7 +231,7 @@ g.querySelectorAll('input').forEach(i=>{
   const r=await j('/api/bots',{method:'POST',body:JSON.stringify(b)});if(!r.ok)alert(r.error);busy=0;bots(true)}})}
 async function bots(force){if(!force&&Date.now()-busy<4000)return;BOTS=await j('/api/bots');$('botnote').textContent=BOTS.routerError?'Router: '+BOTS.routerError:BOTS.note;draw()}
 async function save(){const b={};F.forEach(k=>b[k]=$(k).value);b.ObsPassword=$('ObsPassword').value;const r=await j('/api/config',{method:'POST',body:JSON.stringify(b)});$('msg').textContent=r.note||r.error;$('ObsPassword').value='';load()}
-function signin(role){save();const u='https://id.twitch.tv/oauth2/authorize?response_type=token&force_verify=true&state='+encodeURIComponent(role||'')+'&client_id='+encodeURIComponent($('ClientId').value)+'&redirect_uri='+encodeURIComponent(CFG.redirect)+'&scope='+encodeURIComponent(CFG.scopes);const w=window.open(u,'_blank','noopener');$('msg').textContent=w?'Finish signing in in the new window; this card updates by itself.':'Your browser blocked the new window. Allow pop-ups for this page and try again.'}
+async function signin(role){await save();const r=await j('/api/signin',{method:'POST',body:JSON.stringify({role:role||''})});$('botnote').textContent=$('msg').textContent=r.ok?'Finish signing in in the browser window that just opened; this card updates by itself.':(r.error||'Could not open the browser.')}
 async function callback(){const h=new URLSearchParams(location.hash.slice(1));const t=h.get('access_token');if(!t)return;history.replaceState(null,'','/setup');
 const r=await j('/api/token',{method:'POST',body:JSON.stringify({token:t,role:h.get('state')||''})});document.body.innerHTML=r.ok?'<main><h1>Signed in'+(r.login?' as '+esc(r.login):'')+'</h1><p class=sub>You can close this tab and return to PinguinoSuite.</p></main>':'<main><h1>Sign-in failed</h1><p class=sub>'+esc(r.error||'unknown error')+'</p><p class=sub>Close this tab, then try again from PinguinoSuite.</p></main>'}
 async function tokpoll(){try{const c=await j('/api/config');$('tokstate').textContent=c.hasUserToken?'token saved':'not signed in'}catch(e){}}
