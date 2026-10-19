@@ -345,7 +345,7 @@ pages.help=()=>{
   return `<div class="dim sm" style="margin-bottom:12px">How each part works, how it was set up, and how to redo it. Everything with a <b style="color:var(--accent)">?</b> in the app opens the same text.</div>
   <div class="grid g2" style="align-items:start">${Object.keys(g).map(n=>`<div class="card"><h3>${esc(n)}</h3>${g[n].map(t=>`<div class="irow clk" data-hk="${esc(t.key)}"><div class="grow"><b>${esc(t.title)}</b></div><span class="faint">›</span></div>`).join('')}</div>`).join('')}</div>`};
 /* ============ Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, message?, detail?}]}) ============ */
-const AT={follow:['➕','Follow'],sub:['⭐','Sub'],resub:['🔁','Resub'],gift:['🎁','Gift'],cheer:['💎','Cheer'],raid:['🚩','Raid'],redeem:['🎟','Redeem'],ban:['⛔','Ban'],timeout:['⏱','Timeout'],clip:['🎬','Clip'],poll:['📊','Poll'],prediction:['🔮','Prediction'],hype:['🔥','Hype train'],shoutout:['📣','Shoutout'],other:['•','Other']};
+const AT={follow:['➕','Follow'],sub:['⭐','Sub'],resub:['🔁','Resub'],gift:['🎁','Gift'],cheer:['💎','Cheer'],raid:['🚩','Raid'],redeem:['🎟','Redeem'],ban:['⛔','Ban'],timeout:['⏱','Timeout'],clip:['🎬','Clip'],replay:['⏪','Replay'],poll:['📊','Poll'],prediction:['🔮','Prediction'],hype:['🔥','Hype train'],shoutout:['📣','Shoutout'],other:['•','Other']};
 const A={items:[],seq:0,types:new Set(),q:'',paused:false,err:null,loaded:false,pending:[]};
 const atype=t=>AT[t]?t:'other';
 const actText=e=>{const n=e.amount!=null&&e.amount!==''?` · ${e.amount}${e.type==='cheer'?' bits':e.type==='raid'?' viewers':e.type==='gift'?' subs':''}`:'';return `${e.tier?'Tier '+e.tier+' ':''}${e.detail||''}${n}${e.message?' — “'+e.message+'”':''}`.trim()};
