@@ -11,6 +11,7 @@ body.minimal{--bg:transparent}
 body.minimal #card{box-shadow:none;padding:0}
 body.minimal #title,body.minimal #artist,body.minimal #req,body.minimal #next{text-shadow:0 1px 4px #000,0 0 2px #000}
 html,body{margin:0;background:transparent;font-family:var(--font);color:var(--fg)}
+#wrapper{position:relative;padding-top:38px}
 #card{display:none;width:var(--w);background:var(--bg);border-radius:var(--r);padding:12px;box-sizing:border-box;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.4);zoom:var(--s);transition:opacity .4s}
 #card.show{display:block;animation:in .4s ease}
 #card.dim{opacity:0}
@@ -27,10 +28,12 @@ html,body{margin:0;background:transparent;font-family:var(--font);color:var(--fg
 .noprog #bar{display:none}
 #fill{height:100%;width:0;background:var(--accent)}
 #next{margin-top:8px;font-size:13px;opacity:.8;line-height:1.5}
+#alert{position:absolute;left:0;right:0;top:-34px;text-align:center;font-size:15px;font-weight:600;color:#111;background:var(--accent);border-radius:999px;padding:5px 14px;display:none;animation:in .3s ease}
+#alert.show{display:block}
 #next b{color:var(--accent);font-weight:600}
 </style></head>
-<body><div id="card"><div class="row"><div id="art"></div><div class="t"><div id="title"></div><div id="artist"></div><div id="req"></div></div></div>
-<div id="bar"><div id="fill"></div></div><div id="next"></div></div>
+<body><div id="wrapper"><div id="alert"></div><div id="card"><div class="row"><div id="art"></div><div class="t"><div id="title"></div><div id="artist"></div><div id="req"></div></div></div>
+<div id="bar"><div id="fill"></div></div><div id="next"></div></div></div>
 <script>
 const P=new URLSearchParams(location.search);
 let o=null,at=0,styled='';
@@ -55,6 +58,7 @@ async function poll(){
 function render(){
   style(o.style);
   const c=$('card'),st=o.style||{};
+  const al=$('alert');if(o.alert){if(al.dataset.id!==o.alert.id){al.dataset.id=o.alert.id;al.textContent='🎵 '+o.alert.text}al.classList.add('show')}else al.classList.remove('show');
   if(!o||!o.has_track){c.classList.remove('show');return}
   c.classList.add('show');c.classList.toggle('dim',!!st.hide_paused&&!o.playing);
   $('title').textContent=o.title;$('artist').textContent=o.artist;

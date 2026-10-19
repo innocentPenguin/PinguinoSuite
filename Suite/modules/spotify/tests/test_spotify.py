@@ -1020,5 +1020,113 @@ class Cycle1Tests(unittest.TestCase):
         self.assertEqual((_hhmm("17:00"), _hhmm("24:00"), _hhmm("x")), (1020, None, None))
 
 
+class Cycle2Tests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.api.artist_calls = 0
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True, "per_user_limit": 0})
+
+    def test_genre_block_uses_cache_and_fails_open(self):
+        for n in (5, 6):
+            self.api.tracks[f"t{n}"]["artist_ids"] = ["artX" if n == 5 else "artY"]
+
+        def artists(ids):
+            self.api.artist_calls += 1
+            return {"artX": ["brutal death metal"], "artY": ["pop"]}
+        self.api.artists = artists
+        self.e.save_settings({"block_genres": ["death metal"]})
+        r = self.e.chat("a", "!sr song 5", [])
+        self.assertEqual(r["code"], "genre")
+        self.assertIn("death metal", r["reply"])
+        self.assertEqual(self.e.chat("a", "!sr song 6", [])["code"], "added")
+        calls = self.api.artist_calls
+        self.e.chat("b", "!sr song 5", [])
+        self.assertEqual(self.api.artist_calls, calls, "artist genres cached")
+        self.assertEqual(self.e.chat("ivan", "!sr song 5", ["broadcaster"])["code"], "added")      # broadcaster bypass
+
+        def boom(ids):
+            raise spotify_api.ApiError(500, "x")
+        self.api.artists = boom
+        self.api.tracks["t7"]["artist_ids"] = ["artZ"]
+        self.assertEqual(self.e.chat("c", "!sr song 7", [])["code"], "added")                       # lookup failure = allow
+
+    def test_add_context_dedupes_shuffles_and_validates(self):
+        self.api.context_tracks = lambda kind, cid, limit=100: [self.api.tracks[f"t{n}"] for n in range(5, 11)]
+        self.e.add_track(T(5))
+        n = self.e.add_context("https://open.spotify.com/playlist/" + "p" * 22, shuffle=True)
+        self.assertEqual(n, 5)
+        self.assertEqual(len({i["uri"] for i in self.e.queue.items}), 6)
+        with self.assertRaises(QueueError):
+            self.e.add_context("https://example.com/nope")
+        self.api.context_tracks = lambda *a, **k: []
+        with self.assertRaises(QueueError):
+            self.e.add_context("spotify:album:" + "a" * 22)
+
+    def test_user_presets_roundtrip(self):
+        self.e.save_settings({"per_user_limit": 4, "msgs": {"added": "Mine {user}"}, "requests_open": True})
+        self.assertEqual(self.e.save_user_preset("Friday"), ["Friday"])
+        self.e.reset_settings()
+        self.assertEqual(self.e.settings["per_user_limit"], 2)
+        self.e.apply_preset("Friday")                       # same entry point as built-ins
+        self.assertEqual((self.e.settings["per_user_limit"], self.e.settings["msgs"]["added"]), (4, "Mine {user}"))
+        self.assertFalse(self.e.settings["requests_open"])  # presets never touch open/closed
+        self.assertEqual(self.e.delete_user_preset("Friday"), [])
+        with self.assertRaises(QueueError):
+            self.e.apply_preset("Friday")
+        with self.assertRaises(QueueError):
+            self.e.save_user_preset("  ")
+        e2 = Engine(self.api, FakeAuth(), self.clock)
+        self.assertEqual(e2.cfg.get("user_presets"), {})
+
+    def test_overlay_alert_expires_and_can_be_off(self):
+        self.e.chat("ann", "!sr song 5", [])
+        a = self.e.overlay()["alert"]
+        self.assertIn("ann requested Song 5", a["text"])
+        self.clock.t += 7
+        self.assertIsNone(self.e.overlay()["alert"])
+        self.e.chat("bob", "!sr song 6", [])
+        self.e.save_settings({"ov_alerts": False})
+        self.assertIsNone(self.e.overlay()["alert"])
+
+    def test_sr_safe_toggle_mods_only(self):
+        self.assertEqual(self.e.chat("m", "!sr safe on", ["mod"])["code"], "toggle")
+        self.assertTrue(self.e.settings["stream_safe"])
+        self.assertEqual(self.e.chat("m", "!sr safe off", ["mod"])["code"], "toggle")
+        self.assertFalse(self.e.settings["stream_safe"])
+        r = self.e.chat("v", "!sr safe on", [])             # a viewer's "safe on" is just a search
+        self.assertFalse(self.e.settings["stream_safe"])
+
+    def test_search_cache(self):
+        calls = []
+        orig = self.api.search
+        self.api.search = lambda q, limit=8: (calls.append(q), orig(q, limit))[1]
+        self.e.resolve("Song 5")
+        self.e.resolve("  song 5 ")
+        self.assertEqual(len(calls), 1)
+        self.clock.t += 130
+        self.e.resolve("song 5")
+        self.assertEqual(len(calls), 2)
+
+    def test_norm_track_has_artist_ids_and_context_parsing(self):
+        t = spotify_api.norm_track({"uri": "spotify:track:x", "id": "x", "name": "N", "artists": [{"name": "A", "id": "a1"}], "album": {"name": "Al", "images": []}})
+        self.assertEqual(t["artist_ids"], ["a1"])
+        calls = []
+
+        def http(m, url, hd, body):
+            calls.append(url)
+            if "/albums/" in url:
+                return 200, {}, {"items": [{"uri": "spotify:track:1", "id": "1", "name": "A", "artists": []}, {"uri": "spotify:local:x", "name": "L"}], "next": None}
+            return 200, {}, {"items": [{"track": {"uri": "spotify:track:2", "id": "2", "name": "P", "artists": [], "album": {"images": []}}}, {"track": None},
+                                       {"track": {"uri": "spotify:track:3", "id": "3", "name": "Loc", "is_local": True, "artists": []}}], "next": None}
+        auth = spotify_api.Auth(lambda *a: (200, {}, {}), lambda: 0)
+        auth.tokens = {"refresh_token": "r", "access_token": "a", "expires_at": 10 ** 12}
+        c = spotify_api.Client(auth, http)
+        self.assertEqual([t["name"] for t in c.context_tracks("album", "x" * 22)], ["A"])
+        self.assertEqual([t["name"] for t in c.context_tracks("playlist", "x" * 22)], ["P"])
+
+
 if __name__ == "__main__":
     unittest.main()

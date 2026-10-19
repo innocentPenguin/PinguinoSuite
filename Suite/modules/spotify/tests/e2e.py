@@ -456,6 +456,28 @@ def main():
     post("/api/settings", {"schedule_enabled": False})
     T("text files: json + queue", os.path.exists(os.path.join(DATA, "spotify", "nowplaying.json")))
 
+    # ---------------- cycle 2 features
+    post("/api/queue/clear", {})
+    r = post("/api/queue/add_context", {"link": "https://open.spotify.com/playlist/" + "p" * 22, "shuffle": True, "limit": 4})[1]
+    T("add playlist to queue (limit, shuffle)", r["added"] == 4 or r["added"] == 3, r)
+    T("add album to queue", post("/api/queue/add_context", {"link": "spotify:album:" + "a" * 22})[0] == 200)
+    T("bad playlist link = 400", post("/api/queue/add_context", {"link": "nope"})[0] == 400)
+    post("/api/settings", {"block_genres": ["black metal"], "requests_open": True, "per_user_limit": 0})
+    r = chat("gen", "!sr sweary")
+    T("genre block refuses with the genre in the reply", r["code"] == "genre" and "black metal" in r["reply"], r)
+    post("/api/settings", {"block_genres": []})
+    post("/api/presets/save", {"name": "E2E"})
+    post("/api/settings", {"per_user_limit": 9})
+    T("user preset saved + listed in schema", "E2E" in get("/api/settings/schema")[1]["user_presets"])
+    post("/api/preset", {"name": "E2E"})
+    T("user preset applied", state()["settings"]["per_user_limit"] == 0)
+    post("/api/presets/delete", {"name": "E2E"})
+    T("user preset deleted", "E2E" not in get("/api/settings/schema")[1]["user_presets"])
+    chat("al", "!sr song 3")
+    T("overlay alert shows after a request", (get("/api/overlay.json")[1]["alert"] or {}).get("text", "").startswith("al requested"))
+    T("!sr safe on/off by a mod", chat("m1", "!sr safe on", ["mod"])["code"] == "toggle" and state()["settings"]["stream_safe"] is True)
+    chat("m1", "!sr safe off", ["mod"])
+
     # ---------------- stream end hook
     post("/api/settings", {"requests_open": True})
     T("on_live hook never opens requests", post("/api/live/auto")[1]["requests_open"] is True and True)

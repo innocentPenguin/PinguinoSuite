@@ -285,6 +285,18 @@ def p_remove_user(h, b):
     return {"ok": True, "removed": engine.remove_user(str(b.get("user", "")))}
 
 
+def p_add_context(h, b):
+    return {"ok": True, "added": engine.add_context(str(b.get("link", "")), bool(b.get("shuffle")), int(b.get("limit") or 50))}
+
+
+def p_user_preset(h, b):
+    return {"ok": True, "presets": engine.save_user_preset(b.get("name", ""))}
+
+
+def p_user_preset_del(h, b):
+    return {"ok": True, "presets": engine.delete_user_preset(str(b.get("name", "")))}
+
+
 def p_clear(h, b):
     engine.queue.clear(only_viewers=bool(b.get("only_viewers")))
     engine.persist()
@@ -386,7 +398,8 @@ def g_schema(h, q):
         {"key": k, "kind": kind, "default": d, "label": label, "help": hlp} for k, kind, d, label, hlp in g["items"]]} for g in cs.SCHEMA]
     return {"groups": groups, "vars": cs.VARS, "msgs": {k: {"label": v[0], "default": v[1], "help": v[2]} for k, v in cs.MSGS.items()},
             "commands": {k: {"default": v, "help": cs.COMMAND_HELP[k]} for k, v in cs.COMMANDS.items()},
-            "presets": {k: {"label": v[0], "help": v[1]} for k, v in cs.PRESETS.items()}}
+            "presets": {k: {"label": v[0], "help": v[1]} for k, v in cs.PRESETS.items()},
+            "user_presets": sorted(engine.cfg.get("user_presets") or {})}
 
 
 GET["/api/settings/schema"] = g_schema
@@ -403,7 +416,7 @@ def p_block(h, b):
 
 POST = {"/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
-        "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/shuffle": p_shuffle, "/api/queue/remove_user": p_remove_user, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
+        "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/shuffle": p_shuffle, "/api/queue/add_context": p_add_context, "/api/presets/save": p_user_preset, "/api/presets/delete": p_user_preset_del, "/api/queue/remove_user": p_remove_user, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
         "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/preset": p_preset, "/api/settings/reset": p_reset, "/api/msgs/preview": p_msg_preview, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
 
 
@@ -428,7 +441,11 @@ def main():
     console_log.info("server", f"PinguinoSpotify starting on 127.0.0.1:{PORT}")
     threading.Thread(target=loop, daemon=True).start()
     bridge.start()
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
+    except OSError as e:
+        console_log.error("server", f"cannot listen on 127.0.0.1:{PORT} ({e}); is another PinguinoSpotify already running?")
+        raise SystemExit(1)
     srv.daemon_threads = True
     try:
         srv.serve_forever()

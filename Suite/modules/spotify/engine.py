@@ -35,6 +35,9 @@ class Engine:
         self.last_error = ""
         self.last_verify = 0.0
         self.idle_since = None
+        self._search_cache = {}
+        self.artist_genres = {}
+        self.alert = None
         self.last_track = None         # last track seen playing (survives short "nothing playing" blips)
         self.session_counts = {}       # viewer -> accepted requests since requests were opened
         self._sched_last = None
@@ -80,7 +83,7 @@ class Engine:
     def apply_preset(self, name):
         import config_schema as cs
         if name not in cs.PRESETS:
-            raise QueueError("unknown preset")
+            return self.apply_user_preset(name)
         return self.save_settings(dict(cs.PRESETS[name][2]))
 
     def reset_settings(self, keys=None):
@@ -306,10 +309,23 @@ class Engine:
                     "requester": (self.now_item or {}).get("requester", ""),
                     "next": [{"title": i["name"], "artist": ", ".join(i["artists"]), "requester": i["requester"]} for i in self.queue.items[:n]],
                     "version": self.version,
+                    "alert": ({"id": self.alert["id"], "text": self.alert["text"]} if self.alert and st["ov_alerts"] and now - self.alert["ts"] < st["ov_alert_s"] else None),
                     "style": {k[3:]: st[k] for k in st if k.startswith("ov_")}}
 
     # ---- adding tracks
     def resolve(self, q, limit=5):
+        key = (str(q).strip().lower(), limit)
+        hit = self._search_cache.get(key)
+        if hit and self.clock() - hit[0] < 120:
+            return [dict(t) for t in hit[1]]
+        out = self._resolve(q, limit)
+        if out:
+            self._search_cache[key] = (self.clock(), out)
+            if len(self._search_cache) > 200:
+                self._search_cache.pop(next(iter(self._search_cache)))
+        return [dict(t) for t in out]
+
+    def _resolve(self, q, limit=5):
         tid = rules.track_id_from(q)
         if tid:
             t = self.api.track(tid)
@@ -365,6 +381,7 @@ class Engine:
         first_fail = None
         with self.lock:
             for t in cands:
+                t = self._genre_tag(t, s, roles)
                 ok, code, ctx = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()), self.session_counts.get(user.lower(), 0))
                 if ok:
                     return self._accept(t, user, roles, redeem)
@@ -375,6 +392,25 @@ class Engine:
             self._event("reject", user, f"{t['name']}: {code}", False)
             self._bump()
             return self._r(False, code, **ctx)
+
+    def _genre_tag(self, t, s, roles):
+        """Adds t['_genre'] when one of the artist's Spotify genres is on the blocked list (lookups cached; failures allow)."""
+        bad = [g.strip().lower() for g in s["block_genres"] if g.strip()]
+        if not bad or "broadcaster" in roles or not t.get("artist_ids"):
+            return t
+        need = [a for a in t["artist_ids"] if a not in self.artist_genres]
+        if need:
+            try:
+                got = self.api.artists(need)
+                for a in need:
+                    self.artist_genres[a] = got.get(a, [])
+            except (ApiError, AttributeError):
+                return t
+        for a in t["artist_ids"]:
+            for g in self.artist_genres.get(a, []):
+                if any(b in g for b in bad):
+                    return {**t, "_genre": g}
+        return t
 
     def _accept(self, t, user, roles, redeem):
         s = self.settings
@@ -393,6 +429,7 @@ class Engine:
         item = self.add_track(t, "end", user, "viewer", tier)
         idx = self.queue.index(item["id"])
         mins = round(self.eta_ms(idx) / 60000)
+        self.alert = {"id": item["id"], "text": f"{user} requested {t['name']}", "ts": self.clock()}
         r = self._r(True, "added", **base, pos=idx + 1, eta=f", plays in ~{mins} min" if mins >= 2 else "")
         r["item"] = item["id"]
         return r
@@ -439,6 +476,10 @@ class Engine:
                 opened = low in ("open", "on")
                 self.save_settings({"requests_open": opened})
                 return self._r(True, "toggle", "toggle_open" if opened else "toggle_closed", user=user)
+            if staff and low in ("safe on", "safe off", "safe"):
+                on = low != "safe off"
+                self.save_settings({"stream_safe": on})
+                return self._r(True, "toggle", "safe_on" if on else "safe_off", user=user)
             if staff and low == "clear":
                 return self._chat_cmd("clear", "", user, roles, staff, False)
             return self.request(user, arg, roles, redeem)
@@ -636,6 +677,59 @@ class Engine:
             return {"title": "", "artist": "", "url": "", "requestedBy": ""}
         return {"title": t["name"], "artist": ", ".join(t["artists"]), "url": f"https://open.spotify.com/track/{t['id']}",
                 "requestedBy": (self.now_item or {}).get("requester", "")}
+
+    def add_context(self, link, shuffle=False, limit=50, where="end"):
+        import re as _re
+        m = _re.search(r"(?:spotify:|open\.spotify\.com/(?:intl-[a-z]+/)?)(playlist|album)[:/]([A-Za-z0-9]{22})", link or "")
+        if not m:
+            raise QueueError("paste a Spotify playlist or album link")
+        tracks = self.api.context_tracks(m.group(1), m.group(2), max(1, min(int(limit), 200)))
+        if not tracks:
+            raise QueueError("no playable tracks found (private playlist? reconnect Spotify to grant playlist access)")
+        if shuffle:
+            import random
+            random.shuffle(tracks)
+        with self.lock:
+            have = {i["uri"] for i in self.queue.items}
+            n = 0
+            for t in tracks:
+                if t["uri"] in have:
+                    continue
+                self.add_track(t, "end", "", "streamer")
+                have.add(t["uri"])
+                n += 1
+            return n
+
+    # ---- user presets (snapshots of the current settings)
+    def save_user_preset(self, name):
+        name = str(name).strip()[:40]
+        if not name:
+            raise QueueError("name required")
+        with self.lock:
+            up = self.cfg.setdefault("user_presets", {})
+            if len(up) >= 30 and name not in up:
+                raise QueueError("too many presets (30)")
+            snap = {k: v for k, v in self._own_settings().items() if k != "requests_open"}
+            up[name] = snap
+            self._save_cfg()
+            return sorted(up)
+
+    def apply_user_preset(self, name):
+        with self.lock:
+            snap = (self.cfg.get("user_presets") or {}).get(name)
+            if snap is None:
+                raise QueueError("unknown preset")
+            return self.save_settings(dict(snap))
+
+    def delete_user_preset(self, name):
+        with self.lock:
+            up = self.cfg.get("user_presets") or {}
+            up.pop(name, None)
+            disk = store.load("config.json", {})
+            disk["user_presets"] = up
+            store.save("config.json", disk)
+            self.cfg["user_presets"] = up
+            return sorted(up)
 
     def shuffle_queue(self):
         with self.lock:

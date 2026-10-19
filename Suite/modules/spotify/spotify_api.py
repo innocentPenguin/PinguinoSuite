@@ -22,7 +22,7 @@ AUTH_URL = _ACC + "/authorize"
 TOKEN_URL = _ACC + "/api/token"
 API = os.environ.get("SPOTIFY_API_BASE", "https://api.spotify.com/v1")
 SCOPES = ("user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-private "
-          "user-read-recently-played")
+          "user-read-recently-played playlist-read-private playlist-read-collaborative")
 
 
 class ApiError(Exception):
@@ -187,6 +187,27 @@ class Client:
         js = self._req("GET", "/search", {"q": q, "type": "track", "limit": limit, "market": "from_token"})
         return [norm_track(t) for t in (js or {}).get("tracks", {}).get("items", []) if t]
 
+    def artists(self, ids):
+        js = self._req("GET", "/artists", {"ids": ",".join(ids[:50])})
+        return {a["id"]: [g.lower() for g in a.get("genres", [])] for a in (js or {}).get("artists", []) if a}
+
+    def context_tracks(self, kind, cid, limit=100):
+        """Tracks of a playlist or album (public, or private with the playlist scopes)."""
+        out, offset = [], 0
+        while len(out) < limit:
+            js = self._req("GET", f"/{kind}s/{cid}/tracks", {"limit": 50, "offset": offset, "market": "from_token"})
+            items = (js or {}).get("items", [])
+            for it in items:
+                t = it.get("track") if kind == "playlist" else it
+                if t and t.get("uri", "").startswith("spotify:track:") and not t.get("is_local"):
+                    if kind == "album":
+                        t = {**t, "album": {"name": "", "images": []}}
+                    out.append(norm_track(t))
+            offset += 50
+            if len(items) < 50 or not (js or {}).get("next"):
+                break
+        return [t for t in out if t][:limit]
+
     def track(self, tid):
         return norm_track(self._req("GET", "/tracks/" + tid, {"market": "from_token"}))
 
@@ -231,6 +252,7 @@ def norm_track(t):
     imgs = (t.get("album") or {}).get("images") or []
     art = (imgs[1] if len(imgs) > 1 else imgs[0])["url"] if imgs else ""
     return {"id": t.get("id", ""), "uri": t["uri"], "name": t.get("name", ""), "artists": [a.get("name", "") for a in t.get("artists", [])],
+            "artist_ids": [a.get("id", "") for a in t.get("artists", []) if a.get("id")],
             "album": (t.get("album") or {}).get("name", ""), "art": art, "duration_ms": int(t.get("duration_ms") or 0),
             "explicit": bool(t.get("explicit"))}
 

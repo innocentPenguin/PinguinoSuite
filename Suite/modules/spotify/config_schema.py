@@ -5,7 +5,7 @@ The Settings tab is generated from SCHEMA, rules.DEFAULTS is derived from it."""
 VARS = {"user": "Ann", "song": "Song 1 - Artist", "title": "Song 1", "artist": "Artist", "pos": 3, "eta": ", plays in ~8 min", "by": " (requested by Ann)", "limit": 2,
         "max_min": 10, "min_s": 30, "votes": 1, "need": 3, "link": "https://open.spotify.com/track/abc", "requester": "Ann",
         "count": 5, "next": "1. Song 2 - Artist | 2. Song 3 - Artist", "cooldown": 60, "cmds": "!sr !song !queue !skip !oops",
-        "last": "Song 0 - Artist", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120}
+        "last": "Song 0 - Artist", "genre": "death metal", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120}
 
 MSGS = {
     "added": ("Song added", "@{user} added '{song}' (#{pos} in queue{eta}).", "Viewer request accepted."),
@@ -48,6 +48,9 @@ MSGS = {
     "toggle_closed": ("Closed", "Song requests are now closed.", "A mod closed requests."),
     "cleared": ("Cleared", "Viewer requests cleared.", "A mod cleared the queue."),
     "blocked_song": ("Blocked + skipped", "Blocked '{title}' and skipped it.", "!blocksong."),
+    "genre": ("Genre blocked", "@{user} that genre ({genre}) isn't allowed right now.", "Song by an artist in a blocked genre."),
+    "safe_on": ("Stream-safe on", "Stream-safe mode is ON: no explicit songs, requests need approval.", "A mod turned stream-safe on."),
+    "safe_off": ("Stream-safe off", "Stream-safe mode is off.", "A mod turned stream-safe off."),
     "session_limit": ("Session limit", "@{user} you've used all {limit} requests for this stream.", "Per-stream request cap reached."),
     "volume": ("!volume", "Volume is {vol}%.", "Mods: current volume."),
     "volume_set": ("!volume set", "Volume set to {vol}%.", "Mods: volume changed."),
@@ -79,6 +82,7 @@ SCHEMA = [
         ("queue_max_minutes", "int", 0, "Max queue length (minutes)", "Stop taking requests when the queue holds this many minutes of music (0 = off)."),
         ("priority_users", "list", [], "Priority viewers", "One name per line: their requests rank like subs (eg. friends, regulars)."),
         ("trusted_users", "list", [], "Trusted viewers", "One name per line: never held for approval."),
+        ("block_genres", "list", [], "Blocked genres", "One per line, eg. death metal. Matched against the artist's Spotify genres (needs one extra lookup per artist, cached)."),
         ("autoskip_blocked", "bool", False, "Auto-skip blocked songs", "If a blocklisted song (or an explicit one in stream-safe mode) starts playing from ANY source, skip it."),
     ]},
     {"id": "limits", "title": "Limits per role", "items": [
@@ -148,6 +152,8 @@ SCHEMA = [
         ("ov_width", "int", 460, "Width (px)", ""),
         ("ov_size", "int", 100, "Text size (%)", "Scales the whole card."),
         ("ov_radius", "int", 14, "Corner radius (px)", ""),
+        ("ov_alerts", "bool", True, "Request alerts", "Briefly show \"Ann requested Song\" on the overlay when a request is accepted."),
+        ("ov_alert_s", "int", 6, "Alert seconds", ""),
         ("ov_font", "str", "", "Font", "A font installed on this PC (empty = Segoe UI)."),
     ]},
 ]

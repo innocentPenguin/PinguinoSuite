@@ -137,6 +137,8 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
         return False, "sub_only", ctx
     if blocked_reason(settings, track):
         return False, "blocked", ctx
+    if track.get("_genre"):
+        return False, "genre", {**ctx, "genre": track["_genre"]}
     if (settings["block_explicit"] or settings["stream_safe"]) and track.get("explicit"):
         return False, "explicit", ctx
     dur = track.get("duration_ms", 0)

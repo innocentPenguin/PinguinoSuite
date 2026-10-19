@@ -89,6 +89,8 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
 <section id="t-search" hidden>
   <div class="ctl"><input type="text" id="q" placeholder="Search Spotify, or paste a track link…" style="flex:1"><button class="pri" id="bsearch">Search</button></div>
   <div class="card" id="results" style="margin-top:10px"></div>
+  <div class="card"><b>Add a whole playlist or album</b><div class="small dim" style="margin:4px 0 8px">Paste a Spotify playlist/album link. Songs are added to the end of the queue (duplicates skipped).</div>
+    <div class="ctl"><input type="text" id="ctxlink" placeholder="https://open.spotify.com/playlist/…" style="flex:1"><label class="small"><input type="checkbox" id="ctxshuf" checked> shuffle</label><input type="number" id="ctxlim" value="50" min="1" max="200" style="width:80px" title="Max songs"><button class="pri" id="bctx">Add</button></div></div>
 </section>
 
 <section id="t-req" hidden>
@@ -98,7 +100,7 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
 </section>
 
 <section id="t-set" hidden>
-  <div class="card"><div class="ctl"><b>Presets</b><span id="presets" class="ctl"></span><span style="flex:1"></span><button id="bexport">Export / import</button><button id="breset" class="x">Reset everything</button></div>
+  <div class="card"><div class="ctl"><b>Presets</b><span id="presets" class="ctl"></span><span id="upresets" class="ctl"></span><button id="bsavepreset" title="Save the current settings under a name">＋ Save mine</button><span style="flex:1"></span><button id="bexport">Export / import</button><button id="breset" class="x">Reset everything</button></div>
     <div class="small dim" id="presethelp" style="margin-top:6px">One click sets a bundle of rules. It never opens or closes requests (except "Closed").</div>
     <div id="porter" hidden style="margin-top:8px"><textarea id="porttext" placeholder="Settings JSON"></textarea><div class="ctl" style="margin-top:6px"><button id="bimport" class="pri">Import (merge)</button><span class="small dim">Copy this text to back up or move your setup.</span></div></div></div>
   <div id="groups"></div>
@@ -214,6 +216,7 @@ $('qsafe').onchange=e=>act('/api/settings',{stream_safe:e.target.checked},e.targ
 async function search(){const q=$('q').value.trim();if(!q)return;try{const r=(await api('/api/search?q='+encodeURIComponent(q))).tracks;
   $('results').innerHTML=r.length?r.map((t,i)=>trackRow(t,`<button data-i="${i}" data-w="end">Add</button><button data-i="${i}" data-w="next">Next</button><button class="pri" data-i="${i}" data-w="now">Play now</button>`)).join(''):'<div class="dim" style="padding:10px">No results.</div>';
   $('results')._r=r}catch(e){toast(e.message,true)}}
+$('bctx').onclick=async()=>{try{const r=await api('/api/queue/add_context',{link:$('ctxlink').value,shuffle:$('ctxshuf').checked,limit:+$('ctxlim').value});toast('Added '+r.added+' songs');$('ctxlink').value='';refresh()}catch(e){toast(e.message,true)}};
 $('bsearch').onclick=search;$('q').onkeydown=e=>e.key==='Enter'&&search();
 $('results').onclick=e=>{const b=e.target.closest('button');if(!b)return;act('/api/queue/add',{track:$('results')._r[+b.dataset.i],where:b.dataset.w},'Added')};
 
@@ -248,6 +251,7 @@ function drawSettings(){
   if(DRAFT&&!dirty.size&&drawnSig===sig&&$('groups').children.length)return;
   drawnSig=sig;
   if(!DRAFT||!dirty.size){DRAFT=JSON.parse(JSON.stringify(S.settings));dirty.clear()}
+  $('upresets').innerHTML=(SCHEMA.user_presets||[]).map(n=>`<span class="ctl" style="gap:0"><button data-upreset="${esc(n)}" title="Your saved preset">★ ${esc(n)}</button><button class="x" data-udel="${esc(n)}" title="Delete this preset">✕</button></span>`).join('');
   $('presets').innerHTML=Object.entries(SCHEMA.presets).map(([k,p])=>`<button data-preset="${k}" title="${esc(p.help)}">${esc(p.label)}</button>`).join('');
   $('groups').innerHTML=SCHEMA.groups.map(g=>`<details class="card" ${['requests','limits'].includes(g.id)?'open':''}><summary style="cursor:pointer;font-weight:600">${esc(g.title)}</summary><div style="margin-top:8px">${g.items.map(it=>{
     const wide=['list','cmds','msgs'].includes(it.kind),mod=!same(DRAFT[it.key],it.default);
@@ -269,9 +273,13 @@ $('t-set').addEventListener('click',e=>{
   const a=e.target.closest('a[data-reset]'),m=e.target.closest('a[data-resetmsg]'),p=e.target.closest('button[data-preset]');
   if(a){e.preventDefault();setVal(a.dataset.reset,JSON.parse(JSON.stringify(dflt(a.dataset.reset))));drawSettings()}
   if(m){e.preventDefault();const d=SCHEMA.msgs[m.dataset.resetmsg].default;setVal('msgs',d,m.dataset.resetmsg);drawSettings()}
+  const up=e.target.closest('button[data-upreset]'),ud=e.target.closest('button[data-udel]');
+  if(up)act('/api/preset',{name:up.dataset.upreset},'Applied '+up.dataset.upreset).then(()=>{dirty.clear();DRAFT=null});
+  if(ud&&confirm('Delete preset '+ud.dataset.udel+'?'))act('/api/presets/delete',{name:ud.dataset.udel}).then(()=>{SCHEMA=null;dirty.clear();DRAFT=null;drawnSig='';loadSchema().then(drawSettings)});
   if(p)act('/api/preset',{name:p.dataset.preset},'Preset applied: '+SCHEMA.presets[p.dataset.preset].label).then(()=>{dirty.clear();DRAFT=null})});
 $('bsave').onclick=async()=>{const patch={};for(const f of dirty){const[k,sub]=f.split('.');if(sub){patch[k]=patch[k]||{};patch[k][sub]=DRAFT[k][sub]}else patch[k]=DRAFT[k]}
   try{await api('/api/settings',patch);dirty.clear();DRAFT=null;editing=false;toast('Settings saved');refresh()}catch(e){toast(e.message,true)}};
+$('bsavepreset').onclick=async()=>{const n=prompt('Name for this preset (saves all settings except open/closed):');if(!n)return;try{await api('/api/presets/save',{name:n});SCHEMA=null;await loadSchema();drawnSig='';drawSettings();toast('Saved preset '+n)}catch(e){toast(e.message,true)}};
 $('bdiscard').onclick=()=>{dirty.clear();DRAFT=null;editing=false;drawSettings()};
 $('breset').onclick=()=>confirm('Reset ALL settings to their defaults (requests stay closed)?')&&act('/api/settings/reset',{},'Back to defaults').then(()=>{dirty.clear();DRAFT=null});
 $('bexport').onclick=()=>{$('porter').hidden=!$('porter').hidden;$('porttext').value=JSON.stringify(S.settings,null,1)};

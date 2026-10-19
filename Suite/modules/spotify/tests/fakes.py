@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 def trk(n, dur=200000, explicit=False, artist="Artist"):
     return {"id": f"id{n}".ljust(22, "x"), "uri": f"spotify:track:t{n}", "name": f"Song {n}", "duration_ms": dur, "explicit": explicit,
-            "artists": [{"name": artist}], "album": {"name": "Album", "images": [{"url": "http://x/a.jpg"}, {"url": "http://x/b.jpg"}]}}
+            "artists": [{"name": artist, "id": "artSweary" if artist == "Sweary" else "artNormal"}], "album": {"name": "Album", "images": [{"url": "http://x/a.jpg"}, {"url": "http://x/b.jpg"}]}}
 
 
 class FakeSpotify:
@@ -161,6 +161,11 @@ class _H(BaseHTTPRequestHandler):
                 s = q.get("q", "").lower()
                 hits = [t for t in S.tracks.values() if s in t["name"].lower() or s in t["artists"][0]["name"].lower()]
                 return self._send(200, {"tracks": {"items": hits[:int(q.get("limit", 5))]}})
+            if p == "/artists":
+                return self._send(200, {"artists": [{"id": i, "genres": ["black metal"] if i == "artSweary" else ["pop"]} for i in q["ids"].split(",")]})
+            if p.startswith("/playlists/") or p.startswith("/albums/"):
+                items = [{"track": S.tracks[f"t{n}"]} for n in range(10, 16)] if p.startswith("/playlists/") else [S.tracks[f"t{n}"] for n in range(10, 13)]
+                return self._send(200, {"items": items, "next": None})
             if p.startswith("/tracks/"):
                 t = next((t for t in S.tracks.values() if t["id"] == p.split("/")[-1]), None)
                 return self._send(200, t) if t else self._send(404, {"error": {"status": 404, "message": "no such track"}})
