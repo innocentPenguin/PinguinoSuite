@@ -2,6 +2,7 @@
 push: state mirror every 3 s while playing / 10 s idle / at once on change.  poll: long-poll viewer events -> rules -> ack.
 Site down = we back off (3 s -> 30 s) and keep working locally. The API key never leaves config.json."""
 import json
+import os
 import threading
 import time
 import urllib.error
@@ -33,9 +34,26 @@ def default_http(method, url, key, body, timeout):
         return 0, {"error": str(e)}
 
 
+def fetch_vault(name):
+    """Module-token read of one declared key from the core's vault. None when unavailable (404/409/503/offline)."""
+    core, tok = os.environ.get("PINGUINO_CORE_URL"), os.environ.get("PINGUINO_API_TOKEN")
+    if not core or not tok:
+        return None
+    st, js = default_http("GET", core.rstrip("/") + "/api/vault/" + name, tok, None, 5)
+    if st == 200 and isinstance(js, dict) and js.get("value"):
+        return str(js["value"])
+    if st not in (0, 404):
+        console_log.warn("site", f"vault read for {name} answered HTTP {st}", dedupe_s=300)
+    return None
+
+
 class Bridge:
-    def __init__(self, engine, http=default_http, sleep=time.sleep):
+    def __init__(self, engine, http=default_http, sleep=time.sleep, vault=None):
         self.e, self.http, self.sleep = engine, http, sleep
+        self.vault = vault or fetch_vault
+        self.vault_key = None          # memory only, never written to disk
+        self.vault_tried = 0.0
+        self.key_source = ""
         self.stop = False
         self.last_ok = 0.0
         self.last_error = ""
@@ -45,14 +63,37 @@ class Bridge:
         self.fail = 0
 
     # ---- config
+    def key(self):
+        """Key vault first (memory only, re-fetched after an auth failure); old config.json key as fallback."""
+        if not self.vault_key and time.time() - self.vault_tried > 60:
+            self.vault_tried = time.time()
+            self.vault_key = self.vault("SPOTIFY_API_KEY")
+        if self.vault_key:
+            self.key_source = "vault"
+            return self.vault_key
+        k = (self.e.cfg.get("site") or {}).get("key") or ""
+        self.key_source = "config" if k else ""
+        return k
+
     def conf(self):
         c = self.e.cfg.get("site") or {}
         url = (c.get("url") or "").rstrip("/")
-        return (url, c.get("key") or "") if c.get("enabled") and url and c.get("key") else (None, None)
+        key = self.key() if c.get("enabled") and url else ""
+        return (url, key) if key else (None, None)
+
+    def test(self):
+        """POST /api/test-key from the vault page: the site accepts our key."""
+        url = ((self.e.cfg.get("site") or {}).get("url") or "").rstrip("/")
+        key = self.key()
+        if not url or not key:
+            return False, "site URL or key missing"
+        st, _ = self.http("GET", url + "/api/spotify/blocklist", key, None, 10)
+        return st == 200, f"HTTP {st}"
 
     def status(self):
         c = self.e.cfg.get("site") or {}
-        return {"enabled": bool(c.get("enabled")), "url": c.get("url", ""), "has_key": bool(c.get("key")),
+        return {"enabled": bool(c.get("enabled")), "url": c.get("url", ""), "has_key": bool(self.vault_key or c.get("key")),
+                "key_source": self.key_source,
                 "online": time.time() - self.last_ok < 30, "last_error": self.last_error}
 
     def configure(self, url=None, key=None, enabled=None):
@@ -81,6 +122,7 @@ class Bridge:
             if v is not None and v != self.blocklist_version:
                 self.pull_blocklist(v)
             return True
+        self._auth_failed(st)
         self._bad(f"push HTTP {st}")
         return False
 
@@ -111,6 +153,7 @@ class Bridge:
             return 0
         st, js = self.http("GET", url + "/api/spotify/poll?wait=1", key, None, 30)
         if st != 200:
+            self._auth_failed(st)
             self._bad(f"poll HTTP {st}")
             return 0
         self._ok()
@@ -189,6 +232,10 @@ class Bridge:
         return {"id": eid, "ok": True}
 
     # ---- bookkeeping
+    def _auth_failed(self, st):
+        if st in (401, 403):
+            self.vault_key, self.vault_tried = None, 0.0      # key may have been rotated: ask the vault again
+
     def _ok(self):
         self.last_ok, self.fail, self.last_error = time.time(), 0, ""
 

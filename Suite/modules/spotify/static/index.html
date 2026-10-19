@@ -112,7 +112,7 @@ code{background:var(--bg);padding:2px 6px;border-radius:5px;user-select:all}
     <div class="step"><b>5</b><div>Open Spotify on this PC and press play once so a device exists. <button id="bdisc" class="x" style="float:right">Disconnect</button></div></div>
     <div class="small dim">Dev-mode apps allow up to 25 users: fine for a personal app.</div></div>
   <div class="card"><h3 style="margin-top:0">Website (innocentpenguin.com) <span id="sitestat"></span></h3>
-    <div class="small dim" style="margin-bottom:8px">Optional. This PC only calls out to the site (never exposed). Paste the site URL and the shared <code>SPOTIFY_API_KEY</code>.</div>
+    <div class="small dim" style="margin-bottom:8px">Optional. This PC only calls out to the site (never exposed). Set the site URL here and the shared <code>SPOTIFY_API_KEY</code> in Integrations &gt; Key vault (the key field below is only an old-style fallback).</div>
     <div class="grid"><label>Site URL<input type="text" id="siteurl" placeholder="https://innocentpenguin.com"></label><label>API key (write-only)<input type="text" id="sitekey" placeholder="leave empty to keep the saved key"></label></div>
     <div class="ctl" style="margin-top:8px"><label><input type="checkbox" id="siteon"> enabled</label><button id="bsite" class="pri">Save</button></div></div>
 </section>
@@ -232,7 +232,7 @@ $('bsave').onclick=async()=>{const p={};document.querySelectorAll('#rules [data-
   editing=false;await act('/api/settings',p,'Settings saved')};
 
 async function loadSite(){try{const s=await api('/api/site');if(document.activeElement!==$('siteurl'))$('siteurl').value=s.url;$('siteon').checked=s.enabled;
-  $('sitestat').innerHTML=!s.enabled?'<span class="pill bad">off</span>':s.online?'<span class="pill ok">online</span>':'<span class="pill bad">'+esc(s.last_error||'connecting')+(s.has_key?'':' · no key')+'</span>'}catch(e){}}
+  $('sitestat').innerHTML=!s.enabled?'<span class="pill bad">off</span>':s.online?'<span class="pill ok">online</span>':'<span class="pill bad">'+esc(s.last_error||'connecting')+(s.has_key?'':' · key missing: add SPOTIFY_API_KEY in Integrations > Key vault')+'</span>'}catch(e){}}
 $('bsite').onclick=async()=>{await act('/api/site',{url:$('siteurl').value,key:$('sitekey').value||undefined,enabled:$('siteon').checked},'Saved');$('sitekey').value='';loadSite()};
 async function loadSetup(){loadSite();try{setup=await api('/api/setup');$('redir').textContent=setup.redirect_uri;$('ovurl').textContent=setup.overlay_url;$('npfile').textContent=setup.nowplaying_file;
   $('dashlink').href=setup.dashboard;if(document.activeElement!==$('cid'))$('cid').value=setup.client_id;

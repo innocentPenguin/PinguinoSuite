@@ -612,6 +612,29 @@ class BridgeTests(unittest.TestCase):
         self.b.push_once()
         self.assertEqual(self.b.fail, 0)
 
+    def test_vault_key_preferred_and_refetched_after_401(self):
+        keys = iter(["V1", "V2"])
+        self.b.vault = lambda name: next(keys)
+        self.assertEqual(self.b.conf()[1], "V1")
+        self.assertEqual(self.b.status()["key_source"], "vault")
+        self.responses = {"/push": (401, {})}
+        self.b.push_once()
+        self.assertIsNone(self.b.vault_key)
+        self.responses = {"/push": (200, {})}
+        self.assertTrue(self.b.push_once())
+        self.assertEqual(self.sent[-1][2], "V2")
+
+    def test_falls_back_to_config_key_when_vault_empty(self):
+        self.b.vault = lambda name: None
+        self.assertEqual(self.b.conf()[1], "KEY")
+        self.assertEqual(self.b.status()["key_source"], "config")
+
+    def test_test_key(self):
+        self.responses = {"/blocklist": (200, {})}
+        self.assertTrue(self.b.test()[0])
+        self.responses = {"/blocklist": (401, {})}
+        self.assertFalse(self.b.test()[0])
+
     def test_disabled_does_nothing(self):
         self.b.configure(enabled=False)
         self.assertFalse(self.b.push_once())

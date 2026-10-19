@@ -9,6 +9,8 @@
   "health": "/api/status",
   "prestream": "/api/prestream",
   "singleton": true,
+  "singleton": true,
+  "secrets": [{"name": "SPOTIFY_API_KEY", "label": "Spotify site API key (innocentpenguin.com)", "required": false, "test": "/api/test-key"}],
   "commands": ["sr", "skip", "song", "queue", "oops", "blocksong", "srclear"],
   "ui": { "nav": "Spotify", "icon": "🎵", "section": "Modules", "path": "/", "order": 50 },
   "defaults": { "enabled": true, "start_with_suite": true, "react_to_live": false }

@@ -316,6 +316,13 @@ def p_chat_command(h, b):
     return {"ok": bool(r["ok"]), "say": r["reply"][:400], "error": "" if r["ok"] else r["code"], "code": r["code"]}
 
 
+def p_test_key(h, b):
+    ok, detail = bridge.test()
+    if not ok:
+        raise QueueError("site rejected the key or is unreachable: " + detail)
+    return {"ok": True}
+
+
 def p_site(h, b):
     bridge.configure(b.get("url"), b.get("key"), b.get("enabled"))
     return {"ok": True, **bridge.status()}
@@ -333,7 +340,7 @@ def p_block(h, b):
 POST = {"/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
         "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
-        "/api/control": p_control, "/api/chat": p_chat, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/blocklist": p_block}
+        "/api/control": p_control, "/api/chat": p_chat, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
 
 
 def loop():
