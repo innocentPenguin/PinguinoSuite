@@ -516,3 +516,16 @@ def test_recap_lists_only_unanswered_best_first(tmp_path):
     clk.t += 400
     cm.tick()
     assert [x["id"] for x in cm.recap()] == [b["id"], a["id"]]
+
+
+def test_viewer_note_roundtrip(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import server
+    from store import Store
+    monkeypatch.setattr(server, "store", Store(tmp_path / "n.db"))
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    h = {"origin": "http://127.0.0.1:8766"}
+    assert c.post("/api/viewers/Bob/note", json={"note": "likes cats " * 100}, headers=h).json()["note"].startswith("likes cats")
+    got = c.get("/api/viewers/bob/note").json()
+    assert got["user"] == "bob" and len(got["note"]) == 500

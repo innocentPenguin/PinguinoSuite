@@ -316,6 +316,19 @@ async def mute(user: str, request: Request):
     return {"muted": sorted(cur)}
 
 
+@app.get("/api/viewers/{user}/note")
+def note_get(user: str):
+    return {"user": user.lower(), "note": store.kv_get("note:" + user.lower(), "")}
+
+
+@app.post("/api/viewers/{user}/note")
+async def note_set(user: str, request: Request):
+    """Streamer's private note about a viewer (local only, max 500 chars; empty clears it)."""
+    note = str((await request.json()).get("note", ""))[:500]
+    store.kv_set("note:" + user.lower(), note)
+    return {"user": user.lower(), "note": note}
+
+
 # windows / monitors / profiles ------------------------------------------
 @app.get("/api/monitors")
 def monitors():
