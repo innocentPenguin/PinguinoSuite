@@ -16,3 +16,9 @@ Goal (user /goal): cross-platform PinguinoSuite app on Tauri, ready for other ap
 
 ## Rollback
 `App/` is new; delete it. Core changes are in git history (`git checkout -- Suite/suite/suite.py`).
+
+## Update: toolchain installed and verified (2026-10-19)
+- Installed via winget: Rustlang.Rustup (Rust 1.99.1 stable) and Microsoft.VisualStudio.2022.BuildTools (C++ workload).
+- `cargo check` and `npx tauri build --no-bundle` succeed; exe at `App/src-tauri/target/release/pinguino-suite.exe`.
+- Ran with `PINGUINO_PORT=8792`: window opens, dashboard renders with live module state (Listen running), unauthenticated API 401, bad Origin 403, core sidecar spawned.
+- Shell honors `PINGUINO_PORT`. Installer bundling (NSIS/MSI) and macOS/Linux builds not yet tried. An older unpatched Suite on :8760 makes the shell talk to the wrong core; stop the old Suite first.

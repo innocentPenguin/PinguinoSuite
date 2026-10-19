@@ -16,7 +16,9 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
 
-const PORT: u16 = 8760;
+fn port() -> u16 {
+    std::env::var("PINGUINO_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8760)
+}
 
 struct Core {
     child: Mutex<Option<Child>>,
@@ -32,7 +34,7 @@ struct CoreConfig {
 /// UI -> shell: where the core is and the per-launch token to call it with.
 #[tauri::command]
 fn core_config(core: tauri::State<Core>) -> CoreConfig {
-    CoreConfig { base: format!("http://127.0.0.1:{PORT}"), token: core.token.clone() }
+    CoreConfig { base: format!("http://127.0.0.1:{}", port()), token: core.token.clone() }
 }
 
 /// Find the suite root (the folder holding Suite/suite/suite.py).
@@ -74,7 +76,7 @@ fn spawn_core(token: &str) -> Option<Child> {
         .arg("--headless")
         .current_dir(root.join("Suite"))
         .env("PINGUINO_API_TOKEN", token)
-        .env("PINGUINO_PORT", PORT.to_string())
+        .env("PINGUINO_PORT", port().to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -88,9 +90,10 @@ fn spawn_core(token: &str) -> Option<Child> {
 
 /// Ask the core to stop itself (it stops its modules too); fall back to killing the process.
 fn stop_core(core: &Core) {
-    if let Ok(mut s) = TcpStream::connect_timeout(&format!("127.0.0.1:{PORT}").parse().unwrap(), Duration::from_millis(500)) {
+    if let Ok(mut s) = TcpStream::connect_timeout(&format!("127.0.0.1:{}", port()).parse().unwrap(), Duration::from_millis(500)) {
         let req = format!(
-            "POST /api/quit HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nAuthorization: Bearer {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            "POST /api/quit HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            port(),
             core.token
         );
         let _ = s.set_read_timeout(Some(Duration::from_secs(3)));
