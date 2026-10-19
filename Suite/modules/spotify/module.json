@@ -83,20 +83,24 @@
         "url": "https://developer.spotify.com/dashboard"
       },
       "fix": {
-        "label": "Open Spotify setup",
-        "route": "m:spotify"
+        "label": "Connect Spotify",
+        "url": "http://127.0.0.1:8771/auth/login"
       }
     },
     "token": {
       "title": "Spotify connected",
       "summary": "The module needs a Spotify login (a Client ID from your developer app, then one approval in the browser) to read and control playback.",
       "steps": [
-        "Open the Spotify developer dashboard and press Create app (any name, choose Web API).",
-        "In the app's settings add the Redirect URI exactly: http://127.0.0.1:8771/callback (the literal 127.0.0.1, not localhost) and save.",
-        "Copy the app's Client ID (no client secret is needed) and paste it on the Spotify page > Setup tab, then press Save.",
-        "Press Connect to Spotify, approve in the browser window that opens, then come back.",
-        "If it says login failed or the token was rejected, press Disconnect and Connect again. A changed Spotify password or 'remove access' on spotify.com/account/apps also needs a new Connect.",
-        "When green: the login is stored on this PC and refreshes itself; nothing more to do."
+        "Ivan does this once, about 2 minutes. You need a Spotify PREMIUM account.",
+        "1) Open https://developer.spotify.com/dashboard and log in with the Spotify account you play music with.",
+        "2) Click 'Create app'. App name: Pinguino. Description: anything. Redirect URI: type exactly http://127.0.0.1:8771/callback and click 'Add'. Under 'Which API/SDKs are you planning to use' tick 'Web API'. Accept the terms and click 'Save'.",
+        "3) Open the new app > Settings. Copy the 'Client ID' (the Client secret is NOT needed).",
+        "4) Open the Spotify page in the Suite. At the top paste the Client ID and click 'Save & connect' (or use the Connect button below).",
+        "5) A Spotify page opens in your browser: click 'Agree'. When it says 'Connected to Spotify', close that tab.",
+        "6) Open the Spotify desktop app on this PC and press play once so a playback device exists.",
+        "7) Scopes requested automatically (you do not type them): playback state, modify playback, currently playing, account type (Premium check), recently played, playlists.",
+        "Not ready for this stream? Skip it: the module stays quiet, song requests stay off, and the pre-stream check is only a yellow 'optional' note.",
+        "If it stops working later (password changed, access removed): press Connect again."
       ],
       "example": "Client ID format: 32 letters and digits, e.g. 0123456789abcdef0123456789abcdef",
       "scopes": [
@@ -111,8 +115,8 @@
         "url": "https://developer.spotify.com/dashboard"
       },
       "fix": {
-        "label": "Open Spotify setup",
-        "route": "m:spotify"
+        "label": "Connect Spotify (one click)",
+        "url": "http://127.0.0.1:8771/auth/login"
       }
     },
     "premium": {
@@ -186,7 +190,7 @@
       "title": "Website link (innocentpenguin.com)",
       "summary": "Optional: the PC sends now-playing and the queue to the site and receives viewer requests from it. The PC is never exposed; it only calls out.",
       "steps": [
-        "Set the same SPOTIFY_API_KEY in Railway Variables (32+ characters; site side) and in Integrations > Key vault (this PC). Also set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in Railway (a Spotify developer app, client credentials only).",
+        "Optional (the PC works without the site): set the same SPOTIFY_API_KEY in Railway > your site service > Variables (32+ random characters) and in Integrations > Key vault. Also set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in Railway (the Client ID of the same Spotify app, plus its Client secret from the app's Settings page).",
         "On the Spotify page > Setup > Website, enter https://innocentpenguin.com and tick enabled.",
         "Use Test next to the key in Integrations to check the site accepts it. A 401 means the two keys differ.",
         "If the site is down the module keeps working locally and retries automatically (3 s up to 30 s).",

@@ -826,9 +826,11 @@ class Engine:
     def prestream(self):
         items = []
         if not self.auth.client_id:
-            return [{"id": "token", "label": "Spotify connected", "status": "warn", "detail": "not set up (open the Spotify page)"}]
+            return [{"id": "token", "label": "Spotify (optional)", "status": "warn", "detail": "not set up: song requests are off. Open the Spotify page to connect"}]
         if not self.auth.connected():
-            return [{"id": "token", "label": "Spotify connected", "status": "fail", "detail": "not signed in - open the Spotify page and press Connect"}]
+            # never connected = still optional; a login that was lost (revoked, expired) is a real failure
+            return [{"id": "token", "label": "Spotify connected", "status": "fail" if self.cfg.get("ever_connected") else "warn",
+                     "detail": "not signed in: open the Spotify page and press Connect"}]
         try:
             self.auth.access_token()
             items.append({"id": "token", "label": "Spotify token valid", "status": "pass"})

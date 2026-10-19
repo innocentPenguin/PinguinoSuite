@@ -197,12 +197,24 @@ def g_setup(h, q):
             "token_seconds_left": auth.seconds_left()}
 
 
+def g_login(h, q):
+    """One-click connect: open http://127.0.0.1:8771/auth/login (from the Suite, a help panel or a bookmark)."""
+    if not auth.client_id:
+        return h._send(302, b"", "text/plain", {"Location": "/?setup=1"})
+    try:
+        return h._send(302, b"", "text/plain", {"Location": auth.begin(REDIRECT)})
+    except ApiError as e:
+        h._send(400, page("Cannot connect", e.message), "text/html")
+
+
 def g_callback(h, q):
     if q.get("error"):
         return h._send(400, page("Spotify said no", q.get("error", "")), "text/html")
     try:
         auth.finish(q.get("code", ""), q.get("state", ""), REDIRECT)
         engine.me = None
+        engine.cfg["ever_connected"] = True
+        engine._save_cfg()
         engine.backoff_until = 0
         threading.Thread(target=engine.prestream, daemon=True).start()
         h._send(200, page("Connected to Spotify", "You can close this tab and go back to the Pinguino app."), "text/html")
@@ -218,7 +230,7 @@ def page(title, msg):
 
 
 GET = {"/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
-       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/setup": g_setup, "/callback": g_callback}
+       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/setup": g_setup, "/callback": g_callback, "/auth/login": g_login}
 
 
 # ---- POST routes
@@ -342,7 +354,8 @@ def p_chat(h, b):
     return engine.chat(user, str(b.get("text", "")), b.get("roles") or [], bool(b.get("redeem")))
 
 
-ROLE_MAP = {"viewer": [], "vip": ["vip"], "sub": ["sub"], "mod": ["mod"], "broadcaster": ["broadcaster"]}
+ROLE_MAP = {"viewer": [], "vip": ["vip"], "sub": ["sub"], "mod": ["mod"], "broadcaster": ["broadcaster"],
+            "1": [], "2": ["vip"], "3": ["mod"], "4": ["broadcaster"]}      # Streamer.bot-style numeric roles from the Host
 
 
 def p_chat_command(h, b):

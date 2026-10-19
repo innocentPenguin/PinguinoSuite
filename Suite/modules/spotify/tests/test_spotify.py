@@ -429,7 +429,10 @@ class EngineTests(unittest.TestCase):
         json.dumps(self.e.public_state())
 
     def test_prestream_levels(self):
-        self.assertEqual(Engine(self.api, FakeAuth(False), self.clock).prestream()[0]["status"], "fail")
+        e0 = Engine(self.api, FakeAuth(False), self.clock)
+        self.assertEqual(e0.prestream()[0]["status"], "warn", "never connected = optional")
+        e0.cfg["ever_connected"] = True
+        self.assertEqual(e0.prestream()[0]["status"], "fail", "a lost login is a real failure")
         a = FakeAuth()
         a.client_id = ""
         self.assertEqual(Engine(self.api, a, self.clock).prestream()[0]["status"], "warn")

@@ -141,7 +141,13 @@ def main():
     # ---------------- OAuth PKCE
     post("/api/setup", {"client_id": "cid123"})
     ps = get("/api/prestream")[1]["items"]
-    T("prestream: client id set, not signed in = fail", ps[0]["status"] == "fail", ps)
+    T("prestream: never connected = optional warn", ps[0]["status"] == "warn", ps)
+    import http.client as _hc
+    _c = _hc.HTTPConnection("127.0.0.1", PORT)
+    _c.request("GET", "/auth/login")
+    _r = _c.getresponse()
+    T("one-click /auth/login redirects to Spotify with PKCE", _r.status == 302 and "code_challenge" in _r.getheader("Location", ""), _r.getheader("Location"))
+    _r.read()
     r = post("/api/auth/start")[1]
     q = urllib.parse.parse_qs(urllib.parse.urlparse(r["url"]).query)
     T("auth url has PKCE S256 + state + redirect", q["code_challenge_method"] == ["S256"] and q["redirect_uri"] == [f"{BASE}/callback"] and "state" in q, r["url"])
@@ -156,6 +162,7 @@ def main():
     T("callback with good code connects", code == 200 and "Connected" in page, page[:80])
     T("state says connected", wait(lambda: state()["connected"]))
     T("tokens stored on disk, not in API output", os.path.exists(os.path.join(DATA, "spotify", "tokens.json")) and "R-1" not in json.dumps(state()) and "R-1" not in json.dumps(get("/api/setup")[1]))
+    T("host numeric roles map (3=mod)", cmd("srclear", "", "mm", "3")["code"] == "cleared" or cmd("srclear", "", "mm", "3")["code"] == "clear")
     T("replayed state is single-use", get(f"/callback?code=GOODCODE&state={q['state'][0]}")[0] == 400)
 
     # ---------------- prestream with account
