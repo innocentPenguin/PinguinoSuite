@@ -47,7 +47,8 @@ ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "taur
 DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data")
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 # UI source: single copy lives in the Tauri app so the two can't drift.
-UI_INDEX = next((q for q in (ROOT.parent / "App" / "src" / "index.html", Path(__file__).parent / "static" / "index.html") if q.exists()), None)
+UI_INDEX = ROOT.parent / "App" / "src" / "index.html"  # only copy of the UI (the old Suite/suite/static copy was retired)
+UI_INDEX = UI_INDEX if UI_INDEX.exists() else None
 DEFAULT_SETTINGS = {"channel": "innocentpenguin_", "poll_secs": 20, "offline_grace_secs": 180, "modules": {}}
 
 
