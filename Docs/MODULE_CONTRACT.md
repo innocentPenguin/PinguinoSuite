@@ -231,3 +231,6 @@ Where to put it:
 - On a **secret**: `{"name": "X", "label": "...", "help": {...}}`. This is also shown inline under the Set/Rotate box ("How to get this key"). Say where to find it, scopes, example format; never the value.
 - Console lines: warn/error lines are clickable; the core matches the message to a topic, or uses the module's help by source.
 Core endpoints: `GET /api/help?key=&module=&item=&source=&msg=` and `GET /api/help/all` (index for the Help page).
+
+## Module switch (on/off + padlock)
+Every module has an on/off switch (Settings > Modules and the dashboard Modules card) with a padlock beside it. `POST /api/modules/<id>/enable {"on": bool}` (app token): on = `enabled` + `start_with_suite` + start now; off = stop now + no autostart; saved in the core settings. The padlock is UI only: switches start locked, unlock lasts 30 s or one change. Modules with `defaults.always_start` (Host, Multi) are pinned on by the manifest, and only the unlock + switch-off stores `override_off`, which lifts the pin until switched back on. Modules need no code for this; add `help` text if the module needs a note on what going off means.

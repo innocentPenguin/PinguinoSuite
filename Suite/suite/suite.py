@@ -202,7 +202,7 @@ class Module:
     def opts(self):
         o = dict(self.spec.get("defaults", {}))
         o.update(load_settings()["modules"].get(self.id, {}))
-        if self.spec.get("defaults", {}).get("always_start"):  # manifest pins these on; saved settings can't turn them off
+        if self.spec.get("defaults", {}).get("always_start") and not o.get("override_off"):  # manifest pins these on unless the user unlocked and switched them off
             o["enabled"] = o["start_with_suite"] = True
         return o
 
@@ -1176,6 +1176,25 @@ def event_log(lines: int = 200):
         except ValueError:
             pass
     return {"events": out}
+
+
+@app.post("/api/modules/{mid}/enable")
+def module_enable(mid: str, b: dict):
+    """The on/off switch: on = enabled + starts with the Suite + start now; off = stop now + no autostart. Persisted.
+    Modules the manifest pins on (always_start) only switch off via the UI's unlock; that is remembered as override_off."""
+    m = modules.get(mid)
+    if not m:
+        raise HTTPException(404)
+    on = bool(b.get("on"))
+    s = load_settings()
+    s["modules"].setdefault(mid, {}).update({"enabled": on, "start_with_suite": on, "override_off": (not on) and bool(m.spec.get("defaults", {}).get("always_start"))})
+    save_settings(s)
+    console_log.log("info", "core", f"module {mid} switched {'on' if on else 'off'}", "modules")
+    if on:
+        m.start()
+    else:
+        m.stop()
+    return {"ok": True, "enabled": on}
 
 
 @app.post("/api/modules/{mid}/options")
