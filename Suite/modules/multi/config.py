@@ -15,6 +15,7 @@ PROFILES_DIR = ROOT.parents[2] / "Data" / "profiles"  # shared viewer profiles (
 DEFAULTS = {
     "channel": "innocentpenguin_",
     "twitch_client_id": "",
+    "discord_channels": [],          # channel ids Multi reads/sends in (bot token is in Credential Manager)
     "priority_mode": "local",        # local | ai | auto  (AI arrives in M3; local always works)
     "answered_fade_s": 15,
     "missed_after_s": 300,

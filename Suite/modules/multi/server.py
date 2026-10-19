@@ -20,6 +20,7 @@ import config
 import learning
 import secrets_store
 import windows as win
+from connectors.discord import Discord
 from connectors.twitch import Twitch
 from models import ChatMessage
 from pipeline import Inbox, Pipeline
@@ -71,9 +72,12 @@ async def lifespan(app):
     store.prune(config.settings()["retention_days"])
     tw = Twitch(inbox, hub.emit)
     connectors["twitch"] = tw
-    tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run())]
+    dc = Discord(inbox, hub.emit)
+    connectors["discord"] = dc
+    tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
+             asyncio.create_task(dc.run())]
     yield
-    tw.stop = True
+    tw.stop = dc.stop = True
     for t in tasks:
         t.cancel()
     for wid in list(shell.procs):
@@ -425,6 +429,22 @@ def open_connect():
     """Open the site's Connect URL in the user's default browser (works from embedded/native shells too)."""
     url = checks.site_url() + "/auth/twitch/login?multi=1"
     return {"ok": bool(webbrowser.open(url)), "url": url}
+
+
+@app.post("/api/secrets/discord")
+async def set_discord(request: Request):
+    """Write-only: stores the bot token in Credential Manager; never echoed back."""
+    b = await request.json()
+    tok = (b.get("token") or "").strip()
+    if b.get("clear"):
+        secrets_store.delete("discord_token")
+    elif len(tok) > 20:
+        secrets_store.put("discord_token", tok)
+    elif "channels" not in b:
+        raise HTTPException(400, "token looks too short")
+    if "channels" in b:
+        config.save_settings({"discord_channels": [str(c) for c in b["channels"] if str(c).isdigit()]})
+    return {"ok": True, "has_token": bool(secrets_store.get("discord_token"))}
 
 
 @app.post("/auth/disconnect")

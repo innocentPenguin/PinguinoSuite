@@ -364,3 +364,28 @@ def test_hotkey_acts_on_top_card(monkeypatch, tmp_path):
     r = c.post("/api/hotkey/answer", headers={"origin": "http://127.0.0.1:8766"}).json()
     assert r["ok"] and r["card"] == "c:b" and server.cards.cards["c:b"]["answered_via"] == "hotkey"
     assert c.post("/api/hotkey/nope", headers={"origin": "http://127.0.0.1:8766"}).status_code == 400
+
+
+# discord ----------------------------------------------------------
+def test_discord_normalize_and_filter():
+    from connectors.discord import normalize_message
+    d = {"id": "9", "channel_id": "5", "content": "hey @me?", "author": {"id": "1", "username": "Fan", "global_name": "Fan!"},
+         "message_reference": {"message_id": "7"}, "referenced_message": {"author": {"username": "Me"}}}
+    m = normalize_message(d, ["5"], my_id="2")
+    assert m.id == "discord:5:9" and m.reply_to == "discord:5:7" and m.reply_to_user == "me" and not m.is_self
+    assert normalize_message(d, ["6"]) is None
+    assert normalize_message(dict(d, author={"id": "2", "username": "me"}), ["5"], my_id="2").is_self
+
+
+def test_discord_token_write_only(monkeypatch):
+    from fastapi.testclient import TestClient
+    import server
+    kept = {}
+    monkeypatch.setattr(server.secrets_store, "put", lambda k, v: kept.__setitem__(k, v))
+    monkeypatch.setattr(server.secrets_store, "get", lambda k, d=None: kept.get(k, d))
+    monkeypatch.setattr(server.config, "save_settings", lambda p: p)
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    r = c.post("/api/secrets/discord", json={"token": "x" * 30, "channels": ["12", "ab"]},
+               headers={"origin": "http://127.0.0.1:8766"})
+    assert r.json() == {"ok": True, "has_token": True} and "x" * 30 not in r.text
