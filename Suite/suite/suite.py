@@ -3,6 +3,8 @@ tells modules about it, and serves the dashboard. Run via PinguinoSuite.bat (or 
 import asyncio
 import json
 import os
+import secrets
+import signal
 import subprocess
 import sys
 import threading
@@ -13,8 +15,9 @@ from pathlib import Path
 
 import requests
 import uvicorn
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -24,8 +27,17 @@ ROOT = Path(__file__).resolve().parents[1]
 LOGS = ROOT / "logs"
 LOGS.mkdir(exist_ok=True)
 SETTINGS = ROOT / "suite_settings.json"
-PORT = 8760
+PORT = int(os.environ.get("PINGUINO_PORT", "8760"))
 PY = sys.executable
+IS_WIN = os.name == "nt"
+# Per-launch API token. The Tauri shell passes one in; standalone mode makes its own and injects it into the page it serves.
+TOKEN = os.environ.get("PINGUINO_API_TOKEN") or secrets.token_urlsafe(32)
+# Who may call: the core's own origin plus the Tauri webview origins (Windows/macOS/Linux).
+ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "tauri://localhost",
+                   "http://tauri.localhost", "https://tauri.localhost"}
+ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
+# UI source: single copy lives in the Tauri app so the two can't drift.
+UI_INDEX = next((q for q in (ROOT.parent / "App" / "src" / "index.html", Path(__file__).parent / "static" / "index.html") if q.exists()), None)
 DEFAULT_SETTINGS = {"channel": "innocentpenguin_", "poll_secs": 20, "offline_grace_secs": 180, "modules": {}}
 
 
@@ -67,6 +79,21 @@ bus = Bus()
 
 
 # ------------------------------------------------------------------ modules
+def kill_tree(proc):
+    """Stop a module and its children on any OS."""
+    if IS_WIN:
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        proc.wait(timeout=5)
+    except Exception:  # noqa: BLE001
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 class Module:
     def __init__(self, spec):
         self.spec = spec
@@ -88,13 +115,16 @@ class Module:
             return
         cmd = [PY if c == "{py}" else c for c in self.spec["cmd"]]
         log = open(LOGS / f"{self.id}.log", "ab")
-        flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
-        self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log, creationflags=flags)
+        if IS_WIN:
+            extra = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
+        else:
+            extra = {"start_new_session": True}
+        self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log, **extra)
         bus.emit("module", id=self.id, state="starting")
 
     def stop(self):
         if self.running:
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.proc.pid)], capture_output=True)
+            kill_tree(self.proc)
         self.proc, self.healthy = None, False
         bus.emit("module", id=self.id, state="stopped")
 
@@ -129,7 +159,22 @@ class Module:
         return {"id": self.id, "name": self.spec["name"], "desc": self.spec.get("desc", ""), "url": self.spec["url"], "state": st, "options": self.opts()}
 
 
-modules = {m["id"]: Module(m) for m in json.loads((ROOT / "modules.json").read_text("utf8"))}
+def discover_specs():
+    """Registry = modules.json (explicit) + modules/<dir>/module.json manifests (drop-in). See Docs/MODULE_CONTRACT.md."""
+    specs = {}
+    for mf in sorted((ROOT / "modules").glob("*/module.json")):
+        try:
+            spec = json.loads(mf.read_text("utf8"))
+            spec.setdefault("cwd", f"modules/{mf.parent.name}")
+            specs[spec["id"]] = spec
+        except Exception as e:  # noqa: BLE001
+            print(f"[Pinguino] bad manifest {mf}: {e}", file=sys.stderr)
+    for spec in json.loads((ROOT / "modules.json").read_text("utf8")):
+        specs[spec["id"]] = spec
+    return specs
+
+
+modules = {mid: Module(spec) for mid, spec in discover_specs().items()}
 
 
 # ------------------------------------------------------------------ go-live handling
@@ -192,6 +237,8 @@ RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
 def autostart_enabled():
+    if not IS_WIN:
+        return False  # the Tauri shell owns autostart on every OS
     import winreg
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
@@ -202,6 +249,8 @@ def autostart_enabled():
 
 
 def set_autostart(on):
+    if not IS_WIN:
+        raise HTTPException(501, "autostart is handled by the app shell on this platform")
     import winreg
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
         if on:
@@ -233,13 +282,49 @@ async def lifespan(app):
 app = FastAPI(lifespan=lifespan)
 
 
+@app.middleware("http")
+async def guard(request: Request, call_next):
+    """Local-only API: right Host (anti DNS-rebinding), allowed Origin (anti drive-by web pages), valid token."""
+    if request.method != "OPTIONS":
+        origin = request.headers.get("origin")
+        if request.headers.get("host") not in ALLOWED_HOSTS or (origin and origin not in ALLOWED_ORIGINS):
+            return JSONResponse({"detail": "forbidden origin"}, status_code=403)
+        if request.url.path.startswith("/api/"):
+            auth = request.headers.get("authorization", "")
+            given = auth[7:] if auth.lower().startswith("bearer ") else request.headers.get("x-pinguino-token", "")
+            if not secrets.compare_digest(given, TOKEN):
+                return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    resp = await call_next(request)
+    resp.headers["X-Frame-Options"] = "DENY"
+    return resp
+
+
+app.add_middleware(CORSMiddleware, allow_origins=sorted(ALLOWED_ORIGINS), allow_methods=["GET", "POST"],
+                   allow_headers=["Authorization", "Content-Type", "X-Pinguino-Token"])
+
+
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).parent / "static" / "index.html")
+    """Standalone/browser mode only (the Tauri shell loads the UI itself and gets the token via IPC)."""
+    html = UI_INDEX.read_text("utf8") if UI_INDEX else "<h1>PinguinoSuite core</h1>"
+    return HTMLResponse(html.replace("<head>", f'<head><meta name="pinguino-token" content="{TOKEN}">', 1))
+
+
+@app.get("/api/capabilities")
+def capabilities():
+    """Which platform features this build offers. UIs and modules must treat every entry as optional."""
+    return {"api": 1, "platform": sys.platform, "autostart": "legacy-windows" if IS_WIN else "shell",
+            "tray": "shell", "module_manifest": 1}
 
 
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
+    origin = sock.headers.get("origin")
+    ok = (sock.headers.get("host") in ALLOWED_HOSTS and (not origin or origin in ALLOWED_ORIGINS)
+          and secrets.compare_digest(sock.query_params.get("token", ""), TOKEN))
+    if not ok:
+        await sock.close(code=1008)
+        return
     await sock.accept()
     bus.clients.add(sock)
     try:
@@ -367,7 +452,7 @@ def start_tray():
 
 def already_running():
     try:
-        return requests.get(f"http://127.0.0.1:{PORT}/api/state", timeout=1).ok
+        return requests.get(f"http://127.0.0.1:{PORT}/api/capabilities", timeout=1).status_code in (200, 401)
     except Exception:
         return False
 
@@ -375,10 +460,13 @@ def already_running():
 if __name__ == "__main__":
     if sys.stdout is None or sys.stderr is None:  # pythonw has no console: send output to a log
         sys.stdout = sys.stderr = open(LOGS / "suite.log", "a", buffering=1, encoding="utf8")
+    headless = "--headless" in sys.argv  # launched by the Tauri shell: no tray/browser, the shell owns the window
     if already_running():
-        open_app()
+        if not headless:
+            open_app()
         sys.exit(0)
-    start_tray()
-    if "--background" not in sys.argv:
-        threading.Timer(2.0, open_app).start()
+    if not headless:
+        start_tray()
+        if "--background" not in sys.argv:
+            threading.Timer(2.0, open_app).start()
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

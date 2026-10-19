@@ -1,0 +1,33 @@
+# Module Contract (v1)
+
+How any Pinguino app (Bots, Multi, Link, Site helpers, future apps) plugs into PinguinoSuite.
+
+## Registration
+Either of:
+1. `Suite/modules.json` – explicit list (current: `listen`).
+2. Drop-in: `Suite/modules/<dir>/module.json` – discovered at core start. `cwd` defaults to `modules/<dir>`. `modules.json` wins on id clash.
+
+## Manifest fields
+| Field | Required | Meaning |
+|---|---|---|
+| `id` | yes | short unique id, used in URLs `/api/modules/{id}/...` |
+| `name`, `desc` | yes | shown in the dashboard |
+| `cmd` | yes | argv list; `{py}` expands to the core's Python |
+| `cwd` | no | working dir relative to `Suite/` |
+| `port`, `url`, `health` | for HTTP modules | core polls `url+health` for liveness |
+| `on_live` / `on_offline` | no | `{"post": "/path"}` called when the stream goes live / offline |
+| `defaults` | no | `enabled`, `start_with_suite`, `react_to_live` |
+
+(Planned, not yet enforced: `version`, `deps`, `capabilities`, `config schema`, `restart policy`.)
+
+## Security rules for modules
+- Bind to `127.0.0.1` only.
+- The core passes `PINGUINO_API_TOKEN` (planned: per-module token) and `PINGUINO_DATA_DIR` in the environment. Modules must require the token on state-changing endpoints and reject foreign `Origin`s.
+
+## Core API (all `/api/*` need `Authorization: Bearer <token>` or `X-Pinguino-Token`)
+`GET /api/capabilities`, `GET /api/state`, `POST /api/modules/{id}/{start|stop|restart|options}`, `POST /api/channel`, `POST /api/simulate`, `POST /api/windows-autostart`, `POST /api/quit`, `WS /ws?token=…` (events `{type, ts, …}`).
+Requests with a wrong `Host` or a non-allowed `Origin` get 403 (anti DNS-rebinding / drive-by pages).
+Allowed origins: the core itself and the Tauri webview (`tauri://localhost`, `http(s)://tauri.localhost`).
+
+## Platform capabilities
+Anything OS-specific is optional. `GET /api/capabilities` reports what exists. The Tauri shell provides tray, single-instance and autostart on Windows/macOS/Linux; the legacy HKCU Run key is only the standalone-Python path.

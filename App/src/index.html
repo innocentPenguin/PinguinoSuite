@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="bootstrap.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PinguinoSuite</title>
+<style>
+:root{
+  --bg:#0a0e15;--bg2:#0e131c;--panel:#131925;--panel2:#18202e;--line:#222b3c;--line2:#2d3850;
+  --fg:#e8ecf4;--dim:#8b95ab;--faint:#5b6579;
+  --ice:#7cc4ff;--ice2:#4a9be0;--beak:#ff9f43;--live:#ff4757;--ok:#4cd9a0;--warn:#f5d547;--vio:#a78bfa;
+  --r:14px;--shadow:0 10px 30px #0006;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(1200px 600px at 80% -10%,#15233a55,transparent),var(--bg);color:var(--fg);font:14px/1.5 "Segoe UI",system-ui,sans-serif;display:flex;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--ice)}
+button.pri{background:linear-gradient(180deg,var(--ice),var(--ice2));color:#06101c;border-color:transparent;font-weight:600}
+button.danger{background:var(--live);border-color:transparent;color:#fff;font-weight:600}
+input[type=text],select{background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:6px 10px}
+.dim{color:var(--dim)}.faint{color:var(--faint)}.sm{font-size:12.5px}
+.row{display:flex;align-items:center;gap:10px}.sp{margin-left:auto}.wrap{flex-wrap:wrap}
+/* sidebar */
+nav{width:236px;flex:none;background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 16px}
+.brand .logo{width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,#1c2a44,#0f1726);border:1px solid var(--line2);display:grid;place-items:center;font-size:20px}
+.brand b{font-size:16px;letter-spacing:.2px}.brand small{display:block;color:var(--faint);font-size:11px;margin-top:-3px}
+nav h6{margin:14px 12px 4px;font-size:10.5px;letter-spacing:1.2px;color:var(--faint);text-transform:uppercase;font-weight:600}
+.item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;color:var(--dim);cursor:pointer;border:1px solid transparent;user-select:none}
+.item:hover{background:#ffffff08;color:var(--fg)}
+.item.on{background:linear-gradient(90deg,#7cc4ff1c,#7cc4ff08);border-color:#7cc4ff30;color:var(--fg)}
+.item .ic{width:20px;text-align:center}
+.tag{margin-left:auto;font-size:9.5px;padding:1px 7px;border-radius:8px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tag.live{background:#4cd9a022;color:var(--ok)}.tag.prev{background:#a78bfa22;color:var(--vio)}.tag.off{background:#ffffff0d;color:var(--faint)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--faint);margin-left:auto}.dot.running{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot.starting{background:var(--warn)}
+.navfoot{margin-top:auto;padding:10px;border-top:1px solid var(--line)}
+/* main */
+.col{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid var(--line);background:#0a0e15cc;backdrop-filter:blur(6px)}
+.top h2{font-size:18px;margin:0;font-weight:600}
+.livepill{display:flex;align-items:center;gap:8px;padding:5px 14px;border-radius:20px;background:var(--panel);border:1px solid var(--line2);font-weight:600;font-size:13px}
+.livepill i{width:9px;height:9px;border-radius:50%;background:var(--faint)}
+.livepill.on{border-color:var(--live);color:#ffd9dd}.livepill.on i{background:var(--live);box-shadow:0 0 10px var(--live);animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.45}}
+#page{flex:1;overflow:auto;padding:24px}
+#page.flush{padding:0;display:flex}
+iframe{flex:1;border:0;width:100%;height:100%;background:var(--bg)}
+/* cards & grid */
+.grid{display:grid;gap:16px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.g-main{grid-template-columns:1.6fr 1fr}
+@media(max-width:1150px){.g3,.g4{grid-template-columns:repeat(2,1fr)}.g-main{grid-template-columns:1fr}}
+.card{background:linear-gradient(180deg,var(--panel),#101622);border:1px solid var(--line);border-radius:var(--r);padding:18px;position:relative}
+.card h3{margin:0 0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;color:var(--dim);text-transform:uppercase}
+.hero{padding:26px;background:linear-gradient(120deg,#17243b,#101622 60%);overflow:hidden}
+.hero.live{background:linear-gradient(120deg,#3a1520,#101622 60%);border-color:#ff475755}
+.hero h1{margin:0 0 4px;font-size:26px}
+.stat{font-size:30px;font-weight:700;letter-spacing:-.5px}.stat small{font-size:12px;color:var(--dim);font-weight:400;display:block;letter-spacing:0}
+.bar{height:8px;background:var(--bg2);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--ice2),var(--ice));border-radius:6px}
+.bar.o i{background:linear-gradient(90deg,#ff7b43,var(--beak))}.bar.g i{background:linear-gradient(90deg,#2fb98a,var(--ok))}
+.pill{display:inline-block;font-size:11px;padding:1px 9px;border-radius:9px;border:1px solid var(--line2);color:var(--dim)}
+.pill.ok{color:var(--ok);border-color:#4cd9a055}.pill.warn{color:var(--warn);border-color:#f5d54755}.pill.live{color:var(--live);border-color:#ff475755}.pill.vio{color:var(--vio);border-color:#a78bfa55}
+.ribbon{position:absolute;top:14px;right:-34px;transform:rotate(35deg);background:#a78bfa;color:#10091f;font-size:10px;font-weight:800;letter-spacing:1px;padding:2px 40px;text-transform:uppercase}
+.banner{display:flex;align-items:center;gap:12px;padding:10px 16px;margin-bottom:18px;border-radius:12px;background:#a78bfa14;border:1px dashed #a78bfa66;color:#cdbdfc}
+/* line list */
+.ln{padding:7px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}
+.ln:last-child{border:0}
+.ln .t{color:var(--faint);font-size:12px;min-width:46px;font-variant-numeric:tabular-nums}
+.w-warn{background:#f5d54733;color:var(--warn);border-radius:4px;padding:0 2px}.w-bad{background:#ff475740;color:#ff8a95;border-radius:4px;padding:0 2px;font-weight:600}.w-fix{color:var(--ok);border-bottom:1px dashed var(--ok)}
+.evt{font:12px/1.7 Consolas,monospace;color:var(--dim)}
+.evt b{color:var(--fg);font-weight:600}.evt .lv{color:var(--live)}.evt .hk{color:var(--ok)}
+/* switch */
+.sw{position:relative;width:38px;height:22px;flex:none}.sw input{display:none}
+.sw span{position:absolute;inset:0;background:var(--line2);border-radius:20px;transition:.15s;cursor:pointer}
+.sw span:after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;left:3px;top:3px;background:#cfd6e6;transition:.15s}
+.sw input:checked+span{background:var(--ice2)}.sw input:checked+span:after{left:19px;background:#fff}
+.setrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.setrow:last-child{border:0}.setrow .grow{flex:1}
+/* chat preview */
+.chatwrap{display:grid;grid-template-columns:1fr 300px;gap:16px;height:calc(100vh - 170px);min-height:520px}
+.chat{display:flex;flex-direction:column;overflow:hidden;padding:0}
+.chat .msgs{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.msg{display:flex;gap:8px;align-items:baseline;padding:3px 6px;border-radius:8px}
+.msg:hover{background:#ffffff08}.msg.hl{background:#ff9f4318;border-left:3px solid var(--beak)}.msg.mod{background:#4cd9a010}
+.plat{font-size:10px;font-weight:800;border-radius:5px;padding:0 5px;color:#fff}
+.plat.tw{background:#9146ff}.plat.yt{background:#e62117}.plat.kk{background:#53fc18;color:#06190a}
+.u{font-weight:700}.badge{font-size:10px;padding:0 5px;border-radius:4px;background:#ffffff14;color:var(--dim)}
+.filters{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.chip{padding:3px 11px;border-radius:14px;border:1px solid var(--line2);font-size:12.5px;color:var(--dim);cursor:pointer}.chip.on{background:#7cc4ff1f;border-color:var(--ice);color:var(--fg)}
+.sendbar{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}.sendbar input{flex:1}
+/* actions preview */
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.node{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:10px 14px;min-width:170px}
+.node small{display:block;color:var(--faint);font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;font-weight:700}
+.node.trg{border-color:#ff9f4355}.node.trg small{color:var(--beak)}.node.cnd{border-color:#f5d54755}.node.cnd small{color:var(--warn)}.node.act small{color:var(--ice)}
+.arrow{align-self:center;padding:0 8px;color:var(--faint)}
+/* voice */
+.wave{display:flex;align-items:center;gap:3px;height:60px}.wave i{width:4px;border-radius:3px;background:linear-gradient(var(--ice),var(--ice2));animation:w 1.2s infinite ease-in-out}
+@keyframes w{50%{transform:scaleY(.35)}}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px}
+.cmd{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}.cmd:last-child{border:0}
+.cmd code{background:var(--bg2);border:1px solid var(--line2);border-radius:7px;padding:1px 8px;color:var(--ice)}
+.slider{width:100%;accent-color:var(--ice)}
+table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+#toast{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px}#toast div{background:var(--panel2);border:1px solid var(--line2);padding:10px 14px;border-radius:10px;box-shadow:var(--shadow)}
+</style>
+</head>
+<body>
+<nav>
+  <div class="brand"><div class="logo">🐧</div><div><b>PinguinoSuite</b><small>stream command center</small></div></div>
+  <div class="item" data-r="dashboard"><span class="ic">▦</span>Dashboard</div>
+  <h6>Modules</h6>
+  <div class="item" data-r="listen"><span class="ic">🎙</span>PinguinoListen<span class="dot" id="dot-listen"></span></div>
+  <div class="item" data-r="voice"><span class="ic">🗣</span>Voice Studio<span class="tag prev">preview</span></div>
+  <div class="item" data-r="chat"><span class="ic">💬</span>Chat<span class="tag prev">preview</span></div>
+  <div class="item" data-r="bots"><span class="ic">🤖</span>Bot Control<span class="tag prev">preview</span></div>
+  <div class="item" data-r="actions"><span class="ic">⚡</span>Actions &amp; Events<span class="tag prev">preview</span></div>
+  <h6>System</h6>
+  <div class="item" data-r="settings"><span class="ic">⚙</span>Settings</div>
+  <div class="navfoot sm dim" id="navfoot"></div>
+</nav>
+<div class="col">
+  <div class="top"><h2 id="title">Dashboard</h2><div class="livepill" id="pill"><i></i><span id="pill-t">Offline</span></div><span class="dim sm" id="pill-sub"></span>
+    <div class="row sp"><button id="simon" class="sm" title="Pretend we went live to test auto-start">▶ Test go-live</button><button id="simoff" class="sm">■ End test</button></div></div>
+  <div id="page"></div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LISTEN='http://127.0.0.1:8765';
+let S=null,L={status:null,lines:[]},route='dashboard';
+const up=t=>{const m=Math.max(0,(Date.now()/1000-t)/60|0);return (m/60|0)+'h '+String(m%60).padStart(2,'0')+'m'};
+const fmt=t=>{t=t|0;return (t/60|0)+':'+String(t%60).padStart(2,'0')};
+const wordsHtml=ws=>ws.map(w=>`<span class="${{warn:'w-warn',bad:'w-bad',fix:'w-fix'}[w.l]||''}">${esc(w.w)}</span>`).join(' ');
+const sw=(id,on,extra='')=>`<label class="sw"><input type="checkbox" id="${id}" ${on?'checked':''} ${extra}><span></span></label>`;
+const bar=(p,c='')=>`<div class="bar ${c}"><i style="width:${Math.min(100,p)}%"></i></div>`;
+const prev=(txt)=>`<div class="banner">✨ <div><b>PREVIEW</b> — a mock-up of a planned module with sample data, so you can see the idea. ${txt||''}</div></div>`;
+const listenMod=()=>S?.modules.find(m=>m.id==='listen');
+
+/* ============ pages ============ */
+const pages={};
+pages.dashboard=()=>{
+  const live=S.live,lm=listenMod(),st=L.status,stats=st?.stats||{};
+  return `
+  <div class="card hero ${live.live?'live':''}" style="margin-bottom:16px">
+    <div class="row wrap"><div>
+      <div class="dim sm">${live.live?(live.simulated===null||live.simulated===undefined?'ON AIR':'ON AIR (TEST)'):'OFFLINE · watching '+esc(S.channel)}</div>
+      <h1>${live.live?esc(live.title||'Live'):'Ready when you are'}</h1>
+      <div class="dim">${live.live?`${esc(live.game||'')} · ${live.viewers} watching · live for ${up(live.since)}`:'The Suite will wake your modules and start your mic the moment you go live.'}</div></div>
+      <div class="row sp"><div class="stat">${live.viewers}<small>viewers</small></div><div class="stat" style="margin-left:24px">${live.live?up(live.since):'—'}<small>uptime</small></div></div></div>
+  </div>
+  <div class="grid g-main">
+    <div class="grid">
+      <div class="card"><h3>PinguinoListen · ${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}</h3>
+        ${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim">${lm?.state==='running'?'Not listening right now — it starts automatically when you go live.':'PinguinoListen is not running.'}</div>`}
+        <div class="row" style="margin-top:12px"><button data-go="listen">Open Listen</button>${st?.listening?'':'<button id="d-listen" class="pri">Start listening</button>'}</div></div>
+      <div class="grid g3">
+        <div class="card"><div class="stat">${stats.total||0}<small>lines transcribed</small></div></div>
+        <div class="card"><div class="stat">${(stats.corrected||0)+(stats.approved||0)}<small>lines you verified</small></div></div>
+        <div class="card"><div class="stat" style="color:var(--warn)">${stats.to_review||0}<small>flagged to review</small></div></div>
+      </div>
+      <div class="card"><h3>Coming up</h3><div class="grid g2">
+        ${[['voice','🗣','Voice Studio','Voice ID, voice commands, talk-like-me'],['chat','💬','Unified Chat','Twitch + YouTube + Kick in one place'],['bots','🤖','Bot Control','Widgets for every bot'],['actions','⚡','Actions & Events','Streamer.bot-style automation']].map(x=>`<div class="item" data-go="${x[0]}" style="border:1px solid var(--line);padding:12px"><span class="ic" style="font-size:20px">${x[1]}</span><div><b style="color:var(--fg)">${x[2]}</b><div class="sm faint">${x[3]}</div></div><span class="tag prev">preview</span></div>`).join('')}</div></div>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div class="setrow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(m.name)}</b><div class="sm faint">${esc(m.state)}</div></div><button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>
+      <div class="card"><h3>Activity</h3><div class="evt" style="max-height:300px;overflow:auto">${S.events.slice(-14).reverse().map(e=>`<div>${new Date(e.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} <b class="${e.type==='live'?'lv':e.type==='hook'?'hk':''}">${e.type}</b> ${esc(e.id||e.state||e.title||'')}</div>`).join('')||'<span class="faint">Nothing yet</span>'}</div></div>
+    </div>
+  </div>`};
+
+pages.listen=()=>`<iframe id="lf" src="${LISTEN}"></iframe>`;
+
+pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max-width:1000px">
+  <div class="card"><h3>Stream</h3>
+    <div class="setrow"><div class="grow">Twitch channel<div class="sm faint">Watched for go-live</div></div><input type="text" id="s-chan" value="${esc(S.channel)}" style="width:190px"></div>
+    <div class="setrow"><div class="grow">Start with Windows<div class="sm faint">Suite launches hidden at login</div></div>${sw('s-wa',S.windows_autostart)}</div></div>
+  <div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div style="padding:6px 0"><b>${esc(m.name)}</b>
+    <div class="setrow"><div class="grow">Start with the Suite</div>${sw('o-'+m.id+'-start_with_suite',m.options.start_with_suite,`data-mod="${m.id}" data-opt="start_with_suite"`)}</div>
+    <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div></div>`};
+
+pages.chat=()=>{const M=[['tw','nightowl_42','mod','#6ea8ff','the new map is actually so good'],['yt','Mira','','#ff8fa3','first time catching the stream, hi!'],['tw','clipgoblin','vip','#c4a1ff','that was cracked LUL'],['kk','dusty','','#7be08f','bro what settings are you on'],['tw','ghostbyte','sub 14mo','#ffb86b','@innocentpenguin_ you said you would do the challenge'],['yt','Tomás','member','#7cc4ff','gg'],['tw','pixelpal','','#ff7a90','the lore in chat is insane'],['tw','snowshoe','sub','#8be9fd','lmao clip it'],['kk','frostfang','','#bd93f9','new viewer here, what game is this']];
+  return prev('One chat for every platform, filtered the way <i>you</i> want.')+`<div class="chatwrap">
+  <div class="card chat"><div class="filters"><span class="chip on">All</span><span class="chip">Twitch</span><span class="chip">YouTube</span><span class="chip">Kick</span><span class="chip">Mentions</span><span class="chip">Questions</span><span class="chip">Subs/Members</span><span class="chip">Heard on mic ✨</span></div>
+    <div class="msgs">${M.map((m,i)=>`<div class="msg ${m[4].includes('@innocent')?'hl':''} ${m[2]==='mod'?'mod':''}"><span class="plat ${m[0]}">${{tw:'TW',yt:'YT',kk:'KK'}[m[0]]}</span>${m[2]?`<span class="badge">${m[2]}</span>`:''}<span class="u" style="color:${m[3]}">${m[1]}</span><span>${m[4]}</span></div>`).join('')}
+      <div class="msg" style="background:#7cc4ff12;border-left:3px solid var(--ice)"><span class="plat" style="background:var(--ice2)">🎙</span><span class="dim sm">you said:</span><span>“the new map is actually so good”</span><span class="pill ok" style="margin-left:auto">matched chat ✓</span></div></div>
+    <div class="sendbar"><select><option>Send to: all</option><option>Twitch</option><option>YouTube</option></select><input type="text" placeholder="Say something in every chat…"><button class="pri">Send</button></div></div>
+  <div class="grid" style="align-content:start;overflow:auto">
+    <div class="card"><h3>Viewer card</h3><b style="font-size:16px">ghostbyte</b> <span class="pill">sub 14mo</span><div class="kv sm" style="margin-top:10px"><span class="faint">First seen</span><span>Mar 2026</span><span class="faint">Messages</span><span>1,284</span><span class="faint">Nickname</span><span>“ghost”</span><span class="faint">Lore</span><span>asked for the challenge twice</span></div><div class="row" style="margin-top:12px"><button class="sm">Timeout</button><button class="sm">Highlight</button></div></div>
+    <div class="card"><h3>Chat pulse</h3>${bar(72)}<div class="sm dim" style="margin:6px 0 10px">72 msgs/min · hype building</div><div class="sm faint">Top emote</div><div>LUL ×41</div></div>
+    <div class="card"><h3>Pinned by you</h3><div class="sm dim">“Challenge promised at ~2h” <span class="pill warn">from voice</span></div></div></div></div>`};
+
+pages.bots=()=>{const B=[['PinguinoChat','Chat bot that talks with viewers','🐧',true,['Chattiness','Lore depth'],[35,70]],['PinguinoHelper','History + lore lookups, viewer nicknames','📚',true,['Reply speed','Detail'],[60,45]],['Moderator','Spam, links, caps filtering','🛡',false,['Strictness','Timeout length'],[50,30]]];
+  return prev('Every bot as a widget — dials, toggles, say-as-bot.')+`<div class="grid g3">${B.map(b=>`<div class="card"><div class="row"><span style="font-size:26px">${b[2]}</span><div><b style="font-size:15px">${b[0]}</b><div class="sm faint">${b[1]}</div></div><span class="sp">${sw('',b[3])}</span></div>
+    ${b[4].map((n,i)=>`<div class="sm dim" style="margin-top:12px">${n} <span class="sp" style="float:right">${b[5][i]}%</span></div><input type="range" class="slider" value="${b[5][i]}">`).join('')}
+    <div class="row" style="margin-top:14px"><span class="pill ${b[3]?'ok':''}">${b[3]?'online':'paused'}</span><span class="sm faint">${b[3]?'12 replies this hour':'—'}</span><button class="sm sp">Say as bot…</button></div></div>`).join('')}
+    <div class="card" style="grid-column:span 3"><h3>Recent bot replies</h3><table><tr><th>Bot</th><th>Trigger</th><th>Reply</th><th></th></tr>
+     <tr><td>PinguinoChat</td><td class="dim">“who is ghostbyte”</td><td>ghostbyte has been here since March and asks about the challenge a lot.</td><td><button class="sm">Delete</button></td></tr>
+     <tr><td>PinguinoHelper</td><td class="dim">!lastgame</td><td>Last time we played this was Oct 12.</td><td><button class="sm">Delete</button></td></tr></table></div></div>`};
+
+pages.actions=()=>prev('Where Streamer.bot-style automations would live. Same idea: a trigger, conditions, then actions.')+`
+  <div class="row" style="margin-bottom:14px"><button class="pri">＋ New action</button><span class="chip on">All</span><span class="chip">Twitch</span><span class="chip">OBS</span><span class="chip">Voice</span><span class="sp dim sm">4 actions · 3 enabled</span></div>
+  ${[['New follower','Follow',null,[['Show alert on screen','OBS'],['Thank them in chat','Chat']],true],
+     ['Voice: “clip that”','Heard on mic','confidence > 80%',[['Create a Twitch clip','Twitch'],['Say “clipped it” in chat','Chat']],true],
+     ['Going live','Stream online',null,[['Switch OBS to Starting scene','OBS'],['Start PinguinoListen','Suite'],['Post go-live message','Chat']],true],
+     ['Raid incoming','Raid','viewers ≥ 10',[['Shoutout the raider','Chat'],['Play raid sound','Audio']],false]].map(a=>`
+  <div class="card" style="margin-bottom:12px"><div class="row" style="margin-bottom:12px"><b style="font-size:15px">${a[0]}</b><span class="sp">${sw('',a[4])}</span></div>
+   <div class="flow"><div class="node trg"><small>Trigger</small>${a[1]}</div>${a[2]?`<span class="arrow">→</span><div class="node cnd"><small>If</small>${a[2]}</div>`:''}${a[3].map(x=>`<span class="arrow">→</span><div class="node act"><small>${x[1]}</small>${x[0]}</div>`).join('')}</div></div>`).join('')}`;
+
+pages.voice=()=>prev('Voice ID, commands, and “talks like me”. Nothing here is wired to anything yet.')+`
+  <div class="grid g2">
+   <div class="card"><h3>Voice ID</h3><div class="wave">${Array.from({length:44},(_, i)=>`<i style="height:${20+Math.abs(Math.sin(i*.7))*40}px;animation-delay:${i*.05}s"></i>`).join('')}</div>
+     <div class="kv sm" style="margin-top:10px"><span class="faint">Profile built from</span><span>live mic sessions + verified lines</span><span class="faint">Your voice so far</span><span>3h 12m</span><span class="faint">Match confidence</span><span><span class="pill ok">94%</span></span></div>
+     <div class="sm dim" style="margin:12px 0 4px">Ready to filter VODs (needs ~10 min)</div>${bar(100,'g')}</div>
+   <div class="card"><h3>Voice commands</h3><div class="sm dim" style="margin-bottom:6px">Always listening, only writes things down until you turn commands on.</div>
+     <div class="setrow"><div class="grow"><b>Listening mode</b><div class="sm faint">Transcribe only</div></div><select><option>Transcribe only</option><option>Wake word</option><option>Push-to-talk</option></select></div>
+     ${[['“clip that”','Create a clip'],['“switch to game”','OBS scene → Gameplay'],['“thanks chat”','Send thank-you']].map(c=>`<div class="cmd"><code>${c[0]}</code><span class="dim">→ ${c[1]}</span><span class="sp">${sw('',false)}</span></div>`).join('')}</div>
+   <div class="card"><h3>Talks like me · text</h3><div class="sm dim">Learned from your verified lines</div>
+     <div style="margin:10px 0">${['no cap','lets gooo','bro what','actually insane','chat','fr fr'].map(x=>`<span class="pill" style="margin:2px">${x}</span>`).join('')}</div>
+     <div class="sm dim">Slang</div><input type="range" class="slider" value="75"><div class="sm dim">Sentence length</div><input type="range" class="slider" value="30"><div class="sm dim">Hype level</div><input type="range" class="slider" value="60">
+     <div class="banner" style="margin:14px 0 0;background:#ffffff08;border-color:var(--line2);color:var(--dim)"><i>“bro that was actually insane, chat did you see that”</i></div></div>
+   <div class="card"><h3>Synthetic voice</h3><div class="sm dim">Clean, verified audio of you only</div><div class="stat" style="margin:8px 0">1.3 h<small>of 10 h collected for a good clone</small></div>${bar(13,'o')}
+     <div class="row" style="margin-top:14px"><button disabled>▶ Hear sample</button><span class="pill vio">training later</span></div></div></div>`;
+
+/* ============ shell ============ */
+const titles={dashboard:'Dashboard',listen:'PinguinoListen',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+function go(r){route=r;$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));$('#title').textContent=titles[r];
+  $('#page').classList.toggle('flush',r==='listen');draw(true)}
+let lastHtml='';
+function draw(force){if(!S)return;const html=pages[route]();
+  if(route==='listen'){if(force||!$('#lf'))$('#page').innerHTML=html;return}
+  if(!force&&html===lastHtml)return;
+  const sc=$('#page').scrollTop,focus=document.activeElement?.id;
+  if(route==='settings'&&!force&&document.activeElement?.tagName==='INPUT')return;
+  $('#page').innerHTML=html;lastHtml=html;$('#page').scrollTop=sc;bind()}
+function bind(){
+  $$('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
+  $$('[data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
+  $('#d-listen')&&($('#d-listen').onclick=async()=>{try{await fetch(LISTEN+'/api/live/auto',{method:'POST'});toast('Listening started');loadListen()}catch{toast('Listen is not running')}});
+  $('#s-chan')&&($('#s-chan').onchange=async e=>{await post('/api/channel',{channel:e.target.value});toast('Channel saved')});
+  $('#s-wa')&&($('#s-wa').onchange=async e=>{await post('/api/windows-autostart',{on:e.target.checked});toast(e.target.checked?'Will start with Windows':'Autostart off')});
+  $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));
+}
+$$('nav .item').forEach(i=>i.onclick=()=>go(i.dataset.r));
+function toast(m){const d=document.createElement('div');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3500)}
+$('#simon').onclick=()=>{post('/api/simulate',{live:true});toast('Simulating go-live…')};
+$('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/simulate',{live:null}));
+
+async function load(){try{S=await (await fetch('/api/state')).json()}catch{return}
+  const l=S.live;$('#pill').classList.toggle('on',l.live);$('#pill-t').textContent=l.live?'LIVE':'Offline';
+  $('#pill-sub').textContent=l.live?`${l.viewers} watching · ${up(l.since)}`:(l.error?'Twitch check: '+l.error.slice(0,60):'');
+  const lm=listenMod();$('#dot-listen').className='dot '+(lm?lm.state:'');
+  $('#navfoot').textContent=`Watching ${S.channel}`;draw()}
+async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status')).json();L.status=st;
+  let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}
+  L.lines=sid?(await (await fetch(`${LISTEN}/api/segments?session=${sid}&limit=500`)).json()).slice(-5):[]}catch{L.status=null;L.lines=[]}
+  if(route==='dashboard')draw()}
+(async()=>{await load();go('dashboard');loadListen();setInterval(load,4000);setInterval(loadListen,3000);
+  const ws=()=>{const w=PG.ws();w.onmessage=()=>load();w.onclose=()=>setTimeout(ws,2000)};ws()})();
+</script>
+</body>
+</html>
