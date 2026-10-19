@@ -44,7 +44,8 @@
     "health": "/api/status",
     "defaults": {
       "enabled": true,
-      "start_with_suite": false
+      "start_with_suite": true,
+      "always_start": true
     },
     "ui": {
       "nav": "Multi",
@@ -68,7 +69,8 @@
     "health": "/api/status",
     "defaults": {
       "enabled": true,
-      "start_with_suite": false
+      "start_with_suite": true,
+      "always_start": true
     },
     "ui": {
       "nav": "Bots / Host",

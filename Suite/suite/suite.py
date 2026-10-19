@@ -43,8 +43,9 @@ def module_token(mid):
 # Who may call: the core's own origin plus the Tauri webview origins (Windows/macOS/Linux).
 ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "tauri://localhost",
                    "http://tauri.localhost", "https://tauri.localhost"}
-# Shared data root handed to every module (honours an existing PINGUINO_DATA_DIR).
-DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data")
+# Shared data root handed to every module: PINGUINO_DATA_DIR if the user set it, else Data/runtime
+# (the folder that holds bots.json, chat_settings.json, host_secrets.json... and that Host and Pipeline default to).
+DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "runtime")
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 # UI source: single copy lives in the Tauri app so the two can't drift.
 UI_INDEX = ROOT.parent / "App" / "src" / "index.html"  # only copy of the UI (the old Suite/suite/static copy was retired)
@@ -115,6 +116,8 @@ class Module:
     def opts(self):
         o = dict(self.spec.get("defaults", {}))
         o.update(load_settings()["modules"].get(self.id, {}))
+        if self.spec.get("defaults", {}).get("always_start"):  # manifest pins these on; saved settings can't turn them off
+            o["enabled"] = o["start_with_suite"] = True
         return o
 
     @property
