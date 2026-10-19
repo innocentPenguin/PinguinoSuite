@@ -127,7 +127,7 @@ namespace PinguinoHost
             }
 
             string worst = items.Any(i => (string)i["status"] == "fail") ? "fail" : items.Any(i => (string)i["status"] == "warn") ? "warn" : "pass";
-            return new JObject { { "ok", true }, { "module", "host" }, { "status", worst }, { "ts", DateTime.UtcNow.ToString("o") }, { "items", new JArray(items) } };
+            return new JObject { { "ok", true }, { "module", "host" }, { "status", worst }, { "ts", DateTime.UtcNow.ToString("o") }, { "items", new JArray(items) }, { "checks", new JArray(items.Select(i => (JObject)i.DeepClone())) } };
         }
 
         static JObject _psCache; static DateTime _psAt = DateTime.MinValue; static readonly object _psLock = new object();

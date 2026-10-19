@@ -19,7 +19,7 @@ namespace PinguinoHost
         public static Func<bool> ObsConnected = () => false;
         static readonly string[] Secret = { "UserToken", "ObsPassword" };
         static readonly string[] Plain = { "Channel", "ClientId", "SenderId", "BroadcasterId", "ObsHost", "ObsPort", "OverlayPort" };
-        public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers";
+        public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers moderation:read";
 
         static string FilePath { get { return Path.Combine(DataDir, "host_secrets.json"); } }
         static JObject Load() { try { return File.Exists(FilePath) ? JObject.Parse(File.ReadAllText(FilePath)) : new JObject(); } catch (Exception) { return new JObject(); } }
