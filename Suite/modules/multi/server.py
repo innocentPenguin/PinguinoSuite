@@ -158,6 +158,17 @@ def status():
 
 
 # messages / search ---------------------------------------------------
+@app.get("/api/setup")
+def setup_info():
+    """Non-secret setup state for the launcher: which secrets exist (booleans only) + plain settings."""
+    s = config.settings()
+    keys = ("priority_mode", "ai_provider", "ai_model", "ai_daily_cap_usd", "voice_enabled", "discord_channels",
+            "tiktok_enabled", "tiktok_user", "channel")
+    return {"settings": {k: s[k] for k in keys},
+            "has": {"discord": bool(secrets_store.get("discord_token")), "youtube": bool(secrets_store.get("youtube_token")),
+                    "ai": bool(secrets_store.get("ai_key")), "twitch": bool(secrets_store.get("twitch_tokens"))}}
+
+
 @app.get("/api/messages")
 def messages(limit: int = 200, platform: str = "", min_tier: str = "", before: float = 0):
     return store.recent(min(limit, 1000), platform or None, min_tier or None, before or None)

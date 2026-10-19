@@ -31,8 +31,26 @@ h4{margin:6px 8px;font-size:.8em;color:var(--mut);text-transform:uppercase;lette
 .empty{color:var(--mut);padding:12px;text-align:center}
 .warn{background:#4a3a14;color:#ffd98a;padding:4px 8px;font-size:.8em}
 body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;height:calc(var(--fs)*1.5 + var(--sp)*2)}
+.launch{padding:10px 14px;overflow:auto;flex:1;max-width:900px;line-height:1.45}
+.launch h2{margin:0 0 4px}.launch h3{margin:18px 0 6px;font-size:1.05em;display:flex;align-items:center;gap:8px}
+.launch .n{background:#2f6fdb;color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.8em}
+.mut{color:var(--mut)}.intro{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px}.intro p{margin:6px 0}
+.hlp{display:inline-flex;width:15px;height:15px;border-radius:50%;background:var(--line);color:var(--mut);font-size:.7em;align-items:center;justify-content:center;cursor:help}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:6px 0;padding:8px 12px}.pcard summary{cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pcard label{display:flex;flex-direction:column;gap:3px;margin:8px 0;font-size:.9em}.pcard label.chk,.box label.chk{flex-direction:row;align-items:center;gap:6px}
+.how{color:var(--mut);margin:8px 0;font-size:.9em}.how.warn{color:#ffd98a}.detail{margin:6px 0 0;color:var(--mut);font-size:.85em}
+.st{font-size:.85em}.st.ok{color:var(--ok)}.st.todo,.st.wait{color:var(--med)}.st.bad{color:var(--hi)}.st.off{color:var(--mut)}
+.tag{font-size:.7em;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--med)}.okc{color:var(--ok)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin:6px 0}.grid.small{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.tile{display:flex;flex-direction:column;gap:3px;text-align:left;background:var(--card);border:1px solid var(--line);padding:8px 10px;border-radius:8px}.tile small{color:var(--mut)}
+.wrow{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)}.grow{flex:1}
+.box{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:8px 0;display:flex;flex-direction:column;gap:6px}
+.box label{display:flex;flex-direction:column;gap:3px;font-size:.9em}.box details{margin:4px 0}
+.tok,.tbad{padding:6px 10px;border-radius:6px;margin:8px 0}.tok{background:#12301f;color:#8de0b5}.tbad{background:#3a1717;color:#ffb0b0}
+.chk-row{padding:4px 0}.keys{margin-top:18px;font-size:.85em}
 </style></head><body>
 <header id="hdr"></header><div id="body" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
+<script src="/assets/launcher.js"></script>
 <script>
 const q = new URLSearchParams(location.search), WID = q.get('win');
 let W = {type: q.get('type') || 'launcher', platforms: [], min_tier: 'none'};
@@ -189,31 +207,5 @@ async function renderStatus() {
   $('#body').innerHTML = `<div class="status"><div>Mode: <b>${esc(s.mode)}</b> &middot; queue ${s.queue} &middot; in ${s.stats.in}, dupes ${s.stats.dupes}, dropped ${s.stats.dropped}</div>` +
     s.connectors.map(c => `<div><span class="dot ${c.status}"></span> <b>${esc(c.label)}</b> ${esc(c.status)} ${esc(c.detail || '')}<br><small>${c.official ? 'official API' : 'UNOFFICIAL'} &middot; ${Object.entries(c.capabilities).filter(([, v]) => v).map(([k]) => k).join(', ')} &middot; reconnects ${c.reconnects}</small></div>`).join('') + '</div>';
 }
-async function renderLauncher() {
-  const [ws, pf, st] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status')]);
-  $('#body').innerHTML = `<div class="status"><h4>Twitch</h4><div class="act"><a href="${esc(st.twitch_connect_url)}" target="_blank" rel="noopener"><button type="button">Connect Twitch (log in to the site as the owner first)</button></a> <button id="oc">Open in my browser</button> <button id="ck">Run checks</button> <button id="dc">Disconnect</button></div><div id="checks"><small>Connect link: ${esc(st.twitch_connect_url)}</small></div><h4>Profiles</h4><div class="act">${pf.builtin.concat(pf.saved.filter(p => !pf.builtin.includes(p))).map(p => `<button data-p="${esc(p)}">${esc(p)}</button>`).join('')}</div>
-  <h4>Add window</h4><div class="act">${['unified', 'priority', 'missed', 'composer', 'status', 'first'].map(t => `<button data-t="${t}">+ ${t}</button>`).join('')}</div>
-  <h4>Windows</h4>${ws.map(w => `<div>${esc(w.type)} ${esc(w.id)} <button data-l="${w.id}">Open</button> <button data-x="${w.id}">Delete</button></div>`).join('') || '<div class="empty">None. Pick a profile.</div>'}
-  <h4>What I learned</h4><div class="act"><button id="ln">Show</button> <button id="lr">Reset learning</button></div><div id="learn"><small>Nudges stay small and need 5+ of your actions per rule.</small></div>
-  <div><button id="rs">Restore all</button> <button id="sp">Save current as profile</button></div></div>`;
-}
-document.addEventListener('click', async e => {
-  const t = e.target; if (W.type !== 'launcher') return;
-  if (t.dataset.p) await api('/api/profiles/' + encodeURIComponent(t.dataset.p) + '/apply');
-  else if (t.dataset.t) { const w = await api('/api/windows', {b: {type: t.dataset.t}}); await api('/api/windows/' + w.id + '/launch'); }
-  else if (t.dataset.l) await api('/api/windows/' + t.dataset.l + '/launch');
-  else if (t.dataset.x) await api('/api/windows/' + t.dataset.x, {m: 'DELETE'});
-  else if (t.id === 'oc') { await api('/api/open-connect', {b: {}}); return; }
-  else if (t.id === 'ck') { const box = $('#checks'); box.textContent = 'Checking...'; const r = await api('/api/checks');
-    box.innerHTML = r.checks.map(c => `<div><span class="dot ${c.ok ? 'connected' : 'error'}"></span> <b>${esc(c.label)}</b> ${esc(c.detail)}${c.ok ? '' : `<br><small>Fix: ${esc(c.fix)}</small>`}</div>`).join(''); return; }
-  else if (t.id === 'ln') { const r = await api('/api/learning'); const k = Object.keys(r.rules);
-    $('#learn').innerHTML = k.map(n => { const v = r.rules[n]; return `<div><b>${esc(n)}</b> ${v.delta > 0 ? '+' : ''}${v.delta} pts <small>(${v.n} actions, net ${v.net}, cap ${v.cap}${v.delta ? '' : ', not enough evidence yet'})</small></div>`; }).join('') || '<div class="empty">Nothing learned yet.</div>'; return; }
-  else if (t.id === 'lr') { await api('/api/learning/reset', {b: {}}); $('#learn').innerHTML = '<div class="empty">Learning reset.</div>'; return; }
-  else if (t.id === 'dc') await api('/auth/disconnect', {b: {}});
-  else if (t.id === 'rs') await api('/api/windows/restore');
-  else if (t.id === 'sp') { const n = prompt('Profile name'); if (n) await api('/api/profiles/' + encodeURIComponent(n) + '/save'); }
-  else return;
-  renderLauncher();
-});
 init();
 </script></body></html>
