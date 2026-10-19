@@ -895,3 +895,76 @@ def test_platform_marker_setting_and_logo_validation():
     assert s["base"]["marker"] == "both" and s["marker"]["youtube"] == {"size": 40, "color": "#ff0000"}
     assert s["marker"]["tiktok"] == {"size": 10, "color": ""} and set(s["marker"]) == set(chatstyle.PLATFORMS)
     assert chatstyle.sanitize({"base": {"marker": "huge"}})["base"]["marker"] == "text"
+
+
+# assisted chat --------------------------------------------------------
+def _assist(tmp_path, monkeypatch, reply=None, key="k"):
+    import config, ai, assist, secrets_store
+    from store import Store
+    st = Store(tmp_path / "a.db")
+    adv = ai.Advisor(st)
+    calls = []
+
+    def fake(prov, model, k, prompt, timeout, max_tokens=30):
+        calls.append(prompt)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+    monkeypatch.setattr(secrets_store, "get", lambda n, d=None: key if n == "ai_key" else d)
+    return assist.Assist(st, adv, call=fake), adv, calls
+
+
+def test_assist_suggest_ai_cache_cap_and_cleaning(tmp_path, monkeypatch):
+    import asyncio
+    a, adv, calls = _assist(tmp_path, monkeypatch, reply='{"replies": ["Hey! check https://evil.example now @bob", "ok", "  love it  "]}')
+    m = {"text": "what game is this?", "platform": "twitch", "display": "Al", "user": "al"}
+    r = asyncio.run(a.suggest(m, [{"text": "hi"}]))
+    assert r["source"] == "ai" and r["replies"][0] == "Hey! check now" and "http" not in " ".join(r["replies"]) and len(r["replies"]) == 3
+    assert asyncio.run(a.suggest(m, []))["cached"] and len(calls) == 1               # second ask is free
+    assert adv.spend()["usd"] > 0 and "DATA" in calls[0]
+    monkeypatch.setattr("config.settings", lambda: dict(config_defaults(), ai_daily_cap_usd=0.0))
+    r2 = asyncio.run(a.suggest(dict(m, text="another one?"), []))
+    assert r2["source"] == "templates" and "cap" in r2["why"]                          # capped -> templates, no call
+
+
+def config_defaults():
+    import config
+    return dict(config.DEFAULTS)
+
+
+def test_assist_fallbacks_templates_translate_and_foreign_hint(tmp_path, monkeypatch):
+    import asyncio, assist
+    a, adv, calls = _assist(tmp_path, monkeypatch, reply=RuntimeError("boom"), key=None)
+    r = asyncio.run(a.suggest({"text": "hello?", "platform": "twitch", "display": "Zed", "user": "zed"}, []))
+    assert r["source"] == "templates" and r["replies"][0] == "Thanks Zed!" and not calls            # no key: nothing was sent
+    assert asyncio.run(a.translate({"text": "hola amigos"}))["source"] == "none"
+    assert a.set_templates(["a {name}", "", "b"]) == ["a {name}", "b"] and a.templates() == ["a {name}", "b"]
+    assert assist.looks_foreign("こんにちは みなさん") and not assist.looks_foreign("hello there") and not assist.looks_foreign("lol")
+    a2, _, c2 = _assist(tmp_path, monkeypatch, reply="Hello friends")
+    assert asyncio.run(a2.translate({"text": "hola amigos"})) == {"source": "ai", "text": "Hello friends"}
+
+
+def test_chatter_card_manual_mark_and_assist_routes(tmp_path, monkeypatch):
+    import config, server
+    from fastapi.testclient import TestClient
+    from store import Store
+    st = Store(tmp_path / "c.db")
+    monkeypatch.setattr(server, "store", st)
+    monkeypatch.setattr(server.pipeline, "store", st)
+    monkeypatch.setattr(server.pipeline.assist, "store", st)
+    monkeypatch.setattr(server.cards, "store", st)
+    now = time.time()
+    server.pipeline.ingest(ChatMessage(id="twitch:c:x1", platform="twitch", channel="c", user_id="u9", user="zed", display="Zed", text="nice", ts=now - 3600, badges=["subscriber"]))
+    out = server.pipeline.ingest(ChatMessage(id="twitch:c:x2", platform="twitch", channel="c", user_id="u9", user="zed", display="Zed", text="lol ok", ts=now))
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    h = {"origin": "http://127.0.0.1:8766"}
+    ch = c.get("/api/chatter/twitch/u9").json()
+    assert ch["messages"] == 2 and ch["badges"] == ["subscriber"] and ch["first_seen"] < ch["last_seen"] and not ch["muted"]
+    assert c.get("/api/chatter/twitch/nobody").status_code == 404
+    card = c.post("/api/cards/manual", json={"message_id": "twitch:c:x2"}, headers=h).json()
+    assert card["state"] == "open" and card["reasons"][0]["rule"] == "marked" and card["id"] in server.cards.cards
+    assert c.post("/api/cards/manual", json={"message_id": "twitch:c:none"}, headers=h).status_code == 404
+    assert c.post("/api/templates", json={"templates": ["x {name}"]}, headers=h).json() == {"templates": ["x {name}"]}
+    s = c.post("/api/assist/suggest", json={"message_id": "twitch:c:x2"}, headers=h).json()
+    assert s["source"] == "templates" and s["replies"] == ["x Zed"]                                  # no AI key in tests

@@ -22,17 +22,17 @@ PROMPT = ("You help a livestreamer pick which chat messages deserve a personal r
           "User: {user}\nMessage: {text}")
 
 
-def _http(provider, model, key, prompt, timeout):
+def _http(provider, model, key, prompt, timeout, max_tokens=30):
     if provider == "anthropic":
         r = requests.post("https://api.anthropic.com/v1/messages", timeout=timeout,
                           headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-                          json={"model": model, "max_tokens": 30, "messages": [{"role": "user", "content": prompt}]})
+                          json={"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]})
         r.raise_for_status()
         return r.json()["content"][0]["text"]
     if provider == "openai":
         r = requests.post("https://api.openai.com/v1/chat/completions", timeout=timeout,
                           headers={"Authorization": f"Bearer {key}"},
-                          json={"model": model, "max_tokens": 30, "messages": [{"role": "user", "content": prompt}]})
+                          json={"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]})
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
     if provider == "ollama":

@@ -8,6 +8,7 @@ import time
 import config
 import ai
 import console_log
+import assist as assist_mod
 import ding as ding_mod
 import pop as pop_mod
 import dedupe
@@ -24,6 +25,7 @@ class Pipeline:
         self.seen = dedupe.Seen()
         self.rules = prio.load_rules()
         self.advisor = ai.Advisor(store)
+        self.assist = assist_mod.Assist(store, self.advisor)
         self.ding = ding_mod.Ding(store)
         self.pop = pop_mod.Pop()
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
@@ -96,7 +98,7 @@ class Pipeline:
         t = self.rules["tiers"]
         tier = "high" if score >= t["high"] else "medium" if score >= t["medium"] else "low" if score >= t["low"] else "none"
         reasons = out["reasons"] + [{"rule": "ai", "points": res["delta"], "detail": res["detail"]}]
-        self.store.update_score(out["id"], score, tier)
+        self.store.update_score(out["id"], score, tier, reasons)
         card = self.cards.cards.get("c:" + out["id"])
         if card and card["state"] == "open":
             card.update(score=score, tier=tier, reasons=reasons)

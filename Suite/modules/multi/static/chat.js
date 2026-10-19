@@ -11,9 +11,9 @@ fetch('/api/pins').then(r => r.json()).then(r => { PINS = r.pins || []; }).catch
 
 const CF = (() => {
   const k = 'multi-chat-' + (typeof WID !== 'undefined' && WID ? WID : 'page');
-  let f = {off: [], bots: 'dim', prio: false, strip: true};
+  let f = {off: [], bots: 'dim', prio: false, strip: true, q: false};
   try { f = Object.assign(f, JSON.parse(localStorage.getItem(k) || '{}')); } catch (e) { /* storage may be blocked */ }
-  f.save = () => { try { localStorage.setItem(k, JSON.stringify({off: f.off, bots: f.bots, prio: f.prio, strip: f.strip})); } catch (e) { /* ignore */ } };
+  f.save = () => { try { localStorage.setItem(k, JSON.stringify({off: f.off, bots: f.bots, prio: f.prio, strip: f.strip, q: f.q})); } catch (e) { /* ignore */ } };
   return f;
 })();
 let chatTarget = null, searchTerm = '', searchSeq = 0;
@@ -32,9 +32,14 @@ const mentionsMe = m => { const t = (m.text || '').toLowerCase(); return !isBot(
 const colourOf = m => /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '';
 const canMod = m => m.platform === 'twitch' && !isBot(m) && (conns.find(c => c.platform === 'twitch') || {capabilities: {}}).capabilities;
 
+const MSGC = new Map();
+const foreignText = t => { const l = [...String(t)].filter(c => /\p{L}/u.test(c)); return l.length >= 4 && l.filter(c => c.charCodeAt(0) > 127).length / l.length > 0.3; };
+const msgById = id => MSGC.get(id) || msgs.find(m => m.id === id) || null;
+const isQuestionForMe = m => (m.reasons || []).some(r => ['question', 'mention', 'reply_to_me'].includes(r.rule)) || (/\?/.test(m.text || '') && mentionsMe(m)) || m.event === 'cheer';
 function chatVisible(m) {
   if (CF.off.includes(m.platform) || !pass(m)) return false;
   if (CF.bots === 'hide' && isBot(m)) return false;
+  if (CF.q && !isBot(m) && !isQuestionForMe(m)) return false;
   if (CF.prio && !isBot(m) && !(TIERS[m.tier || 'none'] >= TIERS.medium)) return false;
   return true;
 }
@@ -45,12 +50,16 @@ function chatMsg(m, opts = {}) {
   const rep = m.reply_to_user ? `<span class="rep">&#8618; ${esc(m.reply_to_user)}</span>` : '';
   const flag = bot ? '<span class="bt">bot</span>' : (m.first_time ? '<span class="bt first">first</span>' : '');
   const col = colourOf(m);
-  const tools = opts.plain || !m.id ? '' : `<span class="tools">${bot ? '' : `<button data-reply="${esc(m.id)}" title="Reply (goes to ${esc(m.platform)} only)">&#8617;</button>`}
+  if (m.id && !opts.plain) { MSGC.set(m.id, m); if (MSGC.size > 1500) MSGC.delete(MSGC.keys().next().value); }
+  const assistBtns = opts.plain || !m.id || m.event || bot ? '' : `<button data-suggest="${esc(m.id)}" title="Suggest replies (you approve, nothing is sent by itself)">&#128161;</button>
+    ${foreignText(m.text) ? `<button data-translate="${esc(m.id)}" title="Translate to English">&#127760;</button>` : ''}<button data-mark="${esc(m.id)}" title="Mark to answer (adds a priority card)">&#9733;</button>
+    <button data-mute="${esc(m.user)}" title="Mute this viewer in the ranking (local)">&#128263;</button>`;
+  const tools = opts.plain || !m.id ? '' : `<span class="tools">${assistBtns}${bot ? '' : `<button data-reply="${esc(m.id)}" title="Reply (goes to ${esc(m.platform)} only)">&#8617;</button>`}
     <button data-pin="${esc(m.id)}" title="Pin to the top">&#128204;</button>
     ${caps.mod_timeout ? `<button data-mod="timeout" data-id="${esc(m.id)}" title="Timeout 10 min">&#9201;</button><button data-mod="ban" data-id="${esc(m.id)}" title="Ban">&#9940;</button>` : ''}
     ${caps.mod_delete ? `<button data-mod="delete" data-id="${esc(m.id)}" title="Delete this message">&#128465;</button>` : ''}</span>`;
   return `<div class="msg tier-${m.tier} ${styleClasses(m)}${bot ? ' bot' : ''}${CF.bots === 'dim' ? '' : ' nodim'}${mine ? ' self' : ''}${mod ? ' modmsg' : ''}" data-mid="${esc(m.id)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
-    <span class="t">${hhmm(m.ts)}</span>${markerHtml(m.platform)}${badgeHtml(m)}<span class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</span>${flag}${eventLabel(m)}${rep}${bodyHtml(m)}${tools}</div>`;
+    <span class="t">${hhmm(m.ts)}</span>${markerHtml(m.platform)}${badgeHtml(m)}<span class="u" ${col ? `style="color:${col}"` : ''} ${opts.plain || !m.user_id ? '' : `data-chatter="${esc(m.platform)}|${esc(m.user_id)}|${esc(m.id)}" title="Who is this?"`}>${esc(m.display || m.user)}</span>${flag}${eventLabel(m)}${rep}${bodyHtml(m)}${tools}</div>`;
 }
 function chatAdd(m) {
   if (searchTerm) return;
@@ -88,6 +97,7 @@ function chatCompose() {
   if (!sendable.length) { box.innerHTML = '<div class="mut cnone">Replying is off: no connected platform can send yet. Set one up in the Multi launcher.</div>'; return; }
   const cur = ($('#cplat') || {}).value;
   box.innerHTML = `${chatTarget ? `<div class="ctgt">Replying to <b>${esc(chatTarget.display || chatTarget.user)}</b>: ${esc((chatTarget.text || '').slice(0, 50))} <button class="lnk" data-cf="clr">cancel</button></div>` : ''}
+    <div class="tpls">${TPLS.map((t, i) => `<button class="chip2" data-tpl="${i}" title="${esc(t)}">${esc(t.length > 26 ? t.slice(0, 25) + '...' : t)}</button>`).join('')}<button class="lnk" data-assist="tpls">edit</button></div>
     <div class="row"><select id="cplat" title="A message goes to this ONE platform only">${sendable.map(c => `<option value="${esc(c.platform)}">${esc(c.label)}</option>`).join('')}</select>
     <input id="ctxt" maxlength="500" placeholder="Type a reply - goes to the platform on the left only" style="flex:1"><button class="p" id="cgo">Send</button></div><div id="cres" class="mut"></div>`;
   if (chatTarget && sendable.some(c => c.platform === chatTarget.platform)) $('#cplat').value = chatTarget.platform;
@@ -109,6 +119,7 @@ function chatBar() {
   const keep = $('#csearch') ? $('#csearch').value : searchTerm;
   $('#cbar').innerHTML = `${plats}<input id="csearch" type="search" placeholder="Search chat..." value="${esc(keep)}" style="width:140px">
     <button class="chip2" data-cf="bots" title="Cycle how replies from bots (and you) are shown">${botLbl}</button>
+    <button class="chip2 ${CF.q ? 'on' : ''}" data-cf="q" title="Only messages that look like a question for you or mention you">Questions for me</button>
     <button class="chip2 ${CF.prio ? 'on' : ''}" data-cf="prio" title="Only show messages worth answering (plus bot replies)">Priority only</button>
     <a class="chip2" href="/?type=style" target="_self" title="Fonts, colours, backgrounds and highlights">Look</a>
     <a class="chip2" href="/" target="_self" title="Setup, layouts, smart features">Setup</a>`;
@@ -128,7 +139,7 @@ function chatNotice(text) {
   f.insertAdjacentHTML('beforeend', `<div class="notice msg e-modaction">${esc(text)}</div>`); f.scrollTop = f.scrollHeight;
 }
 function renderChat() {
-  $('#body').innerHTML = `<div id="cbar" class="cbar"></div><div id="cpins"></div><div id="cstrip" class="cstrip"></div><div id="cfeed" class="cfeed"></div><div id="ccomp" class="ccomp"></div>`;
+  $('#body').innerHTML = `<div id="cbar" class="cbar"></div><div id="cpins"></div><div id="cstrip" class="cstrip"></div><div id="cfeed" class="cfeed"></div><div id="cassist" class="cassist" hidden></div><div id="ccomp" class="ccomp"></div>`;
   chatBar(); chatPins(); chatStrip(); chatFeed(); chatCompose();
 }
 
@@ -175,7 +186,82 @@ document.addEventListener('click', async e => {
   if (k === 'plat') { const p = d.p; CF.off = CF.off.includes(p) ? CF.off.filter(x => x !== p) : CF.off.concat(p); chatBar(); chatFeed(); chatStrip(); }
   else if (k === 'bots') { CF.bots = {dim: 'show', show: 'hide', hide: 'dim'}[CF.bots]; chatBar(); chatFeed(); }
   else if (k === 'prio') { CF.prio = !CF.prio; chatBar(); chatFeed(); }
+  else if (k === 'q') { CF.q = !CF.q; chatBar(); chatFeed(); }
   else if (k === 'strip') { CF.strip = !CF.strip; chatStrip(); }
   else if (k === 'clr') { chatTarget = null; chatCompose(); }
   CF.save();
+});
+
+// ---------------------------------------------------------------- assisted chat
+let TPLS = [];
+fetch('/api/templates').then(r => r.json()).then(r => { TPLS = r.templates || []; if (W.type === 'chat') chatCompose(); }).catch(() => {});
+const rel = ts => { const s = Date.now() / 1000 - ts; return s < 90 ? 'just now' : s < 5400 ? Math.round(s / 60) + ' min ago' : s < 129600 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' days ago'; };
+function assistOpen(html) { const p = $('#cassist'); if (!p) return; p.hidden = false; p.innerHTML = `<div class="ahd"><b>Assist</b><button class="lnk" data-assist="close">close</button></div>${html}`; }
+async function postJson(path, body) {
+  const r = await fetch(path, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body || {})});
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || r.status); return j;
+}
+async function assistChatter(platform, uid, mid) {
+  assistOpen('<div class="mut">Loading...</div>');
+  try {
+    const c = await (await fetch(`/api/chatter/${encodeURIComponent(platform)}/${encodeURIComponent(uid)}`)).json();
+    if (c.detail) throw new Error(c.detail);
+    const caps = (conns.find(x => x.platform === 'twitch') || {capabilities: {}}).capabilities;
+    assistOpen(`<div class="chcard"><div><b ${/^#/.test(c.color) ? `style="color:${esc(c.color)}"` : ''}>${esc(c.display)}</b> <span class="pf pf-${esc(platform)}">${esc(platform)}</span>
+      ${c.badges.map(b => `<span class="bt">${esc(b)}</span>`).join('')}${c.muted ? '<span class="bt">muted</span>' : ''}</div>
+      <div class="mut">First seen ${rel(c.first_seen)} &middot; last ${rel(c.last_seen)} &middot; ${c.messages} message(s) &middot; you answered ${c.cards.answered}, missed ${c.cards.missed}</div>
+      <div class="chrec">${c.recent.map(r => `<div>${esc(r.text)}</div>`).join('')}</div>
+      <label>Private note <textarea id="cnote" maxlength="500" rows="2" placeholder="e.g. likes Elden Ring, birthday in May">${esc(c.note)}</textarea></label>
+      <div class="act"><button class="p" data-assist="savenote" data-user="${esc(c.user)}">Save note</button>
+        ${mid ? `<button data-suggest="${esc(mid)}">Suggest replies</button>` : ''}
+        <button data-mute="${esc(c.user)}" data-muted="${c.muted ? '0' : '1'}">${c.muted ? 'Unmute' : 'Mute'} in ranking</button>
+        ${platform === 'twitch' && caps.mod_timeout && mid ? `<button data-mod="timeout" data-id="${esc(mid)}">Timeout 10 min</button><button data-mod="ban" data-id="${esc(mid)}">Ban</button>` : ''}</div></div>`);
+  } catch (e) { assistOpen(`<div class="mut">No history for this chatter yet (${esc(e.message)}).</div>`); }
+}
+async function assistSuggest(mid) {
+  const m = msgById(mid); if (!m) return;
+  assistOpen(`<div class="mut">Drafting replies to <b>${esc(m.display || m.user)}</b>: ${esc((m.text || '').slice(0, 80))}</div><div class="mut">Thinking...</div>`);
+  try {
+    const r = await postJson('/api/assist/suggest', {message_id: mid});
+    assistOpen(`<div class="mut">Replies to <b>${esc(m.display || m.user)}</b>: ${esc((m.text || '').slice(0, 80))}</div>
+      ${r.replies.map((t, i) => `<div class="sug"><span>${esc(t)}</span><span class="act"><button data-assist="use" data-i="${i}" data-id="${esc(mid)}">Use</button><button class="p" data-assist="send" data-i="${i}" data-id="${esc(mid)}">Send</button></span></div>`).join('')}
+      <small class="mut">${r.source === 'ai' ? 'Drafted by AI. Nothing is sent until you click Send.' : 'Quick-reply templates (' + esc(r.why || 'no AI') + '). Add an AI key in setup for smarter drafts.'}</small>`);
+    window.__sug = r.replies;
+  } catch (e) { assistOpen(`<div class="mut">Could not draft replies: ${esc(e.message)}</div>`); }
+}
+async function assistTranslate(mid) {
+  const m = msgById(mid); if (!m) return;
+  assistOpen(`<div class="mut">Translating...</div>`);
+  try {
+    const r = await postJson('/api/assist/translate', {message_id: mid});
+    assistOpen(`<div class="mut">${esc(m.display || m.user)} wrote:</div><div>${esc(m.text)}</div>
+      <div class="mut" style="margin-top:6px">${r.source === 'ai' ? 'English:' : 'Translation unavailable (' + esc(r.why || 'no AI key') + ').'}</div><div><b>${esc(r.text || '')}</b></div>`);
+  } catch (e) { assistOpen(`<div class="mut">Could not translate: ${esc(e.message)}</div>`); }
+}
+document.addEventListener('click', async e => {
+  if (W.type !== 'chat') return;
+  const u = e.target.closest('[data-chatter]');
+  if (u) { const [pl, uid, mid] = u.dataset.chatter.split('|'); assistChatter(pl, uid, mid); return; }
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  try {
+    if (d.suggest) { assistSuggest(d.suggest); return; }
+    if (d.translate) { assistTranslate(d.translate); return; }
+    if (d.mark) { await postJson('/api/cards/manual', {message_id: d.mark}); cards = await api('/api/cards'); chatStrip(); chatNotice('Marked to answer: it is now a priority card.'); return; }
+    if (d.mute) { await postJson('/api/viewers/' + encodeURIComponent(d.mute) + '/mute', {muted: d.muted !== '0'}); chatNotice((d.muted === '0' ? 'Unmuted ' : 'Muted ') + d.mute + ' in the ranking.'); return; }
+    if (d.tpl !== undefined) { const t = (TPLS[+d.tpl] || '').replace('{name}', chatTarget ? (chatTarget.display || chatTarget.user) : '').replace(/\s+/g, ' ').trim(); const i = $('#ctxt'); if (i) { i.value = (i.value ? i.value + ' ' : '') + t; i.focus(); } return; }
+    const a = d.assist; if (!a) return;
+    if (a === 'close') { $('#cassist').hidden = true; }
+    else if (a === 'savenote') { await postJson('/api/viewers/' + encodeURIComponent(d.user) + '/note', {note: $('#cnote').value}); b.textContent = 'Saved'; }
+    else if (a === 'use' || a === 'send') {
+      const m = msgById(d.id), text = (window.__sug || [])[+d.i]; if (!m || !text) return;
+      if (a === 'use') { chatTarget = m; chatCompose(); const i = $('#ctxt'); if (i) { i.value = text; i.focus(); } return; }
+      await postJson('/api/send', {platform: m.platform, text, reply_to: m.id, card_id: 'c:' + m.id});
+      cards = await api('/api/cards'); chatStrip(); b.textContent = 'Sent'; b.disabled = true;
+    }
+    else if (a === 'tpls') {
+      assistOpen(`<label>Quick replies, one per line. {name} becomes the chatter's name.<textarea id="ctpls" rows="6">${esc(TPLS.join('\n'))}</textarea></label><div class="act"><button class="p" data-assist="savetpls">Save</button></div>`);
+    }
+    else if (a === 'savetpls') { const r = await postJson('/api/templates', {templates: $('#ctpls').value.split('\n')}); TPLS = r.templates; chatCompose(); $('#cassist').hidden = true; }
+  } catch (err) { assistOpen(`<div class="mut">That did not work: ${esc(err.message)}</div>`); }
 });

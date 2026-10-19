@@ -1,6 +1,7 @@
 """Tokens live in Windows Credential Manager (macOS Keychain later) via `keyring`; never in JSON or logs.
 Falls back to an in-memory dict when no keyring backend works (tokens then last only for this run)."""
 import json
+import os
 
 import vault
 
@@ -9,6 +10,8 @@ _mem = {}
 
 
 def _kr():
+    if os.environ.get("MULTI_NO_KEYRING"):      # test servers: never touch the real Credential Manager
+        return None
     try:
         import keyring
         return keyring

@@ -48,15 +48,21 @@ class Store:
                 self.db.execute(
                     "INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                     (m.id, m.platform, m.channel, m.user_id, m.user, m.display, m.text, m.ts,
-                     json.dumps(m.to_dict()), decision.score, decision.tier))
+                     json.dumps(dict(m.to_dict(), reasons=decision.reasons)), decision.score, decision.tier))
                 self.db.commit()
                 return True
             except sqlite3.IntegrityError:
                 return False
 
-    def update_score(self, mid, score, tier):
+    def update_score(self, mid, score, tier, reasons=None):
         with self.lock:
             self.db.execute("UPDATE messages SET score=?, tier=? WHERE id=?", (score, tier, mid))
+            if reasons is not None:
+                r = self.db.execute("SELECT json FROM messages WHERE id=?", (mid,)).fetchone()
+                if r:
+                    d = json.loads(r["json"])
+                    d["reasons"] = reasons
+                    self.db.execute("UPDATE messages SET json=? WHERE id=?", (json.dumps(d), mid))
             self.db.commit()
 
     def get_message(self, mid):

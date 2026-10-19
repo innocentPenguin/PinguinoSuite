@@ -120,6 +120,12 @@ async function renderLauncher() {
     <div class="act"><button class="p" data-act="pop-save">Save</button></div>
     <small class="mut">${pp.played} pop(s) played${pp.dropped ? ', ' + pp.dropped + ' skipped during bursts' : ''}.</small></div>
 
+  <h3>Split chat across two monitors ${T('', 'One continuous chat: the newest messages in one window and the older ones continuing in the other.')}</h3>
+  <div class="box"><small class="mut">Opens two chat windows in the app that share one feed. Works inside the Pinguino app; in a normal browser use the Windows section above.</small>
+    <div class="row"><label>Older messages (top / left) on <select id="sp-a"></select></label><label>Newest messages (bottom / right) on <select id="sp-b"></select></label>
+      <label>Layout <select id="sp-dir"><option value="top">stacked (top + bottom)</option><option value="left">side by side (left + right)</option></select></label></div>
+    <div class="act"><button class="p" data-act="split-open">Open split chat</button> <button data-act="split-close">Close split chat</button> <span id="sp-state" class="mut"></span></div></div>
+
   <h3>Smart features</h3>
   <div class="box"><b>How messages are ranked ${T('', 'Local rules always work with no internet and no account. AI only double-checks borderline messages.')}</b>
     ${[['local', 'Local only', 'Free and instant. Explainable rules; nothing leaves your PC.'],
@@ -214,6 +220,12 @@ document.addEventListener('click', async e => {
       toast(plats.length ? 'Saved. Chat pop is ON for ' + plats.join(', ') + '.' : 'Saved. Chat pop is off.'); }
     else if (a === 'ding-reset') { await api('/api/ding/reset', {b: {}}); toast('Cleared. Everyone counts as new again.'); }
     else if (a === 'ding-pick') { toast('A file window opened on this PC...'); const r = await api('/api/ding/pick', {b: {}}); if (r.path) $('#' + t.dataset.target).value = r.path; return; }
+    else if (a === 'split-open' || a === 'split-close') {
+      if (parent === window) { toast('Split chat opens windows through the Pinguino app. Open Multi from the app, or use Add window.', false); return; }
+      const dir = $('#sp-dir').value, second = dir === 'top' ? 'bottom' : 'right';
+      if (a === 'split-close') { ['chat-a', 'chat-b'].forEach(label => parent.postMessage({pinguino: 'window', op: 'close', label}, '*')); toast('Split chat closed.'); return; }
+      const open = (label, half, monitor, place) => parent.postMessage({pinguino: 'window', op: 'open', label, url: location.origin + '/?type=chat&half=' + half, title: 'Chat (' + half + ')', monitor, place, always_on_top: false}, '*');
+      open('chat-a', dir, $('#sp-a').value, 'full'); open('chat-b', second, $('#sp-b').value, 'full'); toast('Opening split chat...'); return; }
     else if (a === 'copy-pop') { const i = $('#pop-url'); i.select(); try { await navigator.clipboard.writeText(i.value); toast('Address copied.'); } catch (x) { document.execCommand('copy'); toast('Address selected - press Ctrl+C.'); } return; }
     else if (a === 'restore') await api('/api/windows/restore');
     else if (a === 'save-profile') { const n = prompt('Name this layout'); if (n) { await api('/api/profiles/' + encodeURIComponent(n) + '/save'); toast('Layout saved: ' + n); } }
@@ -223,3 +235,13 @@ document.addEventListener('click', async e => {
 });
 
 document.addEventListener('input', e => { const n = e.target.dataset && e.target.dataset.live; if (n && $('#' + n)) $('#' + n).textContent = e.target.value; });
+
+// monitors come from the shell (01): parent.postMessage({pinguino:'window',op:'monitors'}) -> {pinguino:'monitors', monitors:[...]}
+window.addEventListener('message', e => {
+  const d = e.data; if (!d || d.pinguino !== 'monitors' || !Array.isArray(d.monitors)) return;
+  const opts = d.monitors.map(m => `<option value="${m.index}">${esc(m.name || 'Monitor ' + m.index)} ${m.width}x${m.height}${m.primary ? ' (main)' : ''}</option>`).join('');
+  ['sp-a', 'sp-b'].forEach((id, i) => { const el = $('#' + id); if (el) { el.innerHTML = opts; if (d.monitors[i]) el.value = d.monitors[i].index; } });
+  const st = $('#sp-state'); if (st) st.textContent = d.monitors.length + ' monitor(s) found';
+});
+function askMonitors() { if (parent !== window) parent.postMessage({pinguino: 'window', op: 'monitors'}, '*'); }
+const _rl = renderLauncher; renderLauncher = async function () { await _rl(); askMonitors(); };

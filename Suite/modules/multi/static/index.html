@@ -74,6 +74,9 @@ body.popout{background:transparent!important;height:auto;min-height:100vh;justif
 .rg{display:flex;flex-wrap:wrap}.style-ed summary{cursor:pointer}.style-ed summary h3{display:inline}.style-ed input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);background:none}
 .cs-prev-wrap{position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0;border-bottom:1px solid var(--line)}.cs-preview{max-height:300px;overflow-y:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px}
 .evl{font-size:.68em;font-weight:700;letter-spacing:.05em;border:1px solid currentColor;border-radius:3px;padding:0 5px;margin-right:6px;opacity:.9}
+.cassist{border-top:1px solid var(--line);padding:6px 10px;max-height:40%;overflow:auto;background:var(--card)}.ahd{display:flex;justify-content:space-between}
+.sug{display:flex;gap:8px;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:6px;padding:5px 8px;margin:4px 0}.chrec{max-height:90px;overflow:auto;border-left:2px solid var(--line);padding-left:8px;margin:4px 0;color:var(--dim)}
+.chcard textarea,#ctpls{width:100%}.tpls{display:flex;gap:5px;flex-wrap:wrap;align-items:center}.u[data-chatter]{cursor:pointer}.u[data-chatter]:hover{text-decoration:underline}
 </style>
 <!--THEME--></head><body>
 <header id="hdr"></header><div id="body" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
@@ -82,7 +85,9 @@ body.popout{background:transparent!important;height:auto;min-height:100vh;justif
 <script src="/assets/chat.js"></script>
 <script>
 const q = new URLSearchParams(location.search), WID = q.get('win');
+const HALF = q.get('half');
 let W = {type: location.pathname === '/popout' ? 'popout' : (q.get('type') || 'launcher'), platforms: [], min_tier: 'none'};
+if (HALF && W.type === 'chat') { W.type = 'unified'; W.link_group = 'chat-split'; W.link_order = (HALF === 'top' || HALF === 'left') ? 1 : 0; }   // one chat spread over two windows: older rows in the top/left one
 const TIERS = {none: 0, low: 1, medium: 2, high: 3};
 let conns = [], cards = {open: [], answered: [], missed: []}, msgs = [], target = null;
 const $ = (s, e = document) => e.querySelector(s);
@@ -125,7 +130,7 @@ function on(ev) {
     if (W.type === 'popout' && window.popAdd) window.popAdd(ev.message);
   } else if (ev.type === 'pins.changed') { PINS = ev.pins || []; if (W.type === 'chat') { chatPins(); chatFeed(); } }
   else if (ev.type === 'chatstyle.changed') { CS = ev.style; applyStyle(); if (W.type === 'chat') chatFeed(); if (W.type === 'style') renderPreview(); } else if (ev.type === 'card.new' || ev.type === 'card.update') api('/api/cards').then(c => { cards = c; renderCards(); if (W.type === 'chat') chatStrip(); });
-  else if (ev.type === 'layout.changed') { if (!WID) renderLauncher(); }
+  else if (ev.type === 'layout.changed') { if (W.type === 'launcher') renderLauncher(); }
 }
 function pass(m) {
   return (!W.platforms.length || W.platforms.includes(m.platform)) && TIERS[m.tier || 'none'] >= TIERS[W.min_tier || 'none'];

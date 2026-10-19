@@ -37,6 +37,29 @@ class CardManager:
         self._enforce_cap()
         return c
 
+    def mark(self, m):
+        """The streamer marked any stored message (dict) to answer: make/reopen a normal medium card for it."""
+        cid = "c:" + m["id"]
+        c = self.cards.get(cid)
+        if c:
+            if not any(r["rule"] == "marked" for r in c["reasons"]):
+                c["reasons"] = [{"rule": "marked", "points": 0, "detail": "you marked this to answer"}] + c["reasons"]
+            c["score"] = max(c["score"], 60.0)
+            if c["state"] != "open":
+                self.set_state(cid, "open", reason="marked to answer")
+            else:
+                self._save(c, "card.update")
+            return self.cards[cid]
+        now = self.clock()
+        c = {"id": cid, "message_id": m["id"], "platform": m["platform"], "channel": m.get("channel", ""), "user": m["user"],
+             "user_id": m["user_id"], "display": m.get("display") or m["user"], "text": m["text"], "msg_ts": m["ts"], "score": 60.0,
+             "tier": "medium", "reasons": [{"rule": "marked", "points": 60, "detail": "you marked this to answer"}], "context": [],
+             "state": "open", "created": now, "updated": now, "answered_at": None, "answered_via": None, "snooze_until": None, "faded": False}
+        self.cards[cid] = c
+        self._save(c, "card.new")
+        self._enforce_cap()
+        return c
+
     def _enforce_cap(self):
         cap = config.settings()["max_cards"]
         open_cards = sorted((c for c in self.cards.values() if c["state"] == "open"), key=lambda c: c["score"])

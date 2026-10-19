@@ -482,6 +482,57 @@ async def events_in(request: Request):
     return {"ok": True, "id": m.id}
 
 
+# assisted chat -----------------------------------------------------------
+def _stored(mid):
+    m = store.get_message(mid or "")
+    if not m:
+        raise HTTPException(404, "unknown message")
+    return m
+
+
+@app.post("/api/assist/suggest")
+async def assist_suggest(request: Request):
+    m = _stored((await request.json()).get("message_id"))
+    hist = [h for h in store.user_history(m["platform"], m["user_id"], 6) if h["id"] != m["id"]]
+    return await pipeline.assist.suggest(m, hist)
+
+
+@app.post("/api/assist/translate")
+async def assist_translate(request: Request):
+    return await pipeline.assist.translate(_stored((await request.json()).get("message_id")))
+
+
+@app.get("/api/templates")
+def templates_get():
+    return {"templates": pipeline.assist.templates()}
+
+
+@app.post("/api/templates")
+async def templates_set(request: Request):
+    return {"templates": pipeline.assist.set_templates((await request.json()).get("templates", []))}
+
+
+@app.post("/api/cards/manual")
+async def card_manual(request: Request):
+    return cards.mark(_stored((await request.json()).get("message_id")))
+
+
+@app.get("/api/chatter/{platform}/{user_id}")
+def chatter(platform: str, user_id: str):
+    hist = store.user_history(platform, user_id, 50)
+    if not hist:
+        raise HTTPException(404, "never seen")
+    last = hist[0]
+    mine = [c for c in cards.cards.values() if c["platform"] == platform and c["user_id"] == user_id]
+    count = lambda st: sum(1 for c in mine if c["state"] == st)
+    return {"platform": platform, "user_id": user_id, "user": last["user"], "display": last.get("display") or last["user"],
+            "first_seen": min(h["ts"] for h in hist), "last_seen": last["ts"], "messages": store.user_count(platform, user_id),
+            "badges": sorted({b for h in hist for b in h.get("badges", [])}), "color": last.get("color", ""),
+            "note": store.kv_get("note:" + last["user"].lower(), ""), "muted": last["user"].lower() in set(pipeline.rules["muted"]),
+            "cards": {"answered": count("answered"), "open": count("open"), "missed": count("missed"), "dismissed": count("dismissed")},
+            "recent": [{"id": h["id"], "text": h["text"], "ts": h["ts"]} for h in hist[:6]]}
+
+
 # new-chatter ding ------------------------------------------------------
 @app.get("/api/ding")
 def ding_info():
