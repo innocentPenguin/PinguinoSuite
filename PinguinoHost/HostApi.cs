@@ -95,6 +95,9 @@ namespace PinguinoHost
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true });
                     Write(c, "{\"ok\":true}", "application/json"); return true;
                 }
+                if (p == "/api/account/streamer" && c.Request.HttpMethod == "GET") { Write(c, AccountStreamer().ToString(), "application/json"); return true; }
+                if (p == "/api/account/streamer/signin" && c.Request.HttpMethod == "POST") { Write(c, AccountSignIn((bool?)Body(c)["open"] != false).ToString(), "application/json"); return true; }
+                if (p == "/api/account/streamer/signout" && c.Request.HttpMethod == "POST") { Write(c, AccountSignOut().ToString(), "application/json"); return true; }
                 if (p == "/api/bottest" && c.Request.HttpMethod == "POST") { Write(c, BotTest(Body(c)).ToString(), "application/json"); return true; }
                 if (p == "/api/token" && c.Request.HttpMethod == "POST") { Write(c, TokenIn(Body(c)).ToString(), "application/json"); return true; }
                 c.Response.StatusCode = 404;

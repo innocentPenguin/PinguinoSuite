@@ -65,6 +65,18 @@ namespace PinguinoHost
             catch (Exception) { }
         }
 
+        /// <summary>sign-out: forget a key here and ask the vault to blank it (best effort).</summary>
+        public static void Clear(string name)
+        {
+            lock (_l) _v.Remove(name); if (!Enabled) return;
+            try
+            {
+                var rq = new HttpRequestMessage(HttpMethod.Post, Core + "/api/vault/" + Uri.EscapeDataString(name) + "/set") { Content = new StringContent(new JObject { { "value", "" } }.ToString(), Encoding.UTF8, "application/json") };
+                rq.Headers.Add("Authorization", "Bearer " + Token); Http.SendAsync(rq).Result.Dispose();
+            }
+            catch (Exception) { }
+        }
+
         /// <summary>what the in-process bots read (CPH global variables, memory only): the AI key and each bot account's token, when their own files do not hold them.</summary>
         public static void PushToBots(HostCPH cph)
         {
