@@ -23,6 +23,7 @@
 // Sensitive things are left out on purpose: age, school, health, politics, religion, sexuality, real names, locations, contact details.
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { fileURLToPath } from 'node:url';
 import { dayFiles, dayOf } from './lib-logs.mjs';
 
@@ -30,7 +31,7 @@ const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i < 0 ?
 const logsDir = arg('logs', 'D:\\PinguinoSuite\\Data\\chat_logs');
 const outDir = arg('out', 'D:\\PinguinoSuite\\Data\\profiles');
 const MIN_MSGS = Number(arg('min-msgs', 1));   // everyone who wrote at least this many messages gets a profile (default: all of them)
-const appData = join(process.env.APPDATA || '', 'BVQ');
+const appData = dataDir();
 const here = dirname(fileURLToPath(import.meta.url));
 const base = JSON.parse(readFileSync(join(appData, 'chat_profiles.json'), 'utf8'));
 const roleInfo = base.users;

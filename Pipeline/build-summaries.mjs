@@ -21,6 +21,7 @@
 // STREAM DAY: Central date of the stream; chat before 06:00 Central still belongs to the previous day (a stream that runs past midnight is one day).
 import { readFileSync, writeFileSync, appendFileSync, readdirSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { dayFiles } from './lib-logs.mjs';
 
 const argv = process.argv.slice(2);
@@ -28,7 +29,7 @@ const has = n => argv.includes('--' + n);
 const arg = (n, d) => { const i = argv.indexOf('--' + n); return i < 0 || i + 1 >= argv.length ? d : argv[i + 1]; };
 const logsDir = arg('logs', 'D:\\PinguinoSuite\\Data\\chat_logs');
 const outDir = arg('out', 'D:\\PinguinoSuite\\Data\\history');
-const appData = arg('appdata', join(process.env.APPDATA || '', 'BVQ'));
+const appData = arg('appdata', dataDir());
 const FAKE = has('fake') || process.env.PINGUINO_FAKE_LLM === '1';
 const DRY = has('dry-run');
 const FORCE = has('force');

@@ -14,6 +14,7 @@
 //  Explicit "call him X" / "X aka Y" lines are not used: too many jokes.
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { fileURLToPath } from 'node:url';
 import { dayFiles, dayOf } from './lib-logs.mjs';
 
@@ -21,7 +22,7 @@ const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i < 0 ?
 const logsDir = arg('logs', 'D:\\PinguinoSuite\\Data\\chat_logs');
 const MIN_COUNT = Number(arg('min-count', 10)), MIN_PEOPLE = Number(arg('min-people', 3)), MIN_RATIO = Number(arg('min-ratio', 2.5));
 const here = dirname(fileURLToPath(import.meta.url));
-const appData = join(process.env.APPDATA || '', 'BVQ');
+const appData = dataDir();
 const prof = JSON.parse(readFileSync(join(appData, 'chat_profiles.json'), 'utf8')).users;
 const common = new Set(readFileSync(join(here, '..', 'Data', 'common-words.txt'), 'utf8').split(/\r?\n/).map(w => w.trim().toLowerCase()).filter(Boolean));
 const norm = s => s.toLowerCase().replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e').replace(/4/g, 'a').replace(/5/g, 's').replace(/[^a-z]/g, '');

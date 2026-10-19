@@ -24,6 +24,7 @@
 // Run it now and then (e.g. every few days) to keep everything up to date. Only public chat is stored.
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { dayFiles, dayOf } from './lib-logs.mjs';
 
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i < 0 ? d : (process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : true); };
@@ -39,7 +40,7 @@ const LOG_FORMAT = 2;   // 2 = year/month/day folders + notice / timeout lines i
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const pad = n => String(n).padStart(2, '0');
 const stamp = t => { const d = new Date(t); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; };
-const appData = join(process.env.APPDATA || '', 'BVQ');
+const appData = dataDir();
 const dayPath = day => join(outDir, day.slice(0, 4), day.slice(5, 7), day + '.txt');
 
 async function get(url, as = 'text') {

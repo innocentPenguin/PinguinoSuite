@@ -9,6 +9,7 @@
 // The website address and key come from %AppData%\BVQ\settings.json (WebSyncUrl / WebSyncKey, the same ones PinguinoB0t uses). Nothing secret is printed.
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { fileURLToPath } from 'node:url';
 import { searchLogs } from './lib-logsearch.mjs';
 
@@ -16,7 +17,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const alive = join(here, '.log-agent.alive'), root = join(here, '..', 'Data', 'chat_logs');
 try { if (Date.now() - statSync(alive).mtimeMs < 30000) { console.log('another log agent is already running'); process.exit(0); } } catch { /* none */ }
 
-const settings = JSON.parse(readFileSync(join(process.env.APPDATA || '', 'BVQ', 'settings.json'), 'utf8'));
+const settings = JSON.parse(readFileSync(join(dataDir(), 'settings.json'), 'utf8'));
 const base = String(settings.WebSyncUrl || '').replace(/\/$/, ''), key = settings.WebSyncKey || '';
 if (!base || !key) { console.error('WebSyncUrl / WebSyncKey are not set in settings.json'); process.exit(1); }
 const head = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key };

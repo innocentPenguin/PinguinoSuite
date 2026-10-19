@@ -12,6 +12,7 @@
 // over every day ("i think", "don't know") are just how people talk and are left out.
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { fileURLToPath } from 'node:url';
 import { dayFiles, dayOf } from './lib-logs.mjs';
 
@@ -20,7 +21,7 @@ const logsDir = arg('logs', 'D:\\PinguinoSuite\\Data\\chat_logs');
 const outFile = arg('out', 'D:\\PinguinoSuite\\Data\\lore.json');
 const MIN_COUNT = Number(arg('min-count', 20)), MIN_PEOPLE = Number(arg('min-people', 6)), MIN_DAYS = 5;
 const here = dirname(fileURLToPath(import.meta.url));
-const appData = join(process.env.APPDATA || '', 'BVQ');
+const appData = dataDir();
 const roleInfo = JSON.parse(readFileSync(join(appData, 'chat_profiles.json'), 'utf8')).users;
 const common = readFileSync(join(here, '..', 'Data', 'common-words.txt'), 'utf8').split(/\r?\n/).map(w => w.trim().toLowerCase()).filter(Boolean);
 const top1000 = new Set(common.slice(0, 1000)), commonAll = new Set(common);

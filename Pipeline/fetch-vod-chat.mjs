@@ -25,6 +25,7 @@
 //    The bot reads every *.txt in the archive folder by itself (and shows the times in Central), and skips lines it already has from other files.
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 
@@ -103,7 +104,7 @@ const stamp = t => { const d = new Date(t); return `${d.getUTCFullYear()}-${pad(
   const vods = await listVods();
   console.log(`${vods.length} VOD(s) found for ${channel}${since ? ' since ' + since : ''}.` + (vods.length ? ` Oldest: ${vods[vods.length - 1].at.slice(0, 10)}, newest: ${vods[0].at.slice(0, 10)}.` : ' Twitch may have deleted the older ones (7 / 14 / 60 days).'));
   if (historyOnly) {
-    const f = join(process.env.APPDATA || '', 'BVQ', 'chat_history.json');
+    const f = join(dataDir(), 'chat_history.json');
     let h = {}; try { h = JSON.parse(readFileSync(f, 'utf8')); } catch { /* new file */ }
     let added = 0;
     for (const v of vods) {
@@ -112,7 +113,7 @@ const stamp = t => { const d = new Date(t); return `${d.getUTCFullYear()}-${pad(
       const l = h[day] || (h[day] = []);
       if (!l.some(x => x.includes(v.title))) { l.push(item); added++; }
     }
-    mkdirSync(join(process.env.APPDATA || '', 'BVQ'), { recursive: true });
+    mkdirSync(dataDir(), { recursive: true });
     writeFileSync(f, JSON.stringify(h, null, 1));
     console.log('Added ' + added + ' stream title(s) to ' + f + '. Restart Streamer.bot (or recompile) so the bot reloads it.');
     return;
@@ -126,7 +127,7 @@ const stamp = t => { const d = new Date(t); return `${d.getUTCFullYear()}-${pad(
     process.exit(2);
   }
   console.log('Using ' + cli + ' for the chat download.');
-  const importDir = join(process.env.APPDATA || '', 'BVQ', 'chat_logs', 'import');
+  const importDir = join(dataDir(), 'chat_logs', 'import');
   let saved = 0, skipped = 0, lines = 0;
   for (const v of vods) {
     const file = join(outDir, `vod-${v.at.slice(0, 10)}-${v.id}.txt`);

@@ -6,11 +6,12 @@
 //   node Pipeline\build-history.mjs        (a few seconds; run it again after importing new logs)
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { dayFiles, dayOf } from './lib-logs.mjs';
 
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i < 0 ? d : process.argv[i + 1]; };
 const logsDir = arg('logs', 'D:\\PinguinoSuite\\Data\\chat_logs');
-const appData = join(process.env.APPDATA || '', 'BVQ');
+const appData = dataDir();
 const file = join(appData, 'chat_history.json');
 let hist = {}; try { hist = JSON.parse(readFileSync(file, 'utf8')); } catch { /* new */ }
 const files = dayFiles(logsDir);

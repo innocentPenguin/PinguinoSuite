@@ -10,11 +10,12 @@
 // The website address and key come from %AppData%\BVQ\settings.json (WebSyncUrl / WebSyncKey, the same ones PinguinoB0t uses). Nothing secret is printed.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { dataDir } from './lib-paths.mjs';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const profDir = join(here, '..', 'Data', 'profiles');
-const appData = join(process.env.APPDATA || '', 'BVQ');
+const appData = dataDir();
 const dry = process.argv.includes('--dry');
 const settings = JSON.parse(readFileSync(join(appData, 'settings.json'), 'utf8'));
 const base = String(settings.WebSyncUrl || '').replace(/\/$/, ''), key = settings.WebSyncKey || '';
