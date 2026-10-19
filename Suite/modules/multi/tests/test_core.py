@@ -529,3 +529,9 @@ def test_viewer_note_roundtrip(tmp_path, monkeypatch):
     assert c.post("/api/viewers/Bob/note", json={"note": "likes cats " * 100}, headers=h).json()["note"].startswith("likes cats")
     got = c.get("/api/viewers/bob/note").json()
     assert got["user"] == "bob" and len(got["note"]) == 500
+
+
+def test_combined_chat_window_and_profile():
+    import windows as w
+    assert w.new_window(type="chat")["type"] == "chat"
+    assert w.PROFILE_DEFAULTS["Combined Chat"][0]["type"] == "chat"

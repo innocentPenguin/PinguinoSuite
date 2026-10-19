@@ -9,6 +9,7 @@ const STATE_TEXT = {
   error: ['bad', 'Problem - see details'],
 };
 const PROFILE_HELP = {
+  'Combined Chat': 'One window with everything: all platforms, bot replies, cards that need an answer, and a reply box.',
   'Streaming': 'Priority cards on top, a unified chat below. Stays on top of your game.',
   'Gaming': 'One small always-on-top window with only the cards that need an answer.',
   'Editing': 'A big unified chat plus a card window; nothing floats over your editor.',
@@ -17,6 +18,7 @@ const PROFILE_HELP = {
   'Full Monitoring': 'Unified chat, cards, missed and a status window across the screen.',
 };
 const WINDOW_HELP = {
+  chat: ['Combined chat', 'The all-in-one window: every platform, bot replies, priority cards and a reply box.'],
   unified: ['All chat', 'Every platform in one scrolling feed.'],
   priority: ['Needs an answer', 'Cards for messages worth replying to, with why.'],
   missed: ['Missed', 'Cards you did not answer in time. You can bring them back.'],

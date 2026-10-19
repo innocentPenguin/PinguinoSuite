@@ -163,7 +163,7 @@ def setup_info():
     """Non-secret setup state for the launcher: which secrets exist (booleans only) + plain settings."""
     s = config.settings()
     keys = ("priority_mode", "ai_provider", "ai_model", "ai_daily_cap_usd", "voice_enabled", "discord_channels",
-            "tiktok_enabled", "tiktok_user", "channel")
+            "tiktok_enabled", "tiktok_user", "channel", "bot_accounts", "my_names")
     return {"settings": {k: s[k] for k in keys},
             "has": {"discord": bool(secrets_store.get("discord_token")), "youtube": bool(secrets_store.get("youtube_token")),
                     "ai": bool(secrets_store.get("ai_key")), "twitch": bool(secrets_store.get("twitch_tokens"))}}

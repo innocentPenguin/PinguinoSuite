@@ -9,7 +9,7 @@ import os
 import subprocess
 import uuid
 
-WINDOW_TYPES = ("unified", "platform", "priority", "missed", "first", "composer", "status")
+WINDOW_TYPES = ("chat", "unified", "platform", "priority", "missed", "first", "composer", "status")
 
 WINDOW_DEFAULTS = {
     "type": "unified", "title": "", "x": 100, "y": 100, "w": 480, "h": 700,
@@ -20,6 +20,7 @@ WINDOW_DEFAULTS = {
 }
 
 PROFILE_DEFAULTS = {
+    "Combined Chat": [{"type": "chat", "x": 1400, "y": 40, "w": 500, "h": 980}],
     "Streaming": [
         {"type": "priority", "x": 1500, "y": 40, "w": 400, "h": 520, "always_on_top": True, "opacity": 0.95},
         {"type": "unified", "x": 1500, "y": 570, "w": 400, "h": 460, "min_tier": "low"},
