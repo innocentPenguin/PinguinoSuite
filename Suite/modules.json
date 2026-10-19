@@ -124,12 +124,407 @@
       }
     ],
     "secrets": [
-      "CHAT_BOT_API_KEY",
-      "HOST_SECRETS.UserToken",
-      "HOST_SECRETS.ObsPassword",
-      "BOTS_SECRETS.core.UserToken",
-      "BOTS_SECRETS.chat.UserToken",
-      "BOTS_SECRETS.helper.UserToken"
-    ]
+      {
+        "name": "CHAT_BOT_API_KEY",
+        "label": "AI key (chat and helper)",
+        "help": {
+          "title": "AI key",
+          "summary": "Lets ChattyPinguino and PinguinoHelper write replies.",
+          "steps": [
+            "Open the Anthropic console and create an API key.",
+            "Paste it into Set here. It is never shown again."
+          ],
+          "example": "sk-ant-... (format only)",
+          "link": {
+            "label": "Anthropic console",
+            "url": "https://console.anthropic.com/settings/keys"
+          }
+        }
+      },
+      {
+        "name": "HOST_SECRETS.UserToken",
+        "label": "Streamer Twitch token",
+        "help": {
+          "title": "Streamer token",
+          "summary": "Used to read chat and events.",
+          "steps": [
+            "Normally set by Sign in as streamer on the Host page; you do not paste it.",
+            "To redo, sign in again."
+          ],
+          "fix": {
+            "label": "Open the Host page",
+            "route": "m:host"
+          }
+        }
+      },
+      {
+        "name": "HOST_SECRETS.ObsPassword",
+        "label": "OBS WebSocket password",
+        "help": {
+          "title": "OBS password",
+          "summary": "The password set in OBS under Tools > WebSocket Server Settings.",
+          "steps": [
+            "In OBS enable the WebSocket server and set a password.",
+            "Paste the same password here."
+          ]
+        }
+      },
+      {
+        "name": "BOTS_SECRETS.core.UserToken",
+        "label": "PinguinoB0t token",
+        "help": {
+          "title": "PinguinoB0t token",
+          "summary": "Lets PinguinoB0t speak as its own account.",
+          "steps": [
+            "Set by Sign in on the PinguinoB0t card (private window, logged in as the bot)."
+          ],
+          "fix": {
+            "label": "Open the Host page",
+            "route": "m:host"
+          }
+        }
+      },
+      {
+        "name": "BOTS_SECRETS.chat.UserToken",
+        "label": "ChattyPinguino token",
+        "help": {
+          "title": "ChattyPinguino token",
+          "summary": "Lets ChattyPinguino speak as its own account.",
+          "steps": [
+            "Set by Sign in on the ChattyPinguino card (private window, logged in as the bot)."
+          ],
+          "fix": {
+            "label": "Open the Host page",
+            "route": "m:host"
+          }
+        }
+      },
+      {
+        "name": "BOTS_SECRETS.helper.UserToken",
+        "label": "PinguinoHelper token",
+        "help": {
+          "title": "PinguinoHelper token",
+          "summary": "Lets PinguinoHelper speak as its own account.",
+          "steps": [
+            "Set by Sign in on the PinguinoHelper card (private window, logged in as the bot)."
+          ],
+          "fix": {
+            "label": "Open the Host page",
+            "route": "m:host"
+          }
+        }
+      }
+    ],
+    "help": {
+      "_module": {
+        "title": "How PinguinoHost works",
+        "summary": "PinguinoHost runs the four chat bots, Twitch events, OBS control and Actions & Events without Streamer.bot.",
+        "steps": [
+          "Sign in the streamer account once on the Host page (Sign in as streamer). This lets the Host read chat and events.",
+          "Give each bot its own Twitch account: press Sign in on its card, in a private window, logged in as that bot. Then press Send test to see which bot answers.",
+          "PinguinoB0t runs the game commands and is the fallback voice. ChattyPinguino chats and answers when @mentioned. PinguinoHelper only chimes in on key words (how to join, minecraft ip, ip, !discord).",
+          "Open Actions & Events to build commands, timers and alerts. Anything imported or preset starts disabled.",
+          "Before going live check the Pre-stream list: everything should be green. To redo any step use the item's fix button."
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "chat": {
+        "title": "Chat connection",
+        "summary": "The Host reads your Twitch chat with the streamer token. Green means messages are flowing in.",
+        "steps": [
+          "If it is red, the streamer account is probably not signed in or the token expired.",
+          "Open the Host page, press Sign in as streamer, approve on Twitch, then wait about 10 seconds.",
+          "Check the channel name in the Host settings matches your Twitch channel.",
+          "To redo: sign in again; the old token is replaced."
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "eventsub": {
+        "title": "EventSub (follows, subs, raids, redeems)",
+        "summary": "EventSub is Twitch's live event feed. The Host subscribes to follows, subs, gifts, cheers, raids and, optionally, stream on/off and channel point redemptions.",
+        "steps": [
+          "It needs the streamer signed in with all scopes. Sign in again if a subscription was refused (HTTP 403).",
+          "403 on redemptions means the token lacks channel:read:redemptions; 403 on the mod check means moderation:read. Signing in again grants both.",
+          "Optional subscriptions that are refused do not turn this red.",
+          "If the connection drops the Host retries by itself."
+        ],
+        "scopes": [
+          "chat:read",
+          "chat:edit",
+          "user:write:chat",
+          "moderator:manage:banned_users",
+          "channel:read:subscriptions",
+          "bits:read",
+          "moderator:read:followers",
+          "moderation:read",
+          "channel:read:redemptions"
+        ],
+        "link": {
+          "label": "Twitch developer console",
+          "url": "https://dev.twitch.tv/console"
+        },
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "master": {
+        "title": "Master device",
+        "summary": "Only one PC runs the bots at a time (the master) so chat never gets double answers.",
+        "steps": [
+          "The Suite core decides which device is master and the Host checks every 10 seconds.",
+          "If this device is not the master the Host stays idle on purpose. Make this device the master in Devices, or run the bots on the master PC.",
+          "If the core is unreachable for 60 seconds the Host stops itself; start the Suite core, then the Host."
+        ],
+        "fix": {
+          "label": "Open Devices",
+          "route": "devices"
+        }
+      },
+      "streamer": {
+        "title": "Streamer account sign-in",
+        "summary": "The streamer token reads chat and events and runs timeouts and follower lookups.",
+        "steps": [
+          "Open the Host page and press Sign in as streamer.",
+          "Log in on Twitch as the channel owner and approve the scopes.",
+          "The token is saved to the key vault when it is available. The pre-stream check warns before it expires.",
+          "To redo: sign in again; the new token replaces the old."
+        ],
+        "scopes": [
+          "chat:read",
+          "chat:edit",
+          "user:write:chat",
+          "moderator:manage:banned_users",
+          "channel:read:subscriptions",
+          "bits:read",
+          "moderator:read:followers",
+          "moderation:read",
+          "channel:read:redemptions"
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "bot-core": {
+        "title": "PinguinoB0t account",
+        "summary": "PinguinoB0t is the main bot and the fallback voice when another bot cannot speak.",
+        "steps": [
+          "On the Host page find the PinguinoB0t card and press Sign in.",
+          "Use a private window and log in as the PinguinoB0t Twitch account, not the streamer account. The page warns if the account differs.",
+          "Press Send test to confirm it speaks as itself.",
+          "If the token is about to expire, sign in again."
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "bot-chat": {
+        "title": "ChattyPinguino account",
+        "summary": "ChattyPinguino is the chatty AI bot. It answers @mentions and the word pinguino.",
+        "steps": [
+          "On the Host page find the ChattyPinguino card and press Sign in.",
+          "Use a private window and log in as the ChattyPinguino Twitch account.",
+          "Press Send test. Until it is signed in, PinguinoB0t speaks for it.",
+          "Chat also needs an AI key (see the AI key item)."
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "bot-helper": {
+        "title": "PinguinoHelper account",
+        "summary": "PinguinoHelper chimes in only on key words such as how to join, minecraft ip, ip and !discord.",
+        "steps": [
+          "On the Host page find the PinguinoHelper card and press Sign in.",
+          "Use a private window and log in as the PinguinoHelper Twitch account.",
+          "Press Send test. Its facts come from innocentpenguin.com."
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "mod": {
+        "title": "PinguinoB0t is a channel mod",
+        "summary": "Timeouts and some moderation need PinguinoB0t to be a moderator.",
+        "steps": [
+          "In Twitch chat, as the channel owner, type /mod PinguinoB0t.",
+          "If the check says it cannot check, sign the streamer in again to grant moderation:read.",
+          "If you never use timeouts you can ignore this."
+        ],
+        "scopes": [
+          "moderation:read"
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "modules": {
+        "title": "Bot modules loaded",
+        "summary": "The Host loads the core, chat, helper and router code from the Suite folders.",
+        "steps": [
+          "Red means a file is missing or did not compile.",
+          "From the PinguinoSuite folder run node Shared/sync-shared.mjs, then restart the Host module.",
+          "Check the Console for compile errors."
+        ],
+        "fix": {
+          "label": "Open the Console",
+          "route": "console"
+        }
+      },
+      "obs": {
+        "title": "OBS connection",
+        "summary": "The Host controls OBS scenes, sources and reports the streaming flag over OBS WebSocket.",
+        "steps": [
+          "In OBS open Tools > WebSocket Server Settings and enable the server (port 4455).",
+          "Set a password and save it in Integrations > Key vault as HOST_SECRETS.ObsPassword.",
+          "OBS must be running. The Host reconnects by itself."
+        ],
+        "fix": {
+          "label": "Enter the OBS password",
+          "route": "integrations",
+          "focus": "HOST_SECRETS.ObsPassword"
+        }
+      },
+      "streamerbot": {
+        "title": "Streamer.bot (legacy engine)",
+        "summary": "Streamer.bot is no longer needed. It only matters if you still run the old setup.",
+        "steps": [
+          "Yellow is fine once you moved to the Host.",
+          "If you keep both, do not enable the same command in both or chat gets double answers.",
+          "To bring old commands over use Actions & Events > Import from Streamer.bot."
+        ],
+        "fix": {
+          "label": "Open Actions & Events",
+          "url": "http://127.0.0.1:8770/automations"
+        }
+      },
+      "ai": {
+        "title": "AI key for chat and helper",
+        "summary": "ChattyPinguino and PinguinoHelper use an AI provider to write replies. The key is stored in the vault and never shown.",
+        "steps": [
+          "Create a key in the Anthropic console.",
+          "Open Integrations > Key vault and Set CHAT_BOT_API_KEY.",
+          "Once it reads green, use Remove plaintext in Integrations to delete the copy in chat_settings.json.",
+          "Limits: chat 200 calls per hour, helper 100."
+        ],
+        "example": "sk-ant-... (format only)",
+        "link": {
+          "label": "Anthropic console",
+          "url": "https://console.anthropic.com/settings/keys"
+        },
+        "fix": {
+          "label": "Enter the key",
+          "route": "integrations",
+          "focus": "CHAT_BOT_API_KEY"
+        }
+      },
+      "faq": {
+        "title": "Helper facts from the website",
+        "summary": "PinguinoHelper answers with the Minecraft IP, port and Discord link from innocentpenguin.com so they stay current.",
+        "steps": [
+          "Facts load from innocentpenguin.com/api/faq (the minecraft_ip and discord entries).",
+          "Yellow means the site could not be reached and the saved helper_facts.json is used instead.",
+          "To change an answer, edit the FAQ on the website; the Host picks it up within minutes."
+        ],
+        "link": {
+          "label": "innocentpenguin.com",
+          "url": "https://innocentpenguin.com"
+        }
+      },
+      "vault": {
+        "title": "Key vault",
+        "summary": "The vault stores API keys and tokens encrypted on this device. The Host reads them at start and every 10 minutes.",
+        "steps": [
+          "Open Integrations > Key vault and use Import into vault for the Host keys.",
+          "When the check is green, Remove plaintext deletes the copies in the settings files.",
+          "Yellow with 403 means the Suite core needs a rebuild; 409 means another device is master; 503 means this OS has no key store.",
+          "Until it works the Host keeps using the plaintext files."
+        ],
+        "fix": {
+          "label": "Open the key vault",
+          "route": "integrations"
+        }
+      },
+      "errors": {
+        "title": "Warnings and errors",
+        "summary": "Shows the last warning or error the Host logged.",
+        "steps": [
+          "Open the Console and filter by module host.",
+          "Click a line to see what it means and how to fix it.",
+          "Green means nothing has gone wrong since the Host started."
+        ],
+        "fix": {
+          "label": "Open the Console",
+          "route": "console"
+        }
+      },
+      "redeem-403": {
+        "title": "Channel point redemptions refused (403)",
+        "summary": "Twitch refuses the redemption subscription until the streamer token has the channel:read:redemptions scope.",
+        "steps": [
+          "Open the Host page and press Sign in as streamer again.",
+          "Approve the new permissions on Twitch.",
+          "Then enable the redeem action in Actions & Events and set the reward title exactly as on Twitch."
+        ],
+        "scopes": [
+          "channel:read:redemptions"
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "automations": {
+        "title": "Actions & Events",
+        "summary": "Build commands, timers, alerts and OBS actions without Streamer.bot.",
+        "steps": [
+          "Open Actions & Events and press New action. Add a trigger and steps.",
+          "Press Test for a dry run first; it never sends chat or changes OBS. Run for real asks first.",
+          "Presets and imports start disabled: review them and enable what you want.",
+          "Song request actions stay off until you turn them on."
+        ],
+        "fix": {
+          "label": "Open Actions & Events",
+          "url": "http://127.0.0.1:8770/automations"
+        }
+      },
+      "streamerbot-import": {
+        "title": "Import from Streamer.bot",
+        "summary": "Brings your old commands, rewards and triggers into Actions & Events, disabled, for review.",
+        "steps": [
+          "On Actions & Events press Import from Streamer.bot and read the preview.",
+          "Press merge to add them. C# actions and unsupported items are listed as skipped.",
+          "Review each action, then enable it. No keys or prompts are read."
+        ],
+        "fix": {
+          "label": "Open Actions & Events",
+          "url": "http://127.0.0.1:8770/automations"
+        }
+      },
+      "bots-signin": {
+        "title": "Bots sign-in",
+        "summary": "Each bot chats as its own Twitch account.",
+        "steps": [
+          "Use a private window for each bot so you are not logged in as the streamer.",
+          "Press Sign in on the bot's card and approve.",
+          "The Host warns if the signed-in account is not the expected one. Press Send test afterwards."
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      }
+    }
   }
 ]
