@@ -1,8 +1,8 @@
-# Multi end-to-end pass (2026-10-19 11:37)
+# Multi end-to-end pass (2026-10-19 11:44)
 
 Real server process on a throwaway port with a throwaway data folder; nothing audible, no network, no live accounts. Script: `Suite/modules/multi/tests/e2e_live.py`.
 
-**82/82 passed**
+**84/84 passed**
 
 | Area | Check | Result | Detail |
 |---|---|---|---|
@@ -17,7 +17,7 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Cards | card action: snooze | PASS |  |
 | Cards | card action: reopen | PASS |  |
 | Cards | card action: answer | PASS |  |
-| Cards | hotkey dismiss acts on top card | PASS | {'ok': True, 'card': 'c:twitch:dev:1792427845737', 'state': 'dismissed'} |
+| Cards | hotkey dismiss acts on top card | PASS | {'ok': True, 'card': 'c:twitch:dev:1792428263640', 'state': 'dismissed'} |
 | Assist | mark to answer creates a card | PASS |  |
 | Cards | after-stream recap | PASS |  |
 | Cards | streamer-first claims endpoint | PASS |  |
@@ -36,7 +36,7 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Look | chat look loads defaults | PASS |  |
 | Look | chat look saved + validated | PASS |  |
 | Look | hostile style values are rejected | PASS |  |
-| Look | follow event pushed with the module token | PASS | {'ok': True, 'id': 'evt:twitch:1792427848184'} |
+| Look | follow event pushed with the module token | PASS | {'ok': True, 'id': 'evt:twitch:1792428266066'} |
 | Safety | event push without a token is refused | PASS | token required |
 | Look | stream-safe popout serves | PASS |  |
 | Look | style editor page serves | PASS |  |
@@ -77,6 +77,8 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Split | changing the split mode keeps each half's look | PASS |  |
 | Windows | pop-out position is remembered | PASS |  |
 | Split | pane page loads | PASS |  |
+| Sounds | chat pop can be limited to roles | PASS |  |
+| Sounds | reset sounds to defaults | PASS |  |
 | Setup | setup info for the launcher | PASS |  |
 | Ranking | explainable rules + defaults | PASS |  |
 | Ranking | learning view | PASS |  |

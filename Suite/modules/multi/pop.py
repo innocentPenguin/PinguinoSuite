@@ -12,6 +12,19 @@ import console_log
 import ding
 
 PLATFORMS = ("twitch", "youtube", "discord")
+ROLES = ("mod", "vip", "sub", "viewer")
+
+
+def role_of(m):
+    """The highest role badge of a message, as one of ROLES (mod includes the broadcaster)."""
+    bd = set(getattr(m, "badges", None) or [])
+    if bd & {"moderator", "broadcaster"}:
+        return "mod"
+    if "vip" in bd:
+        return "vip"
+    if bd & {"subscriber", "founder"}:
+        return "sub"
+    return "viewer"
 
 
 class Pop:
@@ -45,6 +58,8 @@ class Pop:
             if m.is_bot or who in {b.lower() for b in st["bot_accounts"]}:
                 return False
             if (m.is_self or who in {n.lower() for n in st["my_names"]}) and not st["pop_own"]:
+                return False
+            if st.get("pop_roles") and not (role_of(m) in st["pop_roles"]):
                 return False
             if not self._master_cached():
                 return False
@@ -91,5 +106,5 @@ class Pop:
         st = config.settings()
         return {"enabled": bool(st["pop_platforms"]), "platforms": st["pop_platforms"], "sound": st["pop_sound"],
                 "sound_exists": bool(st["pop_sound"]) and os.path.isfile(st["pop_sound"]), "volume": st["pop_volume"],
-                "master_volume": st["ding_master_volume"], "cooldown_s": st["pop_cooldown_s"], "own": st["pop_own"],
+                "master_volume": st["ding_master_volume"], "cooldown_s": st["pop_cooldown_s"], "own": st["pop_own"], "roles": st.get("pop_roles", []),
                 "master": self._master_cached(), **self.stats}

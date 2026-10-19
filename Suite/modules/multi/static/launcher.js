@@ -57,7 +57,7 @@ function platformCard(c, setup) {
 }
 
 async function renderLauncher() {
-  const [ws, pf, st, setup, ai, dg, pp, pn] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai'), api('/api/ding'), api('/api/pop'), api('/api/panes')]);
+  const [ws, pf, st, setup, ai] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai')]);
   const s = setup.settings;
   const connected = st.connectors.filter(c => c.status === 'connected').length;
   const step = n => `<span class="n">${n}</span>`;
@@ -90,58 +90,9 @@ async function renderLauncher() {
     <label>Address<input id="pop-url" readonly value="${esc(location.origin)}/popout?size=22&max=14" onclick="this.select()"></label>
     <div class="act"><button data-act="copy-pop">Copy address</button> <a href="/popout?size=22&max=14" target="_blank" rel="noopener"><button type="button">Preview</button></a></div></div>
 
-  <h3>Chatter dings ${T('', 'A sound on this PC when someone chats for the first time (or returns). Nothing is written to chat.')}</h3>
-  <div class="box"><small class="mut">Plays on this PC only${dg.master ? '' : ' (this PC is not the master, so it stays silent)'}. Everything you change here is saved and remembered after Multi or the app closes.</small>
-    <div class="row"><b>On for:</b> <label class="chk"><input type="checkbox" id="dg-twitch" ${dg.platforms.includes('twitch') ? 'checked' : ''}> Twitch</label>
-      <label class="chk"><input type="checkbox" id="dg-youtube" ${dg.platforms.includes('youtube') ? 'checked' : ''}> YouTube</label></div>
-    <div class="row"><label class="chk"><input type="radio" name="dg-scope" value="stream" ${dg.scope !== 'ever' ? 'checked' : ''}> New chatter: once per person <b>per stream</b></label>
-      <label class="chk"><input type="radio" name="dg-scope" value="ever" ${dg.scope === 'ever' ? 'checked' : ''}> once per person <b>ever</b> (like the old Streamer.bot bell)</label></div>
-    <b>New chatter ding</b>
-    <label>Sound (.mp3 or .wav) ${dg.sound_exists ? '' : '<b class="tbadc">(file not found)</b>'}<span class="row"><input id="dg-sound" value="${esc(dg.sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-sound">Choose...</button><button data-act="ding-test" data-kind="new">Test</button></span></label>
-    <label>Volume <span id="dg-vol-n">${dg.volume}</span>%<input id="dg-vol" type="range" min="0" max="100" value="${dg.volume}" data-live="dg-vol-n"></label>
-    <label class="chk"><input type="checkbox" id="dg-returning" ${dg.returning ? 'checked' : ''}> <b>Different ding for a returning chatter</b> <small class="mut">someone who chatted in an earlier stream and chats again in this one</small></label>
-    <label>Returning sound (empty = same sound)<span class="row"><input id="dg-rsound" value="${esc(dg.returning_sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-rsound">Choose...</button><button data-act="ding-test" data-kind="returning">Test</button></span></label>
-    <label>Returning volume <span id="dg-rvol-n">${dg.returning_volume}</span>%<input id="dg-rvol" type="range" min="0" max="100" value="${dg.returning_volume}" data-live="dg-rvol-n"></label>
-    <label class="chk"><input type="checkbox" id="dg-first" ${dg.first_ever ? 'checked' : ''}> Own sound for a Twitch viewer's very first message ever</label>
-    <label>First-ever sound (empty = same as new)<span class="row"><input id="dg-fsound" value="${esc(dg.first_sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-fsound">Choose...</button><button data-act="ding-test" data-kind="first">Test</button></span></label>
-    <label>Master volume <span id="dg-mvol-n">${dg.master_volume}</span>% <small class="mut">multiplies both volumes above</small><input id="dg-mvol" type="range" min="0" max="100" value="${dg.master_volume}" data-live="dg-mvol-n"></label>
-    <label>At most one ding every (seconds)<input id="dg-gap" type="number" min="0.2" max="30" step="0.1" value="${dg.cooldown_s}" style="width:90px"></label>
-    <div class="act"><button class="p" data-act="ding-save">Save</button> <button data-act="ding-reset">New stream (everyone counts as returning)</button></div>
-    <small class="mut">${dg.chatters_this_stream} chatter(s) counted this stream, ${dg.known_chatters} known from earlier, ${dg.played} ding(s) played${dg.dropped ? ', ' + dg.dropped + ' skipped during bursts' : ''}.</small></div>
-
-  <h3>Chat pop sound ${T('', 'A short pop on this PC for every chat message. Nothing is written to chat.')}</h3>
-  <div class="box"><small class="mut">Like the Streamer.bot "chat" sound. Bots never pop. Plays on this PC only${pp.master ? '' : ' (this PC is not the master, so it stays silent)'}. Saved and remembered after Multi or the app closes.</small>
-    <div class="row"><b>On for:</b>${['twitch', 'youtube', 'discord'].map(p => `<label class="chk"><input type="checkbox" id="pp-${p}" ${pp.platforms.includes(p) ? 'checked' : ''}> ${p[0].toUpperCase() + p.slice(1)}</label>`).join('')}
-      <label class="chk"><input type="checkbox" id="pp-own" ${pp.own ? 'checked' : ''}> also my own messages</label></div>
-    <label>Sound (.mp3 or .wav) ${pp.sound_exists ? '' : '<b class="tbadc">(file not found)</b>'}<span class="row"><input id="pp-sound" value="${esc(pp.sound)}" style="flex:1"><button data-act="ding-pick" data-target="pp-sound">Choose...</button></span></label>
-    ${['twitch', 'youtube', 'discord'].map(p => `<label>${p[0].toUpperCase() + p.slice(1)} volume <span id="pp-v-${p}-n">${pp.volume[p]}</span>% <button data-act="pop-test" data-platform="${p}" style="margin-left:6px">Test</button><input id="pp-v-${p}" type="range" min="0" max="100" value="${pp.volume[p]}" data-live="pp-v-${p}-n"></label>`).join('')}
-    <label>Master volume for all chat sounds (pop and dings) <span id="pp-mvol-n">${pp.master_volume}</span>%<input id="pp-mvol" type="range" min="0" max="100" value="${pp.master_volume}" data-live="pp-mvol-n"></label>
-    <label>At most one pop every (seconds)<input id="pp-gap" type="number" min="0.1" max="10" step="0.05" value="${pp.cooldown_s}" style="width:90px"></label>
-    <div class="act"><button class="p" data-act="pop-save">Save</button></div>
-    <small class="mut">${pp.played} pop(s) played${pp.dropped ? ', ' + pp.dropped + ' skipped during bursts' : ''}.</small></div>
-
-  <h3>Pop-out and split chat ${T('', 'Chat and the look editor can leave this window and live on any monitor. Split chat shares one chat over two windows.')}</h3>
-  <div class="box"><small class="mut">Inside the Pinguino app these are real windows you can drag to any monitor; each one remembers where you left it. In a normal browser they open as pop-up windows.</small>
-    <div class="act"><button class="p" data-act="pop-chat">Pop out the chat</button> <button data-act="pop-look">Pop out the look editor</button>
-      <label class="chk"><input type="checkbox" id="sp-aot" ${aotPref() ? 'checked' : ''}> keep pop-outs on top of other windows</label> <small class="mut">(app only)</small></div>
-    <h4>Split chat in half</h4>
-    <div class="row"><label>How to split <select id="sp-mode">
-      <option value="flow">One feed: newest in B, older rows continue in A</option><option value="platform">By platform</option>
-      <option value="events">Chat in A, stream events in B</option><option value="people">Streamer, mods and VIPs in A, viewers in B</option></select></label>
-      <span id="sp-plats" class="row" hidden><b>A shows:</b>${['twitch', 'youtube', 'discord', 'tiktok'].map(x => `<label class="chk"><input type="checkbox" class="sp-pl" value="${x}" ${x === 'twitch' ? 'checked' : ''}> ${x}</label>`).join('')}<small class="mut">B shows the rest</small></span></div>
-    <div class="row"><label>A (top / left) on <select id="sp-a"></select></label><label>B (bottom / right) on <select id="sp-b"></select></label>
-      <label>Layout <select id="sp-dir"><option value="top">stacked (A above B)</option><option value="left">side by side (A left of B)</option></select></label>
-      <label class="chk"><input type="checkbox" id="sp-keep" checked> use remembered positions</label></div>
-    <div class="act"><button class="p" data-act="split-open">Open split chat</button> <button data-act="split-close">Close split chat</button> <span id="sp-state" class="mut"></span></div>
-    <details><summary>Each half's own look</summary><small class="mut">Leave a box empty to follow the main chat look. Full control over the main look: <a href="/?type=style">Chat look</a>.</small>
-      ${['a', 'b'].map(k => { const lk = ((pn.panes['split-' + k] || {}).look) || {}; return `<div class="rule"><b>Half ${k.toUpperCase()}</b><div class="rg">
-        <label class="cf">Text size <input type="number" id="sl-${k}-size" min="9" max="48" value="${lk.size ?? ''}" style="width:70px" placeholder="main"></label>
-        <label class="cf">Background strength % <input type="number" id="sl-${k}-bgA" min="0" max="100" value="${lk.bgA ?? ''}" style="width:70px" placeholder="main"></label>
-        <label class="cf">Background colour <input type="checkbox" id="sl-${k}-bgon" ${lk.bg ? 'checked' : ''}><input type="color" id="sl-${k}-bg" value="${lk.bg || '#09090a'}"></label>
-        <label class="cf">Platform marker <select id="sl-${k}-marker"><option value="">main</option>${[['text', 'Word'], ['logo', 'Logo'], ['both', 'Both'], ['none', 'Nothing']].map(([v, t]) => `<option value="${v}" ${lk.marker === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-        <label class="cf">Times <select id="sl-${k}-timestamps"><option value="">main</option><option value="1" ${lk.timestamps === true ? 'selected' : ''}>show</option><option value="0" ${lk.timestamps === false ? 'selected' : ''}>hide</option></select></label>
-        <label class="cf">Highlight strength % <input type="number" id="sl-${k}-intensity" min="0" max="250" value="${lk.intensity ?? ''}" style="width:70px" placeholder="main"></label></div></div>`; }).join('')}
-      <div class="act"><button data-act="split-looks">Save the halves' looks</button></div></details></div>
+  <h3>Sounds, look, split chat and pop-out</h3>
+  <div class="box">These moved next to the chat so you can preview them live. Open the chat and press the <b>&#9881; Settings</b> button on the right edge.
+    <div class="act"><a href="/?type=chat"><button class="p" type="button">Open the chat</button></a></div></div>
 
   <h3>Smart features</h3>
   <div class="box"><b>How messages are ranked ${T('', 'Local rules always work with no internet and no account. AI only double-checks borderline messages.')}</b>
@@ -185,7 +136,7 @@ async function saveSecret(path, body, okMsg) {
 }
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest('button'); if (!t || W.type !== 'launcher') return;
+  const t = e.target.closest('button'); if (!t || !(W.type === 'launcher' || t.closest('#sidep'))) return;
   const v = id => ($('#' + id) || {}).value || '';
   const a = t.dataset.act;
   try {
@@ -231,7 +182,7 @@ document.addEventListener('click', async e => {
       const plats = ['twitch', 'youtube', 'discord'].filter(p => $('#pp-' + p).checked);
       const r = await fetch('/api/pop/settings', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({platforms: plats, own: $('#pp-own').checked,
         sound: v('pp-sound'), volume: {twitch: parseInt(v('pp-v-twitch')), youtube: parseInt(v('pp-v-youtube')), discord: parseInt(v('pp-v-discord'))},
-        master_volume: parseInt(v('pp-mvol')), cooldown_s: parseFloat(v('pp-gap'))})});
+        master_volume: parseInt(v('pp-mvol')), cooldown_s: parseFloat(v('pp-gap')), roles: [...document.querySelectorAll('.pp-role:checked')].map(x => x.value)})});
       const j = await r.json().catch(() => ({})); if (!r.ok) { toast(j.detail || 'Could not save', false); return; }
       if (a === 'pop-test') { await fetch('/api/pop/test', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({platform: t.dataset.platform})}); toast('Playing the ' + t.dataset.platform + ' pop on this PC (settings saved)...'); return; }
       toast(plats.length ? 'Saved. Chat pop is ON for ' + plats.join(', ') + '.' : 'Saved. Chat pop is off.'); }
@@ -267,7 +218,7 @@ document.addEventListener('click', async e => {
     else if (a === 'save-profile') { const n = prompt('Name this layout'); if (n) { await api('/api/profiles/' + encodeURIComponent(n) + '/save'); toast('Layout saved: ' + n); } }
     else return;
   } catch (err) { toast('Something went wrong: ' + err, false); return; }
-  setTimeout(renderLauncher, 300);
+  if (W.type === 'launcher') setTimeout(renderLauncher, 300); else if (typeof sideRender === 'function') setTimeout(sideRender, 300);
 });
 
 document.addEventListener('input', e => { const n = e.target.dataset && e.target.dataset.live; if (n && $('#' + n)) $('#' + n).textContent = e.target.value; });
@@ -301,3 +252,53 @@ async function popOut(label, url, title, o = {}) {
 }
 function popClose(label) { if (parent !== window) parent.postMessage({pinguino: 'window', op: 'close', label}, '*'); else if (POPS[label]) POPS[label].close(); }
 document.addEventListener('change', e => { if (e.target.id === 'sp-mode') { const pl = $('#sp-plats'); if (pl) pl.hidden = e.target.value !== 'platform'; } });
+
+// Boxes shared by the chat page's settings panel (side.js). They used to live in Setup.
+function dingBox(dg) { return `  <div class="box"><small class="mut">Plays on this PC only${dg.master ? '' : ' (this PC is not the master, so it stays silent)'}. Everything you change here is saved and remembered after Multi or the app closes.</small>
+    <div class="row"><b>On for:</b> <label class="chk"><input type="checkbox" id="dg-twitch" ${dg.platforms.includes('twitch') ? 'checked' : ''}> Twitch</label>
+      <label class="chk"><input type="checkbox" id="dg-youtube" ${dg.platforms.includes('youtube') ? 'checked' : ''}> YouTube</label></div>
+    <div class="row"><label class="chk"><input type="radio" name="dg-scope" value="stream" ${dg.scope !== 'ever' ? 'checked' : ''}> New chatter: once per person <b>per stream</b></label>
+      <label class="chk"><input type="radio" name="dg-scope" value="ever" ${dg.scope === 'ever' ? 'checked' : ''}> once per person <b>ever</b> (like the old Streamer.bot bell)</label></div>
+    <b>New chatter ding</b>
+    <label>Sound (.mp3 or .wav) ${dg.sound_exists ? '' : '<b class="tbadc">(file not found)</b>'}<span class="row"><input id="dg-sound" value="${esc(dg.sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-sound">Choose...</button><button data-act="ding-test" data-kind="new">Test</button></span></label>
+    <label>Volume <span id="dg-vol-n">${dg.volume}</span>%<input id="dg-vol" type="range" min="0" max="100" value="${dg.volume}" data-live="dg-vol-n"></label>
+    <label class="chk"><input type="checkbox" id="dg-returning" ${dg.returning ? 'checked' : ''}> <b>Different ding for a returning chatter</b> <small class="mut">someone who chatted in an earlier stream and chats again in this one</small></label>
+    <label>Returning sound (empty = same sound)<span class="row"><input id="dg-rsound" value="${esc(dg.returning_sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-rsound">Choose...</button><button data-act="ding-test" data-kind="returning">Test</button></span></label>
+    <label>Returning volume <span id="dg-rvol-n">${dg.returning_volume}</span>%<input id="dg-rvol" type="range" min="0" max="100" value="${dg.returning_volume}" data-live="dg-rvol-n"></label>
+    <label class="chk"><input type="checkbox" id="dg-first" ${dg.first_ever ? 'checked' : ''}> Own sound for a Twitch viewer's very first message ever</label>
+    <label>First-ever sound (empty = same as new)<span class="row"><input id="dg-fsound" value="${esc(dg.first_sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-fsound">Choose...</button><button data-act="ding-test" data-kind="first">Test</button></span></label>
+    <label>Master volume <span id="dg-mvol-n">${dg.master_volume}</span>% <small class="mut">multiplies both volumes above</small><input id="dg-mvol" type="range" min="0" max="100" value="${dg.master_volume}" data-live="dg-mvol-n"></label>
+    <label>At most one ding every (seconds)<input id="dg-gap" type="number" min="0.2" max="30" step="0.1" value="${dg.cooldown_s}" style="width:90px"></label>
+    <div class="act"><button class="p" data-act="ding-save">Save</button> <button data-act="ding-reset">New stream (everyone counts as returning)</button></div>
+    <small class="mut">${dg.chatters_this_stream} chatter(s) counted this stream, ${dg.known_chatters} known from earlier, ${dg.played} ding(s) played${dg.dropped ? ', ' + dg.dropped + ' skipped during bursts' : ''}.</small></div>`; }
+function popBox(pp) { return `  <div class="box"><small class="mut">Like the Streamer.bot "chat" sound. Bots never pop. Plays on this PC only${pp.master ? '' : ' (this PC is not the master, so it stays silent)'}. Saved and remembered after Multi or the app closes.</small>
+    <div class="row"><b>On for:</b>${['twitch', 'youtube', 'discord'].map(p => `<label class="chk"><input type="checkbox" id="pp-${p}" ${pp.platforms.includes(p) ? 'checked' : ''}> ${p[0].toUpperCase() + p.slice(1)}</label>`).join('')}
+      <label class="chk"><input type="checkbox" id="pp-own" ${pp.own ? 'checked' : ''}> also my own messages</label></div>
+    <div class="row"><b>Only for:</b>${[['mod', 'mods'], ['vip', 'VIPs'], ['sub', 'subscribers'], ['viewer', 'everyone else']].map(([r, t]) => `<label class="chk"><input type="checkbox" class="pp-role" value="${r}" ${(pp.roles || []).includes(r) ? 'checked' : ''}> ${t}</label>`).join('')}<small class="mut">none ticked = everyone</small></div>
+    <label>Sound (.mp3 or .wav) ${pp.sound_exists ? '' : '<b class="tbadc">(file not found)</b>'}<span class="row"><input id="pp-sound" value="${esc(pp.sound)}" style="flex:1"><button data-act="ding-pick" data-target="pp-sound">Choose...</button></span></label>
+    ${['twitch', 'youtube', 'discord'].map(p => `<label>${p[0].toUpperCase() + p.slice(1)} volume <span id="pp-v-${p}-n">${pp.volume[p]}</span>% <button data-act="pop-test" data-platform="${p}" style="margin-left:6px">Test</button><input id="pp-v-${p}" type="range" min="0" max="100" value="${pp.volume[p]}" data-live="pp-v-${p}-n"></label>`).join('')}
+    <label>Master volume for all chat sounds (pop and dings) <span id="pp-mvol-n">${pp.master_volume}</span>%<input id="pp-mvol" type="range" min="0" max="100" value="${pp.master_volume}" data-live="pp-mvol-n"></label>
+    <label>At most one pop every (seconds)<input id="pp-gap" type="number" min="0.1" max="10" step="0.05" value="${pp.cooldown_s}" style="width:90px"></label>
+    <div class="act"><button class="p" data-act="pop-save">Save</button></div>
+    <small class="mut">${pp.played} pop(s) played${pp.dropped ? ', ' + pp.dropped + ' skipped during bursts' : ''}.</small></div>`; }
+function splitBox(pn) { return `  <div class="box"><small class="mut">Inside the Pinguino app these are real windows you can drag to any monitor; each one remembers where you left it. In a normal browser they open as pop-up windows.</small>
+    <div class="act"><button class="p" data-act="pop-chat">Pop out the chat</button> <button data-act="pop-look">Pop out the look editor</button>
+      <label class="chk"><input type="checkbox" id="sp-aot" ${aotPref() ? 'checked' : ''}> keep pop-outs on top of other windows</label> <small class="mut">(app only)</small></div>
+    <h4>Split chat in half</h4>
+    <div class="row"><label>How to split <select id="sp-mode">
+      <option value="flow">One feed: newest in B, older rows continue in A</option><option value="platform">By platform</option>
+      <option value="events">Chat in A, stream events in B</option><option value="people">Streamer, mods and VIPs in A, viewers in B</option></select></label>
+      <span id="sp-plats" class="row" hidden><b>A shows:</b>${['twitch', 'youtube', 'discord', 'tiktok'].map(x => `<label class="chk"><input type="checkbox" class="sp-pl" value="${x}" ${x === 'twitch' ? 'checked' : ''}> ${x}</label>`).join('')}<small class="mut">B shows the rest</small></span></div>
+    <div class="row"><label>A (top / left) on <select id="sp-a"></select></label><label>B (bottom / right) on <select id="sp-b"></select></label>
+      <label>Layout <select id="sp-dir"><option value="top">stacked (A above B)</option><option value="left">side by side (A left of B)</option></select></label>
+      <label class="chk"><input type="checkbox" id="sp-keep" checked> use remembered positions</label></div>
+    <div class="act"><button class="p" data-act="split-open">Open split chat</button> <button data-act="split-close">Close split chat</button> <span id="sp-state" class="mut"></span></div>
+    <details><summary>Each half's own look</summary><small class="mut">Leave a box empty to follow the main chat look. Full control over the main look: <a href="/?type=style">Chat look</a>.</small>
+      ${['a', 'b'].map(k => { const lk = ((pn.panes['split-' + k] || {}).look) || {}; return `<div class="rule"><b>Half ${k.toUpperCase()}</b><div class="rg">
+        <label class="cf">Text size <input type="number" id="sl-${k}-size" min="9" max="48" value="${lk.size ?? ''}" style="width:70px" placeholder="main"></label>
+        <label class="cf">Background strength % <input type="number" id="sl-${k}-bgA" min="0" max="100" value="${lk.bgA ?? ''}" style="width:70px" placeholder="main"></label>
+        <label class="cf">Background colour <input type="checkbox" id="sl-${k}-bgon" ${lk.bg ? 'checked' : ''}><input type="color" id="sl-${k}-bg" value="${lk.bg || '#09090a'}"></label>
+        <label class="cf">Platform marker <select id="sl-${k}-marker"><option value="">main</option>${[['text', 'Word'], ['logo', 'Logo'], ['both', 'Both'], ['none', 'Nothing']].map(([v, t]) => `<option value="${v}" ${lk.marker === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label class="cf">Times <select id="sl-${k}-timestamps"><option value="">main</option><option value="1" ${lk.timestamps === true ? 'selected' : ''}>show</option><option value="0" ${lk.timestamps === false ? 'selected' : ''}>hide</option></select></label>
+        <label class="cf">Highlight strength % <input type="number" id="sl-${k}-intensity" min="0" max="250" value="${lk.intensity ?? ''}" style="width:70px" placeholder="main"></label></div></div>`; }).join('')}
+      <div class="act"><button data-act="split-looks">Save the halves' looks</button></div></details></div>`; }

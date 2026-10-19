@@ -33,6 +33,7 @@ DEFAULTS = {
     "pop_sound": r"D:\PinguinoSuite\Data\sounds\chat-pop.mp3",   # = Streamer.bot "chat" / "chat (yt louder)"
     "pop_volume": {"twitch": 50, "youtube": 76, "discord": 50},   # Streamer.bot: 0.5 Twitch, 0.76 YouTube
     "pop_cooldown_s": 0.35,
+    "pop_roles": [],                 # chat pop only for these roles (mod, vip, sub, viewer); empty = everyone
     "pop_own": False,                # also pop for my own messages
     "chat_style": None,              # chat look (fonts, backgrounds, highlights); None = defaults, see chatstyle.py
     "discord_channels": [],          # channel ids Multi reads/sends in (bot token is in Credential Manager)

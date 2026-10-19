@@ -772,9 +772,20 @@ async def pop_settings(request: Request):
         patch["pop_cooldown_s"] = max(0.1, min(10.0, float(b["cooldown_s"])))
     if "own" in b:
         patch["pop_own"] = bool(b["own"])
+    if "roles" in b:
+        patch["pop_roles"] = [r for r in b["roles"] if r in ("mod", "vip", "sub", "viewer")]
     config.save_settings(patch)
     console_log.info("pop", "settings changed: on for " + (", ".join(config.settings()["pop_platforms"]) or "nothing"))
     return pipeline.pop.info()
+
+
+@app.post("/api/sounds/reset")
+def sounds_reset():
+    """Put every ding and chat-pop setting back to its default (the sound files themselves are not touched)."""
+    import copy
+    config.save_settings({k: copy.deepcopy(v) for k, v in config.DEFAULTS.items() if k.startswith(("ding_", "pop_"))})
+    console_log.info("sounds", "ding and pop settings reset to defaults")
+    return {"ding": pipeline.ding.info(), "pop": pipeline.pop.info()}
 
 
 @app.post("/api/pop/test")

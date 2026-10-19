@@ -273,14 +273,15 @@ function csChanged(el, final) {
   else if (t === 'num') { setPath(CS, path, parseFloat(el.value)); const out = el.parentElement.querySelector('b'); if (out) out.textContent = el.value + (out.textContent.replace(/[-0-9.]/g, '')); }
   else setPath(CS, path, el.value);
   applyStyle(); renderPreview(); scheduleSave();
-  if (final && (t === 'quick' || t === 'str' || t === 'optc' || t === 'color')) renderEdLeft();     // refresh fields that mirror each other
+  if (final && (t === 'quick' || t === 'str' || t === 'optc' || t === 'color')) { renderEdLeft(); if (W.type !== 'style' && typeof sideRender === 'function') sideRender(); }     // refresh fields that mirror each other
 }
-document.addEventListener('input', e => { if (W.type === 'style' && e.target.dataset && e.target.dataset.cs) csChanged(e.target, false); });
-document.addEventListener('change', e => { if (W.type === 'style' && e.target.dataset && e.target.dataset.cs) csChanged(e.target, true); });
+const csActive = () => W.type === 'style' || (typeof SIDE !== 'undefined' && SIDE.open && W.type === 'chat');
+document.addEventListener('input', e => { if (csActive() && e.target.dataset && e.target.dataset.cs) csChanged(e.target, false); });
+document.addEventListener('change', e => { if (csActive() && e.target.dataset && e.target.dataset.cs) csChanged(e.target, true); });
 const DENSITY = {tight: {spacing: 1, line: 1.2}, normal: {spacing: 4, line: 1.35}, roomy: {spacing: 9, line: 1.5}};
 function edNote(t) { const s = $('#cs-state'); if (s) s.textContent = t; }
 document.addEventListener('click', async e => {
-  if (W.type !== 'style') return;
+  if (!csActive()) return;
   const b = e.target.closest('button[data-cs-act]'); if (!b) return;
   const a = b.dataset.csAct;
   const took = async (r) => { if (r && r.style) { CS = r.style; applyStyle(); } await loadPresets(); renderEdLeft(); renderPreview(); };
@@ -299,7 +300,7 @@ document.addEventListener('click', async e => {
     else if (a === 'pvreal') { edView.real = !edView.real; renderStyleEditor(); }
     else if (a === 'pvbg') { edView.bg = b.dataset.v; renderStyleEditor(); }
     else if (a === 'popout') popOut('look-editor', location.origin + '/?type=style', 'Chat look', {w: 1180, h: 860});
-    else if (a === 'addkw') { const w = ($('#kw-new').value || '').trim(); if (!w) return; CS.keywords = (CS.keywords || []).concat({word: w, rule: JSON.parse(JSON.stringify(CS.event.mention))}); applyStyle(); renderEdLeft(); renderPreview(); scheduleSave(); }
-    else if (a === 'delkw') { CS.keywords.splice(parseInt(b.dataset.i), 1); applyStyle(); renderEdLeft(); renderPreview(); scheduleSave(); }
+    else if (a === 'addkw') { const w = ($('#kw-new').value || '').trim(); if (!w) return; CS.keywords = (CS.keywords || []).concat({word: w, rule: JSON.parse(JSON.stringify(CS.event.mention))}); applyStyle(); renderEdLeft(); renderPreview(); scheduleSave(); if (W.type !== 'style') { sideRender(); chatFeed(); } }
+    else if (a === 'delkw') { CS.keywords.splice(parseInt(b.dataset.i), 1); applyStyle(); renderEdLeft(); renderPreview(); scheduleSave(); if (W.type !== 'style') { sideRender(); chatFeed(); } }
   } catch (err) { edNote('Something went wrong: ' + err); }
 });

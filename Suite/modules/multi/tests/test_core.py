@@ -1025,3 +1025,18 @@ def test_look_presets_undo_import_and_panes_api(tmp_path, monkeypatch):
     assert c.post("/api/geom/pane-split-a", json={"x": "q"}, headers=h).status_code == 400
     assert c.get("/api/panes").json()["geom"]["pane-split-a"]["w"] == 300
     assert c.delete("/api/panes/split-b", headers=h).status_code == 200 and c.get("/api/panes/split-b").status_code == 404
+
+
+def test_pop_roles_filter_and_sounds_reset(tmp_path, monkeypatch):
+    import config, pop
+    from models import ChatMessage
+    state = dict(config.DEFAULTS, pop_platforms=["twitch"], pop_roles=["mod"], my_names=[], bot_accounts=[])
+    monkeypatch.setattr(config, "settings", lambda: state)
+    pp = pop.Pop(player=object(), master=lambda: True, start_worker=False)
+    def msg(badges):
+        return ChatMessage(id="x" + str(badges), platform="twitch", channel="c", user="u", user_id="1", display="U", text="hi", ts=1.0, badges=badges)
+    assert pp.observe(msg(["moderator"])) is True
+    assert pp.observe(msg([])) is False
+    state["pop_roles"] = []
+    assert pp.observe(msg([])) is True
+    assert pop.role_of(msg(["broadcaster"])) == "mod" and pop.role_of(msg(["subscriber"])) == "sub"
