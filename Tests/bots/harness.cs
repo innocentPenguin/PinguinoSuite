@@ -72,7 +72,7 @@ public static class Harness
         {
             Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
             Chat("viewer1", alias + " hi there how are you");
-            Check("@ing " + alias + " brings up the chatbot first", Runs() == "PinguinoChat", Runs());
+            Check("@ing " + alias + " brings up " + (alias.ToLower().Contains("helper") ? "the helper" : "the chatbot") + " first", Runs() == (alias.ToLower().Contains("helper") ? "PinguinoHelper" : "PinguinoChat"), Runs());
         }
         Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "pass"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
         Chat("viewer1", "@pinguinob0t hey");
@@ -159,9 +159,9 @@ public static class Harness
         Check("speaker chains: helper -> chat -> core, chat -> helper -> core, core -> chat -> helper", c.SpeakerPublic("helper") == "core" && c.SpeakerPublic("chat") == "core" && c.SpeakerPublic("core") == "core");
         Registry("{\"Bots\":{\"chat\":{\"Account\":\"chat_acc\"}}}");
         Check("a bot with its own account speaks for itself", c.SpeakerPublic("chat") == "chat");
-        Check("the helper falls into the chatbot first (before the core)", c.SpeakerPublic("helper") == "chat");
+        Check("a bot without its own login is covered by the main account (PinguinoB0t) first", c.SpeakerPublic("helper") == "core");
         Registry("{\"Bots\":{\"helper\":{\"Account\":\"h_acc\"}}}");
-        Check("the chatbot falls into the helper first", c.SpeakerPublic("chat") == "helper");
+        Check("the main account covers the chatbot too", c.SpeakerPublic("chat") == "core");
         Registry("{\"Bots\":{\"core\":{\"Account\":\"\"},\"helper\":{\"Account\":\"h_acc\"}}}");
         Check("the core falls into the chatbot, then the helper", c.SpeakerPublic("core") == "helper");
         Registry("{\"TagWhenShared\":true,\"Bots\":{\"chat\":{\"Title\":\"Yappy\"}}}");
@@ -178,6 +178,26 @@ public static class Harness
         File.Delete(Path.Combine(dir, "bots_secrets.json"));
         Reset(); c.SayPublic("chat", "no token");
         Check("without a token it falls back to the bot account", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "no token", string.Join("|", CPHProxy.Sent));
+
+        // ── names: every variant reaches the right bot; the main account never takes a chat line ──
+        Registry("{}");
+        foreach (var nm in new[] { "pinguino", "hey pinguino what's up", "@chattypinguino hi", "chatty pinguino hi", "pinguinochatty hi", "@PinguinoB0t hi", "pinguino bot hi", "@pinguinochat hi" })
+        { Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; Chat("viewer1", nm); Check("'" + nm + "' goes to the chatbot", Runs() == "PinguinoChat", Runs()); }
+        foreach (var nm in new[] { "@pinguinohelper hi", "pinguino helper hi", "helper pinguino hi", "@HelperPinguino hi", "pinguinhelper hi", "hey pinguino_helper" })
+        { Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; Chat("viewer1", nm); Check("'" + nm + "' goes to the helper", Runs() == "PinguinoHelper", Runs()); }
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; Chat("chattypinguino", "hello"); Chat("pinguinohelper", "hello");
+        Check("the new bot accounts' own lines start nothing", Runs() == "", Runs());
+        // its own login first, the main account only when that fails
+        Registry("{\"Bots\":{\"chat\":{\"Account\":\"chattypinguino\",\"Sender\":\"helix\"},\"core\":{\"Account\":\"pinguinob0t\",\"Sender\":\"helix\"}}}");
+        File.WriteAllText(Path.Combine(dir, "bots_secrets.json"), "{\"chat\":{\"ClientId\":\"c\",\"UserToken\":\"t1\",\"SenderId\":\"11\",\"BroadcasterId\":\"9\"},\"core\":{\"ClientId\":\"c\",\"UserToken\":\"t2\",\"SenderId\":\"22\",\"BroadcasterId\":\"9\"}}");
+        var posts2 = new List<string>(); bool failChat = false;
+        typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, (Func<string, string, string, string>)((url, auth, body) => { posts2.Add(body); if (failChat && body.Contains("\"sender_id\":\"11\"")) throw new Exception("401"); return "{}"; }));
+        Reset(); c.SayPublic("chat", "hi there");
+        Check("the chatbot speaks from its own login", posts2.Count == 1 && posts2[0].Contains("\"sender_id\":\"11\""), string.Join("|", posts2));
+        posts2.Clear(); failChat = true; Reset(); c.SayPublic("chat", "hi again");
+        Check("when its own login fails, PinguinoB0t speaks instead", posts2.Count == 2 && posts2[1].Contains("\"sender_id\":\"22\"") && posts2[1].Contains("hi again"), string.Join("|", posts2));
+        typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, null);
+        File.Delete(Path.Combine(dir, "bots_secrets.json")); Registry("{}");
 
         // ── correlation: per-message result, msgId dedupe, routing.log ──
         string rlog = Path.Combine(dir, "routing.log");

@@ -132,8 +132,9 @@ namespace PinguinoHost
                 sec[role] = new JObject { { "ClientId", cid }, { "UserToken", tok }, { "SenderId", me[0]["id"] }, { "BroadcasterId", chan[0]["id"] }, { "Login", login } };
                 SaveFile("bots_secrets.json", sec);
                 var reg = LoadFile("bots.json");
+                string expect = ((string)reg["Bots"]?[role]?["Account"] ?? "").ToLowerInvariant();
                 if (reg["Bots"]?[role] != null) { reg["Bots"][role]["Account"] = login; reg["Bots"][role]["Sender"] = "helix"; SaveFile("bots.json", reg); }
-                return new JObject { { "ok", true }, { "login", login }, { "note", role + " now chats as " + login + "." } };
+                return new JObject { { "ok", true }, { "login", login }, { "note", role + " now chats as " + login + "." + (expect != "" && expect != login.ToLowerInvariant() ? " WARNING: this bot is meant to be " + expect + ". If that is wrong, sign in again as " + expect + "." : "") } };
             }
         }
 
@@ -237,7 +238,7 @@ async function bots(force){if(!force&&Date.now()-busy<4000)return;BOTS=await j('
 async function save(){const b={};F.forEach(k=>b[k]=$(k).value);b.ObsPassword=$('ObsPassword').value;const r=await j('/api/config',{method:'POST',body:JSON.stringify(b)});$('msg').textContent=r.note||r.error;$('ObsPassword').value='';load()}
 async function signin(role){await save();const r=await j('/api/signin',{method:'POST',body:JSON.stringify({role:role||''})});$('botnote').textContent=$('msg').textContent=r.ok?'Finish signing in in the browser window that just opened; this card updates by itself.':(r.error||'Could not open the browser.')}
 async function callback(){const h=new URLSearchParams(location.hash.slice(1));const t=h.get('access_token');if(!t)return;history.replaceState(null,'','/setup');
-const r=await j('/api/token',{method:'POST',body:JSON.stringify({token:t,role:h.get('state')||''})});document.body.innerHTML=r.ok?'<main><h1>Signed in'+(r.login?' as '+esc(r.login):'')+'</h1><p class=sub>You can close this tab and return to PinguinoSuite.</p></main>':'<main><h1>Sign-in failed</h1><p class=sub>'+esc(r.error||'unknown error')+'</p><p class=sub>Close this tab, then try again from PinguinoSuite.</p></main>'}
+const r=await j('/api/token',{method:'POST',body:JSON.stringify({token:t,role:h.get('state')||''})});document.body.innerHTML=r.ok?'<main><h1>Signed in'+(r.login?' as '+esc(r.login):'')+'</h1>'+(r.note&&r.note.indexOf('WARNING')>=0?'<p class=sub style=color:#ffb3ba>'+esc(r.note)+'</p>':'')+'<p class=sub>You can close this tab and return to PinguinoSuite.</p></main>':'<main><h1>Sign-in failed</h1><p class=sub>'+esc(r.error||'unknown error')+'</p><p class=sub>Close this tab, then try again from PinguinoSuite.</p></main>'}
 async function tokpoll(){try{const c=await j('/api/config');$('tokstate').textContent=c.hasUserToken?'token saved':'not signed in'}catch(e){}}
 if(location.hash.indexOf('access_token')>=0){callback()}else{load();setInterval(tokpoll,3000);status();bots(true);setInterval(status,3000);setInterval(()=>bots(false),5000)}
 //bots(true);setInterval(status,3000);setInterval(()=>bots(false),5000);

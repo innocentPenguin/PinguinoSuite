@@ -62,9 +62,9 @@ public class CPHInline
     static PgRegistry PgDefault()
     {
         var r = new PgRegistry();
-        r.Bots["core"] = new PgBot { Title = "PinguinoB0t", Account = "pinguinob0t", Action = "PinguinoBot", Aliases = new List<string> { "pinguinob0t", "pinguinb0t", "pinguinobot", "pinguinbot" } };
-        r.Bots["chat"] = new PgBot { Title = "PinguinoChat", Account = "", Action = "PinguinoChat", Aliases = new List<string> { "pinguinochat", "chatpinguino" } };
-        r.Bots["helper"] = new PgBot { Title = "HelperPinguino", Account = "", Action = "PinguinoHelper", Aliases = new List<string> { "helperpinguino", "pinguinohelper" } };
+        r.Bots["core"] = new PgBot { Title = "PinguinoB0t", Account = "pinguinob0t", Action = "PinguinoBot", Aliases = new List<string> { "pinguinob0t", "pinguinb0t", "pinguinobot", "pinguinbot", "pinguino b0t", "pinguino bot", "pinguin b0t", "pinguin bot", "penguinob0t", "penguinb0t", "penguinobot", "penguinbot", "pinguino_bot", "pinguino_b0t" } };
+        r.Bots["chat"] = new PgBot { Title = "ChattyPinguino", Account = "chattypinguino", Sender = "none", Action = "PinguinoChat", Aliases = new List<string> { "chattypinguino", "pinguinochatty", "chattypinguin", "pinguinchatty", "chattypenguino", "chattypenguin", "penguinchatty", "chatty pinguino", "pinguino chatty", "chatty penguin", "chatty_pinguino", "pinguino_chatty", "pinguinochat", "pinguinchat", "penguinochat", "penguinchat", "chatpinguino", "chatpinguin", "pinguino chat", "chat pinguino", "pinguinochatbot", "pinguino" } };
+        r.Bots["helper"] = new PgBot { Title = "PinguinoHelper", Account = "pinguinohelper", Sender = "none", Action = "PinguinoHelper", Aliases = new List<string> { "pinguinohelper", "pinguinhelper", "penguinohelper", "penguinhelper", "helperpinguino", "helperpinguin", "helperpenguino", "helperpenguin", "pinguino helper", "helper pinguino", "pinguin helper", "penguin helper", "pinguino_helper", "helper_pinguino", "pinguinohelp" } };
         r.Fallback["helper"] = new List<string> { "chat", "core" };
         r.Fallback["chat"] = new List<string> { "helper", "core" };
         r.Fallback["core"] = new List<string> { "chat", "helper" };
@@ -136,8 +136,33 @@ public class CPHInline
     // who really speaks for this bot: itself if it has a voice, otherwise the first bot of its chain that has one
     string PgSpeaker(string role)
     {
+        if (PgHasVoice(role)) return role;
+        if (role != "core" && PgHasVoice("core")) return "core";               // the main account only speaks for a bot whose own login is missing
         foreach (string r in PgChain(role)) if (PgHasVoice(r)) return r;
         return role;
+    }
+
+    // the bot a message is addressed to: the LONGEST name found wins ("pinguino helper" beats the plain word "pinguino"), ties go to the earliest
+    string PgBestMention(string text, bool plainWords)
+    {
+        string t = (text ?? "").ToLower(), best = ""; int bestLen = 0, bestPos = int.MaxValue;
+        foreach (string role in PgRoleList)
+        {
+            var b = PgBotOf(role); if (b == null) continue;
+            var names = new List<string>(b.Aliases ?? new List<string>());
+            if (!string.IsNullOrEmpty(b.Account)) names.Add(b.Account);
+            foreach (string n in names)
+            {
+                if (string.IsNullOrWhiteSpace(n)) continue;
+                string e = System.Text.RegularExpressions.Regex.Escape(n.Trim().ToLower().TrimStart('@'));
+                var m = System.Text.RegularExpressions.Regex.Match(t, "@" + e + "(?![a-z0-9_])");
+                if (!m.Success && plainWords) m = System.Text.RegularExpressions.Regex.Match(t, "(?<![a-z0-9_])" + e + "(?![a-z0-9_])");
+                if (!m.Success) continue;
+                int len = m.Value.TrimStart('@').Length;
+                if (len > bestLen || (len == bestLen && m.Index < bestPos)) { best = role; bestLen = len; bestPos = m.Index; }
+            }
+        }
+        return best;
     }
 
     // the roles named in a message: "@HelperPinguino", or the plain word when plainWords is true
@@ -174,8 +199,15 @@ public class CPHInline
             string tag = b != null && !string.IsNullOrEmpty(b.Tag) ? b.Tag : "[" + PgTitle(role) + "]";
             msg = tag + " " + text;
         }
-        var sp = PgBotOf(speaker);
-        if (sp != null && string.Equals(sp.Sender, "helix", StringComparison.OrdinalIgnoreCase) && PgHelixSend(speaker, msg)) return;
+        // its own login first; if that fails, the main account (PinguinoB0t), then the rest of the chain
+        var tryList = new List<string> { speaker };
+        if (!tryList.Contains("core")) tryList.Add("core");
+        foreach (string r in PgChain(role)) if (!tryList.Contains(r)) tryList.Add(r);
+        foreach (string r in tryList)
+        {
+            var sp = PgBotOf(r);
+            if (sp != null && PgHasVoice(r) && string.Equals(sp.Sender, "helix", StringComparison.OrdinalIgnoreCase) && PgHelixSend(r, msg)) return;
+        }
         CPH.SendMessage(msg, true);   // the Streamer.bot bot account
     }
 
