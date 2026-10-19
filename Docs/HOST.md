@@ -38,3 +38,9 @@ untime\host_secrets.json` (local only) and never sent back to the page (`hasUser
 - **First Words:** the host reads the IRC `first-msg` tag and passes `firstMessage` to the bots, so first-chat greetings work without Streamer.bot. It is not Streamer.bot's First Words database (no cross-stream "first words ever" history beyond `chat_memory.json`).
 - **Mock Twitch test:** env `PINGUINO_HELIX_BASE` and `PINGUINO_EVENTSUB_URL` redirect helix / EventSub. `Tools\test-host-twitch.ps1` (uses `Tools\mock-twitch.py`) checks token resolution via `/users`, the helix chat send with Bearer + Client-Id headers, `/api/run`, and EventSub subscription calls: "HOST TWITCH(mock): PASS".
 - **Still only verifiable with real credentials/OBS:** the browser sign-in round trip at id.twitch.tv, real helix acceptance of the scopes, real EventSub notifications, timeouts on a real channel, and real OBS scene/source changes. The paste route (`Deploy\PASTE-CHECKLIST.md`) stays as the fallback until those are confirmed.
+
+## Embedded in the Suite shell (2026-10-19)
+- `GET/POST /api/bots`: status (enabled, runs, last run, last error) and settings for PinguinoB0t, PinguinoChat, HelperPinguino. Writes bots.json / chat_settings.json / helper_settings.json; bots reload within ~10 s.
+- Page: Suite dark theme, responsive, no popups; CSP `frame-ancestors` allows self, tauri://localhost, http(s)://tauri.localhost, loopback.
+- Guard: Host must be loopback; Origin must be loopback or Tauri. POSTs: same-origin page is trusted; every other writer (Tauri shell, Stream Deck with Origin, scripts) needs `Authorization: Bearer` or `X-Pinguino-Token` equal to PINGUINO_API_TOKEN / PINGUINO_MODULE_TOKEN (if neither is set, only non-Tauri callers pass). PINGUINO_DATA_DIR is honored.
+- Twitch sign-in navigates the top window to id.twitch.tv (framing is refused), then returns to /auth on 8770.
