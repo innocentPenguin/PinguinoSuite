@@ -15,6 +15,8 @@ PROFILES_DIR = ROOT.parents[2] / "Data" / "profiles"  # shared viewer profiles (
 DEFAULTS = {
     "channel": "innocentpenguin_",
     "twitch_client_id": "",
+    "tiktok_enabled": False,         # UNOFFICIAL, read-only; needs optional TikTokLive package
+    "tiktok_user": "",
     "discord_channels": [],          # channel ids Multi reads/sends in (bot token is in Credential Manager)
     "priority_mode": "local",        # local | ai | auto  (AI arrives in M3; local always works)
     "ai_provider": "anthropic",      # anthropic | openai | ollama (key in Credential Manager as ai_key)

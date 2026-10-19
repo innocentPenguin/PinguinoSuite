@@ -23,6 +23,7 @@ import voice
 import secrets_store
 import windows as win
 from connectors.discord import Discord
+from connectors.tiktok import TikTok
 from connectors.twitch import Twitch
 from connectors.youtube import YouTube
 from models import ChatMessage
@@ -79,11 +80,13 @@ async def lifespan(app):
     connectors["discord"] = dc
     yt = YouTube(inbox, hub.emit)
     connectors["youtube"] = yt
+    tt = TikTok(inbox, hub.emit)
+    connectors["tiktok"] = tt
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
-             asyncio.create_task(dc.run()), asyncio.create_task(yt.run()),
+             asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()),
              asyncio.create_task(listen_bridge.run(cards, hub.emit))]
     yield
-    tw.stop = dc.stop = yt.stop = True
+    tw.stop = dc.stop = yt.stop = tt.stop = True
     for t in tasks:
         t.cancel()
     for wid in list(shell.procs):

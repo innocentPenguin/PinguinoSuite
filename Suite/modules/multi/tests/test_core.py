@@ -497,3 +497,11 @@ def test_listen_bridge_forwards_segments_to_suggestions(monkeypatch):
 
     asyncio.run(go())
     assert any(e["type"] == "reply.suggested" and e["card_id"] == "c1" for e in got)
+
+
+def test_tiktok_unofficial_readonly_normalize():
+    from types import SimpleNamespace as N
+    from connectors.tiktok import TikTok, normalize_comment
+    m = normalize_comment(N(user=N(user_id=7, unique_id="Fan", nickname="Fan!"), comment="hi?", msg_id="m1"), "host")
+    assert m.id == "tiktok:host:m1" and m.platform == "tiktok" and m.user == "fan" and m.text == "hi?"
+    assert TikTok.official is False and TikTok.capabilities["send"] is False
