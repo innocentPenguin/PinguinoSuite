@@ -260,3 +260,9 @@ For module pages:
 - Live changes arrive as `window.addEventListener('message', e => { if (e.data && e.data.pinguino === 'theme') { for (const [k,v] of Object.entries(e.data.vars)) document.documentElement.style.setProperty(k, v); } })` (`e.data.classes` = `{dense, calm}`). Optional but nicer than reloading.
 - Hardcoded colours break the light theme ("Paper"); prefer `var(--panel)`, `var(--fg)`, `var(--hover)`, `var(--panel-end)`.
 - New variables in theme.css: `--hover`, `--hover2`, `--panel-end`.
+
+## Pre-stream schedule and more adjustable bits (cycle 1)
+- `GET/POST /api/prestream/schedule`: `{enabled, slots:["16:30","16:45"], days:[0..6 (Mon=0)], tz:"central"|"local"}` stored in the core settings; edited in Settings > Pre-stream check schedule. Defaults unchanged (16:30 + 16:45 US Central, every day).
+- Manifest hook `on_start`: `{"post": "/api/..."}` called once after the core launches the module (Listen uses it to start the mic).
+- Personalize adds: wording (app name, offline banner, Live / Offline labels), Errors-tile window and hide-when-clean, and sounds for Activity events (follow, sub/resub/gift, raid, cheer, redeem), which keep working on any page.
+- Console: Copy / Save the lines shown. Dashboard pre-stream card: Run now.

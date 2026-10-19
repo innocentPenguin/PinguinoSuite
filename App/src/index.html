@@ -207,7 +207,7 @@ const pages={};
 pages.dashboard=()=>{
   const live=S.live,lm=listenMod(),st=L.status,stats=st?.stats||{};
   const run=S.modules.filter(m=>m.state==='running').length,tot=S.modules.length,down=S.modules.filter(m=>m.state!=='running');
-  const errs=C.entries.filter(e=>e.level==='error'&&e.ts>Date.now()/1000-1800).length;
+  const errs=C.entries.filter(e=>e.level==='error'&&e.ts>Date.now()/1000-PF.thresholds.errors_min*60).length;
   const pr=C.pr&&C.pr.ts?C.pr.summary:null;
   const ndev=D?D.devices.length:1;
   const tile=(k,v,s,cls='',go='')=>`<div class="card tile ${cls}" ${go?`data-go="${go}"`:''}><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
@@ -215,7 +215,7 @@ pages.dashboard=()=>{
   B.hero=`  <div class="card hero ${live.live?'live':''}" style="margin-bottom:14px">
     <div class="row wrap"><div>
       <div class="dim sm">${live.live?(live.simulated===null||live.simulated===undefined?'ON AIR':'ON AIR (TEST)'):'OFFLINE · watching '+esc(S.channel)}</div>
-      <h1>${live.live?esc(live.title||'Live'):'Ready when you are'}</h1>
+      <h1>${live.live?esc(live.title||'Live'):esc(PF.text.idle_title)}</h1>
       <div class="dim sm">${live.live?`${esc(live.game||'')} · live for ${up(live.since)}`:'Listen is always on; everything else wakes the moment you go live.'}</div></div>
       <div class="row sp"><div class="stat">${live.viewers}<small>viewers</small></div></div></div>
   </div>`;
@@ -225,13 +225,13 @@ pages.dashboard=()=>{
   B.t_devices=tile('Devices',ndev+' online',D?'master: '+esc(D.master_name):'this device','', '');
   B.t_modules=tile('Modules',run+'/'+tot,down.length?esc(down.map(m=>m.name).join(', '))+' not running':'all healthy',down.length?'warn':'ok');
   B.t_prestream=tile('Pre-stream',pr?(pr.fail?pr.fail+' fail':pr.warn?pr.warn+' warn':'All ok'):'—',pr?`${pr.pass} ok · ${pr.warn} warn · ${pr.fail} fail`:'not run yet',pr?(pr.fail?'bad':pr.warn?'warn':'ok'):'','console');
-  B.t_errors=tile('Errors (30 min)',errs,errs?'open the Console':'clean',errs?'bad':'ok','console');
+  B.t_errors=PF.thresholds.tile_errors_hide_zero&&!errs?'':tile('Errors ('+PF.thresholds.errors_min+' min)',errs,errs?'open the Console':'clean',errs?'bad':'ok','console');
   B.listen=`<div class="card"><div class="row"><h3 style="margin:0">PinguinoListen</h3>${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}<span class="sm faint sp">${stats.total||0} lines · ${(stats.corrected||0)+(stats.approved||0)} verified${stats.to_review?` · <span style="color:var(--warn)">${stats.to_review} to review</span>`:''}</span></div>
         <div style="margin-top:8px">${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim sm">${lm?.state==='running'?'Not listening right now: the mic starts with the Suite, so check the microphone in Listen (Console shows why).':'PinguinoListen is not running.'}</div>`}</div>
         <div class="row" style="margin-top:10px"><button class="sm" data-go="m:listen">Open Listen</button><button class="sm" data-go="voice">Voice Studio</button>${st?.listening?'':'<button id="d-listen" class="pri sm">Start listening</button>'}</div></div>`;
   B.activity=`<div class="card"><h3>Activity</h3><div class="evt" style="max-height:260px;overflow:auto">${S.events.slice(-14).reverse().map(e=>`<div>${new Date(e.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} <b class="${e.type==='live'?'lv':e.type==='hook'?'hk':''}">${esc(e.type)}</b> ${esc(e.id||e.state||e.title||'')}</div>`).join('')||'<span class="faint">Nothing yet</span>'}</div></div>`;
   B.modules=`<div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(m.name)}</b> <span class="sm faint">${esc(m.state)}</span></div>${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}${modSwitch(m)}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>`;
-  B.prestream=C.pr&&C.pr.ts?`<div class="card"><div class="row"><h3 style="margin:0">Pre-stream</h3><button class="sm sp" data-go="console">Details</button></div><div style="margin-top:6px">${C.pr.items.filter(i=>i.status!=='pass').slice(0,6).map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<div class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><b>${esc(i.module)}</b><span class="sm">${esc(i.label)}</span></div>`}).join('')||'<span class="sm faint">Everything passed.</span>'}</div></div>`:'';
+  B.prestream=C.pr&&C.pr.ts?`<div class="card"><div class="row"><h3 style="margin:0">Pre-stream</h3><button class="sm sp" id="d-prerun">Run now</button><button class="sm" data-go="console">Details</button></div><div style="margin-top:6px">${C.pr.items.filter(i=>i.status!=='pass').slice(0,6).map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<div class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><b>${esc(i.module)}</b><span class="sm">${esc(i.label)}</span></div>`}).join('')||'<span class="sm faint">Everything passed.</span>'}</div></div>`:'';
   return dashLayout(B)};
 
 function deviceStrip(){
@@ -347,6 +347,8 @@ pages.help=()=>{
 /* ============ Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, message?, detail?}]}) ============ */
 const AT={follow:['➕','Follow'],sub:['⭐','Sub'],resub:['🔁','Resub'],gift:['🎁','Gift'],cheer:['💎','Cheer'],raid:['🚩','Raid'],redeem:['🎟','Redeem'],ban:['⛔','Ban'],timeout:['⏱','Timeout'],clip:['🎬','Clip'],replay:['⏪','Replay'],poll:['📊','Poll'],prediction:['🔮','Prediction'],hype:['🔥','Hype train'],shoutout:['📣','Shoutout'],other:['•','Other']};
 const A={items:[],seq:0,types:new Set(),q:'',paused:false,err:null,loaded:false,pending:[]};
+const ACT_SFX={follow:'act_follow',sub:'act_sub',resub:'act_sub',gift:'act_sub',raid:'act_raid',cheer:'act_cheer',redeem:'act_redeem'};
+const anyActSound=()=>PF.sound.on&&Object.keys(ACT_SFX).some(k=>PF.sound.events[ACT_SFX[k]]);
 const atype=t=>AT[t]?t:'other';
 const actText=e=>{const n=e.amount!=null&&e.amount!==''?` · ${e.amount}${e.type==='cheer'?' bits':e.type==='raid'?' viewers':e.type==='gift'?' subs':''}`:'';return `${e.tier?'Tier '+e.tier+' ':''}${e.detail||''}${n}${e.message?' — “'+e.message+'”':''}`.trim()};
 pages.activity=()=>`<div class="ctool"><div class="chips" id="a-chips"></div><input type="text" id="a-q" placeholder="Search…" value="${esc(A.q)}"><button class="sm" id="a-pause">${A.paused?'Resume':'Pause'}</button><span class="sm faint sp" id="a-count"></span></div><div class="clog" id="alog" style="max-height:none"></div>`;
@@ -361,7 +363,7 @@ async function pollActivity(){
   try{const r=await fetch(`/api/modules/host/get?path=${encodeURIComponent('/api/activity?since='+A.seq+'&limit=300')}`);
     if(!r.ok)throw new Error(r.status);const j=await r.json();A.err=null;A.loaded=true;
     if(j.seq<A.seq){A.items=[];A.seq=0}
-    if(j.items&&j.items.length){const add=j.items.filter(e=>e.seq>A.seq);A.seq=Math.max(A.seq,...add.map(e=>e.seq||0),j.seq||0);
+    if(j.items&&j.items.length){const add=j.items.filter(e=>e.seq>A.seq);if(A.heard)add.forEach(e=>{const k=ACT_SFX[e.type];if(k)sfx(k)});A.heard=true;A.seq=Math.max(A.seq,...add.map(e=>e.seq||0),j.seq||0);
       if(A.paused)A.pending=A.pending.concat(add);else A.items=A.items.concat(add).slice(-3000)}
     else if(j.seq)A.seq=Math.max(A.seq,j.seq)}
   catch(e){A.loaded=true;if(!A.items.length)A.err='The Host is not serving the activity feed yet (is PinguinoHost running, and updated?).'}
@@ -371,6 +373,7 @@ function bindActivity(){
   $('#a-pause').onclick=()=>{A.paused=!A.paused;if(!A.paused){A.items=A.items.concat(A.pending).slice(-3000);A.pending=[]}$('#a-pause').textContent=A.paused?'Resume':'Pause';renderActivity()};
   pollActivity()}
 setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
+setInterval(()=>{if(route!=='activity'&&anyActSound()&&!document.hidden)pollActivity()},5000);   // keeps follow / sub / raid sounds alive on any page
 /* ============ Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PW={mons:null,wins:[],err:null,sel:{page:'console',mon:'',place:'free',top:false}};
 const popRoutes=()=>[['dashboard','Dashboard'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['integrations','Integrations'],['help','Help']].concat((S?uiEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
@@ -414,7 +417,8 @@ window.addEventListener('message',async e=>{
 /* ============ Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PF_DEFAULT={v:1,theme:{preset:'penguin',accent:'',radius:'round',density:'comfortable',motion:'full',zoom:100,vars:{}},layout:{sidebar:'full',start:'dashboard',nav_hidden:[],nav_order:[]},
   dash:{full:['hero','devices','tiles'],cards:['listen','modules','activity','prestream'],tiles:['t_stream','t_chat','t_devices','t_modules','t_prestream','t_errors'],hidden:[]},
-  sound:{on:false,volume:50,tone:'chime',events:{golive:true,prestream_fail:true,prestream_ok:false,error:false,module_down:false}},notify:{toasts:true,desktop:true},time:{hours:'auto'},profiles:{},auto:{live:'',idle:''}};
+  sound:{on:false,volume:50,tone:'chime',events:{golive:true,prestream_fail:true,prestream_ok:false,error:false,module_down:false,act_follow:false,act_sub:false,act_raid:false,act_cheer:false,act_redeem:false}},notify:{toasts:true,desktop:true},time:{hours:'auto'},
+  text:{app_name:'PinguinoSuite',idle_title:'Ready when you are',live_pill:'LIVE',offline_pill:'Offline'},thresholds:{errors_min:30,tile_errors_hide_zero:false},profiles:{},auto:{live:'',idle:''}};
 const clone=o=>JSON.parse(JSON.stringify(o));
 const merge=(d,p)=>{const o=clone(d);if(p&&typeof p==='object')for(const k of Object.keys(o)){if(!(k in p))continue;
   if(o[k]&&typeof o[k]==='object'&&!Array.isArray(o[k])&&k!=='profiles'&&k!=='vars')o[k]=merge(o[k],p[k]);else if(typeof p[k]===typeof o[k]||Array.isArray(o[k])&&Array.isArray(p[k]))o[k]=p[k]}return o};
@@ -446,6 +450,7 @@ function applyPrefs(){
   b.classList.toggle('dense',T.density==='compact');b.classList.toggle('calm',T.motion==='calm');b.classList.toggle('r-sharp',T.radius==='sharp');b.classList.toggle('r-pill',T.radius==='pill');
   b.classList.toggle('nav-icons',PF.layout.sidebar==='icons');b.classList.toggle('nav-hidden',PF.layout.sidebar==='hidden'&&!POP);
   try{localStorage.setItem('pgprefs',JSON.stringify(PF))}catch{}
+  const bn=document.querySelector('.brand b');if(bn)bn.textContent=PF.text.app_name;document.title=PF.text.app_name;
   document.querySelectorAll('iframe').forEach(f=>{try{f.contentWindow.postMessage({pinguino:'theme',vars,classes:{dense:T.density==='compact',calm:T.motion==='calm'}},'*')}catch{}})}
 let pfTimer=null;const pfHist=[];
 function savePrefs(){clearTimeout(pfTimer);pfTimer=setTimeout(()=>fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(PF)}).catch(()=>{}),400)}
@@ -486,7 +491,7 @@ function dashLayout(B){const D2=PF.dash,hid=new Set(D2.hidden);
 
 /* sounds: synthesised (no files), volume + tone + per event */
 let AC=null;document.addEventListener('pointerdown',()=>{try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();AC.state==='suspended'&&AC.resume()}catch{}},{once:false});
-const SEQ={golive:[523,659,784,1047],prestream_ok:[784,988],prestream_fail:[330,247,330,247],error:[247,196],module_down:[392,311,247]};
+const SEQ={act_follow:[660,880],act_sub:[523,659,784],act_raid:[392,523,659,784,1047],act_cheer:[880,1175],act_redeem:[700,700],golive:[523,659,784,1047],prestream_ok:[784,988],prestream_fail:[330,247,330,247],error:[247,196],module_down:[392,311,247]};
 const WAVE={chime:'sine',ping:'triangle',soft:'sine',pop:'square'};
 function sfx(kind,force){if(!force&&!(PF.sound.on&&PF.sound.events[kind]))return;if(!AC)return;
   const seq=SEQ[kind]||[660],vol=PF.sound.volume/100*(PF.sound.tone==='soft'?.12:.25),t0=AC.currentTime+.02,step=PF.sound.tone==='pop'?.07:.13;
@@ -535,7 +540,14 @@ pages.personalize=()=>{const T=PF.theme,Ly=PF.layout,Dh=PF.dash,So=PF.sound,pr=O
     ${prow('Sounds on','Master switch.',chk('sound.on',So.on))}
     ${prow('Volume','',`<input type="range" min="0" max="100" step="5" value="${So.volume}" data-pin="sound.volume"><span class="sm faint" style="width:36px">${So.volume}%</span>`)}
     ${prow('Tone','Chime, ping, soft or pop.',sel('sound.tone',So.tone,[['chime','Chime'],['ping','Ping'],['soft','Soft'],['pop','Pop']]))}
-    ${[['golive','You go live'],['prestream_ok','Pre-stream check passed'],['prestream_fail','Pre-stream check has warnings / failures'],['error','A new error appears in the Console'],['module_down','A module stops unexpectedly']].map(e=>prow(e[1],'',`<button class="sm" data-ptest="${e[0]}">Test</button>${chk('sound.events.'+e[0],So.events[e[0]])}`)).join('')}</div>
+    ${[['golive','You go live'],['prestream_ok','Pre-stream check passed'],['prestream_fail','Pre-stream check has warnings / failures'],['error','A new error appears in the Console'],['module_down','A module stops unexpectedly'],['act_follow','Someone follows'],['act_sub','A sub, resub or gift'],['act_raid','A raid arrives'],['act_cheer','Cheer / bits'],['act_redeem','A channel-point redeem']].map(e=>prow(e[1],'',`<button class="sm" data-ptest="${e[0]}">Test</button>${chk('sound.events.'+e[0],So.events[e[0]])}`)).join('')}</div>
+  <div class="card"><h3>Wording &amp; thresholds</h3><div class="pnote">Change the words the Suite uses for you, and when it counts something as a problem.</div>
+    ${prow('App name','Shown top left and in the window title.',`<input type="text" data-pin="text.app_name" value="${esc(PF.text.app_name)}" maxlength="24" style="width:170px">`)}
+    ${prow('Banner when offline','The big line on the dashboard.',`<input type="text" data-pin="text.idle_title" value="${esc(PF.text.idle_title)}" maxlength="60" style="width:200px">`)}
+    ${prow('"Live" label','Top-bar pill while you are live.',`<input type="text" data-pin="text.live_pill" value="${esc(PF.text.live_pill)}" maxlength="14" style="width:110px">`)}
+    ${prow('"Offline" label','Top-bar pill while offline.',`<input type="text" data-pin="text.offline_pill" value="${esc(PF.text.offline_pill)}" maxlength="14" style="width:110px">`)}
+    ${prow('Errors tile window','Count Console errors from the last N minutes (5-240).',`<input type="range" min="5" max="240" step="5" value="${PF.thresholds.errors_min}" data-pin="thresholds.errors_min"><span class="sm faint" style="width:44px">${PF.thresholds.errors_min} min</span>`)}
+    ${prow('Hide the Errors tile when clean','Only show it when there is something to see.',chk('thresholds.tile_errors_hide_zero',PF.thresholds.tile_errors_hide_zero))}</div>
   <div class="card"><h3>Saved looks</h3><div class="pnote">Save everything above as a named look (for example "Streaming" and "Editing") and switch with one click, or let it switch by itself when you go live.</div>
     <div class="row wrap"><input type="text" id="pf-name" placeholder="Name, e.g. Streaming" style="width:200px"><button class="sm" id="pf-save">Save current look</button></div>
     ${pr.map(n=>`<div class="prow"><div class="grow"><b>${esc(n)}</b></div><button class="sm" data-papply="${esc(n)}">Apply</button><button class="sm" data-pdel="${esc(n)}">Delete</button></div>`).join('')||'<div class="sm faint" style="margin-top:8px">No saved looks yet.</div>'}
@@ -545,8 +557,8 @@ pages.personalize=()=>{const T=PF.theme,Ly=PF.layout,Dh=PF.dash,So=PF.sound,pr=O
   </div>`};
 function bindPersonalize(){
   $$('[data-pset]').forEach(b=>b.onclick=()=>setPref(b.dataset.pset,b.dataset.pval==='true'?true:b.dataset.pval==='false'?false:b.dataset.pval));
-  $$('[data-pin]').forEach(i=>i.onchange=()=>{const p=i.dataset.pin;let v=i.type==='checkbox'?i.checked:i.type==='range'?+i.value:i.value;setPref(p,v)});
-  $$('input[type=range][data-pin]').forEach(i=>i.oninput=()=>{const l=i.nextElementSibling;if(l)l.textContent=i.value+'%'});
+  $$('[data-pin]').forEach(i=>i.onchange=()=>{const p=i.dataset.pin;let v=i.type==='checkbox'?i.checked:i.type==='range'?+i.value:i.value;if(p.startsWith('text.')&&!String(v).trim())v=PF_DEFAULT.text[p.slice(5)];setPref(p,v)});
+  $$('input[type=range][data-pin]').forEach(i=>i.oninput=()=>{const l=i.nextElementSibling;if(l)l.textContent=i.value+(i.dataset.pin.startsWith('thresholds')?' min':'%')});
   $$('[data-pmove]').forEach(b=>b.onclick=()=>{const[k,id,d]=b.dataset.pmove.split('|');moveItem(k,id,+d)});
   $$('[data-phide]').forEach(b=>b.onclick=()=>{const[k,id]=b.dataset.phide.split('|');const arr=k==='nav'?PF.layout.nav_hidden:PF.dash.hidden;pfHist.push(clone(PF));const i=arr.indexOf(id);i<0?arr.push(id):arr.splice(i,1);commit()});
   $$('[data-ptest]').forEach(b=>b.onclick=()=>{if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch{}}sfx(b.dataset.ptest,true)});
@@ -564,6 +576,25 @@ function moveItem(kind,id,d){pfHist.push(clone(PF));
   else{const k=kind.split('.')[1],a=PF.dash[k],i=a.indexOf(id),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]]}
   commit()}
 applyPrefs();
+/* ============ Pre-stream schedule (core: GET/POST /api/prestream/schedule) ============ */
+const SCH={v:null};
+const DAYN=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+async function loadSched(){try{SCH.v=await (await fetch('/api/prestream/schedule')).json()}catch{}if(route==='settings'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
+const ampm=h=>{const[a,b]=h.split(':').map(Number);return `${(a%12)||12}:${String(b).padStart(2,'0')} ${a<12?'am':'pm'}`};
+const schedText=()=>SCH.v?(SCH.v.enabled?`Runs at ${SCH.v.slots.map(ampm).join(' and ')} ${SCH.v.tz==='central'?'Central':'(this PC)'}${SCH.v.days.length<7?' on '+SCH.v.days.map(d=>DAYN[d]).join(', '):''}`:'Scheduled checks are off (Run now still works)'):'Runs at 4:30 pm and 4:45 pm Central';
+function schedCard(){if(!SCH.v){loadSched();return '<div class="sm faint">Loading…</div>'}const v=SCH.v;
+  return `<div class="pnote">When the Suite checks everything is ready (OBS, Twitch, keys, modules) and tells you. Only the master device runs it.</div>
+   ${prow('Scheduled checks','Turn the automatic checks on or off.',chk('sch.enabled',v.enabled))}
+   ${prow('Times','Comma-separated 24-hour times, e.g. 16:30, 16:45.',`<input type="text" id="sch-slots" value="${esc(v.slots.join(', '))}" style="width:170px">`)}
+   ${prow('Time zone','Central follows US daylight saving by itself.',`<select id="sch-tz"><option value="central" ${v.tz==='central'?'selected':''}>US Central</option><option value="local" ${v.tz==='local'?'selected':''}>This PC's time</option></select>`)}
+   <div class="prow"><div class="grow"><b>Days</b><div class="sm faint">Only run on these days.</div></div><div class="chips">${DAYN.map((d,i)=>`<span class="chip ${v.days.includes(i)?'on':''}" data-sday="${i}">${d}</span>`).join('')}</div></div>
+   <div class="row" style="margin-top:8px"><button class="pri sm" id="sch-save">Save schedule</button><span class="sm faint">${esc(schedText())}</span></div>`}
+function bindSched(){
+  const g=id=>document.getElementById(id);if(!g('sch-save'))return;
+  $$('[data-pin="sch.enabled"]').forEach(i=>i.onchange=()=>{SCH.v.enabled=i.checked;draw(true)});
+  $$('[data-sday]').forEach(c=>c.onclick=()=>{const d=+c.dataset.sday,a=SCH.v.days;a.includes(d)?a.splice(a.indexOf(d),1):a.push(d);SCH.v.days=a.sort();draw(true)});
+  g('sch-save').onclick=async()=>{const b={enabled:SCH.v.enabled,slots:g('sch-slots').value.split(/[ ,;]+/).filter(Boolean),days:SCH.v.days,tz:g('sch-tz').value};
+    try{SCH.v=await post('/api/prestream/schedule',b);toast('Schedule saved: '+schedText());draw(true)}catch{toast('Could not save the schedule')}}}
 const openExternal=u=>window.__TAURI__?(location.href=u):window.open(u,'_blank');
 pages.integrations=()=>{
   if(I.err)return `<div class="card" style="max-width:520px"><h3>Integrations</h3><div class="dim">${esc(I.err)}</div></div>`;
@@ -590,17 +621,17 @@ function bindIntegrations(){
 const LV={debug:0,info:1,warn:2,error:3};
 const store={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
 const C={seq:0,entries:[],paused:false,clearBefore:0,seen:null,mod:'',level:'debug',q:'',errOnly:false,pr:null};
-pages.console=()=>`<div class="card" id="prcard" style="margin-bottom:14px"><div class="row"><h3 style="margin:0">Pre-stream check</h3><span class="sm faint" id="pr-sub">Runs at 4:30 pm and 4:45 pm Central; stream at 5:00 pm</span><button class="pri sm sp" id="pr-run">Run now</button></div><div id="pr-items" style="margin-top:8px"></div></div>
+pages.console=()=>`<div class="card" id="prcard" style="margin-bottom:14px"><div class="row"><h3 style="margin:0">Pre-stream check</h3><span class="sm faint" id="pr-sub">${schedText()}</span><button class="pri sm sp" id="pr-run">Run now</button></div><div id="pr-items" style="margin-top:8px"></div></div>
   <div class="ctool"><select id="c-mod"><option value="">All modules</option></select>
    <select id="c-lv"><option value="debug">Debug+</option><option value="info">Info+</option><option value="warn">Warn+</option><option value="error">Errors</option></select>
    <input type="text" id="c-q" placeholder="Search…"><label class="sm dim"><input type="checkbox" id="c-err"> Errors only</label>
-   <button class="sm" id="c-pause">Pause</button><button class="sm" id="c-clear">Clear</button><span class="sm faint sp" id="c-count"></span></div>
+   <button class="sm" id="c-pause">Pause</button><button class="sm" id="c-clear">Clear</button><button class="sm" id="c-copy" title="Copy the lines shown">Copy</button><button class="sm" id="c-save" title="Save the lines shown as a text file">Save</button><span class="sm faint sp" id="c-count"></span></div>
   <div class="clog" id="clog"></div>`;
 const tm=t=>new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',...hr()});
 function renderLog(){const box=$('#clog');if(!box)return;
   const f=C.entries.filter(e=>e.seq>C.clearBefore&&(!C.mod||e.module===C.mod)&&LV[e.level]>=LV[C.errOnly?'error':C.level]&&(!C.q||(e.msg+' '+e.source+' '+e.module).toLowerCase().includes(C.q.toLowerCase())));
   const stick=box.scrollTop+box.clientHeight>=box.scrollHeight-30;
-  const rows=f.slice(-800);
+  const rows=f.slice(-800);C.shown=rows;
   box.innerHTML=rows.map(e=>`<div class="cl ${e.level}${e.level==='warn'||e.level==='error'?' clk':''}"${e.level==='warn'||e.level==='error'?` data-hk="" data-hm="${esc(e.module)}" data-hs="${esc(e.source||'')}" data-hmsg="${esc(e.msg.slice(0,200))}" title="Click for what this means and how to fix it"`:''}><span class="t">${tm(e.ts)}</span><span class="lv">${e.level}</span><span class="m">${esc(e.module)}</span>${e.source?`<span class="s">${esc(e.source)}</span>`:''}<span>${esc(e.msg)}</span></div>`).join('')||'<div class="cl"><span class="faint">No log lines match.</span></div>';
   if(stick)box.scrollTop=box.scrollHeight;
   $('#c-count')&&($('#c-count').textContent=f.length+' lines'+(C.paused?' (paused)':''));
@@ -632,6 +663,9 @@ function bindConsole(){
   $('#c-pause').textContent=C.paused?'Resume':'Pause';
   $('#c-pause').onclick=()=>{C.paused=!C.paused;if(!C.paused&&C.pending){C.entries=C.entries.concat(C.pending).slice(-5000);C.pending=[]}$('#c-pause').textContent=C.paused?'Resume':'Pause';renderLog()};
   $('#c-clear').onclick=()=>{C.clearBefore=C.seq;renderLog()};
+  const txt=()=>(C.shown||[]).map(e=>`${new Date(e.ts*1000).toISOString()} [${e.level}] ${e.module}${e.source?'/'+e.source:''}: ${e.msg}`).join('\n');
+  $('#c-copy').onclick=async()=>{try{await navigator.clipboard.writeText(txt());toast('Copied '+(C.shown||[]).length+' lines')}catch{toast('Could not copy')}};
+  $('#c-save').onclick=()=>saveBlob(new Blob([txt()],{type:'text/plain'}),'pinguino-console.txt');
   $('#pr-run').onclick=async()=>{$('#pr-run').disabled=true;$('#pr-run').textContent='Running…';try{C.pr=await post('/api/prestream/run');renderPrestream();pollConsole()}catch{toast('Check failed to run')}$('#pr-run').disabled=false;$('#pr-run').textContent='Run now'};
   C.seen=C.seq;store.set('consoleSeen',C.seen);updateBadge();renderLog();renderPrestream()}
 pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max-width:1000px">
@@ -641,6 +675,7 @@ pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max
   <div class="card"><div class="row"><h3 style="margin:0">Modules</h3>${hq('module_switch')}</div>${S.modules.map(m=>`<div style="padding:6px 0"><div class="row"><b>${esc(m.name)}</b><span class="sm faint">${m.options.enabled?'on':'off'}</span><span class="sp"></span>${modSwitch(m)}</div>
     <div class="setrow"><div class="grow">Start with the Suite</div>${sw('o-'+m.id+'-start_with_suite',m.options.start_with_suite,`data-mod="${m.id}" data-opt="start_with_suite"`)}</div>
     <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div>
+  <div class="card"><div class="row"><h3 style="margin:0">Pre-stream check schedule</h3>${hq('prestream')}</div>${schedCard()}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Pop-out windows</h3>${hq('popout')}</div>${popoutCard()}</div>
   <div class="card"><h3>This device</h3>
     <div class="setrow"><div class="grow">Name<div class="sm faint">Shown to your other devices</div></div><input type="text" id="dv-name" value="${esc(D?D.me.name:'')}" style="width:190px"></div>
@@ -826,10 +861,11 @@ function bind(){
   $$('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
   $$('[data-dev]').forEach(b=>b.onclick=async()=>{D=await post('/api/device/'+b.dataset.dev);toast(b.dataset.dev==='take'?'This device is now in control':'Control released');draw(true)});
   $$('[data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
+  $('#d-prerun')&&($('#d-prerun').onclick=async()=>{$('#d-prerun').disabled=true;try{C.pr=await post('/api/prestream/run');toast('Pre-stream check done')}catch{toast('Check failed to run')}draw(true)});
   $('#d-listen')&&($('#d-listen').onclick=async()=>{try{await fetch(LISTEN+'/api/live/auto',{method:'POST'});toast('Listening started');loadListen()}catch{toast('Listen is not running')}});
   $('#s-chan')&&($('#s-chan').onchange=async e=>{await post('/api/channel',{channel:e.target.value});toast('Channel saved')});
   $('#s-wa')&&($('#s-wa').onchange=async e=>{await post('/api/windows-autostart',{on:e.target.checked});toast(e.target.checked?'Will start with Windows':'Autostart off')});
-  bindPopout();
+  bindPopout();bindSched();
   $$('[data-mlock]').forEach(b=>b.onclick=()=>{const id=b.dataset.mlock;LK[id]=isUnlocked(id)?0:Date.now()+30000;draw(true);if(isUnlocked(id))setTimeout(()=>{if(!isUnlocked(id)&&route!=='console')draw(true)},30500)});
   $$('[data-menable]').forEach(i=>i.onchange=async()=>{const id=i.dataset.menable;LK[id]=0;
     try{await post(`/api/modules/${id}/enable`,{on:i.checked});toast(`${S.modules.find(x=>x.id===id)?.name||id} switched ${i.checked?'on':'off'}`)}catch{toast('Could not change the module')}
@@ -845,7 +881,7 @@ $('#simon').onclick=()=>{post('/api/simulate',{live:true});toast('Simulating go-
 $('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/simulate',{live:null}));
 
 async function load(){try{S=await (await fetch('/api/state')).json()}catch{return}
-  const l=S.live;$('#pill').classList.toggle('on',l.live);$('#pill-t').textContent=l.live?'LIVE':'Offline';
+  const l=S.live;$('#pill').classList.toggle('on',l.live);$('#pill-t').textContent=l.live?PF.text.live_pill:PF.text.offline_pill;
   $('#pill-sub').textContent=l.live?`${l.viewers} watching · ${up(l.since)}`:(l.error?'Twitch check: '+l.error.slice(0,60):'');
   const lm=listenMod();if(lm?.url)LISTEN=lm.url.replace(/\/$/,'');
   $('#navfoot').textContent=`Watching ${S.channel}`;watchState();draw()}

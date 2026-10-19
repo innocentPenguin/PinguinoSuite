@@ -34,10 +34,38 @@ def central_now(utc=None):
     return naive + timedelta(hours=off), off
 
 
-def due_slot(utc, done):
-    """Slot label ('16:30'/'16:45') that should run now and has not yet today, else None. `done` is a set of 'date slot'."""
-    local, _ = central_now(utc)
-    for slot in SLOTS:
+DEFAULT_SCHEDULE = {"enabled": True, "slots": list(SLOTS), "days": [0, 1, 2, 3, 4, 5, 6], "tz": "central"}   # days: Monday=0 ... Sunday=6
+
+
+def clean_schedule(s):
+    """Validated schedule from untrusted input: up to 6 HH:MM slots, weekdays 0-6, tz 'central' (Chicago, DST-aware) or 'local' (this PC)."""
+    s = s if isinstance(s, dict) else {}
+    out = {"enabled": bool(s.get("enabled", True))}
+    slots = []
+    for x in (s.get("slots") if isinstance(s.get("slots"), list) else DEFAULT_SCHEDULE["slots"])[:6]:
+        try:
+            h, m = str(x).split(":")
+            if 0 <= int(h) <= 23 and 0 <= int(m) <= 59 and f"{int(h):02d}:{int(m):02d}" not in slots:
+                slots.append(f"{int(h):02d}:{int(m):02d}")
+        except ValueError:
+            pass
+    out["slots"] = sorted(slots)
+    days = sorted({int(d) for d in (s.get("days") if isinstance(s.get("days"), list) else DEFAULT_SCHEDULE["days"]) if str(d).isdigit() and 0 <= int(d) <= 6})
+    out["days"] = days
+    out["tz"] = s.get("tz") if s.get("tz") in ("central", "local") else "central"
+    return out
+
+
+def due_slot(utc, done, sched=None):
+    """Slot label ('16:30'/'16:45') that should run now and has not yet today, else None. `done` is a set of 'date slot'.
+    sched = clean_schedule() dict (default: 16:30 + 16:45 Central every day)."""
+    sched = sched or DEFAULT_SCHEDULE
+    if not sched.get("enabled", True):
+        return None
+    local = central_now(utc)[0] if sched.get("tz", "central") == "central" else utc.astimezone().replace(tzinfo=None)
+    if local.weekday() not in sched.get("days", DEFAULT_SCHEDULE["days"]):
+        return None
+    for slot in sched.get("slots", SLOTS):
         h, m = map(int, slot.split(":"))
         at = local.replace(hour=h, minute=m, second=0, microsecond=0)
         key = f"{local.date()} {slot}"

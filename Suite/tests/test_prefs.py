@@ -56,3 +56,13 @@ class CoreParses(unittest.TestCase):
         import ast
         for f in ("suite.py", "helpdb.py", "prefs.py", "livedetect.py", "device.py", "vault.py", "portable.py", "integrations.py", "prestream.py"):
             ast.parse((pathlib.Path(__file__).resolve().parents[1] / "suite" / f).read_text("utf8"), f)
+
+
+class WordingTests(unittest.TestCase):
+    def test_text_and_thresholds(self):
+        d = prefs.clean({"text": {"app_name": "  My Hub  ", "idle_title": "<b>x</b>", "live_pill": "", "offline_pill": 5}, "thresholds": {"errors_min": 1}})
+        self.assertEqual(d["text"]["app_name"], "My Hub")
+        self.assertEqual(d["text"]["idle_title"], "Ready when you are")   # angle brackets rejected -> default
+        self.assertEqual(d["text"]["live_pill"], "LIVE")
+        self.assertEqual(d["thresholds"]["errors_min"], 5)
+        self.assertIn("act_raid", d["sound"]["events"])

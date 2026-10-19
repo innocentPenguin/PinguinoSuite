@@ -142,7 +142,7 @@ def _event_to_console(ev):
     elif t == "hook" and not ev.get("ok"):
         lvl = "warn"
     elif t == "prestream":
-        lvl = "error" if ev.get("fail") else "warn" if ev.get("warn") else "info"
+        lvl = "warn" if ev.get("fail") or ev.get("warn") else "info"   # per-item failures are already logged as errors
     msg = t + (": " + ", ".join(f"{k}={v}" for k, v in extra.items()) if extra else "")
     console_log.log(lvl, t, msg, module=mid)
 
@@ -433,7 +433,7 @@ def prestream_loop():
     done = set()
     while True:
         try:
-            due = prestream.due_slot(datetime.now(timezone.utc), done)
+            due = prestream.due_slot(datetime.now(timezone.utc), done, prestream.clean_schedule(load_settings().get("prestream")))
             if due and not devices.is_master():
                 done.add(due[1])  # auxiliary devices do not run the stream checks
                 due = None
@@ -1185,6 +1185,19 @@ async def voice_dispatch(request: Request):
 def console_get(since: int = 0, limit: int = 300, min_level: str = "debug", module: str = "", q: str = ""):
     return {"seq": console_log.seq, "entries": console_log.query(since, max(1, min(limit, 2000)), min_level, module, q),
             "errors": console_log.errors_since(1800)}
+
+
+@app.get("/api/prestream/schedule")
+def prestream_schedule_get():
+    return prestream.clean_schedule(load_settings().get("prestream"))
+
+
+@app.post("/api/prestream/schedule")
+def prestream_schedule_set(b: dict):
+    s = load_settings()
+    s["prestream"] = prestream.clean_schedule(b)
+    save_settings(s)
+    return s["prestream"]
 
 
 @app.get("/api/prestream")

@@ -25,16 +25,18 @@ ENUMS = {
 DASH_ORDER = ["listen", "modules", "activity", "prestream"]
 DASH_FULL = ["hero", "devices", "tiles"]
 TILES = ["t_stream", "t_chat", "t_devices", "t_modules", "t_prestream", "t_errors"]
-SOUND_EVENTS = ["golive", "prestream_fail", "prestream_ok", "error", "module_down"]
+SOUND_EVENTS = ["golive", "prestream_fail", "prestream_ok", "error", "module_down", "act_follow", "act_sub", "act_raid", "act_cheer", "act_redeem"]
 
 DEFAULTS = {
     "v": 1,
     "theme": {"preset": "penguin", "accent": "", "radius": "round", "density": "comfortable", "motion": "full", "zoom": 100, "vars": {}},
     "layout": {"sidebar": "full", "start": "dashboard", "nav_hidden": [], "nav_order": []},
     "dash": {"full": list(DASH_FULL), "cards": list(DASH_ORDER), "tiles": list(TILES), "hidden": []},
-    "sound": {"on": False, "volume": 50, "tone": "chime", "events": {"golive": True, "prestream_fail": True, "prestream_ok": False, "error": False, "module_down": False}},
+    "sound": {"on": False, "volume": 50, "tone": "chime", "events": {"golive": True, "prestream_fail": True, "prestream_ok": False, "error": False, "module_down": False, "act_follow": False, "act_sub": False, "act_raid": False, "act_cheer": False, "act_redeem": False}},
     "notify": {"toasts": True, "desktop": True},
     "time": {"hours": "auto"},
+    "text": {"app_name": "PinguinoSuite", "idle_title": "Ready when you are", "live_pill": "LIVE", "offline_pill": "Offline"},   # wording the user may change
+    "thresholds": {"errors_min": 30, "tile_errors_hide_zero": False},
     "profiles": {},
     "auto": {"live": "", "idle": ""},
 }
@@ -97,6 +99,16 @@ def clean(p, _depth=0):
     no = p.get("notify") if isinstance(p.get("notify"), dict) else {}
     d["notify"] = {"toasts": bool(no.get("toasts", True)), "desktop": bool(no.get("desktop", True))}
     d["time"]["hours"] = _enum((p.get("time") or {}).get("hours") if isinstance(p.get("time"), dict) else None, "hours", "auto")
+    tx = p.get("text") if isinstance(p.get("text"), dict) else {}
+    for k, mx in (("app_name", 24), ("idle_title", 60), ("live_pill", 14), ("offline_pill", 14)):
+        v = tx.get(k)
+        d["text"][k] = v.strip()[:mx] if isinstance(v, str) and v.strip() and NAME.match(v.strip()[:mx]) else d["text"][k]
+    th2 = p.get("thresholds") if isinstance(p.get("thresholds"), dict) else {}
+    try:
+        d["thresholds"]["errors_min"] = max(5, min(240, int(th2.get("errors_min", 30))))
+    except (TypeError, ValueError):
+        pass
+    d["thresholds"]["tile_errors_hide_zero"] = bool(th2.get("tile_errors_hide_zero"))
     if _depth == 0 and isinstance(p.get("profiles"), dict):   # saved looks ("Streaming", "Editing"...): each is itself a cleaned prefs without profiles
         for name, snap in list(p["profiles"].items())[:12]:
             if isinstance(name, str) and NAME.match(name) and isinstance(snap, dict):
