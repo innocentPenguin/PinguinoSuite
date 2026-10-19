@@ -30,6 +30,7 @@ import prestream  # noqa: E402
 import device  # noqa: E402
 import portable  # noqa: E402
 import integrations  # noqa: E402
+import vault as vaultlib  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -55,6 +56,12 @@ ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "taur
 DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "runtime")
 console_log = consolelog.Console(Path(DATA_DIR) / "console", LOGS)  # live log stream for the Console page
 CONSOLE_DIR = Path(DATA_DIR) / "console"
+try:
+    vault = vaultlib.Vault(Path(DATA_DIR) / "vault.bin")  # encrypted key store (DPAPI on Windows, OS keychain elsewhere)
+    console_log.redact = vault.redact
+except Exception as _e:  # noqa: BLE001  (no key store on this OS: the vault endpoints answer 503, everything else works)
+    vault = None
+    console_log.log("warn", "vault", f"key vault unavailable: {str(_e)[:120]}")
 devices = device.Devices(Path(DATA_DIR) / "device.json", existing_install=SETTINGS.exists() or (Path(DATA_DIR) / "bots.json").exists())  # this install: stable id, master/auxiliary role, peers
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 # UI source: single copy lives in the Tauri app so the two can't drift.
@@ -383,7 +390,7 @@ def run_prestream(slot=None, scheduled=False):
     global last_prestream
     mods = [{"id": m.id, "spec": m.spec, "state": m.public()["state"], "always_start": bool(m.spec.get("defaults", {}).get("always_start"))}
             for m in modules.values()]
-    rep = prestream.run_checks(mods, module_token, CONSOLE_DIR, lambda: console_log.errors_since(1800), ROOT, slot, scheduled)
+    rep = prestream.run_checks(mods, module_token, CONSOLE_DIR, lambda: console_log.errors_since(1800), ROOT, slot, scheduled, extra=vault_prestream_items())
     last_prestream = rep
     try:  # a script (no app token) can read the latest result from here
         tmp = CONSOLE_DIR / "prestream-last.json.tmp"
@@ -529,6 +536,11 @@ app = FastAPI(lifespan=lifespan)
 MODULE_PATHS = {"/api/device/peer", "/api/device/streaming", "/api/device/lease", "/api/voice/dispatch"}
 
 
+def _module_path(request):
+    p = request.url.path
+    return p in MODULE_PATHS or (request.method == "GET" and p.startswith("/api/vault/") and p.count("/") == 3)  # GET /api/vault/<name>
+
+
 @app.middleware("http")
 async def guard(request: Request, call_next):
     """Local-only API: right Host (anti DNS-rebinding), allowed Origin (anti drive-by web pages), valid token."""
@@ -540,7 +552,7 @@ async def guard(request: Request, call_next):
             auth = request.headers.get("authorization", "")
             given = auth[7:] if auth.lower().startswith("bearer ") else request.headers.get("x-pinguino-token", "")
             ok = secrets.compare_digest(given, TOKEN)
-            if not ok and request.url.path in MODULE_PATHS:  # modules (Link, Host...) may call these with their own token
+            if not ok and _module_path(request):  # modules (Link, Host...) may call these with their own token
                 for mid in modules:
                     if secrets.compare_digest(given, module_token(mid)):
                         ok, request.state.mod = True, mid
@@ -674,6 +686,175 @@ def _site_item():
     return _site_cache["item"]
 
 
+# ------------------------------------------------------------------ key vault
+def declared_secrets(m):
+    """Manifest "secrets": ["NAME", ...] or [{name, label, test, required}] -> [{name, label, test, required}]."""
+    out = []
+    for s in m.spec.get("secrets", []):
+        d = {"name": s} if isinstance(s, str) else dict(s)
+        if vaultlib.NAME_RE.match(str(d.get("name", ""))):
+            out.append({"name": d["name"], "label": d.get("label", d["name"]), "test": d.get("test"), "required": bool(d.get("required")), "module": m.id})
+    return out
+
+
+def _vault_or_503():
+    if vault is None:
+        raise HTTPException(503, "key vault unavailable on this device")
+    return vault
+
+
+def _plaintext_files():
+    rt = Path(DATA_DIR)
+    return [rt / "settings.json", rt / "chat_settings.json", rt / "host_secrets.json", rt / "bots_secrets.json"]
+
+
+def vault_prestream_items():
+    """Missing declared keys, reported by the pre-stream check (fail only for keys marked required by an always-start module)."""
+    if vault is None:
+        return []
+    have, out = set(vault.names()), []
+    for m in modules.values():
+        miss = [s for s in declared_secrets(m) if s["name"] not in have]
+        if miss:
+            hard = any(s["required"] for s in miss) and bool(m.spec.get("defaults", {}).get("always_start"))
+            out.append({"module": m.id, "id": "keys", "label": "API keys in the vault", "status": "fail" if hard else "warn",
+                        "detail": "missing: " + ", ".join(s["name"] for s in miss)[:160]})
+    return out
+
+
+@app.get("/api/vault")
+def vault_list():
+    """Which keys are set / missing, when they were set and last read. Values are never returned."""
+    v = _vault_or_503()
+    decl = {}
+    for m in modules.values():
+        for s in declared_secrets(m):
+            decl.setdefault(s["name"], []).append(s)
+    names = sorted(set(v.names()) | set(decl))
+    keys = []
+    for n in names:
+        info = v.info(n)
+        d = decl.get(n, [])
+        keys.append({"name": n, "set": info is not None, **(info or {}), "declared_by": [x["module"] for x in d],
+                     "label": next((x["label"] for x in d if x["label"] != n), n), "testable": any(x.get("test") for x in d),
+                     "required": any(x["required"] for x in d)})
+    return {"backend": type(v.backend).__name__.replace("Backend", "").lower(), "is_master": devices.is_master(), "keys": keys,
+            "plaintext": integrations.plaintext_summary(vaultlib.scan_plaintext(_plaintext_files()), v)}
+
+
+class VaultValue(BaseModel):
+    value: str
+
+
+@app.get("/api/vault/{name}")
+def vault_read(name: str, request: Request):
+    """Module-facing: a module reads a key it declared in its manifest ("secrets"). The app token can NOT read values."""
+    mod = getattr(request.state, "mod", None)
+    if not mod:
+        raise HTTPException(403, "values are only readable by the module that declares them")
+    v = _vault_or_503()
+    if not any(s["name"] == name for s in declared_secrets(modules[mod])):
+        console_log.log("warn", "vault", f"{mod} asked for undeclared key {name} (denied)", module=mod)
+        raise HTTPException(403, "key not declared in this module's manifest")
+    if not devices.solo() and not devices.is_master():
+        raise HTTPException(409, f"the vault is held by the master device ({devices.state()['master_name']})")
+    val = v.get(name, by=mod)
+    if val is None:
+        raise HTTPException(404, "key not set")
+    console_log.log("debug", "vault", f"{mod} read {name}", module=mod)
+    return {"name": name, "value": val}
+
+
+@app.post("/api/vault/import-plaintext")
+def vault_import(overwrite: bool = False):
+    """Copy secrets found in the plaintext config files into the vault. The files are NOT changed (scrub them after verifying)."""
+    v = _vault_or_503()
+    n = vaultlib.import_plaintext(v, _plaintext_files(), overwrite)
+    console_log.log("info", "vault", f"imported {n} key(s) from plaintext files")
+    return {"imported": n}
+
+
+class Scrub(BaseModel):
+    file: str
+    confirm: bool = False
+
+
+@app.post("/api/vault/scrub")
+def vault_scrub(b: Scrub):
+    """Blank vault-held secrets in ONE plaintext file. Only after the module that uses them was verified to read the vault."""
+    v = _vault_or_503()
+    f = next((p for p in _plaintext_files() if p.name == b.file), None)
+    if not f or not f.is_file():
+        raise HTTPException(404, "not a known plaintext file")
+    if not b.confirm:
+        raise HTTPException(400, "send confirm=true once the module is verified to read from the vault")
+    n = vaultlib.scrub_plaintext(v, f)
+    console_log.log("info", "vault", f"blanked {n} plaintext secret(s) in {f.name}")
+    return {"blanked": n}
+
+
+class Passphrase(BaseModel):
+    passphrase: str
+
+
+@app.post("/api/vault/backup")
+def vault_backup(b: Passphrase):
+    v = _vault_or_503()
+    try:
+        data = v.export_backup(b.passphrase)
+    except vaultlib.VaultError as e:
+        raise HTTPException(400, str(e))
+    console_log.log("info", "vault", "vault backup exported (passphrase-encrypted)")
+    return Response(data, media_type="application/octet-stream", headers={"Content-Disposition": 'attachment; filename="pinguino-vault-backup.pgb"'})
+
+
+@app.post("/api/vault/restore")
+async def vault_restore(request: Request, merge: bool = True):
+    v = _vault_or_503()
+    try:
+        n = v.restore_backup(await request.body(), request.headers.get("x-passphrase", ""), merge)
+    except vaultlib.VaultError as e:
+        raise HTTPException(400, str(e))
+    console_log.log("info", "vault", f"vault restored from backup ({n} key(s) added)")
+    return {"restored": n}
+
+
+@app.post("/api/vault/{name}/set")
+def vault_set(name: str, b: VaultValue):
+    v = _vault_or_503()
+    try:
+        v.set(name, b.value.strip())
+    except vaultlib.VaultError as e:
+        raise HTTPException(400, str(e))
+    console_log.log("info", "vault", f"key {name} set")
+    return {"ok": True}
+
+
+@app.post("/api/vault/{name}/delete")
+def vault_delete(name: str):
+    v = _vault_or_503()
+    ok = v.delete(name)
+    console_log.log("info", "vault", f"key {name} deleted" if ok else f"key {name} was not set")
+    return {"ok": ok}
+
+
+@app.post("/api/vault/{name}/test")
+def vault_test(name: str):
+    """Run the integration test the declaring module attached to this key (manifest "test" path, POSTed with the module token)."""
+    v = _vault_or_503()
+    if v.peek(name) is None:
+        return {"ok": False, "detail": "key is not set"}
+    for m in modules.values():
+        for s in declared_secrets(m):
+            if s["name"] == name and s.get("test"):
+                try:
+                    r = requests.post(m.spec["url"] + s["test"], json={}, headers=_mod_headers(m.id), timeout=15)
+                    return {"ok": r.ok, "detail": r.text[:200]}
+                except requests.RequestException as e:
+                    return {"ok": False, "detail": f"module not answering: {str(e)[:100]}"}
+    return {"ok": None, "detail": "this key has no test; the module checks it when it connects"}
+
+
 @app.get("/api/integrations")
 def integrations_get():
     """Every outside connection in one list: module-reported, plus Streamer.bot, OBS, the site and which API keys are set."""
@@ -687,8 +868,15 @@ def integrations_get():
         up = integrations.tcp("127.0.0.1", port)
         items.append({"id": f"core:{label}", "module": "core", "group": "Streaming tools", "name": label, "status": "connected" if up else "off",
                       "detail": f"reachable on :{port}" if up else f"not reachable ({note})"})
-    rt = Path(DATA_DIR)
-    items += integrations.secrets_presence([("Bots settings", rt / "settings.json"), ("Chat bot", rt / "chat_settings.json"), ("Host", rt / "host_secrets.json"), ("Bots", rt / "bots_secrets.json")])
+    if vault is not None:
+        have = set(vault.names())
+        for m in modules.values():
+            for s in declared_secrets(m):
+                items.append({"id": f"key:{s['name']}", "module": m.id, "group": "API keys", "name": f"{s['label']}", "status": "connected" if s["name"] in have else "needs_auth",
+                              "detail": f"in the vault ({m.spec.get('name', m.id)})" if s["name"] in have else "key missing: add it below"})
+        pt = integrations.plaintext_summary(vaultlib.scan_plaintext(_plaintext_files()), vault)
+        items.append({"id": "vault:plaintext", "module": "core", "group": "API keys", "name": "Plaintext keys on disk", "status": "needs_auth" if pt["total"] else "connected",
+                      "detail": f"{pt['total']} key(s) still in config files ({pt['unmigrated']} not yet in the vault): import them below" if pt["total"] else "none"})
     return {"ts": time.time(), "items": items}
 
 

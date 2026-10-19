@@ -96,7 +96,7 @@ def _module_items(mid, spec, token, console_dir, now):
     return out
 
 
-def run_checks(modules, token_for, console_dir, errors_30min, disk_path, slot=None, scheduled=False):
+def run_checks(modules, token_for, console_dir, errors_30min, disk_path, slot=None, scheduled=False, extra=None):
     """modules: [{id, spec, state, always_start}], token_for(id)->str, errors_30min()->int. Returns the report dict."""
     now = time.time()
     items = []
@@ -120,5 +120,6 @@ def run_checks(modules, token_for, console_dir, errors_30min, disk_path, slot=No
         items.append(_item("core", "disk", "Disk space", "warn", str(e)[:80]))
     n = errors_30min()
     items.append(_item("core", "errors", "Errors in the last 30 min", "warn" if n else "pass", f"{n} error(s) - see Console" if n else ""))
+    items += list(extra or [])
     summary = {s: sum(1 for i in items if i["status"] == s) for s in ("pass", "warn", "fail")}
     return {"ts": now, "scheduled": scheduled, "slot": slot, "summary": summary, "items": items}

@@ -87,6 +87,15 @@ def from_link_status(status):
     return [x for x in out if x]
 
 
+def plaintext_summary(found, vault):
+    """found = vaultlib.scan_plaintext(...). Counts how many plaintext keys exist and how many are not in the vault yet."""
+    files = {}
+    for f in found:
+        files.setdefault(f["file"], []).append(f["name"])
+    return {"total": len(found), "unmigrated": sum(1 for f in found if vault.peek(f["name"]) is None),
+            "files": [{"file": k, "count": len(v), "names": v} for k, v in sorted(files.items())]}
+
+
 def secrets_presence(files):
     """Which API keys / tokens are set, never their values. files = [(label, Path)]."""
     out = []

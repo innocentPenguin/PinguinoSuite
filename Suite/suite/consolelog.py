@@ -34,6 +34,7 @@ class Console:
         self.dir, self.logs = Path(directory), Path(logs_dir)
         self.max_bytes, self.keep, self.ring = max_bytes, keep, ring
         self.entries, self.seq = [], 0
+        self.redact = None  # optional text filter (the vault hides stored secrets in every line that reaches the Console)
         self._off = {}      # file path -> read offset
         self._pend = {}     # file path -> unterminated tail bytes
         self._lock = threading.Lock()
@@ -43,6 +44,8 @@ class Console:
     # ---- adding
     def add(self, module, level, source, msg, ts=None):
         level = level if level in LEVELS else "info"
+        if self.redact:
+            msg = self.redact(str(msg))
         e = {"ts": ts or time.time(), "module": str(module)[:40], "level": level,
              "source": str(source or "")[:60], "msg": str(msg)[:MAX_MSG]}
         with self._lock:
