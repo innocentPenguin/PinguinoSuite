@@ -163,6 +163,10 @@ CATALOG["popout"] = H("Pop-out windows", "Send any page (Chat, Console, Activity
                       ["Settings > Pop-out windows: pick the page, the monitor and how much of it to fill (whole monitor, top / bottom / left / right half), then Open window.", "The \"Pop out\" button in the top bar opens the page you are on in its own window.",
                        "Windows remember their position, size, monitor and always-on-top, and reopen where you left them next launch (close one with its X to stop that).", "Always on top keeps a window above the game; Pin / Unpin it in the list.", "Only available in the PinguinoSuite app, not in a plain browser."],
                       fix={"label": "Open Settings", "route": "settings"})
+CATALOG["personalize"] = H("Personalize", "Make the Suite yours: theme and accent colour, sidebar, menu order, dashboard cards, sounds, notifications and saved looks. Saved on this device only.",
+                           ["Theme: pick a look, then optionally a custom accent colour. Module pages follow it.", "Menu order / Dashboard: use the arrows to reorder and Hide to remove things you do not use.", "Sounds are off by default; turn them on, pick a tone, and press Test next to each event.",
+                            "Saved looks: save the current setup under a name; Apply it later, or choose looks that switch automatically when you go live / offline.", "Export to file moves your look to another PC; Reset everything goes back to the defaults; Undo reverts the last change."],
+                           fix={"label": "Open Personalize", "route": "personalize"})
 CATALOG["help"] = H("How Help works", "Every ? button and every red / yellow row opens the same kind of panel: what it means, the steps to fix or set it up, and a button to the place to do it.",
                     ["Click any pre-stream row, Integrations row, Console warning / error, module name or key row.", "Green items have instructions too, for setting them up again.", "This page lists all topics."])
 ALIASES["voice"] = "voice_commands"

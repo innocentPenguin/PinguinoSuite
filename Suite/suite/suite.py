@@ -32,6 +32,7 @@ import portable  # noqa: E402
 import integrations  # noqa: E402
 import vault as vaultlib  # noqa: E402
 import helpdb  # noqa: E402
+import prefs as prefslib  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -57,6 +58,7 @@ ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "taur
 DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "runtime")
 console_log = consolelog.Console(Path(DATA_DIR) / "console", LOGS)  # live log stream for the Console page
 CONSOLE_DIR = Path(DATA_DIR) / "console"
+prefs_store = prefslib.Prefs(Path(DATA_DIR) / "prefs.json")
 livedetect.ENV_FILES.append(ROOT.parent / "PinguinoSite" / ".env")  # frozen core: __file__ is inside the bundle, ROOT is the real Suite folder
 try:
     vault = vaultlib.Vault(Path(DATA_DIR) / "vault.bin")  # encrypted key store (DPAPI on Windows, OS keychain elsewhere)
@@ -616,7 +618,9 @@ def theme_css():
     f = UI_INDEX.parent / "theme.css" if UI_INDEX else None
     if not f or not f.exists():
         raise HTTPException(404)
-    return Response(f.read_text("utf8"), media_type="text/css", headers={"Cache-Control": "no-cache"})
+    return Response(f.read_text("utf8") + "
+/* this device's personalisation */
+" + prefs_store.css(), media_type="text/css", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/bootstrap.js")
@@ -770,6 +774,22 @@ def _warn_nohelp(key, shown=""):
     if key and key not in _nohelp_warned:
         _nohelp_warned.add(key)
         console_log.log("warn", "help", f"no help written yet for '{key}'{(' (' + shown + ')') if shown else ''}: add \"help\" in the module manifest or on the item")
+
+
+@app.get("/api/prefs")
+def prefs_get():
+    """This device's UI preferences (theme, layout, nav, dashboard cards, sounds, saved profiles)."""
+    return prefs_store.load()
+
+
+@app.post("/api/prefs")
+def prefs_set(b: dict):
+    return prefs_store.save(b)
+
+
+@app.post("/api/prefs/reset")
+def prefs_reset():
+    return prefs_store.reset()
 
 
 @app.get("/api/help")

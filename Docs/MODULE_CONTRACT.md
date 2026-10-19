@@ -252,3 +252,11 @@ parent.postMessage({pinguino:'window', op:'close', label:'chat-top'}, '*');
 ```
 Errors come back as `{pinguino:'window-error', error}`. Example split: monitor A (above) `place:'top'`... or two windows on two monitors, each `place:'full'`; one monitor split in half = `top` + `bottom`.
 UI: Settings > Pop-out windows, and "Pop out" in the top bar.
+
+## Personalization (per device)
+Users can change theme (8 presets + custom accent), corner style, density, UI zoom, motion, sidebar (full / icons / hidden, Ctrl+B), start page, menu order and hidden items, dashboard blocks (order / hide), sounds, notifications, clock format, and save named "looks" that can switch automatically on go-live / offline. UI: Personalize page (System). Stored per device in `<data dir>/prefs.json` via `GET/POST /api/prefs` (`POST /api/prefs/reset`), validated by `Suite/suite/prefs.py` (unknown keys dropped, colours must be hex), mirrored in `localStorage` (`pgprefs`) so the shell paints the right look instantly.
+For module pages:
+- Use only the `theme.css` variables for colour and your page follows every theme automatically. The core appends the user's palette to `/theme.css`, so a page that links `http://127.0.0.1:8760/theme.css` gets it on load.
+- Live changes arrive as `window.addEventListener('message', e => { if (e.data && e.data.pinguino === 'theme') { for (const [k,v] of Object.entries(e.data.vars)) document.documentElement.style.setProperty(k, v); } })` (`e.data.classes` = `{dense, calm}`). Optional but nicer than reloading.
+- Hardcoded colours break the light theme ("Paper"); prefer `var(--panel)`, `var(--fg)`, `var(--hover)`, `var(--panel-end)`.
+- New variables in theme.css: `--hover`, `--hover2`, `--panel-end`.

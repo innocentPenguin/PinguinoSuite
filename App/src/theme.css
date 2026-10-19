@@ -28,6 +28,7 @@
   --live:#ff4d4f;
   --info:#9fb4c7;            /* neutral cool grey for informational pills */
   --muted-tag:#b9a58a;       /* "preview"/"planned" tags */
+  --hover:#ffffff08;--hover2:#ffffff0d;--panel-end:#0c0c0e;   /* hover wash and card gradient end: themes change these */
   --r:14px;--shadow:0 10px 30px #000a;
   /* legacy names used by older module pages; they now resolve to the new palette */
   --ice:var(--accent);--ice2:var(--accent-active);--beak:var(--accent);--vio:var(--muted-tag);--acc:var(--accent);
