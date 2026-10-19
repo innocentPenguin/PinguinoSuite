@@ -63,6 +63,7 @@ namespace PinguinoHost
                 case "shoutout": what = g("shoutoutUser"); break;
                 case "first5": what = "place " + g("place"); int.TryParse(g("place"), out amount); break;
             }
+            if (kind == "cheer") Credits.Add("bits", who, amount); else if (kind == "redeem") Credits.Add("points", who, amount);
             var e = new JObject { { "ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "kind", kind }, { "type", kind }, { "user", who }, { "what", what }, { "detail", what } };
             if (amount > 0) e["amount"] = amount; if (tier > 0 && (kind == "sub" || kind == "resub" || kind == "gift")) e["tier"] = tier; if (message != "") e["message"] = message;
             lock (L)

@@ -13,6 +13,7 @@ namespace PinguinoHost
         static readonly Dictionary<string, long> _fires = new Dictionary<string, long>(); static readonly Dictionary<string, DateTime> _last = new Dictionary<string, DateTime>();
         static readonly Dictionary<string, JObject> _varMeta = new Dictionary<string, JObject>();
         public static bool Paused { get { return _paused; } }
+        public static bool Has(string idOrName) { return FindAction(idOrName) != null; }
 
         static void NoteFire(string id) { lock (L) { long n; _fires.TryGetValue(id, out n); _fires[id] = n + 1; _last[id] = DateTime.UtcNow; } }
 

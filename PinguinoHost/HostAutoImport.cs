@@ -94,7 +94,7 @@ namespace PinguinoHost
                     }
                 }
                 made.Add(new JObject {
-                    { "id", Guid.NewGuid().ToString("N").Substring(0, 10) }, { "name", name }, { "group", (string)a["group"] ?? "Imported" }, { "enabled", false }, { "imported", true },
+                    { "id", string.IsNullOrEmpty((string)a["id"]) ? Guid.NewGuid().ToString("N").Substring(0, 10) : (string)a["id"] }, { "name", name }, { "group", (string)a["group"] ?? "Imported" }, { "enabled", false }, { "imported", true },
                     { "triggers", triggers }, { "conditions", new JArray() }, { "steps", steps }, { "importNotes", gaps == 0 ? "converted fully" : gaps + " step(s) need a manual rebuild" } });
                 imported.Add(new JObject { { "name", name }, { "triggers", triggers.Count }, { "steps", steps.Count }, { "gaps", gaps } });
             }

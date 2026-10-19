@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Goal</title>
+<style>
+html,body{margin:0;background:transparent;overflow:hidden}
+#w{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.bar{position:relative;overflow:hidden}
+.fill{position:absolute;left:0;top:0;bottom:0;transition:width .8s ease}
+.txt{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-weight:700;text-shadow:0 2px 5px rgba(0,0,0,.7)}
+</style></head><body><div id="w"><div class="bar" id="bar"><div class="fill" id="fill"></div><div class="txt" id="txt"></div></div></div>
+<script>
+// OBS browser source: http://127.0.0.1:8770/overlay/goal?id=followers   (goals + look: Data/runtime/session_settings.json; URL overrides: width=, height=, font=, color=)
+const q=new URLSearchParams(location.search),id=q.get('id');
+async function tick(){
+ try{
+  const j=await (await fetch('/api/goals')).json();const b=j.bar||{};
+  const g=(j.goals||[]).filter(x=>x.visible).find(x=>!id||x.id===id);const bar=document.getElementById('bar');
+  if(!g){document.getElementById('w').style.display='none';return}
+  document.getElementById('w').style.display='';
+  const w=+(q.get('width')||b.Width||900),h=+(q.get('height')||b.Height||56);
+  bar.style.width=w+'px';bar.style.height=h+'px';bar.style.borderRadius=(b.Rounded===false?0:h/2)+'px';
+  const hex=c=>'#'+String(c||'000000').replace('#','');
+  bar.style.background='rgba(0,0,0,'+(b.Opacity===undefined?.55:b.Opacity)+')';
+  const f=document.getElementById('fill');f.style.background=hex(q.get('color')||g.color);f.style.width=g.pct+'%';
+  const t=document.getElementById('txt');t.style.font='700 '+Math.round(h*.5)+"px '"+(q.get('font')||b.Font||'bahnschrift')+"',Segoe UI,sans-serif";t.style.color=hex(b.TextColor);t.textContent=g.line;
+ }catch(e){}
+}
+tick();setInterval(tick,3000);
+</script></body></html>

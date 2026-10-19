@@ -65,7 +65,7 @@ namespace PinguinoHost
         public static bool Handle(HttpListenerContext c)
         {
             string p = c.Request.Url.AbsolutePath;
-            if (p != "/" && p != "/setup" && p != "/auth" && p != "/automations" && p != "/overlay/latest" && p != "/overlay/latest.html" && !p.StartsWith("/api/")) return false;
+            if (p != "/" && p != "/setup" && p != "/auth" && p != "/automations" && p != "/overlay/latest" && p != "/overlay/latest.html" && p != "/overlay/credits" && p != "/overlay/goal" && !p.StartsWith("/api/")) return false;
             if (!LocalOk(c.Request)) { c.Response.StatusCode = 403; return true; }
             if (c.Request.HttpMethod == "POST" && !WriteOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"token required\"}", "application/json"); return true; }
             try

@@ -74,6 +74,14 @@ namespace PinguinoHost
             if (p == "/api/automations/export" && m == "GET") { Write(c, Auto.Export().ToString(), "application/json"); return true; }
             if (p == "/api/automations/enable" && m == "POST") { var b = Body(c); Write(c, Auto.Enable((string)b["id"], (string)b["group"], (bool?)b["on"] != false).ToString(), "application/json"); return true; }
             if (p == "/api/endpoints" && m == "GET") { Write(c, Auto.Endpoints().ToString(), "application/json"); return true; }
+            if (p == "/api/session" && m == "GET") { Write(c, Session.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/goals" && m == "GET") { Write(c, Session.Goals().ToString(), "application/json"); return true; }
+            if (p == "/api/credits" && m == "GET") { var cr = Credits.Build(); if (c.Request.QueryString["test"] == "1") Credits.Sample(cr); Write(c, cr.ToString(), "application/json"); return true; }
+            if ((p == "/overlay/credits" || p == "/overlay/goal") && m == "GET")
+            {
+                string f = p == "/overlay/goal" ? Session.PagePath() : Credits.PagePath(); if (f == null) { c.Response.StatusCode = 404; return true; }
+                Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
+            }
             if (p == "/api/cutover" && m == "GET") { Write(c, Cutover.State().ToString(), "application/json"); return true; }
             if (p == "/api/cutover" && m == "POST") { var b = Body(c); Write(c, Cutover.Set((bool?)b["on"] == true).ToString(), "application/json"); return true; }
             if (p == "/api/latest" && m == "GET") { Write(c, Latest.Api().ToString(), "application/json"); return true; }

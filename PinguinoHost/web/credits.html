@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Credits</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:transparent;overflow:hidden}
+.wrapper{position:absolute;top:100%;width:100%;text-align:center;line-height:1}
+.title{margin-top:60px;margin-bottom:.5em;font-weight:bold}
+.name{margin-bottom:20px}
+</style></head><body><div id="credits" class="wrapper"></div>
+<script>
+// OBS browser source: http://127.0.0.1:8770/overlay/credits   (look and sections: Data/runtime/credits_settings.json; ?test=1 shows sample names)
+const q=new URLSearchParams(location.search);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function go(){
+ let msg;try{msg=await (await fetch('/api/credits'+(q.get('test')?'?test=1':''))).json()}catch(e){return}
+ const S=msg.settings||{},L=S.Look||{},T=S.Titles||{};
+ const font=q.get('font')||L.Font||'Sour Gummy';
+ if(!document.getElementById('gf')){const l=document.createElement('link');l.id='gf';l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Sour+Gummy:wght@700&display=swap';document.head.appendChild(l)}
+ const w=document.getElementById('credits');
+ w.style.font="300 30px/1 '"+font+"',sans-serif";w.style.color='#'+(L.NameColor||'ff9900');
+ w.style.textTransform=L.Uppercase===false?'none':'uppercase';
+ const st=(L.Stroke===undefined?9:L.Stroke);w.style.webkitTextStroke=st+'px black';w.style.paintOrder='stroke fill';
+ const where={follows:'events',cheers:'events',subs:'events',reSubs:'events',giftSubs:'events',giftBombs:'events',raided:'events',rewardRedemptions:'events',goalContributions:'events',pyramids:'events',editors:'users',moderators:'users',subscribers:'users',vips:'users',users:'users',conductors:'hypeTrain',contributors:'hypeTrain',allBits:'top',monthBits:'top',weekBits:'top',channelRewards:'top'};
+ const dedupe=['moderators','vips','users'];const excl=(S.Exclude||[]).map(x=>x.toLowerCase());
+ const sections=(S.Sections||'').split(',').map(x=>x.trim()).filter(Boolean);
+ const seen=new Set();const html=[];
+ for(const key of sections){
+  let data=(msg[where[key]]||{})[key];if(!data)continue;if(!Array.isArray(data))data=Object.values(data);
+  data=data.filter(n=>{const l=String(n).toLowerCase();return !excl.includes(l)&&!l.includes('bot')});
+  if(dedupe.includes(key))data=data.filter(n=>!seen.has(String(n).toLowerCase()));
+  if(!data.length)continue;data.forEach(n=>seen.add(String(n).toLowerCase()));
+  html.push('<div class="title" style="font-size:'+(L.TitleSize||85)+'px;color:#'+(L.TitleColor||'ffffff')+';-webkit-text-stroke:'+(st+3)+'px black">'+esc(T[key]||key)+'</div>'+data.map(n=>'<div class="name" style="font-size:'+(L.NameSize||72)+'px">'+esc(n)+'</div>').join(''));
+ }
+ w.innerHTML=html.join('')||'<div class="title" style="font-size:85px;color:#fff">Thanks for watching!</div>';
+ const h=Math.ceil((w.offsetHeight/innerHeight)*-100)-10;const dur=((w.offsetHeight/innerHeight*100)+100)*(L.SpeedFactor||120);
+ w.animate([{top:'110%'},{top:h+'%'}],{duration:dur,iterations:1,fill:'forwards'});
+}
+go();
+</script></body></html>

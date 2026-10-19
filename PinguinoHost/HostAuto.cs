@@ -158,6 +158,7 @@ namespace PinguinoHost
         {
             bool consumed = false;
             string login = (display ?? "").ToLowerInvariant(); text = (text ?? "").Trim(); if (text == "") return false;
+            bool firstToday = Roster.FirstToday(login);
             string cmd = text.StartsWith("!") ? text.Split(' ')[0] : ""; string rest = cmd != "" && text.Length > cmd.Length ? text.Substring(cmd.Length).Trim() : "";
             foreach (var a in Actions())
                 foreach (var t in (a["triggers"] as JArray ?? new JArray()).OfType<JObject>())
@@ -166,6 +167,7 @@ namespace PinguinoHost
                     if (type == "command" && cmd != "") hit = (t["names"] as JArray ?? new JArray()).Any(n => string.Equals((string)n, cmd, StringComparison.OrdinalIgnoreCase) || string.Equals((string)n, cmd.TrimStart('!'), StringComparison.OrdinalIgnoreCase));
                     else if (type == "chat") { string pat = (string)t["pattern"]; try { hit = !string.IsNullOrEmpty(pat) && Regex.IsMatch(text, pat, RegexOptions.IgnoreCase); } catch (Exception) { } }
                     else if (type == "first_message") hit = first;
+                    else if (type == "first_today") hit = firstToday;
                     if (!hit) continue;
                     if (UserRank(role, isSub) < PermRank((string)t["permission"])) continue;
                     var ctx = BaseCtx(login, display, text, role, isSub, msgId, replyTo); ctx["command"] = cmd; ctx["args"] = rest;
@@ -209,7 +211,7 @@ namespace PinguinoHost
                 case "TwitchCheer": kind = "cheer"; break; case "TwitchRaid": kind = "raid"; break; case "TwitchRaidOut": kind = "raid_out"; break; case "TwitchBan": kind = "ban"; break; case "TwitchRedeem": kind = "redeem"; break; case "StreamOnline": kind = "stream_online"; break; case "StreamOffline": kind = "stream_offline"; break; default: return; }
             var ctx = new Dictionary<string, string>(); foreach (var kv in args) ctx[kv.Key] = Convert.ToString(kv.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
             string u = ctx.ContainsKey("userName") ? ctx["userName"] : ""; ctx["user"] = u; ctx["display"] = u; ctx["raider"] = u; ctx["channel"] = Channel(); ctx["event"] = kind;
-            if (kind == "stream_online") { try { Program.ResetFirsts(); } catch (Exception) { } }
+            if (kind == "stream_online") { try { Program.ResetFirsts(); Session.Begin(); Roster.Reset(); } catch (Exception) { } }
             try { Latest.Record(kind, ctx); } catch (Exception ex) { Clog.Warn("latest", "could not record the event: " + ex.Message); }
             Fire(kind, ctx);
         }
@@ -329,7 +331,7 @@ namespace PinguinoHost
                 {
                     case "say": { string t = x("text"); if (t != "") outp.Add(Say((string)st["as"] ?? "core", t, test)); break; }
                     case "random_say": { var arr = (st["texts"] as JArray ?? new JArray()).Select(v => Expand((string)v, ctx)).Where(v => v != "").ToList(); if (arr.Count > 0) outp.Add(Say((string)st["as"] ?? "core", arr[Rnd.Next(arr.Count)], test)); break; }
-                    case "delay": { int ms = Math.Max(0, Math.Min(600000, (int?)st["ms"] ?? 0)); Thread.Sleep(test ? Math.Min(ms, 300) : ms); outp.Add("waited " + ms + " ms"); break; }
+                    case "delay": { int ms; if (!int.TryParse(x("ms"), out ms)) ms = 0; ms = Math.Max(0, Math.Min(600000, ms)); Thread.Sleep(test ? Math.Min(ms, 300) : ms); outp.Add("waited " + ms + " ms"); break; }
                     case "obs_scene": { string s = x("scene"); outp.Add(test ? "(dry run) would switch OBS scene to " + s : Obs(() => Program.ObsScene(s), "scene -> " + s)); break; }
                     case "obs_source": { string sc = x("scene"), so = x("source"), v = ((string)st["visible"] ?? "true").ToLowerInvariant(); outp.Add(test ? "(dry run) would set OBS source " + so + " to " + v : Obs(() => Program.ObsSource(sc, so, v), "source " + so + " -> " + v)); break; }
                     case "obs_request": { string rt = (string)st["request"] ?? ""; var data = st["data"] as JObject; var d2 = data == null ? new JObject() : JObject.Parse(Expand(data.ToString(), ctx)); outp.Add(test ? "(dry run) would send OBS request " + rt : Obs(() => Program.ObsRaw(rt, d2), "OBS " + rt)); break; }

@@ -891,6 +891,34 @@
           "label": "Open Actions & Events",
           "url": "http://127.0.0.1:8770/automations"
         }
+      },
+      "credits": {
+        "title": "Credits roll",
+        "summary": "The end-of-stream credits (followers, subs, cheers, raiders, mods, chatters, top bits). It replaces Streamer.bot's credits.",
+        "steps": [
+          "Your OBS source 'Credits' keeps working: after the Streamer.bot cutover the Host answers on the same address (127.0.0.1:8080).",
+          "Or use the Host's own page http://127.0.0.1:8770/overlay/credits (add ?test=1 to see sample names).",
+          "Titles, sections, colours, font and speed: Data/runtime/credits_settings.json.",
+          "Bits and channel-point rankings start counting now; Streamer.bot's old history cannot be imported."
+        ]
+      },
+      "goals": {
+        "title": "Session numbers and goals",
+        "summary": "Counts of this stream's follows, subs, bits and raids, and goals with a progress bar for OBS.",
+        "steps": [
+          "Chat: !session for the numbers, !goal for goal progress.",
+          "OBS: add a browser source http://127.0.0.1:8770/overlay/goal?id=followers (ids and targets in Data/runtime/session_settings.json).",
+          "A stream 'starts' when Twitch says it went online; before that everything since the Host started counts."
+        ]
+      },
+      "alerts": {
+        "title": "Alert look and sounds",
+        "summary": "The OBS popup after each alert and one sound per alert kind, all yours to change.",
+        "steps": [
+          "Edit Data/runtime/alerts_settings.json: PopupScene, PopupSource, PopupSeconds, MuteSounds and a sound file + volume for follow, sub, resub, gift, cheer, raid and ban.",
+          "Texts of the thank-you messages are normal actions on the Actions & Events page.",
+          "Leave a sound File empty for no sound."
+        ]
       }
     },
     "activity": "/api/activity"

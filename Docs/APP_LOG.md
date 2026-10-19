@@ -4,6 +4,7 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 
 | When | Event | Details |
 |---|---|---|
+| 2026-10-19 ~12:00 | FULL REBUILD core+shell, relaunch (rebuild11.log) = LOOP CYCLE 1 | 01 PenguinComm page, Quick actions (variables/queue/triggers/hotkeys), Ctrl+K palette, pop-out reconcile, pre-stream schedule; 06 voice module discovered (PenguinComm Speak); 02 Host cutover batch 5c8c6f2 + activity feed; 03 right-side settings panel + split chat; 04 link cycle 1; Spotify cycles 1-2. Build OK first try after killing dotnet PinguinoHost + listeners. |
 | 2026-10-19 ~11:36 | FULL REBUILD core+shell, relaunch (rebuild10.log) | 01 personalization (Personalize page: 8 themes, density, zoom, sidebar, dashboard layout, sounds, looks) + Listen always_start with on_start hook (mic starts at launch, live or not). Two earlier attempts failed: Host DLL locked by a dotnet process running PinguinoHost (kill via CommandLine match, not just port listeners). |
 | 2026-10-19 ~11:29 | Link restart (04 e9158d5: personalisation) | Settings card (device, OBS address, page look, prestream toggles, timeouts, log level) + macro editor (allow-list actions, two-click guards). Update-Module.bat link -NoBuild OK. |
 | 2026-10-19 ~11:27 | Link restart (04 97c00fd) | Update-Module.bat link -NoBuild OK. OBS card, start/stop guards, plainer errors, doctor hints. Real OBS check still red until OBS_WS_PASSWORD is set. |

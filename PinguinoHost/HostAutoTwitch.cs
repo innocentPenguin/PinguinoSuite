@@ -108,6 +108,20 @@ namespace PinguinoHost
                     if (test) return "(dry run) would queue a shoutout for " + who;
                     return "shoutout " + Shout.Enqueue(who, x("by"), (bool?)st["auto"] == true) + ": " + who;
                 }
+                case "alert_settings":   // sets {popup.scene}, {popup.source}, {popup.ms} from alerts_settings.json
+                {
+                    var al = AlertCfg.Settings(); ctx["popup.scene"] = (string)al["PopupScene"]; ctx["popup.source"] = (string)al["PopupSource"]; ctx["popup.ms"] = ((int)(((double?)al["PopupSeconds"] ?? 10) * 1000)).ToString();
+                    return "popup: " + ctx["popup.scene"] + " / " + ctx["popup.source"] + " for " + ctx["popup.ms"] + " ms";
+                }
+                case "alert_sound":   // plays the sound Ivan set for this kind in alerts_settings.json (none set = nothing)
+                {
+                    var al = AlertCfg.Settings(); if ((bool?)al["MuteSounds"] == true) return "alert sounds are muted";
+                    var so = al["Sounds"]?[x("kind")]; string file = (string)so?["File"] ?? ""; if (file == "") return "no sound set for " + x("kind");
+                    return Sound(file, (double?)so["Volume"] ?? 0.6, test);
+                }
+                case "session_say": ctx["session.line"] = Session.Line(); return "session: " + ctx["session.line"];
+                case "goal_say": ctx["goal.line"] = Session.GoalLine(x("id")); return "goal: " + ctx["goal.line"];
+                case "press_key": return test ? "(dry run) would press " + x("key") : PressKey(x("key"));
                 case "latest_say":   // sets {latest.line}: the newest follower / sub / cheer / raid
                     ctx["latest.line"] = "Latest " + Latest.Summary(); return "latest: " + ctx["latest.line"];
                 case "append_file":
@@ -119,6 +133,25 @@ namespace PinguinoHost
                 }
             }
             return null;
+        }
+
+        static string PressKey(string name)
+        {
+            name = (name ?? "").Trim(); int vk;
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) { { "MediaPlayPause", 0xB3 }, { "MediaNext", 0xB0 }, { "MediaPrev", 0xB1 }, { "MediaStop", 0xB2 }, { "VolumeUp", 0xAF }, { "VolumeDown", 0xAE }, { "VolumeMute", 0xAD } };
+            if (!map.TryGetValue(name, out vk))
+            {
+                var fm = System.Text.RegularExpressions.Regex.Match(name, @"^F(\d{1,2})$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (fm.Success && int.Parse(fm.Groups[1].Value) >= 1 && int.Parse(fm.Groups[1].Value) <= 24) vk = 0x70 + int.Parse(fm.Groups[1].Value) - 1;
+                else if (!int.TryParse(name.StartsWith("0x") ? Convert.ToInt32(name.Substring(2), 16).ToString() : name, out vk) || vk < 1 || vk > 254) return "press_key: unknown key '" + name + "' (use MediaPlayPause, MediaNext, MediaPrev, VolumeUp/Down/Mute, F1-F24 or a virtual-key number)";
+            }
+            try
+            {
+                string ps = "Add-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern void keybd_event(byte b, byte s, int f, int e);' -Name K -Namespace PgKeys; [PgKeys.K]::keybd_event(" + vk + ",0,0,0); [PgKeys.K]::keybd_event(" + vk + ",0,2,0)";
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("powershell", "-NoProfile -ExecutionPolicy Bypass -Command \"" + ps.Replace("\"", "\\\"") + "\"") { CreateNoWindow = true, UseShellExecute = false });
+                return "pressed key " + name;
+            }
+            catch (Exception ex) { return "press_key failed: " + ex.Message; }
         }
 
         // ---------------- presets that replace the Streamer.bot actions ----------------
@@ -143,20 +176,23 @@ namespace PinguinoHost
                 if (seeded.Any(v => (string)v == "sbreplace2")) return;
                 var acts = (JArray)doc["actions"];
                 foreach (var gone in acts.OfType<JObject>().Where(o => ((string)o["id"] ?? "").StartsWith("sb-") && ((string)o["importNotes"] ?? "").StartsWith("preset")).ToList()) acts.Remove(gone);   // an earlier test build's presets
-                string disc = "https://discord.gg/be6bus4GKh";
+                string disc = "https://discord.gg/fktz5sq4b8";   // the live invite (the old be6bus4GKh one is expired)
                 var list = new List<JObject> {
-                    Act("sb-latest-popup", "Alerts: show Latest Group", "preset: shows the 'Latest Group' (scene 'Alerts') for 10 s after each alert, like the old 'latest' action.", true, new JArray { Tr("manual") },
-                        Step("obs_source", "scene", "Alerts", "source", "Latest Group", "visible", "true"), Step("delay", "ms", 10000), Step("obs_source", "scene", "Alerts", "source", "Latest Group", "visible", "false")),
-                    Act("sb-follow", "Alert: follow", "from Streamer.bot 'Followed'", true, new JArray { Tr("follow") }, SayStep("innoce108Cool Hello {user} just followed! Welcome to the community! innoce108Hello"), Popup()),
+                    Act("sb-latest-popup", "Alerts: show Latest Group", "preset: shows the 'Latest Group' for some seconds after each alert, like the old 'latest' action. Scene, source and seconds: Data\\runtime\\alerts_settings.json.", true, new JArray { Tr("manual") },
+                        Step("alert_settings"), Step("obs_source", "scene", "{popup.scene}", "source", "{popup.source}", "visible", "true"), Step("delay", "ms", "{popup.ms}"), Step("obs_source", "scene", "{popup.scene}", "source", "{popup.source}", "visible", "false")),
+                    Act("sb-session-cmd", "Command: !session", "new: this stream's numbers (follows, subs, bits, raids). Wording in session_settings.json.", true, new JArray { Tr("command", "names", new JArray("!session", "!streamstats"), "cooldownSec", 20) }, Step("session_say"), SayStep("{session.line}")),
+                    Act("sb-goal-cmd", "Command: !goal", "new: progress of the goals in session_settings.json (the OBS bar is /overlay/goal?id=followers).", true, new JArray { Tr("command", "names", new JArray("!goal", "!goals"), "cooldownSec", 20) }, Step("goal_say", "id", "{arg1}"), SayStep("{goal.line}")),
+                    Act("sb-recap", "Stream recap", "new: the stream's numbers when you go offline (use instead of or after 'Stream offline').", false, new JArray { Tr("stream_offline") }, Step("session_say"), SayStep("Thanks for tuning in! {session.line}")),
+                    Act("sb-follow", "Alert: follow", "from Streamer.bot 'Followed'", true, new JArray { Tr("follow") }, SayStep("innoce108Cool Hello {user} just followed! Welcome to the community! innoce108Hello"), Step("alert_sound", "kind", "follow"), Popup()),
                     Act("sb-sub", "Alert: sub", "from Streamer.bot 'Normal' + 'Super' (Prime looks like tier 1 in Twitch's event)", true, new JArray { Tr("sub") },
-                        Step("if", "left", "{tier}", "op", "==", "right", "1", "then", new JArray { SayStep("🐧 Thank you for the sub, {user}! Enjoy the stream!") }, "else", new JArray { SayStep("🐧 Thank you for the super sub, {user}! Enjoy the stream!") }), Popup()),
-                    Act("sb-resub", "Alert: resub", "from Streamer.bot 'Resub'", true, new JArray { Tr("resub") }, SayStep("🐧 {user} resubbed with a tier {tier} sub! Thank you. I appreciate you!"), Popup()),
-                    Act("sb-gift", "Alert: gifted subs", "from Streamer.bot 'Gifted' (Twitch sends one event per gift bomb)", true, new JArray { Tr("gift") }, SayStep("🎁 {user} gifted {total} sub(s)! innoce108Cool"), Popup()),
-                    Act("sb-cheer", "Alert: cheer", "from Streamer.bot 'Cheers'", true, new JArray { Tr("cheer") }, SayStep("{user} cheered {bits} bits!"), Popup()),
+                        Step("if", "left", "{tier}", "op", "==", "right", "1", "then", new JArray { SayStep("🐧 Thank you for the sub, {user}! Enjoy the stream!") }, "else", new JArray { SayStep("🐧 Thank you for the super sub, {user}! Enjoy the stream!") }), Step("alert_sound", "kind", "sub"), Popup()),
+                    Act("sb-resub", "Alert: resub", "from Streamer.bot 'Resub'", true, new JArray { Tr("resub") }, SayStep("🐧 {user} resubbed with a tier {tier} sub! Thank you. I appreciate you!"), Step("alert_sound", "kind", "resub"), Popup()),
+                    Act("sb-gift", "Alert: gifted subs", "from Streamer.bot 'Gifted' (Twitch sends one event per gift bomb)", true, new JArray { Tr("gift") }, SayStep("🎁 {user} gifted {total} sub(s)! innoce108Cool"), Step("alert_sound", "kind", "gift"), Popup()),
+                    Act("sb-cheer", "Alert: cheer", "from Streamer.bot 'Cheers'", true, new JArray { Tr("cheer") }, SayStep("{user} cheered {bits} bits!"), Step("alert_sound", "kind", "cheer"), Popup()),
                     Act("sb-raid", "Alert: incoming raid", "from Streamer.bot 'Raided' (it was switched off there): thanks, emotes, welcome, then a queued shoutout.", true, new JArray { Tr("raid") },
                         Step("delay", "ms", 500), SayStep("innoce108Cool {raider} just raided the channel with {viewers} viewers PogChamp"),
                         SayStep("innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid"),
-                        Step("delay", "ms", 2500), SayStep("Welcome everyone! innoce108Hello Thank you so much for the raid {raider}!!! innoce108Gift"), Popup(), Step("delay", "ms", 12000), Step("shoutout_queue", "user", "{raider}", "auto", true)),
+                        Step("delay", "ms", 2500), SayStep("Welcome everyone! innoce108Hello Thank you so much for the raid {raider}!!! innoce108Gift"), Step("alert_sound", "kind", "raid"), Popup(), Step("delay", "ms", 12000), Step("shoutout_queue", "user", "{raider}", "auto", true)),
                     Act("sb-ban", "Alert: ban (Among Us ejected)", "from Streamer.bot 'Add Ban': browser source + eject sound. Needs the ban event (channel:moderate: sign the streamer in again).", true, new JArray { Tr("ban") },
                         Step("obs_request", "request", "SetInputSettings", "data", new JObject { { "inputName", "Ban Alert - Among Us Ejected" }, { "inputSettings", new JObject { { "url", "file:///C:/Users/ivanm/Documents/amongusban/Browser%20Sources/among-uspure-css/index.html?user={user}" } } } }),
                         Step("obs_source", "scene", "Ban Alert", "source", "Ban Alert - Among Us Ejected", "visible", "true"), Step("delay", "ms", 900),

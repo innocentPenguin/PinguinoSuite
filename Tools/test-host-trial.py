@@ -1,11 +1,13 @@
 """Trial run of EVERY Host feature end to end in sim mode (no Twitch, no real chat, no real OBS): game commands, helper, chat bot, !pg, events, automations,
 APIs, pages. Prints a pass/fail table. Usage: python Tools/test-host-trial.py [path-to-PinguinoHost.dll]"""
-import json, os, subprocess, sys, tempfile, threading, time, urllib.request
+import base64, json, os, socket, subprocess, sys, tempfile, threading, time, urllib.request
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from obs_probe import _frame, _recv
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 PORT = 8891; rows = []; out = []; lock = threading.Lock()
 d = tempfile.mkdtemp(prefix='pgtrial_')
 json.dump({'Channel': 'trial', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
-env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
+env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env['PINGUINO_COMPAT_WS_PORT'] = '8896'
 host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 def reader():
     for raw in iter(host.stdout.readline, b''):
@@ -123,6 +125,38 @@ try:
         return 'ad_schedule failed' in o, o[:90]
     case('ads', '!preroll without Twitch fails politely', ads)
     case('ads', '!whyad text', lambda: (lambda o: ('Sorry for the ad' in o and '!preroll' in o, o[:60]))(' | '.join(api('/api/automations/test', {'id': 'sb-whyad', 'dry': True})['run']['output'])))
+    def sess():
+        say('event TwitchFollow zoe', 1.5); say('event TwitchCheer zoe 150', 1.5)
+        s = api('/api/session'); g = api('/api/goals')
+        return s['ok'] and s['counts']['follows'] >= 1 and 'This stream' in s['line'] and len(g['goals']) >= 2 and all('line' in x for x in g['goals']), s['line'][:80]
+    case('session', 'session numbers + goals from the feed', sess)
+    def cred():
+        c = api('/api/credits'); ct = api('/api/credits?test=1'); pg = page('/overlay/credits'); gp = page('/overlay/goal?id=followers')
+        ok = c['id'] == 'credits' and 'zoe' in [x.lower() for x in c['events']['follows']] and ct['events']['follows'] and 'api/credits' in pg and 'api/goals' in gp and 'bob' in [x.lower() for x in c['users']['users']]
+        return ok, 'follows=%s chatters=%d' % (c['events']['follows'], len(c['users']['users']))
+    case('credits', 'credits JSON (events, users, top) + overlays', cred)
+    def ws_compat():
+        s = socket.create_connection(('127.0.0.1', 8896), timeout=6); key = base64.b64encode(os.urandom(16)).decode()
+        CR = chr(13) + chr(10)
+        s.sendall(('GET / HTTP/1.1' + CR + 'Host: 127.0.0.1:8896' + CR + 'Upgrade: websocket' + CR + 'Connection: Upgrade' + CR + 'Sec-WebSocket-Key: ' + key + CR + 'Sec-WebSocket-Version: 13' + CR + CR).encode())
+        resp = b''
+        while (CR + CR).encode() not in resp: resp += s.recv(1)
+        def ask(o): s.sendall(_frame(json.dumps(o))); return _recv(s)
+        a = ask({'id': 'credits', 'request': 'GetCredits'}); b = ask({'id': '2', 'request': 'GetActions'}); c = ask({'id': '3', 'request': 'DoAction', 'action': {'id': 'nope'}}); d2 = ask({'id': '4', 'request': 'DoAction', 'action': {'name': 'Command: !whyad'}}); e = ask({'id': '5', 'request': 'Nope'})
+        s.close()
+        return a['id'] == 'credits' and 'events' in a and b['count'] >= 20 and c['status'] == 'error' and d2['status'] == 'ok' and e['status'] == 'error', 'credits/actions/doaction ok'
+    until_ws = time.time() + 40
+    while time.time() < until_ws:
+        try: socket.create_connection(('127.0.0.1', 8896), timeout=1).close(); break
+        except Exception: time.sleep(1)
+    case('websocket', 'Streamer.bot-compatible WebSocket (GetCredits, GetActions, DoAction)', ws_compat)
+    def newsteps():
+        doc = api('/api/automations')['doc']; doc['actions'].append({'id': 'ft', 'name': 'FirstToday', 'enabled': True, 'triggers': [{'type': 'first_today'}], 'steps': [{'type': 'log', 'text': 'first today {user}'}, {'type': 'alert_sound', 'kind': 'follow'}, {'type': 'press_key', 'key': 'Bogus'}]}); api('/api/automations', {'doc': doc})
+        say('newperson: hello', 2.0); r = [x for x in runs() if x['action'] == 'FirstToday' and not x['test']]
+        say('newperson: again', 1.5); r2 = [x for x in runs() if x['action'] == 'FirstToday' and not x['test']]
+        o = ' | '.join(r[0]['output']) if r else ''
+        return len(r) == 1 and len(r2) == 1 and 'no sound set' in o and 'unknown key' in o, o[:90]
+    case('steps', 'first_today fires once per day; alert_sound and press_key behave', newsteps)
     # --- APIs and pages ---
     def mgmt():
         v = api('/api/vars', {'name': 'tv', 'value': '7', 'persist': True}); l = api('/api/vars')['vars']; dl = api('/api/vars/delete', {'name': 'tv'})
@@ -139,7 +173,7 @@ try:
         after = len([r for r in api('/api/automations/log?n=200')['runs'] if 'whyad' in r['action'].lower() and not r['test']])
         return paused_ok and after > before, 'paused runs ignored, resumed runs work'
     case('mgmt', 'pause stops automatic runs, resume restores', pause)
-    for path in ['/api/status', '/api/summary', '/api/prestream', '/api/bots', '/api/lease', '/api/cutover', '/api/latest', '/api/shoutouts', '/api/activity', '/api/automations', '/api/automations/log']:
+    for path in ['/api/status', '/api/summary', '/api/prestream', '/api/bots', '/api/lease', '/api/cutover', '/api/latest', '/api/shoutouts', '/api/session', '/api/goals', '/api/credits', '/api/vars', '/api/queues', '/api/endpoints', '/api/automations/triggers', '/api/automations/hotkeys', '/api/automations/export', '/api/activity', '/api/automations', '/api/automations/log']:
         case('api', 'GET ' + path, (lambda p=path: (api(p).get('ok', True) is not False, '')))
     for path in ['/', '/automations', '/overlay/latest']:
         case('page', 'GET ' + path, (lambda p=path: (len(page(p)) > 500, '')))
