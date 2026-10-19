@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import os from 'node:os';
+import fs from 'node:fs';
 
 export function run(cmd, args = [], { timeout = 30000 } = {}) {
   return new Promise(resolve => {
@@ -9,7 +10,20 @@ export function run(cmd, args = [], { timeout = 30000 } = {}) {
   });
 }
 
-const ts = (...a) => run('tailscale', a);
+/** Find the Tailscale CLI: PATH first, then the standard app-install locations (macOS app and Windows installer don't always add it to PATH). */
+const CANDIDATES = {
+  win32: ['C:\Program Files\Tailscale\tailscale.exe', 'C:\Program Files (x86)\Tailscale\tailscale.exe'],
+  darwin: ['/Applications/Tailscale.app/Contents/MacOS/Tailscale', '/opt/homebrew/bin/tailscale', '/usr/local/bin/tailscale'],
+  linux: ['/usr/bin/tailscale', '/usr/local/bin/tailscale'],
+};
+let bin = null;
+export async function resolveBin() {
+  if (bin) return bin;
+  if ((await run('tailscale', ['version'], { timeout: 5000 })).ok) return (bin = 'tailscale');
+  for (const c of CANDIDATES[os.platform()] || []) if (fs.existsSync(c)) return (bin = c);
+  return 'tailscale';
+}
+const ts = async (...a) => run(await resolveBin(), a);
 
 export async function installed() {
   return (await ts('version')).ok;
@@ -26,10 +40,18 @@ export async function install() {
 export async function up(hostname) {
   const args = ['up', '--accept-routes=false', '--shields-up=false'];
   if (hostname) args.push(`--hostname=${hostname}`);
-  return run('tailscale', args, { timeout: 180000 });
+  return run(await resolveBin(), args, { timeout: 180000 });
 }
 
-export async function status() {
+let cache = { at: 0, val: null, pending: null };
+/** Cached 3 s and de-duplicated: the dashboard polls every 5 s and each uncached call spawns tailscale.exe. */
+export function status() {
+  if (cache.val && Date.now() - cache.at < 3000) return Promise.resolve(cache.val);
+  if (!cache.pending) cache.pending = statusRaw().then(v => { cache = { at: Date.now(), val: v, pending: null }; return v; });
+  return cache.pending;
+}
+
+async function statusRaw() {
   const r = await ts('status', '--json');
   if (!r.ok && !r.stdout) return { error: r.stderr.trim() || 'tailscale not reachable' };
   try {
@@ -54,5 +76,5 @@ export async function status() {
 
 export const ping = name => ts('ping', '-c', '3', '--timeout=3s', name);
 export const sendFile = (file, device) => ts('file', 'cp', file, `${device}:`);
-export const receiveFiles = dir => run('tailscale', ['file', 'get', dir]);
+export const receiveFiles = dir => ts('file', 'get', dir);
 export const netcheck = () => ts('netcheck');

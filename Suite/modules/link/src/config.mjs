@@ -3,7 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-export const DIR = path.join(os.homedir(), '.pinguinolink');
+const LEGACY = path.join(os.homedir(), '.pinguinolink');
+// The Suite core sets PINGUINO_DATA_DIR; standalone runs keep using ~/.pinguinolink.
+export const DIR = process.env.PINGUINO_DATA_DIR ? path.resolve(process.env.PINGUINO_DATA_DIR) : LEGACY;
 const FILE = path.join(DIR, 'config.json');
 
 const DEFAULTS = {
@@ -25,6 +27,10 @@ const DEFAULTS = {
 
 export function load() {
   fs.mkdirSync(DIR, { recursive: true });
+  // One-time migration of an existing standalone config into the Suite data dir.
+  if (DIR !== LEGACY && !fs.existsSync(FILE) && fs.existsSync(path.join(LEGACY, 'config.json'))) {
+    try { fs.copyFileSync(path.join(LEGACY, 'config.json'), FILE); } catch {}
+  }
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
   const merged = { ...DEFAULTS, ...cfg, obs: { ...DEFAULTS.obs, ...cfg.obs }, claude: { ...DEFAULTS.claude, ...cfg.claude } };
