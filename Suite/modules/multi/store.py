@@ -54,6 +54,11 @@ class Store:
             except sqlite3.IntegrityError:
                 return False
 
+    def update_score(self, mid, score, tier):
+        with self.lock:
+            self.db.execute("UPDATE messages SET score=?, tier=? WHERE id=?", (score, tier, mid))
+            self.db.commit()
+
     def get_message(self, mid):
         with self.lock:
             r = self.db.execute("SELECT json,score,tier FROM messages WHERE id=?", (mid,)).fetchone()

@@ -447,6 +447,24 @@ async def set_discord(request: Request):
     return {"ok": True, "has_token": bool(secrets_store.get("discord_token"))}
 
 
+@app.get("/api/ai")
+def ai_usage():
+    return pipeline.advisor.usage()
+
+
+@app.post("/api/secrets/ai")
+async def set_ai_key(request: Request):
+    """Write-only AI key (Credential Manager). Body: {key|clear}."""
+    b = await request.json()
+    if b.get("clear"):
+        secrets_store.delete("ai_key")
+    elif len((b.get("key") or "").strip()) > 8:
+        secrets_store.put("ai_key", b["key"].strip())
+    else:
+        raise HTTPException(400, "key looks too short")
+    return {"ok": True, "has_key": bool(secrets_store.get("ai_key"))}
+
+
 @app.post("/auth/disconnect")
 def auth_disconnect():
     secrets_store.delete("twitch_tokens")

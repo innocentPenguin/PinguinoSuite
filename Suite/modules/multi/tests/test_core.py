@@ -389,3 +389,60 @@ def test_discord_token_write_only(monkeypatch):
     r = c.post("/api/secrets/discord", json={"token": "x" * 30, "channels": ["12", "ab"]},
                headers={"origin": "http://127.0.0.1:8766"})
     assert r.json() == {"ok": True, "has_token": True} and "x" * 30 not in r.text
+
+
+# ai assist ---------------------------------------------------------
+def _advisor(tmp_path, monkeypatch, call, mode="auto"):
+    import ai, config, secrets_store
+    from store import Store
+    monkeypatch.setattr(config, "settings", lambda: dict(config.DEFAULTS, priority_mode=mode))
+    monkeypatch.setattr(secrets_store, "get", lambda k, d=None: "k" * 20)
+    return ai.Advisor(Store(tmp_path / "a.db"), call=call)
+
+
+def test_ai_refine_cache_and_fallback(tmp_path, monkeypatch):
+    import asyncio
+    n = {"c": 0}
+
+    def ok(*a):
+        n["c"] += 1
+        return '{"need": 9}'
+
+    a = _advisor(tmp_path, monkeypatch, ok)
+    r1 = asyncio.run(a.refine("u", "what game is next?"))
+    r2 = asyncio.run(a.refine("u", "What game is next"))
+    assert r1["delta"] == 12.0 and r2 == r1 and n["c"] == 1 and a.stats["cache_hits"] == 1
+
+    def bad(*a):
+        raise TimeoutError()
+
+    b = _advisor(tmp_path, monkeypatch, bad)
+    assert asyncio.run(b.refine("u", "another long question?")) is None and b.stats["fallbacks"] == 1
+
+
+def test_ai_gating_and_spend_cap(tmp_path, monkeypatch):
+    import asyncio, config
+    a = _advisor(tmp_path, monkeypatch, lambda *x: '{"need": 5}')
+    rules = {"tiers": {"high": 50, "medium": 30, "low": 15}}
+    assert a.wants(28, "is this a real question", rules) and not a.wants(5, "is this a real question", rules)
+    assert not a.wants(28, "hi", rules)
+    local = _advisor(tmp_path, monkeypatch, lambda *x: '{"need": 5}', mode="local")
+    assert not local.wants(28, "is this a real question", rules)
+    a.store.kv_set("ai_spend", {"day": a._day(), "usd": 99.0, "calls": 1})
+    assert asyncio.run(a.refine("u", "capped question here?")) is None and a.stats["last_fallback"] == "daily spend cap"
+
+
+def test_ai_rescore_creates_card_and_survives_failure(tmp_path, monkeypatch):
+    import asyncio, config, secrets_store
+    monkeypatch.setattr(config, "settings", lambda: dict(config.DEFAULTS, priority_mode="auto"))
+    monkeypatch.setattr(secrets_store, "get", lambda k, d=None: "k" * 20)
+    p, ev = make_pipeline(tmp_path)
+    p.advisor.call = lambda *a: '{"need": 10}'
+    m = ChatMessage(id="t:1", platform="twitch", channel="c", user_id="9", user="v", display="v",
+                    text="interesting stream tonight friends", ts=time.time())
+    out = p.ingest(m)
+    assert out["tier"] == "low" and out.pop("_ai") and "c:t:1" not in p.cards.cards
+    asyncio.run(p.refine(out))
+    assert p.cards.cards["c:t:1"]["tier"] in ("medium", "high")
+    assert p.store.get_message("t:1")["tier"] in ("medium", "high")
+    assert any(e["type"] == "message.rescored" for e in ev)

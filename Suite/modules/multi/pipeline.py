@@ -6,6 +6,7 @@ import asyncio
 import time
 
 import config
+import ai
 import dedupe
 from priority import rules as prio
 from models import ChatMessage
@@ -16,6 +17,7 @@ class Pipeline:
         self.store, self.cards, self.emit = store, cards, emit
         self.seen = dedupe.Seen()
         self.rules = prio.load_rules()
+        self.advisor = ai.Advisor(store)
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
         self.stats = {"in": 0, "dupes": 0, "dropped": 0}
 
@@ -58,7 +60,29 @@ class Pipeline:
                                                       for x in ctx_msgs])
         out = dict(m.to_dict(), score=d.score, tier=d.tier, reasons=d.reasons)
         self.emit({"type": "message", "message": out})
+        out["_ai"] = self.advisor.wants(d.score, m.text, self.rules)
         return out
+
+    async def refine(self, out):
+        """AI second opinion for uncertain scores. Never blocks display; any failure keeps the local score."""
+        res = await self.advisor.refine(out["user"], out["text"])
+        if not res:
+            return None
+        score = round(max(0.0, out["score"] + res["delta"]), 1)
+        t = self.rules["tiers"]
+        tier = "high" if score >= t["high"] else "medium" if score >= t["medium"] else "low" if score >= t["low"] else "none"
+        reasons = out["reasons"] + [{"rule": "ai", "points": res["delta"], "detail": res["detail"]}]
+        self.store.update_score(out["id"], score, tier)
+        card = self.cards.cards.get("c:" + out["id"])
+        if card and card["state"] == "open":
+            card.update(score=score, tier=tier, reasons=reasons)
+            self.cards._save(card, "card.update")
+        elif not card and tier in ("medium", "high"):
+            from models import Decision, ChatMessage
+            m = ChatMessage(**{k: v for k, v in out.items() if k in ChatMessage.__dataclass_fields__})
+            self.cards.maybe_create(m, Decision(score, tier, reasons))
+        self.emit({"type": "message.rescored", "id": out["id"], "score": score, "tier": tier, "reasons": reasons})
+        return score
 
 
 class Inbox:
@@ -79,7 +103,9 @@ class Inbox:
         while True:
             m = await self.q.get()
             try:
-                self.p.ingest(m)
+                out = self.p.ingest(m)
+                if out and out.pop("_ai", False):
+                    asyncio.create_task(self.p.refine(out))
             except Exception as e:      # one bad message must never stop the feed
                 print("pipeline error:", e, flush=True)
             if self.q.qsize() > 50:     # during bursts yield to the event loop frequently
