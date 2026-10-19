@@ -584,6 +584,25 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(self.e.upvote(rid, "BO"), "already_voted")
         self.assertEqual(self.e.site_snapshot()["queue"][0]["votes"], 1)
 
+    def test_mod_events_and_sub_flags(self):
+        self.api.track = lambda tid: self.api.tracks["t4"]
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        self.responses = {"/poll": (200, {"events": [
+            {"id": "e1", "type": "request", "user": "Ann", "trackId": "x", "sub": True},
+            {"id": "e2", "type": "mod", "action": "close", "user": "M"},
+            {"id": "e3", "type": "mod", "action": "pause", "user": "M"},
+            {"id": "e4", "type": "mod", "action": "bogus", "user": "M"}]})}
+        self.b.poll_once()
+        ack = [s for s in self.sent if s[1].endswith("/ack")][0][3]["results"]
+        self.assertEqual([a["ok"] for a in ack], [True, True, True, False])
+        self.assertEqual(self.e.queue.items[0]["tier"], 1)
+        self.assertFalse(self.e.settings["requests_open"])
+        self.assertFalse(self.api.is_playing)
+        rid = self.e.queue.items[0]["id"]
+        self.assertTrue(self.b.handle_mod("x", "remove", rid, "M")["ok"])
+        self.assertEqual(self.e.queue.items, [])
+
     def test_site_down_backs_off_and_local_keeps_working(self):
         self.responses = {"/push": (503, {})}
         self.assertFalse(self.b.push_once())

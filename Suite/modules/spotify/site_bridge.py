@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 
 import console_log
+from queue_core import QueueError
 from spotify_api import ApiError
 
 REASON = {"closed": "requests_closed", "mod_only": "requests_closed", "sub_only": "requests_closed", "offline": "requests_closed",
@@ -149,7 +150,8 @@ class Bridge:
                 track = None
             if not track:
                 return {"id": eid, "ok": False, "reason": "unknown_request"}
-            r = self.e.request(user, "", [], False, track=track)
+            roles = [r for r in ("sub", "vip") if ev.get(r)] + (["mod"] if ev.get("staff") else [])
+            r = self.e.request(user, "", roles, False, track=track)
             if r["ok"]:
                 return {"id": eid, "ok": True, "rid": r.get("item") or r.get("code")}
             return {"id": eid, "ok": False, "reason": REASON.get(r["code"], "blocked")}
@@ -159,7 +161,32 @@ class Bridge:
                 return {"id": eid, "ok": r["ok"], **({} if r["ok"] else {"reason": "unknown_request"})}
             err = self.e.upvote(str(ev.get("rid", "")), str(ev.get("login") or user))
             return {"id": eid, "ok": err is None, **({"reason": err} if err else {})}
+        if typ == "mod":
+            return self.handle_mod(eid, str(ev.get("action", "")), str(ev.get("value") or ""), user)
         return {"id": eid, "ok": False, "reason": "unknown_request"}
+
+    def handle_mod(self, eid, action, value, user):
+        e = self.e
+        try:
+            if action == "skip":
+                e.skip(force=True)
+            elif action == "remove":
+                e.queue.remove(value)
+                e.persist()
+                e._bump()
+            elif action in ("open", "close"):
+                e.save_settings({"requests_open": action == "open"})
+            elif action == "pause":
+                e.control("pause")
+            elif action == "resume":
+                e.control("resume")
+            else:
+                return {"id": eid, "ok": False, "reason": "unknown_request"}
+        except (QueueError, ApiError) as ex:
+            console_log.warn("site", f"mod {action} by {user} failed: {ex}", dedupe_s=10)
+            return {"id": eid, "ok": False, "reason": "unknown_request"}
+        console_log.info("site", f"mod action {action} by {user}")
+        return {"id": eid, "ok": True}
 
     # ---- bookkeeping
     def _ok(self):
