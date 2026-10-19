@@ -51,6 +51,8 @@ MSGS = {
     "genre": ("Genre blocked", "@{user} that genre ({genre}) isn't allowed right now.", "Song by an artist in a blocked genre."),
     "safe_on": ("Stream-safe on", "Stream-safe mode is ON: no explicit songs, requests need approval.", "A mod turned stream-safe on."),
     "safe_off": ("Stream-safe off", "Stream-safe mode is off.", "A mod turned stream-safe off."),
+    "announce_track": ("Announce: new song", "Now playing: {song}{by}", "Line the Host can post when a new song starts (needs the announce switch)."),
+    "announce_request": ("Announce: new request", "{user} requested {title}!", "Line the Host can post when a request is accepted."),
     "session_limit": ("Session limit", "@{user} you've used all {limit} requests for this stream.", "Per-stream request cap reached."),
     "volume": ("!volume", "Volume is {vol}%.", "Mods: current volume."),
     "volume_set": ("!volume set", "Volume set to {vol}%.", "Mods: volume changed."),
@@ -115,6 +117,8 @@ SCHEMA = [
     ]},
     {"id": "chat", "title": "Chat wording", "items": [
         ("chat_replies", "bool", True, "Reply in chat", "Off = commands work silently."),
+        ("announce_track_on", "bool", False, "Announce new songs", "Make the Host post a line in chat whenever a new song starts (Host polls /api/announcements)."),
+        ("announce_request_on", "bool", False, "Announce accepted requests", "Make the Host post a line when a viewer request is accepted."),
         ("prefix", "str", "!", "Command prefix", "The character(s) before a command."),
         ("reply_prefix", "str", "", "Text before every reply", "Eg. a music-note emoji. Empty = nothing."),
         ("cmd_aliases", "cmds", COMMANDS, "Command names", "Words that trigger each command, comma separated. Add your own (eg. !tune)."),

@@ -35,6 +35,8 @@ class Engine:
         self.last_error = ""
         self.last_verify = 0.0
         self.idle_since = None
+        self._ann = []                 # announcements for the Host to post: {seq, ts, text}
+        self._ann_seq = 0
         self._search_cache = {}
         self.artist_genres = {}
         self.alert = None
@@ -193,6 +195,10 @@ class Engine:
             console_log.info("player", f"now playing: {cur['name']} - {', '.join(cur['artists'])}" +
                              (f" (requested by {self.now_item['requester']})" if self.now_item and self.now_item["requester"] else ""))
         self._write_np(cur)
+        if cur and self.settings["announce_track_on"]:
+            who = (self.now_item or {}).get("requester")
+            self._announce("announce_track", song=f"{cur['name']} - {', '.join(cur['artists'])}", title=cur["name"], artist=", ".join(cur["artists"]),
+                           by=f" (requested by {who})" if who else "", requester=who or "", link=f"https://open.spotify.com/track/{cur['id']}")
         self.persist()
         if self.now_item and self.now_item["skip_on_play"]:
             threading.Thread(target=self._safe, args=(self.skip,), daemon=True).start()   # skip() sends our next song first
@@ -210,6 +216,18 @@ class Engine:
             fn(*a)
         except ApiError as e:
             console_log.warn("api", f"{getattr(fn, '__name__', 'call')} failed: {e}", dedupe_s=10)
+
+    def _announce(self, key, **v):
+        text = self.say(key, **v)
+        if text:
+            self._ann_seq += 1
+            self._ann.append({"seq": self._ann_seq, "ts": self.clock(), "text": text})
+            del self._ann[:-30]
+
+    def announcements(self, since=0):
+        """The Host polls this and posts the lines to chat (we have no chat connection of our own)."""
+        with self.lock:
+            return {"seq": self._ann_seq, "lines": [a for a in self._ann if a["seq"] > since and self.clock() - a["ts"] < 120]}
 
     def _write_np(self, cur):
         s = self.settings
@@ -430,6 +448,8 @@ class Engine:
         idx = self.queue.index(item["id"])
         mins = round(self.eta_ms(idx) / 60000)
         self.alert = {"id": item["id"], "text": f"{user} requested {t['name']}", "ts": self.clock()}
+        if s["announce_request_on"]:
+            self._announce("announce_request", user=user, song=label, title=t["name"], artist=base["artist"])
         r = self._r(True, "added", **base, pos=idx + 1, eta=f", plays in ~{mins} min" if mins >= 2 else "")
         r["item"] = item["id"]
         return r

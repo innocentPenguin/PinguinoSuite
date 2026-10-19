@@ -1099,6 +1099,20 @@ class Cycle2Tests(unittest.TestCase):
         r = self.e.chat("v", "!sr safe on", [])             # a viewer's "safe on" is just a search
         self.assertFalse(self.e.settings["stream_safe"])
 
+    def test_announcements_feed(self):
+        self.e.save_settings({"announce_track_on": True, "announce_request_on": True})
+        self.e.chat("ann", "!sr song 5", [])
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        a = self.e.announcements(0)
+        self.assertEqual([l["text"] for l in a["lines"]], ["ann requested Song 5!", "Now playing: Song 1 - Artist"])
+        self.assertEqual(self.e.announcements(a["seq"])["lines"], [])
+        self.clock.t += 200
+        self.assertEqual(self.e.announcements(0)["lines"], [], "stale lines are not replayed")
+        self.e.save_settings({"announce_track_on": False, "announce_request_on": False})
+        self.e.chat("bob", "!sr song 6", [])
+        self.assertEqual(self.e.announcements(0)["lines"], [])
+
     def test_search_cache(self):
         calls = []
         orig = self.api.search

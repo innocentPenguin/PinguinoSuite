@@ -50,9 +50,21 @@ def token_ok(headers):
     return hmac.compare_digest(got.encode(), want.encode())
 
 
+class Quiet(ThreadingHTTPServer):
+    """A client closing a keep-alive connection is normal on Windows; don't print a traceback (the Console flags those)."""
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        import sys
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError, BrokenPipeError)):
+            return
+        console_log.warn("server", f"request handler error: {sys.exc_info()[1]!r}", dedupe_s=60)
+
+
 class H(BaseHTTPRequestHandler):
     server_version = "PinguinoSpotify"
     protocol_version = "HTTP/1.1"
+    timeout = 30                      # idle keep-alive connections free their thread
 
     def log_message(self, *a):
         pass
@@ -206,7 +218,7 @@ def page(title, msg):
 
 
 GET = {"/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
-       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/setup": g_setup, "/callback": g_callback}
+       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/setup": g_setup, "/callback": g_callback}
 
 
 # ---- POST routes
@@ -442,7 +454,7 @@ def main():
     threading.Thread(target=loop, daemon=True).start()
     bridge.start()
     try:
-        srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
+        srv = Quiet(("127.0.0.1", PORT), H)
     except OSError as e:
         console_log.error("server", f"cannot listen on 127.0.0.1:{PORT} ({e}); is another PinguinoSpotify already running?")
         raise SystemExit(1)

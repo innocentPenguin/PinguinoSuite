@@ -66,3 +66,6 @@ Schedule (open/close requests at set times and days, transitions only so manual 
 
 ## Cycle 2 additions
 Genre blocklist (`block_genres`, matched against the artist's Spotify genres, cached, lookup failure = allow, broadcaster exempt), add a whole playlist/album to the queue (Search tab; `POST /api/queue/add_context {link, shuffle, limit}`; needs the playlist scopes, so reconnect once if the first login predates them), your own saved presets ("＋ Save mine", also applied via `/api/preset`), overlay request alerts (`ov_alerts`, `ov_alert_s`), mod `!sr safe on|off`, 2-minute search cache (protects Spotify's rate limit during chat bursts), clear error when port 8771 is already taken.
+
+## Cycle 3
+Quiet handling of dropped keep-alive connections (no tracebacks in the Console; idle connections time out after 30 s). Optional chat announcements: `announce_track_on` / `announce_request_on` (off by default) queue lines that the Host polls with `GET /api/announcements?since=<seq>` -> `{seq, lines:[{seq, ts, text}]}` and posts to chat (we have no chat connection of our own); wording is editable (`announce_track`, `announce_request` templates).
