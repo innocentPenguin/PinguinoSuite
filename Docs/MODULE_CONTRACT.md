@@ -18,6 +18,21 @@ Either of:
 | `on_live` / `on_offline` | no | `{"post": "/path"}` called when the stream goes live / offline |
 | `defaults` | no | `enabled`, `start_with_suite`, `react_to_live` |
 
+## `ui` block (optional): appear in the App with only a manifest
+```json
+"ui": { "nav": "Bots", "icon": "🤖", "section": "Modules", "path": "/", "order": 30, "replaces": "bots" }
+```
+| Field | Meaning |
+|---|---|
+| `nav` | sidebar label (default: `name`) |
+| `icon` | emoji/char shown in the sidebar (default ▣) |
+| `section` | sidebar group heading (default `Modules`) |
+| `path` | page inside the module's `url` that the App embeds (default `/`) |
+| `order` | sort key, lower first (default 100) |
+| `replaces` | hides the matching *preview mock* (`voice`, `chat`, `bots`, `actions`) once the real module exists |
+
+The core returns it as `modules[].ui` in `/api/state` (with `url`, `state`). The shell builds a nav entry and an embedded page per module with `ui`; if the module is not running it shows a Start button. No edit to `App/src/index.html` is ever needed. Requirements for the embedded page: serve it over HTTP on `127.0.0.1:<port>`, allow being framed by the App (do not send `X-Frame-Options: DENY`/`frame-ancestors 'none'`), and call your own API same-origin.
+
 (Planned, not yet enforced: `version`, `deps`, `capabilities`, `config schema`, `restart policy`.)
 
 ## Security rules for modules

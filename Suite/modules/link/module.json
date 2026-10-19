@@ -1,0 +1,12 @@
+{
+  "id": "link",
+  "name": "PinguinoLink",
+  "desc": "Secure device link: Tailscale status, remote OBS macros, file send/receive (Windows + macOS)",
+  "cmd": ["node", "src/cli.mjs", "serve"],
+  "cwd": "modules/link",
+  "port": 7777,
+  "url": "http://127.0.0.1:7777",
+  "health": "/api/health",
+  "ui": { "nav": "Link", "icon": "🔗", "section": "Modules", "path": "/", "order": 40 },
+  "defaults": { "enabled": true, "start_with_suite": false, "react_to_live": false }
+}

@@ -165,7 +165,7 @@ class Module:
 
     def public(self):
         st = "running" if self.healthy else "starting" if self.running else "stopped"
-        return {"id": self.id, "name": self.spec["name"], "desc": self.spec.get("desc", ""), "url": self.spec["url"], "state": st, "options": self.opts()}
+        return {"id": self.id, "name": self.spec["name"], "desc": self.spec.get("desc", ""), "url": self.spec["url"], "ui": self.spec.get("ui"), "state": st, "options": self.opts()}
 
 
 def discover_specs():

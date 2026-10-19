@@ -110,13 +110,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
 <nav>
   <div class="brand"><div class="logo">🐧</div><div><b>PinguinoSuite</b><small>stream command center</small></div></div>
   <div class="item" data-r="dashboard"><span class="ic">▦</span>Dashboard</div>
-  <h6>Modules</h6>
-  <div class="item" data-r="listen"><span class="ic">🎙</span>PinguinoListen<span class="dot" id="dot-listen"></span></div>
-  <div class="item" data-r="multi"><span class="ic">🧊</span>PinguinoMulti<span class="dot" id="dot-multi"></span></div>
-  <div class="item" data-r="voice"><span class="ic">🗣</span>Voice Studio<span class="tag prev">preview</span></div>
-  <div class="item" data-r="chat"><span class="ic">💬</span>Chat<span class="tag prev">preview</span></div>
-  <div class="item" data-r="bots"><span class="ic">🤖</span>Bot Control<span class="tag prev">preview</span></div>
-  <div class="item" data-r="actions"><span class="ic">⚡</span>Actions &amp; Events<span class="tag prev">preview</span></div>
+  <div id="modnav"></div>
   <h6>System</h6>
   <div class="item" data-r="settings"><span class="ic">⚙</span>Settings</div>
   <div class="navfoot sm dim" id="navfoot"></div>
@@ -132,8 +126,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const LISTEN='http://127.0.0.1:8765',MULTI='http://127.0.0.1:8766';
-const multiMod=()=>S?.modules.find(m=>m.id==='multi');
+let LISTEN='http://127.0.0.1:8765';
 let S=null,L={status:null,lines:[]},route='dashboard';
 const up=t=>{const m=Math.max(0,(Date.now()/1000-t)/60|0);return (m/60|0)+'h '+String(m%60).padStart(2,'0')+'m'};
 const fmt=t=>{t=t|0;return (t/60|0)+':'+String(t%60).padStart(2,'0')};
@@ -159,7 +152,7 @@ pages.dashboard=()=>{
     <div class="grid">
       <div class="card"><h3>PinguinoListen · ${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}</h3>
         ${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim">${lm?.state==='running'?'Not listening right now — it starts automatically when you go live.':'PinguinoListen is not running.'}</div>`}
-        <div class="row" style="margin-top:12px"><button data-go="listen">Open Listen</button>${st?.listening?'':'<button id="d-listen" class="pri">Start listening</button>'}</div></div>
+        <div class="row" style="margin-top:12px"><button data-go="m:listen">Open Listen</button>${st?.listening?'':'<button id="d-listen" class="pri">Start listening</button>'}</div></div>
       <div class="grid g3">
         <div class="card"><div class="stat">${stats.total||0}<small>lines transcribed</small></div></div>
         <div class="card"><div class="stat">${(stats.corrected||0)+(stats.approved||0)}<small>lines you verified</small></div></div>
@@ -174,10 +167,13 @@ pages.dashboard=()=>{
     </div>
   </div>`};
 
-pages.listen=()=>`<iframe id="lf" src="${LISTEN}"></iframe>`;
-pages.multi=()=>{const m=multiMod();
-  if(m?.state==='running')return `<iframe id="mf" src="${MULTI}"></iframe>`;
-  return `<div class="card" style="max-width:520px"><h3>PinguinoMulti</h3><div class="dim">${esc(m?.desc||'')}</div><div class="row" style="margin-top:14px"><span class="pill">${esc(m?.state||'unavailable')}</span>${m?`<button class="pri" data-act="multi:start">Start PinguinoMulti</button>`:''}</div></div>`};
+/* Generic module page: any module with a `ui` block in its manifest gets nav entry + this page (see Docs/MODULE_CONTRACT.md). */
+const modOf=r=>S?.modules.find(m=>'m:'+m.id===r);
+const modSrc=m=>m.url.replace(/\/$/,'')+(m.ui?.path||'/');
+pages.module=r=>{const m=modOf(r);
+  if(!m)return `<div class="card" style="max-width:520px"><h3>Module not found</h3><div class="dim">It may have been removed from the registry.</div></div>`;
+  if(m.state==='running')return `<iframe id="mif" data-src="${esc(modSrc(m))}" src="${esc(modSrc(m))}"></iframe>`;
+  return `<div class="card" style="max-width:520px"><h3>${esc(m.name)}</h3><div class="dim">${esc(m.desc||'')}</div><div class="row" style="margin-top:14px"><span class="pill">${esc(m.state||'unavailable')}</span><button class="pri" data-act="${esc(m.id)}:start">Start ${esc(m.name)}</button></div></div>`};
 
 pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max-width:1000px">
   <div class="card"><h3>Stream</h3>
@@ -231,13 +227,31 @@ pages.voice=()=>prev('Voice ID, commands, and “talks like me”. Nothing here 
      <div class="row" style="margin-top:14px"><button disabled>▶ Hear sample</button><span class="pill vio">training later</span></div></div></div>`;
 
 /* ============ shell ============ */
-const titles={dashboard:'Dashboard',listen:'PinguinoListen',multi:'PinguinoMulti',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
-function go(r){route=r;$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));$('#title').textContent=titles[r];
-  $('#page').classList.toggle('flush',r==='listen'||(r==='multi'&&multiMod()?.state==='running'));draw(true)}
+const titles={dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const PREVIEWS=[['voice','🗣','Voice Studio'],['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
+let navSig='';
+function renderNav(){if(!S)return;
+  const mods=S.modules.filter(m=>m.ui).sort((a,b)=>(a.ui.order??100)-(b.ui.order??100));
+  const replaced=new Set(mods.map(m=>m.ui.replaces).filter(Boolean));
+  const sig=JSON.stringify([mods.map(m=>[m.id,m.name,m.ui,m.state]),[...replaced],route]);
+  if(sig===navSig)return;navSig=sig;
+  let h='',sec=null;
+  for(const m of mods){const sc=m.ui.section||'Modules';if(sc!==sec){h+=`<h6>${esc(sc)}</h6>`;sec=sc}
+    h+=`<div class="item${route==='m:'+m.id?' on':''}" data-r="m:${esc(m.id)}"><span class="ic">${esc(m.ui.icon||'▣')}</span>${esc(m.ui.nav||m.name)}<span class="dot ${esc(m.state||'')}"></span></div>`}
+  h+='<h6>Planned</h6>'+PREVIEWS.filter(x=>!replaced.has(x[0])).map(x=>`<div class="item${route===x[0]?' on':''}" data-r="${x[0]}"><span class="ic">${x[1]}</span>${x[2]}<span class="tag prev">preview</span></div>`).join('');
+  $('#modnav').innerHTML=h;$$('#modnav .item').forEach(i=>i.onclick=()=>go(i.dataset.r))}
+const isMod=r=>r.startsWith('m:');
+const flushed=()=>isMod(route)&&modOf(route)?.state==='running';
+function go(r){route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));
+  const m=isMod(r)?modOf(r):null;$('#title').textContent=m?(m.ui?.nav||m.name):(titles[r]||r);
+  $('#page').classList.toggle('flush',flushed());draw(true)}
 let lastHtml='';
-function draw(force){if(!S)return;const html=pages[route]();
-  if(route==='listen'){if(force||!$('#lf'))$('#page').innerHTML=html;return}
-  if(route==='multi'){const run=multiMod()?.state==='running';$('#page').classList.toggle('flush',run);if(run&&!force&&$('#mf'))return;$('#page').innerHTML=html;lastHtml=html;bind();return}
+function draw(force){if(!S)return;renderNav();
+  const html=isMod(route)?pages.module(route):pages[route]();
+  if(isMod(route)){const run=flushed();$('#page').classList.toggle('flush',run);
+    if(run&&!force&&$('#mif')&&$('#mif').dataset.src===modSrc(modOf(route)))return;
+    if(!run&&!force&&html===lastHtml)return;
+    $('#page').innerHTML=html;lastHtml=html;bind();return}
   if(!force&&html===lastHtml)return;
   const sc=$('#page').scrollTop,focus=document.activeElement?.id;
   if(route==='settings'&&!force&&document.activeElement?.tagName==='INPUT')return;
@@ -250,7 +264,7 @@ function bind(){
   $('#s-wa')&&($('#s-wa').onchange=async e=>{await post('/api/windows-autostart',{on:e.target.checked});toast(e.target.checked?'Will start with Windows':'Autostart off')});
   $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));
 }
-$$('nav .item').forEach(i=>i.onclick=()=>go(i.dataset.r));
+$$('nav .item[data-r]').forEach(i=>i.onclick=()=>go(i.dataset.r));
 function toast(m){const d=document.createElement('div');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3500)}
 $('#simon').onclick=()=>{post('/api/simulate',{live:true});toast('Simulating go-live…')};
 $('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/simulate',{live:null}));
@@ -258,7 +272,7 @@ $('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/
 async function load(){try{S=await (await fetch('/api/state')).json()}catch{return}
   const l=S.live;$('#pill').classList.toggle('on',l.live);$('#pill-t').textContent=l.live?'LIVE':'Offline';
   $('#pill-sub').textContent=l.live?`${l.viewers} watching · ${up(l.since)}`:(l.error?'Twitch check: '+l.error.slice(0,60):'');
-  const lm=listenMod();$('#dot-listen').className='dot '+(lm?lm.state:'');const mm=multiMod();$('#dot-multi').className='dot '+(mm?mm.state:'');
+  const lm=listenMod();if(lm?.url)LISTEN=lm.url.replace(/\/$/,'');
   $('#navfoot').textContent=`Watching ${S.channel}`;draw()}
 async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status')).json();L.status=st;
   let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}

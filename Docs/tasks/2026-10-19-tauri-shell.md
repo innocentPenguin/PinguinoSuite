@@ -46,3 +46,8 @@ Goal (user /goal): cross-platform PinguinoSuite app on Tauri, ready for other ap
 ## Update: bundled core sidecar (2026-10-19)
 - `suite.py` supports a frozen build (`PINGUINO_SUITE_DIR`, `PINGUINO_PYTHON`). PyInstaller onefile `pinguino-core.exe` (35 MB) built into `App/src-tauri/binaries/` (gitignored; CI builds it per-OS). Verified standalone on :8795: 401 without token, state with token, `/api/quit` OK.
 - Shell (`main.rs`) prefers the bundled core when present, else Python+suite.py. Not yet packaged into the NSIS installer as a resource; modules (Listen venv, Link Node) still come from the Suite folder.
+
+## Update: generic module pages (2026-10-19, coordinator request)
+- Manifests may carry a `ui` block; core exposes `modules[].ui`; shell builds nav + iframe page per module (Start button when stopped). Hardcoded LISTEN/MULTI pages removed; preview mocks remain only for voice/chat/actions and bots until a module declares `replaces`.
+- `ui` added to listen, multi, host (modules.json) and link (module.json). Verified in a browser against a source core: nav lists Listen, Multi, Bots / Host, Link; Host embeds :8770; stopped Multi shows Start.
+- `App/Rebuild-App.bat` = one-step rebuild (core sidecar + NSIS). Shell HTML is compiled in, so the exe must be rebuilt to show the new UI. `tauri.conf.json` also now bundles `binaries/*` as resources.
