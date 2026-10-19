@@ -34,6 +34,7 @@ DEFAULTS = {
     "pop_volume": {"twitch": 50, "youtube": 76, "discord": 50},   # Streamer.bot: 0.5 Twitch, 0.76 YouTube
     "pop_cooldown_s": 0.35,
     "pop_own": False,                # also pop for my own messages
+    "chat_style": None,              # chat look (fonts, backgrounds, highlights); None = defaults, see chatstyle.py
     "discord_channels": [],          # channel ids Multi reads/sends in (bot token is in Credential Manager)
     "priority_mode": "local",        # local | ai | auto  (AI arrives in M3; local always works)
     "ai_provider": "anthropic",      # anthropic | openai | ollama (key in Credential Manager as ai_key)

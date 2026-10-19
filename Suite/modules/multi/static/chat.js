@@ -49,8 +49,8 @@ function chatMsg(m, opts = {}) {
     <button data-pin="${esc(m.id)}" title="Pin to the top">&#128204;</button>
     ${caps.mod_timeout ? `<button data-mod="timeout" data-id="${esc(m.id)}" title="Timeout 10 min">&#9201;</button><button data-mod="ban" data-id="${esc(m.id)}" title="Ban">&#9940;</button>` : ''}
     ${caps.mod_delete ? `<button data-mod="delete" data-id="${esc(m.id)}" title="Delete this message">&#128465;</button>` : ''}</span>`;
-  return `<div class="msg tier-${m.tier}${bot ? ' bot' : ''}${CF.bots === 'dim' ? '' : ' nodim'}${mine ? ' self' : ''}${men ? ' mention' : ''}${mod ? ' modmsg' : ''}" data-mid="${esc(m.id)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
-    <span class="t">${hhmm(m.ts)}</span><span class="pf">${esc(m.platform)}</span>${badgeHtml(m)}<span class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</span>${flag}${rep}${bodyHtml(m)}${tools}</div>`;
+  return `<div class="msg tier-${m.tier} ${styleClasses(m)}${bot ? ' bot' : ''}${CF.bots === 'dim' ? '' : ' nodim'}${mine ? ' self' : ''}${mod ? ' modmsg' : ''}" data-mid="${esc(m.id)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
+    <span class="t">${hhmm(m.ts)}</span><span class="pf pf-${esc(m.platform)}">${esc(m.platform)}</span>${badgeHtml(m)}<span class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</span>${flag}${eventLabel(m)}${rep}${bodyHtml(m)}${tools}</div>`;
 }
 function chatAdd(m) {
   if (searchTerm) return;
@@ -110,6 +110,7 @@ function chatBar() {
   $('#cbar').innerHTML = `${plats}<input id="csearch" type="search" placeholder="Search chat..." value="${esc(keep)}" style="width:140px">
     <button class="chip2" data-cf="bots" title="Cycle how replies from bots (and you) are shown">${botLbl}</button>
     <button class="chip2 ${CF.prio ? 'on' : ''}" data-cf="prio" title="Only show messages worth answering (plus bot replies)">Priority only</button>
+    <a class="chip2" href="/?type=style" target="_self" title="Fonts, colours, backgrounds and highlights">Look</a>
     <a class="chip2" href="/" target="_self" title="Setup, layouts, smart features">Setup</a>`;
   $('#csearch').oninput = e => chatSearch(e.target.value);
 }
@@ -124,7 +125,7 @@ async function chatSearch(term) {
 }
 function chatNotice(text) {
   const f = $('#cfeed'); if (!f) return;
-  f.insertAdjacentHTML('beforeend', `<div class="notice">${esc(text)}</div>`); f.scrollTop = f.scrollHeight;
+  f.insertAdjacentHTML('beforeend', `<div class="notice msg e-modaction">${esc(text)}</div>`); f.scrollTop = f.scrollHeight;
 }
 function renderChat() {
   $('#body').innerHTML = `<div id="cbar" class="cbar"></div><div id="cpins"></div><div id="cstrip" class="cstrip"></div><div id="cfeed" class="cfeed"></div><div id="ccomp" class="ccomp"></div>`;
@@ -140,7 +141,7 @@ function popVisible(m) {
   if (MUTED.has((m.user || '').toLowerCase()) || m.raw_type === 'dev') return false;
   return true;
 }
-const popMsg = m => { const col = colourOf(m); return `<div class="pm">${badgeHtml(m)}<b ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</b>${bodyHtml(m)}</div>`; };
+const popMsg = m => { const col = colourOf(m); return `<div class="pm msg ${styleClasses(m)}">${badgeHtml(m)}<b class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</b>${eventLabel(m)}${bodyHtml(m)}</div>`; };
 function renderPopout() {
   const p = new URLSearchParams(location.search), max = Math.min(parseInt(p.get('max')) || 30, 100);
   document.body.classList.add('popout'); document.documentElement.style.setProperty('--fs', (parseInt(p.get('size')) || 20) + 'px');

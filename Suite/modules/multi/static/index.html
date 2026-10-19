@@ -69,10 +69,16 @@ body.popout{background:transparent!important;height:auto;min-height:100vh;justif
 .pm{padding:2px 0;word-break:break-word}.pm b{margin-right:6px}
 .tile:hover,.pcard[open]{border-color:var(--accent)}.intro{border-left:3px solid var(--accent)}.launch h2{color:var(--accent)}a{color:var(--accent)}header b{color:var(--accent)}
 .tbadc{color:var(--bad)}input[type=range]{accent-color:var(--accent);padding:0}
+.cf{display:inline-flex;align-items:center;gap:6px;margin:4px 14px 4px 0;font-size:.88em}.cf input[type=range]{width:110px}.cf b{min-width:38px}
+.rule{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0;background:var(--card)}.rt{display:flex;gap:10px;align-items:center;margin-bottom:4px}
+.rg{display:flex;flex-wrap:wrap}.style-ed summary{cursor:pointer}.style-ed summary h3{display:inline}.style-ed input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);background:none}
+.cs-prev-wrap{position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0;border-bottom:1px solid var(--line)}.cs-preview{max-height:300px;overflow-y:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px}
+.evl{font-size:.68em;font-weight:700;letter-spacing:.05em;border:1px solid currentColor;border-radius:3px;padding:0 5px;margin-right:6px;opacity:.9}
 </style>
 <!--THEME--></head><body>
 <header id="hdr"></header><div id="body" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
 <script src="/assets/launcher.js"></script>
+<script src="/assets/style.js"></script>
 <script src="/assets/chat.js"></script>
 <script>
 const q = new URLSearchParams(location.search), WID = q.get('win');
@@ -85,15 +91,16 @@ const api = (p, o) => fetch(p, o && {method: o.m || 'POST', headers: {'content-t
 const hhmm = t => new Date(t * 1000).toTimeString().slice(0, 5);
 
 async function init() {
+  await loadStyle();
   if (WID) {
     const all = await api('/api/windows');
     W = all.find(w => w.id === WID) || W;
   }
   document.documentElement.dataset.theme = W.theme || 'dark';
-  document.documentElement.style.setProperty('--fs', (W.font_size || 14) + 'px');
-  document.documentElement.style.setProperty('--sp', (W.spacing || 4) + 'px');
+  if (W.font_size && W.font_size !== 14) document.documentElement.style.setProperty('--fs', W.font_size + 'px');   // a window's own size wins over the chat look
+  if (W.spacing && W.spacing !== 4) document.documentElement.style.setProperty('--sp', W.spacing + 'px');
   document.body.style.opacity = W.opacity || 1;
-  if (W.type !== 'launcher' && W.type !== 'status') msgs = await api('/api/messages?limit=200');
+  if (!['launcher', 'status', 'style'].includes(W.type)) msgs = await api('/api/messages?limit=200');
   cards = await api('/api/cards');
   connect(); render(); setInterval(() => { api('/api/cards').then(c => { cards = c; renderCards(); }); }, 5000);
   if (WID) savePosition();
@@ -116,7 +123,8 @@ function on(ev) {
   else if (ev.type === 'message') {
     msgs.push(ev.message); if (msgs.length > 500) msgs.shift(); addMsg(ev.message);
     if (W.type === 'popout' && window.popAdd) window.popAdd(ev.message);
-  } else if (ev.type === 'pins.changed') { PINS = ev.pins || []; if (W.type === 'chat') chatPins(); } else if (ev.type === 'card.new' || ev.type === 'card.update') api('/api/cards').then(c => { cards = c; renderCards(); if (W.type === 'chat') chatStrip(); });
+  } else if (ev.type === 'pins.changed') { PINS = ev.pins || []; if (W.type === 'chat') { chatPins(); chatFeed(); } }
+  else if (ev.type === 'chatstyle.changed') { CS = ev.style; applyStyle(); if (W.type === 'chat') chatFeed(); if (W.type === 'style') renderPreview(); } else if (ev.type === 'card.new' || ev.type === 'card.update') api('/api/cards').then(c => { cards = c; renderCards(); if (W.type === 'chat') chatStrip(); });
   else if (ev.type === 'layout.changed') { if (!WID) renderLauncher(); }
 }
 function pass(m) {
@@ -124,7 +132,7 @@ function pass(m) {
 }
 function msgHtml(m) {
   const reasons = (m.reasons || []).map(r => `${r.rule} ${r.points > 0 ? '+' : ''}${r.points}`).join(', ');
-  return `<div class="msg tier-${m.tier}${m.is_self ? ' self' : ''}${isBot(m) ? ' bot' : ''}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
+  return `<div class="msg tier-${m.tier}${m.is_self ? ' self' : ''}${isBot(m) ? ' bot' : ''} ${styleClasses(m)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
   <span class="t">${hhmm(m.ts)}</span><span class="pf">${esc(m.platform)}</span><span class="u">${esc(m.display || m.user)}</span>${esc(m.text)}</div>`;
 }
 function addMsg(m) {
@@ -145,7 +153,7 @@ function renderHeader() {
 function render() {
   renderHeader();
   ({unified: renderFeed, platform: renderFeed, first: renderFeed, priority: renderCards, missed: renderCards,
-    composer: renderComposer, status: renderStatus, launcher: renderLauncher, chat: renderChat, popout: renderPopout}[W.type] || renderFeed)();
+    composer: renderComposer, status: renderStatus, launcher: renderLauncher, chat: renderChat, popout: renderPopout, style: renderStyleEditor}[W.type] || renderFeed)();
 }
 // linked feed: windows in one link_group show ONE continuous sequence. link_order 0 shows the newest rows,
 // order 1 continues with the rows just older, and so on. Capacity (rows) is shared over BroadcastChannel.

@@ -108,6 +108,11 @@ class Store:
             return self.db.execute("SELECT COUNT(*) c FROM messages WHERE platform=? AND user_id=?",
                                    (platform, user_id)).fetchone()["c"]
 
+    def last_ts(self, platform, user_id):
+        with self.lock:
+            r = self.db.execute("SELECT MAX(ts) t FROM messages WHERE platform=? AND user_id=?", (platform, user_id)).fetchone()
+        return r["t"] or 0
+
     def last_seen(self, platform):
         with self.lock:
             r = self.db.execute("SELECT MAX(ts) t FROM messages WHERE platform=?", (platform,)).fetchone()

@@ -84,6 +84,7 @@ async function renderLauncher() {
   <h3>Chat page and stream overlay</h3>
   <div class="box"><div><a href="/?type=chat" target="_self"><button class="p" type="button">Open the full Chat page</button></a>
     <small class="mut">All platforms in one feed with badges, emotes, search, pins and quick mod actions.</small></div>
+    <div><a href="/?type=style"><button type="button">Customize the chat look</button></a> <small class="mut">Fonts, sizes, any background colour, and highlights for new chatters, subs, raids, cheers, mentions and more.</small></div>
     <b>Show chat on your stream (OBS) ${T('', 'Public chat only: no priority cards, notes, scores, reply box or muted viewers.')}</b>
     <small class="mut">In OBS: Sources &gt; + &gt; Browser, paste the address, set width 500 and height 800. Or Docks &gt; Custom Browser Docks. Change <code>size</code>, <code>max</code>, <code>platforms</code> in the address as you like; add <code>bots=show</code> to include bot replies.</small>
     <label>Address<input id="pop-url" readonly value="${esc(location.origin)}/popout?size=22&max=14" onclick="this.select()"></label>

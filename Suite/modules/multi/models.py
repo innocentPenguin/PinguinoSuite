@@ -21,6 +21,9 @@ class ChatMessage:
     raw_type: str = "text"
     color: str = ""         # name colour (#rrggbb) when the platform provides one
     emotes: list = field(default_factory=list)   # [{"id": "...", "text": "Kappa"}] (twitch)
+    event: str = ""         # "" = normal chat; sub resub gift cheer raid follow redeem highlighted announcement
+    amount: int = 0         # bits / viewers / months / gift count for an event
+    flags: list = field(default_factory=list)    # computed on arrival: "new" (never seen) / "returning" (back after a long gap)
 
     def to_dict(self):
         return asdict(self)

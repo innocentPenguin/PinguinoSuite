@@ -12,6 +12,7 @@ import requests
 import websockets
 
 import config
+import console_log
 import secrets_store
 from connectors.base import Connector
 from models import ChatMessage
@@ -19,6 +20,29 @@ from models import ChatMessage
 EVENTSUB_URL = "wss://eventsub.wss.twitch.tv/ws"
 HELIX = "https://api.twitch.tv/helix"
 VALIDATE = "https://id.twitch.tv/oauth2/validate"
+
+
+NOTICE_EVENT = {"sub": "sub", "resub": "resub", "sub_gift": "gift", "community_sub_gift": "gift", "gift_paid_upgrade": "gift",
+                "prime_paid_upgrade": "sub", "raid": "raid", "announcement": "announcement", "bits_badge_tier": "cheer"}
+
+
+def normalize_notice(ev):
+    """Twitch channel.chat.notification event (sub, resub, gift, raid, announcement) -> ChatMessage with .event. Pure."""
+    chan, nt = ev["broadcaster_user_login"], ev.get("notice_type", "")
+    amount = 0
+    if nt == "raid":
+        amount = int((ev.get("raid") or {}).get("viewer_count", 0))
+    elif nt == "resub":
+        amount = int((ev.get("resub") or {}).get("cumulative_months", 0))
+    elif nt == "community_sub_gift":
+        amount = int((ev.get("community_sub_gift") or {}).get("total", 0))
+    text = ev.get("system_message") or (ev.get("message") or {}).get("text", "") or nt
+    user = ev.get("chatter_user_login") or "anonymous"
+    return ChatMessage(
+        id=f"twitch:{chan}:{ev['message_id']}", platform="twitch", channel=chan, user_id=ev.get("chatter_user_id") or "0",
+        user=user, display=ev.get("chatter_user_name") or user, text=text, ts=time.time(),
+        badges=[b["set_id"] for b in ev.get("badges", [])], raw_type=nt, color=ev.get("color") or "",
+        event=NOTICE_EVENT.get(nt, "announcement"), amount=amount)
 
 
 def normalize_event(ev):
@@ -35,6 +59,8 @@ def normalize_event(ev):
         reply_to_user=reply.get("parent_user_login", ""),
         first_time=ev.get("message_type") == "user_intro",
         raw_type=ev.get("message_type", "text"), color=ev.get("color") or "",
+        event="cheer" if (ev.get("cheer") or {}).get("bits") else ("highlighted" if ev.get("message_type") == "channel_points_highlighted" else ""),
+        amount=int((ev.get("cheer") or {}).get("bits") or 0),
         emotes=[{"id": f["emote"]["id"], "text": f.get("text", "")} for f in (ev.get("message") or {}).get("fragments", [])
                 if f.get("type") == "emote" and f.get("emote")])
 
@@ -108,12 +134,15 @@ class Twitch(Connector):
 
     # reading ---------------------------------------------------------
     def _subscribe(self, tok):
-        body = {"type": "channel.chat.message", "version": "1",
-                "condition": {"broadcaster_user_id": self.broadcaster_id, "user_id": self.user["user_id"]},
-                "transport": {"method": "websocket", "session_id": self.session_id}}
-        r = requests.post(f"{HELIX}/eventsub/subscriptions", json=body, headers=self._headers(tok), timeout=10)
-        if r.status_code not in (200, 202):
-            raise RuntimeError(f"subscribe failed {r.status_code}: {r.text[:200]}")
+        cond = {"broadcaster_user_id": self.broadcaster_id, "user_id": self.user["user_id"]}
+        for typ in ("channel.chat.message", "channel.chat.notification"):
+            body = {"type": typ, "version": "1", "condition": cond,
+                    "transport": {"method": "websocket", "session_id": self.session_id}}
+            r = requests.post(f"{HELIX}/eventsub/subscriptions", json=body, headers=self._headers(tok), timeout=10)
+            if r.status_code not in (200, 202):
+                if typ == "channel.chat.message":
+                    raise RuntimeError(f"subscribe failed {r.status_code}: {r.text[:200]}")
+                console_log.warn("twitch", f"could not subscribe to stream events ({r.status_code}); chat still works", dedupe_s=600)
 
     async def handle_frame(self, frame, tok):
         """Process one EventSub frame. Returns a reconnect URL when Twitch asks for it."""
@@ -128,6 +157,10 @@ class Twitch(Connector):
         elif t == "notification" and meta.get("subscription_type") == "channel.chat.message":
             msg = normalize_event(payload["event"])
             msg.is_self = msg.user_id == self.user["user_id"]
+            self.state["last_message"] = time.time()
+            self.inbox.put(msg)
+        elif t == "notification" and meta.get("subscription_type") == "channel.chat.notification":
+            msg = normalize_notice(payload["event"])
             self.state["last_message"] = time.time()
             self.inbox.put(msg)
         elif t == "revocation":

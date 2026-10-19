@@ -19,6 +19,7 @@ import cards as cards_mod
 import checks
 import config
 import learning
+import chatstyle
 import console_log
 import help_text
 import listen_bridge
@@ -437,6 +438,50 @@ def feed(since: float = 0, limit: int = 200):
     return {"ts": time.time(), "messages": rows}
 
 
+# chat look -----------------------------------------------------------------
+@app.get("/api/chatstyle")
+def chatstyle_get():
+    return {"style": chatstyle.sanitize(config.settings()["chat_style"]), "defaults": chatstyle.DEFAULT_STYLE}
+
+
+@app.post("/api/chatstyle")
+async def chatstyle_set(request: Request):
+    b = await request.json()
+    style = chatstyle.sanitize(b.get("style"))
+    config.save_settings({"chat_style": style})
+    hub.emit({"type": "chatstyle.changed", "style": style})
+    return {"style": style}
+
+
+@app.post("/api/chatstyle/reset")
+def chatstyle_reset():
+    config.save_settings({"chat_style": None})
+    style = chatstyle.sanitize(None)
+    hub.emit({"type": "chatstyle.changed", "style": style})
+    return {"style": style}
+
+
+# stream events pushed by other modules (Host: follow, redeem...) -------------
+@app.post("/api/events")
+async def events_in(request: Request):
+    b = await request.json()
+    ev = str(b.get("type", ""))
+    if ev not in ("follow", "redeem", "sub", "resub", "gift", "raid", "announcement"):
+        raise HTTPException(400, "unknown event type")
+    plat = b.get("platform", "twitch")
+    if plat not in connectors:
+        raise HTTPException(400, "unknown platform")
+    n = int(time.time() * 1000)
+    user = str(b.get("user", "someone"))[:60]
+    text = str(b.get("text") or {"follow": f"{user} followed", "redeem": f"{user} redeemed a reward", "sub": f"{user} subscribed",
+                                  "resub": f"{user} resubscribed", "gift": f"{user} gifted subs", "raid": f"{user} is raiding",
+                                  "announcement": user}[ev])[:300]
+    m = ChatMessage(id=f"evt:{plat}:{n}", platform=plat, channel=config.settings()["channel"], user_id=str(b.get("user_id") or user),
+                    user=user.lower(), display=user, text=text, ts=time.time(), raw_type=ev, event=ev, amount=int(b.get("amount") or 0))
+    inbox.put(m)
+    return {"ok": True, "id": m.id}
+
+
 # new-chatter ding ------------------------------------------------------
 @app.get("/api/ding")
 def ding_info():
@@ -824,7 +869,8 @@ async def dev_inject(request: Request):
                     user_id=b.get("user_id") or b.get("user", "viewer"), user=b.get("user", "viewer"),
                     display=b.get("user", "viewer"), text=b["text"], ts=time.time(), badges=b.get("badges", []),
                     first_time=b.get("first_time", False), reply_to=b.get("reply_to", ""),
-                    reply_to_user=b.get("reply_to_user", ""), color=b.get("color", ""), emotes=b.get("emotes", []))
+                    reply_to_user=b.get("reply_to_user", ""), color=b.get("color", ""), emotes=b.get("emotes", []),
+                    event=b.get("event", ""), amount=int(b.get("amount", 0)))
     inbox.put(m)
     return {"ok": True, "id": m.id}
 

@@ -15,6 +15,9 @@ from priority import rules as prio
 from models import ChatMessage
 
 
+NOTICES = {"sub", "resub", "gift", "raid", "follow", "redeem", "announcement"}
+
+
 class Pipeline:
     def __init__(self, store, cards, emit):
         self.store, self.cards, self.emit = store, cards, emit
@@ -44,12 +47,25 @@ class Pipeline:
             self.stats["dupes"] += 1
             return None
         st = config.settings()
+        if m.event in NOTICES:                       # stream events (sub, raid, follow...) are shown, never ranked or dinged
+            if not self.store.add_message(m, prio.Decision(0, "none", [])):
+                self.stats["dupes"] += 1
+                return None
+            out = dict(m.to_dict(), score=0, tier="none", reasons=[])
+            self.emit({"type": "message", "message": out})
+            return out
         if m.is_self:
             self.pop.observe(m)
             self.store.add_message(m, prio.Decision(0, "none", []))
             self.emit({"type": "message", "message": dict(m.to_dict(), score=0, tier="none", reasons=[])})
             self.cards.on_own_message(m)
             return m.to_dict()
+        if not m.is_bot and m.user_id:
+            prev = self.store.last_ts(m.platform, m.user_id)
+            if not prev:
+                m.flags = ["new"]
+            elif m.ts - prev > st["ding_session_gap_h"] * 3600:
+                m.flags = ["returning"]
         d = prio.score(m, self._ctx(m), self.rules, st)
         if not self.store.add_message(m, d):          # survives restarts: DB id is the final dedupe
             self.stats["dupes"] += 1

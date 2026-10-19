@@ -818,3 +818,70 @@ def test_pop_per_platform_volume_master_rate_limit_and_bots(tmp_path, monkeypatc
     assert not p.observe(_m("auxuser"))
     assert config.DEFAULTS["pop_volume"] == {"twitch": 50, "youtube": 76, "discord": 50}
     assert config.DEFAULTS["ding_returning_volume"] == 50 and config.DEFAULTS["ding_returning"] is True
+
+
+# chat look ----------------------------------------------------------
+def test_chatstyle_sanitize_defaults_and_hostile_input():
+    import chatstyle
+    d = chatstyle.sanitize(None)
+    assert set(d["platform"]) == set(chatstyle.PLATFORMS) and set(d["role"]) == set(chatstyle.ROLES) and set(d["event"]) == set(chatstyle.EVENTS)
+    bad = chatstyle.sanitize({"base": {"size": 9999, "family": "Evil; } body{display:none", "bg": "red; x", "weight": 450},
+                              "event": {"raid": {"bg": "#12ab34", "bgA": 500, "borderW": -3, "junk": "x", "size": "abc"}, "evil": {}},
+                              "keywords": [{"word": " giveaway ", "rule": {"bg": "url(x)"}}, {"word": ""}, "nope"]})
+    assert bad["base"]["size"] == 48 and bad["base"]["family"] == "system-ui" and bad["base"]["weight"] == 400
+    assert bad["base"]["bg"] == "#09090a"                                             # invalid colour falls back
+    r = bad["event"]["raid"]
+    assert r["bg"] == "#12ab34" and r["bgA"] == 100 and r["borderW"] == 0 and r["size"] == 100 and "junk" not in r and "evil" not in bad["event"]
+    assert [k["word"] for k in bad["keywords"]] == ["giveaway"] and bad["keywords"][0]["rule"]["bg"] == "#ff9900"
+
+
+def test_chatstyle_api_roundtrip_and_reset(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import config, server
+    saved = {}
+    monkeypatch.setattr(config, "save_settings", lambda p: saved.update(p) or p)
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    h = {"origin": "http://127.0.0.1:8766"}
+    r = c.post("/api/chatstyle", json={"style": {"event": {"sub": {"bg": "#112233"}}}}, headers=h).json()["style"]
+    assert r["event"]["sub"]["bg"] == "#112233" and saved["chat_style"]["event"]["sub"]["bg"] == "#112233"
+    assert c.post("/api/chatstyle/reset", json={}, headers=h).json()["style"]["event"]["sub"]["bg"] == "#ffc94d" and saved["chat_style"] is None
+    assert "defaults" in c.get("/api/chatstyle").json()
+
+
+def test_twitch_notices_cheers_and_events_endpoint(tmp_path, monkeypatch):
+    from connectors.twitch import normalize_notice, normalize_event
+    n = normalize_notice({"broadcaster_user_login": "ch", "message_id": "n1", "notice_type": "raid", "chatter_user_login": "raider",
+                          "chatter_user_name": "Raider", "system_message": "Raider is raiding with 120 viewers", "raid": {"viewer_count": 120}})
+    assert n.event == "raid" and n.amount == 120 and n.text.startswith("Raider is raiding")
+    g = normalize_notice({"broadcaster_user_login": "ch", "message_id": "n2", "notice_type": "community_sub_gift", "chatter_user_login": "g",
+                          "community_sub_gift": {"total": 5}, "system_message": "g gifted 5"})
+    assert g.event == "gift" and g.amount == 5
+    c = normalize_event({"broadcaster_user_login": "ch", "message_id": "m", "chatter_user_id": "1", "chatter_user_login": "u",
+                         "message": {"text": "cheer100 hi"}, "cheer": {"bits": 100}})
+    assert c.event == "cheer" and c.amount == 100
+    from fastapi.testclient import TestClient
+    import server
+    from store import Store
+    st = Store(tmp_path / "e.db")
+    monkeypatch.setattr(server, "store", st)
+    monkeypatch.setattr(server.pipeline, "store", st)
+    for fn in (n, g):
+        out = server.pipeline.ingest(fn)
+        assert out["tier"] == "none" and out["event"] == fn.event           # events are shown, never ranked
+    assert not any(c["message_id"] in (n.id, g.id) for c in server.cards.cards.values())
+
+
+def test_new_and_returning_flags_from_history(tmp_path, monkeypatch):
+    import config, server
+    from store import Store
+    st = Store(tmp_path / "f.db")
+    monkeypatch.setattr(server, "store", st)
+    monkeypatch.setattr(server.pipeline, "store", st)
+    now = time.time()
+    first = server.pipeline.ingest(ChatMessage(id="twitch:c:f1", platform="twitch", channel="c", user_id="u1", user="u1", display="u1", text="hello there", ts=now - 20 * 3600))
+    assert first["flags"] == ["new"]
+    again = server.pipeline.ingest(ChatMessage(id="twitch:c:f2", platform="twitch", channel="c", user_id="u1", user="u1", display="u1", text="hello again", ts=now))
+    assert again["flags"] == ["returning"]                                # >6 h since the last message = back after a break
+    soon = server.pipeline.ingest(ChatMessage(id="twitch:c:f3", platform="twitch", channel="c", user_id="u1", user="u1", display="u1", text="still here", ts=now + 5))
+    assert soon["flags"] == []
