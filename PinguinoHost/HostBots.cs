@@ -28,6 +28,12 @@ namespace PinguinoHost
                     new Def("helper_settings.json", "MaxAiCallsPerHour", "AI calls per hour (cost cap)", 0, 200, 5, ""),
                     new Def("helper_settings.json", "UseAi", "Use AI for answers") } };
 
+        // The bots' compiled defaults, shown when a key is missing from the settings file (a missing key must never look like 0).
+        static readonly System.Collections.Generic.Dictionary<string, double> Dflt = new System.Collections.Generic.Dictionary<string, double> {
+            { "RandomChance", 0.001 }, { "FactsInPrompt", 14 }, { "MaxCallsPerHour", 300 },
+            { "chat:UserCooldownSec", 3 }, { "helper:UserCooldownSec", 30 }, { "InfoCooldownSec", 8 }, { "MaxAiCallsPerHour", 40 }, { "UseAi", 1 } };
+        static double DefaultOf(Def d) { double r; return Dflt.TryGetValue(d.File.StartsWith("chat") ? "chat:" + d.Key : "helper:" + d.Key, out r) || Dflt.TryGetValue(d.Key, out r) ? r : 0; }
+
         static readonly ConcurrentDictionary<string, string[]> LastError = new ConcurrentDictionary<string, string[]>();
         static readonly ConcurrentDictionary<string, long> Runs = new ConcurrentDictionary<string, long>();
         static readonly ConcurrentDictionary<string, DateTime> LastRun = new ConcurrentDictionary<string, DateTime>();
@@ -50,8 +56,8 @@ namespace PinguinoHost
                 foreach (var d in Defs[i])
                 {
                     var v = LoadFile(d.File)[d.Key];
-                    set.Add(d.Bool ? new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "bool" }, { "value", v != null && (bool)v } }
-                                   : new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "num" }, { "min", d.Min }, { "max", d.Max }, { "step", d.Step }, { "hint", d.Hint }, { "value", v == null ? 0 : (double)v } });
+                    set.Add(d.Bool ? new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "bool" }, { "value", v != null ? (bool)v : DefaultOf(d) != 0 } }
+                                   : new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "num" }, { "min", d.Min }, { "max", d.Max }, { "step", d.Step }, { "hint", d.Hint }, { "value", v == null ? DefaultOf(d) : (double)v } });
                 }
                 arr.Add(new JObject {
                     { "id", BotIds[i] }, { "title", (string)b?["Title"] ?? BotActions[i] }, { "action", act },

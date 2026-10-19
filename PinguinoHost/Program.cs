@@ -132,11 +132,29 @@ namespace PinguinoHost
         {
             if (!sim && (s.Value<bool?>("ObsEnabled") ?? true))
             { cph.Obs = new ObsClient(s.Value<string>("ObsHost") ?? "127.0.0.1", s.Value<int?>("ObsPort") ?? 4455, s.Value<string>("ObsPassword") ?? ""); Task.Run(() => cph.Obs.RunForever()); }
+            CarryOverApiKey();
             HostApi.DataDir = dataDir; HostApi.Port = s.Value<int?>("OverlayPort") ?? 8770; HostApi.SimMode = sim; HostApi.ObsConnected = () => cph.ObsIsConnected();
             string overlayDir = null;
             try { var f = Path.Combine(dataDir, "settings.json"); if (File.Exists(f)) overlayDir = JObject.Parse(File.ReadAllText(f)).Value<string>("OverlayDir"); } catch (Exception) { }
             OverlayServer.Start(HostApi.Port, overlayDir, Path.Combine(suite, "PinguinoB0t", "overlays"), dataDir);
             if (!sim) Task.Run(() => EventSub.RunForever(s, a => DispatchEvent(a)));
+        }
+
+        // After a data-folder move the AI key can be blank in the new chat_settings.json while the legacy %AppData%\BVQ copy still has it: copy it across once (never logged).
+        static void CarryOverApiKey()
+        {
+            try
+            {
+                var legacy = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BVQ", "chat_settings.json");
+                var cur = Path.Combine(dataDir, "chat_settings.json");
+                if (!File.Exists(legacy) || !File.Exists(cur) || Path.GetFullPath(legacy) == Path.GetFullPath(cur)) return;
+                var c = JObject.Parse(File.ReadAllText(cur)); var l = JObject.Parse(File.ReadAllText(legacy));
+                if (!string.IsNullOrWhiteSpace((string)c["ApiKey"]) || string.IsNullOrWhiteSpace((string)l["ApiKey"])) return;
+                c["ApiKey"] = l["ApiKey"]; if (string.IsNullOrEmpty((string)c["Provider"])) c["Provider"] = l["Provider"];
+                var tmp = cur + ".tmp"; File.WriteAllText(tmp, c.ToString()); File.Replace(tmp, cur, null);
+                Console.WriteLine("INFO  carried the AI key over from the legacy data folder into chat_settings.json");
+            }
+            catch (Exception e) { Console.WriteLine("WARN  AI key carry-over failed: " + e.Message); }
         }
 
         public static void DispatchEvent(Dictionary<string, object> args)
