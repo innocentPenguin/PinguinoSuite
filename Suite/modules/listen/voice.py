@@ -241,11 +241,25 @@ def voice_log(n=60):
     return out[::-1]
 
 
+def bot_speaking():
+    """True while PinguinoVoice (the bot's voice) is playing: its speaking.json {speaking, until} in the shared data dir. Never raises."""
+    try:
+        f = os.path.join(os.environ.get("PINGUINO_DATA_DIR", ""), "voice", "speaking.json")
+        d = json.loads(open(f, encoding="utf8").read())
+        return bool(d.get("speaking")) and float(d.get("until", 0)) + 1.0 > time.time()
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def handle_segment(seg, log, emit):
     """Called for every live segment. Fires enabled commands (master switch on, confident line, cooldown respected); logs every match."""
     d = load_cmds()
     text, unsure = seg.get("text") or "", seg.get("unsure") or 0
+    speaking = bot_speaking()   # the mic can hear the bot's own voice: never let that trigger a command
     for c, score in scored_matches(text, d, only_enabled=d["enabled"]):
+        if speaking:
+            record(log, text, c, score, "ignored_bot_voice", "the bot was speaking at that moment", unsure)
+            continue
         if not d["enabled"]:
             record(log, text, c, score, "master_off", "voice commands are switched off", unsure)
             continue
