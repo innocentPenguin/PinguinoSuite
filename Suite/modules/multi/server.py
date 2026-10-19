@@ -18,6 +18,7 @@ import cards as cards_mod
 import checks
 import config
 import learning
+import listen_bridge
 import voice
 import secrets_store
 import windows as win
@@ -79,7 +80,8 @@ async def lifespan(app):
     yt = YouTube(inbox, hub.emit)
     connectors["youtube"] = yt
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
-             asyncio.create_task(dc.run()), asyncio.create_task(yt.run())]
+             asyncio.create_task(dc.run()), asyncio.create_task(yt.run()),
+             asyncio.create_task(listen_bridge.run(cards, hub.emit))]
     yield
     tw.stop = dc.stop = yt.stop = True
     for t in tasks:

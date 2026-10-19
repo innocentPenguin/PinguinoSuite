@@ -474,3 +474,26 @@ def test_claims_endpoint_lists_open_priority_cards(tmp_path):
                     text="@innocentpenguin when is the giveaway?", ts=time.time())
     p.ingest(m)
     assert any(c["tier"] in ("medium", "high") for c in p.cards.cards.values())
+
+
+def test_listen_bridge_forwards_segments_to_suggestions(monkeypatch):
+    import asyncio, json, config, websockets, listen_bridge
+    monkeypatch.setattr(config, "settings", lambda: dict(config.DEFAULTS, voice_enabled=True))
+
+    class C:
+        cards = {"c1": {"id": "c1", "state": "open", "user": "bob", "text": "which graphics card are you using?"}}
+
+    got = []
+
+    async def go():
+        async def handler(ws):
+            await ws.send(json.dumps({"type": "segment", "segment": {"text": "bob asked which graphics card"}}))
+            await ws.send(json.dumps({"type": "segment", "segment": {"text": "I am using a 4070"}}))
+            await asyncio.sleep(0.3)
+        async with websockets.serve(handler, "127.0.0.1", 18765):
+            t = asyncio.create_task(listen_bridge.run(C, got.append, "ws://127.0.0.1:18765"))
+            await asyncio.sleep(1)
+            t.cancel()
+
+    asyncio.run(go())
+    assert any(e["type"] == "reply.suggested" and e["card_id"] == "c1" for e in got)
