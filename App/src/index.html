@@ -239,10 +239,10 @@ pages.dashboard=()=>{
   B.t_prestream=tile('Pre-stream',pr?(pr.fail?pr.fail+' fail':pr.warn?pr.warn+' warn':'All ok'):'—',pr?`${pr.pass} ok · ${pr.warn} warn · ${pr.fail} fail`:'not run yet',pr?(pr.fail?'bad':pr.warn?'warn':'ok'):'','console');
   B.t_errors=PF.thresholds.tile_errors_hide_zero&&!errs?'':tile('Errors ('+PF.thresholds.errors_min+' min)',errs,errs?'open the Console':'clean',errs?'bad':'ok','console');
   B.listen=`<div class="card"><div class="row"><h3 style="margin:0">PenguinComm · Listen</h3>${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}<span class="sm faint sp">${stats.total||0} lines · ${(stats.corrected||0)+(stats.approved||0)} verified${stats.to_review?` · <span style="color:var(--warn)">${stats.to_review} to review</span>`:''}</span></div>
-        <div style="margin-top:8px">${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim sm">${lm?.state==='running'?'Not listening right now: the mic starts with the Suite, so check the microphone in Listen (Console shows why).':'PinguinoListen is not running.'}</div>`}</div>
+        <div style="margin-top:8px">${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim sm">${st?.listening?'Listening. Nothing heard yet.':lm?.state==='running'?'Not listening right now: the mic starts with the Suite, so check the microphone in Listen (Console shows why).':'PinguinoListen is not running.'}</div>`}</div>
         <div class="row" style="margin-top:10px"><button class="sm" data-go="comm">Open PenguinComm</button><button class="sm" data-go="voice">Voice Studio</button>${st?.listening?'':'<button id="d-listen" class="pri sm">Start listening</button>'}</div></div>`;
   B.activity=`<div class="card"><h3>Activity</h3><div class="evt" style="max-height:260px;overflow:auto">${S.events.slice(-14).reverse().map(e=>`<div>${new Date(e.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} <b class="${e.type==='live'?'lv':e.type==='hook'?'hk':''}">${esc(e.type)}</b> ${esc(e.id||e.state||e.title||'')}</div>`).join('')||'<span class="faint">Nothing yet</span>'}</div></div>`;
-  B.modules=`<div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(dispName(m))}</b> <span class="sm faint">${esc(m.state)}</span></div>${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}${modSwitch(m)}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>`;
+  B.modules=`<div class="card"><h3>Modules</h3>${[...S.modules].sort((a,b)=>String(dispName(a)).localeCompare(String(dispName(b)))).map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(dispName(m))}</b> <span class="sm faint">${esc(m.state)}</span></div>${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}<button class="sm" data-mlog="${esc(m.id)}" title="Recent log lines of this module">Logs</button>${modSwitch(m)}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>`;
   B.prestream=C.pr&&C.pr.ts?`<div class="card"><div class="row"><h3 style="margin:0">Pre-stream</h3><button class="sm sp" id="d-prerun">Run now</button><button class="sm" data-go="console">Details</button></div><div style="margin-top:6px">${C.pr.items.filter(i=>i.status!=='pass').slice(0,6).map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<div class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><b>${esc(i.module)}</b><span class="sm">${esc(i.label)}</span></div>`}).join('')||'<span class="sm faint">Everything passed.</span>'}</div></div>`:'';
   return dashLayout(B)};
 
@@ -327,6 +327,13 @@ function showHelp(h,found){
   if(h.fix)btn(h.fix.label||'Fix it','pri',()=>doFix(h.fix));
   if(h.link)btn(h.link.label||'Open','',()=>openExternal(h.link.url));
   btn('Close','',closeHelp);
+  document.body.classList.add('hopen')}
+function showLogs(mid){const m=S.modules.find(x=>x.id===mid);if(!m)return;
+  const rows=C.entries.filter(e=>e.module===mid).slice(-120).reverse();
+  $('#hd-title').textContent=dispName(m)+' · recent log';
+  $('#hd-body').innerHTML=`<div class="sm faint" style="margin-bottom:8px">State: ${esc(m.state)}. Newest first. The Console has the full log and filters.</div>`+(rows.map(e=>`<div class="cl ${e.level}" style="padding:2px 0"><span class="t">${tm(e.ts)}</span><span class="lv">${e.level}</span>${e.source?`<span class="s">${esc(e.source)}</span>`:''}<span>${esc(e.msg)}</span></div>`).join('')||'<div class="faint">No log lines yet.</div>');
+  const f=$('#hd-foot');f.innerHTML='';const b=(l,c,fn)=>{const x=document.createElement('button');x.className=c;x.textContent=l;x.onclick=fn;f.append(x)};
+  b('Restart module','pri',async()=>{await post(`/api/modules/${mid}/restart`);toast('Restarting '+dispName(m));closeHelp()});b('Open Console','',()=>{closeHelp();C.mod=mid;go('console')});b('Close','',closeHelp);
   document.body.classList.add('hopen')}
 function closeHelp(){document.body.classList.remove('hopen')}
 async function doFix(fx){
@@ -529,7 +536,7 @@ function watchState(){const live=!!S.live.live;
   if(SW.live!==null&&SW.live!==live){sfx('golive');autoProfile(live)}
   else if(SW.live===null&&PF.auto[live?'live':'idle']&&PF.profiles[PF.auto[live?'live':'idle']])autoProfile(live,true);
   SW.live=live;
-  S.modules.forEach(m=>{const was=SW.mods[m.id];if(was==='running'&&m.state!=='running'&&m.options.enabled)sfx('module_down');SW.mods[m.id]=m.state})}
+  S.modules.forEach(m=>{const was=SW.mods[m.id];if(was==='running'&&m.state!=='running'&&m.options.enabled){sfx('module_down');const msg=dispName(m)+' stopped unexpectedly';toast(msg);try{if(PF.notify.desktop&&window.Notification&&Notification.permission==='granted')new Notification('PinguinoSuite',{body:msg})}catch{}}SW.mods[m.id]=m.state})}
 function autoProfile(live,quiet){const n=PF.auto[live?'live':'idle'];if(n&&PF.profiles[n]){applyProfile(n,true);if(!quiet)toast(`Look switched to "${n}"`)}}
 function applyProfile(name,quiet){const p=PF.profiles[name];if(!p)return;pfHist.push(clone(PF));PF={...merge(PF_DEFAULT,p),profiles:PF.profiles,auto:PF.auto};commit(quiet)}
 
@@ -758,6 +765,20 @@ $('#pal-in').oninput=()=>{PAL.sel=0;palRender()};
 $('#pal').onclick=e=>{if(e.target.id==='pal')closePal()};
 $('#pal-in').onkeydown=e=>{if(e.key==='ArrowDown'){PAL.sel=Math.min(PAL.items.length-1,PAL.sel+1);palRender();e.preventDefault()}else if(e.key==='ArrowUp'){PAL.sel=Math.max(0,PAL.sel-1);palRender();e.preventDefault()}else if(e.key==='Enter')palRun(PAL.sel);else if(e.key==='Escape')closePal()};
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='k'){e.preventDefault();document.body.classList.contains('palopen')?closePal():openPal()}});
+/* ============ Automatic config backup (core: /api/backup/auto) ============ */
+const BK={v:null};
+async function loadBackup(){try{BK.v=await (await fetch('/api/backup/auto')).json()}catch{}if(route==='settings'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
+function backupCard(){if(!BK.v){loadBackup();return '<div class="sm faint">Loading…</div>'}const v=BK.v;
+  return `<div class="pnote">A zip of your settings, commands and layouts (never keys or tokens) saved on this PC, so a bad change can be undone or moved to a new PC. Only the master device does it.</div>
+   ${prow('Back up automatically','Turn the schedule on or off.',chk('bk.enabled',v.enabled))}
+   ${prow('Every','Hours between backups (1-168).',`<input type="text" id="bk-hours" value="${v.every_hours}" style="width:60px"> <span class="sm faint">hours</span>`)}
+   ${prow('Keep the newest','Older ones are deleted (1-60).',`<input type="text" id="bk-keep" value="${v.keep}" style="width:60px">`)}
+   <div class="row wrap" style="margin-top:8px"><button class="pri sm" id="bk-save">Save</button><button class="sm" id="bk-run">Back up now</button><span class="sm faint">Folder: ${esc(v.dir)}</span></div>
+   ${v.files.length?`<div style="margin-top:8px">${v.files.slice(0,6).map(f=>`<div class="prow"><span class="grow">${esc(f.name)}</span><span class="sm faint">${ago(f.ts)} · ${(f.size/1024).toFixed(0)} KB</span></div>`).join('')}</div>`:'<div class="sm faint" style="margin-top:8px">No automatic backups yet.</div>'}`}
+function bindBackup(){const g=id=>document.getElementById(id);if(!g('bk-save'))return;
+  $$('[data-pin="bk.enabled"]').forEach(i=>i.onchange=()=>{BK.v.enabled=i.checked;draw(true)});
+  g('bk-save').onclick=async()=>{try{BK.v=await post('/api/backup/auto',{enabled:BK.v.enabled,every_hours:+g('bk-hours').value||24,keep:+g('bk-keep').value||7});toast('Backup settings saved');draw(true)}catch{toast('Could not save')}};
+  g('bk-run').onclick=async()=>{g('bk-run').disabled=true;try{BK.v=await post('/api/backup/auto/run');toast('Backed up: '+BK.v.name)}catch{toast('Backup failed')}draw(true)}}
 const openExternal=u=>window.__TAURI__?(location.href=u):window.open(u,'_blank');
 pages.integrations=()=>{
   if(I.err)return `<div class="card" style="max-width:520px"><h3>Integrations</h3><div class="dim">${esc(I.err)}</div></div>`;
@@ -838,6 +859,7 @@ pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max
   <div class="card"><div class="row"><h3 style="margin:0">Modules</h3>${hq('module_switch')}</div>${S.modules.map(m=>`<div style="padding:6px 0"><div class="row"><b>${esc(dispName(m))}</b><span class="sm faint">${m.options.enabled?'on':'off'}</span><span class="sp"></span>${modSwitch(m)}</div>
     <div class="setrow"><div class="grow">Start with the Suite</div>${sw('o-'+m.id+'-start_with_suite',m.options.start_with_suite,`data-mod="${m.id}" data-opt="start_with_suite"`)}</div>
     <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div>
+  <div class="card"><div class="row"><h3 style="margin:0">Automatic config backup</h3>${hq('autobackup')}</div>${backupCard()}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Pre-stream check schedule</h3>${hq('prestream')}</div>${schedCard()}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Pop-out windows</h3>${hq('popout')}</div>${popoutCard()}</div>
   <div class="card"><h3>This device</h3>
@@ -1030,8 +1052,9 @@ function bind(){
   $('#d-listen')&&($('#d-listen').onclick=async()=>{try{await fetch(LISTEN+'/api/live/auto',{method:'POST'});toast('Listening started');loadListen()}catch{toast('Listen is not running')}});
   $('#s-chan')&&($('#s-chan').onchange=async e=>{await post('/api/channel',{channel:e.target.value});toast('Channel saved')});
   $('#s-wa')&&($('#s-wa').onchange=async e=>{await post('/api/windows-autostart',{on:e.target.checked});toast(e.target.checked?'Will start with Windows':'Autostart off')});
-  bindPopout();bindSched();
+  bindPopout();bindSched();bindBackup();
   bindSwitches();
+  $$('[data-mlog]').forEach(b=>b.onclick=()=>showLogs(b.dataset.mlog));
   $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));
 }
 $$('nav .item[data-r]').forEach(i=>i.onclick=()=>go(i.dataset.r));

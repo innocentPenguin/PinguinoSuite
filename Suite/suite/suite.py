@@ -563,6 +563,7 @@ async def lifespan(app):
     threading.Thread(target=prestream_loop, daemon=True).start()
     threading.Thread(target=device_sync_loop, daemon=True).start()
     threading.Thread(target=status_loop, daemon=True).start()
+    threading.Thread(target=backup_loop, daemon=True).start()
     bus.emit("suite", state="started")
     yield
     for m in modules.values():
@@ -1095,6 +1096,74 @@ def export_config(b: ExportReq):
         pass
     console_log.log("info", "setup", f"config exported ({len(man['files'])} files{', with encrypted secrets' if b.include_secrets else ''})")
     return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+# ---- automatic config backups (no secrets): Data/backups/auto, newest N kept
+AUTO_DIR = Path(DATA_DIR).parent / "backups" / "auto"
+
+
+def backup_cfg():
+    c = load_settings().get("backup") or {}
+    return {"enabled": bool(c.get("enabled", True)), "every_hours": max(1, min(168, int(c.get("every_hours", 24) or 24))), "keep": max(1, min(60, int(c.get("keep", 7) or 7)))}
+
+
+def backup_list():
+    try:
+        fs = sorted(AUTO_DIR.glob("pinguino-config-auto-*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        fs = []
+    return [{"name": f.name, "ts": f.stat().st_mtime, "size": f.stat().st_size} for f in fs]
+
+
+def run_backup(why="scheduled"):
+    data, man = portable.export_bundle(_roots(), [m.spec for m in modules.values()], False, "",
+                                       {"name": devices.me["name"], "id": devices.me["id"], "platform": sys.platform})
+    AUTO_DIR.mkdir(parents=True, exist_ok=True)
+    name = time.strftime("pinguino-config-auto-%Y%m%d-%H%M%S") + ".zip"
+    (AUTO_DIR / name).write_bytes(data)
+    for old in backup_list()[backup_cfg()["keep"]:]:
+        try:
+            (AUTO_DIR / old["name"]).unlink()
+        except OSError:
+            pass
+    console_log.log("info", "setup", f"config backup ({why}): {name}, {len(man['files'])} files, no secrets", "backup")
+    return name
+
+
+def backup_loop():
+    time.sleep(90)
+    while True:
+        try:
+            c = backup_cfg()
+            last = (backup_list() or [{"ts": 0}])[0]["ts"]
+            if c["enabled"] and devices.is_master() and time.time() - last > c["every_hours"] * 3600:
+                run_backup()
+        except Exception as e:  # noqa: BLE001
+            console_log.log("warn", "setup", f"automatic backup failed: {e}", "backup")
+        time.sleep(600)
+
+
+@app.get("/api/backup/auto")
+def backup_auto_get():
+    return {**backup_cfg(), "files": backup_list(), "dir": str(AUTO_DIR)}
+
+
+@app.post("/api/backup/auto")
+def backup_auto_set(b: dict):
+    s = load_settings()
+    cur = backup_cfg()
+    s["backup"] = {"enabled": bool(b.get("enabled", cur["enabled"])), "every_hours": b.get("every_hours", cur["every_hours"]), "keep": b.get("keep", cur["keep"])}
+    save_settings(s)
+    return backup_auto_get()
+
+
+@app.post("/api/backup/auto/run")
+def backup_auto_run():
+    try:
+        name = run_backup("manual")
+    except portable.ExportError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "name": name, **backup_auto_get()}
 
 
 @app.post("/api/import")

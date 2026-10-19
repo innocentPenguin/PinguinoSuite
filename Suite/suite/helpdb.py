@@ -174,6 +174,10 @@ CATALOG["comm"] = H("PenguinComm", "One place for talking with your bots: Listen
 CATALOG["quick"] = H("Quick actions", "Every Host automation (chat commands, redeems, timers, hotkeys) as a button, like a Stream Deck page. Run one now to test it, or Dry run to see what it would do without doing it.",
                      ["Search or filter by group; the star pins an action to the top.", "Run now really runs it (only on the master device). Dry run shows the steps without sending anything.", "Build or edit the actions themselves in Actions & Events (the Host page).",
                       "Ctrl+K opens the command palette: type part of an action name to run it from anywhere."], fix={"label": "Open Actions & Events", "route": "m:host@1"})
+CATALOG["autobackup"] = H("Automatic config backup", "The Suite saves a zip of your settings, commands, layouts and looks on this PC on a schedule (never keys or tokens), so a bad change can be undone.",
+                          ["Settings > Automatic config backup: turn it on or off, choose how often and how many to keep.", "Back up now makes one immediately. The files are in Data\backups\auto.",
+                           "To restore or move to another PC, use Settings > Backup & move > Import and pick one of these zips (dry run first).", "Keys and tokens are not in these backups: export them separately from the key vault with a passphrase."],
+                          fix={"label": "Open Settings", "route": "settings"})
 CATALOG["help"] = H("How Help works", "Every ? button and every red / yellow row opens the same kind of panel: what it means, the steps to fix or set it up, and a button to the place to do it.",
                     ["Click any pre-stream row, Integrations row, Console warning / error, module name or key row.", "Green items have instructions too, for setting them up again.", "This page lists all topics."])
 ALIASES["voice"] = "voice_commands"
