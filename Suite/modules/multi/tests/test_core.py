@@ -456,3 +456,21 @@ def test_youtube_normalize():
     assert m.id == "youtube:chat9:x1" and m.badges == ["subscriber"] and not m.is_self and m.text == "hello?"
     assert normalize_item({"id": "y", "snippet": {"type": "superChatEvent"}}, "chat9") is None
     assert normalize_item(it, "chat9", "UC1").is_self
+
+
+def test_voice_match_never_autocloses():
+    import voice
+    cards = [{"id": "c1", "state": "open", "user": "bob", "text": "which graphics card are you using for streaming?"},
+             {"id": "c2", "state": "open", "user": "amy", "text": "lol nice"},
+             {"id": "c3", "state": "answered", "user": "zed", "text": "which graphics card are you using"}]
+    r = voice.match("so bob asked which graphics card I am using for streaming it's a 4070", cards)
+    assert [x["card_id"] for x in r] == ["c1"] and r[0]["confidence"] >= 0.5
+    assert voice.match("completely unrelated talk about cats", cards) == []
+
+
+def test_claims_endpoint_lists_open_priority_cards(tmp_path):
+    p, ev = make_pipeline(tmp_path)
+    m = ChatMessage(id="t:c1", platform="twitch", channel="c", user_id="9", user="v", display="v",
+                    text="@innocentpenguin when is the giveaway?", ts=time.time())
+    p.ingest(m)
+    assert any(c["tier"] in ("medium", "high") for c in p.cards.cards.values())

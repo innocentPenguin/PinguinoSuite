@@ -18,6 +18,7 @@ import cards as cards_mod
 import checks
 import config
 import learning
+import voice
 import secrets_store
 import windows as win
 from connectors.discord import Discord
@@ -448,6 +449,37 @@ async def set_discord(request: Request):
     if "channels" in b:
         config.save_settings({"discord_channels": [str(c) for c in b["channels"] if str(c).isdigit()]})
     return {"ok": True, "has_token": bool(secrets_store.get("discord_token"))}
+
+
+@app.get("/api/claims")
+def claims():
+    """Streamer-first contract: open medium/high cards the streamer may answer personally. Bots/Router poll this
+    and stay quiet on these message ids until `expires`. Read-only, nothing here can post."""
+    ttl, now = config.settings()["claim_ttl_s"], time.time()
+    out = [{"message_id": c["message_id"], "platform": c["platform"], "user_id": c["user_id"], "tier": c["tier"],
+            "expires": c["created"] + ttl} for c in cards.cards.values()
+           if c["state"] == "open" and c["tier"] in ("medium", "high") and c["created"] + ttl > now]
+    return {"ttl_s": ttl, "claims": out}
+
+
+@app.post("/api/voice/transcript")
+async def voice_transcript(request: Request):
+    """Called by Listen (or any ASR) with recent transcript text. Emits reply.suggested; never answers a card."""
+    if not config.settings()["voice_enabled"]:
+        return {"enabled": False, "suggestions": []}
+    text = str((await request.json()).get("text", ""))[:2000]
+    sug = voice.match(text, cards.cards.values())
+    for s in sug:
+        hub.emit({"type": "reply.suggested", **s})
+    return {"enabled": True, "suggestions": sug}
+
+
+@app.post("/api/voice/confirm/{card_id}")
+def voice_confirm(card_id: str):
+    if card_id not in cards.cards:
+        raise HTTPException(404, "no such card")
+    cards.answer(card_id, via="voice")
+    return {"ok": True}
 
 
 @app.get("/api/ai")

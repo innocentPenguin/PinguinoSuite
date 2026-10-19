@@ -27,3 +27,9 @@ Multi publishes `multi.claim {messageId,userId,ttl}`; Router (`Shared\PinguinoBo
 
 ## Learning v1
 `GET /api/learning` -> `{enabled, min_evidence, rules:{rule:{delta,evidence,net,n,cap}}, applied}`; `POST /api/learning/reset`; `POST /api/learning/enabled {enabled}`. Evidence from the `events` log: answered +1, dismissed -1, missed -0.5, manual tier up/down +-1; 14-day half-life; a rule needs 5+ actions before it moves; delta clamped to 30% of the rule's default weight (max 12). Deltas are stored in kv `learned` and added by the scorer as part of each reason's points, so explanations still sum to the score. Reset ignores older events.
+
+## Streamer-first claims (M4, Multi side)
+`GET /api/claims` -> `{ttl_s, claims:[{message_id, platform, user_id, tier, expires}]}` — open medium/high cards for `claim_ttl_s` (default 20 s). Read-only. A bot/Router that wants "streamer first" polls it and holds off on those message ids until `expires`. The Router-side hook (`Shared\PinguinoBots.cs.txt` + `sync-shared.mjs`) is Unit 04's/owner's change and not made here.
+
+## Voice suggestions (M4)
+Opt-in (`voice_enabled`, default off). ASR (Listen) POSTs transcript text to `/api/voice/transcript`; Multi emits `reply.suggested {card_id, confidence}` (keyword overlap, threshold 0.5). It never closes a card; `POST /api/voice/confirm/{card_id}` marks it answered via `voice`. No audio or transcript is stored. Not verified: wiring to Listen's live transcript stream.
