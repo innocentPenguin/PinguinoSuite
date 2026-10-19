@@ -19,6 +19,8 @@ class ChatMessage:
     is_self: bool = False   # sent by the streamer / by Multi
     is_bot: bool = False
     raw_type: str = "text"
+    color: str = ""         # name colour (#rrggbb) when the platform provides one
+    emotes: list = field(default_factory=list)   # [{"id": "...", "text": "Kappa"}] (twitch)
 
     def to_dict(self):
         return asdict(self)

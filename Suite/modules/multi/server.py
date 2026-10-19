@@ -168,6 +168,12 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/popout")
+def popout():
+    """Stream-safe chat for an OBS browser source/dock: public messages only (no cards, notes, composer, muted users)."""
+    return FileResponse(STATIC / "index.html")
+
+
 @app.get("/api/status")
 def status():
     return {"ok": True, "uptime_s": int(time.time() - START), "stats": pipeline.stats,
@@ -309,6 +315,74 @@ async def send(request: Request):
     if b.get("card_id"):
         cards.answer(b["card_id"], via="typed")
     return {"ok": True, "id": mid}
+
+
+# moderation (Twitch only, explicit action on one message/user; audited) ---
+@app.post("/api/mod/{action}")
+async def mod_action(action: str, request: Request):
+    b = await request.json()
+    m = store.get_message(b.get("message_id", ""))
+    if not m:
+        raise HTTPException(404, "unknown message")
+    conn = connectors.get(m["platform"])
+    if m["platform"] != "twitch" or not hasattr(conn, "moderate"):
+        raise HTTPException(400, f"quick moderation is not available for {m['platform']}")
+    try:
+        await conn.moderate(action, user_id=m["user_id"], message_id=m["id"].split(":")[-1],
+                            seconds=int(b.get("seconds", 600)), reason=b.get("reason", ""))
+    except Exception as e:
+        console_log.warn("mod", f"{action} on {m['user']} failed: {e}")
+        raise HTTPException(502, str(e))
+    store.log_event("mod", {"action": action, "user": m["user"], "message_id": m["id"], "seconds": b.get("seconds")})
+    console_log.info("mod", f"{action} {m['user']} ({m['platform']})")
+    return {"ok": True}
+
+
+# pins: messages the streamer wants kept on top of the chat page ------------
+@app.get("/api/pins")
+def pins_get():
+    return {"pins": store.kv_get("pins", [])}
+
+
+@app.post("/api/pins")
+async def pins_set(request: Request):
+    b = await request.json()
+    pins = [p for p in store.kv_get("pins", []) if p["id"] != b.get("message_id")]
+    if b.get("pin", True):
+        m = store.get_message(b.get("message_id", ""))
+        if not m:
+            raise HTTPException(404, "unknown message")
+        pins = ([{"id": m["id"], "platform": m["platform"], "user": m["user"], "display": m["display"], "text": m["text"],
+                  "color": m.get("color", "")}] + pins)[:5]
+    store.kv_set("pins", pins)
+    hub.emit({"type": "pins.changed", "pins": pins})
+    return {"pins": pins}
+
+
+# dashboard tile numbers for the Suite (chat rate + top chatters) ----------
+@app.get("/api/dashboard")
+def dashboard():
+    now = time.time()
+    per, mins = store.stats_since(now - 3600)
+    bots = {x.lower() for x in config.settings()["bot_accounts"]}
+    cur = int(now // 60)
+    series = [mins.get(cur - i, 0) for i in range(14, -1, -1)]      # oldest -> newest, last 15 minutes
+    humans = [p for p in per if (p["user"] or "").lower() not in bots]
+    top = sorted(humans, key=lambda p: -p["n"])[:5]
+    by_platform = {}
+    for p in per:
+        by_platform[p["platform"]] = by_platform.get(p["platform"], 0) + p["n"]
+    return {"rate_per_min": round(sum(series[-5:]) / 5, 1), "last_minute": series[-1], "series_15m": series,
+            "messages_last_hour": sum(p["n"] for p in per), "unique_chatters_hour": len(humans),
+            "top_chatters": [{"user": p["display"] or p["user"], "platform": p["platform"], "messages": p["n"]} for p in top],
+            "by_platform": by_platform, "open_cards": len(cards.view()["open"])}
+
+
+# feed snapshot for an auxiliary device (read by the master over Link; contract pending with Units 01/04) --
+@app.get("/api/feed")
+def feed(since: float = 0, limit: int = 200):
+    rows = [m for m in store.recent(min(limit, 500)) if m["ts"] > since]
+    return {"ts": time.time(), "messages": rows}
 
 
 # settings / rules ----------------------------------------------------
@@ -589,7 +663,7 @@ async def dev_inject(request: Request):
                     user_id=b.get("user_id") or b.get("user", "viewer"), user=b.get("user", "viewer"),
                     display=b.get("user", "viewer"), text=b["text"], ts=time.time(), badges=b.get("badges", []),
                     first_time=b.get("first_time", False), reply_to=b.get("reply_to", ""),
-                    reply_to_user=b.get("reply_to_user", ""))
+                    reply_to_user=b.get("reply_to_user", ""), color=b.get("color", ""), emotes=b.get("emotes", []))
     inbox.put(m)
     return {"ok": True, "id": m.id}
 

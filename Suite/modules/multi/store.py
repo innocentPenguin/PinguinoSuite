@@ -81,6 +81,14 @@ class Store:
             rows = self.db.execute(q, a).fetchall()
         return [_msg(r) for r in reversed(rows)]
 
+    def stats_since(self, since):
+        """Per-minute counts and per-chatter counts of messages newer than `since` (epoch)."""
+        with self.lock:
+            per = self.db.execute("SELECT platform, user_id, user, display, COUNT(*) n FROM messages WHERE ts>? GROUP BY platform, user_id",
+                                  (since,)).fetchall()
+            mins = self.db.execute("SELECT CAST(ts/60 AS INTEGER) m, COUNT(*) n FROM messages WHERE ts>? GROUP BY m", (since,)).fetchall()
+        return [dict(r) for r in per], {r["m"]: r["n"] for r in mins}
+
     def search(self, term, limit=100):
         with self.lock:
             rows = self.db.execute(

@@ -34,7 +34,9 @@ def normalize_event(ev):
         reply_to=f"twitch:{chan}:{reply['parent_message_id']}" if reply.get("parent_message_id") else "",
         reply_to_user=reply.get("parent_user_login", ""),
         first_time=ev.get("message_type") == "user_intro",
-        raw_type=ev.get("message_type", "text"))
+        raw_type=ev.get("message_type", "text"), color=ev.get("color") or "",
+        emotes=[{"id": f["emote"]["id"], "text": f.get("text", "")} for f in (ev.get("message") or {}).get("fragments", [])
+                if f.get("type") == "emote" and f.get("emote")])
 
 
 class Twitch(Connector):
@@ -91,7 +93,9 @@ class Twitch(Connector):
         if "user:read:chat" not in scopes:
             self.set_status("needs_auth", "token lacks user:read:chat")
             return None
-        self.capabilities = dict(self.capabilities, send="user:write:chat" in scopes, reply="user:write:chat" in scopes)
+        self.capabilities = dict(self.capabilities, send="user:write:chat" in scopes, reply="user:write:chat" in scopes,
+                                 mod_timeout="moderator:manage:banned_users" in scopes,
+                                 mod_delete="moderator:manage:chat_messages" in scopes)
         self.user = {"login": info["login"], "user_id": info["user_id"]}
         return tok
 
@@ -173,6 +177,30 @@ class Twitch(Connector):
         if not d.get("is_sent"):
             raise RuntimeError("Twitch dropped the message: " + json.dumps(d.get("drop_reason")))
         return d["message_id"]
+
+    def _mod_sync(self, action, user_id="", message_id="", seconds=600, reason=""):
+        tok = self.tokens()
+        base = {"broadcaster_id": self.broadcaster_id, "moderator_id": self.user["user_id"]}
+        if action == "delete":
+            r = requests.delete(f"{HELIX}/moderation/chat", params=dict(base, message_id=message_id),
+                                headers=self._headers(tok), timeout=10)
+        else:
+            data = {"user_id": user_id, "reason": (reason or "Multi quick action")[:100]}
+            if action == "timeout":
+                data["duration"] = max(1, min(int(seconds), 1209600))
+            r = requests.post(f"{HELIX}/moderation/bans", params=base, json={"data": data},
+                              headers=self._headers(tok), timeout=10)
+        if r.status_code not in (200, 204):
+            raise RuntimeError(f"{action} failed {r.status_code}: {r.text[:160]}")
+        return True
+
+    async def moderate(self, action, **kw):
+        need = {"delete": "mod_delete", "timeout": "mod_timeout", "ban": "mod_timeout"}.get(action)
+        if not need:
+            raise RuntimeError("unknown moderation action")
+        if not (self.user and self.capabilities.get(need)):
+            raise RuntimeError("Moderation is not authorised: reconnect Twitch with moderator permissions")
+        return await asyncio.to_thread(self._mod_sync, action, **kw)
 
     async def send(self, text, reply_to=None):
         if not (self.user and self.capabilities.get("send")):

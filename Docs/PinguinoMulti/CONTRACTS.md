@@ -33,3 +33,11 @@ Multi publishes `multi.claim {messageId,userId,ttl}`; Router (`Shared\PinguinoBo
 
 ## Voice suggestions (M4)
 Opt-in (`voice_enabled`, default off). ASR (Listen) POSTs transcript text to `/api/voice/transcript`; Multi emits `reply.suggested {card_id, confidence}` (keyword overlap, threshold 0.5). It never closes a card; `POST /api/voice/confirm/{card_id}` marks it answered via `voice`. No audio or transcript is stored. Not verified: wiring to Listen's live transcript stream.
+
+## Unified Chat page, popout, dashboard (2026-10-19)
+- **Chat page**: `http://127.0.0.1:8766/?type=chat` (also window type `chat`, layout "Combined Chat"). Badges, name colours, Twitch emotes, mention highlight, mod/VIP/sub chips, per-platform filter chips, search (`/api/search`), pins (`GET/POST /api/pins`, event `pins.changed`), reply to ONE platform, priority-card strip.
+- **Quick mod actions** (Twitch only): `POST /api/mod/{timeout|ban|delete}` `{message_id, seconds?}`; calls Helix directly with Multi's own token and needs scopes `moderator:manage:banned_users` (timeout/ban) and `moderator:manage:chat_messages` (delete). Without them the buttons are hidden and the call answers 502 "reconnect Twitch with moderator permissions". Every action is audited (store event + Console `mod` source). Host exposes no moderation HTTP API today; if 02 adds one, Multi can switch provider.
+- **Popout / OBS**: `GET /popout?platforms=twitch,youtube&size=22&max=14&bots=show` - transparent, public chat only (no cards/notes/scores/composer/muted users, bots hidden by default).
+- **Dashboard**: `GET /api/dashboard` -> `{rate_per_min, last_minute, series_15m[15], messages_last_hour, unique_chatters_hour, top_chatters[{user,platform,messages}], by_platform, open_cards}` (bots excluded from top chatters).
+- **Aux device feed**: `GET /api/feed?since=<epoch>&limit=` returns `{ts, messages[]}` for the master to serve over Link. Not wired as a client yet (master/aux design is with Units 01/04; Multi's loopback-Host guard also has to allow the Link address).
+- Kick is not built (needs a public webhook; decision pending).

@@ -81,6 +81,14 @@ async function renderLauncher() {
      <span class="grow"></span><button data-l="${w.id}">Open</button> <button data-x="${w.id}">Remove</button></div>`).join('') : '<div class="empty">No windows yet. Pick a layout above or add one below.</div>'}
   <div class="grid small">${Object.entries(WINDOW_HELP).map(([t, [n, d]]) => `<button class="tile" data-t="${t}"><b>+ ${esc(n)}</b><small>${esc(d)}</small></button>`).join('')}</div>
 
+  <h3>Chat page and stream overlay</h3>
+  <div class="box"><div><a href="/?type=chat" target="_self"><button class="p" type="button">Open the full Chat page</button></a>
+    <small class="mut">All platforms in one feed with badges, emotes, search, pins and quick mod actions.</small></div>
+    <b>Show chat on your stream (OBS) ${T('', 'Public chat only: no priority cards, notes, scores, reply box or muted viewers.')}</b>
+    <small class="mut">In OBS: Sources &gt; + &gt; Browser, paste the address, set width 500 and height 800. Or Docks &gt; Custom Browser Docks. Change <code>size</code>, <code>max</code>, <code>platforms</code> in the address as you like; add <code>bots=show</code> to include bot replies.</small>
+    <label>Address<input id="pop-url" readonly value="${esc(location.origin)}/popout?size=22&max=14" onclick="this.select()"></label>
+    <div class="act"><button data-act="copy-pop">Copy address</button> <a href="/popout?size=22&max=14" target="_blank" rel="noopener"><button type="button">Preview</button></a></div></div>
+
   <h3>Smart features</h3>
   <div class="box"><b>How messages are ranked ${T('', 'Local rules always work with no internet and no account. AI only double-checks borderline messages.')}</b>
     ${[['local', 'Local only', 'Free and instant. Explainable rules; nothing leaves your PC.'],
@@ -156,6 +164,7 @@ document.addEventListener('click', async e => {
     else if (a === 'learn-reset') { await api('/api/learning/reset', {b: {}}); toast('Learning reset to defaults.'); return; }
     else if (a === 'recap') { const r = await api('/api/recap');
       $('#recap').innerHTML = r.count ? r.cards.map(c => `<div class="wrow"><b>${esc(c.display || c.user)}</b> <span class="mut">${esc(c.platform || '')}</span> ${esc(c.text)}</div>`).join('') : '<div class="empty">Nothing unanswered. Nice.</div>'; return; }
+    else if (a === 'copy-pop') { const i = $('#pop-url'); i.select(); try { await navigator.clipboard.writeText(i.value); toast('Address copied.'); } catch (x) { document.execCommand('copy'); toast('Address selected - press Ctrl+C.'); } return; }
     else if (a === 'restore') await api('/api/windows/restore');
     else if (a === 'save-profile') { const n = prompt('Name this layout'); if (n) { await api('/api/profiles/' + encodeURIComponent(n) + '/save'); toast('Layout saved: ' + n); } }
     else return;

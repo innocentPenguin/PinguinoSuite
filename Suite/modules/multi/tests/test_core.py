@@ -578,3 +578,60 @@ def test_prestream_endpoint_shape_and_no_token_needed():
     assert r.status_code == 200 and isinstance(body["ts"], float) and rows and all(set(x) == {"id", "label", "status", "detail"} for x in rows)
     assert all(x["status"] in ("pass", "warn", "fail") for x in rows)
     assert {"store", "queue", "windows"} <= {x["id"] for x in rows}
+
+
+def test_twitch_normalize_color_and_emotes():
+    from connectors.twitch import normalize_event
+    ev = {"broadcaster_user_login": "ch", "message_id": "m1", "chatter_user_id": "9", "chatter_user_login": "fan",
+          "chatter_user_name": "Fan", "color": "#FF4500", "badges": [{"set_id": "moderator"}],
+          "message": {"text": "hi Kappa", "fragments": [{"type": "text", "text": "hi "}, {"type": "emote", "text": "Kappa", "emote": {"id": "25"}}]}}
+    m = normalize_event(ev)
+    assert m.color == "#FF4500" and m.emotes == [{"id": "25", "text": "Kappa"}] and m.badges == ["moderator"]
+
+
+def test_twitch_moderation_needs_scope_and_calls_helix(monkeypatch):
+    import asyncio
+    from connectors import twitch as tw
+    t = tw.Twitch(None, lambda e: None)
+    t.user, t.broadcaster_id = {"login": "me", "user_id": "1"}, "2"
+    with __import__("pytest").raises(RuntimeError):
+        asyncio.run(t.moderate("timeout", user_id="9"))
+    t.capabilities = dict(t.capabilities, mod_timeout=True, mod_delete=True)
+    calls = []
+
+    class R:
+        status_code = 200
+        text = ""
+    monkeypatch.setattr(t, "tokens", lambda: {"access_token": "x", "client_id": "c"})
+    monkeypatch.setattr(tw.requests, "post", lambda url, **k: calls.append(("post", url, k)) or R())
+    monkeypatch.setattr(tw.requests, "delete", lambda url, **k: calls.append(("delete", url, k)) or R())
+    assert asyncio.run(t.moderate("timeout", user_id="9", seconds=300))
+    assert asyncio.run(t.moderate("delete", message_id="mm"))
+    assert calls[0][2]["json"]["data"] == {"user_id": "9", "reason": "Multi quick action", "duration": 300}
+    assert calls[1][2]["params"]["message_id"] == "mm"
+
+
+def test_dashboard_pins_feed_and_popout_routes(tmp_path, monkeypatch):
+    import time
+    from fastapi.testclient import TestClient
+    import server
+    from store import Store
+    from models import ChatMessage
+    import priority.rules as prio
+    st = Store(tmp_path / "d.db")
+    monkeypatch.setattr(server, "store", st)
+    monkeypatch.setattr(server.pipeline, "store", st)
+    now = time.time()
+    for i, u in enumerate(["a", "a", "b", "pinguinob0t"]):
+        st.add_message(ChatMessage(id=f"twitch:c:{i}", platform="twitch", channel="c", user_id=u, user=u, display=u, text="hi", ts=now - 5), prio.Decision(0, "none", []) if hasattr(prio, "Decision") else __import__("models").Decision(0, "none", []))
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    d = c.get("/api/dashboard").json()
+    assert d["messages_last_hour"] == 4 and d["top_chatters"][0] == {"user": "a", "platform": "twitch", "messages": 2}
+    assert all(t["user"] != "pinguinob0t" for t in d["top_chatters"]) and len(d["series_15m"]) == 15
+    h = {"origin": "http://127.0.0.1:8766"}
+    assert c.post("/api/pins", json={"message_id": "twitch:c:0"}, headers=h).json()["pins"][0]["user"] == "a"
+    assert c.post("/api/pins", json={"message_id": "twitch:c:0", "pin": False}, headers=h).json()["pins"] == []
+    assert len(c.get("/api/feed?since=0").json()["messages"]) == 4
+    assert c.get("/popout").status_code == 200
+    assert c.post("/api/mod/ban", json={"message_id": "twitch:c:0"}, headers=h).status_code == 400   # no Twitch connector in this unit test

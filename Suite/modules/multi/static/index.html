@@ -50,7 +50,7 @@ body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:h
 .chk-row{padding:4px 0}.keys{margin-top:18px;font-size:.85em}
 .msg.bot{opacity:.65}.msg.bot .u{font-style:italic}
 .cbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:5px 8px;border-bottom:1px solid var(--line)}.grow{flex:1}
-.chip2{display:inline-flex;gap:5px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:.78em}.chip2.off{opacity:.4;text-decoration:line-through}.chip2.on{background:#2f6fdb;border-color:#2f6fdb}
+.chip2{display:inline-flex;gap:5px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:.78em}a.chip2{color:var(--fg);text-decoration:none}.chip2.off{opacity:.4;text-decoration:line-through}.chip2.on{background:#2f6fdb;border-color:#2f6fdb}
 .cstrip{padding:4px 8px;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid var(--line);max-height:36%;overflow:auto}
 .cc{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--med);border-radius:6px;padding:5px 8px;font-size:.92em}.cc.high{border-left-color:var(--hi)}.cc .ch{display:flex;gap:6px;color:var(--mut);align-items:center}.cc .ch b{color:var(--fg)}
 .cnone{padding:2px 0;font-size:.85em}.lnk{background:none;color:var(--mut);text-decoration:underline;padding:0;align-self:flex-start}
@@ -58,13 +58,21 @@ body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:h
 .bt{font-size:.65em;border:1px solid var(--line);border-radius:3px;padding:0 4px;margin-right:6px;color:var(--mut)}.bt.first{color:var(--ok);border-color:var(--ok)}.rep{color:var(--mut);font-size:.85em;margin-right:6px}
 .rb{position:absolute;right:0;top:2px;opacity:0;padding:0 6px}.cfeed .msg:hover .rb{opacity:1}
 .ccomp{padding:6px 8px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:4px}.ctgt{font-size:.85em;color:var(--mut)}
+.bd{font-size:.6em;color:#fff;border-radius:3px;padding:0 4px;margin-right:4px;vertical-align:middle;font-weight:700}
+.emo{height:1.6em;vertical-align:middle;margin:0 1px}
+.msg.mention{background:rgba(245,166,35,.16);border-radius:4px}.msg.modmsg .u{text-decoration:underline dotted}
+.tools{position:absolute;right:0;top:0;display:none;gap:2px;background:var(--card);border-radius:4px;padding:1px}.cfeed .msg:hover .tools{display:flex}.tools button{padding:0 5px}
+.notice{color:var(--mut);font-size:.8em;text-align:center;padding:3px}.pin{background:var(--card);border-left:3px solid var(--ok);padding:3px 8px;margin:3px 8px;border-radius:4px;font-size:.9em}
+body.popout{background:transparent!important;height:auto;min-height:100vh;justify-content:flex-end}
+.pfeed{display:flex;flex-direction:column;justify-content:flex-end;padding:8px;color:#fff;text-shadow:0 1px 3px #000,0 0 2px #000;font-size:var(--fs)}
+.pm{padding:2px 0;word-break:break-word}.pm b{margin-right:6px}
 </style></head><body>
 <header id="hdr"></header><div id="body" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
 <script src="/assets/launcher.js"></script>
 <script src="/assets/chat.js"></script>
 <script>
 const q = new URLSearchParams(location.search), WID = q.get('win');
-let W = {type: q.get('type') || 'launcher', platforms: [], min_tier: 'none'};
+let W = {type: location.pathname === '/popout' ? 'popout' : (q.get('type') || 'launcher'), platforms: [], min_tier: 'none'};
 const TIERS = {none: 0, low: 1, medium: 2, high: 3};
 let conns = [], cards = {open: [], answered: [], missed: []}, msgs = [], target = null;
 const $ = (s, e = document) => e.querySelector(s);
@@ -103,7 +111,8 @@ function on(ev) {
   else if (ev.type === 'conn.status') { conns = conns.filter(c => c.platform !== ev.platform).concat(ev); renderHeader(); if (W.type === 'status') renderStatus(); if (W.type === 'chat') { chatBar(); chatCompose(); } }
   else if (ev.type === 'message') {
     msgs.push(ev.message); if (msgs.length > 500) msgs.shift(); addMsg(ev.message);
-  } else if (ev.type === 'card.new' || ev.type === 'card.update') api('/api/cards').then(c => { cards = c; renderCards(); if (W.type === 'chat') chatStrip(); });
+    if (W.type === 'popout' && window.popAdd) window.popAdd(ev.message);
+  } else if (ev.type === 'pins.changed') { PINS = ev.pins || []; if (W.type === 'chat') chatPins(); } else if (ev.type === 'card.new' || ev.type === 'card.update') api('/api/cards').then(c => { cards = c; renderCards(); if (W.type === 'chat') chatStrip(); });
   else if (ev.type === 'layout.changed') { if (!WID) renderLauncher(); }
 }
 function pass(m) {
@@ -132,7 +141,7 @@ function renderHeader() {
 function render() {
   renderHeader();
   ({unified: renderFeed, platform: renderFeed, first: renderFeed, priority: renderCards, missed: renderCards,
-    composer: renderComposer, status: renderStatus, launcher: renderLauncher, chat: renderChat}[W.type] || renderFeed)();
+    composer: renderComposer, status: renderStatus, launcher: renderLauncher, chat: renderChat, popout: renderPopout}[W.type] || renderFeed)();
 }
 // linked feed: windows in one link_group show ONE continuous sequence. link_order 0 shows the newest rows,
 // order 1 continues with the rows just older, and so on. Capacity (rows) is shared over BroadcastChannel.
