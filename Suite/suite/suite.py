@@ -123,6 +123,10 @@ class Module:
         self.id = spec["id"]
         self.proc = None
         self.healthy = False
+        self.wanted = False   # set by start(), cleared by stop(): a wanted module that dies is restarted
+        self.crashes = []     # timestamps of recent unexpected exits (circuit breaker)
+        self.retry_at = 0.0
+        self.failed = False
 
     def opts(self):
         o = dict(self.spec.get("defaults", {}))
@@ -138,6 +142,7 @@ class Module:
     def start(self):
         if self.running or self._ping():
             return
+        self.wanted, self.failed = True, False
         cmd = [PY if c == "{py}" else c for c in self.spec["cmd"]]
         log = open(LOGS / f"{self.id}.log", "ab")
         if IS_WIN:
@@ -149,6 +154,7 @@ class Module:
         bus.emit("module", id=self.id, state="starting")
 
     def stop(self):
+        self.wanted, self.failed = False, False
         if self.running:
             kill_tree(self.proc)
         self.proc, self.healthy = None, False
@@ -160,7 +166,25 @@ class Module:
         except Exception:
             return False
 
+    def supervise(self):
+        """Restart a wanted module that exited on its own: backoff 2/5/15/30/60s, give up after 5 crashes in 5 min."""
+        if not self.wanted or self.failed or self.proc is None or self.proc.poll() is None:
+            return
+        now = time.time()
+        if not self.retry_at:
+            self.crashes = [t for t in self.crashes if now - t < 300] + [now]
+            if len(self.crashes) > 5:
+                self.failed = True
+                bus.emit("module", id=self.id, state="failed", detail="crashed 5 times in 5 minutes; start it manually")
+                return
+            self.retry_at = now + (2, 5, 15, 30, 60)[min(len(self.crashes), 5) - 1]
+            bus.emit("module", id=self.id, state="crashed", exit=self.proc.poll(), retry_in=round(self.retry_at - now))
+        elif now >= self.retry_at:
+            self.retry_at, self.proc = 0.0, None
+            self.start()
+
     def refresh(self):
+        self.supervise()
         was = self.healthy
         self.healthy = self._ping()
         if self.healthy != was:
