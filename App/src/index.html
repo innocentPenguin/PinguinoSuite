@@ -162,6 +162,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 #pal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:60;align-items:flex-start;justify-content:center;padding-top:12vh}body.palopen #pal{display:flex}
 #pal .pbox{width:min(560px,94vw);background:var(--panel);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}#pal input{width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:14px 16px;font-size:15px;background:transparent}
 #pal .plist{max-height:50vh;overflow:auto}#pal .pit{display:flex;gap:10px;padding:8px 16px;cursor:pointer;align-items:baseline}#pal .pit.on{background:var(--accent-soft)}#pal .pit .pk{margin-left:auto;font-size:11px;color:var(--faint)}
+.tbl{width:100%;border-collapse:collapse}.tbl th{text-align:left;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);padding:6px 8px;border-bottom:1px solid var(--line)}.tbl td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 .minirow{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}.minirow:last-child{border:0}.minirow .grow{flex:1;min-width:0}
 .col2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:1000px){.col2{grid-template-columns:1fr}}
@@ -650,19 +651,23 @@ function bindSwitches(){
     setTimeout(async()=>{await load();redrawSw()},700)});
 }
 /* ============ Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log) ============ */
-const Q={doc:null,err:null,q:'',group:'',out:{},busy:{},pins:(()=>{try{return JSON.parse(localStorage.getItem('qpins')||'[]')}catch{return[]}})()};
+const Q={tab:'actions',data:{},doc:null,err:null,q:'',group:'',out:{},busy:{},pins:(()=>{try{return JSON.parse(localStorage.getItem('qpins')||'[]')}catch{return[]}})()};
 const hostGet=p=>fetch('/api/modules/host/get?path='+encodeURIComponent(p)).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
 const hostPost=(p,b)=>post('/api/modules/host/post',{path:p,body:b});
 async function loadQuick(){try{const j=await hostGet('/api/automations');Q.doc=j.doc;Q.master=j.master;Q.err=null}catch{Q.err='The Host is not answering (is PinguinoHost on?).'}if(route==='quick')draw(true)}
 const trigText=t=>{const k=t.type;return k==='command'?(t.names||[]).join(' / '):k==='redeem'?'redeem: '+(t.title||''):k==='hotkey'?'hotkey '+(t.key||''):k==='timer'?'every '+Math.round((t.everySec||600)/60)+' min':k==='chat'?'chat /'+(t.pattern||'')+'/':k}
 pages.quick=()=>{
+  const tabs=`<div class="ctool" style="margin-bottom:0"><span class="chips">${[['actions','Actions'],['vars','Variables'],['queue','Queue'],['triggers','Triggers'],['hotkeys','Hotkeys'],['connect','Connect apps']].map(x=>`<span class="chip ${Q.tab===x[0]?'on':''}" data-qtab="${x[0]}">${x[1]}</span>`).join('')}</span></div>`;
+  if(Q.tab!=='actions')return tabs+qTab();
+  return tabs+pagesQuickActions()};
+const pagesQuickActions=()=>{
   if(Q.err)return `<div class="card" style="max-width:520px"><h3>Quick actions</h3><div class="dim">${esc(Q.err)}</div><div class="row" style="margin-top:10px"><button class="sm" id="q-retry">Retry</button></div></div>`;
   if(!Q.doc){loadQuick();return '<div class="dim">Loading actions…</div>'}
   const acts=(Q.doc.actions||[]),groups=[...new Set(acts.map(a=>a.group||'Other'))].sort();
   const f=acts.filter(a=>(!Q.group||(a.group||'Other')===Q.group)&&(!Q.q||(a.name+' '+(a.group||'')+' '+(a.triggers||[]).map(trigText).join(' ')).toLowerCase().includes(Q.q.toLowerCase())))
     .sort((a,b)=>(Q.pins.includes(b.id)-Q.pins.includes(a.id))||String(a.name).localeCompare(b.name));
-  return `<div class="ctool"><input type="text" id="q-q" placeholder="Search actions…" value="${esc(Q.q)}"><div class="chips"><span class="chip ${Q.group?'':'on'}" data-qg="">All</span>${groups.map(g=>`<span class="chip ${Q.group===g?'on':''}" data-qg="${esc(g)}">${esc(g)}</span>`).join('')}</div><span class="sm faint sp">${f.length} of ${acts.length}${Q.master===false?' · this device is not the master: actions will not run here':''}</span>${hq('quick')}</div>
-  <div class="qgrid">${f.map(a=>`<div class="qcard ${a.enabled===false?'off':''}"><div class="row"><h4 style="flex:1">${esc(a.name)}</h4><button class="qstar ${Q.pins.includes(a.id)?'on':''}" data-qpin="${esc(a.id)}" title="Pin to the top">★</button></div>
+  return cutoverCard()+`<div class="ctool"><input type="text" id="q-q" placeholder="Search actions…" value="${esc(Q.q)}"><div class="chips"><span class="chip ${Q.group?'':'on'}" data-qg="">All</span>${groups.map(g=>`<span class="chip ${Q.group===g?'on':''}" data-qg="${esc(g)}">${esc(g)}</span>`).join('')}</div>${Q.group?`<button class="sm" data-qgrp="1">Enable group</button><button class="sm" data-qgrp="0">Disable group</button>`:''}<button class="sm" id="q-export" title="Download every action and variable as one JSON file">Export</button><span class="sm faint sp">${f.length} of ${acts.length}${Q.master===false?' · this device is not the master: actions will not run here':''}</span>${hq('quick')}</div>
+  <div class="qgrid">${f.map(a=>`<div class="qcard ${a.enabled===false?'off':''}"><div class="row"><h4 style="flex:1">${esc(a.name)}</h4><label class="sw" title="Turn this action on / off"><input type="checkbox" data-qen="${esc(a.id)}" ${a.enabled===false?'':'checked'}><span></span></label><button class="qstar ${Q.pins.includes(a.id)?'on':''}" data-qpin="${esc(a.id)}" title="Pin to the top">★</button></div>
     <div class="qt">${a.group?`<span class="qtag">${esc(a.group)}</span>`:''}${(a.triggers||[]).map(x=>`<span class="qtag">${esc(trigText(x))}</span>`).join('')}${a.enabled===false?'<span class="qtag">off</span>':''}</div>
     <div class="row"><button class="pri sm" data-qrun="${esc(a.id)}|0" ${Q.busy[a.id]?'disabled':''}>${Q.busy[a.id]?'Running…':'Run now'}</button><button class="sm" data-qrun="${esc(a.id)}|1" title="Show what it would do without doing it">Dry run</button></div>
     ${Q.out[a.id]?`<div class="qout">${esc(Q.out[a.id])}</div>`:''}</div>`).join('')||'<div class="faint">No actions match.</div>'}</div>`};
@@ -671,7 +676,50 @@ function bindQuick(){
   $('#q-q')&&($('#q-q').oninput=e=>{Q.q=e.target.value;const p=e.target.selectionStart;draw(true);const n=$('#q-q');n.focus();n.setSelectionRange(p,p)});
   $$('[data-qg]').forEach(c=>c.onclick=()=>{Q.group=c.dataset.qg;draw(true)});
   $$('[data-qpin]').forEach(b=>b.onclick=()=>{const id=b.dataset.qpin,i=Q.pins.indexOf(id);i<0?Q.pins.push(id):Q.pins.splice(i,1);try{localStorage.setItem('qpins',JSON.stringify(Q.pins))}catch{}draw(true)});
-  $$('[data-qrun]').forEach(b=>b.onclick=()=>runAction(...b.dataset.qrun.split('|')))}
+  $$('[data-qrun]').forEach(b=>b.onclick=()=>runAction(...b.dataset.qrun.split('|')));
+  $$('[data-qtab]').forEach(c=>c.onclick=()=>{Q.tab=c.dataset.qtab;Q.data={};draw(true)});
+  $$('[data-qen]').forEach(i=>i.onchange=async()=>{await hostJ('/api/automations/enable',{id:i.dataset.qen,on:i.checked});await loadQuick()});
+  $$('[data-qgrp]').forEach(b=>b.onclick=async()=>{if(!confirm((b.dataset.qgrp==='1'?'Enable':'Disable')+' every action in "'+Q.group+'"?'))return;await hostJ('/api/automations/enable',{group:Q.group,on:b.dataset.qgrp==='1'});await loadQuick()});
+  $('#q-export')&&($('#q-export').onclick=async()=>{try{saveBlob(new Blob([JSON.stringify(await hostGet('/api/automations/export'),null,1)],{type:'application/json'}),'pinguino-actions.json')}catch{toast('Export failed')}});
+  $('#q-cut')&&($('#q-cut').onchange=async e=>{const on=e.target.checked;if(on&&!confirm('Retire Streamer.bot? The Suite will run every action itself. Close Streamer.bot first or actions will run twice.')){e.target.checked=false;return}
+    await hostJ('/api/cutover',{on});Q.cut=await hostGet('/api/cutover').catch(()=>null);draw(true)});
+  qBind()}
+const hostJ=async(p,b)=>{const r=await hostPost(p,b);let j={};try{j=JSON.parse(r.detail)}catch{}return {...j,_ok:r.ok}};
+function cutoverCard(){if(Q.cut===undefined){hostGet('/api/cutover').then(c=>{Q.cut=c;if(route==='quick'&&Q.tab==='actions')draw(true)}).catch(()=>{Q.cut=null});return ''}
+  const c=Q.cut;if(!c)return '';
+  return `<div class="card" style="margin-bottom:10px"><div class="row wrap"><div class="grow"><b>Streamer.bot retired</b><div class="sm faint">${c.on?'The Suite runs every action itself.':'Streamer.bot is still the one running chat commands and alerts.'}${c.streamerBotRunning&&c.on?' <span style="color:var(--warn)">Streamer.bot is still running: close it or actions run twice.</span>':''}</div></div><label class="sw"><input type="checkbox" id="q-cut" ${c.on?'checked':''}><span></span></label>${hq('cutover',{module:'host'})}</div></div>`}
+
+/* other tabs */
+const qFetch={vars:'/api/vars',queue:'/api/queues',triggers:'/api/automations/triggers',hotkeys:'/api/automations/hotkeys',connect:'/api/endpoints'};
+let qPoll=null;
+function qTab(){const k=Q.tab,d=Q.data[k];
+  if(d===undefined){Q.data[k]=null;hostGet(qFetch[k]).then(j=>{Q.data[k]=j;if(route==='quick'&&Q.tab===k)draw(true)}).catch(()=>{Q.data[k]={_err:'The Host did not answer (is it updated and running?)'};if(route==='quick'&&Q.tab===k)draw(true)});return '<div class="dim" style="margin-top:12px">Loading…</div>'}
+  if(d===null)return '<div class="dim" style="margin-top:12px">Loading…</div>';
+  if(d._err)return `<div class="card" style="margin-top:12px"><div class="dim">${esc(d._err)}</div></div>`;
+  const fl=x=>x==null?'never':x<60?x+' s ago':x<3600?(x/60|0)+' min ago':x<86400?(x/3600|0)+' h ago':(x/86400|0)+' d ago';
+  const q=Q.q.toLowerCase(),f=(a,get)=>(a||[]).filter(x=>!q||get(x).toLowerCase().includes(q));
+  const srch=`<div class="ctool" style="margin-top:10px"><input type="text" id="q-q2" placeholder="Filter…" value="${esc(Q.q)}">${hq('quick')}</div>`;
+  if(k==='vars')return `<div class="ctool" style="margin-top:10px"><input type="text" id="q-q2" placeholder="Filter variables…" value="${esc(Q.q)}"><span class="sm faint">Shared values your actions read and set (like Streamer.bot globals).</span></div>
+    <div class="card">${f(d.vars,x=>x.name+' '+x.value).map(v=>`<div class="prow"><b style="min-width:140px">${esc(v.name)}</b><input type="text" data-vval="${esc(v.name)}" value="${esc(v.value)}" style="flex:1;min-width:120px"><label class="sm faint"><input type="checkbox" data-vper="${esc(v.name)}" ${v.persist?'checked':''}> keep</label><button class="sm" data-vdelx="${esc(v.name)}">Delete</button></div>`).join('')||'<div class="faint">No variables yet.</div>'}
+      <div class="row wrap" style="margin-top:10px"><input type="text" id="vn-name" placeholder="name" style="width:150px"><input type="text" id="vn-val" placeholder="value" style="width:200px"><label class="sm faint"><input type="checkbox" id="vn-per" checked> keep after restart</label><button class="pri sm" id="vn-add">Add</button></div></div>`;
+  if(k==='queue')return `<div class="sm faint" style="margin:10px 0">${esc(d.note||'')}</div>${(d.queues||[]).map(x=>`<div class="card" style="margin-bottom:10px"><div class="row"><h4 style="margin:0">${esc(x.name)}</h4><span class="pill ${x.paused?'':'ok'}">${x.paused?'paused':'running'}</span><span class="sm faint">${x.length} waiting</span><span class="sp"></span><button class="sm" data-qq="${x.paused?'resume':'pause'}">${x.paused?'Resume':'Pause'} automatic runs</button></div>
+      ${(x.items||[]).map(i=>`<div class="prow"><span class="grow">${esc(i.action)}</span><span class="sm faint">${esc(i.state||'')} · ${esc(String(i.age??''))}</span></div>`).join('')||'<div class="sm faint" style="margin-top:6px">Nothing running right now.</div>'}</div>`).join('')}`;
+  if(k==='triggers')return srch+`<div class="card" style="overflow:auto"><table class="tbl"><tr><th>Action</th><th>Trigger</th><th>Who</th><th>Cooldown</th><th>Fired</th><th>Last</th></tr>${f(d.triggers,x=>x.action+' '+x.type+' '+(x.display||'')).map(x=>`<tr class="${x.enabled===false?'faint':''}"><td>${esc(x.action)}<div class="sm faint">${esc(x.group||'')}</div></td><td><span class="qtag">${esc(x.type)}</span> ${esc(x.display==null?'':String(x.display))}</td><td>${esc(x.permission||'')}</td><td>${x.cooldownSec||0}s${x.userCooldownSec?' / '+x.userCooldownSec+'s user':''}</td><td>${x.fires||0}</td><td>${fl(x.lastFiredAgoSec)}</td></tr>`).join('')}</table></div>`;
+  if(k==='hotkeys')return srch+`<div class="card">${f(d.hotkeys,x=>x.hotkey+' '+x.action).map(x=>`<div class="prow ${x.enabled===false?'off':''}"><span class="qtag">${esc(x.hotkey)}</span><span class="grow">${esc(x.action)}</span><button class="sm" data-hkfire="${esc(x.hotkey)}">Fire</button></div>`).join('')||'<div class="faint">No hotkey triggers yet. Add a "hotkey" trigger to an action (Stream Deck sends it).</div>'}</div>`;
+  if(k==='connect'){const host=(S.modules.find(m=>m.id==='host')||{}).url||'http://127.0.0.1:8770';
+    return `<div class="card" style="margin-top:10px"><h3>Connect Stream Deck / external apps</h3><div class="sm dim">Send these calls to <code>${esc(host)}</code> with the header <code>Authorization: Bearer &lt;your Host API key&gt;</code> (the key is in Integrations &gt; Key vault, BOT_API_KEY; it is never shown here).</div>
+      <div style="margin-top:8px">${(d.endpoints||d.calls||(Array.isArray(d)?d:[])).map(e=>{const txt=typeof e==='string'?e:`${e.method||'POST'} ${e.path||e.url||''}${e.body?'  '+(typeof e.body==='string'?e.body:JSON.stringify(e.body)):''}`;return `<div class="prow"><div class="grow"><code style="word-break:break-all">${esc(txt)}</code>${e.desc||e.description?`<div class="sm faint">${esc(e.desc||e.description)}</div>`:''}</div><button class="sm" data-qcopy="${esc(txt)}">Copy</button></div>`}).join('')||`<pre class="qout">${esc(JSON.stringify(d,null,1))}</pre>`}</div></div>`}
+  return ''}
+function qBind(){
+  $('#q-q2')&&($('#q-q2').oninput=e=>{Q.q=e.target.value;const p=e.target.selectionStart;draw(true);const n=$('#q-q2');n.focus();n.setSelectionRange(p,p)});
+  $$('[data-vval]').forEach(i=>i.onchange=async()=>{const per=document.querySelector(`[data-vper="${CSS.escape(i.dataset.vval)}"]`);await hostJ('/api/vars',{name:i.dataset.vval,value:i.value,persist:!!(per&&per.checked)});toast('Saved '+i.dataset.vval)});
+  $$('[data-vper]').forEach(i=>i.onchange=async()=>{const v=document.querySelector(`[data-vval="${CSS.escape(i.dataset.vper)}"]`);await hostJ('/api/vars',{name:i.dataset.vper,value:v?v.value:'',persist:i.checked});toast('Saved '+i.dataset.vper)});
+  $$('[data-vdelx]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete variable '+b.dataset.vdelx+'?'))return;await hostJ('/api/vars/delete',{name:b.dataset.vdelx});Q.data={};draw(true)});
+  $('#vn-add')&&($('#vn-add').onclick=async()=>{const n=$('#vn-name').value.trim();if(!n){toast('Give the variable a name');return}await hostJ('/api/vars',{name:n,value:$('#vn-val').value,persist:$('#vn-per').checked});Q.data={};draw(true)});
+  $$('[data-qq]').forEach(b=>b.onclick=async()=>{await hostJ('/api/queues/'+b.dataset.qq,{});Q.data={};draw(true)});
+  $$('[data-hkfire]').forEach(b=>b.onclick=async()=>{const r=await hostJ('/api/automations/fire',{hotkey:b.dataset.hkfire});toast(r.ok?'Fired '+b.dataset.hkfire:'Could not fire: '+(r.error||''))});
+  $$('[data-qcopy]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.qcopy);toast('Copied')}catch{toast('Could not copy')}});
+  clearInterval(qPoll);if(route==='quick'&&Q.tab==='queue')qPoll=setInterval(()=>{if(route==='quick'&&Q.tab==='queue'){hostGet(qFetch.queue).then(j=>{Q.data.queue=j;if(!document.activeElement?.matches?.('#page input'))draw(true)}).catch(()=>{})}else clearInterval(qPoll)},3000)}
 async function runAction(id,dry){Q.busy[id]=true;if(route==='quick')draw(true);
   try{const r=await hostPost('/api/automations/test',{id,dry:dry==='1'});let j={};try{j=JSON.parse(r.detail)}catch{}
     const run=j.run||{};const lines=[].concat(run.output||[]);Q.out[id]=(j.ok?'OK':'FAILED')+` (${run.ms??'?'} ms)${dry==='1'?' · dry run':''}`+(run.error?'\n'+run.error:'')+(lines.length?'\n'+lines.slice(0,12).join('\n'):'');

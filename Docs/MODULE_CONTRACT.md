@@ -276,3 +276,5 @@ Pop-out additions (from Multi's SHELL_WINDOW_SPEC): `open` also accepts `size:{w
 - Quick actions page: reads Host `GET /api/automations` (`{doc:{actions:[{id,name,group,enabled,triggers:[{type,...}]}]}, master}`), runs `POST /api/automations/test {id, dry}` through the core proxy; stars are per device (localStorage).
 - Activity > Action runs: Host `GET /api/automations/log?n=` (`{runs:[{ts,action,id,trigger,ok,ms,error}]}`).
 - Command palette (Ctrl+K): pages, pre-stream run, sounds, sidebar, pop-out, saved looks, themes, restart module, and every enabled Host action.
+
+Quick actions tabs (Host commit 5c8c6f2, shapes in Docs/ACTIVITY_FEED.md): Actions (per-action on/off `POST /api/automations/enable`, enable/disable a group, Export `GET /api/automations/export`, "Streamer.bot retired" switch `GET/POST /api/cutover`), Variables (`/api/vars`, `/api/vars/delete`), Queue (`/api/queues`, pause/resume), Triggers (`/api/automations/triggers`), Hotkeys (`/api/automations/hotkeys`, Fire = `POST /api/automations/fire`), Connect apps (`/api/endpoints`; the token is never shown, it lives in the key vault as BOT_API_KEY).
