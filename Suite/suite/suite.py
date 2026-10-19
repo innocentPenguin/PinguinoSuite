@@ -17,7 +17,7 @@ import requests
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -309,6 +309,15 @@ def index():
     """Standalone/browser mode only (the Tauri shell loads the UI itself and gets the token via IPC)."""
     html = UI_INDEX.read_text("utf8") if UI_INDEX else "<h1>PinguinoSuite core</h1>"
     return HTMLResponse(html.replace("<head>", f'<head><meta name="pinguino-token" content="{TOKEN}">', 1))
+
+
+@app.get("/bootstrap.js")
+def bootstrap_js():
+    """Browser/standalone mode: index.html loads this to attach the per-launch token to API calls."""
+    f = ROOT.parent / "App" / "src" / "bootstrap.js"
+    if not f.exists():
+        return Response(status_code=404)
+    return Response(f.read_text("utf8"), media_type="application/javascript")
 
 
 @app.get("/api/capabilities")
