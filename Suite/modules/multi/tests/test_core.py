@@ -635,3 +635,33 @@ def test_dashboard_pins_feed_and_popout_routes(tmp_path, monkeypatch):
     assert len(c.get("/api/feed?since=0").json()["messages"]) == 4
     assert c.get("/popout").status_code == 200
     assert c.post("/api/mod/ban", json={"message_id": "twitch:c:0"}, headers=h).status_code == 400   # no Twitch connector in this unit test
+
+
+def test_vault_fallback_order(monkeypatch):
+    import secrets_store, vault
+    monkeypatch.setattr(secrets_store, "_local", lambda n: None)
+    monkeypatch.setattr(vault, "fetch", lambda name: {"MULTI_DISCORD_TOKEN": "vault-token", "MULTI_TWITCH_TOKENS": '{"access_token": "a"}'}.get(name))
+    vault.clear_cache()
+    assert secrets_store.get("discord_token") == "vault-token" and secrets_store.source("discord_token") == "vault"
+    assert secrets_store.get("twitch_tokens") == {"access_token": "a"}
+    assert secrets_store.get("nothing") is None
+    monkeypatch.setattr(secrets_store, "_local", lambda n: "local-token")
+    assert secrets_store.get("discord_token") == "local-token" and secrets_store.source("discord_token") == "local"
+
+
+def test_vault_fetch_needs_token_and_never_raises(monkeypatch):
+    import vault
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    assert vault.fetch("MULTI_AI_KEY") is None
+    monkeypatch.setenv("PINGUINO_API_TOKEN", "t")
+    monkeypatch.setenv("PINGUINO_CORE_URL", "http://127.0.0.1:1")
+    assert vault.fetch("MULTI_AI_KEY") is None
+
+
+def test_pages_link_shared_theme(monkeypatch):
+    from fastapi.testclient import TestClient
+    import server
+    monkeypatch.setenv("PINGUINO_CORE_URL", "http://127.0.0.1:8760")
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    for path in ("/", "/popout"):
+        assert '<link rel="stylesheet" href="http://127.0.0.1:8760/theme.css">' in c.get(path).text

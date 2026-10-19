@@ -163,15 +163,29 @@ async def local_only_writes(request: Request, call_next):
     return await call_next(request)
 
 
+def _page():
+    """index.html with the shared Suite theme linked after our own styles (our values stay as the fallback)."""
+    core = os.environ.get("PINGUINO_CORE_URL", "http://127.0.0.1:8760").rstrip("/")
+    html = (STATIC / "index.html").read_text("utf-8")
+    return HTMLResponse(html.replace("<!--THEME-->", f'<link rel="stylesheet" href="{core}/theme.css">'))
+
+
+def _page():
+    """index.html with the shared Suite theme linked after our own styles (our values stay as the fallback)."""
+    core = os.environ.get("PINGUINO_CORE_URL", "http://127.0.0.1:8760").rstrip("/")
+    html = (STATIC / "index.html").read_text("utf-8")
+    return HTMLResponse(html.replace("<!--THEME-->", f'<link rel="stylesheet" href="{core}/theme.css">'))
+
+
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    return _page()
 
 
 @app.get("/popout")
 def popout():
     """Stream-safe chat for an OBS browser source/dock: public messages only (no cards, notes, composer, muted users)."""
-    return FileResponse(STATIC / "index.html")
+    return _page()
 
 
 @app.get("/api/status")
@@ -191,7 +205,8 @@ def setup_info():
             "tiktok_enabled", "tiktok_user", "channel", "bot_accounts", "my_names")
     return {"settings": {k: s[k] for k in keys},
             "has": {"discord": bool(secrets_store.get("discord_token")), "youtube": bool(secrets_store.get("youtube_token")),
-                    "ai": bool(secrets_store.get("ai_key")), "twitch": bool(secrets_store.get("twitch_tokens"))}}
+                    "ai": bool(secrets_store.get("ai_key")), "twitch": bool(secrets_store.get("twitch_tokens"))},
+            "sources": {k: secrets_store.source(k) for k in ("twitch_tokens", "discord_token", "youtube_token", "ai_key")}}
 
 
 @app.get("/api/prestream")

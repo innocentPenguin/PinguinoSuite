@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><title>PinguinoMulti</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root{--bg:#09090a;--fg:#ececef;--mut:#8f9099;--card:#131315;--line:#26262a;--accent:#ff9900;--on-accent:#1a1000;--hi:#ff5a5f;--med:#ffc94d;--low:#8f9099;--ok:#3ecf8e;--fs:14px;--sp:4px}
+:root{--bg:#09090a;--fg:#ececef;--dim:#a39f98;--faint:#85827b;--panel:#131315;--bad:#ff5a5f;--warn:#e8d44d;--mut:var(--dim);--card:var(--panel);--line:#26262a;--accent:#ff9900;--on-accent:#1a1000;--hi:var(--bad);--med:var(--warn);--low:var(--faint);--ok:#3ecf8e;--fs:14px;--sp:4px}
 :root[data-theme=light]{--bg:#f6f4f0;--fg:#1a1a1c;--mut:#6b6b70;--card:#fff;--line:#e0dcd4;--accent:#e68a00}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:var(--fs)/1.35 system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
@@ -68,7 +68,8 @@ body.popout{background:transparent!important;height:auto;min-height:100vh;justif
 .pfeed{display:flex;flex-direction:column;justify-content:flex-end;padding:8px;color:#fff;text-shadow:0 1px 3px #000,0 0 2px #000;font-size:var(--fs)}
 .pm{padding:2px 0;word-break:break-word}.pm b{margin-right:6px}
 .tile:hover,.pcard[open]{border-color:var(--accent)}.intro{border-left:3px solid var(--accent)}.launch h2{color:var(--accent)}a{color:var(--accent)}header b{color:var(--accent)}
-</style></head><body>
+</style>
+<!--THEME--></head><body>
 <header id="hdr"></header><div id="body" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
 <script src="/assets/launcher.js"></script>
 <script src="/assets/chat.js"></script>

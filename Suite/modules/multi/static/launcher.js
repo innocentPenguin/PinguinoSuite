@@ -33,11 +33,11 @@ function platformSetup(c, setup) {
   if (c.platform === 'twitch') return `<p class="how">Log in to your site as the owner, then press <b>Connect Twitch</b>. Twitch asks permission once; the key is kept in Windows Credential Manager, not in a file.</p>
     <div class="act"><button class="p" data-act="open-connect">Connect Twitch</button> <button data-act="disconnect">Disconnect</button></div>`;
   if (c.platform === 'discord') return `<p class="how">Create a bot at discord.com/developers, turn on <b>Message Content Intent</b>, invite it to your server, then paste its token and the channel IDs you want to follow (Discord &gt; Settings &gt; Advanced &gt; Developer Mode, then right-click a channel &gt; Copy ID).</p>
-    <label>Bot token ${has.discord ? '<b class="okc">(saved)</b>' : ''}<input id="dc-token" type="password" autocomplete="off" placeholder="${has.discord ? 'leave empty to keep the saved token' : 'paste bot token'}"></label>
+    <label>Bot token ${has.discord ? `<b class="okc">(${setup.sources.discord_token === 'vault' ? 'in the Suite key vault' : 'saved'})</b>` : ''}<input id="dc-token" type="password" autocomplete="off" placeholder="${has.discord ? 'leave empty to keep the saved token' : 'paste bot token'}"></label>
     <label>Channel IDs (comma separated)<input id="dc-chans" value="${esc((s.discord_channels || []).join(', '))}" placeholder="123456789012345678"></label>
     <div class="act"><button class="p" data-act="save-discord">Save Discord</button> ${has.discord ? '<button data-act="clear-discord">Forget token</button>' : ''}</div>`;
   if (c.platform === 'youtube') return `<p class="how">Paste a Google access token with the YouTube live-chat permission. Multi reads your active broadcast's chat. Tokens expire, so this needs re-pasting until automatic sign-in is added. Replies are plain messages (YouTube has no reply threads).</p>
-    <label>Access token ${has.youtube ? '<b class="okc">(saved)</b>' : ''}<input id="yt-token" type="password" autocomplete="off" placeholder="paste token"></label>
+    <label>Access token ${has.youtube ? `<b class="okc">(${setup.sources.youtube_token === 'vault' ? 'in the Suite key vault' : 'saved'})</b>` : ''}<input id="yt-token" type="password" autocomplete="off" placeholder="paste token"></label>
     <div class="act"><button class="p" data-act="save-youtube">Save YouTube</button> ${has.youtube ? '<button data-act="clear-youtube">Forget token</button>' : ''}</div>`;
   if (c.platform === 'tiktok') return `<p class="how warn">UNOFFICIAL and read-only. TikTok has no official chat API, so this uses a third-party package that can break or break TikTok's rules. Off by default. You can read TikTok chat here but not reply.</p>
     <label class="chk"><input id="tt-on" type="checkbox" ${s.tiktok_enabled ? 'checked' : ''}> Read my TikTok LIVE chat</label>
@@ -98,7 +98,7 @@ async function renderLauncher() {
     <details ${s.priority_mode !== 'local' ? 'open' : ''}><summary>AI settings</summary>
       <label>Provider <select id="ai-prov">${['anthropic', 'openai', 'ollama'].map(p => `<option ${s.ai_provider === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
       <label>Model<input id="ai-model" value="${esc(s.ai_model)}"></label>
-      <label>API key ${setup.has.ai ? '<b class="okc">(saved)</b>' : ''}<input id="ai-key" type="password" autocomplete="off" placeholder="${setup.has.ai ? 'leave empty to keep' : 'not needed for ollama'}"></label>
+      <label>API key ${setup.has.ai ? `<b class="okc">(${setup.sources.ai_key === 'vault' ? 'in the Suite key vault' : 'saved'})</b>` : ''}<input id="ai-key" type="password" autocomplete="off" placeholder="${setup.has.ai ? 'leave empty to keep' : 'not needed for ollama'}"></label>
       <label>Daily spend limit (USD)<input id="ai-cap" type="number" step="0.1" min="0" value="${s.ai_daily_cap_usd}"></label>
       <small class="mut">Today: ${ai.calls ?? 0} AI checks, about $${Number(ai.usd || 0).toFixed(3)}, ${ai.fallbacks ?? 0} fell back to local.</small>
     </details>
