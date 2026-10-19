@@ -29,6 +29,7 @@ import consolelog  # noqa: E402
 import prestream  # noqa: E402
 import device  # noqa: E402
 import portable  # noqa: E402
+import integrations  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -628,6 +629,89 @@ def module_probe(mid: str):
         return r.json()
     except Exception:
         raise HTTPException(502, "module not answering")
+
+
+_site_cache = {"t": 0.0, "item": None}
+
+
+def _mod_headers(mid):
+    tok = module_token(mid)
+    return {"Authorization": f"Bearer {tok}", "X-Pinguino-Token": tok, "x-link-token": tok}
+
+
+def _integrations_for(m):
+    name = m.spec.get("name", m.id)
+    if m.public()["state"] != "running":
+        return [{"id": f"{m.id}:module", "module": m.id, "group": name, "name": name, "status": "off", "detail": "not running", "page": True}]
+    try:
+        h, base = _mod_headers(m.id), m.spec["url"]
+        if m.spec.get("integrations"):
+            out = integrations.from_items(m.id, requests.get(base + m.spec["integrations"], headers=h, timeout=5).json(), name)
+        elif m.id == "link":
+            out = integrations.from_link_status(requests.get(base + "/api/status", headers=h, timeout=5).json())
+        else:
+            st = requests.get(base + m.spec.get("health", "/"), headers=h, timeout=5).json()
+            out = integrations.from_connectors(m.id, st) if isinstance(st, dict) and st.get("connectors") else integrations.from_prestream(m.id, (last_prestream or {}).get("items", []))
+            for x in out:
+                x["group"] = x["group"] if x["group"] != m.id else name
+    except Exception as e:  # noqa: BLE001
+        out = [{"id": f"{m.id}:error", "module": m.id, "group": name, "name": name, "status": "error", "detail": f"could not read status: {str(e)[:100]}"}]
+    for x in out:
+        x["page"] = True
+    return out or [{"id": f"{m.id}:ok", "module": m.id, "group": name, "name": name, "status": "connected", "detail": "running", "page": True}]
+
+
+def _site_item():
+    if time.time() - _site_cache["t"] < 60 and _site_cache["item"]:
+        return _site_cache["item"]
+    try:
+        r = requests.head("https://innocentpenguin.com", timeout=4, allow_redirects=True)
+        st, d = ("connected", f"HTTP {r.status_code}") if r.status_code < 500 else ("error", f"HTTP {r.status_code}")
+    except requests.RequestException as e:
+        st, d = "error", f"unreachable: {str(e)[:80]}"
+    _site_cache.update(t=time.time(), item={"id": "site:web", "module": "core", "group": "Site", "name": "innocentpenguin.com", "status": st, "detail": d,
+                                            "connect_url": "https://innocentpenguin.com", "connect_label": "Open"})
+    return _site_cache["item"]
+
+
+@app.get("/api/integrations")
+def integrations_get():
+    """Every outside connection in one list: module-reported, plus Streamer.bot, OBS, the site and which API keys are set."""
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futs = [pool.submit(_integrations_for, m) for m in modules.values()]
+        site = pool.submit(_site_item)
+        items = [x for f in futs for x in f.result()]
+        items.append(site.result())
+    for label, port, note in (("Streamer.bot", 8080, "legacy bridge; not needed once Host replaces it"), ("OBS", 4455, "OBS websocket")):
+        up = integrations.tcp("127.0.0.1", port)
+        items.append({"id": f"core:{label}", "module": "core", "group": "Streaming tools", "name": label, "status": "connected" if up else "off",
+                      "detail": f"reachable on :{port}" if up else f"not reachable ({note})"})
+    rt = Path(DATA_DIR)
+    items += integrations.secrets_presence([("Bots settings", rt / "settings.json"), ("Chat bot", rt / "chat_settings.json"), ("Host", rt / "host_secrets.json"), ("Bots", rt / "bots_secrets.json")])
+    return {"ts": time.time(), "items": items}
+
+
+class PostReq(BaseModel):
+    path: str
+    body: dict | list | None = None
+
+
+@app.post("/api/modules/{mid}/post")
+def module_post(mid: str, b: PostReq):
+    """POST to one of a module's /api/ paths on the UI's behalf (the Integrations 'Test' buttons)."""
+    m = modules.get(mid)
+    if not m:
+        raise HTTPException(404)
+    if not b.path.startswith("/api/") or ".." in b.path:
+        raise HTTPException(400, "path must be under /api/")
+    if m.singleton and not devices.is_master():
+        raise HTTPException(409, "that module runs on the master device")
+    try:
+        r = requests.post(m.spec["url"] + b.path, json=b.body or {}, headers=_mod_headers(mid), timeout=15)
+    except requests.RequestException as e:
+        raise HTTPException(502, str(e)[:120])
+    return {"ok": r.ok, "status": r.status_code, "detail": r.text[:300]}
 
 
 @app.get("/api/modules/{mid}/get")

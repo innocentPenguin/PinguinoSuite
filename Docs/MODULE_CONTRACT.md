@@ -174,3 +174,17 @@ One palette for the whole Suite: near-black surfaces and **penguin orange `#ff99
 | `--r`, `--shadow` | `14px`, … | card radius, elevation |
 
 Legacy names `--ice`, `--ice2`, `--beak`, `--vio`, `--acc` still resolve (to accent / accent-active / accent / muted tag / accent) so older pages recolour automatically; new code should use the `--accent*` names. **Do not reuse `--ok` for ordinary text.** Contrast (WCAG): text and accent on surfaces are 5-18:1 (`--faint` is 5:1); status colours are 6-13:1 on `--panel`. Never rely on colour alone for status: pair it with a word or icon. Reading the tokens in script: `getComputedStyle(document.documentElement).getPropertyValue('--accent')`.
+
+## Integrations hub
+The app's **Integrations** tab lists every outside connection in one place: Twitch and chat platforms, Spotify, Discord, Tailscale/Link devices, OBS, Streamer.bot, the site, and which API keys are set (never their values), each with a status and Connect / Test / Open buttons. The core builds the list (`GET /api/integrations`) by asking each running module, in this order:
+1. **Manifest `"integrations": "/api/integrations"`** (preferred): your module answers `GET` (module token) with `{"items": [ ... ]}`.
+2. A status JSON (your `health` URL) containing `"connectors": [{platform, label, status, detail}]`, plus an optional `twitch_connect_url` (Multi's shape).
+3. Otherwise your pre-stream items are shown as your connections.
+
+**Item:** `{"id": "twitch", "name": "Twitch (bot account)", "group": "Chat platforms", "status": "connected|needs_auth|error|off|unknown", "detail": "short text", "connect_url": "https://...", "connect_label": "Connect Twitch", "test": "/api/test-twitch"}`. `connect_url` must be `https://` or loopback (it opens in the system browser). `test` is a path under `/api/` that the app calls with **POST** (module token) when the user presses Test; answer `2xx` for pass. Keep `detail` free of secrets. Modules that are not running show as Off with an Open button.
+
+## Other core helpers (app token)
+- `POST /api/modules/{id}/post {"path": "/api/...", "body": {...}}` and `GET /api/modules/{id}/get?path=/api/...`: the app reaches a module's `/api/` paths through the core (module token attached), so the UI needs no cross-origin call.
+- `GET /api/modules/{id}/probe`: the module's health JSON. `GET /api/integrations`, `GET /api/console`, `GET /api/prestream`, `POST /api/prestream/run`.
+- Control files in `Data\runtime\control\`: `start|stop|restart-<module id>` and `prestream-run` (runs the pre-stream checks; the latest report is also written to `Data\runtime\console\prestream-last.json`).
+- **Several nav entries per module:** `"ui"` may be an array of blocks (Host has Bots / Host and Actions & Events); each becomes its own sidebar entry and page.
