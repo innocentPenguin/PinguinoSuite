@@ -78,6 +78,38 @@ def save_settings(s):
     os.replace(tmp, SETTINGS)
 
 
+# ------------------------------------------------------------------ structured log (JSONL, rotated)
+EVENT_LOG = LOGS / "events.jsonl"
+_log_lock = threading.Lock()
+
+
+def _jsonl_log(ev, max_bytes=2_000_000, keep=3):
+    """One JSON object per line: every bus event. Rotates events.jsonl -> .1 -> .2 -> .3 past max_bytes."""
+    try:
+        with _log_lock:
+            if EVENT_LOG.exists() and EVENT_LOG.stat().st_size > max_bytes:
+                for i in range(keep, 0, -1):
+                    src = EVENT_LOG if i == 1 else EVENT_LOG.with_name(f"{EVENT_LOG.name}.{i - 1}")
+                    if src.exists():
+                        os.replace(src, EVENT_LOG.with_name(f"{EVENT_LOG.name}.{i}"))
+            with open(EVENT_LOG, "a", encoding="utf8") as f:
+                f.write(json.dumps(ev, default=str) + "\n")
+    except OSError:
+        pass
+
+
+def tail_lines(path, n):
+    """Last n lines of a text file without reading all of it (reads at most ~64 KB per 200 lines)."""
+    try:
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            f.seek(max(0, size - max(4096, n * 320)))
+            data = f.read()
+    except OSError:
+        return []
+    return data.decode("utf8", "replace").splitlines()[-n:]
+
+
 # ------------------------------------------------------------------ event bus (the seed of a Streamer.bot-style core)
 class Bus:
     def __init__(self):
@@ -86,6 +118,7 @@ class Bus:
     def emit(self, type_, **data):
         ev = {"type": type_, "ts": time.time(), **data}
         self.history = (self.history + [ev])[-200:]
+        _jsonl_log(ev)
         if self.loop:
             asyncio.run_coroutine_threadsafe(self._send(ev), self.loop)
         return ev
@@ -404,6 +437,25 @@ class Opt(BaseModel):
     enabled: bool | None = None
     start_with_suite: bool | None = None
     react_to_live: bool | None = None
+
+
+@app.get("/api/modules/{mid}/logs")
+def module_logs(mid: str, lines: int = 200):
+    if mid not in modules:
+        raise HTTPException(404)
+    return {"id": mid, "lines": tail_lines(LOGS / f"{mid}.log", max(1, min(lines, 2000)))}
+
+
+@app.get("/api/events/log")
+def event_log(lines: int = 200):
+    """Recent structured events (JSONL), newest last."""
+    out = []
+    for ln in tail_lines(EVENT_LOG, max(1, min(lines, 2000))):
+        try:
+            out.append(json.loads(ln))
+        except ValueError:
+            pass
+    return {"events": out}
 
 
 @app.post("/api/modules/{mid}/options")
