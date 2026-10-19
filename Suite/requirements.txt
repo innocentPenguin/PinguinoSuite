@@ -10,3 +10,7 @@ nvidia-cublas-cu12
 nvidia-cudnn-cu12
 pystray
 pillow
+keyring
+pytest
+pytest-asyncio
+websockets

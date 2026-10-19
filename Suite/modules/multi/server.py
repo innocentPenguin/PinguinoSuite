@@ -1,0 +1,383 @@
+"""PinguinoMulti - unified chat core. REST + WS on 127.0.0.1:8766.
+Run: run.bat   (UI at http://127.0.0.1:8766)"""
+import asyncio
+import json
+import time
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
+import cards as cards_mod
+import config
+import secrets_store
+import windows as win
+from connectors.twitch import Twitch
+from models import ChatMessage
+from pipeline import Inbox, Pipeline
+from priority import rules as prio
+from store import Store
+
+START = time.time()
+
+
+class Hub:
+    def __init__(self):
+        self.clients, self.loop = set(), None
+
+    def emit(self, ev):
+        ev = dict(ev, ts=time.time())
+        if self.loop:
+            self.loop.call_soon_threadsafe(lambda: asyncio.ensure_future(self._send(ev)))
+
+    async def _send(self, ev):
+        for ws in list(self.clients):
+            try:
+                await ws.send_json(ev)
+            except Exception:
+                self.clients.discard(ws)
+
+
+hub = Hub()
+store = Store()
+cards = cards_mod.CardManager(store, hub.emit)
+pipeline = Pipeline(store, cards, hub.emit)
+inbox = Inbox(pipeline)
+connectors = {}
+shell = win.EdgeShell(f"http://127.0.0.1:{config.PORT}")
+
+
+async def tick_loop():
+    n = 0
+    while True:
+        await asyncio.sleep(1)
+        cards.tick()
+        n += 1
+        if n % 3600 == 0:
+            store.prune(config.settings()["retention_days"])
+
+
+@asynccontextmanager
+async def lifespan(app):
+    hub.loop = asyncio.get_running_loop()
+    store.prune(config.settings()["retention_days"])
+    tw = Twitch(inbox, hub.emit)
+    connectors["twitch"] = tw
+    tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run())]
+    yield
+    tw.stop = True
+    for t in tasks:
+        t.cancel()
+    for wid in list(shell.procs):
+        shell.close(wid)
+
+
+app = FastAPI(lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:8760", "http://localhost:8760"],
+                   allow_methods=["*"], allow_headers=["*"])
+STATIC = config.ROOT / "static"
+app.mount("/assets", StaticFiles(directory=STATIC), name="assets")
+
+
+@app.middleware("http")
+async def local_only_writes(request: Request, call_next):
+    """Cross-site pages in the user's browser must not drive the API: writes need a local Origin (or none)."""
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("origin")
+        if origin and not origin.startswith(("http://127.0.0.1", "http://localhost")):
+            return HTMLResponse("forbidden origin", status_code=403)
+    return await call_next(request)
+
+
+@app.get("/")
+def index():
+    return FileResponse(STATIC / "index.html")
+
+
+@app.get("/api/status")
+def status():
+    return {"ok": True, "uptime_s": int(time.time() - START), "stats": pipeline.stats,
+            "queue": inbox.q.qsize(), "connectors": [c.describe() for c in connectors.values()],
+            "mode": config.settings()["priority_mode"],
+            "twitch_connect_url": (secrets_store.get("site_url") or "https://innocentpenguin.com") + "/auth/twitch/login?multi=1"}
+
+
+# messages / search ---------------------------------------------------
+@app.get("/api/messages")
+def messages(limit: int = 200, platform: str = "", min_tier: str = "", before: float = 0):
+    return store.recent(min(limit, 1000), platform or None, min_tier or None, before or None)
+
+
+@app.get("/api/search")
+def search(q: str):
+    return store.search(q) if q.strip() else []
+
+
+@app.get("/api/viewer/{platform}/{user_id}")
+def viewer(platform: str, user_id: str):
+    return {"count": store.user_count(platform, user_id), "history": store.user_history(platform, user_id, 30)}
+
+
+@app.get("/api/messages/{mid:path}/explain")
+def explain(mid: str):
+    m = store.get_message(mid)
+    if not m:
+        raise HTTPException(404)
+    msg = ChatMessage(**{k: m[k] for k in ChatMessage.__dataclass_fields__ if k in m})
+    d = prio.score(msg, prio.Context(user_count=store.user_count(msg.platform, msg.user_id)), pipeline.rules)
+    return d.to_dict()
+
+
+# cards ---------------------------------------------------------------
+@app.get("/api/cards")
+def get_cards():
+    return cards.view()
+
+
+@app.post("/api/cards/{cid:path}/{action}")
+async def card_action(cid: str, action: str, request: Request):
+    body = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+    fn = {"answer": lambda: cards.answer(cid, body.get("via", "manual")), "dismiss": lambda: cards.dismiss(cid),
+          "reopen": lambda: cards.reopen(cid), "snooze": lambda: cards.snooze(cid, body.get("seconds", 300)),
+          "tier": lambda: cards.set_tier(cid, body.get("tier", "medium"))}.get(action)
+    if not fn:
+        raise HTTPException(400, "unknown action")
+    c = fn()
+    if not c:
+        raise HTTPException(404)
+    return c
+
+
+# sending (always to ONE explicit platform; never broadcast) --------------
+@app.post("/api/send")
+async def send(request: Request):
+    b = await request.json()
+    platform, text = b.get("platform"), (b.get("text") or "").strip()
+    if platform not in connectors:
+        raise HTTPException(400, "choose one platform that supports sending (no broadcast to all)")
+    if not text or len(text) > 500:
+        raise HTTPException(400, "empty or too long")
+    conn = connectors[platform]
+    if not conn.capabilities.get("send"):
+        raise HTTPException(400, f"{platform} is read-only")
+    reply_to = b.get("reply_to") or None
+    if reply_to and not conn.capabilities.get("reply"):
+        reply_to = None
+    try:
+        mid = await conn.send(text, reply_to)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+    me = conn.user["login"] if getattr(conn, "user", None) else "me"
+    own = ChatMessage(id=mid, platform=platform, channel=config.settings()["channel"],
+                      user_id=conn.user["user_id"] if getattr(conn, "user", None) else "me", user=me, display=me,
+                      text=text, ts=time.time(), reply_to=reply_to or "", is_self=True)
+    pipeline.ingest(own)
+    if b.get("card_id"):
+        cards.answer(b["card_id"], via="typed")
+    return {"ok": True, "id": mid}
+
+
+# settings / rules ----------------------------------------------------
+@app.get("/api/settings")
+def get_settings():
+    return config.settings()
+
+
+@app.post("/api/settings")
+async def post_settings(request: Request):
+    return config.save_settings(await request.json())
+
+
+@app.get("/api/rules")
+def get_rules():
+    return {"rules": pipeline.rules, "defaults": prio.DEFAULT_RULES}
+
+
+@app.post("/api/rules")
+async def post_rules(request: Request):
+    r = prio.save_rules(await request.json())
+    pipeline.reload_rules()
+    return r
+
+
+@app.post("/api/rules/reset")
+async def reset_rules(request: Request):
+    body = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+    r = prio.reset_rules(body.get("key"))
+    pipeline.reload_rules()
+    return r
+
+
+@app.post("/api/viewers/{user}/mute")
+async def mute(user: str, request: Request):
+    body = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+    cur = set(pipeline.rules["muted"])
+    (cur.add if body.get("muted", True) else cur.discard)(user.lower())
+    prio.save_rules({"muted": sorted(cur)})
+    pipeline.reload_rules()
+    return {"muted": sorted(cur)}
+
+
+# windows / monitors / profiles ------------------------------------------
+@app.get("/api/monitors")
+def monitors():
+    return win.list_monitors()
+
+
+@app.get("/api/windows")
+def windows_list():
+    mons = win.list_monitors()
+    return [dict(w, placed=win.place(w, mons)) for w in store.load_windows()]
+
+
+@app.post("/api/windows")
+async def windows_create(request: Request):
+    w = win.new_window(**(await request.json()))
+    store.save_window(win.describe_geometry(w, win.list_monitors()))
+    hub.emit({"type": "layout.changed"})
+    return w
+
+
+@app.put("/api/windows/{wid}")
+async def windows_update(wid: str, request: Request):
+    cur = next((w for w in store.load_windows() if w["id"] == wid), None)
+    if not cur:
+        raise HTTPException(404)
+    patch = await request.json()
+    cur.update({k: v for k, v in patch.items() if k in win.WINDOW_DEFAULTS})
+    if any(k in patch for k in ("x", "y", "w", "h")):
+        win.describe_geometry(cur, win.list_monitors())
+    store.save_window(cur)
+    hub.emit({"type": "layout.changed", "id": wid})
+    return cur
+
+
+@app.delete("/api/windows/{wid}")
+def windows_delete(wid: str):
+    shell.close(wid)
+    store.delete_window(wid)
+    hub.emit({"type": "layout.changed"})
+    return {"ok": True}
+
+
+@app.post("/api/windows/{wid}/launch")
+def windows_launch(wid: str):
+    w = next((w for w in store.load_windows() if w["id"] == wid), None)
+    if not w:
+        raise HTTPException(404)
+    shell.open(w, win.place(w, win.list_monitors()))
+    return {"ok": True}
+
+
+@app.post("/api/windows/restore")
+def windows_restore():
+    mons, n = win.list_monitors(), 0
+    for w in store.load_windows():
+        if w["visible"]:
+            shell.open(w, win.place(w, mons))
+            n += 1
+    return {"opened": n}
+
+
+@app.get("/api/profiles")
+def profiles():
+    return {"builtin": list(win.PROFILE_DEFAULTS), "saved": list(store.load_profiles())}
+
+
+@app.post("/api/profiles/{name}/apply")
+def profile_apply(name: str):
+    saved = store.load_profiles()
+    spec = saved.get(name) or win.PROFILE_DEFAULTS.get(name)
+    if spec is None:
+        raise HTTPException(404)
+    for w in store.load_windows():
+        shell.close(w["id"])
+        store.delete_window(w["id"])
+    mons, out = win.list_monitors(), []
+    for s in spec:
+        w = win.describe_geometry(win.new_window(**s), mons)
+        store.save_window(w)
+        shell.open(w, win.place(w, mons))
+        out.append(w)
+    store.kv_set("active_profile", name)
+    hub.emit({"type": "layout.changed", "profile": name})
+    return out
+
+
+@app.post("/api/profiles/{name}/save")
+def profile_save(name: str):
+    store.save_profile(name, store.load_windows())
+    return {"ok": True}
+
+
+# auth ----------------------------------------------------------------
+@app.get("/auth/callback", response_class=HTMLResponse)
+def auth_callback():
+    """The site redirects here with the tokens in the URL FRAGMENT (never sent to a server log);
+    this page forwards them to POST /auth/token over localhost, then clears the address bar."""
+    return """<!doctype html><title>Connecting</title><body style="font:16px sans-serif;background:#111;color:#eee">
+<p id=m>Connecting Twitch...</p><script>
+const p=new URLSearchParams(location.hash.slice(1));history.replaceState(null,'','/auth/callback');
+fetch('/auth/token',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(p))})
+.then(r=>r.json()).then(j=>{m.textContent=j.ok?'Connected. You can close this window.':'Failed: '+j.error});
+</script>"""
+
+
+@app.post("/auth/token")
+async def auth_token(request: Request):
+    b = await request.json()
+    if not b.get("access_token"):
+        return {"ok": False, "error": "no access_token"}
+    secrets_store.put("twitch_tokens", {k: b[k] for k in ("access_token", "refresh_token", "client_id") if k in b})
+    if b.get("site_url"):
+        secrets_store.put("site_url", b["site_url"])
+    tw = connectors.get("twitch")
+    if tw:
+        tw.state["detail"] = "token saved"
+    return {"ok": True}
+
+
+@app.post("/auth/disconnect")
+def auth_disconnect():
+    secrets_store.delete("twitch_tokens")
+    return {"ok": True}
+
+
+# dev helper: feed a fake message through the real pipeline ----------------
+@app.post("/api/dev/inject")
+async def dev_inject(request: Request):
+    b = await request.json()
+    n = int(time.time() * 1000)
+    m = ChatMessage(id=b.get("id") or f"twitch:dev:{n}", platform=b.get("platform", "twitch"), channel="dev",
+                    user_id=b.get("user_id") or b.get("user", "viewer"), user=b.get("user", "viewer"),
+                    display=b.get("user", "viewer"), text=b["text"], ts=time.time(), badges=b.get("badges", []),
+                    first_time=b.get("first_time", False), reply_to=b.get("reply_to", ""),
+                    reply_to_user=b.get("reply_to_user", ""))
+    inbox.put(m)
+    return {"ok": True, "id": m.id}
+
+
+@app.websocket("/ws")
+async def ws_endpoint(ws: WebSocket):
+    origin = ws.headers.get("origin", "")
+    if origin and not origin.startswith(("http://127.0.0.1", "http://localhost")):
+        await ws.close(code=1008)
+        return
+    await ws.accept()
+    hub.clients.add(ws)
+    try:
+        await ws.send_json({"type": "hello", "connectors": [c.describe() for c in connectors.values()],
+                            "cards": cards.view(), "ts": time.time()})
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        hub.clients.discard(ws)
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=config.PORT, log_level="warning")
