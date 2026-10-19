@@ -489,6 +489,20 @@
             "route": "m:host"
           }
         }
+      },
+      {
+        "name": "BOT_API_KEY",
+        "label": "innocentpenguin.com bot key",
+        "help": {
+          "title": "Website bot key",
+          "summary": "Lets the Host copy follows, subs, cheers and raids to the website's activity page (optional, off by default).",
+          "steps": [
+            "Ask the site owner (05) for the bot key, or find it in the site's settings.",
+            "Paste it here with Set.",
+            "Then set ForwardToSite to true in Data/runtime/latest_settings.json."
+          ],
+          "example": "(format only) a long random string"
+        }
       }
     ],
     "help": {
@@ -828,6 +842,54 @@
         "fix": {
           "label": "Open the Host page",
           "route": "m:host"
+        }
+      },
+      "scopes": {
+        "title": "Streamer permissions",
+        "summary": "Twitch only sends events and allows clips, ads and shoutouts if the streamer token has the matching permissions.",
+        "steps": [
+          "Yellow lists the permissions the token is missing.",
+          "Open the Host page and press Sign in as streamer again; approve everything.",
+          "Needed for: follows (moderator:read:followers), subs (channel:read:subscriptions), cheers (bits:read), bans (channel:moderate), clips (clips:edit), ads (channel:read:ads), shoutouts (moderator:manage:shoutouts), rewards (channel:read:redemptions)."
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
+      },
+      "latency": {
+        "title": "How fast events arrive",
+        "summary": "Twitch pushes events over a live connection (EventSub). This is the delay between Twitch sending a message and the Host receiving it.",
+        "steps": [
+          "Normal is well under one second.",
+          "If it stays high, check your internet connection or whether the PC is busy.",
+          "Chat alerts are sent right after the event arrives."
+        ]
+      },
+      "cutover": {
+        "title": "Streamer.bot cutover",
+        "summary": "One switch that turns the Streamer.bot replacement actions (alerts, !clip, !preroll, !whyad, ban alert, the First 5 game) on or off together.",
+        "steps": [
+          "While Streamer.bot still runs, leave it OFF: both would answer and the First 5 game would pay points twice.",
+          "When Streamer.bot is closed, open Actions & Events and press Streamer.bot cutover, then confirm.",
+          "You can switch it back off at any time."
+        ],
+        "fix": {
+          "label": "Open Actions & Events",
+          "url": "http://127.0.0.1:8770/automations"
+        }
+      },
+      "mgmt": {
+        "title": "Actions management",
+        "summary": "Variables, triggers, hotkeys, export, pause and the endpoint list for Stream Deck and other apps.",
+        "steps": [
+          "Variables: names and values the actions use (for example counters). Edit or delete them in the Suite.",
+          "Triggers: every trigger with how often it fired and when it last did.",
+          "Pause stops automatic runs without deleting anything; the Test and Run buttons still work."
+        ],
+        "fix": {
+          "label": "Open Actions & Events",
+          "url": "http://127.0.0.1:8770/automations"
         }
       }
     },

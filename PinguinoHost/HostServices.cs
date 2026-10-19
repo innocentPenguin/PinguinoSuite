@@ -143,6 +143,7 @@ namespace PinguinoHost
                             } while (!r.EndOfMessage);
                             if (!open) break;
                             var m = JObject.Parse(sb.ToString()); string type = (string)m["metadata"]["message_type"];
+                            Lag.Note((string)m["metadata"]["message_timestamp"], type == "notification");
                             if (type == "session_welcome") { HostApi.EventSubRefused = 0; _bid = bid; await Subscribe(http, (string)m["payload"]["session"]["id"], bid); Console.WriteLine("EventSub connected"); Clog.Info("eventsub", "EventSub connected"); backoff = 3; HostApi.EventSubConnected = true; }
                             else if (type == "notification") Handle(m, raise);
                             else if (type == "session_reconnect") open = false;

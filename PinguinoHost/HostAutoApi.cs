@@ -64,6 +64,18 @@ namespace PinguinoHost
                 long since = long.TryParse(c.Request.QueryString["since"], out long sn) ? sn : 0; int lim = int.TryParse(c.Request.QueryString["limit"], out int ln) ? ln : 100;
                 Write(c, Latest.Activity(since, lim, c.Request.QueryString["type"]).ToString(), "application/json"); return true;
             }
+            if (p == "/api/vars" && m == "GET") { Write(c, Auto.VarList().ToString(), "application/json"); return true; }
+            if (p == "/api/vars" && m == "POST") { var b = Body(c); Write(c, Auto.VarSet((string)b["name"], (string)b["value"], (bool?)b["persist"] != false).ToString(), "application/json"); return true; }
+            if (p == "/api/vars/delete" && m == "POST") { Write(c, Auto.VarDelete((string)Body(c)["name"] ?? "").ToString(), "application/json"); return true; }
+            if (p == "/api/queues" && m == "GET") { Write(c, Auto.QueueState().ToString(), "application/json"); return true; }
+            if (p.StartsWith("/api/queues/") && m == "POST") { Write(c, Auto.QueueControl(p.Substring(12)).ToString(), "application/json"); return true; }
+            if (p == "/api/automations/triggers" && m == "GET") { Write(c, Auto.TriggerList().ToString(), "application/json"); return true; }
+            if (p == "/api/automations/hotkeys" && m == "GET") { Write(c, Auto.HotkeyList().ToString(), "application/json"); return true; }
+            if (p == "/api/automations/export" && m == "GET") { Write(c, Auto.Export().ToString(), "application/json"); return true; }
+            if (p == "/api/automations/enable" && m == "POST") { var b = Body(c); Write(c, Auto.Enable((string)b["id"], (string)b["group"], (bool?)b["on"] != false).ToString(), "application/json"); return true; }
+            if (p == "/api/endpoints" && m == "GET") { Write(c, Auto.Endpoints().ToString(), "application/json"); return true; }
+            if (p == "/api/cutover" && m == "GET") { Write(c, Cutover.State().ToString(), "application/json"); return true; }
+            if (p == "/api/cutover" && m == "POST") { var b = Body(c); Write(c, Cutover.Set((bool?)b["on"] == true).ToString(), "application/json"); return true; }
             if (p == "/api/latest" && m == "GET") { Write(c, Latest.Api().ToString(), "application/json"); return true; }
             if ((p == "/overlay/latest" || p == "/overlay/latest.html") && m == "GET")
             {

@@ -117,6 +117,9 @@ namespace PinguinoHost
                       : new JObject { { "ok", false }, { "error", "No account could speak. Sign in first." } };
         }
 
+        public static JObject SetBotEnabled(string id, bool on) { return SaveBot(new JObject { { "id", id }, { "enabled", on } }); }
+        public static JObject BotsSnapshot() { return Bots(); }
+        public static JObject StatusSnapshot() { return Status(); }
         static JObject SaveBot(JObject b)
         {
             string id = (string)b["id"]; int i = Array.IndexOf(BotIds, id);

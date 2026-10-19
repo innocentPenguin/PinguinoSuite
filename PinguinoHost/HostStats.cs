@@ -53,6 +53,7 @@ namespace PinguinoHost
             int? errAge = Clog.LastErrorAt == DateTime.MinValue ? (int?)null : (int)(DateTime.UtcNow - Clog.LastErrorAt).TotalSeconds;
             return new JObject {
                 { "ok", true }, { "ts", DateTime.UtcNow.ToString("o") }, { "module", "host" }, { "uptimeSec", st["uptimeSec"] }, { "channel", st["channel"] },
+                { "eventSubLatency", Lag.Stats() }, { "siteForward", SiteFeed.Status() }, { "cutover", Cutover.On },
                 { "connections", new JObject { { "chat", st["chatConnected"] }, { "eventSub", st["eventSubConnected"] }, { "obs", st["obsConnected"] }, { "canSend", st["canSend"] } } },
                 { "chat", ChatStats.Chat() }, { "bots", health }, { "botHealth", worst },
                 { "lease", Lease.State() },

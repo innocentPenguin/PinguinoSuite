@@ -22,3 +22,8 @@ Test run 2026-10-19: core, chat (202), helper (81), bots (40) and history hook (
 PinguinoHost addendum: /api/run (Stream Deck) and mock-Twitch test (Tools/test-host-twitch.ps1) added; live Twitch sign-in, EventSub and real OBS remain unverified.
 
 Separate chatters (3617350): each bot can sign in as its own Twitch account from the Host page (bots_secrets.json[role], Sender "helix"). Built and deployed by 00; live sign-in of pinguinob0t is pending Ivan's click-through, chat and helper accounts do not exist yet.
+
+## Wheel review (Oct 19 2026)
+- Overlay `/overlay/wheel` checked at 375px: no horizontal scroll, reveal then final teams + waitlist; public JSON exposes no IDs/MMR. `/mod/wheel` staff view covered by site tests only (not opened in a browser as staff).
+- Strike rule: customs `!join` and wheel `!me` both refuse 3 strikes; wheel draw drops entrants who reached 3 after joining.
+- Untested: real Twitch chat and real Streamer.bot.

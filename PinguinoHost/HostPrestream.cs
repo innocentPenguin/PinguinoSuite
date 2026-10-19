@@ -62,6 +62,12 @@ namespace PinguinoHost
                 items.Add(sv.Value<bool>("ok") ? Item("streamer", "Streamer account signed in (" + (string)sv["login"] + ")", ((int?)sv["expires_in"] ?? 0) < 4 * 3600 ? "warn" : "pass", Left(sv))
                                                : Item("streamer", "Streamer account signed in", "fail", (string)sv["error"]));
             else items.Add(Item("streamer", "Streamer account signed in", "fail", "not signed in (Host page > Sign in as streamer)"));
+            if (vres.TryGetValue("streamer", out var sv0) && sv0.Value<bool>("ok"))
+            {
+                var have = new HashSet<string>(((sv0["scopes"] as JArray) ?? new JArray()).Select(x => (string)x)); var lack = Scopes.Split(' ').Where(x => !have.Contains(x)).ToList();
+                items.Add(Item("scopes", "Streamer permissions complete (events, clips, ads, shoutouts)", lack.Count == 0 ? "pass" : "warn", lack.Count == 0 ? "" : "missing: " + string.Join(", ", lack) + " (sign the streamer in again)"));
+                var lag = Lag.Stats(); if ((int)lag["samples"] > 5) items.Add(Item("latency", "Twitch events arrive fast", (int)lag["medianMs"] < 1500 ? "pass" : "warn", "median " + (int)lag["medianMs"] + " ms, worst " + (int)lag["maxMs"] + " ms over " + (int)lag["samples"] + " messages"));
+            }
 
             foreach (string role in BotIds)
             {

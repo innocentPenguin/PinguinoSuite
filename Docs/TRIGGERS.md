@@ -13,3 +13,5 @@
 | Helper | no trigger; invoked via Router | n/a |
 
 Rules: the Router never owns `!` command triggers (Core does). Legacy actions are disabled, not deleted. Messages already routed carry `pinguinoRouted=true`, so bots never re-enter the router.
+
+- `!me`, `!wheel`: chat commands -> PinguinoB0t core action (owner adds in Streamer.bot).

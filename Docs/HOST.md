@@ -67,3 +67,6 @@ Sign in as the bot in a private window or log out of Twitch first (the flow uses
 ## Dashboard summary and bot control
 
 `GET /api/summary` returns connections, chat rate (messages in the last minute / per minute over 5 min, active chatters, moderators seen in the last hour), per-bot health (signed in, enabled, last run, last error), the lease state and the last warning. `/api/bots` also carries each bot's `signedIn`, `signedInAs`, `health` and command list; the Host page shows them on every bot card with Send test, enable switch and sign-in button.
+
+## Quick control from chat: `!pg` (mods and the streamer)
+`!pg status` (bots on/off + login, chat/EventSub/OBS state, EventSub delay) · `!pg core|chat|helper on|off` (switch a bot off for a while, same as the card toggle) · `!pg test` (each bot says hi from its own account, so you see who really speaks) · `!pg cutover` (is the Streamer.bot cutover on). Viewers get no reply. If chat cannot be reached the answer is printed in the Host console instead. Pre-stream now also checks the streamer's permissions (what is missing for events/clips/ads/shoutouts), Twitch event delay, and whether the OBS replay buffer runs (!clip needs it).

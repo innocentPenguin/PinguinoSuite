@@ -2,24 +2,32 @@
 <html lang="en"><head><meta charset="utf-8"><title>Latest</title>
 <style>
 html,body{margin:0;background:transparent;overflow:hidden}
-#t{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-weight:700;white-space:nowrap;transition:opacity .5s}
+#t{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);white-space:nowrap;transition:opacity .5s}
 #t b{color:var(--c)}
 </style></head><body>
 <div id="t"></div>
 <script>
-// OBS browser source: http://127.0.0.1:8770/overlay/latest?types=follow,sub,cheer,raid&color=ff9900&size=64&font=bahnschrift&rotate=5
+// OBS browser source: http://127.0.0.1:8770/overlay/latest   (look = latest_settings.json; the URL can override: ?types=follow,sub&color=ff9900&size=64&font=bahnschrift&rotate=5&align=center&detail=0)
 const q=new URLSearchParams(location.search);
-const types=(q.get('types')||'follow,sub,cheer,raid').split(',');
-const color='#'+(q.get('color')||'ff9900'), size=(q.get('size')||'64')+'px', rotate=(parseInt(q.get('rotate'))||5)*1000;
-const t=document.getElementById('t');t.style.fontFamily=(q.get('font')||'bahnschrift')+',Segoe UI,sans-serif';t.style.fontSize=size;t.style.setProperty('--c',color);t.style.color='#fff';
-const NAME={follow:'follower',sub:'sub',resub:'resub',gift:'gifter',cheer:'cheer',raid:'raid',redeem:'redeem'};
-let items=[],i=0;
+const t=document.getElementById('t');
+let S={},items=[],i=0;
+const opt=(k,low,d)=>q.get(low)!==null?q.get(low):(S[k]!==undefined&&S[k]!==''?S[k]:d);
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function load(){try{const r=await fetch('/api/latest');const j=await r.json();items=(j.latest||[]).filter(e=>types.includes(e.kind)).sort((a,b)=>types.indexOf(a.kind)-types.indexOf(b.kind))}catch(e){}}
+function style(){
+ t.style.fontFamily=opt('Font','font','bahnschrift')+',Segoe UI,sans-serif';t.style.fontSize=opt('Size','size',64)+'px';
+ t.style.color='#'+opt('TextColor','textcolor','ffffff');t.style.setProperty('--c','#'+opt('Color','color','ff9900'));
+ t.style.fontWeight=String(opt('Bold','bold',true))==='false'||opt('Bold','bold',true)==='0'?'400':'700';
+ t.style.textAlign=opt('Align','align','center');
+ t.style.textShadow=(String(opt('Shadow','shadow',true))==='false'||opt('Shadow','shadow',true)==='0')?'none':'0 2px 6px rgba(0,0,0,.7)';
+}
+function types(){return String(opt('Types','types','follow,sub,cheer,raid')).split(',')}
+async function load(){try{const r=await fetch('/api/latest');const j=await r.json();S=j.settings||{};style();const ty=types();items=(j.latest||[]).filter(e=>ty.includes(e.kind)).sort((a,b)=>ty.indexOf(a.kind)-ty.indexOf(b.kind))}catch(e){}}
+function label(k){return (S.Labels&&S.Labels[k])||k}
 function show(){
  if(!items.length){t.style.opacity=0;return}
- const e=items[i%items.length];i++;
- t.style.opacity=0;setTimeout(()=>{t.innerHTML='Latest '+(NAME[e.kind]||e.kind)+': <b>'+esc(e.user)+'</b>'+(e.what?' <span style="opacity:.75;font-size:.6em">'+esc(e.what)+'</span>':'');t.style.opacity=1},400)
+ const e=items[i%items.length];i++;const det=!(String(opt('ShowDetail','detail',true))==='false'||opt('ShowDetail','detail',true)==='0');
+ t.style.opacity=0;setTimeout(()=>{t.innerHTML='Latest '+esc(label(e.kind))+': <b>'+esc(e.user)+'</b>'+(det&&e.what?' <span style="opacity:.75;font-size:.6em">'+esc(e.what)+'</span>':'');t.style.opacity=1},400)
 }
-load();setInterval(load,3000);show();setInterval(show,rotate);
+function tick(){show();setTimeout(tick,(parseInt(opt('Rotate','rotate',5))||5)*1000)}
+load().then(tick);setInterval(load,3000);
 </script></body></html>

@@ -29,3 +29,6 @@ Site: `D:\PinguinoSuite\PinguinoSite` (innocentpenguin.com, Railway). Nothing is
 - Content/SEO/performance, PWA (manifest + service worker, no native app).
 - Monetization: merch, supporter perks, sponsorships; nothing intrusive.
 - Brackets, seeding, check-in, captains, presets.
+
+## Supporters + income plan (Oct 19 2026, replaces the sponsorship idea)
+No sponsors or paid entry. Order: (1) DONE: supporter chips (Gifter, Cheerer, Booster, Tipper, Top supporter) set by mods; (2) Twitch sync (gifted subs, bits via owner-connected scopes `channel:read:subscriptions` + `bits:read`) and Discord booster sync (Server Members intent); (3) thresholds in `content/supporters.json` + public `/supporters` page; (4) PinguinoB0t `!supporters` + thank-yous, Discord roles + #supporters posts; (5) visible Support button, `/merch` (print-on-demand, e.g. Fourthwall) and `/gear` affiliate page with disclosure. Perks cosmetic only, never queue priority.

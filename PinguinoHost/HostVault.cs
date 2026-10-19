@@ -15,7 +15,7 @@ namespace PinguinoHost
     public static class Vault
     {
         /// <summary>declared in the module manifest ("secrets") by 01.</summary>
-        public static readonly string[] Names = { "CHAT_BOT_API_KEY", "HOST_SECRETS.UserToken", "HOST_SECRETS.ObsPassword", "BOTS_SECRETS.core.UserToken", "BOTS_SECRETS.chat.UserToken", "BOTS_SECRETS.helper.UserToken" };
+        public static readonly string[] Names = { "CHAT_BOT_API_KEY", "HOST_SECRETS.UserToken", "HOST_SECRETS.ObsPassword", "BOTS_SECRETS.core.UserToken", "BOTS_SECRETS.chat.UserToken", "BOTS_SECRETS.helper.UserToken", "BOT_API_KEY" };
         static readonly string Core = (Environment.GetEnvironmentVariable("PINGUINO_CORE_URL") ?? "http://127.0.0.1:8760").TrimEnd('/');
         static readonly string Token = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? "";
         public static bool Enabled { get { return Token != ""; } }

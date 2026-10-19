@@ -286,7 +286,7 @@ namespace PinguinoHost
 
         static void Run(JObject a, string why, Dictionary<string, string> ctx)
         {
-            if (!Lease.MayRun) return;
+            if (!Lease.MayRun || _paused) return;
             Task.Run(() => { try { RunNow(a, why, ctx, false); } catch (Exception ex) { Clog.Error("automation", (string)a["name"] + ": " + ex.Message); } });
         }
 
@@ -294,8 +294,10 @@ namespace PinguinoHost
         {
             string id = (string)a["id"]; object lk; lock (L) { if (!_locks.TryGetValue(id, out lk)) _locks[id] = lk = new object(); }
             var outp = new JArray(); var sw = Stopwatch.StartNew(); bool ok = true; string err = "";
+            System.Threading.Interlocked.Increment(ref _waiting);
             lock (lk)
             {
+                System.Threading.Interlocked.Decrement(ref _waiting); lock (L) _running[id] = (string)a["name"];
                 try
                 {
                     foreach (var c in (a["conditions"] as JArray ?? new JArray())) if (!CondOk(c, ctx)) { outp.Add("condition not met: skipped"); goto done; }
@@ -303,8 +305,10 @@ namespace PinguinoHost
                 }
                 catch (StopAction) { }
                 catch (Exception ex) { ok = false; err = ex.Message; }
+                finally { lock (L) _running.Remove(id); }
             }
             done:
+            if (!test) NoteFire(id);
             var e = new JObject { { "ts", DateTime.UtcNow.ToString("o") }, { "action", a["name"] }, { "id", id }, { "trigger", why }, { "ok", ok }, { "ms", sw.ElapsedMilliseconds }, { "error", err }, { "output", outp }, { "test", test } };
             lock (L) { _log.Add(e); if (_log.Count > 200) _log.RemoveAt(0); }
             if (ok) Clog.Info("automation", "ran '" + (string)a["name"] + "' (" + why + ", " + sw.ElapsedMilliseconds + " ms)"); else Clog.Warn("automation", "'" + (string)a["name"] + "' failed: " + err);

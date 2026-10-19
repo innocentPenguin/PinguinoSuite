@@ -26,17 +26,28 @@ namespace PinguinoHost
                 return _items;
             }
         }
+        /// <summary>Ivan's look for the overlay and feed (edit latest_settings.json; the OBS page URL can still override each one: ?color=ff9900&amp;size=64 ...).</summary>
         public static JObject Settings()
         {
-            try { var f = System.IO.Path.Combine(HostApi.DataDir, "latest_settings.json"); if (File.Exists(f)) return JObject.Parse(File.ReadAllText(f)); } catch (Exception) { }
-            return new JObject();
+            var d = new JObject {
+                { "Types", "follow,sub,cheer,raid" }, { "Color", "ff9900" }, { "TextColor", "ffffff" }, { "Size", 64 }, { "Font", "bahnschrift" }, { "Rotate", 5 }, { "Bold", true }, { "Shadow", true }, { "ShowDetail", true },
+                { "Align", "center" }, { "Labels", new JObject { { "follow", "follower" }, { "sub", "sub" }, { "resub", "resub" }, { "gift", "gifter" }, { "cheer", "cheer" }, { "raid", "raid" }, { "redeem", "redeem" } } },
+                { "TextSource", "" }, { "ForwardToSite", false }, { "SiteEventsUrl", "https://innocentpenguin.com/api/bot/events" } };
+            try
+            {
+                var f = System.IO.Path.Combine(HostApi.DataDir, "latest_settings.json");
+                if (File.Exists(f)) { foreach (var p in JObject.Parse(File.ReadAllText(f))) { if (p.Key == "Labels" && p.Value is JObject lo) foreach (var l in lo) d["Labels"][l.Key] = l.Value; else d[p.Key] = p.Value; } }
+                else File.WriteAllText(f, d.ToString());
+            }
+            catch (Exception) { }
+            return d;
         }
 
         static long _seq = -1;
         /// <summary>called for every Twitch event (Auto.OnEvent) and by the clip / shoutout steps: kind = follow|sub|resub|gift|cheer|raid|redeem|ban|clip|shoutout.</summary>
         public static void Record(string kind, Dictionary<string, string> ctx)
         {
-            if (!new[] { "follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "ban", "clip", "replay", "shoutout" }.Contains(kind)) return;
+            if (!new[] { "follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "ban", "clip", "replay", "first5", "shoutout" }.Contains(kind)) return;
             Func<string, string> g = k => ctx.ContainsKey(k) ? ctx[k] : "";
             string who = g("user") != "" ? g("user") : g("userName"), what = ""; int amount = 0, tier = 0; string message = "";
             int.TryParse(g("tier"), out tier);
@@ -50,6 +61,7 @@ namespace PinguinoHost
                 case "ban": what = g("permanent") == "false" ? "timed out" : "banned"; message = g("reason"); break;
                 case "clip": case "replay": what = g("clip.url"); break;
                 case "shoutout": what = g("shoutoutUser"); break;
+                case "first5": what = "place " + g("place"); int.TryParse(g("place"), out amount); break;
             }
             var e = new JObject { { "ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "kind", kind }, { "type", kind }, { "user", who }, { "what", what }, { "detail", what } };
             if (amount > 0) e["amount"] = amount; if (tier > 0 && (kind == "sub" || kind == "resub" || kind == "gift")) e["tier"] = tier; if (message != "") e["message"] = message;
@@ -59,7 +71,7 @@ namespace PinguinoHost
                 e["seq"] = ++_seq; a.Add(e); while (a.Count > 500) a.RemoveAt(0);
                 try { File.WriteAllText(Path_, a.ToString()); } catch (Exception) { }
             }
-            if (kind == "ban" || kind == "clip" || kind == "replay" || kind == "shoutout") return;   // the overlay text only follows follower/sub/cheer/raid-type events
+            if (kind == "ban" || kind == "clip" || kind == "replay" || kind == "shoutout" || kind == "first5") return;   // the overlay text only follows follower/sub/cheer/raid-type events
             try { string ts = (string)Settings()["TextSource"]; if (!string.IsNullOrWhiteSpace(ts)) Program.ObsRaw("SetInputSettings", new JObject { { "inputName", ts }, { "inputSettings", new JObject { { "text", Line(e) } } } }); }
             catch (Exception ex) { Clog.Warn("latest", "could not update the OBS text source: " + ex.Message); }
         }
@@ -74,7 +86,8 @@ namespace PinguinoHost
                 return new JObject { { "ok", true }, { "seq", _seq }, { "items", new JArray(all) } };
             }
         }
-        public static string Label(string kind) { switch (kind) { case "follow": return "follower"; case "sub": return "sub"; case "resub": return "resub"; case "gift": return "gifter"; case "cheer": return "cheer"; case "raid": return "raid"; case "ban": return "ban"; case "clip": return "clip"; case "replay": return "replay"; case "shoutout": return "shoutout"; default: return "redeem"; } }
+        public static string Label(string kind) { try { var o = Settings()["Labels"]?[kind]; if (o != null && (string)o != "") return (string)o; } catch (Exception) { } return DefaultLabel(kind); }
+        static string DefaultLabel(string kind) { switch (kind) { case "follow": return "follower"; case "sub": return "sub"; case "resub": return "resub"; case "gift": return "gifter"; case "cheer": return "cheer"; case "raid": return "raid"; case "ban": return "ban"; case "clip": return "clip"; case "replay": return "replay"; case "first5": return "first-5"; case "shoutout": return "shoutout"; default: return "redeem"; } }
         public static string Line(JObject e) { string what = (string)e["what"] ?? ""; return "Latest " + Label((string)e["kind"]) + ": " + (string)e["user"] + (what != "" ? " (" + what + ")" : ""); }
 
         /// <summary>newest entry of each kind, newest first.</summary>

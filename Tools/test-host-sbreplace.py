@@ -24,8 +24,23 @@ try:
     until(lambda: len(api('/api/automations')['doc']['actions']) >= 26, 30, 'presets seeded')
     doc = api('/api/automations')['doc']; sb = [a for a in doc['actions'] if a['id'].startswith('sb-')]
     if len(sb) < 18: fails.append('expected 18 sb- presets, got %d' % len(sb))
-    want_on = {'sb-latest-popup','sb-follow','sb-sub','sb-resub','sb-gift','sb-cheer','sb-raid','sb-ban','sb-clip','sb-preroll','sb-whyad','sb-shout','sb-latest-cmd'}
-    if {a['id'] for a in sb if a['enabled']} != want_on: fails.append('wrong presets enabled: ' + str(sorted({a['id'] for a in sb if a['enabled']} ^ want_on)))
+    safe_on = {'sb-latest-popup', 'sb-shout', 'sb-latest-cmd'}
+    dups = {'sb-follow', 'sb-sub', 'sb-resub', 'sb-gift', 'sb-cheer', 'sb-raid', 'sb-ban', 'sb-clip', 'sb-preroll', 'sb-whyad'}
+    if {a['id'] for a in sb if a['enabled']} != safe_on: fails.append('before cutover only the non-duplicating presets may be ON: ' + str(sorted({a['id'] for a in sb if a['enabled']} ^ safe_on)))
+    if {a['id'] for a in sb if a.get('cutover')} != dups: fails.append('cutover flags wrong')
+    cs = api('/api/cutover')
+    if cs['on'] or len(cs['actions']) != len(dups): fails.append('cutover state: ' + str(cs))
+    # First 5 must stay silent before the cutover (Streamer.bot would pay twice)
+    feed('event StreamOnline nobody'); time.sleep(1.0)
+    feed('zed: hello'); time.sleep(0.5)
+    try: g0 = json.load(open(os.path.join(d, 'host_globals.json')))
+    except Exception: g0 = {}
+    if g0.get('firstChatterClaimedUserIds', '[]') not in ('[]', ''): fails.append('First 5 claimed a chatter before the cutover: ' + str(g0.get('firstChatterClaimedUserIds')))
+    r = api('/api/cutover', {'on': True})
+    if not r['ok'] or r['changed'] != len(dups): fails.append('cutover on: ' + str(r))
+    doc = api('/api/automations')['doc']; sb = [a for a in doc['actions'] if a['id'].startswith('sb-')]
+    want_on = safe_on | dups
+    if {a['id'] for a in sb if a['enabled']} != want_on: fails.append('after cutover wrong presets ON: ' + str(sorted({a['id'] for a in sb if a['enabled']} ^ want_on)))
     types = {t['type'] for a in sb for t in a['triggers']}
     for need in ('ban', 'raid_out', 'follow', 'redeem', 'stream_online'):
         if need not in types: fails.append('trigger type missing in presets: ' + need)
@@ -59,12 +74,18 @@ try:
     g = json.load(open(os.path.join(d, 'host_globals.json')))
     stats = json.loads(g.get('firstPlaceStats', '{}')) if 'firstPlaceStats' in g else {}
     if stats.get('ann') != 1: fails.append('First 5: ann should have 1 first place, globals=' + str({k: v for k, v in g.items() if 'irst' in k})[:300])
+    if not [i for i in api('/api/activity?since=0&type=first5')['items']]: fails.append('first5 not in the activity feed')
     if str(g.get('firstChatterPlace')) != '0': fails.append('First 5: game should be locked after 5 claims, place=' + str(g.get('firstChatterPlace')))
+    feed('*mod: !pg status'); feed('*mod: !pg helper off'); time.sleep(0.8)
+    b = {x['id']: x for x in api('/api/bots')['bots']}
+    if b['helper']['enabled']: fails.append('!pg helper off did not switch the helper off')
+    feed('*mod: !pg helper on'); time.sleep(0.8)
+    if not {x['id']: x for x in api('/api/bots')['bots']}['helper']['enabled']: fails.append('!pg helper on did not switch it back')
     # activity feed + latest + shoutout queue
     for ln in ('event TwitchFollow ann', 'event TwitchSub bob 2', 'event TwitchCheer cy 300', 'event TwitchRaid dee 40', 'event TwitchRedeem eve 1'): feed(ln); time.sleep(0.3)
     until(lambda: len(api('/api/activity?since=0')['items']) >= 4, 10, 'activity items')
     act = api('/api/activity?since=0')
-    types = [i['type'] for i in act['items']]
+    types = [i['type'] for i in act['items'] if i['type'] != 'first5']
     if types[:4] != ['follow', 'sub', 'cheer', 'raid']: fails.append('activity order/types wrong: ' + str(types))
     if [i['seq'] for i in act['items']] != sorted(i['seq'] for i in act['items']): fails.append('activity seq not increasing')
     if any(i.get('amount') for i in act['items'] if i['type'] == 'cheer') is False: fails.append('cheer amount missing')

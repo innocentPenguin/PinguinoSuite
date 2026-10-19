@@ -122,6 +122,7 @@ namespace PinguinoHost
         }
 
         // ---------------- presets that replace the Streamer.bot actions ----------------
+        static JObject Cut(JObject a) { a["cutover"] = true; a["enabled"] = Cutover.On; a["importNotes"] = (string)a["importNotes"] + " [switched on by the Streamer.bot cutover button; until then OFF so nothing answers twice]"; return a; }
         static JObject Act(string id, string name, string note, bool enabled, JArray triggers, params JObject[] steps)
         {
             return new JObject { { "id", id }, { "name", name }, { "group", "Streamer.bot replacement" }, { "enabled", enabled }, { "importNotes", note }, { "triggers", triggers }, { "conditions", new JArray() }, { "steps", new JArray(steps) } };
@@ -184,6 +185,8 @@ namespace PinguinoHost
                     Act("sb-suggest", "Reward: Suggestion Box", "from the 'Suggestion' reward: saves each suggestion to Data\\runtime\\files\\suggestions.txt.", false, new JArray { Tr("redeem", "title", "Suggestion") },
                         Step("inc_var", "name", "suggestions", "by", 1, "persist", true), Step("append_file", "file", "suggestions.txt", "text", "{count} {user} - {input}"), SayStep("Thanks {user}, suggestion saved!")),
                 };
+                var dup = new HashSet<string> { "sb-follow", "sb-sub", "sb-resub", "sb-gift", "sb-cheer", "sb-raid", "sb-ban", "sb-clip", "sb-preroll", "sb-whyad" };   // Streamer.bot answers these too: wait for the cutover switch
+                foreach (var a in list) if (dup.Contains((string)a["id"])) Cut(a);
                 foreach (var a in list) if (!acts.OfType<JObject>().Any(o => (string)o["id"] == (string)a["id"])) acts.Add(a);
                 seeded.Add("sbreplace2"); doc["seeded"] = seeded; Save(doc);
             }

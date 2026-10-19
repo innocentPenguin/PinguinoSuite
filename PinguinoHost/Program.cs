@@ -69,7 +69,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets();
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start();
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -129,6 +129,7 @@ namespace PinguinoHost
         public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false)
         {
             if (!Lease.MayRun) return;   // not the master Host (or lease lost): never run the bots
+            try { if (PgCommand.Handle(user, text, role)) return; } catch (Exception ex) { Clog.Warn("pg", "!pg failed: " + ex.Message); }
             try { if (Auto.OnChat(user, text, role, isSub, firstMsg, msgId, replyTo)) return; } catch (Exception ex) { Clog.Warn("automation", "chat trigger failed: " + ex.Message); }   // an Actions & Events command took it
             lock (dispatchLock)   // one message at a time: arguments are shared state, so no two chats can mix
             {
@@ -143,8 +144,16 @@ namespace PinguinoHost
                 {
                     string trimmed = text.Trim();
                     string first = trimmed.Split(' ')[0];
-                    if (first.ToLowerInvariant() == "!first" || first.ToLowerInvariant() == "!firsts") { cph.Args["command"] = first.ToLowerInvariant(); cph.RunAction("PinguinoFirsts"); return; }
-                    try { cph.Args.Remove("command"); cph.RunAction("PinguinoFirsts"); } catch (Exception ex) { Clog.Warn("firsts", "First 5 claim failed: " + ex.Message); }
+                    if (Cutover.On)   // the First 5 game pays points: only once Streamer.bot is retired, or both would pay
+                    {
+                        if (first.ToLowerInvariant() == "!first" || first.ToLowerInvariant() == "!firsts") { cph.Args["command"] = first.ToLowerInvariant(); cph.RunAction("PinguinoFirsts"); return; }
+                        try
+                        {
+                            int before = cph.GetGlobalVar<int>("firstChatterPlace", true); cph.Args.Remove("command"); cph.RunAction("PinguinoFirsts"); int after = cph.GetGlobalVar<int>("firstChatterPlace", true);
+                            if (before >= 1 && after != before) Latest.Record("first5", new Dictionary<string, string> { { "user", user }, { "place", (after == 0 ? 5 : before).ToString() } });
+                        }
+                        catch (Exception ex) { Clog.Warn("firsts", "First 5 claim failed: " + ex.Message); }
+                    }
                     if (first.StartsWith("!") && coreCommands.Contains(first))
                     {
                         cph.Args["command"] = first.ToLowerInvariant();
@@ -219,7 +228,7 @@ namespace PinguinoHost
             while ((line = Console.ReadLine()) != null)
             {
                 if (line.StartsWith("event "))   // sim: event TwitchSub alice 2   (3rd word = tier / bits / viewers)
-                { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "bits", v }, { "viewers", v } }); continue; }
+                { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v } }); continue; }
                 int c = line.IndexOf(':'); if (c < 1) continue;
                 string who = line.Substring(0, c).Trim(); int role = 1;
                 if (who.StartsWith("*")) { role = 3; who = who.Substring(1); } else if (who.StartsWith("#")) { role = 4; who = who.Substring(1); }

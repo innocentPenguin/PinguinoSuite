@@ -22,3 +22,6 @@ Principle: **one authoritative owner.** Core owns the wheel session; the Site on
 Per team: `Team 1: Ivan + Player2!` (set `announced=true`, so reconnects never repeat), then the full roster in one paragraph, split at team boundaries to stay under the Twitch limit (450 chars per message).
 
 Status: contract only; implementation is Milestone 2.
+
+## Implemented (Oct 19 2026)
+The core PUSHES the session to the site (`POST /api/bot/wheel`, bot key); the site never calls the bot. Mod actions go through `queueCommand` to `!wheel ...`. Public view: `GET /api/wheel/public` (no IDs/MMR). Strikes: the core checks the same Strikes as customs (3 = cannot join, removed at draw). See PinguinoB0t\CHANGES.md.
