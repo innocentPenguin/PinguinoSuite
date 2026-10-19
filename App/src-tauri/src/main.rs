@@ -151,7 +151,7 @@ fn main() {
         .manage(Core { child: Mutex::new(child), token })
         .invoke_handler(tauri::generate_handler![core_config])
         .setup(|app| {
-            let open = MenuItem::with_id(app, "open", "Open PinguinoSuite", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Show PinguinoSuite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit (stops all modules)", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &quit])?;
             TrayIconBuilder::new()
@@ -163,10 +163,12 @@ fn main() {
                     "quit" => app.exit(0),
                     _ => {}
                 })
-                .on_tray_icon_event(|tray, ev| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = ev {
-                        show_main(tray.app_handle());
-                    }
+                // Left click reopens the window; the menu (Show / Quit) is on right click.
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, ev| match ev {
+                    TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. }
+                    | TrayIconEvent::DoubleClick { button: MouseButton::Left, .. } => show_main(tray.app_handle()),
+                    _ => {}
                 })
                 .build(app)?;
             // Started by autostart: stay in the tray.
