@@ -122,6 +122,14 @@
         "order": 35,
         "replaces": "actions"
       }
+    ],
+    "secrets": [
+      "CHAT_BOT_API_KEY",
+      "HOST_SECRETS.UserToken",
+      "HOST_SECRETS.ObsPassword",
+      "BOTS_SECRETS.core.UserToken",
+      "BOTS_SECRETS.chat.UserToken",
+      "BOTS_SECRETS.helper.UserToken"
     ]
   }
 ]

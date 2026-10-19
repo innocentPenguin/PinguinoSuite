@@ -538,7 +538,7 @@ MODULE_PATHS = {"/api/device/peer", "/api/device/streaming", "/api/device/lease"
 
 def _module_path(request):
     p = request.url.path
-    return p in MODULE_PATHS or (request.method == "GET" and p.startswith("/api/vault/") and p.count("/") == 3)  # GET /api/vault/<name>
+    return p in MODULE_PATHS or (p.startswith("/api/vault/") and ((request.method == "GET" and p.count("/") == 3) or (request.method == "POST" and p.count("/") == 4 and p.endswith("/set"))))  # GET /api/vault/<name>, POST /api/vault/<name>/set
 
 
 @app.middleware("http")
@@ -820,13 +820,20 @@ async def vault_restore(request: Request, merge: bool = True):
 
 
 @app.post("/api/vault/{name}/set")
-def vault_set(name: str, b: VaultValue):
+def vault_set(name: str, b: VaultValue, request: Request):
+    """Set/rotate a key. The app token may write any name; a module token only names that module declared (e.g. a fresh Twitch token after re-sign-in)."""
     v = _vault_or_503()
+    mod = getattr(request.state, "mod", None)
+    if mod and not any(s["name"] == name for s in declared_secrets(modules[mod])):
+        console_log.log("warn", "vault", f"{mod} tried to write undeclared key {name} (denied)", module=mod)
+        raise HTTPException(403, "key not declared in this module's manifest")
+    if mod and not devices.solo() and not devices.is_master():
+        raise HTTPException(409, f"the vault is held by the master device ({devices.state()['master_name']})")
     try:
         v.set(name, b.value.strip())
     except vaultlib.VaultError as e:
         raise HTTPException(400, str(e))
-    console_log.log("info", "vault", f"key {name} set")
+    console_log.log("info", "vault", f"key {name} set" + (f" by {mod}" if mod else ""), module=mod or "core")
     return {"ok": True}
 
 
