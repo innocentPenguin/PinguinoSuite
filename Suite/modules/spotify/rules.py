@@ -120,7 +120,7 @@ def needs_approval(settings, roles):
     return bool(settings["require_approval"] or settings["stream_safe"]) and not (is_staff(roles) and not settings["stream_safe"])
 
 
-_CMDS = {"sr": "sr", "request": "sr", "songrequest": "sr", "skip": "skip", "voteskip": "skip", "queue": "queue", "q": "queue",
+_CMDS = {"sr": "sr", "request": "sr", "songrequest": "sr", "skip": "skip", "voteskip": "skip", "queue": "queue", "q": "queue", "songqueue": "queue", "srqueue": "queue",
          "song": "song", "currentsong": "song", "nowplaying": "song", "np": "song", "oops": "oops", "wrongsong": "oops",
          "blocksong": "blocksong", "srclear": "clear"}
 
