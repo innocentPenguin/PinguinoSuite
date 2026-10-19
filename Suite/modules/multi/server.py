@@ -166,14 +166,10 @@ async def local_only_writes(request: Request, call_next):
         same_origin = bool(origin) and origin.split("://", 1)[-1] == request.headers.get("host")
         if not same_origin and not token_ok(request):
             return HTMLResponse("token required", status_code=401)
-    return await call_next(request)
-
-
-def _page():
-    """index.html with the shared Suite theme linked after our own styles (our values stay as the fallback)."""
-    core = os.environ.get("PINGUINO_CORE_URL", "http://127.0.0.1:8760").rstrip("/")
-    html = (STATIC / "index.html").read_text("utf-8")
-    return HTMLResponse(html.replace("<!--THEME-->", f'<link rel="stylesheet" href="{core}/theme.css">'))
+    resp = await call_next(request)
+    if request.url.path.startswith("/assets") or request.url.path in ("/", "/popout"):
+        resp.headers["cache-control"] = "no-cache"     # always revalidate: a new Multi build must never show stale scripts
+    return resp
 
 
 def _page():

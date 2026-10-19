@@ -22,7 +22,7 @@ let chatTarget = null, searchTerm = '', searchSeq = 0;
 const BADGES = {broadcaster: ['HOST', '#e0455b'], moderator: ['MOD', '#2fa84f'], vip: ['VIP', '#d94fa0'], subscriber: ['SUB', '#b36b00'],
   founder: ['SUB', '#b36b00'], partner: ['✓', '#b36b00'], staff: ['STAFF', '#999'], 'sub-gifter': ['GIFT', '#b36b00'], 'bits': ['BITS', '#b58900']};
 const badgeHtml = m => (m.badges || []).filter(b => BADGES[b]).slice(0, 4).map(b => `<span class="bd" style="background:${BADGES[b][1]}" title="${esc(b)}">${BADGES[b][0]}</span>`).join('');
-const emoteUrl = id => `https://static-cdn.jtvnimg.com/emoticons/v2/${encodeURIComponent(id)}/default/dark/1.0`;
+const emoteUrl = id => `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(id)}/default/dark/2.0`;
 function bodyHtml(m) {
   const map = {}; (m.emotes || []).forEach(e => { if (e.text) map[e.text] = e.id; });
   const parts = String(m.text || '').split(/(\s+)/).map(tok => map[tok] ? `<img class="emo" alt="${esc(tok)}" title="${esc(tok)}" src="${emoteUrl(map[tok])}" onerror="this.replaceWith(document.createTextNode(this.alt))">` : esc(tok)).join('');
