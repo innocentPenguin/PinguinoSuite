@@ -124,6 +124,18 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
 .dev{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:12px;border:1px solid var(--line2);background:var(--panel2)}
 .dev.master{border-color:#ff990066;background:#ff990012}.dev i{width:8px;height:8px;border-radius:50%;background:var(--ok)}.dev i.str{background:var(--live);box-shadow:0 0 8px var(--live)}
 .dev b{font-weight:600}.dev .role{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--ice);font-weight:700}
+/* ---- help drawer: every status / error / key row opens it (core: /api/help; format in Docs/MODULE_CONTRACT.md) ---- */
+.clk{cursor:pointer}.clk:hover{background:rgba(255,153,0,.06)}
+.hq{background:transparent;border:1px solid var(--line);color:var(--accent);border-radius:50%;width:22px;height:22px;padding:0;font:600 12px/1 inherit;cursor:pointer;flex:none}
+.hq:hover{background:var(--accent);color:var(--on-accent)}
+#hscrim{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:50}
+#hdrawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);background:var(--panel);border-left:1px solid var(--line);z-index:51;transform:translateX(100%);transition:transform .15s;display:flex;flex-direction:column}
+body.hopen #hscrim{display:block}body.hopen #hdrawer{transform:none}
+#hdrawer .hh{display:flex;gap:10px;align-items:flex-start;padding:16px;border-bottom:1px solid var(--line)}#hdrawer .hh h3{margin:0;flex:1}
+#hdrawer .hb{padding:16px;overflow:auto;flex:1}#hdrawer ol{padding-left:20px;margin:10px 0}#hdrawer li{margin:6px 0;line-height:1.45}
+#hdrawer .hf{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
+.hex{font-family:ui-monospace,Consolas,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:8px 0;word-break:break-all}
+.hkeyhelp{flex-basis:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:6px 0}.hkeyhelp ol{margin:4px 0 4px 18px;padding:0}
 .minirow{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}.minirow:last-child{border:0}.minirow .grow{flex:1;min-width:0}
 .col2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:1000px){.col2{grid-template-columns:1fr}}
@@ -140,15 +152,18 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
   <div id="modnav"></div>
   <h6>System</h6>
   <div class="item" data-r="integrations"><span class="ic">🔌</span>Integrations</div>
+  <div class="item" data-r="help"><span class="ic">?</span>Help</div>
   <div class="item" data-r="console"><span class="ic">▤</span>Console<span class="cbadge" id="cbadge"></span></div>
   <div class="item" data-r="settings"><span class="ic">⚙</span>Settings</div>
   <div class="navfoot sm dim" id="navfoot"></div>
 </nav>
 <div class="col">
-  <div class="top"><h2 id="title">Dashboard</h2><div class="livepill" id="pill"><i></i><span id="pill-t">Offline</span></div><span class="dim sm" id="pill-sub"></span>
+  <div class="top"><h2 id="title">Dashboard</h2><div class="livepill" id="pill"><i></i><span id="pill-t">Offline</span></div><span class="dim sm" id="pill-sub"></span><button class="hq" id="hq-page" title="How this page works">?</button>
     <div class="row sp"><button id="simon" class="sm" title="Pretend we went live to test auto-start">▶ Test go-live</button><button id="simoff" class="sm">■ End test</button></div></div>
   <div id="page"></div>
 </div>
+<div id="hscrim"></div>
+<aside id="hdrawer"><div class="hh"><h3 id="hd-title">Help</h3><button class="sm" onclick="closeHelp()">✕</button></div><div class="hb" id="hd-body"></div><div class="hf" id="hd-foot"></div></aside>
 <div id="toast"></div>
 
 <script>
@@ -199,8 +214,8 @@ pages.dashboard=()=>{
       <div class="card"><h3>Activity</h3><div class="evt" style="max-height:260px;overflow:auto">${S.events.slice(-14).reverse().map(e=>`<div>${new Date(e.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} <b class="${e.type==='live'?'lv':e.type==='hook'?'hk':''}">${esc(e.type)}</b> ${esc(e.id||e.state||e.title||'')}</div>`).join('')||'<span class="faint">Nothing yet</span>'}</div></div>
     </div>
     <div class="grid" style="align-content:start">
-      <div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(m.name)}</b> <span class="sm faint">${esc(m.state)}</span></div><button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>
-      ${C.pr&&C.pr.ts?`<div class="card"><div class="row"><h3 style="margin:0">Pre-stream</h3><button class="sm sp" data-go="console">Details</button></div><div style="margin-top:6px">${C.pr.items.filter(i=>i.status!=='pass').slice(0,6).map(i=>`<div class="pr ${i.status}"><span class="d"></span><b>${esc(i.module)}</b><span class="sm">${esc(i.label)}</span></div>`).join('')||'<span class="sm faint">Everything passed.</span>'}</div></div>`:''}
+      <div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(m.name)}</b> <span class="sm faint">${esc(m.state)}</span></div>${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>
+      ${C.pr&&C.pr.ts?`<div class="card"><div class="row"><h3 style="margin:0">Pre-stream</h3><button class="sm sp" data-go="console">Details</button></div><div style="margin-top:6px">${C.pr.items.filter(i=>i.status!=='pass').slice(0,6).map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<div class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><b>${esc(i.module)}</b><span class="sm">${esc(i.label)}</span></div>`}).join('')||'<span class="sm faint">Everything passed.</span>'}</div></div>`:''}
     </div>
   </div>`};
 
@@ -219,7 +234,7 @@ const modSrc=m=>m.url.replace(/\/$/,'')+(m.ui?.path||'/');
 pages.module=r=>{const m=modOf(r);
   if(!m)return `<div class="card" style="max-width:520px"><h3>Module not found</h3><div class="dim">It may have been removed from the registry.</div></div>`;
   if(m.state==='running')return `<iframe id="mif" data-src="${esc(modSrc(m))}" src="${esc(modSrc(m))}"></iframe>`;
-  return `<div class="card" style="max-width:520px"><h3>${esc(m.name)}</h3><div class="dim">${esc(m.desc||'')}</div><div class="row" style="margin-top:14px"><span class="pill">${esc(m.state||'unavailable')}</span><button class="pri" data-act="${esc(m.id)}:start">Start ${esc(m.name)}</button></div></div>`};
+  return `<div class="card" style="max-width:520px"><h3>${esc(m.name)}</h3><div class="dim">${esc(m.desc||'')}</div><div class="row" style="margin-top:14px">${hq('module:'+m.id+(m.state==='running'?'':':'+(m.state||'unknown')),{module:m.id})} <span class="pill">${esc(m.state||'unavailable')}</span><button class="pri" data-act="${esc(m.id)}:start">Start ${esc(m.name)}</button></div></div>`};
 
 /* ============ Integrations hub (core: GET /api/integrations; contract in Docs/MODULE_CONTRACT.md) ============ */
 const I={items:null,err:null},VT={keys:null,err:null,edit:null,confirmDel:null};
@@ -233,10 +248,11 @@ function vaultCard(){
   if(!VT.keys)return '';
   const k=VT.keys,pt=k.plaintext;
   return `<div class="card" style="grid-column:1/-1"><div class="row"><h3 style="margin:0">Key vault</h3><span class="sm faint">Encrypted on this PC (${esc(k.backend)}). Keys are never shown again and never leave this machine in plain text.</span></div>
-   <div style="margin-top:8px">${k.keys.map(x=>`<div class="irow"><span class="st ${x.set?'connected':'needs_auth'}">${x.set?'Set':'Missing'}</span>
+   <div style="margin-top:8px">${k.keys.map(x=>{if(x.help)HX['vault:'+x.name]=x.help;return `<div class="irow clk" data-hk="vault:${esc(x.name)}"><span class="st ${x.set?'connected':'needs_auth'}">${x.set?'Set':'Missing'}</span>
       <div class="grow"><b>${esc(x.label)}</b> <span class="sm faint">${esc(x.name)}</span><div class="sm faint">${x.declared_by.length?'used by '+esc(x.declared_by.join(', '))+' · ':''}${x.set?'set '+ago(x.updated)+' · last read '+ago(x.last_used)+(x.used_by?' by '+esc(x.used_by):''):(x.required?'required':'not set yet')}</div></div>
       ${VT.edit===x.name?`<input type="password" id="v-new" placeholder="paste the key" autocomplete="off" style="width:220px"><button class="pri sm" data-vsave="${esc(x.name)}">Save</button><button class="sm" data-vcancel="1">Cancel</button>`
-        :`<button class="sm" data-vedit="${esc(x.name)}">${x.set?'Rotate':'Set'}</button>${x.set&&x.testable?`<button class="sm" data-vtest="${esc(x.name)}">Test</button>`:''}${x.set?`<button class="sm" data-vdel="${esc(x.name)}">${VT.confirmDel===x.name?'Click again to delete':'Delete'}</button>`:''}`}</div>`).join('')||'<div class="sm faint">No keys declared by any module yet. Modules list the keys they need in their manifest ("secrets").</div>'}</div>
+        :`${hq('vault:'+x.name)}<button class="sm" data-vedit="${esc(x.name)}">${x.set?'Rotate':'Set'}</button>${x.set&&x.testable?`<button class="sm" data-vtest="${esc(x.name)}">Test</button>`:''}${x.set?`<button class="sm" data-vdel="${esc(x.name)}">${VT.confirmDel===x.name?'Click again to delete':'Delete'}</button>`:''}`}
+      ${VT.edit===x.name&&x.help?`<div class="hkeyhelp"><b>How to get this key</b>${helpBody(x.help)}</div>`:''}</div>`}).join('')||'<div class="sm faint">No keys declared by any module yet. Modules list the keys they need in their manifest ("secrets").</div>'}</div>
    <div class="row" style="margin-top:12px;flex-wrap:wrap;gap:8px"><input type="text" id="v-addname" placeholder="NEW_KEY_NAME" style="width:190px"><button class="sm" id="v-add">Add a key</button></div>
    ${pt.total?`<div class="irow" style="margin-top:10px"><span class="st needs_auth">Plaintext</span><div class="grow"><b>${pt.total} key(s) are still in plain config files</b> <span class="sm faint">${pt.files.map(f=>esc(f.file)+' ('+f.count+')').join(', ')}</span>
        <div class="sm faint">Import copies them into the vault and leaves the files alone. Remove the plaintext only after the module that uses it reads from the vault.</div></div>
@@ -259,6 +275,59 @@ function bindVault(){
   $('#v-export')&&($('#v-export').onclick=async()=>{const r=await fetch('/api/vault/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({passphrase:$('#v-bpass').value})});
     if(!r.ok){toast((await r.json().catch(()=>({}))).detail||'Backup failed');return}saveBlob(await r.blob(),'pinguino-vault-backup.pgb');toast('Encrypted backup saved')});
   $('#v-restore')&&($('#v-restore').onchange=e=>{const f=e.target.files[0];if(!f)return;vaultAct(async()=>{const r=await fetch('/api/vault/restore',{method:'POST',headers:{'X-Passphrase':$('#v-bpass').value},body:await f.arrayBuffer()});const j=await r.json();if(!r.ok)throw new Error(j.detail);toast(`Restored ${j.restored} key(s)`)})})}
+/* ============ Help drawer ============ */
+const HX={};   // help the item carried itself (module manifest / item "help"), keyed like the trigger
+const hq=(key,o={})=>`<button class="hq" title="What is this? How do I fix or set it up?" data-hk="${esc(key)}" data-hm="${esc(o.module||'')}" data-hi="${esc(o.item||'')}" data-hs="${esc(o.source||'')}" data-hmsg="${esc((o.msg||'').slice(0,200))}">?</button>`;
+const hattr=(key,o={})=>`class="clk" data-hk="${esc(key)}" data-hm="${esc(o.module||'')}" data-hi="${esc(o.item||'')}" data-hs="${esc(o.source||'')}" data-hmsg="${esc((o.msg||'').slice(0,200))}"`;
+function helpBody(h){return `${h.summary?`<p class="dim">${esc(h.summary)}</p>`:''}
+  ${(h.steps||[]).length?`<ol>${h.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>`:''}
+  ${h.scopes&&h.scopes.length?`<div class="sm faint">Scopes: ${h.scopes.map(esc).join(', ')}</div>`:''}
+  ${h.example?`<div class="sm faint">Format example (not a real value):</div><div class="hex">${esc(h.example)}</div>`:''}`}
+function showHelp(h,found){
+  $('#hd-title').textContent=h.title||'Help';
+  $('#hd-body').innerHTML=(found===false?'<p class="dim">No instructions have been written for this yet. A note was added to the Console so the owner of that module fills it in.</p>':'')+helpBody(h);
+  const f=$('#hd-foot');f.innerHTML='';
+  const btn=(label,cls,fn)=>{const b=document.createElement('button');b.className=cls;b.textContent=label;b.onclick=fn;f.append(b)};
+  if(h.fix)btn(h.fix.label||'Fix it','pri',()=>doFix(h.fix));
+  if(h.link)btn(h.link.label||'Open','',()=>openExternal(h.link.url));
+  btn('Close','',closeHelp);
+  document.body.classList.add('hopen')}
+function closeHelp(){document.body.classList.remove('hopen')}
+async function doFix(fx){
+  closeHelp();
+  if(fx.url)openExternal(fx.url);
+  if(fx.module_action){await post(`/api/modules/${fx.module_action.module}/${fx.module_action.action}`);toast('Done: '+fx.module_action.action+' '+fx.module_action.module);setTimeout(load,900)}
+  if(fx.route){go(fx.route);
+    if(fx.focus){VT.pendingFocus=fx.focus;focusKey()}}}
+function focusKey(){   // open the vault edit box for the key named by a help "focus" (waits for the Integrations page to load)
+  const n=VT.pendingFocus;if(!n)return;
+  if(route!=='integrations'||!VT.keys){setTimeout(focusKey,300);return}
+  VT.pendingFocus=null;VT.edit=n;
+  if(!VT.keys.keys.some(k=>k.name===n))VT.keys.keys.push({name:n,label:n,set:false,declared_by:[],testable:false,required:false});
+  draw(true);const el=$('#v-new');if(el){el.scrollIntoView({block:'center'});el.focus()}}
+async function openHelp(d){
+  const x=HX[d.hk];if(x){showHelp(x,true);return}
+  $('#hd-title').textContent='Loading…';$('#hd-body').innerHTML='';$('#hd-foot').innerHTML='';document.body.classList.add('hopen');
+  try{const q=new URLSearchParams({key:d.hk||'',module:d.hm||'',item:d.hi||'',source:d.hs||'',msg:d.hmsg||''});
+    const r=await (await fetch('/api/help?'+q)).json();
+    if(r.found)showHelp(r.help,true);
+    else showHelp({title:'No help written yet',steps:['Open the Console and read the line for details.']},false)}
+  catch{showHelp({title:'Help is unavailable',summary:'The core is not answering.'},true)}}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-hk]');if(!t)return;
+  const inner=e.target.closest('button,a,input,select');
+  if(inner&&inner!==t&&!inner.dataset.hk)return;   // a real button inside a clickable row keeps its own job
+  e.preventDefault();openHelp(t.dataset)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeHelp()});
+$('#hscrim').onclick=closeHelp;
+
+/* Help index (every topic that has instructions, incl. green ones) */
+const HP={topics:null};
+pages.help=()=>{
+  if(!HP.topics){fetch('/api/help/all').then(r=>r.json()).then(j=>{HP.topics=j.topics;if(route==='help')draw(true)}).catch(()=>{HP.topics=[];if(route==='help')draw(true)});return '<div class="dim">Loading…</div>'}
+  const g={};HP.topics.forEach(t=>(g[t.group||'General']=g[t.group||'General']||[]).push(t));
+  return `<div class="dim sm" style="margin-bottom:12px">How each part works, how it was set up, and how to redo it. Everything with a <b style="color:var(--accent)">?</b> in the app opens the same text.</div>
+  <div class="grid g2" style="align-items:start">${Object.keys(g).map(n=>`<div class="card"><h3>${esc(n)}</h3>${g[n].map(t=>`<div class="irow clk" data-hk="${esc(t.key)}"><div class="grow"><b>${esc(t.title)}</b></div><span class="faint">›</span></div>`).join('')}</div>`).join('')}</div>`};
 const openExternal=u=>window.__TAURI__?(location.href=u):window.open(u,'_blank');
 pages.integrations=()=>{
   if(I.err)return `<div class="card" style="max-width:520px"><h3>Integrations</h3><div class="dim">${esc(I.err)}</div></div>`;
@@ -268,11 +337,11 @@ pages.integrations=()=>{
   const names=Object.keys(groups).sort((a,b)=>(core.includes(a)-core.includes(b))||(core.indexOf(a)-core.indexOf(b)));
   const bad=I.items.filter(i=>i.status==='error'||i.status==='needs_auth').length;
   return `<div class="row" style="margin-bottom:14px"><span class="dim sm">${I.items.length} connections · ${bad?`<b style="color:var(--warn)">${bad} need attention</b>`:'all good'}</span><button class="sm sp" id="i-refresh">Refresh</button></div>
-  <div class="grid g2" style="align-items:start">${names.map(g=>`<div class="card"><h3>${esc(g)}</h3>${groups[g].map(i=>`<div class="irow"><span class="st ${i.status}">${ST[i.status]||i.status}</span>
+  <div class="grid g2" style="align-items:start">${names.map(g=>`<div class="card"><h3>${esc(g)}</h3>${groups[g].map(i=>{if(i.help)HX[i.id]=i.help;return `<div class="irow clk" data-hk="${esc(i.id)}" data-hm="${esc(i.module||'')}" data-hi="${esc(i.id.split(':').slice(1).join(':'))}"><span class="st ${i.status}">${ST[i.status]||i.status}</span>
      <div class="grow"><b>${esc(i.name)}</b>${i.detail?`<div class="sm faint">${esc(i.detail)}</div>`:''}${i.from?`<div class="sm" style="color:var(--ok)">OK via ${esc(i.from)}</div>`:''}</div>
      ${i.connect_url?`<button class="pri sm" data-ext="${esc(i.connect_url)}">${esc(i.connect_label||'Connect')}</button>`:''}
      ${i.test?`<button class="sm" data-test="${esc(i.module)}|${esc(i.test)}">Test</button>`:''}
-     ${i.page&&i.module!=='core'?`<button class="sm" data-go="m:${esc(i.module)}">Open</button>`:''}</div>`).join('')}</div>`).join('')}${vaultCard()}</div>`};
+     ${i.page&&i.module!=='core'?`<button class="sm" data-go="m:${esc(i.module)}">Open</button>`:''}${hq(i.id,{module:i.module,item:i.id.split(':').slice(1).join(':')})}</div>`}).join('')}</div>`).join('')}${vaultCard()}</div>`};
 function bindIntegrations(){
   bindVault();
   if(!I.items&&!I.err&&!I.loading){I.loading=true;loadIntegrations().finally(()=>I.loading=false)}
@@ -296,7 +365,7 @@ function renderLog(){const box=$('#clog');if(!box)return;
   const f=C.entries.filter(e=>e.seq>C.clearBefore&&(!C.mod||e.module===C.mod)&&LV[e.level]>=LV[C.errOnly?'error':C.level]&&(!C.q||(e.msg+' '+e.source+' '+e.module).toLowerCase().includes(C.q.toLowerCase())));
   const stick=box.scrollTop+box.clientHeight>=box.scrollHeight-30;
   const rows=f.slice(-800);
-  box.innerHTML=rows.map(e=>`<div class="cl ${e.level}"><span class="t">${tm(e.ts)}</span><span class="lv">${e.level}</span><span class="m">${esc(e.module)}</span>${e.source?`<span class="s">${esc(e.source)}</span>`:''}<span>${esc(e.msg)}</span></div>`).join('')||'<div class="cl"><span class="faint">No log lines match.</span></div>';
+  box.innerHTML=rows.map(e=>`<div class="cl ${e.level}${e.level==='warn'||e.level==='error'?' clk':''}"${e.level==='warn'||e.level==='error'?` data-hk="" data-hm="${esc(e.module)}" data-hs="${esc(e.source||'')}" data-hmsg="${esc(e.msg.slice(0,200))}" title="Click for what this means and how to fix it"`:''}><span class="t">${tm(e.ts)}</span><span class="lv">${e.level}</span><span class="m">${esc(e.module)}</span>${e.source?`<span class="s">${esc(e.source)}</span>`:''}<span>${esc(e.msg)}</span></div>`).join('')||'<div class="cl"><span class="faint">No log lines match.</span></div>';
   if(stick)box.scrollTop=box.scrollHeight;
   $('#c-count')&&($('#c-count').textContent=f.length+' lines'+(C.paused?' (paused)':''));
   const sel=$('#c-mod');if(sel){const mods=[...new Set(C.entries.map(e=>e.module))].sort();
@@ -305,7 +374,7 @@ function renderPrestream(){const el=$('#pr-items');if(!el)return;const r=C.pr;
   if(!r||!r.ts){el.innerHTML='<span class="faint sm">No check has run yet. Press Run now.</span>';return}
   $('#pr-sub').textContent=`${r.scheduled?'Scheduled '+(r.slot||''):'Manual'} run at ${tm(r.ts)} · ${r.summary.pass} ok · ${r.summary.warn} warn · ${r.summary.fail} fail`;
   const order={fail:0,warn:1,pass:2};
-  el.innerHTML=[...r.items].sort((a,b)=>order[a.status]-order[b.status]).map(i=>`<div class="pr ${i.status}"><span class="d"></span><b>${esc(i.module)}</b><span>${esc(i.label)}</span><span class="faint sm">${esc(i.detail||'')}</span>${i.from?`<span class="sm" style="color:var(--ok)"> · OK via ${esc(i.from)}</span>`:''}</div>`).join('')}
+  el.innerHTML=[...r.items].sort((a,b)=>order[a.status]-order[b.status]).map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<div class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><b>${esc(i.module)}</b><span>${esc(i.label)}</span><span class="faint sm">${esc(i.detail||'')}</span>${i.from?`<span class="sm" style="color:var(--ok)"> · OK via ${esc(i.from)}</span>`:''}${i.status==='pass'?'':hq(i.module+':'+i.id,{module:i.module,item:i.id})}</div>`}).join('')}
 function updateBadge(){const n=C.entries.filter(e=>e.level==='error'&&e.seq>(C.seen??Infinity)).length;const b=$('#cbadge');if(b)b.textContent=n?(n>99?'99+':n):''}
 async function pollConsole(){try{const r=await (await fetch(`/api/console?since=${C.seq}&limit=500`)).json();
     if(C.seen===null){C.seen=Math.min(+store.get('consoleSeen')||r.seq,r.seq)}
@@ -476,7 +545,7 @@ function showWizard(){let role='streaming';const el=document.createElement('div'
       D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
 
 /* ============ shell ============ */
-const titles={integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const REAL=[['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
@@ -523,6 +592,7 @@ function bind(){
   $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));
 }
 $$('nav .item[data-r]').forEach(i=>i.onclick=()=>go(i.dataset.r));
+$('#hq-page').onclick=()=>openHelp({hk:isMod(route)?'module:'+route.slice(2).split('@')[0]:route,hm:isMod(route)?route.slice(2).split('@')[0]:''});
 function toast(m){const d=document.createElement('div');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3500)}
 $('#simon').onclick=()=>{post('/api/simulate',{live:true});toast('Simulating go-live…')};
 $('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/simulate',{live:null}));

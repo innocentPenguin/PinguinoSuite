@@ -31,6 +31,7 @@ import device  # noqa: E402
 import portable  # noqa: E402
 import integrations  # noqa: E402
 import vault as vaultlib  # noqa: E402
+import helpdb  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -403,6 +404,10 @@ def run_prestream(slot=None, scheduled=False):
     rep = _compute_prestream(slot, scheduled)
     device.green_merge(rep["items"], devices.peer_statuses(), lambda i: f"{i['module']}:{i['id']}", "status", {"pass"}, lambda i: i["id"] in PS_SKIP, "p")
     rep["summary"] = {s: sum(1 for i in rep["items"] if i["status"] == s) for s in ("pass", "warn", "fail")}
+    for i in rep["items"]:
+        k = f"{i['module']}:{i['id']}"
+        if i["status"] != "pass" and not i.get("help") and helpdb.resolve(k, i["module"], i["id"], specs=_specs())[0] is None:
+            _warn_nohelp(k, i["label"])
     last_prestream = rep
     try:  # a script (no app token) can read the latest result from here
         tmp = CONSOLE_DIR / "prestream-last.json.tmp"
@@ -721,7 +726,8 @@ def declared_secrets(m):
     for s in m.spec.get("secrets", []):
         d = {"name": s} if isinstance(s, str) else dict(s)
         if vaultlib.NAME_RE.match(str(d.get("name", ""))):
-            out.append({"name": d["name"], "label": d.get("label", d["name"]), "test": d.get("test"), "required": bool(d.get("required")), "module": m.id})
+            out.append({"name": d["name"], "label": d.get("label", d["name"]), "test": d.get("test"), "required": bool(d.get("required")), "module": m.id,
+                        "help": helpdb.clean_help(d.get("help"))})
     return out
 
 
@@ -750,6 +756,36 @@ def vault_prestream_items():
     return out
 
 
+_nohelp_warned = set()
+
+
+def _specs():
+    return {m.id: m.spec for m in modules.values()}
+
+
+def _warn_nohelp(key, shown=""):
+    """A non-green item nobody wrote help for: say so once in the Console so the owner of that module fills it in."""
+    if key and key not in _nohelp_warned:
+        _nohelp_warned.add(key)
+        console_log.log("warn", "help", f"no help written yet for '{key}'{(' (' + shown + ')') if shown else ''}: add \"help\" in the module manifest or on the item")
+
+
+@app.get("/api/help")
+def help_get(key: str = "", module: str = "", item: str = "", source: str = "", msg: str = ""):
+    """Help for one clickable thing. key = item id ("core:obs", "multi:twitch", "module:host:failed"); for Console lines pass module/source/msg."""
+    h, k = helpdb.resolve(key, module, item, source, msg[:300], _specs())
+    if h is None:
+        _warn_nohelp(k or f"{module}:{source}", msg[:60])
+        return {"found": False, "key": k}
+    return {"found": True, "key": k, "help": h}
+
+
+@app.get("/api/help/all")
+def help_all():
+    """Index of every topic that has help (core + modules), for the Help page."""
+    return {"topics": helpdb.topics(_specs())}
+
+
 @app.get("/api/vault")
 def vault_list():
     """Which keys are set / missing, when they were set and last read. Values are never returned."""
@@ -765,7 +801,8 @@ def vault_list():
         d = decl.get(n, [])
         keys.append({"name": n, "set": info is not None, **(info or {}), "declared_by": [x["module"] for x in d],
                      "label": next((x["label"] for x in d if x["label"] != n), n), "testable": any(x.get("test") for x in d),
-                     "required": any(x["required"] for x in d)})
+                     "required": any(x["required"] for x in d),
+                     "help": next((x["help"] for x in d if x.get("help")), None) or (helpdb.CATALOG["obs"] if n == "OBS_WS_PASSWORD" else helpdb.CATALOG["vault_key"])})
     return {"backend": type(v.backend).__name__.replace("Backend", "").lower(), "is_master": devices.is_master(), "keys": keys,
             "plaintext": integrations.plaintext_summary(vaultlib.scan_plaintext(_plaintext_files()), v)}
 
@@ -897,6 +934,9 @@ def integrations_get():
     items = _integrations_local()
     device.green_merge(items, devices.peer_statuses(), lambda i: i["id"], "status", {"connected"},
                        lambda i: i["id"].startswith(("key:", "vault:")) or i["id"].endswith(":module") or i["group"] == "API keys", "i")
+    for i in items:
+        if i["status"] in ("needs_auth", "error") and not i.get("help") and helpdb.resolve(i["id"], i.get("module", ""), i["id"].split(":", 1)[-1], specs=_specs())[0] is None:
+            _warn_nohelp(i["id"], i["name"])
     return {"ts": time.time(), "items": items}
 
 

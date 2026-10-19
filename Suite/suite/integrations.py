@@ -10,6 +10,8 @@ import re
 import socket
 from pathlib import Path
 
+import helpdb
+
 STATUSES = ("connected", "needs_auth", "error", "off", "unknown")
 SECRET_KEY = re.compile(r"(key|token|secret|password|passwd|credential)", re.I)
 
@@ -39,6 +41,9 @@ def clean_item(mid, it, group=None):
     t = str(it.get("test") or "")
     if t.startswith("/api/") and ".." not in t:
         out["test"] = t
+    h = helpdb.clean_help(it.get("help"))
+    if h:
+        out["help"] = h  # the module's own instructions for this row (shown when the row is clicked)
     return out if out["name"] else None
 
 

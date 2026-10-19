@@ -9,6 +9,8 @@ from pathlib import Path
 
 import requests
 
+import helpdb
+
 SLOTS = ("16:30", "16:45")  # Central wall-clock time; the stream starts at 17:00
 WINDOW_MIN = 5              # a slot still fires if the core wakes up to 5 min late
 STALE_SECS = 600            # a module's prestream-<id>.json older than this is "stale"
@@ -92,7 +94,11 @@ def _module_items(mid, spec, token, console_dir, now):
     for i in items[:60]:
         if isinstance(i, dict):
             st = i.get("status") if i.get("status") in ("pass", "warn", "fail") else "warn"
-            out.append(_item(mid, str(i.get("id", ""))[:40], str(i.get("label", i.get("id", "")))[:80], st, str(i.get("detail", ""))[:200]))
+            it = _item(mid, str(i.get("id", ""))[:40], str(i.get("label", i.get("id", "")))[:80], st, str(i.get("detail", ""))[:200])
+            h = helpdb.clean_help(i.get("help"))
+            if h:
+                it["help"] = h
+            out.append(it)
     return out
 
 

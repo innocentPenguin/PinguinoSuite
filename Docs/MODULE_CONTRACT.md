@@ -211,3 +211,23 @@ Voice commands (Listen / Voice Studio) never produce chat output. An action is a
 
 ## Device status merge (green wins)
 Each device publishes a compact snapshot of its own integration and pre-stream statuses in the device heartbeat (`status: {"i": {item id: status}, "p": {"module:id": status}}`, refreshed every minute). The master stays the source of truth, but if an alive peer reports an item **green** (`connected` / `pass`) that this view has as warn/fail, the merged Integrations and pre-stream views show it green, add `from: <device name>` and "(OK on <device>)", and the UI says "OK via <device>". Never merged: vault/key items, "module is running" items, disk space, error counts and the missing-keys item (per-device facts or secrets). The vault and the bots stay master-only. OBS: this PC's OBS WebSocket is port 4455 (127.0.0.1 locally); the password is entered by the user in Integrations > Key vault as `OBS_WS_PASSWORD`, never stored in a manifest or file.
+
+## Help for every status (clickable ? panels)
+Every warn/fail/error and every row (green too) in the Suite opens a help drawer: what it means, numbered steps, an optional link, and a fix button. **Modules write their own text**; the core only supplies generic ones (OBS, Streamer.bot, site, disk, errors, key vault, module up/down, Tailscale, device, Listen, voice, console, pre-stream) and a fallback. A non-green item with no help gets a "no help written yet" panel and one Console warning (`source: help`) naming the item, so the owner fills it in.
+
+Help object (plain text only; links must be https or loopback; max 14 steps):
+```json
+{"title": "Twitch sign-in", "summary": "One sentence on what this is.",
+ "steps": ["Open Twitch Developer Console...", "Scopes needed: ...", "Paste the token here"],
+ "example": "oauth:xxxxxxxx (format only, never a real value)", "scopes": ["chat:read"],
+ "link": {"label": "Twitch console", "url": "https://dev.twitch.tv/console"},
+ "fix": {"label": "Enter the key", "route": "integrations", "focus": "TWITCH_TOKEN"}}
+```
+`fix` may hold `route` (a shell page: `integrations`, `console`, `m:<id>`...), `focus` (a vault key name: opens its Set/Rotate box), `url` (external), `module_action` `{module, action: "start"|"restart"}`.
+
+Where to put it:
+- On an **integration item** or **pre-stream item**: add `"help": {...}` to the item.
+- Keyed by item id in the manifest: `"help": {"<item id>": {...}, "_module": {...}}` (`_module` = the "how this module works / set up / redo" overview, shown from the module name and the page `?`).
+- On a **secret**: `{"name": "X", "label": "...", "help": {...}}`. This is also shown inline under the Set/Rotate box ("How to get this key"). Say where to find it, scopes, example format; never the value.
+- Console lines: warn/error lines are clickable; the core matches the message to a topic, or uses the module's help by source.
+Core endpoints: `GET /api/help?key=&module=&item=&source=&msg=` and `GET /api/help/all` (index for the Help page).
