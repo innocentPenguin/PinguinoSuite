@@ -21,7 +21,7 @@ WARMUP_SECS = 10     # a device that knows peers waits this long after start bef
 
 
 class Devices:
-    def __init__(self, path, clock=time.time, name=None):
+    def __init__(self, path, clock=time.time, name=None, existing_install=False):
         self.path, self.clock = Path(path), clock
         self.started = clock()
         d = {}
@@ -35,6 +35,8 @@ class Devices:
             "priority": int(d.get("priority", 50)),
             "role_pref": d.get("role_pref", "auxiliary"),   # what the user said this machine is: "master" | "auxiliary"
             "known": list(d.get("known", [])),                 # ids of peers ever paired/seen
+            # first-run wizard done? An install that already had settings before device.json existed counts as done.
+            "setup_done": d["setup_done"] if "setup_done" in d else bool(existing_install or d),  # a device.json from before the wizard existed = already set up
         }
         if "priority" not in d and self.me["role_pref"] == "master":
             self.me["priority"] = 100
@@ -53,13 +55,15 @@ class Devices:
         except OSError:
             pass
 
-    def configure(self, name=None, priority=None, role_pref=None):
+    def configure(self, name=None, priority=None, role_pref=None, setup_done=None):
         if name:
             self.me["name"] = str(name)[:40]
         if priority is not None:
             self.me["priority"] = max(0, min(1000, int(priority)))
         if role_pref in ("master", "auxiliary"):
             self.me["role_pref"] = role_pref
+        if setup_done is not None:
+            self.me["setup_done"] = bool(setup_done)
         self._save()
 
     # ---- gossip

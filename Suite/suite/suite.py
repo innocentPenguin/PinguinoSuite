@@ -28,6 +28,7 @@ import livedetect  # noqa: E402
 import consolelog  # noqa: E402
 import prestream  # noqa: E402
 import device  # noqa: E402
+import portable  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -53,7 +54,7 @@ ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "taur
 DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "runtime")
 console_log = consolelog.Console(Path(DATA_DIR) / "console", LOGS)  # live log stream for the Console page
 CONSOLE_DIR = Path(DATA_DIR) / "console"
-devices = device.Devices(Path(DATA_DIR) / "device.json")  # this install: stable id, master/auxiliary role, peers
+devices = device.Devices(Path(DATA_DIR) / "device.json", existing_install=SETTINGS.exists() or (Path(DATA_DIR) / "bots.json").exists())  # this install: stable id, master/auxiliary role, peers
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 # UI source: single copy lives in the Tauri app so the two can't drift.
 UI_INDEX = ROOT.parent / "App" / "src" / "index.html"  # only copy of the UI (the old Suite/suite/static copy was retired)
@@ -541,7 +542,7 @@ async def guard(request: Request, call_next):
 
 
 app.add_middleware(CORSMiddleware, allow_origins=sorted(ALLOWED_ORIGINS), allow_methods=["GET", "POST"],
-                   allow_headers=["Authorization", "Content-Type", "X-Pinguino-Token"])
+                   allow_headers=["Authorization", "Content-Type", "X-Pinguino-Token", "X-Passphrase"])
 
 
 @app.get("/")
@@ -621,6 +622,71 @@ class DevConfig(BaseModel):
     name: str | None = None
     priority: int | None = None
     role_pref: str | None = None
+
+
+ROLES = {"streaming": ("master", 100), "gaming": ("auxiliary", 70), "mac": ("auxiliary", 50)}
+
+
+class Setup(BaseModel):
+    name: str
+    role: str = "streaming"          # streaming | gaming | mac (priority presets for the master election)
+    priority: int | None = None
+
+
+@app.get("/api/setup")
+def setup_get():
+    """First-run wizard state: is this install set up, and where does everything live (nothing is hardcoded to a drive)."""
+    return {"first_run": not devices.me.get("setup_done"), "device": devices.me, "data_dir": str(DATA_DIR), "suite_root": str(ROOT),
+            "platform": sys.platform, "frozen": FROZEN}
+
+
+@app.post("/api/setup")
+def setup_post(b: Setup):
+    role, prio = ROLES.get(b.role, ("auxiliary", 50))
+    devices.configure(name=b.name.strip() or None, priority=b.priority if b.priority is not None else prio, role_pref=role, setup_done=True)
+    console_log.log("info", "setup", f"device set up: {devices.me['name']} ({b.role})")
+    return devices.state()
+
+
+def _roots():
+    return {"suite": ROOT, "data": Path(DATA_DIR)}
+
+
+class ExportReq(BaseModel):
+    include_secrets: bool = False
+    passphrase: str = ""
+
+
+@app.post("/api/export")
+def export_config(b: ExportReq):
+    """Download a config bundle (zip). Secrets are left out unless asked for, and then encrypted with the passphrase."""
+    try:
+        data, man = portable.export_bundle(_roots(), [m.spec for m in modules.values()], b.include_secrets, b.passphrase,
+                                           {"name": devices.me["name"], "id": devices.me["id"], "platform": sys.platform})
+    except portable.ExportError as e:
+        raise HTTPException(400, str(e))
+    name = time.strftime("pinguino-config-%Y%m%d-%H%M%S") + (".secrets" if b.include_secrets else "") + ".zip"
+    try:
+        out = Path(DATA_DIR) / "exports"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / name).write_bytes(data)
+    except OSError:
+        pass
+    console_log.log("info", "setup", f"config exported ({len(man['files'])} files{', with encrypted secrets' if b.include_secrets else ''})")
+    return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.post("/api/import")
+async def import_config(request: Request, apply: bool = False):
+    """Body = the bundle zip. Dry-run unless apply=true. Passphrase (if the bundle has secrets) in the X-Passphrase header."""
+    body = await request.body()
+    try:
+        rep = portable.import_bundle(_roots(), [m.spec for m in modules.values()], body, request.headers.get("x-passphrase", ""), apply)
+    except portable.ExportError as e:
+        raise HTTPException(400, str(e))
+    if apply:
+        console_log.log("info", "setup", f"config imported from {rep.get('from') or 'a bundle'}: " + ", ".join(f"{f['arc']} {f['status']}" for f in rep["files"] if f["status"] != "same"))
+    return rep
 
 
 @app.get("/api/device")

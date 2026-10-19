@@ -109,6 +109,9 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
 .cl{padding:1px 12px;white-space:pre-wrap;word-break:break-word;display:flex;gap:8px}.cl .t{color:var(--faint);flex:none}.cl .m{color:var(--ice);flex:none;min-width:64px}.cl .s{color:var(--faint);flex:none}
 .cl.error{background:#e5484d1c}.cl.error .lv{color:#ff6b70}.cl.warn .lv{color:#ffb86b}.cl.debug{opacity:.6}.cl .lv{flex:none;width:44px;text-transform:uppercase;font-size:10.5px;padding-top:1px}
 .ctool{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}.ctool input[type=text]{width:200px}
+.wiz{position:fixed;inset:0;background:#050810d9;backdrop-filter:blur(4px);display:grid;place-items:center;z-index:50;padding:16px}
+.wiz .card{width:min(560px,100%);max-height:94vh;overflow:auto}.wiz h2{margin:0 0 4px}.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
+.role{border:1px solid var(--line2);border-radius:12px;padding:10px;cursor:pointer;background:var(--panel2)}.role.on{border-color:var(--ice);background:#7cc4ff14}.role b{display:block}
 .cmdrow{padding:8px 0;border-bottom:1px solid var(--line)}.cmdrow:last-child{border:0}
 .pr{display:flex;gap:8px;align-items:baseline;padding:3px 0}.pr .d{width:9px;height:9px;border-radius:50%;flex:none;background:var(--faint)}.pr.pass .d{background:#46c46b}.pr.warn .d{background:#ffb86b}.pr.fail .d{background:#e5484d}
 /* dashboard v2 */
@@ -270,7 +273,17 @@ pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max
     <div class="setrow"><div class="grow">Start with Windows<div class="sm faint">Suite launches hidden at login</div></div>${sw('s-wa',S.windows_autostart)}</div></div>
   <div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div style="padding:6px 0"><b>${esc(m.name)}</b>
     <div class="setrow"><div class="grow">Start with the Suite</div>${sw('o-'+m.id+'-start_with_suite',m.options.start_with_suite,`data-mod="${m.id}" data-opt="start_with_suite"`)}</div>
-    <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div></div>`};
+    <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div>
+  <div class="card"><h3>This device</h3>
+    <div class="setrow"><div class="grow">Name<div class="sm faint">Shown to your other devices</div></div><input type="text" id="dv-name" value="${esc(D?D.me.name:'')}" style="width:190px"></div>
+    <div class="setrow"><div class="grow">Priority<div class="sm faint">Highest alive device is master (streaming PC 100, gaming PC 70, Mac 50)</div></div><input type="text" id="dv-prio" value="${D?D.me.priority:50}" style="width:70px"></div>
+    <div class="setrow"><div class="grow">${D?(D.is_master?'<span class="pill ok">master</span> This device runs the bots':'<span class="pill">auxiliary</span> Master is '+esc(D.master_name)):''}</div><button class="sm" id="dv-save">Save</button></div>
+    <div class="sm faint" style="margin-top:8px">Data lives in <code id="dv-dir"></code>. Set PINGUINO_DATA_DIR to move it.</div></div>
+  <div class="card"><h3>Backup &amp; move to another PC</h3>
+    <div class="sm dim" style="margin-bottom:8px">Settings, bots and commands in one file. Passwords and keys are left out unless you add an encryption passphrase.</div>
+    <div class="row wrap"><button class="sm" id="ex-plain">Export settings</button><span class="faint sm">or with secrets:</span><input type="password" id="ex-pass" placeholder="passphrase (8+)" style="width:150px"><button class="sm" id="ex-sec">Export encrypted</button></div>
+    <div class="row wrap" style="margin-top:14px"><input type="file" id="im-file" accept=".zip" class="sm"><input type="password" id="im-pass" placeholder="passphrase (if it has secrets)" style="width:190px"></div>
+    <div id="im-out" class="sm" style="margin-top:8px"></div></div></div>`};
 
 pages.chat=()=>{const M=[['tw','nightowl_42','mod','#6ea8ff','the new map is actually so good'],['yt','Mira','','#ff8fa3','first time catching the stream, hi!'],['tw','clipgoblin','vip','#c4a1ff','that was cracked LUL'],['kk','dusty','','#7be08f','bro what settings are you on'],['tw','ghostbyte','sub 14mo','#ffb86b','@innocentpenguin_ you said you would do the challenge'],['yt','Tomás','member','#7cc4ff','gg'],['tw','pixelpal','','#ff7a90','the lore in chat is insane'],['tw','snowshoe','sub','#8be9fd','lmao clip it'],['kk','frostfang','','#bd93f9','new viewer here, what game is this']];
   return prev('One chat for every platform, filtered the way <i>you</i> want.')+`<div class="chatwrap">
@@ -362,6 +375,44 @@ function bindVoice(){
       $('#v-testout').textContent=V.test;if(run)loadVoice()}catch{toast('Listen is not answering')}};
   $('#v-dry').onclick=()=>test(false);$('#v-run').onclick=()=>test(true)}
 
+/* ============ device settings, backup/move, first-run wizard (core: /api/device, /api/export, /api/import, /api/setup) ============ */
+function saveBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+async function doExport(secrets){const pass=$('#ex-pass').value;
+  const r=await fetch('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({include_secrets:secrets,passphrase:pass})});
+  if(!r.ok){toast((await r.json().catch(()=>({}))).detail||'Export failed');return}
+  const m=/filename="([^"]+)"/.exec(r.headers.get('content-disposition')||'');saveBlob(await r.blob(),m?m[1]:'pinguino-config.zip');toast(secrets?'Exported with encrypted secrets':'Settings exported')}
+let IMP=null;
+async function previewImport(file,apply){const pass=$('#im-pass').value,out=$('#im-out');
+  const r=await fetch('/api/import?apply='+(apply?1:0),{method:'POST',headers:{'X-Passphrase':pass},body:await file.arrayBuffer()});
+  const j=await r.json();if(!r.ok){out.textContent=j.detail||'Import failed';return}
+  const names={new:'new',changed:'will change',same:'same',skipped:'skipped'};
+  out.innerHTML=(j.needs_passphrase?'<div style="color:var(--warn)">This bundle has secrets: enter its passphrase and choose the file again to include them.</div>':'')
+    +`<div class="dim">${j.from?'From '+esc(j.from)+'. ':''}${apply?'Applied (previous files saved under Data/backups). Restart the modules to use them.':'Preview, nothing changed yet:'}</div>`
+    +j.files.map(f=>`<div>${esc(f.arc)} <span class="faint">${names[f.status]||f.status}${f.why?' · '+esc(f.why):''}</span></div>`).join('')
+    +(apply||!j.files.some(f=>f.status==='new'||f.status==='changed')?'':'<button class="pri sm" id="im-apply" style="margin-top:8px">Apply import</button>');
+  if($('#im-apply'))$('#im-apply').onclick=()=>previewImport(file,true)}
+function bindPortable(){
+  $('#dv-dir')&&SETUP&&($('#dv-dir').textContent=SETUP.data_dir);
+  $('#dv-save')&&($('#dv-save').onclick=async()=>{D=await post('/api/device/config',{name:$('#dv-name').value,priority:+$('#dv-prio').value||0});toast('Device saved');draw(true)});
+  $('#ex-plain')&&($('#ex-plain').onclick=()=>doExport(false));$('#ex-sec')&&($('#ex-sec').onclick=()=>doExport(true));
+  $('#im-file')&&($('#im-file').onchange=e=>e.target.files[0]&&previewImport(e.target.files[0],false))}
+let SETUP=null;
+async function loadSetup(){try{SETUP=await (await fetch('/api/setup')).json()}catch{return}if(SETUP.first_run)showWizard()}
+function showWizard(){let role='streaming';const el=document.createElement('div');el.className='wiz';
+  el.innerHTML=`<div class="card"><h2>Welcome to PinguinoSuite</h2><div class="dim sm">Set this computer up. Takes a minute, and you can change it later in Settings.</div>
+   <div class="sm faint" style="margin-top:14px">Name this device</div><input type="text" id="w-name" value="${esc(SETUP.device.name)}" style="width:100%">
+   <div class="sm faint" style="margin-top:14px">What is this computer?</div>
+   <div class="roles">${[['streaming','🖥','Streaming PC','Runs the bots. Master by default.'],['gaming','🎮','Gaming PC','Helper. Can take over if you stream here.'],['mac','💻','Mac','Helper. Can take over if you stream here.']].map(r=>`<div class="role ${r[0]===role?'on':''}" data-role="${r[0]}"><span style="font-size:22px">${r[1]}</span><b>${r[2]}</b><span class="sm faint">${r[3]}</span></div>`).join('')}</div>
+   <div class="sm faint">Already set up on another PC? Import its settings (optional)</div>
+   <div class="row wrap" style="margin:6px 0"><input type="file" id="w-file" accept=".zip" class="sm"><input type="password" id="w-pass" placeholder="passphrase (if any)" style="width:170px"></div>
+   <div class="sm faint" id="w-note">To join your other devices, open the Link page after setup and pair with a code from the master.</div>
+   <div class="row" style="margin-top:16px"><span class="sm faint">Data folder: ${esc(SETUP.data_dir)}</span><button class="pri sp" id="w-go">Finish setup</button></div></div>`;
+  document.body.append(el);
+  el.querySelectorAll('.role').forEach(r=>r.onclick=()=>{role=r.dataset.role;el.querySelectorAll('.role').forEach(x=>x.classList.toggle('on',x===r))});
+  el.querySelector('#w-go').onclick=async()=>{const f=el.querySelector('#w-file').files[0];
+    try{if(f){const r=await fetch('/api/import?apply=1',{method:'POST',headers:{'X-Passphrase':el.querySelector('#w-pass').value},body:await f.arrayBuffer()});if(!r.ok){el.querySelector('#w-note').textContent=(await r.json()).detail||'Import failed';return}}
+      D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
+
 /* ============ shell ============ */
 const titles={console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const REAL=[['voice','🗣','Voice Studio']];
@@ -399,6 +450,7 @@ function draw(force){if(!S)return;renderNav();
 function bind(){
   if(route==='console')bindConsole();
   if(route==='voice')bindVoice();
+  if(route==='settings')bindPortable();
   $$('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
   $$('[data-dev]').forEach(b=>b.onclick=async()=>{D=await post('/api/device/'+b.dataset.dev);toast(b.dataset.dev==='take'?'This device is now in control':'Control released');draw(true)});
   $$('[data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
@@ -424,7 +476,7 @@ async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status'
   let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}
   L.lines=sid?(await (await fetch(`${LISTEN}/api/segments?session=${sid}&limit=500`)).json()).slice(-5):[]}catch{L.status=null;L.lines=[]}
   if(route==='dashboard')draw()}
-(async()=>{await load();go('dashboard');loadListen();setInterval(load,4000);setInterval(loadListen,3000);loadDevice();loadMulti();setInterval(loadDevice,5000);setInterval(loadMulti,6000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(pollPrestream,10000);
+(async()=>{await load();go('dashboard');loadListen();setInterval(load,4000);setInterval(loadListen,3000);loadSetup();loadDevice();loadMulti();setInterval(loadDevice,5000);setInterval(loadMulti,6000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(pollPrestream,10000);
   const ws=()=>{const w=PG.ws();w.onmessage=()=>load();w.onclose=()=>setTimeout(ws,2000)};ws()})();
 </script>
 </body>

@@ -6,11 +6,12 @@ yt-dlp
 numpy
 python-multipart
 requests
-nvidia-cublas-cu12
-nvidia-cudnn-cu12
+nvidia-cublas-cu12; sys_platform != "darwin"
+nvidia-cudnn-cu12; sys_platform != "darwin"
 pystray
 pillow
 keyring
 pytest
 pytest-asyncio
 websockets
+cryptography
