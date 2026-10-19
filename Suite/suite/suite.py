@@ -232,6 +232,8 @@ class Module:
         self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log,
                                      env={**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"]), "PINGUINO_DATA_DIR": DATA_DIR, "PINGUINO_CORE_URL": f"http://127.0.0.1:{PORT}"}, **extra)
         bus.emit("module", id=self.id, state="starting")
+        if self.spec.get("on_start"):   # manifest hook fired once after launch (Listen: start the mic even when not live)
+            threading.Thread(target=self.call, args=("on_start",), daemon=True).start()
 
     def stop(self, deferred=False):
         self.wanted, self.failed = False, False
