@@ -112,6 +112,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
   <div class="item" data-r="dashboard"><span class="ic">▦</span>Dashboard</div>
   <h6>Modules</h6>
   <div class="item" data-r="listen"><span class="ic">🎙</span>PinguinoListen<span class="dot" id="dot-listen"></span></div>
+  <div class="item" data-r="multi"><span class="ic">🧊</span>PinguinoMulti<span class="dot" id="dot-multi"></span></div>
   <div class="item" data-r="voice"><span class="ic">🗣</span>Voice Studio<span class="tag prev">preview</span></div>
   <div class="item" data-r="chat"><span class="ic">💬</span>Chat<span class="tag prev">preview</span></div>
   <div class="item" data-r="bots"><span class="ic">🤖</span>Bot Control<span class="tag prev">preview</span></div>
@@ -131,7 +132,8 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const LISTEN='http://127.0.0.1:8765';
+const LISTEN='http://127.0.0.1:8765',MULTI='http://127.0.0.1:8766';
+const multiMod=()=>S?.modules.find(m=>m.id==='multi');
 let S=null,L={status:null,lines:[]},route='dashboard';
 const up=t=>{const m=Math.max(0,(Date.now()/1000-t)/60|0);return (m/60|0)+'h '+String(m%60).padStart(2,'0')+'m'};
 const fmt=t=>{t=t|0;return (t/60|0)+':'+String(t%60).padStart(2,'0')};
@@ -173,6 +175,9 @@ pages.dashboard=()=>{
   </div>`};
 
 pages.listen=()=>`<iframe id="lf" src="${LISTEN}"></iframe>`;
+pages.multi=()=>{const m=multiMod();
+  if(m?.state==='running')return `<iframe id="mf" src="${MULTI}"></iframe>`;
+  return `<div class="card" style="max-width:520px"><h3>PinguinoMulti</h3><div class="dim">${esc(m?.desc||'')}</div><div class="row" style="margin-top:14px"><span class="pill">${esc(m?.state||'unavailable')}</span>${m?`<button class="pri" data-act="multi:start">Start PinguinoMulti</button>`:''}</div></div>`};
 
 pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max-width:1000px">
   <div class="card"><h3>Stream</h3>
@@ -226,12 +231,13 @@ pages.voice=()=>prev('Voice ID, commands, and “talks like me”. Nothing here 
      <div class="row" style="margin-top:14px"><button disabled>▶ Hear sample</button><span class="pill vio">training later</span></div></div></div>`;
 
 /* ============ shell ============ */
-const titles={dashboard:'Dashboard',listen:'PinguinoListen',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={dashboard:'Dashboard',listen:'PinguinoListen',multi:'PinguinoMulti',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 function go(r){route=r;$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));$('#title').textContent=titles[r];
-  $('#page').classList.toggle('flush',r==='listen');draw(true)}
+  $('#page').classList.toggle('flush',r==='listen'||(r==='multi'&&multiMod()?.state==='running'));draw(true)}
 let lastHtml='';
 function draw(force){if(!S)return;const html=pages[route]();
   if(route==='listen'){if(force||!$('#lf'))$('#page').innerHTML=html;return}
+  if(route==='multi'){const run=multiMod()?.state==='running';$('#page').classList.toggle('flush',run);if(run&&!force&&$('#mf'))return;$('#page').innerHTML=html;lastHtml=html;bind();return}
   if(!force&&html===lastHtml)return;
   const sc=$('#page').scrollTop,focus=document.activeElement?.id;
   if(route==='settings'&&!force&&document.activeElement?.tagName==='INPUT')return;
@@ -252,7 +258,7 @@ $('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/
 async function load(){try{S=await (await fetch('/api/state')).json()}catch{return}
   const l=S.live;$('#pill').classList.toggle('on',l.live);$('#pill-t').textContent=l.live?'LIVE':'Offline';
   $('#pill-sub').textContent=l.live?`${l.viewers} watching · ${up(l.since)}`:(l.error?'Twitch check: '+l.error.slice(0,60):'');
-  const lm=listenMod();$('#dot-listen').className='dot '+(lm?lm.state:'');
+  const lm=listenMod();$('#dot-listen').className='dot '+(lm?lm.state:'');const mm=multiMod();$('#dot-multi').className='dot '+(mm?mm.state:'');
   $('#navfoot').textContent=`Watching ${S.channel}`;draw()}
 async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status')).json();L.status=st;
   let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}
