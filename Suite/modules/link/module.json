@@ -8,5 +8,5 @@
   "url": "http://127.0.0.1:7777",
   "health": "/api/health",
   "ui": { "nav": "Link", "icon": "🔗", "section": "Modules", "path": "/", "order": 40 },
-  "defaults": { "enabled": true, "start_with_suite": false, "react_to_live": false }
+  "defaults": { "enabled": true, "start_with_suite": true, "always_start": true, "react_to_live": false }
 }
