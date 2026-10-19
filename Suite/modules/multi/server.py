@@ -1,7 +1,9 @@
 """PinguinoMulti - unified chat core. REST + WS on 127.0.0.1:8766.
 Run: run.bat   (UI at http://127.0.0.1:8766)"""
 import asyncio
+import hmac
 import json
+import os
 import time
 import webbrowser
 from contextlib import asynccontextmanager
@@ -77,20 +79,54 @@ async def lifespan(app):
         shell.close(wid)
 
 
+TAURI_ORIGINS = ("tauri://localhost", "http://tauri.localhost", "https://tauri.localhost")
+LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+
+
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:8760", "http://localhost:8760"],
+app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:8760", "http://localhost:8760", *TAURI_ORIGINS],
                    allow_methods=["*"], allow_headers=["*"])
 STATIC = config.ROOT / "static"
 app.mount("/assets", StaticFiles(directory=STATIC), name="assets")
 
 
+def origin_ok(origin):
+    """Local pages and the Tauri webview only; anything else is a drive-by page."""
+    if not origin:
+        return True
+    if origin in TAURI_ORIGINS:
+        return True
+    return origin.startswith(tuple(f"http://{h}" for h in LOCAL_HOSTS))
+
+
+def host_ok(host):
+    h = (host or "").lower()
+    h = h[:h.index("]") + 1] if h.startswith("[") else h.rsplit(":", 1)[0]
+    return h in LOCAL_HOSTS
+
+
+def token_ok(request):
+    """Per-module token from the Suite (PINGUINO_API_TOKEN). Unset = standalone run, origin check only."""
+    want = os.environ.get("PINGUINO_API_TOKEN")
+    if not want:
+        return True
+    got = request.headers.get("x-pinguino-token") or request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    return hmac.compare_digest(got.encode(), want.encode())
+
+
 @app.middleware("http")
 async def local_only_writes(request: Request, call_next):
-    """Cross-site pages in the user's browser must not drive the API: writes need a local Origin (or none)."""
+    """Anti DNS-rebinding (Host) + anti drive-by (Origin). Writes from our own page (Origin == Host, e.g. the
+    embedded iframe) pass; any other writer (no Origin, or a Tauri origin) must present the module token."""
+    if not host_ok(request.headers.get("host")):
+        return HTMLResponse("forbidden host", status_code=403)
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("origin")
-        if origin and not origin.startswith(("http://127.0.0.1", "http://localhost")):
+        if not origin_ok(origin):
             return HTMLResponse("forbidden origin", status_code=403)
+        same_origin = bool(origin) and origin.split("://", 1)[-1] == request.headers.get("host")
+        if not same_origin and not token_ok(request):
+            return HTMLResponse("token required", status_code=401)
     return await call_next(request)
 
 
@@ -377,7 +413,7 @@ async def dev_inject(request: Request):
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     origin = ws.headers.get("origin", "")
-    if origin and not origin.startswith(("http://127.0.0.1", "http://localhost")):
+    if not origin_ok(origin) or not host_ok(ws.headers.get("host")):
         await ws.close(code=1008)
         return
     await ws.accept()

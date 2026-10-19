@@ -299,3 +299,19 @@ def test_checks_scope_missing(monkeypatch):
     assert res["valid"]["ok"] and not res["scopes"]["ok"]
     assert "user:write:chat" in res["scopes"]["detail"]
     assert "SECRET" not in str(res)
+
+
+def test_guard_origin_host_token(monkeypatch):
+    from fastapi.testclient import TestClient
+    import server
+    monkeypatch.setenv("PINGUINO_API_TOKEN", "tok")
+    monkeypatch.setattr(server.secrets_store, "delete", lambda n: None)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    assert c.get("/api/status", headers={"host": "evil.com"}).status_code == 403
+    assert c.post("/auth/disconnect", headers={"origin": "https://evil.com"}).status_code == 403
+    assert c.post("/auth/disconnect").status_code == 401                       # no origin, no token
+    assert c.post("/auth/disconnect", headers={"x-pinguino-token": "tok"}).status_code == 200
+    assert c.post("/auth/disconnect", headers={"origin": "http://127.0.0.1:8766"}).status_code == 200  # embedded iframe
+    assert c.post("/auth/disconnect", headers={"origin": "tauri://localhost"}).status_code == 401      # Tauri origin needs token
+    assert c.post("/auth/disconnect", headers={"origin": "tauri://localhost", "authorization": "Bearer tok"}).status_code == 200
+    assert "x-frame-options" not in {k.lower() for k in c.get("/").headers}

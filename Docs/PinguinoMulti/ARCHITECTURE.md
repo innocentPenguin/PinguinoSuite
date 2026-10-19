@@ -31,6 +31,9 @@ Every window is a client of one WS stream of typed events: `hello`, `message`, `
 - Writes reject non-local `Origin`; WS rejects non-local origins; bind is 127.0.0.1. All chat text is escaped in the UI.
 - Monitor loss: saved geometry is never mutated; `place()` computes a safe position each time, so the original is restored on reconnect.
 
+## Embedding + module contract (Tauri Suite)
+No frame-blocking headers; main UI is embedded by the shell iframe (CSP `frame-src http://127.0.0.1:*`). Middleware: Host must be loopback; writes need a local/Tauri Origin; writes from our own origin (iframe) pass, any other writer (no Origin, Tauri origin) must send the per-module `PINGUINO_API_TOKEN` (Bearer or `x-pinguino-token`). WS accepts loopback + Tauri origins. Data dir honors `PINGUINO_DATA_DIR` (`<dir>\multi`), else module `data\`. Secrets only in Credential Manager. Extra window layouts open as separate Edge `--app` windows; the launcher/main UI stays inside the Suite pane.
+
 ## Native path
 `EdgeShell` is the only shell-specific code. A native (Tauri/WebView2) shell replaces it and loads the same UI/WS (Unit 01 spike). Edge limits: no click-through; always-on-top not applied yet.
 

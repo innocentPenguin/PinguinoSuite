@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-DATA = ROOT / "data"
+DATA = (Path(os.environ["PINGUINO_DATA_DIR"]) / "multi") if os.environ.get("PINGUINO_DATA_DIR") else ROOT / "data"
 DATA.mkdir(parents=True, exist_ok=True)
 PORT = int(os.environ.get("MULTI_PORT", "8766"))
 DB_FILE = Path(os.environ.get("MULTI_DB", DATA / "multi.db"))
