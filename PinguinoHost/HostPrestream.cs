@@ -42,6 +42,9 @@ namespace PinguinoHost
             bool haveCreds = !string.IsNullOrEmpty((string)s["UserToken"]) && !string.IsNullOrEmpty((string)s["ClientId"]) && !string.IsNullOrEmpty((string)s["BroadcasterId"]);
             items.Add(Item("eventsub", "EventSub connected (follows, subs, raids)", EventSubConnected && EventSubRefused == 0 ? "pass" : haveCreds ? "fail" : "warn", EventSubConnected ? (EventSubRefused == 0 ? "" : EventSubRefused + " event subscriptions refused by Twitch (token or scopes): sign in as streamer again") : haveCreds ? "not connected" : "needs the streamer sign-in"));
 
+            var ls = Lease.State(); string lst = (string)ls["state"];
+            if (lst != "none") items.Add(Item("master", "This device is the master (only the master runs the bots)", lst == "master" ? "pass" : "fail", lst == "master" ? "" : "not confirmed as master" + ((string)ls["error"] != "" ? ": " + (string)ls["error"] : "")));
+
             // 2. accounts: the streamer token and every bot account, all checked with OAuth validate
             var checks = new List<Task<JObject>>(); var names = new List<string>();
             var sec = LoadFile("bots_secrets.json"); var reg = LoadFile("bots.json");

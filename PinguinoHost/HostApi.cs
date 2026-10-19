@@ -57,6 +57,8 @@ namespace PinguinoHost
                 if (p == "/api/bots" && c.Request.HttpMethod == "GET") { Write(c, Bots().ToString(), "application/json"); return true; }
                 if (p == "/api/bots" && c.Request.HttpMethod == "POST") { Write(c, SaveBot(Body(c)).ToString(), "application/json"); return true; }
                 if (p == "/" || p == "/setup" || p == "/auth") { Write(c, Html, "text/html; charset=utf-8"); return true; }
+                if (p == "/api/summary" && c.Request.HttpMethod == "GET") { Write(c, Summary().ToString(), "application/json"); return true; }
+                if (p == "/api/lease" && c.Request.HttpMethod == "GET") { Write(c, Lease.State().ToString(), "application/json"); return true; }
                 if (p == "/api/prestream" && c.Request.HttpMethod == "GET") { Write(c, PrestreamCached().ToString(), "application/json"); return true; }
                 if (p == "/api/status") { Write(c, Status().ToString(), "application/json"); return true; }
                 if (p == "/api/config" && c.Request.HttpMethod == "GET") { Write(c, Config().ToString(), "application/json"); return true; }
@@ -89,7 +91,7 @@ namespace PinguinoHost
                 { "channel", (string)s["Channel"] ?? "" }, { "chatConnected", IrcConnected }, { "eventSubConnected", EventSubConnected },
                 { "obsConnected", ObsConnected() }, { "canSend", tok && !string.IsNullOrEmpty((string)s["ClientId"]) && !string.IsNullOrEmpty((string)s["SenderId"]) && !string.IsNullOrEmpty((string)s["BroadcasterId"]) },
                 { "messages", Messages }, { "lastMessageAgoSec", LastMessage == DateTime.MinValue ? (int?)null : (int)(DateTime.UtcNow - LastMessage).TotalSeconds },
-                { "overlayPort", Port }, { "dataDir", DataDir } };
+                { "overlayPort", Port }, { "dataDir", DataDir }, { "lease", Lease.State() } };
         }
 
         static JObject Config()
@@ -215,14 +217,16 @@ const H=()=>TOK?{'X-Pinguino-Token':TOK}:{};
 async function j(u,o){o=o||{};o.headers=Object.assign(H(),o.headers||{});return (await fetch(u,o)).json()}
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 async function load(){CFG=await j('/api/config');F.forEach(k=>$(k).value=CFG[k]||'');$('redir').textContent=CFG.redirect;$('tokstate').textContent=CFG.hasUserToken?'token saved':'not signed in';if(!CFG.hasUserToken)$('setup').open=true}
-async function status(){const s=await j('/api/status');const p=(n,v)=>`<span class='pill ${v?'on':'off'}'>${n}: ${v?'on':'off'}</span>`;
-$('st').innerHTML=p('chat #'+(s.channel||'?'),s.chatConnected)+p('can reply',s.canSend)+p('events',s.eventSubConnected)+p('OBS',s.obsConnected)+`<br><small>${s.messages} messages${s.lastMessageAgoSec!=null?', last '+s.lastMessageAgoSec+' s ago':''} - up ${s.uptimeSec}s${s.sim?' - SIM':''}</small>`}
+async function status(){const s=await j('/api/status');let sm=null;try{sm=await j('/api/summary')}catch(e){}const p=(n,v)=>`<span class='pill ${v?'on':'off'}'>${n}: ${v?'on':'off'}</span>`;
+$('st').innerHTML=p('chat #'+(s.channel||'?'),s.chatConnected)+p('can reply',s.canSend)+p('events',s.eventSubConnected)+p('OBS',s.obsConnected)+(sm&&sm.chat?`<br><small>${sm.chat.messagesLastMinute}/min - ${sm.chat.chatters5} chatting - ${sm.chat.modsActive30} mods active${sm.lease&&sm.lease.state!='none'?' - lease: '+sm.lease.state:''}</small>`:'')+`<br><small>${s.messages} messages${s.lastMessageAgoSec!=null?', last '+s.lastMessageAgoSec+' s ago':''} - up ${s.uptimeSec}s${s.sim?' - SIM':''}</small>`}
 function ago(s){return s<90?s+' s':s<5400?Math.round(s/60)+' min':Math.round(s/3600)+' h'}
 function fmt(d,v){return d.step<1?(v*100).toFixed(2)+'%':v}
 function draw(){const g=$('bots');g.innerHTML='';BOTS.bots.forEach(b=>{const c=document.createElement('div');c.className='card';
 let h=`<div class=head><b>${esc(b.title)}</b><span class='pill ${b.enabled?'on':'off'}'>${b.enabled?'on':'off'}</span><label class=sw><input type=checkbox ${b.enabled?'checked':''} data-id=${b.id}><i></i></label></div>
 <div class=sub>Speaks as: <b>${b.sender=='helix'&&b.account?esc(b.account):'(shared account)'}</b> <button data-signin=${b.id}>${b.sender=='helix'?'Change account':'Sign in as '+(b.account?esc(b.account):'this bot')}</button></div>
 <div class=sub><button data-test=${b.id}>Send test</button> <span id=t_${b.id}>${esc(TESTRES[b.id]||'')}</span></div>
+<div class=sub>Login: ${b.signedIn?'signed in as <b>'+esc(b.signedInAs)+'</b>':'not signed in'} <span class='pill ${b.health=='pass'?'on':'off'}'>${esc(b.health)}</span> ${esc(b.healthDetail||'')}</div>
+<details><summary>Commands (${b.commands.length})</summary><div class=sub>${b.commands.map(esc).join(' - ')}</div></details>
 <div class=sub>${b.runs} runs${b.lastRunAgoSec!=null?', last '+ago(b.lastRunAgoSec)+' ago':', not run yet'}</div>`;
 b.settings.forEach(s=>{if(s.type=='bool')h+=`<div class=chk><input type=checkbox ${s.value?'checked':''} data-id=${b.id} data-k=${s.key}> ${esc(s.label)}</div>`;
 else h+=`<div class=set><label><span>${esc(s.label)}</span><span id=v_${b.id}_${s.key}>${fmt(s,s.value)}</span></label><input type=range min=${s.min} max=${s.max} step=${s.step} value=${s.value} data-id=${b.id} data-k=${s.key} title='${esc(s.hint)}'></div>`});

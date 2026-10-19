@@ -61,7 +61,19 @@ namespace PinguinoHost
                     set.Add(d.Bool ? new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "bool" }, { "value", v != null ? (bool)v : DefaultOf(d) != 0 } }
                                    : new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "num" }, { "min", d.Min }, { "max", d.Max }, { "step", d.Step }, { "hint", d.Hint }, { "value", v == null ? DefaultOf(d) : (double)v } });
                 }
+                var sec = LoadFile("bots_secrets.json")[BotIds[i]] as JObject; bool signedIn = sec != null && !string.IsNullOrEmpty((string)sec["UserToken"]);
+                bool enabled = b == null || (bool?)b["Enabled"] != false;
+                string health = "pass", hdetail = "";
+                if (!enabled) { health = "warn"; hdetail = "switched off"; }
+                else if (!signedIn && BotIds[i] == "core") { health = "fail"; hdetail = "not signed in"; }
+                else if (!signedIn) { health = "warn"; hdetail = "no login of its own: PinguinoB0t speaks for it"; }
+                if (err != null && DateTime.UtcNow - DateTime.Parse(err[0]).ToUniversalTime() < TimeSpan.FromMinutes(30)) { health = health == "fail" ? "fail" : "warn"; hdetail = (hdetail == "" ? "" : hdetail + "; ") + err[1]; }
+                var cmds = new JArray();
+                if (BotIds[i] == "core") foreach (var c in Program.CoreCommandList()) cmds.Add(c);
+                else if (BotIds[i] == "chat") foreach (var c in new[] { "@ it or say its name", "!forgetme", "!rememberme", "!memory", "!chatbot on|off (mods)" }) cmds.Add(c);
+                else foreach (var c in new[] { "how do I join", "minecraft ip / ip", "!discord", "lobby code / password", "register" }) cmds.Add(c);
                 arr.Add(new JObject {
+                    { "signedIn", signedIn }, { "signedInAs", (string)sec?["Login"] ?? "" }, { "health", health }, { "healthDetail", hdetail }, { "commands", cmds },
                     { "id", BotIds[i] }, { "title", (string)b?["Title"] ?? BotActions[i] }, { "action", act },
                     { "account", (string)b?["Account"] ?? "" }, { "sender", (string)b?["Sender"] ?? "streamerbot" },
                     { "enabled", b == null || (bool?)b["Enabled"] != false }, { "runs", runs },

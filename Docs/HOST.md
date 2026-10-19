@@ -56,3 +56,14 @@ Sign in as the bot in a private window or log out of Twitch first (the flow uses
 
 - **Console log:** the Host appends `{ts,module:"host",level,source,msg}` lines to `Data\runtime\console\host.jsonl` (rotated at 2 MB). Warnings/errors: chat or EventSub lost, EventSub subscription refused (token/scopes), chat send refused (HTTP code, rate limit, token rejected), OBS lost, and anything the bots report through `LogWarn`/`LogError` (router, AI, send-as-bot failures). Info: start, chat/EventSub/OBS connected. No chat text or secrets; the same line repeating within 30 s is written once.
 - **`GET /api/prestream`** (loopback only; served from a copy at most 90 s old and also written to `consoleprestream-host.json` every 2 min, per MODULE_CONTRACT): `{status, items:[{id,label,status pass|warn|fail,detail}]}`. Checks: chat, EventSub (and refused subscriptions), streamer sign-in (token valid, hours left), each bot account (valid, has `user:write:chat`, hours left; core must have its own account), mod status of pinguinob0t (when the streamer token allows the check), bot modules loaded, OBS, Streamer.bot port 8080, AI key present, innocentpenguin.com/api/faq, last warning/error age. It never sends a chat message. Twitch checks use `id.twitch.tv/oauth2/validate`; an answer takes up to about 8 s.
+
+## Single instance and master device
+
+- **Per PC:** a Host takes a mutex per data folder; a second Host on the same folder exits (a restart waits up to 12 s for the old one to let go).
+- **Several PCs:** Host is a `singleton` module (see MODULE_CONTRACT "Devices: master / auxiliary"). When the core launched it (module token present) it polls `GET /api/device/lease` every 10 s. It connects nothing (chat, EventSub, OBS, bots, sends) until it has seen `is_master:true`. When that turns false (twice at start, once when running) or the core is unreachable for 60 s, it disconnects chat and EventSub, waits 1.5 s and exits so the core can start it again on promotion. A core without the endpoint (404) counts as "single device = master". Standalone runs (no token) are not gated. Env for tests: `PINGUINO_LEASE_URL`, `PINGUINO_LEASE_POLL`, `PINGUINO_LEASE_GRACE`.
+- **Streaming flag:** while OBS reports streaming the Host posts `{"on":true|false}` to `/api/device/streaming` (on change, and every 60 s while on).
+- **Status:** `lease` in `/api/status` and `/api/summary`, a "master" item in `/api/prestream`. Test: `python Tools/test-host-lease.py` (mock core).
+
+## Dashboard summary and bot control
+
+`GET /api/summary` returns connections, chat rate (messages in the last minute / per minute over 5 min, active chatters, moderators seen in the last hour), per-bot health (signed in, enabled, last run, last error), the lease state and the last warning. `/api/bots` also carries each bot's `signedIn`, `signedInAs`, `health` and command list; the Host page shows them on every bot card with Send test, enable switch and sign-in button.

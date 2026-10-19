@@ -17,6 +17,7 @@ namespace PinguinoHost
     public partial class HostCPH
     {
         public ObsClient Obs;
+        public bool? ObsStreaming() { if (Obs == null || !Obs.Connected) return null; var d = Obs.Data("GetStreamStatus", null); return d == null ? (bool?)null : (bool?)d["outputActive"]; }
         public bool ObsIsConnected() { return Obs != null && Obs.Connected; }
         public bool ObsSetScene(string scene) { return Obs != null && Obs.Request("SetCurrentProgramScene", new JObject { { "sceneName", scene } }); }
         public bool ObsShowSource(string scene, string source) { return Obs != null && Obs.SetVisible(scene, source, true); }
@@ -35,6 +36,7 @@ namespace PinguinoHost
             int backoff = 3;
             while (true)
             {
+                while (!Lease.MayRun) await Task.Delay(1500);
                 try
                 {
                     identified = false; ws = new ClientWebSocket();
@@ -93,6 +95,7 @@ namespace PinguinoHost
             }
             catch (Exception) { return null; }
         }
+        public JObject Data(string type, JObject data) { var r = Call(type, data); return r != null && (bool)r["requestStatus"]["result"] ? r["responseData"] as JObject : null; }
         public bool Request(string type, JObject data) { var r = Call(type, data); return r != null && (bool)r["requestStatus"]["result"]; }
         public bool SetVisible(string scene, string source, bool on)
         {
@@ -113,6 +116,8 @@ namespace PinguinoHost
             int backoff = 3;
             while (true)
             {
+                while (!Lease.MayRun) await Task.Delay(1500);
+                var lt = Lease.Token;
                 try
                 {
                     using (var ws = new ClientWebSocket())
@@ -124,7 +129,7 @@ namespace PinguinoHost
                             var sb = new StringBuilder(); WebSocketReceiveResult r;
                             do
                             {
-                                r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), CancellationToken.None);
+                                r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), lt);
                                 if (r.MessageType == WebSocketMessageType.Close) { open = false; break; }
                                 sb.Append(Encoding.UTF8.GetString(buf, 0, r.Count));
                             } while (!r.EndOfMessage);

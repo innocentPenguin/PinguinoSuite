@@ -27,6 +27,7 @@ namespace PinguinoHost
         public static bool HasAction(string n) { return cph != null && cph.ActionExists(n); }
         public static bool SayShared(string m) { try { return cph != null && cph.Say != null && cph.Say(m); } catch (Exception) { return false; } }
         static string suite, dataDir;
+        public static List<string> CoreCommandList() { return coreCommands.OrderBy(x => x).ToList(); }
         static HashSet<string> coreCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         static readonly object dispatchLock = new object();
         static readonly Dictionary<string, string> sources = new Dictionary<string, string>
@@ -42,7 +43,8 @@ namespace PinguinoHost
             bool sim = argv.Contains("--sim");
             suite = Opt("--suite", FindSuite());
             dataDir = Opt("--data", Environment.GetEnvironmentVariable("PINGUINO_DATA_DIR") ?? Environment.GetEnvironmentVariable("BVQ_DATA_DIR") ?? Path.Combine(suite, "Data", "runtime"));
-            Directory.CreateDirectory(dataDir); Clog.Init(dataDir); Clog.Info("host", "PinguinoHost starting");
+            Directory.CreateDirectory(dataDir); Clog.Init(dataDir);
+            if (!Lease.TakeMutex(dataDir)) { Console.WriteLine("Another PinguinoHost is already running on this PC for " + dataDir + "; exiting."); Clog.Error("lease", "another Host already runs on this PC; this one exits"); return 3; } Clog.Info("host", "PinguinoHost starting");
             Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dataDir); Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dataDir);   // the bots find bots.json, bots_secrets.json, settings.json, routing.log here
             var secrets = LoadSecrets();
             string channel = Opt("--channel", secrets.Value<string>("Channel") ?? "");
@@ -51,6 +53,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming());
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -104,6 +107,7 @@ namespace PinguinoHost
         // ---------------- dispatch: exactly the Streamer.bot trigger ownership in Docs\TRIGGERS.md ----------------
         public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo)
         {
+            if (!Lease.MayRun) return;   // not the master Host (or lease lost): never run the bots
             lock (dispatchLock)   // one message at a time: arguments are shared state, so no two chats can mix
             {
                 cph.Args.Clear();
@@ -161,6 +165,7 @@ namespace PinguinoHost
 
         public static void DispatchEvent(Dictionary<string, object> args)
         {
+            if (!Lease.MayRun) return;
             lock (dispatchLock)
             {
                 cph.Args.Clear(); foreach (var kv in args) cph.Args[kv.Key] = kv.Value;
@@ -211,6 +216,7 @@ namespace PinguinoHost
             }
             cph.Say = m =>
             {
+                if (!Lease.MayRun) return false;
                 var resp = http.SendAsync(Req(HttpMethod.Post, HostApi.Helix + "/chat/messages", new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", m } })).Result;
                 if (!resp.IsSuccessStatusCode) Clog.Warn("twitch", "chat send refused by Twitch (HTTP " + (int)resp.StatusCode + (resp.StatusCode == (System.Net.HttpStatusCode)429 ? ", rate limited" : resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : "") + ")");
                 return resp.IsSuccessStatusCode;
@@ -230,11 +236,13 @@ namespace PinguinoHost
             int backoff = 2;
             while (true)
             {
+                while (!Lease.MayRun) await Task.Delay(1500);
+                var lt = Lease.Token;
                 try
                 {
                     using (var ws = new ClientWebSocket())
                     {
-                        await ws.ConnectAsync(new Uri("wss://irc-ws.chat.twitch.tv:443"), CancellationToken.None);
+                        await ws.ConnectAsync(new Uri("wss://irc-ws.chat.twitch.tv:443"), lt);
                         async Task Send(string l) { await ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(l + "\r\n")), WebSocketMessageType.Text, true, CancellationToken.None); }
                         await Send("CAP REQ :twitch.tv/tags twitch.tv/commands");
                         await Send("NICK justinfan" + new Random().Next(10000, 99999));
@@ -243,7 +251,7 @@ namespace PinguinoHost
                         var buf = new byte[16384]; var sb = new StringBuilder();
                         while (ws.State == WebSocketState.Open)
                         {
-                            var r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), CancellationToken.None);
+                            var r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), lt);
                             if (r.MessageType == WebSocketMessageType.Close) break;
                             sb.Append(Encoding.UTF8.GetString(buf, 0, r.Count));
                             if (!r.EndOfMessage) continue;
@@ -269,6 +277,7 @@ namespace PinguinoHost
             var tags = m.Groups["tags"].Value.Split(';').Select(t => t.Split(new[] { '=' }, 2)).Where(a => a.Length == 2).ToDictionary(a => a[0], a => a[1], StringComparer.Ordinal);
             string T(string k) { string v; return tags.TryGetValue(k, out v) ? v : ""; }
             HostApi.Messages++; HostApi.LastMessage = DateTime.UtcNow;
+            ChatStats.Note(m.Groups["nick"].Value, T("badges").Contains("broadcaster/") ? 4 : T("mod") == "1" ? 3 : T("badges").Contains("vip/") ? 2 : 1);
             string msg = m.Groups["msg"].Value; if (msg.StartsWith("\u0001ACTION ")) msg = msg.Substring(8).TrimEnd('\u0001');
             int role = T("badges").Contains("broadcaster/") ? 4 : T("mod") == "1" ? 3 : T("badges").Contains("vip/") ? 2 : 1;
             string display = T("display-name") != "" ? T("display-name") : m.Groups["nick"].Value;
