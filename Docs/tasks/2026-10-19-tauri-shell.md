@@ -22,3 +22,11 @@ Goal (user /goal): cross-platform PinguinoSuite app on Tauri, ready for other ap
 - `cargo check` and `npx tauri build --no-bundle` succeed; exe at `App/src-tauri/target/release/pinguino-suite.exe`.
 - Ran with `PINGUINO_PORT=8792`: window opens, dashboard renders with live module state (Listen running), unauthenticated API 401, bad Origin 403, core sidecar spawned.
 - Shell honors `PINGUINO_PORT`. Installer bundling (NSIS/MSI) and macOS/Linux builds not yet tried. An older unpatched Suite on :8760 makes the shell talk to the wrong core; stop the old Suite first.
+
+## Update: module auth + installer + CI (2026-10-19)
+- Core passes `PINGUINO_API_TOKEN` into every module's env and sends `Authorization: Bearer` on `on_live`/`on_offline` hooks.
+- Listen (:8765) now has a Host/Origin guard (core, Tauri and own origins; extra via `PINGUINO_EXTRA_ORIGINS`), non-browser (no Origin) writes need the token, `/ws` checks Host/Origin. Verified: evil Origin 403, bad Host 403, no token 401. Dashboard (allowed Origin) still works.
+- Link is registered (`Suite/modules/link/module.json`, Unit 04); its own security model lives in `Docs/PinguinoLink/03-SECURITY-MODEL.md`. Link must adopt `PINGUINO_API_TOKEN`; tracked for Unit 04.
+- Full icon set generated (`npx tauri icon`); `npx tauri build --bundles nsis` produced `PinguinoSuite_0.1.0_x64-setup.exe` (2 MB).
+- `.github/workflows/app.yml`: Windows/macOS/Linux build matrix. **macOS/Linux builds are unverified until it runs on GitHub** (the root folder is not yet a pushed repo).
+- Still: bundle the Python core (currently needs Python + Suite folder), per-module tokens, Link token adoption.

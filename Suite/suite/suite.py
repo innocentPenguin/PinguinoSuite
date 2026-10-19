@@ -119,7 +119,8 @@ class Module:
             extra = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
         else:
             extra = {"start_new_session": True}
-        self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log, **extra)
+        self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log,
+                                     env={**os.environ, "PINGUINO_API_TOKEN": TOKEN}, **extra)
         bus.emit("module", id=self.id, state="starting")
 
     def stop(self):
@@ -147,7 +148,7 @@ class Module:
             return
         for _ in range(40):
             try:
-                r = requests.post(self.spec["url"] + spec["post"], timeout=10)
+                r = requests.post(self.spec["url"] + spec["post"], headers={"Authorization": f"Bearer {TOKEN}"}, timeout=10)
                 bus.emit("hook", id=self.id, hook=hook, ok=r.ok, detail=r.text[:160])
                 return
             except Exception:

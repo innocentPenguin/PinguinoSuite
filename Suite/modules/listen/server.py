@@ -2,6 +2,8 @@
 Run:  run.bat   (http://127.0.0.1:8765)"""
 import asyncio
 import json
+import os
+import secrets
 import shutil
 import threading
 import time
@@ -71,7 +73,29 @@ async def lifespan(app):
 
 app = FastAPI(lifespan=lifespan)
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402  (the Suite dashboard on :8760 reads Listen's status)
-app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:8760", "http://localhost:8760"], allow_methods=["*"], allow_headers=["*"])
+_SUITE_ORIGINS = ["http://127.0.0.1:8760", "http://localhost:8760", "tauri://localhost", "http://tauri.localhost", "https://tauri.localhost"]
+_OWN_ORIGINS = [f"http://127.0.0.1:{cfg.PORT}", f"http://localhost:{cfg.PORT}"]
+_ALLOWED_ORIGINS = set(_SUITE_ORIGINS + _OWN_ORIGINS + [o for o in os.environ.get("PINGUINO_EXTRA_ORIGINS", "").split(",") if o])
+_ALLOWED_HOSTS = {f"127.0.0.1:{cfg.PORT}", f"localhost:{cfg.PORT}"}
+_TOKEN = os.environ.get("PINGUINO_API_TOKEN", "")
+
+
+@app.middleware("http")
+async def _guard(request, call_next):
+    """Anti DNS-rebinding + drive-by pages: right Host, allowed Origin. Non-browser callers (no Origin) must send the suite token on writes."""
+    from fastapi.responses import JSONResponse
+    if request.method != "OPTIONS":
+        origin = request.headers.get("origin")
+        if request.headers.get("host") not in _ALLOWED_HOSTS or (origin and origin not in _ALLOWED_ORIGINS):
+            return JSONResponse({"detail": "forbidden origin"}, status_code=403)
+        if not origin and _TOKEN and request.method not in ("GET", "HEAD"):
+            auth = request.headers.get("authorization", "")
+            if not secrets.compare_digest(auth[7:] if auth.lower().startswith("bearer ") else "", _TOKEN):
+                return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return await call_next(request)
+
+
+app.add_middleware(CORSMiddleware, allow_origins=sorted(_ALLOWED_ORIGINS), allow_methods=["*"], allow_headers=["*"])
 app.mount("/media", StaticFiles(directory=cfg.DATA), name="media")
 
 
@@ -82,6 +106,10 @@ def index():
 
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
+    origin = sock.headers.get("origin")
+    if sock.headers.get("host") not in _ALLOWED_HOSTS or (origin and origin not in _ALLOWED_ORIGINS):
+        await sock.close(code=1008)
+        return
     await sock.accept()
     hub.clients.add(sock)
     await sock.send_json({"type": "asr", **state["asr"]})

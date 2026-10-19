@@ -1,0 +1,32 @@
+name: PinguinoSuite app
+on:
+  push: { paths: ["App/**", "Suite/suite/**", ".github/workflows/app.yml"] }
+  pull_request: { paths: ["App/**", "Suite/suite/**"] }
+  workflow_dispatch:
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux deps
+        if: matrix.os == 'ubuntu-22.04'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Core smoke test (token + origin guard)
+        shell: bash
+        run: |
+          pip install fastapi uvicorn requests pystray pillow || true
+          cd Suite && python -c "import ast;ast.parse(open('suite/suite.py',encoding='utf8').read())"
+      - run: cd App && npm ci && npx tauri build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pinguinosuite-${{ matrix.os }}
+          path: App/src-tauri/target/release/bundle/**

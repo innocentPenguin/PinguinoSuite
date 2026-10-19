@@ -31,3 +31,6 @@ Allowed origins: the core itself and the Tauri webview (`tauri://localhost`, `ht
 
 ## Platform capabilities
 Anything OS-specific is optional. `GET /api/capabilities` reports what exists. The Tauri shell provides tray, single-instance and autostart on Windows/macOS/Linux; the legacy HKCU Run key is only the standalone-Python path.
+
+## Status (2026-10-19)
+`PINGUINO_API_TOKEN` is now passed to modules and sent on core->module hook calls. Listen enforces it (Host/Origin guard + token for non-browser writes). Link (Unit 04) is registered but must adopt the same rule. Per-module tokens remain planned.
