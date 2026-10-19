@@ -178,6 +178,10 @@ CATALOG["autobackup"] = H("Automatic config backup", "The Suite saves a zip of y
                           ["Settings > Automatic config backup: turn it on or off, choose how often and how many to keep.", "Back up now makes one immediately. The files are in Data\backups\auto.",
                            "To restore or move to another PC, use Settings > Backup & move > Import and pick one of these zips (dry run first).", "Keys and tokens are not in these backups: export them separately from the key vault with a passphrase."],
                           fix={"label": "Open Settings", "route": "settings"})
+CATALOG["accounts"] = H("Accounts: streamer Twitch sign-in", "The streamer account is what lets the Suite read channel-point redeems, ads and bans and make clips and shoutouts. Bots have their own accounts (shown below it).",
+                        ["Open Accounts: the list shows every permission (scope) the Suite needs: green = granted, red = missing, with what each one unlocks.", "Press \"Sign in again (grants all)\": a browser window opens on Twitch; log in as the STREAMER account and approve. One sign-in grants every missing scope.",
+                         "Come back here: the list refreshes by itself once Twitch confirms. If something stays missing, sign out and in again.", "Bot accounts (PinguinoB0t, ChattyPinguino, PinguinoHelper) are signed in on the Host's bot setup page; this page only shows their status."],
+                        fix={"label": "Open Accounts", "route": "accounts"})
 CATALOG["help"] = H("How Help works", "Every ? button and every red / yellow row opens the same kind of panel: what it means, the steps to fix or set it up, and a button to the place to do it.",
                     ["Click any pre-stream row, Integrations row, Console warning / error, module name or key row.", "Green items have instructions too, for setting them up again.", "This page lists all topics."])
 ALIASES["voice"] = "voice_commands"
