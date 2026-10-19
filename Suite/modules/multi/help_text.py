@@ -120,11 +120,13 @@ HELP = {
     },
     "ding": {
         "title": "New-chatter ding",
-        "summary": "Plays a sound on this PC the first time each person chats in a stream, like the Streamer.bot ding. It never writes anything into chat.",
+        "summary": "Plays a sound on this PC the first time each person chats, like the Streamer.bot bell (default: its doorbell sound at 24 percent volume). It never writes anything into chat.",
         "steps": [
             "Off by default: open Multi setup > New-chatter ding, tick Twitch and/or YouTube and press Test.",
-            "Once per person per stream: the list resets after 6 quiet hours, or press 'New stream' to clear it yourself.",
-            "Optional: a separate sound for Twitch's 'first message ever' flag.",
+            "Choose 'per stream' (the list resets after 6 quiet hours or when you press New stream) or 'ever' (once per person forever, like the old Streamer.bot bell).",
+            "Returning chatters: tick the box to play a different ding when someone who chatted in an earlier stream chats again in this one.",
+            "Optional: a separate sound for Twitch's 'first message ever' flag. Each sound has its own Test button.",
+            "Volumes: one slider for new chatters, one for returning, and a master volume that multiplies both. They are saved in Multi's settings and remembered after restarts.",
             "A burst (raid) plays at most one ding every 1.5 seconds; extra dings wait in a short queue and the rest are skipped.",
             "Yellow 'sound file is missing': pick an .mp3 or .wav file. Silent on an auxiliary PC: only the master streaming PC plays it.",
         ],

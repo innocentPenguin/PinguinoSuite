@@ -719,7 +719,7 @@ def test_ding_once_per_user_per_stream_and_per_platform(tmp_path, monkeypatch):
     assert not d.observe(_m("pinguinob0t")) and not d.observe(_m("me", is_self=True))
     while not d.q.empty():
         d.play_one(d.q.get())
-    assert len(pl.played) == 2 and pl.played[0][1] == 70
+    assert len(pl.played) == 2 and pl.played[0][1] == 24
 
 
 def test_ding_session_resets_after_gap_and_survives_restart(tmp_path, monkeypatch):
@@ -763,3 +763,32 @@ def test_ding_settings_endpoint_validates(tmp_path, monkeypatch):
     assert c.post("/api/ding/settings", json={"sound": str(tmp_path / "missing.mp3")}, headers=h).status_code == 400
     r = c.post("/api/ding/settings", json={"platforms": ["twitch", "kick", "youtube"], "volume": 500, "cooldown_s": 0}, headers=h)
     assert r.status_code == 200 and saved["ding_platforms"] == ["twitch", "youtube"] and saved["ding_volume"] == 100 and saved["ding_cooldown_s"] == 0.2
+
+
+def test_ding_ever_scope_survives_quiet_gap_and_streamer_never_dings(tmp_path, monkeypatch):
+    d, pl, clk, s = _ding(tmp_path, monkeypatch, ding_scope="ever")
+    assert d.observe(_m("amy"))
+    clk.t += 30 * 3600
+    assert not d.observe(_m("amy", n=1))                         # forever, not just this stream
+    assert not d.observe(_m("innocentpenguin"))                  # the streamer's own name
+    import config
+    assert config.DEFAULTS["ding_volume"] == 24 and config.DEFAULTS["ding_sound"].endswith("new-chatter-bell.wav")
+
+
+def test_ding_returning_sound_volumes_and_recent_list(tmp_path, monkeypatch):
+    d, pl, clk, s = _ding(tmp_path, monkeypatch, ding_returning=True, ding_returning_volume=50, ding_master_volume=50, ding_volume=80)
+    ret = tmp_path / "ret.wav"
+    ret.write_bytes(b"r")
+    s["ding_returning_sound"] = str(ret)
+    assert d.observe(_m("amy")) == "new"
+    d.new_stream("test")                                          # next stream: amy is now known
+    assert d.observe(_m("amy", n=1)) == "returning" and d.observe(_m("zed")) == "new"
+    assert d.sound_for("returning") == str(ret) and d.sound_for("new") == s["ding_sound"]
+    assert d.volume_for("new") == 40 and d.volume_for("returning") == 25      # kind volume * master / 100
+    assert [x["kind"] for x in d.recent] == ["new", "returning", "new"]
+    s["ding_returning"] = False
+    d.new_stream("again")
+    assert d.observe(_m("amy", n=2)) == "new"                    # without the toggle, 'per stream' just dings normally
+    s["ding_scope"] = "ever"
+    d.new_stream("ever")
+    assert d.observe(_m("amy", n=3)) is False                    # 'ever' + no returning toggle: known people stay quiet

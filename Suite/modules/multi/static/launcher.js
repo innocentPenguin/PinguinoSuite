@@ -89,17 +89,24 @@ async function renderLauncher() {
     <label>Address<input id="pop-url" readonly value="${esc(location.origin)}/popout?size=22&max=14" onclick="this.select()"></label>
     <div class="act"><button data-act="copy-pop">Copy address</button> <a href="/popout?size=22&max=14" target="_blank" rel="noopener"><button type="button">Preview</button></a></div></div>
 
-  <h3>New-chatter ding ${T('', 'Plays a sound on this PC the first time each person chats in a stream. Nothing is written to chat.')}</h3>
-  <div class="box"><small class="mut">A short sound the first time each person chats, once per person per stream - like the Streamer.bot ding. Plays on this PC only${dg.master ? '' : ' (this PC is not the master, so it stays silent)'}.</small>
-    <div class="row"><label class="chk"><input type="checkbox" id="dg-twitch" ${dg.platforms.includes('twitch') ? 'checked' : ''}> Twitch</label>
-      <label class="chk"><input type="checkbox" id="dg-youtube" ${dg.platforms.includes('youtube') ? 'checked' : ''}> YouTube</label>
-      <label class="chk"><input type="checkbox" id="dg-first" ${dg.first_ever ? 'checked' : ''}> Different sound for a Twitch viewer's very first message ever</label></div>
-    <label>Sound file (.mp3 or .wav) ${dg.sound_exists ? '' : '<b class="tbadc">(file not found)</b>'}<span class="row"><input id="dg-sound" value="${esc(dg.sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-sound">Choose...</button></span></label>
-    <label>Sound for first-ever (optional, empty = same sound)<span class="row"><input id="dg-fsound" value="${esc(dg.first_sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-fsound">Choose...</button></span></label>
-    <div class="row"><label>Volume <span id="dg-vol-n">${dg.volume}</span>%<input id="dg-vol" type="range" min="0" max="100" value="${dg.volume}" oninput="document.getElementById('dg-vol-n').textContent=this.value"></label>
-      <label>At most one ding every (seconds)<input id="dg-gap" type="number" min="0.2" max="30" step="0.1" value="${dg.cooldown_s}" style="width:90px"></label></div>
-    <div class="act"><button class="p" data-act="ding-save">Save</button> <button data-act="ding-test">Play test ding</button> <button data-act="ding-reset">New stream (forget who already chatted)</button></div>
-    <small class="mut">${dg.chatters_this_stream} chatter(s) counted this stream, ${dg.played} ding(s) played${dg.dropped ? ', ' + dg.dropped + ' skipped during bursts' : ''}.</small></div>
+  <h3>Chatter dings ${T('', 'A sound on this PC when someone chats for the first time (or returns). Nothing is written to chat.')}</h3>
+  <div class="box"><small class="mut">Plays on this PC only${dg.master ? '' : ' (this PC is not the master, so it stays silent)'}. Everything you change here is saved and remembered after Multi or the app closes.</small>
+    <div class="row"><b>On for:</b> <label class="chk"><input type="checkbox" id="dg-twitch" ${dg.platforms.includes('twitch') ? 'checked' : ''}> Twitch</label>
+      <label class="chk"><input type="checkbox" id="dg-youtube" ${dg.platforms.includes('youtube') ? 'checked' : ''}> YouTube</label></div>
+    <div class="row"><label class="chk"><input type="radio" name="dg-scope" value="stream" ${dg.scope !== 'ever' ? 'checked' : ''}> New chatter: once per person <b>per stream</b></label>
+      <label class="chk"><input type="radio" name="dg-scope" value="ever" ${dg.scope === 'ever' ? 'checked' : ''}> once per person <b>ever</b> (like the old Streamer.bot bell)</label></div>
+    <b>New chatter ding</b>
+    <label>Sound (.mp3 or .wav) ${dg.sound_exists ? '' : '<b class="tbadc">(file not found)</b>'}<span class="row"><input id="dg-sound" value="${esc(dg.sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-sound">Choose...</button><button data-act="ding-test" data-kind="new">Test</button></span></label>
+    <label>Volume <span id="dg-vol-n">${dg.volume}</span>%<input id="dg-vol" type="range" min="0" max="100" value="${dg.volume}" data-live="dg-vol-n"></label>
+    <label class="chk"><input type="checkbox" id="dg-returning" ${dg.returning ? 'checked' : ''}> <b>Different ding for a returning chatter</b> <small class="mut">someone who chatted in an earlier stream and chats again in this one</small></label>
+    <label>Returning sound (empty = same sound)<span class="row"><input id="dg-rsound" value="${esc(dg.returning_sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-rsound">Choose...</button><button data-act="ding-test" data-kind="returning">Test</button></span></label>
+    <label>Returning volume <span id="dg-rvol-n">${dg.returning_volume}</span>%<input id="dg-rvol" type="range" min="0" max="100" value="${dg.returning_volume}" data-live="dg-rvol-n"></label>
+    <label class="chk"><input type="checkbox" id="dg-first" ${dg.first_ever ? 'checked' : ''}> Own sound for a Twitch viewer's very first message ever</label>
+    <label>First-ever sound (empty = same as new)<span class="row"><input id="dg-fsound" value="${esc(dg.first_sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-fsound">Choose...</button><button data-act="ding-test" data-kind="first">Test</button></span></label>
+    <label>Master volume <span id="dg-mvol-n">${dg.master_volume}</span>% <small class="mut">multiplies both volumes above</small><input id="dg-mvol" type="range" min="0" max="100" value="${dg.master_volume}" data-live="dg-mvol-n"></label>
+    <label>At most one ding every (seconds)<input id="dg-gap" type="number" min="0.2" max="30" step="0.1" value="${dg.cooldown_s}" style="width:90px"></label>
+    <div class="act"><button class="p" data-act="ding-save">Save</button> <button data-act="ding-reset">New stream (everyone counts as returning)</button></div>
+    <small class="mut">${dg.chatters_this_stream} chatter(s) counted this stream, ${dg.known_chatters} known from earlier, ${dg.played} ding(s) played${dg.dropped ? ', ' + dg.dropped + ' skipped during bursts' : ''}.</small></div>
 
   <h3>Smart features</h3>
   <div class="box"><b>How messages are ranked ${T('', 'Local rules always work with no internet and no account. AI only double-checks borderline messages.')}</b>
@@ -176,13 +183,15 @@ document.addEventListener('click', async e => {
     else if (a === 'learn-reset') { await api('/api/learning/reset', {b: {}}); toast('Learning reset to defaults.'); return; }
     else if (a === 'recap') { const r = await api('/api/recap');
       $('#recap').innerHTML = r.count ? r.cards.map(c => `<div class="wrow"><b>${esc(c.display || c.user)}</b> <span class="mut">${esc(c.platform || '')}</span> ${esc(c.text)}</div>`).join('') : '<div class="empty">Nothing unanswered. Nice.</div>'; return; }
-    else if (a === 'ding-save') {
+    else if (a === 'ding-save' || a === 'ding-test') {
       const plats = ['twitch', 'youtube'].filter(p => $('#dg-' + p).checked);
       const r = await fetch('/api/ding/settings', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({platforms: plats, first_ever: $('#dg-first').checked,
-        sound: v('dg-sound'), first_sound: v('dg-fsound'), volume: parseInt(v('dg-vol')), cooldown_s: parseFloat(v('dg-gap'))})});
+        returning: $('#dg-returning').checked, scope: (document.querySelector('input[name=dg-scope]:checked') || {}).value || 'stream',
+        sound: v('dg-sound'), first_sound: v('dg-fsound'), returning_sound: v('dg-rsound'), volume: parseInt(v('dg-vol')),
+        returning_volume: parseInt(v('dg-rvol')), master_volume: parseInt(v('dg-mvol')), cooldown_s: parseFloat(v('dg-gap'))})});
       const j = await r.json().catch(() => ({})); if (!r.ok) { toast(j.detail || 'Could not save', false); return; }
-      toast(plats.length ? 'Ding is ON for ' + plats.join(' and ') + '.' : 'Ding is off.'); }
-    else if (a === 'ding-test') { await api('/api/ding/test', {b: {}}); toast('Playing a test ding on this PC...'); return; }
+      if (a === 'ding-test') { await fetch('/api/ding/test', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({kind: t.dataset.kind})}); toast('Playing the ' + t.dataset.kind + ' ding on this PC (settings saved)...'); return; }
+      toast(plats.length ? 'Saved. Ding is ON for ' + plats.join(' and ') + '.' : 'Saved. Ding is off.'); }
     else if (a === 'ding-reset') { await api('/api/ding/reset', {b: {}}); toast('Cleared. Everyone counts as new again.'); }
     else if (a === 'ding-pick') { toast('A file window opened on this PC...'); const r = await api('/api/ding/pick', {b: {}}); if (r.path) $('#' + t.dataset.target).value = r.path; return; }
     else if (a === 'copy-pop') { const i = $('#pop-url'); i.select(); try { await navigator.clipboard.writeText(i.value); toast('Address copied.'); } catch (x) { document.execCommand('copy'); toast('Address selected - press Ctrl+C.'); } return; }
@@ -192,3 +201,5 @@ document.addEventListener('click', async e => {
   } catch (err) { toast('Something went wrong: ' + err, false); return; }
   setTimeout(renderLauncher, 300);
 });
+
+document.addEventListener('input', e => { const n = e.target.dataset && e.target.dataset.live; if (n && $('#' + n)) $('#' + n).textContent = e.target.value; });

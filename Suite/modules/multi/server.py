@@ -451,14 +451,19 @@ async def ding_settings(request: Request):
         patch["ding_platforms"] = [p for p in b["platforms"] if p in ("twitch", "youtube")]
     if "first_ever" in b:
         patch["ding_first_ever"] = bool(b["first_ever"])
-    for key, name in (("sound", "ding_sound"), ("first_sound", "ding_first_sound")):
+    if "returning" in b:
+        patch["ding_returning"] = bool(b["returning"])
+    for key, name in (("sound", "ding_sound"), ("first_sound", "ding_first_sound"), ("returning_sound", "ding_returning_sound")):
         if key in b:
             path = str(b[key]).strip().strip('"')
             if path and not (path.lower().endswith((".mp3", ".wav")) and os.path.isfile(path)):
                 raise HTTPException(400, "choose an existing .mp3 or .wav file")
             patch[name] = path
-    if "volume" in b:
-        patch["ding_volume"] = max(0, min(100, int(b["volume"])))
+    if b.get("scope") in ("stream", "ever"):
+        patch["ding_scope"] = b["scope"]
+    for key, name in (("volume", "ding_volume"), ("returning_volume", "ding_returning_volume"), ("master_volume", "ding_master_volume")):
+        if key in b:
+            patch[name] = max(0, min(100, int(b[key])))
     if "cooldown_s" in b:
         patch["ding_cooldown_s"] = max(0.2, min(30.0, float(b["cooldown_s"])))
     config.save_settings(patch)
@@ -467,9 +472,16 @@ async def ding_settings(request: Request):
 
 
 @app.post("/api/ding/test")
-def ding_test():
-    pipeline.ding.test()
+async def ding_test(request: Request):
+    b = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+    pipeline.ding.test(b.get("kind", "new"))
     return {"ok": True}
+
+
+@app.get("/api/newchatters")
+def new_chatters(since: float = 0):
+    """Recent new / returning chatters (for other modules, e.g. a bot that wants to welcome them)."""
+    return {"ts": time.time(), "items": [x for x in pipeline.ding.recent if x["ts"] > since]}
 
 
 @app.post("/api/ding/reset")

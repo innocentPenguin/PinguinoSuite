@@ -19,9 +19,14 @@ DEFAULTS = {
     "tiktok_user": "",
     "ding_platforms": [],            # new-chatter ding: platforms it is ON for (twitch, youtube); empty = off
     "ding_first_ever": False,        # Twitch "first message ever" gets its own (optional) sound
-    "ding_sound": r"D:\PinguinoSuite\Data\sounds\new-chatter-ding.mp3",
+    "ding_sound": r"D:\PinguinoSuite\Data\sounds\new-chatter-bell.wav",   # = Streamer.bot "First TIme System (Bell)" sound
     "ding_first_sound": "",
-    "ding_volume": 70,
+    "ding_returning": False,         # a different ding for someone who chatted in an earlier stream
+    "ding_returning_sound": "",       # empty = same sound as the new-chatter ding
+    "ding_returning_volume": 24,
+    "ding_master_volume": 100,       # multiplies both ding volumes
+    "ding_volume": 24,                # Streamer.bot used 0.24
+    "ding_scope": "stream",           # stream = once per person per stream; ever = once per person, forever (Streamer.bot bell)
     "ding_cooldown_s": 1.5,
     "ding_session_gap_h": 6,
     "discord_channels": [],          # channel ids Multi reads/sends in (bot token is in Credential Manager)

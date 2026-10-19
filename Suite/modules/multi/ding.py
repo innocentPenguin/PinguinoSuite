@@ -1,19 +1,23 @@
-"""New-chatter ding: plays a sound on the first message from each chatter, once per user per stream.
+"""New-chatter / returning-chatter ding: plays a sound on a chatter's first message, locally, never into chat.
 
-Plays locally on this PC only (and only when this device is the Suite master), never into chat. Off by default.
-Per platform on/off, optional separate sound for Twitch 'first message ever', volume, and a gap between dings so a raid
-cannot machine-gun (extra dings wait in a short queue, the rest are dropped)."""
+kinds:  "new"       never seen before                    -> ding_sound,           ding_volume
+        "returning" known from an earlier stream, first message this stream -> ding_returning_sound, ding_returning_volume
+        "first"     Twitch 'first message ever' flag (optional, own sound)  -> ding_first_sound
+Final volume = kind volume * ding_master_volume / 100. All settings live in Multi's settings.json (survive restarts).
+Plays only on the master device, one ding per ding_cooldown_s (short queue, extras dropped). Off by default."""
 import json
 import os
 import queue
 import threading
 import time
 import urllib.request
+from collections import deque
 
 import config
 import console_log
 
 SEEN_MAX = 20000
+KNOWN_MAX = 100000
 
 
 class Mci:
@@ -57,17 +61,22 @@ class Ding:
         self.store, self.player, self.clock, self.master = store, player or Mci(), clock, master
         self.q = queue.Queue(maxsize=5)
         self.stats = {"played": 0, "dropped": 0, "errors": 0}
+        self.recent = deque(maxlen=200)             # for GET /api/newchatters (other modules may react, e.g. a welcome bot)
         self._master = (0.0, True)
         s = store.kv_get("ding_seen") or {}
         self.started, self.last, self.users = s.get("started", 0), s.get("last", 0), set(s.get("users", []))
+        self.known = set(store.kv_get("ding_known") or [])
         if start_worker:
             threading.Thread(target=self._worker, daemon=True).start()
 
     # session ----------------------------------------------------------
     def _save(self):
         self.store.kv_set("ding_seen", {"started": self.started, "last": self.last, "users": sorted(self.users)[-SEEN_MAX:]})
+        self.store.kv_set("ding_known", sorted(self.known)[-KNOWN_MAX:])
 
     def new_stream(self, reason="reset"):
+        """A new stream starts: everyone who chatted so far becomes 'known' (a returning chatter next time)."""
+        self.known |= self.users
         self.started, self.last, self.users = self.clock(), self.clock(), set()
         self._save()
         console_log.info("ding", f"new-chatter list cleared ({reason})")
@@ -81,24 +90,40 @@ class Ding:
 
     # input ------------------------------------------------------------
     def observe(self, m):
-        """Called for every new stored message. Never blocks and never raises."""
+        """Called for every new stored message. Never blocks and never raises. Returns the ding kind queued, or False."""
         try:
             st = config.settings()
             if m.platform not in st["ding_platforms"] or m.is_self or m.is_bot or not m.user_id:
                 return False
-            if (m.user or "").lower() in {b.lower() for b in st["bot_accounts"]}:
-                return False
+            who = (m.user or "").lower()
+            if who in {b.lower() for b in st["bot_accounts"]} or who in {n.lower() for n in st["my_names"]}:
+                return False                                     # bots and the streamer never ding
             now = self.clock()
-            if not self.started or now - self.last > st["ding_session_gap_h"] * 3600:
-                self.new_stream("quiet for a long time" if self.started else "first message")
+            if not self.started:
+                self.new_stream("first message")
+            elif st["ding_scope"] != "ever" and now - self.last > st["ding_session_gap_h"] * 3600:
+                self.new_stream("quiet for a long time")
             self.last = now
             key = f"{m.platform}:{m.user_id}"
             if key in self.users:
                 return False
             self.users.add(key)
+            known = key in self.known
+            self.known.add(key)
             self._save()
-            first_ever = bool(st["ding_first_ever"]) and m.platform == "twitch" and m.first_time
-            return self._enqueue("first" if first_ever else "new")
+            if known:
+                if st["ding_returning"]:
+                    kind = "returning"
+                elif st["ding_scope"] == "ever":
+                    return False                                  # 'ever' scope: known people never ding
+                else:
+                    kind = "new"
+            elif st["ding_first_ever"] and m.platform == "twitch" and m.first_time:
+                kind = "first"
+            else:
+                kind = "new"
+            self.recent.append({"ts": now, "platform": m.platform, "user": m.user, "display": m.display, "kind": kind})
+            return kind if self._enqueue(kind) else False
         except Exception as e:
             console_log.error("ding", f"observe failed: {e}", dedupe_s=60)
             return False
@@ -113,27 +138,32 @@ class Ding:
             self.stats["dropped"] += 1
             return False
 
-    def test(self):
-        self.q.put_nowait("new") if not self.q.full() else None
+    def test(self, kind="new"):
+        if kind in ("new", "returning", "first") and not self.q.full():
+            self.q.put_nowait(kind)
 
     # playback ---------------------------------------------------------
     def sound_for(self, kind):
         st = config.settings()
-        p = (st["ding_first_sound"] if kind == "first" else "") or st["ding_sound"]
-        return p
+        own = {"first": st["ding_first_sound"], "returning": st["ding_returning_sound"]}.get(kind, "")
+        return own or st["ding_sound"]
+
+    def volume_for(self, kind):
+        st = config.settings()
+        base = st["ding_returning_volume"] if kind == "returning" else st["ding_volume"]
+        return max(0, min(100, base * st["ding_master_volume"] / 100))
 
     def play_one(self, kind):
-        st = config.settings()
         path = self.sound_for(kind)
         if not path or not os.path.isfile(path):
             self.stats["errors"] += 1
             console_log.warn("ding", "sound file not found - pick one in Multi setup", dedupe_s=300)
             return False
         try:
-            self.player.play(path, st["ding_volume"])
+            self.player.play(path, self.volume_for(kind))
             self.stats["played"] += 1
             if self.stats["played"] in (1, 25, 100) or self.stats["played"] % 250 == 0:
-                console_log.info("ding", f"{self.stats['played']} new-chatter dings played since Multi started")
+                console_log.info("ding", f"{self.stats['played']} chatter dings played since Multi started")
             return True
         except Exception as e:
             self.stats["errors"] += 1
@@ -151,7 +181,12 @@ class Ding:
     # info -------------------------------------------------------------
     def info(self):
         st = config.settings()
-        return {"enabled": bool(st["ding_platforms"]), "platforms": st["ding_platforms"], "first_ever": st["ding_first_ever"],
-                "sound": st["ding_sound"], "sound_exists": bool(st["ding_sound"]) and os.path.isfile(st["ding_sound"]),
-                "first_sound": st["ding_first_sound"], "volume": st["ding_volume"], "cooldown_s": st["ding_cooldown_s"],
-                "chatters_this_stream": len(self.users), "master": self._master_cached(), **self.stats}
+        exists = lambda p: bool(p) and os.path.isfile(p)
+        return {"enabled": bool(st["ding_platforms"]), "platforms": st["ding_platforms"], "scope": st["ding_scope"],
+                "first_ever": st["ding_first_ever"], "returning": st["ding_returning"],
+                "sound": st["ding_sound"], "sound_exists": exists(st["ding_sound"]),
+                "first_sound": st["ding_first_sound"], "returning_sound": st["ding_returning_sound"],
+                "returning_sound_exists": exists(st["ding_returning_sound"] or st["ding_sound"]),
+                "volume": st["ding_volume"], "returning_volume": st["ding_returning_volume"], "master_volume": st["ding_master_volume"],
+                "cooldown_s": st["ding_cooldown_s"], "chatters_this_stream": len(self.users), "known_chatters": len(self.known),
+                "master": self._master_cached(), **self.stats}
