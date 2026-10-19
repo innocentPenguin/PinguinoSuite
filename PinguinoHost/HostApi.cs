@@ -254,14 +254,16 @@ let h=`<div class=head><b>${esc(b.title)}</b><span class='pill ${b.enabled?'on':
 <details><summary>Commands (${b.commands.length})</summary><div class=sub>${b.commands.map(esc).join(' - ')}</div></details>
 <div class=sub>${b.runs} runs${b.lastRunAgoSec!=null?', last '+ago(b.lastRunAgoSec)+' ago':', not run yet'}</div>`;
 b.settings.forEach(s=>{if(s.type=='bool')h+=`<div class=chk><input type=checkbox ${s.value?'checked':''} data-id=${b.id} data-k=${s.key}> ${esc(s.label)}</div>`;
+else if(s.type=='text')h+=`<div class=set><label><span>${esc(s.label)}</span></label><input type=text value='${esc(s.value).replace(/'/g,'&#39;')}' placeholder='${esc(s.hint).replace(/'/g,'&#39;')}' data-id=${b.id} data-k=${s.key} title='${esc(s.hint)}' style='width:100%'></div>`;
 else h+=`<div class=set><label><span>${esc(s.label)}</span><span id=v_${b.id}_${s.key}>${fmt(s,s.value)}</span></label><input type=range min=${s.min} max=${s.max} step=${s.step} value=${s.value} data-id=${b.id} data-k=${s.key} title='${esc(s.hint)}'></div>`});
 if(b.lastError)h+=`<div class=err>${esc(b.lastError)} <small>(${ago(b.lastErrorAgoSec)} ago)</small></div>`;
 c.innerHTML=h;g.appendChild(c)});
 g.querySelectorAll('button[data-test]').forEach(x=>x.onclick=async()=>{const k=x.dataset.test;TESTRES[k]='sending...';$('t_'+k).textContent=TESTRES[k];const r=await j('/api/bottest',{method:'POST',body:JSON.stringify({id:k})});TESTRES[k]=r.ok?'OK: '+r.note:'Failed: '+r.error;$('t_'+k).textContent=TESTRES[k]});
 g.querySelectorAll('button[data-signin]').forEach(x=>x.onclick=()=>signin(x.dataset.signin));
 g.querySelectorAll('input').forEach(i=>{
+ if(i.type=='text')i.oninput=()=>{busy=Date.now()+55000};
  if(i.type=='range')i.oninput=()=>{busy=Date.now();const d=BOTS.bots.find(b=>b.id==i.dataset.id).settings.find(s=>s.key==i.dataset.k);$('v_'+i.dataset.id+'_'+i.dataset.k).textContent=fmt(d,+i.value)};
- i.onchange=async()=>{busy=Date.now();const b={id:i.dataset.id};if(i.dataset.k){b.settings={};b.settings[i.dataset.k]=i.type=='range'?+i.value:i.checked}else b.enabled=i.checked;
+ i.onchange=async()=>{busy=Date.now();const b={id:i.dataset.id};if(i.dataset.k){b.settings={};b.settings[i.dataset.k]=i.type=='range'?+i.value:i.type=='text'?i.value:i.checked}else b.enabled=i.checked;
   const r=await j('/api/bots',{method:'POST',body:JSON.stringify(b)});if(!r.ok)alert(r.error);busy=0;bots(true)}})}
 async function bots(force){if(!force&&Date.now()-busy<4000)return;BOTS=await j('/api/bots');$('botnote').textContent=BOTS.routerError?'Router: '+BOTS.routerError:BOTS.note;draw()}
 async function save(){const b={};F.forEach(k=>b[k]=$(k).value);b.ObsPassword=$('ObsPassword').value;const r=await j('/api/config',{method:'POST',body:JSON.stringify(b)});$('msg').textContent=r.note||r.error;$('ObsPassword').value='';load()}
