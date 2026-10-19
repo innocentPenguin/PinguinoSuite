@@ -174,7 +174,7 @@ namespace PinguinoHost
         static void Write(HttpListenerContext c, string text, string type) { c.Response.ContentType = type; c.Response.Headers["Cache-Control"] = "no-store"; c.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self' tauri://localhost http://tauri.localhost https://tauri.localhost http://127.0.0.1:* http://localhost:*"; var b = Encoding.UTF8.GetBytes(text); c.Response.OutputStream.Write(b, 0, b.Length); }
 
         const string Html = @"<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>PinguinoHost</title>
-<style>:root{color-scheme:dark;--bg:#0a0e15;--bg2:#0e131c;--panel:#131925;--panel2:#18202e;--line:#222b3c;--line2:#2d3850;--fg:#e8ecf4;--dim:#8b95ab;--faint:#5b6579;--ice:#7cc4ff;--ice2:#4a9be0;--beak:#ff9f43;--live:#ff4757;--ok:#4cd9a0;--warn:#f5d547;--r:14px}
+<style>:root{color-scheme:dark;--bg:#050505;--bg2:#0a0a0b;--panel:#101012;--panel2:#17171a;--line:#232326;--line2:#34343a;--fg:#f2f0ec;--dim:#a39f98;--faint:#85827b;--accent:#ff9900;--accent-hover:#ffad33;--accent-active:#e68a00;--accent-soft:#ff990022;--accent-line:#ff990066;--on-accent:#140b00;--focus:#ffc266;--ok:#3ddc97;--warn:#e8d44d;--bad:#ff5c5c;--live:#ff4d4f;--info:#9fb4c7;--r:14px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px 'Segoe UI',system-ui,sans-serif}
 main{max-width:1060px;margin:0 auto;padding:18px 16px}h1{font-size:20px;margin:0 0 2px}h2{font-size:15px;margin:0 0 10px}.sub{color:var(--dim);font-size:12.5px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin:14px 0}
@@ -186,16 +186,16 @@ main{max-width:1060px;margin:0 auto;padding:18px 16px}h1{font-size:20px;margin:0
 .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;margin:2px 4px 2px 0;background:var(--panel2);border:1px solid var(--line)}
 .on{color:var(--ok);border-color:rgba(76,217,160,.35)}.off{color:var(--live);border-color:rgba(255,71,87,.35)}
 .set{margin:12px 0 0}.set label{display:flex;justify-content:space-between;color:var(--dim);font-size:12.5px;gap:8px}.set label span:last-child{color:var(--fg);font-variant-numeric:tabular-nums}
-input[type=range]{width:100%;accent-color:var(--ice2);margin:6px 0 0}.chk{display:flex;gap:8px;align-items:center;margin-top:12px;color:var(--dim);font-size:12.5px}
+input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}.chk{display:flex;gap:8px;align-items:center;margin-top:12px;color:var(--dim);font-size:12.5px}
 .err{margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);color:#ffb3ba;font-size:12px;word-break:break-word}
 .row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}.row>label{width:150px;color:var(--dim);flex:none}
 input[type=text],input[type=password]{flex:1;min-width:120px;background:var(--bg2);color:var(--fg);border:1px solid var(--line2);border-radius:10px;padding:8px}
-button{background:var(--ice2);color:#04101e;border:0;border-radius:10px;padding:9px 14px;font-weight:600;cursor:pointer}button:hover{background:var(--ice)}
+button{background:var(--accent);color:var(--on-accent);border:0;border-radius:10px;padding:9px 14px;font-weight:600;cursor:pointer}button:hover{background:var(--accent-hover)}
 small{color:var(--dim)}#msg{min-height:18px;color:var(--ok);margin-top:6px}code{background:var(--bg2);padding:2px 6px;border-radius:6px;word-break:break-all}
-details{margin:14px 0}summary{cursor:pointer;color:var(--ice);font-weight:600;padding:6px 0}
-@media(max-width:560px){.row>label{width:100%}}</style></head><body><main>
+details{margin:14px 0}summary{cursor:pointer;color:var(--accent);font-weight:600;padding:6px 0}
+@media(max-width:560px){.row>label{width:100%}}</style><link rel=stylesheet href=http://127.0.0.1:8760/theme.css></head><body><main>
 <h1>PinguinoHost</h1><div class=sub>Runs the Pinguino bots without Streamer.bot. Only reachable from this PC.</div>
-<div class=sub style='margin-top:6px'><a id=autolink href=/automations style='color:var(--ice);font-weight:600'>Actions &amp; Events &rarr;</a> build chat commands, alerts, timers and OBS actions</div>
+<div class=sub style='margin-top:6px'><a id=autolink href=/automations style='color:var(--accent);font-weight:600'>Actions &amp; Events &rarr;</a> build chat commands, alerts, timers and OBS actions</div>
 <div class=card style='margin-top:14px'><div id=st>loading...</div></div>
 <div class=grid id=bots></div>
 <div class=sub id=botnote></div>

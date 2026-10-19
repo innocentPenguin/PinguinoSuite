@@ -68,6 +68,29 @@ namespace PinguinoHost
             Clog.Info("automation", "saved " + acts.Count + " actions");
             return null;
         }
+        /// <summary>First start only (remembered in the file, so deleting one sticks): the Spotify song-request commands, created DISABLED. They forward to the spotify module
+        /// (POST /api/chat-command on port 8771); enable them on the page when that module is running and Nightbot/StreamElements stop answering !sr.</summary>
+        public static void SeedDefaults()
+        {
+            try
+            {
+                var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
+                if (seeded.Any(x => (string)x == "spotify")) return;
+                const string url = "http://127.0.0.1:8771/api/chat-command";
+                Func<string, string, string[], string, int, int, JObject> mk = (id, cmd, names, perm, cd, ucd) => new JObject {
+                    { "id", "spotify-" + id }, { "name", "Spotify: !" + names[0].TrimStart('!') }, { "group", "Spotify" }, { "enabled", false }, { "importNotes", "preset: enable when the spotify module runs" },
+                    { "triggers", new JArray { new JObject { { "type", "command" }, { "names", new JArray(names) }, { "permission", perm }, { "cooldownSec", cd }, { "userCooldownSec", ucd }, { "consume", true } } } },
+                    { "conditions", new JArray() }, { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", url }, { "command", cmd }, { "as", "core" } } } } };
+                var acts = (JArray)doc["actions"];
+                foreach (var a in new[] {
+                    mk("sr", "sr", new[] { "!sr", "!songrequest" }, "everyone", 0, 10), mk("skip", "skip", new[] { "!skip" }, "mod", 0, 0),
+                    mk("song", "song", new[] { "!song", "!currentsong", "!np" }, "everyone", 8, 0), mk("queue", "queue", new[] { "!songqueue", "!srqueue" }, "everyone", 15, 0),
+                    mk("oops", "oops", new[] { "!oops", "!wrongsong" }, "everyone", 0, 10), mk("block", "blocksong", new[] { "!blocksong" }, "mod", 0, 0), mk("clear", "srclear", new[] { "!srclear" }, "mod", 0, 0) })
+                    if (!acts.OfType<JObject>().Any(x => (string)x["id"] == (string)a["id"])) acts.Add(a);
+                seeded.Add("spotify"); doc["seeded"] = seeded; Save(doc);
+            }
+            catch (Exception ex) { Clog.Warn("automation", "seeding presets failed: " + ex.Message); }
+        }
         static List<JObject> Actions() { return ((JArray)Doc()["actions"]).OfType<JObject>().Where(a => (bool?)a["enabled"] != false).ToList(); }
         static JObject FindAction(string idOrName) { return ((JArray)Doc()["actions"]).OfType<JObject>().FirstOrDefault(a => (string)a["id"] == idOrName || string.Equals((string)a["name"], idOrName, StringComparison.OrdinalIgnoreCase)); }
 
