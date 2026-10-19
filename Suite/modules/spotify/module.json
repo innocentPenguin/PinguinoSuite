@@ -2,16 +2,213 @@
   "id": "spotify",
   "name": "PinguinoSpotify",
   "desc": "Spotify queue you own: drag-to-reorder, viewer song requests (!sr, !skip), fair ordering, stream-safe mode, OBS now-playing overlay.",
-  "cmd": ["{py}", "server.py"],
+  "cmd": [
+    "{py}",
+    "server.py"
+  ],
   "cwd": "modules/spotify",
   "port": 8771,
   "url": "http://127.0.0.1:8771",
   "health": "/api/status",
   "prestream": "/api/prestream",
   "singleton": true,
-  "singleton": true,
-  "secrets": [{"name": "SPOTIFY_API_KEY", "label": "Spotify site API key (innocentpenguin.com)", "required": false, "test": "/api/test-key"}],
-  "commands": ["sr", "skip", "song", "queue", "oops", "blocksong", "srclear"],
-  "ui": { "nav": "Spotify", "icon": "🎵", "section": "Modules", "path": "/", "order": 50 },
-  "defaults": { "enabled": true, "start_with_suite": true, "react_to_live": false }
+  "secrets": [
+    {
+      "name": "SPOTIFY_API_KEY",
+      "label": "Spotify site API key (innocentpenguin.com)",
+      "required": false,
+      "test": "/api/test-key",
+      "help": {
+        "title": "SPOTIFY_API_KEY",
+        "summary": "A shared password between this PC and innocentpenguin.com so the site can trust the module. You make it up; it is not a Spotify key.",
+        "steps": [
+          "Make a random value of 32 or more characters (a password manager can generate one).",
+          "Paste it in Railway > your site service > Variables as SPOTIFY_API_KEY.",
+          "Paste the same value here with Set, then press Test (it must say OK).",
+          "To rotate: change both places to a new value."
+        ],
+        "example": "32+ random letters and digits (format only; never share the real value)",
+        "link": {
+          "label": "Railway dashboard",
+          "url": "https://railway.com/dashboard"
+        },
+        "fix": {
+          "label": "Enter the key",
+          "route": "integrations",
+          "focus": "SPOTIFY_API_KEY"
+        }
+      }
+    }
+  ],
+  "commands": [
+    "sr",
+    "skip",
+    "song",
+    "queue",
+    "oops",
+    "blocksong",
+    "srclear"
+  ],
+  "ui": {
+    "nav": "Spotify",
+    "icon": "🎵",
+    "section": "Modules",
+    "path": "/",
+    "order": 50
+  },
+  "defaults": {
+    "enabled": true,
+    "start_with_suite": true,
+    "react_to_live": false
+  },
+  "help": {
+    "_module": {
+      "title": "PinguinoSpotify",
+      "summary": "A Spotify queue you own: reorder it, let viewers request songs, and show what is playing on stream.",
+      "steps": [
+        "One-time: create a free Spotify developer app and connect it on the Spotify page (Setup tab). Needs Spotify Premium.",
+        "Open Spotify on the streaming PC and press play once so a playback device exists.",
+        "Add songs in Search, or let viewers use !sr in chat. Drag rows to reorder; only the next song is sent to Spotify, shortly before the current one ends.",
+        "Song requests ship CLOSED. Open them with the toggle on the Queue tab, '!sr open' in chat, or the site's mod page.",
+        "OBS: add a Browser source with http://127.0.0.1:8771/overlay, or a Text source reading Data\\runtime\\spotify\\nowplaying.txt.",
+        "Website link (optional): set the site URL on the Setup tab and SPOTIFY_API_KEY in Integrations > Key vault.",
+        "To redo setup: Setup tab > Disconnect, then Connect again."
+      ],
+      "link": {
+        "label": "Spotify developer dashboard",
+        "url": "https://developer.spotify.com/dashboard"
+      },
+      "fix": {
+        "label": "Open Spotify setup",
+        "route": "m:spotify"
+      }
+    },
+    "token": {
+      "title": "Spotify connected",
+      "summary": "The module needs a Spotify login (a Client ID from your developer app, then one approval in the browser) to read and control playback.",
+      "steps": [
+        "Open the Spotify developer dashboard and press Create app (any name, choose Web API).",
+        "In the app's settings add the Redirect URI exactly: http://127.0.0.1:8771/callback (the literal 127.0.0.1, not localhost) and save.",
+        "Copy the app's Client ID (no client secret is needed) and paste it on the Spotify page > Setup tab, then press Save.",
+        "Press Connect to Spotify, approve in the browser window that opens, then come back.",
+        "If it says login failed or the token was rejected, press Disconnect and Connect again. A changed Spotify password or 'remove access' on spotify.com/account/apps also needs a new Connect.",
+        "When green: the login is stored on this PC and refreshes itself; nothing more to do."
+      ],
+      "example": "Client ID format: 32 letters and digits, e.g. 0123456789abcdef0123456789abcdef",
+      "scopes": [
+        "user-read-playback-state",
+        "user-modify-playback-state",
+        "user-read-currently-playing",
+        "user-read-private",
+        "user-read-recently-played"
+      ],
+      "link": {
+        "label": "Spotify developer dashboard",
+        "url": "https://developer.spotify.com/dashboard"
+      },
+      "fix": {
+        "label": "Open Spotify setup",
+        "route": "m:spotify"
+      }
+    },
+    "premium": {
+      "title": "Spotify Premium",
+      "summary": "Spotify only lets apps control playback (skip, queue, play) for Premium accounts.",
+      "steps": [
+        "Check that the account you connected is the Premium one (the Spotify page shows its name after connecting).",
+        "If it is a Free account, upgrade at spotify.com/premium, or Disconnect and Connect again with the Premium account.",
+        "Without Premium the queue page and chat commands still load but playback control fails.",
+        "When green: the connected account is Premium."
+      ],
+      "link": {
+        "label": "Spotify Premium",
+        "url": "https://www.spotify.com/premium/"
+      },
+      "fix": {
+        "label": "Open Spotify setup",
+        "route": "m:spotify"
+      }
+    },
+    "device": {
+      "title": "Active Spotify device",
+      "summary": "Spotify needs a running player (the desktop app on the streaming PC) before the module can queue or skip.",
+      "steps": [
+        "Open the Spotify desktop app on the streaming PC and sign in with the connected account.",
+        "Press play on any song once, then pause if you like. This makes the PC an active device.",
+        "If several devices are listed, pick the PC in the device dropdown on the Spotify page.",
+        "Make sure Spotify is not set to private/silent mode on another device that took over playback.",
+        "When green: the named device is active and the module can control it."
+      ],
+      "fix": {
+        "label": "Open Spotify setup",
+        "route": "m:spotify"
+      }
+    },
+    "api": {
+      "title": "Spotify reachable",
+      "summary": "The module could not talk to Spotify's servers just now.",
+      "steps": [
+        "Check the PC's internet connection.",
+        "Look at the Console for 'auth' or 'api' lines from the spotify module; a repeated rate-limit message means Spotify asked us to slow down and it recovers by itself.",
+        "If it keeps failing, open the Spotify page > Setup and press Disconnect, then Connect.",
+        "When green: Spotify answers normally."
+      ],
+      "link": {
+        "label": "Spotify API status",
+        "url": "https://developer.spotify.com/status"
+      },
+      "fix": {
+        "label": "Open Spotify setup",
+        "route": "m:spotify"
+      }
+    },
+    "requests": {
+      "title": "Song requests open/closed",
+      "summary": "Viewer requests ship CLOSED. This shows the current state; closed is normal when you are not taking requests.",
+      "steps": [
+        "Open requests: toggle 'requests open' on the Queue tab, type '!sr open' in chat as a mod, or use open on the site's /mod/music page.",
+        "Close them with the same controls ('!sr close').",
+        "Rules (limits, explicit filter, blocklist, approval inbox, stream-safe mode) are on the Settings tab.",
+        "Stream-safe mode blocks explicit songs and holds every request in the Requests tab until you approve it.",
+        "The chat commands must also be enabled on the Host's Actions & Events page (they ship disabled), with Nightbot's !sr turned off."
+      ],
+      "example": "!sr open   !sr close   !sr never gonna give you up",
+      "fix": {
+        "label": "Open the queue",
+        "route": "m:spotify"
+      }
+    },
+    "site": {
+      "title": "Website link (innocentpenguin.com)",
+      "summary": "Optional: the PC sends now-playing and the queue to the site and receives viewer requests from it. The PC is never exposed; it only calls out.",
+      "steps": [
+        "Set the same SPOTIFY_API_KEY in Railway Variables (32+ characters; site side) and in Integrations > Key vault (this PC). Also set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in Railway (a Spotify developer app, client credentials only).",
+        "On the Spotify page > Setup > Website, enter https://innocentpenguin.com and tick enabled.",
+        "Use Test next to the key in Integrations to check the site accepts it. A 401 means the two keys differ.",
+        "If the site is down the module keeps working locally and retries automatically (3 s up to 30 s).",
+        "When green: the site shows your now-playing and queue at /music."
+      ],
+      "link": {
+        "label": "Open the site music page",
+        "url": "https://innocentpenguin.com/music"
+      },
+      "fix": {
+        "label": "Open Website setup",
+        "route": "m:spotify"
+      }
+    },
+    "voice_skip": {
+      "title": "Voice skip",
+      "summary": "Saying 'skip' to the Voice bot skips the current song, even while requests are closed. Nothing is posted to chat.",
+      "steps": [
+        "The Voice bot sends POST /api/chat-command {command: skip, role: broadcaster, silent: true} to this module.",
+        "It works whenever Spotify is playing; the skip is logged in the Console with source 'voice'.",
+        "If nothing happens, check the Spotify item above is green and a device is active."
+      ],
+      "fix": {
+        "label": "Open the Console",
+        "route": "console"
+      }
+    }
+  }
 }

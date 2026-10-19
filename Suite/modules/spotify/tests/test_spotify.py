@@ -436,7 +436,7 @@ class EngineTests(unittest.TestCase):
         self.api.me = lambda: {"display_name": "Ivan", "product": "free"}
         self.api.devices = lambda: []
         st = {i["id"]: i["status"] for i in self.e.prestream()}
-        self.assertEqual(st, {"token": "pass", "premium": "fail", "device": "warn"})
+        self.assertEqual(st, {"token": "pass", "premium": "fail", "device": "warn", "requests": "pass"})
         self.api.me = lambda: {"display_name": "Ivan", "product": "premium"}
         self.api.devices = lambda: [{"name": "PC", "is_active": True}]
         self.assertTrue(all(i["status"] == "pass" for i in self.e.prestream()))
@@ -642,6 +642,17 @@ class BridgeTests(unittest.TestCase):
         self.assertFalse(self.b.push_once())
         self.assertEqual(self.sent, [])
         self.assertNotIn("KEY", json.dumps(self.b.status()))
+
+
+class ManifestHelpTests(unittest.TestCase):
+    def test_every_prestream_item_id_has_help(self):
+        m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))
+        for k in ("_module", "token", "premium", "device", "api", "requests", "site", "voice_skip"):
+            h = m["help"][k]
+            self.assertTrue(h["title"] and h["summary"] and h["steps"] and len(h["steps"]) <= 14, k)
+            if "link" in h:
+                self.assertTrue(h["link"]["url"].startswith("https://"), k)
+        self.assertIn("help", m["secrets"][0])
 
 
 class ClosedByDefaultTests(unittest.TestCase):

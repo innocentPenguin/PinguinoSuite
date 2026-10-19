@@ -152,7 +152,13 @@ def g_overlay(h, q):
 
 
 def g_prestream(h, q):
-    return {"ts": time.time(), "items": engine.prestream()}
+    items = engine.prestream()
+    st = bridge.status()
+    if st["enabled"]:
+        ok = st["online"]
+        items.append({"id": "site", "label": "Website link", "status": "pass" if ok else "warn",
+                      "detail": "site connected" if ok else (st["last_error"] or "connecting") + ("" if st["has_key"] else " (key missing)")})
+    return {"ts": time.time(), "items": items}
 
 
 def g_search(h, q):

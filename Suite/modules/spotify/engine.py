@@ -510,6 +510,9 @@ class Engine:
                           "detail": act[0]["name"] if act else ("open Spotify on the streaming PC and press play once" if not devs else "devices idle: " + ", ".join(d["name"] for d in devs)[:100])})
         except ApiError as e:
             items.append({"id": "api", "label": "Spotify API reachable", "status": "warn", "detail": str(e)[:120]})
+        opened = self._own_settings()["requests_open"]
+        items.append({"id": "requests", "label": "Song requests", "status": "pass",
+                      "detail": "open to viewers" if opened else "closed (default): a mod opens them with !sr open"})
         return items
 
 
