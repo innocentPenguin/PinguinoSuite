@@ -43,6 +43,7 @@ DEFAULTS = {
     "ai_daily_cap_usd": 0.5,
     "ai_timeout_s": 2.0,
     "ai_margin": 8,                  # only ask AI when the local score is within this of a tier threshold
+    "host_feed_enabled": True,       # show Host follows / channel point redeems as event rows in chat
     "voice_enabled": False,          # opt-in: suggest cards answered out loud (never auto-closes)
     "claim_ttl_s": 20,               # how long a streamer-first claim holds the bots back
     "answered_fade_s": 15,

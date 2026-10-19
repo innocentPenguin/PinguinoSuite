@@ -1040,3 +1040,11 @@ def test_pop_roles_filter_and_sounds_reset(tmp_path, monkeypatch):
     state["pop_roles"] = []
     assert pp.observe(msg([])) is True
     assert pop.role_of(msg(["broadcaster"])) == "mod" and pop.role_of(msg(["subscriber"])) == "sub"
+
+
+def test_host_feed_maps_activity_items():
+    import host_feed
+    m = host_feed.to_message({"seq": 7, "ts": 100, "type": "redeem", "user": "Pat", "amount": 500, "detail": "Hydrate", "message": "cheers"}, "chan")
+    assert m.id == "host:7" and m.event == "redeem" and m.amount == 500 and m.text == "Pat redeemed Hydrate: cheers"
+    assert host_feed.to_message({"seq": 8, "type": "follow", "user": "Fin"}, "chan").text == "Fin followed"
+    assert host_feed.to_message({"seq": 9, "type": "clip", "user": "x"}, "chan") is None

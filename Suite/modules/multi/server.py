@@ -25,6 +25,7 @@ import presets as presets_mod
 import console_log
 import help_text
 import listen_bridge
+import host_feed
 import prestream
 import voice
 import secrets_store
@@ -100,7 +101,8 @@ async def lifespan(app):
     connectors["tiktok"] = tt
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
              asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()),
-             asyncio.create_task(listen_bridge.run(cards, hub.emit)), asyncio.create_task(prestream_file_loop())]
+             asyncio.create_task(listen_bridge.run(cards, hub.emit)),
+             asyncio.create_task(host_feed.run(inbox, lambda: connectors['twitch'].status == 'connected')), asyncio.create_task(prestream_file_loop())]
     yield
     console_log.info("server", "Multi stopping")
     tw.stop = dc.stop = yt.stop = tt.stop = True
