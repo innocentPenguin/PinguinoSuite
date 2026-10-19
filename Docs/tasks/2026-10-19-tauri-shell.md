@@ -30,3 +30,7 @@ Goal (user /goal): cross-platform PinguinoSuite app on Tauri, ready for other ap
 - Full icon set generated (`npx tauri icon`); `npx tauri build --bundles nsis` produced `PinguinoSuite_0.1.0_x64-setup.exe` (2 MB).
 - `.github/workflows/app.yml`: Windows/macOS/Linux build matrix. **macOS/Linux builds are unverified until it runs on GitHub** (the root folder is not yet a pushed repo).
 - Still: bundle the Python core (currently needs Python + Suite folder), per-module tokens, Link token adoption.
+
+## Update: autostart switched (2026-10-19, user-approved)
+- HKCU Run `PinguinoSuite` changed from `pythonw ...\suite.py --background` to `...\App\src-tauri\target\release\pinguino-suite.exe --background` (stays in tray). Rollback: set the old value back. No Pinguino Startup shortcuts existed; the `PinguinoBot Log Update` scheduled task is the pipeline and was left alone.
+- Caveat: points at the build output; rebuild replaces it. Install the NSIS setup later for a stable path.
