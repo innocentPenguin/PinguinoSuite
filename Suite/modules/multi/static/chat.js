@@ -81,7 +81,7 @@ function chatPins() {
 }
 function chatStrip() {
   const s = $('#cstrip'); if (!s) return;
-  const open = (cards.open || []).filter(c => !CF.off.includes(c.platform)).slice(0, 3);
+  const pf = PANE && PANE.filter || {}, open = (cards.open || []).filter(c => !CF.off.includes(c.platform) && pf.kind !== 'events' && (!(pf.platforms || []).length || pf.platforms.includes(c.platform))).slice(0, 3);
   if (!CF.strip) { s.innerHTML = `<button class="lnk" data-cf="strip">Show ${(cards.open || []).length} message(s) that need a reply</button>`; return; }
   s.innerHTML = (open.length ? open.map(c => `<div class="cc ${c.tier === 'high' ? 'high' : ''}"><div class="ch"><span class="pf">${esc(c.platform)}</span><b>${esc(c.display)}</b>
       <span class="mut" title="${esc((c.reasons || []).map(r => r.rule + ' ' + r.points).join(', '))}">score ${c.score}</span></div>
@@ -122,6 +122,7 @@ function chatBar() {
     <button class="chip2 ${CF.q ? 'on' : ''}" data-cf="q" title="Only messages that look like a question for you or mention you">Questions for me</button>
     <button class="chip2 ${CF.prio ? 'on' : ''}" data-cf="prio" title="Only show messages worth answering (plus bot replies)">Priority only</button>
     <a class="chip2" href="/?type=style" target="_self" title="Fonts, colours, backgrounds and highlights">Look</a>
+    ${PANE ? `<span class="chip2" title="This window shows: ${esc(PANE.name || 'a part of the chat')}">${esc(PANE.name || 'pane')}</span>` : `<button class="chip2" data-cf="popout" title="Open this chat in its own window - drag it to any monitor">Pop out</button>`}
     <a class="chip2" href="/" target="_self" title="Setup, layouts, smart features">Setup</a>`;
   $('#csearch').oninput = e => chatSearch(e.target.value);
 }
@@ -188,6 +189,7 @@ document.addEventListener('click', async e => {
   else if (k === 'prio') { CF.prio = !CF.prio; chatBar(); chatFeed(); }
   else if (k === 'q') { CF.q = !CF.q; chatBar(); chatFeed(); }
   else if (k === 'strip') { CF.strip = !CF.strip; chatStrip(); }
+  else if (k === 'popout') { const r = await popOut('chat-main', location.origin + '/?type=chat', 'Chat', {w: 520, h: 900}); if (r === 'blocked') chatNotice('The browser blocked the pop-up - allow pop-ups for this page.'); }
   else if (k === 'clr') { chatTarget = null; chatCompose(); }
   CF.save();
 });

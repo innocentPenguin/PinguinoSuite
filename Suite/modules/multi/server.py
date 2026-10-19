@@ -20,6 +20,8 @@ import checks
 import config
 import learning
 import chatstyle
+import panes as panes_mod
+import presets as presets_mod
 import console_log
 import help_text
 import listen_bridge
@@ -455,10 +457,150 @@ async def chatstyle_set(request: Request):
 
 @app.post("/api/chatstyle/reset")
 def chatstyle_reset():
-    config.save_settings({"chat_style": None})
-    style = chatstyle.sanitize(None)
+    return _set_style(chatstyle.sanitize(None))
+
+
+# presets, undo, import/export of the chat look ------------------------------
+def _set_style(style, remember=True):
+    if remember:
+        store.kv_set("style_prev", chatstyle.sanitize(config.settings()["chat_style"]))
+    config.save_settings({"chat_style": style})
     hub.emit({"type": "chatstyle.changed", "style": style})
     return {"style": style}
+
+
+@app.get("/api/chatstyle/presets")
+def chatstyle_presets():
+    mine = store.kv_get("style_presets", {}) or {}
+    return {"builtin": [{"name": n, "desc": p["desc"], "style": chatstyle.sanitize(p["style"])} for n, p in presets_mod.PRESETS.items()],
+            "mine": [{"name": n, "desc": "Saved by you", "style": st} for n, st in mine.items()],
+            "can_undo": bool(store.kv_get("style_prev"))}
+
+
+@app.post("/api/chatstyle/apply")
+async def chatstyle_apply(request: Request):
+    name = str((await request.json()).get("name", ""))
+    st = presets_mod.preset_style(name) or (store.kv_get("style_presets", {}) or {}).get(name)
+    if not st:
+        raise HTTPException(404, "unknown look")
+    return _set_style(chatstyle.sanitize(st))
+
+
+@app.post("/api/chatstyle/save-preset")
+async def chatstyle_save_preset(request: Request):
+    b = await request.json()
+    name = str(b.get("name", "")).strip()[:40]
+    if not name:
+        raise HTTPException(400, "give the look a name")
+    mine = store.kv_get("style_presets", {}) or {}
+    if name not in mine and len(mine) >= 30:
+        raise HTTPException(400, "30 saved looks is the limit - delete one first")
+    mine[name] = chatstyle.sanitize(b.get("style") or config.settings()["chat_style"])
+    store.kv_set("style_presets", mine)
+    return {"saved": name, "count": len(mine)}
+
+
+@app.post("/api/chatstyle/delete-preset")
+async def chatstyle_delete_preset(request: Request):
+    name = str((await request.json()).get("name", ""))
+    mine = store.kv_get("style_presets", {}) or {}
+    mine.pop(name, None)
+    store.kv_set("style_presets", mine)
+    return {"count": len(mine)}
+
+
+@app.post("/api/chatstyle/undo")
+def chatstyle_undo():
+    prev = store.kv_get("style_prev")
+    if not prev:
+        raise HTTPException(404, "nothing to undo")
+    return _set_style(chatstyle.sanitize(prev), remember=False)
+
+
+@app.get("/api/chatstyle/export")
+def chatstyle_export():
+    return {"pinguino_chat_look": 1, "style": chatstyle.sanitize(config.settings()["chat_style"])}
+
+
+@app.post("/api/chatstyle/import")
+async def chatstyle_import(request: Request):
+    b = await request.json()
+    src = b.get("style") if isinstance(b.get("style"), dict) else b
+    if not isinstance(src, dict) or not any(k in src for k in ("base", "platform", "role", "event", "keywords")):
+        raise HTTPException(400, "that does not look like a chat look file")
+    return _set_style(chatstyle.sanitize(src))
+
+
+# panes: split chat halves and extra pop-out windows, each with its own filter and look -------------
+def _panes():
+    return store.kv_get("panes", {}) or {}
+
+
+@app.get("/api/panes")
+def panes_list():
+    return {"panes": _panes(), "geom": store.kv_get("geom", {}) or {}}
+
+
+@app.get("/api/panes/{pid}")
+def pane_get(pid: str):
+    p = _panes().get(panes_mod.pane_id(pid))
+    if not p:
+        raise HTTPException(404, "unknown pane")
+    return p
+
+
+@app.post("/api/panes/{pid}")
+async def pane_set(pid: str, request: Request):
+    pid = panes_mod.pane_id(pid)
+    if not pid:
+        raise HTTPException(400, "bad pane id")
+    allp = _panes()
+    if pid not in allp and len(allp) >= 12:
+        raise HTTPException(400, "12 panes is the limit - delete one first")
+    allp[pid] = panes_mod.sanitize(await request.json(), allp.get(pid))
+    store.kv_set("panes", allp)
+    hub.emit({"type": "pane.changed", "id": pid, "pane": allp[pid]})
+    return allp[pid]
+
+
+@app.delete("/api/panes/{pid}")
+def pane_delete(pid: str):
+    allp = _panes()
+    allp.pop(panes_mod.pane_id(pid), None)
+    store.kv_set("panes", allp)
+    hub.emit({"type": "pane.changed", "id": panes_mod.pane_id(pid), "pane": None})
+    return {"ok": True}
+
+
+@app.post("/api/splits/apply")
+async def split_apply(request: Request):
+    b = await request.json()
+    try:
+        built = panes_mod.build_split(str(b.get("mode", "flow")), b.get("platforms"), bool(b.get("aot")))
+    except ValueError:
+        raise HTTPException(400, "unknown split mode (flow, platform, events, people)")
+    allp = _panes()
+    for pid, p in built.items():
+        old = allp.get(pid) or {}
+        p["look"] = old.get("look", {})            # each half keeps its own look tweaks across mode changes
+        p["geom"] = old.get("geom")
+        allp[pid] = p
+        hub.emit({"type": "pane.changed", "id": pid, "pane": p})
+    store.kv_set("panes", allp)
+    return {"panes": built}
+
+
+@app.post("/api/geom/{label}")
+async def geom_set(label: str, request: Request):
+    g = panes_mod.sanitize({"geom": await request.json()}).get("geom")
+    if not g:
+        raise HTTPException(400, "need x, y, w, h")
+    label = panes_mod.pane_id(label)
+    allg = store.kv_get("geom", {}) or {}
+    if allg.get(label) != g:
+        allg[label] = g
+        store.kv_set("geom", allg)
+    return g
 
 
 # stream events pushed by other modules (Host: follow, redeem...) -------------

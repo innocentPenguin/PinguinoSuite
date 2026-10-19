@@ -77,6 +77,12 @@ body.popout{background:transparent!important;height:auto;min-height:100vh;justif
 .cassist{border-top:1px solid var(--line);padding:6px 10px;max-height:40%;overflow:auto;background:var(--card)}.ahd{display:flex;justify-content:space-between}
 .sug{display:flex;gap:8px;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:6px;padding:5px 8px;margin:4px 0}.chrec{max-height:90px;overflow:auto;border-left:2px solid var(--line);padding-left:8px;margin:4px 0;color:var(--dim)}
 .chcard textarea,#ctpls{width:100%}.tpls{display:flex;gap:5px;flex-wrap:wrap;align-items:center}.u[data-chatter]{cursor:pointer}.u[data-chatter]:hover{text-decoration:underline}
+.ed-top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}.ed-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px;align-items:start}
+.ed-right{position:sticky;top:0}.cs-pwrap{border:1px solid var(--line);border-radius:10px;padding:6px;margin-top:6px}.cs-preview{height:calc(100vh - 130px);min-height:360px;overflow-y:auto;background:transparent;border:0}
+.ed-left section{margin-bottom:22px}.ed-left h3{margin:.4em 0}.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.pcardl{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}.pcardl.cur{border-color:var(--accent)}.pv{height:128px;overflow:hidden;padding:4px}.pmeta{padding:8px 10px}
+.qrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:5px 0}.qrow .chk{min-width:210px}.qrow .more{flex-basis:100%}.qrow .more summary{cursor:pointer;color:var(--mut);font-size:.85em}.qv{min-width:38px}
+@media(max-width:900px){.ed-grid{grid-template-columns:1fr}.ed-right{position:static;order:-1}.cs-preview{height:260px;min-height:0}}
 </style>
 <!--THEME--></head><body>
 <header id="hdr"></header><div id="body" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
@@ -85,7 +91,7 @@ body.popout{background:transparent!important;height:auto;min-height:100vh;justif
 <script src="/assets/chat.js"></script>
 <script>
 const q = new URLSearchParams(location.search), WID = q.get('win');
-const HALF = q.get('half');
+const HALF = q.get('half'), PID = q.get('pane'), POPLABEL = q.get('pop');
 let W = {type: location.pathname === '/popout' ? 'popout' : (q.get('type') || 'launcher'), platforms: [], min_tier: 'none'};
 if (HALF && W.type === 'chat') { W.type = 'unified'; W.link_group = 'chat-split'; W.link_order = (HALF === 'top' || HALF === 'left') ? 1 : 0; }   // one chat spread over two windows: older rows in the top/left one
 const TIERS = {none: 0, low: 1, medium: 2, high: 3};
@@ -96,6 +102,14 @@ const api = (p, o) => fetch(p, o && {method: o.m || 'POST', headers: {'content-t
 const hhmm = t => new Date(t * 1000).toTimeString().slice(0, 5);
 
 async function init() {
+  if (PID) {
+    try { const r = await fetch('/api/panes/' + encodeURIComponent(PID)); if (r.ok) PANE = await r.json(); } catch (e) { /* no pane: behave as a plain chat window */ }
+    if (PANE) {
+      W.title = PANE.name || W.title;
+      if (PANE.flow) { W.type = 'unified'; W.link_group = PANE.flow.group; W.link_order = PANE.flow.order; }
+      else if (W.type === 'launcher') W.type = 'chat';
+    }
+  }
   await loadStyle();
   if (WID) {
     const all = await api('/api/windows');
@@ -109,12 +123,20 @@ async function init() {
   cards = await api('/api/cards');
   connect(); render(); setInterval(() => { api('/api/cards').then(c => { cards = c; renderCards(); }); }, 5000);
   if (WID) savePosition();
+  else if (PID || POPLABEL) reportGeom(PID ? 'pane-' + PID : POPLABEL);
 }
 function savePosition() {
   let last = '';
   setInterval(() => {
     const g = {x: screenX, y: screenY, w: outerWidth, h: outerHeight}, s = JSON.stringify(g);
     if (s !== last) { last = s; api('/api/windows/' + WID, {m: 'PUT', b: g}); }
+  }, 3000);
+}
+function reportGeom(label) {      // remembers where this pop-out window sits so it reopens there (also asked of the shell)
+  let last = '';
+  setInterval(() => {
+    const g = {x: screenX, y: screenY, w: outerWidth, h: outerHeight}, j = JSON.stringify(g);
+    if (j !== last && g.w > 100) { last = j; api('/api/geom/' + label, {b: g}).catch(() => {}); }
   }, 3000);
 }
 function connect() {
@@ -130,10 +152,25 @@ function on(ev) {
     if (W.type === 'popout' && window.popAdd) window.popAdd(ev.message);
   } else if (ev.type === 'pins.changed') { PINS = ev.pins || []; if (W.type === 'chat') { chatPins(); chatFeed(); } }
   else if (ev.type === 'chatstyle.changed') { CS = ev.style; applyStyle(); if (W.type === 'chat') chatFeed(); if (W.type === 'style') renderPreview(); } else if (ev.type === 'card.new' || ev.type === 'card.update') api('/api/cards').then(c => { cards = c; renderCards(); if (W.type === 'chat') chatStrip(); });
-  else if (ev.type === 'layout.changed') { if (W.type === 'launcher') renderLauncher(); }
+  else if (ev.type === 'pane.changed' && PID && ev.id === PID) {
+    if (!ev.pane) { document.body.innerHTML = '<div class="empty">This window was removed.</div>'; return; }
+    PANE = ev.pane; applyStyle(); renderHeader(); if (W.type === 'chat') { chatFeed(); } else render();
+  } else if (ev.type === 'layout.changed') { if (W.type === 'launcher') renderLauncher(); }
+}
+const PROLE = m => { const bd = m.badges || [], r = []; if (bd.includes('broadcaster') || MYNAMES.has((m.user || '').toLowerCase())) r.push('streamer');
+  if (bd.includes('moderator')) r.push('mod'); if (bd.includes('vip')) r.push('vip'); if (bd.includes('subscriber') || bd.includes('founder')) r.push('sub');
+  if (isBot(m)) r.push('bot'); if (!r.length) r.push('viewer'); return r; };
+function paneOk(m) {      // this window is a pane (split half / extra window) with its own filter
+  if (!PANE) return true;
+  const f = PANE.filter || {};
+  if (f.platforms && f.platforms.length && !f.platforms.includes(m.platform)) return false;
+  if (f.kind === 'chat' && m.event) return false;
+  if (f.kind === 'events' && !m.event) return false;
+  if (f.roles && f.roles.length && PROLE(m).some(r => f.roles.includes(r)) === !!f.invert_roles) return false;
+  return true;
 }
 function pass(m) {
-  return (!W.platforms.length || W.platforms.includes(m.platform)) && TIERS[m.tier || 'none'] >= TIERS[W.min_tier || 'none'];
+  return paneOk(m) && (!W.platforms.length || W.platforms.includes(m.platform)) && TIERS[m.tier || 'none'] >= TIERS[W.min_tier || 'none'];
 }
 function msgHtml(m) {
   const reasons = (m.reasons || []).map(r => `${r.rule} ${r.points > 0 ? '+' : ''}${r.points}`).join(', ');

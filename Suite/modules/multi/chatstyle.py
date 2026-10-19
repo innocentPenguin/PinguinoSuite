@@ -23,7 +23,8 @@ def rule(bg="", bgA=100, bg2="", text="", name="", bold=False, border="", border
 DEFAULT_STYLE = {
     "base": {"family": "system-ui", "size": 14, "weight": 400, "line": 1.35, "spacing": 4, "nameWeight": 700,
              "bg": "#09090a", "bgA": 0, "text": "#ececef", "timestamps": True, "badges": True, "platformTag": True,
-             "emoteSize": 150, "radius": 6, "marker": "text"},   # marker: text | logo | both | none
+             "emoteSize": 150, "radius": 6, "marker": "text",
+             "intensity": 100, "anim": "none"},   # intensity: highlight strength %; anim: none | pulse | slide (stream events only)   # marker: text | logo | both | none
     "platform": {
         "twitch": rule(border="#9146ff", borderW=0),
         "youtube": rule(border="#ff4d4d", borderW=0),
@@ -103,6 +104,8 @@ def sanitize(user):
     b["text"] = _color(ub.get("text", b["text"]), b["text"]) or b["text"]
     b["emoteSize"] = int(_num(ub.get("emoteSize", b["emoteSize"]), 80, 300, b["emoteSize"]))
     b["radius"] = int(_num(ub.get("radius", b["radius"]), 0, 24, b["radius"]))
+    b["intensity"] = int(_num(ub.get("intensity", b["intensity"]), 0, 250, b["intensity"]))
+    b["anim"] = ub.get("anim") if ub.get("anim") in ("none", "pulse", "slide") else b["anim"]
     b["marker"] = ub.get("marker") if ub.get("marker") in ("text", "logo", "both", "none") else b["marker"]
     um = user.get("marker") if isinstance(user.get("marker"), dict) else {}
     for plat in PLATFORMS:
@@ -121,3 +124,14 @@ def sanitize(user):
                         "rule": _rule(item.get("rule"), rule(bg="#ff9900", bgA=22, border="#ff9900", borderW=4))})
     out["keywords"] = kws
     return out
+
+
+LOOK_KEYS = ("family", "size", "weight", "line", "spacing", "nameWeight", "bg", "bgA", "text", "timestamps", "badges", "platformTag",
+             "emoteSize", "radius", "marker", "intensity", "anim")
+
+
+def sanitize_look(o):
+    """A per-pane look: only the base keys the user actually set, each validated. Everything else follows the main chat look."""
+    o = o if isinstance(o, dict) else {}
+    full = sanitize({"base": o})["base"]
+    return {k: full[k] for k in LOOK_KEYS if k in o}

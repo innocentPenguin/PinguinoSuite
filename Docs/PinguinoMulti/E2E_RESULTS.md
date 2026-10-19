@@ -1,8 +1,8 @@
-# Multi end-to-end pass (2026-10-19 11:26)
+# Multi end-to-end pass (2026-10-19 11:37)
 
 Real server process on a throwaway port with a throwaway data folder; nothing audible, no network, no live accounts. Script: `Suite/modules/multi/tests/e2e_live.py`.
 
-**70/70 passed**
+**82/82 passed**
 
 | Area | Check | Result | Detail |
 |---|---|---|---|
@@ -17,7 +17,7 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Cards | card action: snooze | PASS |  |
 | Cards | card action: reopen | PASS |  |
 | Cards | card action: answer | PASS |  |
-| Cards | hotkey dismiss acts on top card | PASS | {'ok': True, 'card': 'c:twitch:dev:1792427196421', 'state': 'dismissed'} |
+| Cards | hotkey dismiss acts on top card | PASS | {'ok': True, 'card': 'c:twitch:dev:1792427845737', 'state': 'dismissed'} |
 | Assist | mark to answer creates a card | PASS |  |
 | Cards | after-stream recap | PASS |  |
 | Cards | streamer-first claims endpoint | PASS |  |
@@ -36,7 +36,7 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Look | chat look loads defaults | PASS |  |
 | Look | chat look saved + validated | PASS |  |
 | Look | hostile style values are rejected | PASS |  |
-| Look | follow event pushed with the module token | PASS | {'ok': True, 'id': 'evt:twitch:1792427198862'} |
+| Look | follow event pushed with the module token | PASS | {'ok': True, 'id': 'evt:twitch:1792427848184'} |
 | Safety | event push without a token is refused | PASS | token required |
 | Look | stream-safe popout serves | PASS |  |
 | Look | style editor page serves | PASS |  |
@@ -65,6 +65,18 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Windows | delete window | PASS |  |
 | Windows | built-in layouts include Combined Chat | PASS |  |
 | Windows | monitor list | PASS |  |
+| Look | 10 ready-made looks listed | PASS |  |
+| Look | pick a ready-made look | PASS |  |
+| Look | undo goes back | PASS |  |
+| Look | save my own look | PASS |  |
+| Look | export then import round trip | PASS |  |
+| Look | import refuses junk | PASS |  |
+| Split | by-platform split makes two panes | PASS |  |
+| Split | flow split links the two halves | PASS |  |
+| Split | each half keeps its own look (bad keys dropped) | PASS |  |
+| Split | changing the split mode keeps each half's look | PASS |  |
+| Windows | pop-out position is remembered | PASS |  |
+| Split | pane page loads | PASS |  |
 | Setup | setup info for the launcher | PASS |  |
 | Ranking | explainable rules + defaults | PASS |  |
 | Ranking | learning view | PASS |  |

@@ -845,7 +845,7 @@ def test_chatstyle_api_roundtrip_and_reset(tmp_path, monkeypatch):
     h = {"origin": "http://127.0.0.1:8766"}
     r = c.post("/api/chatstyle", json={"style": {"event": {"sub": {"bg": "#112233"}}}}, headers=h).json()["style"]
     assert r["event"]["sub"]["bg"] == "#112233" and saved["chat_style"]["event"]["sub"]["bg"] == "#112233"
-    assert c.post("/api/chatstyle/reset", json={}, headers=h).json()["style"]["event"]["sub"]["bg"] == "#ffc94d" and saved["chat_style"] is None
+    assert c.post("/api/chatstyle/reset", json={}, headers=h).json()["style"]["event"]["sub"]["bg"] == "#ffc94d" and saved["chat_style"]["event"]["sub"]["bg"] == "#ffc94d"
     assert "defaults" in c.get("/api/chatstyle").json()
 
 
@@ -968,3 +968,60 @@ def test_chatter_card_manual_mark_and_assist_routes(tmp_path, monkeypatch):
     assert c.post("/api/templates", json={"templates": ["x {name}"]}, headers=h).json() == {"templates": ["x {name}"]}
     s = c.post("/api/assist/suggest", json={"message_id": "twitch:c:x2"}, headers=h).json()
     assert s["source"] == "templates" and s["replies"] == ["x Zed"]                                  # no AI key in tests
+
+
+def test_presets_are_valid_and_look_overrides_are_clean():
+    import chatstyle, presets
+    for name in presets.PRESETS:
+        st = presets.preset_style(name)
+        assert st["base"]["marker"] in ("text", "logo", "both", "none") and 0 <= st["base"]["intensity"] <= 250
+    assert presets.preset_style("Nope") is None
+    assert chatstyle.sanitize_look({"size": 99, "bg": "#112233", "evil": 1, "anim": "explode", "family": "x;y"}) == {"size": 48, "bg": "#112233", "anim": "none", "family": "system-ui"}
+    assert chatstyle.sanitize_look("junk") == {}
+
+
+def test_panes_filters_and_split_modes():
+    import panes
+    a = panes.build_split("platform", ["twitch", "bogus"])
+    assert a["split-a"]["filter"]["platforms"] == ["twitch"] and "twitch" not in a["split-b"]["filter"]["platforms"]
+    f = panes.build_split("flow")
+    assert f["split-a"]["flow"]["order"] == 1 and f["split-b"]["flow"]["order"] == 0 and f["split-b"]["flow"]["group"] == "chat-split"
+    assert panes.build_split("events")["split-b"]["filter"]["kind"] == "events"
+    p = panes.build_split("people")
+    assert p["split-b"]["filter"]["invert_roles"] is True
+    try:
+        panes.build_split("zzz"); assert False
+    except ValueError:
+        pass
+    s = panes.sanitize({"filter": {"platforms": ["twitch", "x"], "kind": "weird", "roles": ["mod", "god"]}, "look": {"size": 20, "x": 1}, "geom": {"x": "a"}})
+    assert s["filter"] == {"platforms": ["twitch"], "kind": "all", "roles": ["mod"], "invert_roles": False} and s["look"] == {"size": 20} and s["geom"] is None
+
+
+def test_look_presets_undo_import_and_panes_api(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import config, server
+    state = {}
+    monkeypatch.setattr(config, "save_settings", lambda p: state.update(p) or p)
+    monkeypatch.setattr(config, "settings", lambda: dict(config.DEFAULTS, **state))
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    h = {"origin": "http://127.0.0.1:8766"}
+    lst = c.get("/api/chatstyle/presets").json()
+    assert {"Pinguino", "Neon", "Compact"} <= {p["name"] for p in lst["builtin"]}
+    assert c.post("/api/chatstyle/apply", json={"name": "Neon"}, headers=h).json()["style"]["base"]["bg"] == "#0b0014"
+    assert c.post("/api/chatstyle/apply", json={"name": "nope"}, headers=h).status_code == 404
+    assert c.post("/api/chatstyle/undo", json={}, headers=h).json()["style"]["base"]["bg"] == "#09090a"
+    assert c.post("/api/chatstyle/save-preset", json={"name": ""}, headers=h).status_code == 400
+    assert c.post("/api/chatstyle/save-preset", json={"name": "Mine"}, headers=h).json()["count"] >= 1
+    assert "Mine" in [p["name"] for p in c.get("/api/chatstyle/presets").json()["mine"]]
+    assert c.post("/api/chatstyle/import", json={"junk": 1}, headers=h).status_code == 400
+    assert c.post("/api/chatstyle/import", json=c.get("/api/chatstyle/export").json(), headers=h).status_code == 200
+    r = c.post("/api/splits/apply", json={"mode": "events"}, headers=h).json()
+    assert r["panes"]["split-b"]["filter"]["kind"] == "events"
+    assert c.post("/api/panes/split-b", json={"look": {"size": 22, "bg": "bad"}}, headers=h).json()["look"] == {"size": 22, "bg": "#09090a"}
+    assert c.get("/api/panes/split-b").json()["look"]["size"] == 22
+    assert c.post("/api/splits/apply", json={"mode": "zzz"}, headers=h).status_code == 400
+    assert c.post("/api/geom/pane-split-a", json={"x": 1, "y": 2, "w": 300, "h": 200}, headers=h).status_code == 200
+    assert c.post("/api/geom/pane-split-a", json={"x": "q"}, headers=h).status_code == 400
+    assert c.get("/api/panes").json()["geom"]["pane-split-a"]["w"] == 300
+    assert c.delete("/api/panes/split-b", headers=h).status_code == 200 and c.get("/api/panes/split-b").status_code == 404

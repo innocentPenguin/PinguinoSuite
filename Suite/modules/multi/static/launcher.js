@@ -57,7 +57,7 @@ function platformCard(c, setup) {
 }
 
 async function renderLauncher() {
-  const [ws, pf, st, setup, ai, dg, pp] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai'), api('/api/ding'), api('/api/pop')]);
+  const [ws, pf, st, setup, ai, dg, pp, pn] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai'), api('/api/ding'), api('/api/pop'), api('/api/panes')]);
   const s = setup.settings;
   const connected = st.connectors.filter(c => c.status === 'connected').length;
   const step = n => `<span class="n">${n}</span>`;
@@ -120,11 +120,28 @@ async function renderLauncher() {
     <div class="act"><button class="p" data-act="pop-save">Save</button></div>
     <small class="mut">${pp.played} pop(s) played${pp.dropped ? ', ' + pp.dropped + ' skipped during bursts' : ''}.</small></div>
 
-  <h3>Split chat across two monitors ${T('', 'One continuous chat: the newest messages in one window and the older ones continuing in the other.')}</h3>
-  <div class="box"><small class="mut">Opens two chat windows in the app that share one feed. Works inside the Pinguino app; in a normal browser use the Windows section above.</small>
-    <div class="row"><label>Older messages (top / left) on <select id="sp-a"></select></label><label>Newest messages (bottom / right) on <select id="sp-b"></select></label>
-      <label>Layout <select id="sp-dir"><option value="top">stacked (top + bottom)</option><option value="left">side by side (left + right)</option></select></label></div>
-    <div class="act"><button class="p" data-act="split-open">Open split chat</button> <button data-act="split-close">Close split chat</button> <span id="sp-state" class="mut"></span></div></div>
+  <h3>Pop-out and split chat ${T('', 'Chat and the look editor can leave this window and live on any monitor. Split chat shares one chat over two windows.')}</h3>
+  <div class="box"><small class="mut">Inside the Pinguino app these are real windows you can drag to any monitor; each one remembers where you left it. In a normal browser they open as pop-up windows.</small>
+    <div class="act"><button class="p" data-act="pop-chat">Pop out the chat</button> <button data-act="pop-look">Pop out the look editor</button>
+      <label class="chk"><input type="checkbox" id="sp-aot" ${aotPref() ? 'checked' : ''}> keep pop-outs on top of other windows</label> <small class="mut">(app only)</small></div>
+    <h4>Split chat in half</h4>
+    <div class="row"><label>How to split <select id="sp-mode">
+      <option value="flow">One feed: newest in B, older rows continue in A</option><option value="platform">By platform</option>
+      <option value="events">Chat in A, stream events in B</option><option value="people">Streamer, mods and VIPs in A, viewers in B</option></select></label>
+      <span id="sp-plats" class="row" hidden><b>A shows:</b>${['twitch', 'youtube', 'discord', 'tiktok'].map(x => `<label class="chk"><input type="checkbox" class="sp-pl" value="${x}" ${x === 'twitch' ? 'checked' : ''}> ${x}</label>`).join('')}<small class="mut">B shows the rest</small></span></div>
+    <div class="row"><label>A (top / left) on <select id="sp-a"></select></label><label>B (bottom / right) on <select id="sp-b"></select></label>
+      <label>Layout <select id="sp-dir"><option value="top">stacked (A above B)</option><option value="left">side by side (A left of B)</option></select></label>
+      <label class="chk"><input type="checkbox" id="sp-keep" checked> use remembered positions</label></div>
+    <div class="act"><button class="p" data-act="split-open">Open split chat</button> <button data-act="split-close">Close split chat</button> <span id="sp-state" class="mut"></span></div>
+    <details><summary>Each half's own look</summary><small class="mut">Leave a box empty to follow the main chat look. Full control over the main look: <a href="/?type=style">Chat look</a>.</small>
+      ${['a', 'b'].map(k => { const lk = ((pn.panes['split-' + k] || {}).look) || {}; return `<div class="rule"><b>Half ${k.toUpperCase()}</b><div class="rg">
+        <label class="cf">Text size <input type="number" id="sl-${k}-size" min="9" max="48" value="${lk.size ?? ''}" style="width:70px" placeholder="main"></label>
+        <label class="cf">Background strength % <input type="number" id="sl-${k}-bgA" min="0" max="100" value="${lk.bgA ?? ''}" style="width:70px" placeholder="main"></label>
+        <label class="cf">Background colour <input type="checkbox" id="sl-${k}-bgon" ${lk.bg ? 'checked' : ''}><input type="color" id="sl-${k}-bg" value="${lk.bg || '#09090a'}"></label>
+        <label class="cf">Platform marker <select id="sl-${k}-marker"><option value="">main</option>${[['text', 'Word'], ['logo', 'Logo'], ['both', 'Both'], ['none', 'Nothing']].map(([v, t]) => `<option value="${v}" ${lk.marker === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label class="cf">Times <select id="sl-${k}-timestamps"><option value="">main</option><option value="1" ${lk.timestamps === true ? 'selected' : ''}>show</option><option value="0" ${lk.timestamps === false ? 'selected' : ''}>hide</option></select></label>
+        <label class="cf">Highlight strength % <input type="number" id="sl-${k}-intensity" min="0" max="250" value="${lk.intensity ?? ''}" style="width:70px" placeholder="main"></label></div></div>`; }).join('')}
+      <div class="act"><button data-act="split-looks">Save the halves' looks</button></div></details></div>
 
   <h3>Smart features</h3>
   <div class="box"><b>How messages are ranked ${T('', 'Local rules always work with no internet and no account. AI only double-checks borderline messages.')}</b>
@@ -220,12 +237,31 @@ document.addEventListener('click', async e => {
       toast(plats.length ? 'Saved. Chat pop is ON for ' + plats.join(', ') + '.' : 'Saved. Chat pop is off.'); }
     else if (a === 'ding-reset') { await api('/api/ding/reset', {b: {}}); toast('Cleared. Everyone counts as new again.'); }
     else if (a === 'ding-pick') { toast('A file window opened on this PC...'); const r = await api('/api/ding/pick', {b: {}}); if (r.path) $('#' + t.dataset.target).value = r.path; return; }
+    else if (a === 'pop-chat') { const r = await popOut('chat-main', location.origin + '/?type=chat', 'Chat', {w: 520, h: 900, aot: aotPref()}); toast(r === 'blocked' ? 'The browser blocked the pop-up - allow pop-ups for this page.' : 'Chat opened in its own window.', r !== 'blocked'); return; }
+    else if (a === 'pop-look') { const r = await popOut('look-editor', location.origin + '/?type=style', 'Chat look', {w: 1180, h: 860, aot: aotPref()}); toast(r === 'blocked' ? 'The browser blocked the pop-up - allow pop-ups for this page.' : 'Chat look opened in its own window.', r !== 'blocked'); return; }
+    else if (a === 'split-looks') {
+      for (const k of ['a', 'b']) {
+        const g = id => $('#sl-' + k + '-' + id), look = {};
+        if (g('size').value !== '') look.size = +g('size').value;
+        if (g('bgA').value !== '') look.bgA = +g('bgA').value;
+        if (g('bgon').checked) look.bg = g('bg').value;
+        if (g('marker').value) look.marker = g('marker').value;
+        if (g('timestamps').value !== '') look.timestamps = g('timestamps').value === '1';
+        if (g('intensity').value !== '') look.intensity = +g('intensity').value;
+        const r = await fetch('/api/panes/split-' + k, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({look})});
+        if (!r.ok) { toast('Save a split first (press "Open split chat"), then set each half\'s look.', false); return; }
+      }
+      toast('Saved. Open split windows update right away.'); return; }
     else if (a === 'split-open' || a === 'split-close') {
-      if (parent === window) { toast('Split chat opens windows through the Pinguino app. Open Multi from the app, or use Add window.', false); return; }
-      const dir = $('#sp-dir').value, second = dir === 'top' ? 'bottom' : 'right';
-      if (a === 'split-close') { ['chat-a', 'chat-b'].forEach(label => parent.postMessage({pinguino: 'window', op: 'close', label}, '*')); toast('Split chat closed.'); return; }
-      const open = (label, half, monitor, place) => parent.postMessage({pinguino: 'window', op: 'open', label, url: location.origin + '/?type=chat&half=' + half, title: 'Chat (' + half + ')', monitor, place, always_on_top: false}, '*');
-      open('chat-a', dir, $('#sp-a').value, 'full'); open('chat-b', second, $('#sp-b').value, 'full'); toast('Opening split chat...'); return; }
+      if (a === 'split-close') { ['pane-split-a', 'pane-split-b'].forEach(popClose); toast('Split chat closed.'); return; }
+      const mode = $('#sp-mode').value, dir = $('#sp-dir').value, aot = $('#sp-aot').checked, plats = [...document.querySelectorAll('.sp-pl:checked')].map(x => x.value);
+      try { localStorage.setItem('multi-aot', aot ? '1' : ''); } catch (x) { /* ignore */ }
+      const r = await fetch('/api/splits/apply', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({mode, platforms: plats, aot})});
+      const j = await r.json(); if (!r.ok) { toast(j.detail || 'Could not set up the split', false); return; }
+      const fresh = !$('#sp-keep').checked;
+      const res = await Promise.all([['a', $('#sp-a').value], ['b', $('#sp-b').value]].map(([k, mon]) =>
+        popOut('pane-split-' + k, location.origin + '/?type=chat&pane=split-' + k, j.panes['split-' + k].name, {w: 560, h: 520, monitor: mon, fresh, aot})));
+      toast(res.includes('blocked') ? 'The browser blocked a pop-up - allow pop-ups for this page, then press Open again.' : 'Opening the split chat...', !res.includes('blocked')); return; }
     else if (a === 'copy-pop') { const i = $('#pop-url'); i.select(); try { await navigator.clipboard.writeText(i.value); toast('Address copied.'); } catch (x) { document.execCommand('copy'); toast('Address selected - press Ctrl+C.'); } return; }
     else if (a === 'restore') await api('/api/windows/restore');
     else if (a === 'save-profile') { const n = prompt('Name this layout'); if (n) { await api('/api/profiles/' + encodeURIComponent(n) + '/save'); toast('Layout saved: ' + n); } }
@@ -245,3 +281,23 @@ window.addEventListener('message', e => {
 });
 function askMonitors() { if (parent !== window) parent.postMessage({pinguino: 'window', op: 'monitors'}, '*'); }
 const _rl = renderLauncher; renderLauncher = async function () { await _rl(); askMonitors(); };
+
+
+// pop-out windows: real windows in the Pinguino app (shell, Unit 01), browser pop-ups otherwise. Position is remembered per label.
+const POPS = {};
+function aotPref() { try { return !!localStorage.getItem('multi-aot'); } catch (e) { return false; } }
+async function popOut(label, url, title, o = {}) {
+  let g = null; try { g = ((await api('/api/panes')).geom || {})[label]; } catch (e) { /* offline: use defaults */ }
+  const u = url + (url.includes('?') ? '&' : '?') + 'pop=' + encodeURIComponent(label), aot = o.aot != null ? o.aot : aotPref();
+  if (parent !== window) {
+    parent.postMessage({pinguino: 'window', op: 'open', label, url: u, title, remember: true, always_on_top: !!aot, monitor: o.monitor,
+      place: !g || o.fresh ? (o.monitor != null ? 'full' : undefined) : undefined, bounds: !o.fresh && g ? g : undefined, size: {w: o.w, h: o.h}}, '*');
+    return 'app';
+  }
+  const w = g && !o.fresh ? g : {x: 80, y: 60, w: o.w || 520, h: o.h || 800};
+  const ref = window.open(u, label, `popup=yes,left=${w.x},top=${w.y},width=${w.w},height=${w.h}`);
+  if (ref) { POPS[label] = ref; return 'browser'; }
+  return 'blocked';
+}
+function popClose(label) { if (parent !== window) parent.postMessage({pinguino: 'window', op: 'close', label}, '*'); else if (POPS[label]) POPS[label].close(); }
+document.addEventListener('change', e => { if (e.target.id === 'sp-mode') { const pl = $('#sp-plats'); if (pl) pl.hidden = e.target.value !== 'platform'; } });
