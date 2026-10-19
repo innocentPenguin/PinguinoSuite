@@ -535,3 +535,42 @@ def test_combined_chat_window_and_profile():
     import windows as w
     assert w.new_window(type="chat")["type"] == "chat"
     assert w.PROFILE_DEFAULTS["Combined Chat"][0]["type"] == "chat"
+
+
+def test_console_log_format_and_scrub(tmp_path, monkeypatch):
+    import json, console_log
+    f = tmp_path / "x" / "multi.jsonl"
+    monkeypatch.setenv("MULTI_CONSOLE_FILE", str(f))
+    console_log.warn("twitch", "auth failed Bearer abc123def456 token=SECRETVALUE1234567890123456789012345")
+    console_log.info("server", "hello")
+    console_log.info("server", "dup", dedupe_s=60)
+    console_log.info("server", "dup", dedupe_s=60)
+    rows = [json.loads(x) for x in f.read_text("utf-8").splitlines()]
+    assert [r["level"] for r in rows] == ["warn", "info", "info"]
+    assert set(rows[0]) == {"ts", "module", "level", "source", "msg"} and rows[0]["module"] == "multi"
+    assert "abc123def456" not in rows[0]["msg"] and "SECRETVALUE" not in rows[0]["msg"]
+
+
+def test_connector_status_changes_are_logged(tmp_path, monkeypatch):
+    import json, console_log
+    from connectors.base import Connector
+    f = tmp_path / "m.jsonl"
+    monkeypatch.setenv("MULTI_CONSOLE_FILE", str(f))
+    c = Connector(None, lambda e: None)
+    c.platform = "demo"
+    c.set_status("reconnecting", "boom")
+    c.set_status("connecting")
+    c.set_status("connected", "ok")
+    lv = [json.loads(x)["level"] for x in f.read_text("utf-8").splitlines()]
+    assert lv == ["warn", "info"]
+
+
+def test_prestream_endpoint_shape_and_no_token_needed():
+    from fastapi.testclient import TestClient
+    import server
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    r = c.get("/api/prestream")
+    rows = r.json()
+    assert r.status_code == 200 and rows and all(set(x) == {"id", "label", "status", "detail"} for x in rows)
+    assert all(x["status"] in ("pass", "warn", "fail") for x in rows)
+    assert {"store", "queue", "windows"} <= {x["id"] for x in rows}

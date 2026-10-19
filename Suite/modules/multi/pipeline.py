@@ -7,6 +7,7 @@ import time
 
 import config
 import ai
+import console_log
 import dedupe
 from priority import rules as prio
 from models import ChatMessage
@@ -108,5 +109,6 @@ class Inbox:
                     asyncio.create_task(self.p.refine(out))
             except Exception as e:      # one bad message must never stop the feed
                 print("pipeline error:", e, flush=True)
+                console_log.error("pipeline", f"ingest failed: {type(e).__name__}: {e}", dedupe_s=60)
             if self.q.qsize() > 50:     # during bursts yield to the event loop frequently
                 await asyncio.sleep(0)

@@ -12,13 +12,16 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import cards as cards_mod
 import checks
 import config
 import learning
+import console_log
 import listen_bridge
+import prestream
 import voice
 import secrets_store
 import windows as win
@@ -73,6 +76,9 @@ async def tick_loop():
 @asynccontextmanager
 async def lifespan(app):
     hub.loop = asyncio.get_running_loop()
+    hub.loop.set_exception_handler(lambda loop, ctx: console_log.error(
+        "server", f"unhandled: {ctx.get('message', '')} {repr(ctx.get('exception', ''))}", dedupe_s=60))
+    console_log.info("server", f"Multi started on port {config.PORT}")
     store.prune(config.settings()["retention_days"])
     tw = Twitch(inbox, hub.emit)
     connectors["twitch"] = tw
@@ -86,6 +92,7 @@ async def lifespan(app):
              asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()),
              asyncio.create_task(listen_bridge.run(cards, hub.emit))]
     yield
+    console_log.info("server", "Multi stopping")
     tw.stop = dc.stop = yt.stop = tt.stop = True
     for t in tasks:
         t.cancel()
@@ -98,6 +105,12 @@ LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def _unhandled(request: Request, exc: Exception):
+    console_log.error("server", f"{request.method} {request.url.path} failed: {type(exc).__name__}: {exc}", dedupe_s=60)
+    return JSONResponse({"detail": "internal error"}, status_code=500)
 app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:8760", "http://localhost:8760", *TAURI_ORIGINS],
                    allow_methods=["*"], allow_headers=["*"])
 STATIC = config.ROOT / "static"
@@ -167,6 +180,12 @@ def setup_info():
     return {"settings": {k: s[k] for k in keys},
             "has": {"discord": bool(secrets_store.get("discord_token")), "youtube": bool(secrets_store.get("youtube_token")),
                     "ai": bool(secrets_store.get("ai_key")), "twitch": bool(secrets_store.get("twitch_tokens"))}}
+
+
+@app.get("/api/prestream")
+def prestream_checks():
+    """No-token readiness list for the Pinguino Console: [{id,label,status pass|warn|fail,detail}]."""
+    return prestream.run(connectors, store, pipeline, inbox)
 
 
 @app.get("/api/messages")
