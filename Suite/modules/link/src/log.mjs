@@ -11,9 +11,16 @@ let ready = false, minLevel = 'info';
 const ORDER = { debug: 0, info: 1, warn: 2, error: 3 };
 export const setLevel = l => { if (ORDER[l] !== undefined) minLevel = l; };
 
+// Identical lines inside 30 s are collapsed (a peer retrying every 3 s must not flood the Console).
+const recent = new Map();
 export function log(level, source, msg) {
   if (!LEVELS.has(level)) level = 'info';
   if (ORDER[level] < ORDER[minLevel]) return;
+  const key = `${level}|${source}|${msg}`, now = Date.now(), r = recent.get(key);
+  if (r && now - r.at < 30000) { r.n++; return; }
+  if (recent.size > 200) recent.clear();
+  recent.set(key, { at: now, n: 0 });
+  if (r?.n) msg = `${msg} (repeated ${r.n}x before)`;
   const line = JSON.stringify({ ts: Date.now() / 1000, module: 'link', level, source, msg: String(msg).slice(0, 2000) });
   if (level !== 'debug') (level === 'info' ? console.log : console.error)(`[${level}] ${source}: ${msg}`);
   try {

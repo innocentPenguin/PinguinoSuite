@@ -63,6 +63,19 @@ try {
   check('macro can be deleted', (await call('POST', '/api/macros/delete', { name: 'go-live' })).status === 200 && !cfgFile().macros['go-live'] && !cfgFile().macroMeta?.['go-live']);
   check('reload keeps all settings', cfgFile().ui.accent === '#ff9900' && cfgFile().obs.host === '100.64.1.2');
 
+  const ex = (await call('GET', '/api/export')).json;
+  check('export has settings and macros, no secrets', ex.format === 'pinguinolink-settings' && ex.settings['ui.accent'] === '#ff9900' && !JSON.stringify(ex).match(/token|password|module-token/i));
+  await call('POST', '/api/macros/set', { name: 'tmp', steps: [{ kind: 'record-toggle' }] });
+  const exm = (await call('GET', '/api/export')).json;
+  check('export lists editor macros and counts skipped custom steps', exm.macros.some(m => m.name === 'tmp') && exm.skipped_custom_steps === 1);
+  await call('POST', '/api/settings', { changes: { 'ui.accent': null, 'obs.host': null } });
+  await call('POST', '/api/macros/delete', { name: 'tmp' });
+  const imp = await call('POST', '/api/import', { data: exm });
+  check('import restores settings and macros', imp.status === 200 && cfgFile().ui.accent === '#ff9900' && !!cfgFile().macros.tmp);
+  check('import rejects foreign files', (await call('POST', '/api/import', { data: { format: 'other' } })).status === 400);
+  const badImp = await call('POST', '/api/import', { data: { format: 'pinguinolink-settings', settings: {}, macros: [{ name: 'ok1', steps: [{ kind: 'stream-stop' }] }, { name: 'bad name', steps: [{ kind: 'x' }] }] } });
+  check('bad import is all-or-nothing', badImp.status === 400 && !cfgFile().macros.ok1);
+  check('import never changes the role', (await call('POST', '/api/import', { data: { format: 'pinguinolink-settings', settings: { role: 'client' }, macros: [] } })).status === 200 && cfgFile().role === 'hub');
   await call('POST', '/api/settings', { changes: { 'log.level': 'error' } });
   const before = fs.readFileSync(path.join(dir, 'console', 'link.jsonl'), 'utf8').split('\n').length;
   await call('POST', '/api/settings', { changes: { 'ui.compact': true } });       // would log info

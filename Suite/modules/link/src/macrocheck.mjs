@@ -75,14 +75,14 @@ async function link(password) {
   fs.mkdirSync(path.join(dir, 'link'), { recursive: true });
   const cfg = { role: 'hub', hub: 'x', port: 7777, token: 'module-token-module-token-0001', inbox: dir, obs: { host: '127.0.0.1', port: obsPort, password },
     macros: { brb: [{ type: 'SetCurrentProgramScene', data: { sceneName: 'BRB' } }], live: [{ type: 'SetCurrentProgramScene', data: { sceneName: 'Main' } }],
-      start: [{ type: 'StartStream' }], stop: [{ type: 'StopStream' }], mute: [{ type: 'ToggleInputMute', data: { inputName: 'Mic/Aux' } }] }, claude: { enabled: false, cli: 'claude' } };
+      start: [{ type: 'StartStream' }], stop: [{ type: 'StopStream' }], mute: [{ type: 'ToggleInputMute', data: { inputName: 'Mic/Aux' } }] }, claude: { enabled: false, cli: 'claude' }, cooldown: { macroMs: 0, riskyMs: 0 }, ui: { sceneButtons: true } };
   fs.writeFileSync(path.join(dir, 'link', 'config.json'), JSON.stringify(cfg));
   const port = 7950 + Math.floor(Math.random() * 40);
   const child = spawn(process.execPath, [cli, 'serve'], { stdio: 'ignore', windowsHide: true,
     env: { ...process.env, PINGUINO_LINK_PORT: String(port), PINGUINO_API_TOKEN: 'core-mc', PINGUINO_DATA_DIR: dir, PINGUINO_CORE_URL: 'http://127.0.0.1:1' } });
   const base = `http://127.0.0.1:${port}`;
-  const call = async (method, p) => {
-    const r = await fetch(base + p, { method, headers: { 'x-link-token': cfg.token } });
+  const call = async (method, p, body) => {
+    const r = await fetch(base + p, { method, headers: { 'x-link-token': cfg.token, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, json: await r.json().catch(() => ({})) };
   };
   for (let i = 0; i < 30; i++) { try { if ((await fetch(base + '/api/health')).ok) break; } catch {} await sleep(300); }
@@ -109,6 +109,20 @@ try {
   check('second start is refused while live (409)', (await good.call('POST', '/api/macro/start')).status === 409);
   check('macro stop ends the stream', (await good.call('POST', '/api/macro/stop')).status === 200 && obs.streaming === false);
   check('unknown macro = 500 with a clear message', (await good.call('POST', '/api/macro/nope')).json.error?.includes('unknown macro'));
+
+  const o2 = (await good.call('GET', '/api/obs')).json;
+  check('scene buttons: /api/obs lists scenes when enabled', Array.isArray(o2.scenes) && o2.scenes.includes('BRB'));
+  check('scene button switches OBS scene', (await good.call('POST', '/api/scene', { name: 'BRB' })).status === 200 && obs.scene === 'BRB');
+  await good.call('POST', '/api/scene', { name: 'Main' });
+  check('unknown scene refused (404)', (await good.call('POST', '/api/scene', { name: 'Nope' })).status === 404 && obs.scene === 'Main');
+  const act = (await good.call('GET', '/api/activity')).json.items;
+  check('activity lists recent actions', act.length > 3 && act.some(a => a.name === 'start' && a.ok) && act.some(a => a.kind === 'scene'));
+  await good.call('POST', '/api/settings', { changes: { 'cooldown.macroMs': 800 } });
+  const c1 = await good.call('POST', '/api/macro/live'), c2 = await good.call('POST', '/api/macro/live');
+  check('repeat press inside the guard is ignored (429)', c1.status === 200 && c2.status === 429, JSON.stringify([c1.status, c2.status]));
+  await sleep(900);
+  check('press after the guard window works again', (await good.call('POST', '/api/macro/live')).status === 200);
+  await good.call('POST', '/api/settings', { changes: { 'cooldown.macroMs': 0 } });
 
   obs.scenes = ['Main'];                              // BRB scene disappears
   await sleep(2200);

@@ -91,3 +91,17 @@ export function missing(cfg, name, obs) {
   const have = new Set([...(obs.scenes || []), ...(obs.inputs || [])]);
   return cfg.macros[name].flatMap(targets).filter(t => !have.has(t));
 }
+
+/** Portable copy of the macros the editor understands (hand-written steps are skipped and counted). */
+export function exportAll(cfg) {
+  let skipped = 0;
+  const out = list(cfg).map(m => { const steps = m.steps.filter(s => s.kind !== 'custom'); skipped += m.steps.length - steps.length; return { name: m.name, steps, label: m.meta.label || '', icon: m.meta.icon || '', hidden: !!m.meta.hidden }; }).filter(m => m.steps.length);
+  return { macros: out, skipped };
+}
+export function importAll(cfg, items) {
+  if (!Array.isArray(items) || items.length > 30) throw fail(400, 'macros must be a list of at most 30');
+  const before = JSON.stringify([cfg.macros, cfg.macroMeta]);
+  try { for (const m of items) set(cfg, m); }
+  catch (e) { cfg.macros = JSON.parse(before)[0]; cfg.macroMeta = JSON.parse(before)[1] || {}; cfgm.save(cfg); throw e; }
+  return items.length;
+}

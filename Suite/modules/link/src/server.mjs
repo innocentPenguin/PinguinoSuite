@@ -79,6 +79,8 @@ export async function serve(cfg) {
   const port = Number(process.env.PINGUINO_LINK_PORT) || cfg.port;
   let selfName = '';
   const mesh = createMesh(cfg, { port });
+  const lastRun = new Map(), activity = [];
+  const act = (kind, name, ok, detail = '') => { activity.unshift({ t: Date.now(), kind, name, ok, detail }); activity.length = Math.min(activity.length, 50); };
   const sctx = { getName: mesh.getName, setName: mesh.setName };
   setLevel(cfg.log?.level);
   const handler = async (req, res) => {
@@ -112,7 +114,7 @@ export async function serve(cfg) {
       if (req.method === 'GET' && req.url === '/api/status') {
         const t = await ts.status();
         selfName = t.self?.name || selfName;
-        return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), macro_buttons: macros.buttons(cfg), ui: { refreshSec: cfg.ui?.refreshSec ?? 4, compact: !!cfg.ui?.compact, accent: cfg.ui?.accent || '' }, tailscale: t, peers: mesh.status().peers });
+        return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), macro_buttons: macros.buttons(cfg), ui: { refreshSec: cfg.ui?.refreshSec ?? 4, compact: !!cfg.ui?.compact, accent: cfg.ui?.accent || '', activityCount: cfg.ui?.activityCount ?? 15 }, tailscale: t, peers: mesh.status().peers });
       }
       if (req.method === 'GET' && req.url === '/api/integrations') {   // Integrations tab (module token)
         const items = [...await prestream(cfg), ...(cfg.prestream?.devices === false ? [] : mesh.prestreamItems())].map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail, help: i.help }));
@@ -138,10 +140,33 @@ export async function serve(cfg) {
         }
         return json(404, { error: 'not found' });
       }
+      if (req.method === 'GET' && req.url === '/api/activity') return json(200, { items: activity.slice(0, cfg.ui?.activityCount ?? 15) });
+      if (req.method === 'POST' && req.url === '/api/scene') {
+        const b = await readJson(req);
+        if (cfg.role !== 'hub') throw Object.assign(new Error('Scene buttons work on the hub (the PC running OBS)'), { status: 409 });
+        const conn = await obsConn(cfg), o = await obsState(conn), name = String(b.name || '');
+        if (!o.connected) throw Object.assign(new Error(`OBS not reachable: ${o.error}`), { status: 502 });
+        if (!o.scenes.includes(name)) throw Object.assign(new Error('no such scene in OBS'), { status: 404 });
+        await runRequests(conn, [{ type: 'SetCurrentProgramScene', data: { sceneName: name } }]);
+        act('scene', name, true); log('info', 'scene', `switched to "${name}"`);
+        return json(200, { ok: true });
+      }
+      if (req.method === 'GET' && req.url === '/api/export') {
+        const ex = macros.exportAll(cfg), changed = settings.view(cfg, sctx).flatMap(g => g.fields).filter(f => f.changed && f.key !== 'role');
+        return json(200, { format: 'pinguinolink-settings', version: 1, settings: Object.fromEntries(changed.map(f => [f.key, f.value])), macros: ex.macros, skipped_custom_steps: ex.skipped });
+      }
+      if (req.method === 'POST' && req.url === '/api/import') {
+        const b = await readJson(req), d = b.data || {};
+        if (d.format !== 'pinguinolink-settings') throw Object.assign(new Error('not a PinguinoLink settings file'), { status: 400 });
+        const res = settings.apply(cfg, sctx, Object.fromEntries(Object.entries(d.settings || {}).filter(([k]) => k !== 'role')), {});
+        const n = macros.importAll(cfg, d.macros || []);
+        act('settings', 'import', true, `${res.changed.length} settings, ${n} macros`); log('info', 'settings', `imported ${res.changed.length} settings and ${n} macros`);
+        return json(200, { ok: true, settings: res.changed.length, macros: n });
+      }
       if (req.method === 'GET' && req.url === '/api/obs') {            // read-only OBS state for the page
         if (cfg.role !== 'hub') return json(200, { connected: false, role: cfg.role, error: 'this device is a client; OBS runs on the hub' });
-        const { scenes, ...st } = await obsState(await obsConn(cfg));
-        return json(200, st);
+        const { scenes, inputs, ...st } = await obsState(await obsConn(cfg));
+        return json(200, cfg.ui?.sceneButtons ? { ...st, scenes } : st);
       }
       if (req.url.startsWith('/api/mesh/') || req.url === '/api/peer/broadcast') {
         const post = req.method === 'POST';
@@ -160,8 +185,12 @@ export async function serve(cfg) {
       }
       const m = req.method === 'POST' && req.url.match(/^\/api\/macro\/([\w-]+)$/);
       if (m) {
-        try { const results = await runMacro(cfg, m[1]); log('info', 'macro', `ran ${m[1]}`); return json(200, { ok: true, results }); }
-        catch (e) { log('error', 'macro', `${m[1]} failed: ${e.message}`); throw e; }
+        const name = m[1], risky = macros.isRisky(cfg, name), now = Date.now();
+        const cd = risky ? (cfg.cooldown?.riskyMs ?? 3000) : (cfg.cooldown?.macroMs ?? 600);
+        if (cfg.macros[name] && now - (lastRun.get(name) || 0) < cd) { act('macro', name, false, 'ignored: pressed again too fast'); return json(429, { error: `"${name}" was just pressed; ignored (repeat guard ${cd} ms)` }); }
+        if (cfg.macros[name]) lastRun.set(name, now);
+        try { const results = await runMacro(cfg, name); log('info', 'macro', `ran ${name}`); act('macro', name, true); return json(200, { ok: true, results }); }
+        catch (e) { act('macro', name, false, e.message); log(e.status && e.status < 500 ? 'warn' : 'error', 'macro', `${name} failed: ${e.message}`); throw e; }
       }
       json(404, { error: 'not found' });
     } catch (e) {
