@@ -216,7 +216,7 @@ class Module:
         else:
             extra = {"start_new_session": True}
         self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log,
-                                     env={**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"]), "PINGUINO_DATA_DIR": DATA_DIR}, **extra)
+                                     env={**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"]), "PINGUINO_DATA_DIR": DATA_DIR, "PINGUINO_CORE_URL": f"http://127.0.0.1:{PORT}"}, **extra)
         bus.emit("module", id=self.id, state="starting")
 
     def stop(self, deferred=False):
@@ -514,7 +514,7 @@ async def lifespan(app):
 app = FastAPI(lifespan=lifespan)
 
 
-MODULE_PATHS = {"/api/device/peer", "/api/device/streaming", "/api/device/lease"}
+MODULE_PATHS = {"/api/device/peer", "/api/device/streaming", "/api/device/lease", "/api/voice/dispatch"}
 
 
 @app.middleware("http")
@@ -529,7 +529,10 @@ async def guard(request: Request, call_next):
             given = auth[7:] if auth.lower().startswith("bearer ") else request.headers.get("x-pinguino-token", "")
             ok = secrets.compare_digest(given, TOKEN)
             if not ok and request.url.path in MODULE_PATHS:  # modules (Link, Host...) may call these with their own token
-                ok = any(secrets.compare_digest(given, module_token(mid)) for mid in modules)
+                for mid in modules:
+                    if secrets.compare_digest(given, module_token(mid)):
+                        ok, request.state.mod = True, mid
+                        break
             if not ok:
                 return JSONResponse({"detail": "unauthorized"}, status_code=401)
     resp = await call_next(request)
@@ -668,6 +671,27 @@ def device_lease():
     """For singleton modules (Host, Spotify): am I allowed to run on this device right now?"""
     st = devices.state()
     return {"is_master": st["is_master"], "master_id": st["master_id"], "master_name": st["master_name"], "device_id": devices.me["id"]}
+
+
+@app.post("/api/voice/dispatch")
+async def voice_dispatch(request: Request):
+    """Voice commands: Listen (only Listen) asks the core to POST to another registered module's API with that module's token."""
+    if getattr(request.state, "mod", None) != "listen":
+        raise HTTPException(403, "only the listen module may dispatch voice commands")
+    b = await request.json()
+    m, path = modules.get(str(b.get("module", ""))), str(b.get("path", ""))
+    if not m or not path.startswith("/api/") or ".." in path:
+        raise HTTPException(400, "unknown module or bad path")
+    if m.singleton and not devices.is_master():
+        raise HTTPException(409, "that module runs on the master device")
+    tok = module_token(m.id)
+    try:
+        r = requests.post(m.spec["url"] + path, json=b.get("body") or {}, timeout=10,
+                          headers={"Authorization": f"Bearer {tok}", "X-Pinguino-Token": tok, "x-link-token": tok})
+    except requests.RequestException as e:
+        raise HTTPException(502, str(e)[:120])
+    console_log.log("info" if r.ok else "warn", "voice", f"voice command -> {m.id}{path}: {r.status_code}", module="listen")
+    return {"ok": r.ok, "status": r.status_code, "detail": r.text[:200]}
 
 
 @app.get("/api/console")

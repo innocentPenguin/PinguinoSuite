@@ -23,6 +23,7 @@ import ingest
 import learn
 import live as live_mod
 import twitch
+import voice
 
 
 def clog(level, msg, source=""):
@@ -53,6 +54,11 @@ class Hub:
 
     def emit(self, ev):
         _log_event(ev)
+        if ev.get("type") == "segment":
+            try:
+                voice.handle_segment(ev["segment"], clog, self.emit)
+            except Exception as e:  # noqa: BLE001
+                clog("error", f"voice command handling failed: {e}", "voice")
         if self.loop:
             asyncio.run_coroutine_threadsafe(self._send(ev), self.loop)
 
@@ -141,6 +147,41 @@ async def ws(sock: WebSocket):
             await sock.receive_text()
     except WebSocketDisconnect:
         hub.clients.discard(sock)
+
+
+class CmdTest(BaseModel):
+    text: str
+    run: bool = False
+
+
+@app.get("/api/style")
+def style(unverified: bool = False):
+    """Talks-like-me profile computed from your verified lines (and optionally unverified confident mic lines)."""
+    return voice.style(unverified)
+
+
+@app.get("/api/commands")
+def commands_get():
+    return voice.load_cmds()
+
+
+@app.post("/api/commands")
+def commands_set(b: dict):
+    return voice.save_cmds(b)
+
+
+@app.post("/api/commands/test")
+def commands_test(b: CmdTest):
+    """Dry run by default: which commands would this sentence trigger? run=true actually fires them (ignores the master switch)."""
+    d = voice.load_cmds()
+    hit = voice.matches(b.text, d, only_enabled=False)
+    results = [{"phrase": c["phrase"], **(voice.run_action(c, b.text, None, clog) if b.run else {"ok": None, "detail": "dry run"})} for c in hit]
+    return {"matched": [c["phrase"] for c in hit], "results": results}
+
+
+@app.get("/api/markers")
+def markers_get():
+    return {"markers": voice.markers()}
 
 
 @app.get("/api/prestream")

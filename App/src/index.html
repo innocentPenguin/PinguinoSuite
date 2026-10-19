@@ -109,6 +109,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
 .cl{padding:1px 12px;white-space:pre-wrap;word-break:break-word;display:flex;gap:8px}.cl .t{color:var(--faint);flex:none}.cl .m{color:var(--ice);flex:none;min-width:64px}.cl .s{color:var(--faint);flex:none}
 .cl.error{background:#e5484d1c}.cl.error .lv{color:#ff6b70}.cl.warn .lv{color:#ffb86b}.cl.debug{opacity:.6}.cl .lv{flex:none;width:44px;text-transform:uppercase;font-size:10.5px;padding-top:1px}
 .ctool{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}.ctool input[type=text]{width:200px}
+.cmdrow{padding:8px 0;border-bottom:1px solid var(--line)}.cmdrow:last-child{border:0}
 .pr{display:flex;gap:8px;align-items:baseline;padding:3px 0}.pr .d{width:9px;height:9px;border-radius:50%;flex:none;background:var(--faint)}.pr.pass .d{background:#46c46b}.pr.warn .d{background:#ffb86b}.pr.fail .d{background:#e5484d}
 /* dashboard v2 */
 #page{padding:20px}.grid{gap:14px}
@@ -299,20 +300,67 @@ pages.actions=()=>prev('Where Streamer.bot-style automations would live. Same id
   <div class="card" style="margin-bottom:12px"><div class="row" style="margin-bottom:12px"><b style="font-size:15px">${a[0]}</b><span class="sp">${sw('',a[4])}</span></div>
    <div class="flow"><div class="node trg"><small>Trigger</small>${a[1]}</div>${a[2]?`<span class="arrow">→</span><div class="node cnd"><small>If</small>${a[2]}</div>`:''}${a[3].map(x=>`<span class="arrow">→</span><div class="node act"><small>${x[1]}</small>${x[0]}</div>`).join('')}</div></div>`).join('')}`;
 
-pages.voice=()=>prev('Voice ID, commands, and “talks like me”. Nothing here is wired to anything yet.')+`
-  <div class="grid g2">
-   <div class="card"><h3>Voice ID</h3><div class="wave">${Array.from({length:44},(_, i)=>`<i style="height:${20+Math.abs(Math.sin(i*.7))*40}px;animation-delay:${i*.05}s"></i>`).join('')}</div>
-     <div class="kv sm" style="margin-top:10px"><span class="faint">Profile built from</span><span>live mic sessions + verified lines</span><span class="faint">Your voice so far</span><span>3h 12m</span><span class="faint">Match confidence</span><span><span class="pill ok">94%</span></span></div>
-     <div class="sm dim" style="margin:12px 0 4px">Ready to filter VODs (needs ~10 min)</div>${bar(100,'g')}</div>
-   <div class="card"><h3>Voice commands</h3><div class="sm dim" style="margin-bottom:6px">Always listening, only writes things down until you turn commands on.</div>
-     <div class="setrow"><div class="grow"><b>Listening mode</b><div class="sm faint">Transcribe only</div></div><select><option>Transcribe only</option><option>Wake word</option><option>Push-to-talk</option></select></div>
-     ${[['“clip that”','Create a clip'],['“switch to game”','OBS scene → Gameplay'],['“thanks chat”','Send thank-you']].map(c=>`<div class="cmd"><code>${c[0]}</code><span class="dim">→ ${c[1]}</span><span class="sp">${sw('',false)}</span></div>`).join('')}</div>
-   <div class="card"><h3>Talks like me · text</h3><div class="sm dim">Learned from your verified lines</div>
-     <div style="margin:10px 0">${['no cap','lets gooo','bro what','actually insane','chat','fr fr'].map(x=>`<span class="pill" style="margin:2px">${x}</span>`).join('')}</div>
-     <div class="sm dim">Slang</div><input type="range" class="slider" value="75"><div class="sm dim">Sentence length</div><input type="range" class="slider" value="30"><div class="sm dim">Hype level</div><input type="range" class="slider" value="60">
-     <div class="banner" style="margin:14px 0 0;background:#ffffff08;border-color:var(--line2);color:var(--dim)"><i>“bro that was actually insane, chat did you see that”</i></div></div>
-   <div class="card"><h3>Synthetic voice</h3><div class="sm dim">Clean, verified audio of you only</div><div class="stat" style="margin:8px 0">1.3 h<small>of 10 h collected for a good clone</small></div>${bar(13,'o')}
-     <div class="row" style="margin-top:14px"><button disabled>▶ Hear sample</button><span class="pill vio">training later</span></div></div></div>`;
+/* ============ Voice Studio: built on Listen (/api/style, /api/commands, /api/markers); see Suite/modules/listen/voice.py ============ */
+const V={style:null,cmds:null,markers:[],err:null,unv:false,test:null,dirty:false};
+async function loadVoice(){V.err=null;
+  try{const q=u=>fetch(LISTEN+u).then(r=>{if(!r.ok)throw new Error(u+' '+r.status);return r.json()});
+    [V.style,V.cmds,V.markers]=await Promise.all([q('/api/style?unverified='+V.unv),q('/api/commands'),q('/api/markers').then(x=>x.markers)]);V.dirty=false}
+  catch(e){V.err=String(e.message||e)}
+  if(route==='voice')draw(true)}
+const chips=(a,k='w',n='n')=>a&&a.length?a.map(x=>`<span class="pill" style="margin:2px">${esc(x[k])} <span class="faint">×${x[n]}</span></span>`).join(''):'<span class="sm faint">Not enough verified lines yet. Fix lines in Listen (Learn mode) and this fills in.</span>';
+pages.voice=()=>{
+  if(V.err||!V.style)return `<div class="card" style="max-width:560px"><h3>Voice Studio</h3><div class="dim">${V.err?'PinguinoListen is not answering ('+esc(V.err)+'). Voice Studio runs on top of Listen.':'Loading…'}</div><div class="row" style="margin-top:14px"><button class="pri" data-act="listen:start">Start PinguinoListen</button><button id="v-reload">Retry</button></div></div>`;
+  const st=V.style,c=V.cmds,mods=S.modules.filter(m=>m.id!=='listen');
+  const row=(x,i)=>`<div class="cmdrow" data-i="${i}"><div class="row wrap" style="gap:8px">
+      <input type="text" class="v-ph" value="${esc(x.phrase)}" placeholder="phrase, e.g. clip that" style="width:190px">
+      <select class="v-ty"><option value="marker" ${x.action.type==='marker'?'selected':''}>Drop a marker</option><option value="call" ${x.action.type==='call'?'selected':''}>Call a module</option></select>
+      ${x.action.type==='call'?`<select class="v-mod">${mods.map(m=>`<option value="${esc(m.id)}" ${m.id===x.action.module?'selected':''}>${esc(m.name)}</option>`).join('')}</select>
+        <input type="text" class="v-path" value="${esc(x.action.path||'')}" placeholder="/api/macro/name" style="width:200px">
+        <input type="text" class="v-body" value="${esc(JSON.stringify(x.action.body||{}))}" style="width:140px" title="JSON body">`:`<input type="text" class="v-label" value="${esc(x.action.label||'')}" placeholder="marker label" style="width:150px">`}
+      <span class="sp row">${sw('',x.enabled,'class="v-en"')}<button class="sm v-del" title="Remove">✕</button></span></div></div>`;
+  return `<div class="grid g2" style="align-items:start">
+   <div class="card"><h3>Your voice data</h3>
+     <div class="kv sm"><span class="faint">Verified speech</span><span><b>${st.hours} h</b> of ${st.good_hours} h for a good clean set</span>
+       <span class="faint">Lines · words</span><span>${st.lines.toLocaleString()} · ${st.words.toLocaleString()}</span>
+       <span class="faint">Hearing accuracy</span><span>${st.accuracy==null?'—':`<span class="pill ${st.accuracy>=85?'ok':'warn'}">${st.accuracy}%</span> of reviewed lines needed no fix`}</span>
+       <span class="faint">Training pairs</span><span>${st.gold_pairs.toLocaleString()} audio+text pairs saved</span></div>
+     <div style="margin:12px 0 4px" class="sm dim">Progress toward a clean personal voice set</div>${bar(Math.min(100,st.hours*100/st.good_hours),'g')}
+     <div class="sm faint" style="margin-top:10px">Voice ID (recognising you vs. other voices) and a synthetic voice need a speaker model that is not built yet. Everything you verify here is the training data they will use, so none of it is wasted.</div>
+     <div class="row" style="margin-top:12px"><button class="sm" data-go="m:listen">Open Listen to review lines</button></div></div>
+   <div class="card"><h3>Talks like me</h3>
+     <div class="sm dim" style="margin-bottom:6px">Learned from your ${st.include_unverified?'verified + confident mic':'verified'} lines · avg <b>${st.avg_words}</b> words per line</div>
+     <div class="sm faint">Catchphrases</div><div style="margin:4px 0 10px">${chips(st.phrases)}</div>
+     <div class="sm faint">Your words</div><div style="margin:4px 0 10px">${chips(st.your_words)}</div>
+     <div class="sm faint">Filler words (per 100 words)</div><div style="margin:4px 0 10px">${st.fillers.length?st.fillers.map(f=>`<span class="pill" style="margin:2px">${esc(f.w)} <span class="faint">${f.per100}</span></span>`).join(''):'<span class="sm faint">—</span>'}</div>
+     <label class="sm dim"><input type="checkbox" id="v-unv" ${V.unv?'checked':''}> Include unverified lines Listen is confident about</label></div>
+   <div class="card" style="grid-column:1/-1"><div class="row"><h3 style="margin:0">Voice commands</h3><span class="sm faint">Off until you switch it on. Each command has its own switch.</span><span class="sp row"><span class="sm dim">Commands on</span>${sw('v-master',c.enabled)}</span></div>
+     <div class="row wrap" style="margin:12px 0;gap:14px"><label class="sm dim">Wake word (optional) <input type="text" id="v-wake" value="${esc(c.wake_word)}" placeholder="e.g. pinguino" style="width:130px"></label>
+       <label class="sm dim">Cooldown <input type="text" id="v-cool" value="${c.cooldown_s}" style="width:50px"> s</label></div>
+     <div id="v-rows">${c.commands.map(row).join('')||'<div class="sm faint">No commands yet.</div>'}</div>
+     <div class="row" style="margin-top:12px"><button class="sm" id="v-add">＋ Add command</button><button class="pri sm" id="v-save">Save${V.dirty?' *':''}</button>
+       <span class="sp row"><input type="text" id="v-testtxt" placeholder="Type what you would say…" style="width:240px"><button class="sm" id="v-dry">Test</button><button class="sm" id="v-run" title="Actually fires the matching commands">Run for real</button></span></div>
+     <div class="sm" id="v-testout" style="margin-top:8px">${V.test?esc(V.test):''}</div></div>
+   <div class="card" style="grid-column:1/-1"><h3>Markers (for clipping later)</h3>${V.markers.length?`<table><tr><th>When</th><th>Label</th><th>Heard</th></tr>${V.markers.slice(0,10).map(m=>`<tr><td class="dim">${new Date(m.ts*1000).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td><td>${esc(m.label)}</td><td class="dim">${esc(m.text||'')}</td></tr>`).join('')}</table>`:'<div class="sm faint">Say a marker command (like “clip that”) while listening and it shows up here with the time.</div>'}</div>
+  </div>`};
+function bindVoice(){
+  if(!V.style){$('#v-reload')&&($('#v-reload').onclick=loadVoice);if(!V.err&&!V.loading){V.loading=true;loadVoice().finally(()=>V.loading=false)}return}
+  const c=V.cmds,mark=()=>{V.dirty=true;$('#v-save')&&($('#v-save').textContent='Save *')};
+  $('#v-unv').onchange=e=>{V.unv=e.target.checked;loadVoice()};
+  $('#v-master').onchange=e=>{c.enabled=e.target.checked;mark()};
+  $('#v-wake').oninput=e=>{c.wake_word=e.target.value;mark()};$('#v-cool').oninput=e=>{c.cooldown_s=+e.target.value||8;mark()};
+  $$('.cmdrow').forEach(r=>{const x=c.commands[+r.dataset.i],q=s=>r.querySelector(s);
+    q('.v-ph').oninput=e=>{x.phrase=e.target.value;mark()};q('.v-en').onchange=e=>{x.enabled=e.target.checked;mark()};
+    q('.v-ty').onchange=e=>{x.action=e.target.value==='call'?{type:'call',module:(S.modules.find(m=>m.id!=='listen')||{}).id||'',path:'',body:{}}:{type:'marker',label:x.phrase};mark();draw(true)};
+    q('.v-label')&&(q('.v-label').oninput=e=>{x.action.label=e.target.value;mark()});
+    q('.v-mod')&&(q('.v-mod').onchange=e=>{x.action.module=e.target.value;mark()});q('.v-path')&&(q('.v-path').oninput=e=>{x.action.path=e.target.value;mark()});
+    q('.v-body')&&(q('.v-body').oninput=e=>{try{x.action.body=JSON.parse(e.target.value||'{}');e.target.style.borderColor=''}catch{e.target.style.borderColor='var(--live)'}mark()});
+    q('.v-del').onclick=()=>{c.commands.splice(+r.dataset.i,1);mark();draw(true)}});
+  $('#v-add').onclick=()=>{c.commands.push({id:'c'+Date.now(),phrase:'',enabled:false,action:{type:'marker',label:''}});mark();draw(true)};
+  $('#v-save').onclick=async()=>{try{V.cmds=await post(LISTEN+'/api/commands',c);V.dirty=false;toast('Voice commands saved');draw(true)}catch{toast('Could not save (is Listen running?)')}};
+  const test=async run=>{const txt=$('#v-testtxt').value;if(!txt)return;try{const r=await post(LISTEN+'/api/commands/test',{text:txt,run});
+      V.test=r.matched.length?(run?'Fired: ':'Would trigger: ')+r.results.map(x=>`${x.phrase}${x.ok===false?' (failed: '+x.detail+')':''}`).join(', '):'No command matches that.';
+      $('#v-testout').textContent=V.test;if(run)loadVoice()}catch{toast('Listen is not answering')}};
+  $('#v-dry').onclick=()=>test(false);$('#v-run').onclick=()=>test(true)}
 
 /* ============ shell ============ */
 const titles={console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
@@ -333,7 +381,7 @@ function renderNav(){if(!S)return;
   $('#modnav').innerHTML=h;$$('#modnav .item').forEach(i=>i.onclick=()=>go(i.dataset.r))}
 const isMod=r=>r.startsWith('m:');
 const flushed=()=>isMod(route)&&modOf(route)?.state==='running';
-function go(r){route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));
+function go(r){if(r==='voice'){V.style=null;V.err=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));
   const m=isMod(r)?modOf(r):null;$('#title').textContent=m?(m.ui?.nav||m.name):(titles[r]||r);
   $('#page').classList.toggle('flush',flushed());draw(true)}
 let lastHtml='';
@@ -350,6 +398,7 @@ function draw(force){if(!S)return;renderNav();
   $('#page').innerHTML=html;lastHtml=html;$('#page').scrollTop=sc;bind()}
 function bind(){
   if(route==='console')bindConsole();
+  if(route==='voice')bindVoice();
   $$('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
   $$('[data-dev]').forEach(b=>b.onclick=async()=>{D=await post('/api/device/'+b.dataset.dev);toast(b.dataset.dev==='take'?'This device is now in control':'Control released');draw(true)});
   $$('[data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
