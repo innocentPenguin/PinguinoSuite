@@ -104,6 +104,12 @@ iframe{flex:1;border:0;width:100%;height:100%;background:var(--bg)}
 .slider{width:100%;accent-color:var(--ice)}
 table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.8px;font-weight:600}
 #toast{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px}#toast div{background:var(--panel2);border:1px solid var(--line2);padding:10px 14px;border-radius:10px;box-shadow:var(--shadow)}
+.cbadge{margin-left:auto;background:#e5484d;color:#fff;border-radius:9px;font-size:10.5px;padding:1px 6px;font-weight:700}.cbadge:empty{display:none}
+.clog{font:12px/1.5 ui-monospace,Consolas,monospace;max-height:52vh;overflow:auto;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:6px 0}
+.cl{padding:1px 12px;white-space:pre-wrap;word-break:break-word;display:flex;gap:8px}.cl .t{color:var(--faint);flex:none}.cl .m{color:var(--ice);flex:none;min-width:64px}.cl .s{color:var(--faint);flex:none}
+.cl.error{background:#e5484d1c}.cl.error .lv{color:#ff6b70}.cl.warn .lv{color:#ffb86b}.cl.debug{opacity:.6}.cl .lv{flex:none;width:44px;text-transform:uppercase;font-size:10.5px;padding-top:1px}
+.ctool{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}.ctool input[type=text]{width:200px}
+.pr{display:flex;gap:8px;align-items:baseline;padding:3px 0}.pr .d{width:9px;height:9px;border-radius:50%;flex:none;background:var(--faint)}.pr.pass .d{background:#46c46b}.pr.warn .d{background:#ffb86b}.pr.fail .d{background:#e5484d}
 </style>
 </head>
 <body>
@@ -112,6 +118,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1p
   <div class="item" data-r="dashboard"><span class="ic">▦</span>Dashboard</div>
   <div id="modnav"></div>
   <h6>System</h6>
+  <div class="item" data-r="console"><span class="ic">▤</span>Console<span class="cbadge" id="cbadge"></span></div>
   <div class="item" data-r="settings"><span class="ic">⚙</span>Settings</div>
   <div class="navfoot sm dim" id="navfoot"></div>
 </nav>
@@ -175,6 +182,53 @@ pages.module=r=>{const m=modOf(r);
   if(m.state==='running')return `<iframe id="mif" data-src="${esc(modSrc(m))}" src="${esc(modSrc(m))}"></iframe>`;
   return `<div class="card" style="max-width:520px"><h3>${esc(m.name)}</h3><div class="dim">${esc(m.desc||'')}</div><div class="row" style="margin-top:14px"><span class="pill">${esc(m.state||'unavailable')}</span><button class="pri" data-act="${esc(m.id)}:start">Start ${esc(m.name)}</button></div></div>`};
 
+/* ============ Console + pre-stream checks (core: /api/console, /api/prestream; format in Docs/MODULE_CONTRACT.md) ============ */
+const LV={debug:0,info:1,warn:2,error:3};
+const store={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
+const C={seq:0,entries:[],paused:false,clearBefore:0,seen:null,mod:'',level:'debug',q:'',errOnly:false,pr:null};
+pages.console=()=>`<div class="card" id="prcard" style="margin-bottom:14px"><div class="row"><h3 style="margin:0">Pre-stream check</h3><span class="sm faint" id="pr-sub">Runs at 4:30 pm and 4:45 pm Central; stream at 5:00 pm</span><button class="pri sm sp" id="pr-run">Run now</button></div><div id="pr-items" style="margin-top:8px"></div></div>
+  <div class="ctool"><select id="c-mod"><option value="">All modules</option></select>
+   <select id="c-lv"><option value="debug">Debug+</option><option value="info">Info+</option><option value="warn">Warn+</option><option value="error">Errors</option></select>
+   <input type="text" id="c-q" placeholder="Search…"><label class="sm dim"><input type="checkbox" id="c-err"> Errors only</label>
+   <button class="sm" id="c-pause">Pause</button><button class="sm" id="c-clear">Clear</button><span class="sm faint sp" id="c-count"></span></div>
+  <div class="clog" id="clog"></div>`;
+const tm=t=>new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+function renderLog(){const box=$('#clog');if(!box)return;
+  const f=C.entries.filter(e=>e.seq>C.clearBefore&&(!C.mod||e.module===C.mod)&&LV[e.level]>=LV[C.errOnly?'error':C.level]&&(!C.q||(e.msg+' '+e.source+' '+e.module).toLowerCase().includes(C.q.toLowerCase())));
+  const stick=box.scrollTop+box.clientHeight>=box.scrollHeight-30;
+  const rows=f.slice(-800);
+  box.innerHTML=rows.map(e=>`<div class="cl ${e.level}"><span class="t">${tm(e.ts)}</span><span class="lv">${e.level}</span><span class="m">${esc(e.module)}</span>${e.source?`<span class="s">${esc(e.source)}</span>`:''}<span>${esc(e.msg)}</span></div>`).join('')||'<div class="cl"><span class="faint">No log lines match.</span></div>';
+  if(stick)box.scrollTop=box.scrollHeight;
+  $('#c-count')&&($('#c-count').textContent=f.length+' lines'+(C.paused?' (paused)':''));
+  const sel=$('#c-mod');if(sel){const mods=[...new Set(C.entries.map(e=>e.module))].sort();
+    if(sel.options.length!==mods.length+1){sel.innerHTML='<option value="">All modules</option>'+mods.map(m=>`<option ${m===C.mod?'selected':''}>${esc(m)}</option>`).join('')}}}
+function renderPrestream(){const el=$('#pr-items');if(!el)return;const r=C.pr;
+  if(!r||!r.ts){el.innerHTML='<span class="faint sm">No check has run yet. Press Run now.</span>';return}
+  $('#pr-sub').textContent=`${r.scheduled?'Scheduled '+(r.slot||''):'Manual'} run at ${tm(r.ts)} · ${r.summary.pass} ok · ${r.summary.warn} warn · ${r.summary.fail} fail`;
+  const order={fail:0,warn:1,pass:2};
+  el.innerHTML=[...r.items].sort((a,b)=>order[a.status]-order[b.status]).map(i=>`<div class="pr ${i.status}"><span class="d"></span><b>${esc(i.module)}</b><span>${esc(i.label)}</span><span class="faint sm">${esc(i.detail||'')}</span></div>`).join('')}
+function updateBadge(){const n=C.entries.filter(e=>e.level==='error'&&e.seq>(C.seen??Infinity)).length;const b=$('#cbadge');if(b)b.textContent=n?(n>99?'99+':n):''}
+async function pollConsole(){try{const r=await (await fetch(`/api/console?since=${C.seq}&limit=500`)).json();
+    if(C.seen===null){C.seen=Math.min(+store.get('consoleSeen')||r.seq,r.seq)}
+    if(r.seq<C.seq){C.entries=[];C.seq=0;C.seen=0;return}   // core restarted: sequence restarted
+    if(r.entries.length){C.seq=r.seq;if(!C.paused){C.entries=C.entries.concat(r.entries).slice(-5000)}else C.pending=(C.pending||[]).concat(r.entries)}
+    else C.seq=Math.max(C.seq,r.seq);
+    if(route==='console'&&!C.paused){C.seen=C.seq;store.set('consoleSeen',C.seen);if(r.entries.length)renderLog()}
+    updateBadge()}catch{}}
+async function pollPrestream(){try{const r=await (await fetch('/api/prestream')).json();
+    if(r.ts&&(!C.pr||r.ts!==C.pr.ts)){const first=!C.pr;C.pr=r;renderPrestream();
+      if(!first&&r.scheduled&&+store.get('prSeen')!==r.ts){store.set('prSeen',r.ts);
+        const sm=r.summary,msg=`Pre-stream check ${r.slot||''}: ${sm.pass} ok, ${sm.warn} warn, ${sm.fail} fail`;toast(msg);
+        try{if(window.Notification){const go=()=>new Notification('PinguinoSuite',{body:msg});Notification.permission==='granted'?go():Notification.permission!=='denied'&&Notification.requestPermission().then(p=>p==='granted'&&go())}}catch{}}}
+    else if(!C.pr&&r.ts===null){renderPrestream()}}catch{}}
+function bindConsole(){
+  $('#c-mod').onchange=e=>{C.mod=e.target.value;renderLog()};$('#c-lv').value=C.level;$('#c-lv').onchange=e=>{C.level=e.target.value;renderLog()};
+  $('#c-q').value=C.q;$('#c-q').oninput=e=>{C.q=e.target.value;renderLog()};$('#c-err').checked=C.errOnly;$('#c-err').onchange=e=>{C.errOnly=e.target.checked;renderLog()};
+  $('#c-pause').textContent=C.paused?'Resume':'Pause';
+  $('#c-pause').onclick=()=>{C.paused=!C.paused;if(!C.paused&&C.pending){C.entries=C.entries.concat(C.pending).slice(-5000);C.pending=[]}$('#c-pause').textContent=C.paused?'Resume':'Pause';renderLog()};
+  $('#c-clear').onclick=()=>{C.clearBefore=C.seq;renderLog()};
+  $('#pr-run').onclick=async()=>{$('#pr-run').disabled=true;$('#pr-run').textContent='Running…';try{C.pr=await post('/api/prestream/run');renderPrestream();pollConsole()}catch{toast('Check failed to run')}$('#pr-run').disabled=false;$('#pr-run').textContent='Run now'};
+  C.seen=C.seq;store.set('consoleSeen',C.seen);updateBadge();renderLog();renderPrestream()}
 pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max-width:1000px">
   <div class="card"><h3>Stream</h3>
     <div class="setrow"><div class="grow">Twitch channel<div class="sm faint">Watched for go-live</div></div><input type="text" id="s-chan" value="${esc(S.channel)}" style="width:190px"></div>
@@ -227,7 +281,7 @@ pages.voice=()=>prev('Voice ID, commands, and “talks like me”. Nothing here 
      <div class="row" style="margin-top:14px"><button disabled>▶ Hear sample</button><span class="pill vio">training later</span></div></div></div>`;
 
 /* ============ shell ============ */
-const titles={dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const PREVIEWS=[['voice','🗣','Voice Studio'],['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
 function renderNav(){if(!S)return;
@@ -248,6 +302,7 @@ function go(r){route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classL
 let lastHtml='';
 function draw(force){if(!S)return;renderNav();
   const html=isMod(route)?pages.module(route):pages[route]();
+  if(route==='console'&&!force&&html===lastHtml)return;
   if(isMod(route)){const run=flushed();$('#page').classList.toggle('flush',run);
     if(run&&!force&&$('#mif')&&$('#mif').dataset.src===modSrc(modOf(route)))return;
     if(!run&&!force&&html===lastHtml)return;
@@ -257,6 +312,7 @@ function draw(force){if(!S)return;renderNav();
   if(route==='settings'&&!force&&document.activeElement?.tagName==='INPUT')return;
   $('#page').innerHTML=html;lastHtml=html;$('#page').scrollTop=sc;bind()}
 function bind(){
+  if(route==='console')bindConsole();
   $$('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
   $$('[data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
   $('#d-listen')&&($('#d-listen').onclick=async()=>{try{await fetch(LISTEN+'/api/live/auto',{method:'POST'});toast('Listening started');loadListen()}catch{toast('Listen is not running')}});
@@ -278,7 +334,7 @@ async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status'
   let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}
   L.lines=sid?(await (await fetch(`${LISTEN}/api/segments?session=${sid}&limit=500`)).json()).slice(-5):[]}catch{L.status=null;L.lines=[]}
   if(route==='dashboard')draw()}
-(async()=>{await load();go('dashboard');loadListen();setInterval(load,4000);setInterval(loadListen,3000);
+(async()=>{await load();go('dashboard');loadListen();setInterval(load,4000);setInterval(loadListen,3000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(pollPrestream,10000);
   const ws=()=>{const w=PG.ws();w.onmessage=()=>load();w.onclose=()=>setTimeout(ws,2000)};ws()})();
 </script>
 </body>
