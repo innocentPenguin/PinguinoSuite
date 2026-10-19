@@ -141,6 +141,12 @@ class CardManager:
         out["missed"].sort(key=lambda c: -c["updated"])
         return out
 
+    def recap(self, limit=50):
+        """Post-stream list of everything never answered (open, missed, snoozed), best first."""
+        todo = [c for c in self.cards.values() if c["state"] in ("open", "missed", "snoozed")]
+        todo.sort(key=lambda c: (-c["score"], c["created"]))
+        return todo[:limit]
+
     def _save(self, c, ev):
         self.store.save_card(c)
         self.emit({"type": ev, "card": c})

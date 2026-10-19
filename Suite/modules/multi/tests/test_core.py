@@ -505,3 +505,14 @@ def test_tiktok_unofficial_readonly_normalize():
     m = normalize_comment(N(user=N(user_id=7, unique_id="Fan", nickname="Fan!"), comment="hi?", msg_id="m1"), "host")
     assert m.id == "tiktok:host:m1" and m.platform == "tiktok" and m.user == "fan" and m.text == "hi?"
     assert TikTok.official is False and TikTok.capabilities["send"] is False
+
+
+def test_recap_lists_only_unanswered_best_first(tmp_path):
+    cm, clk = mkcards(tmp_path)
+    a = cm.maybe_create(mk("a?", id="twitch:c:a"), hi())
+    b = cm.maybe_create(mk("b?", id="twitch:c:b"), prio.Decision(80, "high", hi().reasons))
+    c = cm.maybe_create(mk("c?", id="twitch:c:c"), hi())
+    cm.answer(c["id"], "typed")
+    clk.t += 400
+    cm.tick()
+    assert [x["id"] for x in cm.recap()] == [b["id"], a["id"]]

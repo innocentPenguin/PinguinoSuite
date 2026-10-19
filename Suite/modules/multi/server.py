@@ -189,6 +189,13 @@ def get_cards():
     return cards.view()
 
 
+@app.get("/api/recap")
+def recap():
+    """Unanswered recap for after the stream: open + missed + snoozed cards, highest score first."""
+    r = cards.recap()
+    return {"count": len(r), "cards": r}
+
+
 @app.post("/api/cards/{cid:path}/{action}")
 async def card_action(cid: str, action: str, request: Request):
     body = await request.json() if request.headers.get("content-length", "0") != "0" else {}
