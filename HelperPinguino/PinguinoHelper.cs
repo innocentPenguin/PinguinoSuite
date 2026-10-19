@@ -460,7 +460,7 @@ public class CPHInline
         if (f == null)
         {
             f = new JObject {
-                { "McSmpIp", "smp.innocentpenguin.com" }, { "McHardcoreIp", "hc.innocentpenguin.com" }, { "McBedrockPort", "19132" }, { "McVersion", "" },
+                { "McSmpIp", "smp.innocentpenguin.com" }, { "McHardcoreIp", "hc.innocentpenguin.com" }, { "McBedrockPort", "19132" }, { "McHardcoreBedrockPort", "9216" }, { "McVersion", "" },
                 { "McRules", "No griefing, no killing, no stealing, no cheating, be nice." }, { "Discord", "https://discord.gg/fktz5sq4b8" }, { "Website", "https://innocentpenguin.com" },
                 { "Note", "Seeded from the chat logs of 2026-10-16. Check these once; the website (FactsUrl) overrides them when it has the same key." } };
             try { File.WriteAllText(Path.Combine(_dir, "helper_facts.json"), f.ToString()); } catch (Exception) { }
@@ -481,13 +481,27 @@ public class CPHInline
         {
             string body = _pgTestHttp != null ? _pgTestHttp("GET " + url, "", "") : HttpGetText(url);
             var j = JObject.Parse(body); var o = new JObject();
-            if (j["faq"] is JArray arr) { foreach (var it in arr) if (it["key"] != null && it["answer"] != null) o[(string)it["key"]] = (string)it["answer"]; }
+            if (j["faq"] is JArray arr) { foreach (var it in arr) if (it["key"] != null && it["answer"] != null) MapFaq(o, (string)it["key"], (string)it["answer"], (string)it["url"]); }
             else foreach (var kv in j) if (kv.Value.Type == JTokenType.String) o[kv.Key] = kv.Value;
             _site = o;
         }
         catch (Exception) { }
         return _site;
     }
+    // innocentpenguin.com/api/faq entries -> the facts above ("minecraft_ip": "Community SMP: smp... (Bedrock port 19132). Hardcore SMP: hc... (Bedrock port 9216).")
+    static void MapFaq(JObject o, string key, string answer, string url)
+    {
+        if (key == "discord") { o["Discord"] = (url ?? "").StartsWith("http") ? url : answer; return; }
+        if (key == "minecraft_ip")
+        {
+            var c = Regex.Match(answer, @"Community[^:]*:\s*(?<h>[A-Za-z0-9.\-]+)\s*\(Bedrock port (?<p>\d+)\)", RegexOptions.IgnoreCase);
+            var h = Regex.Match(answer, @"Hardcore[^:]*:\s*(?<h>[A-Za-z0-9.\-]+)\s*\(Bedrock port (?<p>\d+)\)", RegexOptions.IgnoreCase);
+            if (c.Success) { o["McSmpIp"] = c.Groups["h"].Value; o["McBedrockPort"] = c.Groups["p"].Value; }
+            if (h.Success) { o["McHardcoreIp"] = h.Groups["h"].Value; o["McHardcoreBedrockPort"] = h.Groups["p"].Value; }
+            return;
+        }
+        if (key.StartsWith("Mc") || key == "Discord" || key == "Website") o[key] = answer;   // already in the facts' own names
+    }
     string HttpGetText(string url)
     {
         ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
@@ -548,13 +562,16 @@ public class CPHInline
     bool McAnswer(string login, string display, string ed)
     {
         var f = Facts(); string ip = F(f, "McSmpIp"), hc = F(f, "McHardcoreIp"), port = F(f, "McBedrockPort"), rules = F(f, "McRules");
+        string hcPort = F(f, "McHardcoreBedrockPort");
         string hcPart = hc == "" ? "" : " (the stream-only hardcore server is " + hc + ")";
         if (ed == "java")
             Say("@" + display + " " + Worded("mc_java", "How do I join the Minecraft server on Java?", new[] { ip }, "Java: just add the server IP " + ip + hcPart + ". No port needed." + (rules == "" ? "" : " Rules: " + rules), f));
         else
         {
-            if (port == "") port = "19132";
-            Say("@" + display + " " + Worded("mc_bedrock", "How do I join the Minecraft server on Bedrock?", new[] { ip, port }, "Bedrock: server IP " + ip + ", port " + port + hcPart + "." + (rules == "" ? "" : " Rules: " + rules), f));
+            if (port == "") port = "19132";
+            string hcB = hc == "" ? "" : " (hardcore: " + hc + ", port " + (hcPort == "" ? port : hcPort) + ")";
+            var must = new List<string> { ip, port }; if (hc != "") { must.Add(hc); must.Add(hcPort == "" ? port : hcPort); }
+            Say("@" + display + " " + Worded("mc_bedrock", "How do I join the Minecraft server on Bedrock?", must.ToArray(), "Bedrock: server IP " + ip + ", port " + port + hcB + "." + (rules == "" ? "" : " Rules: " + rules), f));
         }
         return true;
     }

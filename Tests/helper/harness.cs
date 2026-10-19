@@ -228,7 +228,7 @@ public static class Harness
         aiReply = "just join the server lol";
         Msg("Mc2", "minecraft ip bedrock");
         Check("edition in the first message: no question, bedrock gets IP and port (a wording without the facts is thrown away)", Last() != null && Last().Contains("smp.innocentpenguin.com") && Last().Contains("19132"), Last());
-        aiReply = "Bedrock: IP smp.innocentpenguin.com port 19132";
+        aiReply = "Bedrock: IP smp.innocentpenguin.com port 19132, hardcore hc.innocentpenguin.com port 9216";
         Settings(",\"FactsUrl\":\"\",\"PhraseBankSize\":2");
         Msg("Mc3", "ip? bedrock"); Msg("Mc4", "ip? bedrock");
         int ai1 = aiCalls; Msg("Mc5", "ip? bedrock"); Msg("Mc6", "ip? bedrock");
@@ -236,6 +236,17 @@ public static class Harness
         Msg("Mc7", "!discord");
         Check("!discord answers with the invite", Last() != null && Last().Contains("discord.gg/"), Last());
         Check("facts file was seeded for 05/Ivan to check", File.Exists(Path.Combine(dir, "helper_facts.json")));
+
+        // the website's /api/faq overrides the seed
+        var bf = BindingFlags.NonPublic | BindingFlags.Static; var T = typeof(CPHInline);
+        T.GetField("_pgTestHttp", bf).SetValue(null, (Func<string, string, string, string>)((u, a, b) => u.StartsWith("GET ") ? "{\"faq\":[{\"key\":\"minecraft_ip\",\"answer\":\"Community SMP: play.example.net (Bedrock port 11111). Hardcore SMP: hc.example.net (Bedrock port 22222).\"},{\"key\":\"discord\",\"answer\":\"x\",\"url\":\"https://discord.gg/zzz\"}]}" : "{}"));
+        T.GetField("_siteAt", bf).SetValue(null, DateTime.MinValue); T.GetField("_factsAt", bf).SetValue(null, DateTime.MinValue);
+        Settings(",\"FactsUrl\":\"https://site.test/api/faq\",\"PhraseBankSize\":1"); aiReply = "x";
+        Msg("Mc8", "ip? bedrock");
+        Check("site facts win: new IP and both ports", Last() != null && Last().Contains("play.example.net") && Last().Contains("11111") && Last().Contains("22222"), Last());
+        Msg("Mc9", "!discord");
+        Check("site discord link wins", Last() != null && Last().Contains("discord.gg/zzz"), Last());
+        T.GetField("_pgTestHttp", bf).SetValue(null, null);
 
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
