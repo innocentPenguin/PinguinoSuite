@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Now playing</title>
+<!-- OBS browser source: http://127.0.0.1:8771/overlay  (add ?next=0 to hide the up-next list, ?theme=light for dark text) -->
+<style>
+:root{--fg:#fff;--bg:rgba(20,22,27,.82);--accent:#ff9900}
+body.light{--fg:#111;--bg:rgba(255,255,255,.85)}
+html,body{margin:0;background:transparent;font-family:"Segoe UI",system-ui,sans-serif;color:var(--fg)}
+#card{display:none;width:460px;background:var(--bg);border-radius:14px;padding:12px;box-sizing:border-box;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.4)}
+#card.show{display:block;animation:in .4s ease}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.row{display:flex;gap:12px;align-items:center}
+#art{width:84px;height:84px;border-radius:8px;background:#333 center/cover;flex:none}
+.t{min-width:0;flex:1}
+#title{font-size:21px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#artist{font-size:16px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#req{font-size:13px;color:var(--accent);margin-top:3px;min-height:15px}
+#bar{height:5px;background:rgba(255,255,255,.18);border-radius:3px;margin-top:10px;overflow:hidden}
+#fill{height:100%;width:0;background:var(--accent)}
+#next{margin-top:8px;font-size:13px;opacity:.8;line-height:1.5}
+#next b{color:var(--accent);font-weight:600}
+</style></head>
+<body><div id="card"><div class="row"><div id="art"></div><div class="t"><div id="title"></div><div id="artist"></div><div id="req"></div></div></div>
+<div id="bar"><div id="fill"></div></div><div id="next"></div></div>
+<script>
+const P=new URLSearchParams(location.search);if(P.get('theme')==='light')document.body.classList.add('light');
+const showNext=P.has('next')?+P.get('next'):null;
+let o=null,at=0;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function poll(){
+  try{const r=await fetch('/api/overlay.json',{cache:'no-store'});o=await r.json();at=performance.now();render()}catch(e){}
+  setTimeout(poll,1500);
+}
+function render(){
+  const c=$('card');
+  if(!o||!o.has_track){c.classList.remove('show');return}
+  c.classList.add('show');
+  $('title').textContent=o.title;$('artist').textContent=o.artist;
+  $('req').textContent=o.requester?'requested by '+o.requester:'';
+  $('art').style.backgroundImage=o.art?'url("'+o.art+'")':'none';
+  const n=showNext==null?o.next.length:showNext;
+  $('next').innerHTML=o.next.slice(0,n).map((x,i)=>(i?'':'<b>Up next</b> ')+esc(x.title)+' - '+esc(x.artist)+(x.requester?' <b>('+esc(x.requester)+')</b>':'')).join('<br>');
+}
+function frame(){
+  if(o&&o.has_track&&o.duration_ms){const p=o.progress_ms+(o.playing?performance.now()-at:0);$('fill').style.width=Math.min(100,p/o.duration_ms*100)+'%'}
+  requestAnimationFrame(frame);
+}
+poll();frame();
+</script></body></html>

@@ -1,0 +1,537 @@
+"""Run: python -m unittest discover -s Suite/modules/spotify/tests   (stdlib only, no network)."""
+import json
+import os
+import sys
+import tempfile
+import time
+import unittest
+import urllib.parse
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
+os.environ["PINGUINO_DATA_DIR"] = tempfile.mkdtemp(prefix="spotify-test-")
+
+import rules  # noqa: E402
+import spotify_api  # noqa: E402
+import store  # noqa: E402
+from engine import Engine  # noqa: E402
+from queue_core import Queue, QueueError, new_item  # noqa: E402
+
+
+def T(n, dur=200000, explicit=False, artist="Artist"):
+    return {"id": f"id{n}".ljust(22, "x"), "uri": f"spotify:track:t{n}", "name": f"Song {n}", "artists": [artist], "album": "Al",
+            "art": "", "duration_ms": dur, "explicit": explicit}
+
+
+def V(n, user, tier=0):
+    return new_item(T(n), user, "viewer", tier)
+
+
+class QueueTests(unittest.TestCase):
+    def ids(self, q):
+        return [it["uri"][-2:] for it in q.items]
+
+    def test_fair_round_robin(self):
+        q = Queue()
+        for n, u in [(1, "a"), (2, "a"), (3, "a"), (4, "b"), (5, "c")]:
+            q.add(V(n, u))
+        # a's 2nd/3rd requests rank behind b and c's first
+        self.assertEqual([it["name"] for it in q.items], ["Song 1", "Song 4", "Song 5", "Song 2", "Song 3"])
+
+    def test_sub_priority_within_round(self):
+        q = Queue()
+        q.add(V(1, "a"))
+        q.add(V(2, "b", tier=1))
+        self.assertEqual(q.items[0]["name"], "Song 2")
+
+    def test_streamer_next_and_locked_survive(self):
+        q = Queue()
+        q.add(V(1, "a"))
+        q.add(new_item(T(9)), "next")
+        q.add(V(2, "b"))
+        self.assertEqual(q.items[0]["uri"], "spotify:track:t9")
+
+    def test_pushed_head_frozen(self):
+        q = Queue()
+        q.add(V(1, "a"))
+        q.add(V(2, "b"))
+        q.items[0]["pushed"] = True
+        q.add(new_item(T(9)), "next")
+        self.assertEqual(q.items[1]["uri"], "spotify:track:t9")
+        with self.assertRaises(QueueError):
+            q.move(q.items[0]["id"], 2)
+        self.assertEqual(q.remove(q.items[0]["id"]), "marked")
+        self.assertTrue(q.items[0]["skip_on_play"])
+        self.assertEqual(len(q.items), 3)
+
+    def test_move_clamps_and_locks(self):
+        q = Queue()
+        for n in range(4):
+            q.add(new_item(T(n)))
+        q.items[0]["pushed"] = True
+        q.move(q.items[3]["id"], 0)          # can't go before the pushed head
+        self.assertEqual(q.items[1]["name"], "Song 3")
+        self.assertTrue(q.items[1]["locked"])
+
+    def test_undo(self):
+        q = Queue()
+        q.add(new_item(T(1)))
+        q.add(new_item(T(2)))
+        q.remove(q.items[0]["id"])
+        self.assertEqual(len(q.items), 1)
+        q.undo()
+        self.assertEqual(len(q.items), 2)
+        q.undo()
+        q.undo()
+        with self.assertRaises(QueueError):
+            q.undo()
+        self.assertEqual(q.items, [])
+
+    def test_undo_keeps_pushed_head(self):
+        q = Queue()
+        q.add(new_item(T(1)))
+        q.add(new_item(T(2)))
+        q.items[0]["pushed"] = True
+        q.undo()                              # undo of the 2nd add, pushed head must stay
+        self.assertEqual([it["name"] for it in q.items], ["Song 1"])
+        self.assertTrue(q.items[0]["pushed"])
+
+    def test_oops_removes_last_unpushed(self):
+        q = Queue()
+        q.add(V(1, "a"))
+        q.add(V(2, "a"))
+        it = q.remove_last_of("A")
+        self.assertEqual(it["name"], "Song 2")
+
+    def test_history_capped(self):
+        q = Queue()
+        for i in range(250):
+            q.add_history({"uri": str(i)})
+        self.assertEqual(len(q.history), 200)
+        self.assertEqual(q.history[0]["uri"], "249")
+
+
+class RuleTests(unittest.TestCase):
+    def setUp(self):
+        self.s = rules.merged({})
+        self.q = Queue()
+
+    def ev(self, t, user="v", roles=(), now_uri=None):
+        return rules.evaluate(self.s, t, user, roles, self.q, now_uri)
+
+    def test_ok(self):
+        self.assertTrue(self.ev(T(1))[0])
+
+    def test_explicit_and_stream_safe(self):
+        self.s["block_explicit"] = True
+        self.assertEqual(self.ev(T(1, explicit=True))[1], "explicit")
+        self.s.update(block_explicit=False, stream_safe=True)
+        self.assertEqual(self.ev(T(1, explicit=True))[1], "explicit")
+
+    def test_length(self):
+        self.assertEqual(self.ev(T(1, dur=700000))[1], "too_long")
+
+    def test_blocklist_by_artist_title_and_uri(self):
+        self.s["blocklist"] = ["bad artist", "spotify:track:t5", "naughty"]
+        self.assertEqual(self.ev(T(1, artist="The BAD  Artist"))[1], "blocked")
+        self.assertEqual(self.ev(T(5))[1], "blocked")
+        t = T(2)
+        t["name"] = "Very Naughty Song"
+        self.assertEqual(self.ev(t)[1], "blocked")
+
+    def test_limit_and_sub_extra_and_mod_bypass(self):
+        self.q.add(V(1, "v"))
+        self.q.add(V(2, "v"))
+        self.assertEqual(self.ev(T(3))[1], "limit")
+        self.assertTrue(self.ev(T(3), roles={"sub"})[0])
+        self.assertTrue(self.ev(T(3), roles={"mod"})[0])
+
+    def test_duplicates(self):
+        self.q.add(V(1, "x"))
+        self.assertEqual(self.ev(T(1), user="y")[1], "dup_queue")
+        self.assertEqual(self.ev(T(2), now_uri="spotify:track:t2")[1], "dup_queue")
+        self.q.add_history({"uri": "spotify:track:t3", "played_at": time.time() - 60})
+        self.assertEqual(self.ev(T(3))[1], "dup_recent")
+        self.q.history[0]["played_at"] = time.time() - 7200
+        self.assertTrue(self.ev(T(3))[0])
+
+    def test_toggles(self):
+        self.s["requests_open"] = False
+        self.assertEqual(self.ev(T(1))[1], "closed")
+        self.assertTrue(self.ev(T(1), roles={"mod"})[0])
+        self.s.update(requests_open=True, mod_only=True)
+        self.assertEqual(self.ev(T(1), roles={"sub"})[1], "mod_only")
+        self.s.update(mod_only=False, sub_only=True)
+        self.assertEqual(self.ev(T(1))[1], "sub_only")
+        self.assertTrue(self.ev(T(1), roles={"vip"})[0])
+
+    def test_broadcaster_bypasses_everything(self):
+        self.s["blocklist"] = ["artist"]
+        self.assertTrue(self.ev(T(1), roles={"broadcaster"})[0])
+
+    def test_blocked_user_and_queue_full(self):
+        self.s["blocked_users"] = ["Troll"]
+        self.assertEqual(self.ev(T(1), user="troll")[1], "user_blocked")
+        self.s.update(blocked_users=[], queue_max=1)
+        self.q.add(V(2, "z"))
+        self.assertEqual(self.ev(T(1))[1], "full")
+
+    def test_parse_and_ids(self):
+        self.assertEqual(rules.parse("!SR  hello world"), ("sr", "hello world"))
+        self.assertEqual(rules.parse("!request x"), ("sr", "x"))
+        self.assertEqual(rules.parse("hello"), (None, ""))
+        self.assertEqual(rules.parse("!unknown x"), (None, ""))
+        self.assertEqual(rules.track_id_from("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC?si=abc"), "4uLU6hMCjMI75M1A2tKUQC")
+        self.assertEqual(rules.track_id_from("spotify:track:4uLU6hMCjMI75M1A2tKUQC"), "4uLU6hMCjMI75M1A2tKUQC")
+        self.assertIsNone(rules.track_id_from("never gonna"))
+
+    def test_merged_drops_bad_types(self):
+        m = rules.merged({"per_user_limit": "x", "requests_open": 0, "blocklist": ["a"], "nope": 1, "queue_max": 9})
+        self.assertEqual(m["per_user_limit"], 2)
+        self.assertTrue(m["requests_open"])
+        self.assertEqual(m["queue_max"], 9)
+        self.assertNotIn("nope", m)
+
+
+class FakeApi:
+    """Stands in for spotify_api.Client."""
+
+    def __init__(self):
+        self.tracks = {f"t{n}": T(n) for n in range(1, 30)}
+        self.playing = None           # uri
+        self.progress = 0
+        self.is_playing = True
+        self.real_queue = []
+        self.calls = []
+        self.fail_queue = None
+
+    def connected(self):
+        return True
+
+    def playback(self):
+        if not self.playing:
+            return None
+        t = self.tracks[self.playing.split(":")[-1]]
+        return {"is_playing": self.is_playing, "progress_ms": self.progress, "device": {"id": "d1", "name": "PC", "volume_percent": 50},
+                "item": {"uri": t["uri"], "id": t["id"], "name": t["name"], "duration_ms": t["duration_ms"], "explicit": t["explicit"],
+                         "artists": [{"name": a} for a in t["artists"]], "album": {"name": "Al", "images": []}}}
+
+    def queue(self):
+        return {"queue": [{"uri": u} for u in self.real_queue]}
+
+    def add_to_queue(self, uri, device_id=None):
+        self.calls.append(("queue", uri))
+        if self.fail_queue:
+            raise self.fail_queue
+        self.real_queue.append(uri)
+
+    def next(self):
+        self.calls.append(("next",))
+        if self.real_queue:
+            self.playing = self.real_queue.pop(0)
+            self.progress = 0
+
+    def search(self, q, limit=8):
+        return [self.tracks[k] for k in sorted(self.tracks) if q.lower() in self.tracks[k]["name"].lower()][:limit]
+
+    def track(self, tid):
+        return self.tracks.get("t1")
+
+    def play_uris(self, uris, device_id=None):
+        self.playing = uris[0]
+        self.progress = 0
+
+    def resume(self):
+        self.is_playing = True
+
+    def pause(self):
+        self.is_playing = False
+
+
+class Clock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+class FakeAuth:
+    last_error = ""
+    client_id = "cid"
+
+    def __init__(self, connected=True):
+        self._c = connected
+
+    def connected(self):
+        return self._c
+
+    def access_token(self):
+        return "x"
+
+    def seconds_left(self):
+        return 100
+
+
+class EngineTests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+
+    def test_jit_push_and_track_change(self):
+        self.e.add_track(T(2), "end", "bob", "viewer")
+        self.api.playing, self.api.progress = "spotify:track:t1", 10000
+        self.e.tick()
+        self.assertEqual(self.api.real_queue, [], "far from the end: nothing pushed yet")
+        self.api.progress = 180000                      # 20s left < 25s window
+        self.e.tick()
+        self.assertEqual(self.api.real_queue, ["spotify:track:t2"])
+        self.assertTrue(self.e.queue.items[0]["pushed"])
+        self.e.tick()
+        self.assertEqual(len(self.api.real_queue), 1, "never pushed twice")
+        self.api.playing, self.api.real_queue = "spotify:track:t2", []       # Spotify moved on
+        self.e.tick()
+        self.assertEqual(self.e.queue.items, [])
+        self.assertEqual(self.e.now_item["requester"], "bob")
+        self.assertEqual(self.e.queue.history[0]["uri"], "spotify:track:t1")
+        self.assertIn("Song 2", store.folder().joinpath("nowplaying.txt").read_text(encoding="utf8"))
+
+    def test_no_push_when_paused(self):
+        self.e.add_track(T(2))
+        self.api.playing, self.api.progress, self.api.is_playing = "spotify:track:t1", 199000, False
+        self.e.tick()
+        self.assertEqual(self.api.real_queue, [])
+
+    def test_push_failure_is_retried_not_lost(self):
+        self.e.add_track(T(2))
+        self.api.playing, self.api.progress = "spotify:track:t1", 190000
+        self.api.fail_queue = spotify_api.ApiError(404, "no device", "NO_ACTIVE_DEVICE")
+        self.e.tick()
+        self.assertFalse(self.e.queue.items[0]["pushed"])
+        self.api.fail_queue = None
+        self.e.tick()
+        self.assertTrue(self.e.queue.items[0]["pushed"])
+
+    def test_vanished_push_is_retried(self):
+        self.e.add_track(T(2))
+        self.api.playing, self.api.progress = "spotify:track:t1", 190000
+        self.e.tick()
+        self.api.real_queue = []                       # streamer cleared Spotify's queue
+        self.clock.t += 30
+        self.e.tick()
+        self.assertFalse(self.e.queue.items[0]["pushed"])
+        self.e.tick()
+        self.assertEqual(self.api.real_queue, ["spotify:track:t2"])
+
+    def test_skip_pushes_head_first(self):
+        self.e.add_track(T(2))
+        self.api.playing, self.api.progress = "spotify:track:t1", 1000
+        self.e.tick()
+        self.e.skip()
+        self.assertEqual(self.api.calls, [("queue", "spotify:track:t2"), ("next",)])
+        self.assertEqual(self.api.playing, "spotify:track:t2")
+
+    def test_skip_on_play_marked_item(self):
+        self.e.add_track(T(2))
+        self.e.add_track(T(3))
+        self.api.playing, self.api.progress = "spotify:track:t1", 190000
+        self.e.tick()
+        self.e.queue.remove(self.e.queue.items[0]["id"])    # already pushed -> marked
+        self.api.playing = "spotify:track:t2"
+        self.api.real_queue = ["spotify:track:t3"]
+        self.e.tick()
+        time.sleep(0.2)
+        self.assertIn(("next",), self.api.calls)
+
+    def test_chat_request_flow(self):
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        r = self.e.chat("alice", "!sr song 5", ["sub"])
+        self.assertTrue(r["ok"], r)
+        self.assertIn("added", r["reply"])
+        self.assertEqual(self.e.queue.items[0]["tier"], 1)
+        r = self.e.chat("alice", "!sr song 5", [])
+        self.assertEqual(r["code"], "dup_queue")
+        self.assertIn("Song 5", self.e.chat("x", "!queue", [])["reply"])
+        self.assertIn("Song 1", self.e.chat("x", "!song", [])["reply"])
+        self.assertEqual(self.e.chat("alice", "!oops", [])["code"], "removed")
+        self.assertFalse(self.e.chat("x", "hello", [])["handled"])
+
+    def test_chat_skips_blocked_candidate_and_uses_next(self):
+        self.e.save_settings({"blocklist": ["spotify:track:t1"]})
+        r = self.e.chat("bob", "!sr song 1", [])           # search returns Song 1, Song 10.. ; Song 1 blocked
+        self.assertTrue(r["ok"], r)
+        self.assertNotEqual(self.e.queue.items[0]["name"], "Song 1")
+
+    def test_skip_votes(self):
+        self.api.playing = "spotify:track:t1"
+        self.api.real_queue = ["spotify:track:t2"]
+        self.e.tick()
+        self.assertEqual(self.e.chat("a", "!skip", [])["code"], "vote")
+        self.assertEqual(self.e.chat("a", "!skip", [])["code"], "vote")     # same viewer twice counts once
+        self.e.chat("b", "!skip", [])
+        self.assertEqual(self.e.chat("c", "!skip", [])["code"], "skipped")
+
+    def test_mod_skip_and_toggle(self):
+        self.api.playing = "spotify:track:t1"
+        self.api.real_queue = ["spotify:track:t2"]
+        self.e.tick()
+        self.assertEqual(self.e.chat("m", "!skip", ["mod"])["code"], "skipped")
+        self.e.chat("m", "!sr close", ["mod"])
+        self.assertEqual(self.e.chat("v", "!sr song 4", [])["code"], "closed")
+        self.e.chat("m", "!sr open", ["mod"])
+        self.assertTrue(self.e.chat("v", "!sr song 4", [])["ok"])
+
+    def test_approval_inbox(self):
+        self.e.save_settings({"require_approval": True})
+        r = self.e.chat("v", "!sr song 4", [])
+        self.assertEqual(r["code"], "pending")
+        self.assertEqual(self.e.queue.items, [])
+        rid = self.e.inbox[0]["id"]
+        self.e.inbox_decide(rid, True)
+        self.assertEqual(self.e.queue.items[0]["requester"], "v")
+        self.assertTrue(self.e.chat("m", "!sr song 6", ["mod"])["code"] == "added", "mods skip approval unless stream-safe")
+
+    def test_stream_safe_forces_approval_even_for_mods(self):
+        self.e.save_settings({"stream_safe": True})
+        self.assertEqual(self.e.chat("m", "!sr song 6", ["mod"])["code"], "pending")
+        self.assertEqual(self.e.chat("ivan", "!sr song 7", ["broadcaster"])["code"], "added")
+
+    def test_not_connected_and_replies_off(self):
+        e = Engine(self.api, FakeAuth(False), self.clock)
+        self.assertEqual(e.chat("v", "!sr x", [])["code"], "offline")
+        self.e.save_settings({"chat_replies": False})
+        self.assertEqual(self.e.chat("v", "!song", [])["reply"], "")
+
+    def test_state_persists(self):
+        self.e.add_track(T(2), "end", "bob", "viewer")
+        e2 = Engine(self.api, FakeAuth(), self.clock)
+        self.assertEqual(e2.queue.items[0]["name"], "Song 2")
+
+    def test_rate_limit_backoff(self):
+        def boom():
+            raise spotify_api.RateLimited(7)
+        self.api.playback = boom
+        self.e.tick()
+        self.assertGreaterEqual(self.e.backoff_until, self.clock.t + 7)
+
+    def test_overlay_and_state_shape(self):
+        self.api.playing, self.api.progress = "spotify:track:t1", 5000
+        self.e.add_track(T(2))
+        self.e.tick()
+        o = self.e.overlay()
+        self.assertEqual((o["title"], o["next"][0]["title"]), ("Song 1", "Song 2"))
+        self.clock.t += 3
+        self.assertGreaterEqual(self.e.overlay()["progress_ms"], 8000)
+        json.dumps(self.e.public_state())
+
+    def test_prestream_levels(self):
+        self.assertEqual(Engine(self.api, FakeAuth(False), self.clock).prestream()[0]["status"], "fail")
+        a = FakeAuth()
+        a.client_id = ""
+        self.assertEqual(Engine(self.api, a, self.clock).prestream()[0]["status"], "warn")
+        self.api.me = lambda: {"display_name": "Ivan", "product": "free"}
+        self.api.devices = lambda: []
+        st = {i["id"]: i["status"] for i in self.e.prestream()}
+        self.assertEqual(st, {"token": "pass", "premium": "fail", "device": "warn"})
+        self.api.me = lambda: {"display_name": "Ivan", "product": "premium"}
+        self.api.devices = lambda: [{"name": "PC", "is_active": True}]
+        self.assertTrue(all(i["status"] == "pass" for i in self.e.prestream()))
+
+
+class AuthTests(unittest.TestCase):
+    def setUp(self):
+        store.save("tokens.json", {})
+        store.save("config.json", {"client_id": "cid"})
+        self.now = 1000.0
+        self.calls = []
+
+    def http(self, method, url, headers, body):
+        self.calls.append((method, url, body))
+        if url == spotify_api.TOKEN_URL:
+            form = urllib.parse.parse_qs(body.decode())
+            if form["grant_type"] == ["authorization_code"]:
+                return 200, {}, {"access_token": "A1", "refresh_token": "R1", "expires_in": 3600, "scope": "x"}
+            if form["refresh_token"] == ["BAD"]:
+                return 400, {}, {"error": "invalid_grant"}
+            return 200, {}, {"access_token": "A2", "expires_in": 3600}
+        if headers["Authorization"] == "Bearer A1" and getattr(self, "expire_a1", False):
+            return 401, {}, {"error": {"message": "expired"}}
+        return 200, {}, {"ok": 1}
+
+    def mk(self):
+        a = spotify_api.Auth(self.http, lambda: self.now)
+        return a, spotify_api.Client(a, self.http)
+
+    def login(self, a):
+        url = a.begin("http://127.0.0.1:8771/callback")
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        self.assertEqual(q["code_challenge_method"], ["S256"])
+        self.assertNotIn("client_secret", q)
+        a.finish("CODE", q["state"][0], "http://127.0.0.1:8771/callback")
+        return q
+
+    def test_pkce_challenge_matches_verifier(self):
+        a, _ = self.mk()
+        q = self.login(a)
+        form = urllib.parse.parse_qs(self.calls[-1][2].decode())
+        self.assertEqual(spotify_api.b64url(__import__("hashlib").sha256(form["code_verifier"][0].encode()).digest()), q["code_challenge"][0])
+        self.assertTrue(a.connected())
+        self.assertIn("R1", (store.folder() / "tokens.json").read_text(encoding="utf8"))
+
+    def test_bad_state_rejected(self):
+        a, _ = self.mk()
+        with self.assertRaises(spotify_api.ApiError):
+            a.finish("c", "nope", "u")
+
+    def test_auto_refresh_and_keeps_refresh_token(self):
+        a, c = self.mk()
+        self.login(a)
+        self.now += 3600
+        self.assertEqual(a.access_token(), "A2")
+        self.assertEqual(a.tokens["refresh_token"], "R1")
+
+    def test_401_triggers_one_refresh_retry(self):
+        a, c = self.mk()
+        self.login(a)
+        self.expire_a1 = True
+        self.assertEqual(c.me(), {"ok": 1})
+
+    def test_revoked_refresh_token_disconnects(self):
+        a, c = self.mk()
+        self.login(a)
+        a.tokens["refresh_token"] = "BAD"
+        self.now += 3600
+        with self.assertRaises(spotify_api.ApiError):
+            a.access_token()
+        self.assertFalse(a.connected())
+
+    def test_not_connected(self):
+        a, c = self.mk()
+        with self.assertRaises(spotify_api.NotConnected):
+            c.me()
+
+    def test_rate_limit_and_errors(self):
+        a, _ = self.mk()
+        self.login(a)
+
+        def h(m, u, hd, b):
+            return (429, {"Retry-After": "3"}, None) if "limited" in u else (403, {}, {"error": {"message": "x", "reason": "PREMIUM_REQUIRED"}})
+        c = spotify_api.Client(a, h)
+        with self.assertRaises(spotify_api.RateLimited) as cm:
+            c._req("GET", "/limited")
+        self.assertEqual(cm.exception.retry_after, 3)
+        with self.assertRaises(spotify_api.ApiError) as cm:
+            c._req("GET", "/me/player")
+        self.assertEqual(cm.exception.reason, "PREMIUM_REQUIRED")
+
+    def test_norm_playback_ad_and_empty(self):
+        self.assertIsNone(spotify_api.norm_playback(None))
+        pb = spotify_api.norm_playback({"is_playing": True, "item": None, "progress_ms": 1})
+        self.assertIsNone(pb["track"])
+
+
+if __name__ == "__main__":
+    unittest.main()

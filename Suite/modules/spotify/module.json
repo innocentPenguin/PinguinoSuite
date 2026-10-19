@@ -1,0 +1,13 @@
+{
+  "id": "spotify",
+  "name": "PinguinoSpotify",
+  "desc": "Spotify queue you own: drag-to-reorder, viewer song requests (!sr, !skip), fair ordering, stream-safe mode, OBS now-playing overlay.",
+  "cmd": ["{py}", "server.py"],
+  "cwd": "modules/spotify",
+  "port": 8771,
+  "url": "http://127.0.0.1:8771",
+  "health": "/api/status",
+  "prestream": "/api/prestream",
+  "ui": { "nav": "Spotify", "icon": "🎵", "section": "Modules", "path": "/", "order": 50 },
+  "defaults": { "enabled": true, "start_with_suite": true, "react_to_live": false }
+}

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PinguinoSpotify</title>
+<style>
+:root{--bg:#16181d;--panel:#1f2229;--panel2:#272b34;--fg:#e9ebef;--dim:#9aa0ac;--accent:#ff9900;--ok:#3ecf8e;--bad:#ff5d5d;--line:#343945}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px "Segoe UI",system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.pri{background:var(--accent);color:#111;border-color:var(--accent);font-weight:600}
+button.x{color:var(--bad)}
+button:disabled{opacity:.4;cursor:default}
+input[type=text],input[type=number],textarea,select{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:6px 8px;width:100%}
+textarea{min-height:70px;resize:vertical}
+#wrap{max-width:980px;margin:0 auto;padding:14px 16px 40px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+#np{display:flex;gap:14px;align-items:center}
+#npart{width:88px;height:88px;border-radius:8px;background:var(--panel2) center/cover;flex:none}
+#npinfo{flex:1;min-width:0}
+#nptitle{font-size:19px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dim{color:var(--dim)}.small{font-size:12px}
+#prog{height:6px;background:var(--panel2);border-radius:3px;margin:8px 0;cursor:pointer;overflow:hidden}
+#fill{height:100%;background:var(--accent);width:0}
+.ctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ctl input[type=range]{width:100px}
+nav{display:flex;gap:4px;margin:4px 0 12px;border-bottom:1px solid var(--line)}
+nav button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 14px}
+nav button.on{border-color:var(--accent);color:var(--accent);font-weight:600}
+nav .badge{background:var(--accent);color:#111;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}
+.row{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:8px;border:1px solid transparent}
+.row:hover{background:var(--panel2)}
+.row.drag{opacity:.4}.row.over{border-top:2px solid var(--accent)}
+.row img,.row .ph{width:40px;height:40px;border-radius:5px;background:var(--panel2);flex:none;object-fit:cover}
+.row .m{flex:1;min-width:0}
+.row .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:11px;border-radius:4px;padding:1px 6px;background:var(--panel2);color:var(--dim);margin-left:4px}
+.tag.o{background:#4a3511;color:var(--accent)}.tag.e{background:#4a1f1f;color:var(--bad)}
+.handle{cursor:grab;color:var(--dim);padding:0 4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
+.grid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--dim)}
+.grid label.chk{flex-direction:row;align-items:center;gap:8px;color:var(--fg);font-size:14px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.step{display:flex;gap:10px;margin:10px 0}.step b{background:var(--accent);color:#111;border-radius:50%;width:24px;height:24px;display:grid;place-items:center;flex:none}
+code{background:var(--bg);padding:2px 6px;border-radius:5px;user-select:all}
+#toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--accent);padding:8px 14px;border-radius:8px;display:none;z-index:9}
+#banner{background:#4a1f1f;border:1px solid var(--bad);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:none}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px}.pill.ok{background:#12382a;color:var(--ok)}.pill.bad{background:#4a1f1f;color:var(--bad)}
+</style></head><body><div id="wrap">
+<div id="banner"></div>
+
+<div class="card" id="np">
+  <div id="npart"></div>
+  <div id="npinfo">
+    <div id="nptitle" class="dim">Nothing playing</div>
+    <div id="npartist" class="dim"></div>
+    <div id="npreq" class="small" style="color:var(--accent)"></div>
+    <div id="prog" title="click to seek"><div id="fill"></div></div>
+    <div class="ctl">
+      <button id="bprev" title="Previous">⏮</button><button id="bplay" class="pri" title="Play / pause">▶</button><button id="bnext" title="Skip (sends the next queued song first)">⏭</button>
+      <span class="small dim" id="ptime"></span>
+      <span style="flex:1"></span>
+      <span class="small dim">🔊</span><input type="range" id="vol" min="0" max="100">
+      <select id="dev" style="width:auto;max-width:180px" title="Playback device"></select>
+    </div>
+  </div>
+</div>
+
+<nav id="tabs"></nav>
+
+<section id="t-queue">
+  <div class="ctl" style="margin-bottom:8px">
+    <button id="bundo">↶ Undo</button><button id="bclear">Clear viewer requests</button><button id="bstart" class="pri" style="display:none">▶ Start queue</button>
+    <span style="flex:1"></span>
+    <label class="small"><input type="checkbox" id="qopen"> requests open</label>
+    <label class="small"><input type="checkbox" id="qsafe"> stream-safe</label>
+    <span id="qinfo" class="small dim"></span>
+  </div>
+  <div class="card" id="queue"></div>
+  <div class="small dim" style="margin:-4px 4px 10px">Drag ⠿ to reorder. Only the next song is sent to Spotify, just before the current one ends, so everything else stays editable.</div>
+  <h3 style="margin:14px 4px 6px">History</h3><div class="card" id="history"></div>
+</section>
+
+<section id="t-search" hidden>
+  <div class="ctl"><input type="text" id="q" placeholder="Search Spotify, or paste a track link…" style="flex:1"><button class="pri" id="bsearch">Search</button></div>
+  <div class="card" id="results" style="margin-top:10px"></div>
+</section>
+
+<section id="t-req" hidden>
+  <h3 style="margin:4px 4px 6px">Waiting for approval</h3><div class="card" id="inbox"></div>
+  <h3 style="margin:14px 4px 6px">Recent activity</h3><div class="card" id="log"></div>
+</section>
+
+<section id="t-set" hidden>
+  <div class="card"><h3 style="margin-top:0">Request rules</h3><div class="grid" id="rules"></div>
+    <label class="small dim" style="display:block;margin-top:10px">Blocklist (one per line: words in title/artist, or a Spotify track link/URI)</label><textarea id="blocklist"></textarea>
+    <label class="small dim" style="display:block;margin-top:10px">Blocked viewers (one per line)</label><textarea id="blockedusers"></textarea>
+    <div style="margin-top:10px"><button class="pri" id="bsave">Save settings</button></div></div>
+  <div class="card"><h3 style="margin-top:0">Chat commands</h3>
+    <div class="small"><code>!sr &lt;song or link&gt;</code> request &nbsp; <code>!queue</code> &nbsp; <code>!song</code> &nbsp; <code>!skip</code> (votes) &nbsp; <code>!oops</code> remove your last request<br>
+    Mods: <code>!sr open</code> / <code>!sr close</code> / <code>!srclear</code> / <code>!blocksong</code> / instant <code>!skip</code>. Chat wiring: <code>POST /api/chat</code> (see Docs/SPOTIFY.md).</div></div>
+  <div class="card"><h3 style="margin-top:0">OBS overlay</h3>
+    <div class="small">Browser source URL: <code id="ovurl"></code> <button id="bcopyov">Copy</button> (add <code>?next=0</code> to hide up-next, <code>?theme=light</code>)<br>
+    Text file for a Text source: <code id="npfile"></code></div></div>
+</section>
+
+<section id="t-setup" hidden>
+  <div class="card"><h3 style="margin-top:0">Connect Spotify <span id="constat"></span></h3>
+    <div class="step"><b>1</b><div>Open the <a id="dashlink" href="#" target="_blank" style="color:var(--accent)">Spotify developer dashboard</a> (log in with the Spotify account you stream with) and press <i>Create app</i>. Any name. Choose <i>Web API</i>.</div></div>
+    <div class="step"><b>2</b><div>Under <i>Redirect URIs</i> add exactly this and save: <code id="redir"></code> <button id="bcopyredir">Copy</button><br><span class="small dim">Spotify wants the literal 127.0.0.1, not "localhost".</span></div></div>
+    <div class="step"><b>3</b><div>Copy the app's <i>Client ID</i> (no secret needed) and paste it here:<br><div class="ctl" style="margin-top:6px"><input type="text" id="cid" style="max-width:380px" placeholder="Client ID"><button id="bcid">Save</button></div></div></div>
+    <div class="step"><b>4</b><div>Press <button class="pri" id="bconnect">Connect to Spotify</button>. Your browser opens Spotify's approval page; afterwards come back here. <span class="small dim">Needs Spotify Premium. The login is kept and refreshed automatically.</span></div></div>
+    <div class="step"><b>5</b><div>Open Spotify on this PC and press play once so a device exists. <button id="bdisc" class="x" style="float:right">Disconnect</button></div></div>
+    <div class="small dim">Dev-mode apps allow up to 25 users: fine for a personal app.</div></div>
+</section>
+</div><div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S=null,setup=null,tab='queue',dragId=null,pollT=0,lastVer=-1,editing=false;
+async function api(path,body){
+  const r=await fetch(path,body===undefined?{}:{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok||j.ok===false){throw new Error(j.error||('HTTP '+r.status))}
+  return j;
+}
+function toast(m,bad){const t=$('toast');t.textContent=m;t.style.borderColor=bad?'var(--bad)':'var(--accent)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',3500)}
+async function act(p,b,ok){try{await api(p,b||{});if(ok)toast(ok);refresh()}catch(e){toast(e.message,true)}}
+const fmt=ms=>{ms=Math.max(0,ms|0);const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+
+const TABS=[['queue','Queue'],['search','Search'],['req','Requests'],['set','Settings'],['setup','Setup']];
+function drawTabs(){
+  const pend=S&&S.inbox?S.inbox.length:0;
+  $('tabs').innerHTML=TABS.map(([k,l])=>`<button data-t="${k}" class="${k===tab?'on':''}">${l}${k==='req'&&pend?`<span class="badge">${pend}</span>`:''}</button>`).join('');
+  for(const [k] of TABS)$('t-'+k).hidden=k!==tab;
+}
+$('tabs').onclick=e=>{const t=e.target.closest('button');if(!t)return;tab=t.dataset.t;drawTabs();if(tab==='setup'||tab==='set')loadSetup();render()};
+
+function trackRow(t,btns){
+  return `<div class="row"><img src="${esc(t.art)}" onerror="this.style.visibility='hidden'"><div class="m"><div class="n">${esc(t.name)}${t.explicit?'<span class="tag e">E</span>':''}</div><div class="n small dim">${esc((t.artists||[]).join(', '))} · ${fmt(t.duration_ms)}</div></div>${btns}</div>`;
+}
+function render(){
+  if(!S)return;
+  drawTabs();
+  const bn=$('banner');
+  if(!S.client_id_set){bn.style.display='block';bn.innerHTML='Spotify is not set up yet: open the <b>Setup</b> tab.'}
+  else if(!S.connected){bn.style.display='block';bn.innerHTML='Not connected to Spotify: open the <b>Setup</b> tab and press Connect.'}
+  else if(S.error){bn.style.display='block';bn.textContent=S.error}
+  else bn.style.display='none';
+  drawNow();
+  if(tab==='queue')drawQueue();
+  if(tab==='req')drawReq();
+  if(tab==='set'&&!editing)drawSettings();
+  $('qopen').checked=!!S.settings.requests_open;$('qsafe').checked=!!S.settings.stream_safe;
+}
+function drawNow(){
+  const pb=S.playback,t=pb&&pb.track;
+  $('nptitle').textContent=t?t.name:'Nothing playing';$('nptitle').className=t?'':'dim';
+  $('npartist').textContent=t?t.artists.join(', '):(S.connected?'Open Spotify and press play, or use Start queue':'');
+  $('npreq').textContent=S.now_item&&S.now_item.requester?'requested by '+S.now_item.requester:'';
+  $('npart').style.backgroundImage=t&&t.art?`url("${t.art}")`:'none';
+  $('bplay').textContent=pb&&pb.is_playing?'⏸':'▶';
+  if(pb&&pb.device&&pb.device.volume!=null&&document.activeElement!==$('vol'))$('vol').value=pb.device.volume;
+  $('bstart').style.display=(!t&&S.queue.items.length)?'':'none';
+  tickBar();
+}
+function tickBar(){
+  const pb=S&&S.playback;if(!pb||!pb.track){$('fill').style.width='0';$('ptime').textContent='';return}
+  const p=pb.progress_ms+(pb.is_playing?performance.now()-S._at:0);
+  $('fill').style.width=Math.min(100,p/pb.track.duration_ms*100)+'%';$('ptime').textContent=fmt(p)+' / '+fmt(pb.track.duration_ms);
+}
+setInterval(tickBar,500);
+$('prog').onclick=e=>{const pb=S&&S.playback;if(!pb||!pb.track)return;const r=$('prog').getBoundingClientRect();act('/api/control',{action:'seek',value:Math.round((e.clientX-r.left)/r.width*pb.track.duration_ms)})};
+$('bplay').onclick=()=>act('/api/control',{action:S.playback&&S.playback.is_playing?'pause':'play'});
+$('bnext').onclick=()=>act('/api/control',{action:'next'});
+$('bprev').onclick=()=>act('/api/control',{action:'previous'});
+$('vol').onchange=e=>act('/api/control',{action:'volume',value:+e.target.value});
+$('dev').onchange=e=>e.target.value&&act('/api/control',{action:'transfer',value:e.target.value},'Moved playback');
+async function loadDevices(){try{const d=(await api('/api/devices')).devices;$('dev').innerHTML='<option value="">device…</option>'+d.map(x=>`<option value="${esc(x.id)}" ${x.is_active?'selected':''}>${esc(x.name)}</option>`).join('')}catch(e){}}
+$('dev').onfocus=loadDevices;
+
+function drawQueue(){
+  const q=S.queue,items=q.items;
+  $('qinfo').textContent=items.length?`${items.length} queued · ${fmt(q.total_ms)}`:'';
+  $('bundo').disabled=!q.can_undo;
+  $('queue').innerHTML=items.length?items.map((it,i)=>{
+    const tags=(it.pushed?'<span class="tag o">in Spotify queue'+(it.skip_on_play?' · will skip':'')+'</span>':'')+(it.requester?`<span class="tag">${it.tier==2?'★ ':it.tier==1?'♥ ':''}${esc(it.requester)}</span>`:'')+(it.explicit?'<span class="tag e">E</span>':'');
+    return `<div class="row" draggable="${!it.pushed}" data-id="${it.id}" data-i="${i}"><span class="handle">${it.pushed?'':'⠿'}</span><span class="dim" style="width:20px">${i+1}</span><img src="${esc(it.art)}" onerror="this.style.visibility='hidden'"><div class="m"><div class="n">${esc(it.name)}${tags}</div><div class="n small dim">${esc(it.artists.join(', '))} · ${fmt(it.duration_ms)}</div></div>
+      <button data-a="now" title="Play now">▶</button><button data-a="next" title="Play next" ${i<=(items[0]&&items[0].pushed?1:0)?'disabled':''}>⤒</button><button class="x" data-a="rm" title="${it.pushed?'Skip it when it starts':'Remove'}">✕</button></div>`}).join(''):'<div class="dim" style="padding:10px">Queue is empty. Add songs from Search, or let viewers use !sr.</div>';
+  $('history').innerHTML=q.history.length?q.history.slice(0,30).map(h=>`<div class="row"><img src="${esc(h.art)}" onerror="this.style.visibility='hidden'"><div class="m"><div class="n">${esc(h.name)}</div><div class="n small dim">${esc((h.artists||[]).join(', '))}${h.requester?' · requested by '+esc(h.requester):''}</div></div><button data-h="${esc(h.uri)}" title="Add again">＋</button></div>`).join(''):'<div class="dim" style="padding:10px">Nothing played yet.</div>';
+}
+$('queue').onclick=e=>{const b=e.target.closest('button');if(!b)return;const id=b.closest('.row').dataset.id;
+  if(b.dataset.a==='rm')act('/api/queue/remove',{id});else if(b.dataset.a==='next')act('/api/queue/play_next',{id});else if(b.dataset.a==='now')act('/api/queue/play_now',{id})};
+$('history').onclick=e=>{const b=e.target.closest('button');if(b)act('/api/queue/add',{uri:b.dataset.h,where:'end'},'Added')};
+$('queue').ondragstart=e=>{const r=e.target.closest('.row');if(r){dragId=r.dataset.id;r.classList.add('drag');editing=true}};
+$('queue').ondragend=e=>{dragId=null;editing=false;render()};
+$('queue').ondragover=e=>{const r=e.target.closest('.row');if(!r||!dragId)return;e.preventDefault();document.querySelectorAll('.over').forEach(x=>x.classList.remove('over'));r.classList.add('over')};
+$('queue').ondrop=e=>{const r=e.target.closest('.row');if(!r||!dragId)return;e.preventDefault();const to=+r.dataset.i;const id=dragId;dragId=null;editing=false;act('/api/queue/move',{id,index:to})};
+$('bundo').onclick=()=>act('/api/queue/undo');
+$('bclear').onclick=()=>confirm('Remove all viewer requests from the queue?')&&act('/api/queue/clear',{only_viewers:true});
+$('bstart').onclick=()=>act('/api/queue/start');
+$('qopen').onchange=e=>act('/api/settings',{requests_open:e.target.checked});
+$('qsafe').onchange=e=>act('/api/settings',{stream_safe:e.target.checked},e.target.checked?'Stream-safe on: no explicit songs, requests need approval':'Stream-safe off');
+
+async function search(){const q=$('q').value.trim();if(!q)return;try{const r=(await api('/api/search?q='+encodeURIComponent(q))).tracks;
+  $('results').innerHTML=r.length?r.map((t,i)=>trackRow(t,`<button data-i="${i}" data-w="end">Add</button><button data-i="${i}" data-w="next">Next</button><button class="pri" data-i="${i}" data-w="now">Play now</button>`)).join(''):'<div class="dim" style="padding:10px">No results.</div>';
+  $('results')._r=r}catch(e){toast(e.message,true)}}
+$('bsearch').onclick=search;$('q').onkeydown=e=>e.key==='Enter'&&search();
+$('results').onclick=e=>{const b=e.target.closest('button');if(!b)return;act('/api/queue/add',{track:$('results')._r[+b.dataset.i],where:b.dataset.w},'Added')};
+
+function drawReq(){
+  $('inbox').innerHTML=S.inbox.length?S.inbox.map(r=>trackRow(r.track,`<span class="small dim">${esc(r.user)}</span><button class="pri" data-id="${r.id}" data-ok="1">Approve</button><button class="x" data-id="${r.id}">Deny</button>`)).join(''):'<div class="dim" style="padding:10px">Nothing waiting. Turn on <i>Require approval</i> or stream-safe mode to review requests first.</div>';
+  $('log').innerHTML=S.log.length?S.log.map(l=>`<div class="row"><span class="small dim" style="width:60px">${new Date(l.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span><span class="pill ${l.ok?'ok':'bad'}">${esc(l.kind)}</span><span class="n">${esc(l.user)}: ${esc(l.text)}</span></div>`).join(''):'<div class="dim" style="padding:10px">No requests yet.</div>';
+}
+$('inbox').onclick=e=>{const b=e.target.closest('button');if(b)act('/api/inbox/'+b.dataset.id+'/'+(b.dataset.ok?'approve':'deny'))};
+
+const RULES=[['requests_open','Requests open','b'],['mod_only','Mods only','b'],['sub_only','Subs / VIPs only','b'],['stream_safe','Stream-safe (no explicit + approval)','b'],['require_approval','Approve every request first','b'],
+ ['block_explicit','Block explicit songs','b'],['sub_priority','Subs/VIPs go first within a round','b'],['mods_bypass_limits','Mods bypass per-viewer limit','b'],['skip_mod_instant','Mod !skip skips instantly','b'],['chat_replies','Reply in chat','b'],
+ ['per_user_limit','Pending requests per viewer','n'],['sub_extra','Extra slots for subs/VIPs','n'],['queue_max','Max queue length','n'],['max_length_s','Max song length (seconds)','n'],
+ ['dup_cooldown_min','Replay cooldown (minutes)','n'],['skip_votes','Votes needed to skip','n'],['jit_ms','Send next song to Spotify this many ms before the end','n'],['overlay_show_next','Overlay: up-next count','n'],
+ ['np_template','Text file template ({title} {artist} {album} {requester})','t'],['np_idle_text','Text file when nothing plays','t']];
+function drawSettings(){
+  const s=S.settings;
+  $('rules').innerHTML=RULES.map(([k,l,t])=>t==='b'?`<label class="chk"><input type="checkbox" data-k="${k}" ${s[k]?'checked':''}>${l}</label>`:`<label>${l}<input type="${t==='n'?'number':'text'}" data-k="${k}" value="${esc(s[k])}"></label>`).join('');
+  $('blocklist').value=s.blocklist.join('\n');$('blockedusers').value=s.blocked_users.join('\n');
+}
+$('rules').onfocusin=$('blocklist').onfocus=$('blockedusers').onfocus=()=>editing=true;
+$('bsave').onclick=async()=>{const p={};document.querySelectorAll('#rules [data-k]').forEach(i=>{p[i.dataset.k]=i.type==='checkbox'?i.checked:i.type==='number'?+i.value:i.value});
+  p.blocklist=$('blocklist').value.split('\n').map(x=>x.trim()).filter(Boolean);p.blocked_users=$('blockedusers').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  editing=false;await act('/api/settings',p,'Settings saved')};
+
+async function loadSetup(){try{setup=await api('/api/setup');$('redir').textContent=setup.redirect_uri;$('ovurl').textContent=setup.overlay_url;$('npfile').textContent=setup.nowplaying_file;
+  $('dashlink').href=setup.dashboard;if(document.activeElement!==$('cid'))$('cid').value=setup.client_id;
+  $('constat').innerHTML=setup.connected?'<span class="pill ok">connected</span>':'<span class="pill bad">not connected</span>'}catch(e){}}
+const copy=t=>navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy failed: select the text manually',true));
+$('bcopyredir').onclick=()=>copy($('redir').textContent);$('bcopyov').onclick=()=>copy($('ovurl').textContent);
+$('bcid').onclick=async()=>{await act('/api/setup',{client_id:$('cid').value},'Client ID saved');loadSetup()};
+$('bconnect').onclick=async()=>{try{await api('/api/setup',{client_id:$('cid').value});const r=await api('/api/auth/start',{});toast('Opened Spotify in your browser: approve there, then come back.')}catch(e){toast(e.message,true)}};
+$('bdisc').onclick=()=>confirm('Disconnect Spotify?')&&act('/api/disconnect',{},'Disconnected').then(loadSetup);
+
+async function refresh(){
+  try{S=await api('/api/state');S._at=performance.now();if(S.version!==lastVer||tab==='queue'){lastVer=S.version;render()}else{drawNow()}}
+  catch(e){const bn=$('banner');bn.style.display='block';bn.textContent='Cannot reach the Spotify module: '+e.message}
+}
+function loop(){clearTimeout(pollT);if(!document.hidden&&!dragId)refresh();pollT=setTimeout(loop,1500)}
+drawTabs();loop();loadSetup();
+</script></body></html>
