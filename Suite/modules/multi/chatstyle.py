@@ -23,7 +23,7 @@ def rule(bg="", bgA=100, bg2="", text="", name="", bold=False, border="", border
 DEFAULT_STYLE = {
     "base": {"family": "system-ui", "size": 14, "weight": 400, "line": 1.35, "spacing": 4, "nameWeight": 700,
              "bg": "#09090a", "bgA": 0, "text": "#ececef", "timestamps": True, "badges": True, "platformTag": True,
-             "emoteSize": 150, "radius": 6},
+             "emoteSize": 150, "radius": 6, "marker": "text"},   # marker: text | logo | both | none
     "platform": {
         "twitch": rule(border="#9146ff", borderW=0),
         "youtube": rule(border="#ff4d4d", borderW=0),
@@ -54,6 +54,7 @@ DEFAULT_STYLE = {
         "pinned": rule(bg="#ff9900", bgA=12, border="#ff9900", borderW=4),
         "modaction": rule(bg="#ff4d4d", bgA=14, border="#ff4d4d", borderW=4),
     },
+    "marker": {p: {"size": 14, "color": ""} for p in PLATFORMS},   # platform logo size (px) and colour ("" = brand colour)
     "keywords": [],      # [{"word": "giveaway", "rule": {...}}] up to 20; a match highlights the message
 }
 
@@ -102,6 +103,11 @@ def sanitize(user):
     b["text"] = _color(ub.get("text", b["text"]), b["text"]) or b["text"]
     b["emoteSize"] = int(_num(ub.get("emoteSize", b["emoteSize"]), 80, 300, b["emoteSize"]))
     b["radius"] = int(_num(ub.get("radius", b["radius"]), 0, 24, b["radius"]))
+    b["marker"] = ub.get("marker") if ub.get("marker") in ("text", "logo", "both", "none") else b["marker"]
+    um = user.get("marker") if isinstance(user.get("marker"), dict) else {}
+    for plat in PLATFORMS:
+        mk = um.get(plat) if isinstance(um.get(plat), dict) else {}
+        out["marker"][plat] = {"size": int(_num(mk.get("size", 14), 10, 40, 14)), "color": _color(mk.get("color", ""), "")}
     for k in ("timestamps", "badges", "platformTag"):
         b[k] = bool(ub.get(k, b[k]))
     for section, keys in (("platform", PLATFORMS), ("role", ROLES), ("event", EVENTS)):

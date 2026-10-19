@@ -885,3 +885,13 @@ def test_new_and_returning_flags_from_history(tmp_path, monkeypatch):
     assert again["flags"] == ["returning"]                                # >6 h since the last message = back after a break
     soon = server.pipeline.ingest(ChatMessage(id="twitch:c:f3", platform="twitch", channel="c", user_id="u1", user="u1", display="u1", text="still here", ts=now + 5))
     assert soon["flags"] == []
+
+
+def test_platform_marker_setting_and_logo_validation():
+    import chatstyle
+    d = chatstyle.sanitize(None)
+    assert d["base"]["marker"] == "text" and d["marker"]["twitch"] == {"size": 14, "color": ""}      # default stays words
+    s = chatstyle.sanitize({"base": {"marker": "both"}, "marker": {"youtube": {"size": 999, "color": "#ff0000"}, "tiktok": {"size": 2, "color": "javascript:1"}, "evil": {}}})
+    assert s["base"]["marker"] == "both" and s["marker"]["youtube"] == {"size": 40, "color": "#ff0000"}
+    assert s["marker"]["tiktok"] == {"size": 10, "color": ""} and set(s["marker"]) == set(chatstyle.PLATFORMS)
+    assert chatstyle.sanitize({"base": {"marker": "huge"}})["base"]["marker"] == "text"

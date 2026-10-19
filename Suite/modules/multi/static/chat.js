@@ -50,7 +50,7 @@ function chatMsg(m, opts = {}) {
     ${caps.mod_timeout ? `<button data-mod="timeout" data-id="${esc(m.id)}" title="Timeout 10 min">&#9201;</button><button data-mod="ban" data-id="${esc(m.id)}" title="Ban">&#9940;</button>` : ''}
     ${caps.mod_delete ? `<button data-mod="delete" data-id="${esc(m.id)}" title="Delete this message">&#128465;</button>` : ''}</span>`;
   return `<div class="msg tier-${m.tier} ${styleClasses(m)}${bot ? ' bot' : ''}${CF.bots === 'dim' ? '' : ' nodim'}${mine ? ' self' : ''}${mod ? ' modmsg' : ''}" data-mid="${esc(m.id)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
-    <span class="t">${hhmm(m.ts)}</span><span class="pf pf-${esc(m.platform)}">${esc(m.platform)}</span>${badgeHtml(m)}<span class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</span>${flag}${eventLabel(m)}${rep}${bodyHtml(m)}${tools}</div>`;
+    <span class="t">${hhmm(m.ts)}</span>${markerHtml(m.platform)}${badgeHtml(m)}<span class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</span>${flag}${eventLabel(m)}${rep}${bodyHtml(m)}${tools}</div>`;
 }
 function chatAdd(m) {
   if (searchTerm) return;

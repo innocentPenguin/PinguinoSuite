@@ -35,7 +35,8 @@ function compileStyle(s) {
   out.push(`.msg .u,.pm b{font-weight:${b.nameWeight}}.emo{height:${(b.emoteSize / 100).toFixed(2)}em}`);
   if (!b.timestamps) out.push('.msg .t{display:none}');
   if (!b.badges) out.push('.msg .bd,.pm .bd{display:none}');
-  if (!b.platformTag) out.push('.msg .pf{display:none}');
+  if (!b.platformTag) out.push('.msg .pf,.msg .pl{display:none}');
+  CS_PLATFORMS.forEach(p => { const mk = (s.marker || {})[p] || {size: 14, color: ''}; out.push(`.pl.pl-${p}{width:${mk.size}px;height:${mk.size}px;vertical-align:middle;margin-right:5px;color:${mk.color || {twitch: '#9146ff', youtube: '#ff4d4d', discord: '#5865f2', tiktok: '#25f4ee'}[p]}}`); });
   const add = (cls, r) => {
     const css = ruleCss(r);
     if (css) out.push(`.msg.${cls},.pm.${cls}{${css}}`);
@@ -50,6 +51,22 @@ function compileStyle(s) {
   (s.keywords || []).forEach((k, i) => add('kw' + i, k.rule));
   out.push('.notice.e-modaction{border-radius:4px}');
   return out.join('\n');
+}
+// Simple original glyphs drawn as inline SVG (no external files, no fetching). They hint at each platform, they are not the brand artwork.
+const LOGOS = {
+  twitch: '<path fill="currentColor" d="M3 2h18v12l-5 5h-4l-3 3H6v-3H3z"/><rect x="9" y="6" width="2.2" height="6" fill="#fff"/><rect x="14" y="6" width="2.2" height="6" fill="#fff"/>',
+  youtube: '<rect x="1.5" y="5" width="21" height="14" rx="4.5" fill="currentColor"/><path fill="#fff" d="M10 8.8v6.4l5.6-3.2z"/>',
+  discord: '<path fill="currentColor" d="M6 3h12a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4H11l-5 3v-3a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z"/><circle cx="9" cy="11" r="1.8" fill="#fff"/><circle cx="15" cy="11" r="1.8" fill="#fff"/>',
+  tiktok: '<path fill="currentColor" d="M14 2h3.200c.3 2.300 1.700 3.800 4 4v3.300c-1.500 0-2.900-.5-4-1.300v6.300a6 6 0 1 1-6-6c.4 0 .700 0 1 .1v3.400a2.700 2.700 0 1 0 1.800 2.500z"/>',
+};
+function markerHtml(platform) {
+  const mode = (CS && CS.base.marker) || 'text';
+  if (mode === 'none') return '';
+  const word = `<span class="pf pf-${esc(platform)}">${esc(platform)}</span>`;
+  const logo = LOGOS[platform] ? `<svg class="pl pl-${esc(platform)}" viewBox="0 0 24 24" aria-label="${esc(platform)}"><title>${esc(platform)}</title>${LOGOS[platform]}</svg>` : '';
+  if (mode === 'logo') return logo || word;
+  if (mode === 'both') return logo + word;
+  return word;
 }
 function applyStyle() {
   if (!CS) return;
@@ -156,6 +173,8 @@ function renderStyleEditor() {
       <label class="cf">Font <select data-cs="base.family" data-t="str">${FAMILIES.map(f => `<option ${b.family === f ? 'selected' : ''} style="font-family:${f}">${f}</option>`).join('')}</select></label>
       ${num('size', 'Size', 9, 48, 1, 'px')}${num('weight', 'Weight', 300, 900, 100)}${num('nameWeight', 'Name weight', 300, 900, 100)}${num('line', 'Line spacing', 1, 2.2, 0.05)}${num('spacing', 'Space between messages', 0, 20, 1, 'px')}
       ${num('emoteSize', 'Emote size', 80, 300, 10, '%')}${num('radius', 'Corner roundness', 0, 24, 1, 'px')}
+      <label class="cf">Platform marker <select data-cs="base.marker" data-t="str">${[['text', 'Words (default)'], ['logo', 'Logo'], ['both', 'Logo and word'], ['none', 'Nothing']].map(([v, t]) => `<option value="${v}" ${b.marker === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${CS_PLATFORMS.map(p => `<label class="cf">${p} logo ${CS.marker[p].size}px <input type="range" data-cs="marker.${p}.size" data-t="num" min="10" max="40" value="${CS.marker[p].size}">${optColor('marker.' + p + '.color', 'colour')}</label>`).join('')}
       ${optColor('base.text', 'Chat text colour')}${optColor('base.bg', 'Chat background')}${num('bgA', 'Background see-through', 0, 100, 1, '%')}
       ${chk('timestamps', 'Show times')}${chk('badges', 'Show badges')}${chk('platformTag', 'Show platform tags')}</div></details>
     <details open><summary><h3>Platforms ${T('', 'The coloured side bar and tag identify where a message came from.')}</h3></summary>${CS_PLATFORMS.map(p => ruleEditor('platform.' + p, p[0].toUpperCase() + p.slice(1), 'tag colour = side bar colour')).join('')}</details>
