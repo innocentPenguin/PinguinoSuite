@@ -82,6 +82,12 @@ namespace PinguinoHost
                 string f = p == "/overlay/goal" ? Session.PagePath() : Credits.PagePath(); if (f == null) { c.Response.StatusCode = 404; return true; }
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
+            if (p == "/api/live" && m == "GET") { Write(c, LiveState.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/chat-rate" && m == "GET")
+            {   // written by ChattyPinguino once a minute while live: chat lines per minute per stream, averages, the limits in force
+                string f = Path.Combine(DataDir, "chat_rate_history.json");
+                Write(c, File.Exists(f) ? File.ReadAllText(f, Encoding.UTF8) : "{\"stats\":{\"minutes\":0,\"streams\":0},\"streams\":[]}", "application/json"); return true;
+            }
             if (p == "/api/spotify-announce" && m == "GET") { Write(c, SpotifyAnnounce.Api().ToString(), "application/json"); return true; }
             if (p == "/api/spotify-announce" && m == "POST") { Write(c, SpotifyAnnounce.Save(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/cutover" && m == "GET") { Write(c, Cutover.State().ToString(), "application/json"); return true; }

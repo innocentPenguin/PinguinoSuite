@@ -69,7 +69,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim);
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20);
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -224,16 +224,17 @@ namespace PinguinoHost
             }
         }
 
+        static Timer _syncTimer;   // a static field: a local timer is garbage collected and silently stops
         static void StartSyncTimer()   // the "PinguinoBot Web Sync" timed action (every 3 s)
         {
-            var t = new Timer(_ =>
+            _syncTimer = new Timer(_ =>
             {
                 if (!Monitor.TryEnter(dispatchLock)) return;
                 try { cph.Args.Clear(); cph.Args["timerName"] = "PinguinoBot Web Sync"; cph.RunAction("PinguinoBot"); }
-                catch (Exception) { }
+                catch (Exception ex) { Clog.Warn("sync", "web sync tick failed: " + ex.Message); }
                 finally { Monitor.Exit(dispatchLock); }
             }, null, 3000, 3000);
-            GC.KeepAlive(t);
+
         }
 
         // ---------------- simulation (no Twitch, no tokens) ----------------

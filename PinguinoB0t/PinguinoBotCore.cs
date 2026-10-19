@@ -1658,6 +1658,7 @@ public class CPHInline
             {
                 var batch = _problems.ToList();
                 WebCall("POST", "/api/bot/log", JsonConvert.SerializeObject(new { entries = batch.Select(m => new { level = "error", message = m }) }));
+        HostLive();   // the Host knows by itself whether the stream is live (no website key needed)
                 _problems.Clear();
             }
             if (_checkNotes.Count > 0)
@@ -1730,7 +1731,7 @@ public class CPHInline
             }
 
             // 5b) [NEW][STRIKES] Is the stream live? (a new stream takes one strike off everybody)
-            if ((DateTime.UtcNow - _lastLiveCheck).TotalSeconds >= 30)
+            if (!_hostLiveGiven && (DateTime.UtcNow - _lastLiveCheck).TotalSeconds >= 30)
             {
                 _lastLiveCheck = DateTime.UtcNow;
                 try
@@ -3951,6 +3952,20 @@ public class CPHInline
         if (!isPrivileged)
         {
             Say("@" + user + " Only mods can set MMR.");
+    bool _hostLiveGiven; string _hostLiveSeen = "";
+    // The PinguinoHost module publishes its own live state as the global "pinguino.live" ("1"/"0"); when present it replaces the website poll.
+    void HostLive()
+    {
+        try
+        {
+            string hl = CPH.GetGlobalVar<string>("pinguino.live", false);
+            _hostLiveGiven = hl == "1" || hl == "0";
+            if (_hostLiveGiven && _hostLiveSeen != hl) { _hostLiveSeen = hl; CPH.LogInfo("[BVQ] The Host reports the stream is " + (hl == "1" ? "LIVE" : "offline") + "."); }
+            if (_hostLiveGiven) ApplyLive(hl == "1");
+        }
+        catch (Exception) { _hostLiveGiven = false; }
+    }
+
             return true;
         }
 

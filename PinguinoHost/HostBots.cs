@@ -31,6 +31,10 @@ namespace PinguinoHost
                     new Def("chat_settings.json", "GateWindowSec", "Gate: counting window (s)", 10, 300, 5, "60 = last minute"),
                     new Def("chat_settings.json", "GateHysteresisPct", "Gate: margin before it switches back (%)", 0, 50, 1, "stops flapping"),
                     new Def("chat_settings.json", "GateBusyBlocksReplies", "Busy also stops answers to @mentions"),
+                    new Def("chat_settings.json", "GateAuto", "Auto limits from recorded streams (instead of the fixed numbers)"),
+                    new Def("chat_settings.json", "GateAutoQuietPct", "Auto: quiet = % of the average chat rate", 5, 100, 5, "e.g. 40"),
+                    new Def("chat_settings.json", "GateAutoBusyPct", "Auto: busy = % of the average chat rate", 110, 1000, 10, "e.g. 250"),
+                    new Def("chat_settings.json", "GateAutoMinMinutes", "Auto needs this many recorded stream minutes", 10, 3000, 10, "falls back to the fixed numbers before that"),
                     new Def("chat_settings.json", "RandomMinGapSec", "Min seconds between unprompted chime-ins", 0, 3600, 30, "cooldown"),
                     new Def("chat_settings.json", "CountdownEnabled", "Pre-stream countdown"),
                     new Def("chat_settings.json", "CountdownGoLiveAt", "Daily go-live time (HH:MM, this PC's clock)", "", "empty = no countdown"),
@@ -46,7 +50,7 @@ namespace PinguinoHost
 
         // The bots' compiled defaults, shown when a key is missing from the settings file (a missing key must never look like 0).
         static readonly System.Collections.Generic.Dictionary<string, double> Dflt = new System.Collections.Generic.Dictionary<string, double> {
-            { "RandomMinGapSec", 600 }, { "GateEnabled", 1 }, { "GateQuietPerMin", 10 }, { "GateBusyPerMin", 50 }, { "GateWindowSec", 60 }, { "GateHysteresisPct", 20 }, { "GateBusyBlocksReplies", 1 }, { "CountdownEnabled", 1 },
+            { "RandomMinGapSec", 600 }, { "GateEnabled", 1 }, { "GateAutoQuietPct", 40 }, { "GateAutoBusyPct", 250 }, { "GateAutoMinMinutes", 120 }, { "GateQuietPerMin", 10 }, { "GateBusyPerMin", 50 }, { "GateWindowSec", 60 }, { "GateHysteresisPct", 20 }, { "GateBusyBlocksReplies", 1 }, { "CountdownEnabled", 1 },
             { "RandomChance", 0.001 }, { "FactsInPrompt", 14 }, { "MaxCallsPerHour", 300 },
             { "chat:UserCooldownSec", 3 }, { "helper:UserCooldownSec", 30 }, { "InfoCooldownSec", 8 }, { "MaxAiCallsPerHour", 40 }, { "UseAi", 1 }, { "LiveOnly", 1 } };
         static double DefaultOf(Def d) { double r; return Dflt.TryGetValue(d.File.StartsWith("chat") ? "chat:" + d.Key : "helper:" + d.Key, out r) || Dflt.TryGetValue(d.Key, out r) ? r : 0; }

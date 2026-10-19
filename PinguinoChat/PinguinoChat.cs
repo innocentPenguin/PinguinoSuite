@@ -362,6 +362,11 @@ public class CPHInline
         public int GateWindowSec { get; set; } = 60;              // how far back the lines are counted (the rate is scaled to one minute)
         public int GateHysteresisPct { get; set; } = 20;          // a state is only left after crossing its limit by this much, so it does not flap
         public bool GateBusyBlocksReplies { get; set; } = true;   // busy also stops answers to @mentions (off = only chime-ins and welcomes stop)
+        public bool GateAuto { get; set; } = false;               // derive quiet / busy from the recorded streams instead of the fixed numbers above (falls back to them until enough data exists)
+        public int GateAutoQuietPct { get; set; } = 40;           // auto: quiet = this % of the average chat rate (lines/min over recorded stream minutes)
+        public int GateAutoBusyPct { get; set; } = 250;           // auto: busy = this % of the average rate
+        public int GateAutoMinMinutes { get; set; } = 120;        // auto needs at least this many recorded stream minutes
+        public int RateHistoryStreams { get; set; } = 30;         // how many streams chat_rate_history.json keeps
 
         // COUNTDOWN: before the stream starts it posts "starts in 15 minutes" etc. (needs a go-live time)
         public bool CountdownEnabled { get; set; } = true;
@@ -2354,7 +2359,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     static readonly List<long> _gateLog = new List<long>();
     static string _gateSt = "normal"; static int _gateSkipped; static bool _chimeOk = true;
 
-    void GateCount() { lock (_gateLock) { long n = Now(); _gateLog.Add(n); _gateLog.RemoveAll(t => n - t > Math.Max(10, _cfg.GateWindowSec) + 5); } }
+    void GateCount() { lock (_gateLock) { long n = Now(); _gateLog.Add(n); _gateLog.RemoveAll(t => n - t > Math.Max(10, _cfg.GateWindowSec) + 5); } RateCount(); }
     int GateRate()
     {
         lock (_gateLock)
@@ -2367,7 +2372,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     string GateState()
     {
         if (!_cfg.GateEnabled) return "normal";
-        int r = GateRate(); double h = Math.Max(0, _cfg.GateHysteresisPct) / 100.0; int busy = Math.Max(1, _cfg.GateBusyPerMin), quiet = Math.Max(0, _cfg.GateQuietPerMin);
+        int r = GateRate(); double h = Math.Max(0, _cfg.GateHysteresisPct) / 100.0; int quiet, busy; GateLimits(out quiet, out busy);
         lock (_gateLock)
         {
             bool wasBusy = _gateSt == "busy";
@@ -2380,6 +2385,93 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             return _gateSt;
         }
     }
+    /// <summary>the quiet / busy limits in force: the fixed numbers, or (GateAuto and enough recorded minutes) a share of the average rate.</summary>
+    void GateLimits(out int quiet, out int busy)
+    {
+        quiet = Math.Max(0, _cfg.GateQuietPerMin); busy = Math.Max(1, _cfg.GateBusyPerMin);
+        if (!_cfg.GateAuto) return;
+        lock (_gateLock)
+        {
+            if (_rhMinutes < Math.Max(10, _cfg.GateAutoMinMinutes) || _rhAvg <= 0) return;
+            quiet = Math.Max(1, (int)Math.Round(_rhAvg * _cfg.GateAutoQuietPct / 100.0));
+            busy = Math.Max(quiet + 2, (int)Math.Round(_rhAvg * _cfg.GateAutoBusyPct / 100.0));
+        }
+    }
+
+    // ---- chat-rate history: chat lines per minute for every stream, kept in chat_rate_history.json (last RateHistoryStreams streams) ----
+    class RateStream { public long Start; public long End; public List<int> PerMinute = new List<int>(); }
+    static List<RateStream> _rh; static RateStream _rhCur; static double _rhAvg; static int _rhMinutes; static long _rhSaved;
+    void RateLoad()
+    {
+        if (_rh != null) return;
+        _rh = new List<RateStream>();
+        try
+        {
+            string f = Path.Combine(_dir, "chat_rate_history.json");
+            if (File.Exists(f))
+                foreach (var j in (JObject.Parse(File.ReadAllText(f))["streams"] as JArray ?? new JArray()).OfType<JObject>())
+                {
+                    var rs = new RateStream { Start = (long?)j["start"] ?? 0, End = (long?)j["end"] ?? 0 };
+                    foreach (var n in j["perMinute"] as JArray ?? new JArray()) rs.PerMinute.Add((int)n);
+                    _rh.Add(rs);
+                }
+        }
+        catch (Exception ex) { Warn("rate", "chat_rate_history.json unreadable: " + ex.Message); }
+        if (_rh.Count > 0 && _rh[_rh.Count - 1].End == 0) _rhCur = _rh[_rh.Count - 1];   // the Host stopped mid-stream: resumed below if still live, closed otherwise
+        RateStats();
+    }
+    void RateStats()
+    {
+        lock (_gateLock)
+        {
+            long tot = 0; int min = 0; foreach (var rs in _rh) { tot += rs.PerMinute.Sum(); min += rs.PerMinute.Count; }
+            _rhMinutes = min; _rhAvg = min > 0 ? (double)tot / min : 0;
+        }
+    }
+    void RateTrack(bool live)
+    {
+        RateLoad(); long now = Now();
+        lock (_gateLock)
+        {
+            if (live && _rhCur == null) { _rhCur = new RateStream { Start = now }; _rh.Add(_rhCur); }
+            else if (!live && _rhCur != null) { _rhCur.End = now; _rhCur = null; while (_rh.Count > Math.Max(1, _cfg.RateHistoryStreams)) _rh.RemoveAt(0); RateSave(); return; }
+            if (_rhCur != null) { int idx = (int)((now - _rhCur.Start) / 60); while (_rhCur.PerMinute.Count <= idx) _rhCur.PerMinute.Add(0); }
+            if (now - _rhSaved >= 60 && _rhCur != null) RateSave();
+        }
+    }
+    void RateCount()
+    {   // called for every counted line
+        RateLoad(); long now = Now();
+        lock (_gateLock)
+        {
+            if (_rhCur == null) return;
+            int idx = (int)((now - _rhCur.Start) / 60); while (_rhCur.PerMinute.Count <= idx) _rhCur.PerMinute.Add(0); _rhCur.PerMinute[idx]++;
+        }
+    }
+    void RateSave()
+    {   // inside _gateLock
+        _rhSaved = Now(); RateStats();
+        var all = new List<int>(); foreach (var rs in _rh) all.AddRange(rs.PerMinute.Where(x => true));
+        all.Sort(); Func<double, int> pct = fr => all.Count == 0 ? 0 : all[Math.Min(all.Count - 1, (int)Math.Floor(fr * all.Count))];
+        var hours = new JArray(); int maxH = _rh.Count == 0 ? 0 : _rh.Max(r => (r.PerMinute.Count + 59) / 60);
+        for (int h = 0; h < maxH; h++)
+        {
+            long t = 0; int m = 0; foreach (var rs in _rh) { var seg = rs.PerMinute.Skip(h * 60).Take(60).ToList(); t += seg.Sum(); m += seg.Count; }
+            hours.Add(new JObject { { "hour", h + 1 }, { "avgPerMin", m == 0 ? 0 : Math.Round((double)t / m, 1) }, { "minutes", m } });
+        }
+        var last = _rh.LastOrDefault(r => r != _rhCur && r.PerMinute.Count > 0);
+        int q, b; int qs = _cfg.GateQuietPerMin, bs = _cfg.GateBusyPerMin; bool autoOn = false;
+        { double avg = _rhAvg; q = qs; b = bs; if (_cfg.GateAuto && _rhMinutes >= Math.Max(10, _cfg.GateAutoMinMinutes) && avg > 0) { q = Math.Max(1, (int)Math.Round(avg * _cfg.GateAutoQuietPct / 100.0)); b = Math.Max(q + 2, (int)Math.Round(avg * _cfg.GateAutoBusyPct / 100.0)); autoOn = true; } }
+        var doc = new JObject {
+            { "updated", Now() },
+            { "stats", new JObject { { "minutes", _rhMinutes }, { "streams", _rh.Count }, { "avgPerMin", Math.Round(_rhAvg, 1) }, { "typicalQuiet", pct(0.25) }, { "typicalBusy", pct(0.90) },
+                { "lastStreamAvg", last == null ? (JToken)null : Math.Round(last.PerMinute.Average(), 1) }, { "perHour", hours },
+                { "effective", new JObject { { "quiet", q }, { "busy", b }, { "auto", autoOn } } } } },
+            { "streams", new JArray(_rh.Select(rs => new JObject { { "start", rs.Start }, { "end", rs.End }, { "total", rs.PerMinute.Sum() }, { "perMinute", new JArray(rs.PerMinute) } })) } };
+        try { File.WriteAllText(Path.Combine(_dir, "chat_rate_history.json"), doc.ToString(Formatting.None)); } catch (Exception ex) { Warn("rate", "cannot save chat_rate_history.json: " + ex.Message); }
+    }
+
+    string GateLimitText() { int q, b; GateLimits(out q, out b); return q + "/" + b + (_cfg.GateAuto ? " auto" : ""); }
     bool GateAllowsChime() { return !_cfg.GateEnabled || GateState() == "quiet"; }
 
     // ---- countdown (the Host calls this every few seconds with pgTick=True, also while nobody is chatting) ----
@@ -2404,6 +2496,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     static string CdLeft(int sec) { return sec >= 60 && sec % 60 == 0 ? (sec / 60) + (sec == 60 ? " minute" : " minutes") : sec + " seconds"; }
     void CountdownTick()
     {
+        bool liveNow = false; try { var jl = ReadJson("settings.json"); liveNow = jl != null && jl["WasLive"] != null && (bool)jl["WasLive"]; } catch (Exception) { }
+        try { RateTrack(liveNow); } catch (Exception ex) { Warn("rate", ex.Message); }
         if (!_cfg.Enabled || !_cfg.CountdownEnabled) return;
         DateTime now = DateTime.Now;
         DateTime? target = CdTarget(_cfg.CountdownOverrideAt, now, false);
@@ -2443,7 +2537,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         var act = ActivePartners();
         int hushed = _hush.Count(kv => kv.Value > now);
         var last = Updates().LastOrDefault();
-        return "Chat bot " + (_cfg.Enabled ? "ON" : "OFF") + (_live ? ", live" : ", offline") + ". AI calls this hour: " + _callLog.Count + "/" + _cfg.MaxCallsPerHour + ". Chat " + GateRate() + "/min (" + (_cfg.GateEnabled ? GateState() : "gate off") + ", " + _gateSkipped + " skipped)" +
+        return "Chat bot " + (_cfg.Enabled ? "ON" : "OFF") + (_live ? ", live" : ", offline") + ". AI calls this hour: " + _callLog.Count + "/" + _cfg.MaxCallsPerHour + ". Chat " + GateRate() + "/min, limits " + GateLimitText() + " (" + (_cfg.GateEnabled ? GateState() : "gate off") + ", " + _gateSkipped + " skipped)" +
             ". Talking with " + act.Count + ", hushed: " + hushed + ", studying: " + (_studying ? "yes" : "no") + ", viewers known: " + _viewers.Count +
             ". Last problem: " + (string.IsNullOrEmpty(_lastWarn) ? "none" : _lastWarn) +
             ". Last update: " + (last == null ? "none logged" : UpdateLine(last, false)) + ".";
