@@ -17,11 +17,12 @@ public class CPHProxy
     {
         Runs.Add(name + (Args.ContainsKey("pinguinoNoDefer") ? "*" : ""));
         Func<string> b;
-        if (Behaviors.TryGetValue(name, out b)) { string r = b(); if (r != "") Globals["pinguino.result"] = r; }
+        if (Behaviors.TryGetValue(name, out b)) { string r = b(); if (r != "") { object mid; Globals[Args.TryGetValue("pinguinoMsgId", out mid) ? "pinguino.result." + mid : "pinguino.result"] = r; } }
         return true;
     }
     public void SetArgument(string k, object v) { Args[k] = v; }
     public bool SetGlobalVar(string name, object value, bool persisted = true) { Globals[name] = value; return true; }
+    public bool UnsetGlobalVar(string name, bool persisted = true) { return Globals.Remove(name); }
     public T GetGlobalVar<T>(string name, bool persisted = true) { object o; return Globals.TryGetValue(name, out o) && o is T ? (T)o : default(T); }
     public void LogInfo(string m) { Log.Add("INFO " + m); }
     public void LogWarn(string m) { Log.Add("WARN " + m); }

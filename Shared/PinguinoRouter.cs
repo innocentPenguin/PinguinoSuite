@@ -206,8 +206,12 @@ public class CPHInline
     }
 
     // ── what a module tells the router: "handled" (done, or deliberately silent) or "pass" (not mine / can't: next one please) ──
-    void PgSetResult(string result) { try { CPH.SetGlobalVar("pinguino.result", result, false); } catch (Exception) { } }
-    string PgGetResult() { try { return CPH.GetGlobalVar<string>("pinguino.result", false) ?? ""; } catch (Exception) { return ""; } }
+    // The result is stored per chat message ("pinguino.result.<msgId>", the id comes from the router's argument pinguinoMsgId), so two messages
+    // being handled at the same time can never read each other's answer. Without that argument (a module run by hand) the old single key is used.
+    string PgResultKey() { object o; string id = (CPH.TryGetArg("pinguinoMsgId", out o) && o != null) ? Convert.ToString(o) : ""; return id == "" ? "pinguino.result" : "pinguino.result." + id; }
+    void PgSetResult(string result) { try { CPH.SetGlobalVar(PgResultKey(), result, false); } catch (Exception) { } }
+    string PgGetResult() { try { return CPH.GetGlobalVar<string>(PgResultKey(), false) ?? ""; } catch (Exception) { return ""; } }
+    void PgDropResult() { try { CPH.UnsetGlobalVar(PgResultKey(), false); } catch (Exception) { } }
 
     // ── the helper's open conversation with a viewer (set when the helper speaks to them) ──
     void PgSetHelperContext(string login)
@@ -308,6 +312,47 @@ public class CPHInline
         return PgChain(primary).Where(r => r == "helper" || r == "chat").ToList();   // the game manager is not a chat handler: it has its own triggers
     }
 
+    // ---- correlation: one id per chat message, replayed ids are ignored, every decision goes to routing.log ----
+    string MsgId(string login, string text)
+    {
+        string id = ArgS("msgId");
+        if (id == "") id = ArgS("messageId");
+        if (id == "") id = Math.Abs((login + "|" + text + "|" + (PgNow() / 2)).GetHashCode()).ToString();   // no id from Twitch: same text by the same user within ~2 s counts as a replay
+        return Regex.Replace(id, "[^A-Za-z0-9_-]", "");
+    }
+    bool SeenBefore(string id)
+    {
+        try
+        {
+            long now = PgNow();
+            string raw = CPH.GetGlobalVar<string>("pinguino.seen", false) ?? "";
+            var keep = new List<string>();
+            bool seen = false;
+            foreach (string e in raw.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                int c = e.LastIndexOf(':'); long ts;
+                if (c < 0 || !long.TryParse(e.Substring(c + 1), out ts) || now - ts > 60) continue;
+                if (e.Substring(0, c) == id) seen = true;
+                keep.Add(e);
+            }
+            if (!seen) keep.Add(id + ":" + now);
+            if (keep.Count > 50) keep = keep.Skip(keep.Count - 50).ToList();
+            CPH.SetGlobalVar("pinguino.seen", string.Join(";", keep), false);
+            return seen;
+        }
+        catch (Exception) { return false; }
+    }
+    void RLog(string id, string role, string outcome, string why, long ms)
+    {
+        try
+        {
+            string f = Path.Combine(PgDirPath(), "routing.log");
+            try { if (File.Exists(f) && new FileInfo(f).Length > 512 * 1024) File.Move(f, f + ".old"); } catch (Exception) { }
+            File.AppendAllText(f, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "	" + id + "	" + role + "	" + outcome + "	" + why + "	" + ms + "ms" + Environment.NewLine);
+        }
+        catch (Exception) { }
+    }
+
     void Route()
     {
         string text = ArgS("message").Trim();
@@ -315,7 +360,10 @@ public class CPHInline
         string replyTo = ArgS("reply.userName") != "" ? ArgS("reply.userName") : ArgS("reply.userLogin");
         if (login == "") login = ArgS("login").ToLower();
         if (PgIsBotAccount(login)) return;                                          // our own bots' lines never start anything
+        string id = MsgId(login, text);
+        if (SeenBefore(id)) { RLog(id, "-", "duplicate", "msgId already routed", 0); return; }
         CPH.SetArgument("pinguinoRouted", true);
+        CPH.SetArgument("pinguinoMsgId", id);
 
         List<string> order;
         if (text == "" || OtherBots.Contains(login)) order = new List<string> { "chat" };   // events and other bots' lines: only the chatbot reads them (events, announcements)
@@ -326,14 +374,16 @@ public class CPHInline
         {
             string role = order[i];
             var bot = PgBotOf(role);
-            if (bot == null || !bot.Enabled) { CPH.LogInfo("[Router] " + PgTitle(role) + " is switched off, next."); continue; }
-            if (!PgActionExists(bot.Action)) { CPH.LogWarn("[Router] Streamer.bot has no action '" + bot.Action + "' for " + PgTitle(role) + ", next."); continue; }
+            if (bot == null || !bot.Enabled) { CPH.LogInfo("[Router] " + PgTitle(role) + " is switched off, next."); RLog(id, role, "skip", "switched off", 0); continue; }
+            if (!PgActionExists(bot.Action)) { CPH.LogWarn("[Router] Streamer.bot has no action '" + bot.Action + "' for " + PgTitle(role) + ", next."); RLog(id, role, "skip", "no action " + bot.Action, 0); continue; }
             PgSetResult("");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             CPH.SetArgument("pinguinoRole", role);
             CPH.SetArgument("pinguinoNext", string.Join(",", order.Skip(i + 1)));
             bool ran = false;
             try { ran = CPH.RunAction(bot.Action, true); } catch (Exception ex) { CPH.LogWarn("[Router] " + PgTitle(role) + " failed: " + ex.Message); }
-            string r = PgGetResult();
+            string r = PgGetResult(); PgDropResult();
+            RLog(id, role, !ran ? "failed" : r == "" ? "handled?" : r, !ran ? "RunAction false/threw" : r == "" ? "module reported nothing" : "", sw.ElapsedMilliseconds);
             if (ran && r == "defer") { deferred.Add(role); continue; }               // "this looks like the next bot's job": ask it first
             if (ran && r != "pass") return;                                         // handled (or an older module that does not report: it handled it)
         }
@@ -345,7 +395,16 @@ public class CPHInline
             CPH.SetArgument("pinguinoRole", role);
             CPH.SetArgument("pinguinoNext", "");
             CPH.SetArgument("pinguinoNoDefer", true);
-            try { if (CPH.RunAction(bot.Action, true) && PgGetResult() != "pass") return; } catch (Exception ex) { CPH.LogWarn("[Router] " + PgTitle(role) + " failed: " + ex.Message); }
+            var sw2 = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                bool ran2 = CPH.RunAction(bot.Action, true);
+                string r2 = PgGetResult(); PgDropResult();
+                RLog(id, role, !ran2 ? "failed" : "retry:" + (r2 == "" ? "handled?" : r2), "answered after defer", sw2.ElapsedMilliseconds);
+                if (ran2 && r2 != "pass") return;
+            }
+            catch (Exception ex) { CPH.LogWarn("[Router] " + PgTitle(role) + " failed: " + ex.Message); RLog(id, role, "failed", ex.Message, sw2.ElapsedMilliseconds); }
         }
+        RLog(id, "-", "unhandled", "no bot took it", 0);
     }
 }

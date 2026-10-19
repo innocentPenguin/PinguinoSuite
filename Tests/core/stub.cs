@@ -26,6 +26,7 @@ public class CPHProxy {
 
   public static System.Collections.Generic.Dictionary<string,object> Globals = new System.Collections.Generic.Dictionary<string,object>();
   public bool SetGlobalVar(string name, object value, bool persisted = true){ Globals[name] = value; return true; }
+  public bool UnsetGlobalVar(string name, bool persisted = true){ return Globals.Remove(name); }
   public T GetGlobalVar<T>(string name, bool persisted = true){ object o; return Globals.TryGetValue(name, out o) && o is T ? (T)o : default(T); }
 
   public void SetArgument(string k, object v){ Args[k] = v; }

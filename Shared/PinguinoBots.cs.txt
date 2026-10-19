@@ -181,8 +181,12 @@
     }
 
     // ── what a module tells the router: "handled" (done, or deliberately silent) or "pass" (not mine / can't: next one please) ──
-    void PgSetResult(string result) { try { CPH.SetGlobalVar("pinguino.result", result, false); } catch (Exception) { } }
-    string PgGetResult() { try { return CPH.GetGlobalVar<string>("pinguino.result", false) ?? ""; } catch (Exception) { return ""; } }
+    // The result is stored per chat message ("pinguino.result.<msgId>", the id comes from the router's argument pinguinoMsgId), so two messages
+    // being handled at the same time can never read each other's answer. Without that argument (a module run by hand) the old single key is used.
+    string PgResultKey() { object o; string id = (CPH.TryGetArg("pinguinoMsgId", out o) && o != null) ? Convert.ToString(o) : ""; return id == "" ? "pinguino.result" : "pinguino.result." + id; }
+    void PgSetResult(string result) { try { CPH.SetGlobalVar(PgResultKey(), result, false); } catch (Exception) { } }
+    string PgGetResult() { try { return CPH.GetGlobalVar<string>(PgResultKey(), false) ?? ""; } catch (Exception) { return ""; } }
+    void PgDropResult() { try { CPH.UnsetGlobalVar(PgResultKey(), false); } catch (Exception) { } }
 
     // ── the helper's open conversation with a viewer (set when the helper speaks to them) ──
     void PgSetHelperContext(string login)

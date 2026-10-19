@@ -222,8 +222,12 @@ public class CPHInline
     }
 
     // ── what a module tells the router: "handled" (done, or deliberately silent) or "pass" (not mine / can't: next one please) ──
-    void PgSetResult(string result) { try { CPH.SetGlobalVar("pinguino.result", result, false); } catch (Exception) { } }
-    string PgGetResult() { try { return CPH.GetGlobalVar<string>("pinguino.result", false) ?? ""; } catch (Exception) { return ""; } }
+    // The result is stored per chat message ("pinguino.result.<msgId>", the id comes from the router's argument pinguinoMsgId), so two messages
+    // being handled at the same time can never read each other's answer. Without that argument (a module run by hand) the old single key is used.
+    string PgResultKey() { object o; string id = (CPH.TryGetArg("pinguinoMsgId", out o) && o != null) ? Convert.ToString(o) : ""; return id == "" ? "pinguino.result" : "pinguino.result." + id; }
+    void PgSetResult(string result) { try { CPH.SetGlobalVar(PgResultKey(), result, false); } catch (Exception) { } }
+    string PgGetResult() { try { return CPH.GetGlobalVar<string>(PgResultKey(), false) ?? ""; } catch (Exception) { return ""; } }
+    void PgDropResult() { try { CPH.UnsetGlobalVar(PgResultKey(), false); } catch (Exception) { } }
 
     // ── the helper's open conversation with a viewer (set when the helper speaks to them) ──
     void PgSetHelperContext(string login)
@@ -619,6 +623,8 @@ public class CPHInline
             CPH.LogInfo("[BVQ] Removed " + junk.Count + " junk player(s): " + string.Join(", ", junk));
         }
 
+        _wheel = LoadJson<WheelSession>("wheel_session.json");   // [NEW][WHEEL]
+        if (Environment.GetEnvironmentVariable("BVQ_WHEEL_FAST") == "1") { _wheelStepMs = 1; _wheelLeadMs = 0; _wheelGapMs = 0; _wheelPerTick = 1000; }
         BackfillModes();   // [NEW][WEB] one-time: per-mode stats from saved matches
         MigrateObsDefaults();
 
@@ -668,6 +674,530 @@ public class CPHInline
         {
             CPH.LogWarn("[BVQ] Failed to save " + filename + ": " + ex.Message);
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  TOURNAMENT WHEEL  [NEW][WHEEL]
+    //  Viewers type !me to sign up; mods run !wheel (or the website's /mod/wheel
+    //  page, which queues the same commands). THIS code does the one and only
+    //  draw: a seeded Fisher-Yates shuffle (True random) or an MMR balancer
+    //  (Balanced, shown as "Rigged / Balanced by MMR"). The result is COMMITTED
+    //  (draw id + reveal order + start time); the website and the OBS overlay
+    //  only replay it, so a reload never changes it. The whole session is pushed
+    //  to POST /api/bot/wheel on every change, so the site keeps showing it when
+    //  this PC is off. The seed is never sent to the website.
+    //    !me                          join (while sign-ups are open)
+    //    !wheel new | open | close | draw | undo | announce | retry | reset | end
+    //    !wheel mode random|balanced      !wheel size 1-4
+    //    !wheel odd waitlist|trio|partial|hold|mod
+    //    !wheel eligibility all|subs
+    //    !wheel remove <login>            !wheel mmr <login> <number>
+    // ══════════════════════════════════════════════════════════════
+
+    class WheelEntrant
+    {
+        public string Id;            // Twitch id (the unique key); the login when Twitch gave none
+        public string Login;
+        public string Name;          // what the overlay shows
+        public string Epic;
+        public int? Mmr;             // known MMR (mod override or the player's saved one); null = unknown
+        public int? MmrOverride;     // set with !wheel mmr
+        public bool Flagged;         // unknown MMR: the lobby median was used in Balanced mode
+        public bool Wait;            // left over after the draw
+    }
+    class WheelTeam
+    {
+        public int N;
+        public List<string> Members = new List<string>();
+        public int? Avg;
+        public bool Partial;
+        public bool Announced;
+    }
+    class WheelStep { public int Team; public string Name; }
+    class WheelDraw
+    {
+        public string Id;
+        public long StartedAt;       // ms since 1970 (UTC): the overlay starts the reveal here
+        public int StepMs;
+        public List<WheelStep> Steps = new List<WheelStep>();
+    }
+    class WheelMsg { public string Text; public bool Sent; public int Team; }
+    class WheelSession
+    {
+        public string Id;
+        public string Status = "closed";       // closed | open | drawing | drawn
+        public string Mode = "random";         // random | balanced
+        public int TeamSize = 2;
+        public string OddPolicy = "waitlist";  // waitlist | trio | partial | hold | mod
+        public string Eligibility = "all";     // all | subs
+        public string Seed = "";               // private: never pushed
+        public int DrawCount;
+        public List<WheelEntrant> Entrants = new List<WheelEntrant>();
+        public List<WheelTeam> Teams = new List<WheelTeam>();
+        public WheelDraw Draw;
+        public List<string> Waitlist = new List<string>();
+        public List<WheelMsg> Msgs = new List<WheelMsg>();
+        public string AnnState = "idle";       // idle | sending | done | failed
+    }
+
+    // splitmix64 over a SHA-256 of the seed: the same seed always gives the same draw.
+    class WheelRng
+    {
+        ulong _s;
+        public WheelRng(string seed)
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                _s = BitConverter.ToUInt64(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(seed ?? "")), 0);
+        }
+        public ulong Next()
+        {
+            unchecked
+            {
+                _s += 0x9E3779B97F4A7C15UL;
+                ulong z = _s;
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+                z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+                return z ^ (z >> 31);
+            }
+        }
+        public int Below(int n)   // 0..n-1 without modulo bias
+        {
+            ulong lim = ulong.MaxValue - (ulong.MaxValue % (ulong)n);
+            ulong r;
+            do { r = Next(); } while (r >= lim);
+            return (int)(r % (ulong)n);
+        }
+    }
+
+    static WheelSession _wheel;
+    static bool _wheelDirty = true;
+    static DateTime _lastWheelPush = DateTime.MinValue;
+    static string _cmdUserId = "", _cmdDisplay = "";   // who typed the current chat command (Twitch id / display name)
+    static bool _cmdSub;                               // ...and whether they are a subscriber
+    static readonly Dictionary<string, DateTime> _wheelSaid = new Dictionary<string, DateTime>();
+    static int _wheelStepMs = 1500, _wheelLeadMs = 2500, _wheelGapMs = 1200, _wheelPerTick = 3;
+
+    static long NowMs() { return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); }
+
+    static string WheelNewSeed()
+    {
+        var b = new byte[16];
+        using (var g = System.Security.Cryptography.RandomNumberGenerator.Create()) g.GetBytes(b);
+        return BitConverter.ToString(b).Replace("-", "").ToLower();
+    }
+
+    static void WheelShuffle<T>(List<T> l, WheelRng rng)   // Fisher-Yates
+    {
+        for (int i = l.Count - 1; i > 0; i--)
+        {
+            int j = rng.Below(i + 1);
+            T t = l[i]; l[i] = l[j]; l[j] = t;
+        }
+    }
+
+    static string WheelClean(string s, string fallback)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in s ?? "") { if (c == '<' || c == '>' || char.IsControl(c)) continue; sb.Append(c); }
+        string r = sb.ToString().Trim();
+        if (r.Length > 40) r = r.Substring(0, 40);
+        return r.Length == 0 ? fallback : r;
+    }
+
+    void WheelSave() { SaveJson("wheel_session.json", _wheel); _wheelDirty = true; }
+
+    // A reply to a viewer, at most once per 30 s each, so a spammed !me can't flood chat.
+    void WheelSayOnce(string user, string msg)
+    {
+        if (_wheelSaid.Count > 2000) _wheelSaid.Clear();
+        DateTime t;
+        if (_wheelSaid.TryGetValue(user, out t) && (DateTime.UtcNow - t).TotalSeconds < 30) return;
+        _wheelSaid[user] = DateTime.UtcNow;
+        Say(msg);
+    }
+
+    bool HandleMe(string user, bool isPrivileged)
+    {
+        if (string.IsNullOrEmpty(user)) return true;
+        if (_wheel == null || _wheel.Status != "open") { WheelSayOnce(user, "@" + user + " sign-ups for the tournament are closed."); return true; }
+        if (_wheel.Eligibility == "subs" && !_cmdSub && !isPrivileged) { WheelSayOnce(user, "@" + user + " tournament sign-ups are for subscribers right now."); return true; }
+        string id = !string.IsNullOrEmpty(_cmdUserId) ? _cmdUserId : user;
+        if (_wheel.Entrants.Any(e => e.Id == id || e.Login == user)) { WheelSayOnce(user, "@" + user + " you are already in the tournament."); return true; }
+        if (_wheel.Entrants.Count >= 500) { WheelSayOnce(user, "@" + user + " the tournament is full."); return true; }
+        var en = new WheelEntrant { Id = id, Login = user, Name = WheelClean(_cmdDisplay, user) };
+        Player p;
+        if (_players.TryGetValue(user, out p))
+        {
+            en.Epic = p.GameId ?? "";
+            if (p.PeakMmr.HasValue) en.Mmr = p.PeakMmr.Value;
+        }
+        en.Flagged = !en.Mmr.HasValue;
+        _wheel.Entrants.Add(en);
+        WheelSave();
+        Say("@" + user + " you're in the tournament! (" + _wheel.Entrants.Count + " joined)");
+        return true;
+    }
+
+    bool HandleWheel(string user, string input, bool isPrivileged)
+    {
+        if (!isPrivileged) { WheelSayOnce(user, "@" + user + " only mods can run !wheel."); return true; }
+        string[] parts = (input ?? "").Trim().Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+        string sub = parts.Length > 0 ? parts[0].ToLower() : "";
+        string arg = parts.Length > 1 ? parts[1].Trim().ToLower() : "";
+        var w = _wheel;
+        if (w == null && sub != "new" && sub != "open" && sub != "tick")
+        {
+            Say("There is no tournament wheel session. Type !wheel new.");
+            return true;
+        }
+        bool locked = w != null && (w.Status == "drawing" || w.Status == "drawn");
+        switch (sub)
+        {
+            case "new":
+                if (w != null) { Say("A wheel session already exists. Use !wheel end first, or !wheel reset to redo the teams."); return true; }
+                _wheel = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed() };
+                WheelSave();
+                Say("Tournament wheel ready. Type !wheel open to start sign-ups.");
+                return true;
+            case "open":
+                if (w == null) { _wheel = w = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed() }; }
+                if (w.Status == "open") { Say("Sign-ups are already open."); return true; }
+                if (locked) { Say("Teams are already drawn. Use !wheel reset to sign up again."); return true; }
+                w.Status = "open";
+                WheelSave();
+                Say("Tournament sign-ups are OPEN! Type !me to join.");
+                return true;
+            case "close":
+                if (w.Status != "open") { Say("Sign-ups are not open."); return true; }
+                w.Status = "closed";
+                WheelSave();
+                Say("Tournament sign-ups are closed (" + w.Entrants.Count + " joined).");
+                return true;
+            case "mode":
+                if (arg != "random" && arg != "balanced") { Say("Usage: !wheel mode random|balanced"); return true; }
+                if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
+                w.Mode = arg; WheelSave();
+                Say(arg == "balanced" ? "Wheel mode: Rigged / Balanced by MMR." : "Wheel mode: True random.");
+                return true;
+            case "size":
+                int sz;
+                if (!int.TryParse(arg, out sz) || sz < 1 || sz > 4) { Say("Usage: !wheel size 1-4"); return true; }
+                if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
+                w.TeamSize = sz; WheelSave();
+                Say("Team size: " + sz + ".");
+                return true;
+            case "odd":
+                if (new[] { "waitlist", "trio", "partial", "hold", "mod" }.All(x => x != arg)) { Say("Usage: !wheel odd waitlist|trio|partial|hold|mod"); return true; }
+                if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
+                w.OddPolicy = arg; WheelSave();
+                Say("Odd player out: " + arg + ".");
+                return true;
+            case "eligibility":
+                if (arg != "all" && arg != "subs") { Say("Usage: !wheel eligibility all|subs"); return true; }
+                w.Eligibility = arg; WheelSave();
+                Say(arg == "subs" ? "Tournament sign-ups: subscribers only." : "Tournament sign-ups: everyone.");
+                return true;
+            case "remove":
+                {
+                    if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
+                    string who = arg.TrimStart('@');
+                    int n = w.Entrants.RemoveAll(e => e.Login == who);
+                    if (n == 0) { Say(who + " is not signed up."); return true; }
+                    WheelSave();
+                    Say("Removed " + who + " from the tournament.");
+                    return true;
+                }
+            case "mmr":
+                {
+                    if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
+                    string[] a = arg.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    int v;
+                    if (a.Length != 2 || !int.TryParse(a[1], out v) || v < 0 || v > 5000) { Say("Usage: !wheel mmr <login> <0-5000>"); return true; }
+                    string who = a[0].TrimStart('@');
+                    var en = w.Entrants.FirstOrDefault(e => e.Login == who);
+                    if (en == null) { Say(who + " is not signed up."); return true; }
+                    en.MmrOverride = v; en.Mmr = v; en.Flagged = false;
+                    WheelSave();
+                    Say("Wheel MMR for " + who + " set to " + v + ".");
+                    return true;
+                }
+            case "draw": WheelDoDraw(); return true;
+            case "undo":
+                if (!locked) { Say("Nothing to undo."); return true; }
+                if (w.Msgs.Any(m => m.Sent)) { Say("The teams were already announced in chat. Use !wheel reset if you really want to redo them."); return true; }
+                WheelClearDraw(w);
+                Say("Draw undone. Sign-ups are still there.");
+                return true;
+            case "reset":
+                if (!locked) { Say("Nothing to reset."); return true; }
+                WheelClearDraw(w);
+                Say("Teams reset. Sign-ups are still there.");
+                return true;
+            case "end":
+                _wheel = null;
+                WheelSave();
+                Say("Tournament wheel session ended.");
+                return true;
+            case "announce":
+                if (w.Status != "drawn" || w.Teams.Count == 0) { Say(w.Status == "drawing" ? "Wait for the reveal to finish, then announce." : "No teams to announce yet."); return true; }
+                WheelQueueAnnounce(w);
+                WheelPump();
+                return true;
+            case "retry":
+                if (w.AnnState != "failed") { Say("No failed announcement to retry."); return true; }
+                w.AnnState = "sending";
+                WheelSave();
+                WheelPump();
+                return true;
+            case "tick": WheelPump(); return true;
+            default:
+                Say("Wheel: !wheel new|open|close|draw|undo|announce|retry|reset|end, mode, size, odd, eligibility, remove <login>, mmr <login> <n>");
+                return true;
+        }
+    }
+
+    void WheelClearDraw(WheelSession w)
+    {
+        w.Teams.Clear(); w.Waitlist.Clear(); w.Msgs.Clear(); w.Draw = null; w.AnnState = "idle"; w.Status = "closed";
+        foreach (var e in w.Entrants) e.Wait = false;
+        WheelSave();
+    }
+
+    // The ONE draw. Everything random comes from a seed made right now (kept private).
+    void WheelDoDraw()
+    {
+        var w = _wheel;
+        if (w.Status == "drawing" || w.Status == "drawn") { Say("The teams are already drawn. Use !wheel undo to draw again."); return; }
+        int size = w.TeamSize, total = w.Entrants.Count;
+        if (total < size) { Say("Need at least " + size + " player(s) to draw; " + total + " signed up."); return; }
+        int r = total % size, k = total / size;
+        if (r > 0 && w.OddPolicy == "hold")
+        {
+            Say("Odd number of players (" + total + "). Need " + (size - r) + " more (or " + r + " fewer), or change it with !wheel odd.");
+            return;
+        }
+
+        w.Seed = WheelNewSeed();
+        var rng = new WheelRng(w.Seed);
+        w.DrawCount++;
+        foreach (var e in w.Entrants) e.Wait = false;
+
+        // 1) Seeded shuffle: it decides the order AND who is left over.
+        var order = w.Entrants.ToList();
+        WheelShuffle(order, rng);
+        var left = new List<WheelEntrant>();
+        var pool = order;
+        var sizes = new List<int>();
+        for (int i = 0; i < k; i++) sizes.Add(size);
+        if (r > 0)
+        {
+            if (w.OddPolicy == "partial") sizes.Add(r);
+            else if (w.OddPolicy == "trio" && r <= k) { for (int i = 0; i < r; i++) sizes[i]++; }
+            else if (w.OddPolicy == "trio") sizes.Add(r);   // not enough teams to spread the extras
+            else { left = order.Skip(order.Count - r).ToList(); pool = order.Take(order.Count - r).ToList(); }   // waitlist | mod
+        }
+
+        // 2) Teams.
+        var groups = new List<List<WheelEntrant>>();
+        Dictionary<WheelEntrant, int> val = null;
+        if (w.Mode == "balanced")
+        {
+            val = WheelMmrValues(pool, size);
+            groups = WheelBalance(pool, sizes.ToArray(), val, rng);
+            WheelShuffle(groups, rng);   // don't always list the strongest team first
+        }
+        else
+        {
+            int at = 0;
+            foreach (int s in sizes) { groups.Add(pool.Skip(at).Take(s).ToList()); at += s; }
+        }
+
+        w.Teams = new List<WheelTeam>();
+        var steps = new List<WheelStep>();
+        for (int i = 0; i < groups.Count; i++)
+        {
+            var t = new WheelTeam { N = i + 1, Partial = groups[i].Count < size };
+            foreach (var e in groups[i]) { t.Members.Add(e.Name); steps.Add(new WheelStep { Team = t.N, Name = e.Name }); }
+            if (val != null) t.Avg = (int)Math.Round(groups[i].Average(e => (double)val[e]));
+            w.Teams.Add(t);
+        }
+        // Reveal order: random mode shows the shuffle itself; balanced mode shuffles the reveal so the order gives nothing away.
+        if (w.Mode == "balanced") WheelShuffle(steps, rng);
+
+        w.Waitlist = left.Select(e => e.Name).ToList();
+        foreach (var e in left) e.Wait = true;
+        w.Draw = new WheelDraw { Id = w.Id + "-" + w.DrawCount, StartedAt = NowMs() + _wheelLeadMs, StepMs = _wheelStepMs, Steps = steps };
+        w.Msgs.Clear(); w.AnnState = "idle";
+        w.Status = "drawing";
+        WheelSave();
+        Say("Drawing the tournament teams! Watch the stream.");
+    }
+
+    // MMR per entrant for Balanced mode. Unknown MMR = the lobby median (and the entrant is flagged "?").
+    Dictionary<WheelEntrant, int> WheelMmrValues(List<WheelEntrant> pool, int size)
+    {
+        string fmt = size <= 2 ? "2v2" : "3v3";
+        foreach (var e in pool)
+        {
+            if (e.MmrOverride.HasValue) { e.Mmr = e.MmrOverride; continue; }
+            Player p;
+            if (_players.TryGetValue(e.Login, out p) && (p.PeakMmr.HasValue || !string.IsNullOrEmpty(p.GameId)))
+            {
+                try { ResolveMmr(e.Login, fmt); } catch (Exception) { }
+                if (p.PeakMmr.HasValue) e.Mmr = p.PeakMmr.Value;
+            }
+        }
+        var known = pool.Where(e => e.Mmr.HasValue).Select(e => e.Mmr.Value).OrderBy(x => x).ToList();
+        int med = known.Count == 0 ? _settings.DefaultMmr
+                : known.Count % 2 == 1 ? known[known.Count / 2]
+                : (known[known.Count / 2 - 1] + known[known.Count / 2]) / 2;
+        var val = new Dictionary<WheelEntrant, int>();
+        foreach (var e in pool) { e.Flagged = !e.Mmr.HasValue; val[e] = e.Mmr ?? med; }
+        return val;
+    }
+
+    // Splits the pool into teams with (near) equal average MMR.
+    List<List<WheelEntrant>> WheelBalance(List<WheelEntrant> pool, int[] sizes, Dictionary<WheelEntrant, int> val, WheelRng rng)
+    {
+        int T = sizes.Length;
+        var teams = new List<List<WheelEntrant>>();
+        for (int i = 0; i < T; i++) teams.Add(new List<WheelEntrant>());
+
+        // Two equal teams: reuse the exact search the queue's !balance uses.
+        if (T == 2 && sizes[0] == sizes[1] && sizes[0] <= 4 && pool.Count == sizes[0] * 2)
+        {
+            var tps = pool.Select(e => new TeamPlayer { Username = e.Login, Mmr = val[e] }).ToList();
+            var splits = EnumerateSplits(tps, sizes[0]);
+            double best = splits.Min(s => s.Diff);
+            var near = splits.Where(s => s.Diff <= best + 1e-9).ToList();
+            double bestSpread = near.Min(s => s.Spread);
+            near = near.Where(s => s.Spread <= bestSpread + 1e-9).ToList();
+            var aSet = new HashSet<int>(near[rng.Below(near.Count)].TeamA);
+            for (int i = 0; i < pool.Count; i++) teams[aSet.Contains(i) ? 0 : 1].Add(pool[i]);
+            return teams;
+        }
+
+        // Otherwise: snake deal from the strongest down, then swap players while that narrows the gap.
+        var sorted = pool.OrderByDescending(e => val[e]).ToList();   // stable: ties keep the seeded shuffle order
+        int idx = 0, pass = 0;
+        while (idx < sorted.Count)
+        {
+            var seq = Enumerable.Range(0, T).ToList();
+            if (pass % 2 == 1) seq.Reverse();
+            foreach (int ti in seq)
+                if (idx < sorted.Count && teams[ti].Count < sizes[ti]) teams[ti].Add(sorted[idx++]);
+            pass++;
+        }
+        Func<double> gap = () => { var av = teams.Select(t => t.Average(e => (double)val[e])).ToList(); return av.Max() - av.Min(); };
+        for (int iter = 0; iter < 200; iter++)
+        {
+            double cur = gap(), bestGap = cur;
+            int ba = -1, bi = -1, bb = -1, bj = -1;
+            for (int a = 0; a < T; a++) for (int b = a + 1; b < T; b++)
+                for (int i = 0; i < teams[a].Count; i++) for (int j = 0; j < teams[b].Count; j++)
+                {
+                    var x = teams[a][i]; teams[a][i] = teams[b][j]; teams[b][j] = x;
+                    double g = gap();
+                    teams[b][j] = teams[a][i]; teams[a][i] = x;
+                    if (g < bestGap - 1e-9) { bestGap = g; ba = a; bi = i; bb = b; bj = j; }
+                }
+            if (ba < 0) break;
+            var y = teams[ba][bi]; teams[ba][bi] = teams[bb][bj]; teams[bb][bj] = y;
+        }
+        return teams;
+    }
+
+    // One "Team N: A + B!" line per team, then the whole roster in paragraphs under 450 characters (Twitch allows 500), split at team boundaries.
+    List<WheelMsg> WheelBuildMessages(WheelSession w)
+    {
+        var list = new List<WheelMsg>();
+        foreach (var t in w.Teams)
+            list.Add(new WheelMsg { Team = t.N, Text = "Team " + t.N + ": " + string.Join(" + ", t.Members) + "!" + (t.Partial ? " (partial team)" : "") });
+        Action<IEnumerable<string>, string, string> paragraphs = (items, head, cont) =>
+        {
+            var sb = new System.Text.StringBuilder(head);
+            bool any = false;
+            foreach (string p in items)
+            {
+                if (any && sb.Length + 3 + p.Length > 450) { list.Add(new WheelMsg { Text = sb.ToString() }); sb = new System.Text.StringBuilder(cont); any = false; }
+                if (any) sb.Append(" | ");
+                sb.Append(p); any = true;
+            }
+            if (any) list.Add(new WheelMsg { Text = sb.ToString() });
+        };
+        paragraphs(w.Teams.Select(t => "Team " + t.N + ": " + string.Join(" + ", t.Members)), "TOURNAMENT TEAMS - ", "TOURNAMENT TEAMS (cont.) - ");
+        if (w.Waitlist.Count > 0)
+        {
+            string head = w.OddPolicy == "mod" ? "Waiting for a mod decision - " : "Waitlist - ";
+            paragraphs(w.Waitlist, head, head);
+        }
+        return list;
+    }
+
+    void WheelQueueAnnounce(WheelSession w)
+    {
+        w.Msgs = WheelBuildMessages(w);
+        foreach (var t in w.Teams) t.Announced = false;
+        w.AnnState = "sending";
+        WheelSave();
+    }
+
+    // Runs every web sync tick (and after !wheel announce): finishes the reveal, then sends chat messages a few at a time, ~1.2 s apart.
+    // Each message has its own "sent" flag, so a retry never repeats one that already went out.
+    void WheelPump()
+    {
+        var w = _wheel;
+        if (w == null) return;
+        if (w.Status == "drawing" && w.Draw != null && NowMs() >= w.Draw.StartedAt + (long)w.Draw.Steps.Count * w.Draw.StepMs)
+        {
+            w.Status = "drawn";
+            WheelSave();
+        }
+        if (w.AnnState != "sending") return;
+        int sentNow = 0;
+        foreach (var m in w.Msgs.Where(x => !x.Sent).ToList())
+        {
+            if (sentNow >= _wheelPerTick) return;   // the next tick carries on
+            try { PgSay("core", m.Text); }
+            catch (Exception ex)
+            {
+                w.AnnState = "failed";
+                ReportProblem("Wheel announcement failed: " + ex.Message);
+                WheelSave();
+                return;
+            }
+            m.Sent = true;
+            if (m.Team > 0) { var t = w.Teams.FirstOrDefault(x => x.N == m.Team); if (t != null) t.Announced = true; }
+            sentNow++;
+            WheelSave();
+            if (_wheelGapMs > 0 && w.Msgs.Any(x => !x.Sent)) System.Threading.Thread.Sleep(_wheelGapMs);
+        }
+        if (w.Msgs.All(x => x.Sent)) { w.AnnState = "done"; WheelSave(); }
+    }
+
+    // What the website mirrors. Mirrors site worker wheelClean(); the seed is deliberately left out.
+    object WheelSnapshot()
+    {
+        var w = _wheel;
+        if (w == null)
+            return new { id = "", status = "none", mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all",
+                         entrants = new object[0], teams = new object[0], draw = (object)null, waitlist = new string[0],
+                         announce = new { state = "idle", sent = 0, total = 0 }, canUndo = false, drawCount = 0 };
+        object draw = w.Draw == null ? null : (object)new
+        {
+            id = w.Draw.Id, startedAt = w.Draw.StartedAt, stepMs = w.Draw.StepMs,
+            steps = w.Draw.Steps.Select(s => new { team = s.Team, name = s.Name }).ToList()
+        };
+        return new
+        {
+            id = w.Id, status = w.Status, mode = w.Mode, teamSize = w.TeamSize, oddPolicy = w.OddPolicy, eligibility = w.Eligibility,
+            entrants = w.Entrants.Select(e => new { id = e.Id, login = e.Login, name = e.Name, epic = e.Epic ?? "", mmr = e.Mmr, flagged = e.Flagged, wait = e.Wait }).ToList(),
+            teams = w.Teams.Select(t => new { n = t.N, members = t.Members, avg = t.Avg, partial = t.Partial, announced = t.Announced }).ToList(),
+            draw = draw, waitlist = w.Waitlist,
+            announce = new { state = w.AnnState, sent = w.Msgs.Count(m => m.Sent), total = w.Msgs.Count },
+            canUndo = (w.Status == "drawing" || w.Status == "drawn") && !w.Msgs.Any(m => m.Sent),
+            drawCount = w.DrawCount
+        };
     }
 
     void SavePlayers() { SaveJson("players.json", _players); _standingsDirty = true; }   // [NEW][WEB] league table changed
@@ -856,7 +1386,11 @@ public class CPHInline
         if (string.IsNullOrEmpty(command) && string.Equals((timerName ?? "").Trim(), WebSyncTimerName, StringComparison.OrdinalIgnoreCase))
             return HandleWebSync();
 
-        return RunCommand(command, input, userLower, isPrivileged);
+        // [NEW][WHEEL] who typed this (for !me): Twitch id, display name, subscriber
+        CPH.TryGetArg("isSubscribed", out bool isSub);
+        _cmdUserId = userId ?? ""; _cmdDisplay = user ?? ""; _cmdSub = isSub;
+        try { return RunCommand(command, input, userLower, isPrivileged); }
+        finally { _cmdUserId = ""; _cmdDisplay = ""; _cmdSub = false; }
     }
 
     // [NEW] TWITCH IDS: names change, ids don't. Every chat command tells us the
@@ -950,6 +1484,8 @@ public class CPHInline
             case "!strikes":  return HandleStrikes(userLower, input);
             case "!stats":    return HandleStats(userLower, input);                // [NEW]
             case "!topwins":  return HandleTop();                                  // [NEW] (!top was taken by the points bot)
+            case "!me":       return HandleMe(userLower, isPrivileged);             // [NEW][WHEEL] join the tournament
+            case "!wheel":    return HandleWheel(userLower, input, isPrivileged);   // [NEW][WHEEL] mods run the tournament wheel
             default:
                 CPH.LogWarn("[BVQ] Unknown command: " + command);
                 ReportProblem(string.IsNullOrEmpty(command)
@@ -1202,6 +1738,15 @@ public class CPHInline
                     if (lv != null && lv.Type == JTokenType.Boolean) ApplyLive((bool)lv);
                 }
                 catch (Exception) { }
+            }
+
+            // [NEW][WHEEL] finish the reveal / send queued announcements, then mirror the session to the website (when changed, and every 30 s).
+            try { WheelPump(); } catch (Exception ex) { CPH.LogError("[BVQ] Wheel tick failed: " + ex); }
+            if (_wheelDirty || (DateTime.UtcNow - _lastWheelPush).TotalSeconds >= 30)
+            {
+                WebCall("POST", "/api/bot/wheel", JsonConvert.SerializeObject(WheelSnapshot()));
+                _wheelDirty = false;
+                _lastWheelPush = DateTime.UtcNow;
             }
 
             // 2) Live snapshot: when something changed, and every 30 s as a heartbeat.

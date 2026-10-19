@@ -38,6 +38,7 @@ public static class Harness
         dir = Path.Combine(Path.GetTempPath(), "bvqtest_" + Guid.NewGuid().ToString("N").Substring(0, 8));
         Directory.CreateDirectory(dir);
         Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dir);
+        Environment.SetEnvironmentVariable("BVQ_WHEEL_FAST", "1");
         // 12 registered players with a set MMR (so no Tracker/network lookups happen).
         var players = new JObject();
         foreach (var n in new[] { "innocentpenguin_", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10", "p11" })
@@ -477,6 +478,82 @@ public static class Harness
         Check(probs.Any(x => x.Contains("Twitch category")), "a failed category change is a problem (red in the log)");
         Run("mod1", "!activity", "end", true);
         Run("mod1", "!obs", "auto on", true);
+
+        // ===== [NEW][WHEEL] tournament wheel =====
+        Func<JObject> WS = () => JObject.Parse(File.ReadAllText(Path.Combine(dir, "wheel_session.json")));
+        Func<string, int, string[]> signUp = (prefix, n) => { var l = new System.Collections.Generic.List<string>(); for (int i = 1; i <= n; i++) { l.Add(prefix + i); Run(prefix + i, "!me"); } return l.ToArray(); };
+        Action<string, string> wheel = (sub, arg) => Run("mod1", "!wheel", (sub + " " + arg).Trim(), true);
+        Action<int> fresh = size => { wheel("end", ""); wheel("new", ""); wheel("size", size.ToString()); wheel("open", ""); };
+
+        Run("p1", "!wheel", "new");
+        Check(CPHProxy.Sent.Any(m => m.Contains("only mods")), "wheel: non-mods cannot run !wheel");
+        Run("p2", "!me");
+        Check(CPHProxy.Sent.Any(m => m.Contains("closed")), "wheel: !me with no session says sign-ups are closed");
+
+        fresh(2);
+        signUp("w", 6);
+        Run("w1", "!me");
+        Check(WS()["Entrants"].Count() == 6, "wheel: !me twice by the same viewer counts once");
+        wheel("close", "");
+        Run("late1", "!me");
+        Check(WS()["Entrants"].Count() == 6 && CPHProxy.Sent.Any(m => m.Contains("closed")), "wheel: nobody can join after sign-ups close");
+        wheel("open", "");
+        wheel("eligibility", "subs");
+        Run("late2", "!me");
+        Check(WS()["Entrants"].Count() == 6 && CPHProxy.Sent.Any(m => m.Contains("subscribers")), "wheel: subs-only refuses non-subs");
+        wheel("eligibility", "all");
+
+        wheel("draw", "");
+        var ws = WS();
+        Check((string)ws["Status"] == "drawing" && ws["Teams"].Count() == 3, "wheel: 6 players, size 2 -> 3 teams, status drawing");
+        var all = ws["Teams"].SelectMany(t => t["Members"]).Select(x => (string)x).OrderBy(x => x).ToArray();
+        Check(all.Length == 6 && all.Distinct().Count() == 6, "wheel: every player is in exactly one team");
+        Check(ws["Draw"]["Steps"].Count() == 6, "wheel: the draw commits 6 reveal steps");
+        wheel("mode", "balanced");
+        Check(CPHProxy.Sent.Any(m => m.Contains("already drawn")), "wheel: mode can't change after the draw");
+        wheel("undo", "");
+        Check(WS()["Teams"].Count() == 0 && (string)WS()["Status"] == "closed", "wheel: undo clears teams and the draw");
+        wheel("draw", "");
+        System.Threading.Thread.Sleep(150); wheel("tick", "");
+        Check((string)WS()["Status"] == "drawn", "wheel: the pump finishes the reveal");
+        wheel("announce", "");
+        var said = CPHProxy.Sent.ToList();
+        Check(said.Count(m => m.StartsWith("Team ")) == 3 && said.Any(m => m.Contains("TOURNAMENT TEAMS")), "wheel: one line per team plus the roster paragraph");
+        Check(said.All(m => m.Length <= 450), "wheel: announcements fit one chat message");
+        System.Threading.Thread.Sleep(150); wheel("tick", "");
+        Check(CPHProxy.Sent.Count == 0, "wheel: announcements are sent once only");
+        wheel("undo", "");
+        Check(CPHProxy.Sent.Any(m => m.Contains("already announced")), "wheel: undo refused after the teams were announced");
+
+        // seeded determinism (the private PRNG type, by reflection)
+        var rt = typeof(CPHInline).GetNestedType("WheelRng", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+        Func<string, string> seq = seed => { var r = Activator.CreateInstance(rt, new object[] { seed }); var m = rt.GetMethod("Below"); return string.Join(",", Enumerable.Range(0, 20).Select(i => m.Invoke(r, new object[] { 1000 }))); };
+        Check(seq("abc") == seq("abc") && seq("abc") != seq("abd"), "wheel: same seed = same sequence, different seed differs");
+
+        // odd policies
+        fresh(2); signUp("o", 5); wheel("draw", "");
+        ws = WS();
+        Check(ws["Teams"].Count() == 2 && ws["Waitlist"].Count() == 1, "wheel: odd=waitlist -> 2 teams + 1 waiting");
+        wheel("end", ""); wheel("new", ""); wheel("odd", "trio"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
+        ws = WS();
+        Check(ws["Teams"].Count() == 2 && ws["Teams"].Select(t => t["Members"].Count()).OrderBy(x => x).SequenceEqual(new[] { 2, 3 }) && ws["Waitlist"].Count() == 0, "wheel: odd=trio -> a team of 3, nobody waits");
+        wheel("end", ""); wheel("new", ""); wheel("odd", "partial"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
+        ws = WS();
+        Check(ws["Teams"].Count() == 3 && ws["Teams"].Count(t => (bool)t["Partial"]) == 1, "wheel: odd=partial -> an extra partial team");
+        wheel("end", ""); wheel("new", ""); wheel("odd", "hold"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
+        Check((string)WS()["Status"] == "open" && CPHProxy.Sent.Any(m => m.Contains("more")), "wheel: odd=hold refuses to draw");
+
+        // balanced
+        fresh(2); wheel("mode", "balanced"); signUp("b", 4);
+        wheel("mmr", "b1 2000"); wheel("mmr", "b2 1000"); wheel("mmr", "b3 1900"); wheel("mmr", "b4 1100"); wheel("draw", "");
+        ws = WS();
+        Check(ws["Teams"].Count() == 2 && (int)ws["Teams"][0]["Avg"] == (int)ws["Teams"][1]["Avg"], "wheel: balanced splits 2000/1000/1900/1100 into equal averages");
+
+        // roster paragraphs split under 450 characters
+        fresh(1); for (int i = 1; i <= 60; i++) Run("averyveryverylongtwitchname" + i, "!me");
+        wheel("draw", ""); System.Threading.Thread.Sleep(150); wheel("tick", ""); wheel("announce", "");
+        Check(CPHProxy.Sent.Count(m => m.StartsWith("TOURNAMENT TEAMS")) >= 3 && CPHProxy.Sent.All(m => m.Length <= 450), "wheel: a long roster splits into paragraphs under 450 characters");
+        wheel("end", "");
 
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
         try { Directory.Delete(dir, true); } catch { }

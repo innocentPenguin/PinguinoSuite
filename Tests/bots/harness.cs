@@ -24,6 +24,12 @@ public static class Harness
         if (replyTo != null) CPHProxy.Args["reply.userName"] = replyTo;
         new CPHInline().Execute();
     }
+    static void ChatId(string id, string user, string text)
+    {
+        CPHProxy.Args.Clear(); CPHProxy.Runs.Clear();
+        CPHProxy.Args["msgId"] = id; CPHProxy.Args["message"] = text; CPHProxy.Args["userName"] = user.ToLower(); CPHProxy.Args["user"] = user;
+        new CPHInline().Execute();
+    }
     static string Runs() { return string.Join(",", CPHProxy.Runs); }
     static void Registry(string json) { File.WriteAllText(Path.Combine(dir, "bots.json"), json); typeof(CPHInline).GetField("_pgChecked", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue); typeof(CPHInline).GetField("_pgStamp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue); }
     static void HelperSpoke(string login) { new CPHInline().PgSetHelperContextPublic(login); }
@@ -165,6 +171,44 @@ public static class Harness
         Reset(); c.SayPublic("chat", "no token");
         Check("without a token it falls back to the bot account", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "no token", string.Join("|", CPHProxy.Sent));
 
+        // ── correlation: per-message result, msgId dedupe, routing.log ──
+        string rlog = Path.Combine(dir, "routing.log");
+        try { File.Delete(rlog); } catch (Exception) { }
+        Registry("{}");
+        Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        ChatId("m-1", "viewer1", "nice play lol");
+        Check("the router tags the message with its id", (string)CPHProxy.Args["pinguinoMsgId"] == "m-1");
+        Check("results are stored per message and removed after reading", !CPHProxy.Globals.Keys.Any(k => k.StartsWith("pinguino.result")), string.Join(",", CPHProxy.Globals.Keys));
+        Check("a normal message still routes helper then chat", Runs() == "PinguinoHelper,PinguinoChat", Runs());
+        // a stale answer left by another message must not leak into this one
+        Reset(); CPHProxy.Globals["pinguino.result.m-other"] = "handled"; CPHProxy.Globals["pinguino.result"] = "handled";
+        CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        ChatId("m-2", "viewer2", "another line");
+        Check("another message's stored result is ignored", Runs() == "PinguinoHelper,PinguinoChat", Runs());
+        Check("and left untouched", (string)CPHProxy.Globals["pinguino.result.m-other"] == "handled");
+        // replay
+        ChatId("m-2", "viewer2", "another line");
+        Check("a replayed msgId is ignored (nobody answers twice)", Runs() == "", Runs());
+        ChatId("m-3", "viewer2", "another line");
+        Check("same text with a new msgId is a new message", Runs() == "PinguinoHelper,PinguinoChat", Runs());
+        // no msgId from Twitch: same user + text in the same instant is a replay
+        Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        Chat("viewer3", "no id here");
+        Check("without a msgId a fallback id is made", CPHProxy.Args.ContainsKey("pinguinoMsgId") && (string)CPHProxy.Args["pinguinoMsgId"] != "");
+        string first = Runs();
+        CPHProxy.Runs.Clear(); CPHProxy.Args["message"] = "no id here"; CPHProxy.Args["userName"] = "viewer3"; CPHProxy.Args["user"] = "viewer3"; new CPHInline().Execute();
+        Check("an immediate identical line without msgId is dropped as a replay", first == "PinguinoHelper" && Runs() == "", first + " / " + Runs());
+        // log
+        string log = File.Exists(rlog) ? File.ReadAllText(rlog) : "";
+        Check("routing.log is written", log != "");
+        Check("routing.log names msgId, role and outcome", log.Contains("	m-1	chat	handled	") && log.Contains("	m-1	helper	pass	"), log);
+        Check("routing.log records the replay", log.Contains("	m-2	-	duplicate	"), log);
+        // dedupe window expires
+        Reset(); CPHProxy.Globals["pinguino.seen"] = "old-id:" + (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 120);
+        CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
+        ChatId("old-id", "viewer4", "hi");
+        Check("an id older than the window is accepted again", Runs() == "PinguinoHelper", Runs());
+        Check("the seen list stays short", ((string)CPHProxy.Globals["pinguino.seen"]).Split(';').Length <= 50);
         Console.WriteLine(fails == 0 ? "ALL " + passes + " BOT ROUTING CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;
