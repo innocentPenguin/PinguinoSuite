@@ -22,6 +22,7 @@ import secrets_store
 import windows as win
 from connectors.discord import Discord
 from connectors.twitch import Twitch
+from connectors.youtube import YouTube
 from models import ChatMessage
 from pipeline import Inbox, Pipeline
 from priority import rules as prio
@@ -74,10 +75,12 @@ async def lifespan(app):
     connectors["twitch"] = tw
     dc = Discord(inbox, hub.emit)
     connectors["discord"] = dc
+    yt = YouTube(inbox, hub.emit)
+    connectors["youtube"] = yt
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
-             asyncio.create_task(dc.run())]
+             asyncio.create_task(dc.run()), asyncio.create_task(yt.run())]
     yield
-    tw.stop = dc.stop = True
+    tw.stop = dc.stop = yt.stop = True
     for t in tasks:
         t.cancel()
     for wid in list(shell.procs):
@@ -450,6 +453,19 @@ async def set_discord(request: Request):
 @app.get("/api/ai")
 def ai_usage():
     return pipeline.advisor.usage()
+
+
+@app.post("/api/secrets/youtube")
+async def set_youtube(request: Request):
+    """Write-only OAuth access token for YouTube live chat. Body: {token|clear}."""
+    b = await request.json()
+    if b.get("clear"):
+        secrets_store.delete("youtube_token")
+    elif len((b.get("token") or "").strip()) > 20:
+        secrets_store.put("youtube_token", b["token"].strip())
+    else:
+        raise HTTPException(400, "token looks too short")
+    return {"ok": True, "has_token": bool(secrets_store.get("youtube_token"))}
 
 
 @app.post("/api/secrets/ai")

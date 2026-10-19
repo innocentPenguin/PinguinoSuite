@@ -446,3 +446,13 @@ def test_ai_rescore_creates_card_and_survives_failure(tmp_path, monkeypatch):
     assert p.cards.cards["c:t:1"]["tier"] in ("medium", "high")
     assert p.store.get_message("t:1")["tier"] in ("medium", "high")
     assert any(e["type"] == "message.rescored" for e in ev)
+
+
+def test_youtube_normalize():
+    from connectors.youtube import normalize_item
+    it = {"id": "x1", "snippet": {"type": "textMessageEvent", "textMessageDetails": {"messageText": "hello?"}},
+          "authorDetails": {"channelId": "UC1", "displayName": "Fan", "isChatSponsor": True}}
+    m = normalize_item(it, "chat9", "UC2")
+    assert m.id == "youtube:chat9:x1" and m.badges == ["subscriber"] and not m.is_self and m.text == "hello?"
+    assert normalize_item({"id": "y", "snippet": {"type": "superChatEvent"}}, "chat9") is None
+    assert normalize_item(it, "chat9", "UC1").is_self
