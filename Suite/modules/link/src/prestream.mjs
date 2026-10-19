@@ -7,7 +7,7 @@ const item = (id, label, status, detail) => ({ id, label, status, detail });
 
 export async function prestream(cfg) {
   const out = [], on = k => cfg.prestream?.[k] !== false;
-  if (on('obs') || on('macros')) {
+  if (cfg.role !== 'client' && (on('obs') || on('macros'))) {
   // 1. OBS WebSocket reachable + authenticated, and the scenes/inputs the macros use exist.
   try {
     const [, sc, inp] = await getData(await obsConn(cfg), ['GetVersion', 'GetSceneList', 'GetInputList']);

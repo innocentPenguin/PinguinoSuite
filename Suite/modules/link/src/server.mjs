@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import * as ts from './tailscale.mjs';
-import { runRequests, obsState } from './obs.mjs';
+import { runRequests, obsState, forgetState } from './obs.mjs';
 import { log, setLevel } from './log.mjs';
 import { prestream } from './prestream.mjs';
 import { createMesh } from './mesh.mjs';
@@ -19,12 +19,12 @@ export async function runMacro(cfg, name) {
     // State-aware guard so a double press cannot end or restart a live stream by mistake.
     const wants = t => steps.some(s => s.type === t);
     if (wants('StartStream') || wants('StopStream')) {
-      const st = await obsState(conn);
+      const st = await obsState(conn, { fresh: true });   // never trust a cached value for a guard
       if (!st.connected) throw Object.assign(new Error(`OBS not reachable: ${st.error}`), { status: 502 });
       if (wants('StartStream') && st.streaming) throw Object.assign(new Error('already live; start ignored'), { status: 409 });
       if (wants('StopStream') && !st.streaming) throw Object.assign(new Error('not streaming; stop ignored'), { status: 409 });
     }
-    return runRequests(conn, steps);
+    try { return await runRequests(conn, steps); } finally { forgetState(); }
   }
   const st = await ts.status();
   const hub = st.peers?.find(p => p.name === cfg.hub);
@@ -81,6 +81,25 @@ export async function serve(cfg) {
   const mesh = createMesh(cfg, { port });
   const lastRun = new Map(), activity = [];
   const act = (kind, name, ok, detail = '') => { activity.unshift({ t: Date.now(), kind, name, ok, detail }); activity.length = Math.min(activity.length, 50); };
+  /** Cooldown, activity and logging around one macro press. Used by the local route and by paired devices. */
+  async function guarded(name, via) {
+    const risky = macros.isRisky(cfg, name), now = Date.now();
+    const cd = risky ? (cfg.cooldown?.riskyMs ?? 3000) : (cfg.cooldown?.macroMs ?? 600);
+    if (cfg.macros[name] && now - (lastRun.get(name) || 0) < cd) { act('macro', name, false, 'ignored: pressed again too fast'); throw Object.assign(new Error(`"${name}" was just pressed; ignored (repeat guard ${cd} ms)`), { status: 429 }); }
+    if (cfg.macros[name]) lastRun.set(name, now);
+    try {
+      const results = cfg.role === 'hub' || !mesh.hasPeer(cfg.hub) ? await runMacro(cfg, name) : await viaHub(name);
+      log('info', 'macro', `ran ${name}${via === 'page/api' ? '' : ' (' + via + ')'}`); act('macro', name, true, via === 'page/api' ? '' : via); return results;
+    } catch (e) { act('macro', name, false, e.message); log(e.status && e.status < 500 ? 'warn' : 'error', 'macro', `${name} failed: ${e.message}`); throw e; }
+  }
+  const allItems = async () => [...await prestream(cfg), ...(cfg.prestream?.devices === false ? [] : mesh.prestreamItems()), ...(cfg.role === 'client' && cfg.prestream?.obs !== false ? await mesh.hubPrestream(cfg.hub) : [])];
+  /** A client presses a macro on the hub it is paired with (no shared token to copy around). */
+  async function viaHub(name) {
+    if (!cfg.macros[name]) throw new Error(`unknown macro "${name}" (have: ${Object.keys(cfg.macros).join(', ')})`);
+    const r = await mesh.callByName(cfg.hub, '/api/mesh/macro', { name });
+    if (r.status !== 200) throw Object.assign(new Error(r.json?.error || `hub answered ${r.status}`), { status: r.status === 401 ? 502 : r.status });
+    return r.json.results;
+  }
   const sctx = { getName: mesh.getName, setName: mesh.setName };
   setLevel(cfg.log?.level);
   const handler = async (req, res) => {
@@ -101,6 +120,14 @@ export async function serve(cfg) {
       if (req.method === 'POST' && req.url === '/api/mesh/pair/request') return json(200, await mesh.pairRequest(req.socket.remoteAddress, await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/mesh/heartbeat') return json(200, mesh.heartbeat(...peer, await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/mesh/msg') return json(200, await mesh.receive(...peer, await readJson(req)));
+      if (req.method === 'POST' && req.url === '/api/mesh/macro') {      // a paired device presses one of THIS PC's macros
+        const p = mesh.peerAuth(...peer), b = await readJson(req), name = String(b.name || '');
+        if (cfg.role !== 'hub') throw Object.assign(new Error('this device is not a hub'), { status: 409 });
+        if (cfg.mesh?.allowRemoteMacros === false) throw Object.assign(new Error(`remote macros are turned off on this PC (Link > Settings > Devices)`), { status: 403 });
+        if (!cfg.macros[name]) throw Object.assign(new Error(`no macro "${name}" on the hub`), { status: 404 });
+        if (macros.isRisky(cfg, name) && !cfg.mesh?.remoteRisky) throw Object.assign(new Error('remote start/stop of the stream is turned off on the hub (Link > Settings > Devices)'), { status: 403 });
+        return json(200, { ok: true, results: await guarded(name, `from ${p.name}`) });
+      }
       if (req.method === 'POST' && req.url === '/api/mesh/forget') return json(200, mesh.peerUnpaired(...peer));
       // The dashboard page on loopback gets the token injected (same-origin only; Host/Origin checks stop other sites).
       if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html') && local) {
@@ -108,7 +135,7 @@ export async function serve(cfg) {
         return res.end(PAGE.replace('__TOKEN__', cfg.token).replace('__CORE__', CORE_URL));
       }
       // Pre-stream readiness for the Suite console: no token, no secrets in the output.
-      if (req.method === 'GET' && req.url === '/api/prestream') return json(200, { items: [...await prestream(cfg), ...(cfg.prestream?.devices === false ? [] : mesh.prestreamItems())] });
+      if (req.method === 'GET' && req.url === '/api/prestream') return json(200, { items: await allItems() });
       // Everything else needs the token, loopback included.
       if (!tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization)) { log('warn', 'http', `unauthorized ${req.method} ${req.url.split('?')[0]} (401)`); return json(401, { error: 'bad token' }); }
       if (req.method === 'GET' && req.url === '/api/status') {
@@ -117,7 +144,7 @@ export async function serve(cfg) {
         return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), macro_buttons: macros.buttons(cfg), ui: { refreshSec: cfg.ui?.refreshSec ?? 4, compact: !!cfg.ui?.compact, accent: cfg.ui?.accent || '', activityCount: cfg.ui?.activityCount ?? 15 }, tailscale: t, peers: mesh.status().peers });
       }
       if (req.method === 'GET' && req.url === '/api/integrations') {   // Integrations tab (module token)
-        const items = [...await prestream(cfg), ...(cfg.prestream?.devices === false ? [] : mesh.prestreamItems())].map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail, help: i.help }));
+        const items = (await allItems()).map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail, help: i.help }));
         return json(200, { items });
       }
       if (req.method === 'GET' && req.url === '/api/settings') return json(200, { groups: settings.view(cfg, sctx), peers: ((await ts.status()).peers || []).map(p => p.name) });
@@ -148,7 +175,7 @@ export async function serve(cfg) {
         if (!o.connected) throw Object.assign(new Error(`OBS not reachable: ${o.error}`), { status: 502 });
         if (!o.scenes.includes(name)) throw Object.assign(new Error('no such scene in OBS'), { status: 404 });
         await runRequests(conn, [{ type: 'SetCurrentProgramScene', data: { sceneName: name } }]);
-        act('scene', name, true); log('info', 'scene', `switched to "${name}"`);
+        forgetState(); act('scene', name, true); log('info', 'scene', `switched to "${name}"`);
         return json(200, { ok: true });
       }
       if (req.method === 'GET' && req.url === '/api/export') {
@@ -185,12 +212,7 @@ export async function serve(cfg) {
       }
       const m = req.method === 'POST' && req.url.match(/^\/api\/macro\/([\w-]+)$/);
       if (m) {
-        const name = m[1], risky = macros.isRisky(cfg, name), now = Date.now();
-        const cd = risky ? (cfg.cooldown?.riskyMs ?? 3000) : (cfg.cooldown?.macroMs ?? 600);
-        if (cfg.macros[name] && now - (lastRun.get(name) || 0) < cd) { act('macro', name, false, 'ignored: pressed again too fast'); return json(429, { error: `"${name}" was just pressed; ignored (repeat guard ${cd} ms)` }); }
-        if (cfg.macros[name]) lastRun.set(name, now);
-        try { const results = await runMacro(cfg, name); log('info', 'macro', `ran ${name}`); act('macro', name, true); return json(200, { ok: true, results }); }
-        catch (e) { act('macro', name, false, e.message); log(e.status && e.status < 500 ? 'warn' : 'error', 'macro', `${name} failed: ${e.message}`); throw e; }
+        return json(200, { ok: true, results: await guarded(m[1], 'page/api') });
       }
       json(404, { error: 'not found' });
     } catch (e) {

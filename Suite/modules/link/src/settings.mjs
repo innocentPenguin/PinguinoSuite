@@ -39,6 +39,8 @@ export const SCHEMA = [
   ] },
   { group: 'Devices', fields: [
     { key: 'mesh.offlineSec', label: 'Offline after (seconds)', type: 'number', min: 5, max: 120, def: 12, help: 'Silence longer than this shows a paired device as offline.' },
+    { key: 'mesh.allowRemoteMacros', label: 'Let paired devices run my OBS macros', type: 'bool', def: true, help: 'A paired client can press the macros on this PC (scene, mute...). Turn off to make this PC ignore remote presses.' },
+    { key: 'mesh.remoteRisky', label: 'Let paired devices start/stop my stream', type: 'bool', def: false, help: 'Allows remote start/stop-stream macros. Off by default: only press those on this PC.' },
     { key: 'mesh.codeMinutes', label: 'Pairing code lifetime (minutes)', type: 'number', min: 1, max: 15, def: 5, help: 'How long a pairing code stays valid. It always works only once.' },
   ] },
   { group: 'Logging', fields: [

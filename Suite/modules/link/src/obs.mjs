@@ -62,9 +62,9 @@ export function getData({ host, port, password }, types, timeoutMs = 4000) {
 
 let cache = { at: 0, key: '', v: null };
 /** Read-only OBS state for the dashboard and safety checks. Cached 2 s. Never throws. */
-export async function obsState(conn) {
+export async function obsState(conn, { fresh = false } = {}) {
   const key = `${conn.host}:${conn.port}`;
-  if (cache.v && cache.key === key && Date.now() - cache.at < 2000) return cache.v;
+  if (!fresh && cache.v && cache.key === key && Date.now() - cache.at < 2000) return cache.v;
   let v;
   try {
     const [sc, st, rc, inp] = await getData(conn, ['GetSceneList', 'GetStreamStatus', 'GetRecordStatus', 'GetInputList'], 2500);
@@ -73,3 +73,6 @@ export async function obsState(conn) {
   cache = { at: Date.now(), key, v };
   return v;
 }
+
+/** Forget the cached state (call after anything that changes OBS). */
+export const forgetState = () => { cache = { at: 0, key: '', v: null }; };

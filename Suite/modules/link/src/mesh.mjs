@@ -98,6 +98,27 @@ export function createMesh(cfg, { port }) {
       throw e;
     }
   }
+  /** Like call(), but returns {status, json} for any HTTP answer so the caller can show the peer's own error text. */
+  async function callByName(name, route, body, timeout = 8000) {
+    const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
+    if (!p) return null;
+    try {
+      const res = await fetch(url(p, route), { method: 'POST', headers: headersFor(p), body: JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
+      if (res.status !== 401) seen(p);
+      return { status: res.status, json: await res.json().catch(() => ({})) };
+    } catch (e) { throw Object.assign(new Error(`cannot reach ${p.name}: ${e.name === 'TimeoutError' ? 'no answer' : (e.cause?.code || e.message)}`), { status: 502 }); }
+  }
+  /** Items from the hub's own pre-stream report (client view), prefixed so they read as "Hub: ...". */
+  async function hubPrestream(name) {
+    const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
+    if (!p) return [{ id: 'hub-obs', label: 'OBS on the hub', status: 'warn', detail: `pair with "${name}" to check OBS from this device` }];
+    try {
+      const res = await fetch(url(p, '/api/prestream'), { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) throw new Error(`hub answered ${res.status}`);
+      seen(p);
+      return ((await res.json()).items || []).filter(i => ['obs', 'macros'].includes(i.id)).map(i => ({ id: `hub-${i.id}`, label: `${p.name}: ${i.label}`, status: i.status, detail: i.detail, help: i.help }));
+    } catch (e) { return [{ id: 'hub-obs', label: `OBS on ${p.name}`, status: 'fail', detail: `cannot ask ${p.name}: ${e.cause?.code || e.message}` }]; }
+  }
   async function tick() {
     if (busy) return;
     busy = true;
@@ -268,5 +289,5 @@ export function createMesh(cfg, { port }) {
     setInterval(tick, BEAT_MS).unref();
     tick();
   }
-  return { start, tick, status, pairRequest, approve, join, heartbeat, broadcast, receive, peerUnpaired, removePeer, startPairing, setName, getName, prestreamItems };
+  return { hubPrestream, hasPeer: name => peerList().some(p => p.name.toLowerCase() === String(name).toLowerCase()), peerAuth: authPeer, callByName, start, tick, status, pairRequest, approve, join, heartbeat, broadcast, receive, peerUnpaired, removePeer, startPairing, setName, getName, prestreamItems };
 }
