@@ -6,7 +6,7 @@
 //   node Pipeline\fetch-chat-logs.mjs --list                just show which days are available (and from which site)
 //   node Pipeline\fetch-chat-logs.mjs --rebuild             download every day again and rebuild the chatter profiles from zero
 //   node Pipeline\fetch-chat-logs.mjs --no-events           do not touch chat_events.json
-//   node Pipeline\fetch-chat-logs.mjs --for-study           also copy new day files to %AppData%\BVQ\chat_logs\import (the bot learns from them at
+//   node Pipeline\fetch-chat-logs.mjs --for-study           also copy new day files to <data folder>\chat_logs\import (the bot learns from them at
 //                                                      its next study; this costs a few AI calls)
 //   options: --channel innocentpenguin_   --out D:\PinguinoSuite\Data\chat_logs   --host https://a.example,https://b.example
 //
@@ -20,7 +20,7 @@
 // https://logs.potat.app). Together they have innocentpenguin_ from 2026-02-15 on (the earliest day any of them has; nothing older exists
 // anywhere I could find, Twitch VODs expire). API: GET /list?channel=<c> (available days) and GET /channel/<c>/<yyyy>/<m>/<d>?raw (raw IRC lines).
 // For every day the first site that has it is used. The bot reads every *.txt under chat_logs by itself (shows times in Central, skips duplicate lines).
-// Also written to %AppData%\BVQ: chat_events.json (subs / raids / bits, last 400 days) and chat_profiles.json (one profile per chatter).
+// Also written to <data folder>\: chat_events.json (subs / raids / bits, last 400 days) and chat_profiles.json (one profile per chatter).
 // Run it now and then (e.g. every few days) to keep everything up to date. Only public chat is stored.
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';

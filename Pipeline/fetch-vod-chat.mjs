@@ -6,10 +6,10 @@
 //   node Pipeline\fetch-vod-chat.mjs                      every VOD Twitch still has (new ones only; already downloaded VODs are skipped)
 //   node Pipeline\fetch-vod-chat.mjs --since 2026-10-01   only VODs from that date on
 //   node Pipeline\fetch-vod-chat.mjs --list               just list the VODs (date, id, length, title), download nothing
-//   node Pipeline\fetch-vod-chat.mjs --for-study          also copy the files to %AppData%\BVQ\chat_logs\import (the bot learns from them
+//   node Pipeline\fetch-vod-chat.mjs --for-study          also copy the files to <data folder>\chat_logs\import (the bot learns from them
 //                                                    at its next study; this costs a few AI calls)
 //   node Pipeline/fetch-vod-chat.mjs --history      no chat download: add what each past stream was about (the VOD titles, by Central date) to the bot's
-//                                                    stream history (%AppData%BVQchat_history.json) so it knows what you did on those days. Needs no CLI.
+//                                                    stream history (<data folder>\chat_history.json) so it knows what you did on those days. Needs no CLI.
 //   options: --channel innocentpenguin_   --out D:\PinguinoSuite\Data\chat_logs   --max 200 (VODs per run)   --cli <path to TwitchDownloaderCLI.exe>
 //
 // HOW IT WORKS

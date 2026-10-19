@@ -11,10 +11,10 @@
 //            --min-msgs 25 (fewest messages a viewer needs in a month) | --top 40 (most viewers per month) | --concurrency 3
 //            --logs <dir> --out <dir> --appdata <dir> (for tests) | --fake (no API: deterministic fake answers, for tests)
 //
-// THE AI: the same one the chat bot uses, read from %AppData%\BVQ\chat_settings.json (Provider, ApiKey, Model, BaseUrl) at run time. The key is never
+// THE AI: the same one the chat bot uses, read from <data folder>\chat_settings.json (Provider, ApiKey, Model, BaseUrl) at run time. The key is never
 // printed or copied. Default model for the claude provider: claude-haiku-5-5 (cheap and good enough for summaries).
 //
-// PRIVACY (same rules as the bot): viewers whose Privacy in %AppData%\BVQ\chat_memory.json is "forget" or "anon" get NO monthly file, and their name
+// PRIVACY (same rules as the bot): viewers whose Privacy in <data folder>\chat_memory.json is "forget" or "anon" get NO monthly file, and their name
 // is replaced by "someone" in every transcript and in the results; bots and !commands are left out; heavy talk (self-harm, distress) is left out;
 // and every AI answer is filtered again in code (no ages, birthdays, school, health, locations, contact details, politics, religion, sexuality, race).
 //

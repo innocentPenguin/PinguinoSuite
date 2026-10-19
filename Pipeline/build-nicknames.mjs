@@ -1,4 +1,4 @@
-// Finds the NICKNAMES the community uses for each other by reading the chat logs (Data\chat_logs\*.txt) and writes %AppData%\BVQ\chat_nicknames.json:
+// Finds the NICKNAMES the community uses for each other by reading the chat logs (Data\chat_logs\*.txt) and writes <data folder>\chat_nicknames.json:
 //   { "<login>": [ {"nick": "marsh", "count": 3170, "people": 116}, ... ] }
 // The bot puts a viewer's community nicknames into its prompt and prefers them over inventing its own.
 //

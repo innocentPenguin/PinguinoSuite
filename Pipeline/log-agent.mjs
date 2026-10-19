@@ -6,7 +6,7 @@
 // WHO STARTS IT: update-logs.mjs (the 5-minute scheduled task) starts it, hidden, whenever it is not running, so normally you do nothing.
 // Only one copy runs (it exits if another one touched Pipeline\.log-agent.alive in the last 30 s). To stop it, end the node.exe process whose command line
 // contains log-agent.mjs (Task Manager > Details); it comes back at the next 5-minute update.
-// The website address and key come from %AppData%\BVQ\settings.json (WebSyncUrl / WebSyncKey, the same ones PinguinoB0t uses). Nothing secret is printed.
+// The website address and key come from <data folder>\settings.json (WebSyncUrl / WebSyncKey, the same ones PinguinoB0t uses). Nothing secret is printed.
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { dataDir } from './lib-paths.mjs';

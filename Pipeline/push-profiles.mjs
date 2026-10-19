@@ -7,7 +7,7 @@
 // WHAT IS SENT: the whole profile except "clash" (who argues with whom) and the example quotes behind likes / pets / hobbies (the website drops them too).
 // Birthday (month and day only) and US state are included. WHO IS LEFT OUT: anyone who used !optmeout / !forgetme with the chat bot (Privacy "anon" / "forget").
 // A member can also hide the section for themself in Settings. The notes field is sent as written: keep private things out of it.
-// The website address and key come from %AppData%\BVQ\settings.json (WebSyncUrl / WebSyncKey, the same ones PinguinoB0t uses). Nothing secret is printed.
+// The website address and key come from <data folder>\settings.json (WebSyncUrl / WebSyncKey, the same ones PinguinoB0t uses). Nothing secret is printed.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { dataDir } from './lib-paths.mjs';

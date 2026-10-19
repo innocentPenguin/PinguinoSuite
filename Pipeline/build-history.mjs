@@ -1,4 +1,4 @@
-// Fills the bot's STREAM HISTORY (%AppData%\BVQ\chat_history.json: what was on stream each day) from the chat logs, for every day the logs cover:
+// Fills the bot's STREAM HISTORY (<data folder>\chat_history.json: what was on stream each day) from the chat logs, for every day the logs cover:
 //   * Nightbot's "The stream game has been updated to: X" / "The stream title has been updated to: X" announcements
 //   * the bot's own "Stream is live! Today we are streaming X." line
 // Days are Central dates (a stream starting 5 PM Central belongs to that date). Existing entries are kept; nothing is duplicated.
