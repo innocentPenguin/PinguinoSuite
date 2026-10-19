@@ -225,7 +225,7 @@ details{margin:14px 0}summary{cursor:pointer;color:var(--accent);font-weight:600
 <div class=grid>
 <div class=card><h2>1. Twitch sign-in</h2><p class=sub>Create an app at dev.twitch.tv/console, add redirect URL <code id=redir></code>, paste its Client ID, then sign in. You will leave this page for Twitch and come back.</p>
 <div class=row><label>Client ID</label><input type=text id=ClientId></div>
-<div class=row><button onclick=signin()>Sign in as streamer</button><small id=tokstate></small></div></div>
+<div class=row><small>Streamer sign-in now lives in the Suite: <b>Accounts</b>.</small><small id=tokstate></small></div></div>
 <div class=card><h2>2. Channel and OBS</h2>
 <div class=row><label>Channel</label><input type=text id=Channel placeholder='your login name'></div>
 <div class=row><label>OBS host</label><input type=text id=ObsHost placeholder=127.0.0.1></div>
