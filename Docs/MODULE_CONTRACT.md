@@ -49,3 +49,12 @@ Anything OS-specific is optional. `GET /api/capabilities` reports what exists. T
 
 ## Status (2026-10-19)
 `PINGUINO_API_TOKEN` is now passed to modules and sent on core->module hook calls. Listen enforces it (Host/Origin guard + token for non-browser writes). Link (Unit 04) is registered but must adopt the same rule. Per-module tokens are in place (HMAC of the core token per module id).
+
+## What needs a rebuild (rule)
+| You changed | Do |
+|---|---|
+| Module code (Multi, Listen, Link, Host, any `Suite/modules/*`) | Restart **only that module** from the app (or `POST /api/modules/{id}/restart`). No app rebuild. |
+| `Suite/suite/*.py` or `Suite/modules.json` | Rebuild the core sidecar: `App\Rebuild-App.bat` (freezes only if those files are newer than `pinguino-core.exe`). |
+| `App/src`, `App/src-tauri/src`, `tauri.conf.json` | `App\Rebuild-App.bat` (rebuilds only the shell, `--no-bundle`). |
+| Nothing under those | The script reports "up to date" and you just relaunch. |
+`Rebuild-App.bat --installer` also builds the NSIS setup; `--force` rebuilds everything. Only session 00 runs it.
