@@ -85,7 +85,7 @@ namespace PinguinoHost
         // ---- log ----
         public void LogInfo(string m) { Console.WriteLine("INFO  " + m); }
         public void LogVerbose(string m) { }
-        public void LogWarn(string m) { HostApi.NoteLog(CurAction, "WARN", m); Console.WriteLine("WARN  " + m); }
-        public void LogError(string m) { HostApi.NoteLog(CurAction, "ERROR", m); Console.WriteLine("ERROR " + m); }
+        public void LogWarn(string m) { HostApi.NoteLog(CurAction, "WARN", m); Clog.Warn("bot:" + (CurAction ?? "host"), m); Console.WriteLine("WARN  " + m); }
+        public void LogError(string m) { HostApi.NoteLog(CurAction, "ERROR", m); Clog.Error("bot:" + (CurAction ?? "host"), m); Console.WriteLine("ERROR " + m); }
     }
 }

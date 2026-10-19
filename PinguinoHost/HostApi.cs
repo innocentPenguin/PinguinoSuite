@@ -14,7 +14,7 @@ namespace PinguinoHost
         public static int Port = 8770;
         public static readonly string Helix = Environment.GetEnvironmentVariable("PINGUINO_HELIX_BASE") ?? "https://api.twitch.tv/helix";
         public static DateTime Started = DateTime.UtcNow;
-        public static volatile bool IrcConnected, EventSubConnected, SimMode;
+        public static volatile bool IrcConnected, EventSubConnected, SimMode; public static volatile int EventSubRefused;
         public static long Messages; public static DateTime LastMessage = DateTime.MinValue;
         public static Func<bool> ObsConnected = () => false;
         static readonly string[] Secret = { "UserToken", "ObsPassword" };
@@ -57,6 +57,7 @@ namespace PinguinoHost
                 if (p == "/api/bots" && c.Request.HttpMethod == "GET") { Write(c, Bots().ToString(), "application/json"); return true; }
                 if (p == "/api/bots" && c.Request.HttpMethod == "POST") { Write(c, SaveBot(Body(c)).ToString(), "application/json"); return true; }
                 if (p == "/" || p == "/setup" || p == "/auth") { Write(c, Html, "text/html; charset=utf-8"); return true; }
+                if (p == "/api/prestream" && c.Request.HttpMethod == "GET") { Write(c, Prestream().ToString(), "application/json"); return true; }
                 if (p == "/api/status") { Write(c, Status().ToString(), "application/json"); return true; }
                 if (p == "/api/config" && c.Request.HttpMethod == "GET") { Write(c, Config().ToString(), "application/json"); return true; }
                 if (p == "/api/config" && c.Request.HttpMethod == "POST") { Write(c, SaveConfig(Body(c)).ToString(), "application/json"); return true; }

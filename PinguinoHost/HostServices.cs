@@ -55,7 +55,7 @@ namespace PinguinoHost
                             }
                             await Send(new JObject { { "op", 1 }, { "d", id } });
                         }
-                        else if (op == 2) { identified = true; backoff = 3; Console.WriteLine("OBS connected"); }
+                        else if (op == 2) { identified = true; backoff = 3; Console.WriteLine("OBS connected"); Clog.Info("obs", "OBS connected"); }
                         else if (op == 7)
                         {
                             string rid = (string)d["requestId"]; TaskCompletionSource<JObject> tcs;
@@ -65,6 +65,7 @@ namespace PinguinoHost
                     }
                 }
                 catch (Exception) { }
+                if (identified) Clog.Warn("obs", "OBS connection lost");
                 identified = false;
                 await Task.Delay(backoff * 1000); backoff = Math.Min(backoff * 2, 30);
             }
@@ -129,13 +130,13 @@ namespace PinguinoHost
                             } while (!r.EndOfMessage);
                             if (!open) break;
                             var m = JObject.Parse(sb.ToString()); string type = (string)m["metadata"]["message_type"];
-                            if (type == "session_welcome") { await Subscribe(http, (string)m["payload"]["session"]["id"], bid); Console.WriteLine("EventSub connected"); backoff = 3; HostApi.EventSubConnected = true; }
+                            if (type == "session_welcome") { HostApi.EventSubRefused = 0; await Subscribe(http, (string)m["payload"]["session"]["id"], bid); Console.WriteLine("EventSub connected"); Clog.Info("eventsub", "EventSub connected"); backoff = 3; HostApi.EventSubConnected = true; }
                             else if (type == "notification") Handle(m, raise);
                             else if (type == "session_reconnect") open = false;
                         }
                     }
                 }
-                catch (Exception ex) { Console.WriteLine("EventSub lost: " + ex.Message); }
+                catch (Exception ex) { Console.WriteLine("EventSub lost: " + ex.Message); Clog.Warn("eventsub", "EventSub lost: " + ex.Message); }
                 HostApi.EventSubConnected = false;
                 await Task.Delay(backoff * 1000); backoff = Math.Min(backoff * 2, 60);
             }
@@ -151,7 +152,7 @@ namespace PinguinoHost
                 var cond = new JObject { { s[2], bid } }; if (s[0] == "channel.follow") cond["moderator_user_id"] = bid;
                 var body = new JObject { { "type", s[0] }, { "version", s[1] }, { "condition", cond }, { "transport", new JObject { { "method", "websocket" }, { "session_id", session } } } };
                 var resp = await http.PostAsync(HostApi.Helix + "/eventsub/subscriptions", new StringContent(body.ToString(), Encoding.UTF8, "application/json"));
-                if (!resp.IsSuccessStatusCode) Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes");
+                if (!resp.IsSuccessStatusCode) { HostApi.EventSubRefused++; Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes"); Clog.Warn("eventsub", "subscription " + s[0] + " refused (HTTP " + (int)resp.StatusCode + (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : ", check token scopes") + ")"); }
             }
         }
         static void Handle(JObject m, Action<Dictionary<string, object>> raise)

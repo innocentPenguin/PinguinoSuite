@@ -24,6 +24,7 @@ namespace PinguinoHost
     public static class Program
     {
         static HostCPH cph;
+        public static bool HasAction(string n) { return cph != null && cph.ActionExists(n); }
         public static bool SayShared(string m) { try { return cph != null && cph.Say != null && cph.Say(m); } catch (Exception) { return false; } }
         static string suite, dataDir;
         static HashSet<string> coreCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -41,7 +42,7 @@ namespace PinguinoHost
             bool sim = argv.Contains("--sim");
             suite = Opt("--suite", FindSuite());
             dataDir = Opt("--data", Environment.GetEnvironmentVariable("PINGUINO_DATA_DIR") ?? Environment.GetEnvironmentVariable("BVQ_DATA_DIR") ?? Path.Combine(suite, "Data", "runtime"));
-            Directory.CreateDirectory(dataDir);
+            Directory.CreateDirectory(dataDir); Clog.Init(dataDir); Clog.Info("host", "PinguinoHost starting");
             Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dataDir); Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dataDir);   // the bots find bots.json, bots_secrets.json, settings.json, routing.log here
             var secrets = LoadSecrets();
             string channel = Opt("--channel", secrets.Value<string>("Channel") ?? "");
@@ -208,7 +209,12 @@ namespace PinguinoHost
                 if (body != null) r.Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
                 return r;
             }
-            cph.Say = m => http.SendAsync(Req(HttpMethod.Post, HostApi.Helix + "/chat/messages", new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", m } })).Result.IsSuccessStatusCode;
+            cph.Say = m =>
+            {
+                var resp = http.SendAsync(Req(HttpMethod.Post, HostApi.Helix + "/chat/messages", new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", m } })).Result;
+                if (!resp.IsSuccessStatusCode) Clog.Warn("twitch", "chat send refused by Twitch (HTTP " + (int)resp.StatusCode + (resp.StatusCode == (System.Net.HttpStatusCode)429 ? ", rate limited" : resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : "") + ")");
+                return resp.IsSuccessStatusCode;
+            };
             cph.Timeout = (user, secs, why) =>
             {
                 var g = http.SendAsync(Req(HttpMethod.Get, HostApi.Helix + "/users?login=" + Uri.EscapeDataString(user), null)).Result;
@@ -233,7 +239,7 @@ namespace PinguinoHost
                         await Send("CAP REQ :twitch.tv/tags twitch.tv/commands");
                         await Send("NICK justinfan" + new Random().Next(10000, 99999));
                         await Send("JOIN #" + channel.ToLowerInvariant());
-                        Console.WriteLine("connected to #" + channel); backoff = 2; HostApi.IrcConnected = true;
+                        Console.WriteLine("connected to #" + channel); Clog.Info("twitch", "chat connected (read)"); backoff = 2; HostApi.IrcConnected = true;
                         var buf = new byte[16384]; var sb = new StringBuilder();
                         while (ws.State == WebSocketState.Open)
                         {
@@ -250,7 +256,7 @@ namespace PinguinoHost
                         }
                     }
                 }
-                catch (Exception ex) { Console.WriteLine("chat connection lost: " + ex.Message); }
+                catch (Exception ex) { Console.WriteLine("chat connection lost: " + ex.Message); Clog.Warn("twitch", "chat connection lost: " + ex.Message); }
                 HostApi.IrcConnected = false;
                 Console.WriteLine("reconnecting in " + backoff + "s"); await Task.Delay(backoff * 1000); backoff = Math.Min(backoff * 2, 60);
             }
