@@ -43,6 +43,8 @@ def module_token(mid):
 # Who may call: the core's own origin plus the Tauri webview origins (Windows/macOS/Linux).
 ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "tauri://localhost",
                    "http://tauri.localhost", "https://tauri.localhost"}
+# Shared data root handed to every module (honours an existing PINGUINO_DATA_DIR).
+DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data")
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 # UI source: single copy lives in the Tauri app so the two can't drift.
 UI_INDEX = next((q for q in (ROOT.parent / "App" / "src" / "index.html", Path(__file__).parent / "static" / "index.html") if q.exists()), None)
@@ -128,7 +130,7 @@ class Module:
         else:
             extra = {"start_new_session": True}
         self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log,
-                                     env={**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"])}, **extra)
+                                     env={**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"]), "PINGUINO_DATA_DIR": DATA_DIR}, **extra)
         bus.emit("module", id=self.id, state="starting")
 
     def stop(self):
