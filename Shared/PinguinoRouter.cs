@@ -57,7 +57,8 @@ public class CPHInline
     static DateTime _pgChecked = DateTime.MinValue, _pgStamp = DateTime.MinValue;
     static Func<string, string, string, string> _pgTestHttp;   // tests only: fake POST (url, auth header, body) -> response
 
-    static string PgDirPath() { return Environment.GetEnvironmentVariable("BVQ_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BVQ"); }
+    static string PgEnvDir() { return Environment.GetEnvironmentVariable("PINGUINO_DATA_DIR") ?? Environment.GetEnvironmentVariable("BVQ_DATA_DIR"); }  // BVQ_DATA_DIR = deprecated alias
+    static string PgDirPath() { return PgEnvDir() ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BVQ"); }
     static long PgNow() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
 
     static PgRegistry PgDefault()

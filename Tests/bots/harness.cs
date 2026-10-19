@@ -38,7 +38,7 @@ public static class Harness
     {
         dir = Path.Combine(Path.GetTempPath(), "bots_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
-        Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dir);
+        Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dir);
         Reset();
 
         // ── defaults: bots.json is created, only the core has an account ──

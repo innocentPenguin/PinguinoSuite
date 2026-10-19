@@ -45,7 +45,7 @@ public static class Harness
     {
         dir = Path.Combine(Path.GetTempPath(), "bvq_helper_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
-        Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dir);
+        Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dir);
         File.WriteAllText(Path.Combine(dir, "settings.json"), "{\"WasLive\":true}");
         File.WriteAllText(Path.Combine(dir, "players.json"), "{\"ana\":{\"GameId\":\"AnaEpic\"}}");
         File.WriteAllText(Path.Combine(dir, "live_state.json"), "{\"queueOpen\":true}");

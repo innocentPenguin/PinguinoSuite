@@ -1,6 +1,6 @@
 # Routing and fallback architecture
 
-Front door: **PinguinoRouter** on Twitch Chat Message (133). Roles, accounts, aliases, action names, senders and fallbacks come from `bots.json` (in the data folder; env `BVQ_DATA_DIR`). Only PinguinoB0t has a Twitch account; replies go through its sender (the helix sender is untried live).
+Front door: **PinguinoRouter** on Twitch Chat Message (133). Roles, accounts, aliases, action names, senders and fallbacks come from `bots.json` (in the data folder; env `PINGUINO_DATA_DIR`, alias `BVQ_DATA_DIR`). Only PinguinoB0t has a Twitch account; replies go through its sender (the helix sender is untried live).
 
 Flow: message → ignore bots/self/`pinguinoRouted` → `!` command → Core; mention/alias → target role; otherwise → Chat. Each module returns `handled | pass | defer`; on `pass` or failure the router walks the role's fallback chain, finally a local canned reply.
 

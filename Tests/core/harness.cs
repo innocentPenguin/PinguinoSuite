@@ -37,7 +37,7 @@ public static class Harness
     {
         dir = Path.Combine(Path.GetTempPath(), "bvqtest_" + Guid.NewGuid().ToString("N").Substring(0, 8));
         Directory.CreateDirectory(dir);
-        Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dir);
+        Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dir);
         Environment.SetEnvironmentVariable("BVQ_WHEEL_FAST", "1");
         // 12 registered players with a set MMR (so no Tracker/network lookups happen).
         var players = new JObject();
@@ -435,7 +435,7 @@ public static class Harness
         Check(CPHProxy.Sent.Any(m => m.Contains("Check")), "!check answers in chat: " + string.Join(" | ", CPHProxy.Sent));
         Check(probs.Any(x => x.StartsWith("Check:")), "!check reports what is wrong as problems (the stub has no website): " + string.Join(" | ", probs));
         {   // problems.json: every problem + check result is kept in a file that can be edited / cleared
-            string pf = System.IO.Path.Combine(Environment.GetEnvironmentVariable("BVQ_DATA_DIR"), "problems.json");
+            string pf = System.IO.Path.Combine(Environment.GetEnvironmentVariable("PINGUINO_DATA_DIR"), "problems.json");
             string txt = System.IO.File.Exists(pf) ? System.IO.File.ReadAllText(pf) : "";
             Check(txt.Contains("\"Kind\": \"check\"") && txt.Contains("\"Status\": \"open\""), "problems.json lists the open check problems: " + txt.Length);
             Run("mod1", "!problems", "", true);

@@ -45,7 +45,7 @@ public static class Harness
     {
         dir = Path.Combine(Path.GetTempPath(), "bvq_chat_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
-        Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dir);
+        Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dir);
         Environment.SetEnvironmentVariable("BVQ_CHAT_INLINE", "1");
         File.WriteAllText(Path.Combine(dir, "chat_settings.json"),
             "{\"RolesUrl\":\"http://test/roles\",\"GlobalCooldownSec\":0,\"UserCooldownSec\":0,\"RandomChance\":0,\"StreamerInfo\":\"Peng is 24 and streams daily at 5pm CDT\",\"ApiKey\":\"test\",\"HistoryDir\":\"" + Path.Combine(dir, "history").Replace("\\", "\\\\") + "\",\"UpdatesFile\":\"" + Path.Combine(dir, "updates.json").Replace("\\", "\\\\") + "\",\"OpinionsFile\":\"" + Path.Combine(dir, "opinions.json").Replace("\\", "\\\\") + "\",\"CommandsFile\":\"" + Path.Combine(dir, "commands.json").Replace("\\", "\\\\") + "\"}");
