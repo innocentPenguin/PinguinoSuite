@@ -4,7 +4,7 @@ if (-not (Test-Path $Target)) { exit 0 }
 $t = (Get-Item $Target).LastWriteTimeUtc
 foreach ($s in $Sources) {
   if (-not (Test-Path $s)) { continue }
-  $f = Get-ChildItem $s -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\(target|node_modules|__pycache__|binaries)\' }
+  $f = Get-ChildItem $s -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '[\\/](target|node_modules|__pycache__|binaries|bin|obj)[\\/]' }
   if ($f | Where-Object { $_.LastWriteTimeUtc -gt $t }) { exit 0 }
 }
 exit 1
