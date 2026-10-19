@@ -302,3 +302,6 @@ function splitBox(pn) { return `  <div class="box"><small class="mut">Inside the
         <label class="cf">Times <select id="sl-${k}-timestamps"><option value="">main</option><option value="1" ${lk.timestamps === true ? 'selected' : ''}>show</option><option value="0" ${lk.timestamps === false ? 'selected' : ''}>hide</option></select></label>
         <label class="cf">Highlight strength % <input type="number" id="sl-${k}-intensity" min="0" max="250" value="${lk.intensity ?? ''}" style="width:70px" placeholder="main"></label></div></div>`; }).join('')}
       <div class="act"><button data-act="split-looks">Save the halves' looks</button></div></details></div>`; }
+
+// the shell reports why a window could not open (for example a refused address)
+window.addEventListener('message', e => { const d = e.data; if (d && d.pinguino === 'window-error') toast('The app could not open that window: ' + (d.error || 'unknown error'), false); });
