@@ -20,6 +20,7 @@ import checks
 import config
 import learning
 import console_log
+import help_text
 import listen_bridge
 import prestream
 import voice
@@ -213,6 +214,42 @@ def setup_info():
 def prestream_checks():
     """Readiness for the Pinguino Console: {ts, items:[{id,label,status pass|warn|fail,detail}]}."""
     return {"ts": time.time(), "items": prestream.run(connectors, store, pipeline, inbox)}
+
+
+_ISTATE = {"connected": "connected", "needs_auth": "needs_auth", "error": "error", "disabled": "off", "disconnected": "off",
+           "connecting": "unknown", "reconnecting": "error", "waiting": "unknown"}
+
+
+@app.get("/api/integrations")
+def integrations():
+    """Items for the Suite's Integrations hub (never contains secrets)."""
+    out = []
+    for iid, name, plat, label in help_text.INTEGRATIONS:
+        c = connectors.get(plat)
+        d = c.describe() if c else {"status": "disconnected", "detail": ""}
+        it = {"id": iid, "name": name, "group": "Chat platforms", "status": _ISTATE.get(d["status"], "unknown"),
+              "detail": (d.get("detail") or "")[:160], "test": f"/api/test/{plat}", "help": help_text.for_item("conn-" + plat)}
+        if label:
+            it.update(connect_url=(secrets_store.get("site_url") or "https://innocentpenguin.com") + "/auth/twitch/login?multi=1",
+                      connect_label=label)
+        out.append(it)
+    return {"items": out}
+
+
+@app.post("/api/test/{platform}")
+def test_platform(platform: str):
+    c = connectors.get(platform)
+    if not c:
+        raise HTTPException(404, "unknown platform")
+    d = c.describe()
+    if d["status"] != "connected":
+        raise HTTPException(409, f"{d['label']} is {d['status']}: {d.get('detail') or ''}"[:200])
+    return {"ok": True, "detail": d.get("detail", "")}
+
+
+@app.get("/api/help/all")
+def help_all():
+    return {"module": "multi", "items": help_text.HELP, "secrets": help_text.SECRETS}
 
 
 @app.get("/api/messages")

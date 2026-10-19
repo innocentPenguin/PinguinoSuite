@@ -575,7 +575,7 @@ def test_prestream_endpoint_shape_and_no_token_needed():
     r = c.get("/api/prestream")
     body = r.json()
     rows = body["items"]
-    assert r.status_code == 200 and isinstance(body["ts"], float) and rows and all(set(x) == {"id", "label", "status", "detail"} for x in rows)
+    assert r.status_code == 200 and isinstance(body["ts"], float) and rows and all(set(x) == {"id", "label", "status", "detail", "help"} for x in rows)
     assert all(x["status"] in ("pass", "warn", "fail") for x in rows)
     assert {"store", "queue", "windows"} <= {x["id"] for x in rows}
 
@@ -665,3 +665,20 @@ def test_pages_link_shared_theme(monkeypatch):
     c = TestClient(server.app, base_url="http://127.0.0.1:8766")
     for path in ("/", "/popout"):
         assert '<link rel="stylesheet" href="http://127.0.0.1:8760/theme.css">' in c.get(path).text
+
+
+def test_every_prestream_item_has_help_and_integrations():
+    from fastapi.testclient import TestClient
+    import server, help_text
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    items = c.get("/api/prestream").json()["items"]
+    assert items and all(i["help"] and i["help"]["steps"] and i["help"]["title"] for i in items)
+    for h in list(help_text.HELP.values()) + [s["help"] for s in help_text.SECRETS]:
+        assert len(h["steps"]) <= 14
+        if h.get("link"):
+            assert h["link"]["url"].startswith("https://")
+    assert {s["name"] for s in help_text.SECRETS} == {"MULTI_TWITCH_TOKENS", "MULTI_DISCORD_TOKEN", "MULTI_YOUTUBE_TOKEN", "MULTI_AI_KEY"}
+    ints = c.get("/api/integrations").json()["items"]
+    assert {i["id"] for i in ints} == {"twitch", "discord", "youtube", "tiktok"} and all(i["help"] for i in ints)
+    assert c.post("/api/test/nope", headers={"origin": "http://127.0.0.1:8766"}).status_code == 404
+    assert "_module" in c.get("/api/help/all").json()["items"]

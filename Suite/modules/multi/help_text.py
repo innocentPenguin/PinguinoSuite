@@ -1,0 +1,169 @@
+"""Plain-text help for every Multi status item (shown by the Suite's clickable ? panels). Never contains a key value.
+Shapes follow Docs/MODULE_CONTRACT.md 'Help for every status'."""
+
+SETUP = {"label": "Open Multi setup", "route": "m:multi"}
+RESTART = {"label": "Restart Multi", "module_action": {"module": "multi", "action": "restart"}}
+
+HELP = {
+    "_module": {
+        "title": "PinguinoMulti: one chat for every platform",
+        "summary": "Multi reads Twitch, Discord, YouTube and (optionally, unofficially) TikTok chat into one feed, highlights messages that need an answer, and tracks what you replied to.",
+        "steps": [
+            "Open Chat (the nav item) to see the combined feed: badges, emotes, search, pins, and a reply box that sends to ONE platform you pick.",
+            "Open the Multi setup page to connect platforms: Twitch needs you logged in to innocentpenguin.com as the owner, then 'Connect Twitch'.",
+            "Discord needs a bot token and channel IDs. YouTube needs an access token. TikTok is off by default and read-only.",
+            "Pick a layout (Combined Chat is the one-window option) so your chat windows are saved.",
+            "For OBS: copy the stream-safe address from the setup page into an OBS Browser Source. It shows public chat only.",
+            "Run the pre-stream check any time; green means ready, yellow is optional or degraded, red would break the stream.",
+        ],
+        "fix": SETUP,
+    },
+    "conn-twitch": {
+        "title": "Twitch connection",
+        "summary": "Multi reads and sends Twitch chat with a sign-in you approve once. Twitch is the required platform for the stream.",
+        "steps": [
+            "Green (connected): nothing to do. The detail shows which account Multi is using.",
+            "Red 'needs_auth': log in to innocentpenguin.com as the owner, then open Multi setup and press 'Connect Twitch'. Approve the permissions on Twitch.",
+            "Red 'token expired' or 'subscription revoked': press 'Connect Twitch' again; it replaces the old sign-in.",
+            "Yellow 'reconnecting': Multi retries by itself with growing delays. If it lasts more than a minute, check your internet and restart Multi.",
+            "Quick moderation buttons (timeout/ban/delete) appear only after reconnecting with the moderator permissions (needs the site update).",
+        ],
+        "scopes": ["user:read:chat", "user:write:chat", "moderator:manage:banned_users (optional)", "moderator:manage:chat_messages (optional)"],
+        "link": {"label": "Twitch connections", "url": "https://www.twitch.tv/settings/connections"},
+        "fix": SETUP,
+    },
+    "conn-discord": {
+        "title": "Discord connection",
+        "summary": "Optional. A Discord bot reads and can reply in the channels you list. Replies go to one channel only and never ping people.",
+        "steps": [
+            "Create an application and bot at the Discord developer portal, and turn on 'Message Content Intent' (Bot page).",
+            "Invite the bot to your server (OAuth2 > URL Generator > scope 'bot', permissions: View Channels, Send Messages, Read Message History).",
+            "In Discord turn on Settings > Advanced > Developer Mode, right-click a channel, Copy Channel ID.",
+            "In Multi setup paste the bot token and the channel IDs (comma separated), then Save Discord. Or store the token as MULTI_DISCORD_TOKEN in the key vault.",
+            "Yellow 'needs_auth' just means it is not set up; the stream is not affected.",
+        ],
+        "example": "Channel ID format: 123456789012345678 (18-19 digits)",
+        "link": {"label": "Discord developer portal", "url": "https://discord.com/developers/applications"},
+        "fix": SETUP,
+    },
+    "conn-youtube": {
+        "title": "YouTube connection",
+        "summary": "Optional. Multi reads the chat of your active YouTube live broadcast with a Google access token.",
+        "steps": [
+            "You need a Google OAuth access token with the YouTube live-chat permission for your channel.",
+            "Paste it in Multi setup > YouTube > Save, or store it as MULTI_YOUTUBE_TOKEN in the key vault.",
+            "Tokens expire (about an hour) and Multi cannot refresh them yet: paste a fresh one before going live.",
+            "'waiting: no active broadcast' means you are not live on YouTube yet; it connects by itself once you are.",
+            "YouTube has no reply threads, so replies are plain messages.",
+        ],
+        "scopes": ["https://www.googleapis.com/auth/youtube.force-ssl"],
+        "link": {"label": "YouTube Live Streaming API", "url": "https://developers.google.com/youtube/v3/live/getting-started"},
+        "fix": SETUP,
+    },
+    "conn-tiktok": {
+        "title": "TikTok connection (unofficial, read-only)",
+        "summary": "Optional and OFF by default. TikTok has no official chat API; this uses a third-party package that can break or conflict with TikTok's rules. You can read TikTok chat but not reply.",
+        "steps": [
+            "Only turn this on if you accept that risk.",
+            "Install the optional 'TikTokLive' Python package for Multi (status says so if it is missing).",
+            "In Multi setup tick 'Read my TikTok LIVE chat', enter your TikTok username, Save TikTok.",
+            "Gray 'disabled' is the normal state and does not affect the stream.",
+        ],
+        "fix": SETUP,
+    },
+    "store": {
+        "title": "Message database",
+        "summary": "Multi keeps recent chat in a local database so search, cards and recap work after a restart.",
+        "steps": [
+            "Green: readable. 'empty' just means no messages yet.",
+            "Red: the database file could not be read. Restart Multi; if it persists, close other programs using the Multi data folder, or move multi.db away (a new one is created, old chat history is lost).",
+        ],
+        "fix": RESTART,
+    },
+    "file-settings": {
+        "title": "Settings file",
+        "summary": "Multi's non-secret settings (channel, ranking mode, window options) are stored in settings.json in its data folder.",
+        "steps": [
+            "Green: readable, or using defaults when the file does not exist yet.",
+            "Red: the file is unreadable (damaged or locked). Delete settings.json in the Multi data folder; defaults are used and you set things again. No keys are stored there.",
+        ],
+        "fix": RESTART,
+    },
+    "file-rules": {
+        "title": "Priority rules file",
+        "summary": "Your edits to the explainable priority rules (weights, keywords, muted viewers) live in rules.json.",
+        "steps": [
+            "Green: readable, or using the built-in defaults.",
+            "Red: unreadable. Delete rules.json in the Multi data folder to go back to defaults.",
+        ],
+        "fix": RESTART,
+    },
+    "queue": {
+        "title": "Message queue",
+        "summary": "Incoming chat waits briefly in a queue before it is ranked and shown. It should stay near zero.",
+        "steps": [
+            "Green: queue under 200 and nothing dropped.",
+            "Yellow: the queue is long or messages were dropped during a burst. It clears itself; if it stays high, restart Multi.",
+            "Mentions and questions are never dropped before ranking.",
+        ],
+        "fix": RESTART,
+    },
+    "windows": {
+        "title": "Chat windows",
+        "summary": "Saved windows decide what opens on which monitor. Without any, Multi still works inside the Suite page.",
+        "steps": [
+            "Green: at least one window is saved.",
+            "Yellow 'none saved': open Multi setup and pick a layout, for example 'Combined Chat'.",
+            "Positions are remembered; if a monitor is unplugged the window moves to a visible spot and returns when it is back.",
+        ],
+        "fix": SETUP,
+    },
+    "ai": {
+        "title": "Message ranking and AI",
+        "summary": "Local rules always rank messages (free, instant, private). Optional AI only double-checks borderline messages and falls back to local on any problem.",
+        "steps": [
+            "Green 'local rules': nothing needed.",
+            "Yellow 'no AI key': you turned AI on but no key is stored, so Multi uses local rules. Add the key in Multi setup > Smart features, or as MULTI_AI_KEY in the key vault, or switch back to local.",
+            "A daily spend limit stops AI calls when reached (default 0.50 USD).",
+        ],
+        "fix": SETUP,
+    },
+}
+
+SECRETS = [
+    {"name": "MULTI_TWITCH_TOKENS", "label": "Twitch tokens for Multi (written by Connect Twitch)", "help": {
+        "title": "Twitch tokens",
+        "summary": "Normally you never enter this by hand: Multi setup > Connect Twitch stores the sign-in in Windows Credential Manager. A vault copy is only used to seed an empty Multi.",
+        "steps": ["Prefer the Connect Twitch button in Multi setup.",
+                  "The value is JSON with access_token, refresh_token and client_id from the site's Connect Multi flow."],
+        "fix": SETUP}},
+    {"name": "MULTI_DISCORD_TOKEN", "label": "Discord bot token", "help": {
+        "title": "Discord bot token", "summary": "The secret that lets Multi's Discord bot log in.",
+        "steps": ["Open the Discord developer portal > your application > Bot > Reset Token / Copy.",
+                  "Turn on Message Content Intent on the same page.", "Paste it here; it is never shown again."],
+        "example": "a long string of letters, numbers and dots (70+ characters)",
+        "link": {"label": "Discord developer portal", "url": "https://discord.com/developers/applications"}}},
+    {"name": "MULTI_YOUTUBE_TOKEN", "label": "YouTube access token", "help": {
+        "title": "YouTube access token", "summary": "A Google OAuth access token for live chat. It expires in about an hour.",
+        "steps": ["Create it with the YouTube live-chat scope for your channel.",
+                  "Paste a fresh one before you go live; Multi cannot refresh it yet."],
+        "scopes": ["https://www.googleapis.com/auth/youtube.force-ssl"],
+        "link": {"label": "OAuth 2.0 Playground", "url": "https://developers.google.com/oauthplayground"}}},
+    {"name": "MULTI_AI_KEY", "label": "AI provider key for ranking (optional)", "help": {
+        "title": "AI provider key",
+        "summary": "Optional. Lets Multi ask an AI to double-check borderline messages. Local rules work without it.",
+        "steps": ["Create an API key with your provider (Anthropic or OpenAI). Ollama needs no key.",
+                  "Paste it here; set the provider and daily limit in Multi setup > Smart features."],
+        "link": {"label": "Anthropic console", "url": "https://console.anthropic.com/settings/keys"}}},
+]
+
+INTEGRATIONS = [  # (id, name, platform, connect label)
+    ("twitch", "Twitch (chat)", "twitch", "Connect Twitch"),
+    ("discord", "Discord (chat)", "discord", None),
+    ("youtube", "YouTube (chat)", "youtube", None),
+    ("tiktok", "TikTok (chat, unofficial)", "tiktok", None),
+]
+
+
+def for_item(item_id):
+    return HELP.get(item_id)

@@ -1,5 +1,6 @@
 """No-token pre-stream readiness list for the Console: [{id,label,status pass|warn|fail,detail}]."""
 import config
+import help_text
 import secrets_store
 
 REQUIRED = {"twitch"}          # the stream cannot run without this one; others are optional
@@ -51,4 +52,6 @@ def run(connectors, store, pipeline, inbox):
         add("ai", "AI-assisted ranking", "pass" if ok else "warn", "ready" if ok else "mode is on but no AI key (falls back to local)")
     else:
         add("ai", "Ranking mode", "pass", "local rules (no AI needed)")
+    for x in out:
+        x["help"] = help_text.for_item(x["id"])
     return out
