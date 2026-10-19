@@ -594,6 +594,19 @@ class Opt(BaseModel):
     react_to_live: bool | None = None
 
 
+@app.get("/api/modules/{mid}/probe")
+def module_probe(mid: str):
+    """The module's own health/status JSON, fetched by the core so the UI needs no cross-origin call to the module."""
+    m = modules.get(mid)
+    if not m:
+        raise HTTPException(404)
+    try:
+        r = requests.get(m.spec["url"] + m.spec.get("health", "/"), timeout=2)
+        return r.json()
+    except Exception:
+        raise HTTPException(502, "module not answering")
+
+
 @app.get("/api/modules/{mid}/logs")
 def module_logs(mid: str, lines: int = 200):
     if mid not in modules:
