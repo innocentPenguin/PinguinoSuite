@@ -6,6 +6,8 @@ Synthesis and playback are separate: `synth()` returns WAV bytes (used by page p
 import io
 import json
 import os
+import urllib.error
+import urllib.parse
 import subprocess
 import tempfile
 import threading
@@ -117,6 +119,101 @@ class Sapi:
 
 
 sapi = Sapi()
+
+
+# ------------------------------------------------------------------ cloud voices (optional; keys come from the vault, memory only)
+import urllib.request
+
+CLOUD_HOSTS = {"openai": "https://api.openai.com", "elevenlabs": "https://api.elevenlabs.io"}
+KEY_NAMES = {"openai": "VOICE_OPENAI_KEY", "elevenlabs": "VOICE_ELEVENLABS_KEY"}
+
+
+class Cloud:
+    def __init__(self, hosts=None, key_fetch=None):
+        self.hosts = dict(hosts or CLOUD_HOSTS)
+        self.key_fetch = key_fetch or self._vault
+        self.keys = {}
+        self.tried = {}
+
+    @staticmethod
+    def _vault(name):
+        core, tok = os.environ.get("PINGUINO_CORE_URL"), os.environ.get("PINGUINO_API_TOKEN")
+        if not core or not tok:
+            return None
+        try:
+            req = urllib.request.Request(core.rstrip("/") + "/api/vault/" + name, headers={"Authorization": "Bearer " + tok})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                return str(json.loads(r.read()).get("value") or "") or None
+        except Exception:
+            return None
+
+    def key(self, eng, force=False):
+        k = self.keys.get(eng)
+        if k and not force:
+            return k
+        if time.time() - self.tried.get(eng, 0) < (1 if force else 30):
+            return self.keys.get(eng)
+        self.tried[eng] = time.time()
+        k = self.key_fetch(KEY_NAMES[eng])
+        if k:
+            self.keys[eng] = k
+        return k
+
+    def has_key(self, eng):
+        return bool(self.key(eng))
+
+    def _post(self, url, body, headers, timeout=30):
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json", **headers})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.read()
+
+    def synth(self, eng, text, voice, cfg_cloud, style="", rate=0):
+        """-> WAV bytes. Raises RuntimeError with a short, key-free reason."""
+        key = self.key(eng)
+        if not key:
+            raise RuntimeError("no " + KEY_NAMES[eng] + " in the vault")
+        base = self.hosts[eng]
+        try:
+            if eng == "openai":
+                body = {"model": cfg_cloud.get("openai_model") or "gpt-4o-mini-tts", "input": text, "voice": voice or "alloy", "response_format": "wav"}
+                if style and "mini-tts" in body["model"]:
+                    body["instructions"] = style
+                else:
+                    body["speed"] = max(0.25, min(4.0, 1.0 + rate * 0.06))
+                return self._post(base + "/v1/audio/speech", body, {"Authorization": "Bearer " + key})
+            vid = urllib.parse.quote(voice or "21m00Tcm4TlvDq8ikWAM")
+            body = {"text": text, "model_id": cfg_cloud.get("elevenlabs_model") or "eleven_turbo_v2_5",
+                    "voice_settings": {"stability": cfg_cloud.get("stability", 50) / 100.0, "similarity_boost": 0.75}}
+            pcm = self._post(base + "/v1/text-to-speech/" + vid + "?output_format=pcm_22050", body, {"xi-api-key": key})
+            bio = io.BytesIO()
+            with wave.open(bio, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(22050)
+                w.writeframes(pcm)
+            return bio.getvalue()
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                self.keys.pop(eng, None)
+            raise RuntimeError(eng + " answered HTTP " + str(e.code) + (" (key rejected)" if e.code in (401, 403) else ""))
+        except Exception as e:
+            raise RuntimeError(eng + " unreachable: " + type(e).__name__)
+
+    def test(self, eng):
+        key = self.key(eng, force=True)
+        if not key:
+            return {"ok": False, "error": "no " + KEY_NAMES[eng] + " in the vault"}
+        url, hdr = ((self.hosts[eng] + "/v1/models", {"Authorization": "Bearer " + key}) if eng == "openai" else (self.hosts[eng] + "/v1/user", {"xi-api-key": key}))
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=hdr), timeout=10) as r:
+                return {"ok": r.status == 200}
+        except urllib.error.HTTPError as e:
+            return {"ok": False, "error": "HTTP " + str(e.code) + (" (key rejected)" if e.code in (401, 403) else "")}
+        except Exception as e:
+            return {"ok": False, "error": "unreachable: " + type(e).__name__}
+
+
+cloud = Cloud()
 
 
 # ------------------------------------------------------------------ audio helpers
@@ -251,13 +348,26 @@ def stinger(name, sr=SR):
     return np.zeros(0, dtype=np.float32)
 
 
-def render(text, persona, volume=100, extra_gain=1.0, sting="none", sapi_obj=None, output_volume=100, normalize=True, whisper=False):
-    """Persona + text -> (wav bytes, seconds). Raises RuntimeError when the engine is unavailable."""
+def render(text, persona, volume=100, extra_gain=1.0, sting="none", sapi_obj=None, output_volume=100, normalize=True, whisper=False, cloud_obj=None, cloud_cfg=None):
+    """Persona + text -> (wav bytes, seconds). Raises RuntimeError when the engine is unavailable.
+    Cloud personas are used only when cloud_cfg["allow"] is true; on failure they fall back to the Windows voice when cloud_cfg["fallback"]."""
     sp = sapi_obj or sapi
-    raw = sp.speak_to_wav(text, persona.get("voice"), persona.get("rate", 0))
+    eng, cc, raw = persona.get("engine", "sapi"), cloud_cfg or {}, None
+    if eng in KEY_NAMES and cc.get("allow"):
+        try:
+            raw = (cloud_obj or cloud).synth(eng, text, persona.get("cloud_voice"), cc, persona.get("style", ""), persona.get("rate", 0))
+        except RuntimeError as e:
+            console_log.warn("cloud", str(e), dedupe_s=120)
+            if not cc.get("fallback", True):
+                raise
+    if raw is None:
+        raw = sp.speak_to_wav(text, persona.get("voice") or "", persona.get("rate", 0))
+        eng = "sapi"
     a, sr = wav_to_np(raw)
     if sr != SR:
         a = resample(a, sr / SR)
+    if eng == "elevenlabs" and persona.get("rate"):
+        a = stretch(a, 1.0 - persona["rate"] * 0.05)
     a = pitch_shift(a, persona.get("pitch", 0))
     eff = persona.get("effects", {})
     for k in FX_ORDER:
@@ -290,11 +400,16 @@ class Player:
             self.ws = None
         self._tmp = None
 
-    def play(self, wav, seconds):
-        """Blocks until finished or stopped. Returns True when played to the end."""
+    def play(self, wav, seconds, device=""):
+        """Blocks until finished or stopped. Returns True when played to the end. `device` = part of an output device name, empty = Windows default."""
         self.stopped.clear()
         if not (self.enabled and self.ws):
             return True
+        if device:
+            dev = find_device(device)
+            if dev is not None:
+                return self._play_sd(wav, seconds, dev)
+            console_log.warn("output", "output device '" + device[:40] + "' not found, using the default", dedupe_s=300)
         with self.lock:
             fd, f = tempfile.mkstemp(suffix=".wav", prefix="pvp-")
             os.close(fd)
@@ -315,8 +430,30 @@ class Player:
                 except OSError:
                     pass
 
+    def _play_sd(self, wav, seconds, dev):
+        import sounddevice as sd
+        a, sr = wav_to_np(wav)
+        with self.lock:
+            try:
+                self.playing_until = time.time() + seconds
+                sd.play(a, sr, device=dev)
+                end = time.time() + seconds + 0.2
+                while time.time() < end:
+                    if self.stopped.wait(0.05):
+                        sd.stop()
+                        return False
+                sd.wait()
+                return True
+            finally:
+                self.playing_until = 0.0
+
     def stop(self):
         self.stopped.set()
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
         if self.ws and self.enabled:
             try:
                 self.ws.PlaySound(None, self.ws.SND_PURGE)
@@ -326,3 +463,20 @@ class Player:
     @property
     def busy(self):
         return time.time() < self.playing_until
+
+
+def devices():
+    """Output devices as [{index, name}] (empty list when sounddevice is unavailable)."""
+    try:
+        import sounddevice as sd
+        return [{"index": i, "name": d["name"]} for i, d in enumerate(sd.query_devices()) if d["max_output_channels"] > 0]
+    except Exception:
+        return []
+
+
+def find_device(part):
+    part = (part or "").lower()
+    for d in devices():
+        if part and part in d["name"].lower():
+            return d["index"]
+    return None

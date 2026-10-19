@@ -238,11 +238,53 @@ def g_prestream(h, q):
     v = sapi.voices()
     items.append({"id": "voice-engine", "label": "Voice engine", "status": "pass" if v else "fail", "detail": f"{len(v)} Windows voice(s)" if v else "No Windows voices found"})
     items.append({"id": "voice-events", "label": "Event feed (Host)", "status": "pass" if feed["ok"] else "warn", "detail": "connected" if feed["ok"] else (feed["err"] or "waiting for the Host")})
+    import engine
+    used = [e for e in ("openai", "elevenlabs") if any(p["engine"] == e for p in c["personas"].values())]
+    if c["cloud"]["allow"] and used:
+        miss = [e for e in used if not engine.cloud.has_key(e)]
+        items.append({"id": "voice-cloud", "label": "Cloud voices", "status": "warn" if miss else "pass",
+                      "detail": ("key missing for " + ", ".join(miss) + ": " + ", ".join(engine.KEY_NAMES[e] for e in miss) + " (Windows voice is used instead)") if miss else "keys present"})
     items.append({"id": "voice-queue", "label": "Speech queue", "status": "pass" if len(brain.q) < c["queue"]["max_queue"] else "warn", "detail": f"{len(brain.q)} waiting"})
     bad = brain.last_error and brain.stats["errors"]
     items.append({"id": "voice-errors", "label": "Speech errors", "status": "warn" if bad else "pass", "detail": brain.last_error if bad else "none"})
     worst = "fail" if any(i["status"] == "fail" for i in items) else "warn" if any(i["status"] == "warn" for i in items) else "pass"
     return {"status": worst, "items": items}
+
+
+def g_devices(h, q):
+    import engine
+    return {"devices": engine.devices(), "current": brain.cfg["output"]["device"]}
+
+
+def p_test_cloud(h, b):
+    import engine
+    eng = b.get("engine")
+    if eng not in engine.KEY_NAMES:
+        raise ValueError("engine must be openai or elevenlabs")
+    return engine.cloud.test(eng)
+
+
+def p_timer_fire(h, b):
+    for t in brain.cfg["timers"]:
+        if t["id"] == b.get("id"):
+            return brain.fire_timer(t)
+    raise ValueError("no such timer")
+
+
+def g_integrations(h, q):
+    import engine
+    c = brain.cfg
+    items = [{"id": "voice-engine", "name": "Windows voices (SAPI)", "group": "Voice", "status": "connected" if engine.sapi.voices() else "error",
+              "detail": f"{len(engine.sapi.voices())} voice(s) installed"}]
+    for eng, label in (("openai", "OpenAI voices"), ("elevenlabs", "ElevenLabs voices")):
+        used = any(p["engine"] == eng for p in c["personas"].values())
+        has = engine.cloud.has_key(eng)
+        st = "off" if not c["cloud"]["allow"] else ("connected" if has else "needs_auth") if used else "off"
+        items.append({"id": "voice-" + eng, "name": label, "group": "Voice", "status": st,
+                      "detail": ("cloud voices are off (nothing leaves this PC)" if not c["cloud"]["allow"] else "in use" if used else "not used by any persona") + ("" if has else "; key missing: add " + engine.KEY_NAMES[eng] + " in Integrations > Key vault"),
+                      "test": "/api/test-cloud"})
+    items.append({"id": "voice-events", "name": "Host event feed", "group": "Voice", "status": "connected" if feed["ok"] else "unknown", "detail": "follows, subs and raids arrive from the Host"})
+    return {"items": items}
 
 
 def g_help(h, q):
@@ -259,9 +301,9 @@ def g_selftest(h, q):
         return {"ok": False, "error": str(e)[:200]}
 
 
-GET = {"/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
+GET = {"/api/devices": g_devices, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
        "/api/prestream": g_prestream, "/api/help": g_help, "/api/selftest": g_selftest}
-POST = {"/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
+POST = {"/api/test-cloud": p_test_cloud, "/api/timer-fire": p_timer_fire, "/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
         "/api/preview": p_preview, "/api/stop": p_stop, "/api/replay": p_replay, "/api/preset": p_preset, "/api/chat-command": p_chat_command}
 PAGES = {"/": "static/index.html"}
 OPEN_POST = {"/api/chat-command"}      # local bots (Host) with no Origin may call this one: it has its own role checks and is silent in chat

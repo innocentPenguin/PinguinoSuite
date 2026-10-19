@@ -1,4 +1,4 @@
-# Pinguino Voice (module `voice`, port 8772)
+# PenguinComm > Speak (module `voice`, port 8772; formerly "Pinguino Voice")
 
 A talking co-host. Named **personas** (voice, speed, pitch, effects, catchphrases, intro/outro, stinger sound, own wording) announce follows, subs, resubs, gifts, cheers, raids, redeems, stream online/offline and typed `!tts`. **Silent unless the master switch is ON** (default OFF). Page: nav "Voice" (module `ui`). Code: `Suite\modules\voice` (stdlib server, numpy effects, Windows SAPI via a resident PowerShell worker, winsound playback). Data: `Data\runtime\voice\` (`config.json`, `presets\`, `backups\`, `history.jsonl`).
 
@@ -22,3 +22,9 @@ Chat: Actions & Events trigger `!tts` / `!voice` + step `module_command` to `htt
 
 ## Apply
 A new module is a drop-in manifest, discovered at core start: needs a core **relaunch** (no rebuild; no core .py changed). After that, module code changes need only `Update-Module.bat voice`.
+
+## Cycle 2 additions
+- **Cloud voices (optional, OFF by default):** persona engine `openai` (voice name + optional acting `style` with gpt-4o-mini-tts) or `elevenlabs` (voice id). Needs vault keys `VOICE_OPENAI_KEY` / `VOICE_ELEVENLABS_KEY` (declared in the manifest, test buttons) and the switch "Allow cloud voices". Only the finished, secret-free sentence is sent; failures fall back to the Windows voice (switchable).
+- **Schedule:** spoken reminders (every N min, jitter, needs-activity, persona, random lines). Silent whenever the master is off/muted.
+- **Output device** (e.g. a virtual cable) via sounddevice, nicknames (how a name is said), repeat suppression, spoken voice-command confirmation (`POST /api/event {"kind":"voice_cmd","what":"skip"}`, off by default), Rehearse all, `/api/integrations`, `/api/devices`, `/api/test-cloud`, `/api/timer-fire`.
+- Page uses the Suite theme (`theme.css` tokens + live theme messages).

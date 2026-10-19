@@ -34,7 +34,7 @@ class FakePlayer:
         self.stops = 0
         self.delay = 0
 
-    def play(self, wav, secs):
+    def play(self, wav, secs, device=""):
         time.sleep(self.delay)
         self.played.append(secs)
         return True
@@ -177,11 +177,13 @@ class Pipeline(unittest.TestCase):
         b, s, pl = mk(limits={"rate_per_min": 2})
         b.cfg["events"]["follow"]["cooldown_s"] = 0
         b.cfg["queue"]["merge_similar"] = False
-        for i in range(2):
-            b.handle({"kind": "follow", "user": f"u{i}"})
+        for i, n in enumerate(("alice", "bobby")):
+            b.handle({"kind": "follow", "user": n})
             wait(pl, i + 1)
-        time.sleep(0.1)
-        self.assertEqual(b.handle({"kind": "follow", "user": "u9"})["outcome"], "rate_limited")
+        end = time.time() + 3
+        while len(b.recent) < 2 and time.time() < end:
+            time.sleep(0.02)
+        self.assertEqual(b.handle({"kind": "follow", "user": "carol"})["outcome"], "rate_limited")
 
     def test_blocked_and_profanity_skip(self):
         b, s, pl = mk(limits={"blocked_users": ["troll"], "profanity": "skip"})
@@ -279,6 +281,139 @@ class Audio(unittest.TestCase):
         wav, secs = engine.render("hi", config.defaults()["personas"]["robot"], sting="ding", sapi_obj=FakeSapi())
         self.assertGreater(secs, 0.3)
         self.assertTrue(wav.startswith(b"RIFF"))
+
+
+class Cycle2(unittest.TestCase):
+    def test_dedupe(self):
+        b, s, pl = mk()
+        b.cfg["events"]["command"].update(enabled=True, cooldown_s=0)
+        b.cfg["limits"]["user_cooldown_s"] = 0
+        b.cfg["personas"][b.cfg["default_persona"]].update(catch_chance=0, intro="", outro="")
+        r1 = b.handle({"kind": "command", "user": "a", "message": "same text"})
+        r2 = b.handle({"kind": "command", "user": "b", "message": "same text"})
+        self.assertEqual((r1["outcome"], r2["outcome"]), ("queued", "duplicate"))
+
+    def test_nickname(self):
+        b, s, pl = mk()
+        b.cfg["nicknames"] = {"xxdragon99": "Dragon"}
+        b.cfg["events"]["follow"]["templates"] = ["Hi {user}"]
+        b.cfg["personas"][b.cfg["default_persona"]].update(catch_chance=0, intro="", outro="", templates={})
+        b.handle({"kind": "follow", "user": "xxDragon99"})
+        wait(pl, 1)
+        self.assertEqual(s.calls[0][0], "Hi Dragon")
+
+    def test_voice_cmd_confirm(self):
+        b, s, pl = mk()
+        self.assertEqual(b.handle({"kind": "voice_cmd", "what": "skip"})["outcome"], "disabled")
+        b.cfg["listen"] = {"confirm_commands": True, "confirm_text": "Done: {command}."}
+        b.handle({"kind": "voice_cmd", "what": "skip"})
+        wait(pl, 1)
+        self.assertTrue(any(c[0].startswith("Done: skip") for c in s.calls))
+
+    def test_timer_fires_only_when_on(self):
+        b, s, pl = mk()
+        b.cfg["timers"] = [{"id": "w", "name": "Water", "enabled": True, "every_min": 1, "jitter_pct": 0, "min_chat": 0, "persona": "default", "priority": 3, "lines": ["Drink water {catch}"]}]
+        t0 = [1000.0]
+        b.now = lambda: t0[0]
+        b._timer_tick()
+        t0[0] += 61
+        b._timer_tick()
+        wait(pl, 1)
+        self.assertTrue(any(c[0].startswith("Drink water") for c in s.calls))
+        b.cfg["master"] = False
+        n = len(s.calls)
+        t0[0] += 61
+        b._timer_tick()
+        time.sleep(0.2)
+        self.assertEqual(len(s.calls), n)
+
+    def test_timer_normalize(self):
+        c = config.normalize({"timers": [{"every_min": 0, "lines": ["a", "", "b"], "persona": "ghost"}, "junk"]})
+        self.assertEqual(len(c["timers"]), 1)
+        self.assertEqual((c["timers"][0]["every_min"], c["timers"][0]["lines"], c["timers"][0]["persona"], c["timers"][0]["enabled"]), (1, ["a", "b"], "default", False))
+
+
+class CloudMock(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import http.server, threading, json as j
+        cls.seen = []
+        outer = cls
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                n = int(self.headers.get("content-length") or 0)
+                body = j.loads(self.rfile.read(n) or b"{}")
+                outer.seen.append((self.path, dict(self.headers), body))
+                if self.headers.get("Authorization") == "Bearer BAD":
+                    self.send_response(401); self.end_headers(); return
+                wav = engine.np_to_wav(np.sin(np.arange(6000) / 9.0).astype(np.float32) * .4, 24000)
+                if "elevenlabs" in self.headers.get("Host", "") or self.path.startswith("/v1/text-to-speech"):
+                    wav = (np.sin(np.arange(6000) / 9.0) * 8000).astype("<i2").tobytes()
+                self.send_response(200); self.send_header("Content-Length", str(len(wav))); self.end_headers(); self.wfile.write(wav)
+        cls.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        base = "http://127.0.0.1:%d" % cls.srv.server_address[1]
+        cls.base = base
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+
+    def cl(self, key="SECRETKEY123"):
+        return engine.Cloud(hosts={"openai": self.base, "elevenlabs": self.base}, key_fetch=lambda n: key)
+
+    def test_allow_false_never_calls(self):
+        self.seen.clear()
+        p = dict(config.defaults()["personas"]["captain"], engine="openai", cloud_voice="nova")
+        engine.render("hi", p, sapi_obj=FakeSapi(), cloud_obj=self.cl(), cloud_cfg={"allow": False})
+        self.assertEqual(self.seen, [])
+
+    def test_openai_and_elevenlabs(self):
+        self.seen.clear()
+        cc = {"allow": True, "fallback": False, "openai_model": "gpt-4o-mini-tts", "elevenlabs_model": "eleven_turbo_v2_5", "stability": 40}
+        p = dict(config.defaults()["personas"]["captain"], engine="openai", cloud_voice="nova", style="a pirate")
+        wav, secs = engine.render("hello", p, sapi_obj=FakeSapi(), cloud_obj=self.cl(), cloud_cfg=cc)
+        self.assertGreater(secs, 0.1)
+        path, hdr, body = self.seen[-1]
+        self.assertEqual((path, body["voice"], body["instructions"], body["response_format"]), ("/v1/audio/speech", "nova", "a pirate", "wav"))
+        self.assertEqual(hdr["Authorization"], "Bearer SECRETKEY123")
+        p2 = dict(p, engine="elevenlabs", cloud_voice="abc123")
+        engine.render("hello", p2, sapi_obj=FakeSapi(), cloud_obj=self.cl(), cloud_cfg=cc)
+        path, hdr, body = self.seen[-1]
+        self.assertTrue(path.startswith("/v1/text-to-speech/abc123?output_format=pcm_22050"))
+        self.assertEqual({k.lower(): v for k, v in hdr.items()}["xi-api-key"], "SECRETKEY123")
+
+    def test_fallback_and_no_key_leak(self):
+        sapi = FakeSapi()
+        cc = {"allow": True, "fallback": True}
+        p = dict(config.defaults()["personas"]["captain"], engine="openai")
+        engine.render("hello", p, sapi_obj=sapi, cloud_obj=self.cl("BAD"), cloud_cfg=cc)
+        self.assertEqual(len(sapi.calls), 1)
+        engine.render("hello", p, sapi_obj=sapi, cloud_obj=self.cl(None), cloud_cfg=cc)
+        self.assertEqual(len(sapi.calls), 2)
+        with self.assertRaises(RuntimeError) as ctx:
+            engine.render("hello", p, sapi_obj=sapi, cloud_obj=self.cl("BAD"), cloud_cfg={"allow": True, "fallback": False})
+        self.assertNotIn("BAD", str(ctx.exception))
+
+    def test_cloud_text_is_already_cleaned(self):
+        b, s, pl = mk()
+        b.cfg["cloud"]["allow"] = True
+        b.cloud = self.cl()
+        self.seen.clear()
+        b.cfg["personas"][b.cfg["default_persona"]]["engine"] = "openai"
+        b.handle({"kind": "say", "message": "my password is hunter2 visit https://x.com", "manual": True})
+        end = time.time() + 5
+        while not self.seen and time.time() < end:
+            time.sleep(0.05)
+        self.assertTrue(self.seen)
+        sent = self.seen[-1][2]["input"]
+        self.assertNotIn("hunter2", sent)
+        self.assertNotIn("x.com", sent)
+
+    def test_key_test(self):
+        self.assertFalse(engine.Cloud(hosts={"openai": "http://127.0.0.1:1", "elevenlabs": "http://127.0.0.1:1"}, key_fetch=lambda n: None).test("openai")["ok"])
 
 
 if __name__ == "__main__":

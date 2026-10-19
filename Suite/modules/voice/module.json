@@ -1,7 +1,7 @@
 {
   "id": "voice",
-  "name": "PinguinoVoice",
-  "desc": "Talking co-host: named voice personas announce follows, subs, raids and cheers with your wording, limits and quiet hours. Silent until you switch it on.",
+  "name": "PenguinComm Speak",
+  "desc": "The bot's voice: speaks alerts and chat commands out loud with named personas, your wording, limits and quiet hours. Silent until you switch it on.",
   "cmd": [
     "{py}",
     "server.py"
@@ -11,20 +11,74 @@
   "url": "http://127.0.0.1:8772",
   "health": "/api/status",
   "prestream": "/api/prestream",
+  "integrations": "/api/integrations",
   "commands": [
     "tts",
     "voice"
   ],
+  "secrets": [
+    {
+      "name": "VOICE_OPENAI_KEY",
+      "label": "OpenAI API key (cloud voices, optional)",
+      "required": false,
+      "test": "/api/test-cloud",
+      "help": {
+        "title": "VOICE_OPENAI_KEY",
+        "summary": "OpenAI API key. Optional: only needed for cloud voices.",
+        "steps": [
+          "Create an API key in your OpenAI account.",
+          "Paste it in Integrations > Key vault as VOICE_OPENAI_KEY with Set, then press Test.",
+          "Turn on 'Allow cloud voices' in Speak and set a persona's engine.",
+          "The key is never shown, logged or spoken."
+        ],
+        "link": {
+          "label": "Get a key",
+          "url": "https://platform.openai.com/api-keys"
+        },
+        "fix": {
+          "label": "Enter the key",
+          "route": "integrations",
+          "focus": "VOICE_OPENAI_KEY"
+        }
+      }
+    },
+    {
+      "name": "VOICE_ELEVENLABS_KEY",
+      "label": "ElevenLabs API key (cloud voices, optional)",
+      "required": false,
+      "test": "/api/test-cloud",
+      "help": {
+        "title": "VOICE_ELEVENLABS_KEY",
+        "summary": "ElevenLabs API key. Optional: only needed for cloud voices.",
+        "steps": [
+          "Create an API key in your ElevenLabs account.",
+          "Paste it in Integrations > Key vault as VOICE_ELEVENLABS_KEY with Set, then press Test.",
+          "Turn on 'Allow cloud voices' in Speak and set a persona's engine.",
+          "The key is never shown, logged or spoken."
+        ],
+        "link": {
+          "label": "Get a key",
+          "url": "https://elevenlabs.io/app/settings/api-keys"
+        },
+        "fix": {
+          "label": "Enter the key",
+          "route": "integrations",
+          "focus": "VOICE_ELEVENLABS_KEY"
+        }
+      }
+    }
+  ],
   "ui": {
-    "nav": "Voice",
-    "icon": "🐧",
-    "section": "Modules",
+    "nav": "Speak",
+    "icon": "🗣",
+    "section": "PenguinComm",
     "path": "/",
-    "order": 15
+    "order": 16
   },
   "defaults": {
     "enabled": true,
     "start_with_suite": true,
+    "always_start": true,
     "react_to_live": false
   },
   "help": {
@@ -92,6 +146,25 @@
         "route": "m:voice"
       }
     },
+    "voice-cloud": {
+      "title": "Cloud voices",
+      "summary": "Optional realistic voices from OpenAI or ElevenLabs. Off by default: no text leaves this PC until you allow it.",
+      "steps": [
+        "Open Speak > Personas and set a persona's engine to openai or elevenlabs, with a cloud voice.",
+        "Add the key in Integrations > Key vault: VOICE_OPENAI_KEY or VOICE_ELEVENLABS_KEY, then press Test.",
+        "Turn on 'Allow cloud voices' in Speak > Limits & queue > Cloud voices.",
+        "Only the finished sentence (secrets already removed) is sent. If the cloud fails, the Windows voice speaks instead (can be turned off)."
+      ],
+      "link": {
+        "label": "OpenAI API keys",
+        "url": "https://platform.openai.com/api-keys"
+      },
+      "fix": {
+        "label": "Enter the key",
+        "route": "integrations",
+        "focus": "VOICE_OPENAI_KEY"
+      }
+    },
     "quiet": {
       "title": "Quiet hours",
       "summary": "Voice is intentionally muted or whispering because of the daily quiet window or a temporary mute.",
@@ -105,8 +178,8 @@
       }
     },
     "_module": {
-      "title": "Pinguino Voice",
-      "summary": "A talking co-host: named voice personas with catchphrases announce follows, subs, raids, cheers and chat commands. Silent unless you switch it on.",
+      "title": "PenguinComm Speak (Pinguino Voice)",
+      "summary": "The bot's speaking voice (PenguinComm > Speak; Listen is the other half, it hears you). A talking co-host: named voice personas with catchphrases announce follows, subs, raids, cheers and chat commands. Silent unless you switch it on.",
       "steps": [
         "Open Voice. The master switch is OFF: nothing is spoken.",
         "Personas tab: tweak a persona (voice, speed, pitch, effects) and press Preview.",

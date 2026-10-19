@@ -92,6 +92,22 @@ HELP = {
     "theme.accent": "The accent colour of this page.",
     "theme.mode": "Dark or light look for this page.",
     "history.keep": "How many spoken lines to remember for the history list and 'say it again'.",
+    "persona.engine": "Which engine speaks this persona: 'sapi' (Windows, offline), 'openai' or 'elevenlabs' (cloud, needs the switch under Cloud voices and a key in the vault).",
+    "persona.cloud_voice": "The cloud voice: OpenAI name (alloy, ash, coral, echo, fable, nova, onyx, sage, shimmer) or an ElevenLabs voice id.",
+    "persona.style": "OpenAI only: how to act, e.g. 'an excited pirate captain, loud and cheerful'. Gives the voice real attitude.",
+    "cloud.allow": "Master permission for cloud voices. OFF = no text ever leaves this PC. ON = the (already cleaned, secret-free) sentence is sent to the engine you chose for that persona.",
+    "cloud.fallback": "If a cloud voice fails (no key, offline, error) speak with the Windows voice instead of staying silent.",
+    "cloud.openai_model": "OpenAI speech model. gpt-4o-mini-tts understands 'style'; tts-1 is cheaper.",
+    "cloud.elevenlabs_model": "ElevenLabs model, e.g. eleven_turbo_v2_5 (fast) or eleven_multilingual_v2 (richer).",
+    "cloud.stability": "ElevenLabs stability 0-100: low = expressive, high = steady.",
+    "output.device": "Which speakers/virtual cable to play on. Empty = the Windows default. Type part of a device name (e.g. 'CABLE' or 'Voicemeeter').",
+    "limits.dedupe_s": "Don't say the same text twice within this many seconds (stops chat copy-paste spam). 0 = off.",
+    "nicknames": "How to say a person's name: 'xxdragon99' -> 'Dragon'. One per row, left = their name, right = how it is said.",
+    "timers": "Spoken reminders on a schedule (hydrate, follow, socials). Each picks a persona and a random line, only while the master switch is on.",
+    "timer.every_min": "Minutes between announcements.",
+    "timer.jitter_pct": "Randomise the gap by up to this % so it never sounds like a clock.",
+    "timer.lines": "What it says, one variant per row (random). {catch} and {time} work.",
+    "timer.min_chat": "Only fires when at least this many events/lines were handled since the last one (0 = always).",
     "tts.enabled": "Lets people type !tts <text> in chat to have it spoken (the Host runs the command; set it up on Actions & Events). Off by default.",
     "tts.min_role": "Lowest role allowed to use !tts: viewer, sub, vip, mod or broadcaster.",
     "listen.confirm_commands": "When a voice command is heard and fires, say a tiny confirmation. Voice commands stay silent in chat either way.",
@@ -114,7 +130,13 @@ STATUS_HELP = {
               "steps": ["Raise the rate limit and merge similar events in Limits & Queue.", "Panic stop empties the queue."], "fix": {"label": "Open Voice", "route": "m:voice"}},
     "quiet": {"title": "Quiet hours", "summary": "Voice is intentionally muted or whispering because of the daily quiet window or a temporary mute.",
               "steps": ["Change the window in Limits & Queue > Quiet hours.", "Press Unmute to cancel a temporary mute."], "fix": {"label": "Open Voice", "route": "m:voice"}},
-    "_module": {"title": "Pinguino Voice", "summary": "A talking co-host: named voice personas with catchphrases announce follows, subs, raids, cheers and chat commands. Silent unless you switch it on.",
+    "cloud": {"title": "Cloud voices", "summary": "Optional realistic voices from OpenAI or ElevenLabs. Off by default: no text leaves this PC until you allow it.",
+              "steps": ["Open Speak > Personas and set a persona's engine to openai or elevenlabs, with a cloud voice.",
+                        "Add the key in Integrations > Key vault: VOICE_OPENAI_KEY or VOICE_ELEVENLABS_KEY, then press Test.",
+                        "Turn on 'Allow cloud voices' in Speak > Limits & queue > Cloud voices.",
+                        "Only the finished sentence (secrets already removed) is sent. If the cloud fails, the Windows voice speaks instead (can be turned off)."],
+              "link": {"label": "OpenAI API keys", "url": "https://platform.openai.com/api-keys"}, "fix": {"label": "Enter the key", "route": "integrations", "focus": "VOICE_OPENAI_KEY"}},
+    "_module": {"title": "PenguinComm Speak (Pinguino Voice)", "summary": "The bot's speaking voice (PenguinComm > Speak; Listen is the other half, it hears you). A talking co-host: named voice personas with catchphrases announce follows, subs, raids, cheers and chat commands. Silent unless you switch it on.",
                 "steps": ["Open Voice. The master switch is OFF: nothing is spoken.", "Personas tab: tweak a persona (voice, speed, pitch, effects) and press Preview.",
                          "Events tab: choose who announces each event and what they say.", "Limits & Queue: set profanity, length and rate limits, quiet hours.",
                          "Presets: save your whole setup, restore it, share or import one.", "Flip the master switch ON when happy. Panic stop silences everything."],
@@ -122,8 +144,8 @@ STATUS_HELP = {
 }
 
 
-def persona(name, emoji, mood, voice, rate, pitch, volume, effects, catch, chance, stinger="none", intro="", outro="", templates=None):
-    return {"name": name, "emoji": emoji, "mood": mood, "voice": voice, "rate": rate, "pitch": pitch, "volume": volume,
+def persona(name, emoji, mood, voice, rate, pitch, volume, effects, catch, chance, stinger="none", intro="", outro="", templates=None, style=""):
+    return {"engine": "sapi", "cloud_voice": "", "style": style, "name": name, "emoji": emoji, "mood": mood, "voice": voice, "rate": rate, "pitch": pitch, "volume": volume,
             "effects": {k: effects.get(k, 0) for k in EFFECTS}, "catchphrases": catch, "catch_chance": chance,
             "stinger": stinger, "intro": intro, "outro": outro, "templates": templates or {}}
 
@@ -201,11 +223,14 @@ def defaults():
         "roles": {r: "" for r in ROLES},
         "platforms": {p: "" for p in PLATFORMS},
         "users": {},
+        "nicknames": {},
+        "cloud": {"allow": False, "fallback": True, "openai_model": "gpt-4o-mini-tts", "elevenlabs_model": "eleven_turbo_v2_5", "stability": 50},
+        "timers": [],
         "limits": {"max_chars": 160, "too_long": "cut", "rate_per_min": 12, "user_cooldown_s": 20, "profanity": "mask", "bad_words": [], "block_links": True,
-                   "strip_emoji": True, "max_repeat": 3, "blocked_users": [], "clean_names": True},
+                   "strip_emoji": True, "max_repeat": 3, "blocked_users": [], "clean_names": True, "dedupe_s": 20},
         "queue": {"mode": "queue", "max_queue": 8, "max_age_s": 45, "gap_ms": 350, "interrupt_min_priority": 8, "merge_similar": True},
         "quiet": {"enabled": False, "start": "23:00", "end": "07:00", "mode": "mute"},
-        "output": {"volume": 80, "normalize": True},
+        "output": {"volume": 80, "normalize": True, "device": ""},
         "pronounce": {"innocentpenguin": "innocent penguin", "pinguino": "ping win o"},
         "theme": {"accent": "#ff8a1f", "mode": "dark"},
         "history": {"keep": 50},
@@ -259,6 +284,7 @@ def normalize_persona(p, base=None):
         "volume": _i(p.get("volume", b["volume"]), 0, 100, 90),
         "effects": {k: _i(eff.get(k, b["effects"].get(k, 0)), 0, 100, 0) for k in EFFECTS},
         "catchphrases": _list(p.get("catchphrases", b["catchphrases"]), 30, 100), "catch_chance": _i(p.get("catch_chance", b["catch_chance"]), 0, 100, 0),
+        "engine": p.get("engine") if p.get("engine") in ("sapi", "openai", "elevenlabs") else "sapi", "cloud_voice": _s(p.get("cloud_voice", ""), 80), "style": _s(p.get("style", ""), 200),
         "stinger": p.get("stinger") if p.get("stinger") in STINGERS else "none", "intro": _s(p.get("intro", ""), 100), "outro": _s(p.get("outro", ""), 100),
         "templates": {k: _list(v, 20, 240) for k, v in tpl.items() if k in EVENTS},
     }
@@ -316,6 +342,7 @@ def normalize(raw):
     L["max_repeat"] = _i(rl.get("max_repeat", L["max_repeat"]), 0, 20, 3)
     L["blocked_users"] = [w.lower() for w in _list(rl.get("blocked_users", []), 500, 40)]
     L["clean_names"] = bool(rl.get("clean_names", True))
+    L["dedupe_s"] = _i(rl.get("dedupe_s", L["dedupe_s"]), 0, 3600, 20)
     Q, rq = out["queue"], raw.get("queue") if isinstance(raw.get("queue"), dict) else {}
     Q["mode"] = rq.get("mode") if rq.get("mode") in ("queue", "interrupt", "drop_new") else "queue"
     Q["max_queue"] = _i(rq.get("max_queue", Q["max_queue"]), 1, 100, 8)
@@ -330,6 +357,20 @@ def normalize(raw):
     o, ro = out["output"], raw.get("output") if isinstance(raw.get("output"), dict) else {}
     o["volume"] = _i(ro.get("volume", o["volume"]), 0, 100, 80)
     o["normalize"] = bool(ro.get("normalize", True))
+    o["device"] = _s(ro.get("device", ""), 80)
+    rc = raw.get("cloud") if isinstance(raw.get("cloud"), dict) else {}
+    out["cloud"] = {"allow": bool(rc.get("allow", False)), "fallback": bool(rc.get("fallback", True)), "openai_model": _s(rc.get("openai_model", "gpt-4o-mini-tts"), 40) or "gpt-4o-mini-tts",
+                    "elevenlabs_model": _s(rc.get("elevenlabs_model", "eleven_turbo_v2_5"), 40) or "eleven_turbo_v2_5", "stability": _i(rc.get("stability", 50), 0, 100, 50)}
+    if isinstance(raw.get("nicknames"), dict):
+        out["nicknames"] = {_s(k, 40).lower(): _s(v, 40) for k, v in list(raw["nicknames"].items())[:300] if _s(k, 40) and _s(v, 40)}
+    out["timers"] = []
+    for i, t in enumerate((raw.get("timers") if isinstance(raw.get("timers"), list) else [])[:30]):
+        if not isinstance(t, dict):
+            continue
+        pt = _pid(t.get("persona", ""))
+        out["timers"].append({"id": _pid(t.get("id") or f"t{i}") or f"t{i}", "name": _s(t.get("name", "Reminder"), 40) or "Reminder", "enabled": bool(t.get("enabled", False)),
+                              "every_min": _i(t.get("every_min", 30), 1, 1440, 30), "jitter_pct": _i(t.get("jitter_pct", 20), 0, 90, 20), "min_chat": _i(t.get("min_chat", 0), 0, 10**6, 0),
+                              "persona": pt if pt in out["personas"] else "default", "priority": _i(t.get("priority", 3), 1, 9, 3), "lines": _list(t.get("lines", []), 30, 240)})
     if isinstance(raw.get("pronounce"), dict):
         out["pronounce"] = {_s(k, 40).lower(): _s(v, 60) for k, v in list(raw["pronounce"].items())[:200] if _s(k, 40) and _s(v, 60)}
     t, rt = out["theme"], raw.get("theme") if isinstance(raw.get("theme"), dict) else {}

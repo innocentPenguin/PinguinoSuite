@@ -16,10 +16,14 @@ import textproc
 
 
 class Brain:
-    def __init__(self, player=None, sapi=None, now=time.time, rng=None):
+    def __init__(self, player=None, sapi=None, now=time.time, rng=None, cloud=None):
         self.cfg = cfg.load()
         self.player = player or engine.Player(enabled=True)
         self.sapi = sapi or engine.sapi
+        self.cloud = cloud or engine.cloud
+        self.timer_next = {}
+        self.activity = 0                 # events handled since start (timers can require some)
+        self.timer_seen = {}
         self.now = now
         self.rng = rng or random.Random()
         self.q = []                       # waiting items
@@ -29,11 +33,13 @@ class Brain:
         self.stats = {"spoken": 0, "dropped": 0, "blocked": 0, "errors": 0}
         self.recent = deque(maxlen=400)   # timestamps of spoken lines (rate limit)
         self.last_kind = {}               # event -> time (cooldown)
+        self.last_text = {}
         self.last_user = {}               # user -> time
         self.last_error = ""
         self.stop_flag = False
         self.worker = threading.Thread(target=self._run, daemon=True)
         self.worker.start()
+        threading.Thread(target=self._timers, daemon=True).start()
 
     # ------------------------------------------------------------ config
     def set_config(self, c):
@@ -99,8 +105,12 @@ class Brain:
         kind = ev.get("kind") or "chat"
         user = str(ev.get("user") or "")
         base = {"kind": kind, "user": user}
-        if kind not in c["events"] and kind != "say":
+        if kind not in c["events"] and kind not in ("say", "timer"):
             return self._log({**base, "outcome": "ignored", "detail": "unknown event kind"})
+        if kind == "voice_cmd":                                    # spoken confirmation of a fired voice command: its own switch under Words
+            if not c["listen"]["confirm_commands"]:
+                return self._log({**base, "outcome": "disabled", "detail": "spoken voice-command confirmation is off"})
+            ev = {**ev, "kind": "voice_cmd", "manual": True, "_tpl": c["listen"]["confirm_text"]}
         ecfg = c["events"].get(kind) or {**cfg.EVENT_DEFAULTS["test"], "persona": "default", "templates": ["{message}"], "stinger": "", "only_live": False}
         st = self.state()
         manual = bool(ev.get("manual"))                         # a typed !tts or a Say button still obeys master/mute/quiet, but not event switches
@@ -115,6 +125,7 @@ class Brain:
         if ecfg.get("only_live") and ev.get("live") is False:
             return self._log({**base, "outcome": "not_live", "detail": "stream is not live"})
         L = c["limits"]
+        self.activity += 1
         if user.lower() in L["blocked_users"] and ev.get("message"):
             ev = {**ev, "message": ""}
             if kind in ("chat", "command", "say"):
@@ -140,23 +151,23 @@ class Brain:
         persona = c["personas"][pid]
         # wording
         msg, why = "", []
-        if ecfg["read_message"] or kind in ("say", "chat", "command"):
+        if ecfg["read_message"] or kind in ("say", "timer", "chat", "command"):
             raw = ev.get("message") if ev.get("message") is not None else ev.get("text")
             if raw:
                 msg, why = textproc.clean_message(raw, c)
                 if msg is None:
                     self.stats["blocked"] += 1
                     return self._log({**base, "outcome": "blocked", "detail": ", ".join(why)})
-        if kind == "say":
+        if kind in ("say", "timer"):
             text = msg
         else:
             opts = persona["templates"].get(kind) or ecfg["templates"]
-            tpl = textproc.pick_template(opts, amount, self.rng) or textproc.pick_template(ecfg["templates"], amount, self.rng)
+            tpl = ev.get("_tpl") or textproc.pick_template(opts, amount, self.rng) or textproc.pick_template(ecfg["templates"], amount, self.rng)
             if kind == "command" and not persona["templates"].get(kind):
                 tpl = "{message}"
             if not ecfg["read_message"] and kind not in ("chat", "command"):
                 tpl = tpl.replace("{message}", "")
-            vars_ = {"user": textproc.clean_name(user, L["clean_names"]) or "someone", "amount": amount, "viewers": ev.get("viewers") or amount, "bits": ev.get("bits") or amount,
+            vars_ = {"user": c["nicknames"].get(user.lower()) or textproc.clean_name(user, L["clean_names"]) or "someone", "command": ev.get("what") or "", "amount": amount, "viewers": ev.get("viewers") or amount, "bits": ev.get("bits") or amount,
                      "tier": ev.get("tier") or 1, "what": textproc.scrub_secrets(str(ev.get("what") or ""))[0], "message": msg}
             text = textproc.render(tpl, vars_, persona, self.rng)
             if "{catch}" not in tpl and persona["catchphrases"] and self.rng.random() * 100 < persona["catch_chance"]:
@@ -170,6 +181,13 @@ class Brain:
             return self._log({**base, "outcome": "too_long", "detail": "skipped: over the length limit"})
         if not any(ch.isalnum() for ch in text):
             return self._log({**base, "outcome": "empty", "detail": "nothing to say"})
+        if L["dedupe_s"] and not manual:
+            key = text.lower()
+            if t - self.last_text.get(key, 0) < L["dedupe_s"]:
+                return self._log({**base, "outcome": "duplicate", "detail": "same text was just spoken", "text": text})
+            self.last_text[key] = t
+            if len(self.last_text) > 500:
+                self.last_text = {k: v for k, v in self.last_text.items() if t - v < L["dedupe_s"]}
         prio = int(ev.get("priority") or ecfg["priority"])
         item = {"id": f"{int(t * 1000)}-{self.rng.randrange(10**4)}", "kind": kind, "user": user, "text": text, "persona": pid, "priority": prio, "t": t,
                 "sting": (ecfg.get("stinger") or persona["stinger"]), "whisper": st == "quiet-whisper", "notes": why + why2, "names": [user] if user else []}
@@ -235,10 +253,10 @@ class Brain:
                 c = self.cfg
                 persona = c["personas"][item["persona"]]
                 wav, secs = engine.render(item["text"], persona, sting=item["sting"], sapi_obj=self.sapi, output_volume=c["output"]["volume"],
-                                          normalize=c["output"]["normalize"], whisper=item["whisper"])
+                                          normalize=c["output"]["normalize"], whisper=item["whisper"], cloud_obj=self.cloud, cloud_cfg=c["cloud"])
                 if self.state() in ("off", "muted", "quiet-mute"):      # switched off while synthesising
                     raise _Silenced()
-                done = self.player.play(wav, secs)
+                done = self.player.play(wav, secs, c["output"]["device"])
                 self.stats["spoken"] += 1
                 self.recent.append(self.now())
                 self._log({"kind": item["kind"], "user": item["user"], "outcome": "spoken" if done else "interrupted", "text": item["text"], "persona": item["persona"],
@@ -253,6 +271,47 @@ class Brain:
                 time.sleep(1)
             finally:
                 self.current = None
+
+    # ------------------------------------------------------------ scheduled announcements
+    def _timers(self):
+        while True:
+            time.sleep(1.0)
+            try:
+                self._timer_tick()
+            except Exception as e:
+                console_log.warn("timers", f"timer tick failed: {str(e)[:100]}", dedupe_s=300)
+
+    def _timer_tick(self):
+        c, t = self.cfg, self.now()
+        live = {x["id"] for x in c["timers"]}
+        for k in [k for k in self.timer_next if k not in live]:
+            self.timer_next.pop(k, None)
+        for tm in c["timers"]:
+            if not tm["enabled"] or not tm["lines"]:
+                self.timer_next.pop(tm["id"], None)
+                continue
+            nxt = self.timer_next.get(tm["id"])
+            if nxt is None:
+                self.timer_next[tm["id"]] = t + self._gap(tm)
+                continue
+            if t < nxt:
+                continue
+            self.timer_next[tm["id"]] = t + self._gap(tm)
+            if self.state() != "on" and not self.state().startswith("quiet-whisper"):
+                continue                                           # silent states: do not even log every minute
+            if tm["min_chat"] and self.activity - self.timer_seen.get(tm["id"], 0) < tm["min_chat"]:
+                continue
+            self.timer_seen[tm["id"]] = self.activity
+            self.fire_timer(tm)
+
+    def _gap(self, tm):
+        g = tm["every_min"] * 60
+        return g * (1 + self.rng.uniform(-tm["jitter_pct"], tm["jitter_pct"]) / 100.0)
+
+    def fire_timer(self, tm):
+        pid = tm["persona"] if tm["persona"] in self.cfg["personas"] else self.cfg["default_persona"]
+        line = self.rng.choice(tm["lines"])
+        return self.handle({"kind": "timer", "user": "", "message": textproc.render(line, {}, self.cfg["personas"][pid], self.rng), "persona": pid, "priority": tm["priority"], "manual": True, "_raw": True})
 
     # ------------------------------------------------------------ controls
     def panic(self):
@@ -270,7 +329,7 @@ class Brain:
         text, _ = textproc.finish(text or "", c) if text else (None, [])
         if not text:
             raise ValueError("nothing to say after the safety filters")
-        wav, secs = engine.render(text, persona, sting=persona["stinger"], sapi_obj=self.sapi, output_volume=c["output"]["volume"], normalize=c["output"]["normalize"])
+        wav, secs = engine.render(text, persona, sting=persona["stinger"], sapi_obj=self.sapi, output_volume=c["output"]["volume"], normalize=c["output"]["normalize"], cloud_obj=self.cloud, cloud_cfg=c["cloud"])
         return wav, text
 
     def replay(self):
