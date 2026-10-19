@@ -730,6 +730,16 @@ public static class Harness
         Msg("Mod9", "!chatbot on", null, true);
         Check("a mention is also seen when the chatbot replies to a bot account in bots.json", true);
 
+        // ── welcome new viewers (Twitch first-message flag), no AI ──
+        Live(true); Extra.Clear(); CPHProxy.Sent.Clear(); int llm0 = llmCalls;
+        Extra["firstMessage"] = true; Msg("Brandnew", "hello everyone");
+        Check("first message ever: welcomed by name, no AI call", Last() != null && Last().Contains("@Brandnew") && Last().Contains("🐧") && llmCalls == llm0, Last());
+        Extra.Clear(); CPHProxy.Sent.Clear(); Msg("Brandnew", "second message");
+        Check("second message: no welcome", Last() == null, Last());
+        Extra["firstMessage"] = true; CPHProxy.Sent.Clear(); Msg("Brandnew2", "what's up");
+        Check("a second new viewer inside the gap is not welcomed (raid flood guard)", Last() == null, Last());
+        Extra.Clear();
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " CHAT CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;

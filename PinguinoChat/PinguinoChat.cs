@@ -315,6 +315,8 @@ public class CPHInline
         public int GlobalCooldownSec { get; set; } = 1;
         public int MaxConversations { get; set; } = 5;            // it keeps up with at most this many VIEWERS at once (people who are talking to each other count as one thread, see Threads below)
         public int FocusSeconds { get; set; } = 90;               // a conversation counts as over after this much silence
+        public bool WelcomeNewViewers { get; set; } = true;       // greet someone on their first ever message here (Twitch's own first-message flag; costs no AI call)
+        public int WelcomeGapSec { get; set; } = 8;               // never more than one welcome per this many seconds (a raid brings dozens of new names)
         public int MaxMentionsPerMinute { get; set; } = 6;        // more than this from one viewer = spam: ignored for 2 minutes without calling the AI
         public double RandomChance { get; set; } = 0.001;         // 0.1% per chat message
         public int RandomMinGapSec { get; set; } = 600;           // never chimes in unprompted more than once per 10 min
@@ -415,7 +417,12 @@ public class CPHInline
     static readonly List<ChatLine> _buf = new List<ChatLine>();
     static readonly Dictionary<string, List<Turn>> _turns = new Dictionary<string, List<Turn>>();   // login -> recent exchanges
     static readonly Dictionary<string, long> _userCd = new Dictionary<string, long>();
-    static long _globalCd, _lastRandom;
+    static long _globalCd, _lastRandom, _lastWelcome;
+    static readonly string[] WelcomeLines = {
+        "welcome to the stream! 🐧 Glad you stopped by. Say hi, and ask me or HelperPinguino if you need anything.",
+        "welcome in, first time here? 🐧 Make yourself at home! Ask HelperPinguino how to join the games or the Minecraft server.",
+        "hey, welcome to the chat! 🐧 Hang out, ask questions anytime, and say !discord if you want the community.",
+        "welcome to the igloo! 🐧 Great to see a new face. Type anything, we don't bite." };
     static readonly Dictionary<string, long> _focusSeq = new Dictionary<string, long>();         // login -> running number of when they last joined / answered (tie-break for _focus)
     static long _focusN;
     static readonly Dictionary<string, long> _focus = new Dictionary<string, long>();          // login -> when the bot last replied: its current conversations
@@ -573,7 +580,7 @@ public class CPHInline
             Mod = isMod || role >= 3, Broadcaster = isCaster || role >= 4, Sub = isSub, Vip = isVip, FirstMessage = first
         };
 
-        bool accept = false;
+        bool accept = false, welcome = false;     // welcome: Twitch says this is their very first message in the channel
         lock (_lock)
         {
             string cmd = text.StartsWith("!") ? text.Split(' ')[0].ToLower() : "";
@@ -608,6 +615,8 @@ public class CPHInline
             bool mention = IsMention(text) || (!string.IsNullOrEmpty(replyTo) && (replyTo.ToLower() == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(replyTo)));
             // A lobby / join / register question belongs to the helper: when the router has the helper next in line, hand it over without answering.
             if (mention && PgRouted() && PgNextHas("helper") && !PgNoDefer() && PgHelperTopic(text)) { _pgDefer = true; return; }
+            if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
+            { welcome = true; _lastWelcome = Now(); }
             if (mention)
             {
                 bool quiet = Hushed(login) || Flooding(login);                    // told to be quiet / a real flood: stays ignored on purpose
@@ -618,6 +627,7 @@ public class CPHInline
                      && Now() - _lastRandom >= _cfg.RandomMinGapSec && TakeCooldown(login, true))
             { cx.Random = true; _lastRandom = Now(); accept = true; }
         }
+        if (welcome) Say(cx, WelcomeLines[_rng.Next(WelcomeLines.Length)]);
         if (!accept) return;
         if (_inline) Respond(cx);
         else { var t = new Thread(() => { try { Respond(cx); } catch (Exception ex) { CPH.LogError("[Chat] reply failed: " + ex); } }); t.IsBackground = true; t.Start(); }
