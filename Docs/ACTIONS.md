@@ -36,6 +36,13 @@ Button "Import from Streamer.bot" reads `actions.json`, `commands.json`, `twitch
 `GET /api/automations` · `POST /api/automations {doc}` · `POST /api/automations/test {id, dry}` · `POST /api/automations/fire {hotkey}` · `GET /api/automations/log?n=` · `POST /api/automations/import {mode: preview|merge, path?}`. Tests: `python Tools/test-host-auto.py`.
 
 ## Twitch steps and new triggers (Streamer.bot replacement)
-Steps (use the streamer sign-in; sign the streamer in again for the new permissions `channel:manage:broadcast`, `clips:edit`, `channel:read:ads`, `moderator:manage:shoutouts`): `set_title` {title, game} · `create_clip` (sets `{clip.url}`) · `ad_schedule` (sets `{adIn}`, `{adPrerollFree}`, `{adPrerollSec}`, `{adLengthSec}`, `{adSnoozes}`) · `shoutout` {user, native} (sets `{shoutoutUser}`, `{shoutoutGame}`, `{shoutoutChannel}`; native = also Twitch's own shoutout, spaced 2 minutes apart) · `append_file` {file, text} (only inside `Data\runtime\files`).
-Triggers: `raid_out` (you raid someone; `{target}`, `{viewers}`), `ban` (`{user}` = banned viewer, `{moderator}`, `{reason}`, `{permanent}`). Gift events now carry `{total}`.
-Presets: 18 disabled actions in the group "Streamer.bot replacement"; see `STREAMERBOT_REPLACEMENT.md` section 9. Tests: `python Tools/test-host-sbreplace.py`.
+Sign the streamer in again for the permissions `clips:edit`, `channel:read:ads`, `moderator:manage:shoutouts`, `channel:moderate`.
+Steps: `create_clip` {title, duration} (sets `{clip.url}`) · `obs_replay_save` (saves the OBS replay buffer; sets `{replay.path}`; says so honestly if the buffer is not running) · `ad_schedule` (sets `{adIn}`, `{adPrerollFree}`, `{adPrerollSec}`, `{adLengthSec}`, `{adSnoozes}`) · `channel_info` (sets `{game}`, `{title}`) · `shoutout_queue` {user, by, auto} (queue with Twitch card + pronouns, see `shout_settings.json`) · `latest_say` (sets `{latest.line}`) · `append_file` {file, text} (only inside `Data\runtime\files`).
+Triggers: `raid_out` (`{target}`, `{viewers}`), `ban` (`{user}` = banned viewer, `{moderator}`, `{reason}`, `{permanent}`). Gift events carry `{total}`.
+Presets: group "Streamer.bot replacement", 13 ON and 5 OFF; see `STREAMERBOT_REPLACEMENT.md` section 9.
+
+## Activity and latest feeds (Host)
+- `GET /api/activity?since=<seq>&limit=100&type=follow,sub` -> `{ok, seq, items:[{seq, ts (unix s), type, user, amount?, tier?, message?, detail}]}`, oldest first, only items with seq > since. Types: `follow sub resub gift cheer raid redeem ban clip replay shoutout`. Poll with `since=<last seq>`. Kept in `latest.json` (last 500).
+- `GET /api/latest` -> newest entry of each kind (+ last 20); OBS overlay `http://127.0.0.1:8770/overlay/latest?types=follow,sub,cheer,raid&color=ff9900&size=64&font=bahnschrift&rotate=5`; `latest_settings.json {"TextSource": "<OBS text source>"}` also writes the newest line there.
+- `GET /api/shoutouts` (queue + recent) · `POST /api/shoutouts {"user":"name","by":"who"}`.
+Tests: `python Tools/test-host-sbreplace.py` (sim), `python Tools/test-host-obs.py [--start-replay]` (real OBS: popup, ban alert, replay buffer).

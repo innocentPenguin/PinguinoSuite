@@ -2,7 +2,7 @@
   {
     "id": "listen",
     "name": "PinguinoListen",
-    "desc": "Listens to your mic, transcribes, learns how you talk. Listen-only.",
+    "desc": "Listens to your microphone (you), transcribes, learns how you talk. Always on, live or not. Listen-only.",
     "cwd": "modules/listen",
     "cmd": [
       "{py}",
@@ -21,7 +21,8 @@
     "defaults": {
       "enabled": true,
       "start_with_suite": true,
-      "react_to_live": true
+      "always_start": true,
+      "react_to_live": false
     },
     "ui": {
       "nav": "Listen",
@@ -29,6 +30,9 @@
       "section": "Modules",
       "path": "/",
       "order": 10
+    },
+    "on_start": {
+      "post": "/api/live/auto"
     }
   },
   {
@@ -764,7 +768,8 @@
           "Open Actions & Events and press New action. Add a trigger and steps.",
           "Press Test for a dry run first; it never sends chat or changes OBS. Run for real asks first.",
           "Presets and imports start disabled: review them and enable what you want.",
-          "Song request actions stay off until you turn them on."
+          "Song request actions stay off until you turn them on.",
+          "Ready-made, switched-on actions: thank-you alerts, !clip, !preroll, !whyad, !shout, !latest, ban alert. Streamer.bot copies that are still off: stream on/off lines, raid out, End Stream and Suggestion rewards."
         ],
         "fix": {
           "label": "Open Actions & Events",
@@ -796,7 +801,36 @@
           "label": "Open the Host page",
           "route": "m:host"
         }
+      },
+      "replay": {
+        "title": "OBS replay buffer (for !clip)",
+        "summary": "!clip saves the last seconds from the OBS replay buffer, so the buffer has to be running during the stream.",
+        "steps": [
+          "In OBS open Settings > Output > Replay Buffer and tick Enable Replay Buffer (set the length, e.g. 60 s).",
+          "Before streaming press Controls > Start Replay Buffer (or add it to your stream-start routine).",
+          "Test with !clip: the Host log says 'replay saved' with the file name, or tells you the buffer was not running.",
+          "Files land in your OBS recording folder as 'replay' files."
+        ],
+        "fix": {
+          "label": "Open the Console",
+          "route": "console"
+        }
+      },
+      "activity": {
+        "title": "Activity feed",
+        "summary": "One list of what happened on stream, newest last.",
+        "steps": [
+          "follow, sub, resub: a viewer followed or subscribed (tier shown). gift: a gift bomb (amount = number of subs).",
+          "cheer: bits (amount). raid: someone raided you (amount = viewers). redeem: a channel point reward (detail = reward, message = what they typed, amount = cost).",
+          "ban: a viewer was banned or timed out (message = reason). clip: a Twitch clip was made from !clip (detail = link). replay: the OBS replay buffer was saved (detail = file name). shoutout: a shoutout was sent.",
+          "Needs the streamer signed in on the Host page so Twitch can send these events; ban events need the channel:moderate permission (sign in again once)."
+        ],
+        "fix": {
+          "label": "Open the Host page",
+          "route": "m:host"
+        }
       }
-    }
+    },
+    "activity": "/api/activity"
   }
 ]

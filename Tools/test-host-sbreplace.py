@@ -21,9 +21,11 @@ def until(fn, secs, what):
     fails.append('timeout: ' + what); return False
 try:
     until(lambda: api('/api/status')['name'] == 'PinguinoHost', 30, 'host up')
+    until(lambda: len(api('/api/automations')['doc']['actions']) >= 26, 30, 'presets seeded')
     doc = api('/api/automations')['doc']; sb = [a for a in doc['actions'] if a['id'].startswith('sb-')]
     if len(sb) < 18: fails.append('expected 18 sb- presets, got %d' % len(sb))
-    if any(a['enabled'] for a in doc['actions']): fails.append('a preset is enabled')
+    want_on = {'sb-latest-popup','sb-follow','sb-sub','sb-resub','sb-gift','sb-cheer','sb-raid','sb-ban','sb-clip','sb-preroll','sb-whyad','sb-shout','sb-latest-cmd'}
+    if {a['id'] for a in sb if a['enabled']} != want_on: fails.append('wrong presets enabled: ' + str(sorted({a['id'] for a in sb if a['enabled']} ^ want_on)))
     types = {t['type'] for a in sb for t in a['triggers']}
     for need in ('ban', 'raid_out', 'follow', 'redeem', 'stream_online'):
         if need not in types: fails.append('trigger type missing in presets: ' + need)
@@ -32,18 +34,19 @@ try:
         if not r.get('ok'): fails.append('dry run failed: %s %s' % (a['id'], r))
         outs = ' | '.join(r['run'].get('output', []))
         if 'unknown step' in outs: fails.append('unknown step in ' + a['id'] + ': ' + outs)
-    r = api('/api/automations/test', {'id': 'sb-title-customs', 'dry': True})
-    if 'CUSTYs' not in ' '.join(r['run']['output']): fails.append('title preset text missing')
     r = api('/api/automations/test', {'id': 'sb-preroll', 'dry': True})
+    if 'run' not in r: fails.append('sb-preroll dry run: ' + str(r)); raise SystemExit(print('FAIL', fails))
     if '4:00' not in ' '.join(r['run']['output']): fails.append('ad preset did not expand {adIn}: ' + str(r['run']['output']))
-    # save one of them enabled and make sure steps that need the streamer fail politely (not signed in) instead of crashing
+    # steps that need the streamer / OBS fail politely (not signed in, OBS offline) instead of crashing
     for a in doc['actions']:
-        if a['id'] == 'sb-clip': a['enabled'] = True
         if a['id'] == 'sb-suggest': a['enabled'] = True
+    doc['actions'].append({'id': 'clipt', 'name': 'ClipNoDelay', 'enabled': True, 'triggers': [{'type': 'manual'}], 'steps': [{'type': 'create_clip', 'title': 'Clip! cmd', 'duration': 60}, {'type': 'obs_replay_save'}]})
     api('/api/automations', {'doc': doc})
-    r = api('/api/automations/test', {'id': 'sb-clip', 'dry': False})
+    r = api('/api/automations/test', {'id': 'clipt', 'dry': False})
     outs = ' | '.join(r['run'].get('output', []))
-    if 'not signed in' not in outs and 'failed' not in outs: fails.append('clip without sign-in should fail politely: ' + outs)
+    if 'Twitch clip failed' not in outs or 'NOT saved' not in outs and 'NOT running' not in outs: fails.append('clip without sign-in/OBS should fail politely: ' + outs)
+    r = api('/api/automations/test', {'id': 'sb-preroll', 'dry': False}); outs = ' | '.join(r['run'].get('output', []))
+    if 'ad_schedule failed' not in outs: fails.append('preroll without sign-in should fail politely: ' + outs)
     # suggestion box really appends to Data\files
     r = api('/api/automations/test', {'id': 'sb-suggest', 'dry': False, 'args': {'input': 'more cats', 'user': 'bob'}})
     f = os.path.join(d, 'files', 'suggestions.txt')
@@ -57,6 +60,28 @@ try:
     stats = json.loads(g.get('firstPlaceStats', '{}')) if 'firstPlaceStats' in g else {}
     if stats.get('ann') != 1: fails.append('First 5: ann should have 1 first place, globals=' + str({k: v for k, v in g.items() if 'irst' in k})[:300])
     if str(g.get('firstChatterPlace')) != '0': fails.append('First 5: game should be locked after 5 claims, place=' + str(g.get('firstChatterPlace')))
+    # activity feed + latest + shoutout queue
+    for ln in ('event TwitchFollow ann', 'event TwitchSub bob 2', 'event TwitchCheer cy 300', 'event TwitchRaid dee 40', 'event TwitchRedeem eve 1'): feed(ln); time.sleep(0.3)
+    until(lambda: len(api('/api/activity?since=0')['items']) >= 4, 10, 'activity items')
+    act = api('/api/activity?since=0')
+    types = [i['type'] for i in act['items']]
+    if types[:4] != ['follow', 'sub', 'cheer', 'raid']: fails.append('activity order/types wrong: ' + str(types))
+    if [i['seq'] for i in act['items']] != sorted(i['seq'] for i in act['items']): fails.append('activity seq not increasing')
+    if any(i.get('amount') for i in act['items'] if i['type'] == 'cheer') is False: fails.append('cheer amount missing')
+    ch = [i for i in act['items'] if i['type'] == 'cheer']
+    if not ch or ch[0].get('amount') != 300: fails.append('cheer amount wrong: ' + str(ch))
+    if api('/api/activity?since=%d' % act['seq'])['items']: fails.append('since=latest should be empty')
+    if len(api('/api/activity?since=0&type=sub')['items']) != 1: fails.append('type filter')
+    lat = api('/api/latest')
+    if [e['kind'] for e in lat['latest'] if e['kind'] == 'follow'] != ['follow']: fails.append('latest feed')
+    html = urllib.request.urlopen('http://127.0.0.1:%d/overlay/latest' % PORT, timeout=10).read().decode()
+    if 'api/latest' not in html: fails.append('overlay page')
+    feed('ann: !latest'); time.sleep(1.0)
+    if 'Latest' not in ' '.join(o for r in api('/api/automations/log?n=100')['runs'] for o in r.get('output', []) if 'latest:' in o): fails.append('!latest produced no line')
+    r1 = api('/api/shoutouts', {'user': 'someone', 'by': 'mod'}); r2 = api('/api/shoutouts', {'user': 'someone', 'by': 'mod'})
+    if r1['result'] != 'queued' or r2['result'] != 'duplicate': fails.append('shoutout dedupe: %s %s' % (r1, r2))
+    time.sleep(2.0)
+    if api('/api/shoutouts')['pending']: fails.append('shoutout queue did not drain')
 finally:
     host.kill()
 print('HOST STREAMER.BOT REPLACEMENT: ' + ('PASS' if not fails else 'FAIL'))

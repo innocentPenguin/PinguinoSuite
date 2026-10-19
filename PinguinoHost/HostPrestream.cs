@@ -102,6 +102,11 @@ namespace PinguinoHost
             items.Add(Item("modules", "Bot modules loaded (core, chat, helper, router)", missing.Count == 0 ? "pass" : "fail", missing.Count == 0 ? "" : "missing: " + string.Join(", ", missing)));
             bool obsCfg = !string.IsNullOrEmpty((string)s["ObsPassword"]) || !string.IsNullOrEmpty((string)s["ObsHost"]);
             items.Add(Item("obs", "OBS connected", ObsConnected() ? "pass" : obsCfg ? "fail" : "warn", ObsConnected() ? "" : obsCfg ? "OBS WebSocket not reachable (is OBS open, WebSocket on?)" : "OBS is not set up in the Host (overlays/scenes need it)"));
+            if (ObsConnected())
+            {
+                var rb = Program.ObsData("GetReplayBufferStatus", null); bool running = rb != null && ((bool?)rb["outputActive"] ?? false);
+                items.Add(Item("replay", "OBS replay buffer running (!clip saves from it)", rb == null ? "warn" : running ? "pass" : "warn", rb == null ? "OBS did not answer" : running ? "" : "not running: start it in OBS (Controls > Start Replay Buffer), or !clip saves nothing"));
+            }
             int sbPort = int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_SB_PORT"), out int sp) ? sp : 8080; bool sb = false;
             try { using (var tc = new TcpClient()) sb = tc.ConnectAsync("127.0.0.1", sbPort).Wait(700); } catch (Exception) { }
             items.Add(Item("streamerbot", "Streamer.bot reachable (legacy engine)", sb ? "pass" : "warn", sb ? "running on port " + sbPort : "not running: fine, the Host runs the bots, but old Streamer.bot actions will not fire"));

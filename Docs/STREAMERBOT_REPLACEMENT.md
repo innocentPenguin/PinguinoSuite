@@ -99,20 +99,33 @@ All of these say a thank-you line in chat through the bot account, then run the 
 
 All ChatGPT* actions and the "ChatGPT Call" command, "Streambot", "Pinguinobot visible in stream chat", `top tt likers and gifters`, `Raided` (unless re-imported on purpose), the old pasted copies of PinguinoBot/Chat inside Streamer.bot, and the song-request actions in the Host (off by default until Ivan turns them on).
 
-## 9. What the 02 batch added (all presets arrive DISABLED)
+## 9. Status per item after Ivan's decisions (02 batch, committed; goes live with the next Host build)
 
-New Host pieces: steps `set_title`, `create_clip`, `ad_schedule`, `shoutout`, `append_file`; triggers `ban` and `raid_out`; the First 5 game is loaded again (`!first`, `!firsts`, claim on every chat line, reset when the stream goes online, payouts on a background timer so chat is never blocked; payouts are lost if the Host restarts before they finish); the Host now also keeps numeric and yes/no persisted values across restarts. Sign-in asks for four more permissions: `channel:manage:broadcast`, `clips:edit`, `channel:read:ads`, `moderator:manage:shoutouts` (**sign the streamer in again once**).
+Ivan's cutover decisions: game/title changes are dropped (he will make his own), no day counter. Chat pop sounds, first-today and first-time dings and YouTube/Kick chat belong to 03 (Multi). "ON" = created enabled; the presets are the group "Streamer.bot replacement" on `/automations`. Sign the streamer in again once after the rebuild (new permissions: `clips:edit`, `channel:read:ads`, `moderator:manage:shoutouts`, `channel:moderate`).
 
-18 presets in the group "Streamer.bot replacement" on `/automations`, all disabled: Alerts: show Latest Group, follow, sub, resub, gifted subs, cheer, Title: customs (`!setcustoms`, mods), Title: Minecraft (`!setmcserver`, mods), Stream online, Stream offline (day counter +1), `!clip`, `!preroll`/`!ad`/`!ads`, `!whyad`, ban alert (Among Us), raid out, `!shout`, reward "Instantly End Stream", reward "Suggestion" (appends to `Datauntimeiles\suggestions.txt`).
-Differences from Streamer.bot: the four title actions that all hung off `!setCustoms` are now one (RL customs); add more commands the same way. Prime subs cannot be told apart from normal subs by Twitch's event. Gifted subs fire once per gift bomb (`{total}`), not once per recipient. Shoutouts do not look up pronouns. `!setgame` had no action and is dropped. The "Raid out" preset ends with a 20 s wait and Stop Streaming like Streamer.bot did; the "Instantly End Stream" reward does the same after 5 s. Delete that step if you do not want it. OBS source and scene names in the presets are copied from your Streamer.bot export, so check them in OBS.
-Not built on purpose: the chat pop sound, first-time-today sound, first-time bell and YouTube/Kick chat (03/Multi owns these), personal intro videos (intro scheduler), TikTok.
+| Item | Status | How |
+|---|---|---|
+| BVQ Engine (22 commands), chatbot, `!commands` | **DONE** | PinguinoB0t / ChattyPinguino in the Host |
+| First 5 game (`!first`, `!firsts`) | **DONE, ON** | `PinguinoBotFirsts.cs` is loaded by the Host: claim on every chat line, reset when the stream goes online, payouts on a background timer (lost if the Host restarts before they finish). Tested in sim. Old stats must be copied by hand (below) |
+| Followed, Normal/Super/Prime, Resub, Gifted, Cheers | **DONE, ON** | actions "Alert: ..." (chat thank-you as PinguinoB0t + the Latest Group popup in OBS). Prime cannot be told from tier 1; gifts fire once per gift bomb |
+| Raided (was OFF in Streamer.bot) | **DONE, ON** | "Alert: incoming raid": thanks, emotes, welcome, popup, then a queued shoutout for the raider |
+| `latest` (show Latest Group 10 s) | **DONE, ON** | "Alerts: show Latest Group" (OBS scene Alerts / group Latest Group). Tested against the real OBS: shown, then hidden again |
+| Latest feed (what the Latest Group displays) | **DONE** | The old group showed a third-party widget (`vrflad.com/latest`). Ours: every follow/sub/resub/gift/cheer/raid/redeem is stored (`latest.json`); OBS browser source `http://127.0.0.1:8770/overlay/latest?types=follow,sub,cheer,raid` (same orange; `color=`, `size=`, `font=`, `rotate=` options), `!latest` in chat, optional OBS text source via `latest_settings.json {"TextSource":"name"}`. **Your OBS still points at the old widget: change the URL of the browser source "lastest" to the address above when you want to switch.** The Host does not touch that source |
+| Add Ban + ban alert | **DONE, ON** | trigger `ban` (needs `channel:moderate`) sets the URL of the browser source "Ban Alert - Among Us Ejected" (user name in the page), shows it, plays eject_amongus.mp3 at 90 %, hides it after 5 s. Tested against the real OBS (quiet sound) |
+| **Clip** | **DONE, ON** | same order as the old action: says "Clipped"; 10 s later makes a Twitch clip (title "Clip! cmd", 60 s); 15 s later saves the **OBS replay buffer** (SaveReplayBuffer, file name read back from OBS). The old action did nothing after that; we add an Activity entry and a Console line. **The replay buffer must be running: when tested it was OFF in your OBS.** The Host reports that in Pre-stream ("OBS replay buffer running") and in the log instead of failing silently. End to end with the buffer started: saved `D:/Recordings/... replay.mov` (the test file was deleted again, the buffer stopped again). The Twitch-clip half needs a live stream and `clips:edit`, so it was not testable offline |
+| Preroll (`!preroll`, `!ad`, `!ads`) | **DONE, ON** | PinguinoHelper answers with the preroll-free time left (same format `M:SS left.`) plus when the next ad starts; reads Twitch directly every time instead of the 30 s timer. Needs `channel:read:ads`; not testable offline |
+| Whyad (`!whyad`, `!whyads`) | **DONE, ON** | PinguinoHelper, same text (ends with "Use !preroll to check ad status") |
+| Shoutouts | **DONE, ON** | our own queue (not StreamUP): `!shout name` / `!so name` (mods) or `POST /api/shoutouts {"user":"name"}`; Twitch's own shoutout card (one per 2 min), then a chat line with their last game and pronouns (alejo.io, they/them if unknown); repeats within 2 min ignored (raids: 60 min); queue at `GET /api/shoutouts`; lines editable in `shout_settings.json` |
+| Activity feed (new, for the shell) | **DONE** | `GET /api/activity?since=<seq>&limit=&type=` (see ACTIONS.md), declared in the manifest |
+| Stream Status online / offline | seeded OFF | lines only; the First 5 reset happens by itself. No day counter, no title change |
+| Raid out, End Stream reward, Suggestion Box | seeded OFF | review first; raid-out and End Stream end the stream, so they stay off |
+| Game / title commands (`!setCustoms`, `!setMcServer`, `!setgame`) and `dayCounter` | **DROPPED** | Ivan will make his own |
+| Chat pop sound, first-time-today sound, new-chatter ding, YouTube/Kick chat | **03 (Multi)** | |
+| Personal intro videos, TikTok, ChatGPT pack, Streambot, empty "visible in stream chat" | **DROP / later** | |
 
-**Copying your data over (do this with the Host stopped, before the first stream on the new setup):**
-```
-python Tools\import-streamerbot-globals.py            # preview (reads a copy of globals.db)
-python Tools\import-streamerbot-globals.py --apply    # writes dayCounter into the Host
-```
-The tool reads `dayCounter` (currently 261 in the copy) and writes it to `host_globals.json` and `automation_vars.json`. The First 5 stats (`firstPlaceStats` ... `fifthPlaceStats`) are stored in a form the tool cannot read: open Streamer.bot > Settings > Globals (or Variables), copy each value and save it into `Datauntime\host_globals.json` under the same name.
+Other differences: Twitch's event for a sub does not say Prime. Gifted subs arrive once per gift bomb (`{total}`). Clip has a 25 s cooldown (the old one had none).
+
+**Copying your First 5 stats over (with the Host stopped, before the first stream on the new setup):** `dayCounter` is no longer needed. The First 5 stats (`firstPlaceStats` ... `fifthPlaceStats`) are stored by Streamer.bot in a form `Tools\import-streamerbot-globals.py` cannot read: open Streamer.bot > Settings > Globals (or Variables), copy each value and save it into `Data\runtime\host_globals.json` under the same name (a JSON text like `{"name":3,...}`). Without this the leaderboard starts empty.
 
 ## 10. Stream Deck, MIDI and other things that call Streamer.bot
 

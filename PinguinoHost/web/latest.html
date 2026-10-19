@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Latest</title>
+<style>
+html,body{margin:0;background:transparent;overflow:hidden}
+#t{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-weight:700;white-space:nowrap;transition:opacity .5s}
+#t b{color:var(--c)}
+</style></head><body>
+<div id="t"></div>
+<script>
+// OBS browser source: http://127.0.0.1:8770/overlay/latest?types=follow,sub,cheer,raid&color=ff9900&size=64&font=bahnschrift&rotate=5
+const q=new URLSearchParams(location.search);
+const types=(q.get('types')||'follow,sub,cheer,raid').split(',');
+const color='#'+(q.get('color')||'ff9900'), size=(q.get('size')||'64')+'px', rotate=(parseInt(q.get('rotate'))||5)*1000;
+const t=document.getElementById('t');t.style.fontFamily=(q.get('font')||'bahnschrift')+',Segoe UI,sans-serif';t.style.fontSize=size;t.style.setProperty('--c',color);t.style.color='#fff';
+const NAME={follow:'follower',sub:'sub',resub:'resub',gift:'gifter',cheer:'cheer',raid:'raid',redeem:'redeem'};
+let items=[],i=0;
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function load(){try{const r=await fetch('/api/latest');const j=await r.json();items=(j.latest||[]).filter(e=>types.includes(e.kind)).sort((a,b)=>types.indexOf(a.kind)-types.indexOf(b.kind))}catch(e){}}
+function show(){
+ if(!items.length){t.style.opacity=0;return}
+ const e=items[i%items.length];i++;
+ t.style.opacity=0;setTimeout(()=>{t.innerHTML='Latest '+(NAME[e.kind]||e.kind)+': <b>'+esc(e.user)+'</b>'+(e.what?' <span style="opacity:.75;font-size:.6em">'+esc(e.what)+'</span>':'');t.style.opacity=1},400)
+}
+load();setInterval(load,3000);show();setInterval(show,rotate);
+</script></body></html>

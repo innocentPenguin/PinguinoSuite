@@ -59,6 +59,23 @@ namespace PinguinoHost
                 if (f == null) { c.Response.StatusCode = 404; return true; }
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
+            if (p == "/api/activity" && m == "GET")
+            {
+                long since = long.TryParse(c.Request.QueryString["since"], out long sn) ? sn : 0; int lim = int.TryParse(c.Request.QueryString["limit"], out int ln) ? ln : 100;
+                Write(c, Latest.Activity(since, lim, c.Request.QueryString["type"]).ToString(), "application/json"); return true;
+            }
+            if (p == "/api/latest" && m == "GET") { Write(c, Latest.Api().ToString(), "application/json"); return true; }
+            if ((p == "/overlay/latest" || p == "/overlay/latest.html") && m == "GET")
+            {
+                string f = Latest.PagePath(); if (f == null) { c.Response.StatusCode = 404; return true; }
+                Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
+            }
+            if (p == "/api/shoutouts" && m == "GET") { Write(c, Shout.Status().ToString(), "application/json"); return true; }
+            if (p == "/api/shoutouts" && m == "POST")
+            {
+                var b = Body(c); string r = Shout.Enqueue((string)b["user"] ?? "", (string)b["by"] ?? "api", false);
+                Write(c, new JObject { { "ok", true }, { "result", r } }.ToString(), "application/json"); return true;
+            }
             if (p == "/api/automations" && m == "GET") { Write(c, new JObject { { "ok", true }, { "doc", Auto.Doc() }, { "master", Lease.MayRun } }.ToString(), "application/json"); return true; }
             if (p == "/api/automations" && m == "POST")
             {

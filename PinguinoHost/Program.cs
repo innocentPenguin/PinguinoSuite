@@ -38,6 +38,7 @@ namespace PinguinoHost
             cph.SetGlobalVar("firstChatterPlace", 1, true); cph.SetGlobalVar("firstChatterClaimedUserIds", "[]", true); cph.SetGlobalVar("firstChatterWinners", "{}", true);
             Clog.Info("firsts", "First 5 game reset for the new stream");
         }
+        public static JObject ObsData(string type, JObject data) { try { return cph?.Obs?.Data(type, data); } catch (Exception) { return null; } }
         public static bool TimeoutUser(string user, int secs, string why) { return cph != null && cph.TwitchTimeoutUser(user, secs, why, false); }
         public static List<string> CoreCommandList() { return coreCommands.OrderBy(x => x).ToList(); }
         static HashSet<string> coreCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

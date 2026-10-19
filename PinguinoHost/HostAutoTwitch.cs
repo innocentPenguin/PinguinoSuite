@@ -9,8 +9,8 @@ using Newtonsoft.Json.Linq;
 
 namespace PinguinoHost
 {
-    /// <summary>Twitch Helix calls with the streamer token, for the Actions &amp; Events steps that replace Streamer.bot: set_title, create_clip, ad_schedule, shoutout.
-    /// Needs the streamer signed in with channel:manage:broadcast, clips:edit, channel:read:ads and moderator:manage:shoutouts (the sign-in asks for them). Never logs a token.</summary>
+    /// <summary>Twitch Helix calls with the streamer token, for the Actions &amp; Events steps that replace Streamer.bot (create_clip, ad_schedule, channel_info, native shoutouts).
+    /// Needs the streamer signed in with clips:edit, channel:read:ads and moderator:manage:shoutouts (the sign-in asks for them). Never logs a token.</summary>
     public static class TwitchApi
     {
         public static string Call(HttpMethod method, string pathAndQuery, JObject body, out JToken data, out string error)
@@ -38,7 +38,7 @@ namespace PinguinoHost
         public static string Fmt(long sec) { if (sec < 0) sec = 0; return sec >= 60 ? (sec / 60) + ":" + (sec % 60).ToString("D2") : sec + " seconds"; }
         public static string UserId(string login, out string error)
         {
-            JToken d; string code = Call(HttpMethod.Get, "/users?login=" + Uri.EscapeDataString(login.TrimStart('@').ToLowerInvariant()), null, out d, out error);
+            JToken d; Call(HttpMethod.Get, "/users?login=" + Uri.EscapeDataString(login.TrimStart('@').ToLowerInvariant()), null, out d, out error);
             var first = (d as JArray)?.FirstOrDefault(); if (first == null) { if (error == "") error = "no Twitch user named " + login; return ""; }
             return (string)first["id"] ?? "";
         }
@@ -46,44 +46,44 @@ namespace PinguinoHost
 
     public static partial class Auto
     {
-        static DateTime _lastShoutout = DateTime.MinValue; static readonly object _shoutLock = new object();
-
         /// <summary>the Streamer.bot replacements. Returns the line for the run log, or null when the step type is not one of these.</summary>
         static string ExtraStep(string type, JObject st, Dictionary<string, string> ctx, bool test, Func<string, string> x)
         {
             JToken d; string err;
             switch (type)
             {
-                case "set_title":
+                case "create_clip":   // Twitch clip (title + length like the old action: "Clip! cmd", 60 s)
                 {
-                    string title = x("title"), game = x("game");
-                    if (title.Length > 140) title = title.Substring(0, 140);
-                    if (test) return "(dry run) would set the stream title to: " + title + (game != "" ? " | category: " + game : "");
-                    var body = new JObject(); if (title != "") body["title"] = title;
-                    string gname = "";
-                    if (game != "")
-                    {
-                        TwitchApi.Call(HttpMethod.Get, "/games?name=" + Uri.EscapeDataString(game), null, out d, out err);
-                        var g = (d as JArray)?.FirstOrDefault(); if (g == null) return "set_title: no Twitch category named '" + game + "'" + (err != "" ? " (" + err + ")" : "");
-                        body["game_id"] = (string)g["id"]; gname = (string)g["name"];
-                    }
-                    if (body.Count == 0) return "set_title: nothing to set";
-                    string code = TwitchApi.Call(new HttpMethod("PATCH"), "/channels?broadcaster_id={bid}", body, out d, out err);
-                    ctx["title"] = title;
-                    return code == "204" ? "title set" + (gname != "" ? ", category " + gname : "") : "set_title failed (HTTP " + code + "): " + err;
-                }
-                case "create_clip":
-                {
-                    if (test) return "(dry run) would create a clip";
-                    string code = TwitchApi.Call(HttpMethod.Post, "/clips?broadcaster_id={bid}", null, out d, out err);
-                    var c = (d as JArray)?.FirstOrDefault(); if (c == null || (code != "202" && code != "200")) return "create_clip failed (HTTP " + code + "): " + (err != "" ? err : "the stream may be offline");
+                    string title = x("title"); if (title == "") title = "Clip! cmd"; int dur = Math.Max(5, Math.Min(60, (int?)st["duration"] ?? 60));
+                    if (test) return "(dry run) would create a Twitch clip '" + title + "' (" + dur + " s)";
+                    string code = TwitchApi.Call(HttpMethod.Post, "/clips?broadcaster_id={bid}&title=" + Uri.EscapeDataString(title) + "&duration=" + dur, null, out d, out err);
+                    var c = (d as JArray)?.FirstOrDefault(); if (c == null || (code != "202" && code != "200")) { Clog.Warn("clip", "Twitch clip failed (HTTP " + code + "): " + (err != "" ? err : "is the stream live?")); return "Twitch clip failed (HTTP " + code + "): " + (err != "" ? err : "the stream may be offline"); }
                     string id = (string)c["id"]; ctx["clip.id"] = id; ctx["clip.edit"] = (string)c["edit_url"] ?? "";
                     for (int i = 0; i < 6; i++)   // a clip shows up a few seconds after it is requested
                     {
                         Thread.Sleep(3000); TwitchApi.Call(HttpMethod.Get, "/clips?id=" + id, null, out d, out err);
-                        var f = (d as JArray)?.FirstOrDefault(); if (f != null) { ctx["clip.url"] = (string)f["url"] ?? ""; return "clip created: " + ctx["clip.url"]; }
+                        var f = (d as JArray)?.FirstOrDefault(); if (f != null) { ctx["clip.url"] = (string)f["url"] ?? ""; Latest.Record("clip", ctx); return "Twitch clip created: " + ctx["clip.url"]; }
                     }
-                    ctx["clip.url"] = ctx["clip.edit"]; return "clip requested (link not ready): " + id;
+                    ctx["clip.url"] = ctx["clip.edit"]; Latest.Record("clip", ctx); return "Twitch clip requested (link not ready yet): " + id;
+                }
+                case "obs_replay_save":   // the OBS replay buffer (what the old !clip finished with); reports honestly when the buffer is not running
+                {
+                    if (test) return "(dry run) would save the OBS replay buffer";
+                    if (!HostApi.ObsConnected()) { Clog.Warn("clip", "OBS is not connected: the replay was NOT saved"); return "OBS is not connected: replay NOT saved"; }
+                    var status = Program.ObsData("GetReplayBufferStatus", null);
+                    if (status == null) { Clog.Warn("clip", "OBS did not answer GetReplayBufferStatus: replay NOT saved"); return "OBS did not answer: replay NOT saved"; }
+                    if (!((bool?)status["outputActive"] ?? false)) { Clog.Warn("clip", "the OBS replay buffer is not running: start it in OBS (Controls > Start Replay Buffer)"); ctx["replay.ok"] = "false"; return "OBS replay buffer is NOT running: replay not saved (start it in OBS)"; }
+                    string before = (string)Program.ObsData("GetLastReplayBufferReplay", null)?["savedReplayPath"] ?? "";
+                    if (!Program.ObsRaw("SaveReplayBuffer", null)) { Clog.Warn("clip", "OBS refused SaveReplayBuffer"); return "OBS refused to save the replay"; }
+                    string path = "";
+                    for (int i = 0; i < 8 && path == ""; i++)   // the file appears a moment after the request
+                    {
+                        Thread.Sleep(750); string now = (string)Program.ObsData("GetLastReplayBufferReplay", null)?["savedReplayPath"] ?? "";
+                        if (now != "" && now != before) path = now;
+                    }
+                    ctx["replay.ok"] = "true"; ctx["replay.path"] = path; ctx["replay.file"] = path == "" ? "" : Path.GetFileName(path);
+                    var rc = new Dictionary<string, string>(ctx); rc["clip.url"] = ctx["replay.file"]; Latest.Record("replay", rc);
+                    return path == "" ? "replay saved (OBS has not reported the file name yet)" : "replay saved: " + path;
                 }
                 case "ad_schedule":
                 {
@@ -92,31 +92,24 @@ namespace PinguinoHost
                     var a = (d as JArray)?.FirstOrDefault(); if (a == null) return "ad_schedule failed (HTTP " + code + "): " + (err != "" ? err : "no data (is the stream live?)");
                     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), next = (long?)a["next_ad_at"] ?? 0, free = (long?)a["preroll_free_time"] ?? 0;
                     ctx["adPrerollSec"] = free.ToString(); ctx["adPrerollFree"] = TwitchApi.Fmt(free);
-                    ctx["adIn"] = next > 0 ? TwitchApi.Fmt(next - now) : "unknown"; ctx["adNextAt"] = next.ToString();
+                    ctx["adIn"] = next > now ? TwitchApi.Fmt(next - now) : "unknown"; ctx["adNextAt"] = next.ToString();
                     ctx["adLengthSec"] = ((int?)a["duration"] ?? 0).ToString(); ctx["adSnoozes"] = ((int?)a["snooze_count"] ?? 0).ToString();
                     return "ads: next in " + ctx["adIn"] + ", preroll-free " + ctx["adPrerollFree"];
                 }
-                case "shoutout":
+                case "channel_info":   // sets {game} and {title}
                 {
-                    string who = x("user").TrimStart('@'); if (who == "") return "shoutout: no user given";
-                    if (test) { ctx["shoutoutUser"] = who; ctx["shoutoutLogin"] = who.ToLowerInvariant(); ctx["shoutoutGame"] = "their game"; ctx["shoutoutChannel"] = "https://twitch.tv/" + who.ToLowerInvariant(); return "(dry run) would look up " + who + (((bool?)st["native"] ?? false) ? " and send a Twitch shoutout" : ""); }
-                    string uid = TwitchApi.UserId(who, out err); if (uid == "") return "shoutout: " + err;
-                    TwitchApi.Call(HttpMethod.Get, "/channels?broadcaster_id=" + uid, null, out d, out err);
-                    var ch = (d as JArray)?.FirstOrDefault(); string login = ((string)ch?["broadcaster_login"] ?? who).ToLowerInvariant();
-                    ctx["shoutoutUser"] = (string)ch?["broadcaster_name"] ?? who; ctx["shoutoutLogin"] = login; ctx["shoutoutGame"] = ((string)ch?["game_name"] ?? "") != "" ? (string)ch["game_name"] : "something fun";
-                    ctx["shoutoutChannel"] = "https://twitch.tv/" + login;
-                    string extra = "";
-                    if ((bool?)st["native"] == true)   // Twitch's own shoutout card; Twitch allows one every 2 minutes, so later ones wait their turn (max 130 s)
-                    {
-                        lock (_shoutLock)
-                        {
-                            double wait = 125 - (DateTime.UtcNow - _lastShoutout).TotalSeconds; if (wait > 0) Thread.Sleep((int)Math.Min(wait, 130) * 1000);
-                            string code = TwitchApi.Call(HttpMethod.Post, "/chats/shoutouts?from_broadcaster_id={bid}&to_broadcaster_id=" + uid + "&moderator_id=" + TwitchApi.BroadcasterId(), null, out d, out err);
-                            _lastShoutout = DateTime.UtcNow; extra = code == "204" ? ", Twitch shoutout sent" : ", Twitch shoutout refused (HTTP " + code + (err != "" ? ": " + err : "") + ")";
-                        }
-                    }
-                    return "shoutout ready for " + ctx["shoutoutUser"] + " (" + ctx["shoutoutGame"] + ")" + extra;
+                    if (test) { ctx["game"] = "a game"; ctx["title"] = "a title"; return "(dry run) would read the channel title and category"; }
+                    TwitchApi.Call(HttpMethod.Get, "/channels?broadcaster_id={bid}", null, out d, out err); var ch = (d as JArray)?.FirstOrDefault();
+                    if (ch == null) return "channel_info failed: " + err; ctx["game"] = (string)ch["game_name"] ?? ""; ctx["title"] = (string)ch["title"] ?? ""; return "channel: " + ctx["game"];
                 }
+                case "shoutout_queue":   // adds a streamer to the shoutout queue (see Shout in HostLatest.cs)
+                {
+                    string who = x("user").TrimStart('@'); if (who == "") return "shoutout: no streamer given";
+                    if (test) return "(dry run) would queue a shoutout for " + who;
+                    return "shoutout " + Shout.Enqueue(who, x("by"), (bool?)st["auto"] == true) + ": " + who;
+                }
+                case "latest_say":   // sets {latest.line}: the newest follower / sub / cheer / raid
+                    ctx["latest.line"] = "Latest " + Latest.Summary(); return "latest: " + ctx["latest.line"];
                 case "append_file":
                 {
                     string name = Path.GetFileName(x("file")); if (name == "") name = "notes.txt";   // only inside Data\runtime\files: no paths
@@ -128,67 +121,71 @@ namespace PinguinoHost
             return null;
         }
 
-        // ---------------- presets that replace the Streamer.bot actions (all created DISABLED, once) ----------------
-        static JObject Act(string id, string name, string group, string note, JArray triggers, params JObject[] steps)
+        // ---------------- presets that replace the Streamer.bot actions ----------------
+        static JObject Act(string id, string name, string note, bool enabled, JArray triggers, params JObject[] steps)
         {
-            return new JObject { { "id", id }, { "name", name }, { "group", group }, { "enabled", false }, { "importNotes", note }, { "triggers", triggers }, { "conditions", new JArray() }, { "steps", new JArray(steps) } };
+            return new JObject { { "id", id }, { "name", name }, { "group", "Streamer.bot replacement" }, { "enabled", enabled }, { "importNotes", note }, { "triggers", triggers }, { "conditions", new JArray() }, { "steps", new JArray(steps) } };
         }
-        static JObject SayStep(string text) { return new JObject { { "type", "say" }, { "as", "core" }, { "text", text } }; }
+        static JObject SayStep(string text, string as_ = "core") { return new JObject { { "type", "say" }, { "as", as_ }, { "text", text } }; }
         static JObject Tr(string type, params object[] kv) { var o = new JObject { { "type", type } }; for (int i = 0; i + 1 < kv.Length; i += 2) o[(string)kv[i]] = JToken.FromObject(kv[i + 1]); return o; }
         static JObject Step(string type, params object[] kv) { return Tr(type, kv); }
-        static JObject Latest() { return Step("run_action", "name", "Alerts: show Latest Group"); }
+        static JObject Popup() { return Step("run_action", "name", "Alerts: show Latest Group"); }
+        const string BanDir = "C:\\Users\\ivanm\\Documents\\amongusban\\";
 
-        /// <summary>Streamer.bot replacement presets (Docs\STREAMERBOT_REPLACEMENT.md). Remembered in "seeded", so deleting one sticks.</summary>
+        /// <summary>Streamer.bot replacement actions (Docs\STREAMERBOT_REPLACEMENT.md). The ones Ivan asked to be live are created ENABLED, the rest disabled.
+        /// Remembered in "seeded", so deleting or editing one sticks.</summary>
         public static void SeedStreamerBotPresets()
         {
             try
             {
                 var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
-                if (seeded.Any(v => (string)v == "sbreplace1")) return;
-                var acts = (JArray)doc["actions"]; const string G = "Streamer.bot replacement";
+                if (seeded.Any(v => (string)v == "sbreplace2")) return;
+                var acts = (JArray)doc["actions"];
+                foreach (var gone in acts.OfType<JObject>().Where(o => ((string)o["id"] ?? "").StartsWith("sb-") && ((string)o["importNotes"] ?? "").StartsWith("preset")).ToList()) acts.Remove(gone);   // an earlier test build's presets
                 string disc = "https://discord.gg/be6bus4GKh";
                 var list = new List<JObject> {
-                    Act("sb-latest", "Alerts: show Latest Group", G, "preset: shows the 'Latest Group' source in scene 'Alerts' for 10 s (called by the alert actions). Check the scene/source names in OBS.", new JArray { Tr("manual") },
+                    Act("sb-latest-popup", "Alerts: show Latest Group", "preset: shows the 'Latest Group' (scene 'Alerts') for 10 s after each alert, like the old 'latest' action.", true, new JArray { Tr("manual") },
                         Step("obs_source", "scene", "Alerts", "source", "Latest Group", "visible", "true"), Step("delay", "ms", 10000), Step("obs_source", "scene", "Alerts", "source", "Latest Group", "visible", "false")),
-                    Act("sb-follow", "Alert: follow", G, "preset from Streamer.bot 'Followed'", new JArray { Tr("follow") }, SayStep("innoce108Cool Hello {user} just followed! Welcome to the community! innoce108Hello"), Latest()),
-                    Act("sb-sub", "Alert: sub", G, "preset from Streamer.bot 'Normal/Super/Prime'. Twitch does not say which subs are Prime.", new JArray { Tr("sub") }, SayStep("🐧 Thank you for the sub, {user}! Enjoy the stream!"), Latest()),
-                    Act("sb-resub", "Alert: resub", G, "preset from Streamer.bot 'Resub'", new JArray { Tr("resub") }, SayStep("🐧 {user} resubbed with a tier {tier} sub! Thank you. I appreciate you!"), Latest()),
-                    Act("sb-gift", "Alert: gifted subs", G, "preset from Streamer.bot 'Gifted' (Twitch sends one event per gift bomb)", new JArray { Tr("gift") }, SayStep("🎁 {user} gifted {total} sub(s)! innoce108Cool"), Latest()),
-                    Act("sb-cheer", "Alert: cheer", G, "preset from Streamer.bot 'Cheers'", new JArray { Tr("cheer") }, SayStep("{user} cheered {bits} bits!"), Latest()),
-                    Act("sb-title-customs", "Title: customs with viewers", G, "preset from 'RL (customs)'. Day number = variable dayCounter. Edit the text and category.",
-                        new JArray { Tr("command", "names", new JArray("!setcustoms"), "permission", "mod") },
-                        Step("set_title", "title", "CUSTYs w/ Viewers🎮Day {var:dayCounter}🔥GC2👑DROPS✅Collegiate RL🎮🎵Music !sr🎵!discord !hr @InnocentPenguin_ 🕖5pm CDT DAILY!!", "game", "Rocket League"), SayStep("Title updated.")),
-                    Act("sb-title-mc", "Title: Minecraft community server", G, "preset from 'MC Community Server': switch title, wait 7 min, then the Day title.",
-                        new JArray { Tr("command", "names", new JArray("!setmcserver"), "permission", "mod") },
-                        Step("set_title", "title", "Switching to Minecraft🚨Starting Community Server! Day 1! 🌎 Join the SMP (Java + Bedrock)", "game", "Minecraft"), Step("delay", "ms", 420000),
-                        Step("set_title", "title", "Starting Community Server! Day {var:dayCounter}! 🌎 Join the SMP (Java + Bedrock)")),
-                    Act("sb-online", "Stream online", G, "preset from 'Stream Status (Online)'. Also restarts the First 5 game.", new JArray { Tr("stream_online") }, SayStep("Stream is live! Let's go! 🐧")),
-                    Act("sb-offline", "Stream offline", G, "preset from 'Stream Status (Offline)': goodnight + day counter +1. Set dayCounter first (Actions & Events > variables) so the Day number continues.", new JArray { Tr("stream_offline") },
-                        SayStep("Stream offline. Goodnight everybody. Thanks for tuning in!"), Step("inc_var", "name", "dayCounter", "by", 1, "persist", true)),
-                    Act("sb-clip", "Command: !clip", G, "preset from 'Clip'. Needs the clips:edit permission (sign the streamer in again).", new JArray { Tr("command", "names", new JArray("!clip"), "cooldownSec", 30) },
-                        Step("create_clip"), SayStep("Clipped {clip.url}")),
-                    Act("sb-preroll", "Command: !preroll / !ad", G, "preset from 'Preroll'. Needs channel:read:ads (sign the streamer in again).", new JArray { Tr("command", "names", new JArray("!preroll", "!ad", "!ads"), "cooldownSec", 20) },
-                        Step("ad_schedule"), SayStep("Next ad in {adIn}. Preroll-free time left: {adPrerollFree}.")),
-                    Act("sb-whyad", "Command: !whyad", G, "preset from 'Whyad'", new JArray { Tr("command", "names", new JArray("!whyad", "!whyads"), "cooldownSec", 30) },
-                        SayStep("Sorry for the ad! Twitch does not allow affiliates to disable ads, so creators choose between ads when you join or during the stream. I chose to run 3 minutes during the stream so we don't lose any newcomers to ads.")),
-                    Act("sb-ban", "Alert: ban (Among Us ejected)", G, "preset from 'Add Ban'. Set the browser source name below to your 'Ban Alert' source. Needs the ban event (re-sign the streamer in).", new JArray { Tr("ban") },
-                        Step("obs_request", "request", "SetInputSettings", "data", new JObject { { "inputName", "Ban Alert - Among Us Ejected" }, { "inputSettings", new JObject { { "url", "file://C:\\Users\\ivanm\\Documents\\amongusban\\Browser Sources\\among-uspure-css\\index.html?user={user}" } } } }),
+                    Act("sb-follow", "Alert: follow", "from Streamer.bot 'Followed'", true, new JArray { Tr("follow") }, SayStep("innoce108Cool Hello {user} just followed! Welcome to the community! innoce108Hello"), Popup()),
+                    Act("sb-sub", "Alert: sub", "from Streamer.bot 'Normal' + 'Super' (Prime looks like tier 1 in Twitch's event)", true, new JArray { Tr("sub") },
+                        Step("if", "left", "{tier}", "op", "==", "right", "1", "then", new JArray { SayStep("🐧 Thank you for the sub, {user}! Enjoy the stream!") }, "else", new JArray { SayStep("🐧 Thank you for the super sub, {user}! Enjoy the stream!") }), Popup()),
+                    Act("sb-resub", "Alert: resub", "from Streamer.bot 'Resub'", true, new JArray { Tr("resub") }, SayStep("🐧 {user} resubbed with a tier {tier} sub! Thank you. I appreciate you!"), Popup()),
+                    Act("sb-gift", "Alert: gifted subs", "from Streamer.bot 'Gifted' (Twitch sends one event per gift bomb)", true, new JArray { Tr("gift") }, SayStep("🎁 {user} gifted {total} sub(s)! innoce108Cool"), Popup()),
+                    Act("sb-cheer", "Alert: cheer", "from Streamer.bot 'Cheers'", true, new JArray { Tr("cheer") }, SayStep("{user} cheered {bits} bits!"), Popup()),
+                    Act("sb-raid", "Alert: incoming raid", "from Streamer.bot 'Raided' (it was switched off there): thanks, emotes, welcome, then a queued shoutout.", true, new JArray { Tr("raid") },
+                        Step("delay", "ms", 500), SayStep("innoce108Cool {raider} just raided the channel with {viewers} viewers PogChamp"),
+                        SayStep("innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid"),
+                        Step("delay", "ms", 2500), SayStep("Welcome everyone! innoce108Hello Thank you so much for the raid {raider}!!! innoce108Gift"), Popup(), Step("delay", "ms", 12000), Step("shoutout_queue", "user", "{raider}", "auto", true)),
+                    Act("sb-ban", "Alert: ban (Among Us ejected)", "from Streamer.bot 'Add Ban': browser source + eject sound. Needs the ban event (channel:moderate: sign the streamer in again).", true, new JArray { Tr("ban") },
+                        Step("obs_request", "request", "SetInputSettings", "data", new JObject { { "inputName", "Ban Alert - Among Us Ejected" }, { "inputSettings", new JObject { { "url", "file:///C:/Users/ivanm/Documents/amongusban/Browser%20Sources/among-uspure-css/index.html?user={user}" } } } }),
                         Step("obs_source", "scene", "Ban Alert", "source", "Ban Alert - Among Us Ejected", "visible", "true"), Step("delay", "ms", 900),
-                        Step("sound", "file", "C:\\Users\\ivanm\\Documents\\amongusban\\Sounds\\eject_amongus.mp3", "volume", 0.9), Step("delay", "ms", 4100),
+                        Step("sound", "file", BanDir + "Sounds\\eject_amongus.mp3", "volume", 0.9), Step("delay", "ms", 4100),
                         Step("obs_source", "scene", "Ban Alert", "source", "Ban Alert - Among Us Ejected", "visible", "false")),
-                    Act("sb-raidout", "Raid out", G, "preset from 'Raid Out Start/End'. WARNING: the last step stops the stream 20 s later, like Streamer.bot did. Delete it if you do not want that.", new JArray { Tr("raid_out") },
+                    Act("sb-clip", "Command: !clip", "from Streamer.bot 'Clip': says Clipped, 10 s later a Twitch clip (title 'Clip! cmd', 60 s), 15 s later saves the OBS REPLAY BUFFER. The replay buffer must be running in OBS. Needs clips:edit.", true,
+                        new JArray { Tr("command", "names", new JArray("!clip"), "cooldownSec", 25) },
+                        SayStep("Clipped"), Step("delay", "ms", 10000), Step("create_clip", "title", "Clip! cmd", "duration", 60), Step("delay", "ms", 15000), Step("obs_replay_save")),
+                    Act("sb-preroll", "Command: !preroll / !ad", "from Streamer.bot 'Preroll' (PinguinoHelper answers). Needs channel:read:ads.", true, new JArray { Tr("command", "names", new JArray("!preroll", "!ad", "!ads"), "cooldownSec", 20) },
+                        Step("ad_schedule"), SayStep("{adPrerollFree} left. Next ad in {adIn}.", "helper")),
+                    Act("sb-whyad", "Command: !whyad", "from Streamer.bot 'Whyad' (PinguinoHelper answers)", true, new JArray { Tr("command", "names", new JArray("!whyad", "!whyads"), "cooldownSec", 30) },
+                        SayStep("Sorry for the ad! Twitch does not allow affiliates to disable ads so creators have a choice between running ads when you join or during stream. I chose to run 3 minutes during stream so we don't lose any newcomers to ads. Use !preroll to check ad status", "helper")),
+                    Act("sb-shout", "Command: !shout", "our own shoutout queue: Twitch card + chat line with last game and pronouns, no repeats within 2 minutes (raids: 60 minutes). Lines in Data\\runtime\\shout_settings.json.", true, new JArray { Tr("command", "names", new JArray("!shout", "!so"), "permission", "mod") },
+                        Step("shoutout_queue", "user", "{arg1}", "by", "{user}")),
+                    Act("sb-latest-cmd", "Command: !latest", "new: says the newest follower, sub, cheer and raid. The OBS overlay is http://127.0.0.1:8770/overlay/latest.", true, new JArray { Tr("command", "names", new JArray("!latest"), "cooldownSec", 15) },
+                        Step("latest_say"), SayStep("{latest.line}")),
+                    // off until Ivan reviews them
+                    Act("sb-online", "Stream online", "from 'Stream Status (Online)' (the First 5 game restarts by itself)", false, new JArray { Tr("stream_online") }, Step("channel_info"), SayStep("Stream is live! Today we are streaming {game}.")),
+                    Act("sb-offline", "Stream offline", "from 'Stream Status (Offline)'", false, new JArray { Tr("stream_offline") }, SayStep("Stream offline. Goodnight everybody. Thanks for tuning in!")),
+                    Act("sb-raidout", "Raid out", "from 'Raid Out Start/End'. WARNING: the last step stops the stream 20 s later, like Streamer.bot did.", false, new JArray { Tr("raid_out") },
                         SayStep("Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Danceydance innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Hype innoce108Hello innoce108W"),
                         Step("delay", "ms", 3000), SayStep("Don't forget to join the community Discord! Hang out, chat, share media, receive updates → " + disc),
                         Step("delay", "ms", 20000), Step("obs_request", "request", "StopStream")),
-                    Act("sb-shout", "Command: !shout", G, "preset from 'Shoutout • Pronoun Support'. Pronouns are not looked up. 'native' also sends Twitch's own shoutout (needs moderator:manage:shoutouts).", new JArray { Tr("command", "names", new JArray("!shout", "!so"), "permission", "mod") },
-                        Step("shoutout", "user", "{arg1}", "native", true), SayStep("Go and follow {shoutoutUser}! They were last seen streaming {shoutoutGame}. You can find them at {shoutoutChannel}")),
-                    Act("sb-endstream", "Reward: Instantly End Stream", G, "preset from the 'Instantly End Stream' reward (2,500,000 points). Needs channel:read:redemptions.", new JArray { Tr("redeem", "title", "Instantly End Stream") },
+                    Act("sb-endstream", "Reward: Instantly End Stream", "from the 'Instantly End Stream' reward (2,500,000 points). Needs channel:read:redemptions.", false, new JArray { Tr("redeem", "title", "Instantly End Stream") },
                         SayStep("{user} ended the stream. Goodbye! 🐧"), Step("delay", "ms", 5000), Step("obs_request", "request", "StopStream")),
-                    Act("sb-suggest", "Reward: Suggestion Box", G, "preset from the 'Suggestion' reward: saves each suggestion to Data\\runtime\\files\\suggestions.txt.", new JArray { Tr("redeem", "title", "Suggestion") },
+                    Act("sb-suggest", "Reward: Suggestion Box", "from the 'Suggestion' reward: saves each suggestion to Data\\runtime\\files\\suggestions.txt.", false, new JArray { Tr("redeem", "title", "Suggestion") },
                         Step("inc_var", "name", "suggestions", "by", 1, "persist", true), Step("append_file", "file", "suggestions.txt", "text", "{count} {user} - {input}"), SayStep("Thanks {user}, suggestion saved!")),
                 };
                 foreach (var a in list) if (!acts.OfType<JObject>().Any(o => (string)o["id"] == (string)a["id"])) acts.Add(a);
-                seeded.Add("sbreplace1"); doc["seeded"] = seeded; Save(doc);
+                seeded.Add("sbreplace2"); doc["seeded"] = seeded; Save(doc);
             }
             catch (Exception ex) { Clog.Warn("automation", "seeding Streamer.bot replacement presets failed: " + ex.Message); }
         }
