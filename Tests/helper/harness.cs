@@ -218,6 +218,25 @@ public static class Harness
         Msg("Legacy1", "lol nice weather");
         Check("legacy (no router): the helper still hands the message to the chatbot", Forwarded() && Result() == "pass", Result());
 
+        // ── Minecraft: ask Java or Bedrock, answer from the facts, AI words it a few times then the stored wordings repeat ──
+        Routed = false; Settings(",\"FactsUrl\":\"\"");
+        int ai0 = aiCalls; aiReply = "Java players: add smp.innocentpenguin.com, no port needed!";
+        Msg("Mc1", "what's the minecraft ip");
+        Check("minecraft ip with no edition: asks Java or Bedrock first, no AI call", Last() != null && Last().Contains("Bedrock") && Last().Contains("Java") && aiCalls == ai0, Last());
+        Msg("Mc1", "java");
+        Check("java answer: the AI wording is used when it holds the IP", Last() != null && Last().Contains("smp.innocentpenguin.com") && !Last().Contains("19132"), Last());
+        aiReply = "just join the server lol";
+        Msg("Mc2", "minecraft ip bedrock");
+        Check("edition in the first message: no question, bedrock gets IP and port (a wording without the facts is thrown away)", Last() != null && Last().Contains("smp.innocentpenguin.com") && Last().Contains("19132"), Last());
+        aiReply = "Bedrock: IP smp.innocentpenguin.com port 19132";
+        Settings(",\"FactsUrl\":\"\",\"PhraseBankSize\":2");
+        Msg("Mc3", "ip? bedrock"); Msg("Mc4", "ip? bedrock");
+        int ai1 = aiCalls; Msg("Mc5", "ip? bedrock"); Msg("Mc6", "ip? bedrock");
+        Check("once the bank is full the AI is not called again", aiCalls == ai1 && Last() != null && Last().Contains("19132"), Last());
+        Msg("Mc7", "!discord");
+        Check("!discord answers with the invite", Last() != null && Last().Contains("discord.gg/"), Last());
+        Check("facts file was seeded for 05/Ivan to check", File.Exists(Path.Combine(dir, "helper_facts.json")));
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;

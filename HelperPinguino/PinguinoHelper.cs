@@ -280,8 +280,8 @@ public class CPHInline
         public int ConfirmSeconds { get; set; } = 60;                 // how long a "say yes" question stays open
         public bool UseAi { get; set; } = true;                       // ask the AI only when the patterns do not understand a practical-sounding message
         public int MaxAiCallsPerHour { get; set; } = 40;
-        public string McIpReply { get; set; } = "";                   // what to say when someone asks for the Minecraft IP / server IP; blank = say nothing
-        public string DiscordReply { get; set; } = "";                // what to say for !discord (or "discord link"); blank = say nothing
+        public string FactsUrl { get; set; } = "https://innocentpenguin.com/api/faq";   // the website's facts (Minecraft IPs, Discord, ...); blank = use helper_facts.json only
+        public int PhraseBankSize { get; set; } = 3;                  // the AI words an answer this many times, then the stored wordings repeat with no AI call
     }
 
     // ── state (static: survives between messages while Streamer.bot stays open) ──
@@ -385,13 +385,20 @@ public class CPHInline
         string display = ArgS("user") != "" ? ArgS("user") : login;
         if (text == "" || login == "") return false;
         if (login == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(login) || IsOtherBot(login)) return false;
-        _curLogin = login; _curDisplay = display;
+        _curLogin = login; _curDisplay = display; _curText = text;
         if (_cfg.LiveOnly && !IsLive()) return false;
         text = text.Trim();
 
         lock (_lock)
         {
             long now = Now();
+            // 0. "Java or Bedrock?" was asked: the answer gets the right IP
+            long mcUntil;
+            if (_mcAsk.TryGetValue(login, out mcUntil))
+            {
+                if (mcUntil < now) _mcAsk.Remove(login);
+                else { string ed = EditionOf(text); if (ed != "") { _mcAsk.Remove(login); return McAnswer(login, display, ed); } }
+            }
             // 1. an open "say yes" question
             Pending pend;
             if (_pending.TryGetValue(login, out pend))
@@ -426,12 +433,144 @@ public class CPHInline
     static readonly System.Text.RegularExpressions.Regex RxMcIp = new System.Text.RegularExpressions.Regex(@"\b(minecraft\s+)?(server\s+)?ip\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     static readonly System.Text.RegularExpressions.Regex RxDiscordCmd = new System.Text.RegularExpressions.Regex(@"^\s*!discord\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+    // ══════════════════════════════════════════════════════════════
+    //  Minecraft + website facts. The AI words each answer a few times (checked against the facts), then the stored wordings repeat for free.
+    // ══════════════════════════════════════════════════════════════
+    static readonly Regex RxMinecraftWord = new Regex(@"\b(minecraft|mc|smp)\b", RegexOptions.IgnoreCase);
+    static readonly Regex RxJavaWord = new Regex(@"\bjava\b", RegexOptions.IgnoreCase);
+    static readonly Regex RxBedrockWord = new Regex(@"\b(bed\s*rock|pe|mobile|phone|console|xbox|playstation|ps[45]|switch|android|iphone|ipad|windows\s*10)\b", RegexOptions.IgnoreCase);
+    static readonly Dictionary<string, long> _mcAsk = new Dictionary<string, long>();
+    static string _curText = "";
+    static JObject _facts; static DateTime _factsAt = DateTime.MinValue, _siteAt = DateTime.MinValue; static JObject _site;
+    static readonly Random _rnd = new Random();
+    static readonly string[] McAskVariants = { "Are you on Java or Bedrock?", "Java or Bedrock? (Java only needs the IP, Bedrock needs the IP and a port)", "Which version do you play, Java or Bedrock?" };
+
+    static string EditionOf(string text)
+    {
+        bool j = RxJavaWord.IsMatch(text ?? ""), b = RxBedrockWord.IsMatch(text ?? "");
+        return j == b ? "" : j ? "java" : "bedrock";
+    }
+
+    // helper_facts.json is the single source of truth for what the helper tells people; it is seeded once (from what the other chatbots said in the chat logs) and
+    // then topped up from the website (FactsUrl) so the answers stay current. A site value always wins.
+    JObject Facts()
+    {
+        if (_facts != null && (DateTime.UtcNow - _factsAt).TotalSeconds < 60) return _facts;
+        JObject f = ReadJson("helper_facts.json");
+        if (f == null)
+        {
+            f = new JObject {
+                { "McSmpIp", "smp.innocentpenguin.com" }, { "McHardcoreIp", "hc.innocentpenguin.com" }, { "McBedrockPort", "19132" }, { "McVersion", "" },
+                { "McRules", "No griefing, no killing, no stealing, no cheating, be nice." }, { "Discord", "https://discord.gg/fktz5sq4b8" }, { "Website", "https://innocentpenguin.com" },
+                { "Note", "Seeded from the chat logs of 2026-10-16. Check these once; the website (FactsUrl) overrides them when it has the same key." } };
+            try { File.WriteAllText(Path.Combine(_dir, "helper_facts.json"), f.ToString()); } catch (Exception) { }
+        }
+        var merged = (JObject)f.DeepClone();
+        var site = SiteFacts();
+        if (site != null) foreach (var kv in site) if (!string.IsNullOrWhiteSpace((string)kv.Value)) merged[kv.Key] = kv.Value;
+        _facts = merged; _factsAt = DateTime.UtcNow; return merged;
+    }
+    // {"McSmpIp": "...", ...} or {"faq":[{"key":"McSmpIp","answer":"..."}]} from the website, at most every 10 minutes; any failure just keeps the old copy
+    JObject SiteFacts()
+    {
+        string url = (_cfg.FactsUrl ?? "").Trim();
+        if (url == "") return _site;
+        if ((DateTime.UtcNow - _siteAt).TotalMinutes < 10) return _site;
+        _siteAt = DateTime.UtcNow;
+        try
+        {
+            string body = _pgTestHttp != null ? _pgTestHttp("GET " + url, "", "") : HttpGetText(url);
+            var j = JObject.Parse(body); var o = new JObject();
+            if (j["faq"] is JArray arr) { foreach (var it in arr) if (it["key"] != null && it["answer"] != null) o[(string)it["key"]] = (string)it["answer"]; }
+            else foreach (var kv in j) if (kv.Value.Type == JTokenType.String) o[kv.Key] = kv.Value;
+            _site = o;
+        }
+        catch (Exception) { }
+        return _site;
+    }
+    string HttpGetText(string url)
+    {
+        ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+        var req = (HttpWebRequest)WebRequest.Create(url); req.Method = "GET"; req.Timeout = 6000; req.ReadWriteTimeout = 6000;
+        using (var resp = (HttpWebResponse)req.GetResponse())
+        using (var rd = new StreamReader(resp.GetResponseStream(), Encoding.UTF8)) return rd.ReadToEnd();
+    }
+    static string F(JObject f, string k) { return ((string)f[k] ?? "").Trim(); }
+
+    // a stored wording per question key; it is dropped when the facts it was written from change
+    string Worded(string key, string question, string[] mustContain, string template, JObject facts)
+    {
+        string hash = Math.Abs(facts.ToString(Formatting.None).GetHashCode()).ToString();
+        JObject bank = ReadJson("helper_phrases.json") ?? new JObject();
+        var e = bank[key] as JObject;
+        if (e == null || (string)e["facts"] != hash) { e = new JObject { { "facts", hash }, { "phrases", new JArray() } }; bank[key] = e; }
+        var list = (JArray)e["phrases"];
+        if (list.Count >= Math.Max(1, _cfg.PhraseBankSize))
+        {
+            var all = list.Select(x => (string)x).ToList();
+            var others = all.Where(x => x != _lastPhrase).ToList();
+            string pick = others.Count > 0 ? others[_rnd.Next(others.Count)] : all[0];
+            _lastPhrase = pick; return pick;
+        }
+        string text = template;
+        long now = Now(); _aiLog.RemoveAll(t => t < now - 3600);
+        if (_cfg.UseAi && _aiLog.Count < _cfg.MaxAiCallsPerHour)
+        {
+            _aiLog.Add(now);
+            string system = "You are PinguinoHelper, a friendly penguin helper in a Twitch chat. Write ONE short chat reply (under 220 characters, one line, no markdown, at most one emoji) answering the viewer's question. " +
+                "Use ONLY these facts and copy every IP, port and link exactly: " + facts.ToString(Formatting.None) + ". Never invent anything that is not in the facts.";
+            try
+            {
+                string r = Ask(system, question);
+                r = (r ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+                if (r.Length > 0 && r.Length <= 400 && mustContain.All(m => r.IndexOf(m, StringComparison.OrdinalIgnoreCase) >= 0)) text = r;
+            }
+            catch (Exception ex) { CPH.LogWarn("[Helper] AI wording failed: " + ex.Message); }
+        }
+        if (!list.Any(x => (string)x == text)) list.Add(text);
+        try { File.WriteAllText(Path.Combine(_dir, "helper_phrases.json"), bank.ToString()); } catch (Exception) { }
+        _lastPhrase = text; return text;
+    }
+    static string _lastPhrase = "";
+
+    bool McInfo(string login, string display)
+    {
+        var f = Facts();
+        if (F(f, "McSmpIp") == "") return false;                                    // nothing known: stay quiet
+        string ed = EditionOf(_curText);
+        if (ed == "")
+        {
+            _mcAsk[login] = Now() + Math.Max(30, _cfg.ConfirmSeconds);
+            Say("@" + display + " " + McAskVariants[_rnd.Next(McAskVariants.Length)]); return true;
+        }
+        return McAnswer(login, display, ed);
+    }
+    bool McAnswer(string login, string display, string ed)
+    {
+        var f = Facts(); string ip = F(f, "McSmpIp"), hc = F(f, "McHardcoreIp"), port = F(f, "McBedrockPort"), rules = F(f, "McRules");
+        string hcPart = hc == "" ? "" : " (the stream-only hardcore server is " + hc + ")";
+        if (ed == "java")
+            Say("@" + display + " " + Worded("mc_java", "How do I join the Minecraft server on Java?", new[] { ip }, "Java: just add the server IP " + ip + hcPart + ". No port needed." + (rules == "" ? "" : " Rules: " + rules), f));
+        else
+        {
+            if (port == "") port = "19132";
+            Say("@" + display + " " + Worded("mc_bedrock", "How do I join the Minecraft server on Bedrock?", new[] { ip, port }, "Bedrock: server IP " + ip + ", port " + port + hcPart + "." + (rules == "" ? "" : " Rules: " + rules), f));
+        }
+        return true;
+    }
+    bool DiscordInfo(string display)
+    {
+        var f = Facts(); string link = F(f, "Discord"); if (link == "") return false;
+        Say("@" + display + " " + Worded("discord", "Where is the Discord?", new[] { link }, "Join the Discord to hang out, share clips and get updates: " + link, f));
+        return true;
+    }
+
     static void Classify(string text, out string intent, out string epic)
     {
         intent = ""; epic = "";
         var m = RxDoReg.Match(text);
         if (m.Success) { intent = "do_register"; epic = m.Groups["n"].Value.Trim(); return; }
-        if (RxMcIp.IsMatch(text)) { intent = "mc_ip"; return; }
+        if (RxMcIp.IsMatch(text) || RxMinecraftWord.IsMatch(text)) { intent = "mc_info"; return; }
         if (RxDoLeave.IsMatch(text)) { intent = "do_leave"; return; }
         if (RxPos.IsMatch(text)) { intent = "position"; return; }
         if (RxHowReg.IsMatch(text)) { intent = "how_register"; return; }
@@ -519,15 +658,14 @@ public class CPHInline
     bool Respond(string login, string display, string intent, string epic)
     {
         long now = Now();
-        if (intent == "mc_ip" || intent == "discord")
+        if (intent == "mc_info" || intent == "discord")
         {
-            string line = intent == "mc_ip" ? _cfg.McIpReply : _cfg.DiscordReply;
-            if (string.IsNullOrWhiteSpace(line)) return false;                       // nothing configured: stay quiet and let the chatbot decide
             string key = login + "|" + intent; long lastInfo;
             if (_userCd.TryGetValue(key, out lastInfo) && now - lastInfo < _cfg.UserCooldownSec) return true;
             if (now - _infoCd < _cfg.InfoCooldownSec) return true;
-            _userCd[key] = now; _infoCd = now;
-            Say("@" + display + " " + line.Trim()); return true;
+            bool said = intent == "mc_info" ? McInfo(login, display) : DiscordInfo(display);
+            if (said) { _userCd[key] = now; _infoCd = now; }
+            return said;
         }
         string cdKey = login + "|" + intent;
         long last;
