@@ -76,8 +76,12 @@ def poll_loop():
                 console_log.info("events", "connected to the Host activity feed")
             feed.update(ok=True, err="", last=time.time())
         except Exception as e:
-            if feed["ok"] is not False and time.time() - START > 90:        # the Host is usually still starting right after the Suite: stay quiet for 90 s
-                console_log.warn("events", f"Host activity feed unavailable: {str(e)[:120]}", dedupe_s=300)
+            if feed["ok"] is not False:
+                # the Host is usually still starting right after the Suite or restarting: quiet for 90 s, then one warn per 30 min; retries are silent
+                late = time.time() - START > 90 and time.time() - feed.get("warned", 0) > 1800
+                console_log.log("warn" if late else "debug", "events", f"Host activity feed unavailable, retrying every 2 s: {str(e)[:100]}")
+                if late:
+                    feed["warned"] = time.time()
             feed.update(ok=False, err=str(e)[:120], last=time.time())
         time.sleep(2.0)
 
@@ -237,6 +241,14 @@ def g_prestream(h, q):
     from engine import sapi
     v = sapi.voices()
     items.append({"id": "voice-engine", "label": "Voice engine", "status": "pass" if v else "fail", "detail": f"{len(v)} Windows voice(s)" if v else "No Windows voices found"})
+    import engine as _e
+    dev = c["output"]["device"]
+    dev_ok = (not dev) or _e.find_device(dev) is not None
+    vp = c["personas"][c["default_persona"]]
+    items.append({"id": "voice-output", "label": "Voice and output", "status": "pass" if dev_ok else "warn",
+                  "detail": f"{vp['name']} ({vp['engine']}: {vp['voice'] if vp['engine'] == 'sapi' else vp['cloud_voice'] or 'default'}) on " + ((dev + ("" if dev_ok else " - NOT FOUND, using default")) if dev else "the Windows default output") + f", volume {c['output']['volume']}%"})
+    if c["master"] and not dev:
+        items.append({"id": "voice-loop", "label": "Bot voice vs microphone", "status": "warn", "detail": "Plays on the default speakers: Listen's mic may hear it. Use headphones or pick another output."})
     items.append({"id": "voice-events", "label": "Event feed (Host)", "status": "pass" if feed["ok"] else "warn", "detail": "connected" if feed["ok"] else (feed["err"] or "waiting for the Host")})
     import engine
     used = [e for e in ("openai", "elevenlabs") if any(p["engine"] == e for p in c["personas"].values())]
@@ -249,6 +261,19 @@ def g_prestream(h, q):
     items.append({"id": "voice-errors", "label": "Speech errors", "status": "warn" if bad else "pass", "detail": brain.last_error if bad else "none"})
     worst = "fail" if any(i["status"] == "fail" for i in items) else "warn" if any(i["status"] == "warn" for i in items) else "pass"
     return {"status": worst, "items": items}
+
+
+def p_soundcheck(h, b):
+    origin = h.headers.get("origin") or ""
+    if not origin or origin.split("://", 1)[-1] != h.headers.get("host"):
+        raise ValueError("Sound check only works from the Speak page button")
+    return brain.soundcheck()
+
+
+def g_intervals(h, q):
+    since = float(q.get("since") or 0)
+    now = time.time()
+    return {"now": now, "speaking": bool(brain.current) or brain.player.busy, "intervals": [[a, b] for a, b in brain.intervals if b >= since]}
 
 
 def g_devices(h, q):
@@ -367,9 +392,9 @@ def g_selftest(h, q):
         return {"ok": False, "error": str(e)[:200]}
 
 
-GET = {"/api/sounds": g_sounds, "/api/counters": g_counters, "/api/history.csv": g_history_csv, "/api/devices": g_devices, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
+GET = {"/api/speech-intervals": g_intervals, "/api/sounds": g_sounds, "/api/counters": g_counters, "/api/history.csv": g_history_csv, "/api/devices": g_devices, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
        "/api/prestream": g_prestream, "/api/help": g_help, "/api/selftest": g_selftest}
-POST = {"/api/sound-upload": p_sound_upload, "/api/sound-delete": p_sound_delete, "/api/sound-preview": p_sound_play_preview, "/api/counters-reset": p_counters_reset, "/api/test-cloud": p_test_cloud, "/api/timer-fire": p_timer_fire, "/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
+POST = {"/api/soundcheck": p_soundcheck, "/api/sound-upload": p_sound_upload, "/api/sound-delete": p_sound_delete, "/api/sound-preview": p_sound_play_preview, "/api/counters-reset": p_counters_reset, "/api/test-cloud": p_test_cloud, "/api/timer-fire": p_timer_fire, "/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
         "/api/preview": p_preview, "/api/stop": p_stop, "/api/replay": p_replay, "/api/preset": p_preset, "/api/chat-command": p_chat_command}
 PAGES = {"/": "static/index.html"}
 OPEN_POST = {"/api/chat-command"}      # local bots (Host) with no Origin may call this one: it has its own role checks and is silent in chat

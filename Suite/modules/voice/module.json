@@ -192,6 +192,33 @@
         "label": "Open Voice",
         "route": "m:voice"
       }
+    },
+    "voice-output": {
+      "title": "Which voice and where it plays",
+      "summary": "Shows the default persona's voice and the speakers it will use.",
+      "steps": [
+        "Open PenguinComm > Speak > Limits & queue > Output and pick the device (empty = Windows default speakers).",
+        "Press Sound check in the page header: you should hear one line.",
+        "If the device says 'not found', it is unplugged or renamed: pick it again.",
+        "Keep the bot voice OFF your microphone: use headphones or a separate output so Listen does not hear it."
+      ],
+      "fix": {
+        "label": "Open Speak",
+        "route": "m:voice"
+      }
+    },
+    "voice-loop": {
+      "title": "Bot voice and the microphone",
+      "summary": "Listen hears whatever your mic hears. If the bot speaks through speakers next to the mic, Listen transcribes the bot.",
+      "steps": [
+        "Best: play the bot on headphones or on a different output device than your monitors (Speak > Limits & queue > Output).",
+        "Speak publishes when it is talking: GET :8772/api/speech-intervals and the file Data\\runtime\\voice\\speaking.json, so Listen can ignore those moments.",
+        "Voice commands are never answered in chat, so a loop cannot trigger bot replies; it can only add bot lines to the transcript."
+      ],
+      "fix": {
+        "label": "Open Speak",
+        "route": "m:voice"
+      }
     }
   }
 }

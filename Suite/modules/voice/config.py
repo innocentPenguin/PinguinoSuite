@@ -100,6 +100,7 @@ HELP = {
     "cloud.openai_model": "OpenAI speech model. gpt-4o-mini-tts understands 'style'; tts-1 is cheaper.",
     "cloud.elevenlabs_model": "ElevenLabs model, e.g. eleven_turbo_v2_5 (fast) or eleven_multilingual_v2 (richer).",
     "cloud.stability": "ElevenLabs stability 0-100: low = expressive, high = steady.",
+    "soundcheck": "Plays one short line on the real output so you can hear the volume and the device. Works even while the master switch is OFF, but only from this button.",
     "output.device": "Which speakers/virtual cable to play on. Empty = the Windows default. Type part of a device name (e.g. 'CABLE' or 'Voicemeeter').",
     "limits.dedupe_s": "Don't say the same text twice within this many seconds (stops chat copy-paste spam). 0 = off.",
     "nicknames": "How to say a person's name: 'xxdragon99' -> 'Dragon'. One per row, left = their name, right = how it is said.",
@@ -145,6 +146,13 @@ STATUS_HELP = {
                         "Turn on 'Allow cloud voices' in Speak > Limits & queue > Cloud voices.",
                         "Only the finished sentence (secrets already removed) is sent. If the cloud fails, the Windows voice speaks instead (can be turned off)."],
               "link": {"label": "OpenAI API keys", "url": "https://platform.openai.com/api-keys"}, "fix": {"label": "Enter the key", "route": "integrations", "focus": "VOICE_OPENAI_KEY"}},
+    "voice-output": {"title": "Which voice and where it plays", "summary": "Shows the default persona's voice and the speakers it will use.",
+                     "steps": ["Open PenguinComm > Speak > Limits & queue > Output and pick the device (empty = Windows default speakers).", "Press Sound check in the page header: you should hear one line.",
+                               "If the device says 'not found', it is unplugged or renamed: pick it again.", "Keep the bot voice OFF your microphone: use headphones or a separate output so Listen does not hear it."],
+                     "fix": {"label": "Open Speak", "route": "m:voice"}},
+    "voice-loop": {"title": "Bot voice and the microphone", "summary": "Listen hears whatever your mic hears. If the bot speaks through speakers next to the mic, Listen transcribes the bot.",
+                   "steps": ["Best: play the bot on headphones or on a different output device than your monitors (Speak > Limits & queue > Output).", "Speak publishes when it is talking: GET :8772/api/speech-intervals and the file Data\\runtime\\voice\\speaking.json, so Listen can ignore those moments.", "Voice commands are never answered in chat, so a loop cannot trigger bot replies; it can only add bot lines to the transcript."],
+                   "fix": {"label": "Open Speak", "route": "m:voice"}},
     "_module": {"title": "PenguinComm Speak (Pinguino Voice)", "summary": "The bot's speaking voice (PenguinComm > Speak; Listen is the other half, it hears you). A talking co-host: named voice personas with catchphrases announce follows, subs, raids, cheers and chat commands. Silent unless you switch it on.",
                 "steps": ["Open Voice. The master switch is OFF: nothing is spoken.", "Personas tab: tweak a persona (voice, speed, pitch, effects) and press Preview.",
                          "Events tab: choose who announces each event and what they say.", "Limits & Queue: set profanity, length and rate limits, quiet hours.",
@@ -241,7 +249,7 @@ def defaults():
                    "strip_emoji": True, "max_repeat": 3, "blocked_users": [], "clean_names": True, "dedupe_s": 20},
         "queue": {"mode": "queue", "max_queue": 8, "max_age_s": 45, "gap_ms": 350, "interrupt_min_priority": 8, "merge_similar": True},
         "quiet": {"enabled": False, "start": "23:00", "end": "07:00", "mode": "mute"},
-        "output": {"volume": 80, "normalize": True, "device": ""},
+        "output": {"volume": 60, "normalize": True, "device": ""},
         "pronounce": {"innocentpenguin": "innocent penguin", "pinguino": "ping win o"},
         "theme": {"accent": "#ff8a1f", "mode": "dark"},
         "history": {"keep": 50},
@@ -375,7 +383,7 @@ def normalize(raw):
     z["start"], z["end"] = _hhmm(rz.get("start"), "23:00"), _hhmm(rz.get("end"), "07:00")
     z["mode"] = rz.get("mode") if rz.get("mode") in ("mute", "whisper") else "mute"
     o, ro = out["output"], raw.get("output") if isinstance(raw.get("output"), dict) else {}
-    o["volume"] = _i(ro.get("volume", o["volume"]), 0, 100, 80)
+    o["volume"] = _i(ro.get("volume", o["volume"]), 0, 100, 60)
     o["normalize"] = bool(ro.get("normalize", True))
     o["device"] = _s(ro.get("device", ""), 80)
     rc = raw.get("cloud") if isinstance(raw.get("cloud"), dict) else {}

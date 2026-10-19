@@ -31,6 +31,7 @@ class Brain:
         self.current = None
         self.history = deque(maxlen=500)
         self.stats = {"spoken": 0, "dropped": 0, "blocked": 0, "errors": 0}
+        self.intervals = deque(maxlen=100)    # (start, end) epoch seconds of audio that was played: Listen can skip transcribing these
         self.recent = deque(maxlen=400)   # timestamps of spoken lines (rate limit)
         self.last_kind = {}               # event -> time (cooldown)
         self.last_text = {}
@@ -319,7 +320,13 @@ class Brain:
                                           normalize=c["output"]["normalize"], whisper=item["whisper"], cloud_obj=self.cloud, cloud_cfg=c["cloud"], sound_dir=cfg.path("sounds"))
                 if self.state() in ("off", "muted", "quiet-mute"):      # switched off while synthesising
                     raise _Silenced()
-                done = self.player.play(wav, secs, c["output"]["device"])
+                t0 = self.now()
+                self._flag(True, t0 + secs + 0.5)
+                try:
+                    done = self.player.play(wav, secs, c["output"]["device"])
+                finally:
+                    self.intervals.append((t0 - 0.2, self.now() + 1.0))
+                    self._flag(False, 0)
                 self.stats["spoken"] += 1
                 self.recent.append(self.now())
                 self._log({"kind": item["kind"], "user": item["user"], "outcome": "spoken" if done else "interrupted", "text": item["text"], "persona": item["persona"],
@@ -375,6 +382,28 @@ class Brain:
         pid = tm["persona"] if tm["persona"] in self.cfg["personas"] else self.cfg["default_persona"]
         line = self.rng.choice(tm["lines"])
         return self.handle({"kind": "timer", "user": "", "message": textproc.render(line, {}, self.cfg["personas"][pid], self.rng), "persona": pid, "priority": tm["priority"], "manual": True, "_raw": True})
+
+    def _flag(self, on, until):
+        try:
+            cfg.path("speaking.json").write_text(json.dumps({"speaking": on, "until": until, "ts": self.now()}), "utf8")
+        except OSError:
+            pass
+
+    def soundcheck(self):
+        """Explicit button only: one short line on the real output, even with the master OFF. Bypasses the queue, never triggered by events."""
+        c = self.cfg
+        persona = c["personas"][c["default_persona"]]
+        wav, secs = engine.render("Sound check. One, two, three.", persona, sting="none", sapi_obj=self.sapi, output_volume=c["output"]["volume"], normalize=c["output"]["normalize"],
+                                  cloud_obj=self.cloud, cloud_cfg=c["cloud"], sound_dir=cfg.path("sounds"))
+        t0 = self.now()
+        self._flag(True, t0 + secs + 0.5)
+        try:
+            self.player.play(wav, secs, c["output"]["device"])
+        finally:
+            self.intervals.append((t0 - 0.2, self.now() + 1.0))
+            self._flag(False, 0)
+        self._log({"kind": "soundcheck", "user": "", "outcome": "spoken", "text": "Sound check", "persona": c["default_persona"], "seconds": round(secs, 1)})
+        return {"ok": True, "seconds": round(secs, 1), "device": c["output"]["device"] or "Windows default"}
 
     # ------------------------------------------------------------ controls
     def panic(self):

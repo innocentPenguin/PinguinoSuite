@@ -31,3 +31,6 @@ A new module is a drop-in manifest, discovered at core start: needs a core **rel
 
 ## Cycle 3 additions
 Milestones (every Nth follow/sub/raid, or every N bits/viewers; daily or forever; counted even while silent; `GET /api/counters`, `POST /api/counters-reset`), persona by time of day, your own WAV sounds as persona/event stingers (`/api/sounds`, `/api/sound-upload` max 2 MB, file names sanitised, only inside `Data\runtime\voice\sounds`), history CSV export (`/api/history.csv`), output-device list de-duplicated.
+
+## Stream-day safety (cycle 5)
+Default volume 60 %, master OFF, chat/!tts/cloud all OFF. **Sound check** button (page header, same-origin click only) plays one line on the real output even with the master OFF. Feedback loop with Listen: Speak publishes when it plays audio: `GET :8772/api/speech-intervals?since=<epoch>` -> `{speaking, intervals:[[start,end],...]}` and `Data\runtime\voice\speaking.json` `{speaking, until}`; Listen may skip transcribing those moments. Best fix: play the bot on headphones / another output device. Pre-stream items `voice-output` (voice + device + volume) and `voice-loop` (warn when master ON and default speakers). Host-feed outages log at debug (one warn per 30 min after the first 90 s).

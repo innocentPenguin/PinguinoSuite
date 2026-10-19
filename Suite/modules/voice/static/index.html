@@ -41,7 +41,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1p
   <span class="sp"></span>
   <span class="row"><span class="dim sm">Master switch</span><label class="sw"><input type="checkbox" id="master"><span></span></label></span>
   <button id="panic" class="dng">■ Panic stop</button>
-  <button id="mute10">Mute 10 min</button><button id="unmute">Unmute</button><button id="again" title="Say the last line again">↻ Again</button>
+  <button id="sndchk" title="Plays one short line on the real output, even while the master switch is off">🔊 Sound check</button><button id="mute10">Mute 10 min</button><button id="unmute">Unmute</button><button id="again" title="Say the last line again">↻ Again</button>
   <button id="helpbtn">? Help</button>
 </header>
 <nav id="tabs"></nav>
@@ -219,6 +219,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-tab]');if(
 $('#master').onchange=async e=>{if(e.target.checked&&!confirm('Switch Pinguino Voice ON? Announcements will be spoken on this PC from now on.')){e.target.checked=false;return}
   try{const r=await api('/api/master',{on:e.target.checked});toast(e.target.checked?'Voice is ON':'Voice is OFF — silent');refresh()}catch(x){toast(x.message)}};
 $('#panic').onclick=async()=>{const r=await api('/api/stop',{});toast('Stopped. Cleared '+r.cleared+' waiting')};
+$('#sndchk').onclick=async()=>{try{toast('Playing…');const r=await api('/api/soundcheck',{});toast('Sound check played on: '+r.device,4000)}catch(e){toast(e.message)}};
 $('#mute10').onclick=async()=>{await api('/api/mute',{minutes:10});toast('Muted for 10 minutes');refresh()};
 $('#unmute').onclick=async()=>{await api('/api/mute',{minutes:0});toast('Unmuted');refresh()};
 $('#again').onclick=async()=>say(await api('/api/replay',{}));

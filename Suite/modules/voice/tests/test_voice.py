@@ -456,5 +456,34 @@ class Cycle3(unittest.TestCase):
         self.assertEqual(config.normalize({"personas": {"x": {"stinger": "file:../evil.exe"}}})["personas"]["x"]["stinger"], "none")
 
 
+class Cycle5(unittest.TestCase):
+    def test_soundcheck_master_off_and_intervals(self):
+        b, s, pl = mk(master=False)
+        r = b.soundcheck()
+        self.assertTrue(r["ok"])
+        self.assertEqual(len(pl.played), 1)
+        self.assertEqual(len(b.intervals), 1)
+        self.assertEqual(b.handle({"kind": "follow", "user": "bob"})["outcome"], "master_off")
+        import json as j
+        self.assertFalse(j.loads(config.path("speaking.json").read_text())["speaking"])
+
+    def test_spoken_line_recorded_as_interval(self):
+        b, s, pl = mk()
+        b.handle({"kind": "follow", "user": "bobby"})
+        wait(pl, 1)
+        time.sleep(0.2)
+        self.assertEqual(len(b.intervals), 1)
+        a, e = b.intervals[0]
+        self.assertGreater(e, a)
+
+    def test_safe_defaults(self):
+        c = config.defaults()
+        self.assertFalse(c["master"])
+        self.assertLessEqual(c["output"]["volume"], 60)
+        self.assertFalse(c["events"]["chat"]["enabled"])
+        self.assertFalse(c["tts"]["enabled"])
+        self.assertFalse(c["cloud"]["allow"])
+
+
 if __name__ == "__main__":
     unittest.main()
