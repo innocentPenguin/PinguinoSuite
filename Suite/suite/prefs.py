@@ -22,7 +22,7 @@ ENUMS = {
     "tone": ["chime", "ping", "soft", "pop"],
     "hours": ["auto", "12", "24"],
 }
-DASH_ORDER = ["listen", "modules", "activity", "prestream"]
+DASH_ORDER = ["listen", "modules", "activity", "prestream", "chatrate"]
 DASH_FULL = ["hero", "devices", "tiles"]
 TILES = ["t_stream", "t_chat", "t_devices", "t_modules", "t_prestream", "t_errors"]
 SOUND_EVENTS = ["golive", "prestream_fail", "prestream_ok", "error", "module_down", "act_follow", "act_sub", "act_raid", "act_cheer", "act_redeem"]

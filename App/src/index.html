@@ -245,6 +245,7 @@ pages.dashboard=()=>{
         <div class="row" style="margin-top:10px"><button class="sm" data-go="comm">Open PenguinComm</button><button class="sm" data-go="voice">Voice Studio</button>${st?.listening?'':'<button id="d-listen" class="pri sm">Start listening</button>'}</div></div>`;
   B.activity=`<div class="card"><h3>Activity</h3><div class="evt" style="max-height:260px;overflow:auto">${S.events.slice(-14).reverse().map(e=>`<div>${new Date(e.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} <b class="${e.type==='live'?'lv':e.type==='hook'?'hk':''}">${esc(e.type)}</b> ${esc(e.id||e.state||e.title||'')}</div>`).join('')||'<span class="faint">Nothing yet</span>'}</div></div>`;
   B.modules=`<div class="card"><h3>Modules</h3>${[...S.modules].sort((a,b)=>String(dispName(a)).localeCompare(String(dispName(b)))).map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(dispName(m))}</b> <span class="sm faint">${esc(m.state)}</span></div>${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}<button class="sm" data-mlog="${esc(m.id)}" title="Recent log lines of this module">Logs</button>${modSwitch(m)}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>`;
+  B.chatrate=chatRateCard();
   B.prestream=C.pr&&C.pr.ts?`<div class="card"><div class="row"><h3 style="margin:0">Pre-stream</h3><button class="sm sp" id="d-prerun">Run now</button><button class="sm" data-go="console">Details</button></div><div style="margin-top:6px">${C.pr.items.filter(i=>i.status!=='pass').slice(0,6).map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<div class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><b>${esc(i.module)}</b><span class="sm">${esc(i.label)}</span></div>`}).join('')||'<span class="sm faint">Everything passed.</span>'}</div></div>`:'';
   return dashLayout(B)};
 
@@ -450,7 +451,7 @@ window.addEventListener('message',async e=>{
   catch(err){e.source&&e.source.postMessage({pinguino:'window-error',error:String(err.message||err)},e.origin)}});
 /* ============ Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PF_DEFAULT={v:1,theme:{preset:'penguin',accent:'',radius:'round',density:'comfortable',motion:'full',zoom:100,vars:{}},layout:{sidebar:'full',start:'dashboard',nav_hidden:[],nav_order:[]},
-  dash:{full:['hero','devices','tiles'],cards:['listen','modules','activity','prestream'],tiles:['t_stream','t_chat','t_devices','t_modules','t_prestream','t_errors'],hidden:[]},
+  dash:{full:['hero','devices','tiles'],cards:['listen','modules','activity','prestream','chatrate'],tiles:['t_stream','t_chat','t_devices','t_modules','t_prestream','t_errors'],hidden:[]},
   sound:{on:false,volume:50,tone:'chime',events:{golive:true,prestream_fail:true,prestream_ok:false,error:false,module_down:false,act_follow:false,act_sub:false,act_raid:false,act_cheer:false,act_redeem:false}},notify:{toasts:true,desktop:true},time:{hours:'auto'},
   text:{app_name:'PinguinoSuite',idle_title:'Ready when you are',live_pill:'LIVE',offline_pill:'Offline'},thresholds:{errors_min:30,tile_errors_hide_zero:false},profiles:{},auto:{live:'',idle:''}};
 const clone=o=>JSON.parse(JSON.stringify(o));
@@ -517,7 +518,7 @@ function navCatalog(){const out=[{id:'dashboard',label:'Dashboard',fixed:true}];
   return out}
 
 /* dashboard blocks */
-const DASH_LABEL={hero:'Live banner',devices:'Devices strip',tiles:'Status tiles',listen:'PinguinoListen',modules:'Modules list',activity:'Activity log',prestream:'Pre-stream check',t_stream:'Tile: Stream',t_chat:'Tile: Chat',t_devices:'Tile: Devices',t_modules:'Tile: Modules',t_prestream:'Tile: Pre-stream',t_errors:'Tile: Errors'};
+const DASH_LABEL={hero:'Live banner',devices:'Devices strip',tiles:'Status tiles',listen:'PinguinoListen',modules:'Modules list',activity:'Activity log',prestream:'Pre-stream check',chatrate:'Chat activity (last streams)',t_stream:'Tile: Stream',t_chat:'Tile: Chat',t_devices:'Tile: Devices',t_modules:'Tile: Modules',t_prestream:'Tile: Pre-stream',t_errors:'Tile: Errors'};
 function dashLayout(B){const D2=PF.dash,hid=new Set(D2.hidden);
   const full=D2.full.filter(x=>!hid.has(x)).map(x=>x==='tiles'?`<div class="tiles" style="margin-bottom:14px">${D2.tiles.filter(y=>!hid.has(y)).map(y=>B[y]||'').join('')}</div>`:(B[x]||'')).join('');
   const cs=D2.cards.filter(x=>!hid.has(x)),L2=cs.filter((_,i)=>i%2===0).map(x=>B[x]||'').join(''),R2=cs.filter((_,i)=>i%2===1).map(x=>B[x]||'').join('');
@@ -659,6 +660,17 @@ function bindSwitches(){
     try{await post(`/api/modules/${id}/enable`,{on:i.checked});toast(`${S.modules.find(x=>x.id===id)?.name||id} switched ${i.checked?'on':'off'}`)}catch{toast('Could not change the module')}
     setTimeout(async()=>{await load();redrawSw()},700)});
 }
+/* ============ Chat activity card (Host: GET /api/chat-rate) ============ */
+const CR={v:undefined,t:0};
+function chatRateCard(){
+  if(CR.v===undefined||Date.now()-CR.t>60000){CR.t=Date.now();if(CR.v===undefined)CR.v=null;hostGet('/api/chat-rate').then(j=>{CR.v=j;if(route==='dashboard')draw(true)}).catch(()=>{})}
+  const v=CR.v;if(!v||!v.stats)return '';
+  const ss=(v.streams||[]).slice(-5).reverse(),last=(v.streams||[]).slice(-1)[0],pm=last&&last.perMinute||[];
+  let spark='';if(pm.length>1){const n=60,step=Math.max(1,Math.ceil(pm.length/n)),pts=[];for(let i=0;i<pm.length;i+=step)pts.push(pm.slice(i,i+step).reduce((a,b)=>a+b,0)/Math.min(step,pm.length-i));
+    const mx=Math.max(1,...pts),w=240,h=40;spark=`<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><polyline fill="none" stroke="var(--accent)" stroke-width="1.6" points="${pts.map((p,i)=>`${(i/(pts.length-1)*w).toFixed(1)},${(h-2-p/mx*(h-4)).toFixed(1)}`).join(' ')}"/></svg>`}
+  const e=v.stats.effective||{};
+  return `<div class="card"><h3>Chat activity</h3><div class="sm faint">Typical ${v.stats.typicalQuiet??'—'}–${v.stats.typicalBusy??'—'} msgs/min · last stream ${v.stats.lastStreamAvg??'—'}/min${e.auto?' · thresholds auto':''}</div>${spark}
+    ${ss.length?`<table class="tbl" style="margin-top:6px"><tr><th>Stream</th><th>Min</th><th>Msgs</th><th>/min</th></tr>${ss.map(s=>{const mins=s.perMinute?s.perMinute.length:Math.round((Date.parse(s.end)-Date.parse(s.start))/60000);return `<tr><td>${esc(new Date(s.start).toLocaleDateString([], {month:'short',day:'numeric'}))}</td><td>${mins||''}</td><td>${s.total??''}</td><td>${mins?(s.total/mins).toFixed(1):''}</td></tr>`}).join('')}</table>`:''}</div>`}
 /* ============ Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log) ============ */
 const Q={tab:'actions',data:{},doc:null,err:null,q:'',group:'',out:{},busy:{},pins:(()=>{try{return JSON.parse(localStorage.getItem('qpins')||'[]')}catch{return[]}})()};
 const hostGet=p=>fetch('/api/modules/host/get?path='+encodeURIComponent(p)).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});

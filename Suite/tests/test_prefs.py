@@ -25,7 +25,7 @@ class PrefsTests(unittest.TestCase):
 
     def test_new_cards_are_appended(self):
         d = prefs.clean({"dash": {"cards": ["activity", "listen"], "hidden": ["modules", "nope"]}})
-        self.assertEqual(d["dash"]["cards"], ["activity", "listen", "modules", "prestream"])
+        self.assertEqual(d["dash"]["cards"], ["activity", "listen", "modules", "prestream", "chatrate"])
         self.assertEqual(d["dash"]["hidden"], ["modules"])
 
     def test_profiles_and_auto(self):
