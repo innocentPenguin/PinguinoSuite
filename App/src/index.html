@@ -156,6 +156,12 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 .cshead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}.cshead .grow{flex:1;min-width:140px}
 .csbody iframe{width:100%;height:calc(100vh - 250px);min-height:320px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}.commsum{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 @media(max-width:1100px){.commgrid.both{grid-template-columns:1fr}}
+.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}.qcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}.qcard.off{opacity:.55}.qcard h4{margin:0;font-size:14px}
+.qcard .qt{display:flex;gap:4px;flex-wrap:wrap}.qtag{font-size:11px;border:1px solid var(--line2);border-radius:10px;padding:0 7px;color:var(--dim)}.qout{font:11.5px/1.4 ui-monospace,Consolas,monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;white-space:pre-wrap;max-height:120px;overflow:auto}
+.qstar{background:transparent;border:0;cursor:pointer;font-size:16px;color:var(--faint);padding:0 4px}.qstar.on{color:var(--accent)}
+#pal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:60;align-items:flex-start;justify-content:center;padding-top:12vh}body.palopen #pal{display:flex}
+#pal .pbox{width:min(560px,94vw);background:var(--panel);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}#pal input{width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:14px 16px;font-size:15px;background:transparent}
+#pal .plist{max-height:50vh;overflow:auto}#pal .pit{display:flex;gap:10px;padding:8px 16px;cursor:pointer;align-items:baseline}#pal .pit.on{background:var(--accent-soft)}#pal .pit .pk{margin-left:auto;font-size:11px;color:var(--faint)}
 .minirow{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}.minirow:last-child{border:0}.minirow .grow{flex:1;min-width:0}
 .col2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:1000px){.col2{grid-template-columns:1fr}}
@@ -184,6 +190,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
     <div class="row sp"><button id="simon" class="sm" title="Pretend we went live to test auto-start">▶ Test go-live</button><button id="simoff" class="sm">■ End test</button></div></div>
   <div id="page"></div>
 </div>
+<div id="pal"><div class="pbox"><input type="text" id="pal-in" placeholder="Type a page, action or command…  (Esc closes)" autocomplete="off"><div class="plist" id="pal-list"></div></div></div>
 <div id="hscrim"></div>
 <aside id="hdrawer"><div class="hh"><h3 id="hd-title">Help</h3><button class="sm" onclick="closeHelp()">✕</button></div><div class="hb" id="hd-body"></div><div class="hf" id="hd-foot"></div></aside>
 <div id="toast"></div>
@@ -359,13 +366,13 @@ pages.help=()=>{
   <div class="grid g2" style="align-items:start">${Object.keys(g).map(n=>`<div class="card"><h3>${esc(n)}</h3>${g[n].map(t=>`<div class="irow clk" data-hk="${esc(t.key)}"><div class="grow"><b>${esc(t.title)}</b></div><span class="faint">›</span></div>`).join('')}</div>`).join('')}</div>`};
 /* ============ Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, message?, detail?}]}) ============ */
 const AT={follow:['➕','Follow'],sub:['⭐','Sub'],resub:['🔁','Resub'],gift:['🎁','Gift'],cheer:['💎','Cheer'],raid:['🚩','Raid'],redeem:['🎟','Redeem'],ban:['⛔','Ban'],timeout:['⏱','Timeout'],clip:['🎬','Clip'],replay:['⏪','Replay'],poll:['📊','Poll'],prediction:['🔮','Prediction'],hype:['🔥','Hype train'],shoutout:['📣','Shoutout'],other:['•','Other']};
-const A={items:[],seq:0,types:new Set(),q:'',paused:false,err:null,loaded:false,pending:[]};
+const A={view:'events',items:[],seq:0,types:new Set(),q:'',paused:false,err:null,loaded:false,pending:[]};
 const ACT_SFX={follow:'act_follow',sub:'act_sub',resub:'act_sub',gift:'act_sub',raid:'act_raid',cheer:'act_cheer',redeem:'act_redeem'};
 const anyActSound=()=>PF.sound.on&&Object.keys(ACT_SFX).some(k=>PF.sound.events[ACT_SFX[k]]);
 const atype=t=>AT[t]?t:'other';
 const actText=e=>{const n=e.amount!=null&&e.amount!==''?` · ${e.amount}${e.type==='cheer'?' bits':e.type==='raid'?' viewers':e.type==='gift'?' subs':''}`:'';return `${e.tier?'Tier '+e.tier+' ':''}${e.detail||''}${n}${e.message?' — “'+e.message+'”':''}`.trim()};
-pages.activity=()=>`<div class="ctool"><div class="chips" id="a-chips"></div><input type="text" id="a-q" placeholder="Search…" value="${esc(A.q)}"><button class="sm" id="a-pause">${A.paused?'Resume':'Pause'}</button><span class="sm faint sp" id="a-count"></span></div><div class="clog" id="alog" style="max-height:none"></div>`;
-function renderActivity(){const box=$('#alog');if(!box)return;
+pages.activity=()=>`<div class="ctool"><span class="chips"><span class="chip ${A.view==='events'?'on':''}" data-aview="events">Events</span><span class="chip ${A.view==='runs'?'on':''}" data-aview="runs">Action runs</span></span><div class="chips" id="a-chips"></div><input type="text" id="a-q" placeholder="Search…" value="${esc(A.q)}"><button class="sm" id="a-pause">${A.paused?'Resume':'Pause'}</button><span class="sm faint sp" id="a-count"></span></div><div class="clog" id="alog" style="max-height:none"></div>`;
+function renderActivity(){const box=$('#alog');if(!box)return;if(A.view==='runs'){$('#a-chips').innerHTML='';renderRuns();return}
   const seen=new Set(A.items.map(e=>atype(e.type)));
   $('#a-chips').innerHTML=[...seen].sort().map(t=>`<span class="chip ${A.types.has(t)?'on':''}" data-atype="${t}">${AT[t][0]} ${AT[t][1]}</span>`).join('')+(A.types.size?'<span class="chip" data-atype="">Clear</span>':'');
   const f=A.items.filter(e=>(!A.types.size||A.types.has(atype(e.type)))&&(!A.q||((e.user||'')+' '+actText(e)).toLowerCase().includes(A.q.toLowerCase()))).slice(-500).reverse();
@@ -380,8 +387,10 @@ async function pollActivity(){
       if(A.paused)A.pending=A.pending.concat(add);else A.items=A.items.concat(add).slice(-3000)}
     else if(j.seq)A.seq=Math.max(A.seq,j.seq)}
   catch(e){A.loaded=true;if(!A.items.length)A.err='The Host is not serving the activity feed yet (is PinguinoHost running, and updated?).'}
-  if(route==='activity')renderActivity()}
+  if(route==='activity'&&A.view==='events')renderActivity()}
 function bindActivity(){
+  $$('[data-aview]').forEach(c=>c.onclick=()=>{A.view=c.dataset.aview;draw(true)});
+  if(A.view==='runs'){loadRuns();setTimeout(()=>{if(route==='activity'&&A.view==='runs')loadRuns()},4000)}
   $('#a-q').oninput=e=>{A.q=e.target.value;renderActivity()};
   $('#a-pause').onclick=()=>{A.paused=!A.paused;if(!A.paused){A.items=A.items.concat(A.pending).slice(-3000);A.pending=[]}$('#a-pause').textContent=A.paused?'Resume':'Pause';renderActivity()};
   pollActivity()}
@@ -389,7 +398,7 @@ setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
 setInterval(()=>{if(route!=='activity'&&anyActSound()&&!document.hidden)pollActivity()},5000);   // keeps follow / sub / raid sounds alive on any page
 /* ============ Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PW={mons:null,wins:[],err:null,sel:{page:'console',mon:'',place:'free',top:false}};
-const popRoutes=()=>[['dashboard','Dashboard'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
+const popRoutes=()=>[['dashboard','Dashboard'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
 function popTarget(route){   // module pages open directly (they are plain local pages); shell pages open the shell in chrome-less mode
   if(isMod(route)){const m=modOf(route);if(!m)return null;return {url:modSrc(m),title:m.ui?.nav||m.name}}
   return {url:'index.html?popout='+encodeURIComponent(route),title:titles[route]||route}}
@@ -640,6 +649,67 @@ function bindSwitches(){
     try{await post(`/api/modules/${id}/enable`,{on:i.checked});toast(`${S.modules.find(x=>x.id===id)?.name||id} switched ${i.checked?'on':'off'}`)}catch{toast('Could not change the module')}
     setTimeout(async()=>{await load();redrawSw()},700)});
 }
+/* ============ Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log) ============ */
+const Q={doc:null,err:null,q:'',group:'',out:{},busy:{},pins:(()=>{try{return JSON.parse(localStorage.getItem('qpins')||'[]')}catch{return[]}})()};
+const hostGet=p=>fetch('/api/modules/host/get?path='+encodeURIComponent(p)).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+const hostPost=(p,b)=>post('/api/modules/host/post',{path:p,body:b});
+async function loadQuick(){try{const j=await hostGet('/api/automations');Q.doc=j.doc;Q.master=j.master;Q.err=null}catch{Q.err='The Host is not answering (is PinguinoHost on?).'}if(route==='quick')draw(true)}
+const trigText=t=>{const k=t.type;return k==='command'?(t.names||[]).join(' / '):k==='redeem'?'redeem: '+(t.title||''):k==='hotkey'?'hotkey '+(t.key||''):k==='timer'?'every '+Math.round((t.everySec||600)/60)+' min':k==='chat'?'chat /'+(t.pattern||'')+'/':k}
+pages.quick=()=>{
+  if(Q.err)return `<div class="card" style="max-width:520px"><h3>Quick actions</h3><div class="dim">${esc(Q.err)}</div><div class="row" style="margin-top:10px"><button class="sm" id="q-retry">Retry</button></div></div>`;
+  if(!Q.doc){loadQuick();return '<div class="dim">Loading actions…</div>'}
+  const acts=(Q.doc.actions||[]),groups=[...new Set(acts.map(a=>a.group||'Other'))].sort();
+  const f=acts.filter(a=>(!Q.group||(a.group||'Other')===Q.group)&&(!Q.q||(a.name+' '+(a.group||'')+' '+(a.triggers||[]).map(trigText).join(' ')).toLowerCase().includes(Q.q.toLowerCase())))
+    .sort((a,b)=>(Q.pins.includes(b.id)-Q.pins.includes(a.id))||String(a.name).localeCompare(b.name));
+  return `<div class="ctool"><input type="text" id="q-q" placeholder="Search actions…" value="${esc(Q.q)}"><div class="chips"><span class="chip ${Q.group?'':'on'}" data-qg="">All</span>${groups.map(g=>`<span class="chip ${Q.group===g?'on':''}" data-qg="${esc(g)}">${esc(g)}</span>`).join('')}</div><span class="sm faint sp">${f.length} of ${acts.length}${Q.master===false?' · this device is not the master: actions will not run here':''}</span>${hq('quick')}</div>
+  <div class="qgrid">${f.map(a=>`<div class="qcard ${a.enabled===false?'off':''}"><div class="row"><h4 style="flex:1">${esc(a.name)}</h4><button class="qstar ${Q.pins.includes(a.id)?'on':''}" data-qpin="${esc(a.id)}" title="Pin to the top">★</button></div>
+    <div class="qt">${a.group?`<span class="qtag">${esc(a.group)}</span>`:''}${(a.triggers||[]).map(x=>`<span class="qtag">${esc(trigText(x))}</span>`).join('')}${a.enabled===false?'<span class="qtag">off</span>':''}</div>
+    <div class="row"><button class="pri sm" data-qrun="${esc(a.id)}|0" ${Q.busy[a.id]?'disabled':''}>${Q.busy[a.id]?'Running…':'Run now'}</button><button class="sm" data-qrun="${esc(a.id)}|1" title="Show what it would do without doing it">Dry run</button></div>
+    ${Q.out[a.id]?`<div class="qout">${esc(Q.out[a.id])}</div>`:''}</div>`).join('')||'<div class="faint">No actions match.</div>'}</div>`};
+function bindQuick(){
+  $('#q-retry')&&($('#q-retry').onclick=()=>{Q.err=null;Q.doc=null;draw(true)});
+  $('#q-q')&&($('#q-q').oninput=e=>{Q.q=e.target.value;const p=e.target.selectionStart;draw(true);const n=$('#q-q');n.focus();n.setSelectionRange(p,p)});
+  $$('[data-qg]').forEach(c=>c.onclick=()=>{Q.group=c.dataset.qg;draw(true)});
+  $$('[data-qpin]').forEach(b=>b.onclick=()=>{const id=b.dataset.qpin,i=Q.pins.indexOf(id);i<0?Q.pins.push(id):Q.pins.splice(i,1);try{localStorage.setItem('qpins',JSON.stringify(Q.pins))}catch{}draw(true)});
+  $$('[data-qrun]').forEach(b=>b.onclick=()=>runAction(...b.dataset.qrun.split('|')))}
+async function runAction(id,dry){Q.busy[id]=true;if(route==='quick')draw(true);
+  try{const r=await hostPost('/api/automations/test',{id,dry:dry==='1'});let j={};try{j=JSON.parse(r.detail)}catch{}
+    const run=j.run||{};const lines=[].concat(run.output||[]);Q.out[id]=(j.ok?'OK':'FAILED')+` (${run.ms??'?'} ms)${dry==='1'?' · dry run':''}`+(run.error?'\n'+run.error:'')+(lines.length?'\n'+lines.slice(0,12).join('\n'):'');
+    toast((j.ok?'Ran ':'Failed: ')+(Q.doc?.actions.find(a=>a.id===id)?.name||id))}
+  catch{Q.out[id]='Could not reach the Host';toast('Could not reach the Host')}
+  Q.busy[id]=false;if(route==='quick')draw(true)}
+
+/* Action runs (history) shown as a tab on the Activity page */
+const AR={rows:null,err:null};
+async function loadRuns(){try{AR.rows=(await hostGet('/api/automations/log?n=120')).runs||[];AR.err=null}catch{AR.err='The Host is not answering.'}if(route==='activity'&&A.view==='runs')renderRuns()}
+function renderRuns(){const box=$('#alog');if(!box)return;
+  box.innerHTML=AR.err?`<div class="act"><span class="dim">${esc(AR.err)}</span></div>`:!AR.rows?'<div class="act"><span class="faint">Loading…</span></div>':AR.rows.map(r=>`<div class="act"><span class="ai">${r.ok?'✅':'⚠️'}</span><span class="at">${tm(Date.parse(r.ts)/1000)}</span><span><span class="au">${esc(r.action||r.id)}</span> <span class="sm faint">${esc(r.trigger||'')} · ${r.ms??'?'} ms</span>${r.error?`<div class="ad" style="color:var(--bad)">${esc(r.error)}</div>`:''}</span></div>`).join('')||'<div class="act"><span class="faint">No actions have run yet.</span></div>';
+  $('#a-count')&&($('#a-count').textContent=(AR.rows||[]).length+' runs')}
+
+/* ============ Command palette (Ctrl+K) ============ */
+let PAL={items:[],sel:0};
+function palItems(){const it=[];
+  navCatalog().forEach(c=>it.push({t:'Go to '+c.label,k:'page',run:()=>go(c.id)}));
+  it.push({t:'Run the pre-stream check now',k:'action',run:async()=>{try{C.pr=await post('/api/prestream/run');toast('Pre-stream check done');go('console')}catch{toast('Check failed to run')}}});
+  it.push({t:'Toggle sounds',k:'setting',run:()=>setPref('sound.on',!PF.sound.on,true)});
+  it.push({t:'Toggle sidebar',k:'setting',run:toggleNav});
+  it.push({t:'Pop out this page',k:'window',run:()=>popOut(route)});
+  Object.keys(PF.profiles).forEach(n=>it.push({t:'Look: '+n,k:'look',run:()=>applyProfile(n)}));
+  Object.keys(PRESETS).forEach(id=>it.push({t:'Theme: '+PRESETS[id].name,k:'theme',run:()=>setPref('theme.preset',id,true)}));
+  (S?S.modules:[]).forEach(m=>{it.push({t:'Restart '+dispName(m),k:'module',run:()=>post(`/api/modules/${m.id}/restart`).then(()=>toast('Restarting '+dispName(m)))})});
+  ((Q.doc&&Q.doc.actions)||[]).filter(a=>a.enabled!==false).forEach(a=>it.push({t:'Run action: '+a.name,k:'action',run:()=>runAction(a.id,'0')}));
+  return it}
+function palRender(){const q=($('#pal-in').value||'').toLowerCase().split(/\s+/).filter(Boolean);
+  PAL.items=palItems().filter(x=>q.every(w=>x.t.toLowerCase().includes(w))).slice(0,40);PAL.sel=Math.min(PAL.sel,Math.max(0,PAL.items.length-1));
+  $('#pal-list').innerHTML=PAL.items.map((x,i)=>`<div class="pit ${i===PAL.sel?'on':''}" data-pi="${i}"><span>${esc(x.t)}</span><span class="pk">${x.k}</span></div>`).join('')||'<div class="pit"><span class="faint">Nothing matches.</span></div>';
+  $$('#pal-list .pit[data-pi]').forEach(e=>e.onclick=()=>palRun(+e.dataset.pi))}
+function palRun(i){const x=PAL.items[i];if(!x)return;closePal();try{x.run()}catch{}}
+function openPal(){if(!Q.doc&&!Q.err)loadQuick();document.body.classList.add('palopen');const i=$('#pal-in');i.value='';PAL.sel=0;palRender();i.focus()}
+function closePal(){document.body.classList.remove('palopen')}
+$('#pal-in').oninput=()=>{PAL.sel=0;palRender()};
+$('#pal').onclick=e=>{if(e.target.id==='pal')closePal()};
+$('#pal-in').onkeydown=e=>{if(e.key==='ArrowDown'){PAL.sel=Math.min(PAL.items.length-1,PAL.sel+1);palRender();e.preventDefault()}else if(e.key==='ArrowUp'){PAL.sel=Math.max(0,PAL.sel-1);palRender();e.preventDefault()}else if(e.key==='Enter')palRun(PAL.sel);else if(e.key==='Escape')closePal()};
+document.addEventListener('keydown',e=>{if(e.ctrlKey&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='k'){e.preventDefault();document.body.classList.contains('palopen')?closePal():openPal()}});
 const openExternal=u=>window.__TAURI__?(location.href=u):window.open(u,'_blank');
 pages.integrations=()=>{
   if(I.err)return `<div class="card" style="max-width:520px"><h3>Integrations</h3><div class="dim">${esc(I.err)}</div></div>`;
@@ -863,8 +933,8 @@ function showWizard(){let role='streaming';const el=document.createElement('div'
       D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
 
 /* ============ shell ============ */
-const titles={comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
-const REAL=[['voice','🗣','Voice Studio']];
+const titles={quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const REAL=[['quick','⚡','Quick actions'],['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
 function renderNav(){if(!S)return;
@@ -902,6 +972,7 @@ function bind(){
   if(route==='activity')bindActivity();
   if(route==='personalize')bindPersonalize();
   if(route==='comm')updateComm();
+  if(route==='quick')bindQuick();
   if(route==='integrations')bindIntegrations();
   if(route==='settings')bindPortable();
   $$('[data-go]').forEach(e=>e.onclick=()=>{if(e.dataset.commtab){COMM.tab=e.dataset.commtab;try{localStorage.setItem('commTab',COMM.tab)}catch{}}go(e.dataset.go)});
