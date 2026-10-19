@@ -35,6 +35,11 @@ class Engine:
         self.last_error = ""
         self.last_verify = 0.0
         self.idle_since = None
+        self.last_track = None         # last track seen playing (survives short "nothing playing" blips)
+        self.session_counts = {}       # viewer -> accepted requests since requests were opened
+        self._sched_last = None
+        self._fallback_try = 0.0
+        self._autostart_try = 0.0
         self.last_req = {}             # viewer -> time of last accepted request (cooldown)
         self.me = None
         self.devices = []
@@ -56,6 +61,7 @@ class Engine:
 
     def save_settings(self, patch):
         with self.lock:
+            was_open = self._own_settings()["requests_open"]
             cur = self.cfg.get("settings", {})
             for k, v in (patch if isinstance(patch, dict) else {}).items():
                 if k not in rules.DEFAULTS:
@@ -65,6 +71,8 @@ class Engine:
                 elif rules.merged({k: v})[k] == v:                                           # invalid values keep the old setting
                     cur[k] = v
             self.cfg["settings"] = rules.merged(cur)
+            if self.cfg["settings"]["requests_open"] and not was_open:
+                self.session_counts.clear()
             self._save_cfg()
             self._bump()
             return self._own_settings()
@@ -100,7 +108,15 @@ class Engine:
         disk.update(self.cfg)
         store.save("config.json", disk)
 
+    def _write_queue_file(self):
+        n = self.settings["queue_file_lines"]
+        if n > 0:
+            lines = [f"{i + 1}. {it['name']} - {', '.join(it['artists'])}" + (f" ({it['requester']})" if it["requester"] else "")
+                     for i, it in enumerate(self.queue.items[:n])]
+            store.write_text("queue.txt", "\n".join(lines))
+
     def persist(self):
+        self._write_queue_file()
         with self.lock:
             store.save("state.json", {"items": self.queue.items, "history": self.queue.history[:200],
                                       "inbox": self.inbox[-100:], "log": self.log[-LOG_MAX:]})
@@ -156,8 +172,10 @@ class Engine:
         cur = pb["track"] if pb and pb["track"] else None
         cur_uri = cur["uri"] if cur else None
         if cur_uri != self.last_uri:
-            self._track_changed(prev["track"] if prev and prev["track"] else None, cur)
+            self._track_changed(self.last_track, cur)
             self.last_uri = cur_uri
+        if cur:
+            self.last_track = cur
         self._bump()
 
     def _track_changed(self, prev_track, cur):
@@ -175,6 +193,14 @@ class Engine:
         self.persist()
         if self.now_item and self.now_item["skip_on_play"]:
             threading.Thread(target=self._safe, args=(self.skip,), daemon=True).start()   # skip() sends our next song first
+        elif cur and not self.now_item and self._should_autoskip(cur):
+            console_log.warn("player", f"auto-skipping blocked song: {cur['name']}")
+            self._event("autoskip", "auto", cur["name"], False)
+            threading.Thread(target=self._safe, args=(self.skip,), daemon=True).start()
+
+    def _should_autoskip(self, t):
+        s = self.settings
+        return bool(s["autoskip_blocked"] and (rules.blocked_reason(s, t) or (s["stream_safe"] and t.get("explicit"))))
 
     def _safe(self, fn, *a):
         try:
@@ -191,6 +217,12 @@ class Engine:
         if text != self._last_np:
             self._last_np = text
             store.write_text("nowplaying.txt", text)
+            if s["json_file"] if "json_file" in s else True:
+                import json as _json
+                store.write_text("nowplaying.json", _json.dumps({"title": cur["name"] if cur else "", "artist": ", ".join(cur["artists"]) if cur else "",
+                                                                  "album": cur["album"] if cur else "", "art": cur["art"] if cur else "",
+                                                                  "uri": cur["uri"] if cur else "", "requester": (self.now_item or {}).get("requester", ""),
+                                                                  "ts": self.clock()}, ensure_ascii=False))
 
     def _jit(self):
         """Push the head of our queue to Spotify's real queue when the current track is about to end."""
@@ -333,7 +365,7 @@ class Engine:
         first_fail = None
         with self.lock:
             for t in cands:
-                ok, code, ctx = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()))
+                ok, code, ctx = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()), self.session_counts.get(user.lower(), 0))
                 if ok:
                     return self._accept(t, user, roles, redeem)
                 first_fail = first_fail or (code, ctx, t)
@@ -346,11 +378,12 @@ class Engine:
 
     def _accept(self, t, user, roles, redeem):
         s = self.settings
-        tier = rules.tier_for(s, roles, redeem)
+        tier = rules.tier_for(s, roles, redeem, user)
+        self.session_counts[user.lower()] = self.session_counts.get(user.lower(), 0) + 1
         label = f"{t['name']} - {', '.join(t['artists'])}"
         self.last_req[user.lower()] = self.clock()
         base = {"user": user, "song": label, "title": t["name"], "artist": t["artists"][0] if t["artists"] else ""}
-        if rules.needs_approval(s, roles):
+        if rules.needs_approval(s, roles, user):
             self.inbox.append({"id": uuid.uuid4().hex[:8], "track": t, "user": user, "roles": sorted(roles), "tier": tier,
                                "ts": self.clock(), "status": "pending"})
             self._event("pending", user, label)
@@ -425,6 +458,23 @@ class Engine:
             if not mine:
                 return self._r(True, "mine", "mine_none", user=user)
             return self._r(True, "mine", user=user, mine=", ".join(f"{it['name']} (#{self.queue.index(it['id']) + 1})" for it in mine))
+        if cmd == "volume" and staff:
+            cur = (self.pb or {}).get("device") or {}
+            if arg.strip().lstrip("+-").isdigit():
+                v = int(arg.strip())
+                v = self.clamp_volume(v if not arg.strip()[0] in "+-" else (cur.get("volume") or 0) + v)
+                self.api.volume(v)
+                return self._r(True, "volume", "volume_set", user=user, vol=v)
+            return self._r(True, "volume", user=user, vol=cur.get("volume") if cur.get("volume") is not None else "?")
+        if cmd == "playnext" and staff:
+            if not arg:
+                return self._r(False, "usage", user=user)
+            cands = self.resolve(arg, 1)
+            if not cands:
+                return self._r(False, "none", user=user)
+            t = cands[0]
+            item = self.add_track(t, "next", user, "streamer")
+            return self._r(True, "playnext", user=user, title=t["name"], song=f"{t['name']} - {', '.join(t['artists'])}")
         if cmd == "help":
             p = s["prefix"]
             shown = [p + s["cmd_aliases"][c][0] for c in ("sr", "song", "queue", "skip", "oops", "mine", "last") if s["cmd_aliases"].get(c)]
@@ -518,12 +568,16 @@ class Engine:
         elif action == "seek":
             a.seek(int(value))
         elif action == "volume":
-            a.volume(int(value))
+            a.volume(self.clamp_volume(value))
         elif action == "transfer":
             a.transfer(str(value), play=True)
         else:
             raise QueueError("unknown action")
         self._schedule_refresh()
+
+    def clamp_volume(self, v):
+        s = self.settings
+        return max(s["volume_min"], min(s["volume_max"], int(v)))
 
     def start_queue(self):
         """Nothing is playing: start our head track directly."""
@@ -583,6 +637,77 @@ class Engine:
         return {"title": t["name"], "artist": ", ".join(t["artists"]), "url": f"https://open.spotify.com/track/{t['id']}",
                 "requestedBy": (self.now_item or {}).get("requester", "")}
 
+    def shuffle_queue(self):
+        with self.lock:
+            n = self.queue.shuffle()
+            self.persist()
+            self._bump()
+            return n
+
+    def remove_user(self, requester):
+        with self.lock:
+            n = self.queue.remove_by(requester)
+            self.persist()
+            self._bump()
+            return n
+
+    def stats(self):
+        from collections import Counter
+        with self.lock:
+            hist = list(self.queue.history)
+            who = Counter(h["requester"] for h in hist if h.get("requester"))
+            songs = Counter((h["name"], ", ".join(h.get("artists", []))) for h in hist)
+            queued = Counter(i["requester"] for i in self.queue.items if i["requester"])
+            return {"played": len(hist), "requested_played": sum(who.values()),
+                    "top_requesters": who.most_common(8), "top_songs": [[f"{n} - {a}", c] for (n, a), c in songs.most_common(8) if c > 1],
+                    "queued_by": queued.most_common(8), "session": sorted(self.session_counts.items(), key=lambda x: -x[1])[:8]}
+
+    # ---- schedule + idle behaviour (called from the engine loop)
+    def automation_tick(self):
+        s = self._own_settings()
+        now = self.clock()
+        if s["schedule_enabled"]:
+            self._schedule(s, now)
+        pb = self.pb
+        idle = (self.idle_since is not None) and (now - self.idle_since)
+        if self.auth.connected() and pb is None and idle:
+            if self.queue.items and s["autostart_queue"] and idle > 5 and now - self._autostart_try > 30:
+                self._autostart_try = now
+                try:
+                    self.start_queue()
+                    console_log.info("player", "idle with songs queued: started the queue")
+                except ApiError as e:
+                    console_log.warn("player", f"autostart failed: {e}", dedupe_s=60)
+            elif (not self.queue.items and s["fallback_playlist"] and idle > s["fallback_after_s"] and now - self._fallback_try > 60
+                  and (s["requests_open"] or not s["fallback_only_open"])):
+                self._fallback_try = now
+                uri = _context_uri(s["fallback_playlist"])
+                if uri:
+                    try:
+                        if s["fallback_shuffle"]:
+                            self.api.shuffle(True)
+                        self.api.play_context(uri)
+                        console_log.info("player", "idle: started the background playlist")
+                    except ApiError as e:
+                        console_log.warn("player", f"background playlist failed: {e}", dedupe_s=60)
+
+    def _schedule(self, s, now):
+        lt = time.localtime(now)
+        day = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")[lt.tm_wday]
+        days = {d.strip().lower()[:3] for d in s["schedule_days"].split(",")}
+        o, c = _hhmm(s["schedule_open"]), _hhmm(s["schedule_close"])
+        if o is None or c is None:
+            return
+        m = lt.tm_hour * 60 + lt.tm_min
+        inside = (o <= m < c) if o < c else (m >= o or m < c)
+        if inside and o >= c and m < c:                      # after midnight: the window belongs to yesterday's day
+            day = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")[lt.tm_wday]
+        want = inside and day in days
+        if self._sched_last is not None and want != self._sched_last:
+            self.save_settings({"requests_open": want})
+            console_log.info("schedule", "song requests " + ("opened" if want else "closed") + " by schedule")
+        self._sched_last = want
+
     # ---- readiness
     def prestream(self):
         items = []
@@ -612,6 +737,22 @@ class Engine:
         items.append({"id": "requests", "label": "Song requests", "status": "pass",
                       "detail": "open to viewers" if opened else "closed (default): a mod opens them with !sr open"})
         return items
+
+
+def _hhmm(t):
+    try:
+        h, m = str(t).strip().split(":")
+        h, m = int(h), int(m)
+        return h * 60 + m if 0 <= h < 24 and 0 <= m < 60 else None
+    except ValueError:
+        return None
+
+
+def _context_uri(v):
+    import re as _re
+    v = str(v).strip()
+    m = _re.search(r"spotify:(playlist|album|artist):([A-Za-z0-9]{22})", v) or _re.search(r"open\.spotify\.com/(?:intl-[a-z]+/)?(playlist|album|artist)/([A-Za-z0-9]{22})", v)
+    return f"spotify:{m.group(1)}:{m.group(2)}" if m else None
 
 
 class _Safe(dict):

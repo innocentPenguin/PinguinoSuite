@@ -839,5 +839,186 @@ class PersonalizationTests(unittest.TestCase):
         self.assertEqual((st["theme"], st["accent"]), ("glass", "#00ff88"))
 
 
+class Cycle1Tests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.api.vol = None
+        self.api.contexts = []
+        self.api.volume = lambda p: setattr(self.api, "vol", p)
+        self.api.play_context = lambda uri, device_id=None: self.api.contexts.append(uri)
+        self.api.shuffle = lambda on: None
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True, "per_user_limit": 0})
+
+    def at(self, hh, mm, day=0):
+        """Set the fake clock to a local time on a given weekday (0=Mon) of Oct 2026."""
+        import calendar
+        self.clock.t = time.mktime((2026, 10, 12 + day, hh, mm, 0, 0, 0, -1))
+
+    def test_history_survives_a_nothing_playing_blip(self):
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        self.api.playing = None
+        self.e.tick()                                    # Spotify answered 204 between songs
+        self.api.playing = "spotify:track:t2"
+        self.e.tick()
+        self.assertEqual(self.e.queue.history[0]["uri"], "spotify:track:t1")
+
+    def test_session_limit_resets_when_requests_reopen(self):
+        self.e.save_settings({"session_limit": 2})
+        self.assertTrue(self.e.chat("a", "!sr song 5", [])["ok"] and self.e.chat("a", "!sr song 6", [])["ok"])
+        r = self.e.chat("a", "!sr song 7", [])
+        self.assertEqual(r["code"], "session_limit")
+        self.assertTrue(self.e.chat("m", "!sr song 7", ["mod"])["ok"] and self.e.chat("m", "!sr song 8", ["mod"])["ok"] and self.e.chat("m", "!sr song 9", ["mod"])["ok"])
+        self.e.save_settings({"requests_open": False})
+        self.e.save_settings({"requests_open": True})
+        r = self.e.chat("a", "!sr song 10", []); self.assertTrue(r["ok"], r)
+
+    def test_queue_minutes_cap(self):
+        self.e.save_settings({"queue_max_minutes": 7})                 # songs are 200 s
+        self.assertTrue(all(self.e.chat(u, f"!sr song {n}", [])["ok"] for u, n in (("a", 5), ("b", 6))))
+        self.assertTrue(self.e.chat("c", "!sr song 7", [])["ok"])       # 400 s queued < 7 min
+        self.assertEqual(self.e.chat("d", "!sr song 8", [])["code"], "full")  # 600 s >= 7 min? 3*200=600>=420
+
+    def test_priority_and_trusted_users(self):
+        self.e.save_settings({"priority_users": ["Friend"], "trusted_users": ["Friend"], "require_approval": True})
+        self.assertEqual(self.e.chat("rand", "!sr song 5", [])["code"], "pending")
+        r = self.e.chat("friend", "!sr song 6", [])
+        self.assertEqual(r["code"], "added")
+        self.assertEqual(self.e.queue.items[0]["tier"], 1)
+
+    def test_volume_command_and_clamp(self):
+        self.e.save_settings({"volume_max": 60, "volume_min": 10})
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        self.assertEqual(self.e.chat("v", "!volume 30", [])["code"], "denied")                  # mods only
+        r = self.e.chat("m", "!volume 90", ["mod"])
+        self.assertEqual((self.api.vol, r["code"]), (60, "volume"))
+        self.e.chat("m", "!volume 1", ["mod"])
+        self.assertEqual(self.api.vol, 10)
+        self.e.control("volume", 99)
+        self.assertEqual(self.api.vol, 60)
+        self.assertIn("%", self.e.chat("m", "!volume", ["mod"])["reply"])
+
+    def test_playnext_command(self):
+        self.e.chat("a", "!sr song 5", [])
+        r = self.e.chat("m", "!playnext song 6", ["mod"])
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.e.queue.items[0]["name"], "Song 6")
+        self.assertEqual(self.e.chat("v", "!playnext song 7", [])["code"], "denied")
+
+    def test_shuffle_and_remove_user(self):
+        for n, u in [(5, "a"), (6, "b"), (7, "c"), (8, "d"), (9, "e"), (10, "f")]:
+            self.e.chat(u, f"!sr song {n}", [])
+        self.e.add_track(T(20), "next")
+        head = self.e.queue.items[0]["name"]
+        names = sorted(i["name"] for i in self.e.queue.items)
+        self.assertEqual(self.e.shuffle_queue(), 6)
+        self.assertEqual(self.e.queue.items[0]["name"], head)                        # locked item stays
+        self.assertEqual(sorted(i["name"] for i in self.e.queue.items), names)
+        self.assertEqual(self.e.remove_user("B"), 1)
+        self.assertNotIn("Song 6", [i["name"] for i in self.e.queue.items])
+        self.e.queue.undo()
+        self.assertIn("Song 6", [i["name"] for i in self.e.queue.items])
+
+    def test_stats(self):
+        for u, n in (("a", 1), ("a", 2), ("b", 3)):
+            self.e.queue.add_history({"uri": f"u{n}", "name": f"S{n}", "artists": ["X"], "requester": u, "played_at": 1})
+        self.e.queue.add_history({"uri": "u1", "name": "S1", "artists": ["X"], "requester": "b", "played_at": 2})
+        st = self.e.stats()
+        self.assertEqual(st["top_requesters"][0], ("a", 2) if st["top_requesters"][0][0] == "a" else st["top_requesters"][0])
+        self.assertEqual(st["top_songs"][0][1], 2)
+
+    def test_autoskip_blocked_from_any_source(self):
+        self.api.tracks["t5"]["name"] = "Bad Song"
+        self.e.save_settings({"autoskip_blocked": True, "blocklist": ["bad song"]})
+        self.api.playing = "spotify:track:t5"
+        self.api.real_queue = ["spotify:track:t6"]
+        self.e.tick()
+        time.sleep(0.3)
+        self.assertIn(("next",), self.api.calls)
+        self.api.calls.clear()
+        self.e.save_settings({"autoskip_blocked": False})
+        self.api.playing = "spotify:track:t5"
+        self.e.last_uri = None
+        self.e.tick()
+        time.sleep(0.2)
+        self.assertNotIn(("next",), self.api.calls)
+
+    def test_schedule_opens_and_closes_on_transitions_only(self):
+        self.e.save_settings({"requests_open": False, "schedule_enabled": True, "schedule_open": "17:00", "schedule_close": "21:00",
+                              "schedule_days": "mon,tue"})
+        self.at(16, 0)
+        self.e.automation_tick()
+        self.at(17, 5)
+        self.e.automation_tick()
+        self.assertTrue(self.e.settings["requests_open"])
+        self.e.save_settings({"requests_open": False})                  # manual close inside the window is respected
+        self.e.automation_tick()
+        self.assertFalse(self.e.settings["requests_open"])
+        self.at(21, 5)
+        self.e.save_settings({"requests_open": True})
+        self.e.automation_tick()
+        self.assertFalse(self.e.settings["requests_open"])
+        self.at(17, 30, day=2)                                          # Wednesday: not a scheduled day
+        self.e.automation_tick()
+        self.assertFalse(self.e.settings["requests_open"])
+
+    def test_schedule_overnight_window(self):
+        self.e.save_settings({"requests_open": False, "schedule_enabled": True, "schedule_open": "22:00", "schedule_close": "02:00", "schedule_days": "mon"})
+        self.at(21, 0)
+        self.e.automation_tick()
+        self.at(22, 30)
+        self.e.automation_tick()
+        self.assertTrue(self.e.settings["requests_open"])
+        self.at(1, 0, day=1)                                            # Tuesday 01:00 still belongs to Monday's window
+        self.e.automation_tick()
+        self.assertTrue(self.e.settings["requests_open"])
+        self.at(2, 30, day=1)
+        self.e.automation_tick()
+        self.assertFalse(self.e.settings["requests_open"])
+
+    def test_autostart_and_fallback_playlist(self):
+        self.e.add_track(T(5))
+        self.e.save_settings({"autostart_queue": True})
+        self.e.tick()
+        self.e.idle_since = self.clock.t - 10
+        self.e.automation_tick()
+        self.assertEqual(self.api.playing, "spotify:track:t5")
+        self.e.queue.items.clear()
+        self.api.playing = None
+        self.e.tick()
+        self.e.idle_since = self.clock.t - 30
+        self.e.save_settings({"fallback_playlist": "https://open.spotify.com/playlist/" + "a" * 22})
+        self.e.automation_tick()
+        self.assertEqual(self.api.contexts, ["spotify:playlist:" + "a" * 22])
+        self.e.automation_tick()
+        self.assertEqual(len(self.api.contexts), 1, "not repeated within 60 s")
+        self.clock.t += 61
+        self.e.save_settings({"requests_open": False})
+        self.e.automation_tick()
+        self.assertEqual(len(self.api.contexts), 1, "fallback_only_open respected")
+
+    def test_text_files(self):
+        self.e.save_settings({"queue_file_lines": 2})
+        self.e.add_track(T(5), "end", "bob", "viewer")
+        self.e.add_track(T(6))
+        self.e.add_track(T(7))
+        q = (store.folder() / "queue.txt").read_text(encoding="utf8").splitlines()
+        self.assertEqual(len(q), 2)
+        self.assertIn("(bob)", q[0])
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        self.assertEqual(json.loads((store.folder() / "nowplaying.json").read_text(encoding="utf8"))["title"], "Song 1")
+
+    def test_context_uri_parser(self):
+        from engine import _context_uri, _hhmm
+        self.assertEqual(_context_uri("spotify:album:" + "b" * 22), "spotify:album:" + "b" * 22)
+        self.assertIsNone(_context_uri("nonsense"))
+        self.assertEqual((_hhmm("17:00"), _hhmm("24:00"), _hhmm("x")), (1020, None, None))
+
+
 if __name__ == "__main__":
     unittest.main()

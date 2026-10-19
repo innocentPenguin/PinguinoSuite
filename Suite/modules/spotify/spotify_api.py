@@ -209,6 +209,12 @@ class Client:
     def play_uris(self, uris, device_id=None):
         self._req("PUT", "/me/player/play", {"device_id": device_id}, {"uris": uris})
 
+    def play_context(self, context_uri, device_id=None):
+        self._req("PUT", "/me/player/play", {"device_id": device_id}, {"context_uri": context_uri})
+
+    def shuffle(self, on):
+        self._req("PUT", "/me/player/shuffle", {"state": "true" if on else "false"})
+
     def seek(self, ms):
         self._req("PUT", "/me/player/seek", {"position_ms": int(ms)})
 

@@ -5,7 +5,7 @@ The Settings tab is generated from SCHEMA, rules.DEFAULTS is derived from it."""
 VARS = {"user": "Ann", "song": "Song 1 - Artist", "title": "Song 1", "artist": "Artist", "pos": 3, "eta": ", plays in ~8 min", "by": " (requested by Ann)", "limit": 2,
         "max_min": 10, "min_s": 30, "votes": 1, "need": 3, "link": "https://open.spotify.com/track/abc", "requester": "Ann",
         "count": 5, "next": "1. Song 2 - Artist | 2. Song 3 - Artist", "cooldown": 60, "cmds": "!sr !song !queue !skip !oops",
-        "last": "Song 0 - Artist", "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120}
+        "last": "Song 0 - Artist", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120}
 
 MSGS = {
     "added": ("Song added", "@{user} added '{song}' (#{pos} in queue{eta}).", "Viewer request accepted."),
@@ -48,15 +48,20 @@ MSGS = {
     "toggle_closed": ("Closed", "Song requests are now closed.", "A mod closed requests."),
     "cleared": ("Cleared", "Viewer requests cleared.", "A mod cleared the queue."),
     "blocked_song": ("Blocked + skipped", "Blocked '{title}' and skipped it.", "!blocksong."),
+    "session_limit": ("Session limit", "@{user} you've used all {limit} requests for this stream.", "Per-stream request cap reached."),
+    "volume": ("!volume", "Volume is {vol}%.", "Mods: current volume."),
+    "volume_set": ("!volume set", "Volume set to {vol}%.", "Mods: volume changed."),
+    "playnext": ("!playnext", "Playing '{title}' next.", "A mod put a song first in line."),
     "help": ("!songhelp", "Song commands: {cmds}", "List of commands."),
 }
 
 COMMANDS = {"sr": ["sr", "request", "songrequest"], "skip": ["skip", "voteskip"], "queue": ["queue", "q", "songqueue", "srqueue"],
             "song": ["song", "currentsong", "nowplaying", "np"], "oops": ["oops", "wrongsong"], "blocksong": ["blocksong"],
-            "clear": ["srclear"], "last": ["lastsong", "previoussong"], "mine": ["mysongs", "myrequests"], "help": ["songhelp"]}
+            "clear": ["srclear"], "last": ["lastsong", "previoussong"], "mine": ["mysongs", "myrequests"], "help": ["songhelp"],
+            "volume": ["volume", "vol"], "playnext": ["playnext"]}
 COMMAND_HELP = {"sr": "request a song (and mods: open/close/clear)", "skip": "vote to skip (mods: instant)", "queue": "show the next songs",
                 "song": "what is playing", "oops": "remove your last request", "blocksong": "mods: block + skip the current song",
-                "clear": "mods: clear viewer requests", "last": "the previous song", "mine": "your pending requests", "help": "list commands"}
+                "clear": "mods: clear viewer requests", "volume": "mods: show or set the volume", "playnext": "mods: put a song first in line", "last": "the previous song", "mine": "your pending requests", "help": "list commands"}
 
 # kinds: bool int str list choice color msgs cmds
 SCHEMA = [
@@ -70,6 +75,11 @@ SCHEMA = [
         ("queue_max", "int", 50, "Max queue length", "No more requests when this many songs are queued (mods can still add)."),
         ("allow_links", "bool", True, "Accept Spotify links", "Off = viewers must type a song name."),
         ("allow_search", "bool", True, "Accept song names", "Off = viewers must paste a Spotify link."),
+        ("session_limit", "int", 0, "Requests per viewer per stream", "Total accepted requests per viewer since requests were opened (0 = no cap; mods exempt)."),
+        ("queue_max_minutes", "int", 0, "Max queue length (minutes)", "Stop taking requests when the queue holds this many minutes of music (0 = off)."),
+        ("priority_users", "list", [], "Priority viewers", "One name per line: their requests rank like subs (eg. friends, regulars)."),
+        ("trusted_users", "list", [], "Trusted viewers", "One name per line: never held for approval."),
+        ("autoskip_blocked", "bool", False, "Auto-skip blocked songs", "If a blocklisted song (or an explicit one in stream-safe mode) starts playing from ANY source, skip it."),
     ]},
     {"id": "limits", "title": "Limits per role", "items": [
         ("per_user_limit", "int", 2, "Pending per viewer", "How many songs a normal viewer may have waiting at once (0 = unlimited)."),
@@ -106,7 +116,22 @@ SCHEMA = [
         ("cmd_aliases", "cmds", COMMANDS, "Command names", "Words that trigger each command, comma separated. Add your own (eg. !tune)."),
         ("msgs", "msgs", {k: v[1] for k, v in MSGS.items()}, "Replies", "What the bot says. Use {placeholders}; an empty reply = stay silent."),
     ]},
-    {"id": "player", "title": "Playback & text file", "items": [
+    {"id": "schedule", "title": "Schedule & background music", "items": [
+        ("schedule_enabled", "bool", False, "Open/close requests on a schedule", "Opens and closes requests automatically (this PC's clock). Manual toggles still work in between."),
+        ("schedule_open", "str", "17:00", "Open at", "24h time, eg. 17:00."),
+        ("schedule_close", "str", "21:00", "Close at", "24h time; may be after midnight, eg. 01:00."),
+        ("schedule_days", "str", "mon,tue,wed,thu,fri,sat,sun", "Days", "Comma separated: mon,tue,wed,thu,fri,sat,sun."),
+        ("autostart_queue", "bool", False, "Start the queue when idle", "If Spotify is idle and songs are queued, start playing them."),
+        ("fallback_playlist", "str", "", "Background playlist", "A Spotify playlist/album link or URI played when nothing is queued (empty = off)."),
+        ("fallback_shuffle", "bool", True, "Shuffle background playlist", ""),
+        ("fallback_after_s", "int", 20, "Idle seconds before background music", ""),
+        ("fallback_only_open", "bool", True, "Only while requests are open", "Safety: no surprise music when you are not streaming."),
+    ]},
+    {"id": "player", "title": "Playback & text files", "items": [
+        ("volume_min", "int", 0, "Minimum volume", "Volume controls never go below this."),
+        ("volume_max", "int", 100, "Maximum volume", "Volume controls (and !volume) never go above this."),
+        ("json_file", "bool", True, "Write nowplaying.json", "A JSON file with the current song for other tools (Streamer.bot etc.)."),
+        ("queue_file_lines", "int", 0, "Queue text file lines", "Writes the next N songs to queue.txt for an OBS text source (0 = off)."),
         ("jit_ms", "int", 25000, "Send next song this early (ms)", "How long before the end the next song goes to Spotify's queue."),
         ("close_on_offline", "bool", True, "Close requests when stream ends", "Closes song requests when the stream goes offline."),
         ("np_template", "str", "{title} - {artist}", "Text file template", "Written to nowplaying.txt: {title} {artist} {album} {requester}."),

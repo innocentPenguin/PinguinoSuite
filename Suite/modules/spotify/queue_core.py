@@ -107,6 +107,30 @@ class Queue:
             self.items.insert(new_index, it)
             return new_index
 
+    def shuffle(self):
+        """Shuffle viewer requests that nobody placed by hand (locked and pushed items keep their spot)."""
+        import random
+        with self.lock:
+            idx = [i for i, it in enumerate(self.items) if it["source"] == "viewer" and not it["locked"] and not it["pushed"]]
+            if len(idx) < 2:
+                return 0
+            self._snap()
+            moved = [self.items[i] for i in idx]
+            random.shuffle(moved)
+            for i, it in zip(idx, moved):
+                self.items[i] = it
+            return len(idx)
+
+    def remove_by(self, requester):
+        with self.lock:
+            r = (requester or "").lower()
+            keep = [it for it in self.items if it["pushed"] or it["requester"].lower() != r]
+            n = len(self.items) - len(keep)
+            if n:
+                self._snap()
+                self.items = keep
+            return n
+
     def play_next(self, iid):
         return self.move(iid, self.frozen())
 

@@ -75,7 +75,7 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
 
 <section id="t-queue">
   <div class="ctl" style="margin-bottom:8px">
-    <button id="bundo">↶ Undo</button><button id="bclear">Clear viewer requests</button><button id="bstart" class="pri" style="display:none">▶ Start queue</button>
+    <button id="bundo">↶ Undo</button><button id="bclear">Clear viewer requests</button><button id="bshuf" title="Shuffle viewer requests nobody placed by hand">🔀 Shuffle</button><button id="brmuser" title="Remove every song requested by one viewer">Remove viewer…</button><button id="bstart" class="pri" style="display:none">▶ Start queue</button>
     <span style="flex:1"></span>
     <label class="small"><input type="checkbox" id="qopen"> requests open</label>
     <label class="small"><input type="checkbox" id="qsafe"> stream-safe</label>
@@ -94,6 +94,7 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
 <section id="t-req" hidden>
   <h3 style="margin:4px 4px 6px">Waiting for approval</h3><div class="card" id="inbox"></div>
   <h3 style="margin:14px 4px 6px">Recent activity</h3><div class="card" id="log"></div>
+  <h3 style="margin:14px 4px 6px">Stats</h3><div class="card" id="stats"></div>
 </section>
 
 <section id="t-set" hidden>
@@ -203,6 +204,8 @@ $('queue').ondragend=e=>{dragId=null;editing=false;render()};
 $('queue').ondragover=e=>{const r=e.target.closest('.row');if(!r||!dragId)return;e.preventDefault();document.querySelectorAll('.over').forEach(x=>x.classList.remove('over'));r.classList.add('over')};
 $('queue').ondrop=e=>{const r=e.target.closest('.row');if(!r||!dragId)return;e.preventDefault();const to=+r.dataset.i;const id=dragId;dragId=null;editing=false;act('/api/queue/move',{id,index:to})};
 $('bundo').onclick=()=>act('/api/queue/undo');
+$('bshuf').onclick=()=>act('/api/queue/shuffle',{},'Shuffled');
+$('brmuser').onclick=()=>{const u=prompt('Remove all queued songs requested by:');if(u)act('/api/queue/remove_user',{user:u},'Removed')};
 $('bclear').onclick=()=>confirm('Remove all viewer requests from the queue?')&&act('/api/queue/clear',{only_viewers:true});
 $('bstart').onclick=()=>act('/api/queue/start');
 $('qopen').onchange=e=>act('/api/settings',{requests_open:e.target.checked});
@@ -214,7 +217,9 @@ async function search(){const q=$('q').value.trim();if(!q)return;try{const r=(aw
 $('bsearch').onclick=search;$('q').onkeydown=e=>e.key==='Enter'&&search();
 $('results').onclick=e=>{const b=e.target.closest('button');if(!b)return;act('/api/queue/add',{track:$('results')._r[+b.dataset.i],where:b.dataset.w},'Added')};
 
-function drawReq(){
+async function drawStats(){try{const s=await api('/api/stats');const li=(a,f)=>a.length?a.map(f).join(''):'<span class="dim">nothing yet</span>';
+  $('stats').innerHTML=`<div class="grid"><div><b>Top requesters</b><div class="small">${li(s.top_requesters,x=>`<div>${esc(x[0])} · ${x[1]}</div>`)}</div></div><div><b>Played more than once</b><div class="small">${li(s.top_songs,x=>`<div>${esc(x[0])} · ${x[1]}×</div>`)}</div></div><div><b>Queued now</b><div class="small">${li(s.queued_by,x=>`<div>${esc(x[0])} · ${x[1]}</div>`)}</div></div><div><b>This stream (accepted)</b><div class="small">${li(s.session,x=>`<div>${esc(x[0])} · ${x[1]}</div>`)}</div></div></div><div class="small dim" style="margin-top:6px">${s.played} songs in history, ${s.requested_played} requested by viewers.</div>`}catch(e){}}
+function drawReq(){drawStats();
   $('inbox').innerHTML=S.inbox.length?S.inbox.map(r=>trackRow(r.track,`<span class="small dim">${esc(r.user)}</span><button class="pri" data-id="${r.id}" data-ok="1">Approve</button><button class="x" data-id="${r.id}">Deny</button>`)).join(''):'<div class="dim" style="padding:10px">Nothing waiting. Turn on <i>Require approval</i> or stream-safe mode to review requests first.</div>';
   $('log').innerHTML=S.log.length?S.log.map(l=>`<div class="row"><span class="small dim" style="width:60px">${new Date(l.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span><span class="pill ${l.ok?'ok':'bad'}">${esc(l.kind)}</span><span class="n">${esc(l.user)}: ${esc(l.text)}</span></div>`).join(''):'<div class="dim" style="padding:10px">No requests yet.</div>';
 }
@@ -290,4 +295,6 @@ async function refresh(){
 }
 function loop(){clearTimeout(pollT);if(!document.hidden&&!dragId)refresh();pollT=setTimeout(loop,1500)}
 drawTabs();loop();loadSetup();
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.code==='Space'){e.preventDefault();$('bplay').click()}else if(e.key==='n'){$('bnext').click()}else if(e.key==='p'){$('bprev').click()}});
 </script></body></html>

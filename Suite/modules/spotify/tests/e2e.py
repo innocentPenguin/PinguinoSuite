@@ -426,6 +426,36 @@ def main():
     post("/api/settings", {"requests_open": True, "per_user_limit": 5})
     T("overlay.json carries the style", get("/api/overlay.json")[1]["style"]["accent"] == "#ff9900")
 
+    # ---------------- cycle 1 features
+    import http.client
+    c = http.client.HTTPConnection("127.0.0.1", PORT)
+    c.request("POST", "/api/settings", body=json.dumps({"x": "y" * 500}), headers={"Origin": "http://evil.com", "Content-Type": "application/json", "Host": f"127.0.0.1:{PORT}"})
+    r1 = c.getresponse()
+    r1.read()
+    c.request("GET", "/api/status")
+    r2 = c.getresponse()
+    T("keep-alive survives a refused POST with a body", r1.status == 403 and r2.status == 200 and b"ok" in r2.read())
+    post("/api/settings", {"requests_open": True, "per_user_limit": 0})
+    for n, u in [(32, "k1"), (33, "k2"), (34, "k3"), (35, "k4")]:
+        chat(u, f"!sr song {n}")
+    T("shuffle endpoint", post("/api/queue/shuffle")[1]["shuffled"] >= 2)
+    T("remove viewer endpoint", post("/api/queue/remove_user", {"user": "K2"})[1]["removed"] >= 1)
+    T("stats endpoint", "top_requesters" in get("/api/stats")[1] and "session" in get("/api/stats")[1])
+    r = chat("m1", "!volume 25", ["mod"])
+    T("!volume sets and clamps", sim("state")["volume"] == 25 and r["code"] == "volume", r)
+    post("/api/settings", {"volume_max": 40})
+    chat("m1", "!volume 95", ["mod"])
+    T("volume_max enforced", sim("state")["volume"] == 40)
+    post("/api/control", {"action": "volume", "value": 99})
+    T("UI volume obeys volume_max", sim("state")["volume"] == 40)
+    post("/api/settings", {"volume_max": 100})
+    r = chat("m1", "!playnext song 29", ["mod"])
+    T("!playnext puts the song first", r["ok"] and state()["queue"]["items"][0 if not state()["queue"]["items"][0]["pushed"] else 1]["name"] == "Song 29", r)
+    post("/api/settings", {"schedule_enabled": True, "schedule_open": "00:00", "schedule_close": "00:00"})
+    T("degenerate schedule does not crash", get("/api/status")[0] == 200)
+    post("/api/settings", {"schedule_enabled": False})
+    T("text files: json + queue", os.path.exists(os.path.join(DATA, "spotify", "nowplaying.json")))
+
     # ---------------- stream end hook
     post("/api/settings", {"requests_open": True})
     T("on_live hook never opens requests", post("/api/live/auto")[1]["requests_open"] is True and True)

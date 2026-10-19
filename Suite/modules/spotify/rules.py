@@ -66,12 +66,17 @@ def is_sub(roles):
     return bool(set(roles) & {"sub", "vip"})
 
 
-def tier_for(settings, roles, redeem=False):
+def tier_for(settings, roles, redeem=False, user=""):
     if redeem and settings["redeem_priority"]:
         return TIER_REDEEM
-    if settings["sub_priority"] and is_sub(roles):
+    if settings["sub_priority"] and (is_sub(roles) or _listed(settings["priority_users"], user)):
         return TIER_SUB
     return TIER_NORMAL
+
+
+def _listed(names, user):
+    u = _norm(user)
+    return bool(u) and u in {_norm(n) for n in names}
 
 
 def _norm(s):
@@ -112,7 +117,7 @@ def cooldown_for(settings, roles):
     return settings["cooldown_s"]
 
 
-def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=None):
+def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=None, session_count=0):
     """-> (ok, code, ctx). `code` is a message key (see config_schema.MSGS); ctx = placeholder values for the reply."""
     now = now or time.time()
     roles = set(roles)
@@ -144,6 +149,9 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
         return False, "too_short", {**ctx, "min_s": settings["min_length_s"]}
     if len(queue.items) >= settings["queue_max"] and not staff:
         return False, "full", ctx
+    mm = settings["queue_max_minutes"]
+    if mm and not staff and queue.total_ms() >= mm * 60000:
+        return False, "full", ctx
     uri = track.get("uri")
     if queue.contains_uri(uri) or uri == now_uri:
         return False, "dup_queue", ctx
@@ -160,15 +168,20 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
     limit = limit_for(settings, roles)
     if limit and queue.pending_for(user) >= limit:
         return False, "limit", {**ctx, "limit": limit}
+    sl = settings["session_limit"]
+    if sl and not staff and session_count >= sl:
+        return False, "session_limit", {**ctx, "limit": sl}
     cool = cooldown_for(settings, roles)
     if cool and last_ts and now - last_ts < cool:
         return False, "cooldown", {**ctx, "wait": math.ceil(cool - (now - last_ts)), "cooldown": cool}
     return True, "ok", ctx
 
 
-def needs_approval(settings, roles):
+def needs_approval(settings, roles, user=""):
     roles = set(roles)
     if "broadcaster" in roles:
+        return False
+    if _listed(settings["trusted_users"], user) and not settings["stream_safe"]:
         return False
     if settings["stream_safe"]:
         return True
