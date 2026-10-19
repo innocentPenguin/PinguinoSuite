@@ -42,3 +42,9 @@ Browser source: `http://127.0.0.1:8771/overlay` (transparent; `?next=0` hides up
 
 ## Pre-stream (`/api/prestream`)
 `token` (not signed in = fail, not set up = warn), `premium` (fail if not Premium), `device` (warn if no active device).
+
+## Host command API (agreed with 02)
+`POST /api/chat-command` `{command, args, user, display, role: viewer|vip|sub|mod|broadcaster, isMod, isSub, msgId, redeem?}` -> `{ok, say, error, code}` (`say` <= 400 chars, empty = stay silent). Commands: sr, skip, song, queue, oops, blocksong, srclear (declared in `module.json` `commands`). `GET /api/now` -> `{title, artist, url, requestedBy}`. Host owns permissions/cooldowns; per-viewer limits, blocklist and queue rules stay here. Like `/api/chat`, a local caller without an `Origin` header needs no token.
+
+## Website bridge (Docs/SPOTIFY_CONTRACT.md v1, outbound only)
+Setup tab > "Website": site URL + `SPOTIFY_API_KEY` (stored write-only in `spotify/config.json`) + enabled. `site_bridge.py` pushes the state mirror (3 s playing / 10 s idle / immediately on change), long-polls viewer events (request, up/skip vote), applies our rules as final authority and acks with the contract's reason codes, and pulls the site blocklist when `blocklistVersion` changes (merged into the rules, never shown in our settings). Site down: back-off 3 s -> 30 s, everything keeps working locally. Not implemented: site "mod" actions (the contract's poll lists only request/vote events). Upvotes are counted and shown but do not reorder the queue.

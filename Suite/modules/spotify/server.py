@@ -14,6 +14,7 @@ from pathlib import Path
 import console_log
 import store
 from engine import Engine
+from site_bridge import Bridge
 from queue_core import QueueError
 from spotify_api import ApiError, Auth, Client, NotConnected
 
@@ -27,6 +28,7 @@ PAGES = {"/": "static/index.html", "/overlay": "static/overlay.html"}
 
 auth = Auth()
 engine = Engine(Client(auth), auth)
+bridge = Bridge(engine)
 
 
 def host_ok(host):
@@ -86,7 +88,7 @@ class H(BaseHTTPRequestHandler):
             same = bool(origin) and origin.split("://", 1)[-1] == self.headers.get("host")
             # /api/chat is a low-privilege viewer-command endpoint for local bots (Host/Streamer.bot): a local
             # process with no Origin header (not a web page) may call it without the module token.
-            local_bot = path == "/api/chat" and not origin
+            local_bot = path in ("/api/chat", "/api/chat-command") and not origin
             if not (same or local_bot or token_ok(self.headers)):
                 self._send(401, "token required", "text/plain")
                 return False
@@ -191,7 +193,7 @@ def page(title, msg):
 
 
 GET = {"/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
-       "/api/search": g_search, "/api/devices": g_devices, "/api/setup": g_setup, "/callback": g_callback}
+       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/setup": g_setup, "/callback": g_callback}
 
 
 # ---- POST routes
@@ -294,6 +296,31 @@ def p_chat(h, b):
     return engine.chat(user, str(b.get("text", "")), b.get("roles") or [], bool(b.get("redeem")))
 
 
+ROLE_MAP = {"viewer": [], "vip": ["vip"], "sub": ["sub"], "mod": ["mod"], "broadcaster": ["broadcaster"]}
+
+
+def p_chat_command(h, b):
+    """Host contract: {command, args, user, display, role, isMod, isSub, msgId} -> {ok, say, error}."""
+    cmd = str(b.get("command", "")).strip().lstrip("!")
+    user = str(b.get("display") or b.get("user") or "").strip().lstrip("@")
+    if not cmd or not user:
+        return {"ok": False, "say": "", "error": "command and user required"}
+    roles = set(ROLE_MAP.get(str(b.get("role", "viewer")).lower(), []))
+    if b.get("isMod"):
+        roles.add("mod")
+    if b.get("isSub"):
+        roles.add("sub")
+    r = engine.chat(user, f"!{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")))
+    if not r["handled"]:
+        return {"ok": False, "say": "", "error": "unknown command"}
+    return {"ok": bool(r["ok"]), "say": r["reply"][:400], "error": "" if r["ok"] else r["code"], "code": r["code"]}
+
+
+def p_site(h, b):
+    bridge.configure(b.get("url"), b.get("key"), b.get("enabled"))
+    return {"ok": True, **bridge.status()}
+
+
 def p_block(h, b):
     v = str(b.get("value", "")).strip().lower()
     if not v:
@@ -306,7 +333,7 @@ def p_block(h, b):
 POST = {"/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
         "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
-        "/api/control": p_control, "/api/chat": p_chat, "/api/blocklist": p_block}
+        "/api/control": p_control, "/api/chat": p_chat, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/blocklist": p_block}
 
 
 def loop():
@@ -328,6 +355,7 @@ def loop():
 def main():
     console_log.info("server", f"PinguinoSpotify starting on 127.0.0.1:{PORT}")
     threading.Thread(target=loop, daemon=True).start()
+    bridge.start()
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
     srv.daemon_threads = True
     try:

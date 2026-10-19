@@ -37,10 +37,18 @@ class Engine:
         self.devices = []
         self.version = 0               # bumped on any visible change (UI/overlay can poll cheaply)
         self._last_np = None
+        self.site_block = {}           # blocklist pulled from the site (tracks/artists/users)
 
     # ---- settings
     @property
     def settings(self):
+        s = rules.merged(self.cfg.get("settings"))
+        sb = self.site_block
+        s["blocklist"] = s["blocklist"] + list(sb.get("tracks", [])) + list(sb.get("artists", []))
+        s["blocked_users"] = s["blocked_users"] + list(sb.get("users", []))
+        return s
+
+    def _own_settings(self):
         return rules.merged(self.cfg.get("settings"))
 
     def save_settings(self, patch):
@@ -50,7 +58,7 @@ class Engine:
             self.cfg["settings"] = rules.merged(cur)
             self._save_cfg()
             self._bump()
-            return self.settings
+            return self._own_settings()
 
     def set_client_id(self, cid):
         with self.lock:
@@ -205,7 +213,7 @@ class Engine:
                 pb["progress_ms"] += int((now - self.pb_at) * 1000)
             return {"connected": self.auth.connected(), "client_id_set": bool(self.auth.client_id), "playback": pb,
                     "now_item": copy.deepcopy(self.now_item), "queue": self.queue.view(), "inbox": [i for i in self.inbox if i["status"] == "pending"],
-                    "log": self.log[-40:][::-1], "settings": self.settings, "skip_votes": len(self.skip_votes),
+                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "skip_votes": len(self.skip_votes),
                     "error": self.last_error or self.auth.last_error, "me": self.me, "version": self.version}
 
     def overlay(self):
@@ -241,16 +249,16 @@ class Engine:
             return item
 
     # ---- viewer requests
-    def request(self, user, query, roles, redeem=False):
+    def request(self, user, query, roles, redeem=False, track=None):
         """Returns {ok, reply, code}. Shared by chat and the UI's manual 'add as viewer'."""
         s = self.settings
         roles = set(roles)
-        if not query:
+        if not query and not track:
             return {"ok": False, "code": "usage", "reply": f"@{user} usage: !sr <song name or Spotify link>"}
         if not self.auth.connected():
             return {"ok": False, "code": "offline", "reply": "Song requests aren't available right now."}
         try:
-            cands = self.resolve(query)
+            cands = [track] if track else self.resolve(query)
         except ApiError as e:
             console_log.warn("request", f"lookup failed for {user}: {e}", dedupe_s=30)
             return {"ok": False, "code": "lookup", "reply": f"@{user} couldn't reach Spotify, try again."}
@@ -347,7 +355,7 @@ class Engine:
             t = self.pb["track"] if self.pb and self.pb["track"] else None
             if not t:
                 return {"ok": False, "code": "none", "reply": "Nothing is playing."}
-            self.save_settings({"blocklist": s["blocklist"] + [t["uri"]]})
+            self.save_settings({"blocklist": self._own_settings()["blocklist"] + [t["uri"]]})
             self.skip(force=True)
             return {"ok": True, "code": "blocked", "reply": f"Blocked '{t['name']}' and skipped it."}
         return {"ok": False, "code": "denied", "reply": ""}
@@ -434,6 +442,48 @@ class Engine:
         with self.lock:
             self.queue.play_next(iid)
         self.skip()
+
+    def upvote(self, rid, who):
+        with self.lock:
+            it = next((i for i in self.queue.items if i["id"] == rid), None)
+            if not it:
+                return "unknown_request"
+            voters = it.setdefault("voters", [])
+            if who.lower() in voters:
+                return "already_voted"
+            voters.append(who.lower())
+            self._bump()
+            return None
+
+    def site_snapshot(self):
+        """State mirror for innocentpenguin.com (docs/SPOTIFY_CONTRACT.md v1)."""
+        with self.lock:
+            now = self.clock()
+            s = self._own_settings()
+            pb = self.pb
+            t = pb["track"] if pb and pb["track"] else None
+            ms = int(now * 1000)
+            np = None
+            if t:
+                np = {"id": t["id"], "title": t["name"], "artists": t["artists"], "album": t["album"], "art": t["art"],
+                      "durationMs": t["duration_ms"], "progressMs": pb["progress_ms"], "isPlaying": pb["is_playing"],
+                      "requestedBy": (self.now_item or {}).get("requester") or None, "progressAt": int(self.pb_at * 1000)}
+            return {"v": 1, "updatedAt": ms,
+                    "status": {"requestsOpen": bool(s["requests_open"]), "paused": bool(pb and not pb["is_playing"]), "maxQueue": s["queue_max"]},
+                    "nowPlaying": np,
+                    "queue": [{"rid": i["id"], "id": i["track_id"], "title": i["name"], "artists": i["artists"], "art": i["art"],
+                               "durationMs": i["duration_ms"], "requestedBy": i["requester"] or "", "votes": len(i.get("voters", []))}
+                              for i in self.queue.items[:100]],
+                    "history": [{"id": h["uri"].split(":")[-1], "title": h["name"], "artists": h["artists"], "art": h.get("art", ""),
+                                 "playedAt": int(h["played_at"] * 1000), "requestedBy": h.get("requester") or None}
+                                for h in self.queue.history[:50]]}
+
+    def now_info(self):
+        t = self.pb["track"] if self.pb and self.pb["track"] else None
+        if not t:
+            return {"title": "", "artist": "", "url": "", "requestedBy": ""}
+        return {"title": t["name"], "artist": ", ".join(t["artists"]), "url": f"https://open.spotify.com/track/{t['id']}",
+                "requestedBy": (self.now_item or {}).get("requester", "")}
 
     # ---- readiness
     def prestream(self):

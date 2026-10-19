@@ -533,5 +533,86 @@ class AuthTests(unittest.TestCase):
         self.assertIsNone(pb["track"])
 
 
+class BridgeTests(unittest.TestCase):
+    def setUp(self):
+        from site_bridge import Bridge
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.sent = []
+        self.responses = {}
+        self.b = Bridge(self.e, self.http, lambda s: None)
+        self.b.configure("https://site.test/", "KEY", True)
+
+    def http(self, method, url, key, body, timeout):
+        self.sent.append((method, url, key, body))
+        for k, v in self.responses.items():
+            if k in url:
+                return v
+        return 200, {}
+
+    def test_push_shape_and_blocklist_pull(self):
+        self.api.playing, self.api.progress = "spotify:track:t1", 5000
+        self.e.add_track(T(2), "end", "bob", "viewer")
+        self.e.tick()
+        self.responses = {"/push": (200, {"ok": True, "blocklistVersion": 4}),
+                          "/blocklist": (200, {"version": 4, "tracks": ["spotify:track:t9"], "artists": ["Bad"], "users": ["troll"]})}
+        self.assertTrue(self.b.push_once())
+        m, url, key, body = self.sent[0]
+        self.assertEqual((m, url, key), ("POST", "https://site.test/api/spotify/push", "KEY"))
+        self.assertEqual(body["v"], 1)
+        self.assertEqual(body["nowPlaying"]["title"], "Song 1")
+        self.assertEqual(body["queue"][0]["requestedBy"], "bob")
+        self.assertEqual(self.e.site_block["users"], ["troll"])
+        self.assertEqual(self.e.chat("troll", "!sr song 4", [])["code"], "user_blocked")
+        self.assertNotIn("troll", json.dumps(self.e.public_state()["settings"]))
+
+    def test_request_vote_events_and_ack(self):
+        self.api.track = lambda tid: self.api.tracks["t4"]
+        self.responses = {"/poll": (200, {"events": [
+            {"id": "e1", "type": "request", "user": "Ann", "login": "ann", "trackId": "x"},
+            {"id": "e2", "type": "request", "user": "Ann", "login": "ann", "trackId": "x"},
+            {"id": "e3", "type": "vote", "kind": "up", "user": "Bo", "login": "bo", "rid": "nope"}]})}
+        self.assertEqual(self.b.poll_once(), 3)
+        ack = [s for s in self.sent if s[1].endswith("/ack")][0][3]["results"]
+        self.assertTrue(ack[0]["ok"])
+        self.assertEqual(ack[1], {"id": "e2", "ok": False, "reason": "duplicate"})
+        self.assertEqual(ack[2]["reason"], "unknown_request")
+        rid = ack[0]["rid"]
+        self.assertIsNone(self.e.upvote(rid, "bo"))
+        self.assertEqual(self.e.upvote(rid, "BO"), "already_voted")
+        self.assertEqual(self.e.site_snapshot()["queue"][0]["votes"], 1)
+
+    def test_site_down_backs_off_and_local_keeps_working(self):
+        self.responses = {"/push": (503, {})}
+        self.assertFalse(self.b.push_once())
+        self.assertEqual(self.b.fail, 1)
+        self.assertTrue(self.e.chat("v", "!song", [])["handled"])
+        self.responses = {"/push": (200, {})}
+        self.b.push_once()
+        self.assertEqual(self.b.fail, 0)
+
+    def test_disabled_does_nothing(self):
+        self.b.configure(enabled=False)
+        self.assertFalse(self.b.push_once())
+        self.assertEqual(self.sent, [])
+        self.assertNotIn("KEY", json.dumps(self.b.status()))
+
+
+class ChatCommandTests(unittest.TestCase):
+    def test_host_contract(self):
+        import server
+        store.save("state.json", {})
+        api = FakeApi()
+        server.engine = Engine(api, FakeAuth(), Clock())
+        r = server.p_chat_command(None, {"command": "sr", "args": "song 5", "user": "ann", "display": "Ann", "role": "viewer", "isSub": True})
+        self.assertTrue(r["ok"], r)
+        self.assertIn("added", r["say"])
+        self.assertEqual(server.engine.queue.items[0]["tier"], 1)
+        self.assertEqual(server.p_chat_command(None, {"command": "nope", "user": "a"})["error"], "unknown command")
+        self.assertEqual(server.p_chat_command(None, {"command": "sr", "args": "", "user": "a"})["error"], "usage")
+
+
 if __name__ == "__main__":
     unittest.main()
