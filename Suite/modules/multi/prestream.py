@@ -13,7 +13,7 @@ def _conn(c):
     if c["platform"] in REQUIRED:
         return "fail", f"{st}: {c.get('detail') or 'not connected'}"
     if st in ("needs_auth", "disabled", "disconnected", "waiting"):
-        return "warn", f"{st} (optional): {c.get('detail') or ''}".strip()
+        return "pass", f"Optional - skipped for now ({c.get('detail') or st}). Streaming works without it."
     return "warn", f"{st}: {c.get('detail') or ''}".strip()
 
 
@@ -43,7 +43,7 @@ def run(connectors, store, pipeline, inbox):
     add("queue", "Message queue healthy", "pass" if q < 200 and not dropped else "warn", f"queue {q}, dropped {dropped}")
     try:
         nw = len(store.load_windows())
-        add("windows", "Chat windows set up", "pass" if nw else "warn", f"{nw} window(s)" if nw else "none saved: pick a layout in Multi")
+        add("windows", "Chat windows set up", "pass", f"{nw} saved layout window(s); chat opens as the main screen" if nw else "none saved yet (the chat page itself still works)")
     except Exception as e:
         add("windows", "Chat windows set up", "fail", str(e)[:120])
     s = config.settings()

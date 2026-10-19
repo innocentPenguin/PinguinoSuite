@@ -91,6 +91,7 @@ async def lifespan(app):
         "server", f"unhandled: {ctx.get('message', '')} {repr(ctx.get('exception', ''))}", dedupe_s=60))
     console_log.info("server", f"Multi started on port {config.PORT}")
     store.prune(config.settings()["retention_days"])
+    _seed_defaults()
     tw = Twitch(inbox, hub.emit)
     connectors["twitch"] = tw
     dc = Discord(inbox, hub.emit)
@@ -102,7 +103,7 @@ async def lifespan(app):
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
              asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()),
              asyncio.create_task(listen_bridge.run(cards, hub.emit)),
-             asyncio.create_task(host_feed.run(inbox, lambda: connectors['twitch'].status == 'connected')), asyncio.create_task(prestream_file_loop())]
+             asyncio.create_task(host_feed.run(inbox, lambda: connectors['twitch'].describe()['status'] == 'connected')), asyncio.create_task(prestream_file_loop())]
     yield
     console_log.info("server", "Multi stopping")
     tw.stop = dc.stop = yt.stop = tt.stop = True
@@ -114,6 +115,17 @@ async def lifespan(app):
 
 TAURI_ORIGINS = ("tauri://localhost", "http://tauri.localhost", "https://tauri.localhost")
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+
+
+def _seed_defaults():
+    """First run: one saved chat window (so pop-outs have somewhere to go) and a ready split (newest in B, older rows continue in A)."""
+    try:
+        if not store.load_windows():
+            store.save_window(win.describe_geometry(win.new_window(id="main-chat", type="chat", title="Chat", x=1400, y=40, w=520, h=980), win.list_monitors()))
+        if not store.kv_get("panes"):
+            store.kv_set("panes", panes_mod.build_split("flow"))
+    except Exception as e:
+        console_log.warn("server", f"could not save the default layout: {e}", dedupe_s=300)
 
 
 app = FastAPI(lifespan=lifespan)

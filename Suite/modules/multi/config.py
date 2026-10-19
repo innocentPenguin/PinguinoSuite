@@ -51,7 +51,7 @@ DEFAULTS = {
     "max_cards": 12,
     "retention_days": 30,
     "bot_accounts": ["pinguinob0t", "nightbot", "streamelements", "moobot", "streamlabs", "fossabot"],
-    "my_names": ["innocentpenguin", "penguin"],
+    "my_names": ["innocentpenguin", "innocentpenguin_", "penguin"],
 }
 
 
