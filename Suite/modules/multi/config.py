@@ -17,6 +17,13 @@ DEFAULTS = {
     "twitch_client_id": "",
     "tiktok_enabled": False,         # UNOFFICIAL, read-only; needs optional TikTokLive package
     "tiktok_user": "",
+    "ding_platforms": [],            # new-chatter ding: platforms it is ON for (twitch, youtube); empty = off
+    "ding_first_ever": False,        # Twitch "first message ever" gets its own (optional) sound
+    "ding_sound": r"D:\PinguinoSuite\Data\sounds\new-chatter-ding.mp3",
+    "ding_first_sound": "",
+    "ding_volume": 70,
+    "ding_cooldown_s": 1.5,
+    "ding_session_gap_h": 6,
     "discord_channels": [],          # channel ids Multi reads/sends in (bot token is in Credential Manager)
     "priority_mode": "local",        # local | ai | auto  (AI arrives in M3; local always works)
     "ai_provider": "anthropic",      # anthropic | openai | ollama (key in Credential Manager as ai_key)

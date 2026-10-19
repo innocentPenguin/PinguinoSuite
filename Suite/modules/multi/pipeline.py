@@ -8,6 +8,7 @@ import time
 import config
 import ai
 import console_log
+import ding as ding_mod
 import dedupe
 from priority import rules as prio
 from models import ChatMessage
@@ -19,6 +20,7 @@ class Pipeline:
         self.seen = dedupe.Seen()
         self.rules = prio.load_rules()
         self.advisor = ai.Advisor(store)
+        self.ding = ding_mod.Ding(store)
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
         self.stats = {"in": 0, "dupes": 0, "dropped": 0}
 
@@ -50,6 +52,7 @@ class Pipeline:
             self.stats["dupes"] += 1
             return None
         self.stats["in"] += 1
+        self.ding.observe(m)
         key = (m.platform, m.user_id)
         hist = self.recent_by_user.setdefault(key, [])
         hist.append((m.ts, m.text, prio.mentions_me(m.text, st["my_names"])))

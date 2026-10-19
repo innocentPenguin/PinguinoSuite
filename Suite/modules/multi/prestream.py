@@ -52,6 +52,13 @@ def run(connectors, store, pipeline, inbox):
         add("ai", "AI-assisted ranking", "pass" if ok else "warn", "ready" if ok else "mode is on but no AI key (falls back to local)")
     else:
         add("ai", "Ranking mode", "pass", "local rules (no AI needed)")
+    d = pipeline.ding.info()
+    if not d["enabled"]:
+        add("ding", "New-chatter ding", "pass", "off")
+    elif not d["sound_exists"]:
+        add("ding", "New-chatter ding", "warn", "on, but the sound file is missing")
+    else:
+        add("ding", "New-chatter ding", "pass", "on for " + ", ".join(d["platforms"]) + (" (silent: not the master PC)" if not d["master"] else ""))
     for x in out:
         x["help"] = help_text.for_item(x["id"])
     return out

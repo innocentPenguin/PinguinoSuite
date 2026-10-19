@@ -242,6 +242,21 @@
         "route": "m:multi"
       }
     },
+    "ding": {
+      "title": "New-chatter ding",
+      "summary": "Plays a sound on this PC the first time each person chats in a stream, like the Streamer.bot ding. It never writes anything into chat.",
+      "steps": [
+        "Off by default: open Multi setup > New-chatter ding, tick Twitch and/or YouTube and press Test.",
+        "Once per person per stream: the list resets after 6 quiet hours, or press 'New stream' to clear it yourself.",
+        "Optional: a separate sound for Twitch's 'first message ever' flag.",
+        "A burst (raid) plays at most one ding every 1.5 seconds; extra dings wait in a short queue and the rest are skipped.",
+        "Yellow 'sound file is missing': pick an .mp3 or .wav file. Silent on an auxiliary PC: only the master streaming PC plays it."
+      ],
+      "fix": {
+        "label": "Open Multi setup",
+        "route": "m:multi"
+      }
+    },
     "ai": {
       "title": "Message ranking and AI",
       "summary": "Local rules always rank messages (free, instant, private). Optional AI only double-checks borderline messages and falls back to local on any problem.",

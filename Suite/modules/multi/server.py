@@ -437,6 +437,64 @@ def feed(since: float = 0, limit: int = 200):
     return {"ts": time.time(), "messages": rows}
 
 
+# new-chatter ding ------------------------------------------------------
+@app.get("/api/ding")
+def ding_info():
+    return pipeline.ding.info()
+
+
+@app.post("/api/ding/settings")
+async def ding_settings(request: Request):
+    b = await request.json()
+    patch = {}
+    if "platforms" in b:
+        patch["ding_platforms"] = [p for p in b["platforms"] if p in ("twitch", "youtube")]
+    if "first_ever" in b:
+        patch["ding_first_ever"] = bool(b["first_ever"])
+    for key, name in (("sound", "ding_sound"), ("first_sound", "ding_first_sound")):
+        if key in b:
+            path = str(b[key]).strip().strip('"')
+            if path and not (path.lower().endswith((".mp3", ".wav")) and os.path.isfile(path)):
+                raise HTTPException(400, "choose an existing .mp3 or .wav file")
+            patch[name] = path
+    if "volume" in b:
+        patch["ding_volume"] = max(0, min(100, int(b["volume"])))
+    if "cooldown_s" in b:
+        patch["ding_cooldown_s"] = max(0.2, min(30.0, float(b["cooldown_s"])))
+    config.save_settings(patch)
+    console_log.info("ding", "settings changed: on for " + (", ".join(config.settings()["ding_platforms"]) or "nothing"))
+    return pipeline.ding.info()
+
+
+@app.post("/api/ding/test")
+def ding_test():
+    pipeline.ding.test()
+    return {"ok": True}
+
+
+@app.post("/api/ding/reset")
+def ding_reset():
+    pipeline.ding.new_stream("reset by user")
+    return pipeline.ding.info()
+
+
+@app.post("/api/ding/pick")
+async def ding_pick():
+    """Opens a file dialog on this PC (Multi runs locally) and returns the chosen sound path."""
+    def pick():
+        import tkinter
+        from tkinter import filedialog
+        root = tkinter.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        try:
+            return filedialog.askopenfilename(title="Choose the new-chatter sound", filetypes=[("Sound", "*.mp3 *.wav")])
+        finally:
+            root.destroy()
+    path = await asyncio.to_thread(pick)
+    return {"path": path or ""}
+
+
 # settings / rules ----------------------------------------------------
 @app.get("/api/settings")
 def get_settings():

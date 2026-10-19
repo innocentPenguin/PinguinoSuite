@@ -682,3 +682,84 @@ def test_every_prestream_item_has_help_and_integrations():
     assert {i["id"] for i in ints} == {"twitch", "discord", "youtube", "tiktok"} and all(i["help"] for i in ints)
     assert c.post("/api/test/nope", headers={"origin": "http://127.0.0.1:8766"}).status_code == 404
     assert "_module" in c.get("/api/help/all").json()["items"]
+
+
+# new-chatter ding ---------------------------------------------------
+class _Player:
+    def __init__(self):
+        self.played = []
+
+    def play(self, path, vol):
+        self.played.append((path, vol))
+
+
+def _ding(tmp_path, monkeypatch, **cfg):
+    import config, ding
+    from store import Store
+    snd = tmp_path / "d.wav"
+    snd.write_bytes(b"x")
+    s = dict(config.DEFAULTS, ding_platforms=["twitch", "youtube"], ding_sound=str(snd), **cfg)
+    monkeypatch.setattr(config, "settings", lambda: s)
+    clk = Clock()
+    pl = _Player()
+    d = ding.Ding(Store(tmp_path / "g.db"), player=pl, clock=clk, master=lambda: True, start_worker=False)
+    return d, pl, clk, s
+
+
+def _m(user, platform="twitch", n=0, **kw):
+    return ChatMessage(id=f"{platform}:c:{user}{n}", platform=platform, channel="c", user_id=user, user=user, display=user,
+                       text="hi", ts=time.time(), **kw)
+
+
+def test_ding_once_per_user_per_stream_and_per_platform(tmp_path, monkeypatch):
+    d, pl, clk, s = _ding(tmp_path, monkeypatch)
+    assert d.observe(_m("amy")) and not d.observe(_m("amy", n=1))
+    assert d.observe(_m("amy", platform="youtube"))               # same name, other platform = another chatter
+    assert not d.observe(_m("kim", platform="discord"))            # discord is not enabled
+    assert not d.observe(_m("pinguinob0t")) and not d.observe(_m("me", is_self=True))
+    while not d.q.empty():
+        d.play_one(d.q.get())
+    assert len(pl.played) == 2 and pl.played[0][1] == 70
+
+
+def test_ding_session_resets_after_gap_and_survives_restart(tmp_path, monkeypatch):
+    import ding
+    d, pl, clk, s = _ding(tmp_path, monkeypatch)
+    d.observe(_m("amy"))
+    again = ding.Ding(d.store, player=pl, clock=clk, master=lambda: True, start_worker=False)   # Multi restarted mid-stream
+    assert not again.observe(_m("amy", n=1))
+    clk.t += 7 * 3600                                              # long quiet gap = a new stream
+    assert again.observe(_m("amy", n=2))
+
+
+def test_ding_first_ever_sound_burst_limit_master_and_missing_file(tmp_path, monkeypatch):
+    d, pl, clk, s = _ding(tmp_path, monkeypatch, ding_first_ever=True)
+    other = tmp_path / "first.wav"
+    other.write_bytes(b"y")
+    s["ding_first_sound"] = str(other)
+    d.observe(_m("new1", first_time=True))
+    for i in range(10):
+        d.observe(_m(f"raid{i}"))
+    assert d.q.qsize() == 5 and d.stats["dropped"] >= 5            # a raid cannot flood the queue
+    kinds = []
+    while not d.q.empty():
+        kinds.append(d.q.get())
+    assert kinds[0] == "first" and d.sound_for("first") == str(other) and d.sound_for("new") == s["ding_sound"]
+    d.master = lambda: False
+    d._master = (0, True)
+    assert not d.observe(_m("auxuser"))                            # auxiliary device stays silent
+    s["ding_sound"] = str(tmp_path / "nope.mp3")
+    assert d.play_one("new") is False and d.stats["errors"] == 1
+
+
+def test_ding_settings_endpoint_validates(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import config, server
+    saved = {}
+    monkeypatch.setattr(config, "save_settings", lambda p: saved.update(p) or p)
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    h = {"origin": "http://127.0.0.1:8766"}
+    assert c.post("/api/ding/settings", json={"sound": str(tmp_path / "missing.mp3")}, headers=h).status_code == 400
+    r = c.post("/api/ding/settings", json={"platforms": ["twitch", "kick", "youtube"], "volume": 500, "cooldown_s": 0}, headers=h)
+    assert r.status_code == 200 and saved["ding_platforms"] == ["twitch", "youtube"] and saved["ding_volume"] == 100 and saved["ding_cooldown_s"] == 0.2

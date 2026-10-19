@@ -57,7 +57,7 @@ function platformCard(c, setup) {
 }
 
 async function renderLauncher() {
-  const [ws, pf, st, setup, ai] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai')]);
+  const [ws, pf, st, setup, ai, dg] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai'), api('/api/ding')]);
   const s = setup.settings;
   const connected = st.connectors.filter(c => c.status === 'connected').length;
   const step = n => `<span class="n">${n}</span>`;
@@ -88,6 +88,18 @@ async function renderLauncher() {
     <small class="mut">In OBS: Sources &gt; + &gt; Browser, paste the address, set width 500 and height 800. Or Docks &gt; Custom Browser Docks. Change <code>size</code>, <code>max</code>, <code>platforms</code> in the address as you like; add <code>bots=show</code> to include bot replies.</small>
     <label>Address<input id="pop-url" readonly value="${esc(location.origin)}/popout?size=22&max=14" onclick="this.select()"></label>
     <div class="act"><button data-act="copy-pop">Copy address</button> <a href="/popout?size=22&max=14" target="_blank" rel="noopener"><button type="button">Preview</button></a></div></div>
+
+  <h3>New-chatter ding ${T('', 'Plays a sound on this PC the first time each person chats in a stream. Nothing is written to chat.')}</h3>
+  <div class="box"><small class="mut">A short sound the first time each person chats, once per person per stream - like the Streamer.bot ding. Plays on this PC only${dg.master ? '' : ' (this PC is not the master, so it stays silent)'}.</small>
+    <div class="row"><label class="chk"><input type="checkbox" id="dg-twitch" ${dg.platforms.includes('twitch') ? 'checked' : ''}> Twitch</label>
+      <label class="chk"><input type="checkbox" id="dg-youtube" ${dg.platforms.includes('youtube') ? 'checked' : ''}> YouTube</label>
+      <label class="chk"><input type="checkbox" id="dg-first" ${dg.first_ever ? 'checked' : ''}> Different sound for a Twitch viewer's very first message ever</label></div>
+    <label>Sound file (.mp3 or .wav) ${dg.sound_exists ? '' : '<b class="tbadc">(file not found)</b>'}<span class="row"><input id="dg-sound" value="${esc(dg.sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-sound">Choose...</button></span></label>
+    <label>Sound for first-ever (optional, empty = same sound)<span class="row"><input id="dg-fsound" value="${esc(dg.first_sound)}" style="flex:1"><button data-act="ding-pick" data-target="dg-fsound">Choose...</button></span></label>
+    <div class="row"><label>Volume <span id="dg-vol-n">${dg.volume}</span>%<input id="dg-vol" type="range" min="0" max="100" value="${dg.volume}" oninput="document.getElementById('dg-vol-n').textContent=this.value"></label>
+      <label>At most one ding every (seconds)<input id="dg-gap" type="number" min="0.2" max="30" step="0.1" value="${dg.cooldown_s}" style="width:90px"></label></div>
+    <div class="act"><button class="p" data-act="ding-save">Save</button> <button data-act="ding-test">Play test ding</button> <button data-act="ding-reset">New stream (forget who already chatted)</button></div>
+    <small class="mut">${dg.chatters_this_stream} chatter(s) counted this stream, ${dg.played} ding(s) played${dg.dropped ? ', ' + dg.dropped + ' skipped during bursts' : ''}.</small></div>
 
   <h3>Smart features</h3>
   <div class="box"><b>How messages are ranked ${T('', 'Local rules always work with no internet and no account. AI only double-checks borderline messages.')}</b>
@@ -164,6 +176,15 @@ document.addEventListener('click', async e => {
     else if (a === 'learn-reset') { await api('/api/learning/reset', {b: {}}); toast('Learning reset to defaults.'); return; }
     else if (a === 'recap') { const r = await api('/api/recap');
       $('#recap').innerHTML = r.count ? r.cards.map(c => `<div class="wrow"><b>${esc(c.display || c.user)}</b> <span class="mut">${esc(c.platform || '')}</span> ${esc(c.text)}</div>`).join('') : '<div class="empty">Nothing unanswered. Nice.</div>'; return; }
+    else if (a === 'ding-save') {
+      const plats = ['twitch', 'youtube'].filter(p => $('#dg-' + p).checked);
+      const r = await fetch('/api/ding/settings', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({platforms: plats, first_ever: $('#dg-first').checked,
+        sound: v('dg-sound'), first_sound: v('dg-fsound'), volume: parseInt(v('dg-vol')), cooldown_s: parseFloat(v('dg-gap'))})});
+      const j = await r.json().catch(() => ({})); if (!r.ok) { toast(j.detail || 'Could not save', false); return; }
+      toast(plats.length ? 'Ding is ON for ' + plats.join(' and ') + '.' : 'Ding is off.'); }
+    else if (a === 'ding-test') { await api('/api/ding/test', {b: {}}); toast('Playing a test ding on this PC...'); return; }
+    else if (a === 'ding-reset') { await api('/api/ding/reset', {b: {}}); toast('Cleared. Everyone counts as new again.'); }
+    else if (a === 'ding-pick') { toast('A file window opened on this PC...'); const r = await api('/api/ding/pick', {b: {}}); if (r.path) $('#' + t.dataset.target).value = r.path; return; }
     else if (a === 'copy-pop') { const i = $('#pop-url'); i.select(); try { await navigator.clipboard.writeText(i.value); toast('Address copied.'); } catch (x) { document.execCommand('copy'); toast('Address selected - press Ctrl+C.'); } return; }
     else if (a === 'restore') await api('/api/windows/restore');
     else if (a === 'save-profile') { const n = prompt('Name this layout'); if (n) { await api('/api/profiles/' + encodeURIComponent(n) + '/save'); toast('Layout saved: ' + n); } }
