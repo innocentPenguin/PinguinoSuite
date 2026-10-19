@@ -117,7 +117,8 @@ function chatBar() {
     <span class="dot ${c.status}"></span> ${esc(c.label.replace(' (unofficial)', ''))}</button>`).join('');
   const botLbl = {dim: 'Bot replies: dimmed', show: 'Bot replies: normal', hide: 'Bot replies: hidden'}[CF.bots];
   const keep = $('#csearch') ? $('#csearch').value : searchTerm;
-  $('#cbar').innerHTML = `${plats}<input id="csearch" type="search" placeholder="Search chat..." value="${esc(keep)}" style="width:140px">
+  $('#cbar').innerHTML = `<span class="szbox" title="Chat text size"><button class="chip2" data-lk-step="-1" title="Smaller text">A-</button><b id="lk-sz" class="lksz">${lookGet('size')}</b><button class="chip2" data-lk-step="1" title="Bigger text">A+</button>
+    <button class="chip2 ${GEAR ? 'on' : ''}" data-cf="gear" title="Text, spacing, background and logos for this chat">&#9881; Text &amp; look</button></span>${plats}<input id="csearch" type="search" placeholder="Search chat..." value="${esc(keep)}" style="width:140px">
     <button class="chip2" data-cf="bots" title="Cycle how replies from bots (and you) are shown">${botLbl}</button>
     <button class="chip2 ${CF.q ? 'on' : ''}" data-cf="q" title="Only messages that look like a question for you or mention you">Questions for me</button>
     <button class="chip2 ${CF.prio ? 'on' : ''}" data-cf="prio" title="Only show messages worth answering (plus bot replies)">Priority only</button>
@@ -126,6 +127,48 @@ function chatBar() {
     <a class="chip2" href="/" target="_self" title="Setup, layouts, smart features">Setup</a>`;
   $('#csearch').oninput = e => chatSearch(e.target.value);
 }
+
+// --- quick look controls on the chat page itself: live, saved, no need to open the editor ------------------------
+let GEAR = false, lookTimer = null;
+const lookGet = k => (PANE && PANE.look && PANE.look[k] != null) ? PANE.look[k] : (CS ? CS.base[k] : '');
+function lookSet(k, v) {
+  if (!CS) return;
+  if (PANE) PANE.look = Object.assign({}, PANE.look, {[k]: v}); else CS.base[k] = v;
+  applyStyle();
+  clearTimeout(lookTimer);
+  lookTimer = setTimeout(() => { if (PANE) api('/api/panes/' + PID, {b: {look: PANE.look}}); else api('/api/chatstyle', {b: {style: CS}}); }, 350);
+  const z = $('#lk-sz'); if (z) z.textContent = lookGet('size');
+}
+function gearHtml() {
+  const g = lookGet, sl = (k, lab, lo, hi, step, unit = '') => `<label class="cf">${lab} <input type="range" data-lk="${k}" min="${lo}" max="${hi}" step="${step}" value="${g(k)}"><b>${g(k)}${unit}</b></label>`;
+  const sel = (k, lab, opts) => `<label class="cf">${lab} <select data-lk="${k}">${opts.map(([v, t]) => `<option value="${v}" ${String(g(k)) === String(v) ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
+  const tog = (k, lab) => `<label class="cf"><input type="checkbox" data-lk="${k}" data-bool="1" ${g(k) ? 'checked' : ''}> ${lab}</label>`;
+  return `<div class="ahd"><b>Text &amp; look ${PANE ? '(this window only)' : '(all chat windows)'}</b><button class="lnk" data-cf="gear">close</button></div><div class="rg">
+    ${sl('size', 'Text size', 9, 48, 1, 'px')}
+    ${sel('family', 'Font', FAMILIES.map(f => [f, f]))}
+    ${sl('line', 'Line spacing', 1, 2.2, 0.05)}${sl('spacing', 'Space between messages', 0, 20, 1, 'px')}
+    <span class="cf">Density <button class="chip2" data-lk-dens="tight">Tight</button><button class="chip2" data-lk-dens="normal">Normal</button><button class="chip2" data-lk-dens="roomy">Roomy</button></span>
+    <label class="cf">Background <input type="color" data-lk="bg" value="${g('bg')}"></label>${sl('bgA', 'Background strength', 0, 100, 1, '%')}
+    <label class="cf">Text colour <input type="color" data-lk="text" value="${g('text')}"></label>
+    ${sel('marker', 'Platform logos', [['text', 'Word'], ['logo', 'Logo'], ['both', 'Logo and word'], ['none', 'Nothing']])}
+    ${tog('timestamps', 'Times')}${tog('badges', 'Badges')}${tog('platformTag', 'Platform marker')}
+    ${PANE ? `<button class="chip2" data-lk-reset="1" title="Make this window follow the main look again">Follow main look</button>` : ''}
+    <a class="chip2" href="/?type=style">All look options...</a></div>`;
+}
+function chatGear() { const el = $('#cgearp'); if (!el) return; el.hidden = !GEAR; if (GEAR) el.innerHTML = gearHtml(); }
+document.addEventListener('input', e => {
+  const t = e.target, k = t.dataset && t.dataset.lk; if (!k || !$('#cgearp') || !$('#cgearp').contains(t)) return;
+  const v = t.dataset.bool ? t.checked : t.type === 'range' ? parseFloat(t.value) : t.value;
+  lookSet(k, v); const b = t.parentElement.querySelector('b'); if (b && t.type === 'range') b.textContent = t.value + b.textContent.replace(/[-0-9.]/g, '');
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.lkStep) { lookSet('size', Math.max(9, Math.min(48, +lookGet('size') + (+d.lkStep) * (+lookGet('size') >= 20 ? 2 : 1)))); if (GEAR) chatGear(); }
+  else if (d.lkDens) { const x = {tight: [1, 1.2], normal: [4, 1.35], roomy: [9, 1.5]}[d.lkDens]; lookSet('spacing', x[0]); lookSet('line', x[1]); chatGear(); }
+  else if (d.lkReset && PANE) { PANE.look = {}; applyStyle(); api('/api/panes/' + PID, {b: {look: {}}}); chatGear(); }
+  else if (d.cf === 'gear') { GEAR = !GEAR; chatBar(); chatGear(); }
+});
 async function chatSearch(term) {
   searchTerm = term.trim(); const seq = ++searchSeq;
   if (!searchTerm) { chatFeed(); return; }
@@ -140,7 +183,7 @@ function chatNotice(text) {
   f.insertAdjacentHTML('beforeend', `<div class="notice msg e-modaction">${esc(text)}</div>`); f.scrollTop = f.scrollHeight;
 }
 function renderChat() {
-  $('#body').innerHTML = `<div id="cbar" class="cbar"></div><div id="cpins"></div><div id="cstrip" class="cstrip"></div><div id="cfeed" class="cfeed"></div><div id="cassist" class="cassist" hidden></div><div id="ccomp" class="ccomp"></div>`;
+  $('#body').innerHTML = `<div id="cbar" class="cbar"></div><div id="cgearp" class="cassist" hidden></div><div id="cpins"></div><div id="cstrip" class="cstrip"></div><div id="cfeed" class="cfeed"></div><div id="cassist" class="cassist" hidden></div><div id="ccomp" class="ccomp"></div>`;
   chatBar(); chatPins(); chatStrip(); chatFeed(); chatCompose();
 }
 

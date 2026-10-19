@@ -37,6 +37,7 @@ function compileStyle(s, scope = '') {
     out.push(`.cfeed,.pfeed,#feed{color:${b.text}}`);
     if (b.bgA > 0) out.push(`.cfeed,#feed{background:${rgba(b.bg, b.bgA)}}`);
   }
+  R('.msg', `font-size:${b.size}px`);
   R('.msg .u,.pm b', `font-weight:${b.nameWeight}`);
   R('.emo', `height:${(b.emoteSize / 100).toFixed(2)}em`);
   if (!b.timestamps) R('.msg .t', 'display:none');
