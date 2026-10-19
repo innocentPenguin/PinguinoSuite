@@ -29,7 +29,7 @@ Goal (user /goal): cross-platform PinguinoSuite app on Tauri, ready for other ap
 - Link is registered (`Suite/modules/link/module.json`, Unit 04); its own security model lives in `Docs/PinguinoLink/03-SECURITY-MODEL.md`. Link must adopt `PINGUINO_API_TOKEN`; tracked for Unit 04.
 - Full icon set generated (`npx tauri icon`); `npx tauri build --bundles nsis` produced `PinguinoSuite_0.1.0_x64-setup.exe` (2 MB).
 - `.github/workflows/app.yml`: Windows/macOS/Linux build matrix. **macOS/Linux builds are unverified until it runs on GitHub** (the root folder is not yet a pushed repo).
-- Still: bundle the Python core (currently needs Python + Suite folder), per-module tokens, Link token adoption.
+
 
 ## Update: autostart switched (2026-10-19, user-approved)
 - HKCU Run `PinguinoSuite` changed from `pythonw ...\suite.py --background` to `...\App\src-tauri\target\release\pinguino-suite.exe --background` (stays in tray). Rollback: set the old value back. No Pinguino Startup shortcuts existed; the `PinguinoBot Log Update` scheduled task is the pipeline and was left alone.
@@ -38,3 +38,7 @@ Goal (user /goal): cross-platform PinguinoSuite app on Tauri, ready for other ap
 ## Update: Link adopts core token (2026-10-19)
 - Unit 04's Link already accepts `PINGUINO_API_TOKEN` (`x-link-token`). Core hook calls now send `Authorization`, `X-Pinguino-Token` and `x-link-token`. Verified against a running Link: no token 401, core token 200, foreign Host 421.
 - Remaining honest gaps: macOS/Linux never built (no remote repo/WSL/Docker here; CI workflow ready, needs the repo pushed to GitHub); per-module tokens (all modules share the core token); Python core not bundled.
+
+## Update: per-module tokens (2026-10-19)
+- Each module gets `PINGUINO_API_TOKEN` = HMAC(core token, "module:<id>") (`module_token()` in suite.py). Modules never see the core token; core hooks use the module's token. Verified on Listen: master token 401, module token passes the guard (404 on a nonexistent route).
+- Open: macOS/Linux builds (need GitHub push + CI run), bundling the Python core for standalone installs.

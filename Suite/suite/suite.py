@@ -2,6 +2,7 @@
 tells modules about it, and serves the dashboard. Run via PinguinoSuite.bat (or autostart with Windows)."""
 import asyncio
 import json
+import hmac
 import os
 import secrets
 import signal
@@ -32,6 +33,11 @@ PY = sys.executable
 IS_WIN = os.name == "nt"
 # Per-launch API token. The Tauri shell passes one in; standalone mode makes its own and injects it into the page it serves.
 TOKEN = os.environ.get("PINGUINO_API_TOKEN") or secrets.token_urlsafe(32)
+
+
+def module_token(mid):
+    """Per-module secret derived from the core token: a module never receives (or can forge) the core API token."""
+    return hmac.new(TOKEN.encode(), f"module:{mid}".encode(), "sha256").hexdigest()[:40]
 # Who may call: the core's own origin plus the Tauri webview origins (Windows/macOS/Linux).
 ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "tauri://localhost",
                    "http://tauri.localhost", "https://tauri.localhost"}
@@ -120,7 +126,7 @@ class Module:
         else:
             extra = {"start_new_session": True}
         self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log,
-                                     env={**os.environ, "PINGUINO_API_TOKEN": TOKEN}, **extra)
+                                     env={**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"])}, **extra)
         bus.emit("module", id=self.id, state="starting")
 
     def stop(self):
@@ -148,7 +154,7 @@ class Module:
             return
         for _ in range(40):
             try:
-                r = requests.post(self.spec["url"] + spec["post"], headers={"Authorization": f"Bearer {TOKEN}", "X-Pinguino-Token": TOKEN, "x-link-token": TOKEN}, timeout=10)
+                r = requests.post(self.spec["url"] + spec["post"], headers=(lambda t: {"Authorization": f"Bearer {t}", "X-Pinguino-Token": t, "x-link-token": t})(module_token(self.spec["id"])), timeout=10)
                 bus.emit("hook", id=self.id, hook=hook, ok=r.ok, detail=r.text[:160])
                 return
             except Exception:
