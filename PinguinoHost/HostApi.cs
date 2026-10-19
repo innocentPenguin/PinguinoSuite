@@ -19,7 +19,7 @@ namespace PinguinoHost
         public static Func<bool> ObsConnected = () => false;
         static readonly string[] Secret = { "UserToken", "ObsPassword" };
         static readonly string[] Plain = { "Channel", "ClientId", "SenderId", "BroadcasterId", "ObsHost", "ObsPort", "OverlayPort" };
-        public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers moderation:read";
+        public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers moderation:read channel:read:redemptions";
 
         static string FilePath { get { return Path.Combine(DataDir, "host_secrets.json"); } }
         static JObject Load() { try { return File.Exists(FilePath) ? JObject.Parse(File.ReadAllText(FilePath)) : new JObject(); } catch (Exception) { return new JObject(); } }
@@ -46,7 +46,7 @@ namespace PinguinoHost
         public static bool Handle(HttpListenerContext c)
         {
             string p = c.Request.Url.AbsolutePath;
-            if (p != "/" && p != "/setup" && p != "/auth" && !p.StartsWith("/api/")) return false;
+            if (p != "/" && p != "/setup" && p != "/auth" && p != "/automations" && !p.StartsWith("/api/")) return false;
             if (!LocalOk(c.Request)) { c.Response.StatusCode = 403; return true; }
             if (c.Request.HttpMethod == "POST" && !WriteOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"token required\"}", "application/json"); return true; }
             try
@@ -57,6 +57,7 @@ namespace PinguinoHost
                 if (p == "/api/bots" && c.Request.HttpMethod == "GET") { Write(c, Bots().ToString(), "application/json"); return true; }
                 if (p == "/api/bots" && c.Request.HttpMethod == "POST") { Write(c, SaveBot(Body(c)).ToString(), "application/json"); return true; }
                 if (p == "/" || p == "/setup" || p == "/auth") { Write(c, Html, "text/html; charset=utf-8"); return true; }
+                if (AutoRoutes(c, p)) return true;
                 if (p == "/api/summary" && c.Request.HttpMethod == "GET") { Write(c, Summary().ToString(), "application/json"); return true; }
                 if (p == "/api/lease" && c.Request.HttpMethod == "GET") { Write(c, Lease.State().ToString(), "application/json"); return true; }
                 if (p == "/api/prestream" && c.Request.HttpMethod == "GET") { Write(c, PrestreamCached().ToString(), "application/json"); return true; }
@@ -194,6 +195,7 @@ small{color:var(--dim)}#msg{min-height:18px;color:var(--ok);margin-top:6px}code{
 details{margin:14px 0}summary{cursor:pointer;color:var(--ice);font-weight:600;padding:6px 0}
 @media(max-width:560px){.row>label{width:100%}}</style></head><body><main>
 <h1>PinguinoHost</h1><div class=sub>Runs the Pinguino bots without Streamer.bot. Only reachable from this PC.</div>
+<div class=sub style='margin-top:6px'><a id=autolink href=/automations style='color:var(--ice);font-weight:600'>Actions &amp; Events &rarr;</a> build chat commands, alerts, timers and OBS actions</div>
 <div class=card style='margin-top:14px'><div id=st>loading...</div></div>
 <div class=grid id=bots></div>
 <div class=sub id=botnote></div>
@@ -213,6 +215,7 @@ details{margin:14px 0}summary{cursor:pointer;color:var(--ice);font-weight:600;pa
 <script>
 const $=id=>document.getElementById(id);const F=['ClientId','Channel','ObsHost','ObsPort','SenderId','BroadcasterId'];let CFG={},BOTS=null,busy=0,TESTRES={};
 const TOK=new URLSearchParams(location.search).get('token')||'';
+$('autolink').href='/automations'+(TOK?'?token='+encodeURIComponent(TOK):'');
 const H=()=>TOK?{'X-Pinguino-Token':TOK}:{};
 async function j(u,o){o=o||{};o.headers=Object.assign(H(),o.headers||{});return (await fetch(u,o)).json()}
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));

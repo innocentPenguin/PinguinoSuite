@@ -27,6 +27,11 @@ namespace PinguinoHost
         public static bool HasAction(string n) { return cph != null && cph.ActionExists(n); }
         public static bool SayShared(string m) { try { return cph != null && cph.Say != null && cph.Say(m); } catch (Exception) { return false; } }
         static string suite, dataDir;
+        public static string SuiteDir { get { return suite; } }
+        public static bool ObsScene(string s) { return cph != null && cph.ObsSetScene(s); }
+        public static bool ObsRaw(string type, JObject data) { return cph != null && cph.Obs != null && cph.Obs.Request(type, data); }
+        public static bool ObsSource(string scene, string source, string v) { if (cph == null) return false; return v == "toggle" ? cph.Obs != null && cph.Obs.Toggle(scene, source) : v == "false" ? cph.ObsHideSource(scene, source) : cph.ObsShowSource(scene, source); }
+        public static bool TimeoutUser(string user, int secs, string why) { return cph != null && cph.TwitchTimeoutUser(user, secs, why, false); }
         public static List<string> CoreCommandList() { return coreCommands.OrderBy(x => x).ToList(); }
         static HashSet<string> coreCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         static readonly object dispatchLock = new object();
@@ -53,7 +58,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming());
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers();
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -105,9 +110,10 @@ namespace PinguinoHost
         }
 
         // ---------------- dispatch: exactly the Streamer.bot trigger ownership in Docs\TRIGGERS.md ----------------
-        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo)
+        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false)
         {
             if (!Lease.MayRun) return;   // not the master Host (or lease lost): never run the bots
+            try { if (Auto.OnChat(user, text, role, isSub, firstMsg, msgId, replyTo)) return; } catch (Exception ex) { Clog.Warn("automation", "chat trigger failed: " + ex.Message); }   // an Actions & Events command took it
             lock (dispatchLock)   // one message at a time: arguments are shared state, so no two chats can mix
             {
                 cph.Args.Clear();
@@ -166,6 +172,8 @@ namespace PinguinoHost
         public static void DispatchEvent(Dictionary<string, object> args)
         {
             if (!Lease.MayRun) return;
+            try { Auto.OnEvent(args); } catch (Exception ex) { Clog.Warn("automation", "event trigger failed: " + ex.Message); }
+            object et0; if (args.TryGetValue("eventType", out et0) && !new[] { "TwitchSub", "TwitchReSub", "TwitchGiftBomb", "TwitchCheer", "TwitchRaid", "TwitchFollow" }.Contains(Convert.ToString(et0))) return;   // automation-only events
             lock (dispatchLock)
             {
                 cph.Args.Clear(); foreach (var kv in args) cph.Args[kv.Key] = kv.Value;
@@ -282,7 +290,7 @@ namespace PinguinoHost
             int role = T("badges").Contains("broadcaster/") ? 4 : T("mod") == "1" ? 3 : T("badges").Contains("vip/") ? 2 : 1;
             string display = T("display-name") != "" ? T("display-name") : m.Groups["nick"].Value;
             string reply = T("reply-parent-user-login");
-            Task.Run(() => Dispatch(display, msg, T("id"), role, T("user-id"), T("first-msg") == "1", reply));
+            Task.Run(() => Dispatch(display, msg, T("id"), role, T("user-id"), T("first-msg") == "1", reply, T("subscriber") == "1"));
         }
     }
 }

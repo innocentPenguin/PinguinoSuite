@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Actions &amp; Events</title>
+<style>
+:root{color-scheme:dark;--bg:#0a0e15;--bg2:#0e131c;--panel:#131925;--panel2:#18202e;--line:#222b3c;--line2:#2d3850;--fg:#e8ecf4;--dim:#8b95ab;--faint:#5b6579;--ice:#7cc4ff;--ice2:#4a9be0;--beak:#ff9f43;--live:#ff4757;--ok:#4cd9a0;--warn:#f5d547;--r:12px}
+:root[data-theme=light]{color-scheme:light;--bg:#f4f6fa;--bg2:#fff;--panel:#fff;--panel2:#eef2f8;--line:#d9e0ec;--line2:#c3cde0;--fg:#16202e;--dim:#566178;--faint:#7c879c;--ice:#1f6fc2;--ice2:#2b7fd6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px 'Segoe UI',system-ui,sans-serif}
+header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header h1{font-size:18px;margin:0;flex:1;min-width:180px}
+button{background:var(--ice2);color:#04101e;border:0;border-radius:9px;padding:8px 13px;font-weight:600;cursor:pointer}button:hover{background:var(--ice)}
+button.ghost{background:var(--panel2);color:var(--fg);border:1px solid var(--line2)}button.ghost:hover{background:var(--line)}
+button.danger{background:transparent;color:var(--live);border:1px solid var(--line2)}button.sm{padding:4px 9px;font-size:12px}
+main{display:grid;grid-template-columns:290px 1fr;gap:14px;padding:14px 16px;max-width:1300px;margin:0 auto}
+@media(max-width:860px){main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+input[type=text],input[type=number],select,textarea{width:100%;background:var(--bg2);color:var(--fg);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;font:inherit}
+textarea{min-height:64px;resize:vertical;font-family:Consolas,monospace;font-size:13px}
+label{display:block;color:var(--dim);font-size:12px;margin:8px 0 3px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}.row>div{flex:1;min-width:130px}
+.list{max-height:70vh;overflow:auto}
+.item{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:9px;cursor:pointer;border:1px solid transparent}
+.item:hover{background:var(--panel2)}.item.sel{background:var(--panel2);border-color:var(--ice2)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none}.dot.on{background:var(--ok)}
+.grp{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin:12px 4px 4px}
+.sub{color:var(--dim);font-size:12.5px}
+.blk{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
+.blk .hd{display:flex;gap:8px;align-items:center}.blk .hd b{flex:1}
+.nest{border-left:3px solid var(--line2);margin-left:6px;padding-left:10px}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;background:var(--panel2);border:1px solid var(--line)}
+.ok{color:var(--ok)}.bad{color:var(--live)}
+pre{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:9px;white-space:pre-wrap;word-break:break-word;font-size:12.5px;max-height:260px;overflow:auto;margin:6px 0}
+h2{font-size:14px;margin:16px 0 4px}details summary{cursor:pointer;color:var(--ice)}
+code{background:var(--bg2);padding:1px 5px;border-radius:5px}
+.chk{display:flex;gap:7px;align-items:center;margin-top:8px;color:var(--dim)}.chk input{width:auto}
+#toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:9px 14px;display:none;z-index:9;max-width:90vw}
+</style></head><body>
+<header><h1>Actions &amp; Events</h1><span id="mstate" class="pill"></span>
+<button class="ghost" id="bNew">New action</button><button class="ghost" id="bImport">Import from Streamer.bot</button><button id="bSave">Save all</button></header>
+<main>
+<section class="card"><input type="text" id="q" placeholder="Search actions"><div class="list" id="list"></div></section>
+<section>
+ <div class="card" id="editor"><p class="sub">Pick an action on the left, or create a new one. Triggers decide <b>when</b>, steps decide <b>what</b> happens.</p></div>
+ <div class="card" style="margin-top:14px"><h2 style="margin-top:0">Recent runs</h2><div id="runs" class="sub">nothing yet</div></div>
+ <details class="card" style="margin-top:14px"><summary>Variables you can use in any text field</summary>
+  <p class="sub"><code>{user}</code> <code>{userName}</code> <code>{message}</code> <code>{args}</code> <code>{arg1}</code>..<code>{arg9}</code> <code>{command}</code> <code>{channel}</code> <code>{isMod}</code> <code>{isSub}</code>
+  &middot; events: <code>{viewers}</code> (raid) <code>{bits}</code> <code>{tier}</code> <code>{title}</code> (redeem) &middot; <code>{var:name}</code> <code>{random:1-100}</code> <code>{now:HH:mm}</code> <code>{count}</code> (after Add to variable)
+  &middot; after an HTTP call: <code>{http.status}</code> <code>{http.say}</code> and any field of its JSON answer as <code>{http.field}</code>.</p></details>
+</section>
+</main>
+<div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+const TOK=new URLSearchParams(location.search).get('token')||'';
+const H=()=>TOK?{'X-Pinguino-Token':TOK}:{};
+async function j(u,o){o=o||{};o.headers=Object.assign({'Content-Type':'application/json'},H(),o.headers||{});const r=await fetch(u+(TOK?(u.includes('?')?'&':'?')+'token='+encodeURIComponent(TOK):''),o);return r.json()}
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(t,ms){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',ms||3500)}
+
+const PERMS=['everyone','sub','vip','mod','broadcaster'];
+const BOTS=['core','chat','helper'];
+const TRIGGERS={
+ command:{label:'Chat command',f:[['names','Command(s), comma separated','names'],['permission','Who can use it','sel',PERMS],['cooldownSec','Cooldown for everyone (s)','num'],['userCooldownSec','Cooldown per viewer (s)','num'],['consume','Stop the bots from also answering it','bool',true]]},
+ chat:{label:'Chat message matches',f:[['pattern','Regular expression','text'],['permission','Who','sel',PERMS]]},
+ first_message:{label:'Viewer\'s first message ever',f:[]},
+ follow:{label:'Follow',f:[]},
+ sub:{label:'New subscription',f:[['tier','Tier','sel',['any','1','2','3']]]},
+ resub:{label:'Resub',f:[]},
+ gift:{label:'Gifted subs',f:[['min','At least (subs)','num']]},
+ cheer:{label:'Cheer (bits)',f:[['min','At least (bits)','num'],['max','At most (bits, -1 = no limit)','num']]},
+ raid:{label:'Incoming raid',f:[['min','At least (viewers)','num']]},
+ redeem:{label:'Channel point reward',f:[['title','Reward title (* = any)','text']]},
+ timer:{label:'Timer',f:[['everySec','Every (seconds)','num'],['minChatMessages','Only if this many chat messages arrived since','num']]},
+ stream_online:{label:'Stream goes online',f:[]},
+ stream_offline:{label:'Stream goes offline',f:[]},
+ hotkey:{label:'Hotkey / Stream Deck / Link',f:[['key','Key name (POST /api/automations/fire {"hotkey":"..."})','text']]},
+ manual:{label:'Manual only (test button)',f:[]}};
+const STEPS={
+ say:{label:'Say in chat',f:[['as','Speak as','sel',BOTS],['text','Message','area']]},
+ random_say:{label:'Say one of several (random)',f:[['as','Speak as','sel',BOTS],['texts','One message per line','lines']]},
+ delay:{label:'Wait',f:[['ms','Milliseconds','num']]},
+ obs_scene:{label:'OBS: switch scene',f:[['scene','Scene name','text']]},
+ obs_source:{label:'OBS: show / hide a source',f:[['scene','Scene','text'],['source','Source','text'],['visible','Set to','sel',['true','false','toggle']]]},
+ obs_request:{label:'OBS: any request (advanced)',f:[['request','Request type','text'],['data','Request data (JSON)','json']]},
+ sound:{label:'Play a sound file',f:[['file','Full path to .mp3 / .wav','text'],['volume','Volume 0-1','num']]},
+ http:{label:'Call a web / module API',f:[['method','Method','sel',['GET','POST']],['url','URL (this PC, LAN, tailnet or innocentpenguin.com)','text'],['body','Body (JSON)','area'],['say','Say the answer\'s "say" field','bool'],['as','Speak as','sel',BOTS]]},
+ module_command:{label:'Send command to a module (e.g. Spotify)',f:[['url','Module URL (…/api/chat-command)','text'],['command','Command name (blank = the typed one)','text'],['as','Speak as','sel',BOTS]]},
+ bot_command:{label:'Run a bot command as the streamer',f:[['text','Command text, e.g. !next','text']]},
+ timeout:{label:'Time a viewer out',f:[['user','Viewer','text'],['seconds','Seconds','num'],['reason','Reason','text']]},
+ set_var:{label:'Set a variable',f:[['name','Name','text'],['value','Value','text'],['persist','Keep after restart','bool']]},
+ inc_var:{label:'Add to a variable',f:[['name','Name','text'],['by','Add','num'],['persist','Keep after restart','bool']]},
+ log:{label:'Write to the Console',f:[['text','Text','text']]},
+ run_action:{label:'Run another action',f:[['name','Action name','text']]},
+ if:{label:'If / else',f:[['left','Value','text'],['op','Condition','sel',['==','!=','>','>=','<','<=','contains','startswith','matches','empty','notempty','true','false']],['right','Compare with','text']],nested:true},
+ stop:{label:'Stop here',f:[]},
+ comment:{label:'Note',f:[['text','Text','area']]}};
+
+let DOC={version:1,actions:[]},SEL=-1,DIRTY=false;
+function dirty(){DIRTY=true;$('bSave').textContent='Save all *'}
+function fieldHtml(def,val,path){
+ const [k,label,kind,opt]=def;let v=val[k];
+ if(kind=='bool'){const on=v===undefined?(opt===true):v;return `<div class="chk"><input type="checkbox" data-p="${path}" data-k="${k}" data-kind="bool" ${on?'checked':''}> ${esc(label)}</div>`}
+ if(kind=='sel')return `<div><label>${esc(label)}</label><select data-p="${path}" data-k="${k}" data-kind="sel">${opt.map(o=>`<option ${String(v===undefined?opt[0]:v)==o?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+ if(kind=='num')return `<div><label>${esc(label)}</label><input type="number" data-p="${path}" data-k="${k}" data-kind="num" value="${v===undefined?'':esc(v)}"></div>`;
+ if(kind=='area')return `<div style="flex-basis:100%"><label>${esc(label)}</label><textarea data-p="${path}" data-k="${k}" data-kind="text">${esc(v||'')}</textarea></div>`;
+ if(kind=='lines')return `<div style="flex-basis:100%"><label>${esc(label)}</label><textarea data-p="${path}" data-k="${k}" data-kind="lines">${esc((v||[]).join('\n'))}</textarea></div>`;
+ if(kind=='names')return `<div><label>${esc(label)}</label><input type="text" data-p="${path}" data-k="${k}" data-kind="names" value="${esc((v||[]).join(', '))}"></div>`;
+ if(kind=='json')return `<div style="flex-basis:100%"><label>${esc(label)}</label><textarea data-p="${path}" data-k="${k}" data-kind="json">${esc(v?JSON.stringify(v,null,1):'')}</textarea></div>`;
+ return `<div><label>${esc(label)}</label><input type="text" data-p="${path}" data-k="${k}" data-kind="text" value="${esc(v||'')}"></div>`}
+function stepsHtml(steps,path){
+ let h='';(steps||[]).forEach((s,i)=>{const d=STEPS[s.type]||{label:s.type,f:[]};const p=path+'.'+i;
+  h+=`<div class="blk"><div class="hd"><b>${i+1}. ${esc(d.label)}</b><button class="ghost sm" data-act="up" data-p="${p}">&uarr;</button><button class="ghost sm" data-act="down" data-p="${p}">&darr;</button><button class="danger sm" data-act="del" data-p="${p}">Remove</button></div><div class="row">${d.f.map(f=>fieldHtml(f,s,p)).join('')}</div>`;
+  if(d.nested)h+=`<div class="nest"><div class="sub">Then</div>${stepsHtml(s.then,p+'.then')}${addStep(p+'.then')}<div class="sub">Else</div>${stepsHtml(s.else,p+'.else')}${addStep(p+'.else')}</div>`;
+  h+='</div>'});
+ return h}
+function addStep(path){return `<div class="row" style="margin:6px 0"><div><select data-addstep="${path}"><option value="">+ add a step…</option>${Object.keys(STEPS).map(k=>`<option value="${k}">${esc(STEPS[k].label)}</option>`).join('')}</select></div></div>`}
+function getPath(root,path){const parts=path.split('.');let o=root;for(const p of parts){if(o==null)return null;o=o[p]}return o}
+function parentOf(root,path){const parts=path.split('.');const last=parts.pop();return [getPath(root,parts.join('.')),last]}
+function render(){
+ const q=($('q').value||'').toLowerCase();let h='',last=null;
+ DOC.actions.map((a,i)=>[a,i]).filter(([a])=>!q||(a.name||'').toLowerCase().includes(q)||(a.group||'').toLowerCase().includes(q)).sort((x,y)=>(x[0].group||'').localeCompare(y[0].group||'')||x[0].name.localeCompare(y[0].name)).forEach(([a,i])=>{
+  if((a.group||'')!==last){last=a.group||'';h+=`<div class="grp">${esc(last||'No group')}</div>`}
+  h+=`<div class="item ${i==SEL?'sel':''}" data-i="${i}"><span class="dot ${a.enabled!==false?'on':''}"></span><span style="flex:1">${esc(a.name)}</span>${a.imported?'<span class="pill">imported</span>':''}</div>`});
+ $('list').innerHTML=h||'<p class="sub">No actions yet.</p>';
+ $('list').querySelectorAll('.item').forEach(e=>e.onclick=()=>{SEL=+e.dataset.i;render()});
+ renderEditor()}
+function renderEditor(){
+ const a=DOC.actions[SEL];if(!a){$('editor').innerHTML='<p class="sub">Pick an action on the left, or create a new one. Triggers decide <b>when</b>, steps decide <b>what</b> happens.</p>';return}
+ a.triggers=a.triggers||[];a.steps=a.steps||[];a.conditions=a.conditions||[];
+ let h=`<div class="row"><div style="flex:2"><label>Name</label><input type="text" id="aname" value="${esc(a.name)}"></div><div><label>Group</label><input type="text" id="agroup" value="${esc(a.group||'')}"></div>
+  <div style="flex:0 0 auto"><div class="chk"><input type="checkbox" id="aen" ${a.enabled!==false?'checked':''}> Enabled</div></div></div>`;
+ if(a.importNotes)h+=`<p class="sub">Imported from Streamer.bot: ${esc(a.importNotes)}. Review the steps, then enable it.</p>`;
+ h+='<h2>Triggers (any of these starts it)</h2>';
+ a.triggers.forEach((t,i)=>{const d=TRIGGERS[t.type]||{label:t.type,f:[]};const p='triggers.'+i;h+=`<div class="blk"><div class="hd"><b>${esc(d.label)}</b><button class="danger sm" data-act="del" data-p="${p}">Remove</button></div><div class="row">${d.f.map(f=>fieldHtml(f,t,p)).join('')}</div></div>`});
+ h+=`<div class="row"><div><select id="addtrig"><option value="">+ add a trigger…</option>${Object.keys(TRIGGERS).map(k=>`<option value="${k}">${esc(TRIGGERS[k].label)}</option>`).join('')}</select></div></div>`;
+ h+='<h2>Only if (optional conditions, all must be true)</h2>';
+ a.conditions.forEach((c,i)=>{const p='conditions.'+i;h+=`<div class="blk"><div class="row">${fieldHtml(['left','Value','text'],c,p)}${fieldHtml(['op','Condition','sel',STEPS.if.f[1][3]],c,p)}${fieldHtml(['right','Compare with','text'],c,p)}<div style="flex:0 0 auto"><button class="danger sm" data-act="del" data-p="${p}">Remove</button></div></div></div>`});
+ h+='<div class="row"><div><button class="ghost sm" id="addcond">+ add a condition</button></div></div>';
+ h+='<h2>Steps (run in order)</h2>'+stepsHtml(a.steps,'steps')+addStep('steps');
+ h+=`<div class="row" style="margin-top:14px"><button id="bTest">Test (dry run)</button><button class="ghost" id="bReal">Run for real</button><button class="ghost" id="bDup">Duplicate</button><button class="danger" id="bDel">Delete action</button></div><div id="testout"></div>`;
+ $('editor').innerHTML=h;bindEditor(a)}
+function bindEditor(a){
+ const ed=$('editor');
+ $('aname').oninput=e=>{a.name=e.target.value;dirty()};$('aname').onchange=()=>render();
+ $('agroup').oninput=e=>{a.group=e.target.value;dirty()};$('aen').onchange=e=>{a.enabled=e.target.checked;dirty();render()};
+ ed.querySelectorAll('[data-k]').forEach(el=>{el.onchange=el.oninput=()=>{const o=getPath(a,el.dataset.p);if(!o)return;const k=el.dataset.k,kind=el.dataset.kind;
+   if(kind=='bool')o[k]=el.checked;else if(kind=='num')o[k]=el.value===''?undefined:+el.value;else if(kind=='names')o[k]=el.value.split(',').map(s=>s.trim()).filter(Boolean);
+   else if(kind=='lines')o[k]=el.value.split('\n').map(s=>s.trim()).filter(Boolean);else if(kind=='json'){try{o[k]=el.value.trim()?JSON.parse(el.value):undefined;el.style.borderColor=''}catch(e){el.style.borderColor='var(--live)';return}}else o[k]=el.value;dirty()}});
+ ed.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const [par,k]=parentOf(a,b.dataset.p);const i=+k;if(b.dataset.act=='del')par.splice(i,1);else if(b.dataset.act=='up'&&i>0)[par[i-1],par[i]]=[par[i],par[i-1]];else if(b.dataset.act=='down'&&i<par.length-1)[par[i+1],par[i]]=[par[i],par[i+1]];dirty();renderEditor()});
+ ed.querySelectorAll('[data-addstep]').forEach(s=>s.onchange=()=>{if(!s.value)return;let arr=getPath(a,s.dataset.addstep);if(!arr){const [par,k]=parentOf(a,s.dataset.addstep);par[k]=arr=[]}const n={type:s.value};if(s.value=='say'||s.value=='random_say')n.as='core';if(s.value=='delay')n.ms=1000;if(s.value=='if'){n.op='==';n.then=[];n.else=[]}arr.push(n);dirty();renderEditor()});
+ $('addtrig').onchange=e=>{if(!e.target.value)return;const n={type:e.target.value};if(n.type=='command'){n.names=['!mycommand'];n.permission='everyone'}if(n.type=='timer')n.everySec=600;a.triggers.push(n);dirty();renderEditor()};
+ $('addcond').onclick=()=>{a.conditions.push({left:'',op:'==',right:''});dirty();renderEditor()};
+ $('bTest').onclick=()=>runTest(a,true);$('bReal').onclick=()=>{if(confirm('Run "'+a.name+'" for real? Messages will be sent to chat and OBS will change.'))runTest(a,false)};
+ $('bDup').onclick=()=>{const c=JSON.parse(JSON.stringify(a));c.id=undefined;c.name=a.name+' (copy)';DOC.actions.push(c);SEL=DOC.actions.length-1;dirty();render()};
+ $('bDel').onclick=()=>{if(confirm('Delete "'+a.name+'"?')){DOC.actions.splice(SEL,1);SEL=-1;dirty();render()}}}
+async function runTest(a,dry){
+ if(DIRTY){const ok=await save(true);if(!ok)return}
+ $('testout').innerHTML='<p class="sub">running…</p>';
+ const r=await j('/api/automations/test',{method:'POST',body:JSON.stringify({id:a.id,dry:dry})});
+ if(!r.run){$('testout').innerHTML='<pre class="bad">'+esc(r.error||'failed')+'</pre>';return}
+ $('testout').innerHTML=`<pre class="${r.run.ok?'':'bad'}">${esc((dry?'DRY RUN\n':'')+(r.run.output||[]).join('\n')+(r.run.error?'\nERROR: '+r.run.error:''))}</pre>`;loadRuns()}
+async function save(quiet){
+ const r=await j('/api/automations',{method:'POST',body:JSON.stringify({doc:DOC})});
+ if(!r.ok){toast('Not saved: '+(r.error||'error'),6000);return false}
+ DIRTY=false;$('bSave').textContent='Save all';if(!quiet)toast('Saved');await load(true);return true}
+async function load(keep){
+ const r=await j('/api/automations');if(!r.ok){toast('Could not load');return}
+ const cur=keep&&DOC.actions[SEL]?DOC.actions[SEL].id:null;DOC=r.doc;DOC.actions=DOC.actions||[];SEL=cur?DOC.actions.findIndex(a=>a.id==cur):-1;
+ $('mstate').textContent=r.master?'this Host runs automations':'not the master: automations paused';$('mstate').className='pill '+(r.master?'ok':'bad');render()}
+async function loadRuns(){
+ const r=await j('/api/automations/log?n=12');if(!r.ok)return;
+ $('runs').innerHTML=r.runs.length?r.runs.map(x=>`<div style="margin:5px 0"><span class="${x.ok?'ok':'bad'}">${x.ok?'ok':'failed'}</span> <b>${esc(x.action)}</b> <span class="sub">${esc(x.trigger)} - ${x.ms} ms - ${new Date(x.ts).toLocaleTimeString()}</span>${x.error?'<div class="bad">'+esc(x.error)+'</div>':''}<div class="sub">${(x.output||[]).map(esc).join('<br>')}</div></div>`).join(''):'nothing yet'}
+$('bNew').onclick=()=>{DOC.actions.push({id:undefined,name:'New action',group:'My actions',enabled:true,triggers:[],conditions:[],steps:[]});SEL=DOC.actions.length-1;dirty();render()};
+$('bSave').onclick=()=>save(false);$('q').oninput=render;
+$('bImport').onclick=async()=>{
+ toast('Looking at the Streamer.bot files…');const r=await j('/api/automations/import',{method:'POST',body:JSON.stringify({mode:'preview'})});
+ if(!r.ok){toast(r.error,7000);return}
+ const sk=(r.skipped||[]).map(s=>'  - '+s.name+': '+s.why).join('\n');
+ if(confirm(r.importable+' actions can be imported (added disabled so you can review them) from\n'+r.folder+'\n\nNot imported:\n'+sk+'\n\nAdd them now?')){
+  const m=await j('/api/automations/import',{method:'POST',body:JSON.stringify({mode:'merge'})});toast(m.ok?m.added+' actions added (disabled). Review and enable them.':m.error,6000);await load(false)}};
+window.addEventListener('beforeunload',e=>{if(DIRTY){e.preventDefault();e.returnValue=''}});
+load(false);loadRuns();setInterval(loadRuns,5000);
+</script></body></html>

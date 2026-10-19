@@ -96,6 +96,14 @@ namespace PinguinoHost
             catch (Exception) { return null; }
         }
         public JObject Data(string type, JObject data) { var r = Call(type, data); return r != null && (bool)r["requestStatus"]["result"] ? r["responseData"] as JObject : null; }
+        public bool Toggle(string scene, string source)
+        {
+            var r = Call("GetSceneItemId", new JObject { { "sceneName", scene }, { "sourceName", source } });
+            if (r == null || !(bool)r["requestStatus"]["result"]) return false;
+            var id = r["responseData"]["sceneItemId"]; var cur = Call("GetSceneItemEnabled", new JObject { { "sceneName", scene }, { "sceneItemId", id } });
+            if (cur == null || !(bool)cur["requestStatus"]["result"]) return false;
+            return Request("SetSceneItemEnabled", new JObject { { "sceneName", scene }, { "sceneItemId", id }, { "sceneItemEnabled", !(bool)cur["responseData"]["sceneItemEnabled"] } });
+        }
         public bool Request(string type, JObject data) { var r = Call(type, data); return r != null && (bool)r["requestStatus"]["result"]; }
         public bool SetVisible(string scene, string source, bool on)
         {
@@ -151,13 +159,15 @@ namespace PinguinoHost
             var subs = new[] {
                 new[] { "channel.subscribe", "1", "broadcaster_user_id" }, new[] { "channel.subscription.message", "1", "broadcaster_user_id" },
                 new[] { "channel.subscription.gift", "1", "broadcaster_user_id" }, new[] { "channel.cheer", "1", "broadcaster_user_id" },
-                new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.follow", "2", "broadcaster_user_id" } };
+                new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.follow", "2", "broadcaster_user_id" },
+                new[] { "stream.online", "1", "broadcaster_user_id", "opt" }, new[] { "stream.offline", "1", "broadcaster_user_id", "opt" },
+                new[] { "channel.channel_points_custom_reward_redemption.add", "1", "broadcaster_user_id", "opt" } };
             foreach (var s in subs)
             {
                 var cond = new JObject { { s[2], bid } }; if (s[0] == "channel.follow") cond["moderator_user_id"] = bid;
                 var body = new JObject { { "type", s[0] }, { "version", s[1] }, { "condition", cond }, { "transport", new JObject { { "method", "websocket" }, { "session_id", session } } } };
                 var resp = await http.PostAsync(HostApi.Helix + "/eventsub/subscriptions", new StringContent(body.ToString(), Encoding.UTF8, "application/json"));
-                if (!resp.IsSuccessStatusCode) { HostApi.EventSubRefused++; Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes"); Clog.Warn("eventsub", "subscription " + s[0] + " refused (HTTP " + (int)resp.StatusCode + (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : ", check token scopes") + ")"); }
+                if (!resp.IsSuccessStatusCode) { if (s.Length < 4) HostApi.EventSubRefused++; Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes"); Clog.Warn("eventsub", "subscription " + s[0] + " refused (HTTP " + (int)resp.StatusCode + (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : ", check token scopes") + ")"); }
             }
         }
         static void Handle(JObject m, Action<Dictionary<string, object>> raise)
@@ -173,6 +183,9 @@ namespace PinguinoHost
                 case "channel.cheer": a["eventType"] = "TwitchCheer"; a["userName"] = U("user_login"); a["bits"] = (int?)e["bits"] ?? 0; break;
                 case "channel.raid": a["eventType"] = "TwitchRaid"; a["userName"] = U("from_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; break;
                 case "channel.follow": a["eventType"] = "TwitchFollow"; a["userName"] = U("user_login"); break;
+                case "stream.online": a["eventType"] = "StreamOnline"; break;
+                case "stream.offline": a["eventType"] = "StreamOffline"; break;
+                case "channel.channel_points_custom_reward_redemption.add": a["eventType"] = "TwitchRedeem"; a["userName"] = U("user_login"); a["title"] = (string)e["reward"]?["title"] ?? ""; a["input"] = U("user_input"); a["cost"] = (int?)e["reward"]?["cost"] ?? 0; break;
                 default: return;
             }
             raise(a);
