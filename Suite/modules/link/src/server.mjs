@@ -24,13 +24,13 @@ export async function runMacro(cfg, name) {
 const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>PinguinoLink</title>
 <style>
-:root{color-scheme:dark;--bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e6e8ee;--dim:#8b93a7;--acc:#5aa9ff}
+:root{color-scheme:dark;--bg:#050506;--card:#0d0e10;--line:#1f2125;--fg:#ececef;--dim:#8d9199;--acc:#ff9900}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,Segoe UI,sans-serif}
-main{max-width:1060px;margin:0 auto;padding:20px 16px}h1{font-size:20px;margin:0 0 14px}h3{margin:0 0 10px;font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+main{max-width:1060px;margin:0 auto;padding:20px 16px}h1{font-size:20px;margin:0 0 14px}h3{margin:0 0 10px;font-size:13px;color:var(--acc);text-transform:uppercase;letter-spacing:.06em}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
 ul{list-style:none;margin:8px 0 0;padding:0}li{padding:6px 0;border-top:1px solid var(--line)}
-button{background:#1f2430;color:var(--fg);border:1px solid var(--line);border-radius:8px;margin:4px 6px 4px 0;padding:9px 16px;font:inherit;cursor:pointer}
-button:hover{border-color:var(--acc)}button.danger{border-color:#7a3b3b}.dim{color:var(--dim)}#msg{min-height:20px;margin-top:8px}
+button{background:#14161a;color:var(--fg);border:1px solid var(--line);border-radius:8px;margin:4px 6px 4px 0;padding:9px 16px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--acc)}button.danger{border-color:#8a3a3a}button:hover{background:#1b1d21}.dim{color:var(--dim)}#msg{min-height:20px;margin-top:8px}
 </style><body><main>
 <h1>🐧 PinguinoLink</h1>
 <div class=card><h3>Network</h3><div id=s>loading…</div></div>
