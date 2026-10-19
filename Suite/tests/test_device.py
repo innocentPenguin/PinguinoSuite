@@ -105,5 +105,28 @@ class DeviceTests(unittest.TestCase):
         self.assertEqual(a.me["id"], b.me["id"])
 
 
+class GreenMergeTests(unittest.TestCase):
+    def test_peer_green_overrides_master_warn_and_names_device(self):
+        items = [{"id": "multi:twitch", "status": "needs_auth", "detail": "sign in"}, {"id": "core:obs", "status": "connected", "detail": ""},
+                 {"id": "key:X", "status": "needs_auth", "detail": "missing"}, {"id": "spotify:module", "status": "off", "detail": ""}]
+        peers = [("MacBook", {"i": {"multi:twitch": "connected", "core:obs": "error", "key:X": "connected", "spotify:module": "connected"}})]
+        out = D.green_merge(items, peers, lambda i: i["id"], "status", {"connected"}, lambda i: i["id"].startswith("key:") or i["id"].endswith(":module"), "i")
+        self.assertEqual((out[0]["status"], out[0]["from"]), ("connected", "MacBook"))
+        self.assertIn("OK on MacBook", out[0]["detail"])
+        self.assertEqual(out[1]["status"], "connected"); self.assertNotIn("from", out[1])   # master's own green is never touched
+        self.assertEqual(out[2]["status"], "needs_auth"); self.assertEqual(out[3]["status"], "off")  # secrets and module-up are never merged
+
+    def test_peer_red_does_not_downgrade_and_status_travels_in_heartbeat(self):
+        c = Clock(); a, b = mk("pc", 100, c), mk("mac", 50, c)
+        b.set_status({"i": {"x": "connected"}, "p": {"m:y": "pass"}})
+        beat(b, a)
+        self.assertEqual(a.peer_statuses()[0][0], "mac")
+        items = [{"id": "x", "status": "connected"}]
+        D.green_merge(items, [("mac", {"i": {"x": "error"}})], lambda i: i["id"], "status", {"connected"}, section="i")
+        self.assertEqual(items[0]["status"], "connected")
+        c.t += 30
+        self.assertEqual(a.peer_statuses(), [])  # a dead peer's status is ignored
+
+
 if __name__ == "__main__":
     unittest.main()

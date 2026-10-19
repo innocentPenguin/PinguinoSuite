@@ -385,12 +385,24 @@ def process_control():
 last_prestream = {}
 
 
-def run_prestream(slot=None, scheduled=False):
-    """Run all readiness checks, post the result to the Console and the event bus (toast), keep it for /api/prestream."""
-    global last_prestream
+PS_SKIP = {"up", "disk", "errors", "keys"}  # per-device facts: another device being fine says nothing about this one
+local_prestream = {}   # this device's own latest checks, unmerged (also published to peers)
+last_integrations = []  # this device's own integration list, unmerged
+
+
+def _compute_prestream(slot=None, scheduled=False):
     mods = [{"id": m.id, "spec": m.spec, "state": m.public()["state"], "always_start": bool(m.spec.get("defaults", {}).get("always_start"))}
             for m in modules.values()]
-    rep = prestream.run_checks(mods, module_token, CONSOLE_DIR, lambda: console_log.errors_since(1800), ROOT, slot, scheduled, extra=vault_prestream_items())
+    return prestream.run_checks(mods, module_token, CONSOLE_DIR, lambda: console_log.errors_since(1800), ROOT, slot, scheduled, extra=vault_prestream_items())
+
+
+def run_prestream(slot=None, scheduled=False):
+    """Run all readiness checks, post the result to the Console and the event bus (toast), keep it for /api/prestream.
+    Green on any peer device overrides this device's warn/fail for the same item (device.green_merge)."""
+    global last_prestream
+    rep = _compute_prestream(slot, scheduled)
+    device.green_merge(rep["items"], devices.peer_statuses(), lambda i: f"{i['module']}:{i['id']}", "status", {"pass"}, lambda i: i["id"] in PS_SKIP, "p")
+    rep["summary"] = {s: sum(1 for i in rep["items"] if i["status"] == s) for s in ("pass", "warn", "fail")}
     last_prestream = rep
     try:  # a script (no app token) can read the latest result from here
         tmp = CONSOLE_DIR / "prestream-last.json.tmp"
@@ -444,6 +456,21 @@ def reconcile_devices():
         elif not st["is_master"] and not st["warming_up"] and (m.running or m.wanted):
             console_log.log("warn", "device", f"stopping {m.id}: {st['master_name']} is now master", module=m.id)
             m.stop(deferred=True)
+
+
+def status_loop():
+    """Every minute: take this device's own integration + pre-stream state and publish a compact copy to peers (via the heartbeat)."""
+    global last_integrations, local_prestream
+    time.sleep(20)
+    while True:
+        try:
+            last_integrations = _integrations_local()
+            local_prestream = _compute_prestream()
+            devices.set_status({"i": {x["id"]: x["status"] for x in last_integrations if not x["id"].startswith(("key:", "vault:")) and x["group"] != "API keys"},
+                                "p": {f"{x['module']}:{x['id']}": x["status"] for x in local_prestream["items"] if x["id"] not in PS_SKIP}, "ts": time.time()})
+        except Exception as e:  # noqa: BLE001
+            console_log.log("debug", "device", f"status snapshot failed: {e}")
+        time.sleep(60)
 
 
 _link_warned = [False]
@@ -524,6 +551,7 @@ async def lifespan(app):
     threading.Thread(target=twitch_loop, daemon=True).start()
     threading.Thread(target=prestream_loop, daemon=True).start()
     threading.Thread(target=device_sync_loop, daemon=True).start()
+    threading.Thread(target=status_loop, daemon=True).start()
     bus.emit("suite", state="started")
     yield
     for m in modules.values():
@@ -864,7 +892,15 @@ def vault_test(name: str):
 
 @app.get("/api/integrations")
 def integrations_get():
-    """Every outside connection in one list: module-reported, plus Streamer.bot, OBS, the site and which API keys are set."""
+    """Every outside connection in one list: module-reported, plus Streamer.bot, OBS, the site and which API keys are set.
+    An item that is green on any peer device overrides this device's warn/fail (shows which device); keys/vault items never merge."""
+    items = _integrations_local()
+    device.green_merge(items, devices.peer_statuses(), lambda i: i["id"], "status", {"connected"},
+                       lambda i: i["id"].startswith(("key:", "vault:")) or i["id"].endswith(":module") or i["group"] == "API keys", "i")
+    return {"ts": time.time(), "items": items}
+
+
+def _integrations_local():
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=8) as pool:
         futs = [pool.submit(_integrations_for, m) for m in modules.values()]
@@ -884,7 +920,7 @@ def integrations_get():
         pt = integrations.plaintext_summary(vaultlib.scan_plaintext(_plaintext_files()), vault)
         items.append({"id": "vault:plaintext", "module": "core", "group": "API keys", "name": "Plaintext keys on disk", "status": "needs_auth" if pt["total"] else "connected",
                       "detail": f"{pt['total']} key(s) still in config files ({pt['unmigrated']} not yet in the vault): import them below" if pt["total"] else "none"})
-    return {"ts": time.time(), "items": items}
+    return items
 
 
 class PostReq(BaseModel):

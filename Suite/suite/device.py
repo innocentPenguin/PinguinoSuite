@@ -43,6 +43,7 @@ class Devices:
         self.pin = d.get("pin") or {"to": None, "ts": 0.0}
         self.peers = {}                                        # id -> {name, priority, streaming, last_seen, alive_since}
         self.streaming, self.streaming_ts = False, 0.0
+        self.status = None   # compact snapshot of this device's integration / pre-stream state, gossiped to peers (see green_merge)
         self._save()
 
     # ---- persistence
@@ -70,7 +71,7 @@ class Devices:
     def heartbeat(self):
         """What we tell peers about ourselves."""
         return {"id": self.me["id"], "name": self.me["name"], "priority": self.me["priority"], "streaming": self.streaming,
-                "streaming_ts": self.streaming_ts, "pin": self.pin, "sent": self.clock()}
+                "streaming_ts": self.streaming_ts, "pin": self.pin, "sent": self.clock(), "status": self.status}
 
     def receive(self, hb):
         """A peer's heartbeat (delivered by the Link module). Returns True if it was accepted."""
@@ -82,6 +83,8 @@ class Devices:
             p = {"alive_since": now}
         p.update({"name": str(hb.get("name", pid))[:40], "priority": int(hb.get("priority", 0)), "streaming": bool(hb.get("streaming")),
                   "last_seen": now})
+        if isinstance(hb.get("status"), dict):
+            p["status"] = hb["status"]
         self.peers[pid] = p
         if pid not in self.me["known"]:
             self.me["known"].append(pid)
@@ -91,6 +94,13 @@ class Devices:
             self.pin = {"to": pin.get("to"), "ts": float(pin["ts"])}
             self._save()
         return True
+
+    def set_status(self, snap):
+        self.status = snap
+
+    def peer_statuses(self, now=None):
+        """[(device name, status snapshot)] of alive peers that published one."""
+        return [(p["name"], p["status"]) for p in self._alive_peers(now or self.clock()).values() if p.get("status")]
 
     # ---- user actions
     def take_control(self):
@@ -148,3 +158,19 @@ class Devices:
                 "is_master": self.is_master(now), "solo": self.solo(now), "warming_up": self.warming_up(now), "pin": self.pin,
                 "devices": [{"id": i, "name": n, "priority": pr, "streaming": st, "me": i == self.me["id"], "master": i == mid, "stable": ok}
                             for i, n, pr, st, ok in self.candidates(now)]}
+
+
+def green_merge(items, peers, key, field, green, skip=lambda it: False, section="i"):
+    """The master is the source of truth, but if any alive peer reports the same item GREEN while this view has it
+    warn/fail, the merged view shows green and says which device it came from (the information that works wins).
+    Applies to status/connection info only, never to secrets. items: dicts; peers: [(name, snapshot)]; snapshot[section] = {key: status}."""
+    for it in items:
+        if it.get(field) in green or skip(it):
+            continue
+        for name, snap in peers:
+            if (snap.get(section) or {}).get(key(it)) in green:
+                it[field] = next(iter(green))
+                it["from"] = name
+                it["detail"] = (str(it.get("detail", "")) + f" (OK on {name})").strip()
+                break
+    return items
