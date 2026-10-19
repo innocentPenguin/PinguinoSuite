@@ -23,6 +23,17 @@ const str = (v, n = 64) => String(v ?? '').replace(/[^\x20-\x7e]/g, '').slice(0,
 const bare = ip => String(ip || '').replace(/^::ffff:/, '');
 const urlHost = a => (a.includes(':') ? `[${a}]` : a);
 
+const PEER_HELP = {
+  title: 'Paired device',
+  summary: 'Another PC paired with this one over Tailscale. Green = it answered Link within the last 12 seconds.',
+  steps: [
+    'Offline: check the device is on, Tailscale is running there and Link is started.',
+    'If it says the peer no longer trusts this device, unpair on both sides (Link page > Devices) and pair again.',
+    'Unpair a device you no longer use from the same card.',
+  ],
+  fix: { label: 'Open Link', route: 'm:link' },
+};
+
 export function isTailnetIp(ip) {
   ip = bare(ip);
   const m = ip.match(/^100\.(\d+)\./);
@@ -248,7 +259,7 @@ export function createMesh(cfg, { port }) {
     const peers = peerList();
     if (!peers.length) return [{ id: 'mesh', label: 'Device mesh', status: 'pass', detail: 'no paired devices; this device runs alone' }];
     return peers.map(p => { const r = R(p.id);
-      return { id: `peer-${p.id.slice(0, 8)}`, label: `Device ${p.name}`, status: r.online ? 'pass' : 'warn', detail: r.online ? 'online' : `offline${r.error ? `: ${r.error}` : ''}` }; });
+      return { id: `peer-${p.id.slice(0, 8)}`, label: `Device ${p.name}`, status: r.online ? 'pass' : 'warn', detail: r.online ? 'online' : `offline${r.error ? `: ${r.error}` : ''}`, help: PEER_HELP }; });
   }
   function start() {
     log('info', 'mesh', `device "${state.self.name}" id ${state.self.id.slice(0, 8)}, ${peerList().length} paired`);

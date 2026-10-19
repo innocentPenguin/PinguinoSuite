@@ -150,7 +150,7 @@ export async function serve(cfg) {
         return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), tailscale: t, peers: mesh.status().peers });
       }
       if (req.method === 'GET' && req.url === '/api/integrations') {   // Integrations tab (module token)
-        const items = [...await prestream(cfg), ...mesh.prestreamItems()].map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail }));
+        const items = [...await prestream(cfg), ...mesh.prestreamItems()].map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail, help: i.help }));
         return json(200, { items });
       }
       if (req.url.startsWith('/api/mesh/') || req.url === '/api/peer/broadcast') {

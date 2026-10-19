@@ -1,7 +1,7 @@
 {
   "id": "link",
   "name": "PinguinoLink",
-  "desc": "Secure device link: Tailscale status, remote OBS macros, file send/receive (Windows + macOS)",
+  "desc": "Secure device link: Tailscale status, remote OBS macros, device pairing, file send/receive (Windows + macOS)",
   "cmd": ["node", "src/cli.mjs", "serve"],
   "cwd": "modules/link",
   "port": 7777,
@@ -9,7 +9,105 @@
   "health": "/api/health",
   "prestream": "/api/prestream",
   "integrations": "/api/integrations",
-  "secrets": [{ "name": "OBS_WS_PASSWORD", "label": "OBS WebSocket password", "required": false }],
+  "secrets": [
+    {
+      "name": "OBS_WS_PASSWORD",
+      "label": "OBS WebSocket password",
+      "required": false,
+      "help": {
+        "title": "OBS WebSocket password",
+        "summary": "The password Link uses to talk to OBS on this PC. It is stored in the key vault, never in a file or log.",
+        "steps": [
+          "In OBS open Tools > WebSocket Server Settings.",
+          "Tick Enable WebSocket server and keep the port at 4455.",
+          "Tick Enable Authentication. Click Show Connect Info to see or change the Server Password.",
+          "Copy that password and paste it into the box next to this key (Set / Rotate).",
+          "If you rotate it in OBS later, set it here again."
+        ],
+        "example": "A random string of letters and digits (format only)",
+        "link": { "label": "OBS WebSocket guide", "url": "https://github.com/obsproject/obs-websocket" },
+        "fix": { "label": "Enter the key", "route": "integrations", "focus": "OBS_WS_PASSWORD" }
+      }
+    }
+  ],
+  "help": {
+    "_module": {
+      "title": "PinguinoLink",
+      "summary": "Links your devices: shows Tailscale status, runs OBS macros (scene, start/stop stream, mute), pairs other PCs so they share the master role, and sends files.",
+      "steps": [
+        "Install Tailscale on every device and sign in with the same account. Link only talks over Tailscale.",
+        "Streaming PC: start OBS with the WebSocket server enabled (Tools > WebSocket Server Settings), then put its password in the key vault as OBS_WS_PASSWORD.",
+        "Open the Link page. In Devices, click Show a pairing code on one device. On the other, type the first device's Tailscale name and the code, press Pair, then click Allow on the first.",
+        "Macros (BRB, live, start, stop, mute) run in OBS. Their scene and input names must match your OBS names exactly; edit them in the Link config file.",
+        "To redo setup: unpair a device in the Devices card, or restart Link from Modules."
+      ],
+      "link": { "label": "Tailscale download", "url": "https://tailscale.com/download" },
+      "fix": { "label": "Open Link", "route": "m:link" }
+    },
+    "obs": {
+      "title": "OBS WebSocket",
+      "summary": "Link must reach OBS on this PC (127.0.0.1:4455) to run macros and to check that your scenes exist.",
+      "steps": [
+        "Make sure OBS is running.",
+        "In OBS open Tools > WebSocket Server Settings and tick Enable WebSocket server (port 4455).",
+        "If Authentication is on, store its password in the key vault as OBS_WS_PASSWORD (Set / Rotate).",
+        "Green means Link connected and logged in. Red 'cannot reach OBS' = OBS closed or the server is off. 'password is wrong' = the vault key does not match OBS.",
+        "Do not forward port 4455 on your router; OBS is only reachable from this PC."
+      ],
+      "fix": { "label": "Enter the password", "route": "integrations", "focus": "OBS_WS_PASSWORD" }
+    },
+    "macros": {
+      "title": "OBS macro targets",
+      "summary": "Each macro names a scene or audio input. This check confirms those names exist in OBS right now.",
+      "steps": [
+        "The default macros use scene 'BRB', scene 'Main' and input 'Mic/Aux'. They are guesses until you match them to your OBS.",
+        "Compare the names listed in this check with OBS (Scenes box and Audio Mixer). Names are case-sensitive.",
+        "Either rename the scene/input in OBS, or edit the macro in the Link config file (macros section) to use your name.",
+        "Restart Link after editing the config. This check turns green when every name matches."
+      ],
+      "fix": { "label": "Restart Link", "module_action": { "module": "link", "action": "restart" } }
+    },
+    "tailscale": {
+      "title": "Tailscale",
+      "summary": "Link talks to your other devices only through Tailscale. Without it this PC works alone: local OBS macros still run, remote control and pairing do not.",
+      "steps": [
+        "Install Tailscale from the link below if it is missing.",
+        "Open the Tailscale app and sign in with the same account on every device.",
+        "Status Stopped means the Tailscale app is closed or turned off: click its tray icon and turn it on.",
+        "Green means Tailscale is running and shows how many devices are online."
+      ],
+      "link": { "label": "Tailscale download", "url": "https://tailscale.com/download" }
+    },
+    "hub": {
+      "title": "Hub device",
+      "summary": "On a client PC, OBS macros are forwarded to the hub (the streaming PC). The hub must be online on your tailnet.",
+      "steps": [
+        "Check the streaming PC is on, has Tailscale running and Link started.",
+        "The hub name in the Link config (hub) must equal its Tailscale device name.",
+        "A relayed path works but adds delay; direct is best (same network or good NAT)."
+      ]
+    },
+    "role": {
+      "title": "Role: hub or client",
+      "summary": "The hub is the PC that runs OBS and executes macros itself. A client forwards macros to the hub.",
+      "steps": [
+        "On the streaming PC the role should be hub; on every other PC it should be client.",
+        "Changing the role is done in the Link config file (role) and takes effect after a Link restart. Change it only on purpose.",
+        "A warning here on a client is normal: it just tells you macros will go to the hub."
+      ],
+      "fix": { "label": "Restart Link", "module_action": { "module": "link", "action": "restart" } }
+    },
+    "mesh": {
+      "title": "Device mesh",
+      "summary": "Shows paired devices. With none paired, this PC runs alone and is its own master.",
+      "steps": [
+        "Open the Link page > Devices.",
+        "On one PC click Show a pairing code. On the other PC enter the first PC's Tailscale name and the code, then press Pair.",
+        "Click Allow on the first PC when asked. The code works once and expires after 5 minutes."
+      ],
+      "fix": { "label": "Open Link", "route": "m:link" }
+    }
+  },
   "ui": { "nav": "Link", "icon": "🔗", "section": "Modules", "path": "/", "order": 40 },
   "defaults": { "enabled": true, "start_with_suite": true, "always_start": true, "react_to_live": false }
 }
