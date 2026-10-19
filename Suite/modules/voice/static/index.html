@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pinguino Voice</title>
+<style>
+:root{--ac:#ff8a1f;--bg:#15110d;--bg2:#1e1812;--bg3:#2a2119;--fg:#f4ece3;--dim:#a79886;--line:#3a2e22;--ok:#5fcf80;--bad:#ff5c5c;--warn:#ffc24a}
+:root[data-mode=light]{--bg:#fbf6f0;--bg2:#fff;--bg3:#f1e7da;--fg:#2b2218;--dim:#7b6a58;--line:#e0d2c0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+h1{font-size:18px;margin:0}h1 b{color:var(--ac)}h3{margin:0 0 8px}
+.sp{flex:1}.dim{color:var(--dim)}.sm{font-size:12px}.faint{color:var(--dim);font-size:12px}
+button{background:var(--bg3);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;font:inherit}
+button:hover{border-color:var(--ac)}button.pri{background:var(--ac);color:#1a1008;border-color:var(--ac);font-weight:600}button.dng{background:var(--bad);color:#fff;border-color:var(--bad)}button.sm{padding:3px 8px;font-size:12px}
+nav{display:flex;gap:4px;padding:8px 18px 0;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--bg2)}
+nav button{border:0;border-bottom:3px solid transparent;border-radius:6px 6px 0 0;background:none;padding:8px 14px}nav button.on{border-bottom-color:var(--ac);color:var(--ac)}
+main{padding:18px;max-width:1200px;margin:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card.on{border-color:var(--ac)}
+label.f{display:block;margin:10px 0 0;font-weight:600;font-size:13px}
+.h{font-weight:400;color:var(--dim);font-size:12px;margin:1px 0 3px}
+input[type=text],input[type=number],input[type=time],select,textarea{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:6px 8px;font:inherit}
+textarea{min-height:70px;resize:vertical}input[type=range]{width:100%;accent-color:var(--ac)}input[type=color]{width:60px;height:30px;background:none;border:1px solid var(--line);border-radius:6px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{flex:0 0 auto}.row>.grow{flex:1}
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--bg3)}
+.pill.on{background:var(--ok);color:#06210f}.pill.off{background:var(--bg3);color:var(--dim)}.pill.warn{background:var(--warn);color:#2b1c00}.pill.bad{background:var(--bad);color:#fff}
+.sw{position:relative;width:64px;height:32px;display:inline-block}.sw input{display:none}.sw span{position:absolute;inset:0;background:var(--bg3);border:1px solid var(--line);border-radius:99px;cursor:pointer;transition:.15s}
+.sw span:before{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:var(--dim);transition:.15s}.sw input:checked+span{background:var(--ac)}.sw input:checked+span:before{left:35px;background:#fff}
+.sw.sm{width:42px;height:22px}.sw.sm span:before{width:16px;height:16px}.sw.sm input:checked+span:before{left:23px}
+table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px;vertical-align:top}
+.emoji{font-size:28px}.q{display:inline-block;width:16px;height:16px;border-radius:50%;background:var(--bg3);border:1px solid var(--line);text-align:center;font-size:11px;line-height:14px;cursor:pointer;color:var(--dim)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ac);color:#1a1008;padding:8px 16px;border-radius:99px;font-weight:600;display:none;z-index:20;max-width:80vw}
+#drawer{position:fixed;right:0;top:0;bottom:0;width:min(420px,100vw);background:var(--bg2);border-left:1px solid var(--line);padding:18px;overflow:auto;transform:translateX(100%);transition:.2s;z-index:15}#drawer.open{transform:none}
+.savebar{position:sticky;bottom:0;background:var(--bg2);border-top:1px solid var(--line);padding:10px 18px;display:none;gap:10px;align-items:center;z-index:6}.savebar.show{display:flex}
+.big{font-size:22px;font-weight:700}.mono{font-family:Consolas,monospace}
+.tag{display:inline-block;background:var(--bg3);border-radius:6px;padding:1px 7px;margin:2px;font-size:12px}
+@media(max-width:600px){main{padding:10px}}
+</style></head><body>
+<header>
+  <span class="emoji">🐧</span><h1>Pinguino <b>Voice</b></h1><span id="state" class="pill off">…</span>
+  <span class="sp"></span>
+  <span class="row"><span class="dim sm">Master switch</span><label class="sw"><input type="checkbox" id="master"><span></span></label></span>
+  <button id="panic" class="dng">■ Panic stop</button>
+  <button id="mute10">Mute 10 min</button><button id="unmute">Unmute</button><button id="again" title="Say the last line again">↻ Again</button>
+  <button id="helpbtn">? Help</button>
+</header>
+<nav id="tabs"></nav>
+<main id="main"><div class="dim">Loading…</div></main>
+<div class="savebar" id="savebar"><b>Unsaved changes</b><span class="dim sm">Previews use your unsaved settings.</span><span class="sp"></span><button id="discard">Discard</button><button class="pri" id="save">Save</button></div>
+<div id="drawer"></div><div id="toast"></div>
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let C=null,META=null,ST=null,dirty=false,tab=localStorage.getItem('pv-tab')||'overview',sel=null,LOG=[],PRE=null,vcache=[];
+const TABS=[['overview','Overview'],['personas','Personas'],['events','Events'],['who','Who & where'],['limits','Limits & queue'],['words','Words'],['presets','Presets'],['log','Log'],['look','Look']];
+const api=async(p,b)=>{const r=await fetch(p,b===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  if((r.headers.get('content-type')||'').includes('audio'))return {blob:await r.blob(),said:decodeURIComponent(r.headers.get('X-Said')||'')};
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j};
+const toast=(m,ms=2600)=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',ms)};
+const H=k=>`<div class="h">${esc(META.help[k]||'')}</div>`;
+const mark=()=>{dirty=true;$('#savebar').classList.add('show')};
+function theme(){document.documentElement.style.setProperty('--ac',C.theme.accent);document.documentElement.dataset.mode=C.theme.mode}
+const sw=(id,on,sm)=>`<label class="sw ${sm?'sm':''}"><input type="checkbox" id="${id}" ${on?'checked':''}><span></span></label>`;
+// bind helper: data-p="path.to.value" on inputs writes into C
+function get(o,p){return p.split('.').reduce((a,k)=>a?.[k],o)}
+function set(o,p,v){const ks=p.split('.');const l=ks.pop();ks.reduce((a,k)=>a[k]??={},o)[l]=v}
+function bind(root){
+  $$('[data-p]',root).forEach(el=>{const h=()=>{let v=el.type==='checkbox'?el.checked:el.type==='range'||el.type==='number'?+el.value:el.dataset.list?el.value.split('\n').map(s=>s.trim()).filter(Boolean):el.value;set(C,el.dataset.p,v);
+    const o=el.parentElement.querySelector('.val');if(o)o.textContent=el.value;mark();if(el.dataset.redraw)draw()};el.addEventListener(el.type==='range'||el.tagName==='TEXTAREA'||el.type==='text'||el.type==='number'?'input':'change',h)});
+}
+const fld=(label,help,input)=>`<label class="f">${esc(label)}</label>${help?H(help):''}${input}`;
+const txt=(p,label,help,o={})=>fld(label,help,`<input type="text" data-p="${p}" value="${esc(get(C,p))}" ${o.ph?`placeholder="${esc(o.ph)}"`:''}>`);
+const num=(p,label,help,min,max,step=1)=>fld(label,help,`<input type="number" data-p="${p}" value="${get(C,p)}" min="${min}" max="${max}" step="${step}">`);
+const rng=(p,label,help,min,max,unit='')=>fld(label,help,`<div class="row"><input class="grow" type="range" data-p="${p}" min="${min}" max="${max}" value="${get(C,p)}"><b class="val">${get(C,p)}</b><span class="dim sm">${unit}</span></div>`);
+const sel_=(p,label,help,opts)=>fld(label,help,`<select data-p="${p}">${opts.map(o=>{const [v,t]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}" ${get(C,p)===v?'selected':''}>${esc(t)}</option>`}).join('')}</select>`);
+const chk=(p,label,help)=>`<div class="row" style="margin-top:10px">${sw('c-'+p.replace(/\./g,'-'),get(C,p),true).replace('<input','<input data-p="'+p+'"')}<b>${esc(label)}</b></div>${help?H(help):''}`;
+const lst=(p,label,help,rows=4)=>fld(label,help,`<textarea data-p="${p}" data-list="1" rows="${rows}">${esc((get(C,p)||[]).join('\n'))}</textarea>`);
+const pOpts=(blank)=>[...(blank?[['',blank]]:[]),...Object.entries(C.personas).map(([k,p])=>[k,`${p.emoji} ${p.name}`])];
+
+// ---------------------------------------------------------------- tabs
+const V={};
+V.overview=()=>{const s=ST||{};return `<div class="grid">
+ <div class="card ${s.master?'on':''}"><h3>Right now</h3><div class="big">${esc({off:'Silent: master switch is OFF',on:'Live and talking',muted:'Muted for a while','quiet-mute':'Quiet hours (muted)','quiet-whisper':'Quiet hours (whispering)'}[s.state]||s.state)}</div>
+  ${H('master')}<div class="sm dim" style="margin-top:8px">Queue: <b>${s.queue??0}</b> waiting · spoken <b>${s.stats?.spoken??0}</b> · dropped ${s.stats?.dropped??0} · blocked ${s.stats?.blocked??0}</div>
+  ${s.speaking?`<div class="sm" style="margin-top:6px">🔊 ${esc(s.speaking)}</div>`:''}
+  ${s.last_error?`<div class="sm" style="margin-top:6px;color:var(--bad)">Last error: ${esc(s.last_error)}</div>`:''}</div>
+ <div class="card"><h3>Event feed</h3><span class="pill ${s.feed?.ok?'on':'warn'}">${s.feed?.ok?'connected to the Host':'waiting for the Host'}</span>
+  <div class="h" style="margin-top:6px">Follows, subs, raids and cheers come from the Host's Activity feed. ${s.feed?.err?'('+esc(s.feed.err)+')':''} Events heard so far: ${s.feed?.events??0}.</div></div>
+ <div class="card"><h3>Default persona</h3>${sel_('default_persona','Who talks by default','default_persona',pOpts())}
+  ${rng('output.volume','Master volume','output.volume',0,100,'%')}</div>
+ <div class="card" style="grid-column:1/-1"><h3>Try an event <span class="faint">(the real pipeline: your wording, limits, queue; heard on the stream PC only when the master switch is ON)</span></h3>
+  <div class="row">${['follow','sub','resub','gift','cheer','raid','redeem','test'].map(k=>`<button data-test="${k}">${k}</button>`).join('')}<span class="sp"></span>
+  <input type="text" id="sayText" class="grow" placeholder="Type something to say…" style="max-width:380px"><button id="sayBtn">Say it</button></div>
+  <div id="testout" class="sm dim" style="margin-top:8px"></div></div>
+ <div class="card" style="grid-column:1/-1"><h3>Recent</h3>${logTable(LOG.slice(0,6))}</div></div>`};
+const effLabel={echo:'Echo',reverb:'Reverb',robot:'Robot',radio:'Radio',distortion:'Distortion',tremolo:'Tremolo'};
+V.personas=()=>{const ks=Object.keys(C.personas);if(!sel||!C.personas[sel])sel=C.default_persona;const p=C.personas[sel],b='personas.'+sel+'.';
+ return `<div class="row" style="margin-bottom:12px">${ks.map(k=>`<button data-sel="${k}" class="${k===sel?'pri':''}">${C.personas[k].emoji} ${esc(C.personas[k].name)}${k===C.default_persona?' ★':''}</button>`).join('')}<button id="addP">＋ New</button></div>
+ <div class="grid"><div class="card on"><div class="row"><span class="emoji">${p.emoji}</span><h3 style="margin:0">${esc(p.name)}</h3><span class="sp"></span>
+   <button id="pPrev" class="pri">▶ Preview</button></div><div class="h" style="margin-top:6px">Preview plays inside this page only, even while the master switch is off.</div>
+   ${txt(b+'name','Name','persona.name')}${txt(b+'emoji','Emoji','persona.emoji')}${txt(b+'mood','Mood','persona.mood')}
+   ${fld('Voice','persona.voice',`<select data-p="${b}voice">${(vcache.includes(p.voice)?vcache:[p.voice,...vcache]).map(v=>`<option ${v===p.voice?'selected':''}>${esc(v)}</option>`).join('')}</select>`)}
+   ${rng(b+'rate','Speed','persona.rate',-10,10)}${rng(b+'pitch','Pitch (semitones)','persona.pitch',-12,12)}${rng(b+'volume','Volume','persona.volume',0,100,'%')}
+   <div class="row" style="margin-top:12px"><button id="pDef">★ Make default</button><button id="pDup">Duplicate</button><button id="pDel" class="dng sm">Delete</button></div></div>
+  <div class="card"><h3>Effects</h3>${H('persona.effects')}${Object.keys(effLabel).map(k=>rng(b+'effects.'+k,effLabel[k],'',0,100,'%')).join('')}
+   ${sel_(b+'stinger','Sound before speaking','persona.stinger',C_stingers())}</div>
+  <div class="card"><h3>Personality</h3>${lst(b+'catchphrases','Catchphrases','persona.catchphrases',5)}${rng(b+'catch_chance','Catchphrase chance','persona.catch_chance',0,100,'%')}
+   ${txt(b+'intro','Always start with','persona.intro',{ph:'e.g. Attention!'})}${txt(b+'outro','Always end with','persona.outro',{ph:'e.g. Over and out.'})}</div>
+  <div class="card" style="grid-column:1/-1"><h3>${esc(p.name)}'s own wording <span class="faint">(per event; empty = use the Events tab)</span></h3>${H('persona.templates')}
+   <div class="grid">${['follow','sub','resub','gift','cheer','raid','redeem','stream_online','stream_offline'].map(k=>fld(k,'',`<textarea data-p="${b}templates.${k}" data-list="1" rows="2" placeholder="(uses event wording)">${esc((p.templates[k]||[]).join('\n'))}</textarea>`)).join('')}</div></div></div>`};
+const C_stingers=()=>META.stingers.map(s=>[s,s]);
+V.events=()=>`<div class="grid">${META.events.map(k=>{const e=C.events[k],b='events.'+k+'.';return `<div class="card ${e.enabled?'on':''}"><div class="row"><h3 style="margin:0">${k}</h3><span class="sp"></span>${sw('e-'+k,e.enabled,true).replace('<input','<input data-p="'+b+'enabled" data-redraw="1"')}</div>${H('event.enabled')}
+ ${sel_(b+'persona','Who announces','event.persona',pOpts('default (see Who & where)').map(o=>o[0]===''?['default','default persona / role rules']:o))}
+ ${fld('What they say','event.templates',`<textarea data-p="${b}templates" data-list="1" rows="4">${esc(e.templates.join('\n'))}</textarea>`)}
+ <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px">${num(b+'min_amount','Minimum amount','event.min_amount',0,1e7)}${num(b+'cooldown_s','Cooldown (s)','event.cooldown_s',0,3600)}${num(b+'priority','Priority 1-9','event.priority',1,9)}${sel_(b+'stinger','Sound','event.stinger',[['','persona default'],...C_stingers()])}</div>
+ ${chk(b+'read_message','Read their message','event.read_message')}${chk(b+'only_live','Only while live','event.only_live')}
+ <div class="row" style="margin-top:10px"><button data-test="${k}" class="sm">▶ Try</button><button data-prev-ev="${k}" class="sm">🔈 Preview in page</button></div></div>`}).join('')}</div>`;
+V.who=()=>`<div class="grid"><div class="card"><h3>By role</h3>${H('roles')}${META.roles.map(r=>sel_('roles.'+r,r,'',pOpts('(default)'))).join('')}</div>
+ <div class="card"><h3>By platform</h3>${H('platforms')}${META.platforms.map(r=>sel_('platforms.'+r,r,'',pOpts('(default)'))).join('')}</div>
+ <div class="card"><h3>By person</h3>${H('users')}<table>${Object.entries(C.users).map(([u,p])=>`<tr><td>${esc(u)}</td><td>${esc(C.personas[p]?.name||p)}</td><td><button class="sm" data-deluser="${esc(u)}">✕</button></td></tr>`).join('')||'<tr><td class="dim">Nobody yet</td></tr>'}</table>
+  <div class="row" style="margin-top:8px"><input type="text" id="uName" placeholder="viewer name" style="width:150px"><select id="uPers" style="width:170px">${pOpts().map(o=>`<option value="${o[0]}">${esc(o[1])}</option>`).join('')}</select><button id="uAdd">Add</button></div></div>
+ <div class="card"><h3>Chat commands</h3>${chk('tts.enabled','Allow !tts <text>','tts.enabled')}${sel_('tts.min_role','Lowest role','tts.min_role',['viewer','sub','vip','mod','broadcaster'])}
+  <div class="h" style="margin-top:8px">Setup: Actions &amp; Events, trigger <i>command</i> <b>!tts</b>, step <i>module_command</i> to <span class="mono">http://127.0.0.1:8772/api/chat-command</span>. Mods can also use <b>!voice mute | unmute | stop | again</b>. Replies in chat are always empty.</div></div></div>`;
+V.limits=()=>`<div class="grid"><div class="card"><h3>Safety &amp; length</h3>${num('limits.max_chars','Longest line (characters)','limits.max_chars',10,1000)}${sel_('limits.too_long','If longer','limits.too_long',['cut','skip'])}
+ ${sel_('limits.profanity','Bad words','limits.profanity',[['mask','mask (beep)'],['skip','skip the line'],['off','off']])}${chk('limits.block_links','Never read links','limits.block_links')}${chk('limits.strip_emoji','Remove emoji','limits.strip_emoji')}${chk('limits.clean_names','Clean up usernames','limits.clean_names')}${num('limits.max_repeat','Squash repeats to','limits.max_repeat',0,20)}
+ <div class="h" style="margin-top:10px">🔒 Secrets (tokens, keys, passwords, e-mails, IPs) are never read aloud. This is always on.</div></div>
+ <div class="card"><h3>Rates</h3>${num('limits.rate_per_min','Lines per minute (all)','limits.rate_per_min',0,120)}${num('limits.user_cooldown_s','Per person wait (s)','limits.user_cooldown_s',0,3600)}</div>
+ <div class="card"><h3>Queue</h3>${sel_('queue.mode','When busy','queue.mode',[['queue','wait in line'],['interrupt','high priority interrupts'],['drop_new','ignore new']])}${num('queue.max_queue','Max waiting','queue.max_queue',1,100)}${num('queue.max_age_s','Drop after (s)','queue.max_age_s',3,3600)}${num('queue.gap_ms','Pause between (ms)','queue.gap_ms',0,5000)}${num('queue.interrupt_min_priority','Interrupt from priority','queue.interrupt_min_priority',1,9)}${chk('queue.merge_similar','Merge bursts','queue.merge_similar')}</div>
+ <div class="card"><h3>Quiet hours</h3>${chk('quiet.enabled','Use quiet hours','quiet.enabled')}${fld('From','quiet.start',`<input type="time" data-p="quiet.start" value="${C.quiet.start}">`)}${fld('Until','quiet.end',`<input type="time" data-p="quiet.end" value="${C.quiet.end}">`)}${sel_('quiet.mode','During quiet hours','quiet.mode',[['mute','stay silent'],['whisper','whisper (25%)']])}</div></div>`;
+V.words=()=>`<div class="grid"><div class="card"><h3>Pronunciation</h3>${H('pronounce')}<textarea id="pron" rows="9" class="mono">${esc(Object.entries(C.pronounce).map(([k,v])=>k+' = '+v).join('\n'))}</textarea></div>
+ <div class="card"><h3>Your bad words</h3>${lst('limits.bad_words','Extra words','limits.bad_words',8)}</div>
+ <div class="card"><h3>Never speak these people</h3>${lst('limits.blocked_users','Blocked names','limits.blocked_users',8)}</div>
+ <div class="card"><h3>Voice commands</h3>${chk('listen.confirm_commands','Say a short confirmation','listen.confirm_commands')}${txt('listen.confirm_text','Confirmation words','listen.confirm_text')}
+  <div class="h" style="margin-top:8px">Voice <i>commands</i> (Voice Studio, "skip the song") stay silent in chat; this only adds spoken feedback on the PC when Listen reports them.</div></div></div>`;
+V.presets=()=>`<div class="grid"><div class="card"><h3>Presets</h3><div class="h">Whole setups you can switch between. A preset never carries the master switch.</div><table id="plist"></table>
+ <div class="row" style="margin-top:10px"><input type="text" id="pname" placeholder="Name for this setup" class="grow"><button id="psave" class="pri">Save current</button></div></div>
+ <div class="card"><h3>Share / move</h3><div class="row"><a href="/api/export" download><button>⬇ Export setup (JSON)</button></a></div><div class="h" style="margin-top:10px">Import a setup file (replaces your current settings; a backup is made first):</div>
+  <input type="file" id="pimp" accept=".json"><div class="row" style="margin-top:12px"><button id="preset" class="dng sm">Reset everything to factory</button></div></div>
+ <div class="card"><h3>Automatic backups</h3><div class="h">Every save keeps the previous version (last 15).</div><table id="blist"></table></div></div>`;
+function logTable(rows){return rows.length?`<table><tr><th>When</th><th>Event</th><th>Who</th><th>Result</th><th>Said</th></tr>${rows.map(r=>`<tr><td class="dim">${new Date(r.ts*1000).toLocaleTimeString()}</td><td>${esc(r.kind)}</td><td>${esc(r.user)}</td>
+ <td><span class="pill ${['spoken','queued','merged'].includes(r.outcome)?'on':['error'].includes(r.outcome)?'bad':'warn'}">${esc(r.outcome)}</span> <span class="faint">${esc(r.detail||'')}</span></td><td>${esc(r.text||'')}</td></tr>`).join('')}</table>`:'<div class="dim">Nothing yet. Every attempt shows up here, spoken or not, and in the Console under source “voice”.</div>'}
+V.log=()=>`<div class="card"><div class="row"><h3 style="margin:0">History</h3><span class="sp"></span><button id="logref">Refresh</button></div><div style="margin-top:8px">${logTable(LOG)}</div></div>`;
+V.look=()=>`<div class="grid"><div class="card"><h3>Look of this page</h3>${fld('Accent colour','theme.accent',`<input type="color" data-p="theme.accent" value="${C.theme.accent}">`)}${sel_('theme.mode','Mode','theme.mode',['dark','light'])}
+ <div class="row" style="margin-top:10px">${['#ff8a1f','#ffb347','#ff5c8a','#5fcf80','#4aa8ff','#b07cff'].map(c=>`<button class="sm" data-acc="${c}" style="background:${c};color:#111">${c}</button>`).join('')}</div></div>
+ <div class="card"><h3>History</h3>${num('history.keep','Lines remembered','history.keep',5,500)}</div></div>`;
+
+// ---------------------------------------------------------------- draw & wiring
+function draw(){$('#tabs').innerHTML=TABS.map(([k,l])=>`<button data-tab="${k}" class="${k===tab?'on':''}">${l}</button>`).join('');
+  $('#main').innerHTML=V[tab]();bind($('#main'));wire();theme();hdr()}
+function hdr(){const s=ST||{};$('#master').checked=!!s.master;const p=$('#state');p.textContent={off:'silent',on:'live',muted:'muted','quiet-mute':'quiet hours','quiet-whisper':'whispering'}[s.state]||'…';p.className='pill '+(s.state==='on'?'on':s.state==='off'?'off':'warn')}
+async function playPrev(pid,text){try{const r=await api('/api/preview',{persona:pid,text,config:C});const a=new Audio(URL.createObjectURL(r.blob));a.play();toast('▶ '+r.said)}catch(e){toast('Preview failed: '+e.message)}}
+function wire(){
+  $$('[data-test]').forEach(b=>b.onclick=async()=>{const r=await api('/api/test-event',{kind:b.dataset.test});say(r)});
+  $$('[data-sel]').forEach(b=>b.onclick=()=>{sel=b.dataset.sel;draw()});
+  $$('[data-prev-ev]').forEach(b=>b.onclick=()=>{const k=b.dataset.prevEv,e=C.events[k];const pid=e.persona!=='default'?e.persona:C.default_persona;const t=(e.templates[0]||'Hello {user}').replace(/^min:\d+\|/,'').replace('{user}','Test Penguin').replace(/\{(amount|viewers|bits)\}/g,'25').replace('{tier}','1').replace('{what}','a reward').replace('{message}','Love the stream').replace('{catch}',(C.personas[pid].catchphrases[0]||''));playPrev(pid,t)});
+  const g=(id,f)=>{const e=$(id);if(e)e.onclick=f};
+  g('#pPrev',()=>{const p=C.personas[sel];playPrev(sel,(p.catchphrases[0]?'Hi, this is '+p.name+'. '+p.catchphrases[0]:'Hi, this is '+p.name+'.'))});
+  g('#pDef',()=>{C.default_persona=sel;mark();draw()});
+  g('#pDup',()=>{const id=sel+'-'+Math.random().toString(36).slice(2,5);C.personas[id]=JSON.parse(JSON.stringify(C.personas[sel]));C.personas[id].name+=' copy';sel=id;mark();draw()});
+  g('#addP',()=>{const id='p'+Math.random().toString(36).slice(2,6);C.personas[id]={...JSON.parse(JSON.stringify(C.personas[C.default_persona])),name:'New persona',emoji:'🎤',catchphrases:[],templates:{}};sel=id;mark();draw()});
+  g('#pDel',()=>{if(Object.keys(C.personas).length<2)return toast('Keep at least one persona');if(!confirm('Delete '+C.personas[sel].name+'?'))return;delete C.personas[sel];if(C.default_persona===sel)C.default_persona=Object.keys(C.personas)[0];sel=null;mark();draw()});
+  g('#sayBtn',async()=>{const t=$('#sayText').value.trim();if(!t)return;say(await api('/api/speak',{text:t,user:'streamer',role:'broadcaster'}))});
+  g('#uAdd',()=>{const n=$('#uName').value.trim().toLowerCase();if(!n)return;C.users[n]=$('#uPers').value;mark();draw()});
+  $$('[data-deluser]').forEach(b=>b.onclick=()=>{delete C.users[b.dataset.deluser];mark();draw()});
+  $$('[data-acc]').forEach(b=>b.onclick=()=>{C.theme.accent=b.dataset.acc;mark();draw()});
+  const pr=$('#pron');if(pr)pr.oninput=()=>{C.pronounce={};pr.value.split('\n').forEach(l=>{const i=l.indexOf('=');if(i>0){const k=l.slice(0,i).trim().toLowerCase(),v=l.slice(i+1).trim();if(k&&v)C.pronounce[k]=v}});mark()};
+  g('#logref',loadLog);
+  if(tab==='presets')presets();
+  if(tab==='overview'||tab==='log')loadLog();
+}
+function say(r){const m={queued:'Queued ✔ (you will hear it if the master switch is ON)',master_off:'Master switch is OFF: nothing is played. Flip it on to hear it.',merged:'Merged into a waiting line',below_min:'Below the minimum amount',cooldown:'Cooldown not over',muted:'Muted',quiet_hours:'Quiet hours',disabled:'That event is switched off',blocked:'Blocked by the safety filters',blocked_user:'This person is blocked',rate_limited:'Over the rate limit',dropped:'Dropped (queue)'};
+  toast((m[r.outcome]||r.outcome||'done')+(r.text?' — “'+r.text+'”':''),5000);const o=$('#testout');if(o)o.textContent=(r.outcome||'')+(r.text?': '+r.text:'')+(r.detail?' ('+r.detail+')':'');setTimeout(loadLog,600)}
+async function loadLog(){try{LOG=(await api('/api/history?n=80')).history;const o=$('#main .card:last-child');if(tab==='overview'||tab==='log'){const hold=tab==='log'?$('#main .card div:last-child'):$('#main .card:last-child');
+  if(tab==='log')hold.innerHTML=logTable(LOG);else $('#main .card:last-child').innerHTML='<h3>Recent</h3>'+logTable(LOG.slice(0,6))}}catch{}}
+async function presets(){try{const r=await api('/api/presets');$('#plist').innerHTML=r.presets.map(p=>`<tr><td><b>${esc(p.name)}</b><div class="faint">${esc(p.about)}</div></td><td style="text-align:right"><button class="sm pri" data-pl="${esc(p.name)}">Load</button> ${p.builtin?'':`<button class="sm" data-pd="${esc(p.name)}">✕</button>`}</td></tr>`).join('');
+  $('#blist').innerHTML=r.backups.slice(0,8).map(n=>`<tr><td class="mono sm">${esc(n.replace('config-','').replace('.json',''))}</td><td style="text-align:right"><button class="sm" data-pb="${esc(n)}">Restore</button></td></tr>`).join('')||'<tr><td class="dim">None yet</td></tr>';
+  $$('[data-pl]').forEach(b=>b.onclick=async()=>{if(dirty&&!confirm('Discard unsaved changes and load this preset?'))return;C=(await api('/api/preset',{op:'load',name:b.dataset.pl})).config;dirty=false;$('#savebar').classList.remove('show');toast('Loaded '+b.dataset.pl);draw()});
+  $$('[data-pd]').forEach(b=>b.onclick=async()=>{if(confirm('Delete preset?')){await api('/api/preset',{op:'delete',name:b.dataset.pd});presets()}});
+  $$('[data-pb]').forEach(b=>b.onclick=async()=>{C=(await api('/api/preset',{op:'restore',name:b.dataset.pb})).config;dirty=false;$('#savebar').classList.remove('show');toast('Restored');draw()});
+  $('#psave').onclick=async()=>{const n=$('#pname').value.trim();if(!n)return toast('Give it a name');if(dirty)await save();await api('/api/preset',{op:'save',name:n});toast('Saved preset '+n);presets()};
+  $('#pimp').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!confirm('Replace your current settings with this file? A backup is kept.'))return;C=(await api('/api/preset',{op:'import',data:d})).config;dirty=false;$('#savebar').classList.remove('show');toast('Imported');draw()}catch(x){toast('Not a valid setup file')}};
+  $('#preset').onclick=async()=>{if(confirm('Reset all Pinguino Voice settings to factory? (A backup is kept.)')){C=(await api('/api/preset',{op:'reset'})).config;dirty=false;$('#savebar').classList.remove('show');draw()}}}catch(e){toast(e.message)}}
+async function save(){try{C=(await api('/api/config',{config:C})).config;dirty=false;$('#savebar').classList.remove('show');toast('Saved ✔');draw()}catch(e){toast('Save failed: '+e.message)}}
+async function refresh(){try{ST=await api('/api/status');hdr();if(tab==='overview'&&!dirty&&!document.activeElement?.closest?.('#main input,#main textarea,#main select'))draw()}catch{}}
+function helpDrawer(){api('/api/help').then(h=>{const d=$('#drawer');const m=h.help._module;d.innerHTML=`<div class="row"><h3 style="margin:0">${esc(m.title)}</h3><span class="sp"></span><button id="dx">✕</button></div><p>${esc(m.summary)}</p><ol>${m.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+ <h3>Every setting has a one-line help under it.</h3><p class="dim sm">Statuses explained in the Suite's Integrations help: Voice master, engine, event feed, queue, quiet hours.</p>`;d.classList.add('open');$('#dx').onclick=()=>d.classList.remove('open')})}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-tab]');if(t){tab=t.dataset.tab;try{localStorage.setItem('pv-tab',tab)}catch{}draw()}});
+$('#master').onchange=async e=>{if(e.target.checked&&!confirm('Switch Pinguino Voice ON? Announcements will be spoken on this PC from now on.')){e.target.checked=false;return}
+  try{const r=await api('/api/master',{on:e.target.checked});toast(e.target.checked?'Voice is ON':'Voice is OFF — silent');refresh()}catch(x){toast(x.message)}};
+$('#panic').onclick=async()=>{const r=await api('/api/stop',{});toast('Stopped. Cleared '+r.cleared+' waiting')};
+$('#mute10').onclick=async()=>{await api('/api/mute',{minutes:10});toast('Muted for 10 minutes');refresh()};
+$('#unmute').onclick=async()=>{await api('/api/mute',{minutes:0});toast('Unmuted');refresh()};
+$('#again').onclick=async()=>say(await api('/api/replay',{}));
+$('#helpbtn').onclick=helpDrawer;$('#save').onclick=save;
+$('#discard').onclick=async()=>{C=(await api('/api/config')).config;dirty=false;$('#savebar').classList.remove('show');draw()};
+(async()=>{try{const r=await api('/api/config');C=r.config;META={help:r.help,events:r.events,roles:r.roles,platforms:r.platforms,effects:r.effects,stingers:r.stingers};
+  try{vcache=(await api('/api/voices')).voices||[]}catch{}ST=await api('/api/status');draw();setInterval(refresh,2500)}catch(e){$('#main').innerHTML='<div class="card">Pinguino Voice is not answering ('+esc(e.message)+').</div>'}})();
+</script></body></html>

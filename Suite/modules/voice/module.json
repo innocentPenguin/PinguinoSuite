@@ -1,0 +1,124 @@
+{
+  "id": "voice",
+  "name": "PinguinoVoice",
+  "desc": "Talking co-host: named voice personas announce follows, subs, raids and cheers with your wording, limits and quiet hours. Silent until you switch it on.",
+  "cmd": [
+    "{py}",
+    "server.py"
+  ],
+  "cwd": "modules/voice",
+  "port": 8772,
+  "url": "http://127.0.0.1:8772",
+  "health": "/api/status",
+  "prestream": "/api/prestream",
+  "commands": [
+    "tts",
+    "voice"
+  ],
+  "ui": {
+    "nav": "Voice",
+    "icon": "🐧",
+    "section": "Modules",
+    "path": "/",
+    "order": 15
+  },
+  "defaults": {
+    "enabled": true,
+    "start_with_suite": true,
+    "react_to_live": false
+  },
+  "help": {
+    "voice-master": {
+      "title": "Pinguino Voice is switched off",
+      "summary": "This is the normal, safe state: nothing is spoken or played. Previews inside this page still work.",
+      "steps": [
+        "Open the Voice page and pick the persona you like with the Preview buttons (these play inside the page only).",
+        "When ready, flip the big master switch to ON. The first test line goes to your normal Windows output.",
+        "Use Panic stop any time to silence the queue immediately."
+      ],
+      "fix": {
+        "label": "Open Voice",
+        "route": "m:voice"
+      }
+    },
+    "voice-engine": {
+      "title": "Voice engine",
+      "summary": "The Windows speech engine that turns words into audio.",
+      "steps": [
+        "Needs Windows 10/11 with at least one installed voice (David and Zira come with Windows).",
+        "If it fails, open Windows Settings > Time & Language > Speech and add a voice.",
+        "Press Test engine on the Voice page; the result shows the voices found."
+      ],
+      "fix": {
+        "label": "Open Voice",
+        "route": "m:voice"
+      }
+    },
+    "voice-events": {
+      "title": "Event feed",
+      "summary": "Where follows, subs, raids and cheers come from: the Host's Activity feed.",
+      "steps": [
+        "The Host module must be running (Bots / Host page).",
+        "Sign the streamer in on the Host so Twitch events arrive.",
+        "Nothing arrives from here when the Host is down; typed !tts and test events still work."
+      ],
+      "fix": {
+        "label": "Open Host",
+        "route": "m:host"
+      }
+    },
+    "voice-queue": {
+      "title": "Speech queue",
+      "summary": "Lines waiting to be spoken. Too many waiting means the stream is busy or limits are too loose.",
+      "steps": [
+        "Raise the rate limit and merge similar events in Limits & Queue.",
+        "Panic stop empties the queue."
+      ],
+      "fix": {
+        "label": "Open Voice",
+        "route": "m:voice"
+      }
+    },
+    "voice-errors": {
+      "title": "Voice engine",
+      "summary": "The Windows speech engine that turns words into audio.",
+      "steps": [
+        "Needs Windows 10/11 with at least one installed voice (David and Zira come with Windows).",
+        "If it fails, open Windows Settings > Time & Language > Speech and add a voice.",
+        "Press Test engine on the Voice page; the result shows the voices found."
+      ],
+      "fix": {
+        "label": "Open Voice",
+        "route": "m:voice"
+      }
+    },
+    "quiet": {
+      "title": "Quiet hours",
+      "summary": "Voice is intentionally muted or whispering because of the daily quiet window or a temporary mute.",
+      "steps": [
+        "Change the window in Limits & Queue > Quiet hours.",
+        "Press Unmute to cancel a temporary mute."
+      ],
+      "fix": {
+        "label": "Open Voice",
+        "route": "m:voice"
+      }
+    },
+    "_module": {
+      "title": "Pinguino Voice",
+      "summary": "A talking co-host: named voice personas with catchphrases announce follows, subs, raids, cheers and chat commands. Silent unless you switch it on.",
+      "steps": [
+        "Open Voice. The master switch is OFF: nothing is spoken.",
+        "Personas tab: tweak a persona (voice, speed, pitch, effects) and press Preview.",
+        "Events tab: choose who announces each event and what they say.",
+        "Limits & Queue: set profanity, length and rate limits, quiet hours.",
+        "Presets: save your whole setup, restore it, share or import one.",
+        "Flip the master switch ON when happy. Panic stop silences everything."
+      ],
+      "fix": {
+        "label": "Open Voice",
+        "route": "m:voice"
+      }
+    }
+  }
+}
