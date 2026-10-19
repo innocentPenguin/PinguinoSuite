@@ -12,7 +12,7 @@ nav{display:flex;gap:4px;padding:8px 18px 0;flex-wrap:wrap;border-bottom:1px sol
 nav button{border:0;border-bottom:3px solid transparent;border-radius:6px 6px 0 0;background:none;padding:8px 14px}nav button.on{border-bottom-color:var(--ac);color:var(--ac)}
 main{padding:18px;max-width:1200px;margin:auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
-.card{background:var(--pn);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card{min-width:0;background:var(--pn);border:1px solid var(--line);border-radius:12px;padding:14px}
 .card.on{border-color:var(--ac)}
 .bar{width:100%;height:8px;border-radius:99px;background:var(--pn2);overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}
 label.f{display:block;margin:10px 0 0;font-weight:600;font-size:13px}
@@ -23,7 +23,7 @@ textarea{min-height:70px;resize:vertical}input[type=range]{width:100%;accent-col
 .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--pn2)}
 .pill.on{background:var(--ok);color:var(--on-accent)}.pill.off{background:var(--pn2);color:var(--dim)}.pill.warn{background:var(--warn);color:var(--on-accent)}.pill.bad{background:var(--bad);color:var(--on-accent)}
 .sw{position:relative;width:64px;height:32px;display:inline-block}.sw input{display:none}.sw span{position:absolute;inset:0;background:var(--pn2);border:1px solid var(--line);border-radius:99px;cursor:pointer;transition:.15s}
-.sw span:before{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:var(--dim);transition:.15s}.sw input:checked+span{background:var(--ac)}.sw input:checked+span:before{left:35px;background:#fff}
+.sw span:before{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:var(--dim);transition:.15s}.sw input:checked+span{background:var(--ac)}.sw input:checked+span:before{left:35px;background:var(--on-accent)}
 .sw.sm{width:42px;height:22px}.sw.sm span:before{width:16px;height:16px}.sw.sm input:checked+span:before{left:23px}
 table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px;vertical-align:top}
 .emoji{font-size:28px}.q{display:inline-block;width:16px;height:16px;border-radius:50%;background:var(--pn2);border:1px solid var(--line);text-align:center;font-size:11px;line-height:14px;cursor:pointer;color:var(--dim)}
@@ -115,12 +115,12 @@ const C_stingers=()=>META.stingers.map(s=>[s,s]);
 V.events=()=>`<div class="grid">${META.events.map(k=>{const e=C.events[k],b='events.'+k+'.';return `<div class="card ${e.enabled?'on':''}"><div class="row"><h3 style="margin:0">${k}</h3><span class="sp"></span>${sw('e-'+k,e.enabled,true).replace('<input','<input data-p="'+b+'enabled" data-redraw="1"')}</div>${H('event.enabled')}
  ${sel_(b+'persona','Who announces','event.persona',pOpts('default (see Who & where)').map(o=>o[0]===''?['default','default persona / role rules']:o))}
  ${fld('What they say','event.templates',`<textarea data-p="${b}templates" data-list="1" rows="4">${esc(e.templates.join('\n'))}</textarea>`)}
- <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px">${num(b+'min_amount','Minimum amount','event.min_amount',0,1e7)}${num(b+'cooldown_s','Cooldown (s)','event.cooldown_s',0,3600)}${num(b+'priority','Priority 1-9','event.priority',1,9)}${sel_(b+'stinger','Sound','event.stinger',[['','persona default'],...C_stingers()])}</div>
+ <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">${num(b+'min_amount','Minimum amount','event.min_amount',0,1e7)}${num(b+'cooldown_s','Cooldown (s)','event.cooldown_s',0,3600)}${num(b+'priority','Priority 1-9','event.priority',1,9)}${sel_(b+'stinger','Sound','event.stinger',[['','persona default'],...C_stingers()])}</div>
  ${chk(b+'read_message','Read their message','event.read_message')}${chk(b+'only_live','Only while live','event.only_live')}
  <div class="row" style="margin-top:10px"><button data-test="${k}" class="sm">▶ Try</button><button data-prev-ev="${k}" class="sm">🔈 Preview in page</button></div></div>`}).join('')}</div>`;
-V.schedule=()=>`<div class="row" style="margin-bottom:12px"><button id="addT" class="pri">＋ New reminder</button><span class="faint">${H_('timers')}</span></div><div class="grid">${C.timers.map((t,i)=>{const b='timers.'+i+'.';return `<div class="card ${t.enabled?'on':''}"><div class="row">${txt(b+'name','','').replace('<label class="f"></label>','')}${sw('t'+i,t.enabled,true).replace('<input','<input data-p="'+b+'enabled" data-redraw="1"')}</div>
+V.schedule=()=>`<div class="row" style="margin-bottom:12px"><button id="addT" class="pri">＋ New reminder</button><span class="faint grow">${H_('timers')}</span></div><div class="grid">${C.timers.map((t,i)=>{const b='timers.'+i+'.';return `<div class="card ${t.enabled?'on':''}"><div class="row">${txt(b+'name','','').replace('<label class="f"></label>','')}${sw('t'+i,t.enabled,true).replace('<input','<input data-p="'+b+'enabled" data-redraw="1"')}</div>
  ${sel_(b+'persona','Who says it','event.persona',pOpts('').map(o=>o[0]===''?['default','default persona']:o))}
- <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px">${num(b+'every_min','Every (min)','timer.every_min',1,1440)}${num(b+'jitter_pct','Jitter %','timer.jitter_pct',0,90)}${num(b+'min_chat','Needs activity','timer.min_chat',0,100000)}</div>
+ <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">${num(b+'every_min','Every (min)','timer.every_min',1,1440)}${num(b+'jitter_pct','Jitter %','timer.jitter_pct',0,90)}${num(b+'min_chat','Needs activity','timer.min_chat',0,100000)}</div>
  ${fld('Lines','timer.lines',`<textarea data-p="${b}lines" data-list="1" rows="4">${esc(t.lines.join('\n'))}</textarea>`)}
  <div class="row" style="margin-top:10px"><button class="sm" data-tfire="${t.id}">▶ Say one now</button><button class="sm" data-delt="${i}">Delete</button></div></div>`}).join('')||'<div class="dim">No reminders yet. Add one: hydrate, follow reminder, socials…</div>'}</div>`;
 const H_=k=>esc(META.help[k]||'');
