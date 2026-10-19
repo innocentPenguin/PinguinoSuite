@@ -25,11 +25,34 @@ import live as live_mod
 import twitch
 
 
+def clog(level, msg, source=""):
+    """Append a line to <PINGUINO_DATA_DIR>/console/listen.jsonl for the app's Console page (contract: Docs/MODULE_CONTRACT.md)."""
+    try:
+        d = os.path.join(os.environ.get("PINGUINO_DATA_DIR", ""), "console")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "listen.jsonl"), "a", encoding="utf8") as f:
+            f.write(json.dumps({"ts": time.time(), "module": "listen", "level": level, "source": source, "msg": str(msg)[:2000]}) + "\n")
+    except OSError:
+        pass
+
+
+def _log_event(ev):
+    t = ev.get("type")
+    if t == "asr":
+        bad = ev.get("state") == "error" or "failed" in str(ev.get("detail", ""))
+        clog("error" if ev.get("state") == "error" else "warn" if bad else "info", f"speech model {ev.get('state')}: {ev.get('detail', '')}", "asr")
+    elif t == "live":
+        clog("info", f"mic {ev.get('state')}", "live")
+    elif ev.get("error") or ev.get("state") == "error":
+        clog("error", ev.get("error") or ev.get("detail") or json.dumps(ev)[:300], str(t or "event"))
+
+
 class Hub:
     def __init__(self):
         self.clients, self.loop = set(), None
 
     def emit(self, ev):
+        _log_event(ev)
         if self.loop:
             asyncio.run_coroutine_threadsafe(self._send(ev), self.loop)
 
@@ -118,6 +141,27 @@ async def ws(sock: WebSocket):
             await sock.receive_text()
     except WebSocketDisconnect:
         hub.clients.discard(sock)
+
+
+@app.get("/api/prestream")
+def prestream():
+    """Readiness for the Suite's pre-stream check: speech model loaded, a mic exists, listening state."""
+    a = state["asr"]
+    items = [{"id": "model", "label": "Speech model loaded", "status": "pass" if a["state"] == "ready" else "fail" if a["state"] == "error" else "warn", "detail": a.get("detail", "")}]
+    try:
+        devs = live_mod.list_devices()
+        want = cfg.settings().get("device")
+        names = {d["index"]: d["name"] for d in devs}
+        if not devs:
+            items.append({"id": "mic", "label": "Microphone available", "status": "fail", "detail": "no input devices found"})
+        elif want is not None and want not in names:
+            items.append({"id": "mic", "label": "Selected microphone present", "status": "fail", "detail": f"device {want} is not connected"})
+        else:
+            items.append({"id": "mic", "label": "Microphone available", "status": "pass", "detail": names.get(want, "default input")})
+    except Exception as e:  # noqa: BLE001
+        items.append({"id": "mic", "label": "Microphone available", "status": "warn", "detail": str(e)[:120]})
+    items.append({"id": "listening", "label": "Listening", "status": "pass", "detail": "listening" if mic.running else "idle (starts automatically when you go live)"})
+    return {"items": items}
 
 
 # ------------------------------------------------------------------ status / settings

@@ -71,7 +71,7 @@ def _module_items(mid, spec, token, console_dir, now):
     raw = None
     if path:
         try:
-            r = requests.get(spec["url"] + path, headers={"Authorization": f"Bearer {token}", "X-Pinguino-Token": token}, timeout=5)
+            r = requests.get(spec["url"] + path, headers={"Authorization": f"Bearer {token}", "X-Pinguino-Token": token}, timeout=15)
             r.raise_for_status()
             raw = r.json()
         except Exception as e:  # noqa: BLE001
@@ -87,7 +87,7 @@ def _module_items(mid, spec, token, console_dir, now):
         t = _ts(raw.get("ts")) if isinstance(raw, dict) else None
         if t is None or now - t > STALE_SECS:
             return [_item(mid, "readiness", "Readiness report", "warn", "no recent readiness report from the module")]
-    items = raw.get("items", []) if isinstance(raw, dict) else []
+    items = (raw.get("items") or raw.get("checks") or []) if isinstance(raw, dict) else []
     out = []
     for i in items[:60]:
         if isinstance(i, dict):
@@ -100,12 +100,15 @@ def run_checks(modules, token_for, console_dir, errors_30min, disk_path, slot=No
     """modules: [{id, spec, state, always_start}], token_for(id)->str, errors_30min()->int. Returns the report dict."""
     now = time.time()
     items = []
-    for m in modules:
-        up = m["state"] == "running"
-        items.append(_item(m["id"], "up", f"{m['spec'].get('name', m['id'])} is running", "pass" if up else ("fail" if m["always_start"] else "warn"),
-                           "" if up else f"state: {m['state']}"))
-        if up:
-            items += _module_items(m["id"], m["spec"], token_for(m["id"]), console_dir, now)
+    from concurrent.futures import ThreadPoolExecutor  # module endpoints can take several seconds each: ask them all at once
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futs = {m["id"]: pool.submit(_module_items, m["id"], m["spec"], token_for(m["id"]), console_dir, now) for m in modules if m["state"] == "running"}
+        for m in modules:
+            up = m["state"] == "running"
+            items.append(_item(m["id"], "up", f"{m['spec'].get('name', m['id'])} is running", "pass" if up else ("fail" if m["always_start"] else "warn"),
+                               "" if up else f"state: {m['state']}"))
+            if up:
+                items += futs[m["id"]].result()
     sb = _tcp("127.0.0.1", 8080)
     items.append(_item("core", "streamerbot", "Streamer.bot reachable (:8080)", "pass" if sb else "warn", "" if sb else "not reachable (fine once Host replaces it)"))
     obs = _tcp("127.0.0.1", 4455)

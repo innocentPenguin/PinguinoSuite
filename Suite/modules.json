@@ -11,6 +11,7 @@
     "port": 8765,
     "url": "http://127.0.0.1:8765",
     "health": "/api/status",
+    "prestream": "/api/prestream",
     "on_live": {
       "post": "/api/live/auto"
     },
@@ -69,6 +70,7 @@
     "port": 8770,
     "url": "http://127.0.0.1:8770",
     "health": "/api/status",
+    "prestream": "/api/prestream",
     "defaults": {
       "enabled": true,
       "start_with_suite": true,
