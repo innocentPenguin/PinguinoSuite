@@ -56,7 +56,25 @@
       "path": "/?type=chat",
       "order": 20,
       "replaces": "chat"
-    }
+    },
+    "secrets": [
+      {
+        "name": "MULTI_TWITCH_TOKENS",
+        "label": "Twitch tokens for Multi (JSON from Connect)"
+      },
+      {
+        "name": "MULTI_DISCORD_TOKEN",
+        "label": "Discord bot token"
+      },
+      {
+        "name": "MULTI_YOUTUBE_TOKEN",
+        "label": "YouTube OAuth token"
+      },
+      {
+        "name": "MULTI_AI_KEY",
+        "label": "AI provider key for priority ranking"
+      }
+    ]
   },
   {
     "id": "host",
