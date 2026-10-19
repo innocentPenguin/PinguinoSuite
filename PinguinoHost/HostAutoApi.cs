@@ -82,6 +82,8 @@ namespace PinguinoHost
                 string f = p == "/overlay/goal" ? Session.PagePath() : Credits.PagePath(); if (f == null) { c.Response.StatusCode = 404; return true; }
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
+            if (p == "/api/spotify-announce" && m == "GET") { Write(c, SpotifyAnnounce.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/spotify-announce" && m == "POST") { Write(c, SpotifyAnnounce.Save(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/cutover" && m == "GET") { Write(c, Cutover.State().ToString(), "application/json"); return true; }
             if (p == "/api/cutover" && m == "POST") { var b = Body(c); Write(c, Cutover.Set((bool?)b["on"] == true).ToString(), "application/json"); return true; }
             if (p == "/api/latest" && m == "GET") { Write(c, Latest.Api().ToString(), "application/json"); return true; }
