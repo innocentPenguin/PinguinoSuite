@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import livedetect  # noqa: E402
 import consolelog  # noqa: E402
 import prestream  # noqa: E402
+import device  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -52,6 +53,7 @@ ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "taur
 DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "runtime")
 console_log = consolelog.Console(Path(DATA_DIR) / "console", LOGS)  # live log stream for the Console page
 CONSOLE_DIR = Path(DATA_DIR) / "console"
+devices = device.Devices(Path(DATA_DIR) / "device.json")  # this install: stable id, master/auxiliary role, peers
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 # UI source: single copy lives in the Tauri app so the two can't drift.
 UI_INDEX = ROOT.parent / "App" / "src" / "index.html"  # only copy of the UI (the old Suite/suite/static copy was retired)
@@ -181,6 +183,11 @@ class Module:
         self.crashes = []     # timestamps of recent unexpected exits (circuit breaker)
         self.retry_at = 0.0
         self.failed = False
+        self.deferred = False  # singleton waiting for this device to become master
+
+    @property
+    def singleton(self):
+        return bool(self.spec.get("singleton"))
 
     def opts(self):
         o = dict(self.spec.get("defaults", {}))
@@ -196,6 +203,11 @@ class Module:
     def start(self):
         if self.running or self._ping():
             return
+        if self.singleton and not devices.is_master():  # only the master device runs bots/Host/Spotify: never two instances
+            self.deferred = True
+            console_log.log("info", "device", f"{self.id} not started: this device is not the master ({devices.state()['master_name']} is)", module=self.id)
+            return
+        self.deferred = False
         self.wanted, self.failed = True, False
         cmd = [PY if c == "{py}" else c for c in self.spec["cmd"]]
         log = open(LOGS / f"{self.id}.log", "ab")
@@ -207,8 +219,9 @@ class Module:
                                      env={**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"]), "PINGUINO_DATA_DIR": DATA_DIR}, **extra)
         bus.emit("module", id=self.id, state="starting")
 
-    def stop(self):
+    def stop(self, deferred=False):
         self.wanted, self.failed = False, False
+        self.deferred = deferred  # True when stopped only because this device lost the master role: restart on promotion
         if self.running:
             kill_tree(self.proc)
         self.proc, self.healthy = None, False
@@ -247,7 +260,7 @@ class Module:
     def call(self, hook):
         """POST a module's on_live / on_offline hook, retrying while it boots."""
         spec = self.spec.get(hook)
-        if not spec:
+        if not spec or (self.singleton and not devices.is_master()):
             return
         for _ in range(40):
             try:
@@ -379,6 +392,9 @@ def prestream_loop():
     while True:
         try:
             due = prestream.due_slot(datetime.now(timezone.utc), done)
+            if due and not devices.is_master():
+                done.add(due[1])  # auxiliary devices do not run the stream checks
+                due = None
             if due:
                 done.add(due[1])
                 run_prestream(slot=due[0], scheduled=True)
@@ -387,11 +403,57 @@ def prestream_loop():
         time.sleep(20)
 
 
+_last_master = [None]
+
+
+def reconcile_devices():
+    """Start singleton modules when this device becomes master, stop them when it stops being master."""
+    st = devices.state()
+    if st["master_id"] != _last_master[0] or st["is_master"] != getattr(reconcile_devices, "was", None):
+        reconcile_devices.was = st["is_master"]
+        if st["master_id"] != _last_master[0]:
+            console_log.log("info", "device", f"master is now {st['master_name']}" + (" (this device)" if st["is_master"] else ""))
+            bus.emit("device", master=st["master_name"], is_master=st["is_master"])
+        _last_master[0] = st["master_id"]
+    for m in modules.values():
+        if not m.singleton:
+            continue
+        if st["is_master"] and m.deferred and not m.running:
+            o = m.opts()
+            if o.get("enabled") and o.get("start_with_suite"):
+                m.start()
+        elif not st["is_master"] and not st["warming_up"] and (m.running or m.wanted):
+            console_log.log("warn", "device", f"stopping {m.id}: {st['master_name']} is now master", module=m.id)
+            m.stop(deferred=True)
+
+
+_link_warned = [False]
+
+
+def device_sync_loop():
+    """Tell paired devices about us (via the Link module, which owns the network transport); peers arrive on POST /api/device/peer."""
+    link = modules.get("link")
+    while True:
+        time.sleep(device.HEARTBEAT_SECS)
+        if not link or not link.healthy:
+            continue
+        try:
+            tok = module_token("link")
+            r = requests.post(link.spec["url"] + "/api/peer/broadcast", json={"type": "device-hb", "payload": devices.heartbeat()},
+                              headers={"Authorization": f"Bearer {tok}", "x-link-token": tok}, timeout=5)
+            if r.status_code == 404 and not _link_warned[0]:
+                _link_warned[0] = True
+                console_log.log("info", "device", "Link has no peer API yet; running as a single device")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def health_loop():
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
     tick = 0
     while True:
         process_control()
+        reconcile_devices()
         console_log.ingest(list(modules))
         if tick % 4 == 0:  # health every ~4s, control files every second
             for m in modules.values():
@@ -442,6 +504,7 @@ async def lifespan(app):
     threading.Thread(target=health_loop, daemon=True).start()
     threading.Thread(target=twitch_loop, daemon=True).start()
     threading.Thread(target=prestream_loop, daemon=True).start()
+    threading.Thread(target=device_sync_loop, daemon=True).start()
     bus.emit("suite", state="started")
     yield
     for m in modules.values():
@@ -449,6 +512,9 @@ async def lifespan(app):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+MODULE_PATHS = {"/api/device/peer", "/api/device/streaming", "/api/device/lease"}
 
 
 @app.middleware("http")
@@ -461,7 +527,10 @@ async def guard(request: Request, call_next):
         if request.url.path.startswith("/api/"):
             auth = request.headers.get("authorization", "")
             given = auth[7:] if auth.lower().startswith("bearer ") else request.headers.get("x-pinguino-token", "")
-            if not secrets.compare_digest(given, TOKEN):
+            ok = secrets.compare_digest(given, TOKEN)
+            if not ok and request.url.path in MODULE_PATHS:  # modules (Link, Host...) may call these with their own token
+                ok = any(secrets.compare_digest(given, module_token(mid)) for mid in modules)
+            if not ok:
                 return JSONResponse({"detail": "unauthorized"}, status_code=401)
     resp = await call_next(request)
     resp.headers["X-Frame-Options"] = "DENY"
@@ -530,6 +599,62 @@ def module_logs(mid: str, lines: int = 200):
     if mid not in modules:
         raise HTTPException(404)
     return {"id": mid, "lines": tail_lines(LOGS / f"{mid}.log", max(1, min(lines, 2000)))}
+
+
+class DevConfig(BaseModel):
+    name: str | None = None
+    priority: int | None = None
+    role_pref: str | None = None
+
+
+@app.get("/api/device")
+def device_get():
+    return devices.state()
+
+
+@app.post("/api/device/config")
+def device_config(b: DevConfig):
+    devices.configure(b.name, b.priority, b.role_pref)
+    return devices.state()
+
+
+@app.post("/api/device/take")
+def device_take():
+    devices.take_control()
+    console_log.log("info", "device", "manual: take control here")
+    reconcile_devices()
+    return devices.state()
+
+
+@app.post("/api/device/release")
+def device_release():
+    devices.release_pin()
+    reconcile_devices()
+    return devices.state()
+
+
+@app.post("/api/device/peer")
+async def device_peer(request: Request):
+    """Link delivers a peer's heartbeat here: body {"type": "device-hb", "payload": {...}} or the payload itself."""
+    b = await request.json()
+    return {"ok": devices.receive(b.get("payload", b) if isinstance(b, dict) else None)}
+
+
+class Streaming(BaseModel):
+    on: bool
+
+
+@app.post("/api/device/streaming")
+def device_streaming(b: Streaming):
+    devices.set_streaming(b.on)
+    return {"ok": True}
+
+
+@app.get("/api/device/lease")
+def device_lease():
+    """For singleton modules (Host, Spotify): am I allowed to run on this device right now?"""
+    st = devices.state()
+    return {"is_master": st["is_master"], "master_id": st["master_id"], "master_name": st["master_name"], "device_id": devices.me["id"]}
 
 
 @app.get("/api/console")

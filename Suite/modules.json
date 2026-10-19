@@ -70,6 +70,7 @@
     "port": 8770,
     "url": "http://127.0.0.1:8770",
     "health": "/api/status",
+    "singleton": true,
     "prestream": "/api/prestream",
     "defaults": {
       "enabled": true,

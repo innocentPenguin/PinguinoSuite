@@ -129,3 +129,27 @@ The stream starts **5:00 pm America/Chicago daily** (DST-aware). The core runs a
 **Item:** `{"id": "chat", "label": "Twitch chat connected", "status": "pass|warn|fail", "detail": "optional short text"}`. Use `fail` only for things that would break the stream (not connected, not signed in, not a mod); `warn` for degraded or optional. Suggested items: Host: chat connected, EventSub connected, each bot account signed in and moderator, OBS connected, Streamer.bot reachable (if still used); Multi: chat sources connected; Listen: mic/model ready; Link: Tailscale/OBS link status. The core prefixes your items with your module id in the report.
 
 **Core API (token as usual):** `GET /api/console?since=<seq>&limit=<n>&min_level=&module=&q=` returns `{"seq": <latest>, "entries": [{seq, ts, module, level, source, msg}], "errors": <error count>}`; `GET /api/prestream` returns the latest report `{"ts", "scheduled", "slot", "summary": {"pass","warn","fail"}, "items": [{module, id, label, status, detail}]}`; `POST /api/prestream/run` runs it now.
+
+## Devices: master / auxiliary
+Several machines can run the Suite (streaming PC, gaming PC, Mac). Each install has a stable **device id** (`Data\runtime\device.json`), a name and a **priority**. Exactly **one alive device is the master** and holds the *singletons*: bots/Host, Spotify, the pre-stream scheduler. Auxiliary devices run only local things (Listen mic, Link, Multi viewer) and control the master's bots remotely.
+
+**Who is master (every device computes the same answer from heartbeats, no server):**
+1. a manual pin ("Take control here") on a device that is alive, else
+2. a device that is streaming (a module reports `POST /api/device/streaming {"on": true}` while OBS is live), highest priority first, else
+3. the alive device with the highest priority (ties: lowest device id).
+A device is *alive* if its heartbeat arrived in the last 20 s. A device that just (re)appeared only counts for rule 3 after 30 s alive, so a booting PC does not yank the bots away mid-session. A device that already knows peers waits 10 s after start before assuming it is master. A pin to a dead device is ignored. Default priorities: master-role machine 100, others 50; editable in the app.
+Known limit: if the network between devices is cut while both stay online, each side can think it is master for the duration of the cut (no quorum, on purpose, so a lone Mac can take over when the PC is off). Singletons check the lease (below) every 10 s, which bounds the overlap after the network returns.
+
+**Manifest:** `"singleton": true` marks a module that may only run on the master (Host has it; Spotify will). The core refuses to start it elsewhere, stops it when the device loses the master role and starts it again on promotion (if its `enabled` and `start_with_suite` options are on).
+
+**Lease (for singleton modules, token = your module token):** `GET http://127.0.0.1:8760/api/device/lease` -> `{"is_master": true, "master_id": "...", "master_name": "...", "device_id": "..."}`. **A singleton must poll this every 10 s and shut down cleanly when `is_master` is false, and must not start working before it has seen `is_master: true`.** (Host/02: add this check; the core already blocks starting it on an auxiliary device, this is the second fence.)
+
+**Streaming flag (any module, module token):** `POST /api/device/streaming {"on": true|false}`. Host or Link sets it while OBS is streaming on this device.
+
+**Transport (04 / Link).** Link owns the network. The core talks to Link only on loopback and the core never opens a network port. Contract:
+- Core -> Link, every 5 s: `POST <link url>/api/peer/broadcast` with the module token (`Authorization: Bearer`, also `x-link-token`) and body `{"type": "device-hb", "payload": {id, name, priority, streaming, streaming_ts, pin: {to, ts}, sent}}`. Link sends `body` unchanged to every paired peer over the tailnet and answers `200 {"sent": n}`. 404 or an error just means "single device".
+- Link -> core, when a peer's message arrives: `POST http://127.0.0.1:8760/api/device/peer` with Link's module token and the same body. Link must authenticate the peer (pairing secret / tailnet identity) and may add `"from": "<peer name>"`; the core only reads `payload`.
+- Pairing (Link UI/API, not the core): the master shows a short-lived pairing code; an auxiliary enters `<master tailnet name or IP> + code`, they exchange a shared secret, and each side stores the other as a peer. Pairing is symmetric afterwards. Any device can be unpaired from either side.
+- Later (phase 2): Link proxies a peer's module UI (for example the master's Host page) so an auxiliary can control the bots remotely; until then an auxiliary shows "bots run on <master name>".
+
+**Core API (app token):** `GET /api/device` (me, master, devices, pin), `POST /api/device/take` (pin to this device), `POST /api/device/release` (clear the pin), `POST /api/device/config {name, priority, role_pref}`. Module-token endpoints: `/api/device/peer`, `/api/device/streaming`, `/api/device/lease`. Everything is logged to the Console under module `core`, source `device`.
