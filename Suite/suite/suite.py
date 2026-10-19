@@ -308,11 +308,43 @@ def twitch_loop():
         time.sleep(max(10, s["poll_secs"]))
 
 
+CONTROL_DIR = Path(DATA_DIR) / "control"
+
+
+def process_control():
+    """File-drop trigger so a script can restart ONE module without the per-launch API token:
+    create Data/runtime/control/<start|stop|restart>-<module id>. The core consumes (deletes) the file and acts.
+    Only registered module ids are honoured; nothing else is read from the file."""
+    try:
+        files = list(CONTROL_DIR.iterdir()) if CONTROL_DIR.is_dir() else []
+    except OSError:
+        return
+    for f in files:
+        action, _, mid = f.name.partition("-")
+        m = modules.get(mid)
+        try:
+            f.unlink()
+        except OSError:
+            continue
+        if not m or action not in ("start", "stop", "restart"):
+            continue
+        bus.emit("control", id=mid, action=action)
+        if action in ("stop", "restart"):  # run in order on this one thread so a stop never races a later start
+            m.stop()
+        if action in ("start", "restart"):
+            m.start()
+
+
 def health_loop():
+    CONTROL_DIR.mkdir(parents=True, exist_ok=True)
+    tick = 0
     while True:
-        for m in modules.values():
-            m.refresh()
-        time.sleep(4)
+        process_control()
+        if tick % 4 == 0:  # health every ~4s, control files every second
+            for m in modules.values():
+                m.refresh()
+        tick += 1
+        time.sleep(1)
 
 
 # ------------------------------------------------------------------ windows autostart

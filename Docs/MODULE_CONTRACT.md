@@ -58,3 +58,8 @@ Anything OS-specific is optional. `GET /api/capabilities` reports what exists. T
 | `App/src`, `App/src-tauri/src`, `tauri.conf.json` | `App\Rebuild-App.bat` (rebuilds only the shell, `--no-bundle`). |
 | Nothing under those | The script reports "up to date" and you just relaunch. |
 `Rebuild-App.bat --installer` also builds the NSIS setup; `--force` rebuilds everything. Only session 00 runs it.
+
+## Updating one module without restarting the app
+`App\Update-Module.bat <id> [-NoBuild]` stops that module, runs its manifest `build` command if it has one (Host: `dotnet build`, which needs the DLL unlocked, hence the stop first), starts it again and waits until its health URL answers. The app and the other modules are never touched.
+It talks to the core through a file-drop folder, so no API token is needed: the core polls `Data\runtime\control\` every second and consumes files named `start-<id>`, `stop-<id>` or `restart-<id>` (only registered module ids). Anyone who can write to `Data\runtime` can do this, which is the same trust level as the data itself. Needs a core that includes this feature (after the next core rebuild).
+Manifest field: `"build": ["cmd", "arg", ...]`, run in the module's `cwd`.
