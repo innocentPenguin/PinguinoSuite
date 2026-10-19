@@ -8,6 +8,8 @@ Source: read-only look at `Documents\PinguinoB0t\data` (`actions.json` 44 action
 - **NEEDS-BUILD**: not covered yet; says what is missing and who owns it.
 - **DROP**: dead, disabled or a placeholder; safe to lose.
 
+**Update (batch built, awaiting Host rebuild):** 02 has built the Host side (section 9). After the Host restarts and the streamer signs in again, the remaining blockers are the data copy-over, your review of the presets, and 03's YouTube/Kick chat. Original verdict kept below.
+
 **Verdict: not safe to close yet.** The game commands, chat AI, helper, welcome and routing are replaced. About ten small things are still only in Streamer.bot (stream title/game + the day counter, clips, ad countdown, ban alert, raid-out, shoutout, suggestion box, "First 5" game, the chat pop sounds, the thank-you alerts) and YouTube/Kick chat reading belongs to Multi. See the checklist at the end.
 
 ---
@@ -96,3 +98,26 @@ All of these say a thank-you line in chat through the bot account, then run the 
 ## 8. What stays off
 
 All ChatGPT* actions and the "ChatGPT Call" command, "Streambot", "Pinguinobot visible in stream chat", `top tt likers and gifters`, `Raided` (unless re-imported on purpose), the old pasted copies of PinguinoBot/Chat inside Streamer.bot, and the song-request actions in the Host (off by default until Ivan turns them on).
+
+## 9. What the 02 batch added (all presets arrive DISABLED)
+
+New Host pieces: steps `set_title`, `create_clip`, `ad_schedule`, `shoutout`, `append_file`; triggers `ban` and `raid_out`; the First 5 game is loaded again (`!first`, `!firsts`, claim on every chat line, reset when the stream goes online, payouts on a background timer so chat is never blocked; payouts are lost if the Host restarts before they finish); the Host now also keeps numeric and yes/no persisted values across restarts. Sign-in asks for four more permissions: `channel:manage:broadcast`, `clips:edit`, `channel:read:ads`, `moderator:manage:shoutouts` (**sign the streamer in again once**).
+
+18 presets in the group "Streamer.bot replacement" on `/automations`, all disabled: Alerts: show Latest Group, follow, sub, resub, gifted subs, cheer, Title: customs (`!setcustoms`, mods), Title: Minecraft (`!setmcserver`, mods), Stream online, Stream offline (day counter +1), `!clip`, `!preroll`/`!ad`/`!ads`, `!whyad`, ban alert (Among Us), raid out, `!shout`, reward "Instantly End Stream", reward "Suggestion" (appends to `Datauntimeiles\suggestions.txt`).
+Differences from Streamer.bot: the four title actions that all hung off `!setCustoms` are now one (RL customs); add more commands the same way. Prime subs cannot be told apart from normal subs by Twitch's event. Gifted subs fire once per gift bomb (`{total}`), not once per recipient. Shoutouts do not look up pronouns. `!setgame` had no action and is dropped. The "Raid out" preset ends with a 20 s wait and Stop Streaming like Streamer.bot did; the "Instantly End Stream" reward does the same after 5 s. Delete that step if you do not want it. OBS source and scene names in the presets are copied from your Streamer.bot export, so check them in OBS.
+Not built on purpose: the chat pop sound, first-time-today sound, first-time bell and YouTube/Kick chat (03/Multi owns these), personal intro videos (intro scheduler), TikTok.
+
+**Copying your data over (do this with the Host stopped, before the first stream on the new setup):**
+```
+python Tools\import-streamerbot-globals.py            # preview (reads a copy of globals.db)
+python Tools\import-streamerbot-globals.py --apply    # writes dayCounter into the Host
+```
+The tool reads `dayCounter` (currently 261 in the copy) and writes it to `host_globals.json` and `automation_vars.json`. The First 5 stats (`firstPlaceStats` ... `fifthPlaceStats`) are stored in a form the tool cannot read: open Streamer.bot > Settings > Globals (or Variables), copy each value and save it into `Datauntime\host_globals.json` under the same name.
+
+## 10. Stream Deck, MIDI and other things that call Streamer.bot
+
+From `settings.json`: MIDI has no devices; Streamer.bot's Stream Deck server is **off**; its WebSocket server is **on** (`0.0.0.0:8080`, auth on, no connections listed) and its HTTP server is off. So nothing in the export proves a button depends on it, but anything that connects to `ws://<this PC>:8080` (a Stream Deck plugin, a phone app, SoundAlerts-style tools) will stop working when Streamer.bot closes.
+Re-point instructions:
+1. For a Stream Deck button, use *System > Website > GET/POST in background* (or the "API Ninja" plugin) on `POST http://127.0.0.1:8770/api/automations/fire` with body `{"hotkey":"brb"}`; the action must have a trigger of type **Hotkey** with key `brb`.
+2. For a button that used to run a Streamer.bot action by name, make a Host action with a Hotkey trigger and the same steps, then call the URL above. If a call is refused, send the app/module token (Authorization: Bearer ...) or call from the same PC (same-origin rules in ACTIONS.md).
+3. Open Streamer.bot > Servers/Clients and Stream Deck once and write down who is connected before closing it; point those clients at the Host URL above.

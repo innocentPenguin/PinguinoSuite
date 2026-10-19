@@ -31,7 +31,7 @@ namespace PinguinoHost
             _persistPath = Path.Combine(dataDir, "host_globals.json");
             try { if (File.Exists(_persistPath)) foreach (var p in JObject.Parse(File.ReadAllText(_persistPath))) _g[p.Key] = p.Value.ToString(); } catch (Exception) { }
         }
-        void Persist() { try { File.WriteAllText(_persistPath, new JObject(_g.Where(k => !k.Key.StartsWith("pinguino.result") && !k.Key.StartsWith("pinguino.secret.") && k.Value is string).Select(k => new JProperty(k.Key, k.Value))).ToString()); } catch (Exception) { } }
+        void Persist() { try { File.WriteAllText(_persistPath, new JObject(_g.Where(k => !k.Key.StartsWith("pinguino.result") && !k.Key.StartsWith("pinguino.secret.") && (k.Value is string || k.Value is int || k.Value is long || k.Value is double || k.Value is bool)).Select(k => new JProperty(k.Key, k.Value))).ToString()); } catch (Exception) { } }
 
         // ---- chat ----
         public void SendMessage(string m, bool useBot = true) { Sent.Add(m); Console.WriteLine("[say] " + m); try { if (Say != null) Say(m); } catch (Exception e) { LogWarn("send failed: " + e.Message); } }

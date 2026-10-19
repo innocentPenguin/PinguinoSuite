@@ -16,7 +16,7 @@ namespace PinguinoHost
     /// <summary>Actions &amp; Events: Streamer.bot-style automation inside the Host. Triggers (chat command, chat match, first message, follow/sub/resub/gift/cheer/raid/redeem,
     /// timer, stream online/offline, hotkey, manual) run steps (say, delay, OBS, sound, http, module command, variables, if, ...). Stored in Data\runtime\automations.json;
     /// every run is logged to the Console (source "automation") and kept in memory for the page. Format and steps: Docs\ACTIONS.md.</summary>
-    public static class Auto
+    public static partial class Auto
     {
         static readonly object L = new object();
         static JObject _doc; static DateTime _docStamp = DateTime.MinValue;
@@ -206,9 +206,10 @@ namespace PinguinoHost
         {
             object et; if (!args.TryGetValue("eventType", out et)) return; string kind;
             switch ((string)et) { case "TwitchFollow": kind = "follow"; break; case "TwitchSub": kind = "sub"; break; case "TwitchReSub": kind = "resub"; break; case "TwitchGiftBomb": kind = "gift"; break;
-                case "TwitchCheer": kind = "cheer"; break; case "TwitchRaid": kind = "raid"; break; case "TwitchRedeem": kind = "redeem"; break; case "StreamOnline": kind = "stream_online"; break; case "StreamOffline": kind = "stream_offline"; break; default: return; }
+                case "TwitchCheer": kind = "cheer"; break; case "TwitchRaid": kind = "raid"; break; case "TwitchRaidOut": kind = "raid_out"; break; case "TwitchBan": kind = "ban"; break; case "TwitchRedeem": kind = "redeem"; break; case "StreamOnline": kind = "stream_online"; break; case "StreamOffline": kind = "stream_offline"; break; default: return; }
             var ctx = new Dictionary<string, string>(); foreach (var kv in args) ctx[kv.Key] = Convert.ToString(kv.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
             string u = ctx.ContainsKey("userName") ? ctx["userName"] : ""; ctx["user"] = u; ctx["display"] = u; ctx["raider"] = u; ctx["channel"] = Channel(); ctx["event"] = kind;
+            if (kind == "stream_online") { try { Program.ResetFirsts(); } catch (Exception) { } }
             Fire(kind, ctx);
         }
 
@@ -228,7 +229,7 @@ namespace PinguinoHost
                     Run(a, kind, new Dictionary<string, string>(ctx));
                 }
         }
-        public static void OnStream(bool online) { Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }
+        public static void OnStream(bool online) { if (online) Program.ResetFirsts(); Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }
 
         public static JObject Hotkey(string key)
         {
@@ -339,7 +340,7 @@ namespace PinguinoHost
                     case "run_action": { var other = FindAction(x("name")); if (other == null) outp.Add("run_action: no action named " + x("name")); else { outp.Add("-> " + (string)other["name"]); Exec(other["steps"] as JArray, ctx, outp, ref budget, test, depth + 1); } break; }
                     case "comment": break;
                     case "stop": throw new StopAction();
-                    default: outp.Add("unknown step '" + type + "' skipped"); break;
+                    default: { string extra = ExtraStep(type, st, ctx, test, x); outp.Add(extra ?? "unknown step '" + type + "' skipped"); break; }
                 }
             }
         }

@@ -34,3 +34,8 @@ Button "Import from Streamer.bot" reads `actions.json`, `commands.json`, `twitch
 
 ## API (all on the Host port; POST needs the module/app token or same origin)
 `GET /api/automations` · `POST /api/automations {doc}` · `POST /api/automations/test {id, dry}` · `POST /api/automations/fire {hotkey}` · `GET /api/automations/log?n=` · `POST /api/automations/import {mode: preview|merge, path?}`. Tests: `python Tools/test-host-auto.py`.
+
+## Twitch steps and new triggers (Streamer.bot replacement)
+Steps (use the streamer sign-in; sign the streamer in again for the new permissions `channel:manage:broadcast`, `clips:edit`, `channel:read:ads`, `moderator:manage:shoutouts`): `set_title` {title, game} · `create_clip` (sets `{clip.url}`) · `ad_schedule` (sets `{adIn}`, `{adPrerollFree}`, `{adPrerollSec}`, `{adLengthSec}`, `{adSnoozes}`) · `shoutout` {user, native} (sets `{shoutoutUser}`, `{shoutoutGame}`, `{shoutoutChannel}`; native = also Twitch's own shoutout, spaced 2 minutes apart) · `append_file` {file, text} (only inside `Data\runtime\files`).
+Triggers: `raid_out` (you raid someone; `{target}`, `{viewers}`), `ban` (`{user}` = banned viewer, `{moderator}`, `{reason}`, `{permanent}`). Gift events now carry `{total}`.
+Presets: 18 disabled actions in the group "Streamer.bot replacement"; see `STREAMERBOT_REPLACEMENT.md` section 9. Tests: `python Tools/test-host-sbreplace.py`.

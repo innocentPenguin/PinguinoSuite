@@ -19,10 +19,12 @@ namespace PinguinoHost
         public static Func<bool> ObsConnected = () => false;
         static readonly string[] Secret = { "UserToken", "ObsPassword" };
         static readonly string[] Plain = { "Channel", "ClientId", "SenderId", "BroadcasterId", "ObsHost", "ObsPort", "OverlayPort" };
-        public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers moderation:read channel:read:redemptions";
+        public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers moderation:read channel:read:redemptions channel:manage:broadcast clips:edit channel:read:ads moderator:manage:shoutouts";
 
         static string FilePath { get { return Path.Combine(DataDir, "host_secrets.json"); } }
         // read-only views that also see the key vault (a plaintext value wins; Save always uses Load() so a vault value is never written back to a file)
+        /// <summary>the streamer sign-in (token from the file or the vault) for the Twitch API steps; never logged.</summary>
+        public static JObject StreamerCreds() { return LoadV(); }
         static JObject LoadV()
         {
             var s = Load();

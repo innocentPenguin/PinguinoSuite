@@ -143,7 +143,7 @@ namespace PinguinoHost
                             } while (!r.EndOfMessage);
                             if (!open) break;
                             var m = JObject.Parse(sb.ToString()); string type = (string)m["metadata"]["message_type"];
-                            if (type == "session_welcome") { HostApi.EventSubRefused = 0; await Subscribe(http, (string)m["payload"]["session"]["id"], bid); Console.WriteLine("EventSub connected"); Clog.Info("eventsub", "EventSub connected"); backoff = 3; HostApi.EventSubConnected = true; }
+                            if (type == "session_welcome") { HostApi.EventSubRefused = 0; _bid = bid; await Subscribe(http, (string)m["payload"]["session"]["id"], bid); Console.WriteLine("EventSub connected"); Clog.Info("eventsub", "EventSub connected"); backoff = 3; HostApi.EventSubConnected = true; }
                             else if (type == "notification") Handle(m, raise);
                             else if (type == "session_reconnect") open = false;
                         }
@@ -161,7 +161,8 @@ namespace PinguinoHost
                 new[] { "channel.subscription.gift", "1", "broadcaster_user_id" }, new[] { "channel.cheer", "1", "broadcaster_user_id" },
                 new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.follow", "2", "broadcaster_user_id" },
                 new[] { "stream.online", "1", "broadcaster_user_id", "opt" }, new[] { "stream.offline", "1", "broadcaster_user_id", "opt" },
-                new[] { "channel.channel_points_custom_reward_redemption.add", "1", "broadcaster_user_id", "opt" } };
+                new[] { "channel.channel_points_custom_reward_redemption.add", "1", "broadcaster_user_id", "opt" },
+                new[] { "channel.ban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" } };
             foreach (var s in subs)
             {
                 var cond = new JObject { { s[2], bid } }; if (s[0] == "channel.follow") cond["moderator_user_id"] = bid;
@@ -170,6 +171,7 @@ namespace PinguinoHost
                 if (!resp.IsSuccessStatusCode) { if (s.Length < 4) HostApi.EventSubRefused++; Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes"); Clog.Warn("eventsub", "subscription " + s[0] + " refused (HTTP " + (int)resp.StatusCode + (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : ", check token scopes") + ")"); }
             }
         }
+        static string _bid = "";
         static void Handle(JObject m, Action<Dictionary<string, object>> raise)
         {
             string t = (string)m["metadata"]["subscription_type"]; var e = m["payload"]["event"] as JObject; if (e == null) return;
@@ -179,9 +181,13 @@ namespace PinguinoHost
             {
                 case "channel.subscribe": if ((bool?)e["is_gift"] == true) return; a["eventType"] = "TwitchSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
                 case "channel.subscription.message": a["eventType"] = "TwitchReSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
-                case "channel.subscription.gift": a["eventType"] = "TwitchGiftBomb"; a["userName"] = U("user_login"); a["tier"] = tier; break;
+                case "channel.subscription.gift": a["eventType"] = "TwitchGiftBomb"; a["userName"] = (bool?)e["is_anonymous"] == true ? "Anonymous" : U("user_login"); a["tier"] = tier; a["total"] = (int?)e["total"] ?? 1; break;
                 case "channel.cheer": a["eventType"] = "TwitchCheer"; a["userName"] = U("user_login"); a["bits"] = (int?)e["bits"] ?? 0; break;
-                case "channel.raid": a["eventType"] = "TwitchRaid"; a["userName"] = U("from_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; break;
+                case "channel.raid":
+                    if (U("from_broadcaster_user_id") == _bid && _bid != "") { a["eventType"] = "TwitchRaidOut"; a["userName"] = U("to_broadcaster_user_login"); a["target"] = U("to_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }
+                    else { a["eventType"] = "TwitchRaid"; a["userName"] = U("from_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }
+                    break;
+                case "channel.ban": a["eventType"] = "TwitchBan"; a["userName"] = U("user_login"); a["moderator"] = U("moderator_user_login"); a["reason"] = U("reason"); a["permanent"] = ((bool?)e["is_permanent"] ?? false).ToString().ToLowerInvariant(); break;
                 case "channel.follow": a["eventType"] = "TwitchFollow"; a["userName"] = U("user_login"); break;
                 case "stream.online": a["eventType"] = "StreamOnline"; break;
                 case "stream.offline": a["eventType"] = "StreamOffline"; break;

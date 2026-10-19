@@ -31,6 +31,13 @@ namespace PinguinoHost
         public static bool ObsScene(string s) { return cph != null && cph.ObsSetScene(s); }
         public static bool ObsRaw(string type, JObject data) { return cph != null && cph.Obs != null && cph.Obs.Request(type, data); }
         public static bool ObsSource(string scene, string source, string v) { if (cph == null) return false; return v == "toggle" ? cph.Obs != null && cph.Obs.Toggle(scene, source) : v == "false" ? cph.ObsHideSource(scene, source) : cph.ObsShowSource(scene, source); }
+        /// <summary>a new stream starts the First 5 game again (what Streamer.bot's Stream Status (Online) action did).</summary>
+        public static void ResetFirsts()
+        {
+            if (cph == null) return;
+            cph.SetGlobalVar("firstChatterPlace", 1, true); cph.SetGlobalVar("firstChatterClaimedUserIds", "[]", true); cph.SetGlobalVar("firstChatterWinners", "{}", true);
+            Clog.Info("firsts", "First 5 game reset for the new stream");
+        }
         public static bool TimeoutUser(string user, int secs, string why) { return cph != null && cph.TwitchTimeoutUser(user, secs, why, false); }
         public static List<string> CoreCommandList() { return coreCommands.OrderBy(x => x).ToList(); }
         static HashSet<string> coreCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -39,6 +46,7 @@ namespace PinguinoHost
         {
             { "PinguinoBot", @"PinguinoB0t\PinguinoBotCore.cs" }, { "PinguinoChat", @"PinguinoChat\PinguinoChat.cs" },
             { "PinguinoHelper", @"HelperPinguino\PinguinoHelper.cs" }, { "PinguinoRouter", @"Shared\PinguinoRouter.cs" },
+            { "PinguinoFirsts", @"PinguinoB0t\PinguinoBotFirsts.cs" },   // the First 5 game (!first, !firsts, and the claim on every chat line)
         };
 
         public static int Main(string[] argv)
@@ -60,7 +68,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults();
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets();
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -134,6 +142,8 @@ namespace PinguinoHost
                 {
                     string trimmed = text.Trim();
                     string first = trimmed.Split(' ')[0];
+                    if (first.ToLowerInvariant() == "!first" || first.ToLowerInvariant() == "!firsts") { cph.Args["command"] = first.ToLowerInvariant(); cph.RunAction("PinguinoFirsts"); return; }
+                    try { cph.Args.Remove("command"); cph.RunAction("PinguinoFirsts"); } catch (Exception ex) { Clog.Warn("firsts", "First 5 claim failed: " + ex.Message); }
                     if (first.StartsWith("!") && coreCommands.Contains(first))
                     {
                         cph.Args["command"] = first.ToLowerInvariant();

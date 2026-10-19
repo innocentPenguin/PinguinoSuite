@@ -42,7 +42,7 @@ public class CPHInline
     // ── Entry point ─────────────────────────────────────────────────
     public bool Execute()
     {
-        string command = args.ContainsKey("command") ? args["command"].ToString().ToLower() : "";
+        string command = CPH.TryGetArg("command", out string cmdArg) && cmdArg != null ? cmdArg.ToLower() : "";
 
         if (string.IsNullOrEmpty(command))
             return HandleChatMessage();
@@ -147,11 +147,15 @@ public class CPHInline
 
         CPH.SendMessage($"🏁 Firsts are locked in! 🥇 {names[0]} | 🥈 {names[1]} | 🥉 {names[2]} | 4th: {names[3]} | 5th: {names[4]}");
 
-        for (int i = 0; i < 5; i++)
+        // payouts every PayoutDelayMs, on their own thread so the chat is never held up (a restart before they finish drops the rest)
+        System.Threading.Tasks.Task.Run(() =>
         {
-            CPH.Wait(PayoutDelayMs);
-            CPH.SendMessage($"!addpoints {names[i]} {PlacePoints[i]}");
-        }
+            for (int i = 0; i < 5; i++)
+            {
+                System.Threading.Thread.Sleep(PayoutDelayMs);
+                CPH.SendMessage($"!addpoints {names[i]} {PlacePoints[i]}");
+            }
+        });
 
         return true;
     }
@@ -159,7 +163,7 @@ public class CPHInline
     // ── Helpers ─────────────────────────────────────────────────────
     string GetArg(string name)
     {
-        return args.ContainsKey(name) && args[name] != null ? args[name].ToString() : "";
+        return CPH.TryGetArg(name, out string argVal) && argVal != null ? argVal : "";
     }
 
     T LoadJson<T>(string globalVar) where T : class
