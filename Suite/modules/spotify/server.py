@@ -310,10 +310,13 @@ def p_chat_command(h, b):
         roles.add("mod")
     if b.get("isSub"):
         roles.add("sub")
+    src = str(b.get("source") or ("voice" if b.get("silent") else "chat"))[:20]
     r = engine.chat(user, f"!{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")))
     if not r["handled"]:
         return {"ok": False, "say": "", "error": "unknown command"}
-    return {"ok": bool(r["ok"]), "say": r["reply"][:400], "error": "" if r["ok"] else r["code"], "code": r["code"]}
+    if cmd.lower() in ("skip", "voteskip", "blocksong"):
+        console_log.info(src, f"{cmd} by {user}: {r['code']}")
+    return {"ok": bool(r["ok"]), "say": "" if b.get("silent") else r["reply"][:400], "error": "" if r["ok"] else r["code"], "code": r["code"]}
 
 
 def p_test_key(h, b):

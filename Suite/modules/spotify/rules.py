@@ -3,7 +3,7 @@ import re
 import time
 
 DEFAULTS = {
-    "requests_open": True,
+    "requests_open": False,      # ships CLOSED: a mod/broadcaster opens requests (!sr open, UI toggle, site)
     "mod_only": False,            # only mods/broadcaster may request
     "sub_only": False,            # only subs/VIPs/mods may request
     "per_user_limit": 2,          # pending requests per viewer

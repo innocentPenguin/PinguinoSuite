@@ -113,7 +113,7 @@ class QueueTests(unittest.TestCase):
 
 class RuleTests(unittest.TestCase):
     def setUp(self):
-        self.s = rules.merged({})
+        self.s = rules.merged({"requests_open": True})
         self.q = Queue()
 
     def ev(self, t, user="v", roles=(), now_uri=None):
@@ -188,7 +188,7 @@ class RuleTests(unittest.TestCase):
     def test_merged_drops_bad_types(self):
         m = rules.merged({"per_user_limit": "x", "requests_open": 0, "blocklist": ["a"], "nope": 1, "queue_max": 9})
         self.assertEqual(m["per_user_limit"], 2)
-        self.assertTrue(m["requests_open"])
+        self.assertFalse(m["requests_open"])
         self.assertEqual(m["queue_max"], 9)
         self.assertNotIn("nope", m)
 
@@ -279,6 +279,7 @@ class EngineTests(unittest.TestCase):
         store.save("config.json", {})
         self.api, self.clock = FakeApi(), Clock()
         self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True})
 
     def test_jit_push_and_track_change(self):
         self.e.add_track(T(2), "end", "bob", "viewer")
@@ -540,6 +541,7 @@ class BridgeTests(unittest.TestCase):
         store.save("config.json", {})
         self.api, self.clock = FakeApi(), Clock()
         self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True})
         self.sent = []
         self.responses = {}
         self.b = Bridge(self.e, self.http, lambda s: None)
@@ -642,12 +644,33 @@ class BridgeTests(unittest.TestCase):
         self.assertNotIn("KEY", json.dumps(self.b.status()))
 
 
+class ClosedByDefaultTests(unittest.TestCase):
+    def test_ships_closed_and_voice_skip_works(self):
+        import server
+        store.save("state.json", {})
+        store.save("config.json", {})
+        api = FakeApi()
+        api.playing = "spotify:track:t1"
+        api.real_queue = ["spotify:track:t2"]
+        server.engine = Engine(api, FakeAuth(), Clock())
+        e = server.engine
+        self.assertFalse(e.settings["requests_open"])
+        e.tick()
+        self.assertEqual(e.chat("v", "!sr song 4", [])["code"], "closed")
+        self.assertFalse(e.overlay() is None or e.site_snapshot()["status"]["requestsOpen"])
+        r = server.p_chat_command(None, {"command": "skip", "role": "broadcaster", "isMod": True, "user": "ivan", "silent": True})
+        self.assertTrue(r["ok"])
+        self.assertEqual((r["say"], r["code"]), ("", "skipped"))
+        self.assertEqual(api.playing, "spotify:track:t2")
+
+
 class ChatCommandTests(unittest.TestCase):
     def test_host_contract(self):
         import server
         store.save("state.json", {})
         api = FakeApi()
         server.engine = Engine(api, FakeAuth(), Clock())
+        server.engine.save_settings({"requests_open": True})
         r = server.p_chat_command(None, {"command": "sr", "args": "song 5", "user": "ann", "display": "Ann", "role": "viewer", "isSub": True})
         self.assertTrue(r["ok"], r)
         self.assertIn("added", r["say"])
