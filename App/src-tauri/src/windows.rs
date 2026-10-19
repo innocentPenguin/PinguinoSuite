@@ -26,6 +26,7 @@ pub struct Saved {
 
 pub struct Layouts {
     map: Mutex<HashMap<String, Saved>>,
+    parked: Mutex<HashMap<String, Instant>>,   // windows just moved off a missing monitor: keep their saved home until the user moves them
     path: PathBuf,
     last_write: Mutex<Instant>,
 }
@@ -33,7 +34,7 @@ pub struct Layouts {
 impl Layouts {
     pub fn load(path: PathBuf) -> Layouts {
         let map = std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        Layouts { map: Mutex::new(map), path, last_write: Mutex::new(Instant::now() - Duration::from_secs(10)) }
+        Layouts { map: Mutex::new(map), parked: Mutex::new(HashMap::new()), path, last_write: Mutex::new(Instant::now() - Duration::from_secs(10)) }
     }
     fn flush(&self, force: bool) {
         let mut last = self.last_write.lock().unwrap();
@@ -68,6 +69,14 @@ pub struct MonitorInfo {
     primary: bool,
 }
 
+#[derive(Deserialize, Clone)]
+pub struct Bounds {
+    pub x: i32,
+    pub y: i32,
+    pub w: u32,
+    pub h: u32,
+}
+
 #[derive(Deserialize)]
 pub struct OpenReq {
     pub label: String,
@@ -84,6 +93,12 @@ pub struct OpenReq {
     pub decorations: Option<bool>,
     /// ignore the remembered geometry
     pub reset: Option<bool>,
+    /// last position the caller remembers (virtual-desktop pixels); used when nothing is remembered here
+    pub bounds: Option<Bounds>,
+    /// false: do not restore / keep geometry for this label (default true)
+    pub remember: Option<bool>,
+    /// true: remembered geometry beats monitor/place (those are only the first-time default). Module pages use this.
+    pub soft: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -184,6 +199,11 @@ fn snapshot(app: &AppHandle, win: &WebviewWindow, open: bool) {
     if s.width < 50 || p.x <= -30000 {
         return; // minimised / off-screen parking: keep the last good geometry
     }
+    if let Some(t) = lay.parked.lock().unwrap().get(win.label()) {
+        if t.elapsed() < Duration::from_millis(1500) {
+            return; // our own move onto a substitute monitor: the saved home stays so it can return when that monitor does
+        }
+    }
     let mon = win.current_monitor().ok().flatten().map(|m| {
         let i = monitors(app).iter().position(|x| x.position() == m.position()).unwrap_or(0);
         mon_name(&m, i)
@@ -206,7 +226,7 @@ fn snapshot(app: &AppHandle, win: &WebviewWindow, open: bool) {
 pub fn open_window(app: AppHandle, req: OpenReq) -> Result<WinInfo, String> {
     let label = clean_label(&req.label)?;
     let lay = app.state::<Layouts>();
-    let prev = lay.map.lock().unwrap().get(&label).cloned();
+    let prev = if req.remember == Some(false) { None } else { lay.map.lock().unwrap().get(&label).cloned() };
     let reset = req.reset.unwrap_or(false);
 
     if let Some(w) = app.get_webview_window(&label) {
@@ -263,14 +283,45 @@ pub fn open_window(app: AppHandle, req: OpenReq) -> Result<WinInfo, String> {
     Ok(info(&app, &label))
 }
 
+fn nearest_monitor(app: &AppHandle, cx: i32, cy: i32) -> Option<Monitor> {
+    monitors(app).into_iter().min_by_key(|m| {
+        let (p, s) = (m.position(), m.size());
+        let (mx, my) = (p.x + (s.width / 2) as i32, p.y + (s.height / 2) as i32);
+        ((mx - cx) as i64).pow(2) + ((my - cy) as i64).pow(2)
+    })
+}
+
 /// Decide where the window goes: an explicit placement, else the remembered geometry (if its monitor still exists), else centred on a monitor.
 fn place(app: &AppHandle, win: &WebviewWindow, req: &OpenReq, prev: Option<&Saved>, reset: bool) {
-    let explicit = req.place.is_some() || req.monitor.is_some();
-    if !explicit && !reset {
+    let remember = req.remember.unwrap_or(true);
+    let explicit = !req.soft.unwrap_or(false) && (req.place.is_some() || req.monitor.is_some());
+    if !explicit && !reset && remember {
         if let Some(p) = prev {
-            if p.w > 0 && on_any_monitor(app, p.x, p.y, p.w, p.h) {
-                let _ = win.set_size(PhysicalSize::new(p.w, p.h));
-                let _ = win.set_position(PhysicalPosition::new(p.x, p.y));
+            if p.w > 0 {
+                if on_any_monitor(app, p.x, p.y, p.w, p.h) {
+                    let _ = win.set_size(PhysicalSize::new(p.w, p.h));
+                    let _ = win.set_position(PhysicalPosition::new(p.x, p.y));
+                    return;
+                }
+                // its monitor is gone: sit on the nearest one, but keep the saved spot so it goes back when that monitor returns
+                if let Some(m) = nearest_monitor(app, p.x + (p.w / 2) as i32, p.y + (p.h / 2) as i32) {
+                    let (mp, ms) = (m.position(), m.size());
+                    let (w, h) = (p.w.min(ms.width), p.h.min(ms.height));
+                    let x = p.x.max(mp.x).min(mp.x + (ms.width - w) as i32);
+                    let y = p.y.max(mp.y).min(mp.y + (ms.height - h) as i32);
+                    let _ = win.set_size(PhysicalSize::new(w, h));
+                    let _ = win.set_position(PhysicalPosition::new(x, y));
+                    app.state::<Layouts>().parked.lock().unwrap().insert(win.label().to_string(), Instant::now());
+                    return;
+                }
+            }
+        }
+    }
+    if !reset {
+        if let Some(bd) = &req.bounds {
+            if bd.w >= 100 && bd.h >= 80 && on_any_monitor(app, bd.x, bd.y, bd.w, bd.h) {
+                let _ = win.set_size(PhysicalSize::new(bd.w, bd.h));
+                let _ = win.set_position(PhysicalPosition::new(bd.x, bd.y));
                 return;
             }
         }
@@ -350,7 +401,7 @@ pub fn list_windows(app: AppHandle) -> Vec<WinInfo> {
 pub fn restore(app: &AppHandle) {
     let lay = app.state::<Layouts>();
     for (label, s) in lay.open_labels() {
-        let req = OpenReq { label, url: s.url.clone(), title: Some(s.title.clone()), width: None, height: None, monitor: None, place: None, always_on_top: Some(s.on_top), decorations: Some(s.decorations), reset: None };
+        let req = OpenReq { label, url: s.url.clone(), title: Some(s.title.clone()), width: None, height: None, monitor: None, place: None, always_on_top: Some(s.on_top), decorations: Some(s.decorations), reset: None, bounds: None, remember: None, soft: None };
         let _ = open_window(app.clone(), req);
     }
 }

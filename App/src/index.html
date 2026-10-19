@@ -423,7 +423,9 @@ function bindPopout(){
    parent.postMessage({pinguino:'window',op:'open',...OpenReq}, '*')  |  {pinguino:'window',op:'close',label}  |  {pinguino:'window',op:'monitors'} (answer: {pinguino:'monitors',monitors}) */
 window.addEventListener('message',async e=>{
   const d=e.data;if(!d||d.pinguino!=='window'||!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(e.origin))return;
-  try{if(d.op==='open'){const{pinguino,op,...req}=d;await PGWin.open(req);loadPopouts()}
+  try{if(d.op==='open'){const{pinguino,op,size,...req}=d;if(size){req.width=size.w;req.height=size.h}if(req.monitor!=null)req.monitor=String(req.monitor);if(req.remember!==false)req.soft=true;await PGWin.open(req);loadPopouts()}   // soft: remembered geometry beats monitor/place
+    else if(d.op==='set'&&d.label&&typeof d.always_on_top==='boolean')await PGWin.onTop(d.label,d.always_on_top);
+    else if(d.op==='list')e.source.postMessage({pinguino:'windows',windows:await PGWin.list()},e.origin);
     else if(d.op==='close')await PGWin.close(d.label);
     else if(d.op==='monitors')e.source.postMessage({pinguino:'monitors',monitors:await PGWin.monitors()},e.origin)}
   catch(err){e.source&&e.source.postMessage({pinguino:'window-error',error:String(err.message||err)},e.origin)}});
