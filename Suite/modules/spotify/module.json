@@ -59,7 +59,7 @@
   "defaults": {
     "enabled": true,
     "start_with_suite": true,
-    "react_to_live": false
+    "react_to_live": true
   },
   "help": {
     "_module": {
@@ -210,5 +210,11 @@
         "route": "console"
       }
     }
+  },
+  "on_live": {
+    "post": "/api/live/auto"
+  },
+  "on_offline": {
+    "post": "/api/live/stop"
   }
 }

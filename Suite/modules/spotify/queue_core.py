@@ -145,6 +145,8 @@ class Queue:
             for i, it in enumerate(self.items):
                 if it["uri"] == uri and it["pushed"]:
                     return self.items.pop(i)
+            if self.items and self.items[0]["uri"] == uri:      # head started although we had un-flagged it (verify raced the change)
+                return self.items.pop(0)
             return None
 
     def add_history(self, entry):

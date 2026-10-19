@@ -6,6 +6,7 @@ Tokens live in <DATA>/spotify/tokens.json; access tokens refresh automatically.
 import base64
 import hashlib
 import json
+import os
 import secrets
 import threading
 import time
@@ -16,9 +17,10 @@ import urllib.request
 import console_log
 import store
 
-AUTH_URL = "https://accounts.spotify.com/authorize"
-TOKEN_URL = "https://accounts.spotify.com/api/token"
-API = "https://api.spotify.com/v1"
+_ACC = os.environ.get("SPOTIFY_ACCOUNTS_BASE", "https://accounts.spotify.com")      # overridable for the offline e2e test
+AUTH_URL = _ACC + "/authorize"
+TOKEN_URL = _ACC + "/api/token"
+API = os.environ.get("SPOTIFY_API_BASE", "https://api.spotify.com/v1")
 SCOPES = ("user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-private "
           "user-read-recently-played")
 

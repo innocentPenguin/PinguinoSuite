@@ -52,3 +52,8 @@ Setup tab > "Website": site URL + `SPOTIFY_API_KEY` (stored write-only in `spoti
 **Key vault:** `SPOTIFY_API_KEY` is declared in `module.json` (`secrets`, test = `POST /api/test-key`) and read from the core vault with the module token (memory only, re-fetched after a 401). The key field in config.json remains an old-style fallback. Manifest also sets `singleton: true` (one instance: the master device).
 
 **Defaults:** requests ship **closed** (`requests_open: false`); a mod opens them with `!sr open`, the UI toggle or the site. Skip works while closed. `/api/chat-command` accepts `silent:true` (ok, empty `say`; implies source "voice") and `source`; skip/blocksong are logged to the Console with that source (e.g. voice).
+
+## Offline end-to-end trial
+`python Suite/modules/spotify/tests/e2e.py` runs the REAL server against a fake Spotify and a fake site (tests/fakes.py, ~148 checks: OAuth PKCE, JIT push, skip, controls, chat/Host/voice commands, rules, approval, stream-safe, error states, token refresh/revocation, site bridge, restart persistence). `tests/demo.py` starts the same fakes with a seeded queue to look at the UI. Test-only env: SPOTIFY_API_BASE, SPOTIFY_ACCOUNTS_BASE, SPOTIFY_TICK_S, SPOTIFY_NO_BROWSER.
+
+**Stream hooks:** `on_offline` closes song requests; `on_live` never opens them. The queue shows an ETA per song and `!sr` replies "plays in ~N min".

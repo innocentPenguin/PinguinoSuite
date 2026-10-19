@@ -12,6 +12,7 @@ from queue_core import Queue, QueueError, new_item
 from spotify_api import ApiError, NotConnected, RateLimited, norm_playback
 
 VERIFY_EVERY_S = 20
+IDLE_UNPUSH_S = 8
 LOG_MAX = 100
 
 
@@ -33,6 +34,7 @@ class Engine:
         self.backoff_until = 0.0
         self.last_error = ""
         self.last_verify = 0.0
+        self.idle_since = None
         self.me = None
         self.devices = []
         self.version = 0               # bumped on any visible change (UI/overlay can poll cheaply)
@@ -115,6 +117,14 @@ class Engine:
     def _apply(self, pb):
         prev = self.pb
         self.pb, self.pb_at = pb, self.clock()
+        if pb and pb["track"]:
+            self.idle_since = None
+        else:
+            self.idle_since = self.idle_since or self.clock()
+            items = self.queue.items
+            if items and items[0]["pushed"] and self.clock() - self.idle_since > IDLE_UNPUSH_S:
+                items[0]["pushed"] = False          # Spotify went idle: a pushed head can no longer play by itself
+                console_log.warn("queue", "Spotify is idle; will not wait for the queued song (use Start queue)")
         cur = pb["track"] if pb and pb["track"] else None
         cur_uri = cur["uri"] if cur else None
         if cur_uri != self.last_uri:
@@ -123,8 +133,9 @@ class Engine:
         self._bump()
 
     def _track_changed(self, prev_track, cur):
-        if prev_track:
-            self.queue.add_history({"uri": prev_track["uri"], "name": prev_track["name"], "artists": prev_track["artists"],
+        if prev_track and not (self.now_item and self.now_item["skip_on_play"]):
+            self.queue.add_history({"uri": prev_track["uri"], "id": prev_track["id"], "name": prev_track["name"], "artists": prev_track["artists"],
+                                    "album": prev_track["album"], "duration_ms": prev_track["duration_ms"], "explicit": prev_track["explicit"],
                                     "art": prev_track["art"], "requester": self.now_item["requester"] if self.now_item else "",
                                     "source": self.now_item["source"] if self.now_item else "spotify", "played_at": self.clock()})
         self.skip_votes.clear()
@@ -135,7 +146,7 @@ class Engine:
         self._write_np(cur)
         self.persist()
         if self.now_item and self.now_item["skip_on_play"]:
-            threading.Thread(target=self._safe, args=(self.api.next,), daemon=True).start()
+            threading.Thread(target=self._safe, args=(self.skip,), daemon=True).start()   # skip() sends our next song first
 
     def _safe(self, fn, *a):
         try:
@@ -163,7 +174,9 @@ class Engine:
             now = self.clock()
             if head["pushed"]:
                 # make sure Spotify still has it (the streamer might have cleared Spotify's queue)
-                if head["uri"] != pb["track"]["uri"] and now - self.last_verify > VERIFY_EVERY_S:
+                remaining = pb["track"]["duration_ms"] - pb["progress_ms"]
+                every = VERIFY_EVERY_S if remaining > self.settings["jit_ms"] + 5000 else 3     # check closely near the end
+                if head["uri"] != pb["track"]["uri"] and now - self.last_verify > every:
                     self.last_verify = now
                     do_verify = True
                 else:
@@ -184,6 +197,8 @@ class Engine:
         q = self.api.queue() or {}
         lst = q.get("queue") or []
         if any(t and t.get("uri") == head["uri"] for t in lst) or len(lst) >= 20:
+            return
+        if (q.get("currently_playing") or {}).get("uri") == head["uri"]:
             return
         with self.lock:
             if self.queue.items and self.queue.items[0]["id"] == head["id"]:
@@ -212,7 +227,7 @@ class Engine:
             if pb and pb["is_playing"]:
                 pb["progress_ms"] += int((now - self.pb_at) * 1000)
             return {"connected": self.auth.connected(), "client_id_set": bool(self.auth.client_id), "playback": pb,
-                    "now_item": copy.deepcopy(self.now_item), "queue": self.queue.view(), "inbox": [i for i in self.inbox if i["status"] == "pending"],
+                    "now_item": copy.deepcopy(self.now_item), "queue": self.queue.view(), "etas": [self.eta_ms(i) for i in range(len(self.queue.items))], "inbox": [i for i in self.inbox if i["status"] == "pending"],
                     "log": self.log[-40:][::-1], "settings": self._own_settings(), "skip_votes": len(self.skip_votes),
                     "error": self.last_error or self.auth.last_error, "me": self.me, "version": self.version}
 
@@ -292,8 +307,17 @@ class Engine:
             self._bump()
             return {"ok": True, "code": "pending", "reply": f"@{user} '{label}' is waiting for approval."}
         item = self.add_track(t, "end", user, "viewer", tier)
-        pos = self.queue.index(item["id"]) + 1
-        return {"ok": True, "code": "added", "reply": f"@{user} added '{label}' (#{pos} in queue).", "item": item["id"]}
+        idx = self.queue.index(item["id"])
+        mins = round(self.eta_ms(idx) / 60000)
+        when = f", plays in ~{mins} min" if mins >= 2 else ""
+        return {"ok": True, "code": "added", "reply": f"@{user} added '{label}' (#{idx + 1} in queue{when}).", "item": item["id"]}
+
+    def eta_ms(self, idx):
+        """Milliseconds until queue item `idx` starts (rest of the current track + everything before it)."""
+        left = 0
+        if self.pb and self.pb["track"]:
+            left = max(0, self.pb["track"]["duration_ms"] - self.pb["progress_ms"])
+        return left + sum(i["duration_ms"] for i in self.queue.items[:idx])
 
     def inbox_decide(self, rid, approve):
         with self.lock:

@@ -60,7 +60,7 @@ class Bridge:
         self.blocklist_version = None
         self._pushed_version = -1
         self._last_push = 0.0
-        self.fail = 0
+        self.f = {"push": 0, "poll": 0}      # consecutive failures per loop (independent back-off)
 
     # ---- config
     def key(self):
@@ -108,6 +108,10 @@ class Bridge:
             self.e.cfg["site"] = c
             self.e._save_cfg()
 
+    @property
+    def fail(self):
+        return max(self.f.values())
+
     # ---- push
     def push_once(self, force=False):
         url, key = self.conf()
@@ -116,14 +120,14 @@ class Bridge:
         snap = self.e.site_snapshot()
         st, js = self.http("POST", url + "/api/spotify/push", key, snap, 10)
         if st == 200:
-            self._ok()
+            self._ok("push")
             self._pushed_version = self.e.version
             v = (js or {}).get("blocklistVersion")
             if v is not None and v != self.blocklist_version:
                 self.pull_blocklist(v)
             return True
         self._auth_failed(st)
-        self._bad(f"push HTTP {st}")
+        self._bad(f"push HTTP {st}", "push")
         return False
 
     def pull_blocklist(self, version=None):
@@ -144,7 +148,8 @@ class Bridge:
                     self.push_once()
             except Exception as ex:
                 console_log.error("site", f"push loop: {type(ex).__name__}: {ex}", dedupe_s=60)
-            self.sleep(0.5 if not self.fail else min(30, 3 * (2 ** self.fail)))
+            f = self.f["push"]
+            self.sleep(0.5 if not f else min(30, 3 * (2 ** (f - 1))))
 
     # ---- poll / events
     def poll_once(self):
@@ -154,9 +159,9 @@ class Bridge:
         st, js = self.http("GET", url + "/api/spotify/poll?wait=1", key, None, 30)
         if st != 200:
             self._auth_failed(st)
-            self._bad(f"poll HTTP {st}")
+            self._bad(f"poll HTTP {st}", "poll")
             return 0
-        self._ok()
+        self._ok("poll")
         events = (js or {}).get("events") or []
         results = []
         for ev in events:
@@ -173,14 +178,17 @@ class Bridge:
         while not self.stop:
             try:
                 if self.conf()[0]:
+                    t0 = time.time()
                     self.poll_once()
+                    if time.time() - t0 < 1.0 and not self.f["poll"]:      # a site that doesn't hold the request open: don't hammer it
+                        self.sleep(1.0)
                 else:
                     self.sleep(3)
                     continue
             except Exception as ex:
                 console_log.error("site", f"poll loop: {type(ex).__name__}: {ex}", dedupe_s=60)
-            if self.fail:
-                self.sleep(min(30, 3 * (2 ** self.fail)))
+            if self.f["poll"]:
+                self.sleep(min(30, 3 * (2 ** (self.f["poll"] - 1))))
 
     def handle_event(self, ev):
         eid, typ = ev.get("id"), ev.get("type")
@@ -236,11 +244,12 @@ class Bridge:
         if st in (401, 403):
             self.vault_key, self.vault_tried = None, 0.0      # key may have been rotated: ask the vault again
 
-    def _ok(self):
-        self.last_ok, self.fail, self.last_error = time.time(), 0, ""
+    def _ok(self, kind):
+        self.last_ok, self.last_error = time.time(), ""
+        self.f[kind] = 0
 
-    def _bad(self, msg):
-        self.fail = min(self.fail + 1, 4)
+    def _bad(self, msg, kind):
+        self.f[kind] = min(self.f[kind] + 1, 5)
         self.last_error = msg
         console_log.warn("site", f"{msg}; backing off", dedupe_s=60)
 

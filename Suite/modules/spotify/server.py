@@ -20,6 +20,7 @@ from spotify_api import ApiError, Auth, Client, NotConnected
 
 ROOT = Path(__file__).parent
 PORT = int(os.environ.get("SPOTIFY_PORT", "8771"))
+FAST_TICK = float(os.environ.get("SPOTIFY_TICK_S", "0"))     # tests only
 REDIRECT = f"http://127.0.0.1:{PORT}/callback"
 START = time.time()
 TAURI_ORIGINS = ("tauri://localhost", "http://tauri.localhost", "https://tauri.localhost")
@@ -210,10 +211,11 @@ def p_setup(h, b):
 
 def p_auth_start(h, b):
     url = auth.begin(REDIRECT)
-    try:
-        webbrowser.open(url)
-    except Exception:
-        pass
+    if not os.environ.get("SPOTIFY_NO_BROWSER"):
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
     return {"ok": True, "url": url}
 
 
@@ -337,6 +339,17 @@ def p_site(h, b):
     return {"ok": True, **bridge.status()}
 
 
+def p_live_auto(h, b):
+    return {"ok": True, "requests_open": engine.settings["requests_open"]}      # going live never opens requests by itself
+
+
+def p_live_stop(h, b):
+    if engine.settings["requests_open"]:
+        engine.save_settings({"requests_open": False})
+        console_log.info("server", "stream ended: song requests closed")
+    return {"ok": True}
+
+
 def p_block(h, b):
     v = str(b.get("value", "")).strip().lower()
     if not v:
@@ -349,7 +362,7 @@ def p_block(h, b):
 POST = {"/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
         "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
-        "/api/control": p_control, "/api/chat": p_chat, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
+        "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
 
 
 def loop():
@@ -365,7 +378,7 @@ def loop():
         except Exception as e:
             console_log.error("engine", f"tick crashed: {type(e).__name__}: {e}", dedupe_s=30)
             near = False
-        time.sleep(1.0 if near else 2.0)
+        time.sleep(FAST_TICK or (1.0 if near else 2.0))
 
 
 def main():
