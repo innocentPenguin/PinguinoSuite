@@ -76,7 +76,7 @@ def poll_loop():
                 console_log.info("events", "connected to the Host activity feed")
             feed.update(ok=True, err="", last=time.time())
         except Exception as e:
-            if feed["ok"] is not False:
+            if feed["ok"] is not False and time.time() - START > 90:        # the Host is usually still starting right after the Suite: stay quiet for 90 s
                 console_log.warn("events", f"Host activity feed unavailable: {str(e)[:120]}", dedupe_s=300)
             feed.update(ok=False, err=str(e)[:120], last=time.time())
         time.sleep(2.0)
