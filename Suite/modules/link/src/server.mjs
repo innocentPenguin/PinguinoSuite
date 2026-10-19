@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import * as ts from './tailscale.mjs';
-import { runRequests, obsState, forgetState } from './obs.mjs';
+import { runRequests, obsState, forgetState, diagnoseObs } from './obs.mjs';
 import { log, setLevel } from './log.mjs';
 import { prestream } from './prestream.mjs';
 import { createMesh } from './mesh.mjs';
@@ -190,6 +190,10 @@ export async function serve(cfg) {
         const n = macros.importAll(cfg, d.macros || []);
         act('settings', 'import', true, `${res.changed.length} settings, ${n} macros`); log('info', 'settings', `imported ${res.changed.length} settings and ${n} macros`);
         return json(200, { ok: true, settings: res.changed.length, macros: n });
+      }
+      if (req.method === 'POST' && req.url === '/api/test-obs') {      // Test button next to OBS_WS_PASSWORD in the key vault
+        const d = await diagnoseObs(await obsConn(cfg));
+        return json(d.ok ? 200 : 424, d.ok ? { ok: true, detail: d.detail } : { error: d.detail, code: d.code });
       }
       if (req.method === 'GET' && req.url === '/api/obs') {            // read-only OBS state for the page
         if (cfg.role !== 'hub') return json(200, { connected: false, role: cfg.role, error: 'this device is a client; OBS runs on the hub' });

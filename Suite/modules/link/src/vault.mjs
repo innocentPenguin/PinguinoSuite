@@ -23,5 +23,5 @@ export async function secret(name) {
 /** OBS connection settings with the password from the vault when it is set there, else from the config file. */
 export async function obsConn(cfg) {
   const v = await secret('OBS_WS_PASSWORD');
-  return v ? { ...cfg.obs, password: v } : cfg.obs;
+  return v ? { ...cfg.obs, password: v, src: 'the key vault' } : { ...cfg.obs, src: cfg.obs.password ? 'the Link config file' : 'none' };
 }

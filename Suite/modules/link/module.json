@@ -14,6 +14,7 @@
       "name": "OBS_WS_PASSWORD",
       "label": "OBS WebSocket password",
       "required": false,
+      "test": "/api/test-obs",
       "help": {
         "title": "OBS WebSocket password",
         "summary": "The password Link uses to talk to OBS on this PC. It is stored in the key vault, never in a file or log.",
@@ -51,7 +52,7 @@
         "Make sure OBS is running.",
         "In OBS open Tools > WebSocket Server Settings and tick Enable WebSocket server (port 4455).",
         "If Authentication is on, store its password in the key vault as OBS_WS_PASSWORD (Set / Rotate).",
-        "Green means Link connected and logged in. Red 'cannot reach OBS' = OBS closed or the server is off. 'password is wrong' = the vault key does not match OBS.",
+        "The check says exactly one thing: OBS is not running / OBS asks for a password but none is stored / OBS rejected the stored password / OK. Press Test next to the key in Integrations > Key vault to re-run just this check.",
         "Do not forward port 4455 on your router; OBS is only reachable from this PC."
       ],
       "fix": { "label": "Enter the password", "route": "integrations", "focus": "OBS_WS_PASSWORD" }

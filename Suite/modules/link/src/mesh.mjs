@@ -111,7 +111,7 @@ export function createMesh(cfg, { port }) {
   /** Items from the hub's own pre-stream report (client view), prefixed so they read as "Hub: ...". */
   async function hubPrestream(name) {
     const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
-    if (!p) return [{ id: 'hub-obs', label: 'OBS on the hub', status: 'warn', detail: `pair with "${name}" to check OBS from this device` }];
+    if (!p) return [{ id: 'hub-obs', label: 'OBS on the hub', status: 'warn', detail: `no hub is paired. If this PC runs OBS and is the only streaming PC: Link page > Settings > Role > hub > confirm. Otherwise pair with "${name}" (needs Tailscale).` }];
     try {
       const res = await fetch(url(p, '/api/prestream'), { signal: AbortSignal.timeout(5000) });
       if (!res.ok) throw new Error(`hub answered ${res.status}`);

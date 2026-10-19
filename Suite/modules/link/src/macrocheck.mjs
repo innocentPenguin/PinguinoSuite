@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startFakeObs } from './fakeobs.mjs';
+import { diagnoseObs } from './obs.mjs';
 
 const cli = fileURLToPath(new URL('./cli.mjs', import.meta.url));
 const results = [];
@@ -89,6 +90,15 @@ try {
   const miss = await good.call('POST', '/api/macro/brb');
   check('macro with a missing scene fails with OBS comment', miss.status === 500 && /scene/i.test(miss.json.error || ''), JSON.stringify(miss));
 
+  const dn = await diagnoseObs({ host: '127.0.0.1', port: 1, password: '', src: 'none' });
+  check('diagnose: OBS not running says so and what to do', !dn.ok && dn.code === 'not-running' && /Start OBS/.test(dn.detail), dn.detail);
+  const dnp = await diagnoseObs({ host: '127.0.0.1', port: obsPort, password: '', src: 'none' });
+  check('diagnose: OBS up but no password stored', dnp.code === 'no-password' && /OBS_WS_PASSWORD/.test(dnp.detail), dnp.detail);
+  const dbp = await diagnoseObs({ host: '127.0.0.1', port: obsPort, password: 'nope', src: 'the key vault' });
+  check('diagnose: OBS up but wrong password names where it came from', dbp.code === 'bad-password' && /the key vault/.test(dbp.detail), dbp.detail);
+  check('Test button endpoint: pass when good', (await good.call('POST', '/api/test-obs')).status === 200);
+  const tb = await bad.call('POST', '/api/test-obs');
+  check('Test button endpoint: fail with the one-step fix', tb.status === 424 && /OBS_WS_PASSWORD/.test(tb.json.error || ''), JSON.stringify(tb));
   const b = await bad.call('GET', '/api/obs');
   check('wrong OBS password is reported clearly', b.json.connected === false && /password is wrong/.test(b.json.error || ''), JSON.stringify(b.json));
   const bp = (await bad.call('GET', '/api/prestream')).json.items.find(i => i.id === 'obs');

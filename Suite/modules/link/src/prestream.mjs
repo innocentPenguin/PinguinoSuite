@@ -1,7 +1,7 @@
 // Pre-stream readiness checks for the Suite console: [{id,label,status: pass|warn|fail, detail}]. No secrets in output.
 import * as ts from './tailscale.mjs';
 import { obsConn } from './vault.mjs';
-import { getData } from './obs.mjs';
+import { getData, diagnoseObs } from './obs.mjs';
 
 const item = (id, label, status, detail) => ({ id, label, status, detail });
 
@@ -10,8 +10,10 @@ export async function prestream(cfg) {
   if (cfg.role !== 'client' && (on('obs') || on('macros'))) {
   // 1. OBS WebSocket reachable + authenticated, and the scenes/inputs the macros use exist.
   try {
-    const [, sc, inp] = await getData(await obsConn(cfg), ['GetVersion', 'GetSceneList', 'GetInputList']);
-    out.push(item('obs', 'OBS WebSocket', 'pass', `reachable at ${cfg.obs.host}:${cfg.obs.port}`));
+    const conn = await obsConn(cfg), diag = await diagnoseObs(conn);
+    if (!diag.ok) throw new Error(diag.detail);
+    const [, sc, inp] = await getData(conn, ['GetVersion', 'GetSceneList', 'GetInputList']);
+    out.push(item('obs', 'OBS WebSocket', 'pass', diag.detail));
     const scenes = new Set((sc?.scenes || []).map(s => s.sceneName));
     const inputs = new Set((inp?.inputs || []).map(i => i.inputName));
     const missing = [];
@@ -20,7 +22,7 @@ export async function prestream(cfg) {
       if (s.data?.inputName && !inputs.has(s.data.inputName)) missing.push(`${name}: input "${s.data.inputName}"`);
     }
     out.push(missing.length
-      ? item('macros', 'OBS macro targets', 'fail', `not found in OBS: ${missing.join('; ')}. Edit macros in the Link config.`)
+      ? item('macros', 'OBS macro targets', 'fail', `not found in OBS: ${missing.join('; ')}. Fix: Link page > Edit macros (pick the real scene/input names), then press Check.`)
       : item('macros', 'OBS macro targets', 'pass', `${Object.keys(cfg.macros).length} macros match OBS scenes/inputs`));
   } catch (e) {
     out.push(item('obs', 'OBS WebSocket', 'fail', e.message));
@@ -43,6 +45,6 @@ export async function prestream(cfg) {
   } catch (e) { out.push(item('tailscale', 'Tailscale', 'warn', e.message)); }
   // 3. Role sanity for a streaming PC.
   out.push(cfg.role === 'hub' ? item('role', 'Role', 'pass', 'hub (this PC controls OBS)')
-    : item('role', 'Role', 'warn', 'client: macros are forwarded to the hub, not run on this PC'));
+    : item('role', 'Role', 'warn', `client: macros are forwarded to the hub "${cfg.hub}", not run on this PC. If this PC runs OBS and is the only streaming PC: Link page > Settings > Role > hub > confirm.`));
   return out;
 }

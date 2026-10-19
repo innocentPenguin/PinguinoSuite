@@ -1,5 +1,6 @@
 // Minimal obs-websocket v5 client (OBS 28+ has it built in). Uses Node's global WebSocket.
 import crypto from 'node:crypto';
+import net from 'node:net';
 
 const sha = s => crypto.createHash('sha256').update(s).digest('base64');
 
@@ -76,3 +77,25 @@ export async function obsState(conn, { fresh = false } = {}) {
 
 /** Forget the cached state (call after anything that changes OBS). */
 export const forgetState = () => { cache = { at: 0, key: '', v: null }; };
+
+/** One true sentence about OBS: not running / no password stored / wrong password / fine. Used by pre-stream and the key's Test button. */
+export async function diagnoseObs(conn) {
+  const addr = `${conn.host}:${conn.port}`;
+  const open = await new Promise(res => {
+    const sock = net.connect({ host: conn.host, port: conn.port });
+    const done = v => { sock.destroy(); res(v); };
+    sock.setTimeout(1500, () => done(false)); sock.once('connect', () => done(true)); sock.once('error', () => done(false));
+  });
+  if (!open) return { ok: false, code: 'not-running', detail: `OBS is not running, or its WebSocket server is off (nothing is listening on ${addr}). Start OBS, then turn on Tools > WebSocket Server Settings > Enable WebSocket server.` };
+  try {
+    const [v] = await getData(conn, ['GetVersion'], 4000);
+    return { ok: true, code: 'ok', detail: `OBS ${v.obsVersion || ''} is running at ${addr} and accepted the password`.replace('OBS  ', 'OBS ') };
+  } catch (e) {
+    if (/password is wrong/.test(e.message)) {
+      return conn.src === 'none'
+        ? { ok: false, code: 'no-password', detail: 'OBS is running and asks for a password, but none is stored. Enter it in Integrations > Key vault > OBS_WS_PASSWORD (OBS: Tools > WebSocket Server Settings > Show Connect Info).' }
+        : { ok: false, code: 'bad-password', detail: `OBS is running but rejected the password stored in ${conn.src}. Re-enter it in Integrations > Key vault > OBS_WS_PASSWORD (OBS: Tools > WebSocket Server Settings > Show Connect Info).` };
+    }
+    return { ok: false, code: 'error', detail: e.message };
+  }
+}
