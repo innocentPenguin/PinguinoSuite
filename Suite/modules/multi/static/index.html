@@ -2,8 +2,8 @@
 <html lang="en"><head><meta charset="utf-8"><title>PinguinoMulti</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root{--bg:#14161b;--fg:#e8eaf0;--mut:#8b91a1;--card:#1e222b;--line:#2b303c;--hi:#ff5a5f;--med:#f5a623;--low:#4aa3ff;--ok:#3ecf8e;--fs:14px;--sp:4px}
-:root[data-theme=light]{--bg:#f4f5f8;--fg:#1a1d24;--mut:#667;--card:#fff;--line:#d8dbe3}
+:root{--bg:#09090a;--fg:#ececef;--mut:#8f9099;--card:#131315;--line:#26262a;--accent:#ff9900;--on-accent:#1a1000;--hi:#ff5a5f;--med:#ffc94d;--low:#8f9099;--ok:#3ecf8e;--fs:14px;--sp:4px}
+:root[data-theme=light]{--bg:#f6f4f0;--fg:#1a1a1c;--mut:#6b6b70;--card:#fff;--line:#e0dcd4;--accent:#e68a00}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:var(--fs)/1.35 system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
 header{display:flex;gap:8px;align-items:center;padding:4px 8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--mut);-webkit-app-region:drag}
@@ -19,21 +19,22 @@ header b{color:var(--fg)} header button,header select{-webkit-app-region:no-drag
 .card.high{border-left-color:var(--hi)}.card.answered{border-left-color:var(--ok);opacity:.6}.card.missed{border-left-color:#777}
 .card .hd{display:flex;gap:6px;align-items:center;font-size:.85em;color:var(--mut)}.card .hd b{color:var(--fg)}
 .card .tx{margin:4px 0;font-size:1.05em}.why{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
-.chip{font-size:.72em;background:var(--line);border-radius:10px;padding:1px 7px}.chip.neg{background:#5a2a2a}
+.chip{font-size:.72em;background:var(--line);border-radius:10px;padding:1px 7px}.chip.neg{background:#3a1b1b}
 .act{display:flex;gap:4px;flex-wrap:wrap}
 button{background:var(--line);color:var(--fg);border:0;border-radius:4px;padding:3px 8px;cursor:pointer;font:inherit;font-size:.85em}
-button:hover{filter:brightness(1.25)}button.p{background:#2f6fdb}
+button:hover{filter:brightness(1.25)}button.p{background:var(--accent);color:var(--on-accent);font-weight:600}
+input:focus,textarea:focus,select:focus{outline:1px solid var(--accent);border-color:var(--accent)}
 input,textarea,select{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:5px;font:inherit}
 .compose{padding:8px;display:flex;flex-direction:column;gap:6px;flex:1}.compose textarea{flex:1;resize:none}
 .row{display:flex;gap:6px;align-items:center}
 .status{padding:8px;overflow:auto}.status div{padding:4px 0;border-bottom:1px solid var(--line)}
 h4{margin:6px 8px;font-size:.8em;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
 .empty{color:var(--mut);padding:12px;text-align:center}
-.warn{background:#4a3a14;color:#ffd98a;padding:4px 8px;font-size:.8em}
+.warn{background:#2a2008;color:#ffd98a;padding:4px 8px;font-size:.8em}
 body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;height:calc(var(--fs)*1.5 + var(--sp)*2)}
 .launch{padding:10px 14px;overflow:auto;flex:1;max-width:900px;line-height:1.45}
 .launch h2{margin:0 0 4px}.launch h3{margin:18px 0 6px;font-size:1.05em;display:flex;align-items:center;gap:8px}
-.launch .n{background:#2f6fdb;color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.8em}
+.launch .n{background:var(--accent);color:var(--on-accent);border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.8em}
 .mut{color:var(--mut)}.intro{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px}.intro p{margin:6px 0}
 .hlp{display:inline-flex;width:15px;height:15px;border-radius:50%;background:var(--line);color:var(--mut);font-size:.7em;align-items:center;justify-content:center;cursor:help}
 .pcard{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:6px 0;padding:8px 12px}.pcard summary{cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -50,7 +51,7 @@ body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:h
 .chk-row{padding:4px 0}.keys{margin-top:18px;font-size:.85em}
 .msg.bot{opacity:.65}.msg.bot .u{font-style:italic}
 .cbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:5px 8px;border-bottom:1px solid var(--line)}.grow{flex:1}
-.chip2{display:inline-flex;gap:5px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:.78em}a.chip2{color:var(--fg);text-decoration:none}.chip2.off{opacity:.4;text-decoration:line-through}.chip2.on{background:#2f6fdb;border-color:#2f6fdb}
+.chip2{display:inline-flex;gap:5px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:.78em}a.chip2{color:var(--fg);text-decoration:none}.chip2.off{opacity:.4;text-decoration:line-through}.chip2.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .cstrip{padding:4px 8px;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid var(--line);max-height:36%;overflow:auto}
 .cc{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--med);border-radius:6px;padding:5px 8px;font-size:.92em}.cc.high{border-left-color:var(--hi)}.cc .ch{display:flex;gap:6px;color:var(--mut);align-items:center}.cc .ch b{color:var(--fg)}
 .cnone{padding:2px 0;font-size:.85em}.lnk{background:none;color:var(--mut);text-decoration:underline;padding:0;align-self:flex-start}
@@ -66,6 +67,7 @@ body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:h
 body.popout{background:transparent!important;height:auto;min-height:100vh;justify-content:flex-end}
 .pfeed{display:flex;flex-direction:column;justify-content:flex-end;padding:8px;color:#fff;text-shadow:0 1px 3px #000,0 0 2px #000;font-size:var(--fs)}
 .pm{padding:2px 0;word-break:break-word}.pm b{margin-right:6px}
+.tile:hover,.pcard[open]{border-color:var(--accent)}.intro{border-left:3px solid var(--accent)}.launch h2{color:var(--accent)}a{color:var(--accent)}header b{color:var(--accent)}
 </style></head><body>
 <header id="hdr"></header><div id="body" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
 <script src="/assets/launcher.js"></script>

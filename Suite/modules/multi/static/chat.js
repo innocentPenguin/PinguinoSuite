@@ -19,8 +19,8 @@ const CF = (() => {
 let chatTarget = null, searchTerm = '', searchSeq = 0;
 
 // --- rendering helpers ---------------------------------------------------------------
-const BADGES = {broadcaster: ['HOST', '#e0455b'], moderator: ['MOD', '#2fa84f'], vip: ['VIP', '#d94fa0'], subscriber: ['SUB', '#8a5cf6'],
-  founder: ['SUB', '#8a5cf6'], partner: ['✓', '#8a5cf6'], staff: ['STAFF', '#999'], 'sub-gifter': ['GIFT', '#8a5cf6'], 'bits': ['BITS', '#b58900']};
+const BADGES = {broadcaster: ['HOST', '#e0455b'], moderator: ['MOD', '#2fa84f'], vip: ['VIP', '#d94fa0'], subscriber: ['SUB', '#b36b00'],
+  founder: ['SUB', '#b36b00'], partner: ['✓', '#b36b00'], staff: ['STAFF', '#999'], 'sub-gifter': ['GIFT', '#b36b00'], 'bits': ['BITS', '#b58900']};
 const badgeHtml = m => (m.badges || []).filter(b => BADGES[b]).slice(0, 4).map(b => `<span class="bd" style="background:${BADGES[b][1]}" title="${esc(b)}">${BADGES[b][0]}</span>`).join('');
 const emoteUrl = id => `https://static-cdn.jtvnimg.com/emoticons/v2/${encodeURIComponent(id)}/default/dark/1.0`;
 function bodyHtml(m) {
