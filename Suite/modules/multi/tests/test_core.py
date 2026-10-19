@@ -257,3 +257,45 @@ def test_no_monitors_passthrough():
 
 def test_profiles_defined():
     assert {"Streaming", "Gaming", "Editing", "IRL", "Minimal", "Full Monitoring"} <= set(win.PROFILE_DEFAULTS)
+
+
+def test_checks_report_without_tokens(monkeypatch):
+    import checks
+    import secrets_store
+
+    class R:
+        status_code = 302
+        headers = {"location": "https://id.twitch.tv/x?scope=user%3Aread%3Achat+user%3Awrite%3Achat"}
+
+    monkeypatch.setattr(checks.requests, "get", lambda *a, **k: R())
+    monkeypatch.setattr(checks.requests, "post", lambda *a, **k: type("P", (), {"status_code": 400})())
+    monkeypatch.setattr(secrets_store, "get", lambda n, d=None: None)
+
+    class TW:
+        state = {"status": "needs_auth", "detail": "x"}
+    res = {c["id"]: c for c in checks.run(TW())}
+    assert res["connect"]["ok"] and res["refresh"]["ok"]
+    assert not res["token"]["ok"] and res["token"]["fix"]
+    assert not res["connector"]["ok"]
+    assert "access_token" not in str(res)
+
+
+def test_checks_scope_missing(monkeypatch):
+    import checks
+    import secrets_store
+
+    class R:
+        status_code = 200
+        headers = {"location": "x"}
+
+    monkeypatch.setattr(checks.requests, "get", lambda *a, **k: R())
+    monkeypatch.setattr(checks.requests, "post", lambda *a, **k: type("P", (), {"status_code": 400})())
+    monkeypatch.setattr(secrets_store, "get", lambda n, d=None: {"access_token": "SECRET"} if n == "twitch_tokens" else None)
+
+    class TW:
+        state = {"status": "connected", "detail": ""}
+        def validate(self, t): return {"login": "me", "scopes": ["user:read:chat"]}
+    res = {c["id"]: c for c in checks.run(TW())}
+    assert res["valid"]["ok"] and not res["scopes"]["ok"]
+    assert "user:write:chat" in res["scopes"]["detail"]
+    assert "SECRET" not in str(res)

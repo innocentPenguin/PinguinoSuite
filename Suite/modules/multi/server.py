@@ -3,6 +3,7 @@ Run: run.bat   (UI at http://127.0.0.1:8766)"""
 import asyncio
 import json
 import time
+import webbrowser
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -12,6 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 import cards as cards_mod
+import checks
 import config
 import secrets_store
 import windows as win
@@ -338,6 +340,18 @@ async def auth_token(request: Request):
     if tw:
         tw.state["detail"] = "token saved"
     return {"ok": True}
+
+
+@app.get("/api/checks")
+async def api_checks():
+    return {"checks": await asyncio.to_thread(checks.run, connectors.get("twitch"))}
+
+
+@app.post("/api/open-connect")
+def open_connect():
+    """Open the site's Connect URL in the user's default browser (works from embedded/native shells too)."""
+    url = checks.site_url() + "/auth/twitch/login?multi=1"
+    return {"ok": bool(webbrowser.open(url)), "url": url}
 
 
 @app.post("/auth/disconnect")

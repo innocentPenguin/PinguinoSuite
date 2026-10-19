@@ -19,5 +19,8 @@
 ## Site "Connect Multi" (built, site commit; needs deploy + live test)
 Start: owner logged in on the site opens `/auth/twitch/login?multi=1` (broadcaster+staff only, else `/?multi=denied`). Scopes `user:read:chat user:write:chat`. It reuses the existing Twitch redirect URI, so **no new Twitch app redirect is needed**. After approval the site redirects to `http://127.0.0.1:8766/auth/callback#access_token&refresh_token&client_id&site_url` (fragment, nothing stored on the site). Refresh: `POST {site}/api/multi/refresh {refresh_token}` -> `{access_token, refresh_token, client_id}`; rejects any Origin header, and refuses tokens not belonging to the owner. The Multi launcher has a Connect Twitch link and a Disconnect button.
 
+## Connection checks (in the launcher: "Run checks")
+`GET /api/checks` -> `{checks:[{id,label,ok,detail,fix}]}`: keyring, site reachable, Connect link asks for `user:read:chat user:write:chat`, `/api/multi/refresh` deployed, token saved, token valid, scopes, chat connection. Never returns token values. `POST /api/open-connect` opens the Connect URL in the default browser (works from embedded/native shells).
+
 ## Bots (planned, M4)
 Multi publishes `multi.claim {messageId,userId,ttl}`; Router (`Shared\PinguinoBots.cs.txt` + `sync-shared.mjs`) holds PinguinoChat while a claim is active (default off). Loop guard: Multi tags its sent ids and ignores `bot_accounts`.

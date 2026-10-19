@@ -160,7 +160,7 @@ async function renderStatus() {
 }
 async function renderLauncher() {
   const [ws, pf, st] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status')]);
-  $('#body').innerHTML = `<div class="status"><h4>Twitch</h4><div class="act"><a href="${esc(st.twitch_connect_url)}" target="_blank" rel="noopener"><button type="button">Connect Twitch (log in to the site as the owner first)</button></a> <button id="dc">Disconnect</button></div><h4>Profiles</h4><div class="act">${pf.builtin.concat(pf.saved.filter(p => !pf.builtin.includes(p))).map(p => `<button data-p="${esc(p)}">${esc(p)}</button>`).join('')}</div>
+  $('#body').innerHTML = `<div class="status"><h4>Twitch</h4><div class="act"><a href="${esc(st.twitch_connect_url)}" target="_blank" rel="noopener"><button type="button">Connect Twitch (log in to the site as the owner first)</button></a> <button id="oc">Open in my browser</button> <button id="ck">Run checks</button> <button id="dc">Disconnect</button></div><div id="checks"><small>Connect link: ${esc(st.twitch_connect_url)}</small></div><h4>Profiles</h4><div class="act">${pf.builtin.concat(pf.saved.filter(p => !pf.builtin.includes(p))).map(p => `<button data-p="${esc(p)}">${esc(p)}</button>`).join('')}</div>
   <h4>Add window</h4><div class="act">${['unified', 'priority', 'missed', 'composer', 'status', 'first'].map(t => `<button data-t="${t}">+ ${t}</button>`).join('')}</div>
   <h4>Windows</h4>${ws.map(w => `<div>${esc(w.type)} ${esc(w.id)} <button data-l="${w.id}">Open</button> <button data-x="${w.id}">Delete</button></div>`).join('') || '<div class="empty">None. Pick a profile.</div>'}
   <div><button id="rs">Restore all</button> <button id="sp">Save current as profile</button></div></div>`;
@@ -171,6 +171,9 @@ document.addEventListener('click', async e => {
   else if (t.dataset.t) { const w = await api('/api/windows', {b: {type: t.dataset.t}}); await api('/api/windows/' + w.id + '/launch'); }
   else if (t.dataset.l) await api('/api/windows/' + t.dataset.l + '/launch');
   else if (t.dataset.x) await api('/api/windows/' + t.dataset.x, {m: 'DELETE'});
+  else if (t.id === 'oc') { await api('/api/open-connect', {b: {}}); return; }
+  else if (t.id === 'ck') { const box = $('#checks'); box.textContent = 'Checking...'; const r = await api('/api/checks');
+    box.innerHTML = r.checks.map(c => `<div><span class="dot ${c.ok ? 'connected' : 'error'}"></span> <b>${esc(c.label)}</b> ${esc(c.detail)}${c.ok ? '' : `<br><small>Fix: ${esc(c.fix)}</small>`}</div>`).join(''); return; }
   else if (t.id === 'dc') await api('/auth/disconnect', {b: {}});
   else if (t.id === 'rs') await api('/api/windows/restore');
   else if (t.id === 'sp') { const n = prompt('Profile name'); if (n) await api('/api/profiles/' + encodeURIComponent(n) + '/save'); }
