@@ -167,6 +167,10 @@ CATALOG["personalize"] = H("Personalize", "Make the Suite yours: theme and accen
                            ["Theme: pick a look, then optionally a custom accent colour. Module pages follow it.", "Menu order / Dashboard: use the arrows to reorder and Hide to remove things you do not use.", "Sounds are off by default; turn them on, pick a tone, and press Test next to each event.",
                             "Saved looks: save the current setup under a name; Apply it later, or choose looks that switch automatically when you go live / offline.", "Export to file moves your look to another PC; Reset everything goes back to the defaults; Undo reverts the last change."],
                            fix={"label": "Open Personalize", "route": "personalize"})
+CATALOG["comm"] = H("PenguinComm", "One place for talking with your bots: Listen (the microphone: you speaking to the bots) and Speak (PinguinoVoice: the bots speaking out loud). Two sections, one page.",
+                    ["Choose Both, Listen or Speak at the top. Each section has its own on/off switch (unlock the padlock first), Restart and help.", "Listen hears you, turns it into text and runs voice commands (Voice Studio button). It is always on, live or not.",
+                     "Speak is the bot voice: what the bots say, which voice, volume and when. Its own settings are in the Speak section.", "A yellow or red item at the top is a pre-stream problem for Listen or Speak: click it for the fix."],
+                    fix={"label": "Open PenguinComm", "route": "comm"})
 CATALOG["help"] = H("How Help works", "Every ? button and every red / yellow row opens the same kind of panel: what it means, the steps to fix or set it up, and a button to the place to do it.",
                     ["Click any pre-stream row, Integrations row, Console warning / error, module name or key row.", "Green items have instructions too, for setting them up again.", "This page lists all topics."])
 ALIASES["voice"] = "voice_commands"

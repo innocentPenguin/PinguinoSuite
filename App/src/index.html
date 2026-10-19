@@ -152,6 +152,10 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 .swatch .sp1{height:34px;border-radius:8px;margin-bottom:6px;display:flex;overflow:hidden;border:1px solid var(--line)}.swatch .sp1 i{flex:1}
 .prow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}.prow:last-child{border:0}.prow .grow{flex:1;min-width:0}.prow.off .grow{opacity:.45}
 .pnote{color:var(--faint);font-size:12.5px;margin:2px 0 8px}input[type=range]{accent-color:var(--accent);width:150px}input[type=color]{width:38px;height:28px;padding:0;border:1px solid var(--line2);border-radius:8px;background:transparent;cursor:pointer}
+.commgrid{display:grid;gap:12px;grid-template-columns:1fr}.commgrid.both{grid-template-columns:1fr 1fr}.commgrid section{display:flex;flex-direction:column;min-width:0;gap:8px}
+.cshead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}.cshead .grow{flex:1;min-width:140px}
+.csbody iframe{width:100%;height:calc(100vh - 250px);min-height:320px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}.commsum{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+@media(max-width:1100px){.commgrid.both{grid-template-columns:1fr}}
 .minirow{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}.minirow:last-child{border:0}.minirow .grow{flex:1;min-width:0}
 .col2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:1000px){.col2{grid-template-columns:1fr}}
@@ -226,11 +230,11 @@ pages.dashboard=()=>{
   B.t_modules=tile('Modules',run+'/'+tot,down.length?esc(down.map(m=>m.name).join(', '))+' not running':'all healthy',down.length?'warn':'ok');
   B.t_prestream=tile('Pre-stream',pr?(pr.fail?pr.fail+' fail':pr.warn?pr.warn+' warn':'All ok'):'—',pr?`${pr.pass} ok · ${pr.warn} warn · ${pr.fail} fail`:'not run yet',pr?(pr.fail?'bad':pr.warn?'warn':'ok'):'','console');
   B.t_errors=PF.thresholds.tile_errors_hide_zero&&!errs?'':tile('Errors ('+PF.thresholds.errors_min+' min)',errs,errs?'open the Console':'clean',errs?'bad':'ok','console');
-  B.listen=`<div class="card"><div class="row"><h3 style="margin:0">PinguinoListen</h3>${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}<span class="sm faint sp">${stats.total||0} lines · ${(stats.corrected||0)+(stats.approved||0)} verified${stats.to_review?` · <span style="color:var(--warn)">${stats.to_review} to review</span>`:''}</span></div>
+  B.listen=`<div class="card"><div class="row"><h3 style="margin:0">PenguinComm · Listen</h3>${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}<span class="sm faint sp">${stats.total||0} lines · ${(stats.corrected||0)+(stats.approved||0)} verified${stats.to_review?` · <span style="color:var(--warn)">${stats.to_review} to review</span>`:''}</span></div>
         <div style="margin-top:8px">${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim sm">${lm?.state==='running'?'Not listening right now: the mic starts with the Suite, so check the microphone in Listen (Console shows why).':'PinguinoListen is not running.'}</div>`}</div>
-        <div class="row" style="margin-top:10px"><button class="sm" data-go="m:listen">Open Listen</button><button class="sm" data-go="voice">Voice Studio</button>${st?.listening?'':'<button id="d-listen" class="pri sm">Start listening</button>'}</div></div>`;
+        <div class="row" style="margin-top:10px"><button class="sm" data-go="comm">Open PenguinComm</button><button class="sm" data-go="voice">Voice Studio</button>${st?.listening?'':'<button id="d-listen" class="pri sm">Start listening</button>'}</div></div>`;
   B.activity=`<div class="card"><h3>Activity</h3><div class="evt" style="max-height:260px;overflow:auto">${S.events.slice(-14).reverse().map(e=>`<div>${new Date(e.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} <b class="${e.type==='live'?'lv':e.type==='hook'?'hk':''}">${esc(e.type)}</b> ${esc(e.id||e.state||e.title||'')}</div>`).join('')||'<span class="faint">Nothing yet</span>'}</div></div>`;
-  B.modules=`<div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(m.name)}</b> <span class="sm faint">${esc(m.state)}</span></div>${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}${modSwitch(m)}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>`;
+  B.modules=`<div class="card"><h3>Modules</h3>${S.modules.map(m=>`<div class="minirow"><span class="dot ${m.state}" style="margin:0"></span><div class="grow"><b>${esc(dispName(m))}</b> <span class="sm faint">${esc(m.state)}</span></div>${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}${modSwitch(m)}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button></div>`).join('')}</div>`;
   B.prestream=C.pr&&C.pr.ts?`<div class="card"><div class="row"><h3 style="margin:0">Pre-stream</h3><button class="sm sp" id="d-prerun">Run now</button><button class="sm" data-go="console">Details</button></div><div style="margin-top:6px">${C.pr.items.filter(i=>i.status!=='pass').slice(0,6).map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<div class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><b>${esc(i.module)}</b><span class="sm">${esc(i.label)}</span></div>`}).join('')||'<span class="sm faint">Everything passed.</span>'}</div></div>`:'';
   return dashLayout(B)};
 
@@ -245,6 +249,15 @@ function deviceStrip(){
 /* A module's `ui` may be one block or an array; each block is its own nav entry (route m:<id>, then m:<id>@1, ...). */
 const uiEntries=()=>(S?S.modules:[]).flatMap(m=>[].concat(m.ui||[]).map((ui,i)=>({...m,ui,rid:i?`m:${m.id}@${i}`:'m:'+m.id})));
 const modOf=r=>uiEntries().find(e=>e.rid===r);
+/* PenguinComm = Listen (the mic, Ivan -> bots) + Speak (PinguinoVoice, the bots' voice) shown as ONE nav entry / page with two sections.
+   The modules keep their ids, ports and manifests; only the shell presents them together. */
+function navEntries(){const all=uiEntries(),l=all.find(e=>e.rid==='m:listen'),v=all.find(e=>e.rid==='m:voice');if(!l&&!v)return all;
+  const first=l||v,sts=[l,v].filter(Boolean).map(x=>x.state);
+  const state=sts.every(x=>x==='running')?'running':sts.some(x=>x==='running'||x==='starting')?'starting':'stopped';
+  return all.filter(e=>e!==l&&e!==v).concat([{id:'comm',name:'PenguinComm',desc:'Listen (you to the bots) and Speak (the bots\' voice) in one place.',url:'',rid:'comm',state,options:{enabled:true},ui:{nav:'PenguinComm',icon:'🗣',section:first.ui.section||'Modules',order:first.ui.order??10}}])}
+const COMM={tab:(()=>{try{return localStorage.getItem('commTab')||'both'}catch{return 'both'}})()};
+const COMMNAME={listen:'PenguinComm · Listen',voice:'PenguinComm · Speak'};
+const dispName=m=>COMMNAME[m.id]||m.name;
 const modSrc=m=>m.url.replace(/\/$/,'')+(m.ui?.path||'/');
 pages.module=r=>{const m=modOf(r);
   if(!m)return `<div class="card" style="max-width:520px"><h3>Module not found</h3><div class="dim">It may have been removed from the registry.</div></div>`;
@@ -376,7 +389,7 @@ setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
 setInterval(()=>{if(route!=='activity'&&anyActSound()&&!document.hidden)pollActivity()},5000);   // keeps follow / sub / raid sounds alive on any page
 /* ============ Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PW={mons:null,wins:[],err:null,sel:{page:'console',mon:'',place:'free',top:false}};
-const popRoutes=()=>[['dashboard','Dashboard'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['integrations','Integrations'],['help','Help']].concat((S?uiEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
+const popRoutes=()=>[['dashboard','Dashboard'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
 function popTarget(route){   // module pages open directly (they are plain local pages); shell pages open the shell in chrome-less mode
   if(isMod(route)){const m=modOf(route);if(!m)return null;return {url:modSrc(m),title:m.ui?.nav||m.name}}
   return {url:'index.html?popout='+encodeURIComponent(route),title:titles[route]||route}}
@@ -476,7 +489,7 @@ function navStatic(){const foot=$('#navfoot');if(!foot)return;
   order.forEach(r=>{const e=els[r];if(e){foot.parentNode.insertBefore(e,foot);e.style.display=(r!=='settings'&&navHid(r))?'none':''}})}
 const FIXED=['dashboard','settings','personalize'];
 function navCatalog(){const out=[{id:'dashboard',label:'Dashboard',fixed:true}];
-  const mods=S?navSort(uiEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100)),x=>x.rid):[];
+  const mods=S?navSort(navEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100)),x=>x.rid):[];
   mods.forEach(m=>out.push({id:m.rid,label:m.ui.nav||m.name}));REAL.forEach(x=>out.push({id:x[0],label:x[2]}));
   const sys={activity:'Activity',integrations:'Integrations',help:'Help',console:'Console',personalize:'Personalize',settings:'Settings'};
   STATIC_SYS.map((r,i)=>[r,i]).sort((a,b)=>(navIdx(a[0])-navIdx(b[0]))||(a[1]-b[1])).forEach(([r])=>out.push({id:r,label:sys[r],fixed:FIXED.includes(r)}));
@@ -595,6 +608,36 @@ function bindSched(){
   $$('[data-sday]').forEach(c=>c.onclick=()=>{const d=+c.dataset.sday,a=SCH.v.days;a.includes(d)?a.splice(a.indexOf(d),1):a.push(d);SCH.v.days=a.sort();draw(true)});
   g('sch-save').onclick=async()=>{const b={enabled:SCH.v.enabled,slots:g('sch-slots').value.split(/[ ,;]+/).filter(Boolean),days:SCH.v.days,tz:g('sch-tz').value};
     try{SCH.v=await post('/api/prestream/schedule',b);toast('Schedule saved: '+schedText());draw(true)}catch{toast('Could not save the schedule')}}}
+/* ============ PenguinComm page ============ */
+const commMod=id=>S&&S.modules.find(m=>m.id===id);
+pages.comm=()=>{const l=commMod('listen'),v=commMod('voice');
+  if(!l&&!v)return '<div class="card" style="max-width:520px"><h3>PenguinComm</h3><div class="dim">Neither PinguinoListen nor PinguinoVoice is registered.</div></div>';
+  const tab=(l&&v)?COMM.tab:(l?'listen':'speak');
+  const sec=(id,m,title,sub)=>!m?'':`<section id="cs-${id}"><div class="cshead" id="csh-${id}"></div><div class="csbody">${m.state==='running'?`<iframe src="${esc(modSrc({...m,ui:[].concat(m.ui||[])[0]||{}}))}"></iframe>`:`<div class="card"><h3>${esc(title)}</h3><div class="dim">${esc(sub)}</div><div class="row" style="margin-top:12px"><span class="pill">${esc(m.state)}</span><button class="pri sm" data-act="${m.id}:start">Start</button></div></div>`}</div></section>`;
+  return `<div class="commsum" id="comm-sum"></div><div class="commgrid ${tab==='both'?'both':''}">${tab!=='speak'?sec('listen',l,'Listen','Hears you through the microphone.'):''}${tab!=='listen'?sec('speak',v,'Speak','The bot voice.'):''}</div>`};
+function updateComm(){const sum=$('#comm-sum');if(!sum||route!=='comm')return;
+  const l=commMod('listen'),v=commMod('voice'),both=l&&v;
+  const mic=L.status?(L.status.listening?'<span class="pill ok">mic on</span>':'<span class="pill">mic idle</span>'):'';
+  const issues=(C.pr&&C.pr.items||[]).filter(i=>(i.module==='listen'||i.module==='voice')&&i.status!=='pass');
+  sum.innerHTML=`${both?`<span class="chips">${[['both','Both'],['listen','Listen'],['speak','Speak']].map(x=>`<span class="chip ${COMM.tab===x[0]?'on':''}" data-ctab="${x[0]}">${x[1]}</span>`).join('')}</span>`:''}
+    <span class="sm dim">Listen = you talking to the bots. Speak = the bots talking back.</span>${mic}
+    ${issues.map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<span class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><span class="sm">${esc(i.label)}</span></span>`}).join('')}
+    <span class="sp"></span>${hq('comm')}`;
+  const head=(id,m,sub,extra)=>{const el=$('#csh-'+id);if(!el||!m)return;
+    el.innerHTML=`<span class="dot ${esc(m.state)}" style="margin:0"></span><div class="grow"><b>${esc(id==='listen'?'Listen':'Speak')}</b> <span class="sm faint">${esc(m.state)}</span><div class="sm dim">${esc(sub)}</div></div>${extra}${hq('module:'+m.id+(m.state==='running'?'':':'+m.state),{module:m.id})}${modSwitch(m)}<button class="sm" data-act="${m.id}:${m.state==='stopped'?'start':'restart'}">${m.state==='stopped'?'Start':'Restart'}</button>`};
+  head('listen',l,'Hears Ivan through the microphone, turns it into text, runs voice commands.','<button class="sm" data-go="voice">Voice Studio</button>');
+  head('speak',v,'The bot voice: what the bots say out loud (text to speech).','');
+  $$('#comm-sum [data-ctab]').forEach(c=>c.onclick=()=>{COMM.tab=c.dataset.ctab;try{localStorage.setItem('commTab',COMM.tab)}catch{}draw(true)});
+  $$('#cs-listen [data-go],#cs-speak [data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
+  $$('#cs-listen [data-act],#cs-speak [data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
+  bindSwitches()}
+const redrawSw=()=>route==='comm'?updateComm():draw(true);
+function bindSwitches(){
+  $$('[data-mlock]').forEach(b=>b.onclick=()=>{const id=b.dataset.mlock;LK[id]=isUnlocked(id)?0:Date.now()+30000;redrawSw();if(isUnlocked(id))setTimeout(()=>{if(!isUnlocked(id)&&route!=='console')redrawSw()},30500)});
+  $$('[data-menable]').forEach(i=>i.onchange=async()=>{const id=i.dataset.menable;LK[id]=0;
+    try{await post(`/api/modules/${id}/enable`,{on:i.checked});toast(`${S.modules.find(x=>x.id===id)?.name||id} switched ${i.checked?'on':'off'}`)}catch{toast('Could not change the module')}
+    setTimeout(async()=>{await load();redrawSw()},700)});
+}
 const openExternal=u=>window.__TAURI__?(location.href=u):window.open(u,'_blank');
 pages.integrations=()=>{
   if(I.err)return `<div class="card" style="max-width:520px"><h3>Integrations</h3><div class="dim">${esc(I.err)}</div></div>`;
@@ -672,7 +715,7 @@ pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max
   <div class="card"><h3>Stream</h3>
     <div class="setrow"><div class="grow">Twitch channel<div class="sm faint">Watched for go-live</div></div><input type="text" id="s-chan" value="${esc(S.channel)}" style="width:190px"></div>
     <div class="setrow"><div class="grow">Start with Windows<div class="sm faint">Suite launches hidden at login</div></div>${sw('s-wa',S.windows_autostart)}</div></div>
-  <div class="card"><div class="row"><h3 style="margin:0">Modules</h3>${hq('module_switch')}</div>${S.modules.map(m=>`<div style="padding:6px 0"><div class="row"><b>${esc(m.name)}</b><span class="sm faint">${m.options.enabled?'on':'off'}</span><span class="sp"></span>${modSwitch(m)}</div>
+  <div class="card"><div class="row"><h3 style="margin:0">Modules</h3>${hq('module_switch')}</div>${S.modules.map(m=>`<div style="padding:6px 0"><div class="row"><b>${esc(dispName(m))}</b><span class="sm faint">${m.options.enabled?'on':'off'}</span><span class="sp"></span>${modSwitch(m)}</div>
     <div class="setrow"><div class="grow">Start with the Suite</div>${sw('o-'+m.id+'-start_with_suite',m.options.start_with_suite,`data-mod="${m.id}" data-opt="start_with_suite"`)}</div>
     <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Pre-stream check schedule</h3>${hq('prestream')}</div>${schedCard()}</div>
@@ -734,7 +777,7 @@ pages.voice=()=>{
         <input type="text" class="v-path" value="${esc(x.action.path||'')}" placeholder="/api/macro/name" style="width:200px">
         <input type="text" class="v-body" value="${esc(JSON.stringify(x.action.body||{}))}" style="width:140px" title="JSON body">`:`<input type="text" class="v-label" value="${esc(x.action.label||'')}" placeholder="marker label" style="width:150px">`}
       <span class="sp row">${sw('',x.enabled,'class="v-en"')}<button class="sm v-del" title="Remove">✕</button></span></div></div>`;
-  return `<div class="grid g2" style="align-items:start">
+  return `<div class="row" style="margin-bottom:10px"><span class="dim sm">Voice commands for Listen.</span><button class="sm" data-go="comm" data-commtab="speak">Bot voice settings</button><span class="sp"></span></div><div class="grid g2" style="align-items:start">
    <div class="card"><h3>Your voice data</h3>
      <div class="kv sm"><span class="faint">Verified speech</span><span><b>${st.hours} h</b> of ${st.good_hours} h for a good clean set</span>
        <span class="faint">Lines · words</span><span>${st.lines.toLocaleString()} · ${st.words.toLocaleString()}</span>
@@ -818,12 +861,12 @@ function showWizard(){let role='streaming';const el=document.createElement('div'
       D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
 
 /* ============ shell ============ */
-const titles={personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const REAL=[['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
 function renderNav(){if(!S)return;
-  const mods=navSort(uiEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100)),x=>x.rid).filter(m=>!navHid(m.rid));
+  const mods=navSort(navEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100)),x=>x.rid).filter(m=>!navHid(m.rid));
   const replaced=new Set(mods.map(m=>m.ui.replaces).filter(Boolean));
   const sig=JSON.stringify([mods.map(m=>[m.rid,m.name,m.ui,m.state]),[...replaced],route,PF.layout.nav_order,PF.layout.nav_hidden]);
   if(sig===navSig)return;navSig=sig;
@@ -856,9 +899,10 @@ function bind(){
   if(route==='voice')bindVoice();
   if(route==='activity')bindActivity();
   if(route==='personalize')bindPersonalize();
+  if(route==='comm')updateComm();
   if(route==='integrations')bindIntegrations();
   if(route==='settings')bindPortable();
-  $$('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
+  $$('[data-go]').forEach(e=>e.onclick=()=>{if(e.dataset.commtab){COMM.tab=e.dataset.commtab;try{localStorage.setItem('commTab',COMM.tab)}catch{}}go(e.dataset.go)});
   $$('[data-dev]').forEach(b=>b.onclick=async()=>{D=await post('/api/device/'+b.dataset.dev);toast(b.dataset.dev==='take'?'This device is now in control':'Control released');draw(true)});
   $$('[data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
   $('#d-prerun')&&($('#d-prerun').onclick=async()=>{$('#d-prerun').disabled=true;try{C.pr=await post('/api/prestream/run');toast('Pre-stream check done')}catch{toast('Check failed to run')}draw(true)});
@@ -866,10 +910,7 @@ function bind(){
   $('#s-chan')&&($('#s-chan').onchange=async e=>{await post('/api/channel',{channel:e.target.value});toast('Channel saved')});
   $('#s-wa')&&($('#s-wa').onchange=async e=>{await post('/api/windows-autostart',{on:e.target.checked});toast(e.target.checked?'Will start with Windows':'Autostart off')});
   bindPopout();bindSched();
-  $$('[data-mlock]').forEach(b=>b.onclick=()=>{const id=b.dataset.mlock;LK[id]=isUnlocked(id)?0:Date.now()+30000;draw(true);if(isUnlocked(id))setTimeout(()=>{if(!isUnlocked(id)&&route!=='console')draw(true)},30500)});
-  $$('[data-menable]').forEach(i=>i.onchange=async()=>{const id=i.dataset.menable;LK[id]=0;
-    try{await post(`/api/modules/${id}/enable`,{on:i.checked});toast(`${S.modules.find(x=>x.id===id)?.name||id} switched ${i.checked?'on':'off'}`)}catch{toast('Could not change the module')}
-    setTimeout(async()=>{await load();draw(true)},700)});
+  bindSwitches();
   $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));
 }
 $$('nav .item[data-r]').forEach(i=>i.onclick=()=>go(i.dataset.r));
@@ -884,7 +925,7 @@ async function load(){try{S=await (await fetch('/api/state')).json()}catch{retur
   const l=S.live;$('#pill').classList.toggle('on',l.live);$('#pill-t').textContent=l.live?PF.text.live_pill:PF.text.offline_pill;
   $('#pill-sub').textContent=l.live?`${l.viewers} watching · ${up(l.since)}`:(l.error?'Twitch check: '+l.error.slice(0,60):'');
   const lm=listenMod();if(lm?.url)LISTEN=lm.url.replace(/\/$/,'');
-  $('#navfoot').textContent=`Watching ${S.channel}`;watchState();draw()}
+  $('#navfoot').textContent=`Watching ${S.channel}`;watchState();draw();if(route==='comm')updateComm()}
 async function loadDevice(){try{D=await (await fetch('/api/device')).json()}catch{return}if(route==='dashboard')draw()}
 async function loadMulti(){try{const m=await (await fetch('/api/modules/multi/get?path=/api/dashboard')).json();
   M.ok=true;M.rate=m.rate_per_min??m.last_minute??null;M.queue=m.open_cards??0;M.chatters=m.unique_chatters_hour??null;M.hour=m.messages_last_hour??null}
@@ -892,7 +933,7 @@ async function loadMulti(){try{const m=await (await fetch('/api/modules/multi/ge
 async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status')).json();L.status=st;
   let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}
   L.lines=sid?(await (await fetch(`${LISTEN}/api/segments?session=${sid}&limit=500`)).json()).slice(-5):[]}catch{L.status=null;L.lines=[]}
-  if(route==='dashboard')draw()}
+  if(route==='dashboard')draw();if(route==='comm')updateComm()}
 (async()=>{await load();go(POP||(PF.layout.start&&PF.layout.start!=='dashboard'&&routeOk(PF.layout.start)?PF.layout.start:'dashboard'));loadPrefs();loadListen();setInterval(load,4000);setInterval(loadListen,3000);if(!POP)loadSetup();loadDevice();loadMulti();setInterval(loadDevice,5000);setInterval(loadMulti,6000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(()=>{if(route==='integrations')loadIntegrations()},20000);setInterval(pollPrestream,10000);
   const ws=()=>{const w=PG.ws();w.onmessage=()=>load();w.onclose=()=>setTimeout(ws,2000)};ws()})();
 </script>

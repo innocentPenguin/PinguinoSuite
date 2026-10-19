@@ -266,3 +266,6 @@ For module pages:
 - Manifest hook `on_start`: `{"post": "/api/..."}` called once after the core launches the module (Listen uses it to start the mic).
 - Personalize adds: wording (app name, offline banner, Live / Offline labels), Errors-tile window and hide-when-clean, and sounds for Activity events (follow, sub/resub/gift, raid, cheer, redeem), which keep working on any page.
 - Console: Copy / Save the lines shown. Dashboard pre-stream card: Run now.
+
+## PenguinComm (Listen + Speak in one page)
+The shell shows PinguinoListen (`listen`, mic, Ivan to the bots) and PinguinoVoice (`voice`, the bot's TTS voice) as ONE nav entry/page "PenguinComm" (route `comm`) with two sections (Both / Listen / Speak, remembered), each with its own status, on/off switch + padlock, Restart, help and the module's own UI (its manifest `ui.path`, so each module keeps its own settings). Ids, ports, manifests, `always_start` and `on_start` are unchanged; if only one of the two is registered the page shows just that section. Pre-stream items of those two modules appear as clickable chips on top. Listen tells Voice when a voice command fired (`POST /api/voice/dispatch` -> voice `/api/event {"kind":"voice_cmd","what":<id>}`, best effort).

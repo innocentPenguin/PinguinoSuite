@@ -207,6 +207,16 @@ def run_action(cmd, text, seg, log):
         return {"ok": False, "detail": str(e)[:160]}
 
 
+def tell_voice(cmd):
+    """Best effort: tell the PinguinoVoice module a command fired (through the core dispatch; never raises, never blocks a command)."""
+    core = os.environ.get("PINGUINO_CORE_URL", "http://127.0.0.1:8760")
+    try:
+        requests.post(core + "/api/voice/dispatch", json={"module": "voice", "path": "/api/event", "body": {"kind": "voice_cmd", "what": cmd["id"]}},
+                      headers={"Authorization": f"Bearer {os.environ.get('PINGUINO_API_TOKEN', '')}"}, timeout=4)
+    except requests.RequestException:
+        pass
+
+
 def record(log, heard, cmd, score, outcome, detail="", unsure=None):
     """One line per heard command, to the Voice Studio log AND the Console (source "voice")."""
     rec = {"ts": time.time(), "heard": heard[:300], "command": cmd["id"], "phrase": cmd["phrase"], "score": score, "unsure": unsure, "outcome": outcome, "detail": detail[:200]}
@@ -251,5 +261,7 @@ def handle_segment(seg, log, emit):
         def go(c=c, score=score):
             res = run_action(c, text, seg, log)
             record(log, text, c, score, "fired" if res["ok"] else "failed", res["detail"], unsure)
+            if res["ok"] and c["action"].get("module") != "voice":
+                tell_voice(c)   # PinguinoVoice may acknowledge out loud (silent unless Ivan enables "voice command" events there)
             emit({"type": "voice_cmd", "phrase": c["phrase"], "text": text, **res})
         threading.Thread(target=go, daemon=True).start()
