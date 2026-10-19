@@ -61,7 +61,7 @@ namespace PinguinoHost
                     set.Add(d.Bool ? new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "bool" }, { "value", v != null ? (bool)v : DefaultOf(d) != 0 } }
                                    : new JObject { { "key", d.Key }, { "label", d.Label }, { "type", "num" }, { "min", d.Min }, { "max", d.Max }, { "step", d.Step }, { "hint", d.Hint }, { "value", v == null ? DefaultOf(d) : (double)v } });
                 }
-                var sec = LoadFile("bots_secrets.json")[BotIds[i]] as JObject; bool signedIn = sec != null && !string.IsNullOrEmpty((string)sec["UserToken"]);
+                var sec = BotSecretsV()[BotIds[i]] as JObject; bool signedIn = sec != null && !string.IsNullOrEmpty((string)sec["UserToken"]);
                 bool enabled = b == null || (bool?)b["Enabled"] != false;
                 string health = "pass", hdetail = "";
                 if (!enabled) { health = "warn"; hdetail = "switched off"; }
@@ -90,7 +90,7 @@ namespace PinguinoHost
         static JObject BotTest(JObject b)
         {
             string id = (string)b["id"]; if (Array.IndexOf(BotIds, id) < 0) return new JObject { { "ok", false }, { "error", "unknown bot" } };
-            var reg = LoadFile("bots.json"); var sec = LoadFile("bots_secrets.json");
+            var reg = LoadFile("bots.json"); var sec = BotSecretsV();
             string title = (string)reg["Bots"]?[id]?["Title"] ?? id;
             var chain = new System.Collections.Generic.List<string> { id };
             if (reg["Fallback"]?[id] is JArray fb) foreach (var x in fb) chain.Add((string)x);

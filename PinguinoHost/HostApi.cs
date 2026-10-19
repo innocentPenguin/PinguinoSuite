@@ -22,6 +22,23 @@ namespace PinguinoHost
         public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers moderation:read channel:read:redemptions";
 
         static string FilePath { get { return Path.Combine(DataDir, "host_secrets.json"); } }
+        // read-only views that also see the key vault (a plaintext value wins; Save always uses Load() so a vault value is never written back to a file)
+        static JObject LoadV()
+        {
+            var s = Load();
+            foreach (var k in new[] { "UserToken", "ObsPassword" }) if (string.IsNullOrEmpty((string)s[k])) { var v = Vault.Get("HOST_SECRETS." + k); if (v != "") s[k] = v; }
+            return s;
+        }
+        static JObject BotSecretsV()
+        {
+            var sec = LoadFile("bots_secrets.json");
+            foreach (string role in BotIds)
+            {
+                string v = Vault.Get("BOTS_SECRETS." + role + ".UserToken"); var o = sec[role] as JObject;
+                if (v != "" && o != null && string.IsNullOrEmpty((string)o["UserToken"])) o["UserToken"] = v;
+            }
+            return sec;
+        }
         static JObject Load() { try { return File.Exists(FilePath) ? JObject.Parse(File.ReadAllText(FilePath)) : new JObject(); } catch (Exception) { return new JObject(); } }
         static void Save(JObject o) { File.WriteAllText(FilePath, o.ToString()); }
 
@@ -86,7 +103,7 @@ namespace PinguinoHost
 
         static JObject Status()
         {
-            var s = Load(); bool tok = !string.IsNullOrEmpty((string)s["UserToken"]);
+            var s = LoadV(); bool tok = !string.IsNullOrEmpty((string)s["UserToken"]);
             return new JObject {
                 { "ok", true }, { "name", "PinguinoHost" }, { "uptimeSec", (int)(DateTime.UtcNow - Started).TotalSeconds }, { "sim", SimMode },
                 { "channel", (string)s["Channel"] ?? "" }, { "chatConnected", IrcConnected }, { "eventSubConnected", EventSubConnected },
@@ -97,7 +114,7 @@ namespace PinguinoHost
 
         static JObject Config()
         {
-            var s = Load(); var o = new JObject();
+            var s = LoadV(); var o = new JObject();
             foreach (var k in Plain) o[k] = s[k] ?? "";
             foreach (var k in Secret) o["has" + k] = !string.IsNullOrEmpty((string)s[k]);   // never return secret values
             o["scopes"] = Scopes; o["redirect"] = "http://localhost:" + Port + "/auth";
@@ -133,7 +150,7 @@ namespace PinguinoHost
                 string login = (string)me[0]["login"];
                 var sec = LoadFile("bots_secrets.json");
                 sec[role] = new JObject { { "ClientId", cid }, { "UserToken", tok }, { "SenderId", me[0]["id"] }, { "BroadcasterId", chan[0]["id"] }, { "Login", login } };
-                SaveFile("bots_secrets.json", sec);
+                SaveFile("bots_secrets.json", sec); Vault.TrySet("BOTS_SECRETS." + role + ".UserToken", tok);
                 var reg = LoadFile("bots.json");
                 string expect = ((string)reg["Bots"]?[role]?["Account"] ?? "").ToLowerInvariant();
                 if (reg["Bots"]?[role] != null) { reg["Bots"][role]["Account"] = login; reg["Bots"][role]["Sender"] = "helix"; SaveFile("bots.json", reg); }
@@ -166,7 +183,7 @@ namespace PinguinoHost
                     var d2 = r2.IsSuccessStatusCode ? JObject.Parse(r2.Content.ReadAsStringAsync().Result)["data"] as JArray : null;
                     if (d2 != null && d2.Count > 0) s["BroadcasterId"] = d2[0]["id"];
                 }
-                Save(s); return new JObject { { "ok", true }, { "login", u["login"] }, { "note", "Signed in as " + u["login"] + ". Restart the PinguinoHost module to apply." } };
+                Save(s); Vault.TrySet("HOST_SECRETS.UserToken", tok); return new JObject { { "ok", true }, { "login", u["login"] }, { "note", "Signed in as " + u["login"] + ". Restart the PinguinoHost module to apply." } };
             }
         }
 

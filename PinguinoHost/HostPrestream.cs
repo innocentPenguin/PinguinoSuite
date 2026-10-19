@@ -33,7 +33,7 @@ namespace PinguinoHost
 
         static JObject Prestream()
         {
-            var items = new List<JObject>(); var s = Load();
+            var items = new List<JObject>(); var s = LoadV();
             var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
             string chan = ((string)s["Channel"] ?? "").Trim();
 
@@ -47,7 +47,7 @@ namespace PinguinoHost
 
             // 2. accounts: the streamer token and every bot account, all checked with OAuth validate
             var checks = new List<Task<JObject>>(); var names = new List<string>();
-            var sec = LoadFile("bots_secrets.json"); var reg = LoadFile("bots.json");
+            var sec = BotSecretsV(); var reg = LoadFile("bots.json");
             if (!string.IsNullOrEmpty((string)s["UserToken"])) { string t = (string)s["UserToken"], c = (string)s["ClientId"]; names.Add("streamer"); checks.Add(Task.Run(() => Validate(http, t, c))); }
             foreach (string role in BotIds)
             {
@@ -119,6 +119,12 @@ namespace PinguinoHost
                     items.Add(Item("faq", "Helper facts (innocentpenguin.com/api/faq)", r.IsSuccessStatusCode && n > 0 ? "pass" : "warn", r.IsSuccessStatusCode ? n + " entries" : "HTTP " + (int)r.StatusCode + ": the helper uses its saved copy"));
                 }
                 catch (Exception ex) { items.Add(Item("faq", "Helper facts (innocentpenguin.com/api/faq)", "warn", "site not reachable (" + ex.GetType().Name + ": " + ex.Message + "): the helper uses its saved copy")); }
+            }
+
+            if (Vault.Enabled)
+            {
+                bool vr = Vault.Reach == "ok";
+                items.Add(Item("vault", "Key vault readable (API keys and tokens)", vr ? "pass" : "warn", vr ? (Vault.Missing.Count == 0 ? "" : Vault.Missing.Count + " of " + Vault.Names.Length + " declared keys not in the vault yet (plaintext files still used)") : Vault.Reach + ": using the plaintext files"));
             }
 
             // 5. recent trouble

@@ -16,7 +16,7 @@ namespace PinguinoHost
             via = "";
             if (!Lease.MayRun) { via = "this Host is not the master"; return false; }
             role = string.IsNullOrWhiteSpace(role) ? "core" : role.Trim().ToLowerInvariant();
-            var reg = LoadFile("bots.json"); var sec = LoadFile("bots_secrets.json");
+            var reg = LoadFile("bots.json"); var sec = BotSecretsV();
             var chain = new List<string> { role }; if (!chain.Contains("core")) chain.Add("core");
             if (reg["Fallback"]?[role] is JArray fb) foreach (var x in fb) if (!chain.Contains((string)x)) chain.Add((string)x);
             foreach (string r in chain)

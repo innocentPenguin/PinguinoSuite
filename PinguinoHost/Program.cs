@@ -51,10 +51,12 @@ namespace PinguinoHost
             Directory.CreateDirectory(dataDir); Clog.Init(dataDir);
             if (!Lease.TakeMutex(dataDir)) { Console.WriteLine("Another PinguinoHost is already running on this PC for " + dataDir + "; exiting."); Clog.Error("lease", "another Host already runs on this PC; this one exits"); return 3; } Clog.Info("host", "PinguinoHost starting");
             Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dataDir); Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dataDir);   // the bots find bots.json, bots_secrets.json, settings.json, routing.log here
+            Vault.Refresh();   // the key vault (when the core launched us); plaintext files remain the fallback
             var secrets = LoadSecrets();
             string channel = Opt("--channel", secrets.Value<string>("Channel") ?? "");
 
             cph = HostCPH.Current = new HostCPH(dataDir);
+            Vault.PushToBots(cph); Vault.StartLoop(() => Vault.PushToBots(cph));
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
@@ -69,7 +71,12 @@ namespace PinguinoHost
         }
 
         static string FindSuite() { var d = new DirectoryInfo(AppContext.BaseDirectory); while (d != null && !File.Exists(Path.Combine(d.FullName, "Shared", "PinguinoRouter.cs"))) d = d.Parent; return d != null ? d.FullName : @"D:\PinguinoSuite"; }
-        static JObject LoadSecrets() { try { var f = Path.Combine(dataDir, "host_secrets.json"); return File.Exists(f) ? JObject.Parse(File.ReadAllText(f)) : new JObject(); } catch (Exception) { return new JObject(); } }
+        static JObject LoadSecrets()
+        {
+            JObject o; try { var f = Path.Combine(dataDir, "host_secrets.json"); o = File.Exists(f) ? JObject.Parse(File.ReadAllText(f)) : new JObject(); } catch (Exception) { o = new JObject(); }
+            foreach (var k in new[] { "UserToken", "ObsPassword" }) if (string.IsNullOrEmpty((string)o[k])) { var v = Vault.Get("HOST_SECRETS." + k); if (v != "") o[k] = v; }   // memory only: never saved back
+            return o;
+        }
 
         // ---------------- compile each bot file as its own assembly (what Streamer.bot does per action) ----------------
         static bool LoadModules()

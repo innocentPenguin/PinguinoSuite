@@ -222,6 +222,7 @@ public class CPHInline
             var s = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(p))[role] as Newtonsoft.Json.Linq.JObject;
             if (s == null) return false;
             string cid = (string)s["ClientId"] ?? "", tok = (string)s["UserToken"] ?? "", sid = (string)s["SenderId"] ?? "", bid = (string)s["BroadcasterId"] ?? "";
+            if (tok == "") tok = CPH.GetGlobalVar<string>("pinguino.secret.token." + role, false) ?? "";   // the key vault (Host), when bots_secrets.json no longer holds it
             if (cid == "" || tok == "" || sid == "" || bid == "") return false;
             string body = new Newtonsoft.Json.Linq.JObject { ["broadcaster_id"] = bid, ["sender_id"] = sid, ["message"] = text }.ToString(Newtonsoft.Json.Formatting.None);
             if (_pgTestHttp != null) return _pgTestHttp("https://api.twitch.tv/helix/chat/messages", "Bearer " + tok + "|" + cid, body) != null;
@@ -664,7 +665,9 @@ public class CPHInline
     {
         if (_testLlm != null) return _testLlm(system, user);
         JObject c = ReadJson("chat_settings.json");
-        string key = c == null ? "" : ((string)c["ApiKey"] ?? "");
+        c = c ?? new JObject();
+        string key = (string)c["ApiKey"] ?? "";
+        if (key == "") key = CPH.GetGlobalVar<string>("pinguino.secret.aikey", false) ?? "";   // the key vault (Host)
         if (key == "") return null;
         string prov = (((string)c["Provider"]) ?? "claude").ToLower();
         string model = (string)c["Model"] ?? "", baseUrl = ((string)c["BaseUrl"] ?? "").TrimEnd('/');

@@ -241,6 +241,7 @@ public class CPHInline
             var s = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(p))[role] as Newtonsoft.Json.Linq.JObject;
             if (s == null) return false;
             string cid = (string)s["ClientId"] ?? "", tok = (string)s["UserToken"] ?? "", sid = (string)s["SenderId"] ?? "", bid = (string)s["BroadcasterId"] ?? "";
+            if (tok == "") tok = CPH.GetGlobalVar<string>("pinguino.secret.token." + role, false) ?? "";   // the key vault (Host), when bots_secrets.json no longer holds it
             if (cid == "" || tok == "" || sid == "" || bid == "") return false;
             string body = new Newtonsoft.Json.Linq.JObject { ["broadcaster_id"] = bid, ["sender_id"] = sid, ["message"] = text }.ToString(Newtonsoft.Json.Formatting.None);
             if (_pgTestHttp != null) return _pgTestHttp("https://api.twitch.tv/helix/chat/messages", "Bearer " + tok + "|" + cid, body) != null;
@@ -2824,6 +2825,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     }
 
     // The request body for the Anthropic API; with web=true the web_search server tool is attached (the model decides whether to use it).
+    // chat_settings.json first, then the Suite key vault (the Host hands it over in a memory-only global variable)
+    string ApiKeyNow() { return !string.IsNullOrWhiteSpace(_cfg.ApiKey) ? _cfg.ApiKey : (CPH.GetGlobalVar<string>("pinguino.secret.aikey", false) ?? ""); }
     static JObject BuildClaudeBody(string model, string system, JArray messages, int maxTokens, bool web, int maxUses)
     {
         var body = new JObject { ["model"] = model, ["max_tokens"] = maxTokens, ["system"] = system, ["messages"] = messages };
@@ -2851,14 +2854,14 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         try
         {
             if (_testLlm != null) return _testLlm(system, user);
-            if (string.IsNullOrWhiteSpace(_cfg.ApiKey)) { Warn("key", "No ApiKey in chat_settings.json yet, so PinguinoBot can't answer."); return null; }
+            if (string.IsNullOrWhiteSpace(ApiKeyNow())) { Warn("key", "No ApiKey in chat_settings.json yet, so PinguinoBot can't answer."); return null; }
             string prov = (_cfg.Provider ?? "claude").ToLower();
             if (prov == "claude" || prov == "anthropic")
             {
                 string model = string.IsNullOrEmpty(_cfg.Model) ? "claude-haiku-5-5" : _cfg.Model;
                 var msgs = new JArray { new JObject { ["role"] = "user", ["content"] = user } };
                 string url = (string.IsNullOrEmpty(_cfg.BaseUrl) ? "https://api.anthropic.com" : _cfg.BaseUrl.TrimEnd('/')) + "/v1/messages";
-                var h = new Dictionary<string, string> { { "x-api-key", _cfg.ApiKey }, { "anthropic-version", "2023-06-01" } };
+                var h = new Dictionary<string, string> { { "x-api-key", ApiKeyNow() }, { "anthropic-version", "2023-06-01" } };
                 bool useWeb = web && _cfg.WebSearch && !_webBroken;
                 bool useLogs = web && _cfg.LogSearch;   // only the main answer can search the logs
                 JObject r = null;
@@ -2918,7 +2921,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
                         new JObject { ["role"] = "user", ["content"] = user } }
                 };
                 string url = (string.IsNullOrEmpty(_cfg.BaseUrl) ? "https://api.openai.com/v1" : _cfg.BaseUrl.TrimEnd('/')) + "/chat/completions";
-                var h = new Dictionary<string, string> { { "Authorization", "Bearer " + _cfg.ApiKey } };
+                var h = new Dictionary<string, string> { { "Authorization", "Bearer " + ApiKeyNow() } };
                 var r = JObject.Parse(HttpPost(url, h, body.ToString(Formatting.None)));
                 if ((string)r["choices"]?[0]?["finish_reason"] == "length")
                 {
