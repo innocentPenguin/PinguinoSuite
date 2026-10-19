@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- PinguinoHost: runs the four bot C# files WITHOUT Streamer.bot. It provides the CPH object, reads Twitch chat and dispatches like the Streamer.bot triggers do. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <NoWarn>CS0168;CS0219;CS0414;CS0649;CS0169;SYSLIB0014;CS8981</NoWarn>
+    <AssemblyName>PinguinoHost</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,254 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Net.WebSockets;
+using System.Reflection;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Newtonsoft.Json.Linq;
+
+namespace PinguinoHost
+{
+    /// <summary>
+    /// PinguinoHost - runs PinguinoB0t, PinguinoChat, HelperPinguino and PinguinoRouter without Streamer.bot.
+    /// Usage:  PinguinoHost [--sim] [--channel name] [--data dir] [--suite dir] [--no-sync]
+    ///   --sim   read "user: text" lines from the keyboard instead of Twitch ("*user:" = mod, "#user:" = broadcaster)
+    /// Twitch secrets (never printed) live in  data\host_secrets.json :  {"Channel","ClientId","UserToken","SenderId","BroadcasterId"}
+    /// </summary>
+    public static class Program
+    {
+        static HostCPH cph;
+        static string suite, dataDir;
+        static HashSet<string> coreCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static readonly object dispatchLock = new object();
+        static readonly Dictionary<string, string> sources = new Dictionary<string, string>
+        {
+            { "PinguinoBot", @"PinguinoB0t\PinguinoBotCore.cs" }, { "PinguinoChat", @"PinguinoChat\PinguinoChat.cs" },
+            { "PinguinoHelper", @"HelperPinguino\PinguinoHelper.cs" }, { "PinguinoRouter", @"Shared\PinguinoRouter.cs" },
+        };
+
+        public static int Main(string[] argv)
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+            string Opt(string n, string d) { int i = Array.IndexOf(argv, n); return i >= 0 && i + 1 < argv.Length ? argv[i + 1] : d; }
+            bool sim = argv.Contains("--sim");
+            suite = Opt("--suite", FindSuite());
+            dataDir = Opt("--data", Environment.GetEnvironmentVariable("PINGUINO_DATA_DIR") ?? Environment.GetEnvironmentVariable("BVQ_DATA_DIR") ?? Path.Combine(suite, "Data", "runtime"));
+            Directory.CreateDirectory(dataDir);
+            Environment.SetEnvironmentVariable("BVQ_DATA_DIR", dataDir);   // the bots find bots.json, settings.json, routing.log here
+            var secrets = LoadSecrets();
+            string channel = Opt("--channel", secrets.Value<string>("Channel") ?? "");
+
+            cph = HostCPH.Current = new HostCPH(dataDir);
+            if (!LoadModules()) return 2;
+            if (!sim) WireTwitch(secrets);
+            WireServices(secrets, sim);
+
+            Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
+            if (!argv.Contains("--no-sync")) StartSyncTimer();
+            if (sim) { SimLoop(); return 0; }
+            if (channel == "") { Console.WriteLine("No channel yet: open http://127.0.0.1:" + HostApi.Port + "/setup to configure."); Thread.Sleep(Timeout.Infinite); }
+            ReadChatForever(channel).GetAwaiter().GetResult();
+            return 0;
+        }
+
+        static string FindSuite() { var d = new DirectoryInfo(AppContext.BaseDirectory); while (d != null && !File.Exists(Path.Combine(d.FullName, "Shared", "PinguinoRouter.cs"))) d = d.Parent; return d != null ? d.FullName : @"D:\PinguinoSuite"; }
+        static JObject LoadSecrets() { try { var f = Path.Combine(dataDir, "host_secrets.json"); return File.Exists(f) ? JObject.Parse(File.ReadAllText(f)) : new JObject(); } catch (Exception) { return new JObject(); } }
+
+        // ---------------- compile each bot file as its own assembly (what Streamer.bot does per action) ----------------
+        static bool LoadModules()
+        {
+            var refs = new List<MetadataReference>();
+            foreach (string a in ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")).Split(Path.PathSeparator))
+                if (File.Exists(a)) refs.Add(MetadataReference.CreateFromFile(a));
+            refs.Add(MetadataReference.CreateFromFile(typeof(Program).Assembly.Location));
+            bool ok = true;
+            foreach (var kv in sources)
+            {
+                string path = Path.Combine(suite, kv.Value);
+                string code = File.ReadAllText(path, Encoding.UTF8);
+                if (kv.Key == "PinguinoBot") foreach (Match m in Regex.Matches(code, "case \"(![a-z0-9]+)\"")) coreCommands.Add(m.Groups[1].Value);
+                code = Regex.Replace(code, @"(?m)^public class CPHInline\s*$", "public class CPHInline : PinguinoHost.HostBase");
+                var comp = CSharpCompilation.Create("pg_" + kv.Key + "_" + Guid.NewGuid().ToString("N"),
+                    new[] { CSharpSyntaxTree.ParseText(code, new CSharpParseOptions(LanguageVersion.Latest)) }, refs,
+                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Disable));
+                using (var ms = new MemoryStream())
+                {
+                    var res = comp.Emit(ms);
+                    if (!res.Success)
+                    {
+                        ok = false;
+                        Console.WriteLine("COMPILE FAILED: " + kv.Key);
+                        foreach (var d in res.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Take(8)) Console.WriteLine("  " + d);
+                        continue;
+                    }
+                    var asm = Assembly.Load(ms.ToArray());
+                    var type = asm.GetType("CPHInline");
+                    var inst = Activator.CreateInstance(type);
+                    var exec = type.GetMethod("Execute");
+                    cph.Actions[kv.Key] = c => (bool)exec.Invoke(inst, null);
+                    Console.WriteLine("loaded " + kv.Key + "  (" + kv.Value + ")");
+                }
+            }
+            return ok;
+        }
+
+        // ---------------- dispatch: exactly the Streamer.bot trigger ownership in Docs\TRIGGERS.md ----------------
+        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo)
+        {
+            lock (dispatchLock)   // one message at a time: arguments are shared state, so no two chats can mix
+            {
+                cph.Args.Clear();
+                string login = user.ToLowerInvariant();
+                cph.Args["user"] = user; cph.Args["userName"] = login; cph.Args["userId"] = userId ?? "";
+                cph.Args["message"] = text; cph.Args["rawInput"] = text; cph.Args["msgId"] = msgId ?? Guid.NewGuid().ToString("N");
+                cph.Args["role"] = role; cph.Args["isModerator"] = role >= 3; cph.Args["isBroadcaster"] = role >= 4; cph.Args["isVip"] = role == 2;
+                cph.Args["firstMessage"] = firstMsg;
+                if (!string.IsNullOrEmpty(replyTo)) { cph.Args["reply.userName"] = replyTo; cph.Args["reply.userLogin"] = replyTo; }
+                try
+                {
+                    string trimmed = text.Trim();
+                    string first = trimmed.Split(' ')[0];
+                    if (first.StartsWith("!") && coreCommands.Contains(first))
+                    {
+                        cph.Args["command"] = first.ToLowerInvariant();
+                        cph.Args["rawInput"] = trimmed.Length > first.Length ? trimmed.Substring(first.Length).Trim() : "";   // Streamer.bot: rawInput = text after the command
+                        cph.RunAction("PinguinoBot");
+                    }
+                    else cph.RunAction("PinguinoRouter");
+                }
+                catch (Exception ex) { Console.WriteLine("ERROR dispatch: " + ex); }
+            }
+        }
+
+        // OBS, Twitch events and the overlay web server (what Streamer.bot used to provide).
+        static void WireServices(JObject s, bool sim)
+        {
+            if (!sim && (s.Value<bool?>("ObsEnabled") ?? true))
+            { cph.Obs = new ObsClient(s.Value<string>("ObsHost") ?? "127.0.0.1", s.Value<int?>("ObsPort") ?? 4455, s.Value<string>("ObsPassword") ?? ""); Task.Run(() => cph.Obs.RunForever()); }
+            HostApi.DataDir = dataDir; HostApi.Port = s.Value<int?>("OverlayPort") ?? 8770; HostApi.SimMode = sim; HostApi.ObsConnected = () => cph.ObsIsConnected();
+            string overlayDir = null;
+            try { var f = Path.Combine(dataDir, "settings.json"); if (File.Exists(f)) overlayDir = JObject.Parse(File.ReadAllText(f)).Value<string>("OverlayDir"); } catch (Exception) { }
+            OverlayServer.Start(HostApi.Port, overlayDir, Path.Combine(suite, "PinguinoB0t", "overlays"), dataDir);
+            if (!sim) Task.Run(() => EventSub.RunForever(s, a => DispatchEvent(a)));
+        }
+
+        public static void DispatchEvent(Dictionary<string, object> args)
+        {
+            lock (dispatchLock)
+            {
+                cph.Args.Clear(); foreach (var kv in args) cph.Args[kv.Key] = kv.Value;
+                if (args.ContainsKey("userName")) cph.Args["user"] = args["userName"];
+                try { cph.RunAction("PinguinoChat"); } catch (Exception ex) { Console.WriteLine("ERROR event: " + ex); }
+            }
+        }
+
+        static void StartSyncTimer()   // the "PinguinoBot Web Sync" timed action (every 3 s)
+        {
+            var t = new Timer(_ =>
+            {
+                if (!Monitor.TryEnter(dispatchLock)) return;
+                try { cph.Args.Clear(); cph.Args["timerName"] = "PinguinoBot Web Sync"; cph.RunAction("PinguinoBot"); }
+                catch (Exception) { }
+                finally { Monitor.Exit(dispatchLock); }
+            }, null, 3000, 3000);
+            GC.KeepAlive(t);
+        }
+
+        // ---------------- simulation (no Twitch, no tokens) ----------------
+        static void SimLoop()
+        {
+            string line; int n = 0;
+            while ((line = Console.ReadLine()) != null)
+            {
+                if (line.StartsWith("event "))   // sim: event TwitchSub alice 2   (3rd word = tier / bits / viewers)
+                { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "bits", v }, { "viewers", v } }); continue; }
+                int c = line.IndexOf(':'); if (c < 1) continue;
+                string who = line.Substring(0, c).Trim(); int role = 1;
+                if (who.StartsWith("*")) { role = 3; who = who.Substring(1); } else if (who.StartsWith("#")) { role = 4; who = who.Substring(1); }
+                Dispatch(who, line.Substring(c + 1).Trim(), "sim-" + (++n), role, "id-" + who.ToLowerInvariant(), false, null);
+            }
+        }
+
+        // ---------------- Twitch: read chat (anonymous IRC over WebSocket), speak through helix with PinguinoB0t's token ----------------
+        static void WireTwitch(JObject s)
+        {
+            string tok = s.Value<string>("UserToken"), cid = s.Value<string>("ClientId"), sid = s.Value<string>("SenderId"), bid = s.Value<string>("BroadcasterId");
+            if (string.IsNullOrEmpty(tok) || string.IsNullOrEmpty(cid) || string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(bid)) { Console.WriteLine("(no Twitch send credentials: replies are printed only)"); return; }
+            var http = new HttpClient();
+            HttpRequestMessage Req(HttpMethod m, string url, JObject body)
+            {
+                var r = new HttpRequestMessage(m, url);
+                r.Headers.Add("Authorization", "Bearer " + tok); r.Headers.Add("Client-Id", cid);
+                if (body != null) r.Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
+                return r;
+            }
+            cph.Say = m => http.SendAsync(Req(HttpMethod.Post, HostApi.Helix + "/chat/messages", new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", m } })).Result.IsSuccessStatusCode;
+            cph.Timeout = (user, secs, why) =>
+            {
+                var g = http.SendAsync(Req(HttpMethod.Get, HostApi.Helix + "/users?login=" + Uri.EscapeDataString(user), null)).Result;
+                var first = (JObject.Parse(g.Content.ReadAsStringAsync().Result)["data"] as JArray)?.FirstOrDefault();
+                string uid = first == null ? null : (string)first["id"]; if (uid == null) return false;
+                var body = new JObject { { "data", new JObject { { "user_id", uid }, { "duration", secs }, { "reason", why } } } };
+                return http.SendAsync(Req(HttpMethod.Post, HostApi.Helix + "/moderation/bans?broadcaster_id=" + bid + "&moderator_id=" + sid, body)).Result.IsSuccessStatusCode;
+            };
+        }
+
+        static async Task ReadChatForever(string channel)
+        {
+            int backoff = 2;
+            while (true)
+            {
+                try
+                {
+                    using (var ws = new ClientWebSocket())
+                    {
+                        await ws.ConnectAsync(new Uri("wss://irc-ws.chat.twitch.tv:443"), CancellationToken.None);
+                        async Task Send(string l) { await ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(l + "\r\n")), WebSocketMessageType.Text, true, CancellationToken.None); }
+                        await Send("CAP REQ :twitch.tv/tags twitch.tv/commands");
+                        await Send("NICK justinfan" + new Random().Next(10000, 99999));
+                        await Send("JOIN #" + channel.ToLowerInvariant());
+                        Console.WriteLine("connected to #" + channel); backoff = 2; HostApi.IrcConnected = true;
+                        var buf = new byte[16384]; var sb = new StringBuilder();
+                        while (ws.State == WebSocketState.Open)
+                        {
+                            var r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), CancellationToken.None);
+                            if (r.MessageType == WebSocketMessageType.Close) break;
+                            sb.Append(Encoding.UTF8.GetString(buf, 0, r.Count));
+                            if (!r.EndOfMessage) continue;
+                            foreach (string line in sb.ToString().Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                if (line.StartsWith("PING")) { await Send("PONG :tmi.twitch.tv"); continue; }
+                                HandleIrc(line);
+                            }
+                            sb.Clear();
+                        }
+                    }
+                }
+                catch (Exception ex) { Console.WriteLine("chat connection lost: " + ex.Message); }
+                HostApi.IrcConnected = false;
+                Console.WriteLine("reconnecting in " + backoff + "s"); await Task.Delay(backoff * 1000); backoff = Math.Min(backoff * 2, 60);
+            }
+        }
+
+        static readonly Regex Privmsg = new Regex(@"^@(?<tags>\S+) :(?<nick>[^!]+)![^ ]+ PRIVMSG #\S+ :(?<msg>.*)$", RegexOptions.Compiled);
+        static void HandleIrc(string line)
+        {
+            var m = Privmsg.Match(line); if (!m.Success) return;
+            var tags = m.Groups["tags"].Value.Split(';').Select(t => t.Split(new[] { '=' }, 2)).Where(a => a.Length == 2).ToDictionary(a => a[0], a => a[1], StringComparer.Ordinal);
+            string T(string k) { string v; return tags.TryGetValue(k, out v) ? v : ""; }
+            HostApi.Messages++; HostApi.LastMessage = DateTime.UtcNow;
+            string msg = m.Groups["msg"].Value; if (msg.StartsWith("\u0001ACTION ")) msg = msg.Substring(8).TrimEnd('\u0001');
+            int role = T("badges").Contains("broadcaster/") ? 4 : T("mod") == "1" ? 3 : T("badges").Contains("vip/") ? 2 : 1;
+            string display = T("display-name") != "" ? T("display-name") : m.Groups["nick"].Value;
+            string reply = T("reply-parent-user-login");
+            Task.Run(() => Dispatch(display, msg, T("id"), role, T("user-id"), T("first-msg") == "1", reply));
+        }
+    }
+}
