@@ -21,6 +21,13 @@
       "enabled": true,
       "start_with_suite": true,
       "react_to_live": true
+    },
+    "ui": {
+      "nav": "Listen",
+      "icon": "🎙",
+      "section": "Modules",
+      "path": "/",
+      "order": 10
     }
   },
   {
@@ -38,6 +45,38 @@
     "defaults": {
       "enabled": true,
       "start_with_suite": false
+    },
+    "ui": {
+      "nav": "Multi",
+      "icon": "🧊",
+      "section": "Modules",
+      "path": "/",
+      "order": 20
+    }
+  },
+  {
+    "id": "host",
+    "name": "PinguinoHost",
+    "desc": "Runs the four Pinguino bots without Streamer.bot: Twitch chat, events, OBS, overlays. Setup page included.",
+    "cwd": "../PinguinoHost",
+    "cmd": [
+      "dotnet",
+      "bin/Release/net8.0/PinguinoHost.dll"
+    ],
+    "port": 8770,
+    "url": "http://127.0.0.1:8770",
+    "health": "/api/status",
+    "defaults": {
+      "enabled": true,
+      "start_with_suite": false
+    },
+    "ui": {
+      "nav": "Bots / Host",
+      "icon": "🤖",
+      "section": "Modules",
+      "path": "/",
+      "order": 30,
+      "replaces": "bots"
     }
   }
 ]
