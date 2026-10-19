@@ -11,7 +11,7 @@ import { log } from './log.mjs';
 import * as ts from './tailscale.mjs';
 
 const TEST = process.env.PINGUINO_MESH_TEST === '1';   // test hook only: allows loopback peers
-const BEAT_MS = 3000, OFFLINE_MS = 12000, CODE_MS = 5 * 60000, APPROVE_MS = 90000;
+const BEAT_MS = 3000, APPROVE_MS = 90000;
 const CORE = process.env.PINGUINO_CORE_URL || 'http://127.0.0.1:8760';
 const FILE = path.join(DIR, 'mesh.json');
 
@@ -48,6 +48,7 @@ function cleanDevice(d) {
 }
 
 export function createMesh(cfg, { port }) {
+  const OFFLINE_MS = () => (cfg.mesh?.offlineSec ?? 12) * 1000, CODE_MS = () => (cfg.mesh?.codeMinutes ?? 5) * 60000;
   let state = {};
   try { state = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
   state.self ||= { id: crypto.randomUUID(), name: os.hostname() };
@@ -75,7 +76,7 @@ export function createMesh(cfg, { port }) {
   }
   function markOnline() {
     for (const p of peerList()) {
-      const r = R(p.id), on = Date.now() - r.last_seen < OFFLINE_MS;
+      const r = R(p.id), on = Date.now() - r.last_seen < OFFLINE_MS();
       if (r.online && !on) log('warn', 'peer', `${p.name} is offline${r.error ? ` (${r.error})` : ''}`);
       r.online = on;
     }
@@ -247,10 +248,11 @@ export function createMesh(cfg, { port }) {
     };
   }
   function startPairing() {
-    pairing = { code: String(crypto.randomInt(0, 1e6)).padStart(6, '0'), expires: Date.now() + CODE_MS, attempts: 0 };
-    log('info', 'pairing', 'pairing code created (valid 5 minutes)');
+    pairing = { code: String(crypto.randomInt(0, 1e6)).padStart(6, '0'), expires: Date.now() + CODE_MS(), attempts: 0 };
+    log('info', 'pairing', `pairing code created (valid ${CODE_MS() / 60000} minutes)`);
     return { code: pairing.code, expires: pairing.expires };
   }
+  const getName = () => state.self.name;
   function setName(name) {
     state.self.name = str(name) || state.self.name; save();
     return { ok: true };
@@ -266,5 +268,5 @@ export function createMesh(cfg, { port }) {
     setInterval(tick, BEAT_MS).unref();
     tick();
   }
-  return { start, tick, status, pairRequest, approve, join, heartbeat, broadcast, receive, peerUnpaired, removePeer, startPairing, setName, prestreamItems };
+  return { start, tick, status, pairRequest, approve, join, heartbeat, broadcast, receive, peerUnpaired, removePeer, startPairing, setName, getName, prestreamItems };
 }

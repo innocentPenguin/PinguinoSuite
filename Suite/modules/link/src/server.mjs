@@ -1,10 +1,13 @@
 import http from 'node:http';
+import fs from 'node:fs';
 import crypto from 'node:crypto';
 import * as ts from './tailscale.mjs';
 import { runRequests, obsState } from './obs.mjs';
-import { log } from './log.mjs';
+import { log, setLevel } from './log.mjs';
 import { prestream } from './prestream.mjs';
 import { createMesh } from './mesh.mjs';
+import * as settings from './settings.mjs';
+import * as macros from './macros.mjs';
 import { obsConn } from './vault.mjs';
 
 /** Run a macro. Hub talks to OBS directly; clients forward to the hub over the tailnet. */
@@ -34,61 +37,7 @@ export async function runMacro(cfg, name) {
   return r.json();
 }
 
-const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>PinguinoLink</title>
-<style>
-:root{color-scheme:dark}
-*{box-sizing:border-box}body{margin:0;background:var(--bg,#050506);color:var(--fg,#ececef);font:14px/1.45 system-ui,Segoe UI,sans-serif}
-main{max-width:1060px;margin:0 auto;padding:20px 16px}h1{font-size:20px;margin:0 0 14px}h3{margin:0 0 10px;font-size:13px;color:var(--accent,#ff9900);text-transform:uppercase;letter-spacing:.06em}
-.card{background:var(--panel,#0d0e10);border:1px solid var(--line,#1f2125);border-radius:var(--r,10px);padding:14px 16px;margin-bottom:14px}
-ul{list-style:none;margin:8px 0 0;padding:0}li{padding:6px 0;border-top:1px solid var(--line,#1f2125);display:flex;gap:10px;align-items:center;flex-wrap:wrap}li .grow{flex:1}
-button{background:var(--panel2,#14161a);color:var(--fg,#ececef);border:1px solid var(--line2,#1f2125);border-radius:8px;margin:4px 6px 4px 0;padding:9px 16px;font:inherit;cursor:pointer}
-button:hover{border-color:var(--accent,#ff9900);background:var(--panel2,#1b1d21)}button.danger{border-color:var(--bad,#8a3a3a)}button.armed{border-color:var(--accent,#ff9900);color:var(--accent,#ff9900)}
-input{background:var(--bg2,#08090a);color:var(--fg,#ececef);border:1px solid var(--line2,#1f2125);border-radius:8px;padding:8px 10px;font:inherit;margin:4px 6px 4px 0}
-.dim{color:var(--dim,#8d9199)}#msg,#dmsg{min-height:20px;margin-top:8px}.code{font:700 26px/1 ui-monospace,Consolas,monospace;letter-spacing:.2em;color:var(--accent,#ff9900)}
-</style>
-<link rel=stylesheet href="__CORE__/theme.css">
-<body><main>
-<h1>🐧 PinguinoLink</h1>
-<div class=card><h3>Network</h3><div id=s>loading…</div></div>
-<div class=card><h3>Devices</h3><div id=d class=dim>loading…</div><div id=dmsg class=dim></div></div>
-<div class=card><h3>OBS</h3><div id=o class=dim>loading…</div></div>
-<div class=card><h3>OBS macros</h3><div id=m></div><div id=msg class=dim></div></div>
-<div class="card dim">File send/receive: use the CLI (<code>pinguinolink send</code> / <code>receive</code>); not yet in this page.</div>
-</main>
-<script>
-const H={'x-link-token':'__TOKEN__'};
-const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const $=id=>document.getElementById(id);
-const last={};const setHtml=(id,h)=>{if(last[id]!==h){last[id]=h;$(id).innerHTML=h;}};
-let armed=null,armedAt=0;
-const isArmed=k=>armed===k&&Date.now()-armedAt<4000;
-const api=async(p,b)=>{const r=await fetch(p,b===undefined?{headers:H}:{method:'POST',headers:Object.assign({'content-type':'application/json'},H),body:JSON.stringify(b)});
-const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j;};
-async function load(){try{const s=await api('/api/status');
-setHtml('s','Role: <b>'+esc(s.role)+'</b> · '+esc(s.tailscale.state||s.tailscale.error)+'<ul>'+(s.tailscale.peers||[]).map(p=>'<li>'+esc(p.name)+' — '+(p.online?(p.direct?'🟢 direct':'🟡 relayed'):'⚫ offline')+'</li>').join('')+'</ul>');
-setHtml('m',s.macros.map(n=>{const risky=n==='stop'||n==='start';return '<button class="'+(risky?'danger':'')+(isArmed('m:'+n)?' armed':'')+'" data-m="'+esc(n)+'"'+(risky?' data-twice="m:'+esc(n)+'"':'')+'>'+(isArmed('m:'+n)?'Click again: '+esc(n)+' the stream':esc(n))+'</button>';}).join(''));}
-catch(e){$('s').textContent='unavailable: '+e.message;}
-try{const o=await api('/api/obs');setHtml('o',o.connected?'🟢 Connected · scene <b>'+esc(o.scene)+'</b> · '+(o.streaming?'<b style="color:var(--live,#ff4d4f)">● LIVE</b>':'not streaming')+(o.recording?' · ● recording':''):'⚫ '+esc(o.error||'not connected'));}catch(e){$('o').textContent='unavailable: '+e.message;}
-try{const d=await api('/api/mesh/status');
-let h='<div>This device: <b>'+esc(d.self.name)+'</b> <span class=dim>('+esc(d.self.os)+')</span></div>';
-h+='<ul>'+(d.peers.length?d.peers.map(p=>'<li><span class=grow>'+(p.online?'🟢':'⚫')+' <b>'+esc(p.name)+'</b> <span class=dim>'+esc(p.os)+(p.online?'':(p.error?' · '+esc(p.error):' · offline'))+'</span></span><button data-unpair="'+esc(p.id)+'" data-twice="u:'+esc(p.id)+'" class="danger'+(isArmed('u:'+p.id)?' armed':'')+'">'+(isArmed('u:'+p.id)?'Click again to unpair':'Unpair')+'</button></li>').join(''):'<li class=dim>No paired devices. Pair one to share the master role across your PCs.</li>')+'</ul>';
-if(d.pending.length)h+='<h3 style="margin-top:12px">Pairing requests</h3><ul>'+d.pending.map(p=>'<li><span class=grow><b>'+esc(p.name)+'</b> ('+esc(p.os)+') from '+esc(p.from)+' wants to pair</span><button data-appr="'+esc(p.id)+'">Allow</button><button data-deny="'+esc(p.id)+'" class=danger>Deny</button></li>').join('')+'</ul>';
-h+='<div style="margin-top:10px">'+(d.pairing?'Pairing code: <span class=code>'+esc(d.pairing.code)+'</span> <span class=dim>valid 5 minutes, Tailscale devices only</span>':'<button id=pstart>Show a pairing code</button>')+'</div>';
-h+='<div style="margin-top:6px"><input id=ja placeholder="other device: name or 100.x address" size=34><input id=jc placeholder="code" size=8><button id=jgo>Pair</button></div>';
-if(!document.activeElement||document.activeElement.tagName!=='INPUT'){const a=$('ja')&&$('ja').value,c=$('jc')&&$('jc').value;setHtml('d',h);if(a)$('ja').value=a;if(c)$('jc').value=c;}
-}catch(e){$('d').textContent='mesh unavailable: '+e.message;}}
-document.addEventListener('click',async e=>{const t=e.target;if(!t.dataset&&!t.id)return;
-const k=t.dataset&&t.dataset.twice;
-if(k){if(!isArmed(k)){armed=k;armedAt=Date.now();load();return;}armed=null;}
-try{
-if(t.dataset.m){const r=await fetch('/api/macro/'+encodeURIComponent(t.dataset.m),{method:'POST',headers:H});let em='';if(!r.ok){const j=await r.json().catch(()=>({}));em=j.error||('HTTP '+r.status);}$('msg').textContent=t.dataset.m+': '+(r.ok?'done':em);load();return;}
-if(t.dataset.unpair){await api('/api/mesh/unpair',{id:t.dataset.unpair});$('dmsg').textContent='Unpaired.';load();return;}
-if(t.dataset.appr||t.dataset.deny){await api('/api/mesh/pair/approve',{id:t.dataset.appr||t.dataset.deny,allow:!!t.dataset.appr});load();return;}
-if(t.id==='pstart'){await api('/api/mesh/pair/start',{});load();return;}
-if(t.id==='jgo'){$('dmsg').textContent='Waiting for the other device to approve (up to 90 s)…';const r=await api('/api/mesh/pair/join',{addr:$('ja').value,code:$('jc').value});$('dmsg').textContent='Paired with '+r.device.name+'.';load();return;}
-}catch(err){$('dmsg').textContent=err.message;$('msg').textContent=err.message;}});
-load();setInterval(load,4000);</script>`;
+const PAGE = fs.readFileSync(new URL('./page.html', import.meta.url), 'utf8');
 
 // Suite desktop shell (Tauri webview) origins; the token is still required for anything but the page.
 const TAURI = new Set(['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost']);
@@ -130,6 +79,8 @@ export async function serve(cfg) {
   const port = Number(process.env.PINGUINO_LINK_PORT) || cfg.port;
   let selfName = '';
   const mesh = createMesh(cfg, { port });
+  const sctx = { getName: mesh.getName, setName: mesh.setName };
+  setLevel(cfg.log?.level);
   const handler = async (req, res) => {
     const local = LOOP.has(req.socket.remoteAddress || '');
     const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
@@ -155,17 +106,37 @@ export async function serve(cfg) {
         return res.end(PAGE.replace('__TOKEN__', cfg.token).replace('__CORE__', CORE_URL));
       }
       // Pre-stream readiness for the Suite console: no token, no secrets in the output.
-      if (req.method === 'GET' && req.url === '/api/prestream') return json(200, { items: [...await prestream(cfg), ...mesh.prestreamItems()] });
+      if (req.method === 'GET' && req.url === '/api/prestream') return json(200, { items: [...await prestream(cfg), ...(cfg.prestream?.devices === false ? [] : mesh.prestreamItems())] });
       // Everything else needs the token, loopback included.
       if (!tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization)) { log('warn', 'http', `unauthorized ${req.method} ${req.url.split('?')[0]} (401)`); return json(401, { error: 'bad token' }); }
       if (req.method === 'GET' && req.url === '/api/status') {
         const t = await ts.status();
         selfName = t.self?.name || selfName;
-        return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), tailscale: t, peers: mesh.status().peers });
+        return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), macro_buttons: macros.buttons(cfg), ui: { refreshSec: cfg.ui?.refreshSec ?? 4, compact: !!cfg.ui?.compact, accent: cfg.ui?.accent || '' }, tailscale: t, peers: mesh.status().peers });
       }
       if (req.method === 'GET' && req.url === '/api/integrations') {   // Integrations tab (module token)
-        const items = [...await prestream(cfg), ...mesh.prestreamItems()].map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail, help: i.help }));
+        const items = [...await prestream(cfg), ...(cfg.prestream?.devices === false ? [] : mesh.prestreamItems())].map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail, help: i.help }));
         return json(200, { items });
+      }
+      if (req.method === 'GET' && req.url === '/api/settings') return json(200, { groups: settings.view(cfg, sctx), peers: ((await ts.status()).peers || []).map(p => p.name) });
+      if (req.method === 'POST' && req.url === '/api/settings') { const b = await readJson(req); return json(200, settings.apply(cfg, sctx, b.changes, { confirmRole: b.confirm_role === true })); }
+      if (req.method === 'GET' && req.url === '/api/macros') {
+        const o = cfg.role === 'hub' ? await obsState(await obsConn(cfg)) : { connected: false };
+        return json(200, { macros: macros.list(cfg), kinds: Object.entries(macros.KINDS).map(([kind, k]) => ({ kind, label: k.label, param: k.param || null, risky: !!k.risky })), scenes: o.scenes || [], inputs: o.inputs || [], connected: !!o.connected });
+      }
+      if (req.method === 'POST' && req.url.startsWith('/api/macros/')) {
+        const b = await readJson(req), act = req.url.slice('/api/macros/'.length);
+        if (act === 'set') return json(200, macros.set(cfg, b));
+        if (act === 'delete') return json(200, macros.remove(cfg, String(b.name)));
+        if (act === 'move') return json(200, macros.move(cfg, String(b.name), Number(b.dir)));
+        if (act === 'check') {
+          if (cfg.role !== 'hub') return json(200, { ok: null, note: 'This device is a client; names are checked on the hub.' });
+          const o = await obsState(await obsConn(cfg));
+          if (!o.connected) return json(200, { ok: null, note: `OBS not reachable: ${o.error}` });
+          const miss = macros.missing(cfg, String(b.name), o);
+          return json(200, { ok: !miss.length, missing: miss });
+        }
+        return json(404, { error: 'not found' });
       }
       if (req.method === 'GET' && req.url === '/api/obs') {            // read-only OBS state for the page
         if (cfg.role !== 'hub') return json(200, { connected: false, role: cfg.role, error: 'this device is a client; OBS runs on the hub' });

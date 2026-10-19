@@ -1,0 +1,125 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>PinguinoLink</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg,#050506);color:var(--fg,#ececef);font:14px/1.45 system-ui,Segoe UI,sans-serif}
+main{max-width:1060px;margin:0 auto;padding:20px 16px}h1{font-size:20px;margin:0 0 14px}
+h3{margin:0 0 10px;font-size:13px;color:var(--accent,#ff9900);text-transform:uppercase;letter-spacing:.06em}
+h4{margin:14px 0 4px;font-size:12px;color:var(--dim,#8d9199);text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--panel,#0d0e10);border:1px solid var(--line,#1f2125);border-radius:var(--r,10px);padding:14px 16px;margin-bottom:14px}
+body.compact main{padding:10px 10px}body.compact .card{padding:8px 12px;margin-bottom:8px}body.compact li{padding:3px 0}
+details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}details>summary h3{display:inline;margin:0}
+details>summary:after{content:' ▾';color:var(--dim,#8d9199)}details[open]>summary:after{content:' ▴'}
+ul{list-style:none;margin:8px 0 0;padding:0}li{padding:6px 0;border-top:1px solid var(--line,#1f2125);display:flex;gap:10px;align-items:center;flex-wrap:wrap}li .grow{flex:1}
+button{background:var(--panel2,#14161a);color:var(--fg,#ececef);border:1px solid var(--line2,#1f2125);border-radius:8px;margin:4px 6px 4px 0;padding:9px 16px;font:inherit;cursor:pointer}
+button.sm{padding:4px 10px;margin:2px 4px 2px 0;font-size:13px}
+button:hover{border-color:var(--accent,#ff9900);background:var(--panel2,#1b1d21)}button.danger{border-color:var(--bad,#8a3a3a)}button.armed{border-color:var(--accent,#ff9900);color:var(--accent,#ff9900)}
+input,select{background:var(--bg2,#08090a);color:var(--fg,#ececef);border:1px solid var(--line2,#1f2125);border-radius:8px;padding:7px 10px;font:inherit;margin:4px 6px 4px 0}
+input[type=checkbox]{width:18px;height:18px;margin:4px 8px 4px 0;accent-color:var(--accent,#ff9900)}
+.dim{color:var(--dim,#8d9199)}small.dim{display:block;font-size:12px}#msg,#dmsg,#smsg,#mmsg{min-height:20px;margin-top:8px}
+.code{font:700 26px/1 ui-monospace,Consolas,monospace;letter-spacing:.2em;color:var(--accent,#ff9900)}
+.row{display:grid;grid-template-columns:230px 1fr;gap:4px 14px;padding:8px 0;border-top:1px solid var(--line,#1f2125);align-items:start}
+@media(max-width:700px){.row{grid-template-columns:1fr}}
+.ok{color:var(--ok,#3ddc97)}.bad{color:var(--bad,#ff5c5c)}
+</style>
+<link rel=stylesheet href="__CORE__/theme.css">
+<body><main>
+<h1>🐧 PinguinoLink</h1>
+<div class=card><h3>Network</h3><div id=s>loading…</div></div>
+<div class=card><h3>Devices</h3><div id=d class=dim>loading…</div><div id=dmsg class=dim></div></div>
+<div class=card><h3>OBS</h3><div id=o class=dim>loading…</div></div>
+<div class=card><h3>OBS macros</h3><div id=m></div><div id=msg class=dim></div></div>
+<details class=card id=mdet><summary><h3>Edit macros</h3> <span class=dim>add, rename, reorder, check against OBS</span></summary><div id=me class=dim>open to load…</div><div id=mmsg class=dim></div></details>
+<details class=card id=sdet><summary><h3>Settings</h3> <span class=dim>everything here is yours to change; each line shows its default</span></summary><div id=se class=dim>open to load…</div><div id=smsg class=dim></div></details>
+<div class="card dim">File send/receive: use the CLI (<code>pinguinolink send</code> / <code>receive</code>); not yet in this page.</div>
+</main>
+<script>
+const H={'x-link-token':'__TOKEN__'};
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=id=>document.getElementById(id);
+const last={};const setHtml=(id,h)=>{if(last[id]!==h){last[id]=h;$(id).innerHTML=h;}};
+let armed=null,armedAt=0,refreshSec=4;
+const isArmed=k=>armed===k&&Date.now()-armedAt<4000;
+const api=async(p,b)=>{const r=await fetch(p,b===undefined?{headers:H}:{method:'POST',headers:Object.assign({'content-type':'application/json'},H),body:JSON.stringify(b)});
+const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||('HTTP '+r.status)),{data:j});return j;};
+function applyUi(u){if(!u)return;refreshSec=u.refreshSec||4;document.body.classList.toggle('compact',!!u.compact);
+if(u.accent)document.documentElement.style.setProperty('--accent',u.accent);else document.documentElement.style.removeProperty('--accent');}
+async function load(){try{const s=await api('/api/status');applyUi(s.ui);
+setHtml('s','Role: <b>'+esc(s.role)+'</b> · '+esc(s.tailscale.state||s.tailscale.error)+'<ul>'+(s.tailscale.peers||[]).map(p=>'<li>'+esc(p.name)+' — '+(p.online?(p.direct?'🟢 direct':'🟡 relayed'):'⚫ offline')+'</li>').join('')+'</ul>');
+setHtml('m',(s.macro_buttons||[]).filter(b=>!b.hidden).map(b=>{const k='m:'+b.name,a=isArmed(k);return '<button class="'+(b.risky?'danger':'')+(a?' armed':'')+'" data-m="'+esc(b.name)+'"'+(b.risky?' data-twice="'+esc(k)+'"':'')+'>'+(a?'Click again: '+esc(b.label):esc((b.icon?b.icon+' ':'')+b.label))+'</button>';}).join('')||'<span class=dim>No macros yet. Open "Edit macros" to add one.</span>');}
+catch(e){$('s').textContent='unavailable: '+e.message;}
+try{const o=await api('/api/obs');setHtml('o',o.connected?'🟢 Connected · scene <b>'+esc(o.scene)+'</b> · '+(o.streaming?'<b style="color:var(--live,#ff4d4f)">● LIVE</b>':'not streaming')+(o.recording?' · ● recording':''):'⚫ '+esc(o.error||'not connected'));}catch(e){$('o').textContent='unavailable: '+e.message;}
+try{const d=await api('/api/mesh/status');
+let h='<div>This device: <b>'+esc(d.self.name)+'</b> <span class=dim>('+esc(d.self.os)+')</span></div>';
+h+='<ul>'+(d.peers.length?d.peers.map(p=>'<li><span class=grow>'+(p.online?'🟢':'⚫')+' <b>'+esc(p.name)+'</b> <span class=dim>'+esc(p.os)+(p.online?'':(p.error?' · '+esc(p.error):' · offline'))+'</span></span><button data-unpair="'+esc(p.id)+'" data-twice="u:'+esc(p.id)+'" class="danger'+(isArmed('u:'+p.id)?' armed':'')+'">'+(isArmed('u:'+p.id)?'Click again to unpair':'Unpair')+'</button></li>').join(''):'<li class=dim>No paired devices. Pair one to share the master role across your PCs.</li>')+'</ul>';
+if(d.pending.length)h+='<h4>Pairing requests</h4><ul>'+d.pending.map(p=>'<li><span class=grow><b>'+esc(p.name)+'</b> ('+esc(p.os)+') from '+esc(p.from)+' wants to pair</span><button data-appr="'+esc(p.id)+'">Allow</button><button data-deny="'+esc(p.id)+'" class=danger>Deny</button></li>').join('')+'</ul>';
+h+='<div style="margin-top:10px">'+(d.pairing?'Pairing code: <span class=code>'+esc(d.pairing.code)+'</span> <span class=dim>valid until '+new Date(d.pairing.expires).toLocaleTimeString()+', Tailscale devices only</span>':'<button id=pstart>Show a pairing code</button>')+'</div>';
+h+='<div style="margin-top:6px"><input id=ja placeholder="other device: name or 100.x address" size=34><input id=jc placeholder="code" size=8><button id=jgo>Pair</button></div>';
+if(!document.activeElement||document.activeElement.tagName!=='INPUT'){const a=$('ja')&&$('ja').value,c=$('jc')&&$('jc').value;setHtml('d',h);if(a)$('ja').value=a;if(c)$('jc').value=c;}
+}catch(e){$('d').textContent='mesh unavailable: '+e.message;}}
+
+/* ---------- Settings ---------- */
+async function loadSettings(){try{const r=await api('/api/settings');
+$('se').innerHTML='<datalist id=peers>'+r.peers.map(p=>'<option value="'+esc(p)+'">').join('')+'</datalist>'+r.groups.map(g=>'<h4>'+esc(g.group)+'</h4>'+g.fields.map(f=>{
+const v=f.type==='list'?(f.value||[]).join(', '):f.value;let ctl;
+if(f.type==='bool')ctl='<input type=checkbox data-set="'+esc(f.key)+'"'+(f.value?' checked':'')+'>';
+else if(f.type==='select')ctl='<select data-set="'+esc(f.key)+'">'+f.options.map(o=>'<option'+(o===f.value?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
+else ctl='<input data-set="'+esc(f.key)+'" value="'+esc(v)+'" size="'+(f.type==='number'?8:f.type==='path'?44:28)+'"'+(f.list?' list="'+f.list+'"':'')+(f.type==='number'?' type=number min="'+f.min+'" max="'+f.max+'"':'')+(f.type==='color'?' placeholder="#ff9900"':'')+'>';
+const dflt=f.type==='list'?(f.def||[]).join(', ')||'none':(f.def===''?'none':f.def===true?'on':f.def===false?'off':f.def);
+return '<div class=row><div><b>'+esc(f.label)+'</b></div><div>'+ctl+(f.changed?'<button class="sm" data-reset="'+esc(f.key)+'">Reset</button>':'')+'<small class=dim>'+esc(f.help)+' <i>Default: '+esc(dflt)+'.</i></small><span id="sv-'+esc(f.key)+'"></span></div></div>';}).join('')).join('');
+}catch(e){$('se').textContent='settings unavailable: '+e.message;}}
+$('sdet').addEventListener('toggle',()=>{if($('sdet').open)loadSettings();});
+let pendingRole=null;
+document.addEventListener('change',async e=>{const t=e.target,k=t.dataset&&t.dataset.set;if(!k)return;
+const v=t.type==='checkbox'?t.checked:t.value;
+if(k==='role'){pendingRole=v;$('smsg').innerHTML='Switch this PC to <b>'+esc(v)+'</b>? '+(v==='hub'?'It will run OBS macros itself.':'It will forward macros to the hub.')+' <button id=rolego class=danger>Yes, change role</button> <button id=rolestop>Cancel</button>';return;}
+await saveSetting(k,v);});
+async function saveSetting(k,v,extra){try{const r=await api('/api/settings',Object.assign({changes:{[k]:v}},extra||{}));$('smsg').textContent=r.changed.length?('Saved'+(r.restart?' (restart Link to apply)':'')+'.'):'No change.';await loadSettings();load();}catch(err){$('smsg').textContent=err.message;}}
+
+/* ---------- Macro editor ---------- */
+let MC=null;
+async function loadMacros(){try{MC=await api('/api/macros');renderMacros();}catch(e){$('me').textContent='macros unavailable: '+e.message;}}
+$('mdet').addEventListener('toggle',()=>{if($('mdet').open)loadMacros();});
+function stepRow(st,i){const kinds=MC.kinds;const k=kinds.find(x=>x.kind===st.kind);
+if(st.kind==='custom')return '<div class=row><div class=dim>step '+(i+1)+'</div><div>custom request <code>'+esc(st.raw)+'</code> <span class=dim>(edit in config.json)</span><input type=hidden data-kind="custom" value=""></div></div>';
+const opts=kinds.map(x=>'<option value="'+esc(x.kind)+'"'+(x.kind===st.kind?' selected':'')+'>'+esc(x.label)+'</option>').join('');
+const list=k&&k.param==='scene'?MC.scenes:MC.inputs;
+return '<div class=row><div class=dim>step '+(i+1)+'</div><div><select data-kind>'+opts+'</select>'+(k&&k.param?'<input data-val value="'+esc(st.value||'')+'" list="dl-'+k.param+'" placeholder="'+k.param+' name">':'<input data-val type=hidden>')+'<button class="sm danger" data-delstep="'+i+'">✕</button></div></div>';}
+function macroForm(m){const meta=m.meta||{};return '<div class=card style="margin-top:8px" data-form="'+esc(m.name)+'"><div><input data-f=name value="'+esc(m.name)+'" placeholder="name (a-z 0-9 - _)" size=16'+(m.name?' readonly':'')+'><input data-f=label value="'+esc(meta.label||'')+'" placeholder="button label (optional)" size=18><input data-f=icon value="'+esc(meta.icon||'')+'" placeholder="icon" size=4><label><input type=checkbox data-f=hidden'+(meta.hidden?' checked':'')+'> hide button</label></div><div data-steps>'+m.steps.map(stepRow).join('')+'</div><div style="margin-top:6px"><button class=sm data-addstep>+ Add step</button><button class=sm data-save>Save macro</button><button class=sm data-cancel>Cancel</button></div><small class=dim>Start/stop stream and stop recording always need a second click on the button.</small></div>';}
+function renderMacros(){const M=MC;
+$('me').innerHTML='<datalist id=dl-scene>'+M.scenes.map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist><datalist id=dl-input>'+M.inputs.map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist>'
++(M.connected?'':'<div class=dim>OBS is not connected here, so scene/input suggestions and "Check" are unavailable.</div>')
++'<ul>'+M.macros.map((m,i)=>'<li><span class=grow>'+(m.meta.icon?esc(m.meta.icon)+' ':'')+'<b>'+esc(m.name)+'</b>'+(m.meta.label?' <span class=dim>→ '+esc(m.meta.label)+'</span>':'')+(m.risky?' <span class=bad>needs 2 clicks</span>':'')+(m.meta.hidden?' <span class=dim>(hidden)</span>':'')+'<small class=dim>'+m.steps.map(s=>esc(s.kind==='custom'?s.raw:(M.kinds.find(k=>k.kind===s.kind)||{}).label+(s.value?': '+s.value:''))).join(' → ')+'</small><span id="mc-'+esc(m.name)+'"></span></span>'
++'<button class=sm data-mup="'+esc(m.name)+'">↑</button><button class=sm data-mdown="'+esc(m.name)+'">↓</button><button class=sm data-mcheck="'+esc(m.name)+'">Check</button><button class=sm data-medit="'+esc(m.name)+'">Edit</button><button class="sm danger'+(isArmed('md:'+m.name)?' armed':'')+'" data-mdel="'+esc(m.name)+'" data-twice="md:'+esc(m.name)+'">'+(isArmed('md:'+m.name)?'Click again':'Delete')+'</button></li>').join('')+'</ul>'
++'<button id=mnew>+ New macro</button><div id=mform></div>';}
+function readForm(f){const g=n=>f.querySelector('[data-f='+n+']');const steps=[...f.querySelectorAll('[data-steps] .row')].map(r=>{const k=r.querySelector('[data-kind]');const v=r.querySelector('[data-val]');return {kind:k.value||k.getAttribute('value')||'custom',value:v?v.value:''};});
+return {name:g('name').value.trim(),label:g('label').value,icon:g('icon').value,hidden:g('hidden').checked,steps};}
+
+document.addEventListener('click',async e=>{const t=e.target;if(!t.dataset&&!t.id)return;
+const k=t.dataset&&t.dataset.twice;
+if(k){if(!isArmed(k)){armed=k;armedAt=Date.now();load();if(MC&&k.startsWith('md:'))renderMacros();return;}armed=null;}
+try{
+const d=t.dataset;
+if(d.m){const r=await fetch('/api/macro/'+encodeURIComponent(d.m),{method:'POST',headers:H});let em='';if(!r.ok){const j=await r.json().catch(()=>({}));em=j.error||('HTTP '+r.status);}$('msg').textContent=d.m+': '+(r.ok?'done':em);load();return;}
+if(d.unpair){await api('/api/mesh/unpair',{id:d.unpair});$('dmsg').textContent='Unpaired.';load();return;}
+if(d.appr||d.deny){await api('/api/mesh/pair/approve',{id:d.appr||d.deny,allow:!!d.appr});load();return;}
+if(t.id==='pstart'){await api('/api/mesh/pair/start',{});load();return;}
+if(t.id==='jgo'){$('dmsg').textContent='Waiting for the other device to approve (up to 90 s)…';const r=await api('/api/mesh/pair/join',{addr:$('ja').value,code:$('jc').value});$('dmsg').textContent='Paired with '+r.device.name+'.';load();return;}
+if(d.reset){await saveSetting(d.reset,null);return;}
+if(t.id==='rolego'){const v=pendingRole;pendingRole=null;await saveSetting('role',v,{confirm_role:true});return;}
+if(t.id==='rolestop'){pendingRole=null;$('smsg').textContent='';loadSettings();return;}
+/* macro editor */
+if(t.id==='mnew'){$('mform').innerHTML=macroForm({name:'',steps:[{kind:'scene',value:''}],meta:{}});return;}
+if(d.medit){const m=MC.macros.find(x=>x.name===d.medit);$('mform').innerHTML=macroForm(m);return;}
+if(d.mdel){await api('/api/macros/delete',{name:d.mdel});await loadMacros();load();return;}
+if(d.mup||d.mdown){await api('/api/macros/move',{name:d.mup||d.mdown,dir:d.mup?-1:1});await loadMacros();load();return;}
+if(d.mcheck){const r=await api('/api/macros/check',{name:d.mcheck});$('mc-'+d.mcheck).innerHTML=r.ok===null?' <span class=dim>'+esc(r.note)+'</span>':r.ok?' <span class=ok>✓ all names exist in OBS</span>':' <span class=bad>✗ not in OBS: '+esc(r.missing.join(', '))+'</span>';return;}
+const form=t.closest&&t.closest('[data-form]');
+if(form&&d.addstep!==undefined){const rows=form.querySelector('[data-steps]');const n=rows.children.length;rows.insertAdjacentHTML('beforeend',stepRow({kind:'scene',value:''},n));return;}
+if(form&&d.delstep!==undefined){t.closest('.row').remove();return;}
+if(form&&d.cancel!==undefined){$('mform').innerHTML='';return;}
+if(form&&d.save!==undefined){await api('/api/macros/set',readForm(form));$('mmsg').textContent='Saved.';$('mform').innerHTML='';await loadMacros();load();return;}
+}catch(err){$('dmsg').textContent=err.message;$('msg').textContent=err.message;$('smsg').textContent=err.message;$('mmsg').textContent=err.message;}});
+document.addEventListener('change',e=>{const t=e.target;if(t.matches&&t.matches('[data-kind]')&&MC){const row=t.closest('.row');const k=MC.kinds.find(x=>x.kind===t.value);const i=[...row.parentNode.children].indexOf(row);row.outerHTML=stepRow({kind:t.value,value:''},i);}});
+(async function tick(){await load();setTimeout(tick,refreshSec*1000);})();
+</script>

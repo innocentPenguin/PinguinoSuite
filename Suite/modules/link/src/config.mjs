@@ -9,7 +9,7 @@ const LEGACY = path.join(os.homedir(), '.pinguinolink');
 export const DIR = process.env.PINGUINO_DATA_DIR ? path.join(path.resolve(process.env.PINGUINO_DATA_DIR), 'link') : LEGACY;
 const FILE = path.join(DIR, 'config.json');
 
-const DEFAULTS = {
+export const DEFAULTS = {
   role: 'client',            // 'hub' = the streaming PC that runs OBS; 'client' = everything else
   hub: 'streaming-pc',       // Tailscale device name of the hub (clients forward macros to it)
   port: 7777,

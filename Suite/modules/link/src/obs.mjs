@@ -67,8 +67,8 @@ export async function obsState(conn) {
   if (cache.v && cache.key === key && Date.now() - cache.at < 2000) return cache.v;
   let v;
   try {
-    const [sc, st, rc] = await getData(conn, ['GetSceneList', 'GetStreamStatus', 'GetRecordStatus'], 2500);
-    v = { connected: true, scene: sc.currentProgramSceneName || '', scenes: (sc.scenes || []).map(s => s.sceneName), streaming: !!st.outputActive, recording: !!rc.outputActive };
+    const [sc, st, rc, inp] = await getData(conn, ['GetSceneList', 'GetStreamStatus', 'GetRecordStatus', 'GetInputList'], 2500);
+    v = { connected: true, scene: sc.currentProgramSceneName || '', scenes: (sc.scenes || []).map(s => s.sceneName), inputs: (inp.inputs || []).map(i => i.inputName), streaming: !!st.outputActive, recording: !!rc.outputActive };
   } catch (e) { v = { connected: false, error: e.message }; }
   cache = { at: Date.now(), key, v };
   return v;

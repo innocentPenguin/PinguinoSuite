@@ -48,3 +48,6 @@ macOS run (no Mac here; paths and code are platform-neutral but untested; the co
 - `selfcheck.mjs` covers all of the above (13/13 on Windows).
 - Autostart: `start_with_suite: true` and `always_start: true` (commit `d1d7e86`); effective on the next Suite restart. Only session 00 launches or rebuilds the app.
 - File send/receive is CLI-only; no HTTP endpoints for it yet (per 00).
+
+## Personalisation (2026-10-19)
+Link page > Settings and > Edit macros (also `GET/POST /api/settings`, `/api/macros/*`, module token). One schema (`src/settings.mjs`) gives every setting a default and a one-line help: device name, role (confirmation required), hub, received-files folder, OBS address/port (loopback or Tailscale only), page refresh/compact/accent colour, extra two-click macros, which pre-stream checks run (and whether Tailscale is required), offline timeout, pairing-code lifetime, log level. Each has a Reset. Secrets never appear (OBS password stays in the key vault). Macros: add/edit/reorder/delete/check from an allow-list of actions (scene, start/stop stream, record, replay, mute); hand-written steps in config.json are preserved. Checks: `settingscheck.mjs`, `macrocheck.mjs`, `meshcheck.mjs`, `selfcheck.mjs`.
