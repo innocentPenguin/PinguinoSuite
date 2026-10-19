@@ -35,3 +35,41 @@ export function runRequests({ host, port, password }, requests, timeoutMs = 5000
     ws.onclose = e => { if (e.code === 4009) fail(new Error('OBS WebSocket password is wrong')); };
   });
 }
+
+// Small helper: one connection, returns each request's responseData.
+export function getData({ host, port, password }, types, timeoutMs = 4000) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://${host}:${port}`);
+    const res = [];
+    const timer = setTimeout(() => { ws.close(); reject(new Error('OBS timed out')); }, timeoutMs);
+    const fail = e => { clearTimeout(timer); try { ws.close(); } catch {} reject(e); };
+    ws.onerror = () => fail(new Error(`cannot reach OBS at ${host}:${port}`));
+    ws.onclose = e => { if (e.code === 4009) fail(new Error('OBS WebSocket password is wrong')); };
+    ws.onmessage = ev => {
+      const m = JSON.parse(ev.data);
+      if (m.op === 0) {
+        const id = { rpcVersion: 1 };
+        if (m.d.authentication) id.authentication = sha(sha(password + m.d.authentication.salt) + m.d.authentication.challenge);
+        ws.send(JSON.stringify({ op: 1, d: id }));
+      } else if (m.op === 2) types.forEach((t, i) => ws.send(JSON.stringify({ op: 6, d: { requestType: t, requestId: String(i) } })));
+      else if (m.op === 7) {
+        res[Number(m.d.requestId)] = m.d.responseData || {};
+        if (res.filter(Boolean).length === types.length) { clearTimeout(timer); ws.close(); resolve(res); }
+      }
+    };
+  });
+}
+
+let cache = { at: 0, key: '', v: null };
+/** Read-only OBS state for the dashboard and safety checks. Cached 2 s. Never throws. */
+export async function obsState(conn) {
+  const key = `${conn.host}:${conn.port}`;
+  if (cache.v && cache.key === key && Date.now() - cache.at < 2000) return cache.v;
+  let v;
+  try {
+    const [sc, st, rc] = await getData(conn, ['GetSceneList', 'GetStreamStatus', 'GetRecordStatus'], 2500);
+    v = { connected: true, scene: sc.currentProgramSceneName || '', scenes: (sc.scenes || []).map(s => s.sceneName), streaming: !!st.outputActive, recording: !!rc.outputActive };
+  } catch (e) { v = { connected: false, error: e.message }; }
+  cache = { at: Date.now(), key, v };
+  return v;
+}

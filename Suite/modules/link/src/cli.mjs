@@ -18,6 +18,14 @@ const HELP = `PinguinoLink
   receive                         pull incoming files into ${cfg.inbox}
   doctor [--no-ai]                run checks; on failure ask Claude and offer fixes`;
 
+/** Tailscale must be running for send/receive; says what to do instead of a raw error. */
+async function needTailscale() {
+  const s = await ts.status();
+  if (s.error) { console.log(s.error); return null; }
+  if (s.state !== 'Running') { console.log(`Tailscale is ${s.state}. Open the Tailscale app, turn it on, then try again.`); return null; }
+  return s;
+}
+
 switch (cmd) {
   case 'setup': {
     const [role = cfg.role, hub = cfg.hub] = args;
@@ -42,15 +50,22 @@ switch (cmd) {
   }
   case 'serve': await serve(cfg); break;
   case 'macro':
+    if (!args[0]) { console.log(`macros: ${Object.keys(cfg.macros).join(', ')}
+usage: pinguinolink macro <name>`); break; }
     try { await runMacro(cfg, args[0]); console.log('ok'); } catch (e) { console.error(e.message); process.exit(1); }
     break;
   case 'send': {
     const [file, dev] = args;
     if (!file || !dev || !fs.existsSync(file)) { console.log('usage: pinguinolink send <file> <device>'); break; }
-    const r = await ts.sendFile(file, dev); console.log(r.ok ? 'sent' : r.stderr);
+    const st = await needTailscale(); if (!st) break;
+    const peer = st.peers.find(p => p.name.toLowerCase() === dev.toLowerCase());
+    if (!peer) { console.log(`No device "${dev}" on your tailnet. Devices: ${st.peers.map(p => p.name).join(', ') || 'none'}`); break; }
+    if (!peer.online) { console.log(`${peer.name} is offline. Turn it on (with Tailscale running) and try again.`); break; }
+    const r = await ts.sendFile(file, peer.name); console.log(r.ok ? `sent to ${peer.name}` : r.stderr);
     break;
   }
   case 'receive': {
+    if (!(await needTailscale())) break;
     fs.mkdirSync(cfg.inbox, { recursive: true });
     const r = await ts.receiveFiles(cfg.inbox); console.log(r.ok ? `saved to ${cfg.inbox}` : r.stderr);
     break;

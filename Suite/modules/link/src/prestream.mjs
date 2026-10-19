@@ -1,6 +1,7 @@
 // Pre-stream readiness checks for the Suite console: [{id,label,status: pass|warn|fail, detail}]. No secrets in output.
 import * as ts from './tailscale.mjs';
 import { obsConn } from './vault.mjs';
+import { getData } from './obs.mjs';
 
 const item = (id, label, status, detail) => ({ id, label, status, detail });
 
@@ -40,30 +41,4 @@ export async function prestream(cfg) {
   out.push(cfg.role === 'hub' ? item('role', 'Role', 'pass', 'hub (this PC controls OBS)')
     : item('role', 'Role', 'warn', 'client: macros are forwarded to the hub, not run on this PC'));
   return out;
-}
-
-// Small helper: one connection, returns each request's responseData.
-import crypto from 'node:crypto';
-const sha = s => crypto.createHash('sha256').update(s).digest('base64');
-function getData({ host, port, password }, types, timeoutMs = 4000) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://${host}:${port}`);
-    const res = [];
-    const timer = setTimeout(() => { ws.close(); reject(new Error('OBS timed out')); }, timeoutMs);
-    const fail = e => { clearTimeout(timer); try { ws.close(); } catch {} reject(e); };
-    ws.onerror = () => fail(new Error(`cannot reach OBS at ${host}:${port}`));
-    ws.onclose = e => { if (e.code === 4009) fail(new Error('OBS WebSocket password is wrong')); };
-    ws.onmessage = ev => {
-      const m = JSON.parse(ev.data);
-      if (m.op === 0) {
-        const id = { rpcVersion: 1 };
-        if (m.d.authentication) id.authentication = sha(sha(password + m.d.authentication.salt) + m.d.authentication.challenge);
-        ws.send(JSON.stringify({ op: 1, d: id }));
-      } else if (m.op === 2) types.forEach((t, i) => ws.send(JSON.stringify({ op: 6, d: { requestType: t, requestId: String(i) } })));
-      else if (m.op === 7) {
-        res[Number(m.d.requestId)] = m.d.responseData || {};
-        if (res.filter(Boolean).length === types.length) { clearTimeout(timer); ws.close(); resolve(res); }
-      }
-    };
-  });
 }

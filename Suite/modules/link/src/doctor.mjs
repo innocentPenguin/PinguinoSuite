@@ -47,6 +47,13 @@ export async function check(cfg) {
   return out;
 }
 
+const HINTS = {
+  'tailscale installed': 'Install Tailscale from https://tailscale.com/download and sign in.',
+  'tailscale running': 'Open the Tailscale app and turn it on (tray icon).',
+  'hub ': 'Start the streaming PC, make sure Tailscale and PinguinoLink are running there, and check the hub name in the Link config.',
+  'OBS WebSocket': 'Start OBS, enable Tools > WebSocket Server Settings (port 4455), and put its password in the key vault as OBS_WS_PASSWORD.',
+};
+
 function redact(s, cfg) {
   return s.replaceAll(cfg.token, '<token>').replaceAll(cfg.obs.password || '\0', '<obs-password>')
           .replace(/https:\/\/login\.tailscale\.com\/\S+/g, '<login-url>');
@@ -65,7 +72,11 @@ function askClaude(cfg, prompt) {
 
 export async function doctor(cfg, { ask = true } = {}) {
   const results = await check(cfg);
-  for (const r of results) console.log(`${r.ok ? '✓' : '✗'} ${r.name}${r.detail ? ' — ' + r.detail : ''}`);
+  for (const r of results) {
+    console.log(`${r.ok ? '✓' : '✗'} ${r.name}${r.detail ? ' — ' + r.detail : ''}`);
+    const hint = !r.ok && Object.entries(HINTS).find(([k]) => r.name.startsWith(k))?.[1];
+    if (hint) console.log(`    → ${hint}`);
+  }
   const bad = results.filter(r => !r.ok);
   if (!bad.length) return console.log('\nAll good.');
   if (!ask || !cfg.claude.enabled) return;
