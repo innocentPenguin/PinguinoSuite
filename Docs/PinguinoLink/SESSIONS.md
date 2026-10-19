@@ -4,6 +4,7 @@
 |---|---|---|---|---|
 | 2026-10-19 | Permanent planning session | Inventory, architecture, docs 00–09 | Docs written; no code changed | Active |
 | 2026-10-19 | Permanent planning session | Goal: Suite-ready on Windows + macOS | Manifest + server hardening + Tailscale path resolver; see 10-SUITE-INTEGRATION | Done (Mac untested) |
+| 2026-10-19 | Permanent planning session | Tauri embedding, ui block, DATA_DIR, autostart (d1d7e86) | Done on Windows; see 10-SUITE-INTEGRATION | Done |
 
 Rules: log each task session here with its result before archiving it. Task directives start with `/plan`.
 

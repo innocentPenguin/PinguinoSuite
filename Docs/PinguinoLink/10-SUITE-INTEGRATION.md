@@ -15,7 +15,7 @@ Drop-in manifest `Suite\modules\link\module.json` (id `link`, port 7777, health 
 | Health | `GET /api/health` is unauthenticated, secret-free, no Tailscale call (fits the 1.5 s poll). |
 | Port override | `PINGUINO_LINK_PORT`. |
 
-Loopback dashboard page gets the token injected (same-origin only). `PINGUINO_DATA_DIR` is not used: config stays in `~/.pinguinolink` by user decision.
+Loopback dashboard page gets the token injected (same-origin only). `PINGUINO_DATA_DIR` is honoured when set (one-time copy of the legacy `~/.pinguinolink/config.json` into it); the core currently exports only `PINGUINO_API_TOKEN`, so Link keeps using `~/.pinguinolink` until the core also exports the data dir.
 
 ## Cross-platform
 `tailscale.mjs` resolves the CLI from PATH, then `C:\Program Files\Tailscale\tailscale.exe`, `/Applications/Tailscale.app/Contents/MacOS/Tailscale`, Homebrew paths. Works with Tailscale or OBS absent (status reports the error; service still runs).
@@ -40,3 +40,11 @@ macOS run (no Mac here; paths and code are platform-neutral but untested; the co
 
 ## Windows optimisation (2026-10-19; Mac deferred by user)
 `tailscale.status()` is cached 3 s and de-duplicated, so the dashboard's 5 s poll no longer spawns `tailscale.exe` on every request (cold 90 ms, cached 0 ms). `node` resolves at `C:\Program Files\nodejs\node.exe` on PATH. selfcheck still passes. Mac work is deferred until the MacBook is available.
+
+## Tauri shell embedding and autostart (2026-10-19)
+- Manifest has a `ui` block (`nav` Link, section Modules, path `/`, order 40); the Tauri shell renders the dashboard in an iframe from it.
+- Page CSP: `frame-ancestors 'self' tauri://localhost http://tauri.localhost https://tauri.localhost http://127.0.0.1:* http://localhost:*`; no `X-Frame-Options`.
+- Origin check allows same-host plus the three Tauri origins; the token is still required on every endpoint except `/api/health`.
+- `selfcheck.mjs` covers all of the above (13/13 on Windows).
+- Autostart: `start_with_suite: true` and `always_start: true` (commit `d1d7e86`); effective on the next Suite restart. Only session 00 launches or rebuilds the app.
+- File send/receive is CLI-only; no HTTP endpoints for it yet (per 00).
