@@ -137,6 +137,7 @@
           "Open the Multi setup page to connect platforms: Twitch needs you logged in to innocentpenguin.com as the owner, then 'Connect Twitch'.",
           "Discord needs a bot token and channel IDs. YouTube needs an access token. TikTok is off by default and read-only.",
           "Pick a layout (Combined Chat is the one-window option) so your chat windows are saved.",
+          "Chat look (the Look button in Chat, or Customize the chat look in setup): fonts, sizes, any background colour, and highlights for platforms, people and events (new chatters, subs, raids, cheers, mentions, keywords). Changes show live and are saved.",
           "For OBS: copy the stream-safe address from the setup page into an OBS Browser Source. It shows public chat only.",
           "Run the pre-stream check any time; green means ready, yellow is optional or degraded, red would break the stream."
         ],
