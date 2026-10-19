@@ -24,6 +24,7 @@ namespace PinguinoHost
     public static class Program
     {
         static HostCPH cph;
+        public static bool SayShared(string m) { try { return cph != null && cph.Say != null && cph.Say(m); } catch (Exception) { return false; } }
         static string suite, dataDir;
         static HashSet<string> coreCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         static readonly object dispatchLock = new object();

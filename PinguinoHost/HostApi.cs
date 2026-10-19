@@ -72,6 +72,7 @@ namespace PinguinoHost
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true });
                     Write(c, "{\"ok\":true}", "application/json"); return true;
                 }
+                if (p == "/api/bottest" && c.Request.HttpMethod == "POST") { Write(c, BotTest(Body(c)).ToString(), "application/json"); return true; }
                 if (p == "/api/token" && c.Request.HttpMethod == "POST") { Write(c, TokenIn(Body(c)).ToString(), "application/json"); return true; }
                 c.Response.StatusCode = 404;
             }
@@ -206,7 +207,7 @@ details{margin:14px 0}summary{cursor:pointer;color:var(--ice);font-weight:600;pa
 <div class=row><button onclick=save()>Save</button><small>Secrets are never shown again.</small></div><div id=msg></div></div>
 </div></details>
 <script>
-const $=id=>document.getElementById(id);const F=['ClientId','Channel','ObsHost','ObsPort','SenderId','BroadcasterId'];let CFG={},BOTS=null,busy=0;
+const $=id=>document.getElementById(id);const F=['ClientId','Channel','ObsHost','ObsPort','SenderId','BroadcasterId'];let CFG={},BOTS=null,busy=0,TESTRES={};
 const TOK=new URLSearchParams(location.search).get('token')||'';
 const H=()=>TOK?{'X-Pinguino-Token':TOK}:{};
 async function j(u,o){o=o||{};o.headers=Object.assign(H(),o.headers||{});return (await fetch(u,o)).json()}
@@ -219,11 +220,13 @@ function fmt(d,v){return d.step<1?(v*100).toFixed(2)+'%':v}
 function draw(){const g=$('bots');g.innerHTML='';BOTS.bots.forEach(b=>{const c=document.createElement('div');c.className='card';
 let h=`<div class=head><b>${esc(b.title)}</b><span class='pill ${b.enabled?'on':'off'}'>${b.enabled?'on':'off'}</span><label class=sw><input type=checkbox ${b.enabled?'checked':''} data-id=${b.id}><i></i></label></div>
 <div class=sub>Speaks as: <b>${b.sender=='helix'&&b.account?esc(b.account):'(shared account)'}</b> <button data-signin=${b.id}>${b.sender=='helix'?'Change account':'Sign in as '+(b.account?esc(b.account):'this bot')}</button></div>
+<div class=sub><button data-test=${b.id}>Send test</button> <span id=t_${b.id}>${esc(TESTRES[b.id]||'')}</span></div>
 <div class=sub>${b.runs} runs${b.lastRunAgoSec!=null?', last '+ago(b.lastRunAgoSec)+' ago':', not run yet'}</div>`;
 b.settings.forEach(s=>{if(s.type=='bool')h+=`<div class=chk><input type=checkbox ${s.value?'checked':''} data-id=${b.id} data-k=${s.key}> ${esc(s.label)}</div>`;
 else h+=`<div class=set><label><span>${esc(s.label)}</span><span id=v_${b.id}_${s.key}>${fmt(s,s.value)}</span></label><input type=range min=${s.min} max=${s.max} step=${s.step} value=${s.value} data-id=${b.id} data-k=${s.key} title='${esc(s.hint)}'></div>`});
 if(b.lastError)h+=`<div class=err>${esc(b.lastError)} <small>(${ago(b.lastErrorAgoSec)} ago)</small></div>`;
 c.innerHTML=h;g.appendChild(c)});
+g.querySelectorAll('button[data-test]').forEach(x=>x.onclick=async()=>{const k=x.dataset.test;TESTRES[k]='sending...';$('t_'+k).textContent=TESTRES[k];const r=await j('/api/bottest',{method:'POST',body:JSON.stringify({id:k})});TESTRES[k]=r.ok?'OK: '+r.note:'Failed: '+r.error;$('t_'+k).textContent=TESTRES[k]});
 g.querySelectorAll('button[data-signin]').forEach(x=>x.onclick=()=>signin(x.dataset.signin));
 g.querySelectorAll('input').forEach(i=>{
  if(i.type=='range')i.oninput=()=>{busy=Date.now();const d=BOTS.bots.find(b=>b.id==i.dataset.id).settings.find(s=>s.key==i.dataset.k);$('v_'+i.dataset.id+'_'+i.dataset.k).textContent=fmt(d,+i.value)};

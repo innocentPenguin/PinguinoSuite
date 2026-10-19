@@ -43,10 +43,18 @@ public static class Harness
 
         // ── defaults: bots.json is created, only the core has an account ──
         CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
-        Chat("viewer1", "hello everyone");
+        Chat("viewer1", "how is everyone");
         Check("bots.json is created on first use", File.Exists(Path.Combine(dir, "bots.json")));
         Check("ordinary chat: helper first, then the chatbot", Runs() == "PinguinoHelper,PinguinoChat", Runs());
-        Reset(); Chat("viewer1", "an older module that reports nothing");
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        Chat("viewer1", "nice play lol");
+        Check("no key word: the helper stays out, only the chatbot is asked", Runs() == "PinguinoChat", Runs());
+        foreach (string kw in new[] { "what is the minecraft ip", "ip?", "!discord", "how do I join" })
+        { Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; Chat("viewer1", kw); Check("key word '" + kw + "': the helper goes first", Runs() == "PinguinoHelper", Runs()); }
+        Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
+        Chat("viewer1", "@pinguinochat how do I join");
+        Check("@ing the chatbot takes priority even with a key word", Runs() == "PinguinoChat", Runs());
+        Reset(); Chat("viewer1", "how an older module that reports nothing");
         Check("a module that reports nothing counts as handled (nothing is answered twice)", Runs() == "PinguinoHelper", Runs());
 
         // ── who handles it ──
@@ -54,7 +62,7 @@ public static class Harness
         Chat("viewer1", "what's the lobby password");
         Check("the helper handled it: the chatbot is not asked", Runs() == "PinguinoHelper", Runs());
         Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
-        Chat("viewer1", "nice play lol");
+        Chat("viewer1", "how nice play lol");
         Check("the helper passes: the chatbot gets it", Runs() == "PinguinoHelper,PinguinoChat", Runs());
         Check("the router marks the message as routed", CPHProxy.Args.ContainsKey("pinguinoRouted"));
         Check("each module is told who is next", CPHProxy.Args.ContainsKey("pinguinoNext"));
@@ -91,7 +99,7 @@ public static class Harness
         Chat("viewer2", "ok and then");
         Check("a short follow-up without a mention goes to the helper", Runs() == "PinguinoHelper", Runs());
         Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
-        Chat("viewer3", "ok and then");
+        Chat("viewer3", "how and then");
         Check("without an open helper conversation the helper still goes first for ordinary chat", Runs() == "PinguinoHelper", Runs());
 
         // ── commands ──
@@ -116,10 +124,10 @@ public static class Harness
         Chat("viewer1", "hey @yappy you there");
         Check("a renamed bot answers to its new name", Runs() == "PinguinoChat", Runs());
         Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["Penny"] = () => "handled";
-        Chat("viewer1", "hello world");
+        Chat("viewer1", "how world");
         Check("the helper action name comes from bots.json", Runs() == "Penny", Runs());
         Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["Penny"] = () => "handled";
-        Chat("viewer1", "@pinguinob0t hi");
+        Chat("viewer1", "@pinguinob0t how hi");
         Check("the old name is just a word now (no mention)", Runs() == "Penny", Runs());
         Reset(); CPHProxy.Existing.Add("Penny"); CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
         CPHProxy.Behaviors["Penny"] = () => "pass";
@@ -176,27 +184,27 @@ public static class Harness
         try { File.Delete(rlog); } catch (Exception) { }
         Registry("{}");
         Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
-        ChatId("m-1", "viewer1", "nice play lol");
+        ChatId("m-1", "viewer1", "how nice play lol");
         Check("the router tags the message with its id", (string)CPHProxy.Args["pinguinoMsgId"] == "m-1");
         Check("results are stored per message and removed after reading", !CPHProxy.Globals.Keys.Any(k => k.StartsWith("pinguino.result")), string.Join(",", CPHProxy.Globals.Keys));
         Check("a normal message still routes helper then chat", Runs() == "PinguinoHelper,PinguinoChat", Runs());
         // a stale answer left by another message must not leak into this one
         Reset(); CPHProxy.Globals["pinguino.result.m-other"] = "handled"; CPHProxy.Globals["pinguino.result"] = "handled";
         CPHProxy.Behaviors["PinguinoHelper"] = () => "pass"; CPHProxy.Behaviors["PinguinoChat"] = () => "handled";
-        ChatId("m-2", "viewer2", "another line");
+        ChatId("m-2", "viewer2", "how another line");
         Check("another message's stored result is ignored", Runs() == "PinguinoHelper,PinguinoChat", Runs());
         Check("and left untouched", (string)CPHProxy.Globals["pinguino.result.m-other"] == "handled");
         // replay
-        ChatId("m-2", "viewer2", "another line");
+        ChatId("m-2", "viewer2", "how another line");
         Check("a replayed msgId is ignored (nobody answers twice)", Runs() == "", Runs());
-        ChatId("m-3", "viewer2", "another line");
+        ChatId("m-3", "viewer2", "how another line");
         Check("same text with a new msgId is a new message", Runs() == "PinguinoHelper,PinguinoChat", Runs());
         // no msgId from Twitch: same user + text in the same instant is a replay
         Reset(); CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
-        Chat("viewer3", "no id here");
+        Chat("viewer3", "how no id here");
         Check("without a msgId a fallback id is made", CPHProxy.Args.ContainsKey("pinguinoMsgId") && (string)CPHProxy.Args["pinguinoMsgId"] != "");
         string first = Runs();
-        CPHProxy.Runs.Clear(); CPHProxy.Args["message"] = "no id here"; CPHProxy.Args["userName"] = "viewer3"; CPHProxy.Args["user"] = "viewer3"; new CPHInline().Execute();
+        CPHProxy.Runs.Clear(); CPHProxy.Args["message"] = "how no id here"; CPHProxy.Args["userName"] = "viewer3"; CPHProxy.Args["user"] = "viewer3"; new CPHInline().Execute();
         Check("an immediate identical line without msgId is dropped as a replay", first == "PinguinoHelper" && Runs() == "", first + " / " + Runs());
         // log
         string log = File.Exists(rlog) ? File.ReadAllText(rlog) : "";
@@ -206,7 +214,7 @@ public static class Harness
         // dedupe window expires
         Reset(); CPHProxy.Globals["pinguino.seen"] = "old-id:" + (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 120);
         CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
-        ChatId("old-id", "viewer4", "hi");
+        ChatId("old-id", "viewer4", "how hi");
         Check("an id older than the window is accepted again", Runs() == "PinguinoHelper", Runs());
         Check("the seen list stays short", ((string)CPHProxy.Globals["pinguino.seen"]).Split(';').Length <= 50);
         Console.WriteLine(fails == 0 ? "ALL " + passes + " BOT ROUTING CHECKS PASSED" : fails + " FAILED / " + passes + " passed");

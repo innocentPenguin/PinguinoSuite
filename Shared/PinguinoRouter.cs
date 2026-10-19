@@ -271,7 +271,7 @@ public class CPHInline
     static readonly Regex RxPractical = new Regex(@"\b(queue|lobby|join|register|code|pass(word)?|play|custom|private|match|epic|game|pm|in\s+line)\b", RegexOptions.IgnoreCase);
     static readonly string[] OtherBots = { "nightbot", "streamelements", "streamlabs", "moobot", "fossabot", "wizebot", "supibot", "botrix", "synchrabot", "soundalerts", "potatbotat" };
 
-    // used by the tests (testsots)
+    // used by the tests (tests\bots)
     public void PgSetHelperContextPublic(string login) { PgSetHelperContext(login); }
     public void SayPublic(string role, string text) { PgSay(role, text); }
     public string SpeakerPublic(string role) { return PgSpeaker(role); }
@@ -295,6 +295,8 @@ public class CPHInline
         return stripped.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Length <= 4;   // a short follow-up ("and then?", "where?")
     }
 
+    static readonly Regex RxHelperKeys = new Regex(@"\bhow\b|\bjoin\b|\bip\b|!discord|\bminecraft\b|\b(lobby|code|pass(word)?|register|queue)\b", RegexOptions.IgnoreCase);
+
     // The order the bots are asked, for one message. Pure function of the message, the registry and the helper's open conversation.
     public List<string> Order(string text, string login, string replyTo)
     {
@@ -309,7 +311,7 @@ public class CPHInline
         else if (replyRole == "chat") primary = "chat";
         else if (ctx && (!mention || RelatedToHelper(text, mentioned))) primary = "helper";
         else if (mention) primary = "chat";                                        // @ing any of the bots brings up the chatbot
-        else primary = "helper";
+        else primary = RxHelperKeys.IsMatch(text) ? "helper" : "chat";            // the helper only chimes in unprompted at its key words
         return PgChain(primary).Where(r => r == "helper" || r == "chat").ToList();   // the game manager is not a chat handler: it has its own triggers
     }
 

@@ -19,11 +19,13 @@ namespace PinguinoHost
         static readonly string[] OwnFile = { null, "chat_settings.json", "helper_settings.json" };
         static readonly Def[][] Defs = {
             new Def[0],
-            new[] { new Def("chat_settings.json", "RandomChance", "Chattiness (chance of chiming in unprompted)", 0, 0.02, 0.0005, "0 = only when addressed"),
+            new[] { new Def("chat_settings.json", "LiveOnly", "Only reply while the stream is live"),
+                    new Def("chat_settings.json", "RandomChance", "Chattiness (chance of chiming in unprompted)", 0, 0.02, 0.0005, "0 = only when addressed"),
                     new Def("chat_settings.json", "UserCooldownSec", "Reply cooldown per viewer (s)", 0, 60, 1, "lower = faster replies"),
                     new Def("chat_settings.json", "FactsInPrompt", "Lore depth (facts remembered per reply)", 0, 30, 1, "more = more personal, more tokens"),
                     new Def("chat_settings.json", "MaxCallsPerHour", "AI calls per hour (cost cap)", 0, 600, 10, "") },
-            new[] { new Def("helper_settings.json", "UserCooldownSec", "Reply cooldown per viewer (s)", 0, 120, 1, "lower = faster replies"),
+            new[] { new Def("helper_settings.json", "LiveOnly", "Only reply while the stream is live"),
+                    new Def("helper_settings.json", "UserCooldownSec", "Reply cooldown per viewer (s)", 0, 120, 1, "lower = faster replies"),
                     new Def("helper_settings.json", "InfoCooldownSec", "Info lookup cooldown (s)", 0, 60, 1, ""),
                     new Def("helper_settings.json", "MaxAiCallsPerHour", "AI calls per hour (cost cap)", 0, 200, 5, ""),
                     new Def("helper_settings.json", "UseAi", "Use AI for answers") } };
@@ -31,7 +33,7 @@ namespace PinguinoHost
         // The bots' compiled defaults, shown when a key is missing from the settings file (a missing key must never look like 0).
         static readonly System.Collections.Generic.Dictionary<string, double> Dflt = new System.Collections.Generic.Dictionary<string, double> {
             { "RandomChance", 0.001 }, { "FactsInPrompt", 14 }, { "MaxCallsPerHour", 300 },
-            { "chat:UserCooldownSec", 3 }, { "helper:UserCooldownSec", 30 }, { "InfoCooldownSec", 8 }, { "MaxAiCallsPerHour", 40 }, { "UseAi", 1 } };
+            { "chat:UserCooldownSec", 3 }, { "helper:UserCooldownSec", 30 }, { "InfoCooldownSec", 8 }, { "MaxAiCallsPerHour", 40 }, { "UseAi", 1 }, { "LiveOnly", 1 } };
         static double DefaultOf(Def d) { double r; return Dflt.TryGetValue(d.File.StartsWith("chat") ? "chat:" + d.Key : "helper:" + d.Key, out r) || Dflt.TryGetValue(d.Key, out r) ? r : 0; }
 
         static readonly ConcurrentDictionary<string, string[]> LastError = new ConcurrentDictionary<string, string[]>();
@@ -70,6 +72,37 @@ namespace PinguinoHost
             }
             string[] rerr; LastError.TryGetValue("PinguinoRouter", out rerr);
             return new JObject { { "ok", true }, { "bots", arr }, { "routerError", rerr == null ? null : rerr[1] }, { "note", "Changes apply within about 10 seconds." } };
+        }
+
+        // "Send test": the bot says one line in chat so you can see which account actually speaks for it (its own, or the first bot in its fallback chain that has one).
+        static JObject BotTest(JObject b)
+        {
+            string id = (string)b["id"]; if (Array.IndexOf(BotIds, id) < 0) return new JObject { { "ok", false }, { "error", "unknown bot" } };
+            var reg = LoadFile("bots.json"); var sec = LoadFile("bots_secrets.json");
+            string title = (string)reg["Bots"]?[id]?["Title"] ?? id;
+            var chain = new System.Collections.Generic.List<string> { id };
+            if (reg["Fallback"]?[id] is JArray fb) foreach (var x in fb) chain.Add((string)x);
+            foreach (string r in chain)
+            {
+                var bot = reg["Bots"]?[r]; var s = sec[r] as JObject;
+                if (bot == null || (bool?)bot["Enabled"] == false || s == null || string.IsNullOrEmpty((string)bot["Account"]) || ((string)bot["Sender"] ?? "") != "helix") continue;
+                string tok = (string)s["UserToken"], cid = (string)s["ClientId"], sid = (string)s["SenderId"], bid = (string)s["BroadcasterId"];
+                if (string.IsNullOrEmpty(tok) || string.IsNullOrEmpty(cid) || string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(bid)) continue;
+                using (var http = new System.Net.Http.HttpClient())
+                {
+                    var rq = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, Helix + "/chat/messages");
+                    rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("Client-Id", cid);
+                    string who = (string)bot["Account"];
+                    string text = "[test] " + title + " is working" + (r == id ? "." : " (speaking through " + (string)bot["Title"] + ").");
+                    rq.Content = new System.Net.Http.StringContent(new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", text } }.ToString(), System.Text.Encoding.UTF8, "application/json");
+                    var resp = http.SendAsync(rq).Result;
+                    if (resp.IsSuccessStatusCode) return new JObject { { "ok", true }, { "speaker", who }, { "own", r == id }, { "note", (r == id ? title + " spoke as " : title + " has no account of its own, so " + (string)bot["Title"] + " spoke as ") + who + "." } };
+                    return new JObject { { "ok", false }, { "error", "Twitch refused the message from " + who + " (" + (int)resp.StatusCode + "). Sign that account in again." } };
+                }
+            }
+            bool ok = Program.SayShared("[test] " + title + " is working (shared account).");
+            return ok ? new JObject { { "ok", true }, { "speaker", "shared account" }, { "own", false }, { "note", title + " has no account yet, so the shared account spoke." } }
+                      : new JObject { { "ok", false }, { "error", "No account could speak. Sign in first." } };
         }
 
         static JObject SaveBot(JObject b)

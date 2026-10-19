@@ -280,6 +280,8 @@ public class CPHInline
         public int ConfirmSeconds { get; set; } = 60;                 // how long a "say yes" question stays open
         public bool UseAi { get; set; } = true;                       // ask the AI only when the patterns do not understand a practical-sounding message
         public int MaxAiCallsPerHour { get; set; } = 40;
+        public string McIpReply { get; set; } = "";                   // what to say when someone asks for the Minecraft IP / server IP; blank = say nothing
+        public string DiscordReply { get; set; } = "";                // what to say for !discord (or "discord link"); blank = say nothing
     }
 
     // ── state (static: survives between messages while Streamer.bot stays open) ──
@@ -402,6 +404,7 @@ public class CPHInline
             // 2. a typed !register that will not work (brackets, "my epic is ...", a placeholder)
             if (text.StartsWith("!"))
             {
+                if (RxDiscordCmd.IsMatch(text)) return Respond(login, display, "discord", "");
                 var bm = RxBadReg.Match(text);
                 if (bm.Success) return BadRegister(login, display, bm.Groups["a"].Value.Trim());
                 return false;   // every other command belongs to the game manager (and the chatbot sees it through the hand-over)
@@ -420,11 +423,15 @@ public class CPHInline
         }
     }
 
+    static readonly System.Text.RegularExpressions.Regex RxMcIp = new System.Text.RegularExpressions.Regex(@"\b(minecraft\s+)?(server\s+)?ip\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    static readonly System.Text.RegularExpressions.Regex RxDiscordCmd = new System.Text.RegularExpressions.Regex(@"^\s*!discord\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     static void Classify(string text, out string intent, out string epic)
     {
         intent = ""; epic = "";
         var m = RxDoReg.Match(text);
         if (m.Success) { intent = "do_register"; epic = m.Groups["n"].Value.Trim(); return; }
+        if (RxMcIp.IsMatch(text)) { intent = "mc_ip"; return; }
         if (RxDoLeave.IsMatch(text)) { intent = "do_leave"; return; }
         if (RxPos.IsMatch(text)) { intent = "position"; return; }
         if (RxHowReg.IsMatch(text)) { intent = "how_register"; return; }
@@ -512,6 +519,16 @@ public class CPHInline
     bool Respond(string login, string display, string intent, string epic)
     {
         long now = Now();
+        if (intent == "mc_ip" || intent == "discord")
+        {
+            string line = intent == "mc_ip" ? _cfg.McIpReply : _cfg.DiscordReply;
+            if (string.IsNullOrWhiteSpace(line)) return false;                       // nothing configured: stay quiet and let the chatbot decide
+            string key = login + "|" + intent; long lastInfo;
+            if (_userCd.TryGetValue(key, out lastInfo) && now - lastInfo < _cfg.UserCooldownSec) return true;
+            if (now - _infoCd < _cfg.InfoCooldownSec) return true;
+            _userCd[key] = now; _infoCd = now;
+            Say("@" + display + " " + line.Trim()); return true;
+        }
         string cdKey = login + "|" + intent;
         long last;
         bool info = intent == "lobby_info" || intent == "how_join" || intent == "how_register";
