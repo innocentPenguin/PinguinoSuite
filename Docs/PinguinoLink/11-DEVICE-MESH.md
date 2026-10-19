@@ -65,3 +65,14 @@ Contracts to agree before P1: **01** (core) — lease/devices endpoints, `Docs\M
 2. Tailscale-only transport for LAN too (recommended), or also an unencrypted LAN fallback (not recommended)?
 3. Is key injection wanted at all? If yes, with the guard rails above?
 4. Confirm priority: streaming PC > gaming PC > Mac, streaming device always wins, manual take-over always asks to confirm?
+
+## UPDATE 2026-10-19 — approved scope and split with the core (supersedes sections 2 and the lease API above)
+Ivan approved P1 with Tailscale-only transport; key injection stays off the table.
+01 (core) owns master election per `Docs\MODULE_CONTRACT.md` "Devices: master / auxiliary" (heartbeats, priority, pin, streaming flag, singleton modules). So **Link is the transport and pairing layer only**; the lease/election design in section 2 is NOT built in Link.
+Implemented in `src/mesh.mjs` (checks: `node src/meshcheck.mjs`, 20/20):
+- Pairing by 6-digit code (5 min, single use, 3 wrong tries cancel it) plus a visible Allow on the receiving device; per-peer random tokens; tailnet addresses only.
+- `POST /api/peer/broadcast` (module token): forwards `{type,payload}` unchanged to every paired peer.
+- Peer messages are authenticated per message and handed to the core at `POST /api/device/peer` with Link's module token (`from` added).
+- Unpair from either side removes it on both; Link-level heartbeat (3 s) for online/offline, backoff 1 s→15 s on failure.
+- `/api/status` lists paired peers; `/api/prestream` has one item per peer; Console logs for pairing, peer online/offline and failures.
+Still open: shortcut relay (P2), key injection (declined), file send over the mesh (P4), proxying a peer's module UI (phase 2).
