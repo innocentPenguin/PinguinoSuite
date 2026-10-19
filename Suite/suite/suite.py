@@ -24,12 +24,14 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).parent))
 import livedetect  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[1]
+FROZEN = getattr(sys, "frozen", False)
+# Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
+ROOT = Path(os.environ["PINGUINO_SUITE_DIR"]) if FROZEN and os.environ.get("PINGUINO_SUITE_DIR") else Path(__file__).resolve().parents[1]
 LOGS = ROOT / "logs"
 LOGS.mkdir(exist_ok=True)
 SETTINGS = ROOT / "suite_settings.json"
 PORT = int(os.environ.get("PINGUINO_PORT", "8760"))
-PY = sys.executable
+PY = os.environ.get("PINGUINO_PYTHON") or (("python" if os.name == "nt" else "python3") if FROZEN else sys.executable)
 IS_WIN = os.name == "nt"
 # Per-launch API token. The Tauri shell passes one in; standalone mode makes its own and injects it into the page it serves.
 TOKEN = os.environ.get("PINGUINO_API_TOKEN") or secrets.token_urlsafe(32)

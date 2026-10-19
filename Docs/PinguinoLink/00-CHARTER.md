@@ -6,7 +6,7 @@ Status: PLANNING. Created 2026-10-19.
 A secure device ecosystem linking the user's machines (MacBook <-> Windows streaming PC running OBS) from any network: device networking, Mac-to-OBS streaming, remote OBS control, remote Stream Deck, file transfer, device dashboard, security, diagnostics, cross-platform support.
 
 ## Rules
-- Planning only until real-device measurements exist. The prototype in `Suite\modules\link` is NOT rewritten without agreement.
+- Planning only until real-device measurements exist. The prototype in `Suite\modules\link` is NOT rewritten without agreement (exception: the /goal integration edits, see 10).
 - All work lives under `D:\PinguinoSuite`. Related outside material is moved in only after the user approves (see 08 and the move table below).
 - Every Claude task directive for this unit begins with `/plan`.
 - No custom VPN or crypto. No default remote shell. Least privilege. Risky changes need explicit approval.
@@ -19,7 +19,7 @@ A secure device ecosystem linking the user's machines (MacBook <-> Windows strea
 - Each task session is logged in `SESSIONS.md` and archived after its result is documented here.
 
 ## Document map
-01 Prototype inventory · 02 Network · 03 Security · 04 Streaming · 05 Control · 06 Files · 07 Dashboard/Diagnostics · 08 Roadmap/Costs/Risks · 09 Milestone 1 test plan
+01 Prototype inventory · 02 Network · 03 Security · 04 Streaming · 05 Control · 06 Files · 07 Dashboard/Diagnostics · 08 Roadmap/Costs/Risks · 09 Milestone 1 test plan · 10 Suite integration
 
 ## Outside-the-suite items (not moved yet — awaiting user approval)
 | Item | Proposal |

@@ -69,11 +69,35 @@ fn python_for(root: &PathBuf) -> PathBuf {
     }
 }
 
+/// A bundled core binary (PyInstaller build) next to the exe or under binaries/, if present.
+fn bundled_core() -> Option<PathBuf> {
+    let name = if cfg!(windows) { "pinguino-core.exe" } else { "pinguino-core" };
+    let mut dirs: Vec<PathBuf> = vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries")];
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(d) = exe.parent() {
+            dirs.insert(0, d.join("binaries"));
+            dirs.insert(0, d.to_path_buf());
+        }
+    }
+    dirs.into_iter().map(|d| d.join(name)).find(|p| p.exists())
+}
+
 fn spawn_core(token: &str) -> Option<Child> {
     let root = suite_root()?;
-    let mut cmd = Command::new(python_for(&root));
-    cmd.arg(root.join("Suite/suite/suite.py"))
-        .arg("--headless")
+    let mut cmd = match bundled_core() {
+        // Bundled core: no Python needed for the core itself; modules still use the venv/system Python.
+        Some(bin) => {
+            let mut c = Command::new(bin);
+            c.env("PINGUINO_SUITE_DIR", root.join("Suite")).env("PINGUINO_PYTHON", python_for(&root));
+            c
+        }
+        None => {
+            let mut c = Command::new(python_for(&root));
+            c.arg(root.join("Suite/suite/suite.py"));
+            c
+        }
+    };
+    cmd.arg("--headless")
         .current_dir(root.join("Suite"))
         .env("PINGUINO_API_TOKEN", token)
         .env("PINGUINO_PORT", port().to_string())

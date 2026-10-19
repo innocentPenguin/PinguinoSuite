@@ -42,3 +42,7 @@ Goal (user /goal): cross-platform PinguinoSuite app on Tauri, ready for other ap
 ## Update: per-module tokens (2026-10-19)
 - Each module gets `PINGUINO_API_TOKEN` = HMAC(core token, "module:<id>") (`module_token()` in suite.py). Modules never see the core token; core hooks use the module's token. Verified on Listen: master token 401, module token passes the guard (404 on a nonexistent route).
 - Open: macOS/Linux builds (need GitHub push + CI run), bundling the Python core for standalone installs.
+
+## Update: bundled core sidecar (2026-10-19)
+- `suite.py` supports a frozen build (`PINGUINO_SUITE_DIR`, `PINGUINO_PYTHON`). PyInstaller onefile `pinguino-core.exe` (35 MB) built into `App/src-tauri/binaries/` (gitignored; CI builds it per-OS). Verified standalone on :8795: 401 without token, state with token, `/api/quit` OK.
+- Shell (`main.rs`) prefers the bundled core when present, else Python+suite.py. Not yet packaged into the NSIS installer as a resource; modules (Listen venv, Link Node) still come from the Suite folder.

@@ -4,12 +4,13 @@ Front door: **PinguinoRouter** on Twitch Chat Message (133). Roles, accounts, al
 
 Flow: message → ignore bots/self/`pinguinoRouted` → `!` command → Core; mention/alias → target role; otherwise → Chat. Each module returns `handled | pass | defer`; on `pass` or failure the router walks the role's fallback chain, finally a local canned reply.
 
-## Known weakness (fix before enabling live)
-Result passing uses ONE global var `pinguino.result` (`Shared\PinguinoRouter.cs` ~line 209). Two near-simultaneous chat messages can read each other's result. Plan:
-1. Key by message: `pinguino.result.<msgId>`, deleted after read.
-2. Dedupe on `msgId` (ignore a replayed message).
-3. Append one line per decision to `routing.log` (msgId, role, who answered, reason, ms).
-4. Timeout → local fallback so chat never goes silent.
-5. Verify in the real Streamer.bot (build 2026-08-06) what `CPH.RunAction(name, true)` does (argument inheritance, blocking, return value) with a throwaway action before relying on it.
+## Correlation (done 2026-10-19)
+- The router gives each chat message an id (`msgId` from Twitch, else a hash of user+text+2 s) and passes it as argument `pinguinoMsgId`.
+- Modules write their answer to `pinguino.result.<msgId>`; the router reads then deletes it. Without the argument (module run by hand) the old `pinguino.result` is used.
+- Replays: ids seen in the last 60 s (max 50, global `pinguino.seen`) are ignored.
+- `routing.log` (data folder, rotates at 512 KB): `time, msgId, role, outcome, reason, ms` per decision (handled / pass / defer / skip / failed / duplicate / unhandled).
+- Tests: `Testsots` (54 checks).
 
-Status: design only. The code change is not made yet; `Tests\bots` has 40 passing simulated routing checks to extend.
+## Still open
+1. Timeout → local fallback: `RunAction(name,true)` blocks, so a hung module cannot be timed out from C#. Needs a live check.
+2. Verify in the real Streamer.bot (build 2026-08-06) what `CPH.RunAction(name, true)` does (argument inheritance, blocking, return value) with a throwaway action before relying on it; also that `msgId` is the real argument name on trigger 133.

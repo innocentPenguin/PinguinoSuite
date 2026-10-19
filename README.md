@@ -4,7 +4,7 @@ Everything for the stream, in one place. Open **PinguinoApp\PinguinoApp.lnk** (o
 
 | Folder | What it is |
 |---|---|
-| `PinguinoApp\` | Launcher: opens the Suite (hidden, tray icon, app window) |
+| `PinguinoApp\` | Launcher: opens the Tauri shell if built (one window, tray, single-instance), else the standalone Suite |
 | `Suite\` | Dashboard + module host. `modules\listen` = PinguinoListen, `modules\link` = PinguinoLink |
 | `PinguinoB0t\` | The matchmaking/customs bot: `PinguinoBotCore.cs`, `PinguinoBotFirsts.cs`, `commands.json`, `overlays\`, CHANGES, cheat sheet |
 | `PinguinoChat\` | The AI chat bot: `PinguinoChat.cs`, SETUP, history hook, `updates.json` (+ `add-update.mjs`) |

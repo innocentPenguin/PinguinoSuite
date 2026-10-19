@@ -25,6 +25,11 @@ jobs:
         run: |
           pip install fastapi uvicorn requests pystray pillow || true
           cd Suite && python -c "import ast;ast.parse(open('suite/suite.py',encoding='utf8').read())"
+      - name: Bundle core sidecar (PyInstaller)
+        shell: bash
+        run: |
+          pip install pyinstaller
+          pyinstaller --noconfirm --onefile --name pinguino-core --distpath App/src-tauri/binaries --workpath build_pi --specpath build_pi Suite/suite/suite.py
       - run: cd App && npm ci && npx tauri build
       - uses: actions/upload-artifact@v4
         with:

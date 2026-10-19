@@ -1,0 +1,40 @@
+# PinguinoHost - run the bots without Streamer.bot (2026-10-19)
+A .NET 8 console app. It compiles the same four C# files (PinguinoB0t\PinguinoBotCore.cs, PinguinoChat, HelperPinguino, Shared\PinguinoRouter.cs) at start with Roslyn, supplies a `CPH` subset (`PinguinoHost\HostCPH.cs`) and dispatches chat like Docs\TRIGGERS.md: `!` core commands -> PinguinoBot, everything else -> PinguinoRouter. A 3 s timer runs the web sync. Single lock: one message at a time.
+
+## Run
+- Simulation (no Twitch): `Tools\run-host.ps1 -Sim`, then type `user: text` (`*user:` = mod, `#user:` = broadcaster). Test: `Tools\test-host.ps1` (PASS verified).
+- Live: copy `Data\host_secrets.template.json` to `Data\runtime\host_secrets.json`, fill Channel, ClientId, UserToken (chat:write, moderator:manage:banned_users), SenderId, BroadcasterId; run `Tools\run-host.ps1`. Chat is read via anonymous IRC; replies/timeouts via helix. Never commit or print the secrets file.
+- State/data: `Data\runtime` (override `--data`); globals persist in `host_globals.json`; `routing.log` as in ROUTING.md.
+
+## Not done / unverified
+- Verified live 2026-10-19: anonymous IRC read of a real public channel (#xqc) dispatched real Twitch message ids through the Router into routing.log. Still untried: helix send/timeout, EventSub, OBS (need your tokens / OBS running).
+- Not supported: Streamer.bot-only features (OBS actions, First Words, sub/raid triggers, timed actions other than web sync). Events other than chat messages are not wired.
+- Do not run Host and Streamer.bot on the same channel at once (double replies).
+
+## Replacement coverage (added 2026-10-19)
+| Streamer.bot gave us | PinguinoHost | Status |
+|---|---|---|
+| Chat message trigger / `!` commands | Twitch IRC (anonymous) -> Router / Core | sim verified, live untried |
+| CPH calls the bots use (TryGetArg, SetArgument, Global vars, RunAction, SendMessage, TwitchTimeoutUser, Log*) | `HostCPH` | all 13 used calls covered |
+| OBS (ObsSetScene/Show/Hide/IsConnected) | obs-websocket v5 client (`ObsHost/ObsPort/ObsPassword`) | written, untested vs real OBS |
+| Sub/gift/cheer/raid/follow triggers | Twitch EventSub websocket -> PinguinoChat (`eventType`, `userName`, `tier`, `bits`, `viewers`) | written, sim events only (`event TwitchSub alice 2`) |
+| Timed web sync | 3 s timer | sim |
+| Overlay file serving | built-in HTTP on 8770 (8765 = PinguinoListen, 8766 = PinguinoMulti) | players.html served OK |
+| First Words, Stream Deck actions, Streamer.bot UI | not replaced | gap (Chat already tracks first-seen in chat_memory) |
+
+EventSub needs a user token with scopes: channel:read:subscriptions, bits:read, moderator:read:followers, chat:write, moderator:manage:banned_users.
+
+## Suite integration and setup interface (2026-10-19)
+- `Suite\modules.json` has a `host` module (port 8770, health `/api/status`, cwd `PinguinoHost`, `dotnet bin/Release/net8.0/PinguinoHost.dll`). Start it from the Suite UI like the others; it is not started with the Suite by default (flip `start_with_suite` in the UI once you cut over). Backup of the old file: `Suite\modules.json.bak-prehost`.
+- All setup is done in the browser at **http://127.0.0.1:8770/setup** (no JSON editing): Client ID -> "Sign in with Twitch" (stores the token, fills your sender/broadcaster IDs and channel), channel, OBS host/port/password. Status pills show chat / can reply / events / OBS. Add `http://localhost:8770/auth` as a redirect URL in your Twitch app first.
+- Secrets are written to `Data
+untime\host_secrets.json` (local only) and never sent back to the page (`hasUserToken` / `hasObsPassword` flags only). API accepts localhost Host/Origin only. Saving needs a module restart.
+- Tests: `Tools	est-host-api.ps1` (HOST API: PASS) and `Tools	est-host.ps1` (HOST SIM: PASS). Verified through a real Suite: module appears, starts, goes `running`, stops.
+- Still unverified: Twitch sign-in round trip, helix send/timeout, EventSub, OBS (need your account / OBS running).
+- OBS client verified against `Tools\mock-obs.py` (real obs-websocket v5 password handshake): auth OK, host reports `obsConnected: true`. Scene/source calls not exercised; real OBS still untried.
+
+## Stream Deck / hotkeys and mock-Twitch test (2026-10-19)
+- **Stream Deck replacement:** `POST http://127.0.0.1:8770/api/run` with body `{"text":"!next","user":"ivan"}` runs the text as the broadcaster (role 4) through the same dispatch as chat. In Stream Deck use a "Website" or an HTTP-request plugin action (POST, JSON body); a multi-action works for `!next`, `!win blue`, etc. Localhost-only (Host/Origin checked); no other PC can reach it.
+- **First Words:** the host reads the IRC `first-msg` tag and passes `firstMessage` to the bots, so first-chat greetings work without Streamer.bot. It is not Streamer.bot's First Words database (no cross-stream "first words ever" history beyond `chat_memory.json`).
+- **Mock Twitch test:** env `PINGUINO_HELIX_BASE` and `PINGUINO_EVENTSUB_URL` redirect helix / EventSub. `Tools\test-host-twitch.ps1` (uses `Tools\mock-twitch.py`) checks token resolution via `/users`, the helix chat send with Bearer + Client-Id headers, `/api/run`, and EventSub subscription calls: "HOST TWITCH(mock): PASS".
+- **Still only verifiable with real credentials/OBS:** the browser sign-in round trip at id.twitch.tv, real helix acceptance of the scopes, real EventSub notifications, timeouts on a real channel, and real OBS scene/source changes. The paste route (`Deploy\PASTE-CHECKLIST.md`) stays as the fallback until those are confirmed.
