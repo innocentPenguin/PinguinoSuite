@@ -20,3 +20,5 @@ Sim = passes simulated tests. Live = verified in the real Streamer.bot. The new 
 Test run 2026-10-19: core, chat (202), helper (81), bots (40) and history hook (10) all PASS; shared-code sync up to date.
 
 PinguinoHost addendum: /api/run (Stream Deck) and mock-Twitch test (Tools/test-host-twitch.ps1) added; live Twitch sign-in, EventSub and real OBS remain unverified.
+
+Separate chatters (3617350): each bot can sign in as its own Twitch account from the Host page (bots_secrets.json[role], Sender "helix"). Built and deployed by 00; live sign-in of pinguinob0t is pending Ivan's click-through, chat and helper accounts do not exist yet.
