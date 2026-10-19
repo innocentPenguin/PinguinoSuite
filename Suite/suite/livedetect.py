@@ -9,10 +9,18 @@ import requests
 
 ENV_FILES = [Path(__file__).resolve().parents[1] / ".env", Path(__file__).resolve().parents[2] / "PinguinoSite" / ".env"]
 _tok = {"v": None, "exp": 0}
+vault_get = None  # set by the core: name -> value from the encrypted key vault (checked first)
 
 
 def _creds():
     env = dict(os.environ)
+    for n in ("TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET"):
+        try:
+            v = vault_get(n) if vault_get else None
+        except Exception:  # noqa: BLE001
+            v = None
+        if v:
+            env[n] = v
     for f in ENV_FILES:
         try:
             for line in f.read_text("utf8").splitlines():
@@ -22,7 +30,7 @@ def _creds():
         except Exception:
             pass
     if not env.get("TWITCH_CLIENT_ID") or not env.get("TWITCH_CLIENT_SECRET"):
-        raise RuntimeError("TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET not found")
+        raise RuntimeError("TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET not found: add them in Integrations > Key vault (Twitch go-live detection)")
     return env["TWITCH_CLIENT_ID"], env["TWITCH_CLIENT_SECRET"]
 
 

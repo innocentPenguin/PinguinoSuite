@@ -57,9 +57,11 @@ ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "taur
 DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "runtime")
 console_log = consolelog.Console(Path(DATA_DIR) / "console", LOGS)  # live log stream for the Console page
 CONSOLE_DIR = Path(DATA_DIR) / "console"
+livedetect.ENV_FILES.append(ROOT.parent / "PinguinoSite" / ".env")  # frozen core: __file__ is inside the bundle, ROOT is the real Suite folder
 try:
     vault = vaultlib.Vault(Path(DATA_DIR) / "vault.bin")  # encrypted key store (DPAPI on Windows, OS keychain elsewhere)
     console_log.redact = vault.redact
+    livedetect.vault_get = lambda n: vault.get(n, by="core")
 except Exception as _e:  # noqa: BLE001  (no key store on this OS: the vault endpoints answer 503, everything else works)
     vault = None
     console_log.log("warn", "vault", f"key vault unavailable: {str(_e)[:120]}")
@@ -773,7 +775,16 @@ def _warn_nohelp(key, shown=""):
 @app.get("/api/help")
 def help_get(key: str = "", module: str = "", item: str = "", source: str = "", msg: str = ""):
     """Help for one clickable thing. key = item id ("core:obs", "multi:twitch", "module:host:failed"); for Console lines pass module/source/msg."""
-    h, k = helpdb.resolve(key, module, item, source, msg[:300], _specs())
+    h, k = None, key
+    if key.startswith("vault:"):  # a key row: the help its module wrote for that secret, else the generic key help
+        nm = key[6:]
+        h = next((d["help"] for m in modules.values() for d in declared_secrets(m) if d["name"] == nm and d.get("help")), None)
+        if h is None and nm == "OBS_WS_PASSWORD":
+            h = helpdb.CATALOG["obs"]
+        if h is None:
+            h = helpdb.CATALOG["vault_key"]
+    if h is None:
+        h, k = helpdb.resolve(key, module, item, source, msg[:300], _specs())
     if h is None:
         _warn_nohelp(k or f"{module}:{source}", msg[:60])
         return {"found": False, "key": k}

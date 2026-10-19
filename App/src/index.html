@@ -327,6 +327,7 @@ document.addEventListener('click',e=>{
   if(inner&&inner!==t&&!inner.dataset.hk)return;   // a real button inside a clickable row keeps its own job
   e.preventDefault();openHelp(t.dataset)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeHelp()});
+document.addEventListener('keydown',e=>{if(e.key==='/'&&!e.target.closest('input,textarea,select')){const q=$('#c-q')||$('#a-q');if(q){e.preventDefault();q.focus()}}});   // QoL: / jumps to the search box on Console and Activity
 $('#hscrim').onclick=closeHelp;
 
 /* Help index (every topic that has instructions, incl. green ones) */
