@@ -52,11 +52,13 @@ class Queue:
     def contains_uri(self, uri):
         return any(it["uri"] == uri for it in self.items)
 
-    def add(self, item, where="end"):
+    def add(self, item, where="end", fair=True):
         """where: 'end' | 'next'. Viewer items ignore `where` and are placed fairly."""
         with self.lock:
             self._snap()
-            if item["source"] == "viewer":
+            if item["source"] == "viewer" and not fair:
+                self.items.append(item)
+            elif item["source"] == "viewer":
                 rnd = self.pending_for(item["requester"]) + 1
                 key = [rnd, -item["tier"], item["added"]]
                 item["key"] = key

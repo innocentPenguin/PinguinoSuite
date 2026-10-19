@@ -1,20 +1,30 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Now playing</title>
-<!-- OBS browser source: http://127.0.0.1:8771/overlay  (add ?next=0 to hide the up-next list, ?theme=light for dark text) -->
+<!-- OBS browser source: http://127.0.0.1:8771/overlay
+     Look is set in the Spotify page > Settings > OBS overlay. Query overrides: ?next=0 ?theme=dark|light|glass|minimal ?accent=ff9900 ?art=0 ?width=400 -->
 <style>
-:root{--fg:#fff;--bg:rgba(20,22,27,.82);--accent:#ff9900}
-body.light{--fg:#111;--bg:rgba(255,255,255,.85)}
-html,body{margin:0;background:transparent;font-family:"Segoe UI",system-ui,sans-serif;color:var(--fg)}
-#card{display:none;width:460px;background:var(--bg);border-radius:14px;padding:12px;box-sizing:border-box;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.4)}
+:root{--fg:#fff;--bg:rgba(14,14,16,.86);--accent:#ff9900;--w:460px;--r:14px;--s:1;--font:"Segoe UI",system-ui,sans-serif}
+body.light{--fg:#111;--bg:rgba(255,255,255,.9)}
+body.glass{--bg:rgba(20,20,24,.45)}
+body.glass #card{backdrop-filter:blur(10px)}
+body.minimal{--bg:transparent}
+body.minimal #card{box-shadow:none;padding:0}
+body.minimal #title,body.minimal #artist,body.minimal #req,body.minimal #next{text-shadow:0 1px 4px #000,0 0 2px #000}
+html,body{margin:0;background:transparent;font-family:var(--font);color:var(--fg)}
+#card{display:none;width:var(--w);background:var(--bg);border-radius:var(--r);padding:12px;box-sizing:border-box;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.4);zoom:var(--s);transition:opacity .4s}
 #card.show{display:block;animation:in .4s ease}
+#card.dim{opacity:0}
 @keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .row{display:flex;gap:12px;align-items:center}
 #art{width:84px;height:84px;border-radius:8px;background:#333 center/cover;flex:none}
+.noart #art{display:none}
 .t{min-width:0;flex:1}
 #title{font-size:21px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #artist{font-size:16px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #req{font-size:13px;color:var(--accent);margin-top:3px;min-height:15px}
 #bar{height:5px;background:rgba(255,255,255,.18);border-radius:3px;margin-top:10px;overflow:hidden}
+.light #bar{background:rgba(0,0,0,.15)}
+.noprog #bar{display:none}
 #fill{height:100%;width:0;background:var(--accent)}
 #next{margin-top:8px;font-size:13px;opacity:.8;line-height:1.5}
 #next b{color:var(--accent);font-weight:600}
@@ -22,23 +32,35 @@ html,body{margin:0;background:transparent;font-family:"Segoe UI",system-ui,sans-
 <body><div id="card"><div class="row"><div id="art"></div><div class="t"><div id="title"></div><div id="artist"></div><div id="req"></div></div></div>
 <div id="bar"><div id="fill"></div></div><div id="next"></div></div>
 <script>
-const P=new URLSearchParams(location.search);if(P.get('theme')==='light')document.body.classList.add('light');
-const showNext=P.has('next')?+P.get('next'):null;
-let o=null,at=0;
+const P=new URLSearchParams(location.search);
+let o=null,at=0,styled='';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function style(st){
+  const g=(k,d)=>P.has(k)?P.get(k):(st&&st[k]!==undefined?st[k]:d);
+  const sig=JSON.stringify([st,location.search]);if(sig===styled)return;styled=sig;
+  document.body.className=g('theme','dark');
+  const r=document.documentElement.style;
+  const acc=String(g('accent','#ff9900'));r.setProperty('--accent',acc.startsWith('#')?acc:'#'+acc);
+  r.setProperty('--w',(+g('width',460))+'px');r.setProperty('--r',(+g('radius',14))+'px');r.setProperty('--s',(+g('size',100))/100);
+  const f=g('font','');r.setProperty('--font',f?`"${f}",system-ui,sans-serif`:'"Segoe UI",system-ui,sans-serif');
+  const on=(k,d)=>String(g(k,d))!=='0'&&String(g(k,d))!=='false';
+  const c=$('card');c.classList.toggle('noart',!on('art',st&&st.show_art!==false));
+  c.classList.toggle('noprog',!on('progress',st&&st.show_progress!==false));
+}
 async function poll(){
   try{const r=await fetch('/api/overlay.json',{cache:'no-store'});o=await r.json();at=performance.now();render()}catch(e){}
   setTimeout(poll,1500);
 }
 function render(){
-  const c=$('card');
+  style(o.style);
+  const c=$('card'),st=o.style||{};
   if(!o||!o.has_track){c.classList.remove('show');return}
-  c.classList.add('show');
+  c.classList.add('show');c.classList.toggle('dim',!!st.hide_paused&&!o.playing);
   $('title').textContent=o.title;$('artist').textContent=o.artist;
-  $('req').textContent=o.requester?'requested by '+o.requester:'';
+  $('req').textContent=(st.show_requester!==false&&o.requester)?'requested by '+o.requester:'';
   $('art').style.backgroundImage=o.art?'url("'+o.art+'")':'none';
-  const n=showNext==null?o.next.length:showNext;
+  const n=P.has('next')?+P.get('next'):o.next.length;
   $('next').innerHTML=o.next.slice(0,n).map((x,i)=>(i?'':'<b>Up next</b> ')+esc(x.title)+' - '+esc(x.artist)+(x.requester?' <b>('+esc(x.requester)+')</b>':'')).join('<br>');
 }
 function frame(){

@@ -319,7 +319,7 @@ def p_chat_command(h, b):
     if b.get("isSub"):
         roles.add("sub")
     src = str(b.get("source") or ("voice" if b.get("silent") else "chat"))[:20]
-    r = engine.chat(user, f"!{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")))
+    r = engine.chat(user, f"{engine.settings['prefix']}{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")))
     if not r["handled"]:
         return {"ok": False, "say": "", "error": "unknown command"}
     if cmd.lower() in ("skip", "voteskip", "blocksong"):
@@ -344,10 +344,38 @@ def p_live_auto(h, b):
 
 
 def p_live_stop(h, b):
-    if engine.settings["requests_open"]:
+    if engine.settings["requests_open"] and engine.settings["close_on_offline"]:
         engine.save_settings({"requests_open": False})
         console_log.info("server", "stream ended: song requests closed")
     return {"ok": True}
+
+
+def p_preset(h, b):
+    return {"ok": True, "settings": engine.apply_preset(str(b.get("name", "")))}
+
+
+def p_reset(h, b):
+    keys = b.get("keys")
+    return {"ok": True, "settings": engine.reset_settings(keys if isinstance(keys, list) else None)}
+
+
+def p_msg_preview(h, b):
+    try:
+        return {"ok": True, "text": engine.preview_msg(b.get("template", ""))}
+    except (KeyError, ValueError, IndexError) as e:
+        raise QueueError(f"bad template: {e}")
+
+
+def g_schema(h, q):
+    import config_schema as cs
+    groups = [{"id": g["id"], "title": g["title"], "items": [
+        {"key": k, "kind": kind, "default": d, "label": label, "help": hlp} for k, kind, d, label, hlp in g["items"]]} for g in cs.SCHEMA]
+    return {"groups": groups, "vars": cs.VARS, "msgs": {k: {"label": v[0], "default": v[1], "help": v[2]} for k, v in cs.MSGS.items()},
+            "commands": {k: {"default": v, "help": cs.COMMAND_HELP[k]} for k, v in cs.COMMANDS.items()},
+            "presets": {k: {"label": v[0], "help": v[1]} for k, v in cs.PRESETS.items()}}
+
+
+GET["/api/settings/schema"] = g_schema
 
 
 def p_block(h, b):
@@ -362,7 +390,7 @@ def p_block(h, b):
 POST = {"/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
         "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
-        "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
+        "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/preset": p_preset, "/api/settings/reset": p_reset, "/api/msgs/preview": p_msg_preview, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
 
 
 def loop():

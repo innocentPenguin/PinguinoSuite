@@ -690,5 +690,154 @@ class ChatCommandTests(unittest.TestCase):
         self.assertEqual(server.p_chat_command(None, {"command": "sr", "args": "", "user": "a"})["error"], "usage")
 
 
+class PersonalizationTests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True})
+
+    def test_schema_is_consistent(self):
+        import config_schema as cs
+        self.assertEqual(set(cs.DEFAULTS), {k for g in cs.SCHEMA for k, *_ in g["items"]})
+        self.assertEqual(set(cs.DEFAULTS["msgs"]), set(cs.MSGS))
+        self.assertEqual(set(cs.DEFAULTS["cmd_aliases"]), set(cs.COMMANDS))
+        for k, (label, tpl, helptext) in cs.MSGS.items():
+            self.assertTrue(label and helptext, k)
+            tpl.format_map(type("D", (dict,), {"__missing__": lambda s, k: ""})(cs.VARS))
+        for k, kind, d, label, hlp in [i for g in cs.SCHEMA for i in g["items"]]:
+            self.assertTrue(label, k)
+        for name, (label, hlp, patch) in cs.PRESETS.items():
+            self.assertTrue(set(patch) <= set(cs.DEFAULTS), name)
+            self.assertEqual(rules.merged(patch)["requests_open"], patch.get("requests_open", False))
+
+    def test_custom_reply_template_and_prefix_and_silence(self):
+        self.e.save_settings({"msgs": {"added": "{user}: queued {title} at spot {pos}!"}, "reply_prefix": "🎵 "})
+        r = self.e.chat("ann", "!sr song 5", [])
+        self.assertEqual(r["reply"], "🎵 ann: queued Song 5 at spot 1!")
+        self.e.save_settings({"msgs": {"dup_queue": ""}})
+        self.assertEqual(self.e.chat("bob", "!sr song 5", [])["reply"], "")
+        self.assertEqual(self.e.chat("bob", "!sr song 5", [])["code"], "dup_queue")       # still refused, just silent
+        self.assertIn("added", self.e.settings["msgs"]["closed"] + "added")                # other templates untouched
+        self.assertTrue(self.e.settings["msgs"]["limit"])
+
+    def test_bad_template_placeholder_is_blank_not_crash(self):
+        self.e.save_settings({"msgs": {"added": "hi {nonsense} {user}"}})
+        self.assertEqual(self.e.chat("ann", "!sr song 5", [])["reply"], "hi  ann")
+
+    def test_aliases_and_prefix(self):
+        self.e.save_settings({"cmd_aliases": {"sr": "tune, Add-Song"}, "prefix": "?"})
+        self.assertTrue(self.e.chat("ann", "?tune song 5", [])["ok"])
+        self.assertTrue(self.e.chat("ann", "?addsong song 6", [])["ok"])
+        self.assertFalse(self.e.chat("ann", "!sr song 7", [])["handled"])
+        self.assertTrue(self.e.chat("ann", "?song", [])["handled"])
+        self.e.save_settings({"prefix": "!!!!!"})                       # too long: rejected, keeps the old one
+        self.assertEqual(self.e.settings["prefix"], "?")
+        self.e.save_settings({"cmd_aliases": {"nope": "x", "skip": ""}})   # unknown command / empty list ignored
+        self.assertIn("skip", self.e.settings["cmd_aliases"]["skip"])
+
+    def test_per_role_limits(self):
+        self.e.save_settings({"per_user_limit": 1, "limit_sub": 3, "limit_vip": 2, "sub_extra": 0})
+        self.assertTrue(self.e.chat("v", "!sr song 5", [])["ok"])
+        self.assertEqual(self.e.chat("v", "!sr song 6", [])["code"], "limit")
+        for n in (7, 8, 9):
+            self.assertTrue(self.e.chat("s", f"!sr song {n}", ["sub"])["ok"], n)
+        self.assertEqual(self.e.chat("s", "!sr song 10", ["sub"])["code"], "limit")
+        for n in (11, 12):
+            self.assertTrue(self.e.chat("p", f"!sr song {n}", ["vip"])["ok"], n)
+        self.assertEqual(self.e.chat("p", "!sr song 13", ["vip"])["code"], "limit")
+        self.e.save_settings({"per_user_limit": 0})                      # 0 = unlimited
+        self.assertTrue(self.e.chat("v", "!sr song 14", [])["ok"])
+
+    def test_cooldown_per_role(self):
+        self.e.save_settings({"cooldown_s": 60, "cooldown_sub_s": 10, "per_user_limit": 0})
+        self.assertTrue(self.e.chat("v", "!sr song 5", [])["ok"])
+        r = self.e.chat("v", "!sr song 6", [])
+        self.assertEqual(r["code"], "cooldown")
+        self.assertIn("60", r["reply"])
+        self.clock.t += 61
+        self.assertTrue(self.e.chat("v", "!sr song 6", [])["ok"])
+        self.assertTrue(self.e.chat("s", "!sr song 7", ["sub"])["ok"])
+        self.clock.t += 5
+        self.assertEqual(self.e.chat("s", "!sr song 8", ["sub"])["code"], "cooldown")
+        self.clock.t += 6
+        self.assertTrue(self.e.chat("s", "!sr song 8", ["sub"])["ok"])
+        self.assertTrue(self.e.chat("m", "!sr song 9", ["mod"])["ok"] and self.e.chat("m", "!sr song 10", ["mod"])["ok"])
+
+    def test_artist_cap_and_min_length_and_sub_max_length(self):
+        self.e.save_settings({"max_per_artist": 2, "per_user_limit": 0})
+        self.assertTrue(self.e.chat("a", "!sr song 5", [])["ok"] and self.e.chat("b", "!sr song 6", [])["ok"])
+        self.assertEqual(self.e.chat("c", "!sr song 7", [])["code"], "artist_cap")
+        self.e.save_settings({"max_per_artist": 0, "min_length_s": 300})
+        self.assertEqual(self.e.chat("c", "!sr song 7", [])["code"], "too_short")
+        self.e.save_settings({"min_length_s": 0, "max_length_s": 100, "max_length_sub_s": 400})
+        self.assertEqual(self.e.chat("c", "!sr song 7", [])["code"], "too_long")
+        self.assertTrue(self.e.chat("c", "!sr song 7", ["sub"])["ok"])
+
+    def test_links_and_search_toggles(self):
+        self.api.track = lambda tid: self.api.tracks["t4"]
+        self.e.save_settings({"allow_links": False})
+        self.assertEqual(self.e.chat("a", "!sr https://open.spotify.com/track/" + "x" * 22, [])["code"], "no_links")
+        self.assertTrue(self.e.chat("a", "!sr song 5", [])["ok"])
+        self.e.save_settings({"allow_links": True, "allow_search": False})
+        self.assertEqual(self.e.chat("b", "!sr song 6", [])["code"], "no_search")
+        self.assertTrue(self.e.chat("b", "!sr https://open.spotify.com/track/" + "x" * 22, [])["ok"])
+
+    def test_approval_for_choices(self):
+        self.e.save_settings({"require_approval": True, "approval_for": "non_subs"})
+        self.assertEqual(self.e.chat("v", "!sr song 5", [])["code"], "pending")
+        self.assertEqual(self.e.chat("s", "!sr song 6", ["sub"])["code"], "added")
+        self.e.save_settings({"approval_for": "everyone"})
+        self.assertEqual(self.e.chat("m", "!sr song 7", ["mod"])["code"], "pending")
+        self.assertEqual(self.e.chat("ivan", "!sr song 8", ["broadcaster"])["code"], "added")
+
+    def test_fair_queue_off_is_fifo_and_redeem_toggle(self):
+        self.e.save_settings({"fair_queue": False, "per_user_limit": 0})
+        for n, u in [(5, "a"), (6, "a"), (7, "b")]:
+            self.e.chat(u, f"!sr song {n}", [])
+        self.assertEqual(self.e.queue.items[2]["requester"], "b")
+        self.e.save_settings({"redeem_priority": False})
+        self.e.chat("z", "!sr song 8", [], redeem=True)
+        self.assertEqual(self.e.queue.items[-1]["tier"], 0)
+
+    def test_new_commands(self):
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        self.assertEqual(self.e.chat("a", "!lastsong", [])["code"], "last")
+        self.assertIn("No previous", self.e.chat("a", "!lastsong", [])["reply"])
+        self.e.chat("a", "!sr song 5", [])
+        self.assertIn("Song 5", self.e.chat("a", "!mysongs", [])["reply"])
+        self.assertIn("no requests", self.e.chat("zz", "!mysongs", [])["reply"])
+        self.assertIn("!sr", self.e.chat("a", "!songhelp", [])["reply"])
+
+    def test_presets_reset_and_merge_semantics(self):
+        self.e.apply_preset("strict")
+        s = self.e.settings
+        self.assertEqual((s["per_user_limit"], s["block_explicit"], s["requests_open"]), (1, True, True))   # preset leaves open/closed alone
+        self.e.save_settings({"msgs": {"added": "A"}})
+        self.e.save_settings({"msgs": {"closed": "C"}})
+        self.assertEqual((self.e.settings["msgs"]["added"], self.e.settings["msgs"]["closed"]), ("A", "C"))
+        self.e.reset_settings(["msgs"])
+        self.assertNotEqual(self.e.settings["msgs"]["added"], "A")
+        self.assertEqual(self.e.settings["per_user_limit"], 1)
+        self.e.reset_settings()
+        self.assertEqual(self.e.settings["per_user_limit"], 2)
+        self.assertFalse(self.e.settings["requests_open"])
+        with self.assertRaises(QueueError):
+            self.e.apply_preset("nope")
+
+    def test_preview_uses_samples(self):
+        self.assertIn("Ann", self.e.preview_msg("hi {user} {unknown}"))
+
+    def test_overlay_style_exposed_and_validated(self):
+        self.e.save_settings({"ov_theme": "glass", "ov_accent": "#00ff88", "ov_width": 300})
+        st = self.e.overlay()["style"]
+        self.assertEqual((st["theme"], st["accent"], st["width"]), ("glass", "#00ff88", 300))
+        self.e.save_settings({"ov_theme": "neon", "ov_accent": "red"})
+        st = self.e.overlay()["style"]
+        self.assertEqual((st["theme"], st["accent"]), ("glass", "#00ff88"))
+
+
 if __name__ == "__main__":
     unittest.main()

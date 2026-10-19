@@ -35,6 +35,7 @@ class Engine:
         self.last_error = ""
         self.last_verify = 0.0
         self.idle_since = None
+        self.last_req = {}             # viewer -> time of last accepted request (cooldown)
         self.me = None
         self.devices = []
         self.version = 0               # bumped on any visible change (UI/overlay can poll cheaply)
@@ -56,11 +57,38 @@ class Engine:
     def save_settings(self, patch):
         with self.lock:
             cur = self.cfg.get("settings", {})
-            cur.update(patch if isinstance(patch, dict) else {})
+            for k, v in (patch if isinstance(patch, dict) else {}).items():
+                if k not in rules.DEFAULTS:
+                    continue
+                if isinstance(v, dict):
+                    cur[k] = {**(cur.get(k) if isinstance(cur.get(k), dict) else {}), **v}    # msgs / cmd_aliases: single entries
+                elif rules.merged({k: v})[k] == v:                                           # invalid values keep the old setting
+                    cur[k] = v
             self.cfg["settings"] = rules.merged(cur)
             self._save_cfg()
             self._bump()
             return self._own_settings()
+
+    def apply_preset(self, name):
+        import config_schema as cs
+        if name not in cs.PRESETS:
+            raise QueueError("unknown preset")
+        return self.save_settings(dict(cs.PRESETS[name][2]))
+
+    def reset_settings(self, keys=None):
+        """Back to defaults: given keys, or everything (requests stay closed)."""
+        with self.lock:
+            cur = self.cfg.get("settings", {})
+            for k in (keys or list(cur.keys())):
+                cur.pop(k, None)
+            self.cfg["settings"] = rules.merged(cur) if keys else {}
+            self._save_cfg()
+            self._bump()
+            return self._own_settings()
+
+    def preview_msg(self, template):
+        import config_schema as cs
+        return (self.settings["reply_prefix"] + str(template).format_map(_Blank(cs.VARS)))[:400]
 
     def set_client_id(self, cid):
         with self.lock:
@@ -236,7 +264,8 @@ class Engine:
             now = self.clock()
             pb = self.pb
             cur = pb["track"] if pb and pb["track"] else None
-            n = self.settings["overlay_show_next"]
+            st = self.settings
+            n = st["overlay_show_next"]
             return {"playing": bool(pb and pb["is_playing"]), "has_track": bool(cur),
                     "title": cur["name"] if cur else "", "artist": ", ".join(cur["artists"]) if cur else "",
                     "album": cur["album"] if cur else "", "art": cur["art"] if cur else "",
@@ -244,7 +273,8 @@ class Engine:
                     "duration_ms": cur["duration_ms"] if cur else 0,
                     "requester": (self.now_item or {}).get("requester", ""),
                     "next": [{"title": i["name"], "artist": ", ".join(i["artists"]), "requester": i["requester"]} for i in self.queue.items[:n]],
-                    "version": self.version}
+                    "version": self.version,
+                    "style": {k[3:]: st[k] for k in st if k.startswith("ov_")}}
 
     # ---- adding tracks
     def resolve(self, q, limit=5):
@@ -257,60 +287,82 @@ class Engine:
     def add_track(self, track, where="end", requester="", source="streamer", tier=0):
         with self.lock:
             item = new_item(track, requester, source, tier)
-            self.queue.add(item, where)
+            self.queue.add(item, where, fair=self.settings["fair_queue"])
             self._event("add", requester or "you", f"{track['name']} - {', '.join(track['artists'])}")
             self.persist()
             self._bump()
             return item
 
+    # ---- replies (personal wording from settings)
+    def say(self, key, **v):
+        """Render message template `key`; empty template = silent. Unknown {placeholders} become empty."""
+        s = self.settings
+        tpl = s["msgs"].get(key, "")
+        if not tpl:
+            return ""
+        text = tpl.format_map(_Blank(v))
+        return (s["reply_prefix"] + text)[:400]
+
+    def _r(self, ok, code, key=None, **v):
+        return {"ok": ok, "code": code, "reply": self.say(key or code, **v)}
+
     # ---- viewer requests
     def request(self, user, query, roles, redeem=False, track=None):
-        """Returns {ok, reply, code}. Shared by chat and the UI's manual 'add as viewer'."""
+        """Returns {ok, reply, code}. Shared by chat, the site and the Host."""
         s = self.settings
         roles = set(roles)
         if not query and not track:
-            return {"ok": False, "code": "usage", "reply": f"@{user} usage: !sr <song name or Spotify link>"}
+            return self._r(False, "usage", user=user)
         if not self.auth.connected():
-            return {"ok": False, "code": "offline", "reply": "Song requests aren't available right now."}
+            return self._r(False, "offline", user=user)
+        if query and not track and not rules.is_staff(roles):
+            has_link = bool(rules.track_id_from(query))
+            if has_link and not s["allow_links"]:
+                return self._r(False, "no_links", user=user)
+            if not has_link and not s["allow_search"]:
+                return self._r(False, "no_search", user=user)
         try:
             cands = [track] if track else self.resolve(query)
         except ApiError as e:
             console_log.warn("request", f"lookup failed for {user}: {e}", dedupe_s=30)
-            return {"ok": False, "code": "lookup", "reply": f"@{user} couldn't reach Spotify, try again."}
+            return self._r(False, "lookup", user=user)
         if not cands:
             self._event("reject", user, f"no result: {query}", False)
-            return {"ok": False, "code": "none", "reply": f"@{user} no song found for that."}
+            return self._r(False, "none", "none", user=user)
         now_uri = self.pb["track"]["uri"] if self.pb and self.pb["track"] else None
         first_fail = None
         with self.lock:
             for t in cands:
-                ok, code, msg = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock())
+                ok, code, ctx = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()))
                 if ok:
                     return self._accept(t, user, roles, redeem)
-                first_fail = first_fail or (code, msg, t)
-                if code in ("user_blocked", "closed", "mod_only", "sub_only", "full", "limit"):
+                first_fail = first_fail or (code, ctx, t)
+                if code in ("user_blocked", "closed", "mod_only", "sub_only", "full", "limit", "cooldown"):
                     break           # not a track problem: trying other search results won't help
-            code, msg, t = first_fail
+            code, ctx, t = first_fail
             self._event("reject", user, f"{t['name']}: {code}", False)
             self._bump()
-            return {"ok": False, "code": code, "reply": msg}
+            return self._r(False, code, **ctx)
 
     def _accept(self, t, user, roles, redeem):
         s = self.settings
         tier = rules.tier_for(s, roles, redeem)
         label = f"{t['name']} - {', '.join(t['artists'])}"
+        self.last_req[user.lower()] = self.clock()
+        base = {"user": user, "song": label, "title": t["name"], "artist": t["artists"][0] if t["artists"] else ""}
         if rules.needs_approval(s, roles):
             self.inbox.append({"id": uuid.uuid4().hex[:8], "track": t, "user": user, "roles": sorted(roles), "tier": tier,
                                "ts": self.clock(), "status": "pending"})
             self._event("pending", user, label)
             self.persist()
             self._bump()
-            return {"ok": True, "code": "pending", "reply": f"@{user} '{label}' is waiting for approval."}
+            return self._r(True, "pending", **base)
         item = self.add_track(t, "end", user, "viewer", tier)
         idx = self.queue.index(item["id"])
         mins = round(self.eta_ms(idx) / 60000)
-        when = f", plays in ~{mins} min" if mins >= 2 else ""
-        return {"ok": True, "code": "added", "reply": f"@{user} added '{label}' (#{idx + 1} in queue{when}).", "item": item["id"]}
+        r = self._r(True, "added", **base, pos=idx + 1, eta=f", plays in ~{mins} min" if mins >= 2 else "")
+        r["item"] = item["id"]
+        return r
 
     def eta_ms(self, idx):
         """Milliseconds until queue item `idx` starts (rest of the current track + everything before it)."""
@@ -334,8 +386,8 @@ class Engine:
 
     # ---- chat
     def chat(self, user, text, roles=(), redeem=False):
-        """Entry for Streamer.bot/Host. -> {handled, ok, reply, code}. `reply` is empty when chat_replies is off."""
-        cmd, arg = rules.parse(text)
+        """Entry for the Host / Streamer.bot. -> {handled, ok, reply, code}. `reply` is empty when chat_replies is off."""
+        cmd, arg = rules.parse(text, self.settings)
         if not cmd:
             return {"handled": False, "ok": False, "reply": "", "code": "not_a_command"}
         roles = set(r.lower() for r in roles)
@@ -351,68 +403,90 @@ class Engine:
         if cmd == "sr":
             low = arg.lower()
             if staff and low in ("open", "close", "on", "off"):
-                self.save_settings({"requests_open": low in ("open", "on")})
-                return {"ok": True, "code": "toggle", "reply": "Song requests are now " + ("open." if low in ("open", "on") else "closed.")}
+                opened = low in ("open", "on")
+                self.save_settings({"requests_open": opened})
+                return self._r(True, "toggle", "toggle_open" if opened else "toggle_closed", user=user)
             if staff and low == "clear":
                 return self._chat_cmd("clear", "", user, roles, staff, False)
             return self.request(user, arg, roles, redeem)
         if cmd == "song":
-            return {"ok": True, "code": "song", "reply": self.song_line()}
+            return self.song_reply(user)
         if cmd == "queue":
-            return {"ok": True, "code": "queue", "reply": self.queue_line()}
+            return self.queue_reply(user)
         if cmd == "skip":
             return self.vote_skip(user, staff)
+        if cmd == "last":
+            h = self.queue.history[0] if self.queue.history else None
+            if not h:
+                return self._r(True, "last", "last_none", user=user)
+            return self._r(True, "last", "last", user=user, last=f"{h['name']} - {', '.join(h['artists'])}")
+        if cmd == "mine":
+            mine = [it for it in self.queue.items if it["source"] == "viewer" and it["requester"].lower() == user.lower()]
+            if not mine:
+                return self._r(True, "mine", "mine_none", user=user)
+            return self._r(True, "mine", user=user, mine=", ".join(f"{it['name']} (#{self.queue.index(it['id']) + 1})" for it in mine))
+        if cmd == "help":
+            p = s["prefix"]
+            shown = [p + s["cmd_aliases"][c][0] for c in ("sr", "song", "queue", "skip", "oops", "mine", "last") if s["cmd_aliases"].get(c)]
+            return self._r(True, "help", user=user, cmds=" ".join(shown))
         if cmd == "oops":
             it = self.queue.remove_last_of(user)
             if not it:
-                return {"ok": False, "code": "none", "reply": f"@{user} you have nothing to remove."}
+                return self._r(False, "none", "oops_none", user=user)
             self._event("remove", user, it["name"])
             self.persist()
             self._bump()
-            return {"ok": True, "code": "removed", "reply": f"@{user} removed '{it['name']}'."}
+            return self._r(True, "removed", user=user, title=it["name"], song=it["name"])
         if cmd == "clear" and staff:
             self.queue.clear(only_viewers=True)
             self.persist()
             self._bump()
-            return {"ok": True, "code": "clear", "reply": "Viewer requests cleared."}
+            return self._r(True, "clear", "cleared", user=user)
         if cmd == "blocksong" and staff:
             t = self.pb["track"] if self.pb and self.pb["track"] else None
             if not t:
-                return {"ok": False, "code": "none", "reply": "Nothing is playing."}
+                return self._r(False, "none", "skip_none", user=user)
             self.save_settings({"blocklist": self._own_settings()["blocklist"] + [t["uri"]]})
             self.skip(force=True)
-            return {"ok": True, "code": "blocked", "reply": f"Blocked '{t['name']}' and skipped it."}
+            return self._r(True, "blocked", "blocked_song", user=user, title=t["name"], artist=t["artists"][0] if t["artists"] else "")
         return {"ok": False, "code": "denied", "reply": ""}
 
-    def song_line(self):
+    def song_reply(self, user=""):
         t = self.pb["track"] if self.pb and self.pb["track"] else None
         if not t:
-            return "Nothing is playing right now."
+            return self._r(True, "song", "song_idle", user=user)
         who = (self.now_item or {}).get("requester")
-        return f"Now playing: {t['name']} - {', '.join(t['artists'])}" + (f" (requested by {who})" if who else "") + f" https://open.spotify.com/track/{t['id']}"
+        return self._r(True, "song", user=user, song=f"{t['name']} - {', '.join(t['artists'])}", title=t["name"], artist=", ".join(t["artists"]),
+                       by=f" (requested by {who})" if who else "", requester=who or "", link=f"https://open.spotify.com/track/{t['id']}")
 
-    def queue_line(self):
+    def queue_reply(self, user=""):
         items = self.queue.items
         if not items:
-            return "The queue is empty. Request a song with !sr <song or link>."
+            return self._r(True, "queue", "queue_empty", user=user)
         nxt = " | ".join(f"{i + 1}. {it['name']} - {it['artists'][0] if it['artists'] else ''}" for i, it in enumerate(items[:3]))
-        return f"{len(items)} in queue. Next: {nxt}"
+        return self._r(True, "queue", user=user, count=len(items), next=nxt)
+
+    def song_line(self):
+        return self.song_reply()["reply"]
+
+    def queue_line(self):
+        return self.queue_reply()["reply"]
 
     def vote_skip(self, user, staff):
         s = self.settings
         if not (self.pb and self.pb["track"]):
-            return {"ok": False, "code": "none", "reply": "Nothing is playing."}
+            return self._r(False, "none", "skip_none", user=user)
         if staff and s["skip_mod_instant"]:
             self.skip(force=True)
-            return {"ok": True, "code": "skipped", "reply": "Skipped."}
+            return self._r(True, "skipped", user=user)
         self.skip_votes.add(user.lower())
         need = max(1, int(s["skip_votes"]))
         n = len(self.skip_votes)
         if n >= need:
             self.skip(force=True)
-            return {"ok": True, "code": "skipped", "reply": f"Skip vote passed ({n}/{need}). Skipping."}
+            return self._r(True, "skipped", "vote_skipped", user=user, votes=n, need=need)
         self._bump()
-        return {"ok": True, "code": "vote", "reply": f"Skip vote {n}/{need}."}
+        return self._r(True, "vote", user=user, votes=n, need=need)
 
     # ---- playback control (UI + chat)
     def skip(self, force=False):
@@ -543,3 +617,8 @@ class Engine:
 class _Safe(dict):
     def __missing__(self, k):
         return "{" + k + "}"
+
+
+class _Blank(dict):
+    def __missing__(self, k):
+        return ""

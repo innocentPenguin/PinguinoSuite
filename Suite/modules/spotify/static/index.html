@@ -45,6 +45,12 @@ code{background:var(--bg);padding:2px 6px;border-radius:5px;user-select:all}
 #toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--accent);padding:8px 14px;border-radius:8px;display:none;z-index:9}
 #banner{background:#4a1f1f;border:1px solid var(--bad);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:none}
 .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px}.pill.ok{background:#0f2e22;color:var(--ok)}.pill.bad{background:#3a1414;color:var(--bad)}
+.srow{display:flex;gap:14px;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)}
+.srow:first-child{border-top:0}.srow .slab{flex:1;min-width:0}.srow .sctl{flex:none;max-width:58%}.srow.wide{flex-direction:column}.srow.wide .sctl{max-width:none}
+.srow a{color:var(--accent);text-decoration:none}
+.cmdrow,.msgrow{display:grid;grid-template-columns:1fr;gap:2px;margin-bottom:8px}.prev{color:var(--ok);min-height:14px}
+details>summary{list-style:none}details>summary::before{content:'▸ ';color:var(--accent)}details[open]>summary::before{content:'▾ '}
+input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px solid var(--line);border-radius:6px}
 </style></head><body><div id="wrap">
 <div id="banner"></div>
 
@@ -91,16 +97,14 @@ code{background:var(--bg);padding:2px 6px;border-radius:5px;user-select:all}
 </section>
 
 <section id="t-set" hidden>
-  <div class="card"><h3 style="margin-top:0">Request rules</h3><div class="grid" id="rules"></div>
-    <label class="small dim" style="display:block;margin-top:10px">Blocklist (one per line: words in title/artist, or a Spotify track link/URI)</label><textarea id="blocklist"></textarea>
-    <label class="small dim" style="display:block;margin-top:10px">Blocked viewers (one per line)</label><textarea id="blockedusers"></textarea>
-    <div style="margin-top:10px"><button class="pri" id="bsave">Save settings</button></div></div>
-  <div class="card"><h3 style="margin-top:0">Chat commands</h3>
-    <div class="small"><code>!sr &lt;song or link&gt;</code> request &nbsp; <code>!queue</code> &nbsp; <code>!song</code> &nbsp; <code>!skip</code> (votes) &nbsp; <code>!oops</code> remove your last request<br>
-    Mods: <code>!sr open</code> / <code>!sr close</code> / <code>!srclear</code> / <code>!blocksong</code> / instant <code>!skip</code>. Chat wiring: <code>POST /api/chat</code> (see Docs/SPOTIFY.md).</div></div>
+  <div class="card"><div class="ctl"><b>Presets</b><span id="presets" class="ctl"></span><span style="flex:1"></span><button id="bexport">Export / import</button><button id="breset" class="x">Reset everything</button></div>
+    <div class="small dim" id="presethelp" style="margin-top:6px">One click sets a bundle of rules. It never opens or closes requests (except "Closed").</div>
+    <div id="porter" hidden style="margin-top:8px"><textarea id="porttext" placeholder="Settings JSON"></textarea><div class="ctl" style="margin-top:6px"><button id="bimport" class="pri">Import (merge)</button><span class="small dim">Copy this text to back up or move your setup.</span></div></div></div>
+  <div id="groups"></div>
   <div class="card"><h3 style="margin-top:0">OBS overlay</h3>
-    <div class="small">Browser source URL: <code id="ovurl"></code> <button id="bcopyov">Copy</button> (add <code>?next=0</code> to hide up-next, <code>?theme=light</code>)<br>
+    <div class="small">Browser source URL: <code id="ovurl"></code> <button id="bcopyov">Copy</button> (<code>?next=0</code> hides up-next, <code>?theme=glass</code> overrides the look)<br>
     Text file for a Text source: <code id="npfile"></code></div></div>
+  <div class="card" id="savebar" style="position:sticky;bottom:8px;display:flex;gap:10px;align-items:center;border-color:var(--accent)"><span id="dirty" class="small dim">No unsaved changes</span><span style="flex:1"></span><button id="bdiscard">Discard</button><button class="pri" id="bsave">Save settings</button></div>
 </section>
 
 <section id="t-setup" hidden>
@@ -136,7 +140,7 @@ function drawTabs(){
   $('tabs').innerHTML=TABS.map(([k,l])=>`<button data-t="${k}" class="${k===tab?'on':''}">${l}${k==='req'&&pend?`<span class="badge">${pend}</span>`:''}</button>`).join('');
   for(const [k] of TABS)$('t-'+k).hidden=k!==tab;
 }
-$('tabs').onclick=e=>{const t=e.target.closest('button');if(!t)return;tab=t.dataset.t;drawTabs();if(tab==='setup'||tab==='set')loadSetup();render()};
+$('tabs').onclick=e=>{const t=e.target.closest('button');if(!t)return;tab=t.dataset.t;drawTabs();if(tab==='setup'||tab==='set')loadSetup();if(tab==='set')editing=dirty.size>0;render()};
 
 function trackRow(t,btns){
   return `<div class="row"><img src="${esc(t.art)}" onerror="this.style.visibility='hidden'"><div class="m"><div class="n">${esc(t.name)}${t.explicit?'<span class="tag e">E</span>':''}</div><div class="n small dim">${esc((t.artists||[]).join(', '))} · ${fmt(t.duration_ms)}</div></div>${btns}</div>`;
@@ -152,7 +156,7 @@ function render(){
   drawNow();
   if(tab==='queue')drawQueue();
   if(tab==='req')drawReq();
-  if(tab==='set'&&!editing)drawSettings();
+  if(tab==='set'&&!editing){loadSchema().then(drawSettings)}
   $('qopen').checked=!!S.settings.requests_open;$('qsafe').checked=!!S.settings.stream_safe;
 }
 function drawNow(){
@@ -216,20 +220,58 @@ function drawReq(){
 }
 $('inbox').onclick=e=>{const b=e.target.closest('button');if(b)act('/api/inbox/'+b.dataset.id+'/'+(b.dataset.ok?'approve':'deny'))};
 
-const RULES=[['requests_open','Requests open','b'],['mod_only','Mods only','b'],['sub_only','Subs / VIPs only','b'],['stream_safe','Stream-safe (no explicit + approval)','b'],['require_approval','Approve every request first','b'],
- ['block_explicit','Block explicit songs','b'],['sub_priority','Subs/VIPs go first within a round','b'],['mods_bypass_limits','Mods bypass per-viewer limit','b'],['skip_mod_instant','Mod !skip skips instantly','b'],['chat_replies','Reply in chat','b'],
- ['per_user_limit','Pending requests per viewer','n'],['sub_extra','Extra slots for subs/VIPs','n'],['queue_max','Max queue length','n'],['max_length_s','Max song length (seconds)','n'],
- ['dup_cooldown_min','Replay cooldown (minutes)','n'],['skip_votes','Votes needed to skip','n'],['jit_ms','Send next song to Spotify this many ms before the end','n'],['overlay_show_next','Overlay: up-next count','n'],
- ['np_template','Text file template ({title} {artist} {album} {requester})','t'],['np_idle_text','Text file when nothing plays','t']];
-function drawSettings(){
-  const s=S.settings;
-  $('rules').innerHTML=RULES.map(([k,l,t])=>t==='b'?`<label class="chk"><input type="checkbox" data-k="${k}" ${s[k]?'checked':''}>${l}</label>`:`<label>${l}<input type="${t==='n'?'number':'text'}" data-k="${k}" value="${esc(s[k])}"></label>`).join('');
-  $('blocklist').value=s.blocklist.join('\n');$('blockedusers').value=s.blocked_users.join('\n');
+let SCHEMA=null,DRAFT=null,dirty=new Set(),drawnSig='';
+async function loadSchema(){if(!SCHEMA)try{SCHEMA=await api('/api/settings/schema')}catch(e){}}
+const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const dflt=k=>{for(const g of SCHEMA.groups)for(const it of g.items)if(it.key===k)return it.default};
+function mark(){const n=dirty.size;$('dirty').textContent=n?n+' unsaved change'+(n>1?'s':''):'No unsaved changes';$('dirty').style.color=n?'var(--accent)':''}
+function setVal(k,v,sub){if(sub){DRAFT[k]=Object.assign({},DRAFT[k],{[sub]:v});dirty.add(k+'.'+sub)}else{DRAFT[k]=v;dirty.add(k)}mark()}
+function ctl(it){
+  const k=it.key,v=DRAFT[k],id='f_'+k;
+  if(it.kind==='bool')return `<input type="checkbox" id="${id}" data-k="${k}" ${v?'checked':''}>`;
+  if(it.kind==='int')return `<input type="number" id="${id}" data-k="${k}" value="${esc(v)}" style="max-width:140px">`;
+  if(it.kind==='color')return `<input type="color" id="${id}" data-k="${k}" value="${esc(v)}">`;
+  if(it.kind.startsWith('choice:'))return `<select id="${id}" data-k="${k}" style="max-width:200px">${it.kind.slice(7).split('|').map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select>`;
+  if(it.kind==='list')return `<textarea id="${id}" data-k="${k}" data-list="1">${esc((v||[]).join('\n'))}</textarea>`;
+  if(it.kind==='cmds')return Object.entries(SCHEMA.commands).map(([c,m])=>`<div class="cmdrow"><span class="small dim">${esc(m.help)}</span><input type="text" data-k="${k}" data-sub="${c}" data-cmd="1" value="${esc((v[c]||[]).join(', '))}"></div>`).join('');
+  if(it.kind==='msgs')return `<div class="small dim" style="margin-bottom:6px">Placeholders: ${Object.keys(SCHEMA.vars).map(x=>`<code>{${x}}</code>`).join(' ')}</div>`+Object.entries(SCHEMA.msgs).map(([m,d])=>`<div class="msgrow"><label class="small dim">${esc(d.label)} <span style="opacity:.7">· ${esc(d.help)}</span> <a href="#" data-resetmsg="${m}" title="Back to default">↺</a></label><input type="text" data-k="${k}" data-sub="${m}" data-msg="1" value="${esc(v[m]||'')}"><div class="small prev" data-prev="${m}"></div></div>`).join('');
+  return `<input type="text" id="${id}" data-k="${k}" value="${esc(v)}">`;
 }
-$('rules').onfocusin=$('blocklist').onfocus=$('blockedusers').onfocus=()=>editing=true;
-$('bsave').onclick=async()=>{const p={};document.querySelectorAll('#rules [data-k]').forEach(i=>{p[i.dataset.k]=i.type==='checkbox'?i.checked:i.type==='number'?+i.value:i.value});
-  p.blocklist=$('blocklist').value.split('\n').map(x=>x.trim()).filter(Boolean);p.blocked_users=$('blockedusers').value.split('\n').map(x=>x.trim()).filter(Boolean);
-  editing=false;await act('/api/settings',p,'Settings saved')};
+function drawSettings(){
+  if(!SCHEMA||!S)return;
+  const sig=JSON.stringify(S.settings);
+  if(DRAFT&&!dirty.size&&drawnSig===sig&&$('groups').children.length)return;
+  drawnSig=sig;
+  if(!DRAFT||!dirty.size){DRAFT=JSON.parse(JSON.stringify(S.settings));dirty.clear()}
+  $('presets').innerHTML=Object.entries(SCHEMA.presets).map(([k,p])=>`<button data-preset="${k}" title="${esc(p.help)}">${esc(p.label)}</button>`).join('');
+  $('groups').innerHTML=SCHEMA.groups.map(g=>`<details class="card" ${['requests','limits'].includes(g.id)?'open':''}><summary style="cursor:pointer;font-weight:600">${esc(g.title)}</summary><div style="margin-top:8px">${g.items.map(it=>{
+    const wide=['list','cmds','msgs'].includes(it.kind),mod=!same(DRAFT[it.key],it.default);
+    return `<div class="srow ${wide?'wide':''}"><div class="slab"><div>${esc(it.label)}${mod?' <span class="tag o" title="Changed from the default">edited</span>':''} ${mod?`<a href="#" data-reset="${it.key}" title="Reset to default">↺</a>`:''}</div><div class="small dim">${esc(it.help)}</div></div><div class="sctl">${ctl(it)}</div></div>`}).join('')}</div></details>`).join('');
+  $('ovurl').textContent=setup?setup.overlay_url:'';$('npfile').textContent=setup?setup.nowplaying_file:'';
+  document.querySelectorAll('[data-msg]').forEach(i=>preview(i));
+  mark();
+}
+let prevT={};
+function preview(inp){const m=inp.dataset.sub,box=document.querySelector(`[data-prev="${m}"]`);if(!box)return;clearTimeout(prevT[m]);prevT[m]=setTimeout(async()=>{
+  if(!inp.value){box.textContent='(silent)';return}
+  try{box.textContent='→ '+(await api('/api/msgs/preview',{template:inp.value})).text}catch(e){box.textContent='⚠ '+e.message;box.style.color='var(--bad)';return}box.style.color=''},250)}
+$('t-set').addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(!k)return;editing=true;
+  if(t.dataset.msg){setVal(k,t.value,t.dataset.sub);preview(t)}
+  else if(t.dataset.cmd)setVal(k,t.value.split(',').map(x=>x.trim()).filter(Boolean),t.dataset.sub);
+  else if(t.dataset.list)setVal(k,t.value.split('\n').map(x=>x.trim()).filter(Boolean));
+  else if(t.type==='checkbox')setVal(k,t.checked);else if(t.type==='number')setVal(k,+t.value);else setVal(k,t.value)});
+$('t-set').addEventListener('click',e=>{
+  const a=e.target.closest('a[data-reset]'),m=e.target.closest('a[data-resetmsg]'),p=e.target.closest('button[data-preset]');
+  if(a){e.preventDefault();setVal(a.dataset.reset,JSON.parse(JSON.stringify(dflt(a.dataset.reset))));drawSettings()}
+  if(m){e.preventDefault();const d=SCHEMA.msgs[m.dataset.resetmsg].default;setVal('msgs',d,m.dataset.resetmsg);drawSettings()}
+  if(p)act('/api/preset',{name:p.dataset.preset},'Preset applied: '+SCHEMA.presets[p.dataset.preset].label).then(()=>{dirty.clear();DRAFT=null})});
+$('bsave').onclick=async()=>{const patch={};for(const f of dirty){const[k,sub]=f.split('.');if(sub){patch[k]=patch[k]||{};patch[k][sub]=DRAFT[k][sub]}else patch[k]=DRAFT[k]}
+  try{await api('/api/settings',patch);dirty.clear();DRAFT=null;editing=false;toast('Settings saved');refresh()}catch(e){toast(e.message,true)}};
+$('bdiscard').onclick=()=>{dirty.clear();DRAFT=null;editing=false;drawSettings()};
+$('breset').onclick=()=>confirm('Reset ALL settings to their defaults (requests stay closed)?')&&act('/api/settings/reset',{},'Back to defaults').then(()=>{dirty.clear();DRAFT=null});
+$('bexport').onclick=()=>{$('porter').hidden=!$('porter').hidden;$('porttext').value=JSON.stringify(S.settings,null,1)};
+$('bimport').onclick=async()=>{try{await api('/api/settings',JSON.parse($('porttext').value));toast('Imported');dirty.clear();DRAFT=null;refresh()}catch(e){toast('Import failed: '+e.message,true)}};
+$('bcopyov').onclick=()=>copy($('ovurl').textContent);
 
 async function loadSite(){try{const s=await api('/api/site');if(document.activeElement!==$('siteurl'))$('siteurl').value=s.url;$('siteon').checked=s.enabled;
   $('sitestat').innerHTML=!s.enabled?'<span class="pill bad">off</span>':s.online?'<span class="pill ok">online</span>':'<span class="pill bad">'+esc(s.last_error||'connecting')+(s.has_key?'':' · key missing: add SPOTIFY_API_KEY in Integrations > Key vault')+'</span>'}catch(e){}}
@@ -238,8 +280,7 @@ async function loadSetup(){loadSite();try{setup=await api('/api/setup');$('redir
   $('dashlink').href=setup.dashboard;if(document.activeElement!==$('cid'))$('cid').value=setup.client_id;
   $('constat').innerHTML=setup.connected?'<span class="pill ok">connected</span>':'<span class="pill bad">not connected</span>'}catch(e){}}
 const copy=t=>navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy failed: select the text manually',true));
-$('bcopyredir').onclick=()=>copy($('redir').textContent);$('bcopyov').onclick=()=>copy($('ovurl').textContent);
-$('bcid').onclick=async()=>{await act('/api/setup',{client_id:$('cid').value},'Client ID saved');loadSetup()};
+$('bcopyredir').onclick=()=>copy($('redir').textContent);$('bcid').onclick=async()=>{await act('/api/setup',{client_id:$('cid').value},'Client ID saved');loadSetup()};
 $('bconnect').onclick=async()=>{try{await api('/api/setup',{client_id:$('cid').value});const r=await api('/api/auth/start',{});toast('Opened Spotify in your browser: approve there, then come back.')}catch(e){toast(e.message,true)}};
 $('bdisc').onclick=()=>confirm('Disconnect Spotify?')&&act('/api/disconnect',{},'Disconnected').then(loadSetup);
 

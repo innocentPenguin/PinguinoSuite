@@ -70,6 +70,9 @@
         "Open Spotify on the streaming PC and press play once so a playback device exists.",
         "Add songs in Search, or let viewers use !sr in chat. Drag rows to reorder; only the next song is sent to Spotify, shortly before the current one ends.",
         "Song requests ship CLOSED. Open them with the toggle on the Queue tab, '!sr open' in chat, or the site's mod page.",
+        "Make it yours: Spotify page > Settings has presets (Relaxed, Balanced, Strict, Subs only, Mods only, Stream-safe, Closed) and every rule with a one-line explanation: limits per role, cooldowns, artist cap, explicit/length filters, approval, fair queue. Each edited setting shows a reset arrow.",
+        "Chat wording: rename any command (add your own words like !tune), change the prefix, and rewrite every bot reply with {placeholders} and a live preview. An empty reply keeps the bot silent. Export/import copies your whole setup.",
+        "Overlay look (theme, accent colour, size, font, what to show) is also under Settings; the OBS source updates by itself.",
         "OBS: add a Browser source with http://127.0.0.1:8771/overlay, or a Text source reading Data\\runtime\\spotify\\nowplaying.txt.",
         "Website link (optional): set the site URL on the Setup tab and SPOTIFY_API_KEY in Integrations > Key vault.",
         "To redo setup: Setup tab > Disconnect, then Connect again."

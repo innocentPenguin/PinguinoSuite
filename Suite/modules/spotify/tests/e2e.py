@@ -405,6 +405,27 @@ def main():
     T("test-key endpoint rejects bad key", post("/api/test-key")[0] == 400)
     post("/api/site", {"key": "SITEKEY", "enabled": False})
 
+    # ---------------- personalization endpoints
+    sc = get("/api/settings/schema")[1]
+    T("schema endpoint: groups, msgs, commands, presets", len(sc["groups"]) >= 7 and "added" in sc["msgs"] and "sr" in sc["commands"] and "strict" in sc["presets"])
+    T("msg preview renders samples", "Ann" in post("/api/msgs/preview", {"template": "hi {user}"})[1]["text"])
+    T("msg preview rejects a broken template", post("/api/msgs/preview", {"template": "hi {user"})[0] == 400)
+    post("/api/settings", {"msgs": {"added": "{user} got {title}!"}, "reply_prefix": "* "})
+    post("/api/settings", {"requests_open": True, "per_user_limit": 0})
+    T("custom reply used in real chat", chat("tmpl", "!sr song 36")["reply"].startswith("* tmpl got Song 36"))
+    post("/api/settings", {"cmd_aliases": {"sr": "tune"}})
+    T("custom command word works", chat("tmpl", "!tune song 37")["ok"] is True)
+    T("host contract follows custom aliases", cmd("tune", "song 38", "tmpl")["ok"] is True)
+    post("/api/preset", {"name": "strict"})
+    T("preset applied", state()["settings"]["per_user_limit"] == 1 and state()["settings"]["block_explicit"] is True)
+    T("unknown preset = 400", post("/api/preset", {"name": "zzz"})[0] == 400)
+    post("/api/settings/reset", {"keys": ["msgs", "reply_prefix", "cmd_aliases"]})
+    T("partial reset restores wording only", state()["settings"]["msgs"]["added"].startswith("@{user} added") and state()["settings"]["per_user_limit"] == 1)
+    post("/api/settings/reset", {})
+    T("full reset: defaults and requests closed", state()["settings"]["per_user_limit"] == 2 and state()["settings"]["requests_open"] is False)
+    post("/api/settings", {"requests_open": True, "per_user_limit": 5})
+    T("overlay.json carries the style", get("/api/overlay.json")[1]["style"]["accent"] == "#ff9900")
+
     # ---------------- stream end hook
     post("/api/settings", {"requests_open": True})
     T("on_live hook never opens requests", post("/api/live/auto")[1]["requests_open"] is True and True)
@@ -414,7 +435,7 @@ def main():
     post("/api/settings", {"requests_open": True})
 
     # ---------------- persistence across restart
-    post("/api/settings", {"requests_open": True})
+    post("/api/settings", {"requests_open": True, "blocklist": ["artist nobody"]})
     qn = qnames()
     stop_server()
     T("restart server", start_server())
