@@ -175,8 +175,18 @@ def commands_test(b: CmdTest):
     """Dry run by default: which commands would this sentence trigger? run=true actually fires them (ignores the master switch)."""
     d = voice.load_cmds()
     hit = voice.matches(b.text, d, only_enabled=False)
-    results = [{"phrase": c["phrase"], **(voice.run_action(c, b.text, None, clog) if b.run else {"ok": None, "detail": "dry run"})} for c in hit]
+    results = []
+    for c, score in voice.scored_matches(b.text, d, only_enabled=False):
+        res = voice.run_action(c, b.text, None, clog) if b.run else {"ok": None, "detail": "dry run"}
+        voice.record(clog, b.text, c, score, ("fired" if res["ok"] else "failed") if b.run else "test_dry_run", res["detail"])
+        results.append({"phrase": c["phrase"], **res})
     return {"matched": [c["phrase"] for c in hit], "results": results}
+
+
+@app.get("/api/voice-log")
+def voice_log():
+    """Recent heard voice commands with match score, confidence and outcome (also in the Console, source 'voice')."""
+    return {"log": voice.voice_log()}
 
 
 @app.get("/api/markers")

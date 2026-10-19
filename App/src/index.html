@@ -375,10 +375,10 @@ pages.actions=()=>prev('Where Streamer.bot-style automations would live. Same id
    <div class="flow"><div class="node trg"><small>Trigger</small>${a[1]}</div>${a[2]?`<span class="arrow">→</span><div class="node cnd"><small>If</small>${a[2]}</div>`:''}${a[3].map(x=>`<span class="arrow">→</span><div class="node act"><small>${x[1]}</small>${x[0]}</div>`).join('')}</div></div>`).join('')}`;
 
 /* ============ Voice Studio: built on Listen (/api/style, /api/commands, /api/markers); see Suite/modules/listen/voice.py ============ */
-const V={style:null,cmds:null,markers:[],err:null,unv:false,test:null,dirty:false};
+const V={style:null,cmds:null,markers:[],log:[],err:null,unv:false,test:null,dirty:false};
 async function loadVoice(){V.err=null;
   try{const q=u=>fetch(LISTEN+u).then(r=>{if(!r.ok)throw new Error(u+' '+r.status);return r.json()});
-    [V.style,V.cmds,V.markers]=await Promise.all([q('/api/style?unverified='+V.unv),q('/api/commands'),q('/api/markers').then(x=>x.markers)]);V.dirty=false}
+    [V.style,V.cmds,V.markers,V.log]=await Promise.all([q('/api/style?unverified='+V.unv),q('/api/commands'),q('/api/markers').then(x=>x.markers),q('/api/voice-log').then(x=>x.log)]);V.dirty=false}
   catch(e){V.err=String(e.message||e)}
   if(route==='voice')draw(true)}
 const chips=(a,k='w',n='n')=>a&&a.length?a.map(x=>`<span class="pill" style="margin:2px">${esc(x[k])} <span class="faint">×${x[n]}</span></span>`).join(''):'<span class="sm faint">Not enough verified lines yet. Fix lines in Listen (Learn mode) and this fills in.</span>';
@@ -386,7 +386,7 @@ pages.voice=()=>{
   if(V.err||!V.style)return `<div class="card" style="max-width:560px"><h3>Voice Studio</h3><div class="dim">${V.err?'PinguinoListen is not answering ('+esc(V.err)+'). Voice Studio runs on top of Listen.':'Loading…'}</div><div class="row" style="margin-top:14px"><button class="pri" data-act="listen:start">Start PinguinoListen</button><button id="v-reload">Retry</button></div></div>`;
   const st=V.style,c=V.cmds,mods=S.modules.filter(m=>m.id!=='listen');
   const row=(x,i)=>`<div class="cmdrow" data-i="${i}"><div class="row wrap" style="gap:8px">
-      <input type="text" class="v-ph" value="${esc(x.phrase)}" placeholder="phrase, e.g. clip that" style="width:190px">
+      <input type="text" class="v-ph" value="${esc(x.phrase)}" placeholder="phrase; alternatives with |" title="Separate alternative phrases with |, e.g. skip the song | skip this song" style="width:260px">
       <select class="v-ty"><option value="marker" ${x.action.type==='marker'?'selected':''}>Drop a marker</option><option value="call" ${x.action.type==='call'?'selected':''}>Call a module</option></select>
       ${x.action.type==='call'?`<select class="v-mod">${mods.map(m=>`<option value="${esc(m.id)}" ${m.id===x.action.module?'selected':''}>${esc(m.name)}</option>`).join('')}</select>
         <input type="text" class="v-path" value="${esc(x.action.path||'')}" placeholder="/api/macro/name" style="width:200px">
@@ -414,6 +414,7 @@ pages.voice=()=>{
      <div class="row" style="margin-top:12px"><button class="sm" id="v-add">＋ Add command</button><button class="pri sm" id="v-save">Save${V.dirty?' *':''}</button>
        <span class="sp row"><input type="text" id="v-testtxt" placeholder="Type what you would say…" style="width:240px"><button class="sm" id="v-dry">Test</button><button class="sm" id="v-run" title="Actually fires the matching commands">Run for real</button></span></div>
      <div class="sm" id="v-testout" style="margin-top:8px">${V.test?esc(V.test):''}</div></div>
+   <div class="card" style="grid-column:1/-1"><h3>Recent voice commands</h3>${V.log.length?`<table><tr><th>When</th><th>Heard</th><th>Command</th><th>Match</th><th>Outcome</th></tr>${V.log.slice(0,15).map(r=>`<tr><td class="dim">${new Date(r.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td><td>${esc(r.heard)}</td><td>${esc(r.command)}</td><td class="dim">${r.score}${r.unsure!=null?' · unsure '+r.unsure:''}</td><td><span class="st ${r.outcome==='fired'?'connected':r.outcome==='failed'?'error':'needs_auth'}">${esc(r.outcome)}</span> <span class="sm faint">${esc(r.detail||'')}</span></td></tr>`).join('')}</table>`:'<div class="sm faint">Every command Listen hears (fired, skipped or failed) is listed here and in the Console under source “voice”.</div>'}</div>
    <div class="card" style="grid-column:1/-1"><h3>Markers (for clipping later)</h3>${V.markers.length?`<table><tr><th>When</th><th>Label</th><th>Heard</th></tr>${V.markers.slice(0,10).map(m=>`<tr><td class="dim">${new Date(m.ts*1000).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td><td>${esc(m.label)}</td><td class="dim">${esc(m.text||'')}</td></tr>`).join('')}</table>`:'<div class="sm faint">Say a marker command (like “clip that”) while listening and it shows up here with the time.</div>'}</div>
   </div>`};
 function bindVoice(){

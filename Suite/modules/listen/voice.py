@@ -1,5 +1,9 @@
 """Voice Studio back end (built on Listen's own data): "talks like me" style profile, voice commands, clip markers.
 
+VOICE COMMANDS NEVER PRODUCE CHAT OUTPUT. Actions are a marker or a silent call to another module; whatever a module answers
+(for example a "say" reply) is logged and discarded, never posted. Every heard command and its outcome is written to
+data/voice_log.jsonl (the Voice Studio table) and to the Console (source "voice") for accuracy review.
+
 Everything here is local and listen-only by default: voice commands are OFF until you switch them on, and each command
 has its own switch. A command can drop a marker (e.g. "clip that") or ask the Suite core to call another module's API
 (an OBS macro in Link, a Host endpoint...) through /api/voice/dispatch, which only forwards POSTs to registered modules.
@@ -36,8 +40,15 @@ DEFAULT_CMDS = {
     "wake_word": "",           # optional: e.g. "pinguino" -> only "pinguino clip that" counts
     "cooldown_s": 8,           # per command
     "max_unsure": 0.6,         # ignore lines Listen is not sure it heard right
-    "commands": [{"id": "clip", "phrase": "clip that", "enabled": False, "action": {"type": "marker", "label": "clip"}}],
+    "commands": [
+        {"id": "clip", "phrase": "clip that", "enabled": False, "action": {"type": "marker", "label": "clip"}},
+        # silent: Spotify's chat-command API is called as the broadcaster, its `say` reply is ignored
+        {"id": "skip", "phrase": "skip the song | skip this song | i want this song skipped", "enabled": True,
+         "action": {"type": "call", "module": "spotify", "path": "/api/chat-command",
+                    "body": {"command": "skip", "user": "{channel}", "role": "broadcaster", "isMod": True}}},
+    ],
 }
+VLOG = cfg.DATA / "voice_log.jsonl"
 
 
 # ---------------------------------------------------------------- talks like me
@@ -98,7 +109,8 @@ def save_cmds(d):
     clean = {"enabled": bool(d.get("enabled")), "wake_word": learn.norm(str(d.get("wake_word", ""))), "cooldown_s": max(1, min(600, int(d.get("cooldown_s", 8)))),
              "max_unsure": float(d.get("max_unsure", 0.6)), "commands": []}
     for i, c in enumerate(d.get("commands", [])[:60]):
-        ph = " ".join(learn.norm(w) for w in str(c.get("phrase", "")).split() if learn.norm(w))
+        alts = [" ".join(learn.norm(w) for w in part.split() if learn.norm(w)) for part in str(c.get("phrase", "")).split("|")]
+        ph = " | ".join(a for a in alts if a)
         if not ph:
             continue
         act = c.get("action") or {}
@@ -117,21 +129,28 @@ def _tokens(text):
     return [x for x in (learn.norm(w) for w in text.split()) if x]
 
 
-def _find(toks, phrase_toks, start=0):
-    """Index just after the first (fuzzy) occurrence of phrase_toks in toks at/after start, else -1."""
+def _find(toks, phrase_toks, start=0, scored=False):
+    """Index just after the first (fuzzy) occurrence of phrase_toks in toks at/after start, else -1. scored=True -> (index, score 0..1)."""
     n = len(phrase_toks)
     for i in range(start, len(toks) - n + 1):
-        ok = True
+        ok, worst = True, 1.0
         for a, b in zip(toks[i:i + n], phrase_toks):
-            if a != b and not (len(b) >= 4 and difflib.SequenceMatcher(None, a, b).ratio() >= 0.85):
+            r = 1.0 if a == b else difflib.SequenceMatcher(None, a, b).ratio() if len(b) >= 4 else 0.0
+            if r < 0.85:
                 ok = False
                 break
+            worst = min(worst, r)
         if ok:
-            return i + n
-    return -1
+            return (i + n, worst) if scored else i + n
+    return (-1, 0.0) if scored else -1
 
 
 def matches(text, cfg_cmds, only_enabled=True):
+    return [c for c, _s in scored_matches(text, cfg_cmds, only_enabled)]
+
+
+def scored_matches(text, cfg_cmds, only_enabled=True):
+    """[(command, best match score 0..1)] for every command (any of its " | " alternatives) heard in text."""
     toks = _tokens(text)
     start = 0
     wake = cfg_cmds.get("wake_word", "")
@@ -140,7 +159,14 @@ def matches(text, cfg_cmds, only_enabled=True):
         if w < 0:
             return []
         start = w
-    return [c for c in cfg_cmds["commands"] if (c["enabled"] or not only_enabled) and _find(toks, c["phrase"].split(), start) >= 0]
+    out = []
+    for c in cfg_cmds["commands"]:
+        if not (c["enabled"] or not only_enabled):
+            continue
+        best = max((_find(toks, alt.split(), start, scored=True) for alt in c["phrase"].split(" | ")), key=lambda r: r[1] if r[0] >= 0 else -1)
+        if best[0] >= 0:
+            out.append((c, round(best[1], 2)))
+    return out
 
 
 def _marker(label, text, seg):
@@ -168,30 +194,62 @@ def run_action(cmd, text, seg, log):
     a = cmd["action"]
     if a["type"] == "marker":
         _marker(a.get("label", cmd["phrase"]), text, seg)
-        log("info", f"voice command '{cmd['phrase']}' -> marker", "voice")
         return {"ok": True, "detail": "marker saved"}
     core = os.environ.get("PINGUINO_CORE_URL", "http://127.0.0.1:8760")
     tok = os.environ.get("PINGUINO_API_TOKEN", "")
+    body = json.loads(json.dumps(a.get("body") or {}).replace("{channel}", cfg.settings().get("channel", "").rstrip("_") or "streamer"))
     try:
-        r = requests.post(core + "/api/voice/dispatch", json={"module": a["module"], "path": a["path"], "body": a.get("body") or {}},
+        r = requests.post(core + "/api/voice/dispatch", json={"module": a["module"], "path": a["path"], "body": body},
                           headers={"Authorization": f"Bearer {tok}"}, timeout=12)
-        ok = r.ok
-        log("info" if ok else "warn", f"voice command '{cmd['phrase']}' -> {a['module']}{a['path']}: {r.status_code} {r.text[:120]}", "voice")
-        return {"ok": ok, "detail": f"{r.status_code} {r.text[:160]}"}
+        # the module's reply (including any chat "say" text) is deliberately NOT forwarded anywhere: voice commands are silent
+        return {"ok": r.ok, "detail": f"{r.status_code}"}
     except requests.RequestException as e:
-        log("warn", f"voice command '{cmd['phrase']}' failed: {e}", "voice")
         return {"ok": False, "detail": str(e)[:160]}
 
 
+def record(log, heard, cmd, score, outcome, detail="", unsure=None):
+    """One line per heard command, to the Voice Studio log AND the Console (source "voice")."""
+    rec = {"ts": time.time(), "heard": heard[:300], "command": cmd["id"], "phrase": cmd["phrase"], "score": score, "unsure": unsure, "outcome": outcome, "detail": detail[:200]}
+    with _lock, open(VLOG, "a", encoding="utf8") as f:
+        f.write(json.dumps(rec) + "\n")
+    lvl = "info" if outcome == "fired" else "warn" if outcome == "failed" else "debug"
+    log(lvl, f"heard \"{heard[:120]}\" -> {cmd['id']} (match {score}, unsure {unsure}) = {outcome}{(': ' + detail) if detail else ''}", "voice")
+    return rec
+
+
+def voice_log(n=60):
+    try:
+        lines = VLOG.read_text("utf8").splitlines()[-n:]
+    except OSError:
+        return []
+    out = []
+    for ln in lines:
+        try:
+            out.append(json.loads(ln))
+        except ValueError:
+            pass
+    return out[::-1]
+
+
 def handle_segment(seg, log, emit):
-    """Called for every live segment. Fires enabled commands (master switch on, confident line, cooldown respected)."""
+    """Called for every live segment. Fires enabled commands (master switch on, confident line, cooldown respected); logs every match."""
     d = load_cmds()
-    if not d["enabled"] or (seg.get("unsure") or 0) > d["max_unsure"]:
-        return
-    text = seg.get("text") or ""
-    for c in matches(text, d):
+    text, unsure = seg.get("text") or "", seg.get("unsure") or 0
+    for c, score in scored_matches(text, d, only_enabled=d["enabled"]):
+        if not d["enabled"]:
+            record(log, text, c, score, "master_off", "voice commands are switched off", unsure)
+            continue
+        if unsure > d["max_unsure"]:
+            record(log, text, c, score, "ignored_unsure", "Listen was not sure it heard the line right", unsure)
+            continue
         now = time.time()
         if now - _last.get(c["id"], 0) < d["cooldown_s"]:
+            record(log, text, c, score, "cooldown", "", unsure)
             continue
         _last[c["id"]] = now
-        threading.Thread(target=lambda c=c: emit({"type": "voice_cmd", "phrase": c["phrase"], "text": text, **run_action(c, text, seg, log)}), daemon=True).start()
+
+        def go(c=c, score=score):
+            res = run_action(c, text, seg, log)
+            record(log, text, c, score, "fired" if res["ok"] else "failed", res["detail"], unsure)
+            emit({"type": "voice_cmd", "phrase": c["phrase"], "text": text, **res})
+        threading.Thread(target=go, daemon=True).start()
