@@ -5,12 +5,13 @@ import { runRequests } from './obs.mjs';
 import { log } from './log.mjs';
 import { prestream } from './prestream.mjs';
 import { createMesh } from './mesh.mjs';
+import { obsConn } from './vault.mjs';
 
 /** Run a macro. Hub talks to OBS directly; clients forward to the hub over the tailnet. */
 export async function runMacro(cfg, name) {
   const steps = cfg.macros[name];
   if (!steps) throw new Error(`unknown macro "${name}" (have: ${Object.keys(cfg.macros).join(', ')})`);
-  if (cfg.role === 'hub') return runRequests(cfg.obs, steps);
+  if (cfg.role === 'hub') return runRequests(await obsConn(cfg), steps);
   const st = await ts.status();
   const hub = st.peers?.find(p => p.name === cfg.hub);
   if (!hub) throw new Error(`hub "${cfg.hub}" not found on the tailnet`);
@@ -25,16 +26,18 @@ export async function runMacro(cfg, name) {
 const PAGE = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>PinguinoLink</title>
 <style>
-:root{color-scheme:dark;--bg:#050506;--card:#0d0e10;--line:#1f2125;--fg:#ececef;--dim:#8d9199;--acc:#ff9900}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,Segoe UI,sans-serif}
-main{max-width:1060px;margin:0 auto;padding:20px 16px}h1{font-size:20px;margin:0 0 14px}h3{margin:0 0 10px;font-size:13px;color:var(--acc);text-transform:uppercase;letter-spacing:.06em}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-ul{list-style:none;margin:8px 0 0;padding:0}li{padding:6px 0;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center;flex-wrap:wrap}li .grow{flex:1}
-button{background:#14161a;color:var(--fg);border:1px solid var(--line);border-radius:8px;margin:4px 6px 4px 0;padding:9px 16px;font:inherit;cursor:pointer}
-button:hover{border-color:var(--acc);background:#1b1d21}button.danger{border-color:#8a3a3a}button.armed{border-color:var(--acc);color:var(--acc)}
-input{background:#08090a;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;margin:4px 6px 4px 0}
-.dim{color:var(--dim)}#msg,#dmsg{min-height:20px;margin-top:8px}.code{font:700 26px/1 ui-monospace,Consolas,monospace;letter-spacing:.2em;color:var(--acc)}
-</style><body><main>
+:root{color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg,#050506);color:var(--fg,#ececef);font:14px/1.45 system-ui,Segoe UI,sans-serif}
+main{max-width:1060px;margin:0 auto;padding:20px 16px}h1{font-size:20px;margin:0 0 14px}h3{margin:0 0 10px;font-size:13px;color:var(--accent,#ff9900);text-transform:uppercase;letter-spacing:.06em}
+.card{background:var(--panel,#0d0e10);border:1px solid var(--line,#1f2125);border-radius:var(--r,10px);padding:14px 16px;margin-bottom:14px}
+ul{list-style:none;margin:8px 0 0;padding:0}li{padding:6px 0;border-top:1px solid var(--line,#1f2125);display:flex;gap:10px;align-items:center;flex-wrap:wrap}li .grow{flex:1}
+button{background:var(--panel2,#14161a);color:var(--fg,#ececef);border:1px solid var(--line2,#1f2125);border-radius:8px;margin:4px 6px 4px 0;padding:9px 16px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--accent,#ff9900);background:var(--panel2,#1b1d21)}button.danger{border-color:var(--bad,#8a3a3a)}button.armed{border-color:var(--accent,#ff9900);color:var(--accent,#ff9900)}
+input{background:var(--bg2,#08090a);color:var(--fg,#ececef);border:1px solid var(--line2,#1f2125);border-radius:8px;padding:8px 10px;font:inherit;margin:4px 6px 4px 0}
+.dim{color:var(--dim,#8d9199)}#msg,#dmsg{min-height:20px;margin-top:8px}.code{font:700 26px/1 ui-monospace,Consolas,monospace;letter-spacing:.2em;color:var(--accent,#ff9900)}
+</style>
+<link rel=stylesheet href="__CORE__/theme.css">
+<body><main>
 <h1>🐧 PinguinoLink</h1>
 <div class=card><h3>Network</h3><div id=s>loading…</div></div>
 <div class=card><h3>Devices</h3><div id=d class=dim>loading…</div><div id=dmsg class=dim></div></div>
@@ -83,6 +86,7 @@ async function readJson(req) {
   for await (const c of req) { n += c.length; if (n > 16384) throw Object.assign(new Error('body too large'), { status: 413 }); parts.push(c); }
   try { return JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'); } catch { throw Object.assign(new Error('bad JSON'), { status: 400 }); }
 }
+const CORE_URL = (process.env.PINGUINO_CORE_URL || 'http://127.0.0.1:8760').replace(/[/]$/, '');
 const LOOP = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const eq = (a, b) => {
   const x = crypto.createHash('sha256').update(String(a ?? '')).digest();
@@ -134,7 +138,7 @@ export async function serve(cfg) {
       // The dashboard page on loopback gets the token injected (same-origin only; Host/Origin checks stop other sites).
       if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html') && local) {
         res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store', 'content-security-policy': FRAME });
-        return res.end(PAGE.replace('__TOKEN__', cfg.token));
+        return res.end(PAGE.replace('__TOKEN__', cfg.token).replace('__CORE__', CORE_URL));
       }
       // Pre-stream readiness for the Suite console: no token, no secrets in the output.
       if (req.method === 'GET' && req.url === '/api/prestream') return json(200, { items: [...await prestream(cfg), ...mesh.prestreamItems()] });
@@ -144,6 +148,10 @@ export async function serve(cfg) {
         const t = await ts.status();
         selfName = t.self?.name || selfName;
         return json(200, { role: cfg.role, macros: Object.keys(cfg.macros), tailscale: t, peers: mesh.status().peers });
+      }
+      if (req.method === 'GET' && req.url === '/api/integrations') {   // Integrations tab (module token)
+        const items = [...await prestream(cfg), ...mesh.prestreamItems()].map(i => ({ id: i.id, name: i.label, group: 'PinguinoLink', status: i.status === 'pass' ? 'connected' : i.status === 'fail' ? 'error' : 'off', detail: i.detail }));
+        return json(200, { items });
       }
       if (req.url.startsWith('/api/mesh/') || req.url === '/api/peer/broadcast') {
         const post = req.method === 'POST';

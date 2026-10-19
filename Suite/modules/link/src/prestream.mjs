@@ -1,5 +1,6 @@
 // Pre-stream readiness checks for the Suite console: [{id,label,status: pass|warn|fail, detail}]. No secrets in output.
 import * as ts from './tailscale.mjs';
+import { obsConn } from './vault.mjs';
 
 const item = (id, label, status, detail) => ({ id, label, status, detail });
 
@@ -7,7 +8,7 @@ export async function prestream(cfg) {
   const out = [];
   // 1. OBS WebSocket reachable + authenticated, and the scenes/inputs the macros use exist.
   try {
-    const [, sc, inp] = await getData(cfg.obs, ['GetVersion', 'GetSceneList', 'GetInputList']);
+    const [, sc, inp] = await getData(await obsConn(cfg), ['GetVersion', 'GetSceneList', 'GetInputList']);
     out.push(item('obs', 'OBS WebSocket', 'pass', `reachable at ${cfg.obs.host}:${cfg.obs.port}`));
     const scenes = new Set((sc?.scenes || []).map(s => s.sceneName));
     const inputs = new Set((inp?.inputs || []).map(i => i.inputName));

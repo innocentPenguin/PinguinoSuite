@@ -43,6 +43,20 @@ check('prestream: no secrets in output', !JSON.stringify(ps).includes(tok) && !J
 let lines = []; try { lines = fs.readFileSync(path.join(dataDir, 'console', 'link.jsonl'), 'utf8').trim().split(/\r?\n/).map(JSON.parse); } catch {}
 check('console log: JSONL with ts/module/level/source/msg, no token', lines.length > 0 && lines.every(l => l.ts && l.module === 'link' && l.level && l.source && l.msg) && !JSON.stringify(lines).includes(tok));
 console.log('info  prestream: ' + (ps || []).map(i => i.id + '=' + i.status).join(' '));
+const integ = await fetch(base + '/api/integrations', { headers: { authorization: 'Bearer selfcheck-core' } }).then(r => r.json()).catch(() => null);
+check('integrations: items with id/name/status', Array.isArray(integ?.items) && integ.items.length > 0 && integ.items.every(i => i.id && i.name && i.status));
+check('page links the shared theme.css', (await fetch(base + '/').then(r => r.text()).catch(() => '')).includes('/theme.css'));
+{ // key vault client against a fake core
+  const http = await import('node:http');
+  const fake = http.createServer((q, r) => { const ok = q.headers.authorization === 'Bearer vt' && q.url === '/api/vault/OBS_WS_PASSWORD'; r.writeHead(ok ? 200 : 404); r.end(ok ? '{"name":"OBS_WS_PASSWORD","value":"from-vault"}' : '{}'); });
+  await new Promise(r => fake.listen(0, '127.0.0.1', r));
+  process.env.PINGUINO_API_TOKEN = 'vt'; process.env.PINGUINO_CORE_URL = `http://127.0.0.1:${fake.address().port}`;
+  const v = await import('./vault.mjs');
+  check('vault: password comes from the core when set', (await v.obsConn({ obs: { host: 'h', port: 1, password: 'file' } })).password === 'from-vault');
+  process.env.PINGUINO_CORE_URL = 'http://127.0.0.1:1';
+  check('vault: falls back to the config value when the core is unreachable', (await v.obsConn({ obs: { host: 'h', port: 1, password: 'file' } })).password === 'file');
+  fake.close();
+}
 const page = await fetch(base + '/').catch(() => null);
 const csp = page?.headers.get('content-security-policy') || '';
 check('page embeddable (no X-Frame-Options, frame-ancestors lists Tauri)', !!page && !page.headers.get('x-frame-options') && csp.includes('tauri.localhost'));

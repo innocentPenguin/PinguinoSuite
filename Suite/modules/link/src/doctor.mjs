@@ -1,3 +1,4 @@
+import { obsConn } from './vault.mjs';
 import os from 'node:os';
 import readline from 'node:readline/promises';
 import { spawn } from 'node:child_process';
@@ -40,7 +41,7 @@ export async function check(cfg) {
       }
     }
   } else {
-    try { await runRequests(cfg.obs, [{ type: 'GetVersion' }]); add('OBS WebSocket', true); }
+    try { await runRequests(await obsConn(cfg), [{ type: 'GetVersion' }]); add('OBS WebSocket', true); }
     catch (e) { add('OBS WebSocket', false, e.message); }
   }
   return out;
