@@ -234,3 +234,21 @@ Core endpoints: `GET /api/help?key=&module=&item=&source=&msg=` and `GET /api/he
 
 ## Module switch (on/off + padlock)
 Every module has an on/off switch (Settings > Modules and the dashboard Modules card) with a padlock beside it. `POST /api/modules/<id>/enable {"on": bool}` (app token): on = `enabled` + `start_with_suite` + start now; off = stop now + no autostart; saved in the core settings. The padlock is UI only: switches start locked, unlock lasts 30 s or one change. Modules with `defaults.always_start` (Host, Multi) are pinned on by the manifest, and only the unlock + switch-off stores `override_off`, which lifts the pin until switched back on. Modules need no code for this; add `help` text if the module needs a note on what going off means.
+
+## Pop-out windows (split a page across monitors)
+The shell (Tauri) can open extra windows, put them on a chosen monitor or half of one, and remember where they were. Layouts are saved per label in `<data dir>/windows.json`; pop-outs that were open reopen at launch (closing one with its X stops that). Not available in a plain browser.
+
+Shell API (`window.PGWin`, in `App/src/bootstrap.js`; Rust in `App/src-tauri/src/windows.rs`):
+- `PGWin.monitors()` -> `[{index, name, x, y, width, height, scale, primary}]` (physical pixels; `y` negative = a monitor above the main one).
+- `PGWin.open({label, url, title?, width?, height?, monitor?, place?, always_on_top?, decorations?, reset?})`: `label` letters/digits/`-` (prefixed `pop-`); `url` = a local `http://127.0.0.1:<port>/...` page or a shell path (`index.html?popout=console`, chrome-less shell page); `monitor` = index or name; `place` = `full|top|bottom|left|right` (fills that part of the monitor; no `place` = remembered geometry, else a centered window); `reset` ignores what was remembered. Opening an open label brings it forward.
+- `PGWin.close(label, forget?)`, `PGWin.onTop(label, on)`, `PGWin.list()` -> `[{label,url,title,open,on_top,monitor}]`.
+- Only local pages can be opened. Module pages are plain local pages (as in the shell iframe), so they open directly and need no token; shell pop-outs get the core token from the app the same way the main window does.
+
+From a module page (an iframe, no Tauri access) ask the shell with `postMessage`:
+```js
+parent.postMessage({pinguino:'window', op:'open', label:'chat-top', url:location.origin+'/?type=chat&half=top', monitor:'1', place:'top'}, '*');
+parent.postMessage({pinguino:'window', op:'monitors'}, '*');   // reply: {pinguino:'monitors', monitors:[...]}
+parent.postMessage({pinguino:'window', op:'close', label:'chat-top'}, '*');
+```
+Errors come back as `{pinguino:'window-error', error}`. Example split: monitor A (above) `place:'top'`... or two windows on two monitors, each `place:'full'`; one monitor split in half = `top` + `bottom`.
+UI: Settings > Pop-out windows, and "Pop out" in the top bar.

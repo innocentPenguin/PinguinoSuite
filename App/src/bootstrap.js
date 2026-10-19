@@ -20,6 +20,15 @@
     }
     return nativeFetch(url, opts);
   };
+  // Pop-out windows (Tauri shell only; see src-tauri/src/windows.rs). Each call rejects with "not in the app" in a plain browser.
+  const inv = (cmd, args) => (window.__TAURI__ && window.__TAURI__.core) ? window.__TAURI__.core.invoke(cmd, args) : Promise.reject(new Error('Pop-out windows need the PinguinoSuite app'));
+  window.PGWin = {
+    monitors: () => inv('list_monitors'),
+    list: () => inv('list_windows'),
+    open: req => inv('open_window', { req }),                 // {label, url, title?, width?, height?, monitor?, place?: full|top|bottom|left|right, always_on_top?, decorations?, reset?}
+    close: (label, forget) => inv('close_window', { label, forget: !!forget }),
+    onTop: (label, on) => inv('set_window_on_top', { label, on }),
+  };
   window.PG = { ready, ws: () => open() };
   function open() {
     const proxy = { onmessage: null, onclose: null };

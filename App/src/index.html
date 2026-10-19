@@ -140,6 +140,7 @@ body.hopen #hscrim{display:block}body.hopen #hdrawer{transform:none}
 .act{display:flex;gap:10px;align-items:baseline;padding:7px 12px;border-bottom:1px solid var(--line)}.act:hover{background:rgba(255,153,0,.05)}
 .act .ai{width:22px;text-align:center;flex:none}.act .at{color:var(--faint);flex:none;min-width:62px}.act .au{font-weight:600}.act .ad{color:var(--dim);word-break:break-word}
 .act.big{background:rgba(255,153,0,.07)}.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{border:1px solid var(--line);border-radius:14px;padding:2px 10px;cursor:pointer;color:var(--dim);font-size:12px}.chip.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+body.popout nav,body.popout .top{display:none}body.popout .col{width:100%}
 .minirow{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}.minirow:last-child{border:0}.minirow .grow{flex:1;min-width:0}
 .col2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:1000px){.col2{grid-template-columns:1fr}}
@@ -163,7 +164,7 @@ body.hopen #hscrim{display:block}body.hopen #hdrawer{transform:none}
   <div class="navfoot sm dim" id="navfoot"></div>
 </nav>
 <div class="col">
-  <div class="top"><h2 id="title">Dashboard</h2><div class="livepill" id="pill"><i></i><span id="pill-t">Offline</span></div><span class="dim sm" id="pill-sub"></span><button class="hq" id="hq-page" title="How this page works">?</button>
+  <div class="top"><h2 id="title">Dashboard</h2><div class="livepill" id="pill"><i></i><span id="pill-t">Offline</span></div><span class="dim sm" id="pill-sub"></span><button class="hq" id="hq-page" title="How this page works">?</button><button class="sm" id="popout-btn" title="Open this page in its own window">⤢ Pop out</button>
     <div class="row sp"><button id="simon" class="sm" title="Pretend we went live to test auto-start">▶ Test go-live</button><button id="simoff" class="sm">■ End test</button></div></div>
   <div id="page"></div>
 </div>
@@ -176,6 +177,7 @@ const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let LISTEN='http://127.0.0.1:8765';
+const POP=new URLSearchParams(location.search).get('popout');if(POP)document.body.classList.add('popout');
 let S=null,L={status:null,lines:[]},route='dashboard',D=null,M={ok:false,queue:0,rate:null,prev:null};
 const up=t=>{const m=Math.max(0,(Date.now()/1000-t)/60|0);return (m/60|0)+'h '+String(m%60).padStart(2,'0')+'m'};
 const fmt=t=>{t=t|0;return (t/60|0)+':'+String(t%60).padStart(2,'0')};
@@ -364,6 +366,46 @@ function bindActivity(){
   $('#a-pause').onclick=()=>{A.paused=!A.paused;if(!A.paused){A.items=A.items.concat(A.pending).slice(-3000);A.pending=[]}$('#a-pause').textContent=A.paused?'Resume':'Pause';renderActivity()};
   pollActivity()}
 setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
+/* ============ Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md) ============ */
+const PW={mons:null,wins:[],err:null,sel:{page:'console',mon:'',place:'free',top:false}};
+const popRoutes=()=>[['dashboard','Dashboard'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['integrations','Integrations'],['help','Help']].concat((S?uiEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
+function popTarget(route){   // module pages open directly (they are plain local pages); shell pages open the shell in chrome-less mode
+  if(isMod(route)){const m=modOf(route);if(!m)return null;return {url:modSrc(m),title:m.ui?.nav||m.name}}
+  return {url:'index.html?popout='+encodeURIComponent(route),title:titles[route]||route}}
+async function popOut(route,extra={}){
+  const t=popTarget(route);if(!t){toast('Nothing to pop out here');return}
+  try{await PGWin.open({label:route.replace(/[^a-z0-9]+/gi,'-').toLowerCase(),url:t.url,title:'PinguinoSuite · '+t.title,...extra});toast('Opened in its own window');loadPopouts()}
+  catch(e){toast(String(e.message||e).slice(0,100))}}
+async function loadPopouts(){
+  try{[PW.mons,PW.wins]=await Promise.all([PGWin.monitors(),PGWin.list()]);PW.err=null}catch(e){PW.err=String(e.message||e)}
+  if(route==='settings'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
+function popoutCard(){
+  if(!PW.mons&&!PW.err){loadPopouts();return '<div class="sm faint">Looking for monitors…</div>'}
+  if(PW.err)return `<div class="sm faint">${esc(PW.err)}</div>`;
+  const s=PW.sel,mo=PW.mons.map(m=>`<option value="${m.index}" ${String(m.index)===s.mon?'selected':''}>${m.index+1}: ${esc(m.name)} ${m.width}×${m.height} at ${m.x},${m.y}${m.primary?' (main)':''}</option>`).join('');
+  return `<div class="sm faint" style="margin:6px 0">Send a page to its own window on any monitor, or half of one (top half on one screen, bottom half on another). Position, size and monitor are remembered.</div>
+   <div class="setrow"><div class="grow">Page</div><select id="pw-page">${popRoutes().map(r=>`<option value="${esc(r[0])}" ${r[0]===s.page?'selected':''}>${esc(r[1])}</option>`).join('')}</select></div>
+   <div class="setrow"><div class="grow">Monitor</div><select id="pw-mon"><option value="">Remembered / main</option>${mo}</select></div>
+   <div class="setrow"><div class="grow">Fill</div><select id="pw-place">${[['free','Window (free size)'],['full','Whole monitor'],['top','Top half'],['bottom','Bottom half'],['left','Left half'],['right','Right half']].map(p=>`<option value="${p[0]}" ${p[0]===s.place?'selected':''}>${p[1]}</option>`).join('')}</select></div>
+   <div class="setrow"><div class="grow">Always on top</div>${sw('pw-top',s.top)}</div>
+   <div class="row" style="margin-top:8px"><button class="pri sm" id="pw-open">Open window</button><button class="sm" id="pw-refresh">Refresh monitors</button></div>
+   ${PW.wins.length?`<div style="margin-top:10px">${PW.wins.map(w=>`<div class="minirow"><span class="dot ${w.open?'running':'stopped'}" style="margin:0"></span><div class="grow"><b>${esc((w.title||w.label).replace('PinguinoSuite · ',''))}</b><div class="sm faint">${w.open?'open':'closed'}${w.monitor?' · '+esc(w.monitor):''}${w.on_top?' · on top':''}</div></div>${w.open?`<button class="sm" data-pwtop="${esc(w.label)}|${w.on_top?0:1}">${w.on_top?'Unpin':'Pin on top'}</button><button class="sm" data-pwclose="${esc(w.label)}">Close</button>`:`<button class="sm" data-pwforget="${esc(w.label)}">Forget</button>`}</div>`).join('')}</div>`:''}`}
+function bindPopout(){
+  const g=id=>document.getElementById(id);if(!g('pw-open'))return;
+  g('pw-page').onchange=e=>PW.sel.page=e.target.value;g('pw-mon').onchange=e=>PW.sel.mon=e.target.value;g('pw-place').onchange=e=>PW.sel.place=e.target.value;g('pw-top').onchange=e=>PW.sel.top=e.target.checked;
+  g('pw-refresh').onclick=()=>{PW.mons=null;draw(true)};
+  g('pw-open').onclick=()=>{const s=PW.sel;popOut(s.page,{...(s.mon!==''?{monitor:s.mon}:{}),...(s.place!=='free'?{place:s.place}:{}),always_on_top:s.top})};
+  $$('[data-pwclose]').forEach(b=>b.onclick=async()=>{await PGWin.close(b.dataset.pwclose);loadPopouts()});
+  $$('[data-pwforget]').forEach(b=>b.onclick=async()=>{await PGWin.close(b.dataset.pwforget,true);loadPopouts()});
+  $$('[data-pwtop]').forEach(b=>b.onclick=async()=>{const[l,v]=b.dataset.pwtop.split('|');await PGWin.onTop(l,v==='1');loadPopouts()})}
+/* Module pages (iframes, no Tauri access) ask the shell to open / close windows:
+   parent.postMessage({pinguino:'window',op:'open',...OpenReq}, '*')  |  {pinguino:'window',op:'close',label}  |  {pinguino:'window',op:'monitors'} (answer: {pinguino:'monitors',monitors}) */
+window.addEventListener('message',async e=>{
+  const d=e.data;if(!d||d.pinguino!=='window'||!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(e.origin))return;
+  try{if(d.op==='open'){const{pinguino,op,...req}=d;await PGWin.open(req);loadPopouts()}
+    else if(d.op==='close')await PGWin.close(d.label);
+    else if(d.op==='monitors')e.source.postMessage({pinguino:'monitors',monitors:await PGWin.monitors()},e.origin)}
+  catch(err){e.source&&e.source.postMessage({pinguino:'window-error',error:String(err.message||err)},e.origin)}});
 const openExternal=u=>window.__TAURI__?(location.href=u):window.open(u,'_blank');
 pages.integrations=()=>{
   if(I.err)return `<div class="card" style="max-width:520px"><h3>Integrations</h3><div class="dim">${esc(I.err)}</div></div>`;
@@ -440,6 +482,7 @@ pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max
   <div class="card"><div class="row"><h3 style="margin:0">Modules</h3>${hq('module_switch')}</div>${S.modules.map(m=>`<div style="padding:6px 0"><div class="row"><b>${esc(m.name)}</b><span class="sm faint">${m.options.enabled?'on':'off'}</span><span class="sp"></span>${modSwitch(m)}</div>
     <div class="setrow"><div class="grow">Start with the Suite</div>${sw('o-'+m.id+'-start_with_suite',m.options.start_with_suite,`data-mod="${m.id}" data-opt="start_with_suite"`)}</div>
     <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div>
+  <div class="card"><div class="row"><h3 style="margin:0">Pop-out windows</h3>${hq('popout')}</div>${popoutCard()}</div>
   <div class="card"><h3>This device</h3>
     <div class="setrow"><div class="grow">Name<div class="sm faint">Shown to your other devices</div></div><input type="text" id="dv-name" value="${esc(D?D.me.name:'')}" style="width:190px"></div>
     <div class="setrow"><div class="grow">Priority<div class="sm faint">Highest alive device is master (streaming PC 100, gaming PC 70, Mac 50)</div></div><input type="text" id="dv-prio" value="${D?D.me.priority:50}" style="width:70px"></div>
@@ -626,6 +669,7 @@ function bind(){
   $('#d-listen')&&($('#d-listen').onclick=async()=>{try{await fetch(LISTEN+'/api/live/auto',{method:'POST'});toast('Listening started');loadListen()}catch{toast('Listen is not running')}});
   $('#s-chan')&&($('#s-chan').onchange=async e=>{await post('/api/channel',{channel:e.target.value});toast('Channel saved')});
   $('#s-wa')&&($('#s-wa').onchange=async e=>{await post('/api/windows-autostart',{on:e.target.checked});toast(e.target.checked?'Will start with Windows':'Autostart off')});
+  bindPopout();
   $$('[data-mlock]').forEach(b=>b.onclick=()=>{const id=b.dataset.mlock;LK[id]=isUnlocked(id)?0:Date.now()+30000;draw(true);if(isUnlocked(id))setTimeout(()=>{if(!isUnlocked(id)&&route!=='console')draw(true)},30500)});
   $$('[data-menable]').forEach(i=>i.onchange=async()=>{const id=i.dataset.menable;LK[id]=0;
     try{await post(`/api/modules/${id}/enable`,{on:i.checked});toast(`${S.modules.find(x=>x.id===id)?.name||id} switched ${i.checked?'on':'off'}`)}catch{toast('Could not change the module')}
@@ -633,6 +677,7 @@ function bind(){
   $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));
 }
 $$('nav .item[data-r]').forEach(i=>i.onclick=()=>go(i.dataset.r));
+$('#popout-btn').onclick=()=>popOut(route);
 $('#hq-page').onclick=()=>openHelp({hk:isMod(route)?'module:'+route.slice(2).split('@')[0]:route,hm:isMod(route)?route.slice(2).split('@')[0]:''});
 function toast(m){const d=document.createElement('div');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3500)}
 $('#simon').onclick=()=>{post('/api/simulate',{live:true});toast('Simulating go-live…')};
@@ -651,7 +696,7 @@ async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status'
   let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}
   L.lines=sid?(await (await fetch(`${LISTEN}/api/segments?session=${sid}&limit=500`)).json()).slice(-5):[]}catch{L.status=null;L.lines=[]}
   if(route==='dashboard')draw()}
-(async()=>{await load();go('dashboard');loadListen();setInterval(load,4000);setInterval(loadListen,3000);loadSetup();loadDevice();loadMulti();setInterval(loadDevice,5000);setInterval(loadMulti,6000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(()=>{if(route==='integrations')loadIntegrations()},20000);setInterval(pollPrestream,10000);
+(async()=>{await load();go(POP||'dashboard');loadListen();setInterval(load,4000);setInterval(loadListen,3000);if(!POP)loadSetup();loadDevice();loadMulti();setInterval(loadDevice,5000);setInterval(loadMulti,6000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(()=>{if(route==='integrations')loadIntegrations()},20000);setInterval(pollPrestream,10000);
   const ws=()=>{const w=PG.ws();w.onmessage=()=>load();w.onclose=()=>setTimeout(ws,2000)};ws()})();
 </script>
 </body>

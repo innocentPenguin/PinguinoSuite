@@ -2,6 +2,8 @@
 // The core (Suite/suite/suite.py) owns modules, the event bus and the API; this shell only hosts it.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod windows;
+
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
@@ -151,6 +153,14 @@ fn nav_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
         .build()
 }
 
+/// Where per-device UI state lives (same folder as the core's data: PINGUINO_DATA_DIR, else <Suite root>/Data/runtime).
+fn data_dir() -> PathBuf {
+    if let Ok(p) = std::env::var("PINGUINO_DATA_DIR") {
+        return PathBuf::from(p);
+    }
+    suite_root().map(|r| r.join("Data").join("runtime")).unwrap_or_else(|| std::env::temp_dir().join("PinguinoSuite"))
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -169,7 +179,8 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(nav_guard())
         .manage(Core { child: Mutex::new(child), token })
-        .invoke_handler(tauri::generate_handler![core_config])
+        .manage(windows::Layouts::load(data_dir().join("windows.json")))
+        .invoke_handler(tauri::generate_handler![core_config, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Show PinguinoSuite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit (stops all modules)", true, None::<&str>)?;
@@ -196,14 +207,18 @@ fn main() {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
                 }
+            } else {
+                windows::restore(app.handle());
             }
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Close button hides to tray; Quit lives in the tray menu.
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            // Close button on the main window hides to tray; Quit lives in the tray menu. Pop-outs really close.
+            if window.label() == "main" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .build(tauri::generate_context!())

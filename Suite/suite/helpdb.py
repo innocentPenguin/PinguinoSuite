@@ -159,6 +159,10 @@ CATALOG["module_switch"] = H("Module on/off switch and lock", "Each module has a
 CATALOG["activity"] = H("How the Activity feed works", "Every event on your channel in one live list: follows, subs, resubs, gifts, cheers, raids, redeems, bans, clips and more. It is served by PinguinoHost.",
                         ["Click the type chips to filter (Raid, Sub...); search by name or message. Pause freezes the view while you read.", "If it says the Host is not serving the feed: make sure PinguinoHost is on (Settings > Modules) and updated, and that Twitch is connected (Integrations).",
                          "Big raids, gifts and cheers are highlighted."], fix={"label": "Open Integrations", "route": "integrations"})
+CATALOG["popout"] = H("Pop-out windows", "Send any page (Chat, Console, Activity, a module) to its own window, on any monitor, or on half of one: for example the top half of the chat on the monitor above and the bottom half on the monitor below.",
+                      ["Settings > Pop-out windows: pick the page, the monitor and how much of it to fill (whole monitor, top / bottom / left / right half), then Open window.", "The \"Pop out\" button in the top bar opens the page you are on in its own window.",
+                       "Windows remember their position, size, monitor and always-on-top, and reopen where you left them next launch (close one with its X to stop that).", "Always on top keeps a window above the game; Pin / Unpin it in the list.", "Only available in the PinguinoSuite app, not in a plain browser."],
+                      fix={"label": "Open Settings", "route": "settings"})
 CATALOG["help"] = H("How Help works", "Every ? button and every red / yellow row opens the same kind of panel: what it means, the steps to fix or set it up, and a button to the place to do it.",
                     ["Click any pre-stream row, Integrations row, Console warning / error, module name or key row.", "Green items have instructions too, for setting them up again.", "This page lists all topics."])
 ALIASES["voice"] = "voice_commands"
