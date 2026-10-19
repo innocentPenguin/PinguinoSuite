@@ -34,3 +34,7 @@ Goal (user /goal): cross-platform PinguinoSuite app on Tauri, ready for other ap
 ## Update: autostart switched (2026-10-19, user-approved)
 - HKCU Run `PinguinoSuite` changed from `pythonw ...\suite.py --background` to `...\App\src-tauri\target\release\pinguino-suite.exe --background` (stays in tray). Rollback: set the old value back. No Pinguino Startup shortcuts existed; the `PinguinoBot Log Update` scheduled task is the pipeline and was left alone.
 - Caveat: points at the build output; rebuild replaces it. Install the NSIS setup later for a stable path.
+
+## Update: Link adopts core token (2026-10-19)
+- Unit 04's Link already accepts `PINGUINO_API_TOKEN` (`x-link-token`). Core hook calls now send `Authorization`, `X-Pinguino-Token` and `x-link-token`. Verified against a running Link: no token 401, core token 200, foreign Host 421.
+- Remaining honest gaps: macOS/Linux never built (no remote repo/WSL/Docker here; CI workflow ready, needs the repo pushed to GitHub); per-module tokens (all modules share the core token); Python core not bundled.

@@ -148,7 +148,7 @@ class Module:
             return
         for _ in range(40):
             try:
-                r = requests.post(self.spec["url"] + spec["post"], headers={"Authorization": f"Bearer {TOKEN}"}, timeout=10)
+                r = requests.post(self.spec["url"] + spec["post"], headers={"Authorization": f"Bearer {TOKEN}", "X-Pinguino-Token": TOKEN, "x-link-token": TOKEN}, timeout=10)
                 bus.emit("hook", id=self.id, hook=hook, ok=r.ok, detail=r.text[:160])
                 return
             except Exception:
