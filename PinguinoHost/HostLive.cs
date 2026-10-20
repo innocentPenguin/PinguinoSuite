@@ -21,6 +21,22 @@ namespace PinguinoHost
             return "The stream has been live for " + s + ".";
         }
 
+        // when the stream was last seen live (persisted, refreshed every check while live), so !downtime survives a Host restart
+        static string SeenP { get { return System.IO.Path.Combine(HostApi.DataDir, "live_last.json"); } }
+        static DateTime? _lastSeen; static bool _seenLoaded;
+        static void LoadSeen() { if (_seenLoaded) return; _seenLoaded = true; try { if (System.IO.File.Exists(SeenP)) { DateTime t; if (DateTime.TryParse((string)JObject.Parse(System.IO.File.ReadAllText(SeenP))["lastLiveSeen"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out t)) _lastSeen = t; } } catch (Exception) { } }
+        static void NoteSeen() { _lastSeen = DateTime.UtcNow; _seenLoaded = true; try { System.IO.File.WriteAllText(SeenP, new JObject { { "lastLiveSeen", _lastSeen.Value.ToString("o") } }.ToString()); } catch (Exception) { } }
+        /// <summary>!downtime: how long since the last stream ended (the real state, not Offline mode).</summary>
+        public static string DowntimeLine()
+        {
+            LoadSeen();
+            if (_live == true) return "The stream is live right now.";
+            if (_lastSeen == null) return "I don't know when the last stream ended yet.";
+            var t = DateTime.UtcNow - _lastSeen.Value; if (t < TimeSpan.Zero) t = TimeSpan.Zero;
+            string s = t.TotalDays >= 1 ? (int)t.TotalDays + "d " + t.Hours + "h" : t.TotalHours >= 1 ? (int)t.TotalHours + "h " + t.Minutes + "m" : Math.Max(1, t.Minutes) + "m";
+            return "The last stream ended " + s + " ago.";
+        }
+
         public static JObject Api() { return new JObject { { "ok", true }, { "live", _live }, { "source", _source }, { "checkedAgoSec", _at == DateTime.MinValue ? (int?)null : (int)(DateTime.UtcNow - _at).TotalSeconds } }; }
 
         public static void Start(HostCPH cph, int periodSec = 20)
@@ -45,6 +61,7 @@ namespace PinguinoHost
             if (_live != v) Clog.Info("live", "stream is " + (v.Value ? "LIVE" : "offline") + " (" + src + ")");
             if (v == true && _startedAt == null) _startedAt = DateTime.UtcNow;   // OBS / forced: since the Host noticed
             if (v == false) _startedAt = null;
+            if (v == true) NoteSeen(); else LoadSeen();
             _live = v; _source = src; _at = DateTime.UtcNow;
             cph.SetGlobalVar("pinguino.live", v.Value ? "1" : "0", false);
         }

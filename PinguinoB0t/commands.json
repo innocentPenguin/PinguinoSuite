@@ -1581,6 +1581,18 @@
       "examples": [],
       "section": "Stream info",
       "importance": 2
+    },
+    {
+      "command": "!downtime",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Stream",
+      "who": "everyone",
+      "usage": "!downtime",
+      "description": "How long ago the last stream ended.",
+      "examples": [],
+      "section": "Stream info",
+      "importance": 3
     }
   ]
 }

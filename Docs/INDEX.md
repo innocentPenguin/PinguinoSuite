@@ -313,9 +313,9 @@ Methods: Settings:37, Doc:45, Save:54, Norm:55, Canon:56, D:57, Snapshot:64, Me:
 Classes: Emotes:18
 Methods: Start:28, LoadSet:44, TwitchId:50, FetchSet:56, Hash:86, Refresh:89, Scan:97, Ambiguous:186, Uses:197, Api:200, Cooling:225, CoolSec:226, IsCommand:229, Handle:231
 
-### PinguinoHost/HostFeatureCommands.cs (219 lines) - Chat commands for the leaderboard / subscriber / watch-streak features. Their documentation is in PinguinoB0t/commands.json (what the website reads) and GET /ap
+### PinguinoHost/HostFeatureCommands.cs (220 lines) - Chat commands for the leaderboard / subscriber / watch-streak features. Their documentation is in PinguinoB0t/commands.json (what the website reads) and GET /ap
 Classes: FeatureCommands:16
-Methods: Cooling:20, CoolSec:21, ParseMonth:25, MonthLabel:36, BoardOf:46, Num:51, Handle:53, Data:103, Top:106, Ranked:121, Mine:126, SubInfo:136, Founders:147, Alias:154, BoardsCmd:162, SubsCmd:172, StreaksCmd:183, NamesCmd:189, Lookup:195, Doc:207, Norm:216
+Methods: Cooling:20, CoolSec:21, ParseMonth:25, MonthLabel:36, BoardOf:46, Num:51, Handle:53, Data:104, Top:107, Ranked:122, Mine:127, SubInfo:137, Founders:148, Alias:155, BoardsCmd:163, SubsCmd:173, StreaksCmd:184, NamesCmd:190, Lookup:196, Doc:208, Norm:217
 
 ### PinguinoHost/HostHelperReview.cs (79 lines) - Browse the helper's PRIVATE review log (Data\helper\review.jsonl, written by HelperPinguino): every answer and every probably-missed question with the chat
 Classes: HelperReview:12
@@ -333,9 +333,9 @@ Methods: Items:21, Settings:30, Record:48, RefollowCheck:96, Activity:120, Label
 Classes: Lease:14
 Methods: State:32, TakeMutex:38, Start:49, Poll:56, Became:78, Stop:86, StartStreamingReporter:94
 
-### PinguinoHost/HostLive.cs (53 lines) - The Host's own idea of "is the stream live" (no website key needed): Twitch's streams endpoint, else OBS. Published to the bots as the non-persisted global ping
+### PinguinoHost/HostLive.cs (70 lines) - The Host's own idea of "is the stream live" (no website key needed): Twitch's streams endpoint, else OBS. Published to the bots as the non-persisted global ping
 Classes: LiveState:9
-Methods: UptimeLine:16, Api:24, Start:26, Tick:31
+Methods: UptimeLine:16, LoadSeen:27, NoteSeen:28, DowntimeLine:30, Api:40, Start:42, Tick:47
 
 ### PinguinoHost/HostLiveLog.cs (241 lines) - The Host's own recording of ALL chat (every user, always, live or not, independent of ChattyPinguino): Data\chat_logs\live\YYYY-MM-DD.jsonl (UTC day), one
 Classes: LiveLog:15, Tally:50, Extra:84
