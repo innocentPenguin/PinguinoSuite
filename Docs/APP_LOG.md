@@ -4,6 +4,7 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 
 | When | Event | Details |
 |---|---|---|
+| 2026-10-20 ~02:45 | Host restart (Update-Module host, stream offline): a39272c Helper follow-ups (Java/Bedrock -> just the IP, 4-min follow-up help, console steps, join/register answers). /api/live 200. | 00 |
 | 2026-10-20 ~01:40 | Host rebuild+restart (Update-Module host, stream offline): e105809 Helper context gate (only steps in on real asks, cooldowns, no repeats). Build 0 errors, /api/live 200. | 00 |
 | 2026-10-20 ~00:50 | Host rebuild+restart (Update-Module host, stream offline): ec79730 sub footer overlay (/overlay/subfooter, controls /subfooter). Build 0 errors, endpoints 200. | 00 |
 | 2026-10-20 ~00:40 | App relaunch (Build-All, stream offline) + Host restart (-NoBuild) + Listen restart: b71d836 Listen mic fix (ranked device candidates, WDM-KS skipped, one toast). Host had not come back after the relaunch, so the website bridge showed offline ~50 min; restarted, sync running again. Core exe not re-frozen (modules load from the tree). | 00 |
