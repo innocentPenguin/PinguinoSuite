@@ -10,6 +10,7 @@ import config as cfg
 import db
 import learn
 import twitch
+from audioio import iter16k
 
 CHUNK_S = 900  # transcribe long audio in 15-minute slices (bounded memory, steady progress)
 
@@ -59,12 +60,27 @@ class Jobs:
         self.asr, self.emit = asr, emit
         self.q = queue.Queue()
         self.jobs = {}
+        self.recover()
         threading.Thread(target=self._worker, daemon=True).start()
 
     # -- submission -----------------------------------------------------------
+    def recover(self) -> int:
+        """Jobs live in memory only: after a restart any queued/running row is dead. Mark it so it can be re-queued."""
+        live = "kind!='live' AND status IN ('queued','downloading','converting','transcribing')"
+        db.run("UPDATE sessions SET status='done', error='partly transcribed before a Listen restart' "
+               f"WHERE {live} AND EXISTS (SELECT 1 FROM segments g WHERE g.session_id=sessions.id)")  # keep what was learned
+        cur = db.run("UPDATE sessions SET status='interrupted', error='interrupted by a Listen restart - press Learn again' "
+                     f"WHERE {live}")
+        return cur.rowcount
+
     def submit(self, kind, title, source_id, url=None, path=None) -> str | None:
-        if db.one("SELECT id FROM sessions WHERE source_id=?", (source_id,)):
+        old = db.one("SELECT id,status FROM sessions WHERE source_id=?", (source_id,))
+        if old and old["status"] not in ("interrupted", "error"):
             return None  # already ingested / queued
+        if old:  # failed or interrupted earlier: drop the empty shell and queue it again
+            if db.one("SELECT 1 x FROM segments WHERE session_id=?", (old["id"],)):
+                return None  # has lines already: never throw learned/corrected text away
+            db.run("DELETE FROM sessions WHERE id=?", (old["id"],))
         sid = f"{kind}-{uuid.uuid4().hex[:8]}"
         db.run("INSERT INTO sessions(id,kind,title,source_id,url,status,created) VALUES(?,?,?,?,?,?,?)",
                (sid, kind, title, source_id, url, "queued", time.time()))
@@ -119,12 +135,10 @@ class Jobs:
             src.unlink(missing_ok=True)
         db.run("UPDATE sessions SET audio=?,duration=? WHERE id=?", (rel, dur, sid))
 
-        audio = load16k(cfg.DATA / rel)
         self._push(sid, status="transcribing", progress=0.0)
         n = 0
-        for off in range(0, len(audio), CHUNK_S * 16000):
-            chunk = audio[off: off + CHUNK_S * 16000]
-            for s in self.asr.iter_segments(chunk, offset=off / 16000):
+        for off_s, chunk in iter16k(cfg.DATA / rel, CHUNK_S):  # one slice in memory at a time, never the whole VOD
+            for s in self.asr.iter_segments(chunk, offset=off_s):
                 final = learn.finalize(s["words"], s["avg_logprob"])
                 db.add_segment(sid, s["start"], s["start"], s["end"], rel, s["words"], final)
                 n += 1
