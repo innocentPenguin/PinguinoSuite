@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:26 - Host restart (!rank all playlists, points rename, Chatty fixes)
+
+- Restarted Host via Update-Module: 30684aa/6f141c1/b3e3efe: !rank [epic] [playlist] for every playlist (15 min cache per account, 30 min pause when blocked), ranks saved to Data/ranks/rl_ranks.json for profile push, currency renamed pengs -> points (!pengs removed), Chatty ignores ! lines and stays quiet on how-to questions (ChatReplies still false). /api/live 200. Profiles need push-profiles after the first live !rank.
+
 ## 2026-10-20 08:22 - Host restarts + boards/profile push
 
 - Host restarted (Update-Module) for 6c9999f/01be950/8cda53f/b3e3efe (!rank live), helix-ids split fix, 1724d20 (!commands), ec0dc0c (alias merges, banned_accounts). One build failure (HostRank.cs control chars in a doc comment) left the Host down ~2 min; fixed by 00 and rebuilt. Boards pushed 13:20Z (3020 people, supporters 64, 0 502), profiles 1858 sent. Site raised /api/bot body limit to 8 MB (05, 1956d08). Top points/watchtime boards should now appear once 05 pushes the new section.

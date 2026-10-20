@@ -25,3 +25,6 @@ Say !unping to stop the bots pinging you, and !forgetme to have the chat bot for
 
 ## Getting help from a person
 For anything the helper cannot answer, ask in chat and a mod or Ivan will see it. The helper cannot ban, time out or change settings.
+
+## Stream schedule
+Daily Rocket League with viewers, Monday to Friday from 5:00 PM to 6:30 PM Central. Then Minecraft Monday (6:30 to 8 PM Central) and Fortnite Friday (6:30 to 8 PM Central), and Scary Saturday. The full schedule is on the Twitch channel's Schedule tab: https://twitch.tv/innocentpenguin_/schedule
