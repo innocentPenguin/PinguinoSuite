@@ -69,7 +69,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start();
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start(); Streaks.Start();
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -145,6 +145,7 @@ namespace PinguinoHost
             if (!Lease.MayRun) return;
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
+            try { if (Streaks.Handle(user, text, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("streaks", "streak command failed: " + ex.Message); }
             try { if (PgCommand.Handle(user, text, role)) return; } catch (Exception ex) { Clog.Warn("pg", "!pg failed: " + ex.Message); }
             try { if (Auto.OnChat(user, text, role, isSub, firstMsg, msgId, replyTo)) return; } catch (Exception ex) { Clog.Warn("automation", "chat trigger failed: " + ex.Message); }   // an Actions & Events command took it
             lock (dispatchLock)   // one message at a time: arguments are shared state, so no two chats can mix
@@ -244,6 +245,7 @@ namespace PinguinoHost
             string line; int n = 0;
             while ((line = Console.ReadLine()) != null)
             {
+                if (line.StartsWith("@") && line.Contains(" USERNOTICE #")) { Streaks.OnUserNotice(line); continue; }   // sim: a raw IRC USERNOTICE line
                 if (line.StartsWith("event "))   // sim: event TwitchSub alice 2   (3rd word = tier / bits / viewers)
                 { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v } }); continue; }
                 int c = line.IndexOf(':'); if (c < 1) continue;
@@ -326,6 +328,7 @@ namespace PinguinoHost
         static readonly Regex Privmsg = new Regex(@"^@(?<tags>\S+) :(?<nick>[^!]+)![^ ]+ PRIVMSG #\S+ :(?<msg>.*)$", RegexOptions.Compiled);
         static void HandleIrc(string line)
         {
+            if (line.Contains(" USERNOTICE #")) { if (Lease.MayRun) Streaks.OnUserNotice(line); return; }   // sub, resub, raid, watch streak ...: kept, never dropped
             var m = Privmsg.Match(line); if (!m.Success) return;
             var tags = m.Groups["tags"].Value.Split(';').Select(t => t.Split(new[] { '=' }, 2)).Where(a => a.Length == 2).ToDictionary(a => a[0], a => a[1], StringComparer.Ordinal);
             string T(string k) { string v; return tags.TryGetValue(k, out v) ? v : ""; }

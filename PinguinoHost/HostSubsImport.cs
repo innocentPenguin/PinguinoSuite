@@ -50,7 +50,7 @@ namespace PinguinoHost
         }
 
         // dates stay text: the default parser would turn "2026-10-20" into a DateTime and write it back in another format
-        static JObject ParseJ(string json)
+        public static JObject ParseJ(string json)
         {
             using (var r = new Newtonsoft.Json.JsonTextReader(new StringReader(json)) { DateParseHandling = Newtonsoft.Json.DateParseHandling.None }) return JObject.Load(r);
         }
