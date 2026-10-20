@@ -286,7 +286,7 @@ namespace PinguinoHost
                 Func<Dictionary<string, Dictionary<string, int>>, string, JArray> mtop = (dict, month) =>
                 {
                     Dictionary<string, int> d; if (!dict.TryGetValue(month, out d)) return new JArray();
-                    return new JArray(d.Where(kv => keepSet.Contains(kv.Key) && kv.Key != ch).OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(50)
+                    return new JArray(d.Where(kv => keepSet.Contains(kv.Key) && kv.Key != ch).OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(200)
                         .Select(kv => new JObject { { "login", kv.Key }, { "name", users.ContainsKey(kv.Key) ? users[kv.Key]["name"] : (JToken)kv.Key }, { "value", kv.Value } }));
                 };
                 foreach (var mo in allMonths) months[mo] = new JObject { { "gifters", mtop(mGifts, mo) }, { "bits", mtop(mBits, mo) }, { "yappers", mtop(mMsgs, mo) }, { "streaks", mtop(mStreak, mo) } };
