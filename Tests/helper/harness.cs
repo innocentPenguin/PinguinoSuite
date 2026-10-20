@@ -288,6 +288,22 @@ public static class Harness
         Msg("Gb2", "what's the minecraft ip"); Msg("Gb3", "ip?"); Check("burst: the next askers inside the gap get no second reply", Last() == null, Last());
         Settings(",\"FactsUrl\":\"\"");
 
+        // the questions have a purpose: Java -> just the IP; "it doesn't work" -> real help; Bedrock -> port + Bedrock Connect for console
+        Settings(",\"FactsUrl\":\"\""); aiReply = "x";
+        Msg("Fl1", "how do i join the minecraft server?"); Msg("Fl1", "java");
+        Check("java: just the IP, nothing else", Last() != null && Last().StartsWith("@Fl1 Java IP:") && !Last().Contains("port") && !Last().Contains("Rules") && Last().Length < 120, Last());
+        Msg("Fl1", "it doesnt work"); Check("java follow-up 'it doesn't work' gets troubleshooting", Last() != null && Last().Contains("Java not connecting") && Last().Contains("play.example.net"), Last());
+        Msg("Fl2", "how do i join the minecraft server?"); Msg("Fl2", "bedrock");
+        Check("bedrock: IP + port and a pointer to console help", Last() != null && Last().Contains("11111") && Last().Contains("console"), Last());
+        Msg("Fl2", "console"); Check("'console' explains Bedrock Connect (and the BedrockGo2 trick from chat)", Last() != null && Last().Contains("Bedrock Connect") && Last().Contains("BedrockGo2") && Last().Contains("play.example.net"), Last());
+        Msg("Fl3", "how do i join the minecraft server?"); Msg("Fl3", "bedrock"); Msg("Fl3", "it says cant connect");
+        Check("bedrock follow-up gets the bedrock checklist", Last() != null && Last().Contains("Bedrock not connecting") && Last().Contains("separate boxes"), Last());
+        Msg("Fl4", "how do i join the minecraft server?"); Msg("Fl4", "java"); Msg("Fl4", "no bedrock");
+        Check("switching edition gives the other answer", Last() != null && Last().Contains("11111"), Last());
+        Msg("Fl5", "how do i join the minecraft server?"); Msg("Fl5", "java"); Msg("Fl5", "lol nice");
+        Check("unrelated chatter after the answer is left alone", Last() == null, Last());
+        Msg("Fl6", "i wanna join"); Msg("Fl6", "how do i play"); Check("how-to-join steps say join once and search the private match", Last() == null || Last().Contains("once is enough") || Last().Contains("search"), Last());
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;
