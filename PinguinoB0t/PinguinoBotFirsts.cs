@@ -25,6 +25,27 @@ using Newtonsoft.Json;
 public class CPHInline
 {
     // ── Settings ────────────────────────────────────────────────────
+    // Never the same line twice: shares the record "pinguino.said.recent" with the other bots (30 s window).
+    void Say(string msg)
+    {
+        try
+        {
+            string n = System.Text.RegularExpressions.Regex.Replace((msg ?? "").ToLowerInvariant(), @"\s+", " ").Trim();
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); var keep = new List<string>(); bool dup = false;
+            foreach (string row in (CPH.GetGlobalVar<string>("pinguino.said.recent", false) ?? "").Split(new[] { '\n' },StringSplitOptions.RemoveEmptyEntries))
+            {
+                int bar = row.IndexOf('|'); long t; if (bar < 1 || !long.TryParse(row.Substring(0, bar), out t) || now - t > 30) continue;
+                if (row.Substring(bar + 1) == n) dup = true;
+                keep.Add(row);
+            }
+            if (dup) return;
+            keep.Add(now + "|" + n); if (keep.Count > 40) keep.RemoveRange(0, keep.Count - 40);
+            CPH.SetGlobalVar("pinguino.said.recent", string.Join("\n", keep), false);
+        }
+        catch (Exception) { }
+        CPH.SendMessage(msg);
+    }
+
     static readonly string[] LeaderboardCommands = { "!firsts" };   // !first = your own record, !firsts = leaderboard
 
     static readonly string[] IgnoredBots = { "sery_bot", "soundalerts", "pinguinob0t", "streamelements", "nightbot" };
@@ -67,7 +88,7 @@ public class CPHInline
             return stats.ContainsKey(key) ? stats[key] : 0;
         }).ToArray();
 
-        CPH.SendMessage($"{username}'s First Record: 🥇 {counts[0]} | 🥈 {counts[1]} | 🥉 {counts[2]} | 4th: {counts[3]} | 5th: {counts[4]} | Total: {counts.Sum()}");
+        Say($"{username}'s First Record: 🥇 {counts[0]} | 🥈 {counts[1]} | 🥉 {counts[2]} | 4th: {counts[3]} | 5th: {counts[4]} | Total: {counts.Sum()}");
         return true;
     }
 
@@ -87,7 +108,7 @@ public class CPHInline
 
         if (totals.Count == 0)
         {
-            CPH.SendMessage("No First 5 records yet.");
+            Say("No First 5 records yet.");
             return true;
         }
 
@@ -97,7 +118,7 @@ public class CPHInline
                         .Take(5).ToList();
 
         var parts = top.Select((t, i) => $"{PlaceLabels[i].TrimEnd(':')} {t.Key}: {t.Value}");
-        CPH.SendMessage("🏆 First Leaderboard: " + string.Join(" | ", parts));
+        Say("🏆 First Leaderboard: " + string.Join(" | ", parts));
         return true;
     }
 
@@ -145,7 +166,7 @@ public class CPHInline
         for (int i = 0; i < 5; i++)
             TrackPlace(names[i], PlaceStatVars[i]);
 
-        CPH.SendMessage($"🏁 Firsts are locked in! 🥇 {names[0]} | 🥈 {names[1]} | 🥉 {names[2]} | 4th: {names[3]} | 5th: {names[4]}");
+        Say($"🏁 Firsts are locked in! 🥇 {names[0]} | 🥈 {names[1]} | 🥉 {names[2]} | 4th: {names[3]} | 5th: {names[4]}");
 
         // payouts every PayoutDelayMs, on their own thread so the chat is never held up (a restart before they finish drops the rest)
         System.Threading.Tasks.Task.Run(() =>
