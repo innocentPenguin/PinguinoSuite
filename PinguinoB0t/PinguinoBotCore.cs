@@ -80,9 +80,9 @@ public class CPHInline
     static PgRegistry PgDefault()
     {
         var r = new PgRegistry();
-        r.Bots["core"] = new PgBot { Title = "PinguinoB0t", Account = "pinguinob0t", Action = "PinguinoBot", Aliases = new List<string> { "pinguinob0t", "pinguinb0t", "pinguinobot", "pinguinbot" } };
-        r.Bots["chat"] = new PgBot { Title = "PinguinoChat", Account = "", Action = "PinguinoChat", Aliases = new List<string> { "pinguinochat", "chatpinguino" } };
-        r.Bots["helper"] = new PgBot { Title = "HelperPinguino", Account = "", Action = "PinguinoHelper", Aliases = new List<string> { "helperpinguino", "pinguinohelper" } };
+        r.Bots["core"] = new PgBot { Title = "PinguinoB0t", Account = "pinguinob0t", Action = "PinguinoBot", Aliases = new List<string> { "pinguinob0t", "pinguinb0t", "pinguinobot", "pinguinbot", "pinguino b0t", "pinguino bot", "pinguin b0t", "pinguin bot", "penguinob0t", "penguinb0t", "penguinobot", "penguinbot", "pinguino_bot", "pinguino_b0t" } };
+        r.Bots["chat"] = new PgBot { Title = "ChattyPinguino", Account = "chattypinguino", Sender = "none", Action = "PinguinoChat", Aliases = new List<string> { "chattypinguino", "pinguinochatty", "chattypinguin", "pinguinchatty", "chattypenguino", "chattypenguin", "penguinchatty", "chatty pinguino", "pinguino chatty", "chatty penguin", "chatty_pinguino", "pinguino_chatty", "pinguinochat", "pinguinchat", "penguinochat", "penguinchat", "chatpinguino", "chatpinguin", "pinguino chat", "chat pinguino", "pinguinochatbot", "pinguino" } };
+        r.Bots["helper"] = new PgBot { Title = "PinguinoHelper", Account = "pinguinohelper", Sender = "none", Action = "PinguinoHelper", Aliases = new List<string> { "pinguinohelper", "pinguinhelper", "penguinohelper", "penguinhelper", "helperpinguino", "helperpinguin", "helperpenguino", "helperpenguin", "pinguino helper", "helper pinguino", "pinguin helper", "penguin helper", "pinguino_helper", "helper_pinguino", "pinguinohelp" } };
         r.Fallback["helper"] = new List<string> { "chat", "core" };
         r.Fallback["chat"] = new List<string> { "helper", "core" };
         r.Fallback["core"] = new List<string> { "chat", "helper" };
@@ -154,8 +154,33 @@ public class CPHInline
     // who really speaks for this bot: itself if it has a voice, otherwise the first bot of its chain that has one
     string PgSpeaker(string role)
     {
+        if (PgHasVoice(role)) return role;
+        if (role != "core" && PgHasVoice("core")) return "core";               // the main account only speaks for a bot whose own login is missing
         foreach (string r in PgChain(role)) if (PgHasVoice(r)) return r;
         return role;
+    }
+
+    // the bot a message is addressed to: the LONGEST name found wins ("pinguino helper" beats the plain word "pinguino"), ties go to the earliest
+    string PgBestMention(string text, bool plainWords)
+    {
+        string t = (text ?? "").ToLower(), best = ""; int bestLen = 0, bestPos = int.MaxValue;
+        foreach (string role in PgRoleList)
+        {
+            var b = PgBotOf(role); if (b == null) continue;
+            var names = new List<string>(b.Aliases ?? new List<string>());
+            if (!string.IsNullOrEmpty(b.Account)) names.Add(b.Account);
+            foreach (string n in names)
+            {
+                if (string.IsNullOrWhiteSpace(n)) continue;
+                string e = System.Text.RegularExpressions.Regex.Escape(n.Trim().ToLower().TrimStart('@'));
+                var m = System.Text.RegularExpressions.Regex.Match(t, "@" + e + "(?![a-z0-9_])");
+                if (!m.Success && plainWords) m = System.Text.RegularExpressions.Regex.Match(t, "(?<![a-z0-9_])" + e + "(?![a-z0-9_])");
+                if (!m.Success) continue;
+                int len = m.Value.TrimStart('@').Length;
+                if (len > bestLen || (len == bestLen && m.Index < bestPos)) { best = role; bestLen = len; bestPos = m.Index; }
+            }
+        }
+        return best;
     }
 
     // the roles named in a message: "@HelperPinguino", or the plain word when plainWords is true
@@ -192,8 +217,15 @@ public class CPHInline
             string tag = b != null && !string.IsNullOrEmpty(b.Tag) ? b.Tag : "[" + PgTitle(role) + "]";
             msg = tag + " " + text;
         }
-        var sp = PgBotOf(speaker);
-        if (sp != null && string.Equals(sp.Sender, "helix", StringComparison.OrdinalIgnoreCase) && PgHelixSend(speaker, msg)) return;
+        // its own login first; if that fails, the main account (PinguinoB0t), then the rest of the chain
+        var tryList = new List<string> { speaker };
+        if (!tryList.Contains("core")) tryList.Add("core");
+        foreach (string r in PgChain(role)) if (!tryList.Contains(r)) tryList.Add(r);
+        foreach (string r in tryList)
+        {
+            var sp = PgBotOf(r);
+            if (sp != null && PgHasVoice(r) && string.Equals(sp.Sender, "helix", StringComparison.OrdinalIgnoreCase) && PgHelixSend(r, msg)) return;
+        }
         CPH.SendMessage(msg, true);   // the Streamer.bot bot account
     }
 
@@ -208,6 +240,7 @@ public class CPHInline
             var s = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(p))[role] as Newtonsoft.Json.Linq.JObject;
             if (s == null) return false;
             string cid = (string)s["ClientId"] ?? "", tok = (string)s["UserToken"] ?? "", sid = (string)s["SenderId"] ?? "", bid = (string)s["BroadcasterId"] ?? "";
+            if (tok == "") tok = CPH.GetGlobalVar<string>("pinguino.secret.token." + role, false) ?? "";   // the key vault (Host), when bots_secrets.json no longer holds it
             if (cid == "" || tok == "" || sid == "" || bid == "") return false;
             string body = new Newtonsoft.Json.Linq.JObject { ["broadcaster_id"] = bid, ["sender_id"] = sid, ["message"] = text }.ToString(Newtonsoft.Json.Formatting.None);
             if (_pgTestHttp != null) return _pgTestHttp("https://api.twitch.tv/helix/chat/messages", "Bearer " + tok + "|" + cid, body) != null;
@@ -615,7 +648,7 @@ public class CPHInline
         // [NEW] Clean out junk players left by old mistyped commands
         // (e.g. "!register {your epic}" made a player called "{").
         // Real names are letters/numbers/_/- (any language); anything else goes.
-        var junk = _players.Keys.Where(k => string.IsNullOrWhiteSpace(k) ||
+        var junk = _players.Keys.Where(k => string.IsNullOrWhiteSpace(k) || System.Text.RegularExpressions.Regex.IsMatch(k, @"^practice\d{2,3}$") ||
                        k.Any(ch => !(char.IsLetterOrDigit(ch) || ch == '_' || ch == '-'))).ToList();
         if (junk.Count > 0)
         {
@@ -678,6 +711,95 @@ public class CPHInline
     }
 
     // ══════════════════════════════════════════════════════════════
+    //  PRACTICE MODE  [NEW][PRACTICE]
+    //  !practice on [N] | add [N] | off | status   (mods).  Fake players practice01, practice02 ... fill the queue (and the wheel sign-ups while they are open),
+    //  so matchmaking, !next, teams, the overlays and the tournament wheel can be rehearsed. They live in memory ONLY:
+    //  never in players.json / queue.json / matches.json / current_match.json / wheel_session.json, never in stats, points, King of the Hill wins,
+    //  the standings or match history pushed to the website. State/wheel pushes mark them: state.practice, queue[].practice, currentMatch.blue/orange[].Practice,
+    //  wheel.practice, wheel.entrants[].practice. A restart (or !practice off) removes them; "off" also restores the real wheel sign-ups.
+    // ══════════════════════════════════════════════════════════════
+    static readonly HashSet<string> _practice = new HashSet<string>();
+    static bool _practiceOn;
+    bool IsPractice(string login) { return _practice.Count > 0 && login != null && _practice.Contains(login); }
+    bool IsPracticeMatch(MatchRecord m)
+    {
+        return _practice.Count > 0 && m != null && ((m.Blue ?? new List<TeamPlayer>()).Concat(m.Orange ?? new List<TeamPlayer>()).Any(tp => IsPractice(tp.Username)));
+    }
+    bool IsPracticeLast()
+    {
+        return _practice.Count > 0 && _lastBalance != null && _lastBalance.Result != null && _lastBalance.Result.Blue.Concat(_lastBalance.Result.Orange).Any(tp => IsPractice(tp.Username));
+    }
+
+    int PracticeAdd(int n)
+    {
+        int added = 0;
+        for (int i = 1; i <= 99 && added < n && _practice.Count < 40; i++)
+        {
+            string login = "practice" + i.ToString("00");
+            if (_practice.Contains(login) || _players.ContainsKey(login)) continue;
+            int mmr = 450 + (i * 137) % 1100;
+            _players[login] = new Player { Username = login, GameId = login, MmrSource = "manual", PeakMmr = mmr, MmrLastUpdated = Now() };
+            _practice.Add(login);
+            AddToQueue(login);
+            if (_wheel != null && _wheel.Status == "open" && !_wheel.Entrants.Any(e => e.Login == login))
+                _wheel.Entrants.Add(new WheelEntrant { Id = "practice-" + i.ToString("00"), Login = login, Name = "Practice" + i.ToString("00"), Epic = login, Mmr = mmr, Practice = true });
+            added++;
+        }
+        return added;
+    }
+
+    void PracticeClear()
+    {
+        bool hadWheel = _wheel != null && _wheel.Entrants.Any(e => e.Practice);
+        bool hadMatch = IsPracticeLast();
+        foreach (var login in _practice.ToList()) { _players.Remove(login); _queue.RemoveAll(e => e.Username == login); }
+        _matches.RemoveAll(IsPracticeMatch);
+        _practice.Clear(); _practiceOn = false;
+        if (hadMatch) { _lastBalance = LoadJson<LastBalanceData>("current_match.json"); _holdMatch = null; }
+        if (hadWheel) { _wheel = LoadJson<WheelSession>("wheel_session.json"); _wheelDirty = true; }   // back to the real sign-ups (practice entrants were never saved)
+        _standingsDirty = true; _matchesDirty = true;
+        SavePlayers(); SaveQueue(); SaveMatches();
+    }
+
+    bool HandlePractice(string user, string input, bool isPrivileged)
+    {
+        if (!isPrivileged) { Say("@" + user + " Only mods can use !practice."); return true; }
+        string[] parts = (input ?? "").Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        string sub = parts.Length > 0 ? parts[0].ToLower() : "status";
+        int n = 8;
+        if (parts.Length > 1) { int v; if (int.TryParse(parts[1], out v)) n = Math.Max(1, Math.Min(40, v)); }
+        switch (sub)
+        {
+            case "on":
+            case "add":
+            case "start":
+            {
+                _practiceOn = true;
+                int a = PracticeAdd(n);
+                SaveQueue(); SavePlayers();
+                if (_wheel != null) _wheelDirty = true;
+                PublishState("queue_update", "practice players added");
+                Say("PRACTICE mode on: " + a + " practice player(s) added (" + _practice.Count + " now" + (_wheel != null && _wheel.Status == "open" ? ", also in the tournament sign-ups" : "") +
+                    "). Nothing from practice is saved or counted. !practice off ends it.");
+                return true;
+            }
+            case "off":
+            case "clear":
+            case "stop":
+            {
+                int had = _practice.Count;
+                PracticeClear();
+                PublishState("queue_update", "practice mode off");
+                Say("PRACTICE mode off: " + had + " practice player(s) removed" + "; nothing was saved.");
+                return true;
+            }
+            default:
+                Say("Practice mode is " + (_practiceOn ? "ON (" + _practice.Count + " practice players)" : "off") + ". !practice on [N] | add [N] | off");
+                return true;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
     //  TOURNAMENT WHEEL  [NEW][WHEEL]
     //  Viewers type !me to sign up; mods run !wheel (or the website's /mod/wheel
     //  page, which queues the same commands). THIS code does the one and only
@@ -705,6 +827,7 @@ public class CPHInline
         public int? MmrOverride;     // set with !wheel mmr
         public bool Flagged;         // unknown MMR: the lobby median was used in Balanced mode
         public bool Wait;            // left over after the draw
+        public bool Practice;        // a practice (fake) player: memory only, never saved, flagged for the site
     }
     class WheelTeam
     {
@@ -721,6 +844,8 @@ public class CPHInline
         public long StartedAt;       // ms since 1970 (UTC): the overlay starts the reveal here
         public int StepMs;
         public List<WheelStep> Steps = new List<WheelStep>();
+        public int Revealed;         // manual spin: how many picks the mod has revealed so far (the site sends !wheel spin N)
+        public long SpunAt;          // ms since 1970: when Revealed last grew (the overlay spin takes ~8 s)
     }
     class WheelMsg { public string Text; public bool Sent; public int Team; public long Due; }   // Due (ms since 1970): do not send before this (manual spin: after the overlay landed)
     class WheelSession
@@ -754,8 +879,6 @@ public class CPHInline
         {
             unchecked
             {
-        public int Revealed;         // manual spin: how many picks the mod has revealed so far (the site sends !wheel spin N)
-        public long SpunAt;          // ms since 1970: when Revealed last grew (the overlay spin takes ~8 s)
                 _s += 0x9E3779B97F4A7C15UL;
                 ulong z = _s;
                 z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
@@ -807,7 +930,23 @@ public class CPHInline
         return r.Length == 0 ? fallback : r;
     }
 
-    void WheelSave() { SaveJson("wheel_session.json", _wheel); _wheelDirty = true; }
+    void WheelSave()
+    {
+        _wheelDirty = true;
+        if (_wheel != null && _wheel.Entrants.Any(e => e.Practice))
+        {
+            // practice entrants never reach the disk: while sign-ups are open the REAL sign-ups are still saved, after a (practice) draw nothing is
+            if (_wheel.Status == "open" && _wheel.Draw == null)
+            {
+                var real = JObject.FromObject(_wheel);
+                var arr = (JArray)real["Entrants"];
+                foreach (var t in arr.OfType<JObject>().Where(t => (bool?)t["Practice"] == true).ToList()) t.Remove();
+                SaveJson("wheel_session.json", real);
+            }
+            return;
+        }
+        SaveJson("wheel_session.json", _wheel);
+    }
 
     // A reply to a viewer, at most once per 30 s each, so a spammed !me can't flood chat.
     void WheelSayOnce(string user, string msg)
@@ -819,11 +958,19 @@ public class CPHInline
         Say(msg);
     }
 
+    // [NEW][STRIKES] Same rule as customs: 3 strikes = no joining (the streamer is exempt). Strikes live in _players.
+    bool WheelStruck(string login)
+    {
+        Player sp;
+        return !IsStreamer(login) && _players.TryGetValue(login, out sp) && sp.Strikes >= MaxStrikes;
+    }
+
     bool HandleMe(string user, bool isPrivileged)
     {
         if (string.IsNullOrEmpty(user)) return true;
         if (_wheel == null || _wheel.Status != "open") { WheelSayOnce(user, "@" + user + " sign-ups for the tournament are closed."); return true; }
         if (_wheel.Eligibility == "subs" && !_cmdSub && !isPrivileged) { WheelSayOnce(user, "@" + user + " tournament sign-ups are for subscribers right now."); return true; }
+        if (WheelStruck(user)) { WheelSayOnce(user, "@" + user + " you have " + MaxStrikes + " strikes, so you can't join the tournament right now. You lose a strike every time the stream goes live."); return true; }
         string id = !string.IsNullOrEmpty(_cmdUserId) ? _cmdUserId : user;
         if (_wheel.Entrants.Any(e => e.Id == id || e.Login == user)) { WheelSayOnce(user, "@" + user + " you are already in the tournament."); return true; }
         if (_wheel.Entrants.Count >= 500) { WheelSayOnce(user, "@" + user + " the tournament is full."); return true; }
@@ -925,6 +1072,7 @@ public class CPHInline
                     return true;
                 }
             case "draw": WheelDoDraw(); return true;
+            case "spin": WheelSpin(w, arg); return true;
             case "undo":
                 if (!locked) { Say("Nothing to undo."); return true; }
                 if (w.Msgs.Any(m => m.Sent)) { Say("The teams were already announced in chat. Use !wheel reset if you really want to redo them."); return true; }
@@ -966,7 +1114,6 @@ public class CPHInline
         WheelSave();
     }
 
-            case "spin": WheelSpin(w, arg); return true;
     // The ONE draw. Everything random comes from a seed made right now (kept private).
     void WheelDoDraw()
     {
@@ -981,6 +1128,14 @@ public class CPHInline
             return;
         }
 
+        var struck = w.Entrants.Where(e => WheelStruck(e.Login)).ToList();
+        if (struck.Count > 0)
+        {
+            foreach (var e in struck) w.Entrants.Remove(e);
+            Say("Removed from the tournament (" + MaxStrikes + " strikes): " + string.Join(", ", struck.Select(e => e.Name)) + ". Run !wheel draw again.");
+            WheelSave();
+            return;
+        }
         w.Seed = WheelNewSeed();
         var rng = new WheelRng(w.Seed);
         w.DrawCount++;
@@ -1138,56 +1293,6 @@ public class CPHInline
         return list;
     }
 
-    void WheelQueueAnnounce(WheelSession w)
-    {
-        w.Msgs = WheelBuildMessages(w);
-        foreach (var t in w.Teams) t.Announced = false;
-        w.AnnState = "sending";
-        WheelSave();
-    }
-
-    // Runs every web sync tick (and after !wheel announce): finishes the reveal, then sends chat messages a few at a time, ~1.2 s apart.
-    // Each message has its own "sent" flag, so a retry never repeats one that already went out.
-    void WheelPump()
-    {
-        var w = _wheel;
-        if (w == null) return;
-        if (w.Status == "drawing" && w.Draw != null && NowMs() >= w.Draw.StartedAt + (long)w.Draw.Steps.Count * w.Draw.StepMs)
-        {
-            w.Status = "drawn";
-            WheelSave();
-        }
-        if (w.AnnState != "sending") return;
-        int sentNow = 0;
-        foreach (var m in w.Msgs.Where(x => !x.Sent).ToList())
-        {
-            if (sentNow >= _wheelPerTick) return;   // the next tick carries on
-            try { PgSay("core", m.Text); }
-            catch (Exception ex)
-            {
-                w.AnnState = "failed";
-                ReportProblem("Wheel announcement failed: " + ex.Message);
-                WheelSave();
-                return;
-            }
-            m.Sent = true;
-            if (m.Team > 0) { var t = w.Teams.FirstOrDefault(x => x.N == m.Team); if (t != null) t.Announced = true; }
-            sentNow++;
-            WheelSave();
-            if (_wheelGapMs > 0 && w.Msgs.Any(x => !x.Sent)) System.Threading.Thread.Sleep(_wheelGapMs);
-        }
-        bool spinning = w.Draw != null && w.Draw.Revealed > 0 && w.Draw.Revealed < w.Draw.Steps.Count;   // manual spin not finished: more lines will come
-        if (w.Msgs.All(x => x.Sent) && !spinning) { w.AnnState = "done"; WheelSave(); }
-    }
-
-    // What the website mirrors. Mirrors site worker wheelClean(); the seed is deliberately left out.
-    object WheelSnapshot()
-    {
-        var w = _wheel;
-        if (w == null)
-            return new { id = "", status = "none", mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all",
-                         entrants = new object[0], teams = new object[0], draw = (object)null, waitlist = new string[0],
-                         announce = new { state = "idle", sent = 0, total = 0 }, canUndo = false, drawCount = 0, caps = new { spin = true } };
     // MANUAL SPIN: the draw is committed, the mod reveals one pick per Spin (site button -> "!wheel spin N", or a mod typing "!wheel spin"). Chat lines wait until the overlay has landed (~8.5 s)
     // and never give a pick away early. Safe to repeat: Revealed only grows, each team and the final list are queued once.
     const int WheelSpinLandMs = 8500;
@@ -1197,6 +1302,7 @@ public class CPHInline
         int total = w.Draw.Steps.Count, n;
         int target = int.TryParse((arg ?? "").Trim(), out n) ? Math.Min(Math.Max(n, 0), total) : Math.Min(w.Draw.Revealed + 1, total);
         if (target > w.Draw.Revealed) { w.Draw.Revealed = target; w.Draw.SpunAt = NowMs(); }
+        if (w.Draw.Revealed == total - 1 && w.Draw.Revealed > 0) w.Draw.Revealed = total;   // the last entrant left needs no spin: it lands with the one before
         long due = w.Draw.SpunAt + WheelSpinLandMs;
         var shown = w.Draw.Steps.Take(w.Draw.Revealed).ToList();
         foreach (var t in w.Teams)
@@ -1231,6 +1337,57 @@ public class CPHInline
         WheelPump();
     }
 
+    void WheelQueueAnnounce(WheelSession w)
+    {
+        w.Msgs = WheelBuildMessages(w);
+        foreach (var t in w.Teams) t.Announced = false;
+        w.AnnState = "sending";
+        WheelSave();
+    }
+
+    // Runs every web sync tick (and after !wheel announce): finishes the reveal, then sends chat messages a few at a time, ~1.2 s apart.
+    // Each message has its own "sent" flag, so a retry never repeats one that already went out.
+    void WheelPump()
+    {
+        var w = _wheel;
+        if (w == null) return;
+        if (w.Status == "drawing" && w.Draw != null && NowMs() >= w.Draw.StartedAt + (long)w.Draw.Steps.Count * w.Draw.StepMs)
+        {
+            w.Status = "drawn";
+            WheelSave();
+        }
+        if (w.AnnState != "sending") return;
+        int sentNow = 0;
+        foreach (var m in w.Msgs.Where(x => !x.Sent).ToList())
+        {
+            if (m.Due > 0 && NowMs() < m.Due) continue;   // manual spin: not before the overlay has landed
+            if (sentNow >= _wheelPerTick) return;   // the next tick carries on
+            try { PgSay("core", m.Text); }
+            catch (Exception ex)
+            {
+                w.AnnState = "failed";
+                ReportProblem("Wheel announcement failed: " + ex.Message);
+                WheelSave();
+                return;
+            }
+            m.Sent = true;
+            if (m.Team > 0) { var t = w.Teams.FirstOrDefault(x => x.N == m.Team); if (t != null) t.Announced = true; }
+            sentNow++;
+            WheelSave();
+            if (_wheelGapMs > 0 && w.Msgs.Any(x => !x.Sent)) System.Threading.Thread.Sleep(_wheelGapMs);
+        }
+        bool spinning = w.Draw != null && w.Draw.Revealed > 0 && w.Draw.Revealed < w.Draw.Steps.Count;   // manual spin not finished: more lines will come
+        if (w.Msgs.All(x => x.Sent) && !spinning) { w.AnnState = "done"; WheelSave(); }
+    }
+
+    // What the website mirrors. Mirrors site worker wheelClean(); the seed is deliberately left out.
+    object WheelSnapshot()
+    {
+        var w = _wheel;
+        if (w == null)
+            return new { id = "", status = "none", mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all",
+                         entrants = new object[0], teams = new object[0], draw = (object)null, waitlist = new string[0],
+                         announce = new { state = "idle", sent = 0, total = 0 }, canUndo = false, drawCount = 0, caps = new { spin = true }, practice = false };
         object draw = w.Draw == null ? null : (object)new
         {
             id = w.Draw.Id, startedAt = w.Draw.StartedAt, stepMs = w.Draw.StepMs,
@@ -1240,22 +1397,21 @@ public class CPHInline
         return new
         {
             id = w.Id, status = w.Status, mode = w.Mode, teamSize = w.TeamSize, oddPolicy = w.OddPolicy, eligibility = w.Eligibility,
-            entrants = w.Entrants.Select(e => new { id = e.Id, login = e.Login, name = e.Name, epic = e.Epic ?? "", mmr = e.Mmr, flagged = e.Flagged, wait = e.Wait }).ToList(),
+            entrants = w.Entrants.Select(e => new { id = e.Id, login = e.Login, name = e.Name, epic = e.Epic ?? "", mmr = e.Mmr, flagged = e.Flagged, wait = e.Wait, practice = e.Practice }).ToList(),
             teams = w.Teams.Select(t => new { n = t.N, members = t.Members, avg = t.Avg, partial = t.Partial, announced = t.Announced }).ToList(),
             draw = draw, waitlist = w.Waitlist,
             announce = new { state = w.AnnState, sent = w.Msgs.Count(m => m.Sent), total = w.Msgs.Count },
             canUndo = (w.Status == "drawing" || w.Status == "drawn") && !w.Msgs.Any(m => m.Sent),
-            drawCount = w.DrawCount, caps = new { spin = true }
+            drawCount = w.DrawCount, caps = new { spin = true }, practice = w.Entrants.Any(e => e.Practice)
         };
     }
 
-    void SavePlayers() { SaveJson("players.json", _players); _standingsDirty = true; }   // [NEW][WEB] league table changed
-    void SaveQueue() { SaveJson("queue.json", _queue); }
-    void SaveMatches() { SaveJson("matches.json", _matches); _matchesDirty = true; }   // [NEW][WEB] history changed: send it to the website
+    void SavePlayers() { SaveJson("players.json", _practice.Count == 0 ? _players : _players.Where(kv => !IsPractice(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value)); _standingsDirty = true; }   // [NEW][WEB] league table changed (practice players are never saved)
+    void SaveQueue() { SaveJson("queue.json", _practice.Count == 0 ? _queue : _queue.Where(e => !IsPractice(e.Username)).ToList()); }
+    void SaveMatches() { SaveJson("matches.json", _practice.Count == 0 && !_matches.Any(IsPracticeMatch) ? _matches : _matches.Where(m => !IsPracticeMatch(m)).ToList()); _matchesDirty = true; }   // [NEW][WEB] history changed: send it to the website
     void SaveMmrCache() { SaveJson("mmr_cache.json", _mmrCache); }
     void SaveSettings() { SaveJson("settings.json", _settings); }
-    void SaveCurrentMatch() { SaveJson("current_match.json", _lastBalance); }
-            if (m.Due > 0 && NowMs() < m.Due) continue;   // manual spin: not before the overlay has landed
+    void SaveCurrentMatch() { if (_lastBalance != null && IsPracticeLast()) return; SaveJson("current_match.json", _lastBalance); }   // a practice lobby lives in memory only
 
     static long Now() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
 
@@ -1341,8 +1497,9 @@ public class CPHInline
                 // split in two (so !next etc. keep working); the website shows one grid.
                 group = _matches.Any(r => r.Id == _lastBalance.MatchId && r.Group),
                 // [NEW][WEB] epic = registered Epic name, shown on the site as "Platform name | Epic".
-                blue = _lastBalance.Result.Blue.Select(p => new { p.Username, p.Mmr, MmrSource = MmrSrc(p.Username), Epic = EpicOf(p.Username) }),
-                orange = _lastBalance.Result.Orange.Select(p => new { p.Username, p.Mmr, MmrSource = MmrSrc(p.Username), Epic = EpicOf(p.Username) }),
+                blue = _lastBalance.Result.Blue.Select(p => new { p.Username, p.Mmr, MmrSource = MmrSrc(p.Username), Epic = EpicOf(p.Username), Practice = IsPractice(p.Username) }),
+                orange = _lastBalance.Result.Orange.Select(p => new { p.Username, p.Mmr, MmrSource = MmrSrc(p.Username), Epic = EpicOf(p.Username), Practice = IsPractice(p.Username) }),
+                practice = IsPracticeLast(),
                 blueAvg = _lastBalance.Result.BlueAvgMmr,
                 orangeAvg = _lastBalance.Result.OrangeAvgMmr
             };
@@ -1372,13 +1529,14 @@ public class CPHInline
             mode = _settings.TeamMode,
             streamerPlaying = _settings.StreamerPlaying,   // [NEW][WEB] 5 gold (playing) vs 6 gold (sitting out) on the site
             spotsNeeded = Math.Max(0, GetTotalSlots(_settings.DefaultFormat) - waiting.Count),
-            queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username) }),
+            queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username), practice = IsPractice(e.Username) }),
             activity = _settings.Activity,            currentMatch = match,
             liveMatch = hold ? live : null,   // [NEW][KOTH] only while the public view is being held
             hold = hold,
             board = KothBoard(),   // [NEW][KOTH] who is winning in the King of the Hill activity right now (empty in other activities)
             koth = IsKothMode(),   // the KOTH setting OR the King of the Hill activity
             matchId = _lastBalance != null ? _lastBalance.MatchId : 0,
+            practice = _practiceOn || _practice.Count > 0,   // practice mode: the site must not treat anyone flagged practice as a member or keep them
             lastEvent = _lastEvent,
             recentEvents = _recentEvents
         };
@@ -1536,6 +1694,8 @@ public class CPHInline
             case "!topwins":  return HandleTop();                                  // [NEW] (!top was taken by the points bot)
             case "!me":       return HandleMe(userLower, isPrivileged);             // [NEW][WHEEL] join the tournament
             case "!wheel":    return HandleWheel(userLower, input, isPrivileged);   // [NEW][WHEEL] mods run the tournament wheel
+            case "!practice": return HandlePractice(userLower, input, isPrivileged);   // [NEW][PRACTICE] fake players to rehearse matchmaking and the wheel
+            case "!spin":     return HandleWheel(userLower, ("spin " + input).Trim(), isPrivileged);   // [NEW][WHEEL] alias for !wheel spin
             default:
                 CPH.LogWarn("[BVQ] Unknown command: " + command);
                 ReportProblem(string.IsNullOrEmpty(command)
@@ -1585,7 +1745,6 @@ public class CPHInline
     static string _loopId;
     void StartWebSyncLoop()
     {
-            case "!spin":     return HandleWheel(userLower, ("spin " + input).Trim(), isPrivileged);   // [NEW][WHEEL] alias for !wheel spin
         if (string.IsNullOrEmpty(_settings.WebSyncKey) || string.IsNullOrEmpty(_settings.WebSyncUrl)) return;
         if (_loopId != null && (AppDomain.CurrentDomain.GetData(SyncOwnerKey) as string) == _loopId) return;   // already running
         string id = Guid.NewGuid().ToString("N");
@@ -1634,6 +1793,8 @@ public class CPHInline
         public bool privileged { get; set; }
         public bool quiet { get; set; }   // website-only player: don't post the reply in Twitch chat
         public string epic { get; set; }
+        public string userId { get; set; }   // [NEW][WHEEL] the viewer's Twitch id when the site knows it (a site "Join" for the tournament)
+        public bool sub { get; set; }        // [NEW][WHEEL] is a subscriber (tournament eligibility "subs")
         public string name { get; set; }  // [NEW][WEB] site display name, used in chat for website-only players  // [NEW][WEB] Epic name saved in the member's site Settings (sent with !join)
     }
 
@@ -1659,6 +1820,7 @@ public class CPHInline
 
     bool HandleWebSync()
     {
+        HostLive();   // the Host knows by itself whether the stream is live (no website key needed)
         if (string.IsNullOrEmpty(_settings.WebSyncKey) || string.IsNullOrEmpty(_settings.WebSyncUrl))
             return true;   // bridge turned off
         try
@@ -1692,7 +1854,10 @@ public class CPHInline
                         HandleRegister(webUser, epic.StartsWith("@") ? epic.TrimStart('@') : epic, true);
                         _capture.Clear();
                     }
-                    RunCommand(cmd, (wc.input ?? "").Trim(), webUser, wc.privileged);
+                    // [NEW][WHEEL] a site "Join" for the tournament runs !me with the same rules as chat (open sign-ups, subs-only, dedupe by id or name)
+                    _cmdUserId = (wc.userId ?? "").Trim(); _cmdDisplay = string.IsNullOrWhiteSpace(wc.name) ? webUser : wc.name; _cmdSub = wc.sub;
+                    try { RunCommand(cmd, (wc.input ?? "").Trim(), webUser, wc.privileged); }
+                    finally { _cmdUserId = ""; _cmdDisplay = ""; _cmdSub = false; }
                 }
                 catch (Exception ex) { CPH.LogError("[BVQ] Web command failed: " + ex); ReportProblem("Website command " + cmd + " failed: " + ex.GetType().Name + ": " + ex.Message); _capture.Add("Something went wrong in PinguinoB0t."); }
                 results.Add(new { id = wc.id, messages = _capture });
@@ -1708,7 +1873,6 @@ public class CPHInline
             {
                 var batch = _problems.ToList();
                 WebCall("POST", "/api/bot/log", JsonConvert.SerializeObject(new { entries = batch.Select(m => new { level = "error", message = m }) }));
-        HostLive();   // the Host knows by itself whether the stream is live (no website key needed)
                 _problems.Clear();
             }
             if (_checkNotes.Count > 0)
@@ -1727,12 +1891,12 @@ public class CPHInline
             //    makes a member profile for each Twitch player automatically.
             if (_standingsDirty || (DateTime.UtcNow - _lastStandingsPush).TotalMinutes >= 5)
             {
-                var rows = _players.Values.Select(p => new object[] { p.Username, p.GameId ?? "", p.Wins, p.Losses, p.Points, p.TwitchId ?? "", p.PeakMmr.HasValue ? (object)p.PeakMmr.Value : null, MmrSrc(p.Username), p.Strikes, p.Sr.HasValue ? (object)p.Sr.Value : null }).ToList();
+                var rows = _players.Values.Where(p => !IsPractice(p.Username)).Select(p => new object[] { p.Username, p.GameId ?? "", p.Wins, p.Losses, p.Points, p.TwitchId ?? "", p.PeakMmr.HasValue ? (object)p.PeakMmr.Value : null, MmrSrc(p.Username), p.Strikes, p.Sr.HasValue ? (object)p.Sr.Value : null }).ToList();
                 // [NEW][WEB] per game mode tables: category -> [username, wins, losses, points]
                 var modes = new Dictionary<string, List<object[]>>();
                 foreach (var p in _players.Values)
                 {
-                    if (p.Modes == null) continue;
+                    if (p.Modes == null || IsPractice(p.Username)) continue;
                     foreach (var kv in p.Modes)
                     {
                         if (kv.Value.Wins + kv.Value.Losses == 0) continue;
@@ -1749,7 +1913,7 @@ public class CPHInline
             //    mistake. Sent when it changed and every 5 minutes.
             if (_matchesDirty || (DateTime.UtcNow - _lastMatchesPush).TotalMinutes >= 5)
             {
-                var hist = _matches.OrderByDescending(m => m.Id).Take(100).Select(m => new
+                var hist = _matches.Where(m => !IsPracticeMatch(m)).OrderByDescending(m => m.Id).Take(100).Select(m => new
                 {
                     id = m.Id, format = m.Format, category = m.Category ?? m.Format, mode = m.Mode, activity = m.Activity ?? "competitive",
                     counted = IsCounted(m), createdAt = m.CreatedAt, finishedAt = m.FinishedAt, winner = m.Winner,
@@ -1914,7 +2078,11 @@ public class CPHInline
                            .OrderBy(e => e.Position).ToList();
         if (movers.Count == 0) return;
 
+        // [NEW][KOTH] King of the Hill recycles names: everyone who played (the streamer too) goes to the BACK of the waiting line instead of
+        // leaving it, so nobody has to !join again and the streamer waits his turn after a loss. (The winners who stay on are made active again by the caller.)
+        bool recycle = IsKothMode();
         int frontPos = _queue.Min(e => e.Position) - 1;
+        int backPos = _queue.Max(e => e.Position) + 1;
         foreach (var entry in movers)
         {
             if (recycle)
@@ -1969,11 +2137,7 @@ public class CPHInline
     }
 
     int GetTotalSlots(string format)
-        // [NEW][KOTH] King of the Hill recycles names: everyone who played (the streamer too) goes to the BACK of the waiting line instead of
-        // leaving it, so nobody has to !join again and the streamer waits his turn after a loss. (The winners who stay on are made active again by the caller.)
-        bool recycle = IsKothMode();
     {
-        int backPos = _queue.Max(e => e.Position) + 1;
         return GetTeamSize(format) * 2;
     }
 
@@ -2969,6 +3133,7 @@ public class CPHInline
 
     void ApplyMatchStats(MatchRecord rec, string winner, int sign)
     {
+        if (IsPracticeMatch(rec)) return;
         int pw = rec.PtsWin ?? _settings.PointsWin, pl = rec.PtsLoss ?? _settings.PointsLoss;
         var winners = winner == "blue" ? rec.Blue : rec.Orange;
         var losers = winner == "blue" ? rec.Orange : rec.Blue;
@@ -3525,10 +3690,11 @@ public class CPHInline
         var losers = winnerTeam == "blue" ? res.Orange : res.Blue;
 
         // [NEW][WEB] Stats and points only count in the competitive activity.
-        bool counts = IsCompetitive();
+        bool prac = IsPracticeLast();                      // a practice game changes nobody's stats
+        bool counts = IsCompetitive() && !prac;
         bool kothAct = _settings.Activity == "koth";
         int ptsWin = kothAct ? 1 : _settings.PointsWin, ptsLoss = kothAct ? 0 : _settings.PointsLoss;   // King of the Hill ranks by WINS: 1 point per win, none for a loss
-        if (kothAct)
+        if (kothAct && !prac)
             foreach (var tp in winners)
             {
                 int w; _settings.KothWins.TryGetValue(tp.Username, out w);
@@ -3963,6 +4129,20 @@ public class CPHInline
         return true;
     }
 
+    bool _hostLiveGiven; string _hostLiveSeen = "";
+    // The PinguinoHost module publishes its own live state as the global "pinguino.live" ("1"/"0"); when present it replaces the website poll.
+    void HostLive()
+    {
+        try
+        {
+            string hl = CPH.GetGlobalVar<string>("pinguino.live", false);
+            _hostLiveGiven = hl == "1" || hl == "0";
+            if (_hostLiveGiven && _hostLiveSeen != hl) { _hostLiveSeen = hl; CPH.LogInfo("[BVQ] The Host reports the stream is " + (hl == "1" ? "LIVE" : "offline") + "."); }
+            if (_hostLiveGiven) ApplyLive(hl == "1");
+        }
+        catch (Exception) { _hostLiveGiven = false; }
+    }
+
     // Called every 30 s with what Twitch says. A new stream (offline for 30+ minutes, or never seen) takes one strike off everyone.
     void ApplyLive(bool live)
     {
@@ -4012,20 +4192,6 @@ public class CPHInline
         if (!isPrivileged)
         {
             Say("@" + user + " Only mods can set MMR.");
-    bool _hostLiveGiven; string _hostLiveSeen = "";
-    // The PinguinoHost module publishes its own live state as the global "pinguino.live" ("1"/"0"); when present it replaces the website poll.
-    void HostLive()
-    {
-        try
-        {
-            string hl = CPH.GetGlobalVar<string>("pinguino.live", false);
-            _hostLiveGiven = hl == "1" || hl == "0";
-            if (_hostLiveGiven && _hostLiveSeen != hl) { _hostLiveSeen = hl; CPH.LogInfo("[BVQ] The Host reports the stream is " + (hl == "1" ? "LIVE" : "offline") + "."); }
-            if (_hostLiveGiven) ApplyLive(hl == "1");
-        }
-        catch (Exception) { _hostLiveGiven = false; }
-    }
-
             return true;
         }
 

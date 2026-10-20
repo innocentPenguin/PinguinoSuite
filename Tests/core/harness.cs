@@ -505,6 +505,19 @@ public static class Harness
         Check(WS()["Entrants"].Count() == 6 && CPHProxy.Sent.Any(m => m.Contains("subscribers")), "wheel: subs-only refuses non-subs");
         wheel("eligibility", "all");
 
+        // strikes from the site/bot: 3 strikes cannot join, and are dropped at draw time
+        int sNow = int.Parse(Players()["p3"]["Strikes"].ToString());
+        for (int i = sNow; i < 3; i++) Run("mod1", "!strike", "@p3", true);
+        Run("p3", "!me");
+        Check(WS()["Entrants"].Count() == 6 && CPHProxy.Sent.Any(m => m.Contains("3 strikes, so you can't join the tournament")), "wheel: a player with 3 strikes cannot join");
+        Run("mod1", "!unstrike", "@p3", true);
+        Run("p3", "!me");
+        Check(WS()["Entrants"].Count() == 7, "wheel: after losing a strike they can join");
+        Run("mod1", "!strike", "@p3", true);
+        wheel("draw", "");
+        Check((string)WS()["Status"] == "open" && WS()["Entrants"].Count() == 6 && CPHProxy.Sent.Any(m => m.Contains("Removed from the tournament")), "wheel: a 3-strike entrant is removed at draw time, no draw yet");
+        Run("mod1", "!unstrike", "@p1", true);
+
         wheel("draw", "");
         var ws = WS();
         Check((string)ws["Status"] == "drawing" && ws["Teams"].Count() == 3, "wheel: 6 players, size 2 -> 3 teams, status drawing");
@@ -532,25 +545,14 @@ public static class Harness
         Func<string, string> seq = seed => { var r = Activator.CreateInstance(rt, new object[] { seed }); var m = rt.GetMethod("Below"); return string.Join(",", Enumerable.Range(0, 20).Select(i => m.Invoke(r, new object[] { 1000 }))); };
         Check(seq("abc") == seq("abc") && seq("abc") != seq("abd"), "wheel: same seed = same sequence, different seed differs");
 
-        // odd policies
-        fresh(2); signUp("o", 5); wheel("draw", "");
-        ws = WS();
-        Check(ws["Teams"].Count() == 2 && ws["Waitlist"].Count() == 1, "wheel: odd=waitlist -> 2 teams + 1 waiting");
-        wheel("end", ""); wheel("new", ""); wheel("odd", "trio"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
-        ws = WS();
-        Check(ws["Teams"].Count() == 2 && ws["Teams"].Select(t => t["Members"].Count()).OrderBy(x => x).SequenceEqual(new[] { 2, 3 }) && ws["Waitlist"].Count() == 0, "wheel: odd=trio -> a team of 3, nobody waits");
-        wheel("end", ""); wheel("new", ""); wheel("odd", "partial"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
-        ws = WS();
-        Check(ws["Teams"].Count() == 3 && ws["Teams"].Count(t => (bool)t["Partial"]) == 1, "wheel: odd=partial -> an extra partial team");
-        wheel("end", ""); wheel("new", ""); wheel("odd", "hold"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
-        Check((string)WS()["Status"] == "open" && CPHProxy.Sent.Any(m => m.Contains("more")), "wheel: odd=hold refuses to draw");
-
         // manual spin: the site reveals one pick per press; chat lines wait for the overlay and come once per finished team
         fresh(2); signUp("o", 6); wheel("draw", "");
         wheel("spin", "1");
         Check((int)WS()["Draw"]["Revealed"] == 1 && WS()["Msgs"].Count() == 0, "wheel spin: one pick revealed, no team complete yet, nothing queued");
         wheel("spin", "1");
         Check((int)WS()["Draw"]["Revealed"] == 1, "wheel spin: repeating the same number is safe");
+        wheel("spin", "5");
+        Check((int)WS()["Draw"]["Revealed"] == 6, "wheel spin: when one entrant is left it is revealed with the one before (no extra spin)");
         wheel("spin", "6");
         var spinSnap = WS();
         Check((int)spinSnap["Draw"]["Revealed"] == 6 && spinSnap["Msgs"].Count() == 4, "wheel spin: all 6 revealed -> 3 team lines + the final list queued");
@@ -564,6 +566,19 @@ public static class Harness
         Check(spinSaid.Count(m => m.StartsWith("TOURNAMENT TEAMS - ") && m.Contains(" | ")) == 1, "wheel spin: the final list is sent once, teams separated by |");
         wheel("spin", "6"); wheel("tick", "");
         Check(CPHProxy.Sent.Count == 0 && (string)WS()["AnnState"] == "done", "wheel spin: a retry repeats nothing");
+        // odd policies
+        fresh(2); signUp("o", 5); wheel("draw", "");
+        ws = WS();
+        Check(ws["Teams"].Count() == 2 && ws["Waitlist"].Count() == 1, "wheel: odd=waitlist -> 2 teams + 1 waiting");
+        wheel("end", ""); wheel("new", ""); wheel("odd", "trio"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
+        ws = WS();
+        Check(ws["Teams"].Count() == 2 && ws["Teams"].Select(t => t["Members"].Count()).OrderBy(x => x).SequenceEqual(new[] { 2, 3 }) && ws["Waitlist"].Count() == 0, "wheel: odd=trio -> a team of 3, nobody waits");
+        wheel("end", ""); wheel("new", ""); wheel("odd", "partial"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
+        ws = WS();
+        Check(ws["Teams"].Count() == 3 && ws["Teams"].Count(t => (bool)t["Partial"]) == 1, "wheel: odd=partial -> an extra partial team");
+        wheel("end", ""); wheel("new", ""); wheel("odd", "hold"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
+        Check((string)WS()["Status"] == "open" && CPHProxy.Sent.Any(m => m.Contains("more")), "wheel: odd=hold refuses to draw");
+
         // balanced
         fresh(2); wheel("mode", "balanced"); signUp("b", 4);
         wheel("mmr", "b1 2000"); wheel("mmr", "b2 1000"); wheel("mmr", "b3 1900"); wheel("mmr", "b4 1100"); wheel("draw", "");
@@ -574,6 +589,32 @@ public static class Harness
         fresh(1); for (int i = 1; i <= 60; i++) Run("averyveryverylongtwitchname" + i, "!me");
         wheel("draw", ""); System.Threading.Thread.Sleep(150); wheel("tick", ""); wheel("announce", "");
         Check(CPHProxy.Sent.Count(m => m.StartsWith("TOURNAMENT TEAMS")) >= 3 && CPHProxy.Sent.All(m => m.Length <= 450), "wheel: a long roster splits into paragraphs under 450 characters");
+        wheel("end", "");
+
+        // ===== [NEW][PRACTICE] fake players: used by matchmaking and the wheel, never saved =====
+        Func<string, bool> onDisk = needle => new[] { "players.json", "queue.json", "matches.json", "current_match.json", "wheel_session.json" }
+            .Any(f => File.Exists(Path.Combine(dir, f)) && File.ReadAllText(Path.Combine(dir, f)).Contains(needle));
+        Func<JToken> LiveM = () => (bool)State()["hold"] ? State()["liveMatch"] : State()["currentMatch"];
+        Run("p1", "!practice", "on", false);
+        Check(CPHProxy.Sent.Any(m => m.Contains("Only mods can use !practice")), "practice: non-mods cannot start it");
+        Run("mod1", "!queue", "clear", true);
+        Run("mod1", "!format", "2v2", true);
+        fresh(2); signUp("real", 2);
+        Run("mod1", "!practice", "on 6", true);
+        Check(State()["queue"].Count(q => (bool)q["practice"]) == 6 && (bool)State()["practice"], "practice: 6 fake players fill the queue and the state flags them");
+        Check(!onDisk("practice0"), "practice: no fake player reaches players/queue/wheel files");
+        Check(WS()["Entrants"].Count() == 2, "practice: the saved wheel sign-ups hold only the real viewers");
+        wheel("draw", "");
+        Check(WS()["Status"].ToString() == "open", "practice: a practice draw is not written to the wheel file");
+        Run("mod1", "!next", "", true);
+        Check(LiveM()["blue"].Concat(LiveM()["orange"]).All(p => (bool)p["Practice"] == ((string)p["Username"]).StartsWith("practice")) && LiveM()["blue"].Concat(LiveM()["orange"]).Any(p => (bool)p["Practice"]), "practice: matchmaking used fake players and flags exactly them");
+        Check(!onDisk("practice0"), "practice: the practice lobby is not saved");
+        Run("mod1", "!win", "blue", true);
+        Check(!onDisk("practice0") && JObject.Parse(File.ReadAllText(Path.Combine(dir, "players.json"))).Properties().All(pr => (int)pr.Value["Wins"] == 0 || !pr.Name.StartsWith("practice")), "practice: a practice result changes no stats");
+        Run("mod1", "!practice", "off", true);
+        Check(State()["queue"].Count(q => (bool)q["practice"]) == 0 && !(bool)State()["practice"], "practice: off removes the fake players");
+        wheel("close", "");
+        Check(WS()["Entrants"].Count() == 2 && !onDisk("practice0"), "practice: after off the real wheel sign-ups are back");
         wheel("end", "");
 
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
