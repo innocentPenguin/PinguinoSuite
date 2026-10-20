@@ -528,11 +528,13 @@ async def send(request: Request):
         r = await host_feed.say(text)
         if r is not None:
             if not r.get("ok"):
+                _RECENT_SENDS.pop(key, None)             # refused, nothing went out: the same line may be tried again
                 raise HTTPException(502, str(r.get("via") or "Host could not send"))
             return {"ok": True, "id": "", "duplicate": bool(r.get("duplicate")), "via": r.get("via")}
     try:
         mid = await conn.send(text, reply_to)
     except Exception as e:
+        _RECENT_SENDS.pop(key, None)                     # the platform rejected it (not a timeout): allow a retry
         raise HTTPException(502, str(e))
     me = conn.user["login"] if getattr(conn, "user", None) else "me"
     own = ChatMessage(id=mid, platform=platform, channel=config.settings()["channel"],

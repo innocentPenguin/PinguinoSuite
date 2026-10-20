@@ -22,4 +22,8 @@
 - OBS_WIDGETS.md (widgets, dashboard features), STREAM_READY.md (stream checklist), SITE_SCOPE_PROPOSAL.md.
 
 ## Tests
-- Suite/modules/multi/tests/test_core.py (82 pytest), tests/e2e_live.py (throwaway server on 8799).
+- Suite/modules/multi/tests/test_core.py (84 pytest), tests/e2e_live.py (throwaway server on 8799).
+
+## Changes log (night run)
+- 1e25f66 dashboard viewer counts, text size, resize, split halves. e4a8edc / ece3825 send duplicate guard + Twitch via Host say. 046b726 raid_out/poll/prediction/hype rows, gift counter. 58c1565 gift sub alerts (follow widget). Failed sends can be retried (guard entry removed on refusal), timeouts are never retried.
+- Not built: live /obs/poll, /obs/predict, hype bar overlays (need Host live-state route from 02).

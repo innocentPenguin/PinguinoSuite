@@ -1127,3 +1127,32 @@ def test_follow_widget_gift_alerts():
     s2 = obs.sanitize("follow", {"show_gifts": False})
     assert obs.hidden("follow", s2, {"event": "gift"}) is True
     assert obs.hidden("follow", s, {"event": "raid"}) is True
+
+
+def test_send_drops_duplicates_and_allows_retry_after_failure(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import server
+    from store import Store
+    monkeypatch.setattr(server, "store", Store(tmp_path / "s.db"))
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    server._RECENT_SENDS.clear()
+    calls = []
+
+    class Fake:
+        capabilities = {"send": True, "reply": False}
+        user = None
+        fail = True
+
+        async def send(self, text, reply_to=None):
+            calls.append(text)
+            if Fake.fail:
+                raise RuntimeError("nope")
+            return "discord:x:1"
+    monkeypatch.setitem(server.connectors, "discord", Fake())
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    h = {"origin": "http://127.0.0.1:8766"}
+    assert c.post("/api/send", json={"platform": "discord", "text": "hi"}, headers=h).status_code == 502
+    Fake.fail = False
+    assert c.post("/api/send", json={"platform": "discord", "text": "hi"}, headers=h).json()["ok"] is True      # retry after a failure is allowed
+    r = c.post("/api/send", json={"platform": "discord", "text": "  HI "}, headers=h).json()
+    assert r["duplicate"] is True and len(calls) == 2                                                          # identical line within 30 s is not sent again
