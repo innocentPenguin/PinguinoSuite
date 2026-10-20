@@ -328,12 +328,20 @@ def prestream():
 
 
 # ------------------------------------------------------------------ status / settings
+_stats_cache = {"v": {"total": 0, "corrected": 0, "approved": 0, "to_review": 0, "reviewed_secs": 0}, "busy": False}
+
+
 @app.get("/api/status")
 def status():
     st = cfg.settings()
+    try:    # never block on the database: a long import or learn job can hold it, and the dashboard polls this
+        r = db.rows_nowait("SELECT COUNT(*) total, SUM(status='corrected') corrected, SUM(status='approved') approved, "
+                           "SUM(status='new' AND unsure>0) to_review, SUM(CASE WHEN status!='new' THEN end-start ELSE 0 END) reviewed_secs FROM segments")
+        _stats_cache["v"], _stats_cache["busy"] = (r[0] if r else _stats_cache["v"]), False
+    except db.Busy:
+        _stats_cache["busy"] = True
     return {"asr": state["asr"], "mic_alert": state.get("mic_alert"), "listening": mic.running, "live_session": mic.session_id if mic.running else None, "settings": st,
-            "stats": db.one("SELECT COUNT(*) total, SUM(status='corrected') corrected, SUM(status='approved') approved, "
-                            "SUM(status='new' AND unsure>0) to_review, SUM(CASE WHEN status!='new' THEN end-start ELSE 0 END) reviewed_secs FROM segments")}
+            "stats": _stats_cache["v"], "stats_busy": _stats_cache["busy"]}
 
 
 class Settings(BaseModel):

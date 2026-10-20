@@ -38,6 +38,20 @@ def rows(sql, args=()):
         return [dict(r) for r in _c.execute(sql, args).fetchall()]
 
 
+class Busy(Exception):
+    """The database is held by a long job (import, learn); the caller may show cached data instead of hanging."""
+
+
+def rows_nowait(sql, args=(), wait=1.5):
+    """Like rows(), but gives up after `wait` seconds instead of blocking behind a long write: the status poll must never hang the dashboard."""
+    if not _lock.acquire(timeout=wait):
+        raise Busy()
+    try:
+        return [dict(r) for r in _c.execute(sql, args).fetchall()]
+    finally:
+        _lock.release()
+
+
 def one(sql, args=()):
     r = rows(sql, args)
     return r[0] if r else None
