@@ -378,6 +378,8 @@ public class CPHInline
         // PERMANENT strikes (red on the site): !strike @user toxicity|slurs|perma. They never wear off; only !unstrike @user perma removes one.
         public int PermaStrikes { get; set; }
         public string PermaReason { get; set; }
+        public int HalfStrike { get; set; }                // 0/1: one HALF strike waiting (two halves = one temporary strike); wears off after a day
+        public long HalfStrikeAt { get; set; }             // unix s when the half strike was given
         public long StrikeDecayAt { get; set; }            // unix s: when the oldest temporary strike was given / last wore off (a day after it, one goes)
     }
 
@@ -1928,7 +1930,7 @@ public class CPHInline
             //    makes a member profile for each Twitch player automatically.
             if (_standingsDirty || (DateTime.UtcNow - _lastStandingsPush).TotalMinutes >= 5)
             {
-                var rows = _players.Values.Where(p => !IsPractice(p.Username)).Select(p => new object[] { p.Username, p.GameId ?? "", p.Wins, p.Losses, p.Points, p.TwitchId ?? "", p.PeakMmr.HasValue ? (object)p.PeakMmr.Value : null, MmrSrc(p.Username), StrikeTotal(p), p.Sr.HasValue ? (object)p.Sr.Value : null, p.PermaStrikes }).ToList();
+                var rows = _players.Values.Where(p => !IsPractice(p.Username)).Select(p => new object[] { p.Username, p.GameId ?? "", p.Wins, p.Losses, p.Points, p.TwitchId ?? "", p.PeakMmr.HasValue ? (object)p.PeakMmr.Value : null, MmrSrc(p.Username), StrikeTotal(p), p.Sr.HasValue ? (object)p.Sr.Value : null, p.PermaStrikes, p.HalfStrike }).ToList();
                 // [NEW][WEB] per game mode tables: category -> [username, wins, losses, points]
                 var modes = new Dictionary<string, List<object[]>>();
                 foreach (var p in _players.Values)
@@ -4149,6 +4151,7 @@ public class CPHInline
         int n = 0;
         foreach (var p in _players.Values)
         {
+            if (p.HalfStrike > 0 && p.HalfStrikeAt > 0 && now - p.HalfStrikeAt >= 86400) { p.HalfStrike = 0; p.HalfStrikeAt = 0; n++; }
             if (p.Strikes <= 0) { p.StrikeDecayAt = 0; continue; }
             if (p.StrikeDecayAt <= 0) { p.StrikeDecayAt = now; n++; continue; }     // strikes from before this rule: the day starts now
             long days = (now - p.StrikeDecayAt) / 86400;
@@ -4162,22 +4165,31 @@ public class CPHInline
     {
         if (!isPrivileged) { Say("@" + user + " Only mods can " + (delta > 0 ? "give" : "remove") + " strikes."); return true; }
         string[] parts = (input ?? "").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 1) { Say("@" + user + " Usage: " + (delta > 0 ? "!strike @username [perma|toxicity|slurs]" : "!unstrike @username [perma]")); return true; }
+        if (parts.Length < 1) { Say("@" + user + " Usage: " + (delta > 0 ? "!strike @username [half|perma|toxicity|slurs]" : "!unstrike @username [half|perma]")); return true; }
         string target = parts[0].ToLower().TrimStart('@');
         string rest = string.Join(" ", parts.Skip(1));
         bool perma = PermaWords.IsMatch(rest);
+        bool half = !perma && System.Text.RegularExpressions.Regex.IsMatch(rest, @"(^|\s)(half|0\.5|\u00bd|1/2)(\s|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);   // 2 small things = 1 strike
         Player p;
         if (!_players.TryGetValue(target, out p)) { Say("@" + user + " Player \"" + target + "\" is not registered."); return true; }
         int before = StrikeTotal(p); string what;
         if (delta > 0)
         {
             if (before >= MaxStrikes) { Say("@" + user + " " + target + " already has the maximum of " + MaxStrikes + " strikes."); return true; }
-            if (perma) { p.PermaStrikes++; p.PermaReason = rest.Length > 60 ? rest.Substring(0, 60) : rest; what = "Permanent strike given to "; }
+            if (half)
+            {
+                if (p.HalfStrike == 0) { p.HalfStrike = 1; p.HalfStrikeAt = Now(); what = "Half strike given to "; }
+                else { p.HalfStrike = 0; p.HalfStrikeAt = 0; if (p.Strikes == 0) p.StrikeDecayAt = Now(); p.Strikes++; what = "Second half strike, a full strike given to "; }
+            }
+            else if (perma) { p.PermaStrikes++; p.PermaReason = rest.Length > 60 ? rest.Substring(0, 60) : rest; what = "Permanent strike given to "; }
             else { if (p.Strikes == 0) p.StrikeDecayAt = Now(); p.Strikes++; what = "Strike given to "; }
         }
         else
         {
-            if (before == 0) { Say("@" + user + " " + target + " already has no strikes."); return true; }
+            if (half) { if (p.HalfStrike == 0) { Say("@" + user + " " + target + " has no half strike."); return true; } p.HalfStrike = 0; p.HalfStrikeAt = 0; what = "Half strike removed from "; }
+            else if (before == 0 && p.HalfStrike == 0) { Say("@" + user + " " + target + " already has no strikes."); return true; }
+            else if (before == 0) { p.HalfStrike = 0; p.HalfStrikeAt = 0; what = "Half strike removed from "; }
+            else
             if (perma) { if (p.PermaStrikes == 0) { Say("@" + user + " " + target + " has no permanent strikes."); return true; } p.PermaStrikes--; what = "Permanent strike removed from "; }
             else if (p.Strikes > 0) { p.Strikes--; what = "Strike removed from "; }
             else { Say("@" + user + " " + target + " only has permanent strikes. Use !unstrike @" + target + " perma to remove one."); return true; }
@@ -4191,7 +4203,7 @@ public class CPHInline
             if (qe != null && qe.Status == "waiting") { RemoveFromQueue(target); extra = " They were taken out of the queue."; }
             extra = " " + target + " can't play customs until they lose a strike." + extra;
         }
-        Say("@" + user + " " + what + target + ": " + StrikeTotal(p) + "/" + MaxStrikes + (p.PermaStrikes > 0 ? " (" + p.PermaStrikes + " permanent)" : "") + "." + extra);
+        Say("@" + user + " " + what + target + ": " + StrikeTotal(p) + (p.HalfStrike > 0 ? " and a half" : "") + "/" + MaxStrikes + (p.PermaStrikes > 0 ? " (" + p.PermaStrikes + " permanent)" : "") + "." + extra);
         PublishState("queue_update", target + " strikes");
         return true;
     }
@@ -4203,7 +4215,7 @@ public class CPHInline
         Player p;
         if (!_players.TryGetValue(target, out p)) { Say("@" + user + " " + (target == user ? "You aren't" : target + " isn't") + " registered."); return true; }
         int t = StrikeTotal(p);
-        Say("@" + user + " " + (target == user ? "You have " : target + " has ") + t + "/" + MaxStrikes + " strikes" + (p.PermaStrikes > 0 ? " (" + p.PermaStrikes + " permanent, " + p.Strikes + " temporary)" : "") + "." + (t >= MaxStrikes ? " (not allowed to play customs)" : ""));
+        Say("@" + user + " " + (target == user ? "You have " : target + " has ") + t + (p.HalfStrike > 0 ? " and a half" : "") + "/" + MaxStrikes + " strikes" + (p.PermaStrikes > 0 ? " (" + p.PermaStrikes + " permanent, " + p.Strikes + " temporary)" : "") + "." + (t >= MaxStrikes ? " (not allowed to play customs)" : ""));
         return true;
     }
 

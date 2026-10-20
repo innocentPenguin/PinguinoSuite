@@ -356,6 +356,14 @@ public static class Harness
         Check(Players()["p1"]["Strikes"].ToString() == "2" && Q().Contains("p1"), "removing a strike lets them join again");
         Run("mod1", "!unstrike", "@p2", true);
         Check(Players()["p2"]["Strikes"].ToString() == "0" && CPHProxy.Sent.Any(m => m.Contains("no strikes")), "strikes never go below 0");
+        Run("mod1", "!strike", "@p2 half", true);
+        Check(Players()["p2"]["HalfStrike"].ToString() == "1" && Players()["p2"]["Strikes"].ToString() == "0" && CPHProxy.Sent.Any(m => m.Contains("Half strike given")), "a half strike is not yet a full strike");
+        Run("mod1", "!strike", "@p2 half", true);
+        Check(Players()["p2"]["HalfStrike"].ToString() == "0" && Players()["p2"]["Strikes"].ToString() == "1", "two half strikes make one strike");
+        Run("mod1", "!strike", "@p2 half", true); Run("mod1", "!unstrike", "@p2 half", true);
+        Check(Players()["p2"]["HalfStrike"].ToString() == "0" && Players()["p2"]["Strikes"].ToString() == "1", "!unstrike half takes the half back");
+        Run("mod1", "!unstrike", "@p2", true);
+        Check(Players()["p2"]["Strikes"].ToString() == "0", "back to zero");
         var decay = typeof(CPHInline).GetMethod("DecayStrikes", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         long dayLater = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 86400 + 30;
         decay.Invoke(bot, new object[] { dayLater });
