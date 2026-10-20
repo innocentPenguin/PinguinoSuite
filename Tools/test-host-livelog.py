@@ -15,6 +15,12 @@ with open(os.path.join(d, 'chat_logs', '2026-10-18.jsonl'), 'w', encoding='utf-8
     f.write(json.dumps({'t': 1784300000000, 'u': 'lvlmarshmello', 'i': '1', 'm': 'too old', 'c': 0}) + '\n')   # 2026-07-17 (before since+1d? same day) -> counted from the since day on
     f.write(json.dumps({'t': 1792362025772, 'u': 'lvlmarshmello', 'i': '1', 'm': 'hello from chatty', 'c': 0}) + '\n')
     f.write(json.dumps({'t': 1792362025999, 'u': 'normalguy', 'i': '2', 'm': 'ignore me', 'c': 0}) + '\n')
+# public log site day files + Streamer.bot sidecar: per user per UTC day the count is the max of the sources
+os.makedirs(os.path.join(root, 'chat_logs', '2026', '10'), exist_ok=True); os.makedirs(os.path.join(root, 'chat_logs', 'sidecar'), exist_ok=True)
+with open(os.path.join(root, 'chat_logs', '2026', '10', '2026-10-10.txt'), 'w', encoding='utf-8') as f:
+    for i in range(5): f.write('[2026-10-10 12:00:%02d] #innocentpenguin_ normalguy: line %d\n' % (i, i))
+    for i in range(4): f.write('[2026-10-11 12:00:%02d] #innocentpenguin_ normalguy: line %d\n' % (i, i))
+json.dump({'counts': {'normalguy': {'2026-10-10': 8, '2026-10-11': 2, '2026-10-09': 1}}}, open(os.path.join(root, 'chat_logs', 'sidecar', 'streamerbot_daily_counts.json'), 'w'))
 def api(path, body=None):
     rq = urllib.request.Request(B + path, data=None if body is None else json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
     return json.load(urllib.request.urlopen(rq, timeout=60))
@@ -37,7 +43,7 @@ try:
     tot = json.load(open(os.path.join(root, 'boards', 'totals.json'))) if os.path.exists(os.path.join(root, 'boards', 'totals.json')) else {}
     um = tot.get('users', {})
     chk('the hidden user gets profile 100 + Chatty 2 + live 1', um.get('lvlmarshmello', {}).get('messages') == 103, um.get('lvlmarshmello'))
-    chk('a normal user is NOT overlaid (profile only)', um.get('normalguy', {}).get('messages', 50) == 50, um.get('normalguy'))
+    chk('per-day max: SB 8 vs site 5 (+3), SB 2 vs site 4 (+0), SB-only day (+1), Host today (+1) -> 55', um.get('normalguy', {}).get('messages') == 55, um.get('normalguy'))
     chk('hidden_sources.json was seeded with lvlmarshmello', 'lvlmarshmello' in json.load(open(os.path.join(root, 'chat_logs', 'hidden_sources.json')))['users'])
     again = api('/api/boards/refresh', {}); tot = json.load(open(os.path.join(root, 'boards', 'totals.json')))
     chk('a second refresh does not double count', tot['users']['lvlmarshmello']['messages'] == 103, tot['users'].get('lvlmarshmello'))

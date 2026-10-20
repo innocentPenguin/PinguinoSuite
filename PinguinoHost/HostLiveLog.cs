@@ -81,6 +81,111 @@ namespace PinguinoHost
             return res;
         }
 
+        public class Extra { public int Total; public int NewDays; public SortedDictionary<string, int> PerMonth = new SortedDictionary<string, int>(); public string First = "", Last = ""; public int PeakCount; public string PeakDay = ""; public long ExtraSb, ExtraHost; }
+
+        static string ChatRoot { get { return Path.Combine(Root, "chat_logs"); } }
+        static Dictionary<string, Dictionary<string, int>> _siteCache; static string _siteSig = "";
+
+        /// <summary>login -> UTC day -> messages in the public log site day files (Data\chat_logs\YYYY\MM\YYYY-MM-DD.txt), cached until a file changes.</summary>
+        static Dictionary<string, Dictionary<string, int>> SiteDays()
+        {
+            var files = new List<FileInfo>();
+            try { foreach (var y in Directory.EnumerateDirectories(ChatRoot)) { string yn = Path.GetFileName(y); if (yn.Length != 4 || !yn.All(char.IsDigit)) continue; foreach (var f in Directory.EnumerateFiles(y, "*.txt", SearchOption.AllDirectories)) files.Add(new FileInfo(f)); } } catch (Exception) { }
+            string sig = files.Count + "|" + files.Sum(f => f.Length) + "|" + (files.Count == 0 ? 0 : files.Max(f => f.LastWriteTimeUtc.Ticks));
+            if (_siteCache != null && sig == _siteSig) return _siteCache;
+            var res = new Dictionary<string, Dictionary<string, int>>();
+            foreach (var fi in files)
+            {
+                string fday = Path.GetFileNameWithoutExtension(fi.Name); if (fday.Length != 10) continue;
+                try
+                {
+                    foreach (var line in File.ReadLines(fi.FullName, Encoding.UTF8))
+                    {   // [2026-02-15 03:52:29] #channel user: text   (system lines are "* text")
+                        int h = line.IndexOf("] #", StringComparison.Ordinal); if (h < 0) continue;
+                        string day = line.Length > 11 && line[0] == '[' && line[11] == ' ' ? line.Substring(1, 10) : fday;
+                        int sp = line.IndexOf(' ', h + 3); if (sp < 0) continue;
+                        int co = line.IndexOf(':', sp + 1); if (co < 0) continue;
+                        string u = line.Substring(sp + 1, co - sp - 1).Trim().ToLowerInvariant(); if (u.Length == 0 || u == "*" || u.IndexOf(' ') >= 0) continue;
+                        Dictionary<string, int> d; if (!res.TryGetValue(u, out d)) res[u] = d = new Dictionary<string, int>();
+                        int c; d.TryGetValue(day, out c); d[day] = c + 1;
+                    }
+                }
+                catch (Exception) { }
+            }
+            _siteCache = res; _siteSig = sig; return res;
+        }
+
+        /// <summary>login (raw, not alias-folded) -> total and per-month message counts straight from the day files; the viewer profiles are built at one moment and can lag behind newer day files.</summary>
+        public static Dictionary<string, KeyValuePair<int, Dictionary<string, int>>> SiteCounts()
+        {
+            var res = new Dictionary<string, KeyValuePair<int, Dictionary<string, int>>>();
+            foreach (var kv in SiteDays()) { var pm = new Dictionary<string, int>(); int tot = 0; foreach (var d in kv.Value) { tot += d.Value; string mo = d.Key.Substring(0, 7); int c; pm.TryGetValue(mo, out c); pm[mo] = c + d.Value; } res[kv.Key] = new KeyValuePair<int, Dictionary<string, int>>(tot, pm); }
+            return res;
+        }
+
+        /// <summary>Message counts that the public log sites lack. Per user (aliases folded onto the main login) and per UTC day the board count is
+        /// max(public log sites, Streamer.bot debug-log sidecar, Host recording); this returns the part above the site count, so profiles/boards can add it.
+        /// Inputs are read-only: Data\chat_logs\sidecar\streamerbot_daily_counts.json (counts only), Data\chat_logs\live\*.jsonl, the day files.</summary>
+        public static Dictionary<string, Extra> Extras()
+        {
+            var res = new Dictionary<string, Extra>();
+            try
+            {
+                Func<string, string> canon = l => Boards.CanonLogin(l);
+                var site = new Dictionary<string, Dictionary<string, int>>(); var sbD = new Dictionary<string, Dictionary<string, int>>(); var hoD = new Dictionary<string, Dictionary<string, int>>();
+                Action<Dictionary<string, Dictionary<string, int>>, string, string, int> add = (m, u, day, n) => { Dictionary<string, int> d; if (!m.TryGetValue(u, out d)) m[u] = d = new Dictionary<string, int>(); int c; d.TryGetValue(day, out c); d[day] = c + n; };
+                foreach (var kv in SiteDays()) foreach (var dn in kv.Value) add(site, canon(kv.Key), dn.Key, dn.Value);
+                string sbp = Path.Combine(ChatRoot, "sidecar", "streamerbot_daily_counts.json");
+                if (File.Exists(sbp))
+                {
+                    var j = JObject.Parse(File.ReadAllText(sbp, Encoding.UTF8).TrimStart('﻿'));
+                    if (j["counts"] is JObject cs) foreach (var up in cs.Properties()) if (up.Value is JObject dd) foreach (var dp in dd.Properties()) add(sbD, canon(up.Name.ToLowerInvariant()), dp.Name, (int?)dp.Value ?? 0);
+                }
+                if (Directory.Exists(LiveDir))
+                    foreach (var f in Directory.EnumerateFiles(LiveDir, "*.jsonl"))
+                        foreach (var line in File.ReadLines(f, Encoding.UTF8))
+                        {
+                            if (line.Length < 10 || line.IndexOf("\"u\"", StringComparison.Ordinal) < 0) continue;
+                            try { var j = JObject.Parse(line.TrimStart('﻿')); string u = ((string)j["u"] ?? "").ToLowerInvariant(); if (u == "") continue; long t = (long?)j["t"] ?? 0; add(hoD, canon(u), DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime.ToString("yyyy-MM-dd"), 1); }
+                            catch (Exception) { }
+                        }
+                var users = new HashSet<string>(sbD.Keys); users.UnionWith(hoD.Keys);
+                foreach (var u in users)
+                {
+                    Dictionary<string, int> s, b, h; site.TryGetValue(u, out s); sbD.TryGetValue(u, out b); hoD.TryGetValue(u, out h);
+                    var days = new HashSet<string>(); if (b != null) days.UnionWith(b.Keys); if (h != null) days.UnionWith(h.Keys);
+                    Extra ex = null;
+                    foreach (var day in days)
+                    {
+                        int sv = 0, bv = 0, hv = 0; if (s != null) s.TryGetValue(day, out sv); if (b != null) b.TryGetValue(day, out bv); if (h != null) h.TryGetValue(day, out hv);
+                        int best = Math.Max(sv, Math.Max(bv, hv)); if (best <= sv) continue;
+                        if (ex == null) ex = new Extra();
+                        int more = best - sv; ex.Total += more; if (sv == 0) ex.NewDays++;
+                        string mo = day.Substring(0, 7); int c; ex.PerMonth.TryGetValue(mo, out c); ex.PerMonth[mo] = c + more;
+                        if (ex.First == "" || string.CompareOrdinal(day, ex.First) < 0) ex.First = day;
+                        if (string.CompareOrdinal(day, ex.Last) > 0) ex.Last = day;
+                        if (best > ex.PeakCount) { ex.PeakCount = best; ex.PeakDay = day; }
+                        if (hv >= bv) ex.ExtraHost += more; else ex.ExtraSb += more;
+                    }
+                    if (ex != null) res[u] = ex;
+                }
+            }
+            catch (Exception e) { Clog.Warn("livelog", "extras: " + e.Message); }
+            return res;
+        }
+
+        /// <summary>Writes Data\chat_logs\sidecar\message_extra.json for Pipeline\push-profiles.mjs (profiles add these on top of the log-site counts).</summary>
+        public static void WriteExtras(Dictionary<string, Extra> ex)
+        {
+            try
+            {
+                var u = new JObject(); foreach (var kv in ex.OrderBy(k => k.Key)) u[kv.Key] = new JObject { { "messages", kv.Value.Total }, { "newDays", kv.Value.NewDays }, { "first", kv.Value.First }, { "last", kv.Value.Last }, { "peakDay", kv.Value.PeakDay }, { "peakCount", kv.Value.PeakCount }, { "perMonth", JObject.FromObject(kv.Value.PerMonth) } };
+                string dir = Path.Combine(ChatRoot, "sidecar"); Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "message_extra.json"), new JObject { { "rule", "per user per UTC day: max(public log sites, Streamer.bot sidecar, Host recording); this file holds the part above the log-site count, aliases folded onto the main login" }, { "at", DateTime.UtcNow.ToString("o") }, { "users", u } }.ToString(), new UTF8Encoding(false));
+            }
+            catch (Exception e) { Clog.Warn("livelog", "write extras: " + e.Message); }
+        }
+
         /// <summary>GET /api/livelog: what the recording holds, the opted-out users and a rough "estimated missing" note (report only, never added to the boards).</summary>
         public static JObject Api()
         {

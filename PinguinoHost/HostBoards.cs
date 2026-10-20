@@ -300,7 +300,15 @@ namespace PinguinoHost
                 try
                 {
                     LiveLog.BackfillFromChatty();
-                    foreach (var kv in LiveLog.Overlay()) { if (kv.Value.Total <= 0) continue; var o = U(kv.Key); o["messages"] = (int)o["messages"] + kv.Value.Total; foreach (var pm in kv.Value.PerMonth) addM(mMsgs, pm.Key, kv.Key, pm.Value, false); }
+                    // profiles are built at one moment and can lag behind newer day files: never show less than the day files hold
+                    foreach (var sc in LiveLog.SiteCounts())
+                    {
+                        JObject uo; int have = users.TryGetValue(sc.Key, out uo) ? (int)uo["messages"] : 0; if (sc.Value.Key <= have) continue;
+                        var o = U(sc.Key); o["messages"] = sc.Value.Key;
+                        foreach (var m in sc.Value.Value) { Dictionary<string, int> mm; int cur = 0; if (mMsgs.TryGetValue(m.Key, out mm)) mm.TryGetValue(sc.Key, out cur); if (m.Value > cur) addM(mMsgs, m.Key, sc.Key, m.Value - cur, false); }
+                    }
+                    var exm = LiveLog.Extras(); LiveLog.WriteExtras(exm);
+                    foreach (var kv in exm) { if (kv.Value.Total <= 0) continue; var o = U(kv.Key); o["messages"] = (int)o["messages"] + kv.Value.Total; foreach (var pm in kv.Value.PerMonth) addM(mMsgs, pm.Key, kv.Key, pm.Value, false); }
                 }
                 catch (Exception ex) { Clog.Warn("boards", "hidden-source overlay failed: " + ex.Message); }
                 // watch streaks
