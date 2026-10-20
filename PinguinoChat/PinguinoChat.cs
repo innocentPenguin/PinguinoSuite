@@ -399,6 +399,7 @@ public class CPHInline
         public string RolesUrl { get; set; } = "https://innocentpenguin.com/api/roles";   // the website's mods / VIPs / bots list (fetched hourly)
 
         // Getting to know the community
+        public string ModApplyUrl { get; set; } = "https://innocentpenguin.com/mod-apply";   // "make me mod" gets this pointer
         public bool LogChat { get; set; } = true;                 // save live chat to %AppData%\BVQ\chat_logs (Twitch has no chat history to download later)
         public bool StudyOnStreamStart { get; set; } = true;      // when the stream goes live, read the new logs and learn
         public int StudyMinHours { get; set; } = 3;               // at most one study every N hours
@@ -712,7 +713,7 @@ public class CPHInline
             { welcome = true; _lastWelcome = Now(); }
             if (mention)
             {
-                if (ModActionAsk(text)) { string mr = ModRefusal(login); if (mr != "") Say(cx, mr); return; }   // never a timeout / ban / rank change from the bot: "ask a mod"
+                if (!cx.Broadcaster && ModActionAsk(text)) { string mr = ModRefusal(login, text); if (mr != "") Say(cx, mr); return; }   // never a timeout / ban / rank change from the bot: "ask a mod"
                 bool quiet = Hushed(login) || Flooding(login);                    // told to be quiet / a real flood: stays ignored on purpose
                 if (!quiet && RepeatedPrompt(login, text)) quiet = true;          // the same prompt again and again: answered once, then ignored
                 if (!quiet && OverShare(login)) quiet = true;                     // had their share of the bot's attention: others get a turn (no Miss: it is not a failure)
@@ -2399,7 +2400,10 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         // a request aimed at the bot ("can you ban him", "timeout @x", "make me a mod"), not talk about a ban in the news
         return RxModCueBefore.IsMatch(t) || RxModImperative.IsMatch(t) || RxModTarget.IsMatch(t);
     }
-    string ModRefusal(string login)
+    static readonly Regex RxTimeoutAsk = new Regex(@"\b(time\s*out|timeout|time\s+\S+\s+out)\b", RegexOptions.IgnoreCase);
+    static readonly Regex RxModRankAsk = new Regex(@"\b(make|give|get)\s+(me|us)\s+(a\s+)?(mod|moderator)\b|\bmod\s+me\b", RegexOptions.IgnoreCase);
+    // "time him out": no reply at all. "make me mod": a pointer to the application page. Every other mod ask: "ask a mod". Once a minute per viewer.
+    string ModRefusal(string login, string text)
     {
         lock (_lock)
         {
@@ -2407,6 +2411,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             if (_modAsked.TryGetValue(login, out last) && now - last < 60) return "";
             _modAsked[login] = now;
         }
+        if (RxTimeoutAsk.IsMatch(text ?? "")) return "";
+        if (RxModRankAsk.IsMatch(text ?? "")) { string u = (_cfg.ModApplyUrl ?? "").Trim(); return u == "" ? "Mod spots are not handed out in chat. Ask a mod." : "Want to be a mod? Apply here: " + u; }
         string[] v = { "Timeouts, bans and ranks are for the mods. Ask one of them.", "That one is for a mod, not me. Ask a mod.", "I don't do mod stuff. Ask a mod." };
         return v[_rng.Next(v.Length)];
     }

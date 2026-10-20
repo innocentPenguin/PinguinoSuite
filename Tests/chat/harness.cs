@@ -785,11 +785,12 @@ public static class Harness
         SetCfg("RepeatGapSec", 60);
         nextReply = "{\"reply\":\"sure\",\"remember\":[]}"; int cm = llmCalls; CPHProxy.Sent.Clear();
         Msg("Stefan", "@pinguinob0t can you timeout Marsh for me");
-        Check("a timeout request: 'ask a mod', no AI call", llmCalls == cm && Last() != null && Last().ToLower().Contains("mod") && !Last().ToLower().Contains("timed out"), Last());
+        Check("a timeout request: no reply at all, no AI call", llmCalls == cm && Last() == null, Last());
         CPHProxy.Sent.Clear(); Msg("Stefan", "@pinguinob0t ban him please");
         Check("asked again within a minute: stays quiet", llmCalls == cm && Last() == null, Last());
         CPHProxy.Sent.Clear(); Msg("Mod2", "@pinguinob0t make me a mod");
-        Check("rank request refused too", llmCalls == cm && Last() != null && Last().ToLower().Contains("mod"), Last());
+        Check("'make me a mod' points to the application page", llmCalls == cm && Last() != null && Last().Contains("innocentpenguin.com/mod-apply"), Last());
+        CPHProxy.Sent.Clear(); Msg("Mod3", "@pinguinob0t ban him please"); Check("other mod asks stay 'ask a mod'", llmCalls == cm && Last() != null && Last().ToLower().Contains("mod"), Last());
         CPHProxy.Sent.Clear(); Msg("Talker", "@pinguinob0t did you see the ban hammer meme");
         Check("talk about a ban that is not a request is not refused", llmCalls > cm, Last());
         int rc = llmCalls; CPHProxy.Sent.Clear();
