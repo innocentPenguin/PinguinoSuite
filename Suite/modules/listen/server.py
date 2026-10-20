@@ -44,6 +44,10 @@ def _log_event(ev):
         clog("error" if ev.get("state") == "error" else "warn" if bad else "info", f"speech model {ev.get('state')}: {ev.get('detail', '')}", "asr")
     elif t == "live":
         clog("info", f"mic {ev.get('state')}", "live")
+    elif t == "mic_alert":
+        a = ev.get("alert")
+        state["mic_alert"] = a
+        clog("error" if a else "info", a["message"] if a else "microphone OK again", "mic")
     elif ev.get("error") or ev.get("state") == "error":
         clog("error", ev.get("error") or ev.get("detail") or json.dumps(ev)[:300], str(t or "event"))
 
@@ -71,7 +75,7 @@ class Hub:
 
 
 hub = Hub()
-state = {"asr": {"state": "loading", "detail": ""}}
+state = {"asr": {"state": "loading", "detail": ""}, "mic_alert": None}
 
 
 def on_asr_state(s, d=""):
@@ -81,6 +85,24 @@ def on_asr_state(s, d=""):
 
 asr = asr_mod.ASR(on_asr_state)
 mic = live_mod.Live(asr, hub.emit)
+
+
+def start_mic():
+    """Open the saved mic by NAME (indexes shift). If it is gone, fall back to the Windows default input and SAY SO; with no input at all, refuse."""
+    r = live_mod.resolve_device(cfg.settings())
+    if r is None:
+        a = {"kind": "missing", "message": "No microphone was found. Nothing is being recorded."}
+        hub.emit({"type": "mic_alert", "alert": a})
+        raise RuntimeError(a["message"])
+    if r["how"] == "default_fallback":
+        a = {"kind": "fallback", "message": f"Your microphone '{r['wanted']}' was not found. Using '{r['name']}' instead; check it is the right one.",
+             "wanted": r["wanted"], "using": r["name"]}
+        hub.emit({"type": "mic_alert", "alert": a})
+    else:
+        hub.emit({"type": "mic_alert", "alert": None})
+    mic.resolver = lambda: (live_mod.resolve_device(cfg.settings()) or {"index": None})["index"]
+    sid = mic.start(r["index"])
+    return sid
 jobs = ingest.Jobs(asr, hub.emit)
 
 
@@ -200,15 +222,16 @@ def prestream():
     a = state["asr"]
     items = [{"id": "model", "label": "Speech model loaded", "status": "pass" if a["state"] == "ready" else "fail" if a["state"] == "error" else "warn", "detail": a.get("detail", "")}]
     try:
-        devs = live_mod.list_devices()
-        want = cfg.settings().get("device")
-        names = {d["index"]: d["name"] for d in devs}
-        if not devs:
+        r = live_mod.resolve_device(cfg.settings())
+        if r is None:
             items.append({"id": "mic", "label": "Microphone available", "status": "fail", "detail": "no input devices found"})
-        elif want is not None and want not in names:
-            items.append({"id": "mic", "label": "Selected microphone present", "status": "fail", "detail": f"device {want} is not connected"})
+        elif r["how"] == "default_fallback":
+            items.append({"id": "mic", "label": "Selected microphone present", "status": "fail",
+                          "detail": f"'{r['wanted']}' is not connected; it would record from '{r['name']}' instead"})
         else:
-            items.append({"id": "mic", "label": "Microphone available", "status": "pass", "detail": names.get(want, "default input")})
+            items.append({"id": "mic", "label": "Microphone available", "status": "pass", "detail": r["name"]})
+        if state.get("mic_alert") and mic.running:
+            items.append({"id": "mic_live", "label": "Microphone is picking up sound", "status": "fail", "detail": state["mic_alert"]["message"]})
     except Exception as e:  # noqa: BLE001
         items.append({"id": "mic", "label": "Microphone available", "status": "warn", "detail": str(e)[:120]})
     items.append({"id": "listening", "label": "Listening", "status": "pass", "detail": "listening" if mic.running else "idle (starts automatically when you go live)"})
@@ -219,7 +242,7 @@ def prestream():
 @app.get("/api/status")
 def status():
     st = cfg.settings()
-    return {"asr": state["asr"], "listening": mic.running, "live_session": mic.session_id if mic.running else None, "settings": st,
+    return {"asr": state["asr"], "mic_alert": state.get("mic_alert"), "listening": mic.running, "live_session": mic.session_id if mic.running else None, "settings": st,
             "stats": db.one("SELECT COUNT(*) total, SUM(status='corrected') corrected, SUM(status='approved') approved, "
                             "SUM(status='new' AND unsure>0) to_review, SUM(CASE WHEN status!='new' THEN end-start ELSE 0 END) reviewed_secs FROM segments")}
 
@@ -261,8 +284,9 @@ class Start(BaseModel):
 @app.post("/api/live/start")
 def live_start(b: Start):
     try:
-        cfg.save_settings({"device": b.device})
-        return {"session": mic.start(b.device)}
+        info = next((d for d in live_mod.list_devices() if d["index"] == b.device), None)
+        cfg.save_settings({"device": b.device, "device_name": info["name"] if info else None, "device_hostapi": info["api"] if info else None})
+        return {"session": start_mic()}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, str(e))
 
@@ -273,7 +297,7 @@ def live_auto():
     if mic.running:
         return {"session": mic.session_id, "already": True}
     try:
-        return {"session": mic.start(cfg.settings()["device"])}
+        return {"session": start_mic()}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, str(e))
 

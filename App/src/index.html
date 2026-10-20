@@ -240,7 +240,7 @@ pages.dashboard=()=>{
   B.t_modules=tile('Modules',run+'/'+tot,down.length?esc(down.map(m=>m.name).join(', '))+' not running':'all healthy',down.length?'warn':'ok');
   B.t_prestream=tile('Pre-stream',pr?(pr.fail?pr.fail+' fail':pr.warn?pr.warn+' warn':'All ok'):'—',pr?`${pr.pass} ok · ${pr.warn} warn · ${pr.fail} fail`:'not run yet',pr?(pr.fail?'bad':pr.warn?'warn':'ok'):'','console');
   B.t_errors=PF.thresholds.tile_errors_hide_zero&&!errs?'':tile('Errors ('+PF.thresholds.errors_min+' min)',errs,errs?'open the Console':'clean',errs?'bad':'ok','console');
-  B.listen=`<div class="card"><div class="row"><h3 style="margin:0">PenguinComm · Listen</h3>${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}<span class="sm faint sp">${stats.total||0} lines · ${(stats.corrected||0)+(stats.approved||0)} verified${stats.to_review?` · <span style="color:var(--warn)">${stats.to_review} to review</span>`:''}</span></div>
+  B.listen=`<div class="card"><div class="row"><h3 style="margin:0">PenguinComm · Listen</h3>${st?.listening?'<span class="pill ok">listening</span>':'<span class="pill">idle</span>'}<span class="sm faint sp">${stats.total||0} lines · ${(stats.corrected||0)+(stats.approved||0)} verified${stats.to_review?` · <span style="color:var(--warn)">${stats.to_review} to review</span>`:''}</span></div>${micBanner()}
         <div style="margin-top:8px">${L.lines.length?L.lines.map(s=>`<div class="ln"><span class="t">${fmt(s.t)}</span><div>${wordsHtml(s.words)}</div></div>`).join(''):`<div class="dim sm">${st?.listening?'Listening. Nothing heard yet.':lm?.state==='running'?'Not listening right now: the mic starts with the Suite, so check the microphone in Listen (Console shows why).':'PinguinoListen is not running.'}</div>`}</div>
         <div class="row" style="margin-top:10px"><button class="sm" data-go="comm">Open PenguinComm</button><button class="sm" data-go="voice">Voice Studio</button>${st?.listening?'':'<button id="d-listen" class="pri sm">Start listening</button>'}</div></div>`;
   B.activity=`<div class="card"><h3>Activity</h3><div class="evt" style="max-height:260px;overflow:auto">${S.events.slice(-14).reverse().map(e=>`<div>${new Date(e.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} <b class="${e.type==='live'?'lv':e.type==='hook'?'hk':''}">${esc(e.type)}</b> ${esc(e.id||e.state||e.title||'')}</div>`).join('')||'<span class="faint">Nothing yet</span>'}</div></div>`;
@@ -641,7 +641,7 @@ function updateComm(){const sum=$('#comm-sum');if(!sum||route!=='comm')return;
   const l=commMod('listen'),v=commMod('voice'),both=l&&v;
   const mic=L.status?(L.status.listening?'<span class="pill ok">mic on</span>':'<span class="pill">mic idle</span>'):'';
   const issues=(C.pr&&C.pr.items||[]).filter(i=>(i.module==='listen'||i.module==='voice')&&i.status!=='pass');
-  sum.innerHTML=`${both?`<span class="chips">${[['both','Both'],['listen','Listen'],['speak','Speak']].map(x=>`<span class="chip ${COMM.tab===x[0]?'on':''}" data-ctab="${x[0]}">${x[1]}</span>`).join('')}</span>`:''}
+  sum.innerHTML=`${micBanner()}${both?`<span class="chips">${[['both','Both'],['listen','Listen'],['speak','Speak']].map(x=>`<span class="chip ${COMM.tab===x[0]?'on':''}" data-ctab="${x[0]}">${x[1]}</span>`).join('')}</span>`:''}
     <span class="sm dim">Listen = you talking to the bots. Speak = the bots talking back.</span>${mic}
     ${issues.map(i=>{if(i.help)HX[i.module+':'+i.id]=i.help;return `<span class="pr ${i.status} clk" data-hk="${esc(i.module+':'+i.id)}" data-hm="${esc(i.module)}" data-hi="${esc(i.id)}"><span class="d"></span><span class="sm">${esc(i.label)}</span></span>`}).join('')}
     <span class="sp"></span>${hq('comm')}`;
@@ -1119,7 +1119,10 @@ async function loadDevice(){try{D=await (await fetch('/api/device')).json()}catc
 async function loadMulti(){try{const m=await (await fetch('/api/modules/multi/get?path=/api/dashboard')).json();
   M.ok=true;M.rate=m.rate_per_min??m.last_minute??null;M.queue=m.open_cards??0;M.chatters=m.unique_chatters_hour??null;M.hour=m.messages_last_hour??null}
   catch{M.ok=false;M.rate=null}if(route==='dashboard')draw()}
-async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status')).json();L.status=st;
+/* Listen raises mic_alert when the saved mic is missing (fallback / none) or the input has been silent for 30 s: never fail quietly. */
+function micBanner(){const a=L.status&&L.status.mic_alert;return a?`<div class="sm" style="background:#5a1d1d;color:#fff;border:1px solid #c44;border-radius:8px;padding:8px 12px;margin:8px 0;font-weight:600">⚠ ${esc(a.message)}</div>`:''}
+function micAlertWatch(){const a=L.status&&L.status.mic_alert,k=a?a.kind+'|'+a.message:'';if(k&&k!==L.alertSeen){const msg=a.message;toast(msg);try{sfx('module_down')}catch{}try{if(PF.notify.desktop&&window.Notification&&Notification.permission==='granted')new Notification('PinguinoSuite',{body:msg})}catch{}}L.alertSeen=k}
+async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status')).json();L.status=st;micAlertWatch();
   let sid=st.live_session;if(!sid){const ss=await (await fetch(LISTEN+'/api/sessions')).json();sid=ss.find(s=>s.segments)?.id}
   L.lines=sid?(await (await fetch(`${LISTEN}/api/segments?session=${sid}&limit=500`)).json()).slice(-5):[]}catch{L.status=null;L.lines=[]}
   if(route==='dashboard')draw();if(route==='comm')updateComm()}

@@ -204,6 +204,7 @@ let ws;function connect(){ws=new WebSocket(`ws://${location.host}/ws`);
     else if(m.type==='level'){$('#meter i').style.width=Math.round(m.rms*100)+'%';$('#meter').classList.toggle('sp',m.speaking)}
     else if(m.type==='segment'){const f=$('#feed');if(f.querySelector('.dim'))f.innerHTML='';const near=f.scrollHeight-f.scrollTop-f.clientHeight<80;f.append(segEl(m.segment));if(near)f.scrollTop=f.scrollHeight}
     else if(m.type==='live'){setLive(m.state==='listening')}
+    else if(m.type==='mic_alert'){showAlert(m.alert);if(m.alert)toast(m.alert.message,1)}
     else if(m.type==='job'){if($('#tab-sources').classList.contains('on'))loadJobs()}
     else if(m.type==='toast')toast(m.message);else if(m.type==='error')toast(m.message,1)};
   ws.onclose=()=>setTimeout(connect,1500)}
@@ -211,10 +212,11 @@ connect();
 
 // ---------- live
 let listening=false;
+function showAlert(a){let el=$('#micalert');if(!el){el=document.createElement('div');el.id='micalert';el.style.cssText='display:none;background:#5a1d1d;color:#fff;border:1px solid #c44;border-radius:8px;padding:10px 14px;margin:8px 0;font-weight:600';const g=$('#go');g.parentNode.insertAdjacentElement('afterend',el)}el.style.display=a?'block':'none';el.textContent=a?'⚠ '+a.message:''}
 function setLive(on){listening=on;const b=$('#go');b.textContent=on?'■ Stop':'● Start listening';b.classList.toggle('stop',on);b.classList.toggle('pri',!on);$('#live-state').textContent=on?'listening…':''}
 (async()=>{const [devs,st]=await Promise.all([api('/api/devices'),api('/api/status')]);
   $('#dev').innerHTML='<option value="">System default mic</option>'+devs.map(d=>`<option value="${d.index}">${esc(d.name)} (${esc(d.api)})</option>`).join('');
-  if(st.settings.device!=null)$('#dev').value=st.settings.device;setLive(st.listening);
+  {const s=st.settings,d=devs.find(x=>s.device_name&&x.name===s.device_name&&(!s.device_hostapi||x.api===s.device_hostapi))||devs.find(x=>s.device_name&&x.name===s.device_name)||(!s.device_name&&devs.find(x=>x.index===s.device));if(d)$('#dev').value=d.index}setLive(st.listening);showAlert(st.mic_alert);
   $('#s-chan').value=st.settings.channel;$('#s-auto').checked=st.settings.autolearn;
   if(st.live_session)for(const s of await api('/api/segments?session='+st.live_session))$('#feed').append(segEl(s))})();
 $('#go').onclick=async()=>{try{if(listening){await api('/api/live/stop',{method:'POST'});setLive(false)}else{

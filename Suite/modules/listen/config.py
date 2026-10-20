@@ -25,7 +25,9 @@ DEFAULTS = {
     "autolearn_clip_days": 30,
     "yellow": 0.75,            # word probability below this -> yellow (unsure)
     "red": 0.45,               # word probability below this -> red (very unsure)
-    "device": None,
+    "device": None,            # legacy sounddevice index; indexes shift when devices come and go, so the NAME below wins
+    "device_name": None,       # the chosen mic by name (+ host API), resolved to the current index at every start
+    "device_hostapi": None,
 }
 
 

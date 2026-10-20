@@ -18,6 +18,8 @@ BLOCK_S = 0.032
 SILENCE_END_S = 0.8
 MAX_UTT_S = 25.0
 MIN_UTT_S = 0.4
+SILENT_RMS = 0.0015       # below this the input is dead-quiet (a live mic always has some noise floor)
+SILENT_ALERT_S = 30.0     # this long without signal while listening = alert
 
 
 def list_devices() -> list:
@@ -27,6 +29,40 @@ def list_devices() -> list:
         if d["max_input_channels"] > 0:
             out.append({"index": i, "name": d["name"], "api": apis.get(d["hostapi"], ""), "rate": int(d["default_samplerate"])})
     return out
+
+
+def resolve_device(st: dict, devices: list | None = None, default_index: int | None = None) -> dict | None:
+    """Which input device to open NOW. The mic is saved by name because sounddevice indexes shift whenever a device is plugged in,
+    removed or reordered (Voicemeeter, CABLE). Returns {index, name, how, wanted} or None when there is no input device at all.
+    how: name | name_ci | name_part | index | default | default_fallback (the chosen mic is gone, the Windows default was used instead)."""
+    devs = list_devices() if devices is None else devices
+    if not devs:
+        return None
+    name, api, idx = (st.get("device_name") or ""), (st.get("device_hostapi") or ""), st.get("device")
+    wanted = name or (f"device #{idx}" if idx is not None else "")
+
+    def hit(d, how):
+        return {"index": d["index"], "name": d["name"], "how": how, "wanted": wanted}
+    if name:
+        for ok, how in ((lambda d: d["name"] == name and (not api or d["api"] == api), "name"),
+                        (lambda d: d["name"] == name, "name"),
+                        (lambda d: d["name"].lower() == name.lower(), "name_ci"),
+                        (lambda d: name.lower() in d["name"].lower() or d["name"].lower() in name.lower(), "name_part")):
+            for d in devs:
+                if ok(d):
+                    return hit(d, how)
+    elif idx is not None:
+        for d in devs:
+            if d["index"] == idx:
+                return hit(d, "index")
+    if default_index is None:
+        try:
+            default_index = sd.default.device[0]
+        except Exception:  # noqa: BLE001
+            default_index = None
+    d = next((x for x in devs if x["index"] == default_index), None) or devs[0]
+    r = hit(d, "default_fallback" if wanted else "default")
+    return r
 
 
 def _to16k(x: np.ndarray, rate: int) -> np.ndarray:
@@ -47,6 +83,10 @@ class Live:
         self._utts = queue.Queue()
         self._stream = None
         self._t0 = 0.0
+        self.alert = None          # {"kind": "silent"|..., "message": ...} while the mic looks dead
+        self.resolver = None       # callable -> device index; used to reopen the stream when it dies
+        self._last_loud = 0.0
+        self._reopened = False
 
     def start(self, device=None):
         if self.running:
@@ -71,6 +111,8 @@ class Live:
             raise RuntimeError(f"could not open mic: {err}")
         self.running = True
         self._t0 = time.time()
+        self._last_loud = self._t0
+        self._reopened = False
         threading.Thread(target=self._vad_loop, daemon=True).start()
         threading.Thread(target=self._asr_loop, daemon=True).start()
         self.emit({"type": "live", "state": "listening", "session": self.session_id})
@@ -89,6 +131,39 @@ class Live:
         db.run("UPDATE sessions SET status='done', duration=? WHERE id=?", (time.time() - self._t0, self.session_id))
         self.emit({"type": "live", "state": "stopped", "session": self.session_id})
 
+    def _health(self, now: float, rms: float | None):
+        """Watchdog: if the input stays dead-quiet (or stops delivering blocks) for SILENT_ALERT_S, raise an alert once and try one reopen.
+        An alert clears as soon as real signal returns."""
+        if rms is not None and rms > SILENT_RMS:
+            self._last_loud = now
+            if self.alert:
+                self.alert = None
+                self.emit({"type": "mic_alert", "alert": None})
+            return
+        if self.alert or now - self._last_loud < SILENT_ALERT_S:
+            return
+        self.alert = {"kind": "silent", "message": f"The microphone has been silent for {int(now - self._last_loud)} s. Nothing is being recorded; check the mic."}
+        self.emit({"type": "mic_alert", "alert": self.alert})
+        if not self._reopened and self.resolver:
+            self._reopened = True
+            self._reopen()
+
+    def _reopen(self):
+        try:
+            old = self._stream
+            if old is not None:
+                try:
+                    old.stop()
+                    old.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            dev = self.resolver()
+            self._stream = sd.InputStream(device=dev, channels=1, samplerate=self._rate, blocksize=int(self._rate * BLOCK_S), dtype="float32", callback=self._cb)
+            self._stream.start()
+            self._last_loud = time.time()
+        except Exception as e:  # noqa: BLE001
+            self.emit({"type": "error", "message": f"could not reopen the mic: {e}"})
+
     def _cb(self, indata, frames, t, status):
         self._blocks.put(indata[:, 0].copy())
 
@@ -97,11 +172,16 @@ class Live:
         preroll = collections.deque(maxlen=8)
         buf, active, utt_start = [], False, 0.0
         while True:
-            b = self._blocks.get()
+            try:
+                b = self._blocks.get(timeout=2.0)
+            except queue.Empty:
+                self._health(time.time(), None)   # no audio blocks at all: the device is gone or hung
+                continue
             if b is None:
                 break
             b = _to16k(b, self._rate)
             rms = float(np.sqrt(np.mean(b * b)) + 1e-9)
+            self._health(time.time(), rms)
             if floor == 0 or rms < floor * 1.5:
                 floor = rms if floor == 0 else 0.97 * floor + 0.03 * rms
             speaking = rms > max(0.006, floor * 4)
