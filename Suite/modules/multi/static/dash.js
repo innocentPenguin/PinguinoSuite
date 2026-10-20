@@ -77,7 +77,8 @@ function dRowActivity(m) {
   if (m.amount) chips.push(`${m.amount.toLocaleString()} ${D_UNIT[m.event] || ''}`.trim());
   const rest = dRest(m), links = (rest.match(/https?:\/\/\S+/g) || []), txt = rest.replace(/https?:\/\/\S+/g, '').trim();
   if (txt) chips.push(txt.slice(0, 80));
-  return `<div class="d-row" data-id="${esc(m.id)}"><span class="d-age" data-ts="${m.ts}">${dAge(m.ts)}</span>${dIcon(m.platform)}<div class="d-main"><span class="d-pill" style="background:${pill[1]};color:${pill[2]};margin-left:0">${esc(pill[0])}</span><span class="d-user">${esc(dName(m))}</span>${chips.map(c => `<span class="d-chip">${esc(c)}</span>`).join('')}${links.map(l => `<span class="d-link">${dLink(esc(l))}</span>`).join('')}</div><span class="d-kebab" data-d="rowmenu" data-u="${esc((m.user || '').toLowerCase())}" data-id="${esc(m.id)}">&#8942;</span></div>`;
+  if ((m.flags || []).includes('refollow')) chips.push('refollow');
+  return `<div class="d-row" data-id="${esc(m.id)}"><span class="d-age" data-ts="${m.ts}">${dAge(m.ts)}</span>${dIcon(m.platform)}<div class="d-main"><span class="d-pill" style="background:${pill[1]};color:${pill[2]};margin-left:0">${esc(pill[0])}</span><span class="d-user">${esc(dName(m))}</span>${chips.map(c => `<span class="d-chip" ${c === 'refollow' ? 'style="font-size:.8em;opacity:.8"' : ''}>${esc(c)}</span>`).join('')}${links.map(l => `<span class="d-link">${dLink(esc(l))}</span>`).join('')}</div><span class="d-kebab" data-d="rowmenu" data-u="${esc((m.user || '').toLowerCase())}" data-id="${esc(m.id)}">&#8942;</span></div>`;
 }
 function dRowChat(m) {
   const col = colourOf(m) || (m.platform === 'twitch' ? '#a970ff' : '#ff8a1f');

@@ -41,8 +41,9 @@ def to_message(item, channel):
     text = WORDS[t].format(u=user, d=detail or "a reward")
     if t == "redeem" and item.get("message"):
         text += ": " + str(item["message"])[:200]
+    flags = ["refollow"] if t == "follow" and str(item.get("refollow", "")).lower() in ("true", "1") else []
     return ChatMessage(id=f"host:{item['seq']}", platform="twitch", channel=channel, user_id=user.lower(), user=user.lower(), display=user,
-                       text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or 0))
+                       text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or 0), flags=flags)
 
 
 def _get(path):

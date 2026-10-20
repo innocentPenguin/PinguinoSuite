@@ -6,7 +6,8 @@ SIZES = {"xs": 16, "s": 20, "m": 24, "l": 30, "xl": 36, "xxl": 44}
 PROVIDERS = ("twitch", "youtube", "kick", "discord", "tiktok")
 STYLES = ("simple", "bubble", "boxed")
 ENTRANCE = ("none", "fade", "slide", "pop")
-KINDS = ("chat", "activity")
+KINDS = ("chat", "activity", "follow")
+FOLLOW_ANIM = ("fade", "slide", "pop", "bounce")
 ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement", "shoutout", "ban", "timeout", "unban", "mod", "unmod")
 FONTS = {"nunito": "Nunito, 'Segoe UI', sans-serif", "system": "'Segoe UI', Arial, sans-serif", "roboto": "Roboto, Arial, sans-serif",
          "arial": "Arial, sans-serif", "georgia": "Georgia, serif", "consolas": "Consolas, monospace", "comic": "'Comic Sans MS', cursive",
@@ -28,7 +29,15 @@ ACTIVITY_DEFAULT = {
     "entrance_animation_type": "slide", "custom_css": "", "max_messages": 6, "message_order": "bottom", "message_alignment": "left",
     "types": list(ACT_TYPES), "show_age": False, "accent_color": "#ff8a1f", "paused": False,
 }
-DEFAULTS = {"chat": CHAT_DEFAULT, "activity": ACTIVITY_DEFAULT}
+FOLLOW_DEFAULT = {
+    "canvas_scale": 1, "size": "xxl", "text_color": "#ffffff", "text_shadow_color": "#000000", "background_color": "#14110d", "background_opacity": 0.85,
+    "border_width": 3, "border_color": "#ff8a1f", "border_radius": 16, "font_family_id": "nunito", "message_fade_duration_seconds": 0, "message_delay_seconds": 0,
+    "ignore_names": [], "provider_logo": False, "providers": ["all"], "style_type": "boxed", "entrance_animation_type": "pop", "custom_css": "",
+    "max_messages": 1, "message_order": "bottom", "message_alignment": "center", "accent_color": "#ff8a1f",
+    "follow_text": "{user} just followed!", "refollow_text": "{user} followed again", "show_refollow": True, "duration_seconds": 6, "gap_seconds": 1,
+    "sound_enabled": True, "sound_volume": 60, "sound_url": "", "image_url": "",
+}
+DEFAULTS = {"chat": CHAT_DEFAULT, "activity": ACTIVITY_DEFAULT, "follow": FOLLOW_DEFAULT}
 
 IVAN_CHAT = {
     "canvas_scale": 1, "size": "xxl", "text_color": "#ffffff", "text_shadow_color": "#000000", "background_color": "", "background_opacity": 1,
@@ -50,6 +59,11 @@ PRESETS = {
                      "entrance_animation_type": "slide", "ignore_names": IVAN_CHAT["ignore_names"]}},
         "Big and readable": {"desc": "Large text, strong shadow, fades after 40 s.", "settings": {"size": "xxl", "message_fade_duration_seconds": 40,
                              "text_shadow_color": "#000000", "ignore_names": IVAN_CHAT["ignore_names"]}},
+    },
+    "follow": {
+        "Penguino": {"desc": "Dark card, orange border, pop-in, chime.", "settings": {}},
+        "Text only": {"desc": "Big text, no box.", "settings": {"style_type": "simple", "background_color": "", "border_width": 0, "entrance_animation_type": "fade"}},
+        "Quiet": {"desc": "Same card, no sound.", "settings": {"sound_enabled": False}},
     },
     "activity": {
         "Penguino": {"desc": "Dark cards, orange accent.", "settings": {}},
@@ -106,6 +120,18 @@ def sanitize(kind, src):
     d["providers"] = pv or ["all"]
     d["style_type"] = s.get("style_type") if s.get("style_type") in STYLES else d["style_type"]
     d["entrance_animation_type"] = s.get("entrance_animation_type") if s.get("entrance_animation_type") in ENTRANCE else d["entrance_animation_type"]
+    if kind == "follow":
+        d["follow_text"] = str(s.get("follow_text", d["follow_text"]))[:120] or d["follow_text"]
+        d["refollow_text"] = str(s.get("refollow_text", d["refollow_text"]))[:120] or d["refollow_text"]
+        d["show_refollow"] = bool(s.get("show_refollow", d["show_refollow"]))
+        d["duration_seconds"] = round(_num(s.get("duration_seconds", d["duration_seconds"]), 1, 60, 6), 1)
+        d["gap_seconds"] = round(_num(s.get("gap_seconds", d["gap_seconds"]), 0, 30, 1), 1)
+        d["sound_enabled"] = bool(s.get("sound_enabled", d["sound_enabled"]))
+        d["sound_volume"] = int(_num(s.get("sound_volume", d["sound_volume"]), 0, 100, 60))
+        for k in ("sound_url", "image_url"):                       # http(s) or a path on this server only
+            v = str(s.get(k, "") or "").strip()[:500]
+            d[k] = v if re.match(r"^(https?://|/)[^\s\"'<>]*$", v) else ""
+        d["entrance_animation_type"] = s.get("entrance_animation_type") if s.get("entrance_animation_type") in FOLLOW_ANIM else "pop"
     d["max_messages"] = int(_num(s.get("max_messages", d["max_messages"]), 1, 100, d["max_messages"]))
     css = s.get("custom_css", d["custom_css"])
     d["custom_css"] = re.sub(r"</?style", "", str(css), flags=re.I)[:20000] if isinstance(css, str) else ""
@@ -113,7 +139,7 @@ def sanitize(kind, src):
         d["themes"] = s.get("themes") if isinstance(s.get("themes"), list) else []
         d["provider_logo_display"] = s.get("provider_logo_display") if isinstance(s.get("provider_logo_display"), str) else None
         d["name_color_mode"] = s.get("name_color_mode") if s.get("name_color_mode") in ("platform", "own", "none") else "platform"
-    else:
+    elif kind == "activity":
         ty = [t for t in (s.get("types") if isinstance(s.get("types"), list) else d["types"]) if t in ACT_TYPES]
         d["types"] = ty
     return d
@@ -137,7 +163,7 @@ def from_synchra(doc):
 
 def to_synchra(kind, settings, name="Chat"):
     keys = [k for k in CHAT_DEFAULT if k not in ("max_messages", "accent_color", "name_color_mode")] if kind == "chat" else list(settings)
-    return {"kind": "synchra.widget", "version": 1, "type": "chat_widget" if kind == "chat" else "activity_widget", "name": name,
+    return {"kind": "synchra.widget", "version": 1, "type": {"chat": "chat_widget", "activity": "activity_widget", "follow": "follow_alert_widget"}[kind], "name": name,
             "settings": {k: settings[k] for k in keys if k in settings}}
 
 
@@ -153,4 +179,6 @@ def hidden(kind, settings, m, muted=()):
     ev = m.get("event") or ""
     if kind == "chat":
         return bool(ev) and not settings["notices"]
+    if kind == "follow":
+        return ev != "follow" or (bool(m.get("flags") and "refollow" in m["flags"]) and not settings["show_refollow"])
     return ev not in settings["types"]

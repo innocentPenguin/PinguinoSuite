@@ -42,3 +42,10 @@ Saved on the server (kv `dash` in Multi's data dir): GET/POST /api/dash, POST /a
 
 ## Widget editor
 Tabs: Theme (presets), General, Appearance, Timing, Custom CSS; URL/export/import always on top.
+
+## Follow alert (`/obs/follow`, editor `/?type=obs&widget=follow`)
+One alert at a time (queued), Synchra-style options: size, canvas scale, font, colours, box/border, entrance animation (fade/slide/pop/bounce), custom CSS (`.follow-alert .follow-text .follow-user .follow-image .follow-tag`), show-for seconds, gap, text templates (`{user}`), optional image/GIF, sound (built-in chime or your own file address, volume; OBS: tick "Control audio via OBS").
+- New follow: alert plus sound.
+- Refollow (`flags: ["refollow"]`, from the Host follow item field `refollow: true`; missing = false): smaller alert, tagged "refollow", NO sound; can be turned off entirely.
+- /obs/activity and the dashboard feed show a small "refollow" chip on those rows.
+- The widget only reacts to live follows (no replay on reload). Test buttons in the editor preview: new follow, refollow, sound.

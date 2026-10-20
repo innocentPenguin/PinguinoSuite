@@ -1086,3 +1086,15 @@ def test_host_feed_moderation_notices():
     assert m.event == "ban" and m.text == "InnocentPenguin_ banned Troll" and m.display == "InnocentPenguin_"
     assert host_feed.to_message({"seq": 7, "type": "unmod", "user": "PotatBotat", "moderator": "InnocentPenguin_"}, "c").text == "InnocentPenguin_ unmodded PotatBotat"
     assert "ban" in host_feed.ALWAYS and "shoutout" in host_feed.ALWAYS
+
+
+def test_follow_widget_and_refollow_flag():
+    import obs, host_feed
+    st = obs.sanitize("follow", {"duration_seconds": 999, "image_url": "javascript:alert(1)", "sound_url": "/sounds/a.mp3", "entrance_animation_type": "bounce", "follow_text": ""})
+    assert st["duration_seconds"] == 60 and st["image_url"] == "" and st["sound_url"] == "/sounds/a.mp3" and st["entrance_animation_type"] == "bounce" and "{user}" in st["follow_text"]
+    assert not obs.hidden("follow", st, {"user": "x", "platform": "twitch", "event": "follow", "flags": []})
+    assert obs.hidden("follow", st, {"user": "x", "platform": "twitch", "event": "raid"})
+    st2 = obs.sanitize("follow", {"show_refollow": False})
+    assert obs.hidden("follow", st2, {"user": "x", "platform": "twitch", "event": "follow", "flags": ["refollow"]})
+    assert host_feed.to_message({"seq": 1, "type": "follow", "user": "A", "refollow": True}, "c").flags == ["refollow"]
+    assert host_feed.to_message({"seq": 2, "type": "follow", "user": "A"}, "c").flags == []

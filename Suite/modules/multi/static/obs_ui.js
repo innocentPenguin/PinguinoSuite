@@ -5,7 +5,7 @@ const OBS_PLATS = ['twitch', 'youtube', 'kick', 'discord', 'tiktok'];
 const OBS_ACT = ['follow', 'redeem', 'sub', 'resub', 'gift', 'cheer', 'raid', 'announcement', 'shoutout', 'ban', 'timeout', 'unban', 'mod', 'unmod'];
 
 async function renderObsEditor() {
-  OBS.kind = q.get('widget') === 'activity' ? 'activity' : 'chat';
+  OBS.kind = ['activity', 'follow'].includes(q.get('widget')) ? q.get('widget') : 'chat';
   $('#hdr').style.display = 'none';
   $('#body').innerHTML = '<div class="empty">Loading...</div>';
   OBS.cfg = await fetch('/api/obs/' + OBS.kind).then(r => r.json());
@@ -20,16 +20,25 @@ function obsDraw() {
   const col = (key, lab) => `<label class="cf">${lab} <input type="color" data-ob="${key}" value="${S[key] || '#000000'}"></label>`;
   const chk = (key, lab) => `<label class="cf"><input type="checkbox" data-ob="${key}" data-b="1" ${S[key] ? 'checked' : ''}> ${lab}</label>`;
   const nobg = `<label class="cf"><input type="checkbox" data-obnobg="1" ${S.background_color ? '' : 'checked'}> No background box</label>`;
-  const head = `<div class="act"><a href="/?type=obs&widget=chat"><button class="${k === 'chat' ? 'p' : ''}" type="button">Chat widget</button></a> <a href="/?type=obs&widget=activity"><button class="${k === 'activity' ? 'p' : ''}" type="button">Activity widget</button></a>
+  const head = `<div class="act"><a href="/?type=obs&widget=chat"><button class="${k === 'chat' ? 'p' : ''}" type="button">Chat widget</button></a> <a href="/?type=obs&widget=activity"><button class="${k === 'activity' ? 'p' : ''}" type="button">Activity widget</button></a> <a href="/?type=obs&widget=follow"><button class="${k === 'follow' ? 'p' : ''}" type="button">Follow alert</button></a>
       <a href="/?type=dash"><button type="button">Back to dashboard</button></a> <span id="ob-state" class="mut"></span></div>
     <div class="box"><b>Widget URL</b> <input id="ob-url" readonly value="${esc(obsUrl())}" style="width:100%" onclick="this.select()">
       <div class="act"><button data-ob-act="copy">Copy address</button> <a href="${esc(obsUrl())}" target="_blank" rel="noopener"><button type="button">Open</button></a>
       <button data-ob-act="export">Export</button> <button data-ob-act="import-file">Import</button><input id="ob-file" type="file" accept=".json,application/json" hidden></div>
       <small class="mut">OBS: Sources &gt; + &gt; Browser &gt; paste the address. Changes show in OBS instantly.</small></div>`;
+  const txt = (key, lab) => `<label class="cf">${lab} <input type="text" data-ob="${key}" value="${esc(S[key] || '')}" style="width:100%"></label>`;
+  const followGeneral = `<div class="act"><button data-ob-act="ptest" data-t="follow">Test new follow</button><button data-ob-act="ptest" data-t="refollow">Test refollow</button><button data-ob-act="ptest" data-t="sound">Test sound</button></div>
+      ${txt('follow_text', 'New follow text ({user} = name)')}${txt('refollow_text', 'Refollow text (no sound, small)')}${chk('show_refollow', 'Show refollow alerts at all')}
+      ${rng('duration_seconds', 'Show each alert for', 1, 30, 0.5, ' s')}${rng('gap_seconds', 'Pause between alerts', 0, 10, 0.5, ' s')}
+      ${sel('size', Object.keys(c.sizes).map(s => [s, s.toUpperCase() + ' (' + c.sizes[s] + 'px)']), 'Size')}${rng('canvas_scale', 'Canvas scale', 0.25, 3, 0.05, 'x')}${sel('font_family_id', c.fonts.map(f => [f, f]), 'Font')}
+      ${sel('entrance_animation_type', [['none', 'None'], ['fade', 'Fade'], ['slide', 'Slide'], ['pop', 'Pop'], ['bounce', 'Bounce']], 'Entrance animation')}
+      <h4>Sound</h4>${chk('sound_enabled', 'Play a sound for new follows (never for refollows)')}${rng('sound_volume', 'Volume', 0, 100, 1, '%')}${txt('sound_url', 'Sound file address (empty = built-in chime). Must start with http(s):// or /')}
+      <small class="mut">In OBS tick "Control audio via OBS" on the browser source to get the sound on its own mixer channel.</small>
+      <h4>Image</h4>${txt('image_url', 'Image / GIF address (optional, new follows only)')}`;
   const SEC = {
     theme: `<h4>Theme</h4><div class="act">${c.presets.map((p, i) => `<button data-ob-act="preset" data-i="${i}" title="${esc(p.desc)}">${esc(p.name)}</button>`).join('')}<button data-ob-act="reset">Reset to defaults</button></div>
       ${sel('style_type', [['simple', 'Simple (no box per message)'], ['bubble', 'Bubble'], ['boxed', 'Boxed']], 'Style')}<small class="mut">A preset replaces every setting below; you can still change anything afterwards.</small>`,
-    general: `${sel('size', Object.keys(c.sizes).map(s => [s, s.toUpperCase() + ' (' + c.sizes[s] + 'px)']), 'Size')}${rng('canvas_scale', 'Canvas scale', 0.25, 3, 0.05, 'x')}
+    general: k === 'follow' ? followGeneral : `${sel('size', Object.keys(c.sizes).map(s => [s, s.toUpperCase() + ' (' + c.sizes[s] + 'px)']), 'Size')}${rng('canvas_scale', 'Canvas scale', 0.25, 3, 0.05, 'x')}
       <div class="cf">Platforms ${['all', ...OBS_PLATS].map(p => `<label class="chk"><input type="checkbox" data-obp="${p}" ${S.providers.includes(p) ? 'checked' : ''}> ${p}</label>`).join(' ')}</div>
       ${k === 'activity' ? `<div class="cf">Types ${OBS_ACT.map(t => `<label class="chk"><input type="checkbox" data-obt="${t}" ${S.types.includes(t) ? 'checked' : ''}> ${t}</label>`).join(' ')}</div>` : ''}
       ${chk('provider_logo', 'Show platform logo')}${k === 'chat' ? chk('badges', 'Show badges') + chk('username_colon', "Show ':' after username") + chk('notices', 'Show notices (subs, bans, raids, follows)') : chk('show_age', 'Show age (10h)')}
@@ -45,7 +54,7 @@ function obsDraw() {
       <small class="mut">Classes: .chat-message-container .chat-username .chat-text .chat-badge .chat-provider ${k === 'activity' ? '.activity-row .act-pill .act-user .act-chip .act-age' : '.chat-notice'}. @import works for web fonts.</small>
       <h4>Paste a Synchra export</h4><textarea id="ob-paste" rows="3" style="width:100%" placeholder="Paste a Synchra chat widget export here"></textarea><div class="act"><button data-ob-act="import-paste">Import pasted text</button></div>`,
   };
-  const TABS = [['theme', 'Theme'], ['general', 'General'], ['appearance', 'Appearance'], ['timing', 'Timing'], ['css', 'Custom CSS']];
+  const TABS = [['theme', 'Theme'], ['general', 'General'], ['appearance', 'Appearance'], ['timing', 'Timing'], ['css', 'Custom CSS']].filter(t => !(k === 'follow' && t[0] === 'timing'));
   const left = head + `<div class="act" style="margin-top:8px">${TABS.map(([id, t]) => `<button class="${OBS.tab === id ? 'p' : ''}" data-ob-act="tab" data-t="${id}">${t}</button>`).join('')}</div><div style="margin-top:8px">${SEC[OBS.tab] || SEC.theme}</div>`;
   const prev = `<div style="position:sticky;top:8px"><b>Live preview</b> <small class="mut">test messages only</small>
     <div style="height:620px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:repeating-conic-gradient(#2a2622 0% 25%,#1d1a17 0% 50%) 0 0/24px 24px"><iframe id="ob-prev" src="/obs/${k}?preview=1" style="width:100%;height:100%;border:0;background:transparent"></iframe></div></div>`;
@@ -88,6 +97,7 @@ document.addEventListener('click', async e => {
   if (W.type !== 'obs') return; const b = e.target.closest('button'); if (!b || !b.dataset.obAct) return;
   const a = b.dataset.obAct;
   if (a === 'tab') { OBS.tab = b.dataset.t; obsDraw(); }
+  else if (a === 'ptest') { const f = $('#ob-prev'); if (f && f.contentWindow) f.contentWindow.postMessage({obsTest: b.dataset.t}, '*'); }
   else if (a === 'copy') { try { await navigator.clipboard.writeText(obsUrl()); } catch (x) { $('#ob-url').select(); document.execCommand('copy'); } $('#ob-state').textContent = 'address copied'; }
   else if (a === 'preset') { OBS.S = Object.assign({}, OBS.cfg.defaults, OBS.cfg.presets[+b.dataset.i].settings); obsChanged(true); }
   else if (a === 'reset') { if (confirm('Reset this widget to its defaults?')) { OBS.S = JSON.parse(JSON.stringify(OBS.cfg.defaults)); obsChanged(true); } }
