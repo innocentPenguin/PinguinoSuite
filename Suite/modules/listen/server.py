@@ -1,5 +1,83 @@
 """PinguinoBot Ears - local web UI + API. Listen-only: transcribes and learns, never acts.
 Run:  run.bat   (http://127.0.0.1:8765)"""
+# INDEX-BEGIN (line numbers are of this file)
+# INDEX: PinguinoListen (8765): live mic + file ASR, speaker learning, Twitch VOD ingest, prestream checks. Routes + functions:
+# Related: live.py (mic stream, resolve_device/candidates, watchdog), config.py, Suite/tests/test_mic.py, Docs/MODULE_CONTRACT.md, static/index.html
+#   107  def clog
+#   133  class Hub
+#   159  def on_asr_state
+#   168  def start_mic
+#   198  def autolearn_loop
+#   206  def lifespan
+#   242  GET    /
+#   243  def index
+#   247  WEBSOCKET /ws
+#   248  def ws
+#   263  class CmdTest
+#   268  GET    /api/style
+#   269  def style
+#   274  GET    /api/commands
+#   275  def commands_get
+#   279  POST   /api/commands
+#   280  def commands_set
+#   284  POST   /api/commands/test
+#   285  def commands_test
+#   297  GET    /api/voice-log
+#   298  def voice_log
+#   303  GET    /api/markers
+#   304  def markers_get
+#   308  GET    /api/prestream
+#   309  def prestream
+#   331  GET    /api/status
+#   332  def status
+#   339  class Settings
+#   347  POST   /api/settings
+#   348  def set_settings
+#   364  GET    /api/devices
+#   365  def devices
+#   371  class Start
+#   375  POST   /api/live/start
+#   376  def live_start
+#   385  POST   /api/live/auto
+#   386  def live_auto
+#   396  POST   /api/live/stop
+#   397  def live_stop
+#   403  GET    /api/twitch
+#   404  def twitch_list
+#   417  class Queue
+#   424  POST   /api/queue
+#   425  def queue_item
+#   429  class UrlIn
+#   433  POST   /api/ingest-url
+#   434  def ingest_url
+#   438  POST   /api/upload
+#   439  def upload
+#   446  GET    /api/jobs
+#   447  def list_jobs
+#   451  GET    /api/sessions
+#   452  def sessions
+#   459  GET    /api/segments
+#   460  def segments
+#   464  GET    /api/review/next
+#   465  def review_next
+#   480  class Correction
+#   484  POST   /api/segments/{sid}/correct
+#   485  def correct
+#   502  POST   /api/regrade
+#   503  def regrade
+#   507  GET    /api/vocab
+#   508  def vocab
+#   513  class Term
+#   517  POST   /api/vocab
+#   518  def vocab_add
+#   523  DELETE /api/vocab
+#   524  def vocab_del
+#   529  class Rule
+#   534  POST   /api/rules
+#   535  def rule_add
+#   540  DELETE /api/rules
+#   541  def rule_del
+# INDEX-END
 import asyncio
 import json
 import os

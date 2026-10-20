@@ -1,4 +1,58 @@
 <!doctype html>
+<!-- INDEX-BEGIN (line numbers are of this file)
+INDEX: PinguinoSuite shell UI (single file, Tauri webview). Sections, pages.* renderers and key functions:
+Related: Suite/suite/suite.py (core API it calls), App/src-tauri (Tauri shell), App/src/theme.css, App/src/bootstrap.js, Docs/ARCHITECTURE.md
+  274  section: pages
+  276  page pages.dashboard
+  328  page pages.module
+  333  section: Integrations hub (core: GET /api/integrations; contract in Docs/MODULE_CONTRACT.md)
+  372  section: Help drawer
+  428  page pages.help
+  433  section: Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, m
+  440  page pages.activity
+  457  fn bindActivity
+  465  section: Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md)
+  507  section: Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MO
+  586  fn sfx
+  608  page pages.personalize
+  648  fn bindPersonalize
+  669  section: Pre-stream schedule (core: GET/POST /api/prestream/schedule)
+  688  section: PenguinComm page
+  690  page pages.comm
+  718  section: Chat activity card (Host: GET /api/chat-rate)
+  729  section: Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log)
+  735  page pages.quick
+  750  fn bindQuick
+  813  section: Command palette (Ctrl+K)
+  837  section: Automatic config backup (core: /api/backup/auto)
+  851  section: Accounts: the STREAMER's Twitch sign-in (Host: GET /api/account/streamer, POST .../signin, .../signout) + bot 
+  853  fn loadAccounts
+  858  page pages.accounts
+  872  fn bindAccounts
+  882  section: Approvals: the Teach inbox (Host: GET /api/teach?status=, POST /api/teach/decide {id, action approve|reject|ed
+  886  fn loadApprovals
+  895  page pages.approvals
+  916  fn bindApprovals
+  931  page pages.integrations
+  944  fn bindIntegrations
+  952  section: Console + pre-stream checks (core: /api/console, /api/prestream; format in Docs/MODULE_CONTRACT.md)
+  956  page pages.console
+  992  fn bindConsole
+ 1003  page pages.settings
+ 1024  page pages.chat
+ 1035  page pages.bots
+ 1043  page pages.actions
+ 1052  section: Voice Studio: built on Listen (/api/style, /api/commands, /api/markers); see Suite/modules/listen/voice.py
+ 1060  page pages.voice
+ 1095  fn bindVoice
+ 1115  section: device settings, backup/move, first-run wizard (core: /api/device, /api/export, /api/import, /api/setup)
+ 1153  section: shell
+ 1172  fn go
+ 1176  fn draw
+ 1187  fn bind
+ 1214  fn toast
+ 1218  fn load
+INDEX-END -->
 <html lang="en">
 <head>
 <script src="bootstrap.js"></script>

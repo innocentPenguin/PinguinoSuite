@@ -99,3 +99,14 @@ Knowledge pack (PUBLIC material only goes through these):
 - Other sources: `PinguinoB0t\commands.json`, `Data\runtime\helper_facts.json` (+ Taught), `links.json`, `channel_lore.json` (info + link, publicSafe), site FAQ.
 - Never in the public pack: secrets, `Data\lore`, raw logs, opted-out people, internal architecture (enforced by the builder, checked by the leak test).
 - Unanswered questions: `Docs\nightly\YYYY-MM-DD.md`, section "Helper unanswered".
+
+## Suite shell, core and Listen (owner: 01)
+Each big file below starts with its own INDEX block (routes/functions with line numbers).
+- `App/src/index.html` - the shell UI (single file, Tauri webview). Pages `pages.*` (dashboard, comm, quick, voice, accounts, approvals, integrations, activity, console, help, personalize, settings). Talks to the core on `127.0.0.1:8760`; Host calls go through `/api/modules/host/get|post` (`hostGet`, `hostPost`, `hostJ`).
+- `App/src/theme.css`, `App/src/bootstrap.js` - theme and boot script. `App/src-tauri/` - Tauri v2 shell.
+- `Suite/suite/suite.py` - core (FastAPI, port 8760): supervises modules, module tokens, live detection, vault/help/prestream/devices/console/integrations APIs, `/api/modules/{id}/get|post` proxy.
+- `Suite/suite/vault.py` (encrypted secret vault, `/api/vault/{name}` readable only by the declaring module), `helpdb.py` (help entries), `prestream.py` (pre-stream checks), `device.py` (master/auxiliary roles, peers), `consolelog.py` (Console, `<data>/console/<module>.jsonl`), `integrations.py`, `prefs.py`, `portable.py` (export/import), `livedetect.py`.
+- `Suite/modules.json` - module manifests (CRLF file): id, port, url, secrets (name/label/help), UI nav. Contract: `Docs/MODULE_CONTRACT.md`.
+- `Suite/modules/listen/` - PinguinoListen (port 8765): `server.py` (API), `live.py` (mic: `resolve_device`, `candidates`, silence watchdog), `asr.py`, `ingest.py`, `learn.py`, `twitch.py`, `voice.py`, `config.py`, `db.py`, `static/index.html` (Listen page). Settings: `Suite/modules/listen/data/settings.json`.
+- Ports: core 8760, Listen 8765, Multi 8766, Host 8770, Voice 8772.
+- Tests: `Suite/.venv/Scripts/python.exe -m unittest discover -s Suite/tests` (mic, vault, help, prestream, device, portable, prefs).
