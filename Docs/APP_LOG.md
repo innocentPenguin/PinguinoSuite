@@ -73,6 +73,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 06:00 - Host restart (9122ce7 economy, 7139194 helper, e757347/95e31ab/44be985 timers)
+
+- Economy: !points/!pengs, !watchtime, !toppoints, !topwatch (mods: !addpoints, !removepoints, !economy); /api/economy/import dry run + apply; waits for Ivan to paste se_jwt in the vault.
+- Timers: chat timers, stream countdown/stopwatch, reminders. Boards now go to top 500. Commands-doc: 92 commands. Profiles re-pushed.
+- Streamer must sign in again for moderator:read:chatters (earning falls back to recent chatters until then).
+
 ## 2026-10-20 05:58 - Link module restart (04 a3ff4df)
 
 - OBS diagnosis now says one clear thing; vault Test button for OBS_WS_PASSWORD (/api/test-obs).
