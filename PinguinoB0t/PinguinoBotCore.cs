@@ -2451,13 +2451,13 @@ public class CPHInline
     {
         if (!_players.ContainsKey(user))
         {
-            Say("@" + user + " You need to register first! Use: !register <EpicID>");
+            Say("@" + user + " Register first: type !register YourEpicName (your exact Epic name, no < >), then !join.");
             return true;
         }
 
         if (!_settings.QueueOpen)
         {
-            Say("@" + user + " The queue is currently closed.");
+            Say("@" + user + " The queue is closed right now. It opens when customs start, then type !join.");
             return true;
         }
 

@@ -310,6 +310,8 @@ public class CPHInline
         public bool LiveOnly { get; set; } = true;
         public int UserCooldownSec { get; set; } = 30;                // the same viewer gets the same kind of answer at most this often
         public int InfoCooldownSec { get; set; } = 8;                 // anti-flood between any two info answers
+        public int McCooldownSec { get; set; } = 180;                 // the same viewer gets the Minecraft question / answer at most this often
+        public int McGlobalCooldownSec { get; set; } = 20;            // ...and chat as a whole at most this often
         public int ConfirmSeconds { get; set; } = 60;                 // how long a "say yes" question stays open
         public bool UseAi { get; set; } = true;                       // ask the AI only when the patterns do not understand a practical-sounding message
         public int MaxAiCallsPerHour { get; set; } = 40;
@@ -326,7 +328,7 @@ public class CPHInline
     class Pending { public string Intent, Epic; public long Until; }
     static readonly Dictionary<string, Pending> _pending = new Dictionary<string, Pending>();
     static readonly Dictionary<string, long> _userCd = new Dictionary<string, long>();
-    static long _infoCd;
+    static long _infoCd, _mcGlobal;
     static string _curLogin = "", _curDisplay = "";   // the viewer being answered (for the helper conversation marker and failure messages)
     static readonly List<long> _aiLog = new List<long>();
     static Func<string, string, string> _testLlm;   // tests only: a fake AI
@@ -444,6 +446,8 @@ public class CPHInline
             // 2. a typed !register that will not work (brackets, "my epic is ...", a placeholder)
             if (text.StartsWith("!"))
             {
+                var lcm = Regex.Match(text, @"^!(lobbyname|lobbypass|lobbypassword)(?:\s+(?<v>.*))?$", RegexOptions.IgnoreCase);
+                if (lcm.Success) return LobbyCommand(lcm.Groups[1].Value.ToLower(), lcm.Groups["v"].Value, display);
                 if (RxDiscordCmd.IsMatch(text)) return Respond(login, display, "discord", "");
                 var bm = RxBadReg.Match(text);
                 if (bm.Success) return BadRegister(login, display, bm.Groups["a"].Value.Trim());
@@ -615,12 +619,31 @@ public class CPHInline
         return true;
     }
 
+    // a REAL question about getting on the Minecraft server: asks (?, how/where/what/can..., please) AND talks about the IP / server / joining.
+    // "Geo Minecraft today", "u guys also play minecraft" and talk about the !ip command do not count.
+    static readonly Regex RxCmdToken = new Regex(@"(^|\s)!\w+");
+    static readonly Regex RxMcAskForm = new Regex(@"\?|^\s*(how|where|what|whats|what's|can|could|is|are|do|does|wanna|want|gimme|give|drop|send|tell|need|anyone|someone)\b|\b(pls|plz|please)\b", RegexOptions.IgnoreCase);
+    static readonly Regex RxMcTopic = new Regex(@"\b(ip|address|server|port|join|joining|connect|whitelist|get\s+on|get\s+in|play\s+with)\b", RegexOptions.IgnoreCase);
+    static bool IsMcQuestion(string text)
+    {
+        text = text ?? "";
+        if (text.Length > 140 || RxCmdToken.IsMatch(text)) return false;
+        bool askForm = RxMcAskForm.IsMatch(text), terse = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Length <= 6;
+        if (RxMcIp.IsMatch(text)) return askForm || terse;   // "minecraft ip" is a request too
+        if (!askForm) return false;
+        return RxMinecraftWord.IsMatch(text) && RxMcTopic.IsMatch(text);
+    }
+    static readonly Regex RxSong = new Regex(@"\b(what'?s|whats|what\s+is|which)\b.{0,12}\b(song|track|music)\b.{0,15}\b(this|playing|is\s+it|on)\b|\bwhat'?s\s+playing\b|\b(song|track)\s+(name|id|title)\b|\bwhat\s+song\b|\bname\s+of\s+(this|the)\s+song\b|\bnext\s+song\b", RegexOptions.IgnoreCase);
+    static readonly Regex RxMyMmr = new Regex(@"\b(what'?s|whats|what\s+is|check|see|show|tell\s+me)\b.{0,12}\b(my|me)\b.{0,10}\b(mmr|rank|stats|points)\b|\bhow\s+(much|many)\b.{0,12}\b(mmr|points)\b.{0,10}\b(do\s+i|i\s+have|have\s+i)\b", RegexOptions.IgnoreCase);
+
     static void Classify(string text, out string intent, out string epic)
     {
         intent = ""; epic = "";
         var m = RxDoReg.Match(text);
         if (m.Success) { intent = "do_register"; epic = m.Groups["n"].Value.Trim(); return; }
-        if (RxMcIp.IsMatch(text) || RxMinecraftWord.IsMatch(text)) { intent = "mc_info"; return; }
+        if (IsMcQuestion(text)) { intent = "mc_info"; return; }
+        if (RxSong.IsMatch(text)) { intent = "song"; return; }
+        if (RxMyMmr.IsMatch(text)) { intent = "mmr_info"; return; }
         if (RxDoLeave.IsMatch(text)) { intent = "do_leave"; return; }
         if (RxPos.IsMatch(text)) { intent = "position"; return; }
         if (RxHowReg.IsMatch(text)) { intent = "how_register"; return; }
@@ -713,15 +736,21 @@ public class CPHInline
         if (intent == "mc_info" || intent == "discord")
         {
             string key = login + "|" + intent; long lastInfo;
-            if (_userCd.TryGetValue(key, out lastInfo) && now - lastInfo < _cfg.UserCooldownSec) return true;
+            int userCd = intent == "mc_info" ? Math.Max(_cfg.UserCooldownSec, _cfg.McCooldownSec) : _cfg.UserCooldownSec;
+            if (_userCd.TryGetValue(key, out lastInfo) && now - lastInfo < userCd) return true;
+            if (intent == "mc_info")
+            {   // already asked "Java or Bedrock?" and waiting for the answer: never ask again; and not more often than the global gap
+                long open; if (_mcAsk.TryGetValue(login, out open) && open >= now) return true;
+                if (now - _mcGlobal < _cfg.McGlobalCooldownSec) return true;
+            }
             if (now - _infoCd < _cfg.InfoCooldownSec) return true;
             bool said = intent == "mc_info" ? McInfo(login, display) : DiscordInfo(display);
-            if (said) { _userCd[key] = now; _infoCd = now; }
+            if (said) { _userCd[key] = now; _infoCd = now; if (intent == "mc_info") _mcGlobal = now; }
             return said;
         }
         string cdKey = login + "|" + intent;
         long last;
-        bool info = intent == "lobby_info" || intent == "how_join" || intent == "how_register";
+        bool info = intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "song" || intent == "mmr_info";
         if (_userCd.TryGetValue(cdKey, out last) && now - last < _cfg.UserCooldownSec) return true;   // already told them a moment ago: stay quiet, and keep the chatbot out of it
         if (info && now - _infoCd < _cfg.InfoCooldownSec) return true;
         _userCd[cdKey] = now;
@@ -755,6 +784,8 @@ public class CPHInline
                 if (registered == "") { Say(who + "You need to register first. Tell me \"register me as YourEpicName\" (your Epic name) and then ask to join."); return true; }
                 if (!QueueOpen()) { Say(who + "The queue is closed right now. " + LobbyHint()); return true; }
                 return AskConfirm(login, display, "join", "", "Add you to the queue? Say yes to confirm.");
+            case "song": Say(who + SongLine()); return true;
+            case "mmr_info": Say(who + "Type !mmr to see your MMR, or !stats for your wins and points."); return true;
             case "do_leave":
                 return AskConfirm(login, display, "leave", "", "Take you out of the queue? Say yes to confirm.");
             case "position":
@@ -835,6 +866,42 @@ public class CPHInline
     // ══════════════════════════════════════════════════════════════
     //  TEXT BUILDING
     // ══════════════════════════════════════════════════════════════
+    // what is playing right now, from the Spotify module on this PC
+    string SongLine()
+    {
+        try
+        {
+            string json = _pgTestHttp != null ? _pgTestHttp("GET http://127.0.0.1:8771/api/now", "", "") : HttpGetText("http://127.0.0.1:8771/api/now");
+            var j = JObject.Parse(json); string t = (string)j["title"] ?? "", a = (string)j["artist"] ?? "", who = (string)j["requestedBy"] ?? "";
+            if (t == "") return "Nothing is playing right now.";
+            return "Now playing: " + t + (a == "" ? "" : " - " + a) + (who == "" ? "" : " (requested by " + who + ")") + ".";
+        }
+        catch (Exception) { return "I can't see what's playing right now."; }
+    }
+    static Func<string, string> _testHttpGet;   // tests only
+
+    // mods only: !lobbyname NAME / !lobbypass PASS|off  (writes helper_settings.json, so the lobby answers change at once)
+    bool LobbyCommand(string cmd, string value, string display)
+    {
+        int roleN = 0; bool mod = ArgB("isModerator") || ArgB("isBroadcaster") || (int.TryParse(ArgS("role"), out roleN) && roleN >= 3);
+        if (!mod) { Say("@" + display + " Only mods can change the lobby."); return true; }
+        value = (value ?? "").Trim();
+        bool isName = cmd.StartsWith("lobbyname");
+        if (value == "") { Say("@" + display + " " + (isName ? "Lobby name: " + (_cfg.LobbyName ?? "").Trim() + ". Change it with !lobbyname NewName" : LobbyHint() + " Change it with !lobbypass NewPass (or !lobbypass off)")); return true; }
+        if (value.Length > 32 || Regex.IsMatch(value, @"[@/\\<>]")) { Say("@" + display + " That doesn't look like a valid " + (isName ? "lobby name" : "password") + " (32 characters max, no @ / < >)."); return true; }
+        if (isName) _cfg.LobbyName = value;
+        else _cfg.LobbyPassword = Regex.IsMatch(value, @"^(off|none|clear|no)$", RegexOptions.IgnoreCase) ? "" : value;
+        try
+        {
+            string p = Path.Combine(_dir, "helper_settings.json");
+            File.WriteAllText(p, JsonConvert.SerializeObject(_cfg, Formatting.Indented));
+            _cfgStamp = File.GetLastWriteTimeUtc(p);
+        }
+        catch (Exception ex) { CPH.LogWarn("[Helper] could not save helper_settings.json: " + ex.Message); }
+        Say("@" + display + " Done. " + LobbyHint());
+        return true;
+    }
+
     string LobbyLine()
     {
         string pass = string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? "no password" : "Password: " + _cfg.LobbyPassword.Trim();

@@ -36,7 +36,7 @@ public static class Harness
     static void Settings(string extra = "")
     {
         string p = Path.Combine(dir, "helper_settings.json");
-        File.WriteAllText(p, "{\"LobbyName\":\"peng3\",\"LobbyPassword\":\"\",\"UserCooldownSec\":0,\"InfoCooldownSec\":0" + extra + "}");
+        File.WriteAllText(p, "{\"LobbyName\":\"peng3\",\"LobbyPassword\":\"\",\"UserCooldownSec\":0,\"InfoCooldownSec\":0,\"McCooldownSec\":0,\"McGlobalCooldownSec\":0" + extra + "}");
         File.SetLastWriteTimeUtc(p, DateTime.UtcNow.AddSeconds(++stamp));
         typeof(CPHInline).GetField("_cfgChecked", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue);
     }
@@ -247,6 +247,27 @@ public static class Harness
         Msg("Mc9", "!discord");
         Check("site discord link wins", Last() != null && Last().Contains("discord.gg/zzz"), Last());
         T.GetField("_pgTestHttp", bf).SetValue(null, null);
+
+        // viewers' feedback 2026-10-19: no false "Java or Bedrock?", no repeats, mods change the lobby, what's playing, my MMR
+        Settings(",\"FactsUrl\":\"\""); aiReply = "x";
+        Msg("F1", "Geo Minecraft today"); Check("a statement about minecraft is not a question", Last() == null, Last());
+        Msg("F2", "u guys also play minecraft"); Check("'also play minecraft' is not a question either", Last() == null, Last());
+        Msg("F3", "just use !ip for the minecraft server"); Check("talk about the !ip command is ignored", Last() == null, Last());
+        Msg("F4", "how do I join the minecraft server?"); Check("a real question still gets Java or Bedrock", Last() != null && Last().Contains("Bedrock"), Last());
+        Settings(",\"FactsUrl\":\"\",\"McCooldownSec\":120,\"McGlobalCooldownSec\":0");
+        Msg("R1", "what is the minecraft ip"); Check("first ask is answered with the question", Last() != null && Last().Contains("Bedrock"), Last());
+        Msg("R1", "minecraft ip?"); Check("asking again is not answered with the same question again", Last() == null, Last());
+        Msg("R1", "minecraft"); Check("typing just minecraft does nothing", Last() == null, Last());
+        Settings(",\"FactsUrl\":\"\"");
+        Msg("L1", "!lobbyname arena7", false); Check("lobby name: non-mods are refused", Last() != null && Last().Contains("Only mods"), Last());
+        Msg("L2", "!lobbyname arena7", true); Check("a mod sets the lobby name", Last() != null && Last().Contains("arena7") && File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("arena7"), Last());
+        Msg("L2", "!lobbypass hunter2", true); Check("a mod sets the lobby password", Last() != null && Last().Contains("hunter2"), Last());
+        Msg("L3", "what's the lobby code"); Check("viewers get the new name and password", Last() != null && Last().Contains("arena7") && Last().Contains("hunter2"), Last());
+        Msg("L2", "!lobbypass off", true); Check("password can be cleared", Last() != null && Last().Contains("no password"), Last());
+        T.GetField("_pgTestHttp", bf).SetValue(null, (Func<string, string, string, string>)((u, a, b) => u.Contains("8771") ? "{\"title\":\"Song X\",\"artist\":\"Band\",\"requestedBy\":\"\"}" : null));
+        Msg("S1", "what song is this?"); Check("what's playing comes from the Spotify module", Last() != null && Last().Contains("Song X") && Last().Contains("Band"), Last());
+        T.GetField("_pgTestHttp", bf).SetValue(null, null);
+        Msg("M1", "what's my mmr"); Check("MMR question points at !mmr", Last() != null && Last().Contains("!mmr"), Last());
 
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
