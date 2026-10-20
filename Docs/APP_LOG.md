@@ -73,6 +73,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 04:08 CDT - Host restart (boards push on by default, cf549b5)
+- Update-Module host; /api/live 200. Site /api/leaderboards now: gifters 37, bits 47, streaks 50, yappers 50.
+
 ## 2026-10-20 04:03 CDT - Host restart (founders list + board push, 213c121)
 - Update-Module host; /api/live 200. Data\subsounders.json created (10 founders). push-profiles: 1800 profiles pushed.
 
