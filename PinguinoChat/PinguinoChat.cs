@@ -720,7 +720,7 @@ public class CPHInline
                 accept = !quiet && TakeCooldown(login, false);
                 if (!quiet && !accept) Miss(login);                                // pinged but the cooldown / hourly cap dropped it: they are still waiting
             }
-            else if (!optedOut && _cfg.RandomChance > 0 && ActivePartners().Count == 0 && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
+            else if (!optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
                      && GateAllowsChime() && Now() - _lastRandom >= _cfg.RandomMinGapSec && TakeCooldown(login, true))
             { cx.Random = true; _lastRandom = Now(); accept = true; }
         }
@@ -2714,6 +2714,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     }
 
     string GateLimitText() { int q, b; GateLimits(out q, out b); return q + "/" + b + (_cfg.GateAuto ? " auto" : ""); }
+    // ChattyPinguino only answers when addressed until the hidden shop's buy_chatty unlocks random talk (the Host writes chatty_unlock.json); HelperPinguino is the one that may chime in on its own.
+    bool ChattyUnlocked() { try { string f = Path.Combine(_dir ?? "", "chatty_unlock.json"); return File.Exists(f) && File.ReadAllText(f).Replace(" ", "").Contains("\"unlocked\":true"); } catch (Exception) { return false; } }
     bool GateAllowsChime() { return !_cfg.GateEnabled || GateState() == "quiet"; }
 
     // ---- countdown (the Host calls this every few seconds with pgTick=True, also while nobody is chatting) ----
