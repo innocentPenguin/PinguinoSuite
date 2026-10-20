@@ -67,6 +67,14 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!sub` | `!sub [user]` | Subscription tier, months, streak and Founder status from the subscriber list. |
 | `!founders` | `!founders` | Lists the Founders (Twitch Founders Badge holders). |
 
+### Timers
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!remindme` | `!remindme <time> <what>` | The bot @mentions you in chat when the time is up (1 minute to 24 hours, up to 3 open reminders). Survives restarts. |
+| `!reminders` | `!reminders` | Your open reminders and when they are due. |
+| `!cancelreminder` | `!cancelreminder [number]` | Cancel one of your reminders (number from !reminders). |
+
 ### Tournament
 
 | Command | Usage | What it does |
@@ -159,6 +167,11 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | Command | Usage | What it does |
 |---|---|---|
 | `!timer` | `!timer list \| on <name> \| off <name> \| add <minutes> <message> \| remove <name> \| now <name> \| gap <seconds>` | Chat timers: repeating messages that only run while live, after enough chat, and never closer together than the gap. Survive restarts. |
+| `!remind` | `!remind @user <time> <what>` | Set a reminder for someone else; the bot @mentions them when it is due. |
+| `!countdown` | `!countdown <time> [label] \| pause \| resume \| stop` | Start the on-stream countdown (the site timer overlay shows it); says a line at zero. |
+| `!stopwatch` | `!stopwatch start [label] \| stop \| reset` | On-stream stopwatch. |
+| `!addtime` | `!addtime <time>` | Add (or with a minus, take off) time on the running countdown. |
+| `!stoptimer` | `!stoptimer` | Clear every on-stream timer. |
 
 ### Tournament
 

@@ -56,8 +56,8 @@ namespace PinguinoHost
             string cmd = parts[0].ToLowerInvariant(); string[] args = parts.Skip(1).ToArray(); string me = user.ToLowerInvariant();
             bool mod = role >= 3;
             string b = BoardOf(cmd);
-            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || Emotes.IsCommand(cmd);
-            bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd);
+            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || Emotes.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder";
+            bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind";
             if (!viewer && !modOnly) return false;
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
             if (viewer)
@@ -68,6 +68,8 @@ namespace PinguinoHost
             {
                 if (b != "") { Top(b, args, say); return true; }
                 if (Timers.IsCommand(cmd)) { Timers.Handle(args, say); return true; }
+                if (StreamTimers.IsCommand(cmd)) { StreamTimers.Handle(cmd, args, say); return true; }
+                if (cmd == "!remind" || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder") { Reminders.Handle(user, cmd, args, mod, say); return true; }
                 if (Emotes.IsCommand(cmd)) { Emotes.Handle(user, cmd, args, say, ParseMonth, MonthLabel); return true; }
                 switch (cmd)
                 {

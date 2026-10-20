@@ -882,6 +882,98 @@
         "!timer add 15 follow the stream!",
         "!timer now commands"
       ]
+    },
+    {
+      "command": "!remindme",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "everyone",
+      "usage": "!remindme <time> <what>",
+      "description": "The bot @mentions you in chat when the time is up (1 minute to 24 hours, up to 3 open reminders). Survives restarts.",
+      "examples": [
+        "!remindme 30m take the pizza out"
+      ]
+    },
+    {
+      "command": "!reminders",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "everyone",
+      "usage": "!reminders",
+      "description": "Your open reminders and when they are due.",
+      "examples": []
+    },
+    {
+      "command": "!cancelreminder",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "everyone",
+      "usage": "!cancelreminder [number]",
+      "description": "Cancel one of your reminders (number from !reminders).",
+      "examples": [
+        "!cancelreminder 1"
+      ]
+    },
+    {
+      "command": "!remind",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "mods",
+      "usage": "!remind @user <time> <what>",
+      "description": "Set a reminder for someone else; the bot @mentions them when it is due.",
+      "examples": [
+        "!remind @viewer 10m answer chat"
+      ]
+    },
+    {
+      "command": "!countdown",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "mods",
+      "usage": "!countdown <time> [label] | pause | resume | stop",
+      "description": "Start the on-stream countdown (the site timer overlay shows it); says a line at zero.",
+      "examples": [
+        "!countdown 10m starting soon",
+        "!countdown 1h30m subathon"
+      ]
+    },
+    {
+      "command": "!stopwatch",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "mods",
+      "usage": "!stopwatch start [label] | stop | reset",
+      "description": "On-stream stopwatch.",
+      "examples": []
+    },
+    {
+      "command": "!addtime",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "mods",
+      "usage": "!addtime <time>",
+      "description": "Add (or with a minus, take off) time on the running countdown.",
+      "examples": [
+        "!addtime 5m",
+        "!addtime -2m"
+      ]
+    },
+    {
+      "command": "!stoptimer",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "mods",
+      "usage": "!stoptimer",
+      "description": "Clear every on-stream timer.",
+      "examples": []
     }
   ]
 }
