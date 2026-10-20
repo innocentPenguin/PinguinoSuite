@@ -14,6 +14,10 @@ Trigger: Ivan says "done for the night", or the scheduled time (when Ivan sets o
 3. BUG HUNT + FIX: full code read of changed engines, fix, add tests.
 4. Repeat 1-3 until a round finds nothing. Record rounds in Docs\nightly\YYYY-MM-DD.md.
 
+## Phase 2b: Index everything (so bots and sessions find things fast)
+- Put a short INDEX block at the START of each big file/doc (what it is, key sections/functions with line numbers, related files) so a reader or bot finds things without scanning.
+- Keep a repo map: Docs\INDEX.md (every module, port, data file, tool, doc, one line each, newest first for changes) and a machine-readable Data\index\files.json (path, purpose, owner session, last changed). Regenerate nightly with Tools\build-index.py (mechanical; a Runner at low effort can own it). Public bot packs (Helper) only index public material.
+
 ## Phase 3: Engine reports (only what changed)
 Each engine (Helper, Chatty, B0t, Host, Link, Multi, Spotify, Voice, Site) sends 00: what was UPDATED since last run, new capabilities, known issues, future plans. 00 collects into Docs\nightly\reports\YYYY-MM-DD.md.
 
