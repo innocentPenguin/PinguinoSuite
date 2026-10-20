@@ -257,6 +257,66 @@ def obs_export(kind: str):
     return obs_mod.to_synchra(kind, _obs_get(kind))
 
 
+# Dashboard layouts ("Profile" menu), stored on the server so every window/PC sees the same ones ---------
+DASH_DEFAULTS = {"Default": {"panels": ["activity", "chat"], "widths": [50, 50], "src": "all"}, "Chat only": {"panels": ["chat"], "widths": [100], "src": "all"},
+                 "Wide chat": {"panels": ["activity", "chat"], "widths": [30, 70], "src": "all"}}
+
+
+def _dash_layout(o):
+    o = o if isinstance(o, dict) else {}
+    panels = [p for p in (o.get("panels") or []) if p in ("activity", "chat")][:2] or ["activity", "chat"]
+    widths = [min(90, max(10, int(w))) for w in (o.get("widths") or [])][:len(panels)]
+    widths += [50] * (len(panels) - len(widths))
+    src = o.get("src") if o.get("src") in ("all", *obs_mod.PROVIDERS) else "all"
+    return {"panels": panels, "widths": widths, "src": src}
+
+
+def _dash_state():
+    d = store.kv_get("dash", None) or {}
+    profs = dict(DASH_DEFAULTS)
+    profs.update({k: _dash_layout(v) for k, v in (d.get("profiles") or {}).items()})
+    active = d.get("active") if d.get("active") in profs else "Default"
+    return {"profiles": profs, "active": active, "builtin": list(DASH_DEFAULTS)}
+
+
+@app.get("/api/dash")
+def dash_get():
+    return _dash_state()
+
+
+@app.post("/api/dash")
+async def dash_set(request: Request):
+    b = await request.json()
+    name = str(b.get("name") or "").strip()[:40]
+    if not name:
+        return JSONResponse({"detail": "name required"}, status_code=400)
+    d = store.kv_get("dash", None) or {"profiles": {}}
+    d.setdefault("profiles", {})[name] = _dash_layout(b.get("layout"))
+    if b.get("activate", True):
+        d["active"] = name
+    store.kv_set("dash", d)
+    return _dash_state()
+
+
+@app.delete("/api/dash/{name}")
+def dash_delete(name: str):
+    d = store.kv_get("dash", None) or {"profiles": {}}
+    d.get("profiles", {}).pop(name, None)
+    if d.get("active") == name:
+        d["active"] = "Default"
+    store.kv_set("dash", d)
+    return _dash_state()
+
+
+@app.post("/api/dash/active")
+async def dash_active(request: Request):
+    b = await request.json()
+    d = store.kv_get("dash", None) or {"profiles": {}}
+    d["active"] = b.get("name")
+    store.kv_set("dash", d)
+    return _dash_state()
+
+
 @app.get("/api/status")
 def status():
     return {"ok": True, "uptime_s": int(time.time() - START), "stats": pipeline.stats,

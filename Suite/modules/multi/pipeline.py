@@ -16,7 +16,7 @@ from priority import rules as prio
 from models import ChatMessage
 
 
-NOTICES = {"sub", "resub", "gift", "raid", "follow", "redeem", "announcement"}
+NOTICES = {"sub", "resub", "gift", "raid", "follow", "redeem", "announcement", "ban", "timeout", "unban", "unmod", "mod", "shoutout"}
 
 
 class Pipeline:

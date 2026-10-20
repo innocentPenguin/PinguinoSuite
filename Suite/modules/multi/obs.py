@@ -7,7 +7,7 @@ PROVIDERS = ("twitch", "youtube", "kick", "discord", "tiktok")
 STYLES = ("simple", "bubble", "boxed")
 ENTRANCE = ("none", "fade", "slide", "pop")
 KINDS = ("chat", "activity")
-ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement")
+ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement", "shoutout", "ban", "timeout", "unban", "mod", "unmod")
 FONTS = {"nunito": "Nunito, 'Segoe UI', sans-serif", "system": "'Segoe UI', Arial, sans-serif", "roboto": "Roboto, Arial, sans-serif",
          "arial": "Arial, sans-serif", "georgia": "Georgia, serif", "consolas": "Consolas, monospace", "comic": "'Comic Sans MS', cursive",
          "impact": "Impact, sans-serif", "trebuchet": "'Trebuchet MS', sans-serif", "verdana": "Verdana, sans-serif"}

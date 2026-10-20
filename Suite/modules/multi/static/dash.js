@@ -1,11 +1,15 @@
 // Synchra-style dashboard: /?type=dash  (source tabs bar, Activity Feed panel, Chat panel, Ctrl+K search). /?type=dash&panel=chat|activity shows one panel (for pop-out).
 // Globals from index.html/chat.js: $, esc, api, q, W, msgs, conns, isBot, colourOf, badgeHtml, bodyHtml, popOut, sideToggle.
-const DASH = {src: 'all', paused: false, queue: [], lock: true, edit: false, ign: new Set(), user: '', menu: null, panels: ['activity', 'chat'], widths: [50, 50]};
+const DASH = {profs: {}, active: 'Default', builtin: [], src: 'all', paused: false, queue: [], lock: true, edit: false, ign: new Set(), user: '', menu: null, panels: ['activity', 'chat'], widths: [50, 50]};
 try { Object.assign(DASH, JSON.parse(localStorage.getItem('multi-dash') || '{}'), {paused: false, queue: [], menu: null, edit: false, ign: new Set()}); } catch (e) { /* storage blocked */ }
-const dashSave = () => { try { localStorage.setItem('multi-dash', JSON.stringify({src: DASH.src, lock: DASH.lock, panels: DASH.panels, widths: DASH.widths})); } catch (e) { /* ignore */ } };
+const dashSave = () => {      // lock stays per browser; the layout lives on the server in the active profile
+  try { localStorage.setItem('multi-dash', JSON.stringify({lock: DASH.lock})); } catch (e) { /* ignore */ }
+  if (DASH.active) fetch('/api/dash', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({name: DASH.active, layout: {panels: DASH.panels, widths: DASH.widths, src: DASH.src}})}).catch(() => {});
+};
+function dApply(st) { DASH.profs = st.profiles; DASH.active = st.active; DASH.builtin = st.builtin; const l = st.profiles[st.active]; if (l) { DASH.panels = l.panels; DASH.widths = l.widths; DASH.src = l.src; } }
 const D_LOGO = {twitch: ['#9146ff', 'T'], youtube: ['#e62117', '▶'], kick: ['#53fc18', 'K'], discord: ['#5865f2', 'D'], tiktok: ['#111', '♪']};
 const D_PILL = {follow: ['Follow', '#4ade80', '#08210f'], redeem: ['Redeem', '#8ecfe0', '#08242c'], sub: ['Sub', '#a78bfa', '#170a3a'], resub: ['Resub', '#a78bfa', '#170a3a'],
-  gift: ['Gift', '#c084fc', '#220a3a'], cheer: ['Cheer', '#facc15', '#2b2200'], raid: ['Raid', '#f472b6', '#38081f'], announcement: ['Notice', '#fb923c', '#2b1200'], shoutout: ['Shoutout', '#7cb7f5', '#071b33']};
+  gift: ['Gift', '#c084fc', '#220a3a'], cheer: ['Cheer', '#facc15', '#2b2200'], raid: ['Raid', '#f472b6', '#38081f'], announcement: ['Notice', '#fb923c', '#2b1200'], shoutout: ['Shoutout', '#7cb7f5', '#071b33'], ban: ['Ban', '#f87171', '#330808'], timeout: ['Timeout', '#fb923c', '#2b1200'], unban: ['Unban', '#94a3b8', '#0b1220'], mod: ['Mod', '#4ade80', '#08210f'], unmod: ['Unmod', '#94a3b8', '#0b1220']};
 const D_UNIT = {raid: 'viewers', cheer: 'bits', gift: 'subs', resub: 'months', sub: 'months', redeem: 'points'};
 const dIcon = p => { const [c, l] = D_LOGO[p] || ['#888', '?']; return `<span class="d-ic" style="background:${c};color:${p === 'kick' ? '#111' : '#fff'}" title="${esc(p)}">${l}</span>`; };
 const dAge = ts => { const s = Math.max(0, Date.now() / 1000 - ts); return s < 60 ? 'now' : s < 3600 ? Math.floor(s / 60) + 'm' : s < 86400 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 86400) + 'd'; };
@@ -39,7 +43,8 @@ const D_CSS = `
 .d-sr input{padding:12px;background:transparent;border:0;border-bottom:1px solid var(--line);color:inherit;font-size:1.1em;outline:0}.d-sr .d-list{padding:4px}
 .d-emo{position:absolute;bottom:52px;right:14px;background:var(--panel,#1a1814);border:1px solid var(--accent);border-radius:8px;padding:6px;display:grid;grid-template-columns:repeat(8,1fr);gap:2px;z-index:70}.d-emo span{cursor:pointer;padding:3px;font-size:1.3em;border-radius:4px}.d-emo span:hover{background:#ff8a1f30}`;
 
-function renderDash() {
+async function renderDash() {
+  if (!DASH.loaded) { try { dApply(await fetch('/api/dash').then(r => r.json())); } catch (e) { /* defaults */ } DASH.loaded = true; }
   $('#hdr').style.display = 'none';
   if (!$('#d-css')) { const s = document.createElement('style'); s.id = 'd-css'; s.textContent = D_CSS; document.head.appendChild(s); }
   const only = q.get('panel');
@@ -139,7 +144,9 @@ document.addEventListener('click', async e => {
   else if (a === 'lock') { DASH.lock = !DASH.lock; if (DASH.lock) DASH.edit = false; dashSave(); renderDash(); }
   else if (a === 'edit') { DASH.edit = !DASH.edit; renderDash(); }
   else if (a === 'add') dMenu(r.left, r.bottom, [['Activity Feed', () => { if (!DASH.panels.includes('activity')) DASH.panels.unshift('activity'); dashSave(); renderDash(); }], ['Chat', () => { if (!DASH.panels.includes('chat')) DASH.panels.push('chat'); dashSave(); renderDash(); }]]);
-  else if (a === 'profile') dMenu(r.left, r.bottom, [['Default layout', () => { DASH.panels = ['activity', 'chat']; DASH.widths = [50, 50]; DASH.src = 'all'; dashSave(); renderDash(); }], ['Chat only', () => { DASH.panels = ['chat']; dashSave(); renderDash(); }], ['Wide chat', () => { DASH.panels = ['activity', 'chat']; DASH.widths = [30, 70]; dashSave(); renderDash(); }]]);
+  else if (a === 'profile') dMenu(r.left, r.bottom, [...Object.keys(DASH.profs).map(n => [(n === DASH.active ? '✓ ' : '') + n, async () => { dApply(await fetch('/api/dash/active', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({name: n})}).then(r => r.json())); renderDash(); }]), '-',
+    ['Save layout as new profile...', async () => { const n = prompt('Profile name?'); if (!n || !n.trim()) return; DASH.active = n.trim(); dashSave(); setTimeout(async () => { dApply(await fetch('/api/dash').then(r => r.json())); renderDash(); }, 300); }],
+    ...(DASH.builtin.includes(DASH.active) ? [] : [['Delete profile "' + DASH.active + '"', async () => { dApply(await fetch('/api/dash/' + encodeURIComponent(DASH.active), {method: 'DELETE'}).then(r => r.json())); renderDash(); }]])]);
   else if (a === 'rm') { DASH.panels = DASH.panels.filter(x => x !== p); dashSave(); renderDash(); }
   else if (a === 'left' || a === 'right') { const i = DASH.panels.indexOf(p), j = a === 'left' ? i - 1 : i + 1; if (j >= 0 && j < DASH.panels.length) { [DASH.panels[i], DASH.panels[j]] = [DASH.panels[j], DASH.panels[i]]; dashSave(); renderDash(); } }
   else if (a === 'pop') popOut('dash-' + p, location.origin + '/?type=dash&panel=' + p, p === 'chat' ? 'Chat' : 'Activity Feed', {w: 520, h: 800});

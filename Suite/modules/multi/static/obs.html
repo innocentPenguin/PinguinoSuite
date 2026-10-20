@@ -22,7 +22,7 @@ body.top #feed{justify-content:flex-start}
 .chat-notice{font-style:italic;opacity:.92}.chat-notice .chat-username{color:var(--ac,#ff8a1f)}
 .act-age{opacity:.6;font-size:.6em;margin-right:8px;display:inline-block;min-width:2.2em}
 .act-pill{display:inline-block;font:800 .55em/1.6 'Segoe UI',sans-serif;padding:0 .7em;border-radius:1em;background:var(--ac,#ff8a1f);color:#111;text-shadow:none;margin-right:8px;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
-.t-follow{background:#4ade80}.t-raid{background:#f472b6}.t-sub,.t-resub,.t-gift{background:#a78bfa}.t-cheer{background:#facc15}.t-redeem{background:#38bdf8}
+.t-follow{background:#4ade80}.t-raid{background:#f472b6}.t-sub,.t-resub,.t-gift{background:#a78bfa}.t-cheer{background:#facc15}.t-redeem{background:#38bdf8}.t-shoutout{background:#7cb7f5}.t-ban,.t-timeout{background:#f87171}.t-unban,.t-mod,.t-unmod{background:#94a3b8}
 .act-user{font-weight:800;margin-right:8px}.act-chip{display:inline-block;font-size:.6em;padding:0 .7em;border-radius:1em;background:#ffffff22;margin-left:4px;text-shadow:none;vertical-align:middle}
 .in-fade{animation:efade .35s ease-out}.in-slide{animation:eslide .35s ease-out}.in-pop{animation:epop .3s cubic-bezier(.3,1.6,.5,1)}
 @keyframes efade{from{opacity:0}to{opacity:1}}@keyframes eslide{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:none}}@keyframes epop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
@@ -39,7 +39,7 @@ const SIZES = {xs: 16, s: 20, m: 24, l: 30, xl: 36, xxl: 44};
 const PCOL = {twitch: '#9146ff', youtube: '#ff4e45', kick: '#53fc18', discord: '#7983f5', tiktok: '#ff2d55'};
 const PLET = {twitch: 'T', youtube: 'Y', kick: 'K', discord: 'D', tiktok: '♪'};
 const UNIT = {raid: 'viewers', cheer: 'bits', gift: 'subs', resub: 'months', sub: 'months'};
-const LABEL = {follow: 'Follow', redeem: 'Redeem', sub: 'Sub', resub: 'Resub', gift: 'Gift', cheer: 'Cheer', raid: 'Raid', announcement: 'Notice'};
+const LABEL = {follow: 'Follow', redeem: 'Redeem', sub: 'Sub', resub: 'Resub', gift: 'Gift', cheer: 'Cheer', raid: 'Raid', announcement: 'Notice', shoutout: 'Shoutout', ban: 'Ban', timeout: 'Timeout', unban: 'Unban', mod: 'Mod', unmod: 'Unmod'};
 let S = null, MUTED = new Set(), items = [];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const $ = s => document.querySelector(s);

@@ -32,3 +32,13 @@ Presets: Ivan (saved Synchra look), Simple, Penguino, Big and readable (chat); P
 `/?type=dash` (also Settings panel > Dashboard): profile / edit layout / add / lock bar, source tabs (platform logo, channel, status dot with tooltip, menu), Activity Feed panel (alerts bar: pause, next, skip, show all; rows with age, platform logo, type pill, user, chips such as "13 viewers" / "25 points", links under redeems, row menu), Chat panel (date divider, logos, badges, name colours, dimmed notices, message box with ONE platform picker, emoji, send), Ctrl+K search, per-panel settings gear (opens the Settings panel) and pop-out (`&panel=chat|activity`).
 Layout choices are remembered in this browser (localStorage). "Alerts" pause queues new activity rows; next/skip/all work on that queue. Alert sounds/animations on stream belong to the Host, not Multi.
 Not done: ban/unmod notices (needs moderation events from Twitch), custom emote picker.
+
+## Moderation notices (Host feed)
+Multi reads `ban`, `shoutout` (and `unban`/`unmod`/`mod` once the Host emits them) from the Host activity feed. Rows read "<moderator> banned <user>" when the item carries `moderator`, else "<user> was banned / timed out". They show dimmed inline in chat (dashboard + OBS chat notices) and as pills in the activity feed/widget. Never scored or dinged.
+Ask to the Host (02): include `moderator` in ban items (ctx already has it, HostLatest.Record drops it) and emit `unban`, `mod`, `unmod` (EventSub channel.unban, channel.moderator.add/remove, or channel.moderate).
+
+## Dashboard profiles
+Saved on the server (kv `dash` in Multi's data dir): GET/POST /api/dash, POST /api/dash/active, DELETE /api/dash/{name}. Built-ins: Default, Chat only, Wide chat. Layout edits save into the active profile. Only the lock stays per browser.
+
+## Widget editor
+Tabs: Theme (presets), General, Appearance, Timing, Custom CSS; URL/export/import always on top.

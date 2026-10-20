@@ -13,19 +13,31 @@ import console_log
 from models import ChatMessage
 
 HOST = "http://127.0.0.1:8770"
-ALWAYS = ("follow", "redeem")                 # not available through the Twitch chat connection
+ALWAYS = ("follow", "redeem", "ban", "unban", "unmod", "mod", "shoutout")                 # not available through the Twitch chat connection
 FALLBACK = ("sub", "resub", "gift", "cheer", "raid")
-WORDS = {"follow": "{u} followed", "redeem": "{u} redeemed {d}", "sub": "{u} subscribed", "resub": "{u} resubscribed",
+MODWORDS = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "modded"}
+MODPASSIVE = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "made a moderator"}
+WORDS = {"shoutout": "{u} was given a shoutout", "follow": "{u} followed", "redeem": "{u} redeemed {d}", "sub": "{u} subscribed", "resub": "{u} resubscribed",
          "gift": "{u} gifted subs", "cheer": "{u} cheered", "raid": "{u} is raiding"}
 
 
 def to_message(item, channel):
     """One Host activity item -> an event ChatMessage (or None for types Multi does not show)."""
     t = item.get("type")
-    if t not in WORDS:
+    if t not in WORDS and t not in MODWORDS:
         return None
     user = str(item.get("user") or "someone")[:60]
     detail = str(item.get("detail") or "")[:120]
+    if t in MODWORDS:                                  # moderation notice: "<moderator> banned <user>" (or "<user> was banned" when the Host does not say who)
+        if t == "ban" and "timed" in detail:
+            t = "timeout"
+        mod = str(item.get("moderator") or "")[:60]
+        verb = MODWORDS[t]
+        shown, text = (mod, f"{mod} {verb} {user}") if mod else (user, f"{user} was {MODPASSIVE[t]}")
+        if item.get("message") and t in ("ban", "timeout"):
+            text += f" ({str(item['message'])[:100]})"
+        return ChatMessage(id=f"host:{item['seq']}", platform="twitch", channel=channel, user_id=shown.lower(), user=shown.lower(), display=shown,
+                           text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or 0))
     text = WORDS[t].format(u=user, d=detail or "a reward")
     if t == "redeem" and item.get("message"):
         text += ": " + str(item["message"])[:200]

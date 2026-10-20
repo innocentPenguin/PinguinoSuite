@@ -1076,3 +1076,13 @@ def test_obs_sanitize_clamps_and_hidden():
     assert obs.hidden("chat", st2, {"user": "x", "platform": "twitch", "event": "raid"})
     act = obs.sanitize("activity", {"types": ["follow"]})
     assert not obs.hidden("activity", act, {"user": "x", "platform": "twitch", "event": "follow"}) and obs.hidden("activity", act, {"user": "x", "platform": "twitch", "event": "raid"})
+
+
+def test_host_feed_moderation_notices():
+    import host_feed
+    m = host_feed.to_message({"seq": 5, "type": "ban", "user": "Troll", "detail": "timed out", "message": "spam", "ts": 1}, "chan")
+    assert m.event == "timeout" and m.text == "Troll was timed out (spam)" and m.display == "Troll"
+    m = host_feed.to_message({"seq": 6, "type": "ban", "user": "Troll", "detail": "banned", "moderator": "InnocentPenguin_"}, "chan")
+    assert m.event == "ban" and m.text == "InnocentPenguin_ banned Troll" and m.display == "InnocentPenguin_"
+    assert host_feed.to_message({"seq": 7, "type": "unmod", "user": "PotatBotat", "moderator": "InnocentPenguin_"}, "c").text == "InnocentPenguin_ unmodded PotatBotat"
+    assert "ban" in host_feed.ALWAYS and "shoutout" in host_feed.ALWAYS
