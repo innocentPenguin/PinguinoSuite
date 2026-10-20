@@ -18,10 +18,10 @@ namespace PinguinoHost
     {
         static string FilePath { get { return Path.Combine(HostApi.DataDir, "cutover.json"); } }
         public static bool On { get { try { return File.Exists(FilePath) && (bool?)JObject.Parse(File.ReadAllText(FilePath))["on"] == true; } catch (Exception) { return false; } } }
+        /// <summary>is a real Streamer.bot process running? (Not a port probe: since cutover the Host's own compat server listens on 8080.)</summary>
         public static bool StreamerBotRunning()
         {
-            int port = int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_SB_PORT"), out int sp) ? sp : 8080;
-            try { using (var tc = new TcpClient()) return tc.ConnectAsync("127.0.0.1", port).Wait(500); } catch (Exception) { return false; }
+            try { return System.Diagnostics.Process.GetProcessesByName("Streamer.bot").Length > 0; } catch (Exception) { return false; }
         }
         public static JObject State()
         {
