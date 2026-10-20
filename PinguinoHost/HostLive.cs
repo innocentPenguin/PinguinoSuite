@@ -10,6 +10,8 @@ namespace PinguinoHost
     {
         static DateTime? _startedAt; static bool? _live; static string _source = "unknown"; static DateTime _at = DateTime.MinValue; static bool _started;
         public static bool? Live { get { return _live; } }
+        /// <summary>true when the stream is live OR Offline mode is on: what timers, chimes, intros and the economy gate on (the real state in Live stays honest).</summary>
+        public static bool Active { get { return OfflineMode.Enabled || _live == true; } }
         /// <summary>!uptime: how long the stream has been live (Twitch start time when known).</summary>
         public static string UptimeLine()
         {
@@ -23,7 +25,7 @@ namespace PinguinoHost
 
         public static void Start(HostCPH cph, int periodSec = 20)
         {
-            if (_started) return; _started = true;
+            if (_started) return; _started = true; OfflineMode.Attach(cph);
             Task.Run(async () => { await Task.Delay(6000); while (true) { try { Tick(cph); } catch (Exception ex) { Clog.Warn("live", "live check failed: " + ex.Message); } await Task.Delay(periodSec * 1000); } });
         }
         public static void Tick(HostCPH cph)
@@ -37,6 +39,7 @@ namespace PinguinoHost
                 if (code == "200" && d is JArray a) { v = a.Count > 0; src = "twitch"; DateTime st; _startedAt = a.Count > 0 && DateTime.TryParse((string)a[0]["started_at"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out st) ? st : (DateTime?)null; }
                 else { bool? o = cph.ObsStreaming(); if (o != null) { v = o; src = "obs"; } }
             }
+            OfflineMode.Publish();
             if (v == null) return;
             if (_live != true && v == true) SubBoard.ResetChat();
             if (_live != v) Clog.Info("live", "stream is " + (v.Value ? "LIVE" : "offline") + " (" + src + ")");

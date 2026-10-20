@@ -129,6 +129,8 @@ namespace PinguinoHost
                 else res = OverlayFiles.Rename((string)b["from"], (string)b["to"], who);
                 Write(c, res.ToString(), "application/json"); return true;
             }
+            if (p == "/api/offline-mode" && m == "GET") { Write(c, OfflineMode.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/offline-mode" && m == "POST") { var b = Body(c); bool? en = (bool?)b["enabled"]; if (en == null) { Write(c, new JObject { { "ok", false }, { "error", "enabled (true/false) required" } }.ToString(), "application/json"); return true; } Write(c, OfflineMode.Set(en.Value, "api").ToString(), "application/json"); return true; }
             if (p == "/api/live-state" && m == "GET") { Write(c, Control.LiveState().ToString(), "application/json"); return true; }
             if (p == "/api/activity" && m == "GET")
             {

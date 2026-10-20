@@ -1,0 +1,197 @@
+[
+ {
+  "cmd": "!forgetme",
+  "category": "Chat bot",
+  "desc": "ChattyPinguino forgets everything it remembers about you."
+ },
+ {
+  "cmd": "!rememberme",
+  "category": "Chat bot",
+  "desc": "Let ChattyPinguino remember things about you again."
+ },
+ {
+  "cmd": "!memory",
+  "category": "Chat bot",
+  "desc": "Shows what ChattyPinguino remembers about you."
+ },
+ {
+  "cmd": "!8ball",
+  "category": "Chat bot",
+  "desc": "Ask the magic 8-ball. The bot answers in its own voice and may nod to public things like your sub, watch streak or what chat was just saying. Limited to once every 45 seconds per person."
+ },
+ {
+  "cmd": "!ash",
+  "category": "Clips",
+  "desc": "A clip from the channel: He Gives bits! www.twitch.tv/innocentpenguin_/clip/BloodyPie"
+ },
+ {
+  "cmd": "!blizzy",
+  "category": "Clips",
+  "desc": "A clip from the channel: medal.tv/games/minecraft/clips/nvYdSN1xv0wlWov60?invite=cr-M"
+ },
+ {
+  "cmd": "!burglin / !burglingnomes",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/SpookyTrustworthyLapwing"
+ },
+ {
+  "cmd": "!cat",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/DifferentSuaveRingCoolSt"
+ },
+ {
+  "cmd": "!crimson",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/InspiringFrozenGrassPete"
+ },
+ {
+  "cmd": "!geoguesser",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/UglyVainSowNononoCat-bqE"
+ },
+ {
+  "cmd": "!golf",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/HorribleObeseFoxPJSalt-X"
+ },
+ {
+  "cmd": "!howbigisit",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/RacyExpensiveRadicchioDB"
+ },
+ {
+  "cmd": "!marsh",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/onepsynic/clip/CovertHungryOrcaItsBoshyTime-bQ"
+ },
+ {
+  "cmd": "!minecraft / !piglin",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/TsundereSpookyGarageThis"
+ },
+ {
+  "cmd": "!oopsie",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/DirtyViscousCarabeefPani"
+ },
+ {
+  "cmd": "!peak",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/SparklyAmazingPorpoiseKa"
+ },
+ {
+  "cmd": "!repo",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/MoldyAwkwardSnoodBatChes"
+ },
+ {
+  "cmd": "!rl",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/ComfortableArborealYakin"
+ },
+ {
+  "cmd": "!settings",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/TenderKindNarwhalStinkyC"
+ },
+ {
+  "cmd": "!squishy",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/TenderSincereCheddarPogC"
+ },
+ {
+  "cmd": "!uk",
+  "category": "Clips",
+  "desc": "A clip from the channel: www.twitch.tv/innocentpenguin_/clip/GlutenFreeCarelessGooseP"
+ },
+ {
+  "cmd": "!yen",
+  "category": "Clips",
+  "desc": "A clip from the channel: @SG_Yen Sends 20 different subs at 1 time www.twitch.tv/inno"
+ },
+ {
+  "cmd": "!register",
+  "category": "Community Games",
+  "desc": "Link your Twitch name to your Epic Games name. Mods can register or fix someone else's."
+ },
+ {
+  "cmd": "!join",
+  "category": "Community Games",
+  "desc": "Join the queue (must be registered, queue must be open)."
+ },
+ {
+  "cmd": "!leave",
+  "category": "Community Games",
+  "desc": "Leave the queue."
+ },
+ {
+  "cmd": "!pos",
+  "category": "Community Games",
+  "desc": "Show your place in the queue."
+ },
+ {
+  "cmd": "!myrank",
+  "category": "Community Games",
+  "desc": "Show your MMR on file and where it came from."
+ },
+ {
+  "cmd": "!lobby",
+  "category": "Community Games",
+  "desc": "Show the current Blue and Orange teams."
+ },
+ {
+  "cmd": "!stats",
+  "category": "Community Games",
+  "desc": "Wins, losses and points for you or another player."
+ },
+ {
+  "cmd": "!topwins",
+  "category": "Community Games",
+  "desc": "Top 5 community-games players by wins (ties broken by points)."
+ },
+ {
+  "cmd": "!queue",
+  "category": "Community Games",
+  "desc": "Queue status. Mods open, close, or clear (clear also closes and ends the lobby)."
+ },
+ {
+  "cmd": "!strikes",
+  "category": "Community Games",
+  "desc": "How many strikes you have (3 = cannot join customs), split into permanent (red, never expire) and temporary (orange, one wears off per day)."
+ },
+ {
+  "cmd": "!emote",
+  "category": "Emotes",
+  "desc": "How often an emote from the channel's 7TV set has been used in chat, its rank, the top user and when it was last used."
+ },
+ {
+  "cmd": "!topemotes / !topemote",
+  "category": "Emotes",
+  "desc": "The most used 7TV emotes in chat, all time or for one month (oct, 2026-10, last). Emotes that are also everyday words are left out."
+ },
+ {
+  "cmd": "!first",
+  "category": "Firsts",
+  "desc": "Your First 5 record (1st-5th place counts and total)."
+ },
+ {
+  "cmd": "!firsts",
+  "category": "Firsts",
+  "desc": "Top 5 First 5 leaderboard."
+ },
+ {
+  "cmd": "(chat message)",
+  "category": "Firsts",
+  "desc": "First 5 unique chatters claim 1st-5th. Payout via !addpoints every 5 min: 15000 / 10500 / 7500 / 4500 / 3000."
+ },
+ {
+  "cmd": "!1v1",
+  "category": "Fun",
+  "desc": "If you think about it, going into a random stream and asking to 1v1 is like walking into a party you weren'..."
+ },
+ {
+  "cmd": "!ad",
+  "category": "Fun",
+  "desc": "they appear at the worst possible time L ads"
+ }
+]

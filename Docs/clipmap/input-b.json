@@ -1,0 +1,197 @@
+[
+ {
+  "cmd": "!attack",
+  "category": "Fun",
+  "desc": "$(user) viciously tackles $(touser) into a pile of pillows! 🛏💥"
+ },
+ {
+  "cmd": "!ban",
+  "category": "Fun",
+  "desc": "$(user) tried to ban $(touser) . It failed, but it makes $(user) feel like a boss! 😎"
+ },
+ {
+  "cmd": "!cheese",
+  "category": "Fun",
+  "desc": "I like cheese"
+ },
+ {
+  "cmd": "!cups",
+  "category": "Fun",
+  "desc": "Cups is the best"
+ },
+ {
+  "cmd": "!cute",
+  "category": "Fun",
+  "desc": "ivan cutie arroyo"
+ },
+ {
+  "cmd": "!dictators",
+  "category": "Fun",
+  "desc": "flayir and yoopoo"
+ },
+ {
+  "cmd": "!endstream",
+  "category": "Fun",
+  "desc": "LWK PENG GET OFF... YOUR NOT COOKING ANYMORE. JS END STREAM ALREADY!"
+ },
+ {
+  "cmd": "!happy",
+  "category": "Fun",
+  "desc": "if you’re sad by happy doesn’t cost a dime to spread love"
+ },
+ {
+  "cmd": "!hug",
+  "category": "Fun",
+  "desc": "$(user) wraps their arms around $(touser) and gives them a big, warm hug! 🤗"
+ },
+ {
+  "cmd": "!luck",
+  "category": "Fun",
+  "desc": "You got $(random 1 50)% luck BROCHACHO, GET GOOD :)"
+ },
+ {
+  "cmd": "!lurk",
+  "category": "Fun",
+  "desc": "Thanks for lurking, $(user)! We hope to see you back soon!"
+ },
+ {
+  "cmd": "!owngoal",
+  "category": "Fun",
+  "desc": "$(channel) Has own goaled a total of $(count owngoal) times!"
+ },
+ {
+  "cmd": "!penguin",
+  "category": "Fun",
+  "desc": "i love my community, i love playing with viewers, i DONT bite, and i love Rocket league. Also im literally ..."
+ },
+ {
+  "cmd": "!popcorn",
+  "category": "Fun",
+  "desc": "PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn Pop..."
+ },
+ {
+  "cmd": "!sad",
+  "category": "Fun",
+  "desc": "if your sad know your loved by penguin and people in chat"
+ },
+ {
+  "cmd": "!thebest",
+  "category": "Fun",
+  "desc": "im mini"
+ },
+ {
+  "cmd": "!turtles",
+  "category": "Fun",
+  "desc": "i like turtles"
+ },
+ {
+  "cmd": "!unlurk",
+  "category": "Fun",
+  "desc": "$(user) is back!"
+ },
+ {
+  "cmd": "!vanish",
+  "category": "Fun",
+  "desc": "they have disappeared"
+ },
+ {
+  "cmd": "!water",
+  "category": "Fun",
+  "desc": "HYDRATE RIGHT NOW"
+ },
+ {
+  "cmd": "!whiff",
+  "category": "Fun",
+  "desc": "$(channel) has whiffed an amazing $(count whiff) times!"
+ },
+ {
+  "cmd": "goodnight",
+  "category": "Fun",
+  "desc": "Goodnight $(user) innoce108Hello"
+ },
+ {
+  "cmd": "hi",
+  "category": "Fun",
+  "desc": "Hi $(user) innoce108Hello"
+ },
+ {
+  "cmd": "meow",
+  "category": "Fun",
+  "desc": "Meow Meow!!"
+ },
+ {
+  "cmd": "w",
+  "category": "Fun",
+  "desc": "W wyatt and luhgeekski"
+ },
+ {
+  "cmd": "!commands",
+  "category": "Help",
+  "desc": "Link to the website help page with every chat command and a search box."
+ },
+ {
+  "cmd": "!age",
+  "category": "Info",
+  "desc": "40 (larps 24)"
+ },
+ {
+  "cmd": "!burger",
+  "category": "Info",
+  "desc": "Use !burgie to place a order. To change skin, place complexed orders, interact more; read: https://heynauga..."
+ },
+ {
+  "cmd": "!controller",
+  "category": "Info",
+  "desc": "nintendo switch 2 pro controller"
+ },
+ {
+  "cmd": "!customrules",
+  "category": "Info",
+  "desc": "The rules for the customs are: No leaving/going afk mid game, no toxicity directed at other players, no tro..."
+ },
+ {
+  "cmd": "!customs",
+  "category": "Info",
+  "desc": "Type !howtojoin for information on how to join the customs and !customrules for the rules for customs."
+ },
+ {
+  "cmd": "!food",
+  "category": "Info",
+  "desc": "Penguin Sandwiches"
+ },
+ {
+  "cmd": "!hc",
+  "category": "Info",
+  "desc": "penguin has almost died 3x to himself (NOT CHAT DISTRACTING)"
+ },
+ {
+  "cmd": "!height",
+  "category": "Info",
+  "desc": "5'8 on a good day!"
+ },
+ {
+  "cmd": "!howtojoin",
+  "category": "Info",
+  "desc": "To play in the customs, type !join to join the queue. Once it is your turn to play, Penguin will call out y..."
+ },
+ {
+  "cmd": "!ip",
+  "category": "Info",
+  "desc": "smp.innocentpenguin.com | hc.innocentpenguin.com"
+ },
+ {
+  "cmd": "!mcrules",
+  "category": "Info",
+  "desc": "No Griefing, No Killing, No stealing, No cheating, Be nice, No Nether."
+ },
+ {
+  "cmd": "!mod",
+  "category": "Info",
+  "desc": "Don't beg for mod Not a rule, but you will be denied. mods are chosen based on 1 consistent viewership !wat..."
+ },
+ {
+  "cmd": "!mods",
+  "category": "Info",
+  "desc": "\"PENG WE DO NOT NEED MORE MODS\" - Yoohoo15"
+ }
+]

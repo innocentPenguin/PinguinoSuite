@@ -1,0 +1,197 @@
+[
+ {
+  "cmd": "!name",
+  "category": "Info",
+  "desc": "eye van"
+ },
+ {
+  "cmd": "!odds",
+  "category": "Info",
+  "desc": "Chance of winning — Gamble - 45% | Slots - 10% | Duels 50%"
+ },
+ {
+  "cmd": "!realrank",
+  "category": "Info",
+  "desc": "Silver 2 Div 3"
+ },
+ {
+  "cmd": "!schedule",
+  "category": "Info",
+  "desc": "Live every day at 5pm (Central)"
+ },
+ {
+  "cmd": "!server",
+  "category": "Info",
+  "desc": "There Are 2 Current Servers The hardcore server (Stream Only) and the pinguino smp 24/7 for the more chill ..."
+ },
+ {
+  "cmd": "!specs",
+  "category": "Info",
+  "desc": "Main PC Specs: CPU: Ryzen 9 7950X3D • GPU: RTX 5070Ti • RAM: 64GB DDR5"
+ },
+ {
+  "cmd": "!streamingpc",
+  "category": "Info",
+  "desc": "CPU: Ryzen 5600G • GPU: RTX 4070 • RAM: 64GB DDR4"
+ },
+ {
+  "cmd": "!streamtime",
+  "category": "Info",
+  "desc": "5pm (Central Time) 11PM (British Time)"
+ },
+ {
+  "cmd": "!time",
+  "category": "Info",
+  "desc": "It is $(time US/Central) for InnocentPenguin"
+ },
+ {
+  "cmd": "!vip",
+  "category": "Info",
+  "desc": "come to stream everyday be postive and be chill, no requirements except being you and returning. every day...."
+ },
+ {
+  "cmd": "!weight",
+  "category": "Info",
+  "desc": "90kg/ 198lbs"
+ },
+ {
+  "cmd": "!leaderboards / !leaderboard",
+  "category": "Leaderboards",
+  "desc": "Link to the website leaderboards (top gifters, bitters, yappers and watch streaks, all time or by month)."
+ },
+ {
+  "cmd": "!topgifters / !topgifter",
+  "category": "Leaderboards",
+  "desc": "Top 5 subscription gifters (subs gifted). Add a month (oct, october, 2026-10, this, last) for that month only."
+ },
+ {
+  "cmd": "!topbits / !topbitters / !topbitter",
+  "category": "Leaderboards",
+  "desc": "Top 5 bit cheerers, all time or for one month."
+ },
+ {
+  "cmd": "!topyappers / !topyapper",
+  "category": "Leaderboards",
+  "desc": "Top 5 chatters by number of chat messages, all time or for one month."
+ },
+ {
+  "cmd": "!gifted",
+  "category": "Leaderboards",
+  "desc": "How many subs you (or someone) gifted in total, and the rank on the gifters board."
+ },
+ {
+  "cmd": "!bits",
+  "category": "Leaderboards",
+  "desc": "Total bits cheered, the bits badge tier and the rank on the bits board."
+ },
+ {
+  "cmd": "!7tv",
+  "category": "Links",
+  "desc": "download 7TV integration to get access to loads of emotes that are free and get special perks Download via ..."
+ },
+ {
+  "cmd": "!discord / !dc",
+  "category": "Links",
+  "desc": "{{LINK:discord}}"
+ },
+ {
+  "cmd": "!drops",
+  "category": "Links",
+  "desc": "ENABLED!! https://www.twitch.tv/drops/inventory"
+ },
+ {
+  "cmd": "!geo",
+  "category": "Links",
+  "desc": "https://www.geoguessr.com/user/69fbf7426c47f011d20cc335"
+ },
+ {
+  "cmd": "!gsu",
+  "category": "Links",
+  "desc": "Heres the Official Governer State University Rocket League Channel to Watch Innocent Penguin! https://www.t..."
+ },
+ {
+  "cmd": "!modpack",
+  "category": "Links",
+  "desc": "https://drive.google.com/file/d/10TNoOGAQz8GuJ3AJ2S4wNv6x1_jw73pb/view?usp=sharing"
+ },
+ {
+  "cmd": "!phil",
+  "category": "Links",
+  "desc": "LETS FLOCK IN https://linktr.ee/Infancinema"
+ },
+ {
+  "cmd": "!prime",
+  "category": "Links",
+  "desc": "1️⃣ Go to twitch.tv/prime 2️⃣ Connect your Amazon Prime account to your Twitch 3️⃣ Click the Sub button the..."
+ },
+ {
+  "cmd": "!roblox",
+  "category": "Links",
+  "desc": "https://www.roblox.com/users/111646254/profile user: Newbienoob36"
+ },
+ {
+  "cmd": "!save",
+  "category": "Links",
+  "desc": "Save money on mobile! Sub or buy bits through these links to avoid mobile fees | Subs: twitch.tv/subs/innoc..."
+ },
+ {
+  "cmd": "!steam",
+  "category": "Links",
+  "desc": "https://steamcommunity.com/id/innocentpenguin OR CODE: --> 199738440"
+ },
+ {
+  "cmd": "!support",
+  "category": "Links",
+  "desc": "Top ways to support: !prime, sub, bits, and !tip | Support is appreciated but never required!!!"
+ },
+ {
+  "cmd": "!tiktok",
+  "category": "Links",
+  "desc": "{{LINK:tiktok}}"
+ },
+ {
+  "cmd": "!tracker",
+  "category": "Links",
+  "desc": "https://rocketleague.tracker.network/rocket-league/profile/epic/InnocentPeng_TTV/overview"
+ },
+ {
+  "cmd": "!tts",
+  "category": "Links",
+  "desc": "TTS is for subscribers only clicking the link allows u see which voices are allowed voice then message http..."
+ },
+ {
+  "cmd": "!ubisoft",
+  "category": "Links",
+  "desc": "ttvinnocentpeng"
+ },
+ {
+  "cmd": "!youtube / !yt",
+  "category": "Links",
+  "desc": "{{LINK:youtube}}"
+ },
+ {
+  "cmd": "!abdul",
+  "category": "People",
+  "desc": "the first multi millionaire in pinguino points the house is scared of him"
+ },
+ {
+  "cmd": "!blake",
+  "category": "People",
+  "desc": "The Prodigal Child of Rocket League"
+ },
+ {
+  "cmd": "!blizy",
+  "category": "People",
+  "desc": "best sugar daddy (6’6 btw)"
+ },
+ {
+  "cmd": "!coy",
+  "category": "People",
+  "desc": "MAKE SOME NOISE FOR DJ COY"
+ },
+ {
+  "cmd": "!developer",
+  "category": "People",
+  "desc": "Insane in hoops"
+ }
+]

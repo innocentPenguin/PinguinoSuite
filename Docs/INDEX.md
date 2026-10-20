@@ -258,7 +258,7 @@ Methods: StreamerCreds:27, LoadV:28, BotSecretsV:34, Load:44, Save:45, LocalOk:4
 Classes: Auto:19, StopAction:319
 Methods: Doc:34, Save:48, SeedDefaults:73, Actions:103, FindAction:104, Vars:107, GetVar:108, SetVar:109, Expand:113, Compare:126, CondOk:146, PermRank:153, UserRank:154, OnChat:157, BaseCtx:183, Channel:190, LoadSecrets:191, CooldownOk:193, OnEvent:207, Fire:219, OnStream:235, Hotkey:237, StartTimers:247, Test:280, Run:289, RunNow:295, Log:320, Exec:322, Say:355, Obs:361, Sound:363, UrlAllowed:377, Http:385, ModuleCommand:404
 
-### PinguinoHost/HostAutoApi.cs (297 lines) - Say a line in chat as one of the bots (own Twitch login first, then PinguinoB0t, then the rest of its fallback chain, then the shared account).
+### PinguinoHost/HostAutoApi.cs (300 lines) - Say a line in chat as one of the bots (own Twitch login first, then PinguinoB0t, then the rest of its fallback chain, then the shared account).
 Classes: HostApi:12
 Methods: SendAs:15, SaidRecently:55, IntroPage:68, AutoPagePath:75, AutoRoutes:83
 
@@ -270,9 +270,9 @@ Methods: FindDir:16, ReadJson:24, Conv:26, Perm:33, Run:38
 Classes: Auto:9
 Methods: Has:16, NoteFire:18, Display:20, TriggerList:36, HotkeyList:48, Enable:56, Export:63, VarList:66, VarSet:72, VarDelete:78, QueueState:84, QueueControl:90, Endpoints:95
 
-### PinguinoHost/HostAutoTwitch.cs (234 lines) - Twitch Helix calls with the streamer token, for the Actions &amp; Events steps that replace Streamer.bot (create_clip, ad_schedule, channel_info, native shoutou
-Classes: TwitchApi:14, Auto:47
-Methods: Call:16, BroadcasterId:36, Fmt:38, UserId:39, ExtraStep:50, PressKey:138, Cut:158, Act:159, SayStep:163, Tr:164, Step:165, Popup:166, SeedStreamerBotPresets:171
+### PinguinoHost/HostAutoTwitch.cs (254 lines) - Twitch Helix calls with the streamer token, for the Actions &amp; Events steps that replace Streamer.bot (create_clip, ad_schedule, channel_info, native shoutou
+Classes: TwitchApi:14, Auto:67
+Methods: Call:16, CallFull:37, BroadcasterId:56, Fmt:58, UserId:59, ExtraStep:70, PressKey:158, Cut:178, Act:179, SayStep:183, Tr:184, Step:185, Popup:186, SeedStreamerBotPresets:191
 
 ### PinguinoHost/HostBoards.cs (441 lines) - ALL-TIME LEADERBOARD TOTALS for the website (Top Gifters, Top Bitters, Biggest Yappers, Top Watch Streak). One record per person:
 Classes: Boards:21
@@ -288,6 +288,10 @@ Classes: the:12, HostBase:13, HostCPH:16
 ### PinguinoHost/HostChannel.cs (75 lines) - Channel title / category changes and guarded timeouts with the streamer token. Shared by the chat commands (title, game) and the loopback endpoints
 Classes: ChannelControl:13
 Methods: Audit:16, FindGame:23, Update:38, Timeout:55
+
+### PinguinoHost/HostClips.cs (56 lines) - GET /api/clips-dump (loopback): every clip of the channel from Helix GET /clips, saved to Data\clips\clips.json
+Classes: ClipsDump:14
+Methods: Run:17, ClipsRoot:31, Window:34
 
 ### PinguinoHost/HostConsole.cs (45 lines) - The Host's line in the Pinguino Console: one JSON object per line appended to Data\runtime\console\host.jsonl as {ts,module,level,source,msg}.
 Classes: Clog:10
@@ -309,9 +313,9 @@ Methods: Settings:37, Doc:45, Save:54, Norm:55, Canon:56, D:57, Snapshot:64, Me:
 Classes: Emotes:18
 Methods: Start:28, LoadSet:44, TwitchId:50, FetchSet:56, Hash:86, Refresh:89, Scan:97, Ambiguous:186, Uses:197, Api:200, Cooling:225, CoolSec:226, IsCommand:229, Handle:231
 
-### PinguinoHost/HostFeatureCommands.cs (218 lines) - Chat commands for the leaderboard / subscriber / watch-streak features. Their documentation is in PinguinoB0t/commands.json (what the website reads) and GET /ap
+### PinguinoHost/HostFeatureCommands.cs (219 lines) - Chat commands for the leaderboard / subscriber / watch-streak features. Their documentation is in PinguinoB0t/commands.json (what the website reads) and GET /ap
 Classes: FeatureCommands:16
-Methods: Cooling:20, CoolSec:21, ParseMonth:25, MonthLabel:36, BoardOf:46, Num:51, Handle:53, Data:102, Top:105, Ranked:120, Mine:125, SubInfo:135, Founders:146, Alias:153, BoardsCmd:161, SubsCmd:171, StreaksCmd:182, NamesCmd:188, Lookup:194, Doc:206, Norm:215
+Methods: Cooling:20, CoolSec:21, ParseMonth:25, MonthLabel:36, BoardOf:46, Num:51, Handle:53, Data:103, Top:106, Ranked:121, Mine:126, SubInfo:136, Founders:147, Alias:154, BoardsCmd:162, SubsCmd:172, StreaksCmd:183, NamesCmd:189, Lookup:195, Doc:207, Norm:216
 
 ### PinguinoHost/HostHelperReview.cs (79 lines) - Browse the helper's PRIVATE review log (Data\helper\review.jsonl, written by HelperPinguino): every answer and every probably-missed question with the chat
 Classes: HelperReview:12
@@ -329,9 +333,9 @@ Methods: Items:21, Settings:30, Record:48, RefollowCheck:96, Activity:120, Label
 Classes: Lease:14
 Methods: State:32, TakeMutex:38, Start:49, Poll:56, Became:78, Stop:86, StartStreamingReporter:94
 
-### PinguinoHost/HostLive.cs (50 lines) - The Host's own idea of "is the stream live" (no website key needed): Twitch's streams endpoint, else OBS. Published to the bots as the non-persisted global ping
+### PinguinoHost/HostLive.cs (53 lines) - The Host's own idea of "is the stream live" (no website key needed): Twitch's streams endpoint, else OBS. Published to the bots as the non-persisted global ping
 Classes: LiveState:9
-Methods: UptimeLine:14, Api:22, Start:24, Tick:29
+Methods: UptimeLine:16, Api:24, Start:26, Tick:31
 
 ### PinguinoHost/HostLiveLog.cs (241 lines) - The Host's own recording of ALL chat (every user, always, live or not, independent of ChattyPinguino): Data\chat_logs\live\YYYY-MM-DD.jsonl (UTC day), one
 Classes: LiveLog:15, Tally:50, Extra:84
@@ -344,6 +348,10 @@ Methods: Now:22, Doc:25, Save:40, Entries:43, Index:46, IsCommand:56, Central:59
 ### PinguinoHost/HostObs.cs (138 lines) - The live OBS tree for the Master View (Plan 6): scenes with folders, and the sources of a scene with live visibility, groups nested.
 Classes: ObsTree:13
 Methods: Start:21, Split:30, Overrides:40, SceneList:42, ItemsOf:52, Get:75, SetScene:97, HasItem:108, GroupHolding:109, SetItem:116, Err:135
+
+### PinguinoHost/HostOffline.cs (46 lines) - ONE "Offline mode" switch for the whole bot family. ON: Host timers, chimes, intros, economy and the bots (Helper, Chatty, B0t chat) behave as if the stream wer
+Classes: OfflineMode:10
+Methods: Load:15, Attach:20, Publish:21, Set:22, Api:33, Handle:36
 
 ### PinguinoHost/HostOps.cs (151 lines) - One switch for "Streamer.bot is retired": the Streamer.bot replacement actions that would answer a second time while Streamer.bot still runs
 Classes: Cutover:17, Lag:44, SiteFeed:67, PgCommand:110
@@ -426,7 +434,7 @@ Classes: Program:24, CPHInline:103
 Methods: HasAction:27, SayShared:28, ObsScene:31, ObsRaw:32, ObsSource:33, ResetFirsts:35, ObsData:41, TimeoutUser:42, CoreCommandList:43, Main:53, FindSuite:82, LoadSecrets:83, LoadModules:91, StartChatTicker:129, ChatTick:133, Dispatch:143, WireServices:190, CarryOverApiKey:203, DispatchEvent:219, StartSyncTimer:238, SimLoop:251, WireTwitch:270, ReadChatForever:300, HandleIrc:340
 
 ### HTTP routes (127.0.0.1:8770; POST needs same-origin or a token; module routes always need the module token)
-/api/account/streamer (HostApi.cs), /api/account/streamer/signin (HostApi.cs), /api/account/streamer/signout (HostApi.cs), /api/activity (HostAutoApi.cs), /api/automations (HostAutoApi.cs), /api/automations/enable (HostAutoApi.cs), /api/automations/export (HostAutoApi.cs), /api/automations/fire (HostAutoApi.cs), /api/automations/hotkeys (HostAutoApi.cs), /api/automations/import (HostAutoApi.cs), /api/automations/log (HostAutoApi.cs), /api/automations/test (HostAutoApi.cs), /api/automations/triggers (HostAutoApi.cs), /api/boards (HostAutoApi.cs), /api/boards/refresh (HostAutoApi.cs), /api/bots (HostApi.cs), /api/bottest (HostApi.cs), /api/channel/update (HostAutoApi.cs), /api/chat-rate (HostAutoApi.cs), /api/commands-doc (HostAutoApi.cs), /api/config (HostApi.cs), /api/credits (HostAutoApi.cs), /api/cutover (HostAutoApi.cs), /api/economy (HostAutoApi.cs), /api/economy/import (HostAutoApi.cs), /api/economy/user (HostAutoApi.cs), /api/emotes (HostAutoApi.cs), /api/emotes/refresh (HostAutoApi.cs), /api/endpoints (HostAutoApi.cs), /api/goals (HostAutoApi.cs), /api/helix-ids (HostAutoApi.cs), /api/helper/review (HostAutoApi.cs), /api/intro (HostAutoApi.cs), /api/intro/clear (HostAutoApi.cs), /api/intro/done (HostAutoApi.cs), /api/intro/poll (HostAutoApi.cs), /api/intro/reset (HostAutoApi.cs), /api/intro/settings (HostAutoApi.cs), /api/intro/skip (HostAutoApi.cs), /api/intro/test (HostAutoApi.cs), /api/latest (HostAutoApi.cs), /api/lease (HostApi.cs), /api/links (HostAutoApi.cs), /api/live (HostAutoApi.cs), /api/live-state (HostAutoApi.cs), /api/livelog (HostAutoApi.cs), /api/lore (HostAutoApi.cs), /api/mod/timeout (HostAutoApi.cs), /api/obs/item (HostAutoApi.cs), /api/obs/scene (HostAutoApi.cs), /api/obs/tree (HostAutoApi.cs), /api/overlaychat/apply (HostAutoApi.cs), /api/overlaychat/ask (HostAutoApi.cs), /api/overlaychat/status (HostAutoApi.cs), /api/overlays (HostAutoApi.cs), /api/overlays/delete (HostAutoApi.cs), /api/overlays/file (HostAutoApi.cs), /api/overlays/rename (HostAutoApi.cs), /api/overlays/write (HostAutoApi.cs), /api/prestream (HostApi.cs), /api/profile-sync (HostAutoApi.cs), /api/queues (HostAutoApi.cs), /api/reminders (HostAutoApi.cs), /api/run (HostApi.cs), /api/say (HostAutoApi.cs), /api/session (HostAutoApi.cs), /api/shoutouts (HostAutoApi.cs), /api/signin (HostApi.cs), /api/sitebridge (HostAutoApi.cs), /api/spotify-announce (HostAutoApi.cs), /api/status (HostApi.cs), /api/streaks (HostAutoApi.cs), /api/streaks/backfill (HostAutoApi.cs), /api/stream-timers (HostAutoApi.cs), /api/subfooter (HostAutoApi.cs), /api/subfooter/refresh (HostAutoApi.cs), /api/subfooter/settings (HostAutoApi.cs), /api/subs (HostAutoApi.cs), /api/subs/import (HostAutoApi.cs), /api/summary (HostApi.cs), /api/teach (HostAutoApi.cs), /api/teach/decide (HostAutoApi.cs), /api/timers (HostAutoApi.cs), /api/token (HostApi.cs), /api/vars (HostAutoApi.cs), /api/vars/delete (HostAutoApi.cs), /auth (HostApi.cs), /automations (HostAutoApi.cs), /helper-review (HostAutoApi.cs), /intro (HostAutoApi.cs), /overlay/credits (HostAutoApi.cs), /overlay/goal (HostAutoApi.cs), /overlay/intro (HostAutoApi.cs), /overlay/latest (HostAutoApi.cs), /overlay/subfooter (HostAutoApi.cs), /setup (HostApi.cs), /subfooter (HostAutoApi.cs)
+/api/account/streamer (HostApi.cs), /api/account/streamer/signin (HostApi.cs), /api/account/streamer/signout (HostApi.cs), /api/activity (HostAutoApi.cs), /api/automations (HostAutoApi.cs), /api/automations/enable (HostAutoApi.cs), /api/automations/export (HostAutoApi.cs), /api/automations/fire (HostAutoApi.cs), /api/automations/hotkeys (HostAutoApi.cs), /api/automations/import (HostAutoApi.cs), /api/automations/log (HostAutoApi.cs), /api/automations/test (HostAutoApi.cs), /api/automations/triggers (HostAutoApi.cs), /api/boards (HostAutoApi.cs), /api/boards/refresh (HostAutoApi.cs), /api/bots (HostApi.cs), /api/bottest (HostApi.cs), /api/channel/update (HostAutoApi.cs), /api/chat-rate (HostAutoApi.cs), /api/clips-dump (HostAutoApi.cs), /api/commands-doc (HostAutoApi.cs), /api/config (HostApi.cs), /api/credits (HostAutoApi.cs), /api/cutover (HostAutoApi.cs), /api/economy (HostAutoApi.cs), /api/economy/import (HostAutoApi.cs), /api/economy/user (HostAutoApi.cs), /api/emotes (HostAutoApi.cs), /api/emotes/refresh (HostAutoApi.cs), /api/endpoints (HostAutoApi.cs), /api/goals (HostAutoApi.cs), /api/helix-ids (HostAutoApi.cs), /api/helper/review (HostAutoApi.cs), /api/intro (HostAutoApi.cs), /api/intro/clear (HostAutoApi.cs), /api/intro/done (HostAutoApi.cs), /api/intro/poll (HostAutoApi.cs), /api/intro/reset (HostAutoApi.cs), /api/intro/settings (HostAutoApi.cs), /api/intro/skip (HostAutoApi.cs), /api/intro/test (HostAutoApi.cs), /api/latest (HostAutoApi.cs), /api/lease (HostApi.cs), /api/links (HostAutoApi.cs), /api/live (HostAutoApi.cs), /api/live-state (HostAutoApi.cs), /api/livelog (HostAutoApi.cs), /api/lore (HostAutoApi.cs), /api/mod/timeout (HostAutoApi.cs), /api/obs/item (HostAutoApi.cs), /api/obs/scene (HostAutoApi.cs), /api/obs/tree (HostAutoApi.cs), /api/offline-mode (HostAutoApi.cs), /api/overlaychat/apply (HostAutoApi.cs), /api/overlaychat/ask (HostAutoApi.cs), /api/overlaychat/status (HostAutoApi.cs), /api/overlays (HostAutoApi.cs), /api/overlays/delete (HostAutoApi.cs), /api/overlays/file (HostAutoApi.cs), /api/overlays/rename (HostAutoApi.cs), /api/overlays/write (HostAutoApi.cs), /api/prestream (HostApi.cs), /api/profile-sync (HostAutoApi.cs), /api/queues (HostAutoApi.cs), /api/reminders (HostAutoApi.cs), /api/run (HostApi.cs), /api/say (HostAutoApi.cs), /api/session (HostAutoApi.cs), /api/shoutouts (HostAutoApi.cs), /api/signin (HostApi.cs), /api/sitebridge (HostAutoApi.cs), /api/spotify-announce (HostAutoApi.cs), /api/status (HostApi.cs), /api/streaks (HostAutoApi.cs), /api/streaks/backfill (HostAutoApi.cs), /api/stream-timers (HostAutoApi.cs), /api/subfooter (HostAutoApi.cs), /api/subfooter/refresh (HostAutoApi.cs), /api/subfooter/settings (HostAutoApi.cs), /api/subs (HostAutoApi.cs), /api/subs/import (HostAutoApi.cs), /api/summary (HostApi.cs), /api/teach (HostAutoApi.cs), /api/teach/decide (HostAutoApi.cs), /api/timers (HostAutoApi.cs), /api/token (HostApi.cs), /api/vars (HostAutoApi.cs), /api/vars/delete (HostAutoApi.cs), /auth (HostApi.cs), /automations (HostAutoApi.cs), /helper-review (HostAutoApi.cs), /intro (HostAutoApi.cs), /overlay/credits (HostAutoApi.cs), /overlay/goal (HostAutoApi.cs), /overlay/intro (HostAutoApi.cs), /overlay/latest (HostAutoApi.cs), /overlay/subfooter (HostAutoApi.cs), /setup (HostApi.cs), /subfooter (HostAutoApi.cs)
 
 <!-- HOST-INDEX-END -->
 

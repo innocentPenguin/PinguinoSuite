@@ -1,0 +1,187 @@
+[
+ {
+  "cmd": "!flayir",
+  "category": "People",
+  "desc": "The biggest weeknd fan in the top 0.004% in 2025"
+ },
+ {
+  "cmd": "!goat",
+  "category": "People",
+  "desc": "W Kara 🔥🔥"
+ },
+ {
+  "cmd": "!kara",
+  "category": "People",
+  "desc": "goated"
+ },
+ {
+  "cmd": "!koops",
+  "category": "People",
+  "desc": "the king of the koopas and pookie of zylo <3"
+ },
+ {
+  "cmd": "!marshmallow",
+  "category": "People",
+  "desc": "The Legendary Story Off Who Stole The Marshmallow That Ended In Hours Of VOD Reviewing Andddddddddd We Neve..."
+ },
+ {
+  "cmd": "!marshmellow",
+  "category": "People",
+  "desc": "burnt like a mello but still can play the cello"
+ },
+ {
+  "cmd": "!mashka",
+  "category": "People",
+  "desc": "da best gc2 who loves goth mommys"
+ },
+ {
+  "cmd": "!mello",
+  "category": "People",
+  "desc": "im not useful, and im useless but im here typeshit ohSHIT fax"
+ },
+ {
+  "cmd": "!pineapple",
+  "category": "People",
+  "desc": "our favorite c2 btw"
+ },
+ {
+  "cmd": "!quinn",
+  "category": "People",
+  "desc": "#QwinningForLife"
+ },
+ {
+  "cmd": "!robo",
+  "category": "People",
+  "desc": "she’s the ROGOAT"
+ },
+ {
+  "cmd": "!rose",
+  "category": "People",
+  "desc": "jolly ass snowman"
+ },
+ {
+  "cmd": "!samu",
+  "category": "People",
+  "desc": "meow meow"
+ },
+ {
+  "cmd": "!shadow",
+  "category": "People",
+  "desc": "plays way too many extra modes! bit weird if you ask me also when penguin throws money in his face he turns..."
+ },
+ {
+  "cmd": "!snowy",
+  "category": "People",
+  "desc": "a goon or sum"
+ },
+ {
+  "cmd": "!spedy",
+  "category": "People",
+  "desc": "speedy"
+ },
+ {
+  "cmd": "!speedy",
+  "category": "People",
+  "desc": "spedy"
+ },
+ {
+  "cmd": "!sydney",
+  "category": "People",
+  "desc": "brick wall Sydney!!! 🧱"
+ },
+ {
+  "cmd": "!unninocence",
+  "category": "People",
+  "desc": "best champ never reaching gc"
+ },
+ {
+  "cmd": "!vhoggie",
+  "category": "People",
+  "desc": "Straight Jorkin it to penguino banzino!"
+ },
+ {
+  "cmd": "!w",
+  "category": "People",
+  "desc": "speedy and Yen"
+ },
+ {
+  "cmd": "!wyatt",
+  "category": "People",
+  "desc": "I love Eminem, and I’ve only lied once"
+ },
+ {
+  "cmd": "!yoohoo",
+  "category": "People",
+  "desc": "hi"
+ },
+ {
+  "cmd": "!zylo",
+  "category": "People",
+  "desc": "NEW COMMAND CURRENTLY IN THE WORKS (PENG TOO LAZY TO UPDATE IT)"
+ },
+ {
+  "cmd": "!points",
+  "category": "Points",
+  "desc": "Your points balance and rank (earned by watching, imported from StreamElements)."
+ },
+ {
+  "cmd": "!watchtime",
+  "category": "Points",
+  "desc": "How long you have watched the channel, and your rank."
+ },
+ {
+  "cmd": "!toppoints",
+  "category": "Points",
+  "desc": "Top points holders, all time or for one month."
+ },
+ {
+  "cmd": "!topwatch",
+  "category": "Points",
+  "desc": "Most watch time, all time or for one month."
+ },
+ {
+  "cmd": "!sub",
+  "category": "Subscribers",
+  "desc": "Subscription tier, months, streak and Founder status from the subscriber list."
+ },
+ {
+  "cmd": "!founders",
+  "category": "Subscribers",
+  "desc": "Lists the Founders (Twitch Founders Badge holders)."
+ },
+ {
+  "cmd": "!remindme",
+  "category": "Timers",
+  "desc": "The bot @mentions you in chat when the time is up (1 minute to 24 hours, up to 3 open reminders). Survives restarts."
+ },
+ {
+  "cmd": "!reminders",
+  "category": "Timers",
+  "desc": "Your open reminders and when they are due."
+ },
+ {
+  "cmd": "!cancelreminder",
+  "category": "Timers",
+  "desc": "Cancel one of your reminders (number from !reminders)."
+ },
+ {
+  "cmd": "!me",
+  "category": "Tournament",
+  "desc": "Join the tournament wheel while sign-ups are open (also a Join button on the website tournament page)."
+ },
+ {
+  "cmd": "!topstreak / !topstreaks",
+  "category": "Watch Streaks",
+  "desc": "Top 5 watch streaks people have shared in chat (best streak), all time or for one month. Only people who shared a streak are on the board."
+ },
+ {
+  "cmd": "!streak",
+  "category": "Watch Streaks",
+  "desc": "The last watch streak someone shared (and their best). Twitch only shows a watch streak when the viewer shares it."
+ },
+ {
+  "cmd": "!streakrecord",
+  "category": "Watch Streaks",
+  "desc": "The best watch streak someone has shared, with the date."
+ }
+]

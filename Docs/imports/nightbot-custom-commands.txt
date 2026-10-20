@@ -1,0 +1,409 @@
+Commands
+Commands are used to trigger responses in chat.
+New Command
+Search commands...
+!1v1
+If you think about it, going into a random stream and asking to 1v1 is like walking into a
+party you weren't invited to and asking who wants to fight.
+!7tv
+download 7TV integration to get access to loads of emotes that are free and get special
+perks Download via the link https://7tv.app/
+!abdul
+the first multi millionaire in pinguino points the house is scared of him
+!ad
+they appear at the worst possible time L ads
+!age
+40 (larps 24)
+!ash
+He Gives bits! https://www.twitch.tv/innocentpenguin_/clip/BloodyPiercingRaccoonStr
+awBeary-uli7Tn9mJZmI5VUH
+Page 1 of 2Show 100
+Command
+Custom Default
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 1/11
+!attack
+$(eval const outcomes = ["viciously tackles $(touser) into a pile of pillows! 🛏💥 ", "swin
+gs wildly at $(touser) but trips over their own feet and misses! 🤸‍♂️💨 ", "lands a CRITICA
+L HIT on $(touser) with a squeaky rubber chicken! 🐔🔨 "]; "$(user) " + outcomes[Math.f
+loor(Math.random() * outcomes.length)])
+!ban
+$(user) tried to ban $(touser) . It failed, but it makes $(user) feel like a boss! 😎
+!banlist
+slickpretzel dude and potentially gonkilluagg
+!bits
+https://www.twitch.tv/innocentpenguin_/clip/BloodyPiercingRaccoonStrawBeary-uli7T
+n9mJZmI5VUH
+!blake
+The Prodigal Child of Rocket League
+!blizy
+best sugar daddy (6’6 btw)
+!blizzy
+https://medal.tv/games/minecraft/clips/nvYdSN1xv0wlWov60?invite=cr-MSxWVk8sMj
+AwOTUzMDA4
+!burger
+Use !burgie to place a order. To change skin, place complexed orders, interact more; rea
+d: https://heynaugames.com/burgie-commands
+!burglin
+https://www.twitch.tv/innocentpenguin_/clip/SpookyTrustworthyLapwingBIRB-K2S97o
+S82L66V7HN
+!burglingnomes
+https://www.twitch.tv/innocentpenguin_/clip/SpookyTrustworthyLapwingBIRB-K2S97o
+S82L66V7HN
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 2/11
+!cat
+https://www.twitch.tv/innocentpenguin_/clip/DifferentSuaveRingCoolStoryBob-si3-VQ
+IXb4HMjZHS
+!cheese
+I like cheese
+!cmds
+!commands
+!controller
+nintendo switch 2 pro controller
+!coy
+MAKE SOME NOISE FOR DJ COY
+!cpu
+HELP ME PENG BABY IM CHOKING
+!crimson
+https://www.twitch.tv/innocentpenguin_/clip/InspiringFrozenGrassPeteZaroll-W5qBCm
+r1ykqmzIVW
+!cups
+Cups is the best
+!customrules
+The rules for the customs are: No leaving/going afk mid game, no toxicity directed at ot
+her players, no trolling or intentionally throwing the match and only play once it's your t
+urn to play. Defiance of rules will result in you being temporarily or even permanently b
+anned from joining the customs.
+!customs
+Type !howtojoin for information on how to join the customs and !customrules for the rule
+s for customs.
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 3/11
+!cute
+ivan cutie arroyo
+!dc
+!discord
+!developer
+Insane in hoops
+!dictators
+flayir and yoopoo
+!drops
+ENABLED!! https://www.twitch.tv/drops/inventory
+!endstream
+LWK PENG GET OFF... YOUR NOT COOKING ANYMORE. JS END STREAM ALREADY!
+!feetfinder
+Coming soon. (hopefully by 2027)
+!flayir
+The biggest weeknd fan in the top 0.004% in 2025
+!food
+Penguin Sandwiches
+!gay
+you are gay
+!geo
+https://www.geoguessr.com/user/69fbf7426c47f011d20cc335
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 4/11
+!geoguesser
+https://www.twitch.tv/innocentpenguin_/clip/UglyVainSowNononoCat-bqEL0-OKfMe6
+XKNr
+!goat
+W Kara 🔥🔥
+!golf
+https://www.twitch.tv/innocentpenguin_/clip/HorribleObeseFoxPJSalt-XUAGedbDwr9J
+LpXX
+!goon
+https://www.twitch.tv/innocentpenguin_/clip/TenderIronicLyrebirdVoHiYo-e445dM1-Q
+FdPGWk-
+!grindr
+https://youtu.be/Aq5WXmQQooo?si=5SNpUXueYhckky-t
+!gsu
+Heres the Official Governer State University Rocket League Channel to Watch Innocent
+Penguin! https://www.twitch.tv/govstateesports
+!happy
+if you’re sad by happy doesn’t cost a dime to spread love
+!hc
+penguin has almost died 3x to himself (NOT CHAT DISTRACTING)
+!hebunga
+always gets timed out from penguin by mistake 10k seconds was a lot
+!height
+5'8 on a good day!
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 5/11
+!howbigisit
+https://www.twitch.tv/innocentpenguin_/clip/RacyExpensiveRadicchioDBstyle-GI8qUU
+jwIqhJSqBQ
+!howtojoin
+To play in the customs, type !join to join the queue. Once it is your turn to play, Penguin
+will call out your name. After the game, you will be removed from the queue and you wil
+l have to rejoin to play again. Type !leave to leave the queue anytime.
+!hug
+$(user) wraps their arms around $(touser) and gives them a big, warm hug! 🤗
+!intro
+Yo lwk the intros kinda broken, peng will fix it later, geeg.
+!ip
+smp.innocentpenguin.com | hc.innocentpenguin.com
+!kara
+goated
+!koops
+the king of the koopas and pookie of zylo <3
+!luck
+You got $(eval Math.floor(Math.random() * 50) + 1)% luck BROCHACHO, GET GOOD :)
+!lurk
+Thanks for lurking, $(user)! We hope to see you back soon!
+!marsh
+https://www.twitch.tv/onepsynic/clip/CovertHungryOrcaItsBoshyTime-bQuareH83p2ZF
+JiZ
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 6/11
+!marshmallow
+The Legendary Story Off Who Stole The Marshmallow That Ended In Hours Of VOD Revi
+ewing Andddddddddd We Never Found out Who Stole The Marshmallow The End
+!marshmellow
+burnt like a mello but still can play the cello
+!mashka
+da best gc2 who loves goth mommys
+!mcrules
+No Griefing, No Killing, No stealing, No cheating, Be nice, No Nether.
+!mello
+im not useful, and im useless but im here typeshit ohSHIT fax
+!minecraft
+https://www.twitch.tv/innocentpenguin_/clip/TsundereSpookyGarageThisIsSparta-5Kd
+kvJn5DeoBo5fX
+!mod
+Don't beg for mod Not a rule, but you will be denied. mods are chosen based on 1 consis
+tent viewership !watchtime, streak) 2 Maturity + twitch knowledge 3 !followage. You MU
+ST be in the discord!!
+!modpack
+https://drive.google.com/file/d/10TNoOGAQz8GuJ3AJ2S4wNv6x1_jw73pb/view?usp=s
+haring
+!mods
+"PENG WE DO NOT NEED MORE MODS" - Yoohoo15
+!name
+eye van
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 7/11
+!odds
+Chance of winning — Gamble - 45% | Slots - 10% | Duels 50%
+!of
+You can find my only fans page here, where I post all my juicy Pics! https://discord.gg/c
+VNhjZE2Dh
+!onlyfans
+Coming Soon
+!oopsie
+https://www.twitch.tv/innocentpenguin_/clip/DirtyViscousCarabeefPanicVis-PZBnEqd3
+TNDeUSNC
+!owngoal
+$(channel) Has own goaled a total of $(count) times!
+!peak
+https://www.twitch.tv/innocentpenguin_/clip/SparklyAmazingPorpoiseKappaPride-5qe
+eOUje6nyrUjQ6
+!penguin
+i love my community, i love playing with viewers, i DONT bite, and i love Rocket league.
+Also im literally gonna hit gc3 this season ( Dont forget im also child friendly)
+!phil
+LETS FLOCK IN https://linktr.ee/Infancinema
+!piglin
+https://www.twitch.tv/innocentpenguin_/clip/TsundereSpookyGarageThisIsSparta-5Kd
+kvJn5DeoBo5fX
+!pineapple
+our favorite c2 btw
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 8/11
+!pinguino
+fuck pinguino!
+!pm
+Name:peng2 no password
+!popcorn
+PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopC
+orn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn P
+opCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn
+!prime
+1️⃣ Go to twitch.tv/prime 2️⃣ Connect your Amazon Prime account to your Twitch 3️⃣ Click
+the Sub button then "Use Prime Sub" 4️⃣ Claim every 30 days 🕙
+!purge
+penguin decided to choose violence one day and disintegrated every entity exept from
+boats what a noob xd he aimed for getting id of boats so the entire chat rioted at him
+!quinn
+#QwinningForLife
+!racism
+!racist
+!racist
+https://www.twitch.tv/innocentpenguin_/clip/ObservantAmusedButterflyEleGiggle-8Cr
+KbJDkO5MPZ84z
+!realrank
+Silver 2 Div 3
+!repo
+https://www.twitch.tv/innocentpenguin_/clip/MoldyAwkwardSnoodBatChest-8h3z9Sur
+qxuipHSE
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 9/11
+!rl
+https://www.twitch.tv/innocentpenguin_/clip/ComfortableArborealYakinikuANELE-DrF
+TAx-Jw1uHR4wT
+!roblox
+https://www.roblox.com/users/111646254/profile user: Newbienoob36
+!robo
+she’s the ROGOAT
+!rose
+jolly ass snowman
+!sad
+if your sad know your loved by penguin and people in chat
+!samu
+meow meow
+!save
+Save money on mobile! Sub or buy bits through these links to avoid mobile fees | Subs: t
+witch.tv/subs/innocentpenguin_ | Bits: twitch.tv/bits
+!schedule
+Live every day at 5pm (Central)
+!server
+There Are 2 Current Servers The hardcore server (Stream Only) and the pinguino smp 2
+4/7 for the more chill non hardcore minecraft server for both servers !ip
+!settings
+https://www.twitch.tv/innocentpenguin_/clip/TenderKindNarwhalStinkyCheese-KIDSK
+3-VuUjYxl3J
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 10/11
+Copyright © 2026 NightDev, LLC. All Rights Reserved.
+Terms of Service • Privacy Policy • API Documentation
+!shadow
+plays way too many extra modes! bit weird if you ask me also when penguin throws mo
+ney in his face he turns into a demon in rl
+!snowy
+a goon or sum
+!specs
+Main PC Specs: CPU: Ryzen 9 7950X3D • GPU: RTX 5070Ti • RAM: 64GB DDR5 | !streaming
+pc
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100 11/11
+Commands
+Commands are used to trigger responses in chat.
+New Command
+Search commands...
+!spedy
+speedy
+!speedy
+spedy
+!squishy
+https://www.twitch.tv/innocentpenguin_/clip/TenderSincereCheddarPogChamp-a0ROy
+tRnduIvtrVO
+!steam
+https://steamcommunity.com/id/innocentpenguin OR CODE: --> 199738440
+!stop
+Just a command penguin did instead of leaving queue
+!streamingpc
+CPU: Ryzen 5600G • GPU: RTX 4070 • RAM: 64GB DDR4 | !specs for main
+!streamtime
+5pm (Central Time) 11PM (British Time)
+Command
+Custom Default
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100&page=2 1/5
+!support
+Top ways to support: !prime, sub, bits, and !tip | Support is appreciated but never require
+d!!!
+!sydney
+brick wall Sydney!!! 🧱
+!test
+${settitle Switching to Minecraft 🚨 Starting Community Server! Day ${counter mcday}!
+🌎  Join the SMP (Java + Bedrock)} ${setgame Minecraft} ${counter mcday +}
+!thebest
+im mini
+!tiktok
+https://www.tiktok.com/@innocentpenguin_
+!time
+$(eval a="$(time US/Central "hh:mm:a")".split(":");h=parseInt(a[0]);m=parseInt(a[1]);am
+pm=a[2].toUpperCase();if(h==0){h=12}else if(h>12){h=h-12};if(m<10){m="0"+m};"It is "+h
++":"+m+" "+ampm+" for InnocentPenguin")
+!tinder
+Nice Try Brochach!
+!topgooner
+1. Diego. 2.Flayir . 3. @moztyy_. 4 Vhoggie 5. Speedkoops
+!tracker
+https://rocketleague.tracker.network/rocket-league/profile/epic/InnocentPeng_TTV/o
+verview
+!trapaccount
+DO NOT MENTION THAT NAME IN THIS CHAT
+!tts
+Page 2 of 2Show 100
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100&page=2 2/5
+TTS is for subscribers only clicking the link allows u see which voices are allowed voice t
+hen message https://vox.bot/innocentpenguin/voices
+!turtles
+i like turtles
+!twerk
+shake it like u just don’t care
+!ubisoft
+ttvinnocentpeng
+!uk
+https://www.twitch.tv/innocentpenguin_/clip/GlutenFreeCarelessGoosePogChamp-xhA
+V-h8hwN-TEYHX
+!unlurk
+$(user) is back!
+!unninocence
+best champ never reaching gc
+!vanish
+they have disappeared
+!vc
+no... https://www.twitch.tv/kizmoiz/clip/TriangularSuspiciousSwanPanicVis-zropv_vCQs
+0KHtOJ
+!vhoggie
+Straight Jorkin it to penguino banzino!
+!vip
+come to stream everyday be postive and be chill, no requirements except being you an
+d returning. every day. You MUST be in the discord!!
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100&page=2 3/5
+!w
+speedy and Yen
+!water
+HYDRATE RIGHT NOW
+!weight
+90kg/ 198lbs
+!weiner
+https://www.twitch.tv/innocentpenguin_/clip/AbstemiousCuriousMomPhilosoraptor-ldb
+Uon9AY5Y0SW9i
+!whiff
+$(channel) has whiffed an amazing $(count) times!
+!wyatt
+I love Eminem, and I’ve only lied once
+!yen
+@SG_Yen Sends 20 different subs at 1 time https://www.twitch.tv/innocentpenguin_/cli
+p/GracefulPricklyParrotDoritosChip-hpQArz6UniGCP2YW
+!yoohoo
+hi
+!youtube
+https://www.youtube.com/@InnocentPinguino
+!yt
+https://www.youtube.com/@InnocentPinguino
+!zylo
+NEW COMMAND CURRENTLY IN THE WORKS (PENG TOO LAZY TO UPDATE IT)
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100&page=2 4/5
+Copyright © 2026 NightDev, LLC. All Rights Reserved.
+Terms of Service • Privacy Policy • API Documentation
+goodnight
+Goodnight $(user) innoce108Hello
+hi
+Hi $(user) innoce108Hello
+meow
+Meow Meow!!
+w
+W wyatt and luhgeekski
+Command
+10/20/26, 5:38 AM Commands
+https://nightbot.tv/commands/custom?limit=100&page=2 5/5

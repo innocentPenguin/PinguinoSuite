@@ -1462,8 +1462,11 @@ public class CPHInline
         return j != null && j["queueOpen"] != null && (bool)j["queueOpen"];
     }
 
+    bool OfflineModeOn() { try { return CPH.GetGlobalVar<string>("pinguino.offlinemode", false) == "1"; } catch (Exception) { return false; } }
+
     bool IsLive()
     {
+        if (OfflineModeOn()) return true;
         var j = ReadJson("settings.json");
         return j != null && j["WasLive"] != null && (bool)j["WasLive"];
     }

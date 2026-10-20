@@ -1,0 +1,16 @@
+@import url('https://use.typekit.net/inf0cul.css');
+
+.chat-message-container {
+    margin: 0 !important;
+    padding: 0px 4px !important;
+}
+
+.chat-message-container,
+.chat-message-container * {
+    font-family: "Unkempt", cursive !important;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.35 !important;
+    margin-top: -4px !important;
+    margin-bottom: -4px !important;
+}

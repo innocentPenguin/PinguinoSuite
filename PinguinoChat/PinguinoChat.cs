@@ -832,9 +832,12 @@ public class CPHInline
 
     // Streamer.bot's own stream state is not available to inline code, so this reads WasLive from the
     // settings.json that PinguinoBotCore keeps up to date (it checks Twitch every 30 s).
+    // Offline mode (Host switch): the Host publishes the global pinguino.offlinemode = "1"; the bot then behaves as if live.
+    bool OfflineModeOn() { try { return CPH.GetGlobalVar<string>("pinguino.offlinemode", false) == "1"; } catch (Exception) { return false; } }
+
     bool IsLive()
     {
-        if (!_cfg.LiveOnly) return true;
+        if (!_cfg.LiveOnly || OfflineModeOn()) return true;
         if ((DateTime.UtcNow - _liveChecked).TotalSeconds < 10) return _live;
         _liveChecked = DateTime.UtcNow;
         try { var j = ReadJson("settings.json"); _live = j != null && j["WasLive"] != null && (bool)j["WasLive"]; }

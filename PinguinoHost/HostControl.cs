@@ -258,7 +258,7 @@ namespace PinguinoHost
         {
             lock (L)
             {
-                var o = new JObject { { "ok", true } };
+                var o = new JObject { { "ok", true }, { "offlineMode", OfflineMode.Enabled } };
                 foreach (var k in new[] { "poll", "prediction", "hype" })
                 {
                     JObject v; DateTime e; bool has = Live.TryGetValue(k, out v);

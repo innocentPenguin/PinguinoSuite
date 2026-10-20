@@ -76,7 +76,7 @@ namespace PinguinoHost
                 Load();
                 bool? live = LiveState.Live;
                 if (live != null && live != LastLive) { if (live == true) Played.Clear(); LastLive = live; SaveState(); }
-                if ((bool?)s["OnlyWhileLive"] != false && live != true) return;
+                if ((bool?)s["OnlyWhileLive"] != false && !LiveState.Active) return;
                 if (Played.Contains(login)) return;
                 Played.Add(login); SaveState();
                 Enqueue(login, display, tier, false);

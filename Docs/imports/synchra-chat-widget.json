@@ -1,0 +1,45 @@
+{
+  "kind": "synchra.widget",
+  "version": 1,
+  "type": "chat_widget",
+  "name": "Chat",
+  "settings": {
+    "canvas_scale": 1,
+    "size": "xxl",
+    "text_color": "#ffffff",
+    "text_shadow_color": "#000000",
+    "background_color": "",
+    "background_opacity": 1,
+    "border_width": 0,
+    "border_color": "",
+    "border_radius": 0,
+    "font_family_id": "nunito",
+    "message_fade_duration_seconds": 0,
+    "message_delay_seconds": 0,
+    "ignore_names": [
+      "nightbot",
+      "StreamElements",
+      "PinguinoB0t",
+      "SoundAlerts",
+      "potatbotat",
+      "sery_bot",
+      "synchrabot",
+      "PinguinoHelper",
+      "ChattyPinguino"
+    ],
+    "provider_logo": false,
+    "provider_logo_display": null,
+    "badges": true,
+    "username_colon": true,
+    "notices": true,
+    "message_order": "bottom",
+    "message_alignment": "left",
+    "providers": [
+      "all"
+    ],
+    "style_type": "simple",
+    "entrance_animation_type": "fade",
+    "themes": [],
+    "custom_css": "@import url('https://use.typekit.net/inf0cul.css');\n\n.chat-message-container {\n    margin: 0 !important;\n    padding: 0px 4px !important;\n}\n\n.chat-message-container,\n.chat-message-container * {\n    font-family: \"Unkempt\", cursive !important;\n    font-weight: 400;\n    font-style: normal;\n    line-height: 1.35 !important;\n    margin-top: -4px !important;\n    margin-bottom: -4px !important;\n}"
+  }
+}

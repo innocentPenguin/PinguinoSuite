@@ -200,7 +200,7 @@ namespace PinguinoHost
         static bool IsLive()
         {
             string o = Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_LIVE"); if (o == "1") return true; if (o == "0") return false;
-            return LiveState.Live == true;
+            return LiveState.Active;
         }
 
         static List<string> Chatters()
