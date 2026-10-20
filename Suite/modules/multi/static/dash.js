@@ -9,7 +9,7 @@ const dashSave = () => {      // lock stays per browser; the layout lives on the
 function dApply(st) { DASH.profs = st.profiles; DASH.active = st.active; DASH.builtin = st.builtin; const l = st.profiles[st.active]; if (l) { DASH.panels = l.panels; DASH.widths = l.widths; DASH.src = l.src; DASH.fs = l.fs || DASH.fs; DASH.split = l.split || DASH.split; } }
 const D_LOGO = {twitch: ['#9146ff', 'T'], youtube: ['#e62117', '▶'], kick: ['#53fc18', 'K'], discord: ['#5865f2', 'D'], tiktok: ['#111', '♪']};
 const D_PILL = {follow: ['Follow', '#4ade80', '#08210f'], redeem: ['Redeem', '#8ecfe0', '#08242c'], sub: ['Sub', '#a78bfa', '#170a3a'], resub: ['Resub', '#a78bfa', '#170a3a'],
-  gift: ['Gift', '#c084fc', '#220a3a'], cheer: ['Cheer', '#facc15', '#2b2200'], raid: ['Raid', '#f472b6', '#38081f'], announcement: ['Notice', '#fb923c', '#2b1200'], shoutout: ['Shoutout', '#7cb7f5', '#071b33'], ban: ['Ban', '#f87171', '#330808'], timeout: ['Timeout', '#fb923c', '#2b1200'], unban: ['Unban', '#94a3b8', '#0b1220'], mod: ['Mod', '#4ade80', '#08210f'], unmod: ['Unmod', '#94a3b8', '#0b1220']};
+  gift: ['Gift', '#c084fc', '#220a3a'], cheer: ['Cheer', '#facc15', '#2b2200'], raid: ['Raid', '#f472b6', '#38081f'], announcement: ['Notice', '#fb923c', '#2b1200'], shoutout: ['Shoutout', '#7cb7f5', '#071b33'], ban: ['Ban', '#f87171', '#330808'], timeout: ['Timeout', '#fb923c', '#2b1200'], unban: ['Unban', '#94a3b8', '#0b1220'], mod: ['Mod', '#4ade80', '#08210f'], unmod: ['Unmod', '#94a3b8', '#0b1220'], raid_out: ['Raid out', '#f472b6', '#38081f'], poll: ['Poll', '#8ecfe0', '#08242c'], prediction: ['Prediction', '#8ecfe0', '#08242c'], hype: ['Hype', '#ff8a1f', '#2b1200']};
 const D_UNIT = {raid: 'viewers', cheer: 'bits', gift: 'subs', resub: 'months', sub: 'months', redeem: 'points'};
 const dIcon = p => { const [c, l] = D_LOGO[p] || ['#888', '?']; return `<span class="d-ic" style="background:${c};color:${p === 'kick' ? '#111' : '#fff'}" title="${esc(p)}">${l}</span>`; };
 const dAge = ts => { const s = Math.max(0, Date.now() / 1000 - ts); return s < 60 ? 'now' : s < 3600 ? Math.floor(s / 60) + 'm' : s < 86400 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 86400) + 'd'; };
@@ -57,11 +57,18 @@ async function renderDash() {
 }
 function dTop() {
   $('#d-top').innerHTML = `<button class="d-btn" data-d="profile" title="Switch the saved window layout">Profile &#9662;</button><button class="d-btn ${DASH.edit ? 'on' : ''}" data-d="edit" ${DASH.lock ? 'disabled style="opacity:.5"' : ''} title="${DASH.lock ? 'Unlock first' : 'Move or remove panels'}">Edit layout</button>
-    <button class="d-btn" data-d="add">+ Add</button><button class="d-btn" data-d="lock" title="${DASH.lock ? 'Layout locked' : 'Layout unlocked'}">${DASH.lock ? '&#128274;' : '&#128275;'}</button><span class="grow"></span><span class="d-viewers" id="d-vtot" title="People watching live right now"></span>
+    <button class="d-btn" data-d="add">+ Add</button><button class="d-btn" data-d="lock" title="${DASH.lock ? 'Layout locked' : 'Layout unlocked'}">${DASH.lock ? '&#128274;' : '&#128275;'}</button><span class="grow"></span><span class="d-viewers" id="d-gifts" title="Gift subs this session and the top gifter"></span><span class="d-viewers" id="d-vtot" title="People watching live right now"></span>
     <button class="d-btn d-search" data-d="search">&#128269; Search <kbd>Ctrl + K</kbd></button><button class="d-btn" data-d="settings" title="Text, highlights, sounds, split chat">&#9881;</button><a class="d-btn" href="/?type=obs&widget=chat" title="OBS widgets">OBS</a><a class="d-btn" href="/" title="Setup and connections">?</a>`;
 }
 const dViewTxt = p => { const n = DASH.viewers[p]; return n == null ? '' : '&#128065; ' + Number(n).toLocaleString(); };
+function dGifts() {
+  const g = $('#d-gifts'); if (!g) return; const by = {}; let tot = 0;
+  msgs.filter(m => m.event === 'gift').forEach(m => { const n = m.amount || 1; tot += n; const u = dName(m); by[u] = (by[u] || 0) + n; });
+  const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
+  g.innerHTML = tot ? `&#127873; ${tot} gifted${top ? ' &middot; top: ' + esc(top[0]) + ' (' + top[1] + ')' : ''}` : '';
+}
 function dViewRefresh() {
+  dGifts();
   document.querySelectorAll('[data-vp]').forEach(e => { e.innerHTML = dViewTxt(e.dataset.vp); });
   const t = $('#d-vtot'); if (!t) return; const v = Object.values(DASH.viewers).filter(x => x != null);
   t.innerHTML = v.length ? '&#128065; ' + v.reduce((a, b) => a + b, 0).toLocaleString() + ' watching' : '';
@@ -120,6 +127,7 @@ function dFlow() {      // newest rows live in B; whatever no longer fits in B c
 }
 window.dashAdd = m => {
   if (W.type !== 'dash' || !dOk(m)) return;
+  if (m.event === 'gift') dGifts();
   const ca = $('#d-l-chat-a'), cb = $('#d-l-chat-b');
   if (ca && cb) {
     const k = DASH.split.kind, add = (el, ok) => { if (!ok) return; const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; el.insertAdjacentHTML('beforeend', dRowChat(m)); while (el.children.length > 250) el.children[0].remove(); if (end) el.scrollTop = el.scrollHeight; };

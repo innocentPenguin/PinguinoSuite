@@ -1105,3 +1105,15 @@ def test_dash_layout_keeps_text_size_and_split():
     lay = server._dash_layout({"panels": ["chat"], "fs": {"chat": 99}, "split": {"on": True, "dir": "col", "kind": "flow", "a": "nope"}})
     assert lay["fs"]["chat"] == 40 and lay["fs"]["activity"] == 14
     assert lay["split"] == {"on": True, "dir": "col", "a": "all", "b": "all", "kind": "flow"}
+
+
+def test_host_feed_plan5_events():
+    import host_feed
+    m = host_feed.to_message({"seq": 1, "type": "raid_out", "user": "tgt", "target": "tgt", "amount": 12}, "me")
+    assert m.event == "raid_out" and "12 viewers" in m.text
+    m = host_feed.to_message({"seq": 2, "type": "poll", "state": "end", "what": "Game?", "data": {"choices": [{"title": "A", "votes": "3"}, {"title": "B", "votes": "9"}]}}, "me")
+    assert "Poll ended" in m.text and "top: B" in m.text
+    m = host_feed.to_message({"seq": 3, "type": "prediction", "state": "end", "what": "Win?", "data": {"winningOutcomeId": "x", "outcomes": [{"id": "x", "title": "Yes"}]}}, "me")
+    assert "winner: Yes" in m.text
+    m = host_feed.to_message({"seq": 4, "type": "hype", "state": "begin", "what": "level 1", "data": {}}, "me")
+    assert m.event == "hype" and "started" in m.text

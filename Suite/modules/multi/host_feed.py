@@ -15,7 +15,7 @@ import console_log
 from models import ChatMessage
 
 HOST = "http://127.0.0.1:8770"
-ALWAYS = ("follow", "redeem", "ban", "unban", "unmod", "mod", "shoutout")                 # not available through the Twitch chat connection
+ALWAYS = ("follow", "redeem", "ban", "unban", "unmod", "mod", "shoutout", "raid_out", "poll", "prediction", "hype")                 # not available through the Twitch chat connection
 FALLBACK = ("sub", "resub", "gift", "cheer", "raid")
 MODWORDS = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "modded"}
 MODPASSIVE = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "made a moderator"}
@@ -23,9 +23,34 @@ WORDS = {"shoutout": "{u} was given a shoutout", "follow": "{u} followed", "rede
          "gift": "{u} gifted subs", "cheer": "{u} cheered", "raid": "{u} is raiding"}
 
 
+def _live_text(t, item):
+    """Plan 5 channel events (raid out, poll, prediction, hype train) -> one short line, or None."""
+    st, what, d = str(item.get("state") or ""), str(item.get("what") or "")[:100], item.get("data") if isinstance(item.get("data"), dict) else {}
+    if t == "raid_out":
+        return f"Raiding {item.get('target') or item.get('user')} with {int(item.get('amount') or 0)} viewers"
+    if t == "poll":
+        top = max((d.get("choices") or [{}]), key=lambda c: int(c.get("votes") or 0), default={})
+        return f"Poll started: {what}" if st == "begin" else f"Poll ended: {what}" + (f" (top: {top.get('title')})" if top.get("title") else "")
+    if t == "prediction":
+        if st == "begin":
+            return f"Prediction started: {what}"
+        if st == "lock":
+            return f"Prediction locked: {what}"
+        win = next((o.get("title") for o in (d.get("outcomes") or []) if o.get("id") == d.get("winningOutcomeId")), None)
+        return f"Prediction ended: {what}" + (f" (winner: {win})" if win else " (canceled)" if d.get("status") == "canceled" else "")
+    if t == "hype":
+        return f"Hype train started ({what})" if st == "begin" else f"Hype train ended ({what})"
+    return None
+
+
 def to_message(item, channel):
     """One Host activity item -> an event ChatMessage (or None for types Multi does not show)."""
     t = item.get("type")
+    if t in ("raid_out", "poll", "prediction", "hype"):
+        text = _live_text(t, item)
+        user = str(item.get("user") or channel or "channel")[:60]
+        return ChatMessage(id=f"host:{item['seq']}", platform="twitch", channel=channel, user_id=user.lower(), user=user.lower(), display=user,
+                           text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or 0)) if text else None
     if t not in WORDS and t not in MODWORDS:
         return None
     user = str(item.get("user") or "someone")[:60]

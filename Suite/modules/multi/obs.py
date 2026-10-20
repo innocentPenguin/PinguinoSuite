@@ -8,7 +8,7 @@ STYLES = ("simple", "bubble", "boxed")
 ENTRANCE = ("none", "fade", "slide", "pop")
 KINDS = ("chat", "activity", "follow")
 FOLLOW_ANIM = ("fade", "slide", "pop", "bounce")
-ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement", "shoutout", "ban", "timeout", "unban", "mod", "unmod")
+ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement", "shoutout", "ban", "timeout", "unban", "mod", "unmod", "raid_out", "poll", "prediction", "hype")
 FONTS = {"nunito": "Nunito, 'Segoe UI', sans-serif", "system": "'Segoe UI', Arial, sans-serif", "roboto": "Roboto, Arial, sans-serif",
          "arial": "Arial, sans-serif", "georgia": "Georgia, serif", "consolas": "Consolas, monospace", "comic": "'Comic Sans MS', cursive",
          "impact": "Impact, sans-serif", "trebuchet": "'Trebuchet MS', sans-serif", "verdana": "Verdana, sans-serif"}
