@@ -26,6 +26,23 @@ class SongifyTests(unittest.TestCase):
     def sr(self, user, n, roles=("viewer",), redeem=False):
         return self.e.chat(user, f"!sr song {n}", roles, redeem)
 
+    def test_srban_srunban(self):
+        self.assertEqual(self.e.chat("ann", "!srban troll", ("viewer",))["code"], "denied")      # viewers can't
+        self.assertTrue(self.sr("troll", 2)["ok"])
+        r = self.e.chat("mod", "!srban @Troll", ("mod",))
+        self.assertTrue(r["ok"])
+        self.assertIn("troll", r["reply"])
+        self.assertEqual(self.e._own_settings()["blocked_users"], ["troll"])
+        self.assertEqual(self.sr("troll", 3)["code"], "user_blocked")
+        self.assertTrue(self.sr("ann", 3)["ok"])
+        self.e.chat("mod", "!srban troll", ("mod",))                                              # no duplicate entries
+        self.assertEqual(self.e._own_settings()["blocked_users"], ["troll"])
+        self.assertEqual(Engine(self.api, FakeAuth(), self.clock)._own_settings()["blocked_users"], ["troll"])   # persists
+        self.assertFalse(self.e.chat("mod", "!srban", ("mod",))["ok"])                            # usage
+        self.assertTrue(self.e.chat("mod", "!srunban troll", ("mod",))["ok"])
+        self.assertEqual(self.e._own_settings()["blocked_users"], [])
+        self.assertTrue(self.sr("troll", 4)["ok"])
+
     def test_reward_only_blocks_chat_but_not_redeem_or_mods(self):
         self.e.save_settings({"chat_requests": False})
         r = self.sr("ann", 3)

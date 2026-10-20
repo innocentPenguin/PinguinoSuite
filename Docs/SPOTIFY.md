@@ -84,3 +84,6 @@ New commands (all renamable): `!songpos` / `!pos`, `!songnext` / `!next`, `!song
 New endpoints: `POST /api/blocklist/import` (text of bare 22-char track IDs or URIs, one per line, `#` comments; returns `{added,total}`), `GET /api/queue.json` (public queue, no IDs or URIs), pages `/queue` and `/overlay/queue` (OBS widget; query `?count ?theme ?accent ?width ?size ?eta ?now`).
 
 Not done yet: synced lyrics widget, sub-tier or follower request caps, paying with pengs, public exposure of `/queue` through the site.
+
+## Request bans: !srban / !srunban
+Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply: "can no longer request songs", templates `ban_ok`/`unban_ok`/`ban_usage`); `!srunban <user>` lifts it. Stored in the `blocked_users` setting (persists across restarts, shown and editable in Settings -> Blocked viewers, returned by `GET /api/settings`). Banned viewers get the `user_blocked` reply on `!sr`. Site-pulled bans are kept separately and are not removed by `!srunban`.

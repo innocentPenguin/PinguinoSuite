@@ -2,10 +2,10 @@
 INDEX (keep in step when moving code)
 What: the brain. Polls Spotify, owns queue state, JIT push, request pipeline, chat commands, announcements, automation.
   Lifecycle/settings: __init__:30, save_settings:78, apply_preset:96, reset_settings:102, persist:134, tick:148, _apply:177, _track_changed:197
-  Queue push: _jit:259, _verify_pushed:288, _push:301, add_track:372, eta_ms:523, skip:703, control:715, start_queue:743, play_now:754, shuffle_queue:854, remove_user:861, add_context:801
-  Requests: request:395, _request:407, _accept:462, _genre_tag:443, _to_playlist:487, import_blocklist:502, inbox_decide:530, vote_skip:686
-  Chat: chat:545, _chat_cmd:564, song_reply:665, queue_reply:673, say:382
-  Views/API: public_state:315, public_queue:326, overlay:334, announcements:238, stats:868, site_snapshot:771, prestream:926, automation_tick:880
+  Queue push: _jit:259, _verify_pushed:288, _push:301, add_track:372, eta_ms:523, skip:715, control:727, start_queue:755, play_now:766, shuffle_queue:866, remove_user:873, add_context:813
+  Requests: request:395, _request:407, _accept:462, _genre_tag:443, _to_playlist:487, import_blocklist:502, inbox_decide:530, vote_skip:698
+  Chat: chat:545, _chat_cmd:564, song_reply:677, queue_reply:685, say:382
+  Views/API: public_state:315, public_queue:326, overlay:334, announcements:238, stats:880, site_snapshot:783, prestream:938, automation_tick:892
 Related: rules.py, queue_core.py, config_schema.py, spotify_api.py, server.py, tests/test_spotify.py, tests/e2e.py, Docs/SPOTIFY.md
 """
 import copy
@@ -653,6 +653,18 @@ class Engine:
             self.persist()
             self._bump()
             return self._r(True, "clear", "cleared", user=user)
+        if cmd in ("srban", "srunban") and staff:
+            target = arg.split()[0].lstrip("@").lower() if arg.split() else ""
+            if not target:
+                return self._r(False, "usage", "ban_usage", user=user, prefix=s["prefix"])
+            own = self._own_settings()["blocked_users"]
+            keep = [u for u in own if rules._norm(u).lstrip("@") != target]
+            if cmd == "srban":
+                self.save_settings({"blocked_users": keep + [target]})
+            else:
+                self.save_settings({"blocked_users": keep})
+            self._bump()
+            return self._r(True, cmd, "ban_ok" if cmd == "srban" else "unban_ok", user=user, target=target)
         if cmd == "blocksong" and staff:
             t = self.pb["track"] if self.pb and self.pb["track"] else None
             if not t:
