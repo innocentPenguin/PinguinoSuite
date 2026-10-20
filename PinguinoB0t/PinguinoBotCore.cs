@@ -27,6 +27,8 @@
 // RL vs FN: Rocket League is the default game; IsFortnite() is true for boxfights / zonewars / fnviewers (SR instead of MMR, own stats).
 // Tests: D:\PinguinoSuite\Tests (harness.cs compiles this file against stub.cs): powershell -ExecutionPolicy Bypass -File Tests\core\run-tests.ps1
 
+// INDEX: line-numbered sections and methods are in Docs\INDEX.md (regenerate: python Tools\gen-index.py)
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;

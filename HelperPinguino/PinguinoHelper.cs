@@ -1,3 +1,5 @@
+// INDEX: line-numbered sections and methods are in Docs\INDEX.md (regenerate: python Tools\gen-index.py)
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,6 +9,25 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+// ═══════════════════════════════════════
+//  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
+//    43    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    349   HelperSettings (every setting + default)
+//    390   State (static caches, cooldowns, test hooks)
+//    409   Patterns (free pass regexes)
+//    433   Entry point Execute()
+//    491   Help-review log (private review.jsonl)
+//    545   Handle() / HandleCore(): the message pipeline
+//    654   !helper / !ask / !pinguino (knowledge pack answers)
+//    786   Random chime + OptedOutOfBots
+//    826   Context gate (only help when really asked)
+//    876   Minecraft + website facts, Taught notes, site answers
+//    1128  AI intent picker + Ask() (Claude/OpenAI)
+//    1205  Answers and actions (Respond/Do, queue, register)
+//    1363  Text building (lobby line, how-to-join)
+//    1436  Reading game manager files, Say()
+// ═══════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════════════
 //  PinguinoHelper: the HELPER part of PinguinoBot (see HelperPinguino\HELPER_DESIGN.md).

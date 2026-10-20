@@ -26,6 +26,8 @@
 //  Target: Streamer.bot (.NET Framework 4.8, C# 7.3). Newtonsoft.Json only.
 // ══════════════════════════════════════════════════════════════════════
 
+// INDEX: line-numbered sections and methods are in Docs\INDEX.md (regenerate: python Tools\gen-index.py)
+
 using System;
 using System.Collections.Generic;
 using System.IO;
