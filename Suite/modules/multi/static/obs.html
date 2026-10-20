@@ -1,0 +1,153 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Pinguino Multi OBS __KIND__</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style id="base">
+html,body{margin:0;background:transparent;overflow:hidden;height:100%}
+body{font-family:var(--ff,Nunito,'Segoe UI',sans-serif);color:var(--tc,#fff);font-size:var(--fs,44px)}
+#scale{transform:scale(var(--sc,1));transform-origin:0 100%;width:calc(100% / var(--sc,1));height:calc(100% / var(--sc,1));position:absolute;left:0;bottom:0}
+body.top #scale{transform-origin:0 0;top:0;bottom:auto}
+#feed{display:flex;flex-direction:column;justify-content:flex-end;height:100%;box-sizing:border-box;padding:4px;overflow:hidden}
+body.top #feed{justify-content:flex-start}
+.chat-message-container,.activity-row{box-sizing:border-box;max-width:100%;text-shadow:0 0 3px var(--sh,#000),0 1px 2px var(--sh,#000),1px 0 2px var(--sh,#000);line-height:1.25;word-wrap:break-word;overflow-wrap:anywhere;margin:2px 0;padding:2px 6px;text-align:var(--al,left)}
+.boxed .chat-message-container,.boxed .activity-row,.bubble .chat-message-container,.bubble .activity-row{background:var(--bg,transparent);border:var(--bw,0) solid var(--bc,transparent);border-radius:var(--br,0);padding:4px 10px}
+.bubble .chat-message-container,.bubble .activity-row{width:fit-content;max-width:100%;border-radius:calc(var(--br,0) + 14px)}
+.has-bg.simple #feed{background:var(--bg);border:var(--bw,0) solid var(--bc,transparent);border-radius:var(--br,0)}
+.chat-badges{display:inline-flex;gap:3px;margin-right:6px;vertical-align:middle}
+.chat-badge{display:inline-block;font:700 .45em/1.5 'Segoe UI',sans-serif;padding:0 .5em;border-radius:.4em;color:#111;background:#ff8a1f;text-shadow:none;vertical-align:middle}
+.b-moderator{background:#00ad03}.b-vip{background:#e005b9;color:#fff}.b-subscriber{background:#8f5bff;color:#fff}.b-broadcaster{background:#e91916;color:#fff}.b-bot{background:#777;color:#fff}.b-member{background:#2ba640;color:#fff}
+.chat-provider{display:inline-block;width:1.05em;height:1.05em;border-radius:50%;vertical-align:-.15em;margin-right:6px;text-align:center;font:800 .6em/1.75em 'Segoe UI',sans-serif;color:#fff;text-shadow:none}
+.p-twitch{background:#9146ff}.p-youtube{background:#e62117}.p-kick{background:#53fc18;color:#111}.p-discord{background:#5865f2}.p-tiktok{background:#111;box-shadow:0 0 0 1px #fff6}
+.chat-username{font-weight:800}.chat-colon{margin-right:.3em}.chat-text{font-weight:600}
+.chat-text img.emo{height:1.35em;vertical-align:middle;margin:-2px 1px}
+.chat-notice{font-style:italic;opacity:.92}.chat-notice .chat-username{color:var(--ac,#ff8a1f)}
+.act-age{opacity:.6;font-size:.6em;margin-right:8px;display:inline-block;min-width:2.2em}
+.act-pill{display:inline-block;font:800 .55em/1.6 'Segoe UI',sans-serif;padding:0 .7em;border-radius:1em;background:var(--ac,#ff8a1f);color:#111;text-shadow:none;margin-right:8px;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
+.t-follow{background:#4ade80}.t-raid{background:#f472b6}.t-sub,.t-resub,.t-gift{background:#a78bfa}.t-cheer{background:#facc15}.t-redeem{background:#38bdf8}
+.act-user{font-weight:800;margin-right:8px}.act-chip{display:inline-block;font-size:.6em;padding:0 .7em;border-radius:1em;background:#ffffff22;margin-left:4px;text-shadow:none;vertical-align:middle}
+.in-fade{animation:efade .35s ease-out}.in-slide{animation:eslide .35s ease-out}.in-pop{animation:epop .3s cubic-bezier(.3,1.6,.5,1)}
+@keyframes efade{from{opacity:0}to{opacity:1}}@keyframes eslide{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:none}}@keyframes epop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+.out{transition:opacity .8s;opacity:0}
+.preview-tag{position:fixed;right:6px;top:4px;font:12px sans-serif;color:#ff8a1f;opacity:.8;text-shadow:none;z-index:9}
+</style>
+<style id="cust"></style>
+</head><body>
+<div id="scale"><div id="feed"></div></div>
+<script>
+const KIND = '__KIND__', Q = new URLSearchParams(location.search), PREVIEW = Q.get('preview') === '1';
+const FONTS = {nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: "Roboto,Arial,sans-serif", arial: 'Arial,sans-serif', georgia: 'Georgia,serif', consolas: 'Consolas,monospace', comic: "'Comic Sans MS',cursive", impact: 'Impact,sans-serif', trebuchet: "'Trebuchet MS',sans-serif", verdana: 'Verdana,sans-serif'};
+const SIZES = {xs: 16, s: 20, m: 24, l: 30, xl: 36, xxl: 44};
+const PCOL = {twitch: '#9146ff', youtube: '#ff4e45', kick: '#53fc18', discord: '#7983f5', tiktok: '#ff2d55'};
+const PLET = {twitch: 'T', youtube: 'Y', kick: 'K', discord: 'D', tiktok: '♪'};
+const UNIT = {raid: 'viewers', cheer: 'bits', gift: 'subs', resub: 'months', sub: 'months'};
+const LABEL = {follow: 'Follow', redeem: 'Redeem', sub: 'Sub', resub: 'Resub', gift: 'Gift', cheer: 'Cheer', raid: 'Raid', announcement: 'Notice'};
+let S = null, MUTED = new Set(), items = [];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const $ = s => document.querySelector(s);
+
+function hidden(m) {
+  const u = (m.user || '').toLowerCase(), d = (m.display || '').toLowerCase(), ig = S.ignore_names.map(x => x.toLowerCase());
+  if (ig.includes(u) || ig.includes(d) || MUTED.has(u) || m.raw_type === 'dev') return true;
+  if (!S.providers.includes('all') && !S.providers.includes(m.platform)) return true;
+  if (KIND === 'chat') return !!m.event && !S.notices;
+  return !(S.types || []).includes(m.event || '');
+}
+function apply() {
+  const r = document.documentElement.style, hex = (c, a) => { if (!c) return 'transparent'; const n = parseInt(c.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; };
+  r.setProperty('--fs', SIZES[S.size] + 'px'); r.setProperty('--sc', S.canvas_scale); r.setProperty('--tc', S.text_color); r.setProperty('--sh', S.text_shadow_color);
+  r.setProperty('--ff', FONTS[S.font_family_id] || FONTS.nunito); r.setProperty('--al', S.message_alignment);
+  r.setProperty('--bg', hex(S.background_color, S.background_opacity)); r.setProperty('--bw', S.border_width + 'px'); r.setProperty('--bc', S.border_color || 'transparent');
+  r.setProperty('--br', S.border_radius + 'px'); r.setProperty('--ac', S.accent_color);
+  document.body.className = (S.message_order === 'top' ? 'top ' : '') + S.style_type + (S.background_color ? ' has-bg' : '');
+  $('#feed').style.alignItems = S.message_alignment === 'right' ? 'flex-end' : S.message_alignment === 'center' ? 'center' : 'flex-start';
+  $('#cust').textContent = S.custom_css || '';
+  items.filter(i => hidden(i.m)).forEach(drop);
+}
+function emoBody(m) {
+  const map = {}; (m.emotes || []).forEach(e => { map[e.text] = e.id; });
+  return String(m.text || '').split(/(\s+)/).map(t => map[t] ? `<img class="emo" alt="${esc(t)}" src="https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(map[t])}/default/dark/2.0" onerror="this.replaceWith(document.createTextNode(this.alt))">` : esc(t)).join('');
+}
+function badges(m) {
+  if (!S.badges) return '';
+  const b = (m.badges || []).map(x => String(x).replace(/\/.*/, '').toLowerCase()).filter(x => ['broadcaster', 'moderator', 'vip', 'subscriber', 'member'].includes(x));
+  if (m.is_bot) b.push('bot');
+  return b.length ? `<span class="chat-badges">${b.map(x => `<span class="chat-badge b-${x}">${{broadcaster: 'LIVE', moderator: 'MOD', vip: 'VIP', subscriber: 'SUB', member: 'MEM', bot: 'BOT'}[x]}</span>`).join('')}</span>` : '';
+}
+function logo(m) { return S.provider_logo ? `<span class="chat-provider p-${esc(m.platform)}" title="${esc(m.platform)}">${PLET[m.platform] || '?'}</span>` : ''; }
+function chatHtml(m) {
+  const name = esc(m.display || m.user);
+  const own = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '', col = S.name_color_mode === 'none' ? S.text_color : own || (S.name_color_mode === 'own' ? S.text_color : PCOL[m.platform] || '#ff8a1f');
+  if (m.event) return `<div class="chat-message-container chat-notice"><span class="chat-message">${logo(m)}<span class="chat-username" style="color:${col}">${name}</span> <span class="chat-text">${esc((m.text || '').replace(new RegExp('^' + (m.display || m.user).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), ''))}</span></span></div>`;
+  return `<div class="chat-message-container"><span class="chat-message">${logo(m)}${badges(m)}<span class="chat-username" style="color:${col}">${name}</span>${S.username_colon ? '<span class="chat-colon">:</span>' : ' '}<span class="chat-text">${emoBody(m)}</span></span></div>`;
+}
+function age(ts) { const s = Math.max(0, Date.now() / 1000 - ts); return s < 60 ? 'now' : s < 3600 ? Math.floor(s / 60) + 'm' : s < 86400 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 86400) + 'd'; }
+function actHtml(m) {
+  const chips = []; if (m.amount) chips.push(`${m.amount} ${UNIT[m.event] || ''}`.trim());
+  let rest = (m.text || '').replace(new RegExp('^' + (m.display || m.user).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^(followed|redeemed|subscribed|resubscribed|gifted subs|cheered|is raiding)\s*/i, '');
+  if (rest) chips.push(rest.slice(0, 80));
+  return `<div class="activity-row">${S.show_age ? `<span class="act-age" data-ts="${m.ts}">${age(m.ts)}</span>` : ''}${logo(m)}<span class="act-pill t-${esc(m.event)}">${esc(LABEL[m.event] || m.event)}</span><span class="act-user">${esc(m.display || m.user)}</span>${chips.map(c => `<span class="act-chip">${esc(c)}</span>`).join('')}</div>`;
+}
+function drop(i) { items = items.filter(x => x !== i); i.el.classList.add('out'); setTimeout(() => i.el.remove(), 850); }
+function add(m, immediate) {
+  if (!S || hidden(m) || (KIND === 'activity' && !m.event) || (KIND === 'activity' && S.paused && !immediate)) return;
+  if (items.some(i => i.m.id === m.id)) return;
+  const show = () => {
+    const w = document.createElement('div'); w.innerHTML = KIND === 'chat' ? chatHtml(m) : actHtml(m); const el = w.firstElementChild;
+    if (S.entrance_animation_type !== 'none') el.classList.add('in-' + S.entrance_animation_type);
+    const feed = $('#feed'), it = {m, el};
+    if (S.message_order === 'top') feed.prepend(el); else feed.append(el);
+    items.push(it);
+    while (items.length > S.max_messages) drop(items[0]);
+    if (S.message_fade_duration_seconds > 0 && !PREVIEW) setTimeout(() => drop(it), S.message_fade_duration_seconds * 1000);
+  };
+  if (S.message_delay_seconds > 0 && !immediate) setTimeout(show, S.message_delay_seconds * 1000); else show();
+}
+function redraw(list) { $('#feed').innerHTML = ''; items = []; list.forEach(m => add(m, true)); }
+
+// test messages (editor preview + ?preview=1)
+const SAMPLE = [
+  ['twitch', 'InnocentPenguin_', 'Welcome in everyone! Today we ship the new chat 🐧', ['broadcaster'], '#ff8a1f', ''],
+  ['twitch', 'ModMarie', 'remember to hydrate!', ['moderator'], '#00ad03', ''],
+  ['youtube', 'Tomas', 'Hello from YouTube, great stream', ['member'], '', ''],
+  ['twitch', 'SubSam', 'that boss was brutal', ['subscriber', 'vip'], '#8f5bff', ''],
+  ['kick', 'KickKid', 'first time here, loving the vibe', [], '', ''],
+  ['discord', 'Dana', 'posting from the Discord channel', [], '', ''],
+  ['twitch', 'nightbot', 'this bot message should be hidden by the ignore list', [], '', ''],
+  ['twitch', 'NewFollower', 'followed', [], '', 'follow'],
+  ['twitch', 'RaidRay', 'is raiding', [], '', 'raid'],
+  ['twitch', 'SongFan', 'redeemed Song Request', [], '', 'redeem'],
+];
+let sampleN = 0;
+function sampleMsg() {
+  const pool = KIND === 'activity' ? SAMPLE.filter(x => x[5]) : SAMPLE, [p, u, t, b, c, ev] = pool[sampleN++ % pool.length];
+  return {id: 'test:' + sampleN, platform: p, user: u.toLowerCase(), display: u, text: ev ? `${u} ${t}` : t, ts: Date.now() / 1000, badges: b, color: c, event: ev, amount: ev === 'raid' ? 13 : ev === 'redeem' ? 25 : 0, emotes: [], is_bot: false};
+}
+function startTest() {
+  const tick = () => { add(sampleMsg(), true); };
+  for (let i = 0; i < 6; i++) tick();
+  setInterval(tick, 2500);
+}
+
+async function boot() {
+  const cfg = await fetch('/api/obs/' + KIND).then(r => r.json());
+  S = cfg.settings; MUTED = new Set(cfg.muted || []); apply();
+  if (PREVIEW) {
+    document.body.insertAdjacentHTML('beforeend', '<div class="preview-tag">test messages</div>');
+    window.addEventListener('message', e => { if (e.data && e.data.obsSettings) { S = e.data.obsSettings; apply(); redraw(items.map(i => i.m)); } });
+    startTest(); parent.postMessage({obsReady: true}, '*'); return;
+  }
+  const hist = await fetch('/api/messages?limit=100').then(r => r.json()).catch(() => []);
+  hist.sort((a, b) => a.ts - b.ts).filter(m => Date.now() / 1000 - m.ts < 600 && (KIND === 'chat' || m.event)).forEach(m => add(m, true));
+  connect();
+  setInterval(() => document.querySelectorAll('.act-age').forEach(e => { e.textContent = age(+e.dataset.ts); }), 30000);
+}
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onmessage = e => {
+    let ev; try { ev = JSON.parse(e.data); } catch (x) { return; }
+    if (ev.type === 'message') add(ev.message);
+    else if (ev.type === 'obs.changed' && ev.kind === KIND) { S = ev.settings; apply(); redraw(items.map(i => i.m)); }
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+boot();
+</script></body></html>

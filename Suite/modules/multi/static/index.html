@@ -97,6 +97,7 @@ body.side-open #sidebtn{display:none}
 <script src="/assets/style.js"></script>
 <script src="/assets/chat.js"></script>
 <script src="/assets/side.js"></script>
+<script src="/assets/obs_ui.js"></script>
 <script>
 const q = new URLSearchParams(location.search), WID = q.get('win');
 const HALF = q.get('half'), PID = q.get('pane'), POPLABEL = q.get('pop');
@@ -127,7 +128,7 @@ async function init() {
   if (W.font_size && W.font_size !== 14) document.documentElement.style.setProperty('--fs', W.font_size + 'px');   // a window's own size wins over the chat look
   if (W.spacing && W.spacing !== 4) document.documentElement.style.setProperty('--sp', W.spacing + 'px');
   document.body.style.opacity = W.opacity || 1;
-  if (!['launcher', 'status', 'style'].includes(W.type)) msgs = await api('/api/messages?limit=200');
+  if (!['launcher', 'status', 'style', 'obs'].includes(W.type)) msgs = await api('/api/messages?limit=200');
   cards = await api('/api/cards');
   connect(); render(); setInterval(() => { api('/api/cards').then(c => { cards = c; renderCards(); }); }, 5000);
   if (WID) savePosition();
@@ -203,7 +204,7 @@ function renderHeader() {
 function render() {
   renderHeader();
   ({unified: renderFeed, platform: renderFeed, first: renderFeed, priority: renderCards, missed: renderCards,
-    composer: renderComposer, status: renderStatus, launcher: renderLauncher, chat: renderChat, popout: renderPopout, style: renderStyleEditor}[W.type] || renderFeed)();
+    composer: renderComposer, status: renderStatus, launcher: renderLauncher, chat: renderChat, popout: renderPopout, style: renderStyleEditor, obs: renderObsEditor}[W.type] || renderFeed)();
 }
 // linked feed: windows in one link_group show ONE continuous sequence. link_order 0 shows the newest rows,
 // order 1 continues with the rows just older, and so on. Capacity (rows) is shared over BroadcastChannel.

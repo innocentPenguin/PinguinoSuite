@@ -21,7 +21,7 @@ const SIDE_SECTIONS = [
   {id: 'sound', title: 'Sounds', help: 'sound audio ding pop volume new chatter returning mute notification', body: () => !SIDE.dg ? '<div class="empty">Loading...</div>' :
     `<h4>New-chatter ding</h4>${dingBox(SIDE.dg)}<h4>Chat pop</h4>${popBox(SIDE.pp)}`},
   {id: 'split', title: 'Split chat and pop-out', help: 'split pop out window monitor half top bottom always on top', body: () => SIDE.pn ? splitBox(SIDE.pn) : '<div class="empty">Loading...</div>'},
-  {id: 'more', title: 'Connections and more', help: 'setup connect twitch youtube discord editor look presets', body: () => `<div class="act"><a href="/"><button type="button">Setup (connections)</button></a> <a href="/?type=style"><button type="button">Full look editor and presets</button></a></div>`},
+  {id: 'more', title: 'Connections and more', help: 'setup connect twitch youtube discord editor look presets', body: () => `<div class="act"><a href="/"><button type="button">Setup (connections)</button></a> <a href="/?type=style"><button type="button">Full look editor and presets</button></a> <a href="/?type=obs&widget=chat"><button type="button">OBS chat widget</button></a> <a href="/?type=obs&widget=activity"><button type="button">OBS activity widget</button></a></div>`},
 ];
 
 // the text controls (shared with the A-/A+ buttons in the chat bar)

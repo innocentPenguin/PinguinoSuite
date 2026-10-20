@@ -20,6 +20,7 @@ import checks
 import config
 import learning
 import chatstyle
+import obs as obs_mod
 import panes as panes_mod
 import presets as presets_mod
 import console_log
@@ -179,7 +180,7 @@ async def local_only_writes(request: Request, call_next):
         if not same_origin and not token_ok(request):
             return HTMLResponse("token required", status_code=401)
     resp = await call_next(request)
-    if request.url.path.startswith("/assets") or request.url.path in ("/", "/popout"):
+    if request.url.path.startswith("/assets") or request.url.path in ("/", "/popout", "/obs/chat", "/obs/activity"):
         resp.headers["cache-control"] = "no-cache"     # always revalidate: a new Multi build must never show stale scripts
     return resp
 
@@ -200,6 +201,60 @@ def index():
 def popout():
     """Stream-safe chat for an OBS browser source/dock: public messages only (no cards, notes, composer, muted users)."""
     return _page()
+
+
+# OBS browser sources: /obs/chat and /obs/activity (Synchra-compatible settings) ------------------
+def _obs_get(kind):
+    saved = store.kv_get("obs:" + kind, None)
+    if saved is None and kind == "chat":
+        saved = obs_mod.IVAN_CHAT       # first run: the look Ivan already had in Synchra
+    return obs_mod.sanitize(kind, saved)
+
+
+@app.get("/obs/{kind}")
+def obs_page(kind: str):
+    if kind not in obs_mod.KINDS:
+        return HTMLResponse("not found", status_code=404)
+    return HTMLResponse((STATIC / "obs.html").read_text("utf-8").replace("__KIND__", kind))
+
+
+@app.get("/api/obs/{kind}")
+def obs_settings(kind: str):
+    if kind not in obs_mod.KINDS:
+        return JSONResponse({"detail": "unknown widget"}, status_code=404)
+    return {"settings": _obs_get(kind), "defaults": obs_mod.DEFAULTS[kind], "fonts": list(obs_mod.FONTS), "sizes": obs_mod.SIZES,
+            "muted": sorted(pipeline.rules["muted"]), "presets": [{"name": n, "desc": p["desc"], "settings": obs_mod.sanitize(kind, p["settings"])}
+                                                                  for n, p in obs_mod.PRESETS[kind].items()]}
+
+
+@app.post("/api/obs/{kind}")
+async def obs_save(kind: str, request: Request):
+    if kind not in obs_mod.KINDS:
+        return JSONResponse({"detail": "unknown widget"}, status_code=404)
+    b = await request.json()
+    st = obs_mod.sanitize(kind, b.get("settings"))
+    store.kv_set("obs:" + kind, st)
+    hub.emit({"type": "obs.changed", "kind": kind, "settings": st})
+    return {"settings": st}
+
+
+@app.post("/api/obs/chat/import")
+async def obs_import(request: Request):
+    b = await request.json()
+    st, err = obs_mod.from_synchra(b.get("doc"))
+    if err:
+        return JSONResponse({"detail": err}, status_code=400)
+    if b.get("save", True):
+        store.kv_set("obs:chat", st)
+        hub.emit({"type": "obs.changed", "kind": "chat", "settings": st})
+    return {"settings": st}
+
+
+@app.get("/api/obs/{kind}/export")
+def obs_export(kind: str):
+    if kind not in obs_mod.KINDS:
+        return JSONResponse({"detail": "unknown widget"}, status_code=404)
+    return obs_mod.to_synchra(kind, _obs_get(kind))
 
 
 @app.get("/api/status")

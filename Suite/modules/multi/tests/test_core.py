@@ -1048,3 +1048,31 @@ def test_host_feed_maps_activity_items():
     assert m.id == "host:7" and m.event == "redeem" and m.amount == 500 and m.text == "Pat redeemed Hydrate: cheers"
     assert host_feed.to_message({"seq": 8, "type": "follow", "user": "Fin"}, "chan").text == "Fin followed"
     assert host_feed.to_message({"seq": 9, "type": "clip", "user": "x"}, "chan") is None
+
+
+# ---- OBS widgets (Synchra compatible) ----------------------------------------------------
+def test_obs_import_ivans_synchra_export():
+    import json, pathlib
+    import obs
+    doc = json.loads(pathlib.Path(r"D:\PinguinoSuite\Docs\imports\synchra-chat-widget.json").read_text("utf-8"))
+    st, err = obs.from_synchra(doc)
+    assert not err and st["size"] == "xxl" and st["font_family_id"] == "nunito" and "synchrabot" in st["ignore_names"]
+    assert "Unkempt" in st["custom_css"] and st["message_order"] == "bottom" and st["entrance_animation_type"] == "fade"
+    back = obs.to_synchra("chat", st)
+    assert back["kind"] == "synchra.widget" and back["settings"]["ignore_names"] == st["ignore_names"] and "max_messages" not in back["settings"]
+
+
+def test_obs_sanitize_clamps_and_hidden():
+    import obs
+    st = obs.sanitize("chat", {"size": "huge", "canvas_scale": 99, "text_color": "red", "custom_css": "a{}</style><script>", "ignore_names": ["Bot", "bot", " "],
+                               "providers": ["twitch", "nope"]})
+    assert st["size"] == obs.CHAT_DEFAULT["size"] and st["canvas_scale"] == 4 and st["text_color"] == "#ffffff"
+    assert "</style" not in st["custom_css"] and st["ignore_names"] == ["Bot"] and st["providers"] == ["twitch"]
+    m = {"user": "bot", "display": "Bot", "platform": "twitch", "event": ""}
+    assert obs.hidden("chat", st, m)
+    assert obs.hidden("chat", st, {"user": "x", "platform": "youtube", "event": ""})
+    assert not obs.hidden("chat", st, {"user": "x", "platform": "twitch", "event": "raid"})
+    st2 = obs.sanitize("chat", {"notices": False})
+    assert obs.hidden("chat", st2, {"user": "x", "platform": "twitch", "event": "raid"})
+    act = obs.sanitize("activity", {"types": ["follow"]})
+    assert not obs.hidden("activity", act, {"user": "x", "platform": "twitch", "event": "follow"}) and obs.hidden("activity", act, {"user": "x", "platform": "twitch", "event": "raid"})
