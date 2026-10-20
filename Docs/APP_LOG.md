@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 09:02 - Host + Multi restart (Plan 5 events, /api/say)
+
+- Host restarted on 9210a76 (EventSub poll/prediction/hype train, raid out, richer gift events in the activity feed; POST /api/say with module token). Multi restarted on ece3825 (Twitch plain sends via Host /api/say, falls back to direct if Host down) and 046b726 (raid_out/poll/prediction/hype rows, gift counter + top gifter). New scopes need Ivan's re-sign-in. Gift alert/poll/predict/hype overlays still to build.
+
 ## 2026-10-20 08:55 Host restart (Plan 5 scopes)
 - Host rebuilt on 1a9377e: 36 extra Twitch scopes in the sign-in (polls, predictions, raids, chat settings, announcements, shield, VIP/mods, whispers, schedule, etc.). Ivan needs ONE re-sign-in on the Accounts page; `missing` should then be empty.
 
