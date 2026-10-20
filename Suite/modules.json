@@ -401,6 +401,23 @@
     ],
     "secrets": [
       {
+        "name": "se_jwt",
+        "label": "StreamElements JWT",
+        "help": {
+          "title": "StreamElements JWT",
+          "summary": "Lets the Host import your StreamElements points and watch time. Read-only use; it is stored encrypted and never shown again.",
+          "steps": [
+            "Open StreamElements, click your avatar, then Channels (or Account), and Show secrets.",
+            "Copy the JWT Token (do not share it with anyone).",
+            "Paste it into Set here."
+          ],
+          "link": {
+            "label": "StreamElements dashboard",
+            "url": "https://streamelements.com/dashboard/account/channels"
+          }
+        }
+      },
+      {
         "name": "CHAT_BOT_API_KEY",
         "label": "AI key (chat and helper)",
         "help": {
