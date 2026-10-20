@@ -118,6 +118,8 @@ namespace PinguinoHost
                 if (p == "/api/helper/review" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, HelperReview.List(c.Request.QueryString["kind"], c.Request.QueryString["q"], lim).ToString(), "application/json"); return true; }
                 if (p == "/api/helper/review" && m == "POST") { var hb = Body(c); Write(c, HelperReview.SetNote((string)hb["id"], (string)hb["note"]).ToString(), "application/json"); return true; }
             }
+            if (p == "/api/lore" && m == "GET") { Write(c, ChannelLore.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/lore" && m == "POST") { Write(c, ChannelLore.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/profile-sync" && m == "GET") { Write(c, ProfileSync.Api().ToString(), "application/json"); return true; }
             if (p == "/api/profile-sync" && m == "POST") { Write(c, ProfileSync.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/economy" && m == "GET") { Write(c, Economy.Api().ToString(), "application/json"); return true; }

@@ -149,6 +149,7 @@ namespace PinguinoHost
             try { if (Streaks.Handle(user, text, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("streaks", "streak command failed: " + ex.Message); }
             try { if (PgCommand.Handle(user, text, role)) return; } catch (Exception ex) { Clog.Warn("pg", "!pg failed: " + ex.Message); }
             try { if (Auto.OnChat(user, text, role, isSub, firstMsg, msgId, replyTo)) return; } catch (Exception ex) { Clog.Warn("automation", "chat trigger failed: " + ex.Message); }   // an Actions & Events command took it
+            try { if (ChannelLore.OnChat(user, text, role, ChannelLore.Say)) return; } catch (Exception ex) { Clog.Warn("lore", "channel lore failed: " + ex.Message); }   // a clear question the channel's own commands answer
             lock (dispatchLock)   // one message at a time: arguments are shared state, so no two chats can mix
             {
                 cph.Args.Clear();

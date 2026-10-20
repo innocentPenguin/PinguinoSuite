@@ -1,0 +1,3038 @@
+{
+ "version": 1,
+ "settings": {
+  "channelName": "InnocentPenguin",
+  "contextual": true,
+  "bareWords": true,
+  "entryCooldownSec": 90,
+  "globalCooldownSec": 20,
+  "commandCooldownSec": 5
+ },
+ "counters": {
+  "owngoal": 0,
+  "whiff": 0
+ },
+ "entries": [
+  {
+   "id": "1v1",
+   "kind": "fun",
+   "triggers": [
+    "!1v1"
+   ],
+   "aliases": [],
+   "response": "If you think about it, going into a random stream and asking to 1v1 is like walking into a party you weren't invited to and asking who wants to fight.",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "7tv",
+   "kind": "link",
+   "triggers": [
+    "!7tv"
+   ],
+   "aliases": [],
+   "response": "download 7TV integration to get access to loads of emotes that are free and get special perks Download via the link https://7tv.app/",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b7tv\\b",
+    "\\bseven ?tv\\b",
+    "\\bhow (?:do )?(?:i|you) (?:get|see) (?:the )?emotes\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "abdul",
+   "kind": "person",
+   "triggers": [
+    "!abdul"
+   ],
+   "aliases": [],
+   "response": "the first multi millionaire in pinguino points the house is scared of him",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?abdul\\b",
+    "^\\W*abdul\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "ad",
+   "kind": "fun",
+   "triggers": [
+    "!ad"
+   ],
+   "aliases": [],
+   "response": "they appear at the worst possible time L ads",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "age",
+   "kind": "info",
+   "triggers": [
+    "!age"
+   ],
+   "aliases": [],
+   "response": "40 (larps 24)",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bhow old (?:is|are)\\b.*\\b(?:penguin|peng|he|you)\\b",
+    "\\bwhat(?:\\'s| is) (?:his|your|penguin\\'?s?) age\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "ash",
+   "kind": "clip",
+   "triggers": [
+    "!ash"
+   ],
+   "aliases": [],
+   "response": "He Gives bits! https://www.twitch.tv/innocentpenguin_/clip/BloodyPiercingRaccoonStrawBeary-uli7Tn9mJZmI5VUH",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:ash|bits clip|he gives bits)\\b",
+    "\\b(?:ash|bits clip|he gives bits)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "the same clip as Nightbot's !bits (our !bits is the bits board)",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "attack",
+   "kind": "fun",
+   "triggers": [
+    "!attack"
+   ],
+   "aliases": [],
+   "response": "$(user) viciously tackles $(touser) into a pile of pillows! 🛏💥",
+   "variants": [
+    "$(user) viciously tackles $(touser) into a pile of pillows! 🛏💥",
+    "$(user) swings wildly at $(touser) but trips over their own feet and misses! 🤸‍♂️💨",
+    "$(user) lands a CRITICAL HIT on $(touser) with a squeaky rubber chicken! 🐔🔨"
+   ],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "random",
+    "touser"
+   ],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "ban",
+   "kind": "fun",
+   "triggers": [
+    "!ban"
+   ],
+   "aliases": [],
+   "response": "$(user) tried to ban $(touser) . It failed, but it makes $(user) feel like a boss! 😎",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "touser"
+   ],
+   "note": "a joke command: nobody is actually banned",
+   "source": "nightbot"
+  },
+  {
+   "id": "blake",
+   "kind": "person",
+   "triggers": [
+    "!blake"
+   ],
+   "aliases": [],
+   "response": "The Prodigal Child of Rocket League",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?blake\\b",
+    "^\\W*blake\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "blizy",
+   "kind": "person",
+   "triggers": [
+    "!blizy"
+   ],
+   "aliases": [],
+   "response": "best sugar daddy (6’6 btw)",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?blizy\\b",
+    "^\\W*blizy\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "blizzy",
+   "kind": "clip",
+   "triggers": [
+    "!blizzy"
+   ],
+   "aliases": [],
+   "response": "https://medal.tv/games/minecraft/clips/nvYdSN1xv0wlWov60?invite=cr-MSxWVk8sMjAwOTUzMDA4",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:blizzy)\\b",
+    "\\b(?:blizzy)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "burger",
+   "kind": "info",
+   "triggers": [
+    "!burger"
+   ],
+   "aliases": [],
+   "response": "Use !burgie to place a order. To change skin, place complexed orders, interact more; read: https://heynaugames.com/burgie-commands",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bburgie\\b",
+    "\\bburger (?:command|order|game)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 3,
+   "not": ""
+  },
+  {
+   "id": "burglin",
+   "kind": "clip",
+   "triggers": [
+    "!burglin"
+   ],
+   "aliases": [
+    "!burglingnomes"
+   ],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/SpookyTrustworthyLapwingBIRB-K2S97oS82L66V7HN",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:burglin|burgling ?nomes)\\b",
+    "\\b(?:burglin|burgling ?nomes)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "cat",
+   "kind": "clip",
+   "triggers": [
+    "!cat"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/DifferentSuaveRingCoolStoryBob-si3-VQIXb4HMjZHS",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:cat)\\b",
+    "\\b(?:cat)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "cheese",
+   "kind": "fun",
+   "triggers": [
+    "!cheese"
+   ],
+   "aliases": [],
+   "response": "I like cheese",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "controller",
+   "kind": "info",
+   "triggers": [
+    "!controller"
+   ],
+   "aliases": [],
+   "response": "nintendo switch 2 pro controller",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:what|which) controller\\b",
+    "\\bcontroller\\b.*\\b(?:he|you|penguin|peng) (?:use|play|have)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "coy",
+   "kind": "person",
+   "triggers": [
+    "!coy"
+   ],
+   "aliases": [],
+   "response": "MAKE SOME NOISE FOR DJ COY",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?coy\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "cpu",
+   "kind": "fun",
+   "triggers": [
+    "!cpu"
+   ],
+   "aliases": [],
+   "response": "HELP ME PENG BABY IM CHOKING",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "crimson",
+   "kind": "clip",
+   "triggers": [
+    "!crimson"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/InspiringFrozenGrassPeteZaroll-W5qBCmr1ykqmzIVW",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:crimson)\\b",
+    "\\b(?:crimson)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "cups",
+   "kind": "fun",
+   "triggers": [
+    "!cups"
+   ],
+   "aliases": [],
+   "response": "Cups is the best",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "customrules",
+   "kind": "info",
+   "triggers": [
+    "!customrules"
+   ],
+   "aliases": [],
+   "response": "The rules for the customs are: No leaving/going afk mid game, no toxicity directed at other players, no trolling or intentionally throwing the match and only play once it's your turn to play. Defiance of rules will result in you being temporarily or even permanently banned from joining the customs.",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bcustoms? rules\\b",
+    "\\brules (?:for|of|in) (?:the )?customs?\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 5,
+   "not": ""
+  },
+  {
+   "id": "customs",
+   "kind": "info",
+   "triggers": [
+    "!customs"
+   ],
+   "aliases": [],
+   "response": "Type !howtojoin for information on how to join the customs and !customrules for the rules for customs.",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwhat (?:are|is) (?:the )?customs\\b",
+    "\\bhow (?:do )?customs work\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 3,
+   "not": ""
+  },
+  {
+   "id": "cute",
+   "kind": "fun",
+   "triggers": [
+    "!cute"
+   ],
+   "aliases": [],
+   "response": "ivan cutie arroyo",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "discord",
+   "kind": "link",
+   "triggers": [
+    "!discord"
+   ],
+   "aliases": [
+    "!dc"
+   ],
+   "response": "https://discord.gg/fktz5sq4b8",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bdiscord\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "needsConfirm": "the export had no text for !discord/!dc; this is the invite the website uses - confirm",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "developer",
+   "kind": "person",
+   "triggers": [
+    "!developer"
+   ],
+   "aliases": [],
+   "response": "Insane in hoops",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "dictators",
+   "kind": "fun",
+   "triggers": [
+    "!dictators"
+   ],
+   "aliases": [],
+   "response": "flayir and yoopoo",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "drops",
+   "kind": "link",
+   "triggers": [
+    "!drops"
+   ],
+   "aliases": [],
+   "response": "ENABLED!! https://www.twitch.tv/drops/inventory",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bdrops?\\b.*\\b(?:enabled|on|active|working)\\b",
+    "\\bare there (?:any )?drops\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "endstream",
+   "kind": "fun",
+   "triggers": [
+    "!endstream"
+   ],
+   "aliases": [],
+   "response": "LWK PENG GET OFF... YOUR NOT COOKING ANYMORE. JS END STREAM ALREADY!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "feetfinder",
+   "kind": "fun",
+   "triggers": [
+    "!feetfinder"
+   ],
+   "aliases": [],
+   "response": "Coming soon. (hopefully by 2027)",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "flayir",
+   "kind": "person",
+   "triggers": [
+    "!flayir"
+   ],
+   "aliases": [],
+   "response": "The biggest weeknd fan in the top 0.004% in 2025",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?flayir\\b",
+    "^\\W*flayir\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "food",
+   "kind": "info",
+   "triggers": [
+    "!food"
+   ],
+   "aliases": [],
+   "response": "Penguin Sandwiches",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:favorite|favourite|fav) food\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2,
+   "not": ""
+  },
+  {
+   "id": "gay",
+   "kind": "fun",
+   "triggers": [
+    "!gay"
+   ],
+   "aliases": [],
+   "response": "you are gay",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "geo",
+   "kind": "link",
+   "triggers": [
+    "!geo"
+   ],
+   "aliases": [],
+   "response": "https://www.geoguessr.com/user/69fbf7426c47f011d20cc335",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bgeo ?guess?r (?:profile|account|link)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 3,
+   "not": ""
+  },
+  {
+   "id": "geoguesser",
+   "kind": "clip",
+   "triggers": [
+    "!geoguesser"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/UglyVainSowNononoCat-bqEL0-OKfMe6XKNr",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:geo ?guess?er)\\b",
+    "\\b(?:geo ?guess?er)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "goat",
+   "kind": "person",
+   "triggers": [
+    "!goat"
+   ],
+   "aliases": [],
+   "response": "W Kara 🔥🔥",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "golf",
+   "kind": "clip",
+   "triggers": [
+    "!golf"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/HorribleObeseFoxPJSalt-XUAGedbDwr9JLpXX",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:golf)\\b",
+    "\\b(?:golf)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "goon",
+   "kind": "clip",
+   "triggers": [
+    "!goon"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/TenderIronicLyrebirdVoHiYo-e445dM1-QFdPGWk-",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "grindr",
+   "kind": "link",
+   "triggers": [
+    "!grindr"
+   ],
+   "aliases": [],
+   "response": "https://youtu.be/Aq5WXmQQooo?si=5SNpUXueYhckky-t",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "gsu",
+   "kind": "link",
+   "triggers": [
+    "!gsu"
+   ],
+   "aliases": [],
+   "response": "Heres the Official Governer State University Rocket League Channel to Watch Innocent Penguin! https://www.twitch.tv/govstateesports",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bgsu\\b",
+    "\\bgovernor\\'?s? state\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "happy",
+   "kind": "fun",
+   "triggers": [
+    "!happy"
+   ],
+   "aliases": [],
+   "response": "if you’re sad by happy doesn’t cost a dime to spread love",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "hc",
+   "kind": "info",
+   "triggers": [
+    "!hc"
+   ],
+   "aliases": [],
+   "response": "penguin has almost died 3x to himself (NOT CHAT DISTRACTING)",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bhardcore\\b.*\\b(?:died|death|deaths|dead)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "Penguin has nearly died in hardcore Minecraft 3 times to himself",
+   "source": "nightbot",
+   "priority": 2,
+   "not": ""
+  },
+  {
+   "id": "hebunga",
+   "kind": "fun",
+   "triggers": [
+    "!hebunga"
+   ],
+   "aliases": [],
+   "response": "always gets timed out from penguin by mistake 10k seconds was a lot",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "height",
+   "kind": "info",
+   "triggers": [
+    "!height"
+   ],
+   "aliases": [],
+   "response": "5'8 on a good day!",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bhow tall (?:is|are)\\b",
+    "\\bwhat(?:\\'s| is) (?:his|your|penguin\\'?s?) height\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "howbigisit",
+   "kind": "clip",
+   "triggers": [
+    "!howbigisit"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/RacyExpensiveRadicchioDBstyle-GI8qUUjwIqhJSqBQ",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:how big is it)\\b",
+    "\\b(?:how big is it)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "howtojoin",
+   "kind": "info",
+   "triggers": [
+    "!howtojoin"
+   ],
+   "aliases": [],
+   "response": "To play in the customs, type !join to join the queue. Once it is your turn to play, Penguin will call out your name. After the game, you will be removed from the queue and you will have to rejoin to play again. Type !leave to leave the queue anytime.",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bhow\\b.*\\b(?:join|play|get in)\\b.*\\b(?:customs?|queue|lobby|games?)\\b",
+    "\\bhow (?:do|can|to) (?:i|we|you)? ?(?:join|get into) (?:the )?(?:customs?|queue)\\b",
+    "\\bhow does the queue work\\b",
+    "\\bhow (?:do )?(?:i|you) play with (?:penguin|peng|viewers)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 6,
+   "not": ""
+  },
+  {
+   "id": "hug",
+   "kind": "fun",
+   "triggers": [
+    "!hug"
+   ],
+   "aliases": [],
+   "response": "$(user) wraps their arms around $(touser) and gives them a big, warm hug! 🤗",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "touser"
+   ],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "ip",
+   "kind": "info",
+   "triggers": [
+    "!ip"
+   ],
+   "aliases": [],
+   "response": "smp.innocentpenguin.com | hc.innocentpenguin.com",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:server|smp|mc|minecraft)\\b.*\\b(?:ip|address)\\b",
+    "\\b(?:what|whats)(?:\\'s| is)? the ip\\b",
+    "\\bip (?:for|of) the (?:server|smp|minecraft)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 5,
+   "not": ""
+  },
+  {
+   "id": "kara",
+   "kind": "person",
+   "triggers": [
+    "!kara"
+   ],
+   "aliases": [],
+   "response": "goated",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?kara\\b",
+    "^\\W*kara\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "koops",
+   "kind": "person",
+   "triggers": [
+    "!koops"
+   ],
+   "aliases": [],
+   "response": "the king of the koopas and pookie of zylo <3",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?koops\\b",
+    "\\bkoops\\b",
+    "^\\W*koops\\W*$"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "luck",
+   "kind": "fun",
+   "triggers": [
+    "!luck"
+   ],
+   "aliases": [],
+   "response": "You got $(random 1 50)% luck BROCHACHO, GET GOOD :)",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "random"
+   ],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "lurk",
+   "kind": "fun",
+   "triggers": [
+    "!lurk"
+   ],
+   "aliases": [],
+   "response": "Thanks for lurking, $(user)! We hope to see you back soon!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "marsh",
+   "kind": "clip",
+   "triggers": [
+    "!marsh"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/onepsynic/clip/CovertHungryOrcaItsBoshyTime-bQuareH83p2ZFJiZ",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:marsh)\\b",
+    "\\b(?:marsh)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "marshmallow",
+   "kind": "person",
+   "triggers": [
+    "!marshmallow"
+   ],
+   "aliases": [],
+   "response": "The Legendary Story Off Who Stole The Marshmallow That Ended In Hours Of VOD Reviewing Andddddddddd We Never Found out Who Stole The Marshmallow The End",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?marshmallow\\b",
+    "who stole the marshmallow",
+    "stole the marshmallow",
+    "^\\W*marshmallow\\W*$"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [],
+   "note": "long-running mystery: who stole the marshmallow (hours of VOD review, never solved)",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "marshmellow",
+   "kind": "person",
+   "triggers": [
+    "!marshmellow"
+   ],
+   "aliases": [],
+   "response": "burnt like a mello but still can play the cello",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?marshmellow\\b",
+    "^\\W*marshmellow\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "mashka",
+   "kind": "person",
+   "triggers": [
+    "!mashka"
+   ],
+   "aliases": [],
+   "response": "da best gc2 who loves goth mommys",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?mashka\\b",
+    "^\\W*mashka\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "mcrules",
+   "kind": "info",
+   "triggers": [
+    "!mcrules"
+   ],
+   "aliases": [],
+   "response": "No Griefing, No Killing, No stealing, No cheating, Be nice, No Nether.",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:mc|minecraft|server|smp) rules\\b",
+    "\\bwhat are the (?:mc|minecraft|server|smp) rules\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "mello",
+   "kind": "person",
+   "triggers": [
+    "!mello"
+   ],
+   "aliases": [],
+   "response": "im not useful, and im useless but im here typeshit ohSHIT fax",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?mello\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "minecraft",
+   "kind": "clip",
+   "triggers": [
+    "!minecraft"
+   ],
+   "aliases": [
+    "!piglin"
+   ],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/TsundereSpookyGarageThisIsSparta-5KdkvJn5DeoBo5fX",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:minecraft|piglin)\\b",
+    "\\b(?:minecraft|piglin)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "mod",
+   "kind": "info",
+   "triggers": [
+    "!mod"
+   ],
+   "aliases": [],
+   "response": "Don't beg for mod Not a rule, but you will be denied. mods are chosen based on 1 consistent viewership !watchtime, streak) 2 Maturity + twitch knowledge 3 !followage. You MUST be in the discord!!",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bhow\\b.*\\b(?:get|become|be)\\b.*\\bmod(?:erator)?\\b",
+    "\\b(?:can|could) i (?:be|get|become)( a)? mod\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 5,
+   "not": ""
+  },
+  {
+   "id": "modpack",
+   "kind": "link",
+   "triggers": [
+    "!modpack"
+   ],
+   "aliases": [],
+   "response": "https://drive.google.com/file/d/10TNoOGAQz8GuJ3AJ2S4wNv6x1_jw73pb/view?usp=sharing",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bmod ?pack\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "mods",
+   "kind": "info",
+   "triggers": [
+    "!mods"
+   ],
+   "aliases": [],
+   "response": "\"PENG WE DO NOT NEED MORE MODS\" - Yoohoo15",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bmore mods\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "quote from Yoohoo15 about adding mods",
+   "source": "nightbot",
+   "priority": 1,
+   "not": ""
+  },
+  {
+   "id": "name",
+   "kind": "info",
+   "triggers": [
+    "!name"
+   ],
+   "aliases": [],
+   "response": "eye van",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwhat(?:\\'s| is) (?:his|your|penguin\\'?s?) (?:real |irl )?name\\b",
+    "\\bwhat(?:\\'s| is) penguin\\'?s? real name\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "odds",
+   "kind": "info",
+   "triggers": [
+    "!odds"
+   ],
+   "aliases": [],
+   "response": "Chance of winning — Gamble - 45% | Slots - 10% | Duels 50%",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:gamble|gambling|slots|duels?) odds\\b",
+    "\\bodds (?:of|for|on) (?:winning|gambling|slots|duels?)\\b",
+    "\\bwhat are the odds\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "of",
+   "kind": "fun",
+   "triggers": [
+    "!of"
+   ],
+   "aliases": [],
+   "response": "You can find my only fans page here, where I post all my juicy Pics! https://discord.gg/cVNhjZE2Dh",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "onlyfans",
+   "kind": "fun",
+   "triggers": [
+    "!onlyfans"
+   ],
+   "aliases": [],
+   "response": "Coming Soon",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "oopsie",
+   "kind": "clip",
+   "triggers": [
+    "!oopsie"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/DirtyViscousCarabeefPanicVis-PZBnEqd3TNDeUSNC",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:oopsie)\\b",
+    "\\b(?:oopsie)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "owngoal",
+   "kind": "fun",
+   "triggers": [
+    "!owngoal"
+   ],
+   "aliases": [],
+   "response": "$(channel) Has own goaled a total of $(count owngoal) times!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "counter"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "counter": "owngoal"
+  },
+  {
+   "id": "peak",
+   "kind": "clip",
+   "triggers": [
+    "!peak"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/SparklyAmazingPorpoiseKappaPride-5qeeOUje6nyrUjQ6",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:peak)\\b",
+    "\\b(?:peak)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "penguin",
+   "kind": "fun",
+   "triggers": [
+    "!penguin"
+   ],
+   "aliases": [],
+   "response": "i love my community, i love playing with viewers, i DONT bite, and i love Rocket league. Also im literally gonna hit gc3 this season ( Dont forget im also child friendly)",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "phil",
+   "kind": "link",
+   "triggers": [
+    "!phil"
+   ],
+   "aliases": [],
+   "response": "LETS FLOCK IN https://linktr.ee/Infancinema",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "pineapple",
+   "kind": "person",
+   "triggers": [
+    "!pineapple"
+   ],
+   "aliases": [],
+   "response": "our favorite c2 btw",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?pineapple\\b",
+    "^\\W*pineapple\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "pinguino",
+   "kind": "fun",
+   "triggers": [
+    "!pinguino"
+   ],
+   "aliases": [],
+   "response": "fuck pinguino!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "popcorn",
+   "kind": "fun",
+   "triggers": [
+    "!popcorn"
+   ],
+   "aliases": [],
+   "response": "PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "needsConfirm": ""
+  },
+  {
+   "id": "prime",
+   "kind": "link",
+   "triggers": [
+    "!prime"
+   ],
+   "aliases": [],
+   "response": "1️⃣ Go to twitch.tv/prime 2️⃣ Connect your Amazon Prime account to your Twitch 3️⃣ Click the Sub button then \"Use Prime Sub\" 4️⃣ Claim every 30 days 🕙",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:twitch )?prime (?:sub|gaming)\\b",
+    "\\bhow (?:do )?(?:i|you) (?:use|sub with) prime\\b",
+    "\\buse (?:my )?prime\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 5,
+   "not": ""
+  },
+  {
+   "id": "purge",
+   "kind": "fun",
+   "triggers": [
+    "!purge"
+   ],
+   "aliases": [],
+   "response": "penguin decided to choose violence one day and disintegrated every entity exept from boats what a noob xd he aimed for getting id of boats so the entire chat rioted at him",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "story of the day Penguin removed every entity except boats in Minecraft",
+   "source": "nightbot"
+  },
+  {
+   "id": "quinn",
+   "kind": "person",
+   "triggers": [
+    "!quinn"
+   ],
+   "aliases": [],
+   "response": "#QwinningForLife",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?quinn\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "racist",
+   "kind": "clip",
+   "triggers": [
+    "!racist"
+   ],
+   "aliases": [
+    "!racism"
+   ],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/ObservantAmusedButterflyEleGiggle-8CrKbJDkO5MPZ84z",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "realrank",
+   "kind": "info",
+   "triggers": [
+    "!realrank"
+   ],
+   "aliases": [],
+   "response": "Silver 2 Div 3",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwhat(?:\\'s| is) (?:his|your|the) (?:real|irl|true) rank\\b",
+    "\\bwhat rank (?:is|are) (?:he|you|penguin|peng)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "repo",
+   "kind": "clip",
+   "triggers": [
+    "!repo"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/MoldyAwkwardSnoodBatChest-8h3z9SurqxuipHSE",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:repo)\\b",
+    "\\b(?:repo)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "rl",
+   "kind": "clip",
+   "triggers": [
+    "!rl"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/ComfortableArborealYakinikuANELE-DrFTAx-Jw1uHR4wT",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:rl|rocket league)\\b",
+    "\\b(?:rl|rocket league)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "roblox",
+   "kind": "link",
+   "triggers": [
+    "!roblox"
+   ],
+   "aliases": [],
+   "response": "https://www.roblox.com/users/111646254/profile user: Newbienoob36",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\broblox (?:user|username|name|account|profile)\\b",
+    "\\bwhat(?:\\'s| is) (?:his|your|penguin\\'?s?) roblox\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "robo",
+   "kind": "person",
+   "triggers": [
+    "!robo"
+   ],
+   "aliases": [],
+   "response": "she’s the ROGOAT",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?robo\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "rose",
+   "kind": "person",
+   "triggers": [
+    "!rose"
+   ],
+   "aliases": [],
+   "response": "jolly ass snowman",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?rose\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "sad",
+   "kind": "fun",
+   "triggers": [
+    "!sad"
+   ],
+   "aliases": [],
+   "response": "if your sad know your loved by penguin and people in chat",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "samu",
+   "kind": "person",
+   "triggers": [
+    "!samu"
+   ],
+   "aliases": [],
+   "response": "meow meow",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?samu\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "save",
+   "kind": "link",
+   "triggers": [
+    "!save"
+   ],
+   "aliases": [],
+   "response": "Save money on mobile! Sub or buy bits through these links to avoid mobile fees | Subs: twitch.tv/subs/innocentpenguin_ | Bits: twitch.tv/bits",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bmobile fees\\b",
+    "\\bsave money\\b.*\\b(?:sub|bits)\\b",
+    "\\bsub(?:scribe)? on (?:mobile|phone)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 3,
+   "not": ""
+  },
+  {
+   "id": "schedule",
+   "kind": "info",
+   "triggers": [
+    "!schedule"
+   ],
+   "aliases": [],
+   "response": "Live every day at 5pm (Central)",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwhen\\b.*\\b(?:stream|live|go live|start|on)\\b",
+    "\\b(?:stream|streaming) (?:schedule|times?|hours)\\b",
+    "\\bwhat time\\b.*\\b(?:stream|live|start|on)\\b",
+    "\\bschedule\\b"
+   ],
+   "anyShape": false,
+   "also": [
+    "!streamtime"
+   ],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 5,
+   "not": ""
+  },
+  {
+   "id": "server",
+   "kind": "info",
+   "triggers": [
+    "!server"
+   ],
+   "aliases": [],
+   "response": "There Are 2 Current Servers The hardcore server (Stream Only) and the pinguino smp 24/7 for the more chill non hardcore minecraft server for both servers !ip",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:which|what|how many) (?:minecraft )?servers?\\b",
+    "\\bis there (?:a )?(?:minecraft|mc) server\\b"
+   ],
+   "anyShape": false,
+   "also": [
+    "!ip"
+   ],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "settings",
+   "kind": "clip",
+   "triggers": [
+    "!settings"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/TenderKindNarwhalStinkyCheese-KIDSK3-VuUjYxl3J",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:settings)\\b",
+    "\\b(?:settings)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "shadow",
+   "kind": "person",
+   "triggers": [
+    "!shadow"
+   ],
+   "aliases": [],
+   "response": "plays way too many extra modes! bit weird if you ask me also when penguin throws money in his face he turns into a demon in rl",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?shadow\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "snowy",
+   "kind": "person",
+   "triggers": [
+    "!snowy"
+   ],
+   "aliases": [],
+   "response": "a goon or sum",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?snowy\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "specs",
+   "kind": "info",
+   "triggers": [
+    "!specs"
+   ],
+   "aliases": [],
+   "response": "Main PC Specs: CPU: Ryzen 9 7950X3D • GPU: RTX 5070Ti • RAM: 64GB DDR5",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bspecs?\\b",
+    "\\b(?:what|which)\\b.*\\b(?:pc|computer|gpu|cpu|graphics card|processor|ram|rig)\\b",
+    "\\b(?:pc|computer|rig)\\b.*\\b(?:have|use|using|run|play on)\\b",
+    "\\bhow much ram\\b"
+   ],
+   "anyShape": false,
+   "also": [
+    "!streamingpc"
+   ],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 5,
+   "not": "\\b(?:should i|recommend|buy|build me|my own)\\b"
+  },
+  {
+   "id": "spedy",
+   "kind": "person",
+   "triggers": [
+    "!spedy"
+   ],
+   "aliases": [],
+   "response": "speedy",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?spedy\\b",
+    "\\bspedy\\b",
+    "^\\W*spedy\\W*$"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "speedy",
+   "kind": "person",
+   "triggers": [
+    "!speedy"
+   ],
+   "aliases": [],
+   "response": "spedy",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?speedy\\b",
+    "\\bspeedy\\b",
+    "^\\W*speedy\\W*$"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "squishy",
+   "kind": "clip",
+   "triggers": [
+    "!squishy"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/TenderSincereCheddarPogChamp-a0ROytRnduIvtrVO",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:squishy)\\b",
+    "\\b(?:squishy)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "steam",
+   "kind": "link",
+   "triggers": [
+    "!steam"
+   ],
+   "aliases": [],
+   "response": "https://steamcommunity.com/id/innocentpenguin OR CODE: --> 199738440",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bsteam (?:id|code|profile|name|friend)\\b",
+    "\\badd (?:him|you|penguin|peng) on steam\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "streamingpc",
+   "kind": "info",
+   "triggers": [
+    "!streamingpc"
+   ],
+   "aliases": [],
+   "response": "CPU: Ryzen 5600G • GPU: RTX 4070 • RAM: 64GB DDR4",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bstream(?:ing)? (?:pc|computer|setup|rig)\\b",
+    "\\b(?:pc|computer) (?:he|you|penguin|peng) stream(?:s)? (?:on|with)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 6,
+   "not": ""
+  },
+  {
+   "id": "streamtime",
+   "kind": "info",
+   "triggers": [
+    "!streamtime"
+   ],
+   "aliases": [],
+   "response": "5pm (Central Time) 11PM (British Time)",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bstream ?time\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "support",
+   "kind": "link",
+   "triggers": [
+    "!support"
+   ],
+   "aliases": [],
+   "response": "Top ways to support: !prime, sub, bits, and !tip | Support is appreciated but never required!!!",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bhow\\b.*\\b(?:support|help)\\b.*\\b(?:penguin|peng|stream|channel|him)\\b",
+    "\\bways to support\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "sydney",
+   "kind": "person",
+   "triggers": [
+    "!sydney"
+   ],
+   "aliases": [],
+   "response": "brick wall Sydney!!! 🧱",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?sydney\\b",
+    "brick\\s*wall\\s*sydney",
+    "sydney.{0,10}brick\\s*wall",
+    "^\\W*sydney\\W*$"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [],
+   "note": "running joke: \"brick wall Sydney\"",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "thebest",
+   "kind": "fun",
+   "triggers": [
+    "!thebest"
+   ],
+   "aliases": [],
+   "response": "im mini",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "tiktok",
+   "kind": "link",
+   "triggers": [
+    "!tiktok"
+   ],
+   "aliases": [],
+   "response": "https://www.tiktok.com/@innocentpenguin_",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\btik ?tok\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 3,
+   "not": ""
+  },
+  {
+   "id": "time",
+   "kind": "info",
+   "triggers": [
+    "!time"
+   ],
+   "aliases": [],
+   "response": "It is $(time US/Central) for InnocentPenguin",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwhat time is it\\b",
+    "\\bwhat(?:\\'s| is) the time\\b",
+    "\\bwhat time is it for (?:him|penguin|peng)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "dynamic"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 3,
+   "not": ""
+  },
+  {
+   "id": "tinder",
+   "kind": "fun",
+   "triggers": [
+    "!tinder"
+   ],
+   "aliases": [],
+   "response": "Nice Try Brochach!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "topgooner",
+   "kind": "fun",
+   "triggers": [
+    "!topgooner"
+   ],
+   "aliases": [],
+   "response": "1. Diego. 2.Flayir . 3. @moztyy_. 4 Vhoggie 5. Speedkoops",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "tracker",
+   "kind": "link",
+   "triggers": [
+    "!tracker"
+   ],
+   "aliases": [],
+   "response": "https://rocketleague.tracker.network/rocket-league/profile/epic/InnocentPeng_TTV/overview",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:rl |rocket league |rank )?tracker\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "tts",
+   "kind": "link",
+   "triggers": [
+    "!tts"
+   ],
+   "aliases": [],
+   "response": "TTS is for subscribers only clicking the link allows u see which voices are allowed voice then message https://vox.bot/innocentpenguin/voices",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\btts\\b",
+    "\\btext[- ]to[- ]speech\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "turtles",
+   "kind": "fun",
+   "triggers": [
+    "!turtles"
+   ],
+   "aliases": [],
+   "response": "i like turtles",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "twerk",
+   "kind": "fun",
+   "triggers": [
+    "!twerk"
+   ],
+   "aliases": [],
+   "response": "shake it like u just don’t care",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "ubisoft",
+   "kind": "link",
+   "triggers": [
+    "!ubisoft"
+   ],
+   "aliases": [],
+   "response": "ttvinnocentpeng",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:ubisoft|r6|siege|uplay) (?:user|username|name|id|account)\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "uk",
+   "kind": "clip",
+   "triggers": [
+    "!uk"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/GlutenFreeCarelessGoosePogChamp-xhAV-h8hwN-TEYHX",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:uk)\\b",
+    "\\b(?:uk)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "unlurk",
+   "kind": "fun",
+   "triggers": [
+    "!unlurk"
+   ],
+   "aliases": [],
+   "response": "$(user) is back!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "unninocence",
+   "kind": "person",
+   "triggers": [
+    "!unninocence"
+   ],
+   "aliases": [],
+   "response": "best champ never reaching gc",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "vanish",
+   "kind": "fun",
+   "triggers": [
+    "!vanish"
+   ],
+   "aliases": [],
+   "response": "they have disappeared",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "vc",
+   "kind": "clip",
+   "triggers": [
+    "!vc"
+   ],
+   "aliases": [],
+   "response": "no... https://www.twitch.tv/kizmoiz/clip/TriangularSuspiciousSwanPanicVis-zropv_vCQs0KHtOJ",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "vhoggie",
+   "kind": "person",
+   "triggers": [
+    "!vhoggie"
+   ],
+   "aliases": [],
+   "response": "Straight Jorkin it to penguino banzino!",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?vhoggie\\b",
+    "^\\W*vhoggie\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "vip",
+   "kind": "info",
+   "triggers": [
+    "!vip"
+   ],
+   "aliases": [],
+   "response": "come to stream everyday be postive and be chill, no requirements except being you and returning. every day. You MUST be in the discord!!",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bhow\\b.*\\b(?:get|become|be)\\b.*\\bvip\\b",
+    "\\b(?:can|could) i (?:be|get|become)( a)? vip\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 5,
+   "not": ""
+  },
+  {
+   "id": "w",
+   "kind": "person",
+   "triggers": [
+    "!w"
+   ],
+   "aliases": [],
+   "response": "speedy and Yen",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "speedy and Yen",
+   "source": "nightbot"
+  },
+  {
+   "id": "water",
+   "kind": "fun",
+   "triggers": [
+    "!water"
+   ],
+   "aliases": [],
+   "response": "HYDRATE RIGHT NOW",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "weight",
+   "kind": "info",
+   "triggers": [
+    "!weight"
+   ],
+   "aliases": [],
+   "response": "90kg/ 198lbs",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bhow much (?:does|do) (?:he|you|penguin|peng) weigh\\b",
+    "\\bwhat(?:\\'s| is) (?:his|your|penguin\\'?s?) weight\\b"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 4,
+   "not": ""
+  },
+  {
+   "id": "weiner",
+   "kind": "clip",
+   "triggers": [
+    "!weiner"
+   ],
+   "aliases": [],
+   "response": "https://www.twitch.tv/innocentpenguin_/clip/AbstemiousCuriousMomPhilosoraptor-ldbUon9AY5Y0SW9i",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": false,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "clip"
+   ],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "whiff",
+   "kind": "fun",
+   "triggers": [
+    "!whiff"
+   ],
+   "aliases": [],
+   "response": "$(channel) has whiffed an amazing $(count whiff) times!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "counter"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "counter": "whiff"
+  },
+  {
+   "id": "wyatt",
+   "kind": "person",
+   "triggers": [
+    "!wyatt"
+   ],
+   "aliases": [],
+   "response": "I love Eminem, and I’ve only lied once",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?wyatt\\b",
+    "^\\W*wyatt\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "yen",
+   "kind": "clip",
+   "triggers": [
+    "!yen"
+   ],
+   "aliases": [],
+   "response": "@SG_Yen Sends 20 different subs at 1 time https://www.twitch.tv/innocentpenguin_/clip/GracefulPricklyParrotDoritosChip-hpQArz6UniGCP2YW",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:yen|20 subs|gifted 20)\\b",
+    "\\b(?:yen|20 subs|gifted 20)\\b.*\\b(?:clip|video)\\b"
+   ],
+   "anyShape": true,
+   "also": [],
+   "tags": [
+    "clip",
+    "person"
+   ],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "yoohoo",
+   "kind": "person",
+   "triggers": [
+    "!yoohoo"
+   ],
+   "aliases": [],
+   "response": "hi",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\bwho(?:\\'?s| is| are)\\s+(?:the\\s+)?yoohoo\\b",
+    "^\\W*yoohoo\\W*$"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 2
+  },
+  {
+   "id": "youtube",
+   "kind": "link",
+   "triggers": [
+    "!youtube"
+   ],
+   "aliases": [
+    "!yt"
+   ],
+   "response": "https://www.youtube.com/@InnocentPinguino",
+   "variants": [],
+   "contextual": true,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [
+    "\\byoutube\\b(?! video)"
+   ],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot",
+   "priority": 3,
+   "not": ""
+  },
+  {
+   "id": "zylo",
+   "kind": "person",
+   "triggers": [
+    "!zylo"
+   ],
+   "aliases": [],
+   "response": "NEW COMMAND CURRENTLY IN THE WORKS (PENG TOO LAZY TO UPDATE IT)",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "goodnight",
+   "kind": "fun",
+   "triggers": [
+    "goodnight"
+   ],
+   "aliases": [],
+   "response": "Goodnight $(user) innoce108Hello",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "hi",
+   "kind": "fun",
+   "triggers": [
+    "hi"
+   ],
+   "aliases": [],
+   "response": "Hi $(user) innoce108Hello",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "meow",
+   "kind": "fun",
+   "triggers": [
+    "meow"
+   ],
+   "aliases": [],
+   "response": "Meow Meow!!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "w",
+   "kind": "fun",
+   "triggers": [
+    "w"
+   ],
+   "aliases": [],
+   "response": "W wyatt and luhgeekski",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [],
+   "note": "",
+   "source": "nightbot"
+  },
+  {
+   "id": "bare_goodnight",
+   "kind": "fun",
+   "triggers": [],
+   "aliases": [],
+   "response": "Goodnight $(user) innoce108Hello",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "bare": "goodnight",
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "keyword"
+   ],
+   "note": "answers when a message is exactly \"goodnight\" (like Nightbot did)",
+   "source": "nightbot"
+  },
+  {
+   "id": "bare_hi",
+   "kind": "fun",
+   "triggers": [],
+   "aliases": [],
+   "response": "Hi $(user) innoce108Hello",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "bare": "hi",
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "keyword"
+   ],
+   "note": "answers when a message is exactly \"hi\" (like Nightbot did)",
+   "source": "nightbot"
+  },
+  {
+   "id": "bare_meow",
+   "kind": "fun",
+   "triggers": [],
+   "aliases": [],
+   "response": "Meow Meow!!",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "bare": "meow",
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "keyword"
+   ],
+   "note": "answers when a message is exactly \"meow\" (like Nightbot did)",
+   "source": "nightbot"
+  },
+  {
+   "id": "bare_w",
+   "kind": "fun",
+   "triggers": [],
+   "aliases": [],
+   "response": "W wyatt and luhgeekski",
+   "variants": [],
+   "contextual": false,
+   "publicSafe": true,
+   "enabled": true,
+   "bare": "w",
+   "patterns": [],
+   "anyShape": false,
+   "also": [],
+   "tags": [
+    "keyword"
+   ],
+   "note": "answers when a message is exactly \"w\" (like Nightbot did)",
+   "source": "nightbot"
+  }
+ ]
+}

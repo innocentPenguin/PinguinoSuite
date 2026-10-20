@@ -56,7 +56,7 @@ namespace PinguinoHost
             string cmd = parts[0].ToLowerInvariant(); string[] args = parts.Skip(1).ToArray(); string me = user.ToLowerInvariant();
             bool mod = role >= 3;
             string b = BoardOf(cmd);
-            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || Emotes.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || Economy.IsViewerCommand(cmd);
+            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || Economy.IsViewerCommand(cmd);
             bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd);
             if (!viewer && !modOnly) return false;
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
@@ -71,6 +71,7 @@ namespace PinguinoHost
                 if (Timers.IsCommand(cmd)) { Timers.Handle(args, say); return true; }
                 if (StreamTimers.IsCommand(cmd)) { StreamTimers.Handle(cmd, args, say); return true; }
                 if (cmd == "!remind" || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder") { Reminders.Handle(user, cmd, args, mod, say); return true; }
+                if (ChannelLore.IsCommand(cmd) && !Economy.IsViewerCommand(cmd)) { ChannelLore.Handle(user, cmd, args, mod, say); return true; }
                 if (Emotes.IsCommand(cmd)) { Emotes.Handle(user, cmd, args, say, ParseMonth, MonthLabel); return true; }
                 switch (cmd)
                 {
@@ -202,8 +203,8 @@ namespace PinguinoHost
             JObject src; try { src = SubsImport.ParseJ(File.ReadAllText(f)); } catch (Exception ex) { return new JObject { { "ok", false }, { "error", "commands.json: " + ex.Message } }; }
             var all = (src["commands"] as JArray) ?? new JArray();
             Func<JToken, string> who = c => ((string)c["who"] ?? "").ToLowerInvariant();
-            var viewer = new JArray(all.Where(c => who(c).Contains("everyone") || who(c) == "automatic").Select(Norm)); var mod = new JArray(all.Where(c => who(c).Contains("mod")).Select(Norm));
-            return new JObject { { "ok", true }, { "version", src["version"] }, { "updated", src["updated"] }, { "viewer", viewer }, { "mod", mod }, { "all", all }, { "counts", new JObject { { "viewer", viewer.Count }, { "mod", mod.Count } } } };
+            var viewer = new JArray(all.Where(c => who(c).Contains("everyone") || who(c) == "automatic").Select(Norm)); var chan = ChannelLore.DocRows(); foreach (var r in chan) { viewer.Add(r); } var mod = new JArray(all.Where(c => who(c).Contains("mod")).Select(Norm));
+            return new JObject { { "ok", true }, { "version", src["version"] }, { "updated", src["updated"] }, { "viewer", viewer }, { "mod", mod }, { "all", new JArray(all.Concat(chan)) }, { "counts", new JObject { { "viewer", viewer.Count }, { "mod", mod.Count }, { "channel", chan.Count } } } };
         }
         static JToken Norm(JToken c) { var o = (JObject)c.DeepClone(); string w = ((string)o["who"] ?? "").ToLowerInvariant(); o["permission"] = w.Contains("everyone") && w.Contains("mod") ? "everyone (mods can do more)" : w.Contains("mod") ? "mods" : w.Contains("everyone") ? "everyone" : w; return o; }
     }
