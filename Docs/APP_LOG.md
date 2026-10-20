@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:22 - Host restarts + boards/profile push
+
+- Host restarted (Update-Module) for 6c9999f/01be950/8cda53f/b3e3efe (!rank live), helix-ids split fix, 1724d20 (!commands), ec0dc0c (alias merges, banned_accounts). One build failure (HostRank.cs control chars in a doc comment) left the Host down ~2 min; fixed by 00 and rebuilt. Boards pushed 13:20Z (3020 people, supporters 64, 0 502), profiles 1858 sent. Site raised /api/bot body limit to 8 MB (05, 1956d08). Top points/watchtime boards should now appear once 05 pushes the new section.
+
 ## 2026-10-20 08:13 - Host restarts (helix-ids fix, commands triggers)
 
 - Restarted Host twice via Update-Module: helix-ids batch-split fix (name history 9 -> 164 certain-rename chatters after rebuild), then 1724d20 (!commands/!command/!cmds/!cmd reply with link to /commands; commands-doc rows carry section + importance). Profiles pushed (1858). Boards push still HTTP 413: 05 raising the route limit, 02 slimming payload.
