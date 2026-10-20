@@ -2466,7 +2466,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         try
         {
             string dir = _cfg.PersonCardsDir ?? ""; if (!_cfg.ChannelLoreOn || !Directory.Exists(dir)) return _cards ?? new Dictionary<string, JObject>();
-            var files = new DirectoryInfo(dir).GetFiles("*.json"); string key = files.Length + "|" + (files.Length == 0 ? 0 : files.Max(f => f.LastWriteTimeUtc.Ticks)) + "|" + _cfg.PersonCardsTop;
+            var files = new DirectoryInfo(dir).GetFiles("*.json"); string key = files.Length + "|" + (files.Length == 0 ? 0 : files.Max(f => f.LastWriteTimeUtc.Ticks)) + "|" + _cfg.PersonCardsTop + "|" + OpinionAliases().Count;
             if (_cards != null && key == _cardsKey) return _cards;
             var all = new List<JObject>();
             foreach (var f in files) { try { all.Add(JObject.Parse(File.ReadAllText(f.FullName, Encoding.UTF8))); } catch (Exception) { } }
@@ -2475,6 +2475,22 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             {
                 string lg = ((string)c["login"] ?? "").ToLowerInvariant(); if (lg != "") d[lg] = c;
                 foreach (var al in c["aliasesMerged"] as JArray ?? new JArray()) { string a = ((string)al ?? "").ToLowerInvariant(); if (a != "" && !d.ContainsKey(a)) d[a] = c; }
+            }
+            // Boardsliases.json: an alias login and its main login are one person (merged card: unions of likes/dislikes/nicknames, summed messages)
+            foreach (var pr in OpinionAliases())
+            {
+                JObject ca, cm; d.TryGetValue(pr.Key, out ca); d.TryGetValue(pr.Value, out cm);
+                if (ca == null && cm == null) continue;
+                if (ca == null || ca == cm) { if (cm != null) d[pr.Key] = cm; continue; }
+                if (cm == null) { d[pr.Value] = ca; continue; }
+                var m = (JObject)cm.DeepClone();
+                foreach (string f in new[] { "likes", "dislikes", "nicknamesUsedByChat" })
+                {
+                    var u = new JArray((cm[f] as JArray ?? new JArray()).Concat(ca[f] as JArray ?? new JArray()).GroupBy(x => ((string)x ?? "").ToLowerInvariant()).Select(g => g.First()));
+                    m[f] = u;
+                }
+                m["messages"] = ((int?)cm["messages"] ?? 0) + ((int?)ca["messages"] ?? 0);
+                d[pr.Key] = m; d[pr.Value] = m;
             }
             _cards = d; _cardsKey = key; return d;
         }
