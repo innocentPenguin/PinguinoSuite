@@ -840,6 +840,33 @@
       "examples": [
         "!8ball will I win my next game?"
       ]
+    },
+    {
+      "command": "!emote",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Emotes",
+      "who": "everyone",
+      "usage": "!emote <name>",
+      "description": "How often an emote from the channel's 7TV set has been used in chat, its rank, the top user and when it was last used.",
+      "examples": [
+        "!emote KEKW"
+      ]
+    },
+    {
+      "command": "!topemotes",
+      "aliases": [
+        "!topemote"
+      ],
+      "action": "PinguinoHost",
+      "category": "Emotes",
+      "who": "everyone",
+      "usage": "!topemotes [month]",
+      "description": "The most used 7TV emotes in chat, all time or for one month (oct, 2026-10, last). Emotes that are also everyday words are left out.",
+      "examples": [
+        "!topemotes",
+        "!topemotes oct"
+      ]
     }
   ]
 }

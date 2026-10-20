@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 namespace PinguinoHost
 {
     /// <summary>Chat commands for the leaderboard / subscriber / watch-streak features. Their documentation is in PinguinoB0t/commands.json (what the website reads) and GET /api/commands-doc.
-    /// VIEWERS (everyone): !commands  !topgifters  !topbits (!topbitters)  !topyappers  !topstreak (!topstreaks)  [month]   !leaderboards   !gifted [user]   !bits [user]   !sub [user]   !founders   !streak  !streakrecord (in Streaks)
+    /// VIEWERS (everyone): !emote name  !topemotes [month]  !commands  !topgifters  !topbits (!topbitters)  !topyappers  !topstreak (!topstreaks)  [month]   !leaderboards   !gifted [user]   !bits [user]   !sub [user]   !founders   !streak  !streakrecord (in Streaks)
     /// MODS only (anyone else is ignored): !alias add|remove|list   !boards refresh|status   !subs import|status   !streaks backfill|status   !names refresh   !lookup user
     /// A month is optional: oct, october, 2026-10, this, last (UTC); without it the all-time board is used.</summary>
     public static class FeatureCommands
@@ -56,7 +56,7 @@ namespace PinguinoHost
             string cmd = parts[0].ToLowerInvariant(); string[] args = parts.Skip(1).ToArray(); string me = user.ToLowerInvariant();
             bool mod = role >= 3;
             string b = BoardOf(cmd);
-            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands";
+            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || Emotes.IsCommand(cmd);
             bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup";
             if (!viewer && !modOnly) return false;
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
@@ -67,6 +67,7 @@ namespace PinguinoHost
             try
             {
                 if (b != "") { Top(b, args, say); return true; }
+                if (Emotes.IsCommand(cmd)) { Emotes.Handle(user, cmd, args, say, ParseMonth, MonthLabel); return true; }
                 switch (cmd)
                 {
                     case "!commands": say("Every chat command, with search: https://innocentpenguin.com/help#commands"); return true;

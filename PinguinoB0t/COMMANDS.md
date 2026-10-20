@@ -28,6 +28,13 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!queue` | `!queue  \|  !queue list  \|  mods: !queue open \| close \| clear` | Queue status. Mods open, close, or clear (clear also closes and ends the lobby). |
 | `!strikes` | `!strikes` | How many strikes you have (3 = cannot join customs), split into permanent (red, never expire) and temporary (orange, one wears off per day). |
 
+### Emotes
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!emote` | `!emote <name>` | How often an emote from the channel's 7TV set has been used in chat, its rank, the top user and when it was last used. |
+| `!topemotes` | `!topemotes [month]` | The most used 7TV emotes in chat, all time or for one month (oct, 2026-10, last). Emotes that are also everyday words are left out. |
+
 ### Firsts
 
 | Command | Usage | What it does |

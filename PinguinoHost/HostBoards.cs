@@ -145,6 +145,7 @@ namespace PinguinoHost
 
         /// <summary>alias logins, sent as "drop" so the site can delete their stale rows (the site ignores it until it supports it).</summary>
         static JArray DropList() { lock (L) return new JArray(Aliases().Keys.OrderBy(k => k, StringComparer.Ordinal)); }
+        public static bool IsBot(string login) { login = (login ?? "").ToLowerInvariant(); return BotName.IsMatch(login) || KnownBots.Contains(login); }
         public static string CanonLogin(string login) { lock (L) return Canon(Aliases(), (login ?? "").Trim().ToLowerInvariant()); }
         public static Dictionary<string, string> AliasMap() { lock (L) return Aliases(); }
         static JObject AliasDoc()

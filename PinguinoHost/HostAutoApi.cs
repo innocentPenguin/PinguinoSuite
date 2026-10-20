@@ -107,6 +107,8 @@ namespace PinguinoHost
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
             if (p == "/api/commands-doc" && m == "GET") { Write(c, FeatureCommands.Doc().ToString(), "application/json"); return true; }
+            if (p == "/api/emotes" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, Emotes.Api(c.Request.QueryString["q"], c.Request.QueryString["month"], lim).ToString(), "application/json"); return true; }
+            if (p == "/api/emotes/refresh" && m == "POST") { Write(c, Emotes.Refresh(true).ToString(), "application/json"); return true; }
             if (p == "/api/boards" && m == "GET") { Write(c, Boards.Api().ToString(), "application/json"); return true; }
             if (p == "/api/boards/refresh" && m == "POST") { Write(c, Boards.Refresh(true).ToString(), "application/json"); return true; }
             if (p == "/api/streaks" && m == "GET") { Write(c, Streaks.Api().ToString(), "application/json"); return true; }
