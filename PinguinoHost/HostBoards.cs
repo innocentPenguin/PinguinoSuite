@@ -123,6 +123,65 @@ namespace PinguinoHost
             }
         }
 
+        // ---- aliases: one person, several accounts. Data/boards/aliases.json {"aliases":{"sg_yen":"cyfirl"}} folds the first login into the second everywhere on the boards ----
+        static string AliasP { get { return Path.Combine(Root, "boards", "aliases.json"); } }
+        static Dictionary<string, string> Aliases()
+        {
+            var m = new Dictionary<string, string>();
+            try
+            {
+                if (!File.Exists(AliasP))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(AliasP));
+                    File.WriteAllText(AliasP, new JObject { { "note", "alias login -> main login. Their gifts, bits, messages and watch streak are combined under the main login (its Twitch display name is kept). Edit and the next refresh applies it." }, { "aliases", new JObject { { "sg_yen", "cyfirl" } } } }.ToString());
+                }
+                var a = SubsImport.ParseJ(File.ReadAllText(AliasP))["aliases"] as JObject;
+                if (a != null) foreach (var p in a.Properties()) { string from = p.Name.Trim().ToLowerInvariant().TrimStart('@'), to = ((string)p.Value ?? "").Trim().ToLowerInvariant().TrimStart('@'); if (from != "" && to != "" && from != to) m[from] = to; }
+            }
+            catch (Exception ex) { Clog.Warn("boards", "aliases.json: " + ex.Message); }
+            return m;
+        }
+        static string Canon(Dictionary<string, string> al, string login) { string x; for (int i = 0; i < 5 && al.TryGetValue(login, out x); i++) login = x; return login; }
+
+        // ---- display names: the real Twitch capitalisation. Data/boards/names.json {login:{name,at}} is filled from Twitch (Helix users) for everyone whose stored name is just the lowercase login ----
+        static string NamesP { get { return Path.Combine(Root, "boards", "names.json"); } }
+        static JObject _names;
+        static JObject Names()
+        {
+            if (_names != null) return _names;
+            try { _names = File.Exists(NamesP) ? SubsImport.ParseJ(File.ReadAllText(NamesP)) : new JObject(); } catch (Exception) { _names = new JObject(); }
+            return _names;
+        }
+        /// <summary>ask Twitch for the display names of people whose name is still the lowercase login. true when new names were learned.</summary>
+        static bool FetchNames(JObject r)
+        {
+            var cr = HostApi.StreamerCreds(); string tok = (string)cr["UserToken"] ?? "", cid = (string)cr["ClientId"] ?? ""; if (tok == "" || cid == "") return false;
+            JObject names; lock (L) names = Names();
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var todo = ((JObject)r["users"]).Properties().Where(p => (string)p.Value["name"] == p.Name || (string)p.Value["name"] == null).Select(p => p.Name)
+                .Where(l => { var e = names[l] as JObject; return e == null || now - ((long?)e["at"] ?? 0) > 60L * 86400; }).Where(l => Regex.IsMatch(l, "^[a-z0-9_]{2,25}$")).ToList();
+            if (todo.Count == 0) return false;
+            bool learned = false;
+            try
+            {
+                using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+                    for (int i = 0; i < todo.Count && i < 1500; i += 100)
+                    {
+                        var batch = todo.Skip(i).Take(100).ToList();
+                        var rq = new HttpRequestMessage(HttpMethod.Get, HostApi.Helix + "/users?" + string.Join("&", batch.Select(l => "login=" + l)));
+                        rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("Client-Id", cid);
+                        var resp = h.SendAsync(rq).Result; if (!resp.IsSuccessStatusCode) { Clog.Warn("boards", "display names: Twitch answered HTTP " + (int)resp.StatusCode); break; }
+                        var found = new HashSet<string>();
+                        foreach (var u in (SubsImport.ParseJ(resp.Content.ReadAsStringAsync().Result)["data"] as JArray) ?? new JArray())
+                        { string lg = ((string)u["login"] ?? "").ToLowerInvariant(), dn = (string)u["display_name"] ?? ""; if (lg == "" || dn == "") continue; found.Add(lg); lock (L) names[lg] = new JObject { { "name", dn }, { "at", now } }; if (dn != lg) learned = true; }
+                        foreach (var l in batch.Where(l => !found.Contains(l))) lock (L) names[l] = new JObject { { "name", "" }, { "at", now } };   // renamed/banned account: do not ask again for 60 days
+                    }
+                lock (L) { Directory.CreateDirectory(Path.GetDirectoryName(NamesP)); File.WriteAllText(NamesP, Names().ToString(Newtonsoft.Json.Formatting.None)); }
+            }
+            catch (Exception ex) { Clog.Warn("boards", "display names: " + ex.Message); }
+            return learned;
+        }
+
         static string Channel()
         {
             try { return ((string)SubsImport.ParseJ(File.ReadAllText(Path.Combine(HostApi.DataDir, "host_secrets.json")))["Channel"] ?? "").ToLowerInvariant(); } catch (Exception) { return ""; }
@@ -160,12 +219,28 @@ namespace PinguinoHost
                         {
                             string login = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(); if (login == "index") continue;
                             var p = SubsImport.ParseJ(File.ReadAllText(f)); int msgs = (int?)p["activity"]?["messages"] ?? 0;
-                            if (msgs > 0) { var o = U(login); o["messages"] = msgs; string nm = (string)p["name"]; if (!string.IsNullOrEmpty(nm)) o["name"] = nm; }
+                            if (msgs > 0) { var o = U(login); o["messages"] = msgs; string pn = (string)p["name"]; if (!string.IsNullOrEmpty(pn)) o["name"] = pn; }
                         }
                         catch (Exception) { }
                     }
                 // watch streaks
                 foreach (JObject b in (JArray)Streaks.Api()["board"]) { var o = U((string)b["login"]); o["streakBest"] = (int)b["best"]; o["streakCurrent"] = (int)b["current"]; o["streakAt"] = (string)b["lastSharedAt"]; if (o["name"].ToString() == (string)b["login"] && !string.IsNullOrEmpty((string)b["name"])) o["name"] = (string)b["name"]; }
+                // real Twitch display names (from names.json) win over the name the logs happened to show
+                var nm = Names(); foreach (var kv in users) { var e = nm[kv.Key] as JObject; string dn = e == null ? "" : (string)e["name"] ?? ""; if (dn != "") kv.Value["name"] = dn; }
+                // aliases: fold the extra accounts of one person into the main login
+                var al = Aliases();
+                foreach (var kv in al)
+                {
+                    string a = kv.Key, c = Canon(al, kv.Key); JObject ao;
+                    if (c == a || !users.TryGetValue(a, out ao)) continue;
+                    var co = U(c);
+                    co["gifts"] = (int)co["gifts"] + (int)ao["gifts"]; co["bits"] = (int)co["bits"] + (int)ao["bits"]; co["messages"] = (int)co["messages"] + (int)ao["messages"];
+                    co["streakBest"] = Math.Max((int)co["streakBest"], (int)ao["streakBest"]);
+                    if (string.CompareOrdinal((string)ao["streakAt"] ?? "", (string)co["streakAt"] ?? "") > 0) { co["streakCurrent"] = ao["streakCurrent"]; co["streakAt"] = ao["streakAt"]; }
+                    var aka = co["aka"] as JArray ?? new JArray(); if (!aka.Any(x => (string)x == a)) aka.Add(a); co["aka"] = aka;
+                    if ((string)co["name"] == c && (string)ao["name"] != a && nm[c] == null) { /* keep the main account's own name */ }
+                    users.Remove(a);
+                }
                 foreach (var kv in users) kv.Value["bitsBadge"] = BitsBadge((int)kv.Value["bits"]);
                 try { ApplyBitsToProfiles(users.Where(kv => !BotName.IsMatch(kv.Key) && !KnownBots.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value)); } catch (Exception ex) { Clog.Warn("boards", "bits roles: " + ex.Message); }
                 // names for gifters / bitters without a profile come from the ledger user itself (already the login)
@@ -188,6 +263,7 @@ namespace PinguinoHost
         public static JObject Refresh(bool push)
         {
             var r = Compute();
+            try { if (FetchNames(r)) r = Compute(); } catch (Exception ex) { Clog.Warn("boards", "names: " + ex.Message); }
             if (push && Lease.MayRun) PushToSite(r);
             return r;
         }
@@ -206,7 +282,7 @@ namespace PinguinoHost
         static void PushBoards(JObject r, JObject s, string key)
         {
             var users = new JObject(); string ch = (string)r["streamerLogin"] ?? "";
-            foreach (var p in ((JObject)r["users"]).Properties()) { if (p.Name == ch || !Regex.IsMatch(p.Name, "^[a-z0-9_]{2,25}$")) continue; var o = (JObject)p.Value; users[p.Name] = new JObject { { "name", o["name"] }, { "gifts", o["gifts"] }, { "bits", o["bits"] }, { "messages", o["messages"] }, { "streakBest", o["streakBest"] }, { "streakCurrent", o["streakCurrent"] }, { "streakAt", o["streakAt"] }, { "bitsBadge", o["bitsBadge"] } }; }
+            foreach (var p in ((JObject)r["users"]).Properties()) { if (p.Name == ch || !Regex.IsMatch(p.Name, "^[a-z0-9_]{2,25}$")) continue; var o = (JObject)p.Value; users[p.Name] = new JObject { { "name", o["name"] }, { "gifts", o["gifts"] }, { "bits", o["bits"] }, { "messages", o["messages"] }, { "streakBest", o["streakBest"] }, { "streakCurrent", o["streakCurrent"] }, { "streakAt", o["streakAt"] }, { "bitsBadge", o["bitsBadge"] } }; if (o["aka"] != null) users[p.Name]["aka"] = o["aka"]; }
             string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(users.ToString(Newtonsoft.Json.Formatting.None))));
             if (hash == _lastBoardsHash && (DateTime.UtcNow - _lastBoards).TotalMinutes < 30) return;
             try
