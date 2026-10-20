@@ -277,6 +277,40 @@ namespace PinguinoHost
             return login + " now has " + Num(me.Points) + " " + CurrencyName + ".";
         }
 
+        // ---- spending (the hidden shop): every change carries an id, so a retry or a restart never applies it twice ----
+        /// <summary>whole pengs the user can spend right now</summary>
+        public static bool Applied(string id) { lock (L) return Ledger()[id] != null; }
+        public static long Balance(string login) { return (long)Math.Floor(Me(login).Points); }
+        /// <summary>takes `amount` pengs for good. Returns null on success (also when this id was already applied: nothing is taken twice), otherwise the reason it was refused.</summary>
+        public static string Spend(string id, string login, long amount, string reason)
+        {
+            if (string.IsNullOrEmpty(id) || amount <= 0) return "bad spend";
+            login = Canon(Boards.AliasMap(), login); if (login == "") return "no user";
+            long bal = Balance(login);
+            lock (L)
+            {
+                var led = Ledger(); if (led[id] != null) return null;
+                if (bal < amount) return "not enough " + CurrencyName;
+                var adj = (JObject)Doc()["adjust"]; adj[login] = D(adj[login]) - amount;
+                led[id] = new JObject { { "login", login }, { "delta", -amount }, { "reason", reason ?? "" }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } }; Save();
+            }
+            Clog.Info("economy", login + " spent " + amount + " (" + reason + ")"); return null;
+        }
+        /// <summary>gives `amount` pengs (a prize). Same id twice is applied once.</summary>
+        public static bool Credit(string id, string login, long amount, string reason)
+        {
+            if (string.IsNullOrEmpty(id) || amount <= 0) return false;
+            login = Canon(Boards.AliasMap(), login); if (login == "") return false;
+            lock (L)
+            {
+                var led = Ledger(); if (led[id] != null) return true;
+                var adj = (JObject)Doc()["adjust"]; adj[login] = D(adj[login]) + amount;
+                led[id] = new JObject { { "login", login }, { "delta", amount }, { "reason", reason ?? "" }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } }; Save();
+            }
+            return true;
+        }
+        static JObject Ledger() { var d = Doc(); var l = d["ledger"] as JObject; if (l == null) d["ledger"] = l = new JObject(); return l; }
+
         // ---- API ----
         public static JObject Api()
         {

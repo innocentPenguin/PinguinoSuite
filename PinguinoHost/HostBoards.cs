@@ -378,7 +378,7 @@ namespace PinguinoHost
         // The site reads lifetime gifts and bits from its supporter tally: POST /api/bot/supporters {gifts:{login:n}, bits:{login:n}} (each login's number REPLACES the earlier one, max 3000 logins a call).
         // The watch streaks reach the site through the viewer profiles (roles.watchStreakBest / watchStreakCurrent, pushed by Pipeline/push-profiles.mjs).
         // the site key: vault BOT_API_KEY, the BOT_API_KEY environment variable, or the WebSyncKey the bots already use (it is the same key on the site). Never printed.
-        static string SiteKey()
+        internal static string SiteKey()
         {
             string key = Vault.Get("BOT_API_KEY"); if (key == "") key = Environment.GetEnvironmentVariable("BOT_API_KEY") ?? "";
             if (key == "") { try { key = (string)SubsImport.ParseJ(File.ReadAllText(Path.Combine(HostApi.DataDir, "settings.json")))["WebSyncKey"] ?? ""; } catch (Exception) { } }

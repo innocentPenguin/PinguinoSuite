@@ -111,7 +111,7 @@ namespace PinguinoHost
 
         // ---- submitting ----
         /// <summary>role is the verified Twitch role (4 broadcaster, 3 mod, 2 vip, 1 viewer). Returns the item, or null when the sender may not teach (or is rate limited).</summary>
-        public static JObject Submit(string from, int role, string rawText, string forceKind, string via, out string why)
+        public static JObject Submit(string from, int role, string rawText, string forceKind, string via, out string why, string siteId = null)
         {
             why = ""; string login = (from ?? "").ToLowerInvariant().TrimStart('@'); if (login == "") { why = "no sender"; return null; }
             string label = role >= 3 ? "mod" : Trusted().Contains(login) ? (role == 2 ? "vip" : "trusted") : "";
@@ -125,12 +125,14 @@ namespace PinguinoHost
             lock (L)
             {
                 long now = Now(); List<long> h; if (!Sent.TryGetValue(login, out h)) Sent[login] = h = new List<long>();
-                h.RemoveAll(t => now - t > 3600); if (h.Count >= PerHour || (h.Count > 0 && now - h[h.Count - 1] < MinGapSec)) { why = "rate limited"; return null; }
                 var d = Inbox(); var items = (JArray)d["items"];
+                if (siteId != null && items.OfType<JObject>().Any(x => (string)x["siteId"] == siteId)) { why = "duplicate"; return null; }   // the site bridge polls again and again: one site id is one item, ever
+                if (siteId == null) { h.RemoveAll(t => now - t > 3600); if (h.Count >= PerHour || (h.Count > 0 && now - h[h.Count - 1] < MinGapSec)) { why = "rate limited"; return null; } }   // the site already rate limits its own form
                 if (items.OfType<JObject>().Count(x => (string)x["status"] == "pending") >= MaxPending) { why = "inbox full"; return null; }
-                h.Add(now);
+                if (siteId == null) h.Add(now);
                 var it = new JObject { { "id", Guid.NewGuid().ToString("N").Substring(0, 10) }, { "from", login }, { "role", label }, { "kind", kind }, { "text", clean }, { "target", target },
                     { "status", "pending" }, { "ts", now }, { "reviewer", "" }, { "note", "" }, { "via", via ?? "chat" }, { "linksStripped", stripped }, { "raw", txt.Length > 600 ? txt.Substring(0, 600) : txt } };
+                if (siteId != null) it["siteId"] = siteId;
                 items.Add(it); Audit(d, "submit", (string)it["id"], login, kind + "->" + target); Write(InboxP, d); return it;
             }
         }
@@ -185,10 +187,10 @@ namespace PinguinoHost
                 if (act == "undo")
                 {
                     if (it["applied"] == null) return new JObject { { "ok", false }, { "error", "nothing applied" } };
-                    Unapply(it); it.Remove("applied"); it["status"] = "rejected"; it["note"] = "undone"; it["reviewer"] = by; Audit(d, "undo", id, by); Write(InboxP, d); return new JObject { { "ok", true }, { "status", "rejected" } };
+                    Unapply(it); it.Remove("applied"); it["status"] = "rejected"; it["note"] = "undone"; it["reviewer"] = by; Audit(d, "undo", id, by); Write(InboxP, d); Raise(it); return new JObject { { "ok", true }, { "status", "rejected" } };
                 }
                 if (st != "pending") return new JObject { { "ok", false }, { "error", "already " + st } };
-                if (act == "reject") { it["status"] = "rejected"; it["reviewer"] = by; it["note"] = (string)b["note"] ?? ""; Audit(d, "reject", id, by); Write(InboxP, d); return new JObject { { "ok", true }, { "status", "rejected" } }; }
+                if (act == "reject") { it["status"] = "rejected"; it["reviewer"] = by; it["note"] = (string)b["note"] ?? ""; Audit(d, "reject", id, by); Write(InboxP, d); Raise(it); return new JObject { { "ok", true }, { "status", "rejected" } }; }
                 if (act != "approve" && act != "edit") return new JObject { { "ok", false }, { "error", "action: approve | reject | edit | undo" } };
                 if (act == "edit")
                 {   // the owner's own text may keep links / mentions: it is Ivan's text now
@@ -197,12 +199,17 @@ namespace PinguinoHost
                 }
                 string t = ((string)b["target"] ?? "").ToLowerInvariant(); if (Targets.Contains(t)) it["target"] = t;
                 it["applied"] = Apply(it); it["status"] = act == "edit" ? "edited" : "approved"; it["reviewer"] = by; it["note"] = (string)b["note"] ?? ""; it["decidedAt"] = Now();
-                Audit(d, act, id, by, (string)it["target"]); Write(InboxP, d);
+                Audit(d, act, id, by, (string)it["target"]); Write(InboxP, d); Raise(it);
                 return new JObject { { "ok", true }, { "status", it["status"] }, { "applied", it["applied"] } };
             }
         }
 
         // ---- what an approved note becomes (with provenance); every one can be undone ----
+        /// <summary>raised after every decision (approve / edit / reject / undo) with a copy of the item; the site bridge uses it to tell the site. Never throws into Decide.</summary>
+        public static event Action<JObject> Decided;
+        static void Raise(JObject it) { try { var h = Decided; if (h != null) h((JObject)it.DeepClone()); } catch (Exception ex) { Clog.Warn("teach", "decision hook: " + ex.Message); } }
+        /// <summary>a copy of the item that came from this site id, or null</summary>
+        public static JObject FindSite(string siteId) { lock (L) { var it = ((JArray)Inbox()["items"]).OfType<JObject>().FirstOrDefault(x => (string)x["siteId"] == siteId); return it == null ? null : (JObject)it.DeepClone(); } }
         static JObject Prov(JObject it) { return new JObject { { "taughtBy", it["from"] }, { "role", it["role"] }, { "taughtAt", it["ts"] }, { "teachId", it["id"] } }; }
         static JObject Apply(JObject it)
         {

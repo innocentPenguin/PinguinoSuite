@@ -56,6 +56,7 @@ namespace PinguinoHost
             string cmd = parts[0].ToLowerInvariant(); string[] args = parts.Skip(1).ToArray(); string me = user.ToLowerInvariant();
             bool mod = role >= 3;
             if (Teach.IsCommand(cmd)) { Teach.Handle(user, cmd, args, role, say); return true; }
+            if (cmd == "!guess") { SiteShop.HandleGuess(user, args, say); return true; }   // hidden shop game: only the running round's player gets any answer
             string b = BoardOf(cmd);
             bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || Economy.IsViewerCommand(cmd);
             bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd);
