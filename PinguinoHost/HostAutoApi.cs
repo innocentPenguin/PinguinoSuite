@@ -113,6 +113,12 @@ namespace PinguinoHost
                 else res = ObsTree.SetItem((string)b["scene"] ?? "", (int?)b["itemId"] ?? -1, (bool?)b["enabled"], (bool?)b["toggle"] == true);
                 Write(c, res.ToString(), "application/json"); return true;
             }
+            if (p == "/api/overlaychat/status" && m == "GET") { Write(c, OverlayChat.Status().ToString(), "application/json"); return true; }
+            if ((p == "/api/overlaychat/ask" || p == "/api/overlaychat/apply") && m == "POST")
+            {
+                var b = Body(c); var res = p.EndsWith("/ask") ? OverlayChat.Ask((string)b["user"], (string)b["text"]) : OverlayChat.Apply((string)b["id"], (string)b["user"]);
+                Write(c, res.ToString(), "application/json"); return true;
+            }
             if (p == "/api/overlays" && m == "GET") { Write(c, OverlayFiles.List().ToString(), "application/json"); return true; }
             if (p == "/api/overlays/file" && m == "GET") { Write(c, OverlayFiles.Read(c.Request.QueryString["path"]).ToString(), "application/json"); return true; }
             if ((p == "/api/overlays/write" || p == "/api/overlays/delete" || p == "/api/overlays/rename") && m == "POST")

@@ -108,6 +108,23 @@ namespace PinguinoHost
             return new JObject { { "ok", true } };
         }
 
+        /// <summary>puts the newest backed-up copy of a file back (the current one is backed up first), so every assistant or API change can be undone.</summary>
+        public static JObject Restore(string rel, string who)
+        {
+            string e, full = Resolve(rel, true, out e); if (full == null) return Err(e);
+            if (!Directory.Exists(TrashRoot)) return Err("nothing to restore");
+            string r = Rel(full).Replace('/', Path.DirectorySeparatorChar);
+            foreach (var dir in Directory.GetDirectories(TrashRoot).OrderByDescending(x => Path.GetFileName(x), StringComparer.Ordinal))
+            {
+                string cand = Path.Combine(dir, r); if (!File.Exists(cand)) continue;
+                try { Backup(full, "undo"); Directory.CreateDirectory(Path.GetDirectoryName(full)); File.Copy(cand, full, true); File.Delete(cand); }
+                catch (Exception ex) { return Err("could not restore: " + ex.Message); }
+                ChannelControl.Audit(who, "overlay/restore", Rel(full) + " from " + Path.GetFileName(dir));
+                return new JObject { { "ok", true }, { "path", Rel(full) } };
+            }
+            return Err("no earlier version of that file");
+        }
+
         public static JObject Rename(string from, string to, string who)
         {
             string e, a = Resolve(from, true, out e); if (a == null) return Err(e);
