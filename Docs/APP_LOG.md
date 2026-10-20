@@ -73,6 +73,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 05:10 - Host restart (1a4af3b)
+
+- Weekly private opinion notes + mod-only !opinion enabled. Profiles re-pushed (1800).
+
 ## 2026-10-20 04:52 - Host restart (177941e)
 
 - Boards push now sends drop + aliases maps (site purge live, c374700). Profiles re-pushed (1800).
