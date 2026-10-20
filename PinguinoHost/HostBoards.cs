@@ -190,7 +190,7 @@ namespace PinguinoHost
                 using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
                 {
                     var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(new JObject { { "updatedAt", r["updatedAt"] }, { "users", users } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
-                    rq.Headers.Add("Authorization", "Bearer " + key);
+                    rq.Headers.Add("Authorization", "Bearer " + key); rq.Headers.UserAgent.ParseAdd("PinguinoHost/1.0");   // the site is behind Cloudflare, which refuses requests with no User-Agent (error 1010)
                     var resp = h.SendAsync(rq).Result;
                     if (!resp.IsSuccessStatusCode) { _pushNote += "; boards HTTP " + (int)resp.StatusCode; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the board (HTTP " + (int)resp.StatusCode + ")"); return; }
                 }
@@ -216,7 +216,7 @@ namespace PinguinoHost
                         var gifts = new JObject(); var bits = new JObject();
                         foreach (var p in rows.Skip(i).Take(2500)) { if ((int)p.Value["gifts"] > 0) gifts[p.Name] = (int)p.Value["gifts"]; if ((int)p.Value["bits"] > 0) bits[p.Name] = (int)p.Value["bits"]; }
                         var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteSupportersUrl"] ?? "https://innocentpenguin.com/api/bot/supporters") { Content = new StringContent(new JObject { { "gifts", gifts }, { "bits", bits } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
-                        rq.Headers.Add("Authorization", "Bearer " + key);
+                        rq.Headers.Add("Authorization", "Bearer " + key); rq.Headers.UserAgent.ParseAdd("PinguinoHost/1.0");   // the site is behind Cloudflare, which refuses requests with no User-Agent (error 1010)
                         var resp = h.SendAsync(rq).Result;
                         if (!resp.IsSuccessStatusCode) { _pushNote = "supporters: site answered HTTP " + (int)resp.StatusCode; _lastPush = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the totals (HTTP " + (int)resp.StatusCode + ")"); return; }
                     }
