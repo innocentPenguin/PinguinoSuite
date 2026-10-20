@@ -36,6 +36,12 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!firsts` | `!firsts` | Top 5 First 5 leaderboard. |
 | `(chat message)` | `Just chat when the game is running` | First 5 unique chatters claim 1st-5th. Payout via !addpoints every 5 min: 15000 / 10500 / 7500 / 4500 / 3000. |
 
+### Help
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!commands` | `!commands` | Link to the website help page with every chat command and a search box. |
+
 ### Leaderboards
 
 | Command | Usage | What it does |

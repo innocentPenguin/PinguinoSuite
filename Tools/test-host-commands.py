@@ -45,6 +45,7 @@ try:
     r = ask('viewer1: !topstreaks'); chk('!topstreaks lists shared streaks and links the page', len(r) == 1 and 'Talker 33' in r[0] and r[0].endswith('https://innocentpenguin.com/leaderboards#streaks'))
     r = ask('viewer1: !topgifters 2025-01'); chk('an empty month says so', len(r) == 1 and 'Nobody' in r[0])
     r = ask('viewer1: !leaderboards'); chk('!leaderboards gives the link', len(r) == 1 and r[0].endswith('https://innocentpenguin.com/leaderboards'))
+    r = ask('viewer1: !commands'); chk('!commands links the help page command list', len(r) == 1 and r[0].endswith('https://innocentpenguin.com/help#commands'))
     r = ask('generous: !gifted'); chk('!gifted: own total and rank', len(r) == 1 and '@generous you have gifted 5 subs' in r[0] and 'rank #1 of' in r[0])
     r = ask('sg_yen: !bits'); chk('!bits on an alias account shows the main account total', len(r) == 1 and '1,600' not in r[0] and 'cheered 1,500 bits' in r[0])
     r = ask('nobodyhere: !gifted'); chk('!gifted with nothing recorded is honest', len(r) == 1 and 'no gifted subs recorded' in r[0].replace('I have ', ''))

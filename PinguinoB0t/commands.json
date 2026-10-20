@@ -3,6 +3,18 @@
   "updated": "2026-10-20",
   "commands": [
     {
+      "command": "!commands",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Help",
+      "who": "everyone",
+      "usage": "!commands",
+      "description": "Link to the website help page with every chat command and a search box.",
+      "examples": [
+        "!commands"
+      ]
+    },
+    {
       "command": "!register",
       "aliases": [],
       "action": "PinguinoBotCore",

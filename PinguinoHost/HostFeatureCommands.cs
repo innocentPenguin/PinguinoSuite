@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 namespace PinguinoHost
 {
     /// <summary>Chat commands for the leaderboard / subscriber / watch-streak features. Their documentation is in PinguinoB0t/commands.json (what the website reads) and GET /api/commands-doc.
-    /// VIEWERS (everyone): !topgifters  !topbits (!topbitters)  !topyappers  !topstreak (!topstreaks)  [month]   !leaderboards   !gifted [user]   !bits [user]   !sub [user]   !founders   !streak  !streakrecord (in Streaks)
+    /// VIEWERS (everyone): !commands  !topgifters  !topbits (!topbitters)  !topyappers  !topstreak (!topstreaks)  [month]   !leaderboards   !gifted [user]   !bits [user]   !sub [user]   !founders   !streak  !streakrecord (in Streaks)
     /// MODS only (anyone else is ignored): !alias add|remove|list   !boards refresh|status   !subs import|status   !streaks backfill|status   !names refresh   !lookup user
     /// A month is optional: oct, october, 2026-10, this, last (UTC); without it the all-time board is used.</summary>
     public static class FeatureCommands
@@ -56,7 +56,7 @@ namespace PinguinoHost
             string cmd = parts[0].ToLowerInvariant(); string[] args = parts.Skip(1).ToArray(); string me = user.ToLowerInvariant();
             bool mod = role >= 3;
             string b = BoardOf(cmd);
-            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders";
+            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands";
             bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup";
             if (!viewer && !modOnly) return false;
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
@@ -69,6 +69,7 @@ namespace PinguinoHost
                 if (b != "") { Top(b, args, say); return true; }
                 switch (cmd)
                 {
+                    case "!commands": say("Every chat command, with search: https://innocentpenguin.com/help#commands"); return true;
                     case "!leaderboards": case "!leaderboard": say("Leaderboards (top gifters, bitters, yappers and watch streaks, all time or by month): " + Link); return true;
                     case "!gifted": Mine("gifters", me, args, say, user); return true;
                     case "!bits": Mine("bits", me, args, say, user); return true;
