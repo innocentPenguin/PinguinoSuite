@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:13 - Host restarts (helix-ids fix, commands triggers)
+
+- Restarted Host twice via Update-Module: helix-ids batch-split fix (name history 9 -> 164 certain-rename chatters after rebuild), then 1724d20 (!commands/!command/!cmds/!cmd reply with link to /commands; commands-doc rows carry section + importance). Profiles pushed (1858). Boards push still HTTP 413: 05 raising the route limit, 02 slimming payload.
+
 ## 2026-10-20 08:08 - Host restart (!rank live refresh)
 
 - Restarted Host via Update-Module: !rank for Ivan refreshes from the unofficial tracker.gg endpoint (5 min cache, 30 min pause when blocked, last-known fallback, !setrank override 24h). Not yet checked against the real tracker: watch Host log for rank warnings.
