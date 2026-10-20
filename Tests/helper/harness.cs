@@ -36,7 +36,7 @@ public static class Harness
     static void Settings(string extra = "")
     {
         string p = Path.Combine(dir, "helper_settings.json");
-        File.WriteAllText(p, "{\"LobbyName\":\"peng3\",\"LobbyPassword\":\"\",\"UserCooldownSec\":0,\"InfoCooldownSec\":0,\"McCooldownSec\":0,\"McGlobalCooldownSec\":0,\"SameAnswerGapSec\":0" + extra + "}");
+        File.WriteAllText(p, "{\"LobbyName\":\"peng3\",\"LobbyPassword\":\"\",\"UserCooldownSec\":0,\"InfoCooldownSec\":0,\"McCooldownSec\":0,\"McGlobalCooldownSec\":0,\"SameAnswerGapSec\":0,\"JoinGuardSec\":0" + extra + "}");
         File.SetLastWriteTimeUtc(p, DateTime.UtcNow.AddSeconds(++stamp));
         typeof(CPHInline).GetField("_cfgChecked", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue);
     }
@@ -338,6 +338,29 @@ public static class Harness
         string mid = (string)missed.First(r => (string)r["user"] == "missy1")["id"];
         var after = rows.Where(r => (string)r["type"] == "after" && (string)r["id"] == mid).Select(r => (string)r["t"]).ToList();
         Check("the chat AFTER the trigger (from all chatters) is kept", after.Contains("later chat line one") && after.Contains("later chat line two"), string.Join("|", after));
+
+
+        // ── lore proposals: quick facts, negative feedback, lobby correction, double join ──
+        Settings(",\"FactsUrl\":\"\"");
+        Msg("Q1", "why are there so many ads?"); Check("ads question gets the 3 minute line", Last() != null && Last().Contains("3-minute ads") && Last().Length < 160, Last());
+        Msg("Q2", "how do i use tts?"); Check("tts question: sub-only + link", Last() != null && Last().Contains("sub-only") && Last().Contains("https://"), Last());
+        Msg("Q3", "where is the roblox link?"); Check("roblox question: Ivan posts it", Last() != null && Last().Contains("Roblox") && Last().Contains("Ivan"), Last());
+        Msg("Q4", "lol ads are the worst haha"); Check("a remark about ads is left alone", Last() == null, Last());
+        Msg("Neg1", "what commands are there?"); Check("negative setup: helper answered", Last() != null, Last());
+        Msg("Neg1", "wasn't talking to you"); Check("negative feedback: no reply", Last() == null, Last());
+        Msg("Neg1", "what commands are there?"); Check("negative feedback: silent for that viewer for a while", Last() == null, Last());
+        Msg("Neg2", "what are the rules?"); Check("others still get answers", Last() != null, Last());
+        string rvn = Path.Combine(dir, "helper", "review.jsonl");
+        Check("negative feedback is logged as negative", File.ReadAllLines(rvn).Any(l => l.Contains("\"kind\":\"negative\"") && l.Contains("neg1")), "");
+        Msg("Neg3", "wrong context bro"); Check("negative from a viewer the helper never answered is not a trigger", Last() == null, Last());
+        Msg("Lob1", "whats the code"); Check("lobby setup", Last() != null && Last().Contains("peng3"), Last());
+        Msg("Lob2", "its peng4"); Check("someone says another name: thanks + mod hint, once", Last() != null && Last().Contains("peng4") && Last().Contains("!lobbyname"), Last());
+        Msg("Lob3", "its peng4"); Check("not repeated within 5 minutes", Last() == null, Last());
+        Settings(",\"FactsUrl\":\"\",\"JoinGuardSec\":120");
+        File.WriteAllText(Path.Combine(dir, "players.json"), "{\"ana\":{\"GameId\":\"AnaEpic\"},\"dj\":{\"GameId\":\"DjEpic\"}}");
+        Msg("Dj", "add me to the queue"); Msg("Dj", "yes"); var djRun = CoreRun();
+        Check("double join setup: first join ran", djRun != null && (string)djRun["command"] == "!join", djRun == null ? "no run" : "x");
+        Msg("Dj", "add me to the queue"); Check("a second 'add me' right after is answered without asking or calling the core", CoreRun() == null && Last() != null && Last().Contains("already added"), Last());
 
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }

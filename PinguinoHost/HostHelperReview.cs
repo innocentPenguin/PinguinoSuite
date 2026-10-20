@@ -47,11 +47,11 @@ namespace PinguinoHost
                         }
                     }
                 }
-                var rows = new List<JObject>(); int missed = 0, answered = 0;
+                var rows = new List<JObject>(); int missed = 0, answered = 0, negative = 0;
                 foreach (var t in Enumerable.Reverse(triggers))
                 {
                     string id = (string)t["id"]; string k = (string)t["kind"];
-                    if (k == "missed") missed++; else answered++;
+                    if (k == "missed") missed++; else if (k == "negative") negative++; else answered++;
                     if (kind != "" && k != kind) continue;
                     t["after"] = after.ContainsKey(id) ? after[id] : new JArray();
                     t["note"] = (string)notes[id] ?? "";
@@ -59,7 +59,7 @@ namespace PinguinoHost
                     if (q != "" && !(t.ToString(Newtonsoft.Json.Formatting.None)).ToLowerInvariant().Contains(q)) continue;
                     if (rows.Count < limit) rows.Add(t);
                 }
-                return new JObject { { "ok", true }, { "private", true }, { "total", triggers.Count }, { "answered", answered }, { "missed", missed }, { "shown", rows.Count }, { "entries", new JArray(rows) } };
+                return new JObject { { "ok", true }, { "private", true }, { "total", triggers.Count }, { "answered", answered }, { "missed", missed }, { "negative", negative }, { "shown", rows.Count }, { "entries", new JArray(rows) } };
             }
         }
 

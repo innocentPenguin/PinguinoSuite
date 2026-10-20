@@ -324,6 +324,8 @@ public class CPHInline
         public int ReviewBefore { get; set; } = 8;                    // chat lines (from all chatters) kept from before the trigger ...
         public int ReviewAfter { get; set; } = 8;                     // ... and after it
         public int ReviewAfterSec { get; set; } = 300;                // the "after" part stops this long after the trigger even if fewer lines came
+        public int JoinGuardSec { get; set; } = 120;                  // after the helper added someone to the queue, a second "add me" within this many seconds is answered with "already added" (no core call)
+        public int NegativeMuteSec { get; set; } = 300;               // "wasn't talking to you" / "wrong context": silent for that viewer this long, and the review log marks it as negative feedback
         public int PhraseBankSize { get; set; } = 3;                  // the AI words an answer this many times, then the stored wordings repeat with no AI call
     }
 
@@ -336,6 +338,8 @@ public class CPHInline
     class Pending { public string Intent, Epic; public long Until; }
     static readonly Dictionary<string, Pending> _pending = new Dictionary<string, Pending>();
     static readonly Dictionary<string, long> _userCd = new Dictionary<string, long>();
+    static readonly Dictionary<string, long> _mutedUntil = new Dictionary<string, long>(), _saidTo = new Dictionary<string, long>(), _joinedByHelper = new Dictionary<string, long>();
+    static long _lobbyToldAt, _lobbyFixGap;
     static long _infoCd, _mcGlobal;
     static string _curLogin = "", _curDisplay = "";   // the viewer being answered (for the helper conversation marker and failure messages)
     static readonly List<long> _aiLog = new List<long>();
@@ -354,6 +358,12 @@ public class CPHInline
     static readonly Regex RxDoJoin = new Regex(@"\b(add|put|throw|stick|sign|get|let)\s+(me|us)\s+(in|into|on|to)?\s*(the\s+)?(queue|list|game|lobby|match|custom)|\b(let|lemme|lemme|gonna|wanna|want\s+to|can\s+i|can\s+you)\s+(me\s+)?(join|get\s+in)\b|^\s*(i\s+)?(wanna|want\s+to|would\s+like\s+to|'?d\s+like\s+to)\s+(play|join)\s*[.!?]*\s*$|^\s*(join\s+me|i'?m\s+in|im\s+in|count\s+me\s+in|queue\s+me)\s*[.!?]*\s*$", RX);
     static readonly Regex RxDoLeave = new Regex(@"\b(take|remove|get|pull|drop)\s+me\s+(out|off)\b.{0,20}\b(queue|list|game|lobby)?|\b(leave|exit|quit)\s+(the\s+)?(queue|lobby|game|list)\b|\bi\s+(have\s+to|gotta|need\s+to|must)\s+(go|leave)\b.{0,25}\b(queue|game|lobby)\b|\b(cancel|unqueue|dequeue)\s+me\b|\bi'?m\s+out\b.{0,12}\b(queue|game)", RX);
     static readonly Regex RxPos = new Regex(@"\b(where|what('?s|\s+is))\b.{0,12}\b(am\s+i|my\s+(place|position|spot|pos|turn))\b.{0,18}\b(queue|line|list)?|\b(my\s+)?(position|spot|place)\s+(in\s+)?(the\s+)?(queue|line|list)\b|\bhow\s+(long|far|many)\b.{0,25}\b(until|till|before|to)\b.{0,15}\b(my\s+turn|play|i\s+play|im\s+up|i'?m\s+up)|\bam\s+i\s+(in|on)\s+(the\s+)?(queue|list)\b|\bwhen\s+(do|will|am)\s+(i|we)\b.{0,12}\b(play|up|next|go)\b", RX);
+    // the viewer is telling the helper it got it wrong ("wasn't talking to you", "wrong context", "i didn't ask", "rustbucket")
+    static readonly Regex RxNegFeedback = new Regex(@"\b(wasn'?t|was\s+not|not|weren'?t|isn'?t)\s+(even\s+)?(talking|speaking|asking)\s+(to|with)\s+(you|u|the\s+bot)\b|\bwrong\s+context\b|\bi\s+(didn'?t|did\s+not|never)\s+(ask|call)\b|\bnobody\s+asked\b|\bnot\s+(asking|talking\s+to)\s+you\b|\b(rust\s*bucket|clanker)\b.{0,20}\b(stop|shut|quiet|go\s+away)\b|\b(stop|shut\s+up|be\s+quiet|go\s+away)\b.{0,12}\b(helper|bot|pinguino\w*)\b|\bnot\s+you\b", RX);
+    static readonly Regex RxLobbyFix = new Regex(@"\b(it'?s|its|it\s+is|is|now|use|try|should\s+be|changed\s+to|moved\s+to)\s+(?<n>peng\d+)\b|^\s*(?<n>peng\d+)\s*[.!]?\s*$", RX);
+    static readonly Regex RxSiteAds = new Regex(@"\b(why|how\s+come|what)\b.{0,25}\b(ads?|commercials?)\b|\b(ads?|commercials?)\b.{0,25}\b(why|how\s+long|so\s+long|again|so\s+many)\b|\bhow\s+long\b.{0,12}\b(are|is)\b.{0,8}\b(the\s+)?ads?\b", RX);
+    static readonly Regex RxSiteTts = new Regex(@"\b(tts|text\s*to\s*speech|voices?)\b.{0,30}\b(how|work|use|sub|who\s+can|can\s+i|where|list|which)\b|\b(how|where|can\s+i|who\s+can)\b.{0,30}\b(tts|text\s*to\s*speech|voices)\b", RX);
+    static readonly Regex RxSiteRoblox = new Regex(@"\broblox\b.{0,30}\b(link|server|code|join|where|how|private|play)\b|\b(link|server|code|join|where|how)\b.{0,30}\broblox\b", RX);
     static readonly Regex RxYes = new Regex(@"^\s*@?\S*\s*(yes|yep|yeah|yea|ya|yup|y|ye|sure|ok|okay|k|please|pls|plz|do\s+it|go\s+ahead|confirm|yes\s+please|yes\s+pls|sí|si)\s*[.!]*\s*$", RX);
     static readonly Regex RxNo = new Regex(@"^\s*@?\S*\s*(no|nope|nah|n|cancel|nevermind|never\s*mind|stop|dont|don'?t|no\s+thanks|nvm)\s*[.!]*\s*$", RX);
     static readonly Regex RxBadReg = new Regex(@"^\s*!register\s+(?<a>.*)$", RX);
@@ -478,6 +488,7 @@ public class CPHInline
     {
         _said.Clear(); _gateWhy = ""; _revIntent = ""; _revReady = false;
         bool handled = HandleCore();
+        if (_said.Count > 0 && _curLogin != "") { _saidTo[_curLogin] = Now(); if (_revIntent == "lobby_info") _lobbyToldAt = Now(); }
         try
         {
             if (_revReady)
@@ -503,6 +514,28 @@ public class CPHInline
         try { ReviewFollow(login, text); } catch (Exception) { }
         if (_cfg.LiveOnly && !IsLive()) return false;
         _revReady = true;
+        {   // negative feedback: the viewer says the helper was not wanted -> silent for a few minutes, noted for the review
+            long nowN = Now(); long mu;
+            if (_mutedUntil.TryGetValue(login, out mu) && mu > nowN) { _gateWhy = "muted after negative feedback"; return false; }
+            long said;
+            if (_saidTo.TryGetValue(login, out said) && nowN - said <= 180 && RxNegFeedback.IsMatch(text))
+            {
+                _mutedUntil[login] = nowN + Math.Max(30, _cfg.NegativeMuteSec);
+                ReviewAdd("negative", "", "the viewer said the helper was not wanted: \"" + text + "\"; silent for " + _cfg.NegativeMuteSec + " s");
+                _revReady = false; return false;
+            }
+        }
+        {   // somebody corrects the private match name the helper gave ("it's peng3"): say thanks, flag it, not more than every 5 minutes
+            var lf = RxLobbyFix.Match(text); long nowL = Now();
+            if (lf.Success && !text.StartsWith("!") && nowL - _lobbyToldAt <= 900 && !string.Equals(lf.Groups["n"].Value, (_cfg.LobbyName ?? "").Trim(), StringComparison.OrdinalIgnoreCase) && nowL - _lobbyFixGap > 300)
+            {
+                _lobbyFixGap = nowL;
+                ReviewAdd("missed", "lobby_fix", "chat says the private match is " + lf.Groups["n"].Value + " but the helper said " + _cfg.LobbyName);
+                _revReady = false;
+                Say("@" + display + " Thanks, " + lf.Groups["n"].Value + " noted. A mod can set it for good with !lobbyname " + lf.Groups["n"].Value + ".");
+                return true;
+            }
+        }
         text = text.Trim();
 
         lock (_lock)
@@ -821,6 +854,9 @@ public class CPHInline
         if (RxHowJoin.IsMatch(text)) { intent = "how_join"; return; }
         if (RxDoJoin.IsMatch(text)) { intent = "do_join"; return; }
         if (RxSiteCmds.IsMatch(text)) { intent = "site_commands"; return; }
+        if (RxSiteAds.IsMatch(text)) { intent = "site_ads"; return; }
+        if (RxSiteTts.IsMatch(text)) { intent = "site_tts"; return; }
+        if (RxSiteRoblox.IsMatch(text)) { intent = "site_roblox"; return; }
         if (RxSiteBoards.IsMatch(text)) { intent = "site_leaderboards"; return; }
         if (RxSiteProfile.IsMatch(text)) { intent = "site_profile"; return; }
         if (RxSiteEmotes.IsMatch(text)) { intent = "site_emotes"; return; }
@@ -960,8 +996,12 @@ public class CPHInline
             case "do_join":
                 if (registered == "") { Say(who + "You need to register first. Tell me \"register me as YourEpicName\" (your Epic name) and then ask to join."); return true; }
                 if (!QueueOpen()) { Say(who + "The queue is closed right now. " + LobbyHint()); return true; }
+                { long jb; if (_joinedByHelper.TryGetValue(login, out jb) && now - jb < _cfg.JoinGuardSec) { Say(who + "I already added you a moment ago. Ask \"where am I in the queue\" to check your spot."); return true; } }
                 return AskConfirm(login, display, "join", "", "Add you to the queue? Say yes to confirm.");
             case "song": Say(who + SongLine()); return true;
+            case "site_ads": Say(who + "Ivan runs 3-minute ads during the stream so newcomers are not lost."); return true;
+            case "site_tts": Say(who + "TTS voices (!brian, !hank, !ivy, !trump ...) are sub-only. All voices and commands: " + SiteUrl("/help#commands")); return true;
+            case "site_roblox": Say(who + "Ivan posts the Roblox private-server link in chat himself. Keep an eye on chat."); return true;
             case "site_commands": Say(who + "Every chat command, with search: " + SiteUrl("/help#commands")); return true;
             case "site_leaderboards": Say(who + "Top gifters, bitters, yappers and watch streaks, all time or by month: " + SiteUrl("/leaderboards")); return true;
             case "site_profile": Say(who + "Your profile, stats and what the bot knows about you: " + SiteUrl("/members")); return true;
@@ -1012,7 +1052,7 @@ public class CPHInline
         switch (intent)
         {
             case "register": { string n = CleanEpic(epic); if (n == null) return true; return CallCore("!register", n); }
-            case "join": return CallCore("!join", "");
+            case "join": { long jb; if (_joinedByHelper.TryGetValue(login, out jb) && Now() - jb < _cfg.JoinGuardSec) return true; _joinedByHelper[login] = Now(); return CallCore("!join", ""); }
             case "leave": return CallCore("!leave", "");
             case "position": return CallCore("!pos", "");
         }

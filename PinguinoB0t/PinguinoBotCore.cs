@@ -3648,8 +3648,9 @@ public class CPHInline
     bool HandleNext(string user, string input, bool isPrivileged)
     {
         if (!isPrivileged)
-        {
-            Say("@" + user + " Only mods can advance the queue.");
+        {   // viewers asking "who is next?" get a short exact line (read-only); only mods advance the queue
+            var nextUp = GetWaitingQueue().Take(3).Select(e => e.Username).ToList();
+            Say(nextUp.Count == 0 ? "@" + user + " The queue is empty." : "@" + user + " Next up: " + string.Join(", ", nextUp) + " (" + GetWaitingQueue().Count + " waiting).");
             return true;
         }
 

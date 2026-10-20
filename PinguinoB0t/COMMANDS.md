@@ -17,6 +17,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
+| `!pm` | `!pm` | The current private match name and password (one shared setting; mods change it with !lobbyname / !lobbypass). |
 | `!register` | `!register <EpicID>  \|  mods: !register @viewer <EpicID>` | Link your Twitch name to your Epic Games name. Mods can register or fix someone else's. |
 | `!join` | `!join` | Join the queue (must be registered, queue must be open). |
 | `!leave` | `!leave` | Leave the queue. |
@@ -125,7 +126,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!match` | `!match <clear\|fill\|queue>` | clear = game over: everyone in the match leaves the queue, nobody is pulled in. fill = make teams from the queue, or fill empty slots. queue = put everyone in the match back at the front of the queue. Website: Clear / Fill / Move all ➜ Queue under the teams. |
 | `!reroll` | `!reroll` | Different teams with the same players. Refills anyone kicked/left from the queue. |
 | `!win` | `!win <blue\|orange>` | Record the winner and award points. A match can only be scored once. |
-| `!next` | `!next  \|  !next <blue\|orange>` | !next = everyone rotates out. !next blue = record Blue win (if not already) and Blue stays on vs new challengers. |
+| `!next` | `!next  \|  !next <blue\|orange>` | Viewers: shows who is next in the queue (read-only). Mods: !next = everyone rotates out. !next blue = record Blue win (if not already) and Blue stays on vs new challengers. |
 | `!mode` | `!mode <balanced\|random\|picks>` | How teams are made. |
 | `!pick` | `!pick <names for Blue>  \|  !pick auto` | In picks mode, after !balance: listed players go Blue, the rest Orange. 'auto' balances instead. |
 | `!format` | `!format <2v2\|3v3\|4v4>` | Team size for the next match. |

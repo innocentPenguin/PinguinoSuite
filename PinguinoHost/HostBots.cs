@@ -62,6 +62,13 @@ namespace PinguinoHost
         public static void NoteLog(string action, string level, string text)
         { text = text ?? ""; LastError[action ?? "host"] = new[] { DateTime.UtcNow.ToString("o"), level + ": " + (text.Length > 300 ? text.Substring(0, 300) : text) }; }
 
+        /// <summary>The ONE private-match name/password: helper_settings.json (HelperPinguino reads it, mods change it with !lobbyname / !lobbypass, !pm shows it).</summary>
+        public static string PrivateMatchLine()
+        {
+            var j = LoadFile("helper_settings.json"); string n = ((string)j["LobbyName"] ?? "").Trim(), pw = ((string)j["LobbyPassword"] ?? "").Trim();
+            if (n == "") return "No private match is set right now. Ask a mod.";
+            return "Private match -> Name: " + n + ", " + (pw == "" ? "no password" : "password: " + pw) + ".";
+        }
         static JObject LoadFile(string name) { try { var f = Path.Combine(DataDir, name); return File.Exists(f) ? JObject.Parse(File.ReadAllText(f)) : new JObject(); } catch (Exception) { return new JObject(); } }
         static void SaveFile(string name, JObject o)
         { var f = Path.Combine(DataDir, name); var tmp = f + ".tmp"; File.WriteAllText(tmp, o.ToString()); if (File.Exists(f)) File.Replace(tmp, f, null); else File.Move(tmp, f); }

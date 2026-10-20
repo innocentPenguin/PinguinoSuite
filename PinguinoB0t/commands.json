@@ -15,6 +15,18 @@
       ]
     },
     {
+      "command": "!pm",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!pm",
+      "description": "The current private match name and password (one shared setting; mods change it with !lobbyname / !lobbypass).",
+      "examples": [
+        "!pm"
+      ]
+    },
+    {
       "command": "!register",
       "aliases": [],
       "action": "PinguinoBotCore",
@@ -184,7 +196,7 @@
       "category": "Community Games",
       "who": "mods",
       "usage": "!next  |  !next <blue|orange>",
-      "description": "!next = everyone rotates out. !next blue = record Blue win (if not already) and Blue stays on vs new challengers.",
+      "description": "Viewers: shows who is next in the queue (read-only). Mods: !next = everyone rotates out. !next blue = record Blue win (if not already) and Blue stays on vs new challengers.",
       "examples": [
         "!next",
         "!next orange"

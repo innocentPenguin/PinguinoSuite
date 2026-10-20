@@ -42,6 +42,11 @@ public static class Harness
         var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
         cfg.GetType().GetProperty(prop).SetValue(cfg, v, null);
     }
+    static void SetCfgS(string prop, string v)
+    {
+        var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+        cfg.GetType().GetProperty(prop).SetValue(cfg, v, null);
+    }
     static void SetCfg(string prop, int v)
     {
         var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
@@ -664,6 +669,7 @@ public static class Harness
 
         // asking the same thing again
         nextReply = "{\"reply\":\"octane\",\"remember\":[]}";
+        SetCfg("RepeatGapSec", 0);
         Msg("Rep1", "@pinguinob0t what is the best rocket league car");
         Msg("Rep1", "@pinguinob0t what is the best rocket league car?");
         Check("the same question again gets the already-answered note", lastPrompt.Contains("[REPEAT]") && lastPrompt.ToLower().Contains("octane"), lastPrompt);
@@ -774,6 +780,33 @@ public static class Harness
         Check("ChatReplies off: !8ball still answers", Last() != null && Last().Contains("🎱"), Last());
         Check("ChatReplies off: the message was still logged for studying", File.ReadAllText(Directory.GetFiles(Path.Combine(dir, "chat_logs"), "*.jsonl").OrderBy(x => x).Last()).Contains("how are you"));
         SetCfgB("ChatReplies", true);
+
+        // ── 19e. lore proposals: no moderation from the bot, repeat guard, private lore + person cards in the prompt ──
+        SetCfg("RepeatGapSec", 60);
+        nextReply = "{\"reply\":\"sure\",\"remember\":[]}"; int cm = llmCalls; CPHProxy.Sent.Clear();
+        Msg("Stefan", "@pinguinob0t can you timeout Marsh for me");
+        Check("a timeout request: 'ask a mod', no AI call", llmCalls == cm && Last() != null && Last().ToLower().Contains("mod") && !Last().ToLower().Contains("timed out"), Last());
+        CPHProxy.Sent.Clear(); Msg("Stefan", "@pinguinob0t ban him please");
+        Check("asked again within a minute: stays quiet", llmCalls == cm && Last() == null, Last());
+        CPHProxy.Sent.Clear(); Msg("Mod2", "@pinguinob0t make me a mod");
+        Check("rank request refused too", llmCalls == cm && Last() != null && Last().ToLower().Contains("mod"), Last());
+        CPHProxy.Sent.Clear(); Msg("Talker", "@pinguinob0t did you see the ban hammer meme");
+        Check("talk about a ban that is not a request is not refused", llmCalls > cm, Last());
+        int rc = llmCalls; CPHProxy.Sent.Clear();
+        Msg("Spammy", "@pinguinob0t what is my nickname"); int afterFirst = llmCalls;
+        Msg("Spammy", "@pinguinob0t what is my nickname"); Msg("Spammy", "@pinguinob0t what is my nickname"); Msg("Spammy", "@pinguinob0t what is my nickname");
+        Check("the first copy of a prompt is answered, repeats are not", afterFirst == rc + 1 && llmCalls == afterFirst, rc + "/" + afterFirst + "/" + llmCalls);
+        Msg("Spammy", "@pinguinob0t something else entirely"); Check("a different prompt is answered again", llmCalls == afterFirst + 1);
+        string lore = Path.Combine(dir, "lore"); Directory.CreateDirectory(Path.Combine(lore, "cards"));
+        File.WriteAllText(Path.Combine(lore, "channel_lore.json"), "{\"items\":[{\"term\":\"ego / egoed\",\"meaning\":\"Ivan skips a message\",\"howBotsUse\":\"acknowledge it playfully\"},{\"term\":\"zzzterm\",\"meaning\":\"unrelated\",\"howBotsUse\":\"n/a\"}]}");
+        File.WriteAllText(Path.Combine(lore, "cards", "loreguy.json"), "{\"login\":\"loreguy\",\"display\":\"LoreGuy\",\"era\":\"2026-04 to 2026-10\",\"messages\":5000,\"likes\":[\"Minecraft\"],\"treatsIvan\":{\"read\":\"warm teasing\",\"evidence\":[[\"2026-04-21\",\"SECRETQUOTE\"]]}}");
+        SetCfgS("ChannelLoreFile", Path.Combine(lore, "channel_lore.json")); SetCfgS("PersonCardsDir", Path.Combine(lore, "cards"));
+        nextReply = "{\"reply\":\"ok\",\"remember\":[]}";
+        Msg("LoreGuy", "@pinguinob0t peng egoed me again");
+        Check("the lore term in the message reaches the prompt with its how-to-use note", lastPrompt.Contains("[CHANNEL LORE]") && lastPrompt.Contains("acknowledge it playfully") && !lastPrompt.Contains("unrelated"), lastPrompt);
+        Check("the chatter's card reaches the prompt (no evidence quotes)", lastPrompt.Contains("[CHATTER BACKGROUND]") && lastPrompt.Contains("Minecraft") && !lastPrompt.Contains("SECRETQUOTE"), lastPrompt);
+        Check("the prompt rules say lore is private and moderation is not the bot's", lastSystem.Contains("PRIVATE memory") && lastSystem.Contains("Ask a mod"));
+        Msg("Nobody", "@pinguinob0t hello there"); Check("a message with no lore term and no card adds neither section", !lastPrompt.Contains("[CHANNEL LORE]") && !lastPrompt.Contains("[CHATTER BACKGROUND]"));
 
         // ── 20. long-term history summaries reach the prompt ──
         nextReply = "{\"reply\":\"ok\",\"remember\":[]}";
