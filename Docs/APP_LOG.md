@@ -77,6 +77,11 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 15:58 Host + Multi + Listen restarts (night run)
+- Host rebuilt (0 errors): 023 hype/goal announcements, !uptime, Firsts guard; site-bridges shop/teach contract fix (cc70a3d); 02 live-state route, HostControl; /api/sitebridge teach+shop ok.
+- Multi restarted (gift alert, poll/predict/hype overlays, send guard). Listen restarted twice (VOD memory fix, /api/status no-lock fix). Link restart skipped (still answers; harmless).
+- Pending: core/app rebuild (c8ae770, Accounts sign-in), Streamer.bot script re-paste, Firsts !addpoints collision.
+
 ## 2026-10-20 09:02 - Host + Multi restart (Plan 5 events, /api/say)
 
 - Host restarted on 9210a76 (EventSub poll/prediction/hype train, raid out, richer gift events in the activity feed; POST /api/say with module token). Multi restarted on ece3825 (Twitch plain sends via Host /api/say, falls back to direct if Host down) and 046b726 (raid_out/poll/prediction/hype rows, gift counter + top gifter). New scopes need Ivan's re-sign-in. Gift alert/poll/predict/hype overlays still to build.
