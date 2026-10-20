@@ -356,14 +356,29 @@ public static class Harness
         Check(Players()["p1"]["Strikes"].ToString() == "2" && Q().Contains("p1"), "removing a strike lets them join again");
         Run("mod1", "!unstrike", "@p2", true);
         Check(Players()["p2"]["Strikes"].ToString() == "0" && CPHProxy.Sent.Any(m => m.Contains("no strikes")), "strikes never go below 0");
-        var live = typeof(CPHInline).GetMethod("ApplyLive", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        live.Invoke(bot, new object[] { true });
-        Check(Players()["p1"]["Strikes"].ToString() == "1", "the stream going live takes a strike off");
-        live.Invoke(bot, new object[] { true });
-        Check(Players()["p1"]["Strikes"].ToString() == "1", "still live: no second strike removed");
-        live.Invoke(bot, new object[] { false });
-        live.Invoke(bot, new object[] { true });
-        Check(Players()["p1"]["Strikes"].ToString() == "1", "a quick reconnect is not a new stream");
+        var decay = typeof(CPHInline).GetMethod("DecayStrikes", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        long dayLater = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 86400 + 30;
+        decay.Invoke(bot, new object[] { dayLater });
+        Check(Players()["p1"]["Strikes"].ToString() == "1", "a temporary strike wears off after a day");
+        decay.Invoke(bot, new object[] { dayLater + 60 });
+        Check(Players()["p1"]["Strikes"].ToString() == "1", "only one per day");
+        decay.Invoke(bot, new object[] { dayLater + 86400 });
+        Check(Players()["p1"]["Strikes"].ToString() == "0", "the next day takes the last one");
+        Run("mod1", "!strike", "@p1", true);
+        Run("mod1", "!strike", "@p1 toxicity", true);
+        Check(Players()["p1"]["Strikes"].ToString() == "1" && Players()["p1"]["PermaStrikes"].ToString() == "1" && CPHProxy.Sent.Any(m => m.Contains("Permanent strike given to p1")), "a toxicity strike is permanent");
+        decay.Invoke(bot, new object[] { dayLater + 30L * 86400 });
+        Check(Players()["p1"]["Strikes"].ToString() == "0" && Players()["p1"]["PermaStrikes"].ToString() == "1", "permanent strikes never wear off");
+        Run("p1", "!strikes");
+        Check(CPHProxy.Sent.Any(m => m.Contains("1/3 strikes (1 permanent, 0 temporary)")), "!strikes tells the two kinds apart");
+        Run("mod1", "!unstrike", "@p1", true);
+        Check(Players()["p1"]["PermaStrikes"].ToString() == "1" && CPHProxy.Sent.Any(m => m.Contains("only has permanent strikes")), "!unstrike alone does not remove a permanent strike");
+        Run("mod1", "!unstrike", "@p1 perma", true);
+        Check(Players()["p1"]["PermaStrikes"].ToString() == "0", "!unstrike @user perma removes one");
+        Run("mod1", "!strike", "@p1", true);   // back to 1 temporary like before
+        Run("mod1", "!strike", "@p1 slurs", true); Run("mod1", "!strike", "@p1 racist", true);
+        Check(Players()["p1"]["Strikes"].ToString() == "1" && Players()["p1"]["PermaStrikes"].ToString() == "2" && !Q().Contains("p1"), "2 permanent + 1 temporary = 3: out of the queue");
+        Run("mod1", "!unstrike", "@p1 perma", true); Run("mod1", "!unstrike", "@p1 perma", true);
         Run("mod1", "!activity", "end", true);
 
         // ---- KOTH + !finish ----

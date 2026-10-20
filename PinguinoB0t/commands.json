@@ -555,7 +555,7 @@
       "category": "Community Games",
       "who": "everyone",
       "usage": "!strikes",
-      "description": "How many strikes you have (3 = cannot join customs). Everyone loses a strike each time the stream goes live.",
+      "description": "How many strikes you have (3 = cannot join customs), split into permanent (red, never expire) and temporary (orange, one wears off per day).",
       "examples": []
     },
     {
@@ -564,9 +564,12 @@
       "action": "PinguinoBotCore",
       "category": "Community Games",
       "who": "mods",
-      "usage": "!strike @user",
-      "description": "Give a strike.",
-      "examples": []
+      "usage": "!strike @user [perma|toxicity|slurs]",
+      "description": "Give a temporary strike (wears off after a day). Add perma, toxicity or slurs for a PERMANENT strike (red, never expires).",
+      "examples": [
+        "!strike @user",
+        "!strike @user toxicity"
+      ]
     },
     {
       "command": "!unstrike",
@@ -574,9 +577,12 @@
       "action": "PinguinoBotCore",
       "category": "Community Games",
       "who": "mods",
-      "usage": "!unstrike @user",
-      "description": "Take a strike away.",
-      "examples": []
+      "usage": "!unstrike @user [perma]",
+      "description": "Take a temporary strike away. Add perma to remove a permanent one.",
+      "examples": [
+        "!unstrike @user",
+        "!unstrike @user perma"
+      ]
     },
     {
       "command": "!finish",

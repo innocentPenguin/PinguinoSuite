@@ -25,7 +25,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!stats` | `!stats [user]` | Wins, losses and points for you or another player. |
 | `!topwins` | `!topwins` | Top 5 community-games players by wins (ties broken by points). |
 | `!queue` | `!queue  \|  !queue list  \|  mods: !queue open \| close \| clear` | Queue status. Mods open, close, or clear (clear also closes and ends the lobby). |
-| `!strikes` | `!strikes` | How many strikes you have (3 = cannot join customs). Everyone loses a strike each time the stream goes live. |
+| `!strikes` | `!strikes` | How many strikes you have (3 = cannot join customs), split into permanent (red, never expire) and temporary (orange, one wears off per day). |
 
 ### Firsts
 
@@ -102,8 +102,8 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!mmr` | `!mmr @user` | Look up a player's MMR. |
 | `!setmmr` | `!setmmr @user <mmr\|rank\|auto>` | Manually set MMR (number or rank like gc1, c2, d3). 'auto' goes back to Tracker Network. |
 | `!koth` | `!koth on\|off` | Switch King of the Hill on or off. |
-| `!strike` | `!strike @user` | Give a strike. |
-| `!unstrike` | `!unstrike @user` | Take a strike away. |
+| `!strike` | `!strike @user [perma\|toxicity\|slurs]` | Give a temporary strike (wears off after a day). Add perma, toxicity or slurs for a PERMANENT strike (red, never expires). |
+| `!unstrike` | `!unstrike @user [perma]` | Take a temporary strike away. Add perma to remove a permanent one. |
 | `!finish` | `!finish <blue\|orange>` | End the King of the Hill game: record the winner and rotate the queue. |
 | `!activity` | `!activity [rl\|fn] competitive\|casual\|koth\|viewers\|boxfights\|zonewars\|end` | Pick what kind of game the stream is running. |
 | `!gamemode` | `!gamemode standard\|dropshot\|rumble` | Rocket League game mode for stats. |

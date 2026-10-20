@@ -342,8 +342,12 @@ public class CPHInline
         public int? Sr { get; set; }
         public string SrSource { get; set; }               // "manual" (a mod) | "self" (the player)
 
-        // [NEW][STRIKES] 0-3. Mods give / remove them (!strike, !unstrike); every time the stream goes live everyone loses one. 3 = can't join customs.
+        // [NEW][STRIKES] TEMPORARY strikes (orange on the site): a mod gives them (!strike), each one wears off after a day (DecayStrikes). Temporary + permanent is at most 3; 3 = can't join customs.
         public int Strikes { get; set; }
+        // PERMANENT strikes (red on the site): !strike @user toxicity|slurs|perma. They never wear off; only !unstrike @user perma removes one.
+        public int PermaStrikes { get; set; }
+        public string PermaReason { get; set; }
+        public long StrikeDecayAt { get; set; }            // unix s: when the oldest temporary strike was given / last wore off (a day after it, one goes)
     }
 
     class ObsSourceCfg
@@ -963,7 +967,7 @@ public class CPHInline
     bool WheelStruck(string login)
     {
         Player sp;
-        return !IsStreamer(login) && _players.TryGetValue(login, out sp) && sp.Strikes >= MaxStrikes;
+        return !IsStreamer(login) && _players.TryGetValue(login, out sp) && StrikeTotal(sp) >= MaxStrikes;
     }
 
     bool HandleMe(string user, bool isPrivileged)
@@ -971,7 +975,7 @@ public class CPHInline
         if (string.IsNullOrEmpty(user)) return true;
         if (_wheel == null || _wheel.Status != "open") { WheelSayOnce(user, "@" + user + " sign-ups for the tournament are closed."); return true; }
         if (_wheel.Eligibility == "subs" && !_cmdSub && !isPrivileged) { WheelSayOnce(user, "@" + user + " tournament sign-ups are for subscribers right now."); return true; }
-        if (WheelStruck(user)) { WheelSayOnce(user, "@" + user + " you have " + MaxStrikes + " strikes, so you can't join the tournament right now. You lose a strike every time the stream goes live."); return true; }
+        if (WheelStruck(user)) { WheelSayOnce(user, "@" + user + " you have " + MaxStrikes + " strikes, so you can't join the tournament right now. A temporary strike wears off after a day; permanent ones stay."); return true; }
         string id = !string.IsNullOrEmpty(_cmdUserId) ? _cmdUserId : user;
         if (_wheel.Entrants.Any(e => e.Id == id || e.Login == user)) { WheelSayOnce(user, "@" + user + " you are already in the tournament."); return true; }
         if (_wheel.Entrants.Count >= 500) { WheelSayOnce(user, "@" + user + " the tournament is full."); return true; }
@@ -1893,7 +1897,7 @@ public class CPHInline
             //    makes a member profile for each Twitch player automatically.
             if (_standingsDirty || (DateTime.UtcNow - _lastStandingsPush).TotalMinutes >= 5)
             {
-                var rows = _players.Values.Where(p => !IsPractice(p.Username)).Select(p => new object[] { p.Username, p.GameId ?? "", p.Wins, p.Losses, p.Points, p.TwitchId ?? "", p.PeakMmr.HasValue ? (object)p.PeakMmr.Value : null, MmrSrc(p.Username), p.Strikes, p.Sr.HasValue ? (object)p.Sr.Value : null }).ToList();
+                var rows = _players.Values.Where(p => !IsPractice(p.Username)).Select(p => new object[] { p.Username, p.GameId ?? "", p.Wins, p.Losses, p.Points, p.TwitchId ?? "", p.PeakMmr.HasValue ? (object)p.PeakMmr.Value : null, MmrSrc(p.Username), StrikeTotal(p), p.Sr.HasValue ? (object)p.Sr.Value : null, p.PermaStrikes }).ToList();
                 // [NEW][WEB] per game mode tables: category -> [username, wins, losses, points]
                 var modes = new Dictionary<string, List<object[]>>();
                 foreach (var p in _players.Values)
@@ -2627,9 +2631,9 @@ public class CPHInline
             return true;
         }
 
-        if (!IsStreamer(user) && _players[user].Strikes >= MaxStrikes)
+        if (!IsStreamer(user) && StrikeTotal(_players[user]) >= MaxStrikes)
         {
-            Say("@" + user + " You have " + MaxStrikes + " strikes, so you can't play customs right now. You lose a strike every time the stream goes live.");
+            Say("@" + user + " You have " + MaxStrikes + " strikes, so you can't play customs right now. A temporary strike wears off after a day; permanent ones stay.");
             return true;
         }
 
@@ -4091,32 +4095,58 @@ public class CPHInline
     //  Every time the stream goes live everybody loses one. Shown on the website profile (standings column 9).
     // ══════════════════════════════════════════════════════════════
     const int MaxStrikes = 3;
+    static int StrikeTotal(Player p) { return p.Strikes + p.PermaStrikes; }
+    static readonly System.Text.RegularExpressions.Regex PermaWords = new System.Text.RegularExpressions.Regex(@"\b(perma|permanent|toxic|toxicity|slur|slurs|racism|racist|hate)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    // temporary strikes wear off: one per full day since the last one went (or since the oldest was given)
+    void DecayStrikes(long now)
+    {
+        int n = 0;
+        foreach (var p in _players.Values)
+        {
+            if (p.Strikes <= 0) { p.StrikeDecayAt = 0; continue; }
+            if (p.StrikeDecayAt <= 0) { p.StrikeDecayAt = now; n++; continue; }     // strikes from before this rule: the day starts now
+            long days = (now - p.StrikeDecayAt) / 86400;
+            if (days <= 0) continue;
+            p.Strikes = (int)Math.Max(0, p.Strikes - days); p.StrikeDecayAt = p.Strikes > 0 ? p.StrikeDecayAt + days * 86400 : 0; n++;
+        }
+        if (n > 0) { SavePlayers(); _standingsDirty = true; _stateDirty = true; CPH.LogInfo("[BVQ] Strike check: temporary strikes updated for " + n + " player(s)."); }
+    }
 
     bool HandleStrike(string user, string input, bool isPrivileged, int delta)
     {
         if (!isPrivileged) { Say("@" + user + " Only mods can " + (delta > 0 ? "give" : "remove") + " strikes."); return true; }
         string[] parts = (input ?? "").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 1) { Say("@" + user + " Usage: " + (delta > 0 ? "!strike" : "!unstrike") + " @username"); return true; }
+        if (parts.Length < 1) { Say("@" + user + " Usage: " + (delta > 0 ? "!strike @username [perma|toxicity|slurs]" : "!unstrike @username [perma]")); return true; }
         string target = parts[0].ToLower().TrimStart('@');
+        string rest = string.Join(" ", parts.Skip(1));
+        bool perma = PermaWords.IsMatch(rest);
         Player p;
         if (!_players.TryGetValue(target, out p)) { Say("@" + user + " Player \"" + target + "\" is not registered."); return true; }
-        int before = p.Strikes;
-        p.Strikes = Math.Max(0, Math.Min(MaxStrikes, before + delta));
-        if (p.Strikes == before)
+        int before = StrikeTotal(p); string what;
+        if (delta > 0)
         {
-            Say("@" + user + " " + target + " already has " + (delta > 0 ? "the maximum of " + MaxStrikes : "no") + " strikes.");
-            return true;
+            if (before >= MaxStrikes) { Say("@" + user + " " + target + " already has the maximum of " + MaxStrikes + " strikes."); return true; }
+            if (perma) { p.PermaStrikes++; p.PermaReason = rest.Length > 60 ? rest.Substring(0, 60) : rest; what = "Permanent strike given to "; }
+            else { if (p.Strikes == 0) p.StrikeDecayAt = Now(); p.Strikes++; what = "Strike given to "; }
+        }
+        else
+        {
+            if (before == 0) { Say("@" + user + " " + target + " already has no strikes."); return true; }
+            if (perma) { if (p.PermaStrikes == 0) { Say("@" + user + " " + target + " has no permanent strikes."); return true; } p.PermaStrikes--; what = "Permanent strike removed from "; }
+            else if (p.Strikes > 0) { p.Strikes--; what = "Strike removed from "; }
+            else { Say("@" + user + " " + target + " only has permanent strikes. Use !unstrike @" + target + " perma to remove one."); return true; }
         }
         SavePlayers();
         _standingsDirty = true;
         string extra = "";
-        if (p.Strikes >= MaxStrikes)
+        if (StrikeTotal(p) >= MaxStrikes)
         {
             QueueEntry qe = GetEntry(target);
             if (qe != null && qe.Status == "waiting") { RemoveFromQueue(target); extra = " They were taken out of the queue."; }
             extra = " " + target + " can't play customs until they lose a strike." + extra;
         }
-        Say("@" + user + " " + (delta > 0 ? "Strike given to " : "Strike removed from ") + target + ": " + p.Strikes + "/" + MaxStrikes + "." + extra);
+        Say("@" + user + " " + what + target + ": " + StrikeTotal(p) + "/" + MaxStrikes + (p.PermaStrikes > 0 ? " (" + p.PermaStrikes + " permanent)" : "") + "." + extra);
         PublishState("queue_update", target + " strikes");
         return true;
     }
@@ -4127,7 +4157,8 @@ public class CPHInline
         string target = parts.Length >= 1 ? parts[0].ToLower().TrimStart('@') : user;
         Player p;
         if (!_players.TryGetValue(target, out p)) { Say("@" + user + " " + (target == user ? "You aren't" : target + " isn't") + " registered."); return true; }
-        Say("@" + user + " " + (target == user ? "You have " : target + " has ") + p.Strikes + "/" + MaxStrikes + " strikes." + (p.Strikes >= MaxStrikes ? " (not allowed to play customs)" : ""));
+        int t = StrikeTotal(p);
+        Say("@" + user + " " + (target == user ? "You have " : target + " has ") + t + "/" + MaxStrikes + " strikes" + (p.PermaStrikes > 0 ? " (" + p.PermaStrikes + " permanent, " + p.Strikes + " temporary)" : "") + "." + (t >= MaxStrikes ? " (not allowed to play customs)" : ""));
         return true;
     }
 
@@ -4145,20 +4176,14 @@ public class CPHInline
         catch (Exception) { _hostLiveGiven = false; }
     }
 
-    // Called every 30 s with what Twitch says. A new stream (offline for 30+ minutes, or never seen) takes one strike off everyone.
+    // Called every 30 s with what Twitch says. Also where temporary strikes wear off (one per day, see DecayStrikes).
     void ApplyLive(bool live)
     {
+        DecayStrikes(Now());
         if (live)
         {
             if (!_settings.WasLive)
             {
-                if (Now() - _settings.LastLiveSeen >= 1800)
-                {
-                    int n = 0;
-                    foreach (var p in _players.Values) if (p.Strikes > 0) { p.Strikes--; n++; }
-                    if (n > 0) { SavePlayers(); _standingsDirty = true; _stateDirty = true; }
-                    CPH.LogInfo("[BVQ] Stream went live: " + n + " player(s) lost a strike.");
-                }
                 _settings.WasLive = true;
                 SaveSettings();
             }
