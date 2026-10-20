@@ -6,6 +6,7 @@ dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 
 PORT = 8991; B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pglore_'); outf = os.path.join(d, 'out.txt')
 json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
+json.dump({'CannedFile': os.path.join(d, 'no_canned.json')}, open(os.path.join(d, 'chat_settings.json'), 'w'))   # Chatty owns no terms here, so the Host answers them all
 def start():
     env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
     env.update({'PINGUINO_COMPAT_WS_PORT': '8994', 'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0'})
