@@ -131,6 +131,9 @@ namespace PinguinoHost
         static readonly Queue<Item> Q = new Queue<Item>(); static readonly object L = new object();
         static readonly Dictionary<string, DateTime> Recent = new Dictionary<string, DateTime>(); static DateTime _lastNative = DateTime.MinValue, _lastPlain = DateTime.MinValue;
         static readonly SemaphoreSlim Sig = new SemaphoreSlim(0); static bool _started; static string _current = "";
+        static readonly Dictionary<string, DateTime> NativeRecent = new Dictionary<string, DateTime>();   // login -> when Twitch's own card was last sent for them (Twitch: same target once per 60 min)
+        static readonly Dictionary<string, string[]> InfoCache = new Dictionary<string, string[]>();      // login -> {uid, login, name, game}
+        static readonly Random Rng = new Random();
 
         public static JObject Settings()
         {
@@ -138,6 +141,8 @@ namespace PinguinoHost
                 { "Line", "Go and Follow {user}, {subject} {were} last seen streaming {game} you can find {object} at {channel}!!" },
                 { "QueuedLine", "Shoutout for {user} has been queued, there are currently {n} people in the queue." },
                 { "NotFoundLine", "Sorry {by}, {user} was not found." }, { "DuplicateLine", "{user} was already shouted out recently." },
+                { "TempLine", "Shoutout queued, in the meantime please check out {user} at {channel}. Last playing {game}" }, { "TempLineOn", true },
+                { "NativeDelayMinSec", 1 }, { "NativeDelayMaxSec", 5 }, { "LineAfterNative", false }, { "NativeSameTargetMinutes", 61 },
                 { "DedupeMinutes", 60 }, { "ManualDedupeMinutes", 2 }, { "Native", true }, { "ShoutRaiders", true }, { "NativeGapSec", 125 } };
             try { var f = System.IO.Path.Combine(HostApi.DataDir, "shout_settings.json"); if (File.Exists(f)) foreach (var p in JObject.Parse(File.ReadAllText(f))) d[p.Key] = p.Value; else File.WriteAllText(f, d.ToString()); } catch (Exception) { }
             return d;
@@ -170,7 +175,12 @@ namespace PinguinoHost
                 ahead = Q.Count + (_current != "" ? 1 : 0);
                 Q.Enqueue(new Item { User = user, By = by ?? "", Native = (bool?)s["Native"] != false, At = DateTime.UtcNow });
             }
-            if (ahead > 0 && !auto) SayCore(F((string)s["QueuedLine"], "user", user, "n", ahead.ToString()));
+            if ((bool?)s["TempLineOn"] != false)
+            {
+                // right away, without waiting for Twitch's 2 minute shoutout gap: a plain chat line with the channel link and the game they last played
+                ThreadPool.QueueUserWorkItem(_ => { try { var inf = Info(user); SayCore(F((string)s["TempLine"], "user", inf != null ? inf[2] : user, "channel", "https://twitch.tv/" + (inf != null ? inf[1] : user), "game", inf != null ? inf[3] : "something fun")); } catch (Exception ex) { Clog.Warn("shoutout", "temp line failed: " + ex.Message); } });
+            }
+            else if (ahead > 0 && !auto) SayCore(F((string)s["QueuedLine"], "user", user, "n", ahead.ToString()));
             Sig.Release(); return "queued";
         }
         public static JObject Status()
@@ -188,27 +198,51 @@ namespace PinguinoHost
                 finally { lock (L) _current = ""; }
             }
         }
+        /// <summary>{uid, login, display name, last game} for a streamer (Helix, cached for 10 minutes); null when Twitch does not know the name.</summary>
+        static string[] Info(string user)
+        {
+            lock (InfoCache) { string[] c; if (InfoCache.TryGetValue(user, out c)) return c; }
+            string err, uid = TwitchApi.UserId(user, out err); if (uid == "") return null;
+            JToken d; TwitchApi.Call(HttpMethod.Get, "/channels?broadcaster_id=" + uid, null, out d, out err);
+            var ch = (d as JArray)?.FirstOrDefault();
+            var r = new[] { uid, ((string)ch?["broadcaster_login"] ?? user).ToLowerInvariant(), (string)ch?["broadcaster_name"] ?? user, ((string)ch?["game_name"] ?? "") != "" ? (string)ch["game_name"] : "something fun" };
+            lock (InfoCache) { InfoCache[user] = r; if (InfoCache.Count > 200) InfoCache.Clear(); }
+            ThreadPool.QueueUserWorkItem(_ => { Thread.Sleep(10 * 60 * 1000); lock (InfoCache) InfoCache.Remove(user); });
+            return r;
+        }
         static void Do(Item it)
         {
-            var s = Settings(); string err, uid = TwitchApi.UserId(it.User, out err);
-            if (uid == "") { SayCore(F((string)s["NotFoundLine"], "user", it.User, "by", it.By)); Clog.Warn("shoutout", it.User + ": " + err); return; }
-            JToken d; TwitchApi.Call(HttpMethod.Get, "/channels?broadcaster_id=" + uid, null, out d, out err);
-            var ch = (d as JArray)?.FirstOrDefault(); string login = ((string)ch?["broadcaster_login"] ?? it.User).ToLowerInvariant(), name = (string)ch?["broadcaster_name"] ?? it.User;
-            string game = ((string)ch?["game_name"] ?? "") != "" ? (string)ch["game_name"] : "something fun";
+            var s = Settings(); var inf = Info(it.User);
+            if (inf == null) { SayCore(F((string)s["NotFoundLine"], "user", it.User, "by", it.By)); Clog.Warn("shoutout", it.User + ": no such Twitch user"); return; }
+            string uid = inf[0], login = inf[1], name = inf[2], game = inf[3];
             string sub, obj, were; Pronouns(login, out sub, out obj, out were);
-            string note = "";
-            if (it.Native)   // Twitch's shoutout card: one per 2 minutes (and one per streamer per hour), so later ones wait their turn
+            string note = ""; bool cardSent = false;
+            if (it.Native)   // Twitch's own shoutout card. Twitch limits (per channel, whoever sends): one shoutout per 2 minutes, the same streamer once per 60 minutes
             {
-                double wait = (double)s["NativeGapSec"] - (DateTime.UtcNow - _lastNative).TotalSeconds; if (wait > 0) Thread.Sleep((int)(Math.Min(wait, 130) * 1000));
-                string code = TwitchApi.Call(HttpMethod.Post, "/chats/shoutouts?from_broadcaster_id={bid}&to_broadcaster_id=" + uid + "&moderator_id=" + TwitchApi.BroadcasterId(), null, out d, out err);
-                _lastNative = DateTime.UtcNow; note = code == "204" ? "native shoutout sent" : "native shoutout refused (HTTP " + code + (err != "" ? ": " + err : "") + ")";
+                DateTime lastTarget; bool targetBlocked; lock (L) targetBlocked = NativeRecent.TryGetValue(login, out lastTarget) && (DateTime.UtcNow - lastTarget).TotalMinutes < (double)s["NativeSameTargetMinutes"];
+                if (targetBlocked) note = "native card skipped: " + login + " already got one in the last hour";
+                else
+                {
+                    double wait = (double)s["NativeGapSec"] - (DateTime.UtcNow - _lastNative).TotalSeconds; if (wait > 0) Thread.Sleep((int)(Math.Min(wait, 130) * 1000));
+                    int lo = Math.Max(0, (int?)s["NativeDelayMinSec"] ?? 1), hi = Math.Max(lo, (int?)s["NativeDelayMaxSec"] ?? 5);
+                    int jitter = Rng.Next(lo * 1000, hi * 1000 + 1); Thread.Sleep(jitter);
+                    JToken d; string err;
+                    string code = TwitchApi.Call(HttpMethod.Post, "/chats/shoutouts?from_broadcaster_id={bid}&to_broadcaster_id=" + uid + "&moderator_id=" + TwitchApi.BroadcasterId(), null, out d, out err);
+                    if (code == "429") { Thread.Sleep(30000); code = TwitchApi.Call(HttpMethod.Post, "/chats/shoutouts?from_broadcaster_id={bid}&to_broadcaster_id=" + uid + "&moderator_id=" + TwitchApi.BroadcasterId(), null, out d, out err); }
+                    _lastNative = DateTime.UtcNow; cardSent = code == "204";
+                    if (cardSent) lock (L) NativeRecent[login] = DateTime.UtcNow;
+                    note = cardSent ? "native shoutout sent after " + jitter + " ms" : "native shoutout refused (HTTP " + code + (err != "" ? ": " + err : "") + ")";
+                }
             }
             else
             {
                 double wait = 8 - (DateTime.UtcNow - _lastPlain).TotalSeconds; if (wait > 0) Thread.Sleep((int)(wait * 1000));
             }
             _lastPlain = DateTime.UtcNow;
-            SayCore(F((string)s["Line"], "user", name, "game", game, "channel", "https://twitch.tv/" + login, "subject", sub, "object", obj, "were", were));
+            // the temp line already told chat and the card does the shouting; the full line is only for when the temp line is switched off (or LineAfterNative)
+            bool tempSent = (bool?)s["TempLineOn"] != false;
+            if (!tempSent || (bool?)s["LineAfterNative"] == true)
+                SayCore(F((string)s["Line"], "user", name, "game", game, "channel", "https://twitch.tv/" + login, "subject", sub, "object", obj, "were", were));
             Latest.Record("shoutout", new Dictionary<string, string> { { "user", it.By }, { "shoutoutUser", name } });
             Clog.Info("shoutout", "shouted out " + name + " (" + game + ")" + (note != "" ? "; " + note : ""));
         }
