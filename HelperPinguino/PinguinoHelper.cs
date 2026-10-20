@@ -308,6 +308,11 @@ public class CPHInline
         public bool ForwardHandled { get; set; } = false;             // also hand handled messages on (needs the helperHandled hook in the chatbot)
         public string BotAccount { get; set; } = "pinguinob0t";
         public bool LiveOnly { get; set; } = true;
+        public bool RandomChime { get; set; } = true;                 // the helper (not Chatty) may drop a short helpful / fun tip into a quiet moment
+        public double ChimeChancePct { get; set; } = 3;               // chance per ordinary chat line that passes every gate
+        public int ChimeGlobalGapSec { get; set; } = 900;             // chat as a whole hears a chime at most this often
+        public int ChimeUserGapSec { get; set; } = 3600;              // ...and the same viewer at most this often
+        public int ChimeMinChars { get; set; } = 15;
         public int UserCooldownSec { get; set; } = 30;                // the same viewer gets the same kind of answer at most this often
         public int InfoCooldownSec { get; set; } = 8;                 // anti-flood between any two info answers
         public int McCooldownSec { get; set; } = 180;                 // the same viewer gets the Minecraft question / answer at most this often
@@ -585,10 +590,50 @@ public class CPHInline
                 AskAi(text, out intent, out epic);
 
             _revIntent = intent;
-            if (intent == "") return false;
+            if (intent == "") return TryChime(login, display, text);
             if (_cfg.ContextGate && !ContextOk(login, text, intent)) return false;   // passing mention / talk between viewers / already answered: stay out
             return Respond(login, display, intent, epic);
         }
+    }
+
+    // ---- random chime: a rate-limited, helpful / fun tip. Never for opted-out or !unping viewers, replies, @mentions, commands, bots, or while someone is muting the helper ----
+    static long _chimeGlobal; static readonly Dictionary<string, long> _chimeUser = new Dictionary<string, long>(); static int _chimeNext;
+    static Func<double> _pgTestRoll;
+    static readonly string[] ChimeTips = {
+        "Tip: !points shows your pengs, you earn them just by hanging out.",
+        "Fun one: ask !8ball a question and see what the penguin says.",
+        "Need a nudge? !remindme 10m stretch and I will ping you.",
+        "Did you know !watchtime tells you how long you have been here?",
+        "Tip: the website has the leaderboards and the full command list.",
+        "Fun one: !streak shows how many streams in a row you showed up." };
+    bool OptedOutOfBots(string login)
+    {
+        try
+        {
+            var m = ReadJson("chat_memory.json");
+            if (m != null) foreach (var p in m.Properties()) { var v = p.Value as JObject; if (v == null || string.IsNullOrEmpty((string)v["Privacy"])) continue; if (string.Equals((string)v["Login"], login, StringComparison.OrdinalIgnoreCase)) return true; }
+            var u = ReadJson("unping.json");
+            if (u != null) { var arr = u["logins"] as JArray; if (arr != null && arr.Any(x => string.Equals((string)x, login, StringComparison.OrdinalIgnoreCase))) return true; if (u[login] != null && u[login].Type == JTokenType.Boolean && (bool)u[login]) return true; }
+        }
+        catch (Exception) { }
+        return false;
+    }
+    bool TryChime(string login, string display, string text)
+    {
+        if (!_cfg.RandomChime || _cfg.ChimeChancePct <= 0) return false;
+        if (text.Length < _cfg.ChimeMinChars || text.StartsWith("!") || text.Contains("@") || text.IndexOf("http", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+        if (!string.IsNullOrEmpty(ArgS("reply.userName")) || !string.IsNullOrEmpty(ArgS("reply.userLogin"))) return false;
+        if (PgIsBotAccount(login) || IsOtherBot(login)) return false;
+        long now = Now();
+        long m; if (_mutedUntil.TryGetValue(login, out m) && m > now) return false;
+        if (now - _chimeGlobal < _cfg.ChimeGlobalGapSec) return false;
+        long last; if (_chimeUser.TryGetValue(login, out last) && now - last < _cfg.ChimeUserGapSec) return false;
+        double roll = _pgTestRoll != null ? _pgTestRoll() : _rnd.NextDouble() * 100;
+        if (roll >= _cfg.ChimeChancePct) return false;
+        if (OptedOutOfBots(login)) return false;
+        _chimeGlobal = now; _chimeUser[login] = now;
+        string tip = ChimeTips[_chimeNext++ % ChimeTips.Length];
+        _revIntent = "chime"; Say("@" + display + " " + tip); return true;
     }
 
     // ---- context gate: the helper only steps in when the viewer is really asking or needing help ----

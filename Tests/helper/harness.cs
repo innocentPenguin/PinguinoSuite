@@ -53,6 +53,7 @@ public static class Harness
         typeof(CPHInline).GetField("_testLlm", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null,
             (Func<string, string, string>)((s, u) => { aiCalls++; return aiReply; }));
 
+        typeof(CPHInline).GetField("_pgTestRoll", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, (Func<double>)(() => 100.0));   // chimes off unless a test turns them on
         // 1. lobby questions: answered from the config, chatbot kept out
         foreach (var q in new[] { "whats the code", "what's the code?", "name and pass?", "lobby password?", "gimme the pass", "what is the private match name", "whats the lobby name", "pass?", "can someone give me the password" })
         {
@@ -335,6 +336,28 @@ public static class Harness
             Check("a statement is left alone", Last() == null, Last());
             Msg("Tch3", "what is the best pizza topping?");
             Check("an unrelated question gets no taught answer", Last() == null, Last());
+        }
+
+        // ── random chime (Helper only): rate limited, gated ──
+        {
+            var roll = T.GetField("_pgTestRoll", bf); var cg = T.GetField("_chimeGlobal", bf);
+            roll.SetValue(null, (Func<double>)(() => 0.0)); cg.SetValue(null, 0L);
+            Msg("Chm1", "this stream is really chill today honestly");
+            Check("a chime lands on an ordinary line when the roll hits", Last() != null && Last().StartsWith("@Chm1 ") && Last().Length < 140, Last());
+            Msg("Chm2", "another perfectly ordinary chat line here");
+            Check("global gap: no second chime right away", Last() == null, Last());
+            cg.SetValue(null, 0L); Msg("Chm1", "still a chill stream here with everyone");
+            Check("per-viewer gap: same viewer is not chimed twice", Last() == null, Last());
+            cg.SetValue(null, 0L); Msg("Chm3", "@Someone that was a funny moment honestly");
+            Check("no chime on a line meant for someone else", Last() == null, Last());
+            Msg("Chm3", "!points");
+            cg.SetValue(null, 0L); Msg("Chm4", "short");
+            Check("no chime on a very short line", Last() == null, Last());
+            File.WriteAllText(Path.Combine(dir, "unping.json"), "{\"logins\":[\"chm5\"]}");
+            cg.SetValue(null, 0L); Msg("Chm5", "this stream is really chill today honestly");
+            Check("an !unping viewer is never chimed", Last() == null, Last());
+            File.Delete(Path.Combine(dir, "unping.json"));
+            roll.SetValue(null, (Func<double>)(() => 100.0));
         }
 
         // ── private help-review log ──
