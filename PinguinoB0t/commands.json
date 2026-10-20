@@ -816,6 +816,18 @@
         "!opinion cyfirl",
         "!opinion refresh all"
       ]
+    },
+    {
+      "command": "!8ball",
+      "aliases": [],
+      "action": "PinguinoChat",
+      "category": "Chat bot",
+      "who": "everyone",
+      "usage": "!8ball <question>",
+      "description": "Ask the magic 8-ball. The bot answers in its own voice and may nod to public things like your sub, watch streak or what chat was just saying. Limited to once every 45 seconds per person.",
+      "examples": [
+        "!8ball will I win my next game?"
+      ]
     }
   ]
 }

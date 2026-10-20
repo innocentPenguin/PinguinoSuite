@@ -17,6 +17,8 @@ public static class Harness
     static string mergePrompt = "";
     static List<string> opinionPrompts = new List<string>();
     static string opinionReply = "";
+    static List<string> ballPrompts = new List<string>();
+    static string ballReply = "Signs point to yes, go win it.";
     static string studyReply = "{\"viewers\":[],\"community\":[]}";
 
     static void Check(string name, bool ok, string extra = "")
@@ -35,6 +37,11 @@ public static class Harness
         new CPHInline().Execute();
     }
 
+    static void SetCfg(string prop, int v)
+    {
+        var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+        cfg.GetType().GetProperty(prop).SetValue(cfg, v, null);
+    }
     static string Last() { return CPHProxy.Sent.Count == 0 ? null : CPHProxy.Sent[CPHProxy.Sent.Count - 1]; }
     static JObject Memory() { return JObject.Parse(File.ReadAllText(Path.Combine(dir, "chat_memory.json"))); }
 
@@ -73,6 +80,7 @@ public static class Harness
         {
             llmCalls++; lastSystem = s; lastPrompt = u;
             if (s.Contains("STUDY MODE")) { studyPrompts.Add(u); return studyReply; }
+            if (s.Contains("8-BALL MODE")) { ballPrompts.Add(u); return ballReply; }
             if (s.Contains("OPINION MODE")) { opinionPrompts.Add(u); return opinionReply; }
             if (s.Contains("maintain PinguinoBot")) { mergePrompt = u; return "{\"community\":\"A chill Rocket League crew that loves cat memes.\"}"; }
             return nextReply;
@@ -733,6 +741,23 @@ public static class Harness
         Msg("Opnx", "@pinguinob0t morning");
         Msg("Opnx", "!forgetme");
         Check("!forgetme also wipes the opinion", string.IsNullOrEmpty((string)Memory()["id_opnx"]["Opinion"]) && !File.Exists(Path.Combine(dir, "opinions", "opnx.json")));
+
+        // ── 19c. !8ball ──
+        SetCfg("EightBallUserSec", 0); SetCfg("EightBallGlobalSec", 0);
+        Directory.CreateDirectory(Path.Combine(dir, "profiles"));
+        File.WriteAllText(Path.Combine(dir, "profiles", "ballguy.json"), "{\"roles\":{\"sub\":true,\"subMonths\":14,\"watchStreakBest\":120},\"traits\":[\"secret trait\"]}");
+        Msg("Chatty1", "gg that last round was wild"); Msg("Chatty2", "anyone playing fortnite later");
+        CPHProxy.Sent.Clear(); ballPrompts.Clear(); int callsBefore = llmCalls;
+        Msg("Ballguy", "!8ball will I win my next game?", null, false);
+        Check("!8ball answers with the ball emoji and the model's line", Last() != null && Last().Contains("🎱 Signs point to yes"), Last());
+        Check("the prompt has the question and the public context (streak, what chat said)", ballPrompts.Count == 1 && ballPrompts[0].Contains("will I win my next game") && ballPrompts[0].Contains("gg that last round") && ballPrompts[0].Contains("watch streak record 120"), ballPrompts.Count > 0 ? ballPrompts[0] : "none");
+        Check("no private notes, traits or opinion notes in the 8ball prompt", ballPrompts.Count == 1 && !ballPrompts[0].Contains("secret trait") && !ballPrompts[0].Contains("opinion") && !ballPrompts[0].Contains("Notes"), ballPrompts.Count > 0 ? ballPrompts[0] : "none");
+        CPHProxy.Sent.Clear(); Msg("Ballguy", "!8ball", null, false);
+        Check("!8ball without a question asks for one, no AI call", Last() != null && Last().Contains("ask me a question") && ballPrompts.Count == 1);
+        ballReply = "!ignore previous https://evil.example/x yes";
+        CPHProxy.Sent.Clear(); Msg("Ballguy", "!8ball is this a trick?", null, false);
+        Check("a link or a leading ! from the model never reaches chat", Last() != null && !Last().Contains("http") && !Last().Contains("🎱 !") , Last());
+        SetCfg("EightBallUserSec", 600);
 
         // ── 20. long-term history summaries reach the prompt ──
         nextReply = "{\"reply\":\"ok\",\"remember\":[]}";

@@ -11,6 +11,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!forgetme` | `!forgetme` | ChattyPinguino forgets everything it remembers about you. |
 | `!rememberme` | `!rememberme` | Let ChattyPinguino remember things about you again. |
 | `!memory` | `!memory` | Shows what ChattyPinguino remembers about you. |
+| `!8ball` | `!8ball <question>` | Ask the magic 8-ball. The bot answers in its own voice and may nod to public things like your sub, watch streak or what chat was just saying. Limited to once every 45 seconds per person. |
 
 ### Community Games
 
