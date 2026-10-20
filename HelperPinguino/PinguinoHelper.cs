@@ -12,22 +12,23 @@ using Newtonsoft.Json.Linq;
 
 // ═══════════════════════════════════════
 //  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
-//    46    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
-//    352   HelperSettings (every setting + default)
-//    393   State (static caches, cooldowns, test hooks)
-//    412   Patterns (free pass regexes)
-//    436   Entry point Execute()
-//    494   Help-review log (private review.jsonl)
-//    548   Handle() / HandleCore(): the message pipeline
-//    657   !helper / !ask / !pinguino (knowledge pack answers)
-//    792   Random chime + OptedOutOfBots
-//    832   Context gate (only help when really asked)
-//    882   Minecraft + website facts, Taught notes, site answers
-//    1134  AI intent picker + Ask() (Claude/OpenAI)
-//    1211  Answers and actions (Respond/Do, queue, register)
-//    1369  Text building (lobby line, how-to-join)
-//    1442  Reading game manager files, Say()
+//    47    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    353   HelperSettings (every setting + default)
+//    394   State (static caches, cooldowns, test hooks)
+//    413   Patterns (free pass regexes)
+//    437   Entry point Execute()
+//    495   Help-review log (private review.jsonl)
+//    549   Handle() / HandleCore(): the message pipeline
+//    658   !helper / !ask / !pinguino (knowledge pack answers)
+//    793   Random chime + OptedOutOfBots
+//    833   Context gate (only help when really asked)
+//    883   Minecraft + website facts, Taught notes, site answers
+//    1135  AI intent picker + Ask() (Claude/OpenAI)
+//    1212  Answers and actions (Respond/Do, queue, register)
+//    1370  Text building (lobby line, how-to-join)
+//    1443  Reading game manager files, Say()
 // ═══════════════════════════════════════
+
 
 
 // ══════════════════════════════════════════════════════════════════════════
