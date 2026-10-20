@@ -221,6 +221,7 @@ namespace PinguinoHost
                     Act("sb-suggest", "Reward: Suggestion Box", "from the 'Suggestion' reward: saves each suggestion to Data\\runtime\\files\\suggestions.txt.", false, new JArray { Tr("redeem", "title", "Suggestion") },
                         Step("inc_var", "name", "suggestions", "by", 1, "persist", true), Step("append_file", "file", "suggestions.txt", "text", "{count} {user} - {input}"), SayStep("Thanks {user}, suggestion saved!")),
                 };
+                foreach (var a in list) if ((string)a["id"] == "sb-ban") a["conditions"] = new JArray { new JObject { { "left", "{permanent}" }, { "op", "==" }, { "right", "true" } } };   // timeouts (permanent=false) must not play the eject sound
                 var dup = new HashSet<string> { "sb-follow", "sb-sub", "sb-resub", "sb-gift", "sb-cheer", "sb-raid", "sb-ban", "sb-clip", "sb-preroll", "sb-whyad" };   // Streamer.bot answers these too: wait for the cutover switch
                 foreach (var a in list) if (dup.Contains((string)a["id"])) Cut(a);
                 foreach (var a in list) if (!acts.OfType<JObject>().Any(o => (string)o["id"] == (string)a["id"])) acts.Add(a);
