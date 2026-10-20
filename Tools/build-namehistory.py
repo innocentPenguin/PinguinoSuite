@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Build the chatter NAME HISTORY database (offline, rerunnable, read-only on its inputs).
+"""INDEX: main() builds names.json | steps: read logs, union-find CERTAIN, similar_pairs (LIKELY/POSSIBLE), chat statements, banned filter, write | doc Docs/NAMEHISTORY.md
+
+Build the chatter NAME HISTORY database (offline, rerunnable, read-only on its inputs).
 
     python Tools\\build-namehistory.py                 # writes Data\\namehistory\\names.json
     python Tools\\build-namehistory.py --root X --out Y  # use another suite root / output dir (tests)
@@ -112,12 +114,16 @@ def read_ids(root, ids):
             print('multi.db skipped:', e, file=sys.stderr)
 
 
+HELIX_CURRENT = set()   # logins Helix reports as the id's current login
+
+
 def read_helix(path, ids):
     """Saved Helix /users answers: {"data":[{"id","login"}...]} or a list of those; merged by id."""
     d = jload(path, None)
     rows = d.get('data', []) if isinstance(d, dict) else (d or [])
     for r in rows:
-        if r.get('id') and r.get('login'): ids[str(r['id'])].setdefault(r['login'].lower(), 'Helix /users')
+        if r.get('id') and r.get('login'):
+            ids[str(r['id'])].setdefault(r['login'].lower(), 'Helix /users'); HELIX_CURRENT.add(r['login'].lower())
 
 
 class UF:
@@ -175,10 +181,11 @@ def main(argv=None):
     root = os.path.abspath(a.root); out = a.out or os.path.join(root, 'Data', 'namehistory')
     os.makedirs(out, exist_ok=True)
 
-    seen = Seen(); ids = collections.defaultdict(dict)
+    HELIX_CURRENT.clear(); seen = Seen(); ids = collections.defaultdict(dict)
     statements = read_logs(root, seen)
     read_live(root, seen, ids); read_ids(root, ids)
-    if a.helix_ids: read_helix(a.helix_ids, ids)
+    hx = a.helix_ids or os.path.join(out, 'helix_ids.json')   # default: use the saved Helix answer if it exists
+    if os.path.exists(hx): read_helix(hx, ids)
     hidden = set((jload(os.path.join(root, 'Data', 'chat_logs', 'hidden_sources.json'), {}) or {}).get('users', {}))
 
     uf = UF(); why = {}          # why[(login)] = (tier, source) for how it joined its group
@@ -209,7 +216,8 @@ def main(argv=None):
         active = [n for n in names if n in seen.last]
         # canonical: the alias target if given, else the most recently seen login
         mains = {alias_main[n] for n in names if n in alias_main}
-        canon = next(iter(mains)) if len(mains) == 1 else (max(active, key=lambda n: seen.last[n]) if active else ordered[-1])
+        cur = [n for n in names if n in HELIX_CURRENT]
+        canon = next(iter(mains)) if len(mains) == 1 else (cur[0] if len(cur) == 1 else (max(active, key=lambda n: seen.last[n]) if active else ordered[-1]))
         tid = next((id_of[n] for n in names if n in id_of), None)
         entries = []
         for n in ordered:
@@ -246,7 +254,7 @@ def main(argv=None):
     pairs = sorted(best.values(), key=lambda p: (-TIERS[p['tier']], p['from']))
     # banned / impersonator accounts: never the same person as anyone, never a pair candidate
     banned = {}
-    try: banned = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Data', 'boards', 'banned_accounts.json'), encoding='utf-8-sig')).get('accounts', {})
+    try: banned = json.load(open(os.path.join(root, 'Data', 'boards', 'banned_accounts.json'), encoding='utf-8-sig')).get('accounts', {})
     except Exception: pass
     pairs = [p for p in pairs if p['from'] not in banned and p['to'] not in banned]
     for c in chatters:

@@ -33,6 +33,26 @@ namespace PinguinoHost
             }
             catch (Exception ex) { error = ex.Message; return "0"; }
         }
+        /// <summary>like Call, but hands back the whole Helix body (pagination cursor included).</summary>
+        public static string CallFull(HttpMethod method, string pathAndQuery, out JObject json, out string error)
+        {
+            json = null; error = ""; var s = HostApi.StreamerCreds();
+            string tok = (string)s["UserToken"] ?? "", cid = (string)s["ClientId"] ?? "", bid = (string)s["BroadcasterId"] ?? "";
+            if (tok == "" || cid == "" || bid == "") { error = "the streamer account is not signed in (Host page > Sign in as streamer)"; return "0"; }
+            try
+            {
+                using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+                {
+                    var rq = new HttpRequestMessage(method, HostApi.Helix + pathAndQuery.Replace("{bid}", bid));
+                    rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("Client-Id", cid);
+                    var r = h.SendAsync(rq).Result; string txt = r.Content.ReadAsStringAsync().Result;
+                    try { json = JObject.Parse(txt); } catch (Exception) { }
+                    if (!r.IsSuccessStatusCode) error = (json != null ? (string)json["message"] : null) ?? txt;
+                    return ((int)r.StatusCode).ToString();
+                }
+            }
+            catch (Exception ex) { error = ex.Message; return "0"; }
+        }
         public static string BroadcasterId() { return (string)HostApi.StreamerCreds()["BroadcasterId"] ?? ""; }
 
         public static string Fmt(long sec) { if (sec < 0) sec = 0; return sec >= 60 ? (sec / 60) + ":" + (sec % 60).ToString("D2") : sec + " seconds"; }
