@@ -39,7 +39,7 @@ namespace PinguinoHost
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(HiddenP));
                     var d = new JObject { { "note", "Logins the public chat-log sites will not serve (they opted out). Their messages are counted from Data\\chat_logs\\live from 'since' on. Day files are never edited." },
-                        { "users", new JObject { { "lvlmarshmello", new JObject { { "since", "2026-07-17" }, { "note", "opted out of the public log sites; last site-logged line 2026-07-17 21:28:28 UTC" }, { "offset", 0 } } } } } };
+                        { "users", new JObject() } };
                     File.WriteAllText(HiddenP, d.ToString(), new UTF8Encoding(false)); return d;
                 }
                 return JObject.Parse(File.ReadAllText(HiddenP, Encoding.UTF8).TrimStart('﻿'));

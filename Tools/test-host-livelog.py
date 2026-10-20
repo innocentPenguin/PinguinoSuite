@@ -9,6 +9,8 @@ json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.joi
 os.makedirs(os.path.join(root, 'profiles')); os.makedirs(os.path.join(d, 'chat_logs'))
 json.dump({'login': 'lvlmarshmello', 'name': 'LvLMarshmello', 'activity': {'messages': 100, 'perMonth': {'2026-07': 100}}}, open(os.path.join(root, 'profiles', 'lvlmarshmello.json'), 'w'))
 json.dump({'login': 'normalguy', 'name': 'NormalGuy', 'activity': {'messages': 50, 'perMonth': {'2026-07': 50}}}, open(os.path.join(root, 'profiles', 'normalguy.json'), 'w'))
+os.makedirs(os.path.join(root, 'chat_logs'))   # fixture only: the real file no longer lists anyone, the mechanism stays covered here
+json.dump({'users': {'lvlmarshmello': {'since': '2026-07-17', 'note': 'test fixture', 'offset': 0}}}, open(os.path.join(root, 'chat_logs', 'hidden_sources.json'), 'w'))
 # Chatty's own recording: two lines of the hidden user (one before 'since', one after) and one of a normal user
 now = int(time.time() * 1000)
 with open(os.path.join(d, 'chat_logs', '2026-10-18.jsonl'), 'w', encoding='utf-8') as f:

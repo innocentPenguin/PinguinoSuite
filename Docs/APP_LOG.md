@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:05 - Host restart (refollow, Helper chime, !rank, Marsh opt-in)
+
+- Restarted Host via Update-Module: 6c9999f follow items carry refollow; 01be950 Helper random chime (rate limited, honours !unping); 8cda53f !rank/!setrank (rank.json) + rocketrankbot in bot lists; Marsh opt-in (hidden_sources emptied, default seed removed, trusted). /api/live 200. Marsh and checklist edits committed by 00 on Ivan's direct instruction.
+
 ## 2026-10-20 08:02 - Listen restart (VODs memory fix)
 
 - Restarted Listen via Update-Module: 1c3b4ea decodes/transcribes VODs in 15-minute slices (was loading the whole VOD into RAM and dying), stranded jobs marked interrupted and re-queueable. Cause not reproduced live; Listen autolearn is ON (can transcribe on GPU during streams).
