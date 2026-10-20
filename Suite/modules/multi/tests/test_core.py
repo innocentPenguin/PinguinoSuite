@@ -1098,3 +1098,10 @@ def test_follow_widget_and_refollow_flag():
     assert obs.hidden("follow", st2, {"user": "x", "platform": "twitch", "event": "follow", "flags": ["refollow"]})
     assert host_feed.to_message({"seq": 1, "type": "follow", "user": "A", "refollow": True}, "c").flags == ["refollow"]
     assert host_feed.to_message({"seq": 2, "type": "follow", "user": "A"}, "c").flags == []
+
+
+def test_dash_layout_keeps_text_size_and_split():
+    import server
+    lay = server._dash_layout({"panels": ["chat"], "fs": {"chat": 99}, "split": {"on": True, "dir": "col", "kind": "flow", "a": "nope"}})
+    assert lay["fs"]["chat"] == 40 and lay["fs"]["activity"] == 14
+    assert lay["split"] == {"on": True, "dir": "col", "a": "all", "b": "all", "kind": "flow"}

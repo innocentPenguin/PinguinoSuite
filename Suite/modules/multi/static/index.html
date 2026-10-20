@@ -155,7 +155,8 @@ function connect() {
   ws.onclose = () => setTimeout(connect, 2000);
 }
 function on(ev) {
-  if (ev.type === 'hello') { conns = ev.connectors; cards = ev.cards; render(); }
+  if (ev.type === 'hello') { conns = ev.connectors; cards = ev.cards; render(); if (window.dashViewers) window.dashViewers(ev.viewers); }
+  else if (ev.type === 'viewers') { if (window.dashViewers) window.dashViewers(ev.counts); }
   else if (ev.type === 'conn.status') { conns = conns.filter(c => c.platform !== ev.platform).concat(ev); renderHeader(); if (window.dashConn) window.dashConn(); if (W.type === 'status') renderStatus(); if (W.type === 'chat') { chatBar(); chatCompose(); } }
   else if (ev.type === 'message') {
     msgs.push(ev.message); if (msgs.length > 500) msgs.shift(); addMsg(ev.message);

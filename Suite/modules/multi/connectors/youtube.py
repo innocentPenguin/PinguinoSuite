@@ -51,6 +51,7 @@ class YouTube(Connector):
         items = r.json().get("items", [])
         if not items:
             return None, None
+        self.video_id = items[0].get("id")
         sn = items[0]["snippet"]
         return sn.get("liveChatId"), sn.get("channelId")
 

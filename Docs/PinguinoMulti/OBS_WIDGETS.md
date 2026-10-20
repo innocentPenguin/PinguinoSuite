@@ -49,3 +49,9 @@ One alert at a time (queued), Synchra-style options: size, canvas scale, font, c
 - Refollow (`flags: ["refollow"]`, from the Host follow item field `refollow: true`; missing = false): smaller alert, tagged "refollow", NO sound; can be turned off entirely.
 - /obs/activity and the dashboard feed show a small "refollow" chip on those rows.
 - The widget only reacts to live follows (no replay on reload). Test buttons in the editor preview: new follow, refollow, sound.
+
+## Dashboard: viewer counts, text size, resizing, split halves
+- **Live viewers**: `viewers.py` polls every 30 s (Twitch Helix streams, YouTube concurrentViewers, TikTok room count) and pushes `{"type":"viewers","counts":{...}}` on the WebSocket (also in `hello`, and `GET /api/viewers`). The dashboard shows `👁 N` on each source tab and a total in the top bar; blank when a platform is offline or gives no number. Needs a live stream; Kick/Discord have none.
+- **Text size**: `A−` / `A+` in each panel header (10-40 px), saved with the profile.
+- **Resize**: unlock (padlock) and drag the bar between the two panels; saved with the profile. Edit layout swaps/removes panels; each panel pops out to its own window.
+- **Split chat in halves** (⫻ button in the Chat header): flow (older rows continue in the first half, newest in the second; side by side or top/bottom), one platform per half, or chat vs events. "Open the two halves as separate windows" reuses the pane split (/api/splits/apply) for two monitors. Saved with the profile.

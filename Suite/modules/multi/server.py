@@ -27,6 +27,7 @@ import console_log
 import help_text
 import listen_bridge
 import host_feed
+import viewers as viewers_mod
 import prestream
 import voice
 import secrets_store
@@ -104,7 +105,7 @@ async def lifespan(app):
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
              asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()),
              asyncio.create_task(listen_bridge.run(cards, hub.emit)),
-             asyncio.create_task(host_feed.run(inbox, lambda: connectors['twitch'].describe()['status'] == 'connected')), asyncio.create_task(prestream_file_loop())]
+             asyncio.create_task(host_feed.run(inbox, lambda: connectors['twitch'].describe()['status'] == 'connected')), asyncio.create_task(prestream_file_loop()), asyncio.create_task(viewers_mod.run(connectors, hub.emit))]
     yield
     console_log.info("server", "Multi stopping")
     tw.stop = dc.stop = yt.stop = tt.stop = True
@@ -268,7 +269,12 @@ def _dash_layout(o):
     widths = [min(90, max(10, int(w))) for w in (o.get("widths") or [])][:len(panels)]
     widths += [50] * (len(panels) - len(widths))
     src = o.get("src") if o.get("src") in ("all", *obs_mod.PROVIDERS) else "all"
-    return {"panels": panels, "widths": widths, "src": src}
+    fs = {k: min(40, max(10, int((o.get("fs") or {}).get(k) or 14))) for k in ("activity", "chat")}
+    sp = o.get("split") if isinstance(o.get("split"), dict) else {}
+    split = {"on": bool(sp.get("on")), "dir": "col" if sp.get("dir") == "col" else "row",
+             "a": sp.get("a") if sp.get("a") in ("all", *obs_mod.PROVIDERS) else "all", "b": sp.get("b") if sp.get("b") in ("all", *obs_mod.PROVIDERS) else "all",
+             "kind": sp.get("kind") if sp.get("kind") in ("source", "flow", "events") else "source"}
+    return {"panels": panels, "widths": widths, "src": src, "fs": fs, "split": split}
 
 
 def _dash_state():
@@ -315,6 +321,11 @@ async def dash_active(request: Request):
     d["active"] = b.get("name")
     store.kv_set("dash", d)
     return _dash_state()
+
+
+@app.get("/api/viewers")
+def viewers_get():
+    return {"counts": viewers_mod.counts}
 
 
 @app.get("/api/status")
@@ -1213,7 +1224,7 @@ async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     hub.clients.add(ws)
     try:
-        await ws.send_json({"type": "hello", "connectors": [c.describe() for c in connectors.values()],
+        await ws.send_json({"type": "hello", "connectors": [c.describe() for c in connectors.values()], "viewers": viewers_mod.counts,
                             "cards": cards.view(), "ts": time.time()})
         while True:
             await ws.receive_text()

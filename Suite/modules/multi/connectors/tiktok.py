@@ -52,6 +52,16 @@ class TikTok(Connector):
                     self.state["last_message"] = time.time()
                     self.inbox.put(normalize_comment(ev, user))
                 client.add_listener(CommentEvent, on_comment)
+                try:                                   # room viewer count (field names differ between library versions)
+                    from TikTokLive.events import RoomUserSeqEvent
+
+                    async def on_room(ev):
+                        n = getattr(ev, "total", None) or getattr(ev, "m_total", None) or getattr(ev, "viewer_count", None)
+                        if n is not None:
+                            self.state["viewers"] = int(n)
+                    client.add_listener(RoomUserSeqEvent, on_room)
+                except Exception:
+                    pass
                 self.set_status("connecting")
                 await client.start()
             except Exception as e:
