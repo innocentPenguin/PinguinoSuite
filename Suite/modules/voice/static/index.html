@@ -52,7 +52,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:5px 8px;border-bottom:1p
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let SND=[],CNT=null,DEVS=[],C=null,META=null,ST=null,dirty=false,tab=localStorage.getItem('pv-tab')||'overview',sel=null,LOG=[],PRE=null,vcache=[];
-const TABS=[['overview','Overview'],['personas','Personas'],['events','Events'],['schedule','Schedule'],['who','Who & where'],['limits','Limits & queue'],['words','Words'],['presets','Presets'],['log','Log']];
+const TABS=[['overview','Overview'],['personas','Personas'],['events','Events'],['schedule','Schedule'],['who','Who & where'],['limits','Limits & queue'],['words','Words'],['review','Review & control'],['presets','Presets'],['log','Log']];
 const api=async(p,b)=>{const r=await fetch(p,b===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
   if((r.headers.get('content-type')||'').includes('audio'))return {blob:await r.blob(),said:decodeURIComponent(r.headers.get('X-Said')||'')};
   const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j};
@@ -161,6 +161,43 @@ function logTable(rows){return rows.length?`<table><tr><th>When</th><th>Event</t
  <td><span class="pill ${['spoken','queued','merged'].includes(r.outcome)?'on':['error'].includes(r.outcome)?'bad':'warn'}">${esc(r.outcome)}</span> <span class="faint">${esc(r.detail||'')}</span></td><td>${esc(r.text||'')}</td></tr>`).join('')}</table>`:'<div class="dim">Nothing yet. Every attempt shows up here, spoken or not, and in the Console under source “voice”.</div>'}
 V.log=()=>`<div class="card"><div class="row"><h3 style="margin:0">History</h3><span class="sp"></span><button id="logref">Refresh</button></div><div style="margin-top:8px">${logTable(LOG)}</div></div>`;
 
+
+// ---------------------------------------------------------------- review & spoken control
+let RV=null,CT=null,RPT=null;
+V.review=()=>{const c=C.control,r=C.review;return `<div class="grid">
+ <div class="card"><div class="row"><h3 style="margin:0">Spoken control</h3><span class="sp"></span>${sw('ctlOn',CT&&CT.enabled,false)}</div>${H('control.enabled')}
+  <div class="faint">Say: “${esc(c.wake_words[0])}, change the game to …”, “… change the title to …”, “… timeout <i>name</i> for 5 minutes”, then “${esc(c.wake_words[0])}, confirm” (or press Confirm).</div>
+  <div id="ctlPending" style="margin-top:8px"></div>
+  ${fld('Try a sentence (nothing is done)','',`<div class="row"><input class="grow" type="text" id="ctlTry" placeholder="pinguinobot change the game to Rocket League"><button id="ctlTryGo">Try</button></div><div id="ctlTryOut" class="faint" style="margin-top:4px"></div>`)}
+  ${chk('control.require_confirm','Ask me to confirm first','control.require_confirm')}${chk('control.readback','Say the readback and result out loud','control.readback')}${chk('control.title_case','Capitalise game and title words','control.title_case')}
+  <div class="row" style="margin-top:6px">${chk('control.allow.game','Game','control.allow')}${chk('control.allow.title','Title','control.allow')}${chk('control.allow.timeout','Timeout','control.allow')}</div>
+  ${num('control.max_timeout_s','Longest timeout (seconds)','control.max_timeout_s',1,86400)}${num('control.expire_s','Seconds to confirm','control.expire_s',5,120)}${num('control.cooldown_s','Seconds between same actions','control.cooldown_s',0,600)}
+  ${rng('control.max_unsure','Ignore lines Listen is unsure about above','control.max_unsure',0,1)}${lst('control.wake_words','Wake words (one per line)','control.wake_words',3)}${lst('control.protected','Never time out (one per line)','control.protected',2)}
+  <div class="h" style="margin-top:8px"><b>Recent</b></div><div id="ctlLog" class="faint"></div></div>
+ <div class="card"><div class="row"><h3 style="margin:0">Hourly review</h3><span class="sp"></span><button class="pri sm" id="rvRun">Review the last hour now</button></div>${H('review.enabled')}
+  <div id="rvState" class="faint"></div>${chk('review.enabled','Review automatically','review.enabled')}${chk('review.only_when_live','Only while live','review.only_when_live')}${chk('review.final_review','Review when the stream ends','review.final_review')}
+  ${num('review.interval_min','Minutes between reviews','review.interval_min',5,720)}
+  <div class="row">${chk('review.use_transcript','Your transcript','review.use_transcript')}${chk('review.use_chat','Chat log','review.use_chat')}${chk('review.use_console','Console logs','review.use_console')}</div>
+  ${num('review.talk_over_max','Flag talk-overs from','review.talk_over_max',1,100)}${num('review.repeat_max','Flag repeats from','review.repeat_max',2,100)}${num('review.complaint_window_s','Complaint window (s)','review.complaint_window_s',5,300)}
+  ${lst('review.complaint_phrases','Words that mean it annoyed you','review.complaint_phrases',5)}${lst('review.praise_phrases','Words that mean it went well','review.praise_phrases',3)}
+  <div class="h" style="margin-top:8px"><b>Checks</b></div><div class="row">${Object.keys(r.checks).map(k=>chk('review.checks.'+k,k.replace(/_/g,' '),'review.checks')).join('')}</div></div>
+ <div class="card" style="grid-column:1/-1"><h3>Reports</h3><div id="rvList" class="faint">Loading…</div><div id="rvBody" style="margin-top:10px"></div></div></div>`};
+async function loadReview(){try{RV=await api('/api/review/reports');CT=await api('/api/control')}catch(e){return}
+  const l=$('#rvList');if(!l)return;
+  $('#rvState').textContent=(RV.live?'Live now. ':'Not live. ')+(RV.last.ts?'Last review '+new Date(RV.last.ts*1000).toLocaleTimeString()+'. ':'No review yet this run. ')+(RV.last.err?'Last error: '+RV.last.err:'');
+  l.innerHTML=RV.reports.length?`<table><tr><th>When</th><th>Covers</th><th>Score</th><th>Findings</th><th></th></tr>${RV.reports.map(r=>`<tr><td>${new Date(r.ts*1000).toLocaleString()}</td><td>${r.minutes} min</td><td><span class="pill ${r.score>=80?'on':r.score>=50?'warn':'bad'}">${r.score}</span></td><td>${r.findings}${r.high?` <span class="pill bad">${r.high} serious</span>`:''}</td><td><button class="sm" data-rpt="${r.id}">Open</button></td></tr>`).join('')}</table>`:'No reports yet. They appear every hour of stream, or press “Review the last hour now”.';
+  $$('[data-rpt]').forEach(b=>b.onclick=()=>showReport(b.dataset.rpt));
+  if(RPT)showReport(RPT);
+  const p=CT.pending;$('#ctlPending').innerHTML=p?`<div class="card on"><b>Waiting: ${esc(p.summary)}</b> <span class="faint">(${p.left_s}s left)</span><div class="row" style="margin-top:6px"><button class="pri sm" id="ctlYes">Confirm</button><button class="sm" id="ctlNo">Cancel</button></div></div>`:'';
+  const y=$('#ctlYes');if(y)y.onclick=async()=>{const r=await api('/api/control/confirm',{});toast(r.result.outcome+': '+(r.result.detail||''),5000);loadReview()};
+  const n=$('#ctlNo');if(n)n.onclick=async()=>{await api('/api/control/cancel',{});loadReview()};
+  $('#ctlLog').innerHTML=CT.recent.length?CT.recent.slice(0,8).map(r=>`${new Date(r.ts*1000).toLocaleTimeString()} <span class="pill ${r.outcome==='done'?'on':['failed','unsupported'].includes(r.outcome)?'bad':'off'}">${esc(r.outcome)}</span> ${esc(r.detail||'')}`).join('<br>'):'Nothing yet. '+(CT.source.err?'Listen: '+esc(CT.source.err):'');}
+async function showReport(id){RPT=id;try{const r=(await api('/api/review/report?id='+id)).report;const col={high:'bad',warn:'warn',info:'off'};
+  $('#rvBody').innerHTML=`<div class="row"><b>${new Date(r.ts*1000).toLocaleString()}</b><span class="pill ${r.score>=80?'on':r.score>=50?'warn':'bad'}">score ${r.score}</span><span class="faint">${r.minutes} min · ${r.stats.spoken} spoken · ${r.stats.your_lines} of your lines · ${r.stats.chat_messages} chat messages · ${r.stats.console_problems} log problems</span></div>
+  ${r.missing.length?`<div class="faint">Could not read: ${esc(r.missing.join('; '))}</div>`:''}
+  ${r.findings.length?r.findings.map((f,i)=>`<div class="card" style="margin-top:8px"><span class="pill ${col[f.sev]}">${f.sev}</span> <b>${esc(f.title)}</b><div class="faint">${esc(f.detail)}</div>${f.evidence.length?'<ul class="faint">'+f.evidence.map(e=>`<li>${esc(e)}</li>`).join('')+'</ul>':''}${f.suggest?`<button class="sm pri" data-ap="${i}">${esc(f.suggest.label)}</button>`:''}</div>`).join(''):'<div class="card" style="margin-top:8px">Nothing to flag. 🎉</div>'}`;
+  $$('[data-ap]').forEach(b=>b.onclick=async()=>{const f=r.findings[+b.dataset.ap];try{C=(await api('/api/review/apply',{set:f.suggest.set})).config;toast('Applied ✔ (you can change it back on Limits / Output)');draw()}catch(e){toast(e.message)}})}catch(e){$('#rvBody').textContent=e.message}}
+
 // ---------------------------------------------------------------- draw & wiring
 function draw(){$('#tabs').innerHTML=TABS.map(([k,l])=>`<button data-tab="${k}" class="${k===tab?'on':''}">${l}</button>`).join('');
   $('#main').innerHTML=V[tab]();bind($('#main'));wire();theme();hdr()}
@@ -196,6 +233,11 @@ function wire(){
   $$('[data-delt]').forEach(b=>b.onclick=()=>{C.timers.splice(+b.dataset.delt,1);mark();draw()});
   g('#rehearse',async()=>{for(const k of ['follow','sub','gift','cheer','raid']){await api('/api/test-event',{kind:k})}toast('Rehearsal queued: follow, sub, gift, cheer, raid',4000);setTimeout(loadLog,800)});
   const nk=$('#nick');if(nk)nk.oninput=()=>{C.nicknames={};nk.value.split('\n').forEach(l=>{const i=l.indexOf('=');if(i>0){const k=l.slice(0,i).trim().toLowerCase(),v=l.slice(i+1).trim();if(k&&v)C.nicknames[k]=v}});mark()};
+  g('#rvRun',async()=>{toast('Reviewing…');try{const r=await api('/api/review/run',{minutes:60});RPT=r.report.id;toast('Done: score '+r.report.score);loadReview()}catch(e){toast(e.message)}});
+  const co=$('#ctlOn');if(co)co.onchange=async e=>{if(e.target.checked&&!confirm('Let your voice change the game, title and time people out? You will be asked to confirm each one.')){e.target.checked=false;return}
+    try{CT=await api('/api/control/enable',{on:e.target.checked});toast(e.target.checked?'Spoken control is ON':'Spoken control is OFF');loadReview()}catch(x){toast(x.message)}};
+  g('#ctlTryGo',async()=>{const r=await api('/api/control/try',{text:$('#ctlTry').value});$('#ctlTryOut').textContent=!r.understood?'Not understood: '+r.why:r.intent.control?'Understood: '+r.intent.control:(r.allowed?'Would ask: ':'Refused: ')+(r.summary||r.why)});
+  if(tab==='review'){loadReview();clearInterval(window._rvT);window._rvT=setInterval(()=>{if(tab==='review')loadReview()},4000)}
   if(tab==='presets')presets();
   if(tab==='overview'||tab==='log')loadLog();
 }

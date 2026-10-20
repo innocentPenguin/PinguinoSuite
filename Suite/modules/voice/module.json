@@ -219,6 +219,24 @@
         "label": "Open Speak",
         "route": "m:voice"
       }
+    },
+    "voice-control": {
+      "title": "Spoken control",
+      "summary": "Lets your voice change the game, the title and time people out (say 'pinguinobot ...'). Off by default; you switch it on in Speak > Review & control.",
+      "steps": [
+        "Open Speak > Review & control and read the one-line help.",
+        "Use 'Try a sentence' to rehearse; nothing is done.",
+        "Switch Spoken control on only when you want it. Every action asks you to confirm and is logged."
+      ]
+    },
+    "voice-review": {
+      "title": "Hourly review",
+      "summary": "Every hour of stream it compares what the bot said with your transcript, chat and the logs, and lists anything that looks bad, with a one-click fix.",
+      "steps": [
+        "Open Speak > Review & control > Reports.",
+        "Open the newest report and read the findings (serious ones first).",
+        "Press a suggested fix only if you agree; nothing changes by itself."
+      ]
     }
   }
 }

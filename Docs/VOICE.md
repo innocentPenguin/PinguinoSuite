@@ -34,3 +34,16 @@ Milestones (every Nth follow/sub/raid, or every N bits/viewers; daily or forever
 
 ## Stream-day safety (cycle 5)
 Default volume 60 %, master OFF, chat/!tts/cloud all OFF. **Sound check** button (page header, same-origin click only) plays one line on the real output even with the master OFF. Feedback loop with Listen: Speak publishes when it plays audio: `GET :8772/api/speech-intervals?since=<epoch>` -> `{speaking, intervals:[[start,end],...]}` and `Data\runtime\voice\speaking.json` `{speaking, until}`; Listen may skip transcribing those moments. Best fix: play the bot on headphones / another output device. Pre-stream items `voice-output` (voice + device + volume) and `voice-loop` (warn when master ON and default speakers). Host-feed outages log at debug (one warn per 30 min after the first 90 s).
+
+## Cycle 6: hourly review + spoken control
+**Page tab "Review & control".**
+
+*Hourly review* (rule-based, local, never speaks). While the Host says you are live, every `review.interval_min` (60) minutes, and once more when the stream ends, it compares what Speak said with your Listen transcript, the chat logs, the Listen voice log and the Console logs. Checks: talk-overs (it spoke while you did), complaints/praise in your words ("shut up", "too loud", "nice"), mispronounced names, repeats, drops/play errors, master on but silent, Console problems, spoken-control activity. Score = 100 minus 8 per warning and 20 per serious finding. Reports: `Data\runtime\voice\reports` (last 48). Findings carry one-click suggestions limited to a safe allow-list (volume, rate, wait, dedupe, queue size/age, max chars). Serious findings are appended to `Data\runtime\voice\incidents.jsonl`.
+
+*Link to Claude:* a module cannot start or wake a Claude session. The live hook is `incidents.jsonl` / `GET /api/incidents`; a Claude session can watch it (Monitor) and investigate with a fork when a line appears.
+
+*Spoken control* (OFF by default; only the switch on that page turns it on, never a config POST, preset, import or restore). Say "pinguinobot change the game to X", "... change the title to X", "... timeout NAME for 5 minutes", then "pinguinobot confirm" (or press Confirm; expires after 25 s). Safety: strict grammar, fuzzy wake word, unsure transcript lines ignored, never obeys its own voice, name must resolve to exactly one recent chatter, protected names, longest timeout 600 s, per-action allow switches, secrets/profanity/length refused, cooldown, full audit log (`control.jsonl`, Console source "control"). "Try a sentence" rehearses without doing anything.
+Needs Host endpoints `POST /api/channel/update {game|title}` and `POST /api/mod/timeout {user,seconds,reason}` (requested from 02); until they exist, actions report "unsupported".
+
+New API: GET `/api/control /api/review/reports /api/review/report?id= /api/incidents` · POST `/api/control/enable|confirm|cancel|try`, `/api/review/run|apply`. Pre-stream items `voice-control`, `voice-review`. Tests: 65 (`test_review_control.py` adds 19).
+Apply: `Update-Module.bat voice -NoBuild` (manifest help only changed; Listen VOD fix needs `Update-Module.bat listen -NoBuild`).

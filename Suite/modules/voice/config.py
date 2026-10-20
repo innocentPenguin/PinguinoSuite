@@ -27,6 +27,9 @@ def path(name):
     return p / name
 
 
+REVIEW_CHECKS = ["talk_over", "complaints", "pronounce", "repeats", "drops", "silent_master", "console", "control"]
+COMPLAINTS = ["too loud", "shut up", "stop talking", "turn it down", "be quiet", "so annoying", "annoying", "stop that", "mute it", "mute the bot", "too much", "too quiet", "can't hear", "cant hear", "wrong", "stop it", "turn that off"]
+PRAISE = ["love that", "love the voice", "that was funny", "that was good", "nice one", "good one", "perfect", "i like that", "so good", "haha the bot", "lol the bot"]
 EVENTS = ["follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "command", "chat", "voice_cmd", "stream_online", "stream_offline", "test"]
 ROLES = ["broadcaster", "mod", "vip", "sub", "viewer"]
 PLATFORMS = ["twitch", "youtube", "tiktok", "kick", "discord", "other"]
@@ -121,6 +124,31 @@ HELP = {
     "tts.enabled": "Lets people type !tts <text> in chat to have it spoken (the Host runs the command; set it up on Actions & Events). Off by default.",
     "tts.min_role": "Lowest role allowed to use !tts: viewer, sub, vip, mod or broadcaster.",
     "listen.confirm_commands": "When a voice command is heard and fires, say a tiny confirmation. Voice commands stay silent in chat either way.",
+    "review.enabled": "Every hour of stream, compare what the bot said with what you said, what chat said and what the logs recorded, and write a report (Review tab). Local only; it never speaks.",
+    "review.interval_min": "Minutes between reviews while the stream is live (a closing review also runs when the stream ends).",
+    "review.only_when_live": "Only review while Twitch says you are live. Off = review on the clock all day.",
+    "review.final_review": "Run one more review when the stream ends, covering the last stretch.",
+    "review.keep": "How many reports to keep.",
+    "review.use_transcript": "Read your live transcript from Listen (needs Listen running).",
+    "review.use_chat": "Read today's chat log.",
+    "review.use_console": "Read warnings and errors from the Console logs.",
+    "review.talk_over_max": "Flag the hour when the bot talked over you at least this many times.",
+    "review.repeat_max": "Flag a line the bot said at least this many times in the window.",
+    "review.complaint_window_s": "A complaint counts when you say it within this many seconds after the bot spoke.",
+    "review.complaint_phrases": "Words that mean the voice annoyed you or chat (one per line).",
+    "review.praise_phrases": "Words that mean the voice went well (one per line).",
+    "review.checks": "Switch individual checks on or off.",
+    "control.enabled": "Spoken control: say 'pinguinobot change the game to ...', 'change the title to ...', 'timeout <name> for 5 minutes'. OFF by default; only you switch it on. It never changes with presets.",
+    "control.wake_words": "What you say first. Close spellings from the transcript are accepted ('pinguino bot').",
+    "control.require_confirm": "Ask back first ('I heard ... say pinguinobot confirm') or press Confirm on the page. Strongly recommended.",
+    "control.expire_s": "Seconds you have to confirm before the request is forgotten.",
+    "control.cooldown_s": "Minimum seconds between two actions of the same kind.",
+    "control.max_unsure": "Ignore a line Listen is not sure it heard right (0 = sure, 1 = guess).",
+    "control.readback": "Say the readback and result aloud (only when the master switch is ON; the page always shows them).",
+    "control.title_case": "Capitalise each word of a spoken game/title.",
+    "control.max_timeout_s": "The longest timeout the voice may give, in seconds.",
+    "control.protected": "People who can never be timed out by voice (the broadcaster and mods are also refused by the Host).",
+    "control.allow": "Which actions the voice may do at all.",
     "listen.confirm_text": "What to say when a voice command fired. {command} is its name.",
 }
 
@@ -255,6 +283,12 @@ def defaults():
         "history": {"keep": 50},
         "tts": {"enabled": False, "min_role": "mod"},
         "listen": {"confirm_commands": False, "confirm_text": "Done."},
+        "review": {"enabled": True, "interval_min": 60, "only_when_live": True, "final_review": True, "keep": 48, "use_transcript": True, "use_chat": True, "use_console": True,
+                   "talk_over_max": 3, "repeat_max": 3, "complaint_window_s": 45, "checks": {k: True for k in REVIEW_CHECKS},
+                   "complaint_phrases": list(COMPLAINTS), "praise_phrases": list(PRAISE)},
+        "control": {"enabled": False, "wake_words": ["pinguinobot", "pinguino bot", "penguino bot", "penguin bot"], "require_confirm": True, "expire_s": 25, "cooldown_s": 5,
+                    "max_unsure": 0.6, "readback": True, "title_case": True, "max_timeout_s": 600, "protected": [],
+                    "allow": {"game": True, "title": True, "timeout": True}},
     }
 
 
@@ -420,6 +454,22 @@ def normalize(raw):
     rt2 = raw.get("tts") if isinstance(raw.get("tts"), dict) else {}
     out["tts"] = {"enabled": bool(rt2.get("enabled", False)), "min_role": rt2.get("min_role") if rt2.get("min_role") in ("viewer", "sub", "vip", "mod", "broadcaster") else "mod"}
     rl2 = raw.get("listen") if isinstance(raw.get("listen"), dict) else {}
+    rv = raw.get("review") if isinstance(raw.get("review"), dict) else {}
+    dv = d["review"]
+    rc = rv.get("checks") if isinstance(rv.get("checks"), dict) else {}
+    out["review"] = {"enabled": bool(rv.get("enabled", True)), "interval_min": _i(rv.get("interval_min", 60), 5, 720, 60), "only_when_live": bool(rv.get("only_when_live", True)),
+                     "final_review": bool(rv.get("final_review", True)), "keep": _i(rv.get("keep", 48), 5, 500, 48), "use_transcript": bool(rv.get("use_transcript", True)),
+                     "use_chat": bool(rv.get("use_chat", True)), "use_console": bool(rv.get("use_console", True)), "talk_over_max": _i(rv.get("talk_over_max", 3), 1, 100, 3),
+                     "repeat_max": _i(rv.get("repeat_max", 3), 2, 100, 3), "complaint_window_s": _i(rv.get("complaint_window_s", 45), 5, 300, 45),
+                     "checks": {k: bool(rc.get(k, True)) for k in REVIEW_CHECKS},
+                     "complaint_phrases": _list(rv.get("complaint_phrases", dv["complaint_phrases"]), 60, 60), "praise_phrases": _list(rv.get("praise_phrases", dv["praise_phrases"]), 60, 60)}
+    cv = raw.get("control") if isinstance(raw.get("control"), dict) else {}
+    ca = cv.get("allow") if isinstance(cv.get("allow"), dict) else {}
+    out["control"] = {"enabled": bool(cv.get("enabled", False)), "wake_words": [w.lower() for w in _list(cv.get("wake_words", d["control"]["wake_words"]), 10, 30)] or d["control"]["wake_words"],
+                      "require_confirm": bool(cv.get("require_confirm", True)), "expire_s": _i(cv.get("expire_s", 25), 5, 120, 25), "cooldown_s": _i(cv.get("cooldown_s", 5), 0, 600, 5),
+                      "max_unsure": _clip(cv.get("max_unsure", 0.6), 0, 1, 0.6), "readback": bool(cv.get("readback", True)), "title_case": bool(cv.get("title_case", True)),
+                      "max_timeout_s": _i(cv.get("max_timeout_s", 600), 1, 86400, 600), "protected": [p.lower() for p in _list(cv.get("protected", []), 50, 40)],
+                      "allow": {k: bool(ca.get(k, True)) for k in ("game", "title", "timeout")}}
     out["listen"] = {"confirm_commands": bool(rl2.get("confirm_commands", False)), "confirm_text": _s(rl2.get("confirm_text", "Done."), 100) or "Done."}
     return out
 

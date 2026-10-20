@@ -12,18 +12,24 @@ from pathlib import Path
 
 import config as cfg
 import console_log
+import review as rv
 import textproc
+import voicectl
 from brain import Brain
 
 ROOT = Path(__file__).parent
 PORT = int(os.environ.get("VOICE_PORT", "8772"))
 HOST_URL = os.environ.get("VOICE_HOST_URL", "http://127.0.0.1:8770")
+LISTEN_URL = os.environ.get("VOICE_LISTEN_URL", "http://127.0.0.1:8765")
 START = time.time()
 TAURI_ORIGINS = ("tauri://localhost", "http://tauri.localhost", "https://tauri.localhost")
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 ROLE_RANK = {"viewer": 0, "sub": 1, "vip": 2, "mod": 3, "broadcaster": 4}
 
 brain = None
+ctl = None
+reviewer = None
+live = {"v": False, "t": 0}
 feed = {"seq": None, "ok": None, "err": "", "last": 0, "events": 0}
 
 
@@ -53,6 +59,34 @@ def _host_get(path):
         req.add_header("Authorization", "Bearer " + tok)
     with urllib.request.urlopen(req, timeout=4) as r:
         return json.loads(r.read())
+
+
+def _host_post(path, body):
+    req = urllib.request.Request(HOST_URL + path, data=json.dumps(body).encode(), method="POST", headers={"Content-Type": "application/json"})
+    tok = os.environ.get("PINGUINO_API_TOKEN")
+    if tok:
+        req.add_header("Authorization", "Bearer " + tok)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read() or b"{}")
+
+
+def is_live():
+    if time.time() - live["t"] > 25:
+        try:
+            live["v"] = bool(_host_get("/api/live").get("live"))
+        except Exception:
+            pass
+        live["t"] = time.time()
+    return live["v"]
+
+
+def review_loop():
+    while True:
+        try:
+            reviewer.tick()
+        except Exception as e:
+            console_log.warn("review", f"tick failed: {str(e)[:100]}", dedupe_s=300)
+        time.sleep(30)
 
 
 KIND_MAP = {"follow": "follow", "sub": "sub", "resub": "resub", "gift": "gift", "cheer": "cheer", "raid": "raid", "redeem": "redeem"}
@@ -98,11 +132,16 @@ def g_config(h, q):
     return {"config": brain.cfg, "help": cfg.HELP, "events": cfg.EVENTS, "roles": cfg.ROLES, "platforms": cfg.PLATFORMS, "effects": cfg.EFFECTS, "stingers": cfg.STINGERS}
 
 
+def _locked(data):
+    """Switches only their own endpoints may change: master, mute, spoken-control enable. Presets/imports/restores keep the current state."""
+    data["master"], data["mute_until"] = brain.cfg["master"], brain.cfg["mute_until"]
+    data["control"] = {**(data.get("control") if isinstance(data.get("control"), dict) else {}), "enabled": brain.cfg["control"]["enabled"]}
+    return data
+
+
 def p_config(h, b):
     c = b.get("config") if isinstance(b.get("config"), dict) else b
-    c = dict(c)
-    c["master"] = brain.cfg["master"]          # the master switch only changes through its own endpoint
-    c["mute_until"] = brain.cfg["mute_until"]
+    c = _locked(dict(c))
     return {"ok": True, "config": brain.set_config(c)}
 
 
@@ -179,24 +218,24 @@ def p_preset(h, b):
         return {"ok": True, "name": cfg.preset_save(name, brain.cfg)}
     if op == "load":
         data = cfg.preset_get(name)
-        data["master"], data["mute_until"] = brain.cfg["master"], brain.cfg["mute_until"]
+        data = _locked(data)
         return {"ok": True, "config": brain.set_config(data)}
     if op == "delete":
         cfg.preset_delete(name)
         return {"ok": True}
     if op == "import":
         data = cfg.normalize(b.get("data"))
-        data["master"], data["mute_until"] = brain.cfg["master"], brain.cfg["mute_until"]
+        data = _locked(data)
         if b.get("save_as"):
             cfg.preset_save(str(b["save_as"]), data)
         return {"ok": True, "config": brain.set_config(data)}
     if op == "restore":
         data = cfg.restore_backup(name)
-        data["master"], data["mute_until"] = brain.cfg["master"], brain.cfg["mute_until"]
+        data = _locked(data)
         return {"ok": True, "config": brain.set_config(data)}
     if op == "reset":
         data = cfg.defaults()
-        data["master"], data["mute_until"] = brain.cfg["master"], brain.cfg["mute_until"]
+        data = _locked(data)
         return {"ok": True, "config": brain.set_config(data)}
     raise ValueError("unknown op")
 
@@ -256,6 +295,10 @@ def g_prestream(h, q):
         miss = [e for e in used if not engine.cloud.has_key(e)]
         items.append({"id": "voice-cloud", "label": "Cloud voices", "status": "warn" if miss else "pass",
                       "detail": ("key missing for " + ", ".join(miss) + ": " + ", ".join(engine.KEY_NAMES[e] for e in miss) + " (Windows voice is used instead)") if miss else "keys present"})
+    cc = c["control"]
+    items.append({"id": "voice-control", "label": "Spoken control (game/title/timeout)", "status": "pass" if not cc["enabled"] or ctl.src.get("ok") else "warn",
+                  "detail": "off (as intended)" if not cc["enabled"] else ("listening for '" + cc["wake_words"][0] + "'" + ("" if cc["require_confirm"] else " - NO confirm step") if ctl.src.get("ok") else "cannot read Listen: " + (ctl.src.get("err") or "waiting"))})
+    items.append({"id": "voice-review", "label": "Hourly review", "status": "pass", "detail": ("on - last report " + time.strftime("%H:%M", time.localtime(reviewer.last["ts"]))) if c["review"]["enabled"] and reviewer.last["ts"] else ("on, waiting for the stream" if c["review"]["enabled"] else "off")})
     items.append({"id": "voice-queue", "label": "Speech queue", "status": "pass" if len(brain.q) < c["queue"]["max_queue"] else "warn", "detail": f"{len(brain.q)} waiting"})
     bad = brain.last_error and brain.stats["errors"]
     items.append({"id": "voice-errors", "label": "Speech errors", "status": "warn" if bad else "pass", "detail": brain.last_error if bad else "none"})
@@ -378,6 +421,63 @@ def g_history_csv(h, q):
     return ("text/csv", bio.getvalue().encode("utf-8-sig"), {"Content-Disposition": 'attachment; filename="speak-history.csv"'})
 
 
+def g_control(h, q):
+    return {"ok": True, **ctl.state(), "help": cfg.HELP}
+
+
+def p_control_enable(h, b):
+    c = dict(brain.cfg)
+    c["control"] = {**c["control"], "enabled": bool(b.get("on"))}
+    brain.cfg = cfg.save(c, backup=False)
+    console_log.info("control", f"spoken control {'ON' if b.get('on') else 'OFF'}")
+    return {"ok": True, **ctl.state()}
+
+
+def p_control_confirm(h, b):
+    return {"ok": True, "result": ctl.confirm(by="page")}
+
+
+def p_control_cancel(h, b):
+    return {"ok": True, "result": ctl.cancel(by="page")}
+
+
+def p_control_try(h, b):
+    """Rehearse a sentence without acting: what would be understood, and would it pass the checks? ({text})"""
+    text = str(b.get("text") or "")[:300]
+    rest = voicectl.strip_wake(text, brain.cfg["control"]["wake_words"])
+    if rest is None:
+        return {"ok": True, "understood": False, "why": "no wake word at the start"}
+    intent = voicectl.parse(rest)
+    if not intent:
+        return {"ok": True, "understood": False, "why": "no command I know"}
+    if intent.get("control"):
+        return {"ok": True, "understood": True, "intent": intent}
+    ok, why, intent = ctl.check(intent)
+    return {"ok": True, "understood": True, "intent": intent, "allowed": ok and bool(brain.cfg["control"]["allow"].get(intent["action"])), "why": why, "summary": ctl.summary(intent) if ok else ""}
+
+
+def g_reports(h, q):
+    return {"ok": True, "reports": rv.list_reports(), "last": reviewer.last, "enabled": brain.cfg["review"]["enabled"], "live": is_live()}
+
+
+def g_report(h, q):
+    return {"ok": True, "report": rv.get_report(q.get("id", ""))}
+
+
+def p_review_run(h, b):
+    m = b.get("minutes")
+    return {"ok": True, "report": reviewer.run(minutes=max(5, min(720, int(m))) if m else 60, reason="manual")}
+
+
+def p_review_apply(h, b):
+    new = rv.apply_suggestion(b.get("set") if isinstance(b.get("set"), dict) else {}, brain.cfg)
+    return {"ok": True, "config": brain.set_config(_locked(new))}
+
+
+def g_incidents(h, q):
+    return {"ok": True, "incidents": [r for r in rv.read_jsonl(cfg.path("incidents.jsonl"), 0, 4e9, tail=200)][-50:]}
+
+
 def g_help(h, q):
     return {"help": cfg.STATUS_HELP, "settings": cfg.HELP}
 
@@ -393,8 +493,8 @@ def g_selftest(h, q):
 
 
 GET = {"/api/speech-intervals": g_intervals, "/api/sounds": g_sounds, "/api/counters": g_counters, "/api/history.csv": g_history_csv, "/api/devices": g_devices, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
-       "/api/prestream": g_prestream, "/api/help": g_help, "/api/selftest": g_selftest}
-POST = {"/api/soundcheck": p_soundcheck, "/api/sound-upload": p_sound_upload, "/api/sound-delete": p_sound_delete, "/api/sound-preview": p_sound_play_preview, "/api/counters-reset": p_counters_reset, "/api/test-cloud": p_test_cloud, "/api/timer-fire": p_timer_fire, "/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
+       "/api/control": g_control, "/api/review/reports": g_reports, "/api/review/report": g_report, "/api/incidents": g_incidents, "/api/prestream": g_prestream, "/api/help": g_help, "/api/selftest": g_selftest}
+POST = {"/api/control/enable": p_control_enable, "/api/control/confirm": p_control_confirm, "/api/control/cancel": p_control_cancel, "/api/control/try": p_control_try, "/api/review/run": p_review_run, "/api/review/apply": p_review_apply, "/api/soundcheck": p_soundcheck, "/api/sound-upload": p_sound_upload, "/api/sound-delete": p_sound_delete, "/api/sound-preview": p_sound_play_preview, "/api/counters-reset": p_counters_reset, "/api/test-cloud": p_test_cloud, "/api/timer-fire": p_timer_fire, "/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
         "/api/preview": p_preview, "/api/stop": p_stop, "/api/replay": p_replay, "/api/preset": p_preset, "/api/chat-command": p_chat_command}
 PAGES = {"/": "static/index.html"}
 OPEN_POST = {"/api/chat-command"}      # local bots (Host) with no Origin may call this one: it has its own role checks and is silent in chat
@@ -471,10 +571,15 @@ class H(BaseHTTPRequestHandler):
 
 
 def main():
-    global brain
+    global brain, ctl, reviewer
     brain = Brain()
+    ctl = voicectl.Control(lambda: brain.cfg, _host_post, speak=lambda t: brain.handle({"kind": "say", "message": t, "manual": True, "priority": 7}),
+                          overlaps=lambda a, b: any(s < b and e > a for s, e in list(brain.intervals)))
+    reviewer = rv.Reviewer(lambda: brain.cfg, lambda: list(brain.history), LISTEN_URL, is_live)
     console_log.info("server", f"Pinguino Voice on 127.0.0.1:{PORT} (master {'ON' if brain.cfg['master'] else 'OFF'})")
     threading.Thread(target=poll_loop, daemon=True).start()
+    threading.Thread(target=voicectl.read_loop, args=(ctl, LISTEN_URL), daemon=True).start()
+    threading.Thread(target=review_loop, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
 
 
