@@ -55,3 +55,8 @@ One alert at a time (queued), Synchra-style options: size, canvas scale, font, c
 - **Text size**: `A−` / `A+` in each panel header (10-40 px), saved with the profile.
 - **Resize**: unlock (padlock) and drag the bar between the two panels; saved with the profile. Edit layout swaps/removes panels; each panel pops out to its own window.
 - **Split chat in halves** (⫻ button in the Chat header): flow (older rows continue in the first half, newest in the second; side by side or top/bottom), one platform per half, or chat vs events. "Open the two halves as separate windows" reuses the pane split (/api/splits/apply) for two monitors. Saved with the profile.
+
+## Gift sub alerts, Plan 5 event rows
+- The follow alert widget (/obs/follow) also shows gift sub alerts ("{user} gifted {amount} subs!", same sound, setting "Show gift sub alerts"; "Test gift" button in the editor).
+- Activity widget / dashboard rows: raid out, poll, prediction, hype train (from Host /api/activity). Live poll/prediction/hype overlays are NOT built: they need a Host live-state route (asked of 02).
+- Dashboard top bar: gifts this session and top gifter.

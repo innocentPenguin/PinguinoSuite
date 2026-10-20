@@ -32,7 +32,7 @@ body.top #feed{justify-content:flex-start}
 .boxed .follow-alert,.bubble .follow-alert{background:var(--bg,transparent);border:var(--bw,0) solid var(--bc,transparent);border-radius:var(--br,0)}
 .follow-image{max-height:3.2em;max-width:100%}.follow-text{font-weight:800}.follow-user{color:var(--ac,#ff8a1f)}
 .follow-tag{font:700 .4em/1.6 'Segoe UI',sans-serif;background:#ffffff26;border-radius:1em;padding:0 .8em;text-shadow:none;letter-spacing:.05em;text-transform:uppercase}
-.follow-alert.refollow{font-size:.7em;opacity:.95}
+.follow-alert.gift .follow-user{color:#c084fc}.follow-alert.refollow{font-size:.7em;opacity:.95}
 .in-bounce{animation:ebounce .6s cubic-bezier(.3,1.5,.5,1)}@keyframes ebounce{0%{opacity:0;transform:translateY(-80px)}60%{opacity:1;transform:translateY(10px)}100%{transform:none}}
 .follow-out{transition:opacity .6s,transform .6s;opacity:0;transform:scale(.9)}
 .refollow-tag{background:#ffffff30}
@@ -58,7 +58,7 @@ function hidden(m) {
   if (ig.includes(u) || ig.includes(d) || MUTED.has(u) || m.raw_type === 'dev') return true;
   if (!S.providers.includes('all') && !S.providers.includes(m.platform)) return true;
   if (KIND === 'chat') return !!m.event && !S.notices;
-  if (KIND === 'follow') return m.event !== 'follow';
+  if (KIND === 'follow') return !(m.event === 'follow' || (m.event === 'gift' && S.show_gifts));
   return !(S.types || []).includes(m.event || '');
 }
 function apply() {
@@ -99,7 +99,7 @@ function actHtml(m) {
 }
 function drop(i) { items = items.filter(x => x !== i); i.el.classList.add('out'); setTimeout(() => i.el.remove(), 850); }
 function add(m, immediate) {
-  if (KIND === 'follow') { if (S && m.event === 'follow' && !hidden(m)) followAdd(m); return; }
+  if (KIND === 'follow') { if (S && (m.event === 'follow' || m.event === 'gift') && !hidden(m)) followAdd(m); return; }
   if (!S || hidden(m) || (KIND === 'activity' && !m.event) || (KIND === 'activity' && S.paused && !immediate)) return;
   if (items.some(i => i.m.id === m.id)) return;
   const show = () => {
@@ -131,13 +131,13 @@ function followAdd(m, force) {
   const re = (m.flags || []).includes('refollow');
   if (re && !S.show_refollow) return;
   if (!force && fq.some(x => x.id === m.id)) return;
-  fq.push({id: m.id, user: m.display || m.user, re}); if (fq.length > 20) fq.shift(); followNext();
+  fq.push({id: m.id, user: m.display || m.user, re, gift: m.event === 'gift' ? Math.max(1, m.amount || 1) : 0}); if (fq.length > 20) fq.shift(); followNext();
 }
 function followNext() {
   if (fbusy || !fq.length) return; fbusy = true;
-  const a = fq.shift(), parts = (a.re ? S.refollow_text : S.follow_text).split(/\{user\}/);
+  const a = fq.shift(), parts = (a.gift ? S.gift_text.replace(/\{amount\}/g, a.gift) : a.re ? S.refollow_text : S.follow_text).split(/\{user\}/);
   const html = parts.map(esc).join(`<span class="follow-user">${esc(a.user)}</span>`);
-  const el = document.createElement('div'); el.className = 'follow-alert' + (a.re ? ' refollow' : '') + ' in-' + (S.entrance_animation_type === 'none' ? 'x' : S.entrance_animation_type);
+  const el = document.createElement('div'); el.className = 'follow-alert' + (a.re ? ' refollow' : '') + (a.gift ? ' gift' : '') + ' in-' + (S.entrance_animation_type === 'none' ? 'x' : S.entrance_animation_type);
   el.innerHTML = (S.image_url && !a.re ? `<img class="follow-image" src="${esc(S.image_url)}" alt="">` : '') + `<div class="follow-text">${html}</div>` + (a.re ? '<span class="follow-tag">refollow</span>' : '');
   const feed = $('#feed'); feed.innerHTML = ''; feed.className = 'follow-stage'; feed.appendChild(el);
   if (!a.re) playFollowSound();
@@ -167,7 +167,7 @@ function startTest() {
   if (KIND === 'follow') {
     const f = re => ({id: 'test:f' + (++sampleN), platform: 'twitch', user: re ? 'returningrae' : 'newfollower', display: re ? 'ReturningRae' : 'NewFollower', text: 'followed', ts: Date.now() / 1000, event: 'follow', flags: re ? ['refollow'] : []});
     followAdd(f(false), true);
-    window.addEventListener('message', e => { const t = e.data && e.data.obsTest; if (t === 'follow') followAdd(f(false), true); else if (t === 'refollow') followAdd(f(true), true); else if (t === 'sound') playFollowSound(); });
+    window.addEventListener('message', e => { const t = e.data && e.data.obsTest; if (t === 'follow') followAdd(f(false), true); else if (t === 'refollow') followAdd(f(true), true); else if (t === 'gift') followAdd({id: 'test:g' + (++sampleN), platform: 'twitch', user: 'gifty', display: 'Gifty', text: 'gifted subs', ts: Date.now() / 1000, event: 'gift', amount: 5, flags: []}, true); else if (t === 'sound') playFollowSound(); });
     return;
   }
   const tick = () => { add(sampleMsg(), true); };

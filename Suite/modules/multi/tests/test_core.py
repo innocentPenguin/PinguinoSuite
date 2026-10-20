@@ -1117,3 +1117,13 @@ def test_host_feed_plan5_events():
     assert "winner: Yes" in m.text
     m = host_feed.to_message({"seq": 4, "type": "hype", "state": "begin", "what": "level 1", "data": {}}, "me")
     assert m.event == "hype" and "started" in m.text
+
+
+def test_follow_widget_gift_alerts():
+    import obs
+    s = obs.sanitize("follow", {})
+    assert s["show_gifts"] and "{amount}" in s["gift_text"]
+    assert obs.hidden("follow", s, {"event": "gift"}) is False
+    s2 = obs.sanitize("follow", {"show_gifts": False})
+    assert obs.hidden("follow", s2, {"event": "gift"}) is True
+    assert obs.hidden("follow", s, {"event": "raid"}) is True

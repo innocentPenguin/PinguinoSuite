@@ -27,8 +27,8 @@ function obsDraw() {
       <button data-ob-act="export">Export</button> <button data-ob-act="import-file">Import</button><input id="ob-file" type="file" accept=".json,application/json" hidden></div>
       <small class="mut">OBS: Sources &gt; + &gt; Browser &gt; paste the address. Changes show in OBS instantly.</small></div>`;
   const txt = (key, lab) => `<label class="cf">${lab} <input type="text" data-ob="${key}" value="${esc(S[key] || '')}" style="width:100%"></label>`;
-  const followGeneral = `<div class="act"><button data-ob-act="ptest" data-t="follow">Test new follow</button><button data-ob-act="ptest" data-t="refollow">Test refollow</button><button data-ob-act="ptest" data-t="sound">Test sound</button></div>
-      ${txt('follow_text', 'New follow text ({user} = name)')}${txt('refollow_text', 'Refollow text (no sound, small)')}${chk('show_refollow', 'Show refollow alerts at all')}
+  const followGeneral = `<div class="act"><button data-ob-act="ptest" data-t="follow">Test new follow</button><button data-ob-act="ptest" data-t="refollow">Test refollow</button><button data-ob-act="ptest" data-t="gift">Test gift</button><button data-ob-act="ptest" data-t="sound">Test sound</button></div>
+      ${txt('follow_text', 'New follow text ({user} = name)')}${txt('refollow_text', 'Refollow text (no sound, small)')}${chk('show_refollow', 'Show refollow alerts at all')}${txt('gift_text', 'Gift sub text ({user}, {amount})')}${chk('show_gifts', 'Show gift sub alerts (same sound)')}
       ${rng('duration_seconds', 'Show each alert for', 1, 30, 0.5, ' s')}${rng('gap_seconds', 'Pause between alerts', 0, 10, 0.5, ' s')}
       ${sel('size', Object.keys(c.sizes).map(s => [s, s.toUpperCase() + ' (' + c.sizes[s] + 'px)']), 'Size')}${rng('canvas_scale', 'Canvas scale', 0.25, 3, 0.05, 'x')}${sel('font_family_id', c.fonts.map(f => [f, f]), 'Font')}
       ${sel('entrance_animation_type', [['none', 'None'], ['fade', 'Fade'], ['slide', 'Slide'], ['pop', 'Pop'], ['bounce', 'Bounce']], 'Entrance animation')}

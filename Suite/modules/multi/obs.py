@@ -34,7 +34,7 @@ FOLLOW_DEFAULT = {
     "border_width": 3, "border_color": "#ff8a1f", "border_radius": 16, "font_family_id": "nunito", "message_fade_duration_seconds": 0, "message_delay_seconds": 0,
     "ignore_names": [], "provider_logo": False, "providers": ["all"], "style_type": "boxed", "entrance_animation_type": "pop", "custom_css": "",
     "max_messages": 1, "message_order": "bottom", "message_alignment": "center", "accent_color": "#ff8a1f",
-    "follow_text": "{user} just followed!", "refollow_text": "{user} followed again", "show_refollow": True, "duration_seconds": 6, "gap_seconds": 1,
+    "follow_text": "{user} just followed!", "refollow_text": "{user} followed again", "show_refollow": True, "show_gifts": True, "gift_text": "{user} gifted {amount} subs!", "duration_seconds": 6, "gap_seconds": 1,
     "sound_enabled": True, "sound_volume": 60, "sound_url": "", "image_url": "",
 }
 DEFAULTS = {"chat": CHAT_DEFAULT, "activity": ACTIVITY_DEFAULT, "follow": FOLLOW_DEFAULT}
@@ -124,6 +124,8 @@ def sanitize(kind, src):
         d["follow_text"] = str(s.get("follow_text", d["follow_text"]))[:120] or d["follow_text"]
         d["refollow_text"] = str(s.get("refollow_text", d["refollow_text"]))[:120] or d["refollow_text"]
         d["show_refollow"] = bool(s.get("show_refollow", d["show_refollow"]))
+        d["show_gifts"] = bool(s.get("show_gifts", d["show_gifts"]))
+        d["gift_text"] = str(s.get("gift_text", d["gift_text"]))[:120] or d["gift_text"]
         d["duration_seconds"] = round(_num(s.get("duration_seconds", d["duration_seconds"]), 1, 60, 6), 1)
         d["gap_seconds"] = round(_num(s.get("gap_seconds", d["gap_seconds"]), 0, 30, 1), 1)
         d["sound_enabled"] = bool(s.get("sound_enabled", d["sound_enabled"]))
@@ -180,5 +182,7 @@ def hidden(kind, settings, m, muted=()):
     if kind == "chat":
         return bool(ev) and not settings["notices"]
     if kind == "follow":
+        if ev == "gift":
+            return not settings["show_gifts"]
         return ev != "follow" or (bool(m.get("flags") and "refollow" in m["flags"]) and not settings["show_refollow"])
     return ev not in settings["types"]
