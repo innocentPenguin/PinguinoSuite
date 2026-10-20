@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Sub footer</title>
+<style>:root{color-scheme:dark}body{margin:0;background:#050505;color:#f2f0ec;font:14px 'Segoe UI',system-ui,sans-serif}main{max-width:900px;margin:0 auto;padding:18px 16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px}.sub{color:#a39f98;font-size:12.5px}.card{background:#101012;border:1px solid #232326;border-radius:10px;padding:14px;margin:12px 0}
+button{background:#ff9900;color:#111;border:0;border-radius:8px;padding:7px 12px;font-weight:600;cursor:pointer;margin:2px}button.g{background:#2a2a2e;color:#f2f0ec}
+input,select{background:#17171a;color:#f2f0ec;border:1px solid #34343a;border-radius:6px;padding:6px 8px}code{background:#17171a;padding:2px 5px;border-radius:4px}.row{margin:6px 0}.t3{color:#9be8ff}.t2{color:#ffc933}</style></head><body><main>
+<h1>Sub footer</h1><div class=sub>A strip at the bottom of the stream that scrolls the channel's subscribers: T3 (diamond) first, then T2 (gold), then T1.</div>
+<div class=card><h2>Now</h2><div id=now>...</div><div class=sub id=src></div>
+<button id=bt onclick=toggle()>...</button><button class=g onclick=refresh()>Fetch the Twitch list now</button></div>
+<div class=card><h2>OBS browser source</h2><code id=url></code><div class=sub>Add it as a browser source as wide as the stream (e.g. 1920 x 120); the strip sits at the bottom of the source.</div></div>
+<div class=card><h2>Settings</h2><div id=set></div></div>
+<script>
+const $=id=>document.getElementById(id);let S=null;
+async function j(u,o){return (await fetch(u,o)).json()}
+async function post(a,b){await j('/api/subfooter/'+a,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});load()}
+function toggle(){post('settings',{Enabled:!S.settings.Enabled})}
+function refresh(){post('refresh')}
+const F=[['Scope','Who to show','s',['all','chat']],['ShowT1','Show tier 1','b'],['ShowT2','Show tier 2 (gold)','b'],['ShowT3','Show tier 3 (diamond)','b'],['TierMarks','Little marks before gold and diamond names','b'],['Title','Label on the left (empty = none)','t'],['Height','Height (px)','n'],['FontSize','Text size (px)','n'],['Speed','Scroll speed (px per second)','n'],['Gap','Space between names (px)','n'],['Opacity','Background opacity (0-1)','n'],['MaxNames','Most names shown','n'],['RefreshMin','Fetch the Twitch list every (minutes)','n'],['T1Color','Tier 1 colour (hex)','t'],['T2Color','Tier 2 colour (hex, gold)','t'],['T3Color','Tier 3 colour (hex, diamond)','t'],['Background','Background colour (hex)','t'],['BorderColor','Top line colour (hex)','t'],['Font','Font','t']];
+function save(k,t,el){const v=t=='b'?el.checked:t=='n'?parseFloat(el.value):el.value;post('settings',{[k]:v})}
+async function load(){S=await j('/api/subfooter');const c=S.counts;
+ $('now').innerHTML=(S.settings.Enabled?'Showing':'Hidden')+' - <span class=t3>T3 '+c.t3+'</span>, <span class=t2>T2 '+c.t2+'</span>, T1 '+c.t1+' ('+S.names.length+' on the strip)';
+ $('src').textContent='Source: '+S.source;$('bt').textContent=S.settings.Enabled?'Hide the footer':'Show the footer';$('url').textContent=location.origin+'/overlay/subfooter';
+ if(!document.activeElement||document.activeElement.tagName!='INPUT')$('set').innerHTML=F.map(([k,l,t,o])=>'<div class=row><label>'+(t=='b'?'<input type=checkbox '+(S.settings[k]?'checked':'')+' onchange="save(\''+k+'\',\'b\',this)"> '+l:t=='s'?l+': <select onchange="save(\''+k+'\',\'s\',this)">'+o.map(x=>'<option '+(S.settings[k]==x?'selected':'')+'>'+x+'</option>').join('')+'</select>':l+': <input '+(t=='n'?'type=number step=any style="width:90px"':'type=text')+' value="'+(S.settings[k]??'')+'" onchange="save(\''+k+'\',\''+t+'\',this)">')+'</label></div>').join('')}
+load();setInterval(load,3000);
+</script></main></body></html>

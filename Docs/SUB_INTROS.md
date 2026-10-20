@@ -8,3 +8,6 @@ A subscriber's FIRST chat message of each stream plays their own clip on the str
 - **Queue**: one intro at a time across all sources; the next is the highest tier waiting (T3 > T2 > T1), first come first served inside a tier; nobody is queued twice. An intro whose browser source is not open in OBS is skipped, not stuck.
 - **Controls**: `http://127.0.0.1:8770/intro` (skip, clear, test a name, forget who played, settings). API: `GET /api/intro`, `POST /api/intro/skip|clear|reset|test|settings`. Settings live in `Data\runtime\intro_settings.json` (Enabled, OnlyWhileLive, T1/T2/T3, UseTierDefaults, SkipOfflineSlots, MaxPlaySec, GifSec, Volume, Dir).
 - **Tests**: `python Tools/test-host-intro.py`.
+
+## Sub footer (strip of subscribers)
+OBS browser source `http://127.0.0.1:8770/overlay/subfooter` (as wide as the stream, e.g. 1920x120; the strip sits at the bottom). Controls: `http://127.0.0.1:8770/subfooter` (hide/show, tiers, size, speed, colours, scope). Names: Twitch's subscriber list (all subs, refreshed every 10 min; needs the streamer's subscriptions permission) or only the subs seen chatting this stream (`Scope: chat`). Order T3 (diamond shimmer), T2 (gold), T1. Settings: `Data\runtime\subfooter_settings.json`. Test: `python Tools/test-host-subfooter.py`.

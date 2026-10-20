@@ -29,6 +29,7 @@ namespace PinguinoHost
                 else { bool? o = cph.ObsStreaming(); if (o != null) { v = o; src = "obs"; } }
             }
             if (v == null) return;
+            if (_live != true && v == true) SubBoard.ResetChat();
             if (_live != v) Clog.Info("live", "stream is " + (v.Value ? "LIVE" : "offline") + " (" + src + ")");
             _live = v; _source = src; _at = DateTime.UtcNow;
             cph.SetGlobalVar("pinguino.live", v.Value ? "1" : "0", false);

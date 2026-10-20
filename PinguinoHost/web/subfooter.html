@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset=utf-8><title>Sub footer</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden;width:100%;height:100%}
+#bar{position:fixed;left:0;right:0;bottom:0;display:none;align-items:center;overflow:hidden;box-sizing:border-box;border-top:3px solid #ff9900}
+#ttl{flex:none;padding:0 18px;font-weight:800;letter-spacing:.12em;background:#ff9900;color:#111;height:100%;display:flex;align-items:center}
+#view{flex:1;overflow:hidden;white-space:nowrap;position:relative;height:100%}
+#track{display:inline-flex;align-items:center;height:100%;will-change:transform}
+.n{display:inline-block;margin:0 var(--gap);font-weight:700;text-shadow:0 1px 3px #000a}
+.t3{background:linear-gradient(100deg,#bff3ff 0%,#ffffff 25%,#7fd8ff 50%,#ffffff 75%,#bff3ff 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;filter:drop-shadow(0 0 6px #7fd8ff99);animation:shim 2.6s linear infinite}
+.t2{background:linear-gradient(100deg,#d99a00 0%,#ffe27a 30%,#ffc933 50%,#fff0a8 70%,#d99a00 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;filter:drop-shadow(0 0 4px #ffc93388);animation:shim 4s linear infinite}
+@keyframes shim{from{background-position:250% 0}to{background-position:-150% 0}}
+</style></head><body>
+<div id=bar><div id=ttl></div><div id=view><div id=track></div></div></div>
+<script>
+const bar=document.getElementById('bar'),ttl=document.getElementById('ttl'),view=document.getElementById('view'),track=document.getElementById('track');
+let last='',anim=null;
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function build(d){
+ const s=d.settings;
+ if(s.Enabled===false||!d.names.length){bar.style.display='none';return}
+ bar.style.display='flex';bar.style.height=s.Height+'px';bar.style.background='#'+s.Background+Math.round(255*s.Opacity).toString(16).padStart(2,'0');
+ bar.style.borderTopColor='#'+s.BorderColor;bar.style.fontFamily="'"+s.Font+"',sans-serif";bar.style.fontSize=s.FontSize+'px';bar.style.setProperty('--gap',(s.Gap/2)+'px');
+ ttl.textContent=s.Title||'';ttl.style.display=s.Title?'flex':'none';ttl.style.fontSize=Math.round(s.FontSize*.8)+'px';
+ const mark={3:'◆ ',2:'★ ',1:''};
+ const one=d.names.map(n=>'<span class="n t'+n.tier+'" style="'+(n.tier==1?'color:#'+s.T1Color:'')+'">'+(s.TierMarks?mark[n.tier]:'')+esc(n.name)+'</span>').join('');
+ track.innerHTML=one;const w=track.scrollWidth||1;const need=Math.max(2,Math.ceil((view.clientWidth*2)/w));
+ track.innerHTML=one.repeat(need+1);
+ if(anim)anim.cancel();
+ anim=track.animate([{transform:'translateX(0)'},{transform:'translateX(-'+w+'px)'}],{duration:w/Math.max(10,s.Speed)*1000,iterations:Infinity});
+}
+async function tick(){try{const d=await (await fetch('/api/subfooter',{cache:'no-store'})).json();const key=JSON.stringify([d.names,d.settings]);if(key!==last){last=key;build(d)}}catch(e){}setTimeout(tick,10000)}
+tick();
+</script></body></html>
