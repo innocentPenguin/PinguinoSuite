@@ -207,9 +207,9 @@ Code: `PinguinoHost/HostSiteBridge.cs` (357 lines). Contract: [SHOP_BRIDGE.md](S
 | `Docs\ROCKETRANKBOT_AUDIT.md`, `SYNCHRABOT_AUDIT.md`, `BOT_REMOVAL_AUDIT.md` | old-bot replacement audits |
 | `Docs\SHOP_BRIDGE.md`, `NAMEHISTORY.md` | site-bridge contract, name-history rules |
 | `Data\config\raid_list.json` | NOT YET CREATED: Ivan's trusted raid list (Plan 5 B) |
-| `DataloreLORE_REPORT.md` (+ proposals_for_bots.md, channel_lore.json, people_graph.json, person_cards) | PRIVATE log-mining results: people, relationships, how chat treats Ivan, lore glossary, bot role fit (git-ignored) |
-| `Datachat_logssidecar` | PRIVATE Streamer.bot per-message counts + merged message totals (max of public logs, Streamer.bot, Host recording) |
-| `Toolslore-mining` | scripts + README to rebuild the lore/cards/sidecar from the logs |
 | `Docsimports
 ightbot-custom-commands.txt` | extract of Ivan's Nightbot custom commands (source for the quick-info import) |
+| `Data\chat_logs\sidecar\` | PRIVATE Streamer.bot per-message counts + merged message totals (max of public logs, Streamer.bot, Host recording) |
+| `Tools\lore-mining\` | scripts + README to rebuild the lore, person cards and the sidecar from the logs |
+| `Docs\imports\nightbot-custom-commands.txt` | extract of the Nightbot custom commands (source of the quick-info import) |
 <!-- COORD-INDEX-END -->
