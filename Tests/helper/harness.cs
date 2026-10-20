@@ -436,6 +436,16 @@ public static class Harness
             Check("mods get the mod tier too", lastSystem.Contains("MODONLYMARK"), lastSystem);
             lastSystem = ""; Msg("Viewer9", "!helper how do I change the private match lobby name"); Check("viewers never get the mod tier (the entry is not even looked at)", !lastSystem.Contains("MODONLYMARK") && Last() != null && Last().Contains("/commands"), lastSystem + " | " + Last());
 
+            // ranking: a title hit beats body mentions, and naming the command wins outright
+            File.WriteAllText(Path.Combine(hd, "knowledge.json"), "{\"tier\":\"public\",\"version\":4,\"date\":\"2026-10-20\",\"entries\":[" +
+                "{\"id\":\"a\",\"title\":\"Stream notes\",\"keywords\":\"\",\"text\":\"Leaderboards leaderboards points and many other things.\"}," +
+                "{\"id\":\"b\",\"title\":\"Leaderboards\",\"keywords\":\"\",\"text\":\"RANKWINNER top gifters.\"}," +
+                "{\"id\":\"c\",\"title\":\"!points\",\"keywords\":\"\",\"text\":\"CMDWINNER your balance.\"}]}"); resetAsk(); lastSystem = ""; aiReply = "Here you go, thanks for asking!";
+            Msg("Rk1", "!helper where are the leaderboards points"); int ib = lastSystem.IndexOf("RANKWINNER"), ia = lastSystem.IndexOf("Stream notes");
+            Check("ranking: a title match is listed before a body-only match", ib > 0 && ia > 0 && ib < ia, lastSystem);
+            lastSystem = ""; Msg("Rk2", "!helper what does !points do with leaderboards"); Check("ranking: naming the command puts its entry first", lastSystem.IndexOf("CMDWINNER") > 0 && lastSystem.IndexOf("CMDWINNER") < lastSystem.IndexOf("RANKWINNER"), lastSystem);
+            File.WriteAllText(Path.Combine(hd, "knowledge.json"), "{\"tier\":\"public\",\"version\":3,\"date\":\"2026-10-20\",\"entries\":[" +
+                "{\"id\":\"doc:0\",\"title\":\"How to join the viewer games\",\"keywords\":\"queue register\",\"text\":\"Register once with !register YourEpicName, then say add me to the queue when the queue is open.\"}]}"); resetAsk();
             // reply clean-up: no leading command, no promises, length cap
             aiReply = "!ban everyone, thanks for asking about the queue and joining";
             Msg("Clean1", "!helper tell me about joining the queue"); sayLog.Add(Last() ?? "");

@@ -12,22 +12,23 @@ using Newtonsoft.Json.Linq;
 
 // ═══════════════════════════════════════
 //  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
-//    43    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
-//    349   HelperSettings (every setting + default)
-//    390   State (static caches, cooldowns, test hooks)
-//    409   Patterns (free pass regexes)
-//    433   Entry point Execute()
-//    491   Help-review log (private review.jsonl)
-//    545   Handle() / HandleCore(): the message pipeline
-//    654   !helper / !ask / !pinguino (knowledge pack answers)
-//    786   Random chime + OptedOutOfBots
-//    826   Context gate (only help when really asked)
-//    876   Minecraft + website facts, Taught notes, site answers
-//    1128  AI intent picker + Ask() (Claude/OpenAI)
-//    1205  Answers and actions (Respond/Do, queue, register)
-//    1363  Text building (lobby line, how-to-join)
-//    1436  Reading game manager files, Say()
+//    46    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    352   HelperSettings (every setting + default)
+//    393   State (static caches, cooldowns, test hooks)
+//    412   Patterns (free pass regexes)
+//    436   Entry point Execute()
+//    494   Help-review log (private review.jsonl)
+//    548   Handle() / HandleCore(): the message pipeline
+//    657   !helper / !ask / !pinguino (knowledge pack answers)
+//    792   Random chime + OptedOutOfBots
+//    832   Context gate (only help when really asked)
+//    882   Minecraft + website facts, Taught notes, site answers
+//    1134  AI intent picker + Ask() (Claude/OpenAI)
+//    1211  Answers and actions (Respond/Do, queue, register)
+//    1369  Text building (lobby line, how-to-join)
+//    1442  Reading game manager files, Say()
 // ═══════════════════════════════════════
+
 
 // ══════════════════════════════════════════════════════════════════════════
 //  PinguinoHelper: the HELPER part of PinguinoBot (see HelperPinguino\HELPER_DESIGN.md).
@@ -714,8 +715,11 @@ public class CPHInline
         var scored = new List<KeyValuePair<int, JObject>>();
         foreach (var e in KbEntries(mod))
         {
-            string blob = ((string)e["title"] ?? "") + " " + ((string)e["keywords"] ?? "") + " " + ((string)e["text"] ?? "");
-            int sc = TaughtWords(blob).Count(w => qw.Contains(w));
+            string title = (string)e["title"] ?? "";
+            string rest = ((string)e["keywords"] ?? "") + " " + ((string)e["text"] ?? "");
+            var tw = TaughtWords(title);
+            int sc = tw.Count(w => qw.Contains(w)) * 3 + TaughtWords(rest).Count(w => qw.Contains(w) && !tw.Contains(w));   // a title hit counts triple: the entry IS about that
+            foreach (Match cm in Regex.Matches(title, @"![a-z0-9]+", RegexOptions.IgnoreCase)) if (q.IndexOf(cm.Value, StringComparison.OrdinalIgnoreCase) >= 0) sc += 10;   // the question names the command itself
             if (sc > 0) scored.Add(new KeyValuePair<int, JObject>(sc, e));
         }
         scored = scored.OrderByDescending(x => x.Key).Take(6).ToList();
@@ -741,7 +745,7 @@ public class CPHInline
                 else why = "AI budget used up";
             }
             if (!string.IsNullOrWhiteSpace(reply)) answer = CleanAsk(reply, out why);
-            else if (scored[0].Key >= 2) answer = CleanAsk((string)scored[0].Value["text"], out why);   // no AI: the best entry, read out
+            else if (scored[0].Key >= 3) answer = CleanAsk((string)scored[0].Value["text"], out why);   // no AI: the best entry, read out
             else if (why == "") why = "no AI answer and no strong pack match";
         }
         if (answer == "")
