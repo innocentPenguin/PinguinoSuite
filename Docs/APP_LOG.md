@@ -73,6 +73,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 04:20 CDT - Host restart (per-month boards Feb 2026 on, profile displayName/aliasOf)
+
+Host rebuilt+restarted; /api/live 200; boards push ok; profiles re-pushed.
+
 ## 2026-10-20 04:17 CDT - Host restart (alias merge sg_yen->cyfirl, real Twitch display names)
 
 Host rebuilt+restarted; /api/live 200; boards push ok.
