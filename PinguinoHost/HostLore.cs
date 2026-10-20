@@ -183,7 +183,7 @@ namespace PinguinoHost
                 var trig = ((e["triggers"] as JArray) ?? new JArray()).Select(x => (string)x).ToList(); if (trig.Count == 0) continue;   // keyword replies are not commands
                 string resp = ((string)e["response"] ?? ""); string desc = resp.Length > 110 ? resp.Substring(0, 107) + "..." : resp;
                 if ((string)e["kind"] == "clip") desc = "A clip from the channel: " + resp.Replace("https://", "").Substring(0, Math.Min(resp.Replace("https://", "").Length, 60));
-                rows.Add(new JObject { { "command", trig[0] }, { "aliases", e["aliases"] ?? new JArray() }, { "action", "ChannelLore" }, { "category", "Channel" }, { "group", Group((string)e["kind"]) }, { "who", "everyone" }, { "permission", "everyone" }, { "usage", trig[0] },
+                rows.Add(new JObject { { "command", trig[0] }, { "aliases", e["aliases"] ?? new JArray() }, { "action", "ChannelLore" }, { "category", "Channel" }, { "section", "Stream info" }, { "importance", 100 + rows.Count }, { "group", Group((string)e["kind"]) }, { "who", "everyone" }, { "permission", "everyone" }, { "usage", trig[0] },
                     { "description", desc }, { "examples", new JArray(trig[0]) } });
             }
             return rows;

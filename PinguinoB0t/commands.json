@@ -4,7 +4,11 @@
   "commands": [
     {
       "command": "!commands",
-      "aliases": [],
+      "aliases": [
+        "!cmd",
+        "!cmds",
+        "!command"
+      ],
       "action": "PinguinoHost",
       "category": "Help",
       "who": "everyone",
@@ -12,7 +16,9 @@
       "description": "Link to the website help page with every chat command and a search box.",
       "examples": [
         "!commands"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 1
     },
     {
       "command": "!pm",
@@ -24,7 +30,9 @@
       "description": "The current private match name and password (one shared setting; mods change it with !lobbyname / !lobbypass).",
       "examples": [
         "!pm"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 8
     },
     {
       "command": "!register",
@@ -37,7 +45,9 @@
       "examples": [
         "!register CoolPenguin",
         "!register @viewer123 Cool Penguin"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 4
     },
     {
       "command": "!join",
@@ -49,7 +59,9 @@
       "description": "Join the queue (must be registered, queue must be open).",
       "examples": [
         "!join"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 2
     },
     {
       "command": "!leave",
@@ -61,7 +73,9 @@
       "description": "Leave the queue.",
       "examples": [
         "!leave"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 3
     },
     {
       "command": "!pos",
@@ -73,7 +87,9 @@
       "description": "Show your place in the queue.",
       "examples": [
         "!pos"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 6
     },
     {
       "command": "!myrank",
@@ -85,7 +101,9 @@
       "description": "Show your MMR on file and where it came from.",
       "examples": [
         "!myrank"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 15
     },
     {
       "command": "!lobby",
@@ -97,7 +115,9 @@
       "description": "Show the current Blue and Orange teams.",
       "examples": [
         "!lobby"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 7
     },
     {
       "command": "!stats",
@@ -110,7 +130,9 @@
       "examples": [
         "!stats",
         "!stats viewer123"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 13
     },
     {
       "command": "!topwins",
@@ -122,7 +144,9 @@
       "description": "Top 5 community-games players by wins (ties broken by points).",
       "examples": [
         "!topwins"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 14
     },
     {
       "command": "!queue",
@@ -137,7 +161,11 @@
         "!queue list",
         "!queue open",
         "!queue clear"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 5,
+      "modSection": "Stream",
+      "modImportance": 1
     },
     {
       "command": "!balance",
@@ -149,7 +177,9 @@
       "description": "Rotate current players out and build new teams from the queue using the current mode.",
       "examples": [
         "!balance"
-      ]
+      ],
+      "section": "Stream",
+      "importance": 3
     },
     {
       "command": "!match",
@@ -163,7 +193,9 @@
         "!match clear",
         "!match fill",
         "!match queue"
-      ]
+      ],
+      "section": "Stream",
+      "importance": 2
     },
     {
       "command": "!reroll",
@@ -175,7 +207,9 @@
       "description": "Different teams with the same players. Refills anyone kicked/left from the queue.",
       "examples": [
         "!reroll"
-      ]
+      ],
+      "section": "Stream",
+      "importance": 4
     },
     {
       "command": "!win",
@@ -187,7 +221,9 @@
       "description": "Record the winner and award points. A match can only be scored once.",
       "examples": [
         "!win blue"
-      ]
+      ],
+      "section": "Stream",
+      "importance": 5
     },
     {
       "command": "!next",
@@ -200,7 +236,9 @@
       "examples": [
         "!next",
         "!next orange"
-      ]
+      ],
+      "section": "Stream",
+      "importance": 6
     },
     {
       "command": "!mode",
@@ -212,7 +250,9 @@
       "description": "How teams are made.",
       "examples": [
         "!mode random"
-      ]
+      ],
+      "section": "Stream",
+      "importance": 7
     },
     {
       "command": "!pick",
@@ -225,7 +265,9 @@
       "examples": [
         "!pick alice bob carl",
         "!pick auto"
-      ]
+      ],
+      "section": "Stream",
+      "importance": 8
     },
     {
       "command": "!format",
@@ -237,7 +279,9 @@
       "description": "Team size for the next match.",
       "examples": [
         "!format 2v2"
-      ]
+      ],
+      "section": "Stream",
+      "importance": 9
     },
     {
       "command": "!kick",
@@ -249,7 +293,9 @@
       "description": "Remove someone from the queue. Follow with !reroll if they were in the lobby.",
       "examples": [
         "!kick @viewer123"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 10
     },
     {
       "command": "!mmr",
@@ -261,7 +307,9 @@
       "description": "Look up a player's MMR.",
       "examples": [
         "!mmr @viewer123"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 13
     },
     {
       "command": "!setmmr",
@@ -275,7 +323,9 @@
         "!setmmr @viewer123 1200",
         "!setmmr @viewer123 c2",
         "!setmmr @viewer123 auto"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 14
     },
     {
       "command": "!first",
@@ -287,7 +337,9 @@
       "description": "Your First 5 record (1st-5th place counts and total).",
       "examples": [
         "!first"
-      ]
+      ],
+      "section": "Chat history",
+      "importance": 1
     },
     {
       "command": "!firsts",
@@ -299,7 +351,9 @@
       "description": "Top 5 First 5 leaderboard.",
       "examples": [
         "!firsts"
-      ]
+      ],
+      "section": "Chat history",
+      "importance": 2
     },
     {
       "command": "(chat message)",
@@ -309,7 +363,9 @@
       "who": "automatic",
       "usage": "Just chat when the game is running",
       "description": "First 5 unique chatters claim 1st-5th. Payout via !addpoints every 5 min: 15000 / 10500 / 7500 / 4500 / 3000.",
-      "examples": []
+      "examples": [],
+      "section": "Chat history",
+      "importance": 3
     },
     {
       "command": "!leaderboards",
@@ -321,7 +377,9 @@
       "who": "everyone",
       "usage": "!leaderboards",
       "description": "Link to the website leaderboards (top gifters, bitters, yappers and watch streaks, all time or by month).",
-      "examples": []
+      "examples": [],
+      "section": "Stream info",
+      "importance": 2
     },
     {
       "command": "!topgifters",
@@ -336,7 +394,9 @@
       "examples": [
         "!topgifters",
         "!topgifters oct"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 3
     },
     {
       "command": "!topbits",
@@ -352,7 +412,9 @@
       "examples": [
         "!topbits",
         "!topbits last"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 4
     },
     {
       "command": "!topyappers",
@@ -367,7 +429,9 @@
       "examples": [
         "!topyappers",
         "!topyappers sep"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 5
     },
     {
       "command": "!topstreak",
@@ -382,7 +446,9 @@
       "examples": [
         "!topstreak",
         "!topstreaks oct"
-      ]
+      ],
+      "section": "Chat history",
+      "importance": 8
     },
     {
       "command": "!streak",
@@ -395,7 +461,9 @@
       "examples": [
         "!streak",
         "!streak cyfirl"
-      ]
+      ],
+      "section": "Chat history",
+      "importance": 6
     },
     {
       "command": "!streakrecord",
@@ -407,7 +475,9 @@
       "description": "The best watch streak someone has shared, with the date.",
       "examples": [
         "!streakrecord"
-      ]
+      ],
+      "section": "Chat history",
+      "importance": 7
     },
     {
       "command": "!gifted",
@@ -420,7 +490,9 @@
       "examples": [
         "!gifted",
         "!gifted wyatt104987"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 6
     },
     {
       "command": "!bits",
@@ -432,7 +504,9 @@
       "description": "Total bits cheered, the bits badge tier and the rank on the bits board.",
       "examples": [
         "!bits"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 7
     },
     {
       "command": "!sub",
@@ -445,7 +519,9 @@
       "examples": [
         "!sub",
         "!sub ash_wagawaga"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 8
     },
     {
       "command": "!founders",
@@ -455,7 +531,9 @@
       "who": "everyone",
       "usage": "!founders",
       "description": "Lists the Founders (Twitch Founders Badge holders).",
-      "examples": []
+      "examples": [],
+      "section": "Stream info",
+      "importance": 9
     },
     {
       "command": "!alias",
@@ -468,7 +546,9 @@
       "examples": [
         "!alias add sg_yen cyfirl",
         "!alias list"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 1
     },
     {
       "command": "!boards",
@@ -478,7 +558,9 @@
       "who": "mods",
       "usage": "!boards refresh | !boards status",
       "description": "refresh = recompute every leaderboard now and push it to the website. status = people, months and the last push result.",
-      "examples": []
+      "examples": [],
+      "section": "Viewers",
+      "importance": 4
     },
     {
       "command": "!subs",
@@ -488,7 +570,9 @@
       "who": "mods",
       "usage": "!subs import | !subs status",
       "description": "import = read any new subscriber-list*.csv (Downloads or Data\\subs\\incoming) into the subscriber list. status = counts by tier, lapsed, founders.",
-      "examples": []
+      "examples": [],
+      "section": "Viewers",
+      "importance": 5
     },
     {
       "command": "!streaks",
@@ -498,7 +582,9 @@
       "who": "mods",
       "usage": "!streaks backfill | !streaks status",
       "description": "backfill = read old chat logs for watch streaks people shared (safe to repeat). status = how many people shared one.",
-      "examples": []
+      "examples": [],
+      "section": "Viewers",
+      "importance": 6
     },
     {
       "command": "!names",
@@ -508,7 +594,9 @@
       "who": "mods",
       "usage": "!names refresh",
       "description": "Ask Twitch again for everyone's real display name (capital letters) and update the boards.",
-      "examples": []
+      "examples": [],
+      "section": "Viewers",
+      "importance": 2
     },
     {
       "command": "!lookup",
@@ -520,7 +608,9 @@
       "description": "Shows everything on record for a person: aliases, subscription, gifts, bits, messages and watch streak.",
       "examples": [
         "!lookup cyfirl"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 3
     },
     {
       "command": "!me",
@@ -530,7 +620,9 @@
       "who": "everyone",
       "usage": "!me",
       "description": "Join the tournament wheel while sign-ups are open (also a Join button on the website tournament page).",
-      "examples": []
+      "examples": [],
+      "section": "Essentials",
+      "importance": 9
     },
     {
       "command": "!wheel",
@@ -540,7 +632,9 @@
       "who": "mods",
       "usage": "!wheel new|open|close|draw|spin [n]|undo|reset|announce|end | mode random|balanced | size 1-4 | odd waitlist|trio|partial|hold|mod | eligibility all|subs | remove <user> | mmr <user> <n>",
       "description": "Run the tournament wheel: sign-ups, the draw, one spin per pick (the last pick reveals itself), team announcements go to chat by themselves.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 19
     },
     {
       "command": "!spin",
@@ -550,7 +644,9 @@
       "who": "mods",
       "usage": "!spin [n]",
       "description": "Shortcut for !wheel spin: reveal the next pick (or up to pick n).",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 20
     },
     {
       "command": "!practice",
@@ -560,7 +656,9 @@
       "who": "mods",
       "usage": "!practice on [n] | add [n] | off",
       "description": "Rehearse with fake players (practice01...). They fill the queue, matchmaking and the wheel but are never saved or counted anywhere.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 21
     },
     {
       "command": "!koth",
@@ -570,7 +668,9 @@
       "who": "mods",
       "usage": "!koth on|off",
       "description": "Switch King of the Hill on or off.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 18
     },
     {
       "command": "!strikes",
@@ -580,7 +680,9 @@
       "who": "everyone",
       "usage": "!strikes",
       "description": "How many strikes you have (3 = cannot join customs), split into permanent (red, never expire) and temporary (orange, one wears off per day).",
-      "examples": []
+      "examples": [],
+      "section": "Stream info",
+      "importance": 16
     },
     {
       "command": "!strike",
@@ -593,7 +695,9 @@
       "examples": [
         "!strike @user",
         "!strike @user toxicity"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 7
     },
     {
       "command": "!unstrike",
@@ -606,7 +710,9 @@
       "examples": [
         "!unstrike @user",
         "!unstrike @user perma"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 8
     },
     {
       "command": "!finish",
@@ -616,7 +722,9 @@
       "who": "mods",
       "usage": "!finish <blue|orange>",
       "description": "End the King of the Hill game: record the winner and rotate the queue.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 12
     },
     {
       "command": "!activity",
@@ -626,7 +734,9 @@
       "who": "mods",
       "usage": "!activity [rl|fn] competitive|casual|koth|viewers|boxfights|zonewars|end",
       "description": "Pick what kind of game the stream is running.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 11
     },
     {
       "command": "!gamemode",
@@ -636,7 +746,9 @@
       "who": "mods",
       "usage": "!gamemode standard|dropshot|rumble",
       "description": "Rocket League game mode for stats.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 10
     },
     {
       "command": "!setsr",
@@ -646,7 +758,9 @@
       "who": "mods",
       "usage": "!setsr @user <0-5000>",
       "description": "Set a Fortnite skill rating.",
-      "examples": []
+      "examples": [],
+      "section": "Viewers",
+      "importance": 15
     },
     {
       "command": "!matchwin",
@@ -656,7 +770,9 @@
       "who": "mods",
       "usage": "!matchwin <id> blue|orange",
       "description": "Fix the winner of a past match (stats are corrected).",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 13
     },
     {
       "command": "!matchdel",
@@ -666,7 +782,9 @@
       "who": "mods",
       "usage": "!matchdel <id>",
       "description": "Remove a past match and take its wins back.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 14
     },
     {
       "command": "!move",
@@ -676,7 +794,9 @@
       "who": "mods",
       "usage": "!move <user> <position>",
       "description": "Move someone in the queue.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 15
     },
     {
       "command": "!out",
@@ -686,7 +806,9 @@
       "who": "mods",
       "usage": "!out <user>",
       "description": "Take a player out of the current match.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 16
     },
     {
       "command": "!in",
@@ -696,7 +818,9 @@
       "who": "mods",
       "usage": "!in <user> <blue|orange>",
       "description": "Put a player into a team.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 17
     },
     {
       "command": "!scene",
@@ -706,7 +830,9 @@
       "who": "mods",
       "usage": "!scene <name>",
       "description": "Switch the OBS scene.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 22
     },
     {
       "command": "!source",
@@ -716,7 +842,9 @@
       "who": "mods",
       "usage": "!source on|off|toggle <name>",
       "description": "Show or hide an OBS source.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 23
     },
     {
       "command": "!obs",
@@ -726,7 +854,9 @@
       "who": "mods",
       "usage": "!obs auto on|off | !obs status",
       "description": "Automatic OBS scene switching and status.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 24
     },
     {
       "command": "!problems",
@@ -736,7 +866,9 @@
       "who": "mods",
       "usage": "!problems [clear]",
       "description": "List what the bot found wrong, or clear the list.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 25
     },
     {
       "command": "!check",
@@ -746,7 +878,9 @@
       "who": "mods",
       "usage": "!check",
       "description": "Self-test: problems go to the website log.",
-      "examples": []
+      "examples": [],
+      "section": "Stream",
+      "importance": 26
     },
     {
       "command": "!forgetme",
@@ -756,7 +890,9 @@
       "who": "everyone",
       "usage": "!forgetme",
       "description": "ChattyPinguino forgets everything it remembers about you.",
-      "examples": []
+      "examples": [],
+      "section": "Your settings",
+      "importance": 1
     },
     {
       "command": "!rememberme",
@@ -766,7 +902,9 @@
       "who": "everyone",
       "usage": "!rememberme",
       "description": "Let ChattyPinguino remember things about you again.",
-      "examples": []
+      "examples": [],
+      "section": "Your settings",
+      "importance": 2
     },
     {
       "command": "!memory",
@@ -776,7 +914,9 @@
       "who": "everyone",
       "usage": "!memory",
       "description": "Shows what ChattyPinguino remembers about you.",
-      "examples": []
+      "examples": [],
+      "section": "Your settings",
+      "importance": 3
     },
     {
       "command": "!chatbot",
@@ -786,7 +926,9 @@
       "who": "mods",
       "usage": "!chatbot on|off",
       "description": "Switch ChattyPinguino on or off.",
-      "examples": []
+      "examples": [],
+      "section": "Chat commands",
+      "importance": 1
     },
     {
       "command": "!golive",
@@ -796,7 +938,9 @@
       "who": "mods",
       "usage": "!golive [time]",
       "description": "Set when the stream starts, for the countdown message.",
-      "examples": []
+      "examples": [],
+      "section": "Chat commands",
+      "importance": 3
     },
     {
       "command": "!lobbyname",
@@ -806,7 +950,9 @@
       "who": "mods",
       "usage": "!lobbyname <name> | off",
       "description": "Set (or clear) the private match name PinguinoHelper tells viewers to search.",
-      "examples": []
+      "examples": [],
+      "section": "Chat commands",
+      "importance": 4
     },
     {
       "command": "!lobbypass",
@@ -816,7 +962,9 @@
       "who": "mods",
       "usage": "!lobbypass <password> | off",
       "description": "Set (or clear) the private match password PinguinoHelper shares.",
-      "examples": []
+      "examples": [],
+      "section": "Chat commands",
+      "importance": 5
     },
     {
       "command": "!pg",
@@ -826,7 +974,9 @@
       "who": "mods",
       "usage": "!pg status | core|chat|helper on|off | test | cutover",
       "description": "Quick control of the bots from chat. Everyone else gets no answer.",
-      "examples": []
+      "examples": [],
+      "section": "Chat commands",
+      "importance": 14
     },
     {
       "command": "!opinion",
@@ -839,7 +989,9 @@
       "examples": [
         "!opinion cyfirl",
         "!opinion refresh all"
-      ]
+      ],
+      "section": "Chat commands",
+      "importance": 2
     },
     {
       "command": "!8ball",
@@ -851,7 +1003,9 @@
       "description": "Ask the magic 8-ball. The bot answers in its own voice and may nod to public things like your sub, watch streak or what chat was just saying. Limited to once every 45 seconds per person.",
       "examples": [
         "!8ball will I win my next game?"
-      ]
+      ],
+      "section": "Fun",
+      "importance": 1
     },
     {
       "command": "!emote",
@@ -863,7 +1017,9 @@
       "description": "How often an emote from the channel's 7TV set has been used in chat, its rank, the top user and when it was last used.",
       "examples": [
         "!emote KEKW"
-      ]
+      ],
+      "section": "Chat history",
+      "importance": 9
     },
     {
       "command": "!topemotes",
@@ -878,7 +1034,9 @@
       "examples": [
         "!topemotes",
         "!topemotes oct"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 12
     },
     {
       "command": "!timer",
@@ -893,7 +1051,9 @@
       "examples": [
         "!timer add 15 follow the stream!",
         "!timer now commands"
-      ]
+      ],
+      "section": "Chat commands",
+      "importance": 7
     },
     {
       "command": "!remindme",
@@ -905,7 +1065,9 @@
       "description": "The bot @mentions you in chat when the time is up (1 minute to 24 hours, up to 3 open reminders). Survives restarts.",
       "examples": [
         "!remindme 30m take the pizza out"
-      ]
+      ],
+      "section": "Your settings",
+      "importance": 4
     },
     {
       "command": "!reminders",
@@ -915,7 +1077,9 @@
       "who": "everyone",
       "usage": "!reminders",
       "description": "Your open reminders and when they are due.",
-      "examples": []
+      "examples": [],
+      "section": "Your settings",
+      "importance": 5
     },
     {
       "command": "!cancelreminder",
@@ -927,7 +1091,9 @@
       "description": "Cancel one of your reminders (number from !reminders).",
       "examples": [
         "!cancelreminder 1"
-      ]
+      ],
+      "section": "Your settings",
+      "importance": 6
     },
     {
       "command": "!remind",
@@ -939,7 +1105,9 @@
       "description": "Set a reminder for someone else; the bot @mentions them when it is due.",
       "examples": [
         "!remind @viewer 10m answer chat"
-      ]
+      ],
+      "section": "Chat commands",
+      "importance": 6
     },
     {
       "command": "!countdown",
@@ -952,7 +1120,9 @@
       "examples": [
         "!countdown 10m starting soon",
         "!countdown 1h30m subathon"
-      ]
+      ],
+      "section": "Chat commands",
+      "importance": 8
     },
     {
       "command": "!stopwatch",
@@ -962,7 +1132,9 @@
       "who": "mods",
       "usage": "!stopwatch start [label] | stop | reset",
       "description": "On-stream stopwatch.",
-      "examples": []
+      "examples": [],
+      "section": "Chat commands",
+      "importance": 9
     },
     {
       "command": "!addtime",
@@ -975,7 +1147,9 @@
       "examples": [
         "!addtime 5m",
         "!addtime -2m"
-      ]
+      ],
+      "section": "Chat commands",
+      "importance": 10
     },
     {
       "command": "!stoptimer",
@@ -985,7 +1159,9 @@
       "who": "mods",
       "usage": "!stoptimer",
       "description": "Clear every on-stream timer.",
-      "examples": []
+      "examples": [],
+      "section": "Chat commands",
+      "importance": 11
     },
     {
       "command": "!points",
@@ -1000,7 +1176,9 @@
       "examples": [
         "!points",
         "!pengs cyfirl"
-      ]
+      ],
+      "section": "Essentials",
+      "importance": 10
     },
     {
       "command": "!watchtime",
@@ -1012,7 +1190,9 @@
       "description": "How long you have watched the channel, and your rank.",
       "examples": [
         "!watchtime"
-      ]
+      ],
+      "section": "Chat history",
+      "importance": 5
     },
     {
       "command": "!toppoints",
@@ -1025,7 +1205,9 @@
       "examples": [
         "!toppoints",
         "!toppoints oct"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 11
     },
     {
       "command": "!topwatch",
@@ -1037,7 +1219,9 @@
       "description": "Most watch time, all time or for one month.",
       "examples": [
         "!topwatch"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 10
     },
     {
       "command": "!addpoints",
@@ -1049,7 +1233,9 @@
       "description": "Give someone pengs.",
       "examples": [
         "!addpoints @ana 500"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 11
     },
     {
       "command": "!removepoints",
@@ -1061,7 +1247,9 @@
       "description": "Take pengs away from someone.",
       "examples": [
         "!removepoints @ana 50"
-      ]
+      ],
+      "section": "Viewers",
+      "importance": 12
     },
     {
       "command": "!economy",
@@ -1073,7 +1261,9 @@
       "description": "Points system status; import from StreamElements (dry run, then apply with the report id).",
       "examples": [
         "!economy status"
-      ]
+      ],
+      "section": "Chat commands",
+      "importance": 13
     },
     {
       "command": "!rank",
@@ -1088,7 +1278,9 @@
         "!rank 2s",
         "!rank dropshot",
         "!rank someEpicName 3v3"
-      ]
+      ],
+      "section": "Stream info",
+      "importance": 1
     },
     {
       "command": "!setrank",
@@ -1100,7 +1292,9 @@
       "description": "Mods update the rank !rank shows. You can also paste a whole 'Ranked 1v1: ... | Ranked 2v2: ...' line.",
       "examples": [
         "!setrank 2v2 Grand Champion I Div III (1532)"
-      ]
+      ],
+      "section": "Chat commands",
+      "importance": 12
     }
   ]
 }

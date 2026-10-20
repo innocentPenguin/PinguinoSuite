@@ -58,7 +58,7 @@ namespace PinguinoHost
             if (Teach.IsCommand(cmd)) { Teach.Handle(user, cmd, args, role, say); return true; }
             if (cmd == "!guess") { SiteShop.HandleGuess(user, args, say); return true; }   // hidden shop game: only the running round's player gets any answer
             string b = BoardOf(cmd);
-            bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || Economy.IsViewerCommand(cmd);
+            bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!command" || cmd == "!cmds" || cmd == "!cmd" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || Economy.IsViewerCommand(cmd);
             bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd);
             if (!viewer && !modOnly) return false;
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
@@ -79,7 +79,7 @@ namespace PinguinoHost
                 switch (cmd)
                 {
                     case "!pm": say(HostApi.PrivateMatchLine()); return true;
-                    case "!commands": say("Every chat command, with search: https://innocentpenguin.com/help#commands"); return true;
+                    case "!commands": case "!command": case "!cmds": case "!cmd": say("All my commands, by category and importance: https://innocentpenguin.com/commands"); return true;
                     case "!leaderboards": case "!leaderboard": say("Leaderboards (top gifters, bitters, yappers and watch streaks, all time or by month): " + Link); return true;
                     case "!gifted": Mine("gifters", me, args, say, user); return true;
                     case "!bits": Mine("bits", me, args, say, user); return true;
@@ -207,7 +207,7 @@ namespace PinguinoHost
             JObject src; try { src = SubsImport.ParseJ(File.ReadAllText(f)); } catch (Exception ex) { return new JObject { { "ok", false }, { "error", "commands.json: " + ex.Message } }; }
             var all = (src["commands"] as JArray) ?? new JArray();
             Func<JToken, string> who = c => ((string)c["who"] ?? "").ToLowerInvariant();
-            var viewer = new JArray(all.Where(c => who(c).Contains("everyone") || who(c) == "automatic").Select(Norm)); var chan = ChannelLore.DocRows(); foreach (var r in chan) { viewer.Add(r); } var mod = new JArray(all.Where(c => who(c).Contains("mod")).Select(Norm));
+            var viewer = new JArray(all.Where(c => who(c).Contains("everyone") || who(c) == "automatic").Select(Norm)); var chan = ChannelLore.DocRows(); foreach (var r in chan) { viewer.Add(r); } var mod = new JArray(all.Where(c => who(c).Contains("mod")).Select(c => { var o = (JObject)Norm(c); if (o["modSection"] != null) { o["section"] = o["modSection"]; o["importance"] = o["modImportance"]; } return o; }));
             return new JObject { { "ok", true }, { "version", src["version"] }, { "updated", src["updated"] }, { "viewer", viewer }, { "mod", mod }, { "all", new JArray(all.Concat(chan)) }, { "counts", new JObject { { "viewer", viewer.Count }, { "mod", mod.Count }, { "channel", chan.Count } } } };
         }
         static JToken Norm(JToken c) { var o = (JObject)c.DeepClone(); string w = ((string)o["who"] ?? "").ToLowerInvariant(); o["permission"] = w.Contains("everyone") && w.Contains("mod") ? "everyone (mods can do more)" : w.Contains("mod") ? "mods" : w.Contains("everyone") ? "everyone" : w; return o; }

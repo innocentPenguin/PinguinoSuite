@@ -1,4 +1,4 @@
-"""!rank / !setrank (replaces RocketRankBot's !rank).  Usage: python Tools/test-host-rank.py [dll]"""
+"""!commands aliases + section/importance in the commands doc, !rank / !setrank (replaces RocketRankBot's !rank).  Usage: python Tools/test-host-rank.py [dll]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
@@ -25,6 +25,13 @@ try:
     for _ in range(80):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
+    for c in ('!commands', '!command', '!cmds', '!cmd'):
+        r = say('viewer: ' + c); chk(c + ' alias', r == 'All my commands, by category and importance: https://innocentpenguin.com/commands', r)
+    doc = json.load(urllib.request.urlopen(B + '/api/commands-doc', timeout=10))
+    vs = {'Essentials', 'Stream info', 'Chat history', 'Fun', 'Your settings'}; ms = {'Chat commands', 'Stream', 'Viewers'}
+    chk('every viewer row has section + importance', all(c.get('section') in vs and isinstance(c.get('importance'), int) for c in doc['viewer']), [c['command'] for c in doc['viewer'] if c.get('section') not in vs][:5])
+    chk('every mod row has section + importance', all(c.get('section') in ms and isinstance(c.get('importance'), int) for c in doc['mod']), [c['command'] for c in doc['mod'] if c.get('section') not in ms][:5])
+    chk('!queue sits in Essentials for viewers and Stream for mods', any(c['command'] == '!queue' and c['section'] == 'Essentials' for c in doc['viewer']) and any(c['command'] == '!queue' and c['section'] == 'Stream' for c in doc['mod']))
     r = say('viewer: !rank'); chk('live from the tracker', r == 'Ranked 1v1: Champion I Div II (1003) | Ranked 2v2: Grand Champion II Div I (1750) | Ranked 3v3: Champion II Div III (1280)', r)
     r = say('viewer: !rank /2s'); chk('single playlist', r == 'Ranked 2v2: Grand Champion II Div I (1750)', r)
     chk('one tracker call so far (all playlists in one pull)', ncalls() == 1, ncalls())
