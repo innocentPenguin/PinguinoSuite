@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
+using System.Text;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
 namespace PinguinoHost
@@ -15,6 +16,7 @@ namespace PinguinoHost
         {
             via = "";
             if (!Lease.MayRun) { via = "this Host is not the master"; return false; }
+            if (SaidRecently(text)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent, same line said moments ago: " + (text.Length > 60 ? text.Substring(0, 60) : text)); return true; }
             role = string.IsNullOrWhiteSpace(role) ? "core" : role.Trim().ToLowerInvariant();
             var reg = LoadFile("bots.json"); var sec = BotSecretsV();
             var chain = new List<string> { role }; if (!chain.Contains("core")) chain.Add("core");
@@ -36,10 +38,31 @@ namespace PinguinoHost
                         Clog.Warn("automation", "chat send as " + r + " refused (HTTP " + (int)resp.StatusCode + ")");
                     }
                 }
-                catch (Exception ex) { Clog.Warn("automation", "chat send as " + r + " failed: " + ex.Message); }
+                catch (Exception ex)
+                {
+                    Clog.Warn("automation", "chat send as " + r + " failed: " + ex.Message);
+                    // a timeout after the request went out may still have been delivered: never try another account for it (that is how a line gets said twice)
+                    if (ex is AggregateException || ex is TaskCanceledException || ex is TimeoutException) { via = "timed out (may have gone out, not repeated)"; return true; }
+                }
             }
             if (Program.SayShared(text)) { via = "shared account"; return true; }
             via = "no account could send (not signed in, or sim mode)"; return false;
+        }
+
+        // NEVER SAY THE SAME LINE TWICE: every chat send (timers, reminders, commands, shoutouts...) passes here. Same text (case/spacing ignored) inside the window is dropped.
+        static readonly System.Collections.Generic.Dictionary<string, DateTime> _said = new System.Collections.Generic.Dictionary<string, DateTime>();
+        public static int DupSeconds { get { int n; return int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_DUP_SECONDS"), out n) ? n : 30; } }
+        public static bool SaidRecently(string text)
+        {
+            string k = System.Text.RegularExpressions.Regex.Replace((text ?? "").ToLowerInvariant(), "[​‍️]", "");
+            k = System.Text.RegularExpressions.Regex.Replace(k, @"\s+", " ").Trim(); int win = DupSeconds;
+            if (k == "" || win <= 0) return false;
+            lock (_said)
+            {
+                var now = DateTime.UtcNow; foreach (var old in _said.Where(x => (now - x.Value).TotalSeconds > win).Select(x => x.Key).ToList()) _said.Remove(old);
+                if (_said.ContainsKey(k)) return true;
+                _said[k] = now; return false;
+            }
         }
 
         static string IntroPage(string name)

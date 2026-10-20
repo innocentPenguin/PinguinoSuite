@@ -21,7 +21,7 @@ json.dump({'Bots': {'core': {'Enabled': True, 'Sender': 'helix', 'Account': 'Pin
 json.dump({'core': {'UserToken': 't', 'ClientId': 'c', 'SenderId': 'bot1', 'BroadcasterId': 'streamer1'}}, open(os.path.join(d, 'bots_secrets.json'), 'w'))
 def start(live):
     env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
-    env.update({'PINGUINO_HELIX_BASE': 'http://127.0.0.1:%d' % HX, 'PINGUINO_COMPAT_WS_PORT': '8999', 'PINGUINO_TIMERS_FAST': '1', 'PINGUINO_TIMERS_LIVE': live, 'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0'})
+    env.update({'PINGUINO_HELIX_BASE': 'http://127.0.0.1:%d' % HX, 'PINGUINO_COMPAT_WS_PORT': '8999', 'PINGUINO_TIMERS_FAST': '1', 'PINGUINO_TIMERS_LIVE': live, 'PINGUINO_DUP_SECONDS': '0', 'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0'})
     h = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(os.path.join(d, 'out.txt'), 'ab'), stderr=subprocess.STDOUT)
     for _ in range(80):
         try: api('/api/status'); break

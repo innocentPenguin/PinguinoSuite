@@ -25,7 +25,7 @@ public static class Harness
         a["message"] = text; a["userName"] = user.ToLower(); a["user"] = user; a["userId"] = "id_" + user.ToLower();
         a["isModerator"] = mod; a["role"] = mod ? 3 : 1; a["isBroadcaster"] = false; a["rawInput"] = "orig raw";
         if (Routed) a["pinguinoRouted"] = true;
-        CPHProxy.Sent.Clear(); CPHProxy.Runs.Clear(); CPHProxy.Globals.Remove("pinguino.result");
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Runs.Clear(); CPHProxy.Globals.Remove("pinguino.result");
         new CPHInline().Execute();
     }
 

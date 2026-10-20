@@ -199,6 +199,7 @@ public class CPHInline
             string tag = b != null && !string.IsNullOrEmpty(b.Tag) ? b.Tag : "[" + PgTitle(role) + "]";
             msg = tag + " " + text;
         }
+        if (PgSaidRecently(msg)) { CPH.LogInfo("[Bots] not sent, the same line was already said a moment ago: " + (msg.Length > 60 ? msg.Substring(0, 60) : msg)); return; }
         // its own login first; if that fails, the main account (PinguinoB0t), then the rest of the chain
         var tryList = new List<string> { speaker };
         if (!tryList.Contains("core")) tryList.Add("core");
@@ -209,6 +210,32 @@ public class CPHInline
             if (sp != null && PgHasVoice(r) && string.Equals(sp.Sender, "helix", StringComparison.OrdinalIgnoreCase) && PgHelixSend(r, msg)) return;
         }
         CPH.SendMessage(msg, true);   // the Streamer.bot bot account
+    }
+
+    // NEVER SEND THE SAME LINE TWICE: every bot checks (and records) its line here before it speaks. The record is a Streamer.bot global, so the router, the helper,
+    // the chat bot and the core all see each other's lines. Same text (case, spacing and invisible characters ignored) inside PgDupSeconds is dropped.
+    const int PgDupSeconds = 30;
+    bool PgSaidRecently(string text)
+    {
+        try
+        {
+            string n = System.Text.RegularExpressions.Regex.Replace((text ?? "").ToLowerInvariant(), "[​‍️]", "");
+            n = System.Text.RegularExpressions.Regex.Replace(n, @"\s+", " ").Trim();
+            if (n == "") return false;
+            long now = PgNow(); var keep = new List<string>(); bool dup = false;
+            string raw = CPH.GetGlobalVar<string>("pinguino.said.recent", false) ?? "";
+            foreach (string row in raw.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                int bar = row.IndexOf('|'); long t; if (bar < 1 || !long.TryParse(row.Substring(0, bar), out t) || now - t > PgDupSeconds) continue;
+                if (row.Substring(bar + 1) == n) dup = true;
+                keep.Add(row);
+            }
+            if (!dup) { keep.Add(now + "|" + n); }
+            if (keep.Count > 40) keep.RemoveRange(0, keep.Count - 40);
+            CPH.SetGlobalVar("pinguino.said.recent", string.Join("\n", keep), false);
+            return dup;
+        }
+        catch (Exception) { return false; }
     }
 
     // Sends as one bot's OWN Twitch account with Twitch's "send chat message" API. Needs bots_secrets.json: { "<role>": { "ClientId", "UserToken", "SenderId", "BroadcasterId" } }
@@ -234,6 +261,8 @@ public class CPHInline
             using (var st = req.GetRequestStream()) st.Write(bytes, 0, bytes.Length);
             using (var resp = (System.Net.HttpWebResponse)req.GetResponse()) return (int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300;
         }
+        catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
+        { CPH.LogWarn("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
         catch (Exception ex) { CPH.LogWarn("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message); return false; }
     }
 

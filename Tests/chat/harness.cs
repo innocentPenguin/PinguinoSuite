@@ -115,7 +115,7 @@ public static class Harness
         Check("system prompt present", lastSystem.Contains("PinguinoBot"));
 
         // 3. memory is recalled next time, and other viewers' memory never appears
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Ana", "@pinguinob0t hi", "id_ana");
         Check("viewer B prompt has no viewer A facts", !lastPrompt.Contains("Luna cat") && !lastPrompt.Contains("Has a cat named Luna"));
         Check("small talk: no queue, live state or stats in the prompt", !lastPrompt.Contains("[LIVE STATE]") && !lastPrompt.Contains("5W/1L") && !lastPrompt.Contains("[VIEWER STATUS]") && !lastPrompt.Contains("pinged you"), lastPrompt);
@@ -129,13 +129,13 @@ public static class Harness
         Check("zed chat visible as context to ana", lastPrompt.Contains("my cat Luna says hi"));
 
         // 4. no timer cooldown: the AI decides whether to answer; hush + flood guards stop spam
-        CPHProxy.Sent.Clear(); int before = llmCalls;
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); int before = llmCalls;
         Msg("Zed", "@pinguinob0t again?");
         Check("no cooldown: a second mention is answered", llmCalls == before + 1 && Last() != null);
         Check("prompt shows what the bot said recently", lastPrompt.Contains("[YOUR RECENT MESSAGES IN CHAT]") && lastPrompt.Contains("Welcome back champ!"));
         Check("system prompt teaches when to stay quiet", lastSystem.Contains("WHEN TO ANSWER AND WHEN TO STAY QUIET"));
         string savedReply = nextReply; nextReply = "{\"skip\":true,\"hush\":10}";
-        CPHProxy.Sent.Clear(); before = llmCalls;
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); before = llmCalls;
         Msg("Chill1", "@pinguinob0t chill");
         Check("AI can choose silence", llmCalls == before + 1 && Last() == null);
         Msg("Chill1", "@pinguinob0t hello??");
@@ -145,7 +145,7 @@ public static class Harness
         Check("flood guard caps AI calls", llmCalls - before <= 6 && llmCalls - before >= 1, (llmCalls - before).ToString());
 
         // 5. bots, commands, replies-to-bot, name without @
-        CPHProxy.Sent.Clear(); before = llmCalls;
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); before = llmCalls;
         Msg("Nightbot", "@pinguinob0t hi"); Msg("pinguinob0t", "@pinguinob0t hi");
         Check("ignores other bots and itself", llmCalls == before);
         Msg("Cmd1", "!join @pinguinob0t");
@@ -169,11 +169,11 @@ public static class Harness
         Check("master flagged", lastPrompt.Contains("MASTER AND CREATOR"));
 
         // 7. reply cleaning
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         nextReply = "{\"reply\":\"!join now https://evil.com /timeout x\",\"remember\":[]}";
         Msg("Clean1", "@pinguinob0t test");
         Check("strips commands and links", Last() != null && !Last().Contains("!") && !Last().Contains("http") && !Last().Contains(" /"), Last());
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         nextReply = "{\"reply\":\"you are a minor!\",\"remember\":[]}";
         Msg("Clean2", "@pinguinob0t how old am i");
         Check("calling someone a minor is blocked (stays silent)", Last() == null, Last());
@@ -183,24 +183,24 @@ public static class Harness
         nextReply = "{\"reply\":\"" + new string('a', 50) + " " + new string('b', 300) + "\",\"remember\":[]}";
         Msg("Clean3", "@pinguinob0t long");
         Check("no hard cap: a 350 character answer is sent whole", Last() != null && Last().Length > 340 && !Last().Contains("…"), Last() == null ? "null" : Last().Length.ToString());
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         nextReply = "{\"reply\":\"" + string.Concat(Enumerable.Repeat("This is a full sentence about the game. ", 25)).Trim() + "\",\"remember\":[]}";
         Msg("Clean3b", "@pinguinob0t explain everything");
         Check("an answer longer than Twitch allows is split at sentence ends", CPHProxy.Sent.Count == 3 || CPHProxy.Sent.Count == 2, CPHProxy.Sent.Count.ToString());
         Check("every part fits Twitch", CPHProxy.Sent.All(m => m.Length <= 450), string.Join(",", CPHProxy.Sent.Select(m => m.Length)));
         nextReply = "{\"skip\":true}";
-        CPHProxy.Sent.Clear(); Msg("Clean4", "@pinguinob0t skip");
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Clean4", "@pinguinob0t skip");
         Check("skip sends nothing", Last() == null);
 
         // 8. privacy commands
         nextReply = "{\"reply\":\"ok\",\"remember\":[\"Plays on PC\"]}";
-        Msg("Priv1", "@pinguinob0t hi"); CPHProxy.Sent.Clear();
+        Msg("Priv1", "@pinguinob0t hi"); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Priv1", "!memory");
         Check("!memory whispers", CPHProxy.Whispers.Count == 1 && CPHProxy.Whispers[0].Contains("Plays on PC") && (Last() ?? "").Contains("whisper"), string.Join("|", CPHProxy.Whispers));
         Check("!memory never prints facts in public", !CPHProxy.Sent.Any(m => m.Contains("Plays on PC")));
         Msg("Priv1", "!forgetme");
         Check("!forgetme wipes", Memory()["id_priv1"]["Facts"].Count() == 0 && (string)Memory()["id_priv1"]["Privacy"] == "forget");
-        CPHProxy.Sent.Clear(); nextReply = "{\"reply\":\"sure\",\"remember\":[\"Loves cats\"]}";
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); nextReply = "{\"reply\":\"sure\",\"remember\":[\"Loves cats\"]}";
         Msg("Priv1", "my name is x and @pinguinob0t hi", null);
         Check("opted-out viewer: nothing stored", Memory()["id_priv1"]["Facts"].Count() == 0 && (int)Memory()["id_priv1"]["Msgs"] == 0);
         Msg("Ctx5", "@pinguinob0t hello again");
@@ -209,7 +209,7 @@ public static class Harness
         Check("!remember me opts back in", (string)Memory()["id_priv1"]["Privacy"] == "");
 
         // 9. whisper blocked -> polite public fallback, no facts leaked
-        CPHProxy.WhisperOk = false; CPHProxy.Sent.Clear();
+        CPHProxy.WhisperOk = false; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Zed", "!memory");
         Check("whisper failure fallback", Last() != null && Last().Contains("couldn't whisper") && !Last().Contains("Luna"), Last());
         CPHProxy.WhisperOk = true;
@@ -217,14 +217,14 @@ public static class Harness
         // 10. offline: nothing recorded, no reply; privacy commands still work
         Live(false);
         typeof(CPHInline).GetField("_liveChecked", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue);
-        CPHProxy.Sent.Clear(); before = llmCalls;
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); before = llmCalls;
         Msg("Late1", "@pinguinob0t anyone home?", null, false);
         Check("offline: the AI is not called, nothing is learned", llmCalls == before);
         Check("offline: pinged bot says come back when live + the link", Last() != null && Last().Contains("come back when InnocentPenguin is live") && Last().Contains("innocentpenguin.com"), Last());
         int sentNap = CPHProxy.Sent.Count;
         Msg("Late1", "@pinguinob0t hello??", null, false);
         Check("offline: the sleeping reply is rate limited per viewer", CPHProxy.Sent.Count == sentNap);
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Late2", "just chatting while offline", null, false);
         Msg("Late2", "!join", null, false);
         Check("offline: ordinary chat and commands get no reply", Last() == null);
@@ -238,7 +238,7 @@ public static class Harness
         Live(true);
         typeof(CPHInline).GetField("_liveChecked", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue);
         Msg("Mod2", "!chatbot off", null, true);
-        CPHProxy.Sent.Clear(); before = llmCalls;
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); before = llmCalls;
         Msg("Fresh1", "@pinguinob0t hi");
         Check("!chatbot off silences it", llmCalls == before && Last() == null);
         Msg("Mod2", "!chatbot on", null, true);
@@ -246,7 +246,7 @@ public static class Harness
         Check("!chatbot on restores it", Last() != null);
 
         // 13. roles from the website: bots ignored, mods/VIPs known
-        CPHProxy.Sent.Clear(); before = llmCalls;
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); before = llmCalls;
         Msg("RoleBot", "@pinguinob0t hi");
         Check("website bot list is respected", llmCalls == before && Last() == null);
         Msg("CyFiRL", "@pinguinob0t hi");
@@ -265,7 +265,7 @@ public static class Harness
         // 15. stream-start study: facts learned, community notes saved, nothing re-studied
         File.WriteAllText(Path.Combine(logs, "import", "old_stream.txt"), "[12:00:01] Imported1: i main goalie in 3s" + "\n" + "[12:00:09] Imported1: my dog is named Rex" + "\n");
         studyReply = "{\"viewers\":[{\"login\":\"zed\",\"facts\":[\"Plays Rocket League on PS5\",\"Is 15 years old\"],\"notes\":\"Cat lover and regular\"},{\"login\":\"ghost_not_in_chat\",\"facts\":[\"Invented\"],\"notes\":\"x\"},{\"login\":\"imported1\",\"facts\":[\"Plays goalie in 3v3\"],\"notes\":\"Goalie main\"}],\"community\":[\"Loves cat memes\",\"Everyone hypes the goalies\"]}";
-        CPHProxy.Sent.Clear(); studyPrompts.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); studyPrompts.Clear();
         Msg("Mod2", "!chatbot study", null, true);
         Check("study ran", studyPrompts.Count >= 1, studyPrompts.Count.ToString());
         Check("study sees log lines", studyPrompts.Count > 0 && studyPrompts[0].Contains("VIEWER: zed") && studyPrompts[0].Contains("my cat Luna says hi"));
@@ -279,7 +279,7 @@ public static class Harness
         Check("imported viewer got facts", mem2.Properties().Any(p => (string)p.Value["Login"] == "imported1" && p.Value["Facts"].Any(x => (string)x["Text"] == "Plays goalie in 3v3")));
         Check("import file moved to done", Directory.GetFiles(Path.Combine(logs, "import", "done")).Length == 1);
         Check("community merged + saved", File.ReadAllText(Path.Combine(dir, "chat_study.json")).Contains("cat memes") && mergePrompt.Contains("Loves cat memes") && mergePrompt.Contains("cyfirl (mod)"));
-        CPHProxy.Sent.Clear(); nextReply = "{\"reply\":\"meow\",\"remember\":[]}";
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); nextReply = "{\"reply\":\"meow\",\"remember\":[]}";
         Msg("Fresh9", "@pinguinob0t sup");
         Check("community picture used in replies", lastPrompt.Contains("[COMMUNITY]") && lastPrompt.Contains("A chill Rocket League crew"));
         studyPrompts.Clear();
@@ -287,16 +287,16 @@ public static class Harness
         Check("old lines are not studied twice", !string.Concat(studyPrompts).Contains("my cat Luna says hi"), string.Concat(studyPrompts));
 
         // 16. broken JSON from the AI is salvaged, never posted raw
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         nextReply = "{\"reply\": \"yo that clutch was cracked\", \"remember\": [\"Has a cat named Biscuit\"";
         Msg("Salv1", "@pinguinob0t did you see it");
         Check("truncated JSON: clean reply", Last() == "@Salv1 yo that clutch was cracked", Last());
         Check("truncated JSON: memory still saved", Memory()["id_salv1"]["Facts"].Any(x => (string)x["Text"] == "Has a cat named Biscuit"));
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         nextReply = "Sure! ```json" + "\n" + "{reply\": \"lmao fr\"}" + "\n" + "```";
         Msg("Salv2", "@pinguinob0t fr?");
         Check("odd prefix is stripped", Last() == "@Salv2 lmao fr", Last());
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         nextReply = "just plain text no json at all";
         Msg("Salv3", "@pinguinob0t hi");
         Check("plain text still works", Last() == "@Salv3 just plain text no json at all", Last());
@@ -318,7 +318,7 @@ public static class Harness
         Check("never more than 5 viewers at once", ((System.Collections.IDictionary)fc.GetValue(null)).Count <= 5);
 
         // 18. cut-off / odd AI output is never posted half-finished; distress gets the safety note
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         nextReply = "{\"reply\": \"i run the queue";
         Msg("Cut1", "@pinguinob0t what do you do");
         Check("cut-off JSON posts nothing", Last() == null, Last());
@@ -644,10 +644,10 @@ public static class Harness
         Msg("Upd1", "@pinguinob0t when did you get updated, what changed?");
         Check("update log is in the prompt", lastPrompt.Contains("[YOUR UPDATES]") && lastPrompt.Contains("Names and trust") && lastPrompt.Contains("2026-10-19 08:15 CT"), lastPrompt);
         Check("system prompt knows the update rule", lastSystem.Contains("YOUR UPDATES"));
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Modx", "!chatbot status", null, true);
         Check("!chatbot status answers for mods", Last() != null && Last().Contains("AI calls this hour") && Last().Contains("Names and trust"), Last());
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Viewerx", "!chatbot status");
         Check("!chatbot status is mods only", Last() == null);
         Msg("Modx", "!chatbot updates", null, true);
@@ -667,7 +667,7 @@ public static class Harness
         Msg("Adv1", "@pinguinob0t daddy");
         Check("level 4", lastPrompt.Contains("level 4 of 4"));
         int callsAfter4 = llmCalls;
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Adv1", "@pinguinob0t hello again");
         Check("after level 4 the bot goes quiet for that viewer", llmCalls == callsAfter4 && Last() == null);
         Check("system prompt has the ladder", lastSystem.Contains("FRIENDSHIP, NOT ROMANCE") && lastSystem.Contains("harassment"));
@@ -728,7 +728,7 @@ public static class Harness
         for (int i = 0; i < 25; i++) Msg("Opnout", "secret chatter number " + i);
         Msg("Opnout", "!forgetme");
         for (int i = 0; i < 3; i++) Msg("Opnfew", "only a few messages " + i);
-        CPHProxy.Sent.Clear(); opinionPrompts.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); opinionPrompts.Clear();
         opinionReply = "{\"opinions\":[{\"login\":\"opnx\",\"opinion\":\"Always here and always loud, a lovable derailer of chat.\"},{\"login\":\"opnbad\",\"opinion\":\"Is 12 years old and very sweaty.\"},{\"login\":\"opnout\",\"opinion\":\"Mysterious and quiet type honestly.\"},{\"login\":\"invented\",\"opinion\":\"Made up person who is not in the data.\"}]}";
         Msg("Mod1", "!opinion refresh all", null, true);
         var memO = Memory();
@@ -741,9 +741,9 @@ public static class Harness
         Check("someone who opted out (!forgetme) gets no note", !opinionPrompts.Any(p => p.Contains("VIEWER: opnout")) && (memO["id_opnout"] == null || string.IsNullOrEmpty((string)memO["id_opnout"]["Opinion"])));
         Check("too few messages = no note", !opinionPrompts.Any(p => p.Contains("VIEWER: opnfew")));
         Check("made-up names from the AI are ignored", memO["login:invented"] == null);
-        CPHProxy.Sent.Clear(); Msg("Opnx", "!opinion opnx");
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Opnx", "!opinion opnx");
         Check("a normal viewer gets no answer to !opinion", CPHProxy.Sent.Count == 0, Last());
-        CPHProxy.Sent.Clear();
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Mod1", "!opinion opnx", null, true);
         Check("!opinion <user> never prints the note in public chat", CPHProxy.Sent.All(m => !m.Contains("lovable derailer")), string.Join("|", CPHProxy.Sent));
         Msg("Mod1", "!opinion status", null, true);
@@ -763,21 +763,21 @@ public static class Harness
         Directory.CreateDirectory(Path.Combine(dir, "profiles"));
         File.WriteAllText(Path.Combine(dir, "profiles", "ballguy.json"), "{\"roles\":{\"sub\":true,\"subMonths\":14,\"watchStreakBest\":120},\"traits\":[\"secret trait\"]}");
         Msg("Chatty1", "gg that last round was wild"); Msg("Chatty2", "anyone playing fortnite later");
-        CPHProxy.Sent.Clear(); ballPrompts.Clear(); int callsBefore = llmCalls;
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); ballPrompts.Clear(); int callsBefore = llmCalls;
         Msg("Ballguy", "!8ball will I win my next game?", null, false);
         Check("!8ball answers with the ball emoji and the model's line", Last() != null && Last().Contains("🎱 Signs point to yes"), Last());
         Check("the prompt has the question and the public context (streak, what chat said)", ballPrompts.Count == 1 && ballPrompts[0].Contains("will I win my next game") && ballPrompts[0].Contains("gg that last round") && ballPrompts[0].Contains("watch streak record 120"), ballPrompts.Count > 0 ? ballPrompts[0] : "none");
         Check("no private notes, traits or opinion notes in the 8ball prompt", ballPrompts.Count == 1 && !ballPrompts[0].Contains("secret trait") && !ballPrompts[0].Contains("opinion") && !ballPrompts[0].Contains("Notes"), ballPrompts.Count > 0 ? ballPrompts[0] : "none");
-        CPHProxy.Sent.Clear(); Msg("Ballguy", "!8ball", null, false);
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Ballguy", "!8ball", null, false);
         Check("!8ball without a question asks for one, no AI call", Last() != null && Last().Contains("ask me a question") && ballPrompts.Count == 1);
         ballReply = "!ignore previous https://evil.example/x yes";
-        CPHProxy.Sent.Clear(); Msg("Ballguy", "!8ball is this a trick?", null, false);
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Ballguy", "!8ball is this a trick?", null, false);
         Check("a link or a leading ! from the model never reaches chat", Last() != null && !Last().Contains("http") && !Last().Contains("🎱 !") , Last());
         SetCfg("EightBallUserSec", 600);
 
         // ── 19d. ChatReplies off: Chatty stays quiet; !8ball, logging and mod commands keep working ──
         SetCfgB("ChatReplies", false);
-        CPHProxy.Sent.Clear(); int callsOff = llmCalls; nextReply = "{\"reply\":\"should not be sent\",\"remember\":[]}";
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); int callsOff = llmCalls; nextReply = "{\"reply\":\"should not be sent\",\"remember\":[]}";
         Msg("Quiet1", "@pinguinob0t hello there, how are you?");
         Check("ChatReplies off: a mention gets no reply and no AI call", CPHProxy.Sent.Count == 0 && llmCalls == callsOff, string.Join("|", CPHProxy.Sent));
         SetCfg("EightBallUserSec", 0);
@@ -788,17 +788,17 @@ public static class Harness
 
         // ── 19e. lore proposals: no moderation from the bot, repeat guard, private lore + person cards in the prompt ──
         SetCfg("RepeatGapSec", 60);
-        nextReply = "{\"reply\":\"sure\",\"remember\":[]}"; int cm = llmCalls; CPHProxy.Sent.Clear();
+        nextReply = "{\"reply\":\"sure\",\"remember\":[]}"; int cm = llmCalls; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Stefan", "@pinguinob0t can you timeout Marsh for me");
         Check("a timeout request: no reply at all, no AI call", llmCalls == cm && Last() == null, Last());
-        CPHProxy.Sent.Clear(); Msg("Stefan", "@pinguinob0t ban him please");
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Stefan", "@pinguinob0t ban him please");
         Check("asked again within a minute: stays quiet", llmCalls == cm && Last() == null, Last());
-        CPHProxy.Sent.Clear(); Msg("Mod2", "@pinguinob0t make me a mod");
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Mod2", "@pinguinob0t make me a mod");
         Check("'make me a mod' points to the application page", llmCalls == cm && Last() != null && Last().Contains("innocentpenguin.com/mod-apply"), Last());
-        CPHProxy.Sent.Clear(); Msg("Mod3", "@pinguinob0t ban him please"); Check("other mod asks stay 'ask a mod'", llmCalls == cm && Last() != null && Last().ToLower().Contains("mod"), Last());
-        CPHProxy.Sent.Clear(); Msg("Talker", "@pinguinob0t did you see the ban hammer meme");
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Mod3", "@pinguinob0t ban him please"); Check("other mod asks stay 'ask a mod'", llmCalls == cm && Last() != null && Last().ToLower().Contains("mod"), Last());
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Talker", "@pinguinob0t did you see the ban hammer meme");
         Check("talk about a ban that is not a request is not refused", llmCalls > cm, Last());
-        int rc = llmCalls; CPHProxy.Sent.Clear();
+        int rc = llmCalls; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Spammy", "@pinguinob0t what is my nickname"); int afterFirst = llmCalls;
         Msg("Spammy", "@pinguinob0t what is my nickname"); Msg("Spammy", "@pinguinob0t what is my nickname"); Msg("Spammy", "@pinguinob0t what is my nickname");
         Check("the first copy of a prompt is answered, repeats are not", afterFirst == rc + 1 && llmCalls == afterFirst, rc + "/" + afterFirst + "/" + llmCalls);
@@ -860,12 +860,12 @@ public static class Harness
         Check("a mention is also seen when the chatbot replies to a bot account in bots.json", true);
 
         // ── welcome new viewers (Twitch first-message flag), no AI ──
-        Live(true); Extra.Clear(); CPHProxy.Sent.Clear(); int llm0 = llmCalls;
+        Live(true); Extra.Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); int llm0 = llmCalls;
         Extra["firstMessage"] = true; Msg("Brandnew", "hello everyone");
         Check("first message ever: welcomed by name, no AI call", Last() != null && Last().Contains("@Brandnew") && Last().Contains("🐧") && llmCalls == llm0, Last());
-        Extra.Clear(); CPHProxy.Sent.Clear(); Msg("Brandnew", "second message");
+        Extra.Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Brandnew", "second message");
         Check("second message: no welcome", Last() == null, Last());
-        Extra["firstMessage"] = true; CPHProxy.Sent.Clear(); Msg("Brandnew2", "what's up");
+        Extra["firstMessage"] = true; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Brandnew2", "what's up");
         Check("a second new viewer inside the gap is not welcomed (raid flood guard)", Last() == null, Last());
         Extra.Clear();
 

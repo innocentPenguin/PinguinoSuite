@@ -279,6 +279,7 @@ namespace PinguinoHost
             cph.Say = m =>
             {
                 if (!Lease.MayRun) return false;
+                if (HostApi.SaidRecently(m)) return true;   // never the same line twice
                 var resp = http.SendAsync(Req(HttpMethod.Post, HostApi.Helix + "/chat/messages", new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", m } })).Result;
                 if (!resp.IsSuccessStatusCode) Clog.Warn("twitch", "chat send refused by Twitch (HTTP " + (int)resp.StatusCode + (resp.StatusCode == (System.Net.HttpStatusCode)429 ? ", rate limited" : resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : "") + ")");
                 return resp.IsSuccessStatusCode;

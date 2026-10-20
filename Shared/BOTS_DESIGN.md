@@ -48,3 +48,6 @@ From then on that bot speaks as itself through Twitch's "send chat message" API;
 
 ## Folder layout
 Layout (since Oct 19 2026, everything lives under `D:\PinguinoSuite`): `PinguinoB0t\` (core bot, overlays, commands), `PinguinoChat\`, `HelperPinguino\`, `Shared\` (this doc, the router, the sync script), `Pipeline\` (the log / profile / history scripts the scheduled task `PinguinoBot Log Update` runs), `Data\` (chat logs, profiles, history, lore), `Tests\{core,chat,helper,bots,history}`, `Suite\` (dashboard, PinguinoListen, PinguinoLink), `PinguinoApp\` (opens the Suite), `Archive\` (old versions). See `README.md` in the root for the map.
+
+## Never the same line twice
+Every line a bot says goes through `PgSay` (Streamer.bot bots) or `HostApi.SendAs` (Host modules). Both drop a line that is identical (case, spacing and invisible characters ignored) to one already said in the last 30 seconds, whichever bot said it. The Streamer.bot side keeps the record in the global `pinguino.said.recent`, so Router, Chat, Helper and Core see each other's lines. A send that times out is never retried on another account (it may have gone out). New code must not call `CPH.SendMessage` or post to Helix directly. Host tests set `PINGUINO_DUP_SECONDS=0` only when they must repeat a line.

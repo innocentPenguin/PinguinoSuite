@@ -168,6 +168,16 @@ public static class Harness
         Reset(); c.SayPublic("chat", "hi"); c.SayPublic("core", "ok");
         Check("with TagWhenShared a borrowed voice is tagged with the bot's name", CPHProxy.Sent.SequenceEqual(new[] { "[Yappy] hi", "ok" }), string.Join("|", CPHProxy.Sent));
 
+        // ── never the same line twice ──
+        Registry("{}"); Reset();
+        c.SayPublic("helper", "Queue is open!"); c.SayPublic("chat", "queue  is OPEN! "); c.SayPublic("core", "Queue is open!");
+        Check("the same line from any bot inside 30 s is said once (case/spacing ignored)", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "Queue is open!", string.Join("|", CPHProxy.Sent));
+        c.SayPublic("core", "Queue is closed!");
+        Check("a different line still goes out", CPHProxy.Sent.Count == 2 && CPHProxy.Sent[1] == "Queue is closed!", string.Join("|", CPHProxy.Sent));
+        CPHProxy.Globals["pinguino.said.recent"] = "1|queue is open!";   // old record: 30 s long gone
+        c.SayPublic("core", "Queue is open!");
+        Check("after the window the line may be said again", CPHProxy.Sent.Count == 3, string.Join("|", CPHProxy.Sent));
+
         // ── a bot's own account via Twitch's API (fake HTTP) ──
         Registry("{\"Bots\":{\"chat\":{\"Account\":\"chat_acc\",\"Sender\":\"helix\"}}}");
         File.WriteAllText(Path.Combine(dir, "bots_secrets.json"), "{\"chat\":{\"ClientId\":\"cid\",\"UserToken\":\"tok\",\"SenderId\":\"123\",\"BroadcasterId\":\"456\"}}");
