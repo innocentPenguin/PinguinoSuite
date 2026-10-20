@@ -2,6 +2,7 @@
 
 Kept by session 00 (the only session that launches, restarts or rebuilds the app). One entry per rebuild, relaunch or notable app change, newest first. Times are local (CDT).
 
+| 2026-10-20 ~06:20 | App relaunch + Host start: the app was not running, and leftover start-host/stop-host control files made the new core start then stop Host. Removed the pair, launched pinguino-suite.exe, started Host clean (/api/live 200). Alias merges confirmed by Ivan: rocketleaugelover221 -> synther_rl, mirihater -> ixsamuu (Data/boards/aliases.json); profiles re-pushed (1858). Host includes 02 commits cab671e (Nightbot quick-info), 9122ce7 (economy), aae0872 (profile sync). | 00 |
 | ~03:26 CDT | Host rebuild+restart (eb8eeea site Join: sub input, web-only join replies to site) | 00 |
 | ~03:22 CDT | Host rebuild+restart (53fdb5c practice mode, wheel auto-announce/auto-complete, site join via bridge) | 00 |
 | When | Event | Details |
