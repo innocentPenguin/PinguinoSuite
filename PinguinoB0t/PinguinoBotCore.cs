@@ -955,6 +955,7 @@ public class CPHInline
         DateTime t;
         if (_wheelSaid.TryGetValue(user, out t) && (DateTime.UtcNow - t).TotalSeconds < 30) return;
         _wheelSaid[user] = DateTime.UtcNow;
+        if (_quiet) { if (_capture != null) _capture.Add(msg); return; }   // a website-only join: the reply goes back to the site, not into chat
         Say(msg);
     }
 
@@ -984,7 +985,8 @@ public class CPHInline
         en.Flagged = !en.Mmr.HasValue;
         _wheel.Entrants.Add(en);
         WheelSave();
-        Say("@" + user + " you're in the tournament! (" + _wheel.Entrants.Count + " joined)");
+        string joined = "@" + user + " you're in the tournament! (" + _wheel.Entrants.Count + " joined)";
+        if (_quiet) { if (_capture != null) _capture.Add(joined); } else Say(joined);
         return true;
     }
 
@@ -1855,7 +1857,7 @@ public class CPHInline
                         _capture.Clear();
                     }
                     // [NEW][WHEEL] a site "Join" for the tournament runs !me with the same rules as chat (open sign-ups, subs-only, dedupe by id or name)
-                    _cmdUserId = (wc.userId ?? "").Trim(); _cmdDisplay = string.IsNullOrWhiteSpace(wc.name) ? webUser : wc.name; _cmdSub = wc.sub;
+                    _cmdUserId = (wc.userId ?? "").Trim(); _cmdDisplay = string.IsNullOrWhiteSpace(wc.name) ? webUser : wc.name; _cmdSub = wc.sub || string.Equals((wc.input ?? "").Trim(), "sub", StringComparison.OrdinalIgnoreCase);   // the site sends input "sub" for subscribers/staff
                     try { RunCommand(cmd, (wc.input ?? "").Trim(), webUser, wc.privileged); }
                     finally { _cmdUserId = ""; _cmdDisplay = ""; _cmdSub = false; }
                 }
