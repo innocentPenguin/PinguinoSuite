@@ -73,6 +73,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 06:06 - Host restart (02 aae0872 profile sync)
+
+- Live sub sync from Helix: Twitch 171 active subs vs 244 on profiles; 58 active subs had no profile (stubs now created); 131 profiles marked subbed but not on Twitch.
+- Avatars: 1542 of 1858 logins have a picture; 316 not found on Twitch (renamed/deleted). Cyfi's picture exists under cyfirl; site must resolve the nickname.
+- Profiles re-pushed (1858) with avatar/isBot/subType/giftedBy.
+
 ## 2026-10-20 06:00 - Host restart (9122ce7 economy, 7139194 helper, e757347/95e31ab/44be985 timers)
 
 - Economy: !points/!pengs, !watchtime, !toppoints, !topwatch (mods: !addpoints, !removepoints, !economy); /api/economy/import dry run + apply; waits for Ivan to paste se_jwt in the vault.
