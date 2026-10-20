@@ -11,13 +11,15 @@ try:
     for _ in range(80):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
-    for ln in ('event TwitchBan troll 1 modjoe', 'event TwitchUnban troll 1 modjoe', 'event TwitchMod newmod 1 innocentpenguin_', 'event TwitchUnmod newmod 1 innocentpenguin_'):
+    for ln in ('event TwitchBan troll 1 modjoe', 'event TwitchUnban troll 1 modjoe', 'event TwitchMod newmod 1 innocentpenguin_', 'event TwitchUnmod newmod 1 innocentpenguin_', 'event TwitchFollow ann', 'event TwitchFollow ann'):
         h.stdin.write((ln + '\n').encode()); h.stdin.flush(); time.sleep(0.4)
     items = json.load(urllib.request.urlopen(B + '/api/activity?since=0', timeout=5))['items']
     got = {i['kind']: i for i in items}
     for k, u, m in (('ban', 'troll', 'modjoe'), ('unban', 'troll', 'modjoe'), ('mod', 'newmod', 'innocentpenguin_'), ('unmod', 'newmod', 'innocentpenguin_')):
         i = got.get(k)
         if not i or i.get('user') != u or i.get('moderator') != m: fails.append('%s item wrong: %s' % (k, i))
+    fo = [i for i in items if i['kind'] == 'follow' and i.get('user') == 'ann']
+    if len(fo) != 2 or fo[0].get('refollow') is not False or fo[1].get('refollow') is not True: fails.append('refollow flags wrong: %s' % [i.get('refollow') for i in fo])
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS ban/unban/mod/unmod carry user + moderator')

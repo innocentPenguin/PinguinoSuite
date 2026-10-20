@@ -68,6 +68,7 @@ namespace PinguinoHost
             }
             if (kind == "cheer") Credits.Add("bits", who, amount); else if (kind == "redeem") Credits.Add("points", who, amount);
             var e = new JObject { { "ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "kind", kind }, { "type", kind }, { "user", who }, { "what", what }, { "detail", what } };
+            if (kind == "follow") e["refollow"] = RefollowCheck(who);
             if (amount > 0) e["amount"] = amount; if (tier > 0 && (kind == "sub" || kind == "resub" || kind == "gift")) e["tier"] = tier; if (message != "") e["message"] = message;
             if (g("moderator") != "" && (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod")) e["moderator"] = g("moderator");
             lock (L)
@@ -79,6 +80,30 @@ namespace PinguinoHost
             if (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod" || kind == "clip" || kind == "replay" || kind == "shoutout" || kind == "first5") return;   // the overlay text only follows follower/sub/cheer/raid-type events
             try { string ts = (string)Settings()["TextSource"]; if (!string.IsNullOrWhiteSpace(ts)) Program.ObsRaw("SetInputSettings", new JObject { { "inputName", ts }, { "inputSettings", new JObject { { "text", Line(e) } } } }); }
             catch (Exception ex) { Clog.Warn("latest", "could not update the OBS text source: " + ex.Message); }
+        }
+        // refollow: this login followed before (our own follow log, or the profile has a followingSince date). Persisted in followed.json next to the activity file.
+        static bool RefollowCheck(string login)
+        {
+            login = (login ?? "").ToLowerInvariant(); if (login == "") return false;
+            try
+            {
+                lock (L)
+                {
+                    string fp = System.IO.Path.Combine(HostApi.DataDir, "followed.json");
+                    var d = File.Exists(fp) ? JObject.Parse(File.ReadAllText(fp)) : new JObject(); var lg = d["logins"] as JObject ?? new JObject(); d["logins"] = lg;
+                    bool before = lg[login] != null;
+                    if (!before)
+                    {
+                        string dd = HostApi.DataDir.TrimEnd((char)92, '/'); string root = string.Equals(System.IO.Path.GetFileName(dd), "runtime", StringComparison.OrdinalIgnoreCase) ? System.IO.Path.GetDirectoryName(dd) : dd;
+                        string pf = System.IO.Path.Combine(root, "profiles", login + ".json");
+                        if (File.Exists(pf)) { try { before = !string.IsNullOrEmpty((string)JObject.Parse(File.ReadAllText(pf).TrimStart((char)0xFEFF))["seen"]?["followingSince"]); } catch (Exception) { } }
+                        lg[login] = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                        File.WriteAllText(fp, d.ToString());
+                    }
+                    return before;
+                }
+            }
+            catch (Exception) { return false; }
         }
         /// <summary>GET /api/activity?since=&amp;limit=&amp;type= for the shell's Activity Feed: newest last, only items with seq &gt; since.</summary>
         public static JObject Activity(long since, int limit, string type)
