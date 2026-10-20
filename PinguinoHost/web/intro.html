@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset=utf-8><title>Sub intro</title>
+<style>html,body{margin:0;width:800px;height:600px;background:transparent;overflow:hidden}
+#v,#g{position:absolute;left:0;top:0;width:800px;height:600px;object-fit:contain;display:none}</style></head><body>
+<video id=v playsinline></video><img id=g>
+<script>
+const slot=new URLSearchParams(location.search).get('slot')||'t1';let cur=0,busy=false,timer=null;
+const v=document.getElementById('v'),g=document.getElementById('g');
+function done(id){clearTimeout(timer);v.style.display='none';g.style.display='none';v.removeAttribute('src');g.removeAttribute('src');v.load();busy=false;fetch('/api/intro/done?id='+id).catch(()=>{})}
+function play(p,vol){busy=true;cur=p.id;const gif=/\.gif$/i.test(p.url);
+ timer=setTimeout(()=>done(p.id),(p.maxSec||60)*1000);
+ if(gif){g.src=p.url;g.style.display='block'}
+ else{v.volume=Math.max(0,Math.min(1,vol==null?1:vol));v.src=p.url;v.style.display='block';v.onended=()=>done(p.id);v.onerror=()=>done(p.id);v.play().catch(()=>done(p.id))}}
+async function tick(){if(!busy){try{const r=await (await fetch('/api/intro/poll?slot='+slot,{cache:'no-store'})).json();if(r.play&&r.play.id!==cur)play(r.play,r.volume)}catch(e){}}setTimeout(tick,500)}
+tick();
+</script></body></html>

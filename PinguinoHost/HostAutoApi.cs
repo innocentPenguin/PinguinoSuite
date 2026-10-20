@@ -42,6 +42,13 @@ namespace PinguinoHost
             via = "no account could send (not signed in, or sim mode)"; return false;
         }
 
+        static string IntroPage(string name)
+        {
+            foreach (var d in new[] { Path.Combine(AppContext.BaseDirectory, "web"), Path.Combine(Program.SuiteDir ?? "", "PinguinoHost", "web") })
+            { var f = Path.Combine(d, name); if (File.Exists(f)) return f; }
+            return null;
+        }
+
         static string AutoPagePath()
         {
             foreach (var d in new[] { Path.Combine(AppContext.BaseDirectory, "web"), Path.Combine(Program.SuiteDir ?? "", "PinguinoHost", "web") })
@@ -82,6 +89,26 @@ namespace PinguinoHost
                 string f = p == "/overlay/goal" ? Session.PagePath() : Credits.PagePath(); if (f == null) { c.Response.StatusCode = 404; return true; }
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
+            if (p == "/overlay/intro" && m == "GET" || p == "/intro" && m == "GET")
+            {
+                string f = IntroPage(p == "/intro" ? "intro_controls.html" : "intro.html"); if (f == null) { c.Response.StatusCode = 404; return true; }
+                Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
+            }
+            if (p.StartsWith("/intro/media/") && m == "GET")
+            {
+                string f = Intro.MediaPath(Uri.UnescapeDataString(p.Substring("/intro/media/".Length))); if (f == null) { c.Response.StatusCode = 404; return true; }
+                c.Response.ContentType = Intro.Mime(f); c.Response.Headers["Cache-Control"] = "no-store"; var fi = new FileInfo(f); c.Response.ContentLength64 = fi.Length;
+                using (var fs = File.OpenRead(f)) fs.CopyTo(c.Response.OutputStream);
+                return true;
+            }
+            if (p == "/api/intro" && m == "GET") { Write(c, Intro.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/intro/poll" && m == "GET") { Write(c, Intro.Poll(c.Request.QueryString["slot"]).ToString(), "application/json"); return true; }
+            if (p == "/api/intro/done" && m == "GET") { Write(c, Intro.Done(long.TryParse(c.Request.QueryString["id"], out long iid) ? iid : 0).ToString(), "application/json"); return true; }
+            if (p == "/api/intro/skip" && m == "POST") { Write(c, Intro.Skip().ToString(), "application/json"); return true; }
+            if (p == "/api/intro/clear" && m == "POST") { Write(c, Intro.Clear().ToString(), "application/json"); return true; }
+            if (p == "/api/intro/reset" && m == "POST") { Write(c, Intro.ResetPlayed().ToString(), "application/json"); return true; }
+            if (p == "/api/intro/test" && m == "POST") { var b = Body(c); Write(c, Intro.Test((string)b["login"], (int?)b["tier"] ?? 1).ToString(), "application/json"); return true; }
+            if (p == "/api/intro/settings" && m == "POST") { Write(c, Intro.Save(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/live" && m == "GET") { Write(c, LiveState.Api().ToString(), "application/json"); return true; }
             if (p == "/api/chat-rate" && m == "GET")
             {   // written by ChattyPinguino once a minute while live: chat lines per minute per stream, averages, the limits in force

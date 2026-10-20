@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Sub intros</title>
+<style>:root{color-scheme:dark}body{margin:0;background:#050505;color:#f2f0ec;font:14px 'Segoe UI',system-ui,sans-serif}main{max-width:900px;margin:0 auto;padding:18px 16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px}.sub{color:#a39f98;font-size:12.5px}.card{background:#101012;border:1px solid #232326;border-radius:10px;padding:14px;margin:12px 0}
+button{background:#ff9900;color:#111;border:0;border-radius:8px;padding:7px 12px;font-weight:600;cursor:pointer;margin:2px}button.g{background:#2a2a2e;color:#f2f0ec}
+input,select{background:#17171a;color:#f2f0ec;border:1px solid #34343a;border-radius:6px;padding:6px 8px}code{background:#17171a;padding:2px 5px;border-radius:4px}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:4px 6px;border-bottom:1px solid #232326}.ok{color:#6fd36f}.no{color:#e87}</style></head><body><main>
+<h1>Sub intros</h1><div class=sub>A T1/T2/T3 sub's first chat message each stream plays their clip on the stream. One at a time, highest tier first.</div>
+<div class=card><h2>Now</h2><div id=cur>...</div><div id=que class=sub></div>
+<button onclick="post('skip')">Skip current</button><button class=g onclick="post('clear')">Clear queue</button><button class=g onclick="post('reset')">Forget who already played this stream</button></div>
+<div class=card><h2>Test a name</h2><input id=tl placeholder='twitch login'> <select id=tt><option value=1>T1</option><option value=2>T2</option><option value=3>T3</option></select> <button onclick=test()>Play</button> <span id=tmsg class=sub></span></div>
+<div class=card><h2>OBS browser sources (800 x 600 each)</h2><table id=urls></table><div class=sub>Clips go in <code id=dir></code> as <code>login.mp4</code> (or .webm / .gif). Vertical T3 clips: <code>login_v.mp4</code>. Per-tier fallback: <code>_default_t1.mp4</code>, <code>_default_t2.mp4</code>, <code>_default_t3.mp4</code>.</div>
+<div class=sub id=files></div></div>
+<div class=card><h2>Settings</h2><div id=set></div></div>
+<script>
+const $=id=>document.getElementById(id);let S=null;
+async function j(u,o){return (await fetch(u,o)).json()}
+async function post(a,b){await j('/api/intro/'+a,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});load()}
+async function test(){const r=await j('/api/intro/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login:$('tl').value,tier:+$('tt').value})});$('tmsg').textContent=r.ok?'queued':r.error;load()}
+const FIELDS=[['Enabled','Intros on','b'],['OnlyWhileLive','Only while the stream is live','b'],['T1','Tier 1 plays','b'],['T2','Tier 2 plays','b'],['T3','Tier 3 plays','b'],['UseTierDefaults','Use _default_tN clips when someone has none','b'],['SkipOfflineSlots','Skip an intro when its browser source is not open','b'],['MaxPlaySec','Longest clip (seconds)','n'],['GifSec','GIF length (seconds)','n'],['Volume','Volume (0-1)','n'],['Dir','Clip folder (empty = Data/intros)','t']];
+function save(k,t,el){const v=t=='b'?el.checked:t=='n'?parseFloat(el.value):el.value;post('settings',{[k]:v})}
+async function load(){S=await j('/api/intro');const c=S.current;
+ $('cur').textContent=c?('Playing: '+c.display+' (T'+c.tier+', '+c.slot+')'):'Nothing playing'+(S.live===false?' (stream is offline)':'');
+ $('que').textContent=S.queue.length?('Waiting: '+S.queue.map(q=>q.display+' T'+q.tier).join(', ')):'Queue empty. '+S.playedThisStream+' sub(s) already played this stream.';
+ $('urls').innerHTML='<tr><th>Source</th><th>URL</th><th>Open in OBS</th></tr>'+Object.entries(S.urls).map(([k,u])=>{const a=S.slotsSeenAgoSec[k];return '<tr><td>'+k.toUpperCase()+'</td><td><code>'+location.origin+u+'</code></td><td class='+(a!=null&&a<15?'ok':'no')+'>'+(a!=null&&a<15?'yes':'no')+'</td></tr>'}).join('');
+ $('dir').textContent=S.dir;$('files').textContent='Clips found: '+(S.files.length?S.files.join(', '):'none yet');
+ if(!document.activeElement||document.activeElement.tagName!='INPUT')$('set').innerHTML=FIELDS.map(([k,l,t])=>'<div><label>'+(t=='b'?'<input type=checkbox '+(S.settings[k]?'checked':'')+' onchange="save(\''+k+'\',\'b\',this)"> '+l:l+': <input '+(t=='n'?'type=number step=any style="width:90px"':'type=text')+' value="'+(S.settings[k]??'')+'" onchange="save(\''+k+'\',\''+t+'\',this)">')+'</label></div>').join('')}
+load();setInterval(load,2000);
+</script></main></body></html>

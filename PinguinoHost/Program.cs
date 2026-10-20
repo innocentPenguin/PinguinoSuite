@@ -140,9 +140,10 @@ namespace PinguinoHost
         }
 
         // ---------------- dispatch: exactly the Streamer.bot trigger ownership in Docs\TRIGGERS.md ----------------
-        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false)
+        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false, int subTier = 0)
         {
-            if (!Lease.MayRun) return;   // not the master Host (or lease lost): never run the bots
+            if (!Lease.MayRun) return;
+            try { if (subTier > 0) Intro.OnChat(user, subTier); } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
             try { if (PgCommand.Handle(user, text, role)) return; } catch (Exception ex) { Clog.Warn("pg", "!pg failed: " + ex.Message); }
             try { if (Auto.OnChat(user, text, role, isSub, firstMsg, msgId, replyTo)) return; } catch (Exception ex) { Clog.Warn("automation", "chat trigger failed: " + ex.Message); }   // an Actions & Events command took it
@@ -248,7 +249,8 @@ namespace PinguinoHost
                 int c = line.IndexOf(':'); if (c < 1) continue;
                 string who = line.Substring(0, c).Trim(); int role = 1;
                 if (who.StartsWith("*")) { role = 3; who = who.Substring(1); } else if (who.StartsWith("#")) { role = 4; who = who.Substring(1); }
-                Dispatch(who, line.Substring(c + 1).Trim(), "sim-" + (++n), role, "id-" + who.ToLowerInvariant(), false, null);
+                int simTier = 0; if (who.StartsWith("$") && who.Length > 2 && char.IsDigit(who[1])) { simTier = who[1] - '0'; who = who.Substring(2); }   // sim: "$2alice: hi" = a tier 2 sub
+                Dispatch(who, line.Substring(c + 1).Trim(), "sim-" + (++n), role, "id-" + who.ToLowerInvariant(), false, null, false, simTier);
             }
         }
 
@@ -333,7 +335,7 @@ namespace PinguinoHost
             int role = T("badges").Contains("broadcaster/") ? 4 : T("mod") == "1" ? 3 : T("badges").Contains("vip/") ? 2 : 1;
             string display = T("display-name") != "" ? T("display-name") : m.Groups["nick"].Value;
             string reply = T("reply-parent-user-login");
-            Task.Run(() => Dispatch(display, msg, T("id"), role, T("user-id"), T("first-msg") == "1", reply, T("subscriber") == "1"));
+            Task.Run(() => Dispatch(display, msg, T("id"), role, T("user-id"), T("first-msg") == "1", reply, T("subscriber") == "1", Intro.TierFromBadges(T("badges"))));
         }
     }
 }
