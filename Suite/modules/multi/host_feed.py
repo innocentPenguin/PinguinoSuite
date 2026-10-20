@@ -5,7 +5,9 @@ retry. Subs, gifts, cheers and raids already arrive through Twitch's own chat ev
 is not connected in Multi (never twice). Off with setting host_feed_enabled=false."""
 import asyncio
 import json
+import os
 import time
+import urllib.error
 import urllib.request
 
 import config
@@ -49,6 +51,28 @@ def to_message(item, channel):
 def _get(path):
     with urllib.request.urlopen(HOST + path, timeout=3) as r:
         return json.loads(r.read())
+
+
+def _say_sync(text):
+    tok = os.environ.get("PINGUINO_MODULE_TOKEN") or os.environ.get("PINGUINO_API_TOKEN") or ""
+    req = urllib.request.Request(HOST + "/api/say", data=json.dumps({"text": text, "bot": "core"}).encode(), method="POST",
+                                 headers={"content-type": "application/json", "Authorization": "Bearer " + tok})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "via": f"Host refused ({e.code})"}
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, ConnectionRefusedError):
+            return None                                  # Host not running: nothing was sent, caller may use the direct route
+        return {"ok": True, "via": "timed out (may have gone out, not repeated)"}
+    except TimeoutError:
+        return {"ok": True, "via": "timed out (may have gone out, not repeated)"}
+
+
+async def say(text):
+    """Say a line in Twitch chat through the Host (its 30 s duplicate guard applies to every bot). None = Host unreachable."""
+    return await asyncio.to_thread(_say_sync, text)
 
 
 async def run(inbox, twitch_connected, base=None):

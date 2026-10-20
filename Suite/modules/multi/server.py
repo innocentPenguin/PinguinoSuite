@@ -502,6 +502,12 @@ async def send(request: Request):
     if key in _RECENT_SENDS:
         return {"ok": True, "duplicate": True, "id": ""}
     _RECENT_SENDS[key] = now
+    if platform == "twitch" and not reply_to:           # plain lines go through the Host so its global duplicate guard covers every bot
+        r = await host_feed.say(text)
+        if r is not None:
+            if not r.get("ok"):
+                raise HTTPException(502, str(r.get("via") or "Host could not send"))
+            return {"ok": True, "id": "", "duplicate": bool(r.get("duplicate")), "via": r.get("via")}
     try:
         mid = await conn.send(text, reply_to)
     except Exception as e:
