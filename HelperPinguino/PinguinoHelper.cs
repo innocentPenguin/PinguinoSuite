@@ -578,6 +578,7 @@ public class CPHInline
             // 3. patterns
             string intent, epic = "";
             Classify(text, out intent, out epic);
+            if (intent == "" && RxStrongAsk.IsMatch(text)) { _taughtHit = TaughtMatch(text); if (_taughtHit != null) intent = "site_taught"; }
 
             // 4. the AI, only when the patterns found nothing but it sounds practical
             if (intent == "" && _cfg.UseAi && RxPractical.IsMatch(text) && RxAsking.IsMatch(text) && text.Length <= 200)
@@ -839,6 +840,34 @@ public class CPHInline
     static readonly Regex RxSiteFaq = new Regex(@"\b(the\s+rules|what\s+are\s+the\s+rules|chat\s+rules|faq|what\s+is\s+a\s+strike|what\s+are\s+strikes|how\s+do\s+strikes\s+work)\b", RX);
     static readonly Regex RxSiteEmotes = new Regex(@"\b(7tv|seventv|emote\s+(list|search)|what\s+emotes?\s+(are|does)|which\s+emotes?|where\b.{0,12}\bemotes?)\b", RX);
 
+    // Approved "Taught" notes (helper_facts.json "Taught": [{id,text,taughtBy,...}], written by the Host's teach inbox only after Ivan approved them).
+    // A question matches a note when at least two meaningful words overlap; the answer is the note's text, kept short, plus the site help page.
+    JObject _taughtHit;
+    static readonly HashSet<string> TaughtStop = new HashSet<string>(new[] { "what", "when", "where", "which", "does", "this", "that", "with", "have", "from", "your", "about", "there", "their", "they", "will", "would", "could", "should", "how", "the", "can", "you", "are", "for", "and", "any", "who", "why", "is", "do", "to", "of", "in", "on", "it", "a", "an", "pinguino", "penguin", "stream", "channel", "chat", "guys", "please", "tell", "know" });
+    static HashSet<string> TaughtWords(string t)
+    {
+        var h = new HashSet<string>();
+        foreach (Match m in Regex.Matches((t ?? "").ToLowerInvariant(), @"[a-z0-9']{3,}")) { string w = m.Value.Trim((char)39); if (w.Length >= 3 && !TaughtStop.Contains(w)) h.Add(w.Length > 4 && w.EndsWith("s") ? w.Substring(0, w.Length - 1) : w); }
+        return h;
+    }
+    JObject TaughtMatch(string text)
+    {
+        try
+        {
+            var arr = Facts()["Taught"] as JArray; if (arr == null || arr.Count == 0) return null;
+            var q = TaughtWords(text); if (q.Count < 2) return null;
+            JObject best = null; int bs = 0;
+            foreach (var it in arr.OfType<JObject>())
+            {
+                string tx = (string)it["text"] ?? ""; if (tx.Trim() == "") continue;
+                int sc = TaughtWords(tx).Count(w => q.Contains(w));
+                if (sc > bs) { bs = sc; best = it; }
+            }
+            return bs >= 2 ? best : null;
+        }
+        catch (Exception) { return null; }
+    }
+
     static void Classify(string text, out string intent, out string epic)
     {
         intent = ""; epic = "";
@@ -999,6 +1028,13 @@ public class CPHInline
                 { long jb; if (_joinedByHelper.TryGetValue(login, out jb) && now - jb < _cfg.JoinGuardSec) { Say(who + "I already added you a moment ago. Ask \"where am I in the queue\" to check your spot."); return true; } }
                 return AskConfirm(login, display, "join", "", "Add you to the queue? Say yes to confirm.");
             case "song": Say(who + SongLine()); return true;
+            case "site_taught":
+            {
+                string tx = _taughtHit == null ? "" : ((string)_taughtHit["text"] ?? "").Trim(); _taughtHit = null;
+                if (tx == "") return false;
+                if (tx.Length > 200) { int cut = tx.LastIndexOf(' ', 200); tx = tx.Substring(0, cut > 80 ? cut : 200).TrimEnd(' ', ',', ';') + "..."; }
+                Say(who + tx + " More: " + SiteUrl("/help")); return true;
+            }
             case "site_ads": Say(who + "Ivan runs 3-minute ads during the stream so newcomers are not lost."); return true;
             case "site_tts": Say(who + "TTS voices (!brian, !hank, !ivy, !trump ...) are sub-only. All voices and commands: " + SiteUrl("/help#commands")); return true;
             case "site_roblox": Say(who + "Ivan posts the Roblox private-server link in chat himself. Keep an eye on chat."); return true;

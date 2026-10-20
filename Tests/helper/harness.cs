@@ -323,6 +323,20 @@ public static class Harness
         Msg("Quiet9", "@Someone what commands are there?");
         Check("should stay silent: a question meant for another viewer", Last() == null, Last());
 
+        // ── approved "Taught" notes (Host teach inbox) ──
+        {
+            string hf = Path.Combine(dir, "helper_facts.json"); var hj = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(hf));
+            hj["Taught"] = new Newtonsoft.Json.Linq.JArray(new Newtonsoft.Json.Linq.JObject { { "id", "t1" }, { "text", "The SMP world resets at the start of every season, builds are saved to the map archive." }, { "taughtBy", "modguy" } });
+            File.WriteAllText(hf, hj.ToString());
+            T.GetField("_factsAt", bf).SetValue(null, DateTime.MinValue);
+            Msg("Tch1", "when does the smp world reset?");
+            Check("a taught note answers a matching question, short, with the help link", Last() != null && Last().Contains("resets at the start of every season") && Last().Contains("https://innocentpenguin.com/help") && Last().IndexOf('\n') < 0, Last());
+            Msg("Tch2", "lol the world reset was funny");
+            Check("a statement is left alone", Last() == null, Last());
+            Msg("Tch3", "what is the best pizza topping?");
+            Check("an unrelated question gets no taught answer", Last() == null, Last());
+        }
+
         // ── private help-review log ──
         string rv = Path.Combine(dir, "helper", "review.jsonl");
         Check("the review log exists in Data\\helper (private, not pushed)", File.Exists(rv), rv);
