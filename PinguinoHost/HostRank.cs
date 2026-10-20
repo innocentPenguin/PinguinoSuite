@@ -97,7 +97,53 @@ namespace PinguinoHost
                 if (n == 0) { _pausedUntil = now + PauseMin * 60; c["status"] = "blocked"; status = "blocked"; SaveCache(); Clog.Warn("rank", "tracker answered without ranked playlists"); return c["ranks"] as JObject; }
                 try { string nm = (string)JObject.Parse(body)["data"]?["platformInfo"]?["platformUserHandle"]; if (!string.IsNullOrEmpty(nm)) c["name"] = Clean(nm); } catch (Exception) { }
                 c["ranks"] = got; c["status"] = "ok"; status = "ok"; SaveCache();
+                try { PublishProfiles(epic, got); } catch (Exception ex) { Clog.Warn("rank", "profile ranks not saved: " + ex.Message); }
                 return got;
+            }
+        }
+
+        static string DataRoot { get { string d = HostApi.DataDir.TrimEnd((char)92, '/'); return string.Equals(Path.GetFileName(d), "runtime", StringComparison.OrdinalIgnoreCase) ? (Path.GetDirectoryName(d) ?? d) : d; } }
+        static string RanksP { get { return Path.Combine(DataRoot, "ranks", "rl_ranks.json"); } }
+
+        /// <summary>twitch login -> Epic name for people who linked an account in matchmaking (Core's players.json: Platform epic + GameId)</summary>
+        static string EpicOfLogin(string login)
+        {
+            try
+            {
+                var pj = JObject.Parse(File.ReadAllText(Path.Combine(HostApi.DataDir, "players.json"), Encoding.UTF8).TrimStart((char)0xFEFF));
+                foreach (var p in pj.Properties()) { var o = p.Value as JObject; if (o == null) continue; string u = ((string)o["Username"] ?? p.Name).ToLowerInvariant(); if (u == login && string.Equals((string)o["Platform"], "epic", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace((string)o["GameId"])) return ((string)o["GameId"]).Trim(); }
+            }
+            catch (Exception) { }
+            return "";
+        }
+
+        /// <summary>every twitch login that belongs to this Epic account: the channel owner, plus matchmaking players who linked it. Aliases fold onto the main login.</summary>
+        static List<string> LoginsOfEpic(string epic)
+        {
+            var l = new List<string>(); JObject d; lock (L) d = Load();
+            if (epic == ((string)d["epic"] ?? "innocentpenguin").ToLowerInvariant()) l.Add(((string)d["login"] ?? "innocentpenguin_").ToLowerInvariant());
+            try
+            {
+                var pj = JObject.Parse(File.ReadAllText(Path.Combine(HostApi.DataDir, "players.json"), Encoding.UTF8).TrimStart((char)0xFEFF));
+                foreach (var p in pj.Properties()) { var o = p.Value as JObject; if (o == null) continue; if (string.Equals((string)o["Platform"], "epic", StringComparison.OrdinalIgnoreCase) && string.Equals(((string)o["GameId"] ?? "").Trim(), epic, StringComparison.OrdinalIgnoreCase)) l.Add(((string)o["Username"] ?? p.Name).ToLowerInvariant()); }
+            }
+            catch (Exception) { }
+            return l.Select(x => { try { return Boards.CanonLogin(x); } catch (Exception) { return x; } }).Distinct().ToList();
+        }
+
+        /// <summary>Saves each fresh rank pull to Data/ranks/rl_ranks.json for the profile push (rocketLeague). Only linked accounts, never a random lookup.</summary>
+        static void PublishProfiles(string epic, JObject ranks)
+        {
+            var logins = LoginsOfEpic(epic); if (logins.Count == 0 || ranks == null || !ranks.HasValues) return;
+            lock (L)
+            {
+                JObject doc = null; try { if (File.Exists(RanksP)) doc = JObject.Parse(File.ReadAllText(RanksP, Encoding.UTF8).TrimStart((char)0xFEFF)); } catch (Exception) { }
+                if (doc == null) doc = new JObject(); var users = doc["users"] as JObject ?? new JObject(); doc["users"] = users;
+                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                foreach (var lg in logins) users[lg] = new JObject { { "at", now }, { "ranks", ranks.DeepClone() } };
+                doc["updatedAt"] = now;
+                Directory.CreateDirectory(Path.GetDirectoryName(RanksP)); string tmp = RanksP + ".tmp";
+                File.WriteAllText(tmp, doc.ToString(), new UTF8Encoding(false)); if (File.Exists(RanksP)) File.Delete(RanksP); File.Move(tmp, RanksP);
             }
         }
 
@@ -163,7 +209,7 @@ namespace PinguinoHost
             JObject d; lock (L) d = Load();
             string owner = ((string)d["epic"] ?? "innocentpenguin").ToLowerInvariant(); if (owner == "") owner = "innocentpenguin";
             bool isOwner = who == "" || who == owner || who == "innocentpenguin_" || who == "innocentpenguin" || who == "ivan" || who == "penguin";
-            string epic = isOwner ? owner : who;
+            string epic = isOwner ? owner : who; string linked = isOwner ? "" : EpicOfLogin(who); if (linked != "") epic = linked.ToLowerInvariant();   // !rank alice: a viewer who linked their Epic account is found by their twitch name
             if (!Regex.IsMatch(epic, @"^[A-Za-z0-9_.\- ]{2,32}$")) { say("That does not look like an Epic name."); return; }
             string status = "pending"; JObject ranks = null;
             try { var t = System.Threading.Tasks.Task.Run(() => { string st; var r = Lookup(epic, out st); return Tuple.Create(r, st); }); if (t.Wait(14000)) { ranks = t.Result.Item1; status = t.Result.Item2; } else status = "pending"; } catch (Exception) { status = "blocked"; }
