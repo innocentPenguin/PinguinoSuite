@@ -20,18 +20,18 @@ Each session keeps its own heading/block; generators only touch their own marker
 
 Methods (name:line, outside the shared block): SaveJson:719, IsPractice:758, IsPracticeMatch:759, IsPracticeLast:763, HandlePractice:799, HandleMe:1004, HandleWheel:1028, SavePlayers:1446, SaveQueue:1447, SaveMatches:1448, SaveMmrCache:1449, SaveSettings:1450, SaveCurrentMatch:1451, PublishState:1461, BuildMatchObject:1521, BuildLiveState:1547, Execute:1586, Dispatch:1606, RunCommand:1687, Say:1745, StartWebSyncLoop:1783, HandleWebSync:1858, IsKothMode:2075, IsFortnite:2079, IsCompetitive:2080, IsStreamer:2085, PullNextBatch:2098, SendToBack:2111, BuildResult:2215, StartMatch:2312, HandleRegister:2562, HandleJoin:2651, HandleLeave:2690, HandlePos:2706, HandleRank:2724, HandleLobby:2741, HandleStats:2753, HandleTop:2767, HandleQueue:2786, HandleStreamer:2853, SwitchObsScene:2977, SwitchToGame:3001, BuildObsState:3028, HandleObsScene:3043, HandleObsSource:3054, HandleObs:3074, IsFnCategory:3101, HandleCasualStyle:3136, HandleGameMode:3145, IsCounted:3165, ApplyMatchStats:3171, HandleMatchWin:3191, HandleMatchDel:3221, HandleActivity:3243, HandleMove:3341, HandleOut:3365, HandleIn:3387, ReportProblem:3426, HandleProblems:3466, HandleCheck:3482, HandleFinish:3520, HandleKoth:3574, HandleMatch:3598, HandleBalance:3667, HandleNext:3679, HandleWin:3696, RecordResult:3724, DoRotateAndBalance:3783, DoKothRotateAndBalance:3815, HandleReroll:3897, HandlePick:3986, HandleMode:4027, HandleFormat:4047, HandleKick:4069, HandleMmrLookup:4099, HandleStrike:4148, HandleStrikes:4186, ApplyLive:4212, HandleSetSr:4232, HandleSetMmr:4249, PostTeams:4320, SayColored:4338
 
-### PinguinoB0t/PinguinoBotFirsts.cs (197 lines) - First-5 chat game
+### PinguinoB0t/PinguinoBotFirsts.cs (218 lines) - First-5 chat game
 
 | line | section |
 |---|---|
 | 27 | Settings |
-| 42 | Entry point |
-| 56 | 1. Personal record |
-| 74 | 2. Leaderboard |
-| 104 | 3. First-chatter claim (Chat Message trigger) |
-| 163 | Helpers |
+| 63 | Entry point |
+| 77 | 1. Personal record |
+| 95 | 2. Leaderboard |
+| 125 | 3. First-chatter claim (Chat Message trigger) |
+| 184 | Helpers |
 
-Methods (name:line, outside the shared block): Execute:43, ShowUserRecord:57, ShowLeaderboard:75, HandleChatMessage:105
+Methods (name:line, outside the shared block): Say:29, Execute:64, ShowUserRecord:78, ShowLeaderboard:96, HandleChatMessage:126
 
 ### PinguinoChat/PinguinoChat.cs (4070 lines) - ChattyPinguino: AI chat, !8ball, opinions, memory
 
