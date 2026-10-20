@@ -12,7 +12,7 @@ class H(BaseHTTPRequestHandler):
 srv = HTTPServer(('127.0.0.1', FAKE), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 d = tempfile.mkdtemp(prefix='pgboards_')
 json.dump({'Channel': 'trial', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
-json.dump({'ForwardToSite': True, 'SiteSupportersUrl': 'http://127.0.0.1:%d/api/bot/supporters' % FAKE, 'SiteEventsUrl': 'http://127.0.0.1:%d/api/bot/events' % FAKE}, open(os.path.join(d, 'latest_settings.json'), 'w'))
+json.dump({'ForwardToSite': True, 'SiteSupportersUrl': 'http://127.0.0.1:%d/api/bot/supporters' % FAKE, 'SiteBoardsUrl': 'http://127.0.0.1:%d/api/bot/boards' % FAKE, 'SiteEventsUrl': 'http://127.0.0.1:%d/api/bot/events' % FAKE}, open(os.path.join(d, 'latest_settings.json'), 'w'))
 t0 = 1771300000
 ev = [{'At': t0, 'Type': 'gift', 'User': 'generous', 'Amount': 5, 'To': ''}] + [{'At': t0 + 1, 'Type': 'gift', 'User': 'generous', 'Amount': 1, 'To': 'r%d' % i} for i in range(5)] + \
      [{'At': t0 + 500, 'Type': 'gift', 'User': 'generous', 'Amount': 1, 'To': 'solo1'}, {'At': t0 + 900, 'Type': 'gift', 'User': 'anonymous', 'Amount': 9, 'To': ''},
@@ -49,8 +49,10 @@ try:
     time.sleep(1); pushed = [g for g in got if g[0] == '/api/bot/supporters']
     chk('gifts and bits pushed to /api/bot/supporters with the key', len(pushed) >= 1 and pushed[-1][1] == 'Bearer testkey' and pushed[-1][2]['gifts'] == {'generous': 6} and pushed[-1][2]['bits'].get('bitty') == 350)
     chk('bots, practice players and the streamer are not in the push', all(k not in pushed[-1][2]['gifts'] and k not in pushed[-1][2]['bits'] for k in ('nightbot', 'practice01', 'trial')))
+    bp = [g for g in got if g[0] == '/api/bot/boards']
+    chk('the full board is pushed too, with streaks and messages, without the streamer', len(bp) >= 1 and bp[-1][1] == 'Bearer testkey' and bp[-1][2]['users']['talker']['streakBest'] == 33 and bp[-1][2]['users']['talker']['messages'] == 500 and 'trial' not in bp[-1][2]['users'] and 'nightbot' not in bp[-1][2]['users'])
     n = len(pushed); post('/api/boards/refresh'); time.sleep(1)
-    chk('unchanged totals are not pushed again', len([g for g in got if g[0] == '/api/bot/supporters']) == n)
+    chk('unchanged totals are not pushed again', len([g for g in got if g[0] == '/api/bot/supporters']) == n and len([g for g in got if g[0] == '/api/bot/boards']) == len(bp))
     chk('the same totals are served on /api/boards', get('/api/boards')['users']['bitty']['bits'] == 350)
 finally:
     host.kill(); srv.shutdown(); time.sleep(0.5); shutil.rmtree(d, True)

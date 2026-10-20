@@ -170,6 +170,29 @@ namespace PinguinoHost
         }
         // The site reads lifetime gifts and bits from its supporter tally: POST /api/bot/supporters {gifts:{login:n}, bits:{login:n}} (each login's number REPLACES the earlier one, max 3000 logins a call).
         // The watch streaks reach the site through the viewer profiles (roles.watchStreakBest / watchStreakCurrent, pushed by Pipeline/push-profiles.mjs).
+        static string _lastBoardsHash = ""; static DateTime _lastBoards = DateTime.MinValue;
+        // The full snapshot for the leaderboards page: POST /api/bot/boards {updatedAt, users:{login:{name,gifts,bits,messages,streakBest,streakCurrent,streakAt}}} (replaces the stored board; the site
+        // drops all-zero users and the streamer/bots itself). This carries the watch streaks too, so they do not have to wait for the daily profile push.
+        static void PushBoards(JObject r, JObject s, string key)
+        {
+            var users = new JObject(); string ch = (string)r["streamerLogin"] ?? "";
+            foreach (var p in ((JObject)r["users"]).Properties()) { if (p.Name == ch || !Regex.IsMatch(p.Name, "^[a-z0-9_]{2,25}$")) continue; var o = (JObject)p.Value; users[p.Name] = new JObject { { "name", o["name"] }, { "gifts", o["gifts"] }, { "bits", o["bits"] }, { "messages", o["messages"] }, { "streakBest", o["streakBest"] }, { "streakCurrent", o["streakCurrent"] }, { "streakAt", o["streakAt"] } }; }
+            string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(users.ToString(Newtonsoft.Json.Formatting.None))));
+            if (hash == _lastBoardsHash && (DateTime.UtcNow - _lastBoards).TotalMinutes < 30) return;
+            try
+            {
+                using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
+                {
+                    var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(new JObject { { "updatedAt", r["updatedAt"] }, { "users", users } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
+                    rq.Headers.Add("Authorization", "Bearer " + key);
+                    var resp = h.SendAsync(rq).Result;
+                    if (!resp.IsSuccessStatusCode) { _pushNote += "; boards HTTP " + (int)resp.StatusCode; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the board (HTTP " + (int)resp.StatusCode + ")"); return; }
+                }
+                _lastBoardsHash = hash; _lastBoards = DateTime.UtcNow; _pushNote += "; board ok (" + users.Count + " people)";
+            }
+            catch (Exception ex) { _pushNote += "; boards error: " + ex.Message; _lastBoards = DateTime.UtcNow.AddMinutes(-25); }
+        }
+
         static void PushToSite(JObject r)
         {
             var s = Latest.Settings(); if ((bool?)s["ForwardToSite"] != true) { _pushNote = "off (ForwardToSite)"; return; }
@@ -178,7 +201,7 @@ namespace PinguinoHost
             string ch = (string)r["streamerLogin"] ?? "";
             var rows = ((JObject)r["users"]).Properties().Where(p => p.Name != ch && ((int)p.Value["gifts"] > 0 || (int)p.Value["bits"] > 0)).OrderBy(p => p.Name, StringComparer.Ordinal).ToList();
             string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(string.Join("|", rows.Select(p => p.Name + ":" + (int)p.Value["gifts"] + ":" + (int)p.Value["bits"])))));
-            if (hash == _lastPushHash && (DateTime.UtcNow - _lastPush).TotalMinutes < 30) return;
+            if (hash == _lastPushHash && (DateTime.UtcNow - _lastPush).TotalMinutes < 30) { _pushNote = "supporters unchanged"; PushBoards(r, s, key); return; }
             try
             {
                 using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(20) })
@@ -191,9 +214,10 @@ namespace PinguinoHost
                         var resp = h.SendAsync(rq).Result;
                         if (!resp.IsSuccessStatusCode) { _pushNote = "site answered HTTP " + (int)resp.StatusCode; _lastPush = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the totals (HTTP " + (int)resp.StatusCode + ")"); return; }
                     }
-                _lastPushHash = hash; _lastPush = DateTime.UtcNow; _pushNote = "ok (" + rows.Count + " people)";
+                _lastPushHash = hash; _lastPush = DateTime.UtcNow; _pushNote = "supporters ok (" + rows.Count + " people)";
             }
             catch (Exception ex) { _pushNote = "error: " + ex.Message; _lastPush = DateTime.UtcNow.AddMinutes(-25); }
+            PushBoards(r, s, key);
         }
         public static string PushNote() { return _pushNote; }
     }
