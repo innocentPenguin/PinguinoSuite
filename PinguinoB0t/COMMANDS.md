@@ -60,6 +60,15 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!gifted` | `!gifted [user]` | How many subs you (or someone) gifted in total, and the rank on the gifters board. |
 | `!bits` | `!bits [user]` | Total bits cheered, the bits badge tier and the rank on the bits board. |
 
+### Points
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!points` | `!points [user]` | Your pengs balance and rank (earned by watching, imported from StreamElements). |
+| `!watchtime` | `!watchtime [user]` | How long you have watched the channel, and your rank. |
+| `!toppoints` | `!toppoints [month]` | Top pengs holders, all time or for one month. |
+| `!topwatch` | `!topwatch [month]` | Most watch time, all time or for one month. |
+
 ### Subscribers
 
 | Command | Usage | What it does |
@@ -161,6 +170,14 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!scene` | `!scene <name>` | Switch the OBS scene. |
 | `!source` | `!source on\|off\|toggle <name>` | Show or hide an OBS source. |
 | `!obs` | `!obs auto on\|off \| !obs status` | Automatic OBS scene switching and status. |
+
+### Points
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!addpoints` | `!addpoints @user <n>` | Give someone pengs. |
+| `!removepoints` | `!removepoints @user <n>` | Take pengs away from someone. |
+| `!economy` | `!economy status\|import\|apply <id>` | Points system status; import from StreamElements (dry run, then apply with the report id). |
 
 ### Timers
 

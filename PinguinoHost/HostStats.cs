@@ -21,6 +21,12 @@ namespace PinguinoHost
             }
         }
 
+        /// <summary>people who wrote in chat within the last N minutes (logins), for when Twitch's chatters list is not available.</summary>
+        public static List<string> ActiveLogins(int minutes)
+        {
+            lock (_l) { var now = DateTime.UtcNow; return _hits.Where(h => (now - h.At).TotalMinutes <= minutes).Select(h => h.Login).Where(x => x != "").Distinct().ToList(); }
+        }
+
         public static JObject Chat()
         {
             lock (_l)

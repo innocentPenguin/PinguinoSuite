@@ -118,6 +118,10 @@ namespace PinguinoHost
                 if (p == "/api/helper/review" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, HelperReview.List(c.Request.QueryString["kind"], c.Request.QueryString["q"], lim).ToString(), "application/json"); return true; }
                 if (p == "/api/helper/review" && m == "POST") { var hb = Body(c); Write(c, HelperReview.SetNote((string)hb["id"], (string)hb["note"]).ToString(), "application/json"); return true; }
             }
+            if (p == "/api/economy" && m == "GET") { Write(c, Economy.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/economy/user" && m == "GET") { Write(c, Economy.User(c.Request.QueryString["login"] ?? "").ToString(), "application/json"); return true; }
+            if (p == "/api/economy/import" && m == "POST") { Write(c, Economy.Post(Body(c)).ToString(), "application/json"); return true; }
+            if (p == "/api/economy" && m == "POST") { Write(c, Economy.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/stream-timers" && m == "GET") { Write(c, StreamTimers.Api(c.Request.QueryString["id"]).ToString(), "application/json"); return true; }
             if (p == "/api/stream-timers" && m == "POST") { Write(c, StreamTimers.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/reminders" && m == "GET") { Write(c, Reminders.Api(c.Request.QueryString["user"]).ToString(), "application/json"); return true; }

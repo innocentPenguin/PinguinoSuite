@@ -16,7 +16,7 @@ namespace PinguinoHost
             new[] { "moderator:manage:banned_users", "timeouts and bans from commands", "1" }, new[] { "channel:read:subscriptions", "sub alerts", "1" },
             new[] { "bits:read", "cheer alerts", "1" }, new[] { "moderator:read:followers", "follow alerts", "1" }, new[] { "moderation:read", "moderator checks", "1" },
             new[] { "channel:read:redemptions", "channel-point redemptions", "1" }, new[] { "channel:moderate", "bans/moderation events (ban alert)", "1" },
-            new[] { "clips:edit", "clips: !clip", "1" }, new[] { "channel:read:ads", "ads: !preroll / ad commands", "0" }, new[] { "moderator:manage:shoutouts", "native Twitch shoutouts (!shout)", "0" } };
+            new[] { "clips:edit", "clips: !clip", "1" }, new[] { "channel:read:ads", "ads: !preroll / ad commands", "0" }, new[] { "moderator:manage:shoutouts", "native Twitch shoutouts (!shout)", "0" }, new[] { "moderator:read:chatters", "who is in the chatroom (points and watch time)", "0" } };
 
         static JObject AccountStreamer()
         {

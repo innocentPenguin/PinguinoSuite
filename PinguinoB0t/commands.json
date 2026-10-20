@@ -974,6 +974,94 @@
       "usage": "!stoptimer",
       "description": "Clear every on-stream timer.",
       "examples": []
+    },
+    {
+      "command": "!points",
+      "aliases": [
+        "!pengs"
+      ],
+      "action": "PinguinoHost",
+      "category": "Points",
+      "who": "everyone",
+      "usage": "!points [user]",
+      "description": "Your pengs balance and rank (earned by watching, imported from StreamElements).",
+      "examples": [
+        "!points",
+        "!pengs cyfirl"
+      ]
+    },
+    {
+      "command": "!watchtime",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Points",
+      "who": "everyone",
+      "usage": "!watchtime [user]",
+      "description": "How long you have watched the channel, and your rank.",
+      "examples": [
+        "!watchtime"
+      ]
+    },
+    {
+      "command": "!toppoints",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Points",
+      "who": "everyone",
+      "usage": "!toppoints [month]",
+      "description": "Top pengs holders, all time or for one month.",
+      "examples": [
+        "!toppoints",
+        "!toppoints oct"
+      ]
+    },
+    {
+      "command": "!topwatch",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Points",
+      "who": "everyone",
+      "usage": "!topwatch [month]",
+      "description": "Most watch time, all time or for one month.",
+      "examples": [
+        "!topwatch"
+      ]
+    },
+    {
+      "command": "!addpoints",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Points",
+      "who": "mods",
+      "usage": "!addpoints @user <n>",
+      "description": "Give someone pengs.",
+      "examples": [
+        "!addpoints @ana 500"
+      ]
+    },
+    {
+      "command": "!removepoints",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Points",
+      "who": "mods",
+      "usage": "!removepoints @user <n>",
+      "description": "Take pengs away from someone.",
+      "examples": [
+        "!removepoints @ana 50"
+      ]
+    },
+    {
+      "command": "!economy",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Points",
+      "who": "mods",
+      "usage": "!economy status|import|apply <id>",
+      "description": "Points system status; import from StreamElements (dry run, then apply with the report id).",
+      "examples": [
+        "!economy status"
+      ]
     }
   ]
 }
