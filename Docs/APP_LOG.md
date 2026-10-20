@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 07:43 - Multi restart (follow overlay)
+
+- Restarted Multi via Update-Module (ab8eecc): new OBS source /obs/follow (new follow alert + sound, refollow = silent, tagged refollow), refollow chip in /obs/activity and dashboard. Refollow flag from Host (refollow:true) pending from 02.
+
 ## 2026-10-20 07:05 - App rebuild + Spotify module restart (01 e799c22 Approvals tab, songify-music 368da9e)
 
 - App rebuilt and relaunched (Suite > System > Approvals tab for the Teach inbox). Host restarted earlier (aliases, Teach inbox, links, recorder). Boards refreshed, 1858 profiles re-pushed.
