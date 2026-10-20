@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Helper review</title>
+<style>
+:root{--bg:#14110d;--card:#1e1913;--ink:#f4ede4;--mut:#a89a88;--acc:#ff9900;--line:#3a3025;--bad:#ff6b5b;--ok:#6fcf8a}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]){--bg:#faf6f0;--card:#fff;--ink:#241d15;--mut:#6f6354;--line:#e3d8c8}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,Segoe UI,sans-serif;padding:16px;max-width:1000px;margin-inline:auto}
+h1{font-size:22px;margin:0 0 4px}p.sub{color:var(--mut);margin:0 0 14px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.bar input,.bar select,.bar button{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}
+.bar input{flex:1;min-width:180px}.bar button{background:var(--acc);color:#1a1209;border:0;font-weight:700;cursor:pointer}
+.e{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.e.missed{border-left:4px solid var(--bad)}.e.answered{border-left:4px solid var(--ok)}
+.hd{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;color:var(--mut);font-size:13px}.hd b{color:var(--ink);font-size:15px}
+.tag{padding:1px 8px;border-radius:99px;border:1px solid var(--line);font-size:12px}
+.q{margin:8px 0;font-size:16px}.rp{margin:6px 0;color:var(--ok)}.rs{margin:6px 0;color:var(--bad)}
+details{margin-top:6px}summary{cursor:pointer;color:var(--mut)}
+.w div{padding:2px 0;font-size:14px;color:var(--mut)}.w div b{color:var(--ink)}.w .me{background:#ff990022;border-radius:6px;padding:2px 6px;color:var(--ink)}
+.note{display:flex;gap:6px;margin-top:8px}.note input{flex:1;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit}.note button{background:transparent;color:var(--acc);border:1px solid var(--acc);border-radius:8px;padding:6px 10px;cursor:pointer}
+.empty{color:var(--mut);padding:30px;text-align:center}
+</style></head><body>
+<h1>Helper review</h1>
+<p class="sub" id="sub">Private. What HelperPinguino answered, what it stayed silent on, and the chat around it. Never sent to the website.</p>
+<div class="bar"><select id="kind"><option value="">All</option><option value="missed">Missed (no answer)</option><option value="answered">Answered</option></select>
+<input id="q" placeholder="Search user, text, reply, reason, note"><button id="go">Search</button></div>
+<div id="list"></div>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const t=x=>new Date(x*1000).toLocaleString();
+async function load(){
+  const r=await fetch('/api/helper/review?limit=200&kind='+encodeURIComponent($('#kind').value)+'&q='+encodeURIComponent($('#q').value)).then(r=>r.json()).catch(()=>null);
+  if(!r||!r.ok){$('#list').innerHTML='<div class="empty">Could not load the review log.</div>';return}
+  $('#sub').textContent='Private. '+r.total+' entries: '+r.answered+' answered, '+r.missed+' missed. Showing '+r.shown+'. Never sent to the website.';
+  if(!r.entries.length){$('#list').innerHTML='<div class="empty">Nothing here yet.</div>';return}
+  $('#list').innerHTML=r.entries.map(e=>{
+    const win=(e.window||[]).map((l,i,a)=>'<div class="'+(i===a.length-1?'me':'')+'"><b>'+esc(l.u)+'</b>: '+esc(l.t)+'</div>').join('');
+    const aft=(e.after||[]).map(l=>'<div><b>'+esc(l.u)+'</b>: '+esc(l.t)+'</div>').join('');
+    return '<div class="e '+esc(e.kind)+'" data-id="'+esc(e.id)+'"><div class="hd"><b>'+esc(e.user)+'</b><span class="tag">'+esc(e.kind)+'</span>'+(e.intent?'<span class="tag">'+esc(e.intent)+'</span>':'')+'<span>'+t(e.at)+'</span></div>'
+    +'<div class="q">'+esc(e.text)+'</div>'
+    +(e.reply?'<div class="rp">Helper: '+esc(e.reply)+'</div>':'<div class="rs">Silent: '+esc(e.reason)+'</div>')
+    +'<details><summary>Chat before ('+((e.window||[]).length-1)+') and after ('+(e.after||[]).length+')</summary><div class="w">'+win+(aft?'<hr style="border-color:var(--line)">'+aft:'')+'</div></details>'
+    +'<div class="note"><input placeholder="Your note: what could have gone better?" value="'+esc(e.note)+'"><button>Save</button></div></div>'}).join('');
+}
+$('#list').addEventListener('click',async ev=>{
+  if(ev.target.tagName!=='BUTTON')return;const box=ev.target.closest('.e');
+  const note=box.querySelector('.note input').value;
+  const r=await fetch('/api/helper/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:box.dataset.id,note})}).then(r=>r.json()).catch(()=>null);
+  ev.target.textContent=r&&r.ok?'Saved':'Failed';setTimeout(()=>ev.target.textContent='Save',1500);
+});
+$('#go').onclick=load;$('#kind').onchange=load;$('#q').addEventListener('keydown',e=>{if(e.key==='Enter')load()});load();
+</script></body></html>

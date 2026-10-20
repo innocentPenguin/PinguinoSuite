@@ -304,6 +304,41 @@ public static class Harness
         Check("unrelated chatter after the answer is left alone", Last() == null, Last());
         Msg("Fl6", "i wanna join"); Msg("Fl6", "how do i play"); Check("how-to-join steps say join once and search the private match", Last() == null || Last().Contains("once is enough") || Last().Contains("search"), Last());
 
+        // ── training: the helper answers real help questions in ONE short line with the right site page, and stays silent otherwise ──
+        Settings(",\"FactsUrl\":\"\""); aiReply = "{\"intent\":\"none\",\"epic\":\"\"}";
+        var siteCases = new[] { new[] { "what commands are there?", "/help#commands" }, new[] { "is there a list of commands?", "/help#commands" }, new[] { "where can i see the leaderboards?", "/leaderboards" }, new[] { "who has gifted the most subs?", "/leaderboards" },
+            new[] { "where do i find my profile?", "/members" }, new[] { "what are the rules?", "/faq" }, new[] { "what are strikes?", "/faq" }, new[] { "which emotes are there? 7tv", "/emotes" } };
+        int sc = 0;
+        foreach (var c in siteCases)
+        {
+            Msg("Site" + (++sc), c[0]);
+            Check("should answer: " + c[0], Last() != null && Last().Contains("https://innocentpenguin.com" + c[1]), Last());
+            Check("short: one line under 160 characters with a link: " + c[0], Last() != null && Last().IndexOf('\n') < 0 && Last().Length < 160 && Last().Contains("https://"), Last());
+        }
+        foreach (var q in new[] { "lol the commands in this game are crazy", "i love the leaderboards on this site", "gg that was a good round", "ay did you see that clutch", "my commands are broken on my keyboard haha", "the rules of rocket league are weird" })
+        {
+            Msg("Quiet9", q);
+            Check("should stay silent: " + q, Last() == null, Last());
+        }
+        Msg("Quiet9", "@Someone what commands are there?");
+        Check("should stay silent: a question meant for another viewer", Last() == null, Last());
+
+        // ── private help-review log ──
+        string rv = Path.Combine(dir, "helper", "review.jsonl");
+        Check("the review log exists in Data\\helper (private, not pushed)", File.Exists(rv), rv);
+        var rows = File.ReadAllLines(rv).Where(l => l.Trim() != "").Select(l => Newtonsoft.Json.Linq.JObject.Parse(l)).ToList();
+        var trig = rows.Where(r => (string)r["type"] == "trigger").ToList();
+        Check("every answer is logged with its reply and the chat window before it", trig.Any(r => (string)r["kind"] == "answered" && ((string)r["reply"]).Contains("/help#commands") && ((Newtonsoft.Json.Linq.JArray)r["window"]).Count >= 2), "triggers=" + trig.Count);
+        Msg("Missy1", "how do i get my points refunded?");
+        Msg("Chat1", "later chat line one"); Msg("Chat2", "later chat line two");
+        rows = File.ReadAllLines(rv).Where(l => l.Trim() != "").Select(l => Newtonsoft.Json.Linq.JObject.Parse(l)).ToList();
+        var missed = rows.Where(r => (string)r["type"] == "trigger" && (string)r["kind"] == "missed").ToList();
+        Check("a likely-help question with no answer is logged as missed with the reason", missed.Any(r => (string)r["user"] == "missy1" && ((string)r["reason"]).Length > 3), string.Join(",", missed.Select(r => (string)r["user"] + ":" + (string)r["reason"])));
+        Check("plain banter is not logged at all", !rows.Any(r => (string)r["type"] == "trigger" && ((string)r["text"]).Contains("clutch")));
+        string mid = (string)missed.First(r => (string)r["user"] == "missy1")["id"];
+        var after = rows.Where(r => (string)r["type"] == "after" && (string)r["id"] == mid).Select(r => (string)r["t"]).ToList();
+        Check("the chat AFTER the trigger (from all chatters) is kept", after.Contains("later chat line one") && after.Contains("later chat line two"), string.Join("|", after));
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;

@@ -107,6 +107,17 @@ namespace PinguinoHost
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
             if (p == "/api/commands-doc" && m == "GET") { Write(c, FeatureCommands.Doc().ToString(), "application/json"); return true; }
+            if (p == "/helper-review" || p == "/api/helper/review")
+            {   // private chat history: this computer only
+                if (!System.Net.IPAddress.IsLoopback(c.Request.RemoteEndPoint.Address)) { c.Response.StatusCode = 403; return true; }
+                if (p == "/helper-review" && m == "GET")
+                {
+                    string f = IntroPage("helper-review.html"); if (f == null) { c.Response.StatusCode = 404; return true; }
+                    Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
+                }
+                if (p == "/api/helper/review" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, HelperReview.List(c.Request.QueryString["kind"], c.Request.QueryString["q"], lim).ToString(), "application/json"); return true; }
+                if (p == "/api/helper/review" && m == "POST") { var hb = Body(c); Write(c, HelperReview.SetNote((string)hb["id"], (string)hb["note"]).ToString(), "application/json"); return true; }
+            }
             if (p == "/api/emotes" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, Emotes.Api(c.Request.QueryString["q"], c.Request.QueryString["month"], lim).ToString(), "application/json"); return true; }
             if (p == "/api/emotes/refresh" && m == "POST") { Write(c, Emotes.Refresh(true).ToString(), "application/json"); return true; }
             if (p == "/api/boards" && m == "GET") { Write(c, Boards.Api().ToString(), "application/json"); return true; }

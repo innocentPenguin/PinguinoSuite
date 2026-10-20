@@ -319,6 +319,11 @@ public class CPHInline
         public bool UseAi { get; set; } = true;                       // ask the AI only when the patterns do not understand a practical-sounding message
         public int MaxAiCallsPerHour { get; set; } = 40;
         public string FactsUrl { get; set; } = "https://innocentpenguin.com/api/faq";   // the website's facts (Minecraft IPs, Discord, ...); blank = use helper_facts.json only
+        public string SiteBase { get; set; } = "https://innocentpenguin.com";   // where longer explanations live: the helper answers in 1-2 short lines and points here
+        public bool ReviewOn { get; set; } = true;                    // private help-review log (Data\helper\review.jsonl): every helper answer and every probably-missed question, with the chat around it
+        public int ReviewBefore { get; set; } = 8;                    // chat lines (from all chatters) kept from before the trigger ...
+        public int ReviewAfter { get; set; } = 8;                     // ... and after it
+        public int ReviewAfterSec { get; set; } = 300;                // the "after" part stops this long after the trigger even if fewer lines came
         public int PhraseBankSize { get; set; } = 3;                  // the AI words an answer this many times, then the stored wordings repeat with no AI call
     }
 
@@ -352,7 +357,7 @@ public class CPHInline
     static readonly Regex RxYes = new Regex(@"^\s*@?\S*\s*(yes|yep|yeah|yea|ya|yup|y|ye|sure|ok|okay|k|please|pls|plz|do\s+it|go\s+ahead|confirm|yes\s+please|yes\s+pls|sí|si)\s*[.!]*\s*$", RX);
     static readonly Regex RxNo = new Regex(@"^\s*@?\S*\s*(no|nope|nah|n|cancel|nevermind|never\s*mind|stop|dont|don'?t|no\s+thanks|nvm)\s*[.!]*\s*$", RX);
     static readonly Regex RxBadReg = new Regex(@"^\s*!register\s+(?<a>.*)$", RX);
-    static readonly Regex RxPractical = new Regex(@"\b(queue|lobby|join|register|code|pass(word)?|play|custom|private|match|epic|game|pm|in\s+line)\b", RX);
+    static readonly Regex RxPractical = new Regex(@"\b(queue|lobby|join|register|code|pass(word)?|play|custom|private|match|epic|game|pm|in\s+line|commands?|leaderboards?|rules|faq|strikes?|emotes?|7tv)\b", RX);
     static readonly Regex RxAsking = new Regex(@"\?|\b(how|where|what|whats|when|can|could|do|does|is|are|will|wanna|want|need|help|pls|please|gimme|give)\b", RX);
     static readonly string[] Placeholders = { "name", "yourname", "your name", "your epic name", "yourepicname", "epicname", "epic name", "epic", "epicid", "epic id", "username", "user", "id", "your epic id", "yourepicid", "your id", "ign", "your name here", "yourusername", "your username", "epic username", "my epic name", "my name" };
 
@@ -414,8 +419,78 @@ public class CPHInline
     string ArgS(string name) { object o; return CPH.TryGetArg(name, out o) && o != null ? (Convert.ToString(o) ?? "") : ""; }
     bool ArgB(string name) { object o; if (CPH.TryGetArg(name, out o) && o != null) { bool b; if (o is bool) return (bool)o; if (bool.TryParse(Convert.ToString(o), out b)) return b; } return false; }
 
+    // ══════════════════════════════════════════════════════════════
+    //  HELP-REVIEW LOG (private; never pushed anywhere): for every helper answer, and every question that looked like it needed help but got no answer,
+    //  Data\helper\review.jsonl keeps the chat window of ALL chatters before and after, what the helper said or why it stayed silent, and room for a note.
+    //  The Host browses it at /helper-review (/api/helper/review). Rows: {type:"trigger"...} and later {type:"after", id, at, u, t} lines.
+    // ══════════════════════════════════════════════════════════════
+    class ReviewOpen { public string Id; public int Left; public long Until; }
+    static readonly List<ReviewOpen> _revOpen = new List<ReviewOpen>();
+    static readonly List<string> _said = new List<string>();     // what the helper said while handling the current message
+    static string _gateWhy = "", _revIntent = ""; static bool _revReady; static int _revSeq;
+
+    string ReviewPath()
+    {
+        string d = (_dir ?? "").TrimEnd('\\', '/');
+        string root = string.Equals(Path.GetFileName(d), "runtime", StringComparison.OrdinalIgnoreCase) ? (Path.GetDirectoryName(d) ?? d) : d;
+        string dir = Path.Combine(root, "helper"); Directory.CreateDirectory(dir); return Path.Combine(dir, "review.jsonl");
+    }
+    void ReviewAppend(JObject row) { try { File.AppendAllText(ReviewPath(), row.ToString(Formatting.None) + "\n", new UTF8Encoding(false)); } catch (Exception ex) { CPH.LogWarn("[Helper] review log: " + ex.Message); } }
+
+    // every incoming line goes into the "after" part of the reviews that are still open
+    void ReviewFollow(string login, string text)
+    {
+        if (!_cfg.ReviewOn || _revOpen.Count == 0) return;
+        long now = Now();
+        foreach (var o in _revOpen.ToList())
+        {
+            if (now > o.Until || o.Left <= 0) { _revOpen.Remove(o); continue; }
+            ReviewAppend(new JObject { { "type", "after" }, { "id", o.Id }, { "at", now }, { "u", login }, { "t", text } });
+            if (--o.Left <= 0) _revOpen.Remove(o);
+        }
+    }
+
+    void ReviewAdd(string kind, string intent, string reason)
+    {
+        if (!_cfg.ReviewOn) return;
+        var before = new JArray();
+        lock (_recent)
+        {
+            var win = _recent.Count > 0 ? _recent.Skip(Math.Max(0, _recent.Count - 1 - Math.Max(0, _cfg.ReviewBefore))).Take(Math.Max(0, _cfg.ReviewBefore) + 1).ToList() : new List<Line>();
+            foreach (var l in win) before.Add(new JObject { { "at", l.At }, { "u", l.Login }, { "t", l.Text } });   // the last one is the trigger itself
+        }
+        string id = DateTimeOffset.UtcNow.ToString("yyMMddHHmmss") + "-" + (++_revSeq);
+        ReviewAppend(new JObject { { "type", "trigger" }, { "id", id }, { "at", Now() }, { "user", _curLogin }, { "text", _curText }, { "kind", kind }, { "intent", intent ?? "" },
+            { "reply", string.Join(" / ", _said) }, { "reason", reason ?? "" }, { "window", before } });
+        if (_cfg.ReviewAfter > 0) _revOpen.Add(new ReviewOpen { Id = id, Left = _cfg.ReviewAfter, Until = Now() + Math.Max(10, _cfg.ReviewAfterSec) });
+    }
+
+    // looks like somebody needing help (so a silence is worth a look later), without being a command
+    static bool LooksLikeHelpAsk(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.StartsWith("!") || text.Length > 220) return false;
+        if (RxNotAsk.IsMatch(text) || !RxStrongAsk.IsMatch(text)) return false;
+        return RxPractical.IsMatch(text) || RxMinecraftWord.IsMatch(text) || RxSiteCmds.IsMatch(text) || Regex.IsMatch(text, @"\b(help|stuck|doesn'?t\s+work|not\s+working|how\s+do\s+i|where\s+(do|can)\s+i|ip|discord)\b", RegexOptions.IgnoreCase);
+    }
+
     // returns true when the helper answered or acted (so the chatbot should stay out of it)
     bool Handle()
+    {
+        _said.Clear(); _gateWhy = ""; _revIntent = ""; _revReady = false;
+        bool handled = HandleCore();
+        try
+        {
+            if (_revReady)
+            {
+                if (_said.Count > 0) ReviewAdd("answered", _revIntent, "");
+                else if (LooksLikeHelpAsk(_curText)) ReviewAdd("missed", _revIntent, _gateWhy != "" ? _gateWhy : (_revIntent == "" ? "no pattern or AI intent matched" : "stayed silent"));
+            }
+        }
+        catch (Exception ex) { CPH.LogWarn("[Helper] review failed: " + ex.Message); }
+        return handled;
+    }
+
+    bool HandleCore()
     {
         if (!_cfg.Enabled) return false;
         string text = ArgS("message");
@@ -425,7 +500,9 @@ public class CPHInline
         if (login == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(login) || IsOtherBot(login)) return false;
         _curLogin = login; _curDisplay = display; _curText = text;
         Remember(login, text, ArgS("reply.userName") != "" ? ArgS("reply.userName") : ArgS("reply.userLogin"));
+        try { ReviewFollow(login, text); } catch (Exception) { }
         if (_cfg.LiveOnly && !IsLive()) return false;
+        _revReady = true;
         text = text.Trim();
 
         lock (_lock)
@@ -473,6 +550,7 @@ public class CPHInline
             if (intent == "" && _cfg.UseAi && RxPractical.IsMatch(text) && RxAsking.IsMatch(text) && text.Length <= 200)
                 AskAi(text, out intent, out epic);
 
+            _revIntent = intent;
             if (intent == "") return false;
             if (_cfg.ContextGate && !ContextOk(login, text, intent)) return false;   // passing mention / talk between viewers / already answered: stay out
             return Respond(login, display, intent, epic);
@@ -499,27 +577,27 @@ public class CPHInline
 
     bool ContextOk(string login, string text, string intent)
     {
-        bool info = intent == "mc_info" || intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "do_join";
+        bool info = intent == "mc_info" || intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "do_join" || IsSite(intent);
         if (!info) return true;                                                   // register / leave / position / song / mmr are direct requests
         long now = Now();
         string replyTo = ArgS("reply.userName") != "" ? ArgS("reply.userName") : ArgS("reply.userLogin");
         // 1) meant for somebody else: a reply to another viewer, or starting with their @name (the bots' own names do not count)
-        if (!string.IsNullOrEmpty(replyTo) && replyTo.ToLower() != (_cfg.BotAccount ?? "").ToLower() && !PgIsBotAccount(replyTo.ToLower()) && !IsOtherBot(replyTo.ToLower())) return false;
+        if (!string.IsNullOrEmpty(replyTo) && replyTo.ToLower() != (_cfg.BotAccount ?? "").ToLower() && !PgIsBotAccount(replyTo.ToLower()) && !IsOtherBot(replyTo.ToLower())) { _gateWhy = "a reply to another viewer (" + replyTo + ")"; return false; }
         var at = Regex.Match(text, @"^@(\w+)");
         if (at.Success)
         {
             string tgt = at.Groups[1].Value.ToLower();
-            if (tgt != (_cfg.BotAccount ?? "").ToLower() && !PgIsBotAccount(tgt) && !IsOtherBot(tgt) && !tgt.Contains("pinguino")) return false;
+            if (tgt != (_cfg.BotAccount ?? "").ToLower() && !PgIsBotAccount(tgt) && !IsOtherBot(tgt) && !tgt.Contains("pinguino")) { _gateWhy = "addressed to @" + tgt; return false; }
         }
         // 2) it has to be a real ask, not a statement or a passing mention
-        if (RxNotAsk.IsMatch(text) || !(RxStrongAsk.IsMatch(text) || (intent == "mc_info" && IsMcQuestion(text)))) return false;
+        if (RxNotAsk.IsMatch(text) || !(RxStrongAsk.IsMatch(text) || (intent == "mc_info" && IsMcQuestion(text)))) { _gateWhy = "not a real question (statement or passing mention)"; return false; }
         lock (_recent)
         {
             // 3) somebody else (a viewer or mod) already answered this person a moment ago
             foreach (var l in _recent.Where(x => now - x.At <= _cfg.AnsweredWindowSec && x.Login != login && !PgIsBotAccount(x.Login) && !IsOtherBot(x.Login)))
-                if ((l.Text ?? "").ToLower().Contains("@" + login) || l.ReplyTo == login) { if (RxAnswerish.IsMatch(l.Text ?? "") || (l.Text ?? "").Length >= 12) return false; }
+                if ((l.Text ?? "").ToLower().Contains("@" + login) || l.ReplyTo == login) { if (RxAnswerish.IsMatch(l.Text ?? "") || (l.Text ?? "").Length >= 12) { _gateWhy = "someone else (" + l.Login + ") already answered"; return false; } }
             // 4) the same kind of answer just went out to someone else: do not repeat it to everybody
-            long last; if (_sameAnswer.TryGetValue(intent, out last) && now - last < _cfg.SameAnswerGapSec) return false;
+            long last; if (_sameAnswer.TryGetValue(intent, out last) && now - last < _cfg.SameAnswerGapSec) { _gateWhy = "the same answer just went out to someone else"; return false; }
         }
         lock (_recent) _sameAnswer[intent] = now;
         return true;
@@ -722,6 +800,12 @@ public class CPHInline
     static readonly Regex RxSong = new Regex(@"\b(what'?s|whats|what\s+is|which)\b.{0,12}\b(song|track|music)\b.{0,15}\b(this|playing|is\s+it|on)\b|\bwhat'?s\s+playing\b|\b(song|track)\s+(name|id|title)\b|\bwhat\s+song\b|\bname\s+of\s+(this|the)\s+song\b|\bnext\s+song\b", RegexOptions.IgnoreCase);
     static readonly Regex RxMyMmr = new Regex(@"\b(what'?s|whats|what\s+is|check|see|show|tell\s+me)\b.{0,12}\b(my|me)\b.{0,10}\b(mmr|rank|stats|points)\b|\bhow\s+(much|many)\b.{0,12}\b(mmr|points)\b.{0,10}\b(do\s+i|i\s+have|have\s+i)\b", RegexOptions.IgnoreCase);
 
+    static readonly Regex RxSiteCmds = new Regex(@"\b(what|which|any)\b.{0,18}\bcommands?\b|\bcommands?\s*list\b|\blist\s+of\s+(the\s+)?commands\b|\bhow\b.{0,14}\b(use|do)\b.{0,16}\bcommands?\b|\bwhat\s+can\s+(you|the\s+bot|pinguino\w*)\s+do\b|\bwhat'?s\s+the\s+command\s+(for|to)\b|\bis\s+there\s+a\s+command\b", RX);
+    static readonly Regex RxSiteBoards = new Regex(@"\b(leader\s*boards?|top\s+(gifters?|bitters?|yappers?|streaks?)|who\s+(has\s+)?(gifted|cheered|yapped)\s+the\s+most|most\s+gifted|watch\s*streak\s+(board|record|leaders?)|where\b.{0,12}\b(see|find|check)\b.{0,12}\b(my\s+)?(rank|ranking))\b", RX);
+    static readonly Regex RxSiteProfile = new Regex(@"\b(my\s+profile|members?\s+page|where\b.{0,14}\b(see|find|check)\b.{0,16}\b(profile|my\s+stats|my\s+strikes|my\s+points)|what\s+does\s+(the\s+)?(bot|pinguino\w*)\s+know\s+about\s+me)\b", RX);
+    static readonly Regex RxSiteFaq = new Regex(@"\b(the\s+rules|what\s+are\s+the\s+rules|chat\s+rules|faq|what\s+is\s+a\s+strike|what\s+are\s+strikes|how\s+do\s+strikes\s+work)\b", RX);
+    static readonly Regex RxSiteEmotes = new Regex(@"\b(7tv|seventv|emote\s+(list|search)|what\s+emotes?\s+(are|does)|which\s+emotes?|where\b.{0,12}\bemotes?)\b", RX);
+
     static void Classify(string text, out string intent, out string epic)
     {
         intent = ""; epic = "";
@@ -736,12 +820,18 @@ public class CPHInline
         if (RxLobby.IsMatch(text)) { intent = "lobby_info"; return; }
         if (RxHowJoin.IsMatch(text)) { intent = "how_join"; return; }
         if (RxDoJoin.IsMatch(text)) { intent = "do_join"; return; }
+        if (RxSiteCmds.IsMatch(text)) { intent = "site_commands"; return; }
+        if (RxSiteBoards.IsMatch(text)) { intent = "site_leaderboards"; return; }
+        if (RxSiteProfile.IsMatch(text)) { intent = "site_profile"; return; }
+        if (RxSiteEmotes.IsMatch(text)) { intent = "site_emotes"; return; }
+        if (RxSiteFaq.IsMatch(text)) { intent = "site_faq"; return; }
     }
 
     // ══════════════════════════════════════════════════════════════
     //  AI (only to pick an intent from a fixed list; it never writes the reply)
     // ══════════════════════════════════════════════════════════════
-    static readonly string[] Intents = { "lobby_info", "how_join", "how_register", "do_register", "do_join", "do_leave", "position", "none" };
+    static readonly string[] Intents = { "lobby_info", "how_join", "how_register", "do_register", "do_join", "do_leave", "position", "site_commands", "site_leaderboards", "site_profile", "site_faq", "site_emotes", "none" };
+    static bool IsSite(string i) { return i != null && i.StartsWith("site_"); }
 
     void AskAi(string text, out string intent, out string epic)
     {
@@ -753,6 +843,7 @@ public class CPHInline
         string system = "You sort Twitch chat messages for a Rocket League viewer-games stream. Reply with ONLY JSON: {\"intent\":\"...\",\"epic\":\"...\"}. intent is one of: " +
             "lobby_info (asks for the private match / lobby name, code or password), how_join (asks how to join or play with the streamer), how_register (asks how to register / link their Epic name), " +
             "do_register (asks to be registered; put the Epic name they gave in epic), do_join (asks to be put in the queue), do_leave (asks to leave the queue), position (asks where they are in the queue), " +
+            "site_commands (asks what commands exist / how to use commands), site_leaderboards (asks about the leaderboards, top gifters, rankings), site_profile (asks where to see their profile / stats / what the bot knows about them), site_faq (asks about the rules, strikes, common questions), site_emotes (asks about the 7TV emotes), " +
             "none (anything else: chatting, jokes, talking to someone else, other topics). When unsure, answer none. Never invent an Epic name.";
         string reply;
         try { reply = Ask(system, text); } catch (Exception ex) { CPH.LogWarn("[Helper] AI failed: " + ex.Message); return; }
@@ -836,9 +927,9 @@ public class CPHInline
         }
         string cdKey = login + "|" + intent;
         long last;
-        bool info = intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "song" || intent == "mmr_info";
-        if (_userCd.TryGetValue(cdKey, out last) && now - last < _cfg.UserCooldownSec) return true;   // already told them a moment ago: stay quiet, and keep the chatbot out of it
-        if (info && now - _infoCd < _cfg.InfoCooldownSec) return true;
+        bool info = intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "song" || intent == "mmr_info" || IsSite(intent);
+        if (_userCd.TryGetValue(cdKey, out last) && now - last < _cfg.UserCooldownSec) { _gateWhy = "cooldown: told this viewer the same a moment ago"; return true; }   // already told them a moment ago: stay quiet, and keep the chatbot out of it
+        if (info && now - _infoCd < _cfg.InfoCooldownSec) { _gateWhy = "cooldown: another info answer just went out"; return true; }
         _userCd[cdKey] = now;
         if (info) _infoCd = now;
 
@@ -871,6 +962,11 @@ public class CPHInline
                 if (!QueueOpen()) { Say(who + "The queue is closed right now. " + LobbyHint()); return true; }
                 return AskConfirm(login, display, "join", "", "Add you to the queue? Say yes to confirm.");
             case "song": Say(who + SongLine()); return true;
+            case "site_commands": Say(who + "Every chat command, with search: " + SiteUrl("/help#commands")); return true;
+            case "site_leaderboards": Say(who + "Top gifters, bitters, yappers and watch streaks, all time or by month: " + SiteUrl("/leaderboards")); return true;
+            case "site_profile": Say(who + "Your profile, stats and what the bot knows about you: " + SiteUrl("/members")); return true;
+            case "site_faq": Say(who + "Rules and answers to common questions: " + SiteUrl("/faq")); return true;
+            case "site_emotes": Say(who + "The channel's 7TV emotes, searchable: " + SiteUrl("/emotes")); return true;
             case "mmr_info": Say(who + "Type !mmr to see your MMR, or !stats for your wins and points."); return true;
             case "do_leave":
                 return AskConfirm(login, display, "leave", "", "Take you out of the queue? Say yes to confirm.");
@@ -878,6 +974,12 @@ public class CPHInline
                 return Do(login, display, "position", "");
         }
         return false;
+    }
+
+    string SiteUrl(string path)
+    {
+        string b = (_cfg.SiteBase ?? "").Trim().TrimEnd('/'); if (b == "") b = F(Facts(), "Website").TrimEnd('/'); if (b == "") b = "https://innocentpenguin.com";
+        return b + path;
     }
 
     bool AskConfirm(string login, string display, string intent, string epic, string question)
@@ -1060,6 +1162,7 @@ public class CPHInline
     // The helper speaks as HelperPinguino (through its fallback while it has no account of its own) and the viewer stays "in conversation" with it for a while.
     void Say(string msg)
     {
+        _said.Add(msg);
         PgSay("helper", msg);
         PgSetHelperContext(_curLogin);
     }
