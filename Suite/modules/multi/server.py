@@ -1,5 +1,27 @@
 """PinguinoMulti - unified chat core. REST + WS on 127.0.0.1:8766.
-Run: run.bat   (UI at http://127.0.0.1:8766)"""
+Run: run.bat   (UI at http://127.0.0.1:8766)
+
+INDEX (server.py, sections by line)
+  OBS widgets (/obs/{chat,activity,follow}, /api/obs/*): line 229
+  Dashboard profiles (/api/dash*), viewer counts (/api/viewers): line 283
+  messages/search/setup/prestream: line 361
+  priority cards: line 441
+  learning: line 484
+  sending (one platform; Twitch plain lines via Host /api/say; 30 s duplicate guard): line 504
+  Twitch moderation: line 547
+  pins: line 568
+  chat look (chatstyle): line 615
+  panes + splits: line 706
+  stream events pushed by Host: line 778
+  assisted chat: line 799
+  new-chatter ding / chat pop: line 850
+  settings / rules: line 970
+  windows / monitors / profiles: line 1024
+  auth + secrets + voice: line 1116
+  dev inject + /ws: line 1239
+Related: obs.py (widget settings), viewers.py (live counts), host_feed.py (Host activity + /api/say), pipeline.py, store.py, panes.py, windows.py,
+connectors/{twitch,discord,youtube,tiktok}.py, static/{index.html,dash.js,obs.html,obs_ui.js,chat.js,side.js,launcher.js,style.js}. Full index: Docs/PinguinoMulti/INDEX.md
+"""
 import asyncio
 import hmac
 import json
