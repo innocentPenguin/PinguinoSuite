@@ -89,20 +89,31 @@ mic = live_mod.Live(asr, hub.emit)
 
 def start_mic():
     """Open the saved mic by NAME (indexes shift). If it is gone, fall back to the Windows default input and SAY SO; with no input at all, refuse."""
-    r = live_mod.resolve_device(cfg.settings())
-    if r is None:
+    cands = live_mod.candidates(cfg.settings())
+    if not cands:
         a = {"kind": "missing", "message": "No microphone was found. Nothing is being recorded."}
         hub.emit({"type": "mic_alert", "alert": a})
         raise RuntimeError(a["message"])
-    if r["how"] == "default_fallback":
-        a = {"kind": "fallback", "message": f"Your microphone '{r['wanted']}' was not found. Using '{r['name']}' instead; check it is the right one.",
-             "wanted": r["wanted"], "using": r["name"]}
-        hub.emit({"type": "mic_alert", "alert": a})
-    else:
-        hub.emit({"type": "mic_alert", "alert": None})
-    mic.resolver = lambda: (live_mod.resolve_device(cfg.settings()) or {"index": None})["index"]
-    sid = mic.start(r["index"])
-    return sid
+    mic.resolver = lambda: (live_mod.candidates(cfg.settings()) or [{"index": None}])[0]["index"]
+    last = None
+    for i, r in enumerate(cands[:8]):       # a listed device can still refuse to open (PaErrorCode -9996): walk the list
+        try:
+            sid = mic.start(r["index"])
+        except Exception as e:  # noqa: BLE001
+            last = e
+            clog("warn", f"could not open '{r['name']}' ({r.get('api', '')}): {e}", "mic")
+            continue
+        same = i == 0 or r["how"] == "same_name" or (r["wanted"] or "").lower() == r["name"].lower()
+        if same or not r["wanted"]:
+            hub.emit({"type": "mic_alert", "alert": None})
+        else:
+            a = {"kind": "fallback", "message": f"Your microphone '{r['wanted']}' could not be used. Recording from '{r['name']}' instead; check it is the right one.",
+                 "wanted": r["wanted"], "using": r["name"]}
+            hub.emit({"type": "mic_alert", "alert": a})
+        return sid
+    a = {"kind": "missing", "message": f"No microphone could be opened ({last}). Nothing is being recorded."}
+    hub.emit({"type": "mic_alert", "alert": a})
+    raise RuntimeError(a["message"])
 jobs = ingest.Jobs(asr, hub.emit)
 
 
@@ -274,7 +285,9 @@ def _safe_sync():
 # ------------------------------------------------------------------ live mic
 @app.get("/api/devices")
 def devices():
-    return live_mod.list_devices()
+    all_ = live_mod.list_devices()
+    ok = [d for d in all_ if d["api"] != "Windows WDM-KS"]
+    return ok or all_
 
 
 class Start(BaseModel):

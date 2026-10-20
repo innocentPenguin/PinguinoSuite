@@ -77,5 +77,26 @@ class Watchdog(unittest.TestCase):
         self.assertEqual(calls.count("reopen"), 1)
 
 
+class Candidates(unittest.TestCase):
+    DEVS = [
+        {"index": 2, "name": "Microphone (Yeti Classic)", "api": "MME", "rate": 44100},
+        {"index": 72, "name": "Microphone (Yeti Classic)", "api": "Windows WASAPI", "rate": 48000},
+        {"index": 123, "name": "Microphone (Yeti Stereo Microphone)", "api": "Windows WDM-KS", "rate": 44100},
+        {"index": 1, "name": "Webcam 4 (NDI Webcam Audio)", "api": "MME", "rate": 44100},
+    ]
+
+    def test_wdm_ks_that_will_not_open_falls_to_same_mic_on_mme(self):
+        c = live.candidates({"device": 123}, self.DEVS, 1)
+        self.assertEqual(c[0]["index"], 123)
+        self.assertEqual([x["index"] for x in c[1:3]], [2, 72])
+
+    def test_gone_mic_goes_to_defaults(self):
+        c = live.candidates({"device_name": "Gone"}, self.DEVS, 1)
+        self.assertEqual(c[0]["index"], 1)
+
+    def test_no_devices(self):
+        self.assertEqual(live.candidates({}, [], 0), [])
+
+
 if __name__ == "__main__":
     unittest.main()

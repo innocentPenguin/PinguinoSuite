@@ -65,6 +65,63 @@ def resolve_device(st: dict, devices: list | None = None, default_index: int | N
     return r
 
 
+API_RANK = {"MME": 0, "Windows DirectSound": 1, "Windows WASAPI": 2}   # WDM-KS and anything else last: it often refuses to open (PaErrorCode -9996)
+_GENERIC = {"microphone", "input", "audio", "stereo", "mono", "usb", "wave", "webcam", "capture", "driver", "sound", "mic", "line", "device", "virtual"}
+
+
+def _tokens(name: str) -> set:
+    import re
+    return {w for w in re.findall(r"[a-z0-9]+", name.lower()) if len(w) >= 3 and w not in _GENERIC}
+
+
+def candidates(st: dict, devices: list | None = None, default_index: int | None = None) -> list:
+    """Every device worth trying, best first: the chosen mic, the same mic on other host APIs (MME/DirectSound/WASAPI before WDM-KS),
+    a similar name (shares a distinctive word such as 'Yeti'), then the Windows default input. Opening can fail on a device that is listed
+    (PaErrorCode -9996), so the caller walks this list until one opens."""
+    first = resolve_device(st, devices, default_index)
+    if first is None:
+        return []
+    devs = list_devices() if devices is None else devices
+    out, seen = [], set()
+
+    def add(d, how):
+        if d["index"] not in seen:
+            seen.add(d["index"])
+            out.append({"index": d["index"], "name": d["name"], "api": d.get("api", ""), "how": how, "wanted": first["wanted"]})
+    rank = lambda d: API_RANK.get(d.get("api", ""), 3)  # noqa: E731
+    if first["how"] != "default_fallback":
+        add(next(d for d in devs if d["index"] == first["index"]), first["how"])
+        base = first["name"].lower()
+        for d in sorted(devs, key=rank):
+            if d["name"].lower() == base:
+                add(d, "same_name")
+        tk = _tokens(first["name"])
+        if tk:
+            for d in sorted(devs, key=lambda d: (-len(_tokens(d["name"]) & tk), rank(d))):
+                if _tokens(d["name"]) & tk:
+                    add(d, "similar_name")
+    elif first["wanted"]:
+        tk = _tokens(first["wanted"])
+        if tk:
+            for d in sorted(devs, key=lambda d: (-len(_tokens(d["name"]) & tk), rank(d))):
+                if _tokens(d["name"]) & tk:
+                    add(d, "similar_name")
+    # the Windows default input, then anything that is not WDM-KS
+    di = first["index"] if first["how"] in ("default", "default_fallback") else None
+    if di is None:
+        try:
+            di = sd.default.device[0] if default_index is None else default_index
+        except Exception:  # noqa: BLE001
+            di = None
+    for d in devs:
+        if d["index"] == di:
+            add(d, "default")
+    for d in sorted(devs, key=rank):
+        if rank(d) < 3 and "voicemeeter" not in d["name"].lower() and "cable" not in d["name"].lower():
+            add(d, "default")
+    return out
+
+
 def _to16k(x: np.ndarray, rate: int) -> np.ndarray:
     if rate == SR:
         return x
@@ -91,11 +148,8 @@ class Live:
     def start(self, device=None):
         if self.running:
             raise RuntimeError("already listening")
-        self.session_id = "live-" + time.strftime("%Y%m%d-%H%M%S")
-        db.run("INSERT INTO sessions(id,kind,title,source_id,status,created) VALUES(?,?,?,?,?,?)",
-               (self.session_id, "live", "Live mic " + time.strftime("%Y-%m-%d %H:%M"), self.session_id, "listening", time.time()))
-        (cfg.LIVE_AUDIO / self.session_id).mkdir(exist_ok=True)
         rate = SR
+        err = None
         for rate in (SR, None):
             try:
                 r = rate or int(sd.query_devices(device, "input")["default_samplerate"])
@@ -109,6 +163,10 @@ class Live:
                 err = e
         if not self._stream:
             raise RuntimeError(f"could not open mic: {err}")
+        self.session_id = "live-" + time.strftime("%Y%m%d-%H%M%S")
+        db.run("INSERT INTO sessions(id,kind,title,source_id,status,created) VALUES(?,?,?,?,?,?)",
+               (self.session_id, "live", "Live mic " + time.strftime("%Y-%m-%d %H:%M"), self.session_id, "listening", time.time()))
+        (cfg.LIVE_AUDIO / self.session_id).mkdir(exist_ok=True)
         self.running = True
         self._t0 = time.time()
         self._last_loud = self._t0

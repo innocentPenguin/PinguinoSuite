@@ -167,7 +167,8 @@ const api=async(p,o={})=>{const r=await fetch(p,o.body&&typeof o.body==='object'
   if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail||m}catch{}throw new Error(m)}return r.json()};
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt=t=>{t=Math.max(0,t|0);const h=t/3600|0,m=t%3600/60|0,s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
-function toast(msg,err){const d=document.createElement('div');if(err)d.className='err';d.textContent=msg;$('#toast').append(d);setTimeout(()=>d.remove(),err?8000:4500)}
+let _lastToast={m:'',t:0};
+function toast(msg,err){if(_lastToast.m===msg&&Date.now()-_lastToast.t<15000)return;_lastToast={m:msg,t:Date.now()};const d=document.createElement('div');if(err)d.className='err';d.textContent=msg;$('#toast').append(d);setTimeout(()=>d.remove(),err?8000:4500)}
 
 if(window.self!==window.top)document.body.classList.add("embedded");
 // ---------- tabs
