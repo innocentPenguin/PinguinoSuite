@@ -1,5 +1,6 @@
 """Trial run of EVERY Host feature end to end in sim mode (no Twitch, no real chat, no real OBS): game commands, helper, chat bot, !pg, events, automations,
 APIs, pages. Prints a pass/fail table. Usage: python Tools/test-host-trial.py [path-to-PinguinoHost.dll]"""
+import sys; sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import base64, json, os, socket, subprocess, sys, tempfile, threading, time, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from obs_probe import _frame, _recv

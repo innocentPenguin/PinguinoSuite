@@ -41,7 +41,7 @@ try:
     seeded = api('/api/automations')['doc']
     if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 8: fails.append('spotify presets missing or enabled')
     acts = [
-        {'id': 'lurk', 'name': 'Lurk', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!lurk'], 'permission': 'everyone', 'cooldownSec': 30}],
+        {'id': 'lurk', 'name': 'Lurk', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!lurkx'], 'permission': 'everyone', 'cooldownSec': 30}],
          'steps': [{'type': 'inc_var', 'name': 'lurkers'}, {'type': 'say', 'as': 'core', 'text': 'Enjoy the lurk {user}! total {count}'}]},
         {'id': 'modonly', 'name': 'ModOnly', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!modonly'], 'permission': 'mod'}], 'steps': [{'type': 'say', 'text': 'mod command ok'}]},
         {'id': 'cheer', 'name': 'BigCheer', 'enabled': True, 'triggers': [{'type': 'cheer', 'min': 100}], 'steps': [{'type': 'say', 'text': 'thanks {user} for {bits} bits'}]},
@@ -58,8 +58,8 @@ try:
     if not r.get('ok'): fails.append('save: ' + str(r))
     if api('/api/automations/log')['runs']: fails.append('log should start empty')
 
-    feed('viewer: !lurk'); until(lambda: said('Enjoy the lurk viewer! total 1'), 10, 'command ran with variables')
-    feed('viewer2: !lurk'); time.sleep(1.5)
+    feed('viewer: !lurkx'); until(lambda: said('Enjoy the lurk viewer! total 1'), 10, 'command ran with variables')
+    feed('viewer2: !lurkx'); time.sleep(1.5)
     if ran('Lurk') != 1: fails.append('global cooldown: Lurk ran %d times' % ran('Lurk'))
     feed('viewer: !modonly'); time.sleep(1.5)
     if ran('ModOnly') != 0: fails.append('mod command ran for a viewer')
