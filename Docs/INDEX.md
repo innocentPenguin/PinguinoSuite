@@ -109,7 +109,9 @@ Each big file below starts with its own INDEX block (routes/functions with line 
 - `Suite/modules.json` - module manifests (CRLF file): id, port, url, secrets (name/label/help), UI nav. Contract: `Docs/MODULE_CONTRACT.md`.
 - `Suite/modules/listen/` - PinguinoListen (port 8765): `server.py` (API), `live.py` (mic: `resolve_device`, `candidates`, silence watchdog), `asr.py`, `ingest.py`, `learn.py`, `twitch.py`, `voice.py`, `config.py`, `db.py`, `static/index.html` (Listen page). Settings: `Suite/modules/listen/data/settings.json`.
 - Ports: core 8760, Listen 8765, Multi 8766, Host 8770, Voice 8772.
-- Tests: `Suite/.venv/Scripts/python.exe -m unittest discover -s Suite/tests` (mic, vault, help, prestream, device, portable, prefs).
+- Tests: `Suite/.venv/Scripts/python.exe -m unittest discover -s Suite/tests` (mic, listen_db, supervisor, vault, help, prestream, device, portable, prefs).
+- Safety nets: Listen `db.rows_nowait` + `/api/status` `stats_busy` (status never hangs behind a long DB job); core `Module.start` refuses to spawn when the module's port is already held by a hung copy and warns in Console (source `supervisor`).
+- Shell Approvals tab (`pages.approvals`, `bindApprovals`) reads the Host Teach inbox: `GET /api/teach?status=`, `POST /api/teach/decide`.
 
 ## Music (PinguinoMusic / Spotify module, port 8771)
 Code: `Suite\modules\spotify\` (stdlib Python, no extra deps). Each big file has an INDEX block at the top of its docstring (functions with line numbers).
