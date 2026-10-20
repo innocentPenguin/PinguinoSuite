@@ -118,6 +118,8 @@ namespace PinguinoHost
                 if (p == "/api/helper/review" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, HelperReview.List(c.Request.QueryString["kind"], c.Request.QueryString["q"], lim).ToString(), "application/json"); return true; }
                 if (p == "/api/helper/review" && m == "POST") { var hb = Body(c); Write(c, HelperReview.SetNote((string)hb["id"], (string)hb["note"]).ToString(), "application/json"); return true; }
             }
+            if (p == "/api/timers" && m == "GET") { Write(c, Timers.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/timers" && m == "POST") { Write(c, Timers.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/emotes" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, Emotes.Api(c.Request.QueryString["q"], c.Request.QueryString["month"], lim).ToString(), "application/json"); return true; }
             if (p == "/api/emotes/refresh" && m == "POST") { Write(c, Emotes.Refresh(true).ToString(), "application/json"); return true; }
             if (p == "/api/boards" && m == "GET") { Write(c, Boards.Api().ToString(), "application/json"); return true; }

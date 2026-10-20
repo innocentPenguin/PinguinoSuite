@@ -867,6 +867,21 @@
         "!topemotes",
         "!topemotes oct"
       ]
+    },
+    {
+      "command": "!timer",
+      "aliases": [
+        "!timers"
+      ],
+      "action": "PinguinoHost",
+      "category": "Timers",
+      "who": "mods",
+      "usage": "!timer list | on <name> | off <name> | add <minutes> <message> | remove <name> | now <name> | gap <seconds>",
+      "description": "Chat timers: repeating messages that only run while live, after enough chat, and never closer together than the gap. Survive restarts.",
+      "examples": [
+        "!timer add 15 follow the stream!",
+        "!timer now commands"
+      ]
     }
   ]
 }

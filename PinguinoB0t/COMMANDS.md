@@ -154,6 +154,12 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!source` | `!source on\|off\|toggle <name>` | Show or hide an OBS source. |
 | `!obs` | `!obs auto on\|off \| !obs status` | Automatic OBS scene switching and status. |
 
+### Timers
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!timer` | `!timer list \| on <name> \| off <name> \| add <minutes> <message> \| remove <name> \| now <name> \| gap <seconds>` | Chat timers: repeating messages that only run while live, after enough chat, and never closer together than the gap. Survive restarts. |
+
 ### Tournament
 
 | Command | Usage | What it does |

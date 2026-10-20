@@ -57,7 +57,7 @@ namespace PinguinoHost
             bool mod = role >= 3;
             string b = BoardOf(cmd);
             bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || Emotes.IsCommand(cmd);
-            bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup";
+            bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd);
             if (!viewer && !modOnly) return false;
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
             if (viewer)
@@ -67,6 +67,7 @@ namespace PinguinoHost
             try
             {
                 if (b != "") { Top(b, args, say); return true; }
+                if (Timers.IsCommand(cmd)) { Timers.Handle(args, say); return true; }
                 if (Emotes.IsCommand(cmd)) { Emotes.Handle(user, cmd, args, say, ParseMonth, MonthLabel); return true; }
                 switch (cmd)
                 {
