@@ -1,0 +1,399 @@
+{
+ "_note": "Chatty canned commands (ported from the Nightbot export). text/choices; $(user) $(touser) $(luck). enabled:false = held. aliases optional. Edit freely, reloads on save.",
+ "cooldownSec": 20,
+ "commands": [
+  {
+   "name": "1v1",
+   "text": "If you think about it, going into a random stream and asking to 1v1 is like walking into a party you weren't invited to and asking who wants to fight."
+  },
+  {
+   "name": "abdul",
+   "text": "the first multi millionaire in pinguino points the house is scared of him"
+  },
+  {
+   "name": "ad",
+   "text": "they appear at the worst possible time L ads"
+  },
+  {
+   "name": "ash",
+   "text": "He Gives bits! https://www.twitch.tv/innocentpenguin_/clip/BloodyPiercingRaccoonStrawBeary-uli7Tn9mJZmI5VUH"
+  },
+  {
+   "name": "attack",
+   "choices": [
+    "$(user) viciously tackles $(touser) into a pile of pillows! 🛏💥",
+    "$(user) swings wildly at $(touser) but trips over their own feet and misses! 🤸‍♂️💨",
+    "$(user) lands a CRITICAL HIT on $(touser) with a squeaky rubber chicken! 🐔🔨"
+   ]
+  },
+  {
+   "name": "ban",
+   "text": "$(user) tried to ban $(touser) . It failed, but it makes $(user) feel like a boss! 😎"
+  },
+  {
+   "name": "bits",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/BloodyPiercingRaccoonStrawBeary-uli7Tn9mJZmI5VUH"
+  },
+  {
+   "name": "blake",
+   "text": "The Prodigal Child of Rocket League"
+  },
+  {
+   "name": "blizy",
+   "text": "best sugar daddy (6’6 btw)"
+  },
+  {
+   "name": "blizzy",
+   "text": "https://medal.tv/games/minecraft/clips/nvYdSN1xv0wlWov60?invite=cr-MSxWVk8sMjAwOTUzMDA4"
+  },
+  {
+   "name": "burglin",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/SpookyTrustworthyLapwingBIRB-K2S97oS82L66V7HN",
+   "aliases": [
+    "burglingnomes"
+   ]
+  },
+  {
+   "name": "cat",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/DifferentSuaveRingCoolStoryBob-si3-VQIXb4HMjZHS"
+  },
+  {
+   "name": "cheese",
+   "text": "I like cheese"
+  },
+  {
+   "name": "controller",
+   "text": "nintendo switch 2 pro controller"
+  },
+  {
+   "name": "coy",
+   "text": "MAKE SOME NOISE FOR DJ COY"
+  },
+  {
+   "name": "cpu",
+   "text": "HELP ME PENG BABY IM CHOKING"
+  },
+  {
+   "name": "crimson",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/InspiringFrozenGrassPeteZaroll-W5qBCmr1ykqmzIVW"
+  },
+  {
+   "name": "cups",
+   "text": "Cups is the best"
+  },
+  {
+   "name": "cute",
+   "text": "ivan cutie arroyo"
+  },
+  {
+   "name": "developer",
+   "text": "Insane in hoops"
+  },
+  {
+   "name": "dictators",
+   "text": "flayir and yoopoo"
+  },
+  {
+   "name": "endstream",
+   "text": "LWK PENG GET OFF... YOUR NOT COOKING ANYMORE. JS END STREAM ALREADY!"
+  },
+  {
+   "name": "flayir",
+   "text": "The biggest weeknd fan in the top 0.004% in 2025"
+  },
+  {
+   "name": "food",
+   "text": "Penguin Sandwiches"
+  },
+  {
+   "name": "geoguesser",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/UglyVainSowNononoCat-bqEL0-OKfMe6XKNr"
+  },
+  {
+   "name": "goat",
+   "text": "W Kara 🔥🔥"
+  },
+  {
+   "name": "golf",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/HorribleObeseFoxPJSalt-XUAGedbDwr9JLpXX"
+  },
+  {
+   "name": "happy",
+   "text": "if you’re sad by happy doesn’t cost a dime to spread love"
+  },
+  {
+   "name": "hc",
+   "text": "penguin has almost died 3x to himself (NOT CHAT DISTRACTING)"
+  },
+  {
+   "name": "hebunga",
+   "text": "always gets timed out from penguin by mistake 10k seconds was a lot"
+  },
+  {
+   "name": "howbigisit",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/RacyExpensiveRadicchioDBstyle-GI8qUUjwIqhJSqBQ"
+  },
+  {
+   "name": "hug",
+   "text": "$(user) wraps their arms around $(touser) and gives them a big, warm hug! 🤗"
+  },
+  {
+   "name": "intro",
+   "text": "Yo lwk the intros kinda broken, peng will fix it later, geeg."
+  },
+  {
+   "name": "kara",
+   "text": "goated"
+  },
+  {
+   "name": "koops",
+   "text": "the king of the koopas and pookie of zylo <3"
+  },
+  {
+   "name": "luck",
+   "text": "You got $(luck)% luck BROCHACHO, GET GOOD :)"
+  },
+  {
+   "name": "lurk",
+   "text": "Thanks for lurking, $(user)! We hope to see you back soon!"
+  },
+  {
+   "name": "marsh",
+   "text": "https://www.twitch.tv/onepsynic/clip/CovertHungryOrcaItsBoshyTime-bQuareH83p2ZFJiZ"
+  },
+  {
+   "name": "marshmallow",
+   "text": "The Legendary Story Off Who Stole The Marshmallow That Ended In Hours Of VOD Reviewing Andddddddddd We Never Found out Who Stole The Marshmallow The End"
+  },
+  {
+   "name": "marshmellow",
+   "text": "burnt like a mello but still can play the cello"
+  },
+  {
+   "name": "mashka",
+   "text": "da best gc2 who loves goth mommys"
+  },
+  {
+   "name": "mello",
+   "text": "im not useful, and im useless but im here typeshit ohSHIT fax"
+  },
+  {
+   "name": "minecraft",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/TsundereSpookyGarageThisIsSparta-5KdkvJn5DeoBo5fX",
+   "aliases": [
+    "piglin"
+   ]
+  },
+  {
+   "name": "mods",
+   "text": "\"PENG WE DO NOT NEED MORE MODS\" - Yoohoo15"
+  },
+  {
+   "name": "oopsie",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/DirtyViscousCarabeefPanicVis-PZBnEqd3TNDeUSNC"
+  },
+  {
+   "name": "peak",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/SparklyAmazingPorpoiseKappaPride-5qeeOUje6nyrUjQ6"
+  },
+  {
+   "name": "penguin",
+   "text": "i love my community, i love playing with viewers, i DONT bite, and i love Rocket league. Also im literally gonna hit gc3 this season ( Dont forget im also child friendly)"
+  },
+  {
+   "name": "phil",
+   "text": "LETS FLOCK IN https://linktr.ee/Infancinema"
+  },
+  {
+   "name": "pineapple",
+   "text": "our favorite c2 btw"
+  },
+  {
+   "name": "popcorn",
+   "text": "PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn PopCorn"
+  },
+  {
+   "name": "purge",
+   "text": "penguin decided to choose violence one day and disintegrated every entity exept from boats what a noob xd he aimed for getting id of boats so the entire chat rioted at him"
+  },
+  {
+   "name": "quinn",
+   "text": "#QwinningForLife"
+  },
+  {
+   "name": "repo",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/MoldyAwkwardSnoodBatChest-8h3z9SurqxuipHSE"
+  },
+  {
+   "name": "rl",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/ComfortableArborealYakinikuANELE-DrFTAx-Jw1uHR4wT"
+  },
+  {
+   "name": "robo",
+   "text": "she’s the ROGOAT"
+  },
+  {
+   "name": "rose",
+   "text": "jolly ass snowman"
+  },
+  {
+   "name": "sad",
+   "text": "if your sad know your loved by penguin and people in chat"
+  },
+  {
+   "name": "samu",
+   "text": "meow meow"
+  },
+  {
+   "name": "shadow",
+   "text": "plays way too many extra modes! bit weird if you ask me also when penguin throws money in his face he turns into a demon in rl"
+  },
+  {
+   "name": "snowy",
+   "text": "a goon or sum"
+  },
+  {
+   "name": "spedy",
+   "text": "speedy"
+  },
+  {
+   "name": "speedy",
+   "text": "spedy"
+  },
+  {
+   "name": "squishy",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/TenderSincereCheddarPogChamp-a0ROytRnduIvtrVO"
+  },
+  {
+   "name": "stop",
+   "text": "Just a command penguin did instead of leaving queue"
+  },
+  {
+   "name": "sydney",
+   "text": "brick wall Sydney!!! 🧱"
+  },
+  {
+   "name": "thebest",
+   "text": "im mini"
+  },
+  {
+   "name": "topgooner",
+   "text": "1. Diego. 2.Flayir . 3. @moztyy_. 4 Vhoggie 5. Speedkoops"
+  },
+  {
+   "name": "turtles",
+   "text": "i like turtles"
+  },
+  {
+   "name": "twerk",
+   "text": "shake it like u just don’t care"
+  },
+  {
+   "name": "ubisoft",
+   "text": "ttvinnocentpeng"
+  },
+  {
+   "name": "uk",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/GlutenFreeCarelessGoosePogChamp-xhAV-h8hwN-TEYHX"
+  },
+  {
+   "name": "unlurk",
+   "text": "$(user) is back!"
+  },
+  {
+   "name": "unninocence",
+   "text": "best champ never reaching gc"
+  },
+  {
+   "name": "vanish",
+   "text": "they have disappeared"
+  },
+  {
+   "name": "vc",
+   "text": "no... https://www.twitch.tv/kizmoiz/clip/TriangularSuspiciousSwanPanicVis-zropv_vCQs0KHtOJ"
+  },
+  {
+   "name": "vhoggie",
+   "text": "Straight Jorkin it to penguino banzino!"
+  },
+  {
+   "name": "w",
+   "text": "speedy and Yen"
+  },
+  {
+   "name": "water",
+   "text": "HYDRATE RIGHT NOW"
+  },
+  {
+   "name": "wyatt",
+   "text": "I love Eminem, and I’ve only lied once"
+  },
+  {
+   "name": "yen",
+   "text": "@SG_Yen Sends 20 different subs at 1 time https://www.twitch.tv/innocentpenguin_/clip/GracefulPricklyParrotDoritosChip-hpQArz6UniGCP2YW"
+  },
+  {
+   "name": "yoohoo",
+   "text": "hi"
+  },
+  {
+   "name": "zylo",
+   "text": "NEW COMMAND CURRENTLY IN THE WORKS (PENG TOO LAZY TO UPDATE IT)"
+  },
+  {
+   "name": "geo",
+   "text": "https://www.geoguessr.com/user/69fbf7426c47f011d20cc335"
+  },
+  {
+   "name": "burger",
+   "text": "Use !burgie to place a order. To change skin, place complexed orders, interact more; read: https://heynaugames.com/burgie-commands"
+  },
+  {
+   "name": "gsu",
+   "text": "Heres the Official Governer State University Rocket League Channel to Watch Innocent Penguin! https://www.twitch.tv/govstateesports"
+  },
+  {
+   "name": "roblox",
+   "text": "https://www.roblox.com/users/111646254/profile user: Newbienoob36"
+  },
+  {
+   "name": "tinder",
+   "text": "Nice Try Brochach!"
+  },
+  {
+   "name": "gay",
+   "text": "you are gay",
+   "enabled": false
+  },
+  {
+   "name": "grindr",
+   "text": "https://youtu.be/Aq5WXmQQooo?si=5SNpUXueYhckky-t",
+   "enabled": false
+  },
+  {
+   "name": "goon",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/TenderIronicLyrebirdVoHiYo-e445dM1-QFdPGWk-",
+   "enabled": false
+  },
+  {
+   "name": "weiner",
+   "text": "https://www.twitch.tv/innocentpenguin_/clip/AbstemiousCuriousMomPhilosoraptor-ldbUon9AY5Y0SW9i",
+   "enabled": false
+  },
+  {
+   "name": "feetfinder",
+   "text": "Coming soon. (hopefully by 2027)",
+   "enabled": false
+  },
+  {
+   "name": "onlyfans",
+   "text": "Coming Soon",
+   "enabled": false
+  },
+  {
+   "name": "trapaccount",
+   "text": "DO NOT MENTION THAT NAME IN THIS CHAT",
+   "enabled": false
+  }
+ ]
+}

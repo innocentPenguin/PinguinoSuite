@@ -454,6 +454,8 @@ public class CPHInline
         public int PastContextMs { get; set; } = 4000;            // longest this search may take (a full search of 660k lines takes well under a second now)
         public string LoreFile { get; set; } = @"D:\PinguinoSuite\Data\lore.json";   // running jokes / catchphrases / emotes with where they came from (Pipeline\build-lore.mjs)
         public bool ChannelLoreOn { get; set; } = true;            // PRIVATE channel lore (Data\lore, built from the logs): the bot understands the running jokes and the regulars. Never quoted or sent anywhere.
+        public bool CannedOn { get; set; } = true;                 // the ported Nightbot canned-reply commands (CannedFile): works online and offline, ChatReplies off or on
+        public string CannedFile { get; set; } = @"D:\PinguinoSuite\PinguinoChat\canned_commands.json";   // {cooldownSec, commands:[{name, aliases, text | choices, enabled}]}; reloads when saved
         public string ChannelLoreFile { get; set; } = @"D:\PinguinoSuite\Data\lore\channel_lore.json";   // {items:[{term, meaning, howBotsUse}]}
         public string PersonCardsDir { get; set; } = @"D:\PinguinoSuite\Data\lore\person_cards";        // one <login>.json per regular; only the busiest PersonCardsTop are loaded
         public int PersonCardsTop { get; set; } = 30;
@@ -711,6 +713,7 @@ public class CPHInline
             if (cmd == "!8ball") { if (_cfg.EightBallOn) EightBallCommand(cx, text.Length > 6 ? text.Substring(6).Trim() : ""); return; }
             RecordEvent(login, text);                                // gifted subs, resubs, bits, follows, raids (announced by the bots / the raiders)
             if (login == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(login) || IsBot(login)) return;
+            if (cmd != "" && _cfg.CannedOn && CannedCommand(cx, cmd, text)) return;   // the old Nightbot fun / lore commands (!shadow, !hug ...): same texts, answered by this bot
             if (cmd == "" && !PgNoDefer()) GateCount();                           // counts the line for the activity gate (once, not again when the router hands it back)
             if (!IsLive()) { SleepingReply(cx, cmd, replyTo); return; }   // offline: no recording, no AI; only a short "come back when live" when pinged
 
@@ -2475,6 +2478,41 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             r.LastAnswered = now; return false;
         }
     }
+    // ── canned-reply commands (ported from Nightbot): !shadow, !hug @x, !luck ... Plain text, no AI. enabled:false in the file holds one back. ──
+    static Dictionary<string, JObject> _canned; static long _cannedStamp; static readonly Dictionary<string, long> _cannedAt = new Dictionary<string, long>();
+    Dictionary<string, JObject> CannedMap()
+    {
+        try
+        {
+            string p = _cfg.CannedFile ?? ""; if (!File.Exists(p)) return _canned ?? new Dictionary<string, JObject>();
+            long st = new FileInfo(p).LastWriteTimeUtc.Ticks; if (_canned != null && st == _cannedStamp) return _canned;
+            var m = new Dictionary<string, JObject>(); var root = JObject.Parse(File.ReadAllText(p, Encoding.UTF8).TrimStart((char)0xFEFF));
+            foreach (var x in root["commands"] as JArray ?? new JArray())
+            {
+                var o = x as JObject; if (o == null || (bool?)o["enabled"] == false) continue;
+                var names = new List<string> { ((string)o["name"] ?? "").ToLower() };
+                foreach (var al in o["aliases"] as JArray ?? new JArray()) names.Add(((string)al ?? "").ToLower());
+                foreach (string n in names) if (n != "") m["!" + n.TrimStart('!')] = o;
+            }
+            _canned = m; _cannedStamp = st; _cannedSec = (int?)root["cooldownSec"] ?? 20; return m;
+        }
+        catch (Exception ex) { Warn("canned", "canned_commands.json: " + ex.Message); return _canned ?? new Dictionary<string, JObject>(); }
+    }
+    static int _cannedSec = 20;
+    bool CannedCommand(Ctx c, string cmd, string text)
+    {
+        JObject o; if (!CannedMap().TryGetValue(cmd, out o)) return false;
+        long now = Now(); long last; if (_cannedAt.TryGetValue(cmd, out last) && now - last < _cannedSec) return true;   // answered a moment ago: stay quiet, but the command is still handled here
+        string reply = (string)o["text"];
+        var ch = o["choices"] as JArray; if (ch != null && ch.Count > 0) reply = (string)ch[_rng.Next(ch.Count)];
+        if (string.IsNullOrWhiteSpace(reply)) return true;
+        string arg = text.Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim() : "";
+        string to = arg.Split(' ')[0].TrimStart('@'); if (to == "" || to.Length > 30) to = c.Display;
+        reply = reply.Replace("$(user)", c.Display).Replace("$(touser)", to).Replace("$(luck)", (_rng.Next(50) + 1).ToString());
+        _cannedAt[cmd] = now; PgSay("chat", reply);
+        return true;
+    }
+
     // ── PRIVATE channel lore + person cards (Data\lore): background only, never quoted ──
     static List<JObject> _chLoreItems; static long _chLoreStamp;
     List<JObject> ChannelLoreItems()

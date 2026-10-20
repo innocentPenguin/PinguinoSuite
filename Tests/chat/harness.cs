@@ -758,6 +758,19 @@ public static class Harness
         Msg("Opnx", "!forgetme");
         Check("!forgetme also wipes the opinion", string.IsNullOrEmpty((string)Memory()["id_opnx"]["Opinion"]) && !File.Exists(Path.Combine(dir, "opinions", "opnx.json")));
 
+        // ── 19b2. canned commands (ported from Nightbot) ──
+        CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+        Msg("Canny", "!shadow", null, false);
+        Check("!shadow is answered by the chat bot with the old Nightbot text", Last() != null && Last().Contains("plays way too many extra modes"), Last());
+        int cn = CPHProxy.Sent.Count; Msg("Canny2", "!shadow", null, false);
+        Check("the same canned command a moment later stays quiet (cooldown + duplicate guard)", CPHProxy.Sent.Count == cn);
+        Msg("Canny", "!hug @Bobby", null, false);
+        Check("$(user) and $(touser) are filled in", Last() != null && Last().Contains("Canny wraps their arms around Bobby"), Last());
+        Msg("Canny", "!luck", null, false);
+        Check("!luck rolls a number", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), @"You got \d+% luck"), Last());
+        cn = CPHProxy.Sent.Count; Msg("Canny", "!gay", null, false);
+        Check("a command held with enabled:false says nothing", CPHProxy.Sent.Count == cn);
+
         // ── 19c. !8ball ──
         SetCfg("EightBallUserSec", 0); SetCfg("EightBallGlobalSec", 0);
         Directory.CreateDirectory(Path.Combine(dir, "profiles"));
