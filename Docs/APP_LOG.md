@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:52 - Host restart (no-duplicate-message guard)
+
+- Restarted Host via Update-Module: 2393763 duplicate-chat guard (identical line within 30 s from any bot is dropped; HostApi.SaidRecently in SendAs and cph.Say). Streamer.bot scripts (Core/Chat/Helper/Router PgSay) need re-pasting from the synced files. test-host-commands.py has 2 stale checks since the !commands link change.
+
 ## 2026-10-20 08:45 - Voice restart (Speak review + spoken control)
 
 - Restarted Voice via Update-Module (first attempt failed: module was running outside the core; killed its listener on 8772 and reran, it now runs under the core). 80cad76: Speak > Review & control tab (hourly self-review, spoken game/title/timeout control OFF by default). Needs Host endpoints (live as of 72349a4) and Ivan's Twitch re-sign-in for title/game.
