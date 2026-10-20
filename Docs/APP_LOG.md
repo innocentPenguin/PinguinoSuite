@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:45 - Voice restart (Speak review + spoken control)
+
+- Restarted Voice via Update-Module (first attempt failed: module was running outside the core; killed its listener on 8772 and reran, it now runs under the core). 80cad76: Speak > Review & control tab (hourly self-review, spoken game/title/timeout control OFF by default). Needs Host endpoints (live as of 72349a4) and Ivan's Twitch re-sign-in for title/game.
+
 ## 2026-10-20 08:37 - Host restart (channel update + mod timeout endpoints)
 
 - Restarted Host via Update-Module: 72349a4 HostChannel.cs: POST /api/channel/update (title/game) and POST /api/mod/timeout (module token required, protected users refused, audit log Data/runtime/mod_audit.log). New scopes (channel:manage:broadcast, channel:manage:redemptions, channel:read:goals, channel:read:hype_train) need Ivan's one Twitch re-sign-in. /api/live 200.
