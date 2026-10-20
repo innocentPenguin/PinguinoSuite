@@ -3035,8 +3035,21 @@ public class CPHInline
             scene = _obsScene,
             twitchGame = _twitchGame,
             scenes = _settings.ObsScenes.Keys.ToList(),
-            sources = _settings.ObsSources.Select(s => new { label = s.Label, visible = _obsVis.ContainsKey(s.Label) ? (bool?)_obsVis[s.Label] : null }).ToList()
+            sources = _settings.ObsSources.Select(s => new { label = s.Label, visible = _obsVis.ContainsKey(s.Label) ? (bool?)_obsVis[s.Label] : null }).ToList(),
+            tree = ReadObsTree()   // [NEW][OBS] what OBS really has (scenes with folders, sources with live visibility); null when the Host has no fresh copy
         };
+    }
+
+    // The Host writes runtime\obs_tree.json every few seconds while OBS is connected (HostObs.cs); a copy older than 30 s is ignored so the site never shows a stale OBS.
+    JToken ReadObsTree()
+    {
+        try
+        {
+            string f = Path.Combine(_dataDir, "runtime", "obs_tree.json"); if (!File.Exists(f)) return null;
+            var t = JObject.Parse(File.ReadAllText(f, System.Text.Encoding.UTF8)); long ts = (long?)t["ts"] ?? 0;
+            return DateTimeOffset.UtcNow.ToUnixTimeSeconds() - ts <= 30 && (bool?)t["connected"] == true ? t : null;
+        }
+        catch (Exception) { return null; }
     }
 
     // !scene <label>   (mods)

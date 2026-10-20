@@ -16,6 +16,13 @@ namespace PinguinoHost
         static JObject _scenes; static DateTime _scenesAt = DateTime.MinValue;
         static readonly Dictionary<string, KeyValuePair<DateTime, JArray>> _items = new Dictionary<string, KeyValuePair<DateTime, JArray>>();
         const double CacheSec = 2.0;
+        static bool _started;
+        /// <summary>keeps runtime\obs_tree.json fresh (every 5 s while OBS is connected) so the bot's published state always carries the real tree.</summary>
+        public static void Start()
+        {
+            if (_started) return; _started = true;
+            System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(6000); while (true) { try { if (Lease.MayRun) Get(null); } catch (Exception) { } await System.Threading.Tasks.Task.Delay(5000); } });
+        }
         static string FoldersP { get { return Path.Combine(HostApi.DataDir, "config", "obs_folders.json"); } }
         static string TreeP { get { return Path.Combine(HostApi.DataDir, "runtime", "obs_tree.json"); } }
 
