@@ -351,10 +351,18 @@ class Module:
         self.retry_at = 0.0
         self.failed = False
         self.deferred = False  # singleton waiting for this device to become master
+        self.port_warned = 0.0
+        self.last_try = 0.0
 
     @property
     def singleton(self):
         return bool(self.spec.get("singleton"))
+
+    def port(self):
+        try:
+            return int(self.spec["url"].rsplit(":", 1)[1].split("/")[0])
+        except (KeyError, ValueError, IndexError):
+            return 0
 
     def opts(self):
         o = dict(self.spec.get("defaults", {}))
@@ -376,6 +384,12 @@ class Module:
             return
         self.deferred = False
         self.wanted, self.failed = True, False
+        port = self.port()
+        if port and integrations.tcp("127.0.0.1", port):    # something holds the port but does not answer health: a hung old copy. Spawning another would only crash on bind.
+            if time.time() - self.port_warned > 60:
+                self.port_warned = time.time()
+                console_log.log("error", "supervisor", f"{self.id}: port {port} is held by a process that does not answer; not starting a second copy. Stop that process (or restart the Suite) to recover.", module=self.id)
+            return
         cmd = [PY if c == "{py}" else c for c in self.spec["cmd"]]
         log = open(LOGS / f"{self.id}.log", "ab")
         if IS_WIN:
@@ -421,6 +435,9 @@ class Module:
 
     def refresh(self):
         self.supervise()
+        if self.wanted and not self.failed and self.proc is None and not self.deferred and time.time() - self.last_try > 15 and not self._ping():
+            self.last_try = time.time()      # wanted but nothing running (e.g. start was skipped because a hung copy held the port): try again
+            self.start()
         was = self.healthy
         self.healthy = self._ping()
         if self.healthy != was:
