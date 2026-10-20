@@ -434,7 +434,7 @@ public class CPHInline
         public bool LogChat { get; set; } = true;                 // save live chat to %AppData%\BVQ\chat_logs (Twitch has no chat history to download later)
         public bool StudyOnStreamStart { get; set; } = true;      // when the stream goes live, read the new logs and learn
         public int StudyMinHours { get; set; } = 3;               // at most one study every N hours
-        public bool ChatReplies { get; set; } = false;             // ChattyPinguino's own chatting (answering mentions, random chimes, welcomes, the offline nap line). OFF while HelperPinguino is being trained: set true to bring it back. Logging, studying, !8ball, !forgetme and mod commands still work.
+        public bool ChatReplies { get; set; } = true;              // ChattyPinguino's own chatting (answering mentions, random chimes, welcomes, the offline nap line). Turn it off to keep the bot silent (e.g. while HelperPinguino is being trained). Logging, studying, !8ball, !forgetme and mod commands still work.
         public bool EightBallOn { get; set; } = true;              // !8ball: a fun answer that nods to the asker's public context (roles, streak, what chat was just talking about)
         public int EightBallUserSec { get; set; } = 45;            // per viewer
         public int EightBallGlobalSec { get; set; } = 8;           // whole chat
@@ -748,7 +748,9 @@ public class CPHInline
             { welcome = true; _lastWelcome = Now(); }
             if (mention)
             {
-                if (!cx.Broadcaster && ModActionAsk(text)) { string mr = ModRefusal(login, text); if (mr != "") Say(cx, mr); return; }   // never a timeout / ban / rank change from the bot: "ask a mod"
+                if (!cx.Broadcaster && ModActionAsk(text)) { string mr = ModRefusal(login, text); if (mr != "") Say(cx, mr); return; }
+                { string ca = CapabilityAnswer(login, text); if (ca != null) { if (ca != "") Say(cx, ca); return; } }   // "can you make commands / change the title": a short true answer, no AI
+                { string bc = BareCallAck(login, text); if (bc != null) { if (bc != "") Say(cx, bc); return; } }   // just the name ("CHATTY", "ask chatty pinguino!"): one playful line, once in a while   // never a timeout / ban / rank change from the bot: "ask a mod"
                 bool quiet = Hushed(login) || Flooding(login);                    // told to be quiet / a real flood: stays ignored on purpose
                 if (!quiet && RepeatedPrompt(login, text)) quiet = true;          // the same prompt again and again: answered once, then ignored
                 if (!quiet && OverShare(login)) quiet = true;                     // had their share of the bot's attention: others get a turn (no Miss: it is not a failure)
@@ -1216,6 +1218,9 @@ PERSONALITY (be a character, not a help desk)
 - Answer what THIS person actually said: a callback to their last line, a mock-serious ruling, a one-word verdict. Generic hype is the worst reply.
 - Change your move every time: roast, fake outrage, deadpan, a sudden compliment, a confident absurd claim. A small surprise beats a long joke.
 - FAIR PLAY: every chatter gets the same energy and the same teasing level, regulars, newcomers, mods and subs alike. No favourites, no piling on anyone, no keeping a grudge. Lines that start with ! are chat commands, not conversation: never react to them or to what other bots answered.
+
+YOUR LIMITS (say them honestly, one short line, and only name things that exist)
+- You cannot change the stream title, add or edit commands, ban, time out, mod or change any setting. Titles: a mod uses !title <new title>. New commands or facts: mods send !teach <text> and Penguin approves it. Anything else a mod does: point to a mod, no invented commands.
 
 HARD RULES
 - MATCH THE TONE (very important): read how the viewer is talking. When they ask for information or help and sound serious (a real question, a request to explain something, someone who wants an actual answer, a problem they need solved), be serious back: answer directly, clearly and correctly in plain words, with the real information first. NO jokes, roasting, sass, slang filler, catchphrases or deflecting with humor, and don't answer a real question with a joke. If you don't know, say so plainly (or use web search). Be playful ONLY when they are playful (banter, memes, teasing, jokes, emotes). Mixed message: answer the serious part first and properly. Being kind and warm is fine, being flippant is not.
@@ -2478,6 +2483,31 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             r.LastAnswered = now; return false;
         }
     }
+    // ── things people ask the chat bot to DO that it cannot: only what really exists is named (!title, !teach) ──
+    static readonly Regex AskTitle = new Regex(@"\b(change|set|update|switch|edit)\b.{0,25}\b(title|stream title)\b|\b(title)\b.{0,20}\b(change|update)\b", RegexOptions.IgnoreCase);
+    static readonly Regex AskCommands = new Regex(@"\b(make|add|create|build|write|set ?up)\b.{0,20}\bcommands?\b|\bcommands?\b.{0,20}\b(make|add|create)\b", RegexOptions.IgnoreCase);
+    static readonly Dictionary<string, long> _capAt = new Dictionary<string, long>();
+    string CapabilityAnswer(string login, string text)
+    {
+        string a = null;
+        if (AskTitle.IsMatch(text)) a = "I can't change the stream title, but a mod can with !title <new title>.";
+        else if (AskCommands.IsMatch(text)) a = "I can't add commands myself. Mods can send an idea with !teach <text> and Penguin approves it.";
+        if (a == null) return null;
+        long now = Now(), last; if (_capAt.TryGetValue(login, out last) && now - last < 120) return "";   // answered a moment ago: stay quiet
+        _capAt[login] = now; return a;
+    }
+    static readonly string[] BareAcks = { "quack... I mean, waddle waddle. what's up?", "you rang? 🐧", "present! chatty pinguino reporting for duty.", "yes yes, I'm here, flippers ready.", "that's me! what do you need?", "🐧 someone say my name?" };
+    static readonly Dictionary<string, long> _bareAt = new Dictionary<string, long>(); static long _bareAny;
+    /// <summary>a message that is only a call for the bot ("CHATTY", "PINGUINO!", "ask chatty pinguino!") and nothing to answer: null = not one; "" = it is one but stay quiet; else the line</summary>
+    string BareCallAck(string login, string text)
+    {
+        string t = Regex.Replace(text.ToLowerInvariant(), @"[@!?.,:;~*_\-]", " ");
+        t = Regex.Replace(t, @"\b(ask|chatty|pinguino|penguino|pinguinob0t|pinguinobot|pinguinbot|chattypinguino|chatty pinguino|chatty penguino)\b", " ");
+        if (Regex.Replace(t, @"\s+", "") != "") return null;
+        long now = Now(), last; if ((_bareAt.TryGetValue(login, out last) && now - last < 300) || now - _bareAny < 20) return "";
+        _bareAt[login] = now; _bareAny = now; return BareAcks[_rng.Next(BareAcks.Length)];
+    }
+
     // ── canned-reply commands (ported from Nightbot): !shadow, !hug @x, !luck ... Plain text, no AI. enabled:false in the file holds one back. ──
     static Dictionary<string, JObject> _canned; static long _cannedStamp; static readonly Dictionary<string, long> _cannedAt = new Dictionary<string, long>();
     Dictionary<string, JObject> CannedMap()

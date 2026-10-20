@@ -772,6 +772,20 @@ public static class Harness
         cn = CPHProxy.Sent.Count; Msg("Canny", "!gay", null, false);
         Check("a command held with enabled:false says nothing", CPHProxy.Sent.Count == cn);
 
+        // ── 19b3. capability questions + bare calls ──
+        { int cl0 = llmCalls;
+          CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          Msg("Marshy", "@ChattyPinguino can you change the title", null, false);
+          Check("asked to change the title: says a mod uses !title, no AI call", Last() != null && Last().Contains("!title") && llmCalls == cl0, Last());
+          CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          Msg("Marshy2", "@ChattyPinguino are you able to make commands?", null, false);
+          Check("asked to make commands: points to !teach, no AI call", Last() != null && Last().Contains("!teach") && llmCalls == cl0, Last());
+          CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          Msg("Shouty", "ASK @CHATTYPINGUINO!", null, false);
+          Check("a bare ASK @CHATTYPINGUINO! gets one short playful line, no AI call", Last() != null && Last().Length < 80 && llmCalls == cl0, Last());
+          int cb = CPHProxy.Sent.Count; Msg("Shouty", "ASK @CHATTYPINGUINO!", null, false);
+          Check("the same bare call again stays quiet", CPHProxy.Sent.Count == cb); }
+
         // ── 19c. !8ball ──
         SetCfg("EightBallUserSec", 0); SetCfg("EightBallGlobalSec", 0);
         Directory.CreateDirectory(Path.Combine(dir, "profiles"));
