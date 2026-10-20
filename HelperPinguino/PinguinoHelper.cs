@@ -301,7 +301,7 @@ public class CPHInline
     class HelperSettings
     {
         public bool Enabled { get; set; } = true;
-        public string LobbyName { get; set; } = "peng2";
+        public string LobbyName { get; set; } = "peng3";
         public string LobbyPassword { get; set; } = "";               // blank = "no password"
         public string CoreActionName { get; set; } = "PinguinoBot";   // the Streamer.bot action that runs PinguinoBotCore.cs
         public string ChatActionName { get; set; } = "PinguinoChat";  // messages the helper does not handle are handed to this action

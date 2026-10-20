@@ -1,9 +1,18 @@
-# PinguinoSuite App log
+﻿# PinguinoSuite App log
 
 Kept by session 00 (the only session that launches, restarts or rebuilds the app). One entry per rebuild, relaunch or notable app change, newest first. Times are local (CDT).
 
 | When | Event | Details |
 |---|---|---|
+| 2026-10-19 ~18:50 | Host-only restart (Update-Module host -NoBuild, DURING STREAM at Ivan's OK): helper lobby name peng2 -> peng3 (helper_settings.json + source defaults), Chatty now also answers to chattypinguino / chatty pinguino / chatty penguino / chatty. Chat, Helper ready after restart. | 00 |
+| 2026-10-19 ~18:00 | Host restart WITH build (Update-Module host), DURING STREAM at Ivan's OK. Now live: aaaa2c9 Chatty activity gate + countdown, 794f2d1 Host supplies live state itself + web-sync timer GC fix + chat-rate history, ddb9d1c Host text settings, e2fbcd9 KOTH recycle (losers and streamer go to back of queue). Also included at Ivan's OK: other sessions' uncommitted PinguinoBotCore.cs edits (bot voice routing, aliases, main-account fallback). Build 0 errors; bots healthy; /api/live = live. NOT yet applied: Build-All (shell/core/UI: Accounts page, dashboard chat card). | 00 |
+| 2026-10-19 ~17:36 | Host-only restart (Update-Module host -NoBuild, no new code, DURING STREAM at Ivan's OK): WebSyncKey copied from backups\pre-migration-20261019-065904 into Data\runtime\settings.json (cutover had left it empty, so the site showed PinguinoBot offline). Old file saved as settings.json.pre-key-1736.bak. Site /standings updated 17:37 and /customs shows KOTH live with queue open. 02's timer-GC fix (794f2d1) still applies at the post-stream Host build. | 00 |
+| 2026-10-19 ~17:23 | Host-only restart (Update-Module host -NoBuild, no new code, DURING STREAM at Ivan's OK): restored 188 players to Data\runtime\players.json from backups\pre-migration-20261019-065904 (cutover left only 3, everyone was told to register). Live file saved as players.json.pre-restore-1722.bak. Also WasLive hand-set true ~17:13 (WebSyncKey empty); permanent fix = 02's 794f2d1, applies at the post-stream Host build. | 00 |
+| 2026-10-19 ~16:15 | FULL REBUILD core+shell (rebuild13.log): password inputs were white-on-white in vault key entry (App/src/index.html) + 01's f7e2297 CSS. Last restart before stream; FREEZE after. | 00 |
+| 2026-10-19 ~15:58 | Update-Module spotify -NoBuild (f7b1f77 one-click connect, quiet degrade). No app restart. FREEZE after this. | 00 |
+| 2026-10-19 ~15:55 | Update-Module voice -NoBuild (00a27cd speech-intervals, safe defaults) + listen (3233a9b ignore voice cmds while bot speaks) + multi -NoBuild (a339fed stream-ready). No app restart. | 00 |
+| 2026-10-19 ~15:50 | Update-Module voice -NoBuild + link -NoBuild (no app restart) | voice 227b665 (no boot-time Host feed warning); link 6196cb2 (cycle 3: readiness list, Stream Deck CLI via running module). Both up (8772, 7777 = 200). Host 6d48fa1 was rebuilt earlier (~12:30). |
+| 2026-10-19 ~12:15 | FULL REBUILD core+shell, relaunch (rebuild12.log) = LOOP CYCLE 2 | 01 cycle 2 (auto config backups, module Logs drawer, stop-toast); 02 Host d3da5e7 (Streamer.bot parity: Credits WS 8080 after cutover, first_today, press_key, goals/session, manifest change); 03 cycle 3; 04 link f5fc4a1 (fresh-state guards, hub-run macros); 06 voice 2b1653b (milestones, personas, custom sounds, CSV); Spotify cycle 3 59b7d9b; 05 site (no restart needed). Build OK first try. |
 | 2026-10-19 ~12:00 | FULL REBUILD core+shell, relaunch (rebuild11.log) = LOOP CYCLE 1 | 01 PenguinComm page, Quick actions (variables/queue/triggers/hotkeys), Ctrl+K palette, pop-out reconcile, pre-stream schedule; 06 voice module discovered (PenguinComm Speak); 02 Host cutover batch 5c8c6f2 + activity feed; 03 right-side settings panel + split chat; 04 link cycle 1; Spotify cycles 1-2. Build OK first try after killing dotnet PinguinoHost + listeners. |
 | 2026-10-19 ~11:36 | FULL REBUILD core+shell, relaunch (rebuild10.log) | 01 personalization (Personalize page: 8 themes, density, zoom, sidebar, dashboard layout, sounds, looks) + Listen always_start with on_start hook (mic starts at launch, live or not). Two earlier attempts failed: Host DLL locked by a dotnet process running PinguinoHost (kill via CommandLine match, not just port listeners). |
 | 2026-10-19 ~11:29 | Link restart (04 e9158d5: personalisation) | Settings card (device, OBS address, page look, prestream toggles, timeouts, log level) + macro editor (allow-list actions, two-click guards). Update-Module.bat link -NoBuild OK. |
@@ -53,3 +62,6 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 ## Rules
 - Only 00 launches/kills/restarts/rebuilds. Other sessions message 00; Ivan's yes is asked in 00's session before each rebuild.
 - Update this file on every rebuild or relaunch with: time, who asked, what changed (commit hashes), result.
+
+
+

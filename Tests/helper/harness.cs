@@ -36,7 +36,7 @@ public static class Harness
     static void Settings(string extra = "")
     {
         string p = Path.Combine(dir, "helper_settings.json");
-        File.WriteAllText(p, "{\"LobbyName\":\"peng2\",\"LobbyPassword\":\"\",\"UserCooldownSec\":0,\"InfoCooldownSec\":0" + extra + "}");
+        File.WriteAllText(p, "{\"LobbyName\":\"peng3\",\"LobbyPassword\":\"\",\"UserCooldownSec\":0,\"InfoCooldownSec\":0" + extra + "}");
         File.SetLastWriteTimeUtc(p, DateTime.UtcNow.AddSeconds(++stamp));
         typeof(CPHInline).GetField("_cfgChecked", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue);
     }
@@ -57,17 +57,17 @@ public static class Harness
         foreach (var q in new[] { "whats the code", "what's the code?", "name and pass?", "lobby password?", "gimme the pass", "what is the private match name", "whats the lobby name", "pass?", "can someone give me the password" })
         {
             Msg("Newbie", q);
-            Check("lobby: " + q, Last() != null && Last().Contains("Name: peng2") && Last().Contains("no password") && !Forwarded(), Last());
+            Check("lobby: " + q, Last() != null && Last().Contains("Name: peng3") && Last().Contains("no password") && !Forwarded(), Last());
         }
         Check("reply names the viewer", Last().StartsWith("@Newbie "));
         Settings(",\"LobbyName\":\"zzz9\",\"LobbyPassword\":\"hunter2\"");
         Msg("Newbie", "whats the code");
-        Check("values come from the config file, not code", Last().Contains("zzz9") && Last().Contains("Password: hunter2") && !Last().Contains("peng2"), Last());
+        Check("values come from the config file, not code", Last().Contains("zzz9") && Last().Contains("Password: hunter2") && !Last().Contains("peng3"), Last());
         Settings();
 
         // 2. how to join / register: right example, no brackets
         Msg("Newbie", "how do I join?");
-        Check("how join: steps + example", Last().Contains("!register YourEpicName") && Last().Contains("peng2") && !Last().Contains("<"), Last());
+        Check("how join: steps + example", Last().Contains("!register YourEpicName") && Last().Contains("peng3") && !Last().Contains("<"), Last());
         Msg("Newbie", "how do i register");
         Check("how register: example", Last().Contains("!register YourEpicName") && Last().Contains("no < > brackets"), Last());
         Msg("Ana", "how do i join");
@@ -165,7 +165,7 @@ public static class Harness
         Check("no AI call for chatter or pattern hits", aiCalls == 0, aiCalls + "");
         aiReply = "{\"intent\":\"lobby_info\",\"epic\":\"\"}";
         Msg("Q", "yo is there a way for me to hop into the game?");
-        Check("unclear but practical: AI used, answer templated", aiCalls == 1 && Last() != null && Last().Contains("peng2") && !Forwarded(), Last());
+        Check("unclear but practical: AI used, answer templated", aiCalls == 1 && Last() != null && Last().Contains("peng3") && !Forwarded(), Last());
         aiReply = "{\"intent\":\"none\",\"epic\":\"\"}"; aiCalls = 0;
         Msg("Q", "do you play the game with your cat?");
         Check("AI says none: chatbot gets it", aiCalls == 1 && Last() == null && Forwarded());
@@ -196,7 +196,7 @@ public static class Harness
         File.Delete(Path.Combine(dir, "helper_settings.json"));
         typeof(CPHInline).GetField("_init", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, false);
         Msg("Zed", "hi");
-        Check("template config written on first run", File.Exists(Path.Combine(dir, "helper_settings.json")) && File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("peng2"));
+        Check("template config written on first run", File.Exists(Path.Combine(dir, "helper_settings.json")) && File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("peng3"));
         Check("core files untouched", File.ReadAllText(Path.Combine(dir, "players.json")).Contains("AnaEpic") && !File.ReadAllText(Path.Combine(dir, "players.json")).Contains("Cool Penguin"));
 
         // ── the three bots: the router protocol ──
