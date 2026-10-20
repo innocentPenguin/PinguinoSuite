@@ -143,6 +143,43 @@ namespace PinguinoHost
         }
         static string Canon(Dictionary<string, string> al, string login) { string x; for (int i = 0; i < 5 && al.TryGetValue(login, out x); i++) login = x; return login; }
 
+        public static string CanonLogin(string login) { lock (L) return Canon(Aliases(), (login ?? "").Trim().ToLowerInvariant()); }
+        public static Dictionary<string, string> AliasMap() { lock (L) return Aliases(); }
+        static JObject AliasDoc()
+        {
+            Aliases();   // creates the file with its note when it is missing
+            try { return SubsImport.ParseJ(File.ReadAllText(AliasP)); } catch (Exception) { return new JObject { { "aliases", new JObject() } }; }
+        }
+        public static string AliasAdd(string old, string main)
+        {
+            old = (old ?? "").Trim().ToLowerInvariant().TrimStart('@'); main = (main ?? "").Trim().ToLowerInvariant().TrimStart('@');
+            if (!Regex.IsMatch(old, "^[a-z0-9_]{2,25}$") || !Regex.IsMatch(main, "^[a-z0-9_]{2,25}$")) return "Logins are letters, numbers and underscores (2-25 characters).";
+            lock (L)
+            {
+                var al = Aliases(); string target = Canon(al, main);
+                if (target == old) return old + " is already the main account of " + main + ", so that would loop.";
+                var doc = AliasDoc(); var a = (JObject)(doc["aliases"] ?? (doc["aliases"] = new JObject()));
+                foreach (var p in a.Properties().Where(p => ((string)p.Value ?? "").ToLowerInvariant() == old).ToList()) p.Value = target;   // whoever pointed at the old login now points at the main one
+                a[old] = target; File.WriteAllText(AliasP, doc.ToString()); _cacheAt = DateTime.MinValue;
+                return "Alias saved: " + old + " > " + target + ". Their gifts, bits, messages and streak count under " + target + " from the next refresh (!boards refresh).";
+            }
+        }
+        public static string AliasRemove(string old)
+        {
+            old = (old ?? "").Trim().ToLowerInvariant().TrimStart('@');
+            lock (L)
+            {
+                var doc = AliasDoc(); var a = doc["aliases"] as JObject; if (a == null || a[old] == null) return old + " is not an alias.";
+                a.Remove(old); File.WriteAllText(AliasP, doc.ToString()); _cacheAt = DateTime.MinValue; return "Alias removed: " + old + ". It counts as its own person again from the next refresh.";
+            }
+        }
+        /// <summary>forget every learned display name so the next refresh asks Twitch again.</summary>
+        public static void NamesReset() { lock (L) { _names = new JObject(); try { if (File.Exists(NamesP)) File.Delete(NamesP); } catch (Exception) { } } }
+        public static string DisplayName(string login)
+        {
+            lock (L) { var e = Names()[login] as JObject; string dn = e == null ? "" : (string)e["name"] ?? ""; if (dn != "") return dn; var u = (_cache?["users"] as JObject)?[login] as JObject; return u != null ? (string)u["name"] : login; }
+        }
+
         // ---- display names: the real Twitch capitalisation. Data/boards/names.json {login:{name,at}} is filled from Twitch (Helix users) for everyone whose stored name is just the lowercase login ----
         static string NamesP { get { return Path.Combine(Root, "boards", "names.json"); } }
         static JObject _names;

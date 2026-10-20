@@ -1,39 +1,149 @@
 # PinguinoBot commands
 
-The website reads `commands.json`, which is the source of truth. This page is the human-readable copy of it.
+The website reads `commands.json`, which is the source of truth (the Host also serves it at `GET /api/commands-doc` with viewer / mod lists and a permission field). This page is generated from it; edit the JSON, not this page.
 
-## Community Games: everyone
-| Command | What it does |
-|---|---|
-| `!register <EpicID>` | Link your Epic name |
-| `!join` / `!leave` | Join or leave the queue |
-| `!pos` | Your place in the queue |
-| `!myrank` | Your MMR |
-| `!lobby` | Current teams |
-| `!stats [user]` | Wins, losses and points |
-| `!topwins` | Wins leaderboard |
-| `!queue` / `!queue list` | Queue status and list |
+## Viewer commands
 
-## Community Games: mods
-| Command | What it does |
-|---|---|
-| `!queue open\|close\|clear` | Manage the queue |
-| `!balance` | Make new teams |
-| `!match clear\|fill\|queue` | Clear = game over, empty the match (they leave the queue). Fill = make teams / fill empty slots. Queue = match back to the front of the queue |
-| `!reroll` | Different teams with the same players, refilling anyone who left |
-| `!win blue\|orange` | Record the winner (only once per match) |
-| `!next` / `!next blue` | Rotate everyone out / the winner stays on |
-| `!mode balanced\|random\|picks` | How teams are made |
-| `!pick a b c` / `!pick auto` | Choose Blue in picks mode |
-| `!format 2v2\|3v3\|4v4` | Team size |
-| `!kick @user` | Remove someone from the queue |
-| `!mmr @user` | Look up a player's MMR |
-| `!setmmr @user <mmr\|rank\|auto>` | Set a player's MMR, or `auto` to go back to Tracker Network |
-| `!register @user <EpicID>` | Register or fix someone else's Epic name |
+### Chat bot
 
-## Firsts
-| Command | What it does |
-|---|---|
-| `!first` | Your First 5 record |
-| `!firsts` | First 5 leaderboard |
-| *(any chat message)* | The first 5 unique chatters claim 1st to 5th place, paid out every 5 minutes |
+| Command | Usage | What it does |
+|---|---|---|
+| `!forgetme` | `!forgetme` | ChattyPinguino forgets everything it remembers about you. |
+| `!rememberme` | `!rememberme` | Let ChattyPinguino remember things about you again. |
+| `!memory` | `!memory` | Shows what ChattyPinguino remembers about you. |
+
+### Community Games
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!register` | `!register <EpicID>  \|  mods: !register @viewer <EpicID>` | Link your Twitch name to your Epic Games name. Mods can register or fix someone else's. |
+| `!join` | `!join` | Join the queue (must be registered, queue must be open). |
+| `!leave` | `!leave` | Leave the queue. |
+| `!pos` | `!pos` | Show your place in the queue. |
+| `!myrank` | `!myrank` | Show your MMR on file and where it came from. |
+| `!lobby` | `!lobby` | Show the current Blue and Orange teams. |
+| `!stats` | `!stats [user]` | Wins, losses and points for you or another player. |
+| `!topwins` | `!topwins` | Top 5 community-games players by wins (ties broken by points). |
+| `!queue` | `!queue  \|  !queue list  \|  mods: !queue open \| close \| clear` | Queue status. Mods open, close, or clear (clear also closes and ends the lobby). |
+| `!strikes` | `!strikes` | How many strikes you have (3 = cannot join customs). Everyone loses a strike each time the stream goes live. |
+
+### Firsts
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!first` | `!first` | Your First 5 record (1st-5th place counts and total). |
+| `!firsts` | `!firsts` | Top 5 First 5 leaderboard. |
+| `(chat message)` | `Just chat when the game is running` | First 5 unique chatters claim 1st-5th. Payout via !addpoints every 5 min: 15000 / 10500 / 7500 / 4500 / 3000. |
+
+### Leaderboards
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!leaderboards` | `!leaderboards` | Link to the website leaderboards (top gifters, bitters, yappers and watch streaks, all time or by month). |
+| `!topgifters` | `!topgifters [month]` | Top 5 subscription gifters (subs gifted). Add a month (oct, october, 2026-10, this, last) for that month only. |
+| `!topbits` | `!topbits [month]` | Top 5 bit cheerers, all time or for one month. |
+| `!topyappers` | `!topyappers [month]` | Top 5 chatters by number of chat messages, all time or for one month. |
+| `!gifted` | `!gifted [user]` | How many subs you (or someone) gifted in total, and the rank on the gifters board. |
+| `!bits` | `!bits [user]` | Total bits cheered, the bits badge tier and the rank on the bits board. |
+
+### Subscribers
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!sub` | `!sub [user]` | Subscription tier, months, streak and Founder status from the subscriber list. |
+| `!founders` | `!founders` | Lists the Founders (Twitch Founders Badge holders). |
+
+### Tournament
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!me` | `!me` | Join the tournament wheel while sign-ups are open (also a Join button on the website tournament page). |
+
+### Watch Streaks
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!topstreak` | `!topstreak [month]` | Top 5 watch streaks people have shared in chat (best streak), all time or for one month. Only people who shared a streak are on the board. |
+| `!streak` | `!streak [user]` | The last watch streak someone shared (and their best). Twitch only shows a watch streak when the viewer shares it. |
+| `!streakrecord` | `!streakrecord [user]` | The best watch streak someone has shared, with the date. |
+
+
+## Moderator commands
+
+### Bot care
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!problems` | `!problems [clear]` | List what the bot found wrong, or clear the list. |
+| `!check` | `!check` | Self-test: problems go to the website log. |
+| `!pg` | `!pg status \| core\|chat\|helper on\|off \| test \| cutover` | Quick control of the bots from chat. Everyone else gets no answer. |
+
+### Chat bot
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!chatbot` | `!chatbot on\|off` | Switch ChattyPinguino on or off. |
+| `!golive` | `!golive [time]` | Set when the stream starts, for the countdown message. |
+
+### Community Games
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!balance` | `!balance` | Rotate current players out and build new teams from the queue using the current mode. |
+| `!match` | `!match <clear\|fill\|queue>` | clear = game over: everyone in the match leaves the queue, nobody is pulled in. fill = make teams from the queue, or fill empty slots. queue = put everyone in the match back at the front of the queue. Website: Clear / Fill / Move all ➜ Queue under the teams. |
+| `!reroll` | `!reroll` | Different teams with the same players. Refills anyone kicked/left from the queue. |
+| `!win` | `!win <blue\|orange>` | Record the winner and award points. A match can only be scored once. |
+| `!next` | `!next  \|  !next <blue\|orange>` | !next = everyone rotates out. !next blue = record Blue win (if not already) and Blue stays on vs new challengers. |
+| `!mode` | `!mode <balanced\|random\|picks>` | How teams are made. |
+| `!pick` | `!pick <names for Blue>  \|  !pick auto` | In picks mode, after !balance: listed players go Blue, the rest Orange. 'auto' balances instead. |
+| `!format` | `!format <2v2\|3v3\|4v4>` | Team size for the next match. |
+| `!kick` | `!kick @user` | Remove someone from the queue. Follow with !reroll if they were in the lobby. |
+| `!mmr` | `!mmr @user` | Look up a player's MMR. |
+| `!setmmr` | `!setmmr @user <mmr\|rank\|auto>` | Manually set MMR (number or rank like gc1, c2, d3). 'auto' goes back to Tracker Network. |
+| `!koth` | `!koth on\|off` | Switch King of the Hill on or off. |
+| `!strike` | `!strike @user` | Give a strike. |
+| `!unstrike` | `!unstrike @user` | Take a strike away. |
+| `!finish` | `!finish <blue\|orange>` | End the King of the Hill game: record the winner and rotate the queue. |
+| `!activity` | `!activity [rl\|fn] competitive\|casual\|koth\|viewers\|boxfights\|zonewars\|end` | Pick what kind of game the stream is running. |
+| `!gamemode` | `!gamemode standard\|dropshot\|rumble` | Rocket League game mode for stats. |
+| `!setsr` | `!setsr @user <0-5000>` | Set a Fortnite skill rating. |
+| `!matchwin` | `!matchwin <id> blue\|orange` | Fix the winner of a past match (stats are corrected). |
+| `!matchdel` | `!matchdel <id>` | Remove a past match and take its wins back. |
+| `!move` | `!move <user> <position>` | Move someone in the queue. |
+| `!out` | `!out <user>` | Take a player out of the current match. |
+| `!in` | `!in <user> <blue\|orange>` | Put a player into a team. |
+
+### Helper
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!lobbyname` | `!lobbyname <name> \| off` | Set (or clear) the private match name PinguinoHelper tells viewers to search. |
+| `!lobbypass` | `!lobbypass <password> \| off` | Set (or clear) the private match password PinguinoHelper shares. |
+
+### Leaderboards (mods)
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!alias` | `!alias add <old login> <main login> \| !alias remove <old login> \| !alias list` | One person with several accounts: their gifts, bits, messages and streaks are combined under the main login on the boards. Edits Data\boards\aliases.json. |
+| `!boards` | `!boards refresh \| !boards status` | refresh = recompute every leaderboard now and push it to the website. status = people, months and the last push result. |
+| `!subs` | `!subs import \| !subs status` | import = read any new subscriber-list*.csv (Downloads or Data\subs\incoming) into the subscriber list. status = counts by tier, lapsed, founders. |
+| `!streaks` | `!streaks backfill \| !streaks status` | backfill = read old chat logs for watch streaks people shared (safe to repeat). status = how many people shared one. |
+| `!names` | `!names refresh` | Ask Twitch again for everyone's real display name (capital letters) and update the boards. |
+| `!lookup` | `!lookup <user>` | Shows everything on record for a person: aliases, subscription, gifts, bits, messages and watch streak. |
+
+### OBS
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!scene` | `!scene <name>` | Switch the OBS scene. |
+| `!source` | `!source on\|off\|toggle <name>` | Show or hide an OBS source. |
+| `!obs` | `!obs auto on\|off \| !obs status` | Automatic OBS scene switching and status. |
+
+### Tournament
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!wheel` | `!wheel new\|open\|close\|draw\|spin [n]\|undo\|reset\|announce\|end \| mode random\|balanced \| size 1-4 \| odd waitlist\|trio\|partial\|hold\|mod \| eligibility all\|subs \| remove <user> \| mmr <user> <n>` | Run the tournament wheel: sign-ups, the draw, one spin per pick (the last pick reveals itself), team announcements go to chat by themselves. |
+| `!spin` | `!spin [n]` | Shortcut for !wheel spin: reveal the next pick (or up to pick n). |
+| `!practice` | `!practice on [n] \| add [n] \| off` | Rehearse with fake players (practice01...). They fill the queue, matchmaking and the wheel but are never saved or counted anywhere. |
+

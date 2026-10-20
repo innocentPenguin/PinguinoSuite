@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-17",
+  "updated": "2026-10-20",
   "commands": [
     {
       "command": "!register",
@@ -285,6 +285,517 @@
       "who": "automatic",
       "usage": "Just chat when the game is running",
       "description": "First 5 unique chatters claim 1st-5th. Payout via !addpoints every 5 min: 15000 / 10500 / 7500 / 4500 / 3000.",
+      "examples": []
+    },
+    {
+      "command": "!leaderboards",
+      "aliases": [
+        "!leaderboard"
+      ],
+      "action": "PinguinoHost",
+      "category": "Leaderboards",
+      "who": "everyone",
+      "usage": "!leaderboards",
+      "description": "Link to the website leaderboards (top gifters, bitters, yappers and watch streaks, all time or by month).",
+      "examples": []
+    },
+    {
+      "command": "!topgifters",
+      "aliases": [
+        "!topgifter"
+      ],
+      "action": "PinguinoHost",
+      "category": "Leaderboards",
+      "who": "everyone",
+      "usage": "!topgifters [month]",
+      "description": "Top 5 subscription gifters (subs gifted). Add a month (oct, october, 2026-10, this, last) for that month only.",
+      "examples": [
+        "!topgifters",
+        "!topgifters oct"
+      ]
+    },
+    {
+      "command": "!topbits",
+      "aliases": [
+        "!topbitters",
+        "!topbitter"
+      ],
+      "action": "PinguinoHost",
+      "category": "Leaderboards",
+      "who": "everyone",
+      "usage": "!topbits [month]",
+      "description": "Top 5 bit cheerers, all time or for one month.",
+      "examples": [
+        "!topbits",
+        "!topbits last"
+      ]
+    },
+    {
+      "command": "!topyappers",
+      "aliases": [
+        "!topyapper"
+      ],
+      "action": "PinguinoHost",
+      "category": "Leaderboards",
+      "who": "everyone",
+      "usage": "!topyappers [month]",
+      "description": "Top 5 chatters by number of chat messages, all time or for one month.",
+      "examples": [
+        "!topyappers",
+        "!topyappers sep"
+      ]
+    },
+    {
+      "command": "!topstreak",
+      "aliases": [
+        "!topstreaks"
+      ],
+      "action": "PinguinoHost",
+      "category": "Watch Streaks",
+      "who": "everyone",
+      "usage": "!topstreak [month]",
+      "description": "Top 5 watch streaks people have shared in chat (best streak), all time or for one month. Only people who shared a streak are on the board.",
+      "examples": [
+        "!topstreak",
+        "!topstreaks oct"
+      ]
+    },
+    {
+      "command": "!streak",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Watch Streaks",
+      "who": "everyone",
+      "usage": "!streak [user]",
+      "description": "The last watch streak someone shared (and their best). Twitch only shows a watch streak when the viewer shares it.",
+      "examples": [
+        "!streak",
+        "!streak cyfirl"
+      ]
+    },
+    {
+      "command": "!streakrecord",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Watch Streaks",
+      "who": "everyone",
+      "usage": "!streakrecord [user]",
+      "description": "The best watch streak someone has shared, with the date.",
+      "examples": [
+        "!streakrecord"
+      ]
+    },
+    {
+      "command": "!gifted",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Leaderboards",
+      "who": "everyone",
+      "usage": "!gifted [user]",
+      "description": "How many subs you (or someone) gifted in total, and the rank on the gifters board.",
+      "examples": [
+        "!gifted",
+        "!gifted wyatt104987"
+      ]
+    },
+    {
+      "command": "!bits",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Leaderboards",
+      "who": "everyone",
+      "usage": "!bits [user]",
+      "description": "Total bits cheered, the bits badge tier and the rank on the bits board.",
+      "examples": [
+        "!bits"
+      ]
+    },
+    {
+      "command": "!sub",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Subscribers",
+      "who": "everyone",
+      "usage": "!sub [user]",
+      "description": "Subscription tier, months, streak and Founder status from the subscriber list.",
+      "examples": [
+        "!sub",
+        "!sub ash_wagawaga"
+      ]
+    },
+    {
+      "command": "!founders",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Subscribers",
+      "who": "everyone",
+      "usage": "!founders",
+      "description": "Lists the Founders (Twitch Founders Badge holders).",
+      "examples": []
+    },
+    {
+      "command": "!alias",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Leaderboards (mods)",
+      "who": "mods",
+      "usage": "!alias add <old login> <main login> | !alias remove <old login> | !alias list",
+      "description": "One person with several accounts: their gifts, bits, messages and streaks are combined under the main login on the boards. Edits Data\\boards\\aliases.json.",
+      "examples": [
+        "!alias add sg_yen cyfirl",
+        "!alias list"
+      ]
+    },
+    {
+      "command": "!boards",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Leaderboards (mods)",
+      "who": "mods",
+      "usage": "!boards refresh | !boards status",
+      "description": "refresh = recompute every leaderboard now and push it to the website. status = people, months and the last push result.",
+      "examples": []
+    },
+    {
+      "command": "!subs",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Leaderboards (mods)",
+      "who": "mods",
+      "usage": "!subs import | !subs status",
+      "description": "import = read any new subscriber-list*.csv (Downloads or Data\\subs\\incoming) into the subscriber list. status = counts by tier, lapsed, founders.",
+      "examples": []
+    },
+    {
+      "command": "!streaks",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Leaderboards (mods)",
+      "who": "mods",
+      "usage": "!streaks backfill | !streaks status",
+      "description": "backfill = read old chat logs for watch streaks people shared (safe to repeat). status = how many people shared one.",
+      "examples": []
+    },
+    {
+      "command": "!names",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Leaderboards (mods)",
+      "who": "mods",
+      "usage": "!names refresh",
+      "description": "Ask Twitch again for everyone's real display name (capital letters) and update the boards.",
+      "examples": []
+    },
+    {
+      "command": "!lookup",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Leaderboards (mods)",
+      "who": "mods",
+      "usage": "!lookup <user>",
+      "description": "Shows everything on record for a person: aliases, subscription, gifts, bits, messages and watch streak.",
+      "examples": [
+        "!lookup cyfirl"
+      ]
+    },
+    {
+      "command": "!me",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Tournament",
+      "who": "everyone",
+      "usage": "!me",
+      "description": "Join the tournament wheel while sign-ups are open (also a Join button on the website tournament page).",
+      "examples": []
+    },
+    {
+      "command": "!wheel",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Tournament",
+      "who": "mods",
+      "usage": "!wheel new|open|close|draw|spin [n]|undo|reset|announce|end | mode random|balanced | size 1-4 | odd waitlist|trio|partial|hold|mod | eligibility all|subs | remove <user> | mmr <user> <n>",
+      "description": "Run the tournament wheel: sign-ups, the draw, one spin per pick (the last pick reveals itself), team announcements go to chat by themselves.",
+      "examples": []
+    },
+    {
+      "command": "!spin",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Tournament",
+      "who": "mods",
+      "usage": "!spin [n]",
+      "description": "Shortcut for !wheel spin: reveal the next pick (or up to pick n).",
+      "examples": []
+    },
+    {
+      "command": "!practice",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Tournament",
+      "who": "mods",
+      "usage": "!practice on [n] | add [n] | off",
+      "description": "Rehearse with fake players (practice01...). They fill the queue, matchmaking and the wheel but are never saved or counted anywhere.",
+      "examples": []
+    },
+    {
+      "command": "!koth",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!koth on|off",
+      "description": "Switch King of the Hill on or off.",
+      "examples": []
+    },
+    {
+      "command": "!strikes",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone",
+      "usage": "!strikes",
+      "description": "How many strikes you have (3 = cannot join customs). Everyone loses a strike each time the stream goes live.",
+      "examples": []
+    },
+    {
+      "command": "!strike",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!strike @user",
+      "description": "Give a strike.",
+      "examples": []
+    },
+    {
+      "command": "!unstrike",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!unstrike @user",
+      "description": "Take a strike away.",
+      "examples": []
+    },
+    {
+      "command": "!finish",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!finish <blue|orange>",
+      "description": "End the King of the Hill game: record the winner and rotate the queue.",
+      "examples": []
+    },
+    {
+      "command": "!activity",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!activity [rl|fn] competitive|casual|koth|viewers|boxfights|zonewars|end",
+      "description": "Pick what kind of game the stream is running.",
+      "examples": []
+    },
+    {
+      "command": "!gamemode",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!gamemode standard|dropshot|rumble",
+      "description": "Rocket League game mode for stats.",
+      "examples": []
+    },
+    {
+      "command": "!setsr",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!setsr @user <0-5000>",
+      "description": "Set a Fortnite skill rating.",
+      "examples": []
+    },
+    {
+      "command": "!matchwin",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!matchwin <id> blue|orange",
+      "description": "Fix the winner of a past match (stats are corrected).",
+      "examples": []
+    },
+    {
+      "command": "!matchdel",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!matchdel <id>",
+      "description": "Remove a past match and take its wins back.",
+      "examples": []
+    },
+    {
+      "command": "!move",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!move <user> <position>",
+      "description": "Move someone in the queue.",
+      "examples": []
+    },
+    {
+      "command": "!out",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!out <user>",
+      "description": "Take a player out of the current match.",
+      "examples": []
+    },
+    {
+      "command": "!in",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!in <user> <blue|orange>",
+      "description": "Put a player into a team.",
+      "examples": []
+    },
+    {
+      "command": "!scene",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "OBS",
+      "who": "mods",
+      "usage": "!scene <name>",
+      "description": "Switch the OBS scene.",
+      "examples": []
+    },
+    {
+      "command": "!source",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "OBS",
+      "who": "mods",
+      "usage": "!source on|off|toggle <name>",
+      "description": "Show or hide an OBS source.",
+      "examples": []
+    },
+    {
+      "command": "!obs",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "OBS",
+      "who": "mods",
+      "usage": "!obs auto on|off | !obs status",
+      "description": "Automatic OBS scene switching and status.",
+      "examples": []
+    },
+    {
+      "command": "!problems",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Bot care",
+      "who": "mods",
+      "usage": "!problems [clear]",
+      "description": "List what the bot found wrong, or clear the list.",
+      "examples": []
+    },
+    {
+      "command": "!check",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Bot care",
+      "who": "mods",
+      "usage": "!check",
+      "description": "Self-test: problems go to the website log.",
+      "examples": []
+    },
+    {
+      "command": "!forgetme",
+      "aliases": [],
+      "action": "PinguinoChat",
+      "category": "Chat bot",
+      "who": "everyone",
+      "usage": "!forgetme",
+      "description": "ChattyPinguino forgets everything it remembers about you.",
+      "examples": []
+    },
+    {
+      "command": "!rememberme",
+      "aliases": [],
+      "action": "PinguinoChat",
+      "category": "Chat bot",
+      "who": "everyone",
+      "usage": "!rememberme",
+      "description": "Let ChattyPinguino remember things about you again.",
+      "examples": []
+    },
+    {
+      "command": "!memory",
+      "aliases": [],
+      "action": "PinguinoChat",
+      "category": "Chat bot",
+      "who": "everyone",
+      "usage": "!memory",
+      "description": "Shows what ChattyPinguino remembers about you.",
+      "examples": []
+    },
+    {
+      "command": "!chatbot",
+      "aliases": [],
+      "action": "PinguinoChat",
+      "category": "Chat bot",
+      "who": "mods",
+      "usage": "!chatbot on|off",
+      "description": "Switch ChattyPinguino on or off.",
+      "examples": []
+    },
+    {
+      "command": "!golive",
+      "aliases": [],
+      "action": "PinguinoChat",
+      "category": "Chat bot",
+      "who": "mods",
+      "usage": "!golive [time]",
+      "description": "Set when the stream starts, for the countdown message.",
+      "examples": []
+    },
+    {
+      "command": "!lobbyname",
+      "aliases": [],
+      "action": "PinguinoHelper",
+      "category": "Helper",
+      "who": "mods",
+      "usage": "!lobbyname <name> | off",
+      "description": "Set (or clear) the private match name PinguinoHelper tells viewers to search.",
+      "examples": []
+    },
+    {
+      "command": "!lobbypass",
+      "aliases": [],
+      "action": "PinguinoHelper",
+      "category": "Helper",
+      "who": "mods",
+      "usage": "!lobbypass <password> | off",
+      "description": "Set (or clear) the private match password PinguinoHelper shares.",
+      "examples": []
+    },
+    {
+      "command": "!pg",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Bot care",
+      "who": "mods",
+      "usage": "!pg status | core|chat|helper on|off | test | cutover",
+      "description": "Quick control of the bots from chat. Everyone else gets no answer.",
       "examples": []
     }
   ]

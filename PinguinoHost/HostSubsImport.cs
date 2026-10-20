@@ -280,6 +280,23 @@ namespace PinguinoHost
             }
         }
 
+        /// <summary>the master record of a subscriber (tier, tenure, streak, founder, lapsed ...) or null; a founder who is no subscriber gets a record with founder:true only.</summary>
+        public static JObject UserInfo(string login)
+        {
+            login = (login ?? "").ToLowerInvariant(); lock (L)
+            {
+                var u = (LoadMaster()["users"] as JObject)?[login] as JObject;
+                if (u != null) return (JObject)u.DeepClone();
+                if (LoadFounders()["founders"][login] != null) return new JObject { { "login", login }, { "tier", 0 }, { "tenure", 0 }, { "streak", 0 }, { "founder", true }, { "lapsed", true } };
+                return null;
+            }
+        }
+        /// <summary>the founders (login, display name), in the order of the list.</summary>
+        public static List<KeyValuePair<string, string>> FoundersList()
+        {
+            lock (L) return ((JObject)LoadFounders()["founders"]).Properties().Select(p => new KeyValuePair<string, string>(p.Name, Boards.DisplayName(p.Name))).ToList();
+        }
+
         public static JObject Api()
         {
             var m = LoadMaster(); var users = (JObject)m["users"];
