@@ -15,7 +15,19 @@ MOD = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import fakes  # noqa: E402
 
-PORT, SP_PORT, SITE_PORT = 8792, 8793, 8794
+def _free_ports(n):
+    import socket
+    socks = [socket.socket() for _ in range(n)]
+    for k in socks:
+        k.bind(("127.0.0.1", 0))
+    ports = [k.getsockname()[1] for k in socks]
+    for k in socks:
+        k.close()
+    return ports
+
+
+# free ports each run so parallel runs (other sessions) cannot collide
+PORT, SP_PORT, SITE_PORT = _free_ports(3)
 BASE = f"http://127.0.0.1:{PORT}"
 RESULTS = []
 DATA = tempfile.mkdtemp(prefix="spotify-e2e-")
