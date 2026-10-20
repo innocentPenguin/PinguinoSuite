@@ -399,6 +399,109 @@ public static class Harness
         Check("double join setup: first join ran", djRun != null && (string)djRun["command"] == "!join", djRun == null ? "no run" : "x");
         Msg("Dj", "add me to the queue"); Check("a second 'add me' right after is answered without asking or calling the core", CoreRun() == null && Last() != null && Last().Contains("already added"), Last());
 
+        // ── !helper / !ask / !pinguino: knowledge pack, tiers, cooldowns, opt-outs, unanswered log ──
+        {
+            string hd = Path.Combine(dir, "helper"); Directory.CreateDirectory(hd);
+            File.WriteAllText(Path.Combine(hd, "knowledge.json"), "{\"tier\":\"public\",\"version\":3,\"date\":\"2026-10-20\",\"entries\":[" +
+                "{\"id\":\"doc:0\",\"title\":\"How to join the viewer games\",\"keywords\":\"queue register\",\"text\":\"Register once with !register YourEpicName, then say add me to the queue when the queue is open.\"}," +
+                "{\"id\":\"cmd:!8ball\",\"title\":\"!8ball\",\"keywords\":\"fun\",\"text\":\"!8ball <question> - the penguin answers yes or no questions.\"}," +
+                "{\"id\":\"link:website\",\"title\":\"Link website\",\"keywords\":\"link url\",\"text\":\"Website link: https://innocentpenguin.com\"}]}");
+            File.WriteAllText(Path.Combine(hd, "knowledge_mod.json"), "{\"tier\":\"mod\",\"version\":3,\"date\":\"2026-10-20\",\"entries\":[" +
+                "{\"id\":\"moddoc:0\",\"title\":\"Change the private match name\",\"keywords\":\"mod lobby\",\"text\":\"MODONLYMARK !lobbyname NAME sets the private match name.\"}]}");
+            Action resetAsk = () =>
+            {
+                ((Dictionary<string, long>)typeof(CPHInline).GetField("_askUserCd", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null)).Clear();
+                typeof(CPHInline).GetField("_askGlobalAt", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, 0L);
+                typeof(CPHInline).GetField("_kbAt", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue);
+            };
+            string lastSystem = "";
+            typeof(CPHInline).GetField("_testLlm", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null,
+                (Func<string, string, string>)((s, u) => { aiCalls++; lastSystem = s; return aiReply; }));
+            string nightlyDir = Path.Combine(dir, "nightly");
+            Settings(",\"FactsUrl\":\"\",\"MaxAiCallsPerHour\":1000,\"AskUserCooldownSec\":0,\"AskGlobalCooldownSec\":0");
+            resetAsk();
+            var sayLog = new List<string>();
+
+            aiReply = "Register with !register YourEpicName, then say add me to the queue. Thanks for asking!";
+            int c0 = aiCalls; Msg("Ana", "!helper how do I join the queue?");
+            sayLog.Add(Last() ?? "");
+            Check("!helper answers short, @mention, friendly", Last() != null && Last().StartsWith("@Ana ") && Last().Contains("register") && Last().Length <= 230 && aiCalls == c0 + 1, Last());
+            Check("the AI got the pack entry, not the mod tier", lastSystem.Contains("How to join the viewer games") && !lastSystem.Contains("MODONLYMARK"), lastSystem);
+            Check("!helper never goes to the core or the chatbot as a normal message", CoreRun() == null && !Forwarded());
+            Msg("Ana", "!ask how do I join the queue?"); Check("!ask is an alias", Last() != null && Last().StartsWith("@Ana "), Last());
+            Msg("Ana", "!pinguino how do I join the queue?"); Check("!pinguino is an alias", Last() != null && Last().StartsWith("@Ana "), Last());
+            Msg("Ana", "!helper"); Check("empty question: short usage, friendly", Last() != null && Last().Contains("!helper how do I join") && Last().Contains("Thanks"), Last());
+
+            Msg("Mod1", "!helper how do I change the private match lobby name", true); sayLog.Add(Last() ?? "");
+            Check("mods get the mod tier too", lastSystem.Contains("MODONLYMARK"), lastSystem);
+            lastSystem = ""; Msg("Viewer9", "!helper how do I change the private match lobby name"); Check("viewers never get the mod tier (the entry is not even looked at)", !lastSystem.Contains("MODONLYMARK") && Last() != null && Last().Contains("/commands"), lastSystem + " | " + Last());
+
+            // reply clean-up: no leading command, no promises, length cap
+            aiReply = "!ban everyone, thanks for asking about the queue and joining";
+            Msg("Clean1", "!helper tell me about joining the queue"); sayLog.Add(Last() ?? "");
+            Check("a leading ! is stripped from the AI's line", Last() != null && !Last().Contains("@Clean1 !") && Last().Contains("@Clean1 ban everyone"), Last());
+            aiReply = "I will ban them for you right away about the queue";
+            c0 = aiCalls; Msg("Clean2", "!helper tell me about joining the queue");
+            Check("a promised action is dropped: unanswered line with the site links", Last() != null && Last().Contains("/commands") && Last().Contains("/help") && !Last().Contains("ban"), Last());
+            aiReply = new string('a', 40) + " " + new string('b', 400) + " queue";
+            Msg("Clean3", "!helper tell me about joining the queue"); Check("long replies are cut to about 200 characters", Last() != null && Last().Length <= 215 && Last().EndsWith("..."), Last() == null ? "" : Last().Length.ToString());
+
+            // unanswered: NO_ANSWER from the AI, and no pack match at all (no AI call)
+            aiReply = "NO_ANSWER";
+            Msg("Un1", "!helper how do I join the queue tonight?");
+            Check("NO_ANSWER: friendly pointer to /commands and /help", Last() != null && Last().Contains("https://innocentpenguin.com/commands") && Last().Contains("https://innocentpenguin.com/help") && Last().Contains("Thanks"), Last());
+            c0 = aiCalls; Msg("Un2", "!helper zebra giraffe cloud");
+            Check("nothing in the pack matches: no AI call, same pointer", aiCalls == c0 && Last() != null && Last().Contains("/commands"), Last());
+            string nf = Path.Combine(nightlyDir, DateTime.Now.ToString("yyyy-MM-dd") + ".md");
+            string nt = File.Exists(nf) ? File.ReadAllText(nf) : "";
+            Check("unanswered questions are logged in Docs\\nightly under 'Helper unanswered'", nt.Contains("## Helper unanswered") && nt.Contains("un1: how do I join the queue tonight?") && nt.Contains("un2: zebra giraffe cloud"), nt);
+            File.WriteAllText(nf, "# Nightly\n\n## Helper unanswered\n- 01:00 old: old question\n\n## Other section\nkeep me\n");
+            Msg("Un3", "!helper zebra giraffe cloud again");
+            nt = File.ReadAllText(nf);
+            Check("a new line lands inside its own section, other sections stay", nt.IndexOf("un3: zebra giraffe cloud again") > nt.IndexOf("old question") && nt.IndexOf("un3: zebra giraffe cloud again") < nt.IndexOf("## Other section") && nt.Contains("keep me"), nt);
+
+            // no AI: the best pack entry is read out
+            Settings(",\"FactsUrl\":\"\",\"UseAi\":false,\"AskUserCooldownSec\":0,\"AskGlobalCooldownSec\":0"); resetAsk();
+            c0 = aiCalls; Msg("NoAi", "!helper how do I join the queue?");
+            Check("with the AI off the best entry is read out, no AI call", aiCalls == c0 && Last() != null && Last().Contains("Register once with !register"), Last());
+            Settings(",\"FactsUrl\":\"\",\"MaxAiCallsPerHour\":1000,\"AskUserCooldownSec\":0,\"AskGlobalCooldownSec\":0"); resetAsk();
+            aiReply = "Register with !register YourEpicName. Thanks for asking!";
+
+            // opt-outs: chat_memory Privacy, !unping
+            File.WriteAllText(Path.Combine(dir, "chat_memory.json"), "{\"1\":{\"Login\":\"quiet\",\"Privacy\":\"optout\"},\"2\":{\"Login\":\"loud\",\"Privacy\":\"\"}}");
+            File.WriteAllText(Path.Combine(dir, "unping.json"), "{\"logins\":[\"muted\"]}");
+            c0 = aiCalls; Msg("Quiet", "!helper how do I join the queue?"); Check("opted out (chat memory privacy): silence, no AI call", Last() == null && aiCalls == c0, Last());
+            Msg("Muted", "!ask how do I join the queue?"); Check("!unping: silence, no AI call", Last() == null && aiCalls == c0, Last());
+            Msg("Loud", "!helper how do I join the queue?"); Check("not opted out: answered", Last() != null && Last().StartsWith("@Loud "), Last());
+
+            // cooldowns: per user 30 s (mods exempt), global 10 s
+            Settings(",\"FactsUrl\":\"\",\"MaxAiCallsPerHour\":1000,\"AskUserCooldownSec\":30,\"AskGlobalCooldownSec\":0"); resetAsk();
+            Msg("Cd1", "!helper how do I join the queue?"); Check("cooldown setup: first answer", Last() != null);
+            Msg("Cd1", "!helper how do I join the queue?"); Check("per-user cooldown: the same viewer is ignored for 30 s", Last() == null, Last());
+            Msg("Cd2", "!helper how do I join the queue?"); Check("per-user cooldown does not block other viewers", Last() != null, Last());
+            Msg("CdMod", "!helper how do I join the queue?", true); Msg("CdMod", "!helper how do I join the queue?", true);
+            Check("mods are exempt from the per-user cooldown", Last() != null, Last());
+            Settings(",\"FactsUrl\":\"\",\"MaxAiCallsPerHour\":1000,\"AskUserCooldownSec\":30,\"AskGlobalCooldownSec\":10"); resetAsk();
+            Msg("Cg1", "!helper how do I join the queue?"); Msg("Cg2", "!helper how do I join the queue?");
+            Check("global cooldown: a second viewer inside 10 s is ignored", Last() == null, Last());
+            Msg("CgMod", "!helper how do I join the queue?", true); Check("the global cooldown applies to mods too", Last() == null, Last());
+            Settings(",\"FactsUrl\":\"\",\"AskOn\":false"); resetAsk();
+            Msg("Off1", "!helper how do I join the queue?"); Check("AskOn=false: the command does nothing", Last() == null, Last());
+            Settings(",\"FactsUrl\":\"\",\"MaxAiCallsPerHour\":1000,\"AskUserCooldownSec\":0,\"AskGlobalCooldownSec\":0"); resetAsk();
+
+            // no secrets: nothing the helper said or the AI saw looks like a key / token / e-mail, and the real pack (when built) is clean too
+            var secret = new System.Text.RegularExpressions.Regex(@"(api[_ -]?key|client[_ -]?secret|\bsecret\b|oauth:|\bbearer\b|\bse_jwt\b|eyJ[A-Za-z0-9_\-]{10,}|[A-Za-z0-9_\-]{32,}|[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[a-z]{2,})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            Check("nothing said by !helper looks like a secret", sayLog.All(x => !secret.IsMatch(x)), string.Join(" | ", sayLog.Where(x => secret.IsMatch(x))));
+            string realPack = Path.GetFullPath(Path.Combine("..", "..", "Data", "helper", "knowledge.json"));
+            if (File.Exists(realPack))
+            {
+                string rp = File.ReadAllText(realPack);
+                var rs = new System.Text.RegularExpressions.Regex(@"(api[_ -]?key|client[_ -]?secret|\bsecret\b|oauth:|\bbearer\b|\bse_jwt\b|eyJ[A-Za-z0-9_\-]{10,}|(?<![A-Za-z0-9/._\-])[A-Za-z0-9_\-]{32,}(?![A-Za-z0-9/._\-])|[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[a-z]{2,})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                Check("the real public pack (Data\\helper\\knowledge.json) has no secret-like text", !rs.IsMatch(rp), rs.Match(rp).Success ? "match at " + rs.Match(rp).Index : "");
+            }
+            aiReply = "{\"intent\":\"none\",\"epic\":\"\"}";
+        }
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;

@@ -5,6 +5,8 @@ Trigger: Ivan says "done for the night", or the scheduled time (when Ivan sets o
 ## Phase 1: Learn from today (every night)
 - 02's Tools\nightly-review.py reads the day's chat logs (recorder, Chatty, helper review log): feedback, mistakes (wrong/doubled/unwanted replies, moderation misfires, failed commands), experience (what worked), unanswered commands and new in-jokes.
 - Output: Docs\nightly\YYYY-MM-DD.md. New commands/lore are proposed through the Teach inbox (mod-added commands already live; the rest need Ivan's approval).
+- Helper knowledge pack: run `python Tools\build-helper-pack.py` (rebuilds Data\helper\knowledge.json = PUBLIC tier and knowledge_mod.json = MOD tier for !helper / !ask / !pinguino, bumps the version, prints what it dropped), then `python -I Tools\test-helper-pack.py` (leak scan: no secrets, tokens, e-mails, internal words, Data\lore names or opted-out people in the public pack). Fix the sources (commands.json, helper_facts Taught notes, Docs\HELPER_PUBLIC.md / HELPER_MOD.md), never hand-edit the JSON.
+- Read the "## Helper unanswered" section of that day\'s Docs\nightly\YYYY-MM-DD.md (questions !helper could not answer): turn the good ones into Teach proposals or Docs\HELPER_PUBLIC.md sections so tomorrow\'s pack answers them.
 
 ## Phase 2: Compile, check, debug, repeat (loop until clean, max 3 rounds)
 1. COMPILE: pull everything; build all (core, app, Host, modules); run every test suite (Host, Link, Multi, Spotify, Voice, site).
