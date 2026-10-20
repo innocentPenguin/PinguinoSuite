@@ -2,6 +2,7 @@
 
 Kept by session 00 (the only session that launches, restarts or rebuilds the app). One entry per rebuild, relaunch or notable app change, newest first. Times are local (CDT).
 
+| ~03:26 CDT | Host rebuild+restart (eb8eeea site Join: sub input, web-only join replies to site) | 00 |
 | ~03:22 CDT | Host rebuild+restart (53fdb5c practice mode, wheel auto-announce/auto-complete, site join via bridge) | 00 |
 | When | Event | Details |
 |---|---|---|
