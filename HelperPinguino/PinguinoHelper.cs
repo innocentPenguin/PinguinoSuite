@@ -12,22 +12,23 @@ using Newtonsoft.Json.Linq;
 
 // ═══════════════════════════════════════
 //  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
-//    48    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
-//    354   HelperSettings (every setting + default)
-//    395   State (static caches, cooldowns, test hooks)
-//    414   Patterns (free pass regexes)
-//    438   Entry point Execute()
-//    496   Help-review log (private review.jsonl)
-//    550   Handle() / HandleCore(): the message pipeline
-//    659   !helper / !ask / !pinguino (knowledge pack answers)
-//    794   Random chime + OptedOutOfBots
-//    834   Context gate (only help when really asked)
-//    884   Minecraft + website facts, Taught notes, site answers
-//    1135  AI intent picker + Ask() (Claude/OpenAI)
-//    1212  Answers and actions (Respond/Do, queue, register)
-//    1370  Text building (lobby line, how-to-join)
-//    1443  Reading game manager files, Say()
+//    49    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    355   HelperSettings (every setting + default)
+//    399   State (static caches, cooldowns, test hooks)
+//    418   Patterns (free pass regexes)
+//    442   Entry point Execute()
+//    500   Help-review log (private review.jsonl)
+//    554   Handle() / HandleCore(): the message pipeline
+//    663   !helper / !ask / !pinguino (knowledge pack answers)
+//    798   Random chime + OptedOutOfBots
+//    838   Context gate (only help when really asked)
+//    888   Minecraft + website facts, Taught notes, site answers
+//    1139  AI intent picker + Ask() (Claude/OpenAI)
+//    1216  Answers and actions (Respond/Do, queue, register)
+//    1374  Text building (lobby line, how-to-join)
+//    1449  Reading game manager files, Say()
 // ═══════════════════════════════════════
+
 
 
 
@@ -355,7 +356,10 @@ public class CPHInline
     {
         public bool Enabled { get; set; } = true;
         public string LobbyName { get; set; } = "peng3";
-        public string LobbyPassword { get; set; } = "";               // blank = "no password"
+        public string LobbyPassword { get; set; } = "";               // blank = "no password"; NEVER said in chat, the Host copies it to the site's private lobby store (Docs/LOBBY_CONTRACT.md)
+        public string LobbyUpdatedAt { get; set; } = "";              // UTC ISO time of the last !lobbyname / !lobbypass; the Host bridge pushes when it changes
+        public string LobbyUpdatedBy { get; set; } = "";              // the mod's login
+        public string LobbyPagePath { get; set; } = "/lobby";        // the site's private page (players and staff sign in to see the password)
         public string CoreActionName { get; set; } = "PinguinoBot";   // the Streamer.bot action that runs PinguinoBotCore.cs
         public string ChatActionName { get; set; } = "PinguinoChat";  // messages the helper does not handle are handed to this action
         public bool ForwardHandled { get; set; } = false;             // also hand handled messages on (needs the helperHandled hook in the chatbot)
@@ -1394,6 +1398,7 @@ public class CPHInline
         if (value.Length > 32 || Regex.IsMatch(value, @"[@/\\<>]")) { Say("@" + display + " That doesn't look like a valid " + (isName ? "lobby name" : "password") + " (32 characters max, no @ / < >)."); return true; }
         if (isName) _cfg.LobbyName = value;
         else _cfg.LobbyPassword = Regex.IsMatch(value, @"^(off|none|clear|no)$", RegexOptions.IgnoreCase) ? "" : value;
+        _cfg.LobbyUpdatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"); _cfg.LobbyUpdatedBy = (ArgS("user") ?? display ?? "").ToLowerInvariant();
         try
         {
             string p = Path.Combine(_dir, "helper_settings.json");
@@ -1407,11 +1412,12 @@ public class CPHInline
 
     string LobbyLine()
     {
-        string pass = string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? "no password" : "Password: " + _cfg.LobbyPassword.Trim();
-        return "Private match -> Name: " + (_cfg.LobbyName ?? "").Trim() + ", " + pass + ". ";
+        return "Private match -> Name: " + (_cfg.LobbyName ?? "").Trim() + ", " + LobbyPassWord() + ". ";
     }
 
-    string LobbyHint() { return "Private match name: " + (_cfg.LobbyName ?? "").Trim() + (string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? " (no password)." : ", password " + _cfg.LobbyPassword.Trim() + "."); }
+    // the password is never said in chat: viewers are pointed at the site's private lobby page (staff write it, players and staff read it)
+    string LobbyPassWord() { return string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? "no password" : "the password is on " + SiteUrl(string.IsNullOrWhiteSpace(_cfg.LobbyPagePath) ? "/lobby" : _cfg.LobbyPagePath) + " (sign in), or ask a mod"; }
+    string LobbyHint() { return "Private match name: " + (_cfg.LobbyName ?? "").Trim() + (string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? " (no password)." : ", " + LobbyPassWord() + "."); }
 
     string QueueHint(string registered)
     {

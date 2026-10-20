@@ -89,6 +89,8 @@ try:
             walk(bhp.read_json(os.path.join(rd, 'runtime', fn), {}))
         cs = bhp.read_json(os.path.join(rd, 'runtime', 'chat_settings.json'), {}) or {}
         if isinstance(cs.get('ApiKey'), str) and len(cs['ApiKey']) >= 8: vals.add(cs['ApiKey'])
+        hs = bhp.read_json(os.path.join(rd, 'runtime', 'helper_settings.json'), {}) or {}
+        if isinstance(hs.get('LobbyPassword'), str) and len(hs['LobbyPassword'].strip()) >= 3: vals.add(hs['LobbyPassword'].strip())   # the private match password lives on the site's private page only
         both = pt + ' ' + alltext(ents(os.path.join(t2, 'knowledge_mod.json')))
         chk('real packs: no literal secret value from the secret files (%d checked)' % len(vals), not any(v in both for v in vals))
         # lore kinds: only info/link lore may enter
