@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:57 - Multi + Spotify restarts
+
+- Spotify restarted (announcements only for site requests, avoids double chat line). Multi restarted: 1e25f66 dashboard (live viewer counts, text size A-/A+, drag-resize panels, split chat), e4a8edc duplicate guard (same line to same platform within 30 s dropped). Multi /api/send still goes to Twitch/Discord/YouTube directly.
+
 ## 2026-10-20 08:52 - Host restart (no-duplicate-message guard)
 
 - Restarted Host via Update-Module: 2393763 duplicate-chat guard (identical line within 30 s from any bot is dropped; HostApi.SaidRecently in SendAs and cph.Say). Streamer.bot scripts (Core/Chat/Helper/Router PgSay) need re-pasting from the synced files. test-host-commands.py has 2 stale checks since the !commands link change.
