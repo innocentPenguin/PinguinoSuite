@@ -545,6 +545,25 @@ public static class Harness
         wheel("end", ""); wheel("new", ""); wheel("odd", "hold"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
         Check((string)WS()["Status"] == "open" && CPHProxy.Sent.Any(m => m.Contains("more")), "wheel: odd=hold refuses to draw");
 
+        // manual spin: the site reveals one pick per press; chat lines wait for the overlay and come once per finished team
+        fresh(2); signUp("o", 6); wheel("draw", "");
+        wheel("spin", "1");
+        Check((int)WS()["Draw"]["Revealed"] == 1 && WS()["Msgs"].Count() == 0, "wheel spin: one pick revealed, no team complete yet, nothing queued");
+        wheel("spin", "1");
+        Check((int)WS()["Draw"]["Revealed"] == 1, "wheel spin: repeating the same number is safe");
+        wheel("spin", "6");
+        var spinSnap = WS();
+        Check((int)spinSnap["Draw"]["Revealed"] == 6 && spinSnap["Msgs"].Count() == 4, "wheel spin: all 6 revealed -> 3 team lines + the final list queued");
+        Check(!CPHProxy.Sent.Any(m => m.StartsWith("Team ")), "wheel spin: nothing is said before the overlay has landed");
+        var wheelField = typeof(CPHInline).GetField("_wheel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var wheelObj = wheelField.GetValue(null);
+        foreach (var wm in (System.Collections.IEnumerable)wheelObj.GetType().GetField("Msgs").GetValue(wheelObj)) wm.GetType().GetField("Due").SetValue(wm, 1L);
+        var spinSaid = new System.Collections.Generic.List<string>();
+        for (int tk = 0; tk < 3; tk++) { wheel("tick", ""); spinSaid.AddRange(CPHProxy.Sent); }
+        Check(spinSaid.Count(m => m.StartsWith("Team ") && m.Contains(" & ")) == 3, "wheel spin: one 'Team N: A & B!' line per finished team");
+        Check(spinSaid.Count(m => m.StartsWith("TOURNAMENT TEAMS - ") && m.Contains(" | ")) == 1, "wheel spin: the final list is sent once, teams separated by |");
+        wheel("spin", "6"); wheel("tick", "");
+        Check(CPHProxy.Sent.Count == 0 && (string)WS()["AnnState"] == "done", "wheel spin: a retry repeats nothing");
         // balanced
         fresh(2); wheel("mode", "balanced"); signUp("b", 4);
         wheel("mmr", "b1 2000"); wheel("mmr", "b2 1000"); wheel("mmr", "b3 1900"); wheel("mmr", "b4 1100"); wheel("draw", "");

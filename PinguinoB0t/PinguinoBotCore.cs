@@ -722,7 +722,7 @@ public class CPHInline
         public int StepMs;
         public List<WheelStep> Steps = new List<WheelStep>();
     }
-    class WheelMsg { public string Text; public bool Sent; public int Team; }
+    class WheelMsg { public string Text; public bool Sent; public int Team; public long Due; }   // Due (ms since 1970): do not send before this (manual spin: after the overlay landed)
     class WheelSession
     {
         public string Id;
@@ -754,6 +754,8 @@ public class CPHInline
         {
             unchecked
             {
+        public int Revealed;         // manual spin: how many picks the mod has revealed so far (the site sends !wheel spin N)
+        public long SpunAt;          // ms since 1970: when Revealed last grew (the overlay spin takes ~8 s)
                 _s += 0x9E3779B97F4A7C15UL;
                 ulong z = _s;
                 z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
@@ -952,7 +954,7 @@ public class CPHInline
                 return true;
             case "tick": WheelPump(); return true;
             default:
-                Say("Wheel: !wheel new|open|close|draw|undo|announce|retry|reset|end, mode, size, odd, eligibility, remove <login>, mmr <login> <n>");
+                Say("Wheel: !wheel new|open|close|draw|spin [n]|undo|announce|retry|reset|end, mode, size, odd, eligibility, remove <login>, mmr <login> <n>");
                 return true;
         }
     }
@@ -964,6 +966,7 @@ public class CPHInline
         WheelSave();
     }
 
+            case "spin": WheelSpin(w, arg); return true;
     // The ONE draw. Everything random comes from a seed made right now (kept private).
     void WheelDoDraw()
     {
@@ -1173,7 +1176,8 @@ public class CPHInline
             WheelSave();
             if (_wheelGapMs > 0 && w.Msgs.Any(x => !x.Sent)) System.Threading.Thread.Sleep(_wheelGapMs);
         }
-        if (w.Msgs.All(x => x.Sent)) { w.AnnState = "done"; WheelSave(); }
+        bool spinning = w.Draw != null && w.Draw.Revealed > 0 && w.Draw.Revealed < w.Draw.Steps.Count;   // manual spin not finished: more lines will come
+        if (w.Msgs.All(x => x.Sent) && !spinning) { w.AnnState = "done"; WheelSave(); }
     }
 
     // What the website mirrors. Mirrors site worker wheelClean(); the seed is deliberately left out.
@@ -1183,11 +1187,55 @@ public class CPHInline
         if (w == null)
             return new { id = "", status = "none", mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all",
                          entrants = new object[0], teams = new object[0], draw = (object)null, waitlist = new string[0],
-                         announce = new { state = "idle", sent = 0, total = 0 }, canUndo = false, drawCount = 0 };
+                         announce = new { state = "idle", sent = 0, total = 0 }, canUndo = false, drawCount = 0, caps = new { spin = true } };
+    // MANUAL SPIN: the draw is committed, the mod reveals one pick per Spin (site button -> "!wheel spin N", or a mod typing "!wheel spin"). Chat lines wait until the overlay has landed (~8.5 s)
+    // and never give a pick away early. Safe to repeat: Revealed only grows, each team and the final list are queued once.
+    const int WheelSpinLandMs = 8500;
+    void WheelSpin(WheelSession w, string arg)
+    {
+        if (w.Draw == null || w.Draw.Steps.Count == 0) { Say("There is no draw to spin. Type !wheel draw first."); return; }
+        int total = w.Draw.Steps.Count, n;
+        int target = int.TryParse((arg ?? "").Trim(), out n) ? Math.Min(Math.Max(n, 0), total) : Math.Min(w.Draw.Revealed + 1, total);
+        if (target > w.Draw.Revealed) { w.Draw.Revealed = target; w.Draw.SpunAt = NowMs(); }
+        long due = w.Draw.SpunAt + WheelSpinLandMs;
+        var shown = w.Draw.Steps.Take(w.Draw.Revealed).ToList();
+        foreach (var t in w.Teams)
+        {
+            if (w.Msgs.Any(m => m.Team == t.N)) continue;
+            if (shown.Count(x => x.Team == t.N) < t.Members.Count) continue;   // not every member revealed yet
+            w.Msgs.Add(new WheelMsg { Team = t.N, Due = due, Text = "Team " + t.N + ": " + string.Join(" & ", t.Members) + "!" + (t.Partial ? " (partial team)" : "") });
+        }
+        if (w.Draw.Revealed >= total && !w.Msgs.Any(m => m.Team == 0 && (m.Text ?? "").StartsWith("TOURNAMENT TEAMS")))
+        {
+            Action<IEnumerable<string>, string, string> paragraphs = (items, head, cont) =>
+            {
+                var sb = new System.Text.StringBuilder(head);
+                bool any = false;
+                foreach (string p in items)
+                {
+                    if (any && sb.Length + 3 + p.Length > 450) { w.Msgs.Add(new WheelMsg { Due = due + 500, Text = sb.ToString() }); sb = new System.Text.StringBuilder(cont); any = false; }
+                    if (any) sb.Append(" | ");
+                    sb.Append(p); any = true;
+                }
+                if (any) w.Msgs.Add(new WheelMsg { Due = due + 500, Text = sb.ToString() });
+            };
+            paragraphs(w.Teams.Select(t => string.Join(" & ", t.Members) + (t.Partial ? " (partial team)" : "")), "TOURNAMENT TEAMS - ", "TOURNAMENT TEAMS (cont.) - ");
+            if (w.Waitlist.Count > 0)
+            {
+                string head = w.OddPolicy == "mod" ? "Waiting for a mod decision - " : "Waitlist - ";
+                paragraphs(w.Waitlist, head, head);
+            }
+        }
+        if (w.Msgs.Any(m => !m.Sent)) w.AnnState = "sending";
+        WheelSave();
+        WheelPump();
+    }
+
         object draw = w.Draw == null ? null : (object)new
         {
             id = w.Draw.Id, startedAt = w.Draw.StartedAt, stepMs = w.Draw.StepMs,
-            steps = w.Draw.Steps.Select(s => new { team = s.Team, name = s.Name }).ToList()
+            steps = w.Draw.Steps.Select(s => new { team = s.Team, name = s.Name }).ToList(),
+            revealed = w.Draw.Revealed, spunAt = w.Draw.SpunAt
         };
         return new
         {
@@ -1197,7 +1245,7 @@ public class CPHInline
             draw = draw, waitlist = w.Waitlist,
             announce = new { state = w.AnnState, sent = w.Msgs.Count(m => m.Sent), total = w.Msgs.Count },
             canUndo = (w.Status == "drawing" || w.Status == "drawn") && !w.Msgs.Any(m => m.Sent),
-            drawCount = w.DrawCount
+            drawCount = w.DrawCount, caps = new { spin = true }
         };
     }
 
@@ -1207,6 +1255,7 @@ public class CPHInline
     void SaveMmrCache() { SaveJson("mmr_cache.json", _mmrCache); }
     void SaveSettings() { SaveJson("settings.json", _settings); }
     void SaveCurrentMatch() { SaveJson("current_match.json", _lastBalance); }
+            if (m.Due > 0 && NowMs() < m.Due) continue;   // manual spin: not before the overlay has landed
 
     static long Now() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
 
@@ -1536,6 +1585,7 @@ public class CPHInline
     static string _loopId;
     void StartWebSyncLoop()
     {
+            case "!spin":     return HandleWheel(userLower, ("spin " + input).Trim(), isPrivileged);   // [NEW][WHEEL] alias for !wheel spin
         if (string.IsNullOrEmpty(_settings.WebSyncKey) || string.IsNullOrEmpty(_settings.WebSyncUrl)) return;
         if (_loopId != null && (AppDomain.CurrentDomain.GetData(SyncOwnerKey) as string) == _loopId) return;   // already running
         string id = Guid.NewGuid().ToString("N");
