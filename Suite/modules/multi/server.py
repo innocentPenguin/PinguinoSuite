@@ -480,6 +480,7 @@ async def set_learning(request: Request):
 
 
 # sending (always to ONE explicit platform; never broadcast) --------------
+_RECENT_SENDS = {}
 @app.post("/api/send")
 async def send(request: Request):
     b = await request.json()
@@ -494,6 +495,13 @@ async def send(request: Request):
     reply_to = b.get("reply_to") or None
     if reply_to and not conn.capabilities.get("reply"):
         reply_to = None
+    now = time.time()                                   # Ivan's rule: never send the same line twice (identical text within 30 s is dropped; a failed send is not retried elsewhere)
+    for k in [k for k, t in _RECENT_SENDS.items() if now - t > 30]:
+        del _RECENT_SENDS[k]
+    key = (platform, " ".join(text.lower().split()))
+    if key in _RECENT_SENDS:
+        return {"ok": True, "duplicate": True, "id": ""}
+    _RECENT_SENDS[key] = now
     try:
         mid = await conn.send(text, reply_to)
     except Exception as e:
