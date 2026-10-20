@@ -12,7 +12,7 @@ class H(BaseHTTPRequestHandler):
 srv = HTTPServer(('127.0.0.1', FAKE), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 d = tempfile.mkdtemp(prefix='pgboards_')
 json.dump({'Channel': 'trial', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
-json.dump({'ForwardToSite': True, 'SiteSupportersUrl': 'http://127.0.0.1:%d/api/bot/supporters' % FAKE, 'SiteBoardsUrl': 'http://127.0.0.1:%d/api/bot/boards' % FAKE, 'SiteEventsUrl': 'http://127.0.0.1:%d/api/bot/events' % FAKE}, open(os.path.join(d, 'latest_settings.json'), 'w'))
+json.dump({'ForwardToSite': False, 'SiteSupportersUrl': 'http://127.0.0.1:%d/api/bot/supporters' % FAKE, 'SiteBoardsUrl': 'http://127.0.0.1:%d/api/bot/boards' % FAKE, 'SiteEventsUrl': 'http://127.0.0.1:%d/api/bot/events' % FAKE}, open(os.path.join(d, 'latest_settings.json'), 'w'))
 t0 = 1771300000
 ev = [{'At': t0, 'Type': 'gift', 'User': 'generous', 'Amount': 5, 'To': ''}] + [{'At': t0 + 1, 'Type': 'gift', 'User': 'generous', 'Amount': 1, 'To': 'r%d' % i} for i in range(5)] + \
      [{'At': t0 + 500, 'Type': 'gift', 'User': 'generous', 'Amount': 1, 'To': 'solo1'}, {'At': t0 + 900, 'Type': 'gift', 'User': 'anonymous', 'Amount': 9, 'To': ''},

@@ -17,8 +17,7 @@ namespace PinguinoHost
     ///   streakBest / streakCurrent / streakAt   the watch streak they shared (Streaks).
     /// Gifts and bits are kept in their own permanent ledger (Data\boards\events.json): chat_events.json forgets old events, this one does not. It is filled from chat_events.json
     /// (merged, the same event within 20 s counts once) and from the live Twitch events. Bots, practice players and anonymous gifters are left out.
-    /// GET /api/boards, POST /api/boards/refresh. Gifts and bits are pushed to the site (POST {SiteSupportersUrl}, default https://innocentpenguin.com/api/bot/supporters {gifts:{login:n},bits:{login:n}}, Bearer BOT_API_KEY) when
-    /// "ForwardToSite" is on, every 5 minutes if something changed.</summary>
+    /// GET /api/boards, POST /api/boards/refresh. Gifts and bits are pushed to the site (POST {SiteSupportersUrl}, default https://innocentpenguin.com/api/bot/supporters {gifts:{login:n},bits:{login:n}}, Bearer BOT_API_KEY) every 5 minutes if something changed (unless latest_settings.json says ForwardBoards:false).</summary>
     public static class Boards
     {
         static readonly object L = new object();
@@ -170,6 +169,13 @@ namespace PinguinoHost
         }
         // The site reads lifetime gifts and bits from its supporter tally: POST /api/bot/supporters {gifts:{login:n}, bits:{login:n}} (each login's number REPLACES the earlier one, max 3000 logins a call).
         // The watch streaks reach the site through the viewer profiles (roles.watchStreakBest / watchStreakCurrent, pushed by Pipeline/push-profiles.mjs).
+        // the site key: vault BOT_API_KEY, the BOT_API_KEY environment variable, or the WebSyncKey the bots already use (it is the same key on the site). Never printed.
+        static string SiteKey()
+        {
+            string key = Vault.Get("BOT_API_KEY"); if (key == "") key = Environment.GetEnvironmentVariable("BOT_API_KEY") ?? "";
+            if (key == "") { try { key = (string)SubsImport.ParseJ(File.ReadAllText(Path.Combine(HostApi.DataDir, "settings.json")))["WebSyncKey"] ?? ""; } catch (Exception) { } }
+            return key;
+        }
         static string _lastBoardsHash = ""; static DateTime _lastBoards = DateTime.MinValue;
         // The full snapshot for the leaderboards page: POST /api/bot/boards {updatedAt, users:{login:{name,gifts,bits,messages,streakBest,streakCurrent,streakAt}}} (replaces the stored board; the site
         // drops all-zero users and the streamer/bots itself). This carries the watch streaks too, so they do not have to wait for the daily profile push.
@@ -195,8 +201,8 @@ namespace PinguinoHost
 
         static void PushToSite(JObject r)
         {
-            var s = Latest.Settings(); if ((bool?)s["ForwardToSite"] != true) { _pushNote = "off (ForwardToSite)"; return; }
-            string key = Vault.Get("BOT_API_KEY"); if (key == "") key = Environment.GetEnvironmentVariable("BOT_API_KEY") ?? "";
+            var s = Latest.Settings(); if ((bool?)s["ForwardBoards"] == false) { _pushNote = "off (ForwardBoards = false)"; return; }   // on by default: the boards are public data; the events forwarding switch (ForwardToSite) is a different thing
+            string key = SiteKey();
             if (key == "") { _pushNote = "no key (vault name BOT_API_KEY)"; return; }
             string ch = (string)r["streamerLogin"] ?? "";
             var rows = ((JObject)r["users"]).Properties().Where(p => p.Name != ch && ((int)p.Value["gifts"] > 0 || (int)p.Value["bits"] > 0)).OrderBy(p => p.Name, StringComparer.Ordinal).ToList();
