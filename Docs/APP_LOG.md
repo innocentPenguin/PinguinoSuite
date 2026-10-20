@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 16:14 Host restart (Plan 6 A-D)
+- Host rebuilt 0 errors with 02's e7fd136, ce87afe, e6bb0dd, 4ec3ca0: /api/obs/tree (live, connected), scene/item actions, overlay CRUD API, overlay assistant (OFF, needs key + enabled flag). /api/live 200.
+- Pending: 05 site UI for Master View, Anthropic key in vault, Ivan flips overlaychat enabled.
+
 ## 2026-10-20 15:58 Host + Multi + Listen restarts (night run)
 - Host rebuilt (0 errors): 023 hype/goal announcements, !uptime, Firsts guard; site-bridges shop/teach contract fix (cc70a3d); 02 live-state route, HostControl; /api/sitebridge teach+shop ok.
 - Multi restarted (gift alert, poll/predict/hype overlays, send guard). Listen restarted twice (VOD memory fix, /api/status no-lock fix). Link restart skipped (still answers; harmless).
