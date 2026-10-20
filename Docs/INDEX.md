@@ -46,15 +46,15 @@ Methods (name:line, outside the shared block): Execute:43, ShowUserRecord:57, Sh
 
 Methods (name:line, outside the shared block): Execute:575, HandleTwitchEvent:648, Handle:671, IsBot:769, IsMention:819, IsLive:835, IsSkip:1323, TryOrderTimeout:1345, TryTimeout:1386, BuildPrompt:1619, ParseReply:1968, IsTrustedAnnouncer:2071, RecordEvent:2081, IsBigStreamer:2129, SendReply:2616, IsMasterLogin:3034, IsMaster:3036, ParseArcLine:3180, BuildClaudeBody:3319, RunBg:3665, MaybeOpinions:3667, RunOpinions:3677, MaybeStudy:3811, RunStudy:3831, Say:4004, SaveMemory:4052, SaveJson:4058
 
-### HelperPinguino/PinguinoHelper.cs (1479 lines) - HelperPinguino: short help answers, site links, review log
+### HelperPinguino/PinguinoHelper.cs (1484 lines) - HelperPinguino: short help answers, site links, review log
 
 | line | section |
 |---|---|
-| 45 | (shared block start: Pg* helpers, PgSay + duplicate guard, router helpers - identical in every bot, edit Shared/PinguinoBots.cs.txt) |
-| 349 | (shared block end) |
-| 392 | state (static: survives between messages while Streamer.bot stays open) |
+| 47 | (shared block start: Pg* helpers, PgSay + duplicate guard, router helpers - identical in every bot, edit Shared/PinguinoBots.cs.txt) |
+| 351 | (shared block end) |
+| 394 | state (static: survives between messages while Streamer.bot stays open) |
 
-Methods (name:line, outside the shared block): Execute:437, Handle:547, HandleCore:564, IsModNow:665, TryChime:810, IsMcQuestion:1059, IsSite:1133, Do:1320, IsLive:1460, IsOtherBot:1466, Say:1473
+Methods (name:line, outside the shared block): Execute:439, Handle:549, HandleCore:566, IsModNow:667, TryChime:815, IsMcQuestion:1064, IsSite:1138, Do:1325, IsLive:1465, IsOtherBot:1471, Say:1478
 
 ### Shared/PinguinoRouter.cs (475 lines) - Router: decides which bot answers; also PgSay duplicate guard
 
@@ -69,7 +69,7 @@ Methods (name:line, outside the shared block): SayPublic:338, Execute:343
 
 | file | lines | what |
 |---|---|---|
-| PinguinoHost/HostFeatureCommands.cs | 216 | Chat commands for the leaderboard / subscriber / watch-streak features. Their documentation is in PinguinoB0t/commands.json (what the website reads) a |
+| PinguinoHost/HostFeatureCommands.cs | 217 | Chat commands for the leaderboard / subscriber / watch-streak features. Their documentation is in PinguinoB0t/commands.json (what the website reads) a |
 | PinguinoHost/HostBoards.cs | 440 | ALL-TIME LEADERBOARD TOTALS for the website (Top Gifters, Top Bitters, Biggest Yappers, Top Watch Streak). One record per person: |
 | PinguinoHost/HostLatest.cs | 314 | The "latest" feed (replaces the third-party latest widget): every follow, sub, resub, gift, cheer, raid and channel point redeem is kept, so an OBS br |
 | PinguinoHost/HostEmotes.cs | 265 | 7TV channel emotes + how often chat used them. READ-ONLY use of the public 7TV API (GET https://7tv.io/v3/users/twitch/{id}, one call per 30 minutes,  |
@@ -78,6 +78,7 @@ Methods (name:line, outside the shared block): SayPublic:338, Execute:343
 | PinguinoHost/HostReminders.cs | 119 | !remindme 30m text: the bot @mentions you in chat when it is due. Persisted in Data\runtime\reminders.json, so it survives a restart (delivered late w |
 | PinguinoHost/HostHelperReview.cs | 78 | Browse the helper's PRIVATE review log (Data\helper\review.jsonl, written by HelperPinguino): every answer and every probably-missed question with the |
 | PinguinoHost/HostEconomy.cs | 403 | Points + watch time. Replaces StreamElements' loyalty: a ONE-TIME import (dry run first, apply on confirm, backup, re-runnable because the imported BA |
+| PinguinoHost/HostAnnounce.cs | 67 | Chat announcements for hype trains and channel goals (EventSub). Settings in Data\runtime\announce.json: HypeOn / GoalsOn (default on), lines with {le |
 
 <!-- B0T-INDEX-END -->
 ## Helper (HelperPinguino, owner: Helper fork of 02)
@@ -412,3 +413,7 @@ Methods: HasAction:27, SayShared:28, ObsScene:31, ObsRaw:32, ObsSource:33, Reset
 /api/account/streamer (HostApi.cs), /api/account/streamer/signin (HostApi.cs), /api/account/streamer/signout (HostApi.cs), /api/activity (HostAutoApi.cs), /api/automations (HostAutoApi.cs), /api/automations/enable (HostAutoApi.cs), /api/automations/export (HostAutoApi.cs), /api/automations/fire (HostAutoApi.cs), /api/automations/hotkeys (HostAutoApi.cs), /api/automations/import (HostAutoApi.cs), /api/automations/log (HostAutoApi.cs), /api/automations/test (HostAutoApi.cs), /api/automations/triggers (HostAutoApi.cs), /api/boards (HostAutoApi.cs), /api/boards/refresh (HostAutoApi.cs), /api/bots (HostApi.cs), /api/bottest (HostApi.cs), /api/channel/update (HostAutoApi.cs), /api/chat-rate (HostAutoApi.cs), /api/commands-doc (HostAutoApi.cs), /api/config (HostApi.cs), /api/credits (HostAutoApi.cs), /api/cutover (HostAutoApi.cs), /api/economy (HostAutoApi.cs), /api/economy/import (HostAutoApi.cs), /api/economy/user (HostAutoApi.cs), /api/emotes (HostAutoApi.cs), /api/emotes/refresh (HostAutoApi.cs), /api/endpoints (HostAutoApi.cs), /api/goals (HostAutoApi.cs), /api/helix-ids (HostAutoApi.cs), /api/helper/review (HostAutoApi.cs), /api/intro (HostAutoApi.cs), /api/intro/clear (HostAutoApi.cs), /api/intro/done (HostAutoApi.cs), /api/intro/poll (HostAutoApi.cs), /api/intro/reset (HostAutoApi.cs), /api/intro/settings (HostAutoApi.cs), /api/intro/skip (HostAutoApi.cs), /api/intro/test (HostAutoApi.cs), /api/latest (HostAutoApi.cs), /api/lease (HostApi.cs), /api/links (HostAutoApi.cs), /api/live (HostAutoApi.cs), /api/live-state (HostAutoApi.cs), /api/livelog (HostAutoApi.cs), /api/lore (HostAutoApi.cs), /api/mod/timeout (HostAutoApi.cs), /api/prestream (HostApi.cs), /api/profile-sync (HostAutoApi.cs), /api/queues (HostAutoApi.cs), /api/reminders (HostAutoApi.cs), /api/run (HostApi.cs), /api/say (HostAutoApi.cs), /api/session (HostAutoApi.cs), /api/shoutouts (HostAutoApi.cs), /api/signin (HostApi.cs), /api/sitebridge (HostAutoApi.cs), /api/spotify-announce (HostAutoApi.cs), /api/status (HostApi.cs), /api/streaks (HostAutoApi.cs), /api/streaks/backfill (HostAutoApi.cs), /api/stream-timers (HostAutoApi.cs), /api/subfooter (HostAutoApi.cs), /api/subfooter/refresh (HostAutoApi.cs), /api/subfooter/settings (HostAutoApi.cs), /api/subs (HostAutoApi.cs), /api/subs/import (HostAutoApi.cs), /api/summary (HostApi.cs), /api/teach (HostAutoApi.cs), /api/teach/decide (HostAutoApi.cs), /api/timers (HostAutoApi.cs), /api/token (HostApi.cs), /api/vars (HostAutoApi.cs), /api/vars/delete (HostAutoApi.cs), /auth (HostApi.cs), /automations (HostAutoApi.cs), /helper-review (HostAutoApi.cs), /intro (HostAutoApi.cs), /overlay/credits (HostAutoApi.cs), /overlay/goal (HostAutoApi.cs), /overlay/intro (HostAutoApi.cs), /overlay/latest (HostAutoApi.cs), /overlay/subfooter (HostAutoApi.cs), /setup (HostApi.cs), /subfooter (HostAutoApi.cs)
 
 <!-- HOST-INDEX-END -->
+
+## Tools by 999 (compiler)
+- `Tools/build-index.py` - writes `Data/index/files.json` + `Data/index/index-gaps.md` (read-only; run at end of night).
+- `Tools/run-all-tests.ps1` - runs every suite serially, read-only: `powershell -NoProfile -ExecutionPolicy Bypass -File Tools\run-all-tests.ps1 [-NoHost]`. **Use `Suite\.venv\Scripts\python.exe` for all Python tests** - system Python 3.14 lacks numpy/requests/cryptography/windows and gives false failures; multi is pytest, run from `Suite/modules/multi`. Host `test-host-*.py` are skipped if their fixed 88xx/89xx ports are busy; live ports are never touched.

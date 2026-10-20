@@ -1569,6 +1569,18 @@
       ],
       "section": "Stream",
       "importance": 57
+    },
+    {
+      "command": "!uptime",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Stream",
+      "who": "everyone",
+      "usage": "!uptime",
+      "description": "How long the stream has been live.",
+      "examples": [],
+      "section": "Stream info",
+      "importance": 2
     }
   ]
 }

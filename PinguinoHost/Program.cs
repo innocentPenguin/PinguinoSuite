@@ -222,6 +222,7 @@ namespace PinguinoHost
             try { Boards.OnEvent(args); } catch (Exception) { }
             try { Control.OnEvent(args); } catch (Exception) { }
             try { StreamTimers.OnEvent(args); } catch (Exception) { }
+            try { Announce.OnEvent(args); } catch (Exception) { }
             try { ProfileSync.OnEvent(args); } catch (Exception) { }
             try { Auto.OnEvent(args); } catch (Exception ex) { Clog.Warn("automation", "event trigger failed: " + ex.Message); }
             object et0; if (args.TryGetValue("eventType", out et0) && !new[] { "TwitchSub", "TwitchReSub", "TwitchGiftBomb", "TwitchCheer", "TwitchRaid", "TwitchFollow" }.Contains(Convert.ToString(et0))) return;   // automation-only events

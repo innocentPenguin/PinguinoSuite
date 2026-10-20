@@ -19,6 +19,8 @@ try:
     res.append(('settings.json WasLive became true without a website key', st.get('WasLive') is True))
     pl = json.load(open(os.path.join(d, 'players.json')))
     res.append(('one temporary strike expired after a full day (decay is per day, not per stream)', pl['bob']['Strikes'] == 1))
+    host.stdin.write(b'viewer1: !uptime' + bytes([10])); host.stdin.flush(); time.sleep(1.5)
+    res.append(('!uptime says how long the stream has been live', 'The stream has been live for' in open(os.path.join(d, 'out.txt'), encoding='utf-8', errors='replace').read()))
 finally:
     host.kill(); print(d)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)
