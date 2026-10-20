@@ -1014,7 +1014,12 @@ def module_post(mid: str, b: PostReq):
         r = requests.post(m.spec["url"] + b.path, json=b.body or {}, headers=_mod_headers(mid), timeout=15)
     except requests.RequestException as e:
         raise HTTPException(502, str(e)[:120])
-    return {"ok": r.ok, "status": r.status_code, "detail": r.text[:300]}
+    out = {"ok": r.ok, "status": r.status_code, "detail": r.text[:300]}
+    try:
+        out["json"] = r.json()      # the full parsed body: detail is cut at 300 chars, which breaks JSON such as a long sign-in URL
+    except ValueError:
+        pass
+    return out
 
 
 @app.get("/api/modules/{mid}/get")

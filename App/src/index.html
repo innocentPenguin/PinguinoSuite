@@ -705,7 +705,7 @@ function bindQuick(){
   $('#q-cut')&&($('#q-cut').onchange=async e=>{const on=e.target.checked;if(on&&!confirm('Retire Streamer.bot? The Suite will run every action itself. Close Streamer.bot first or actions will run twice.')){e.target.checked=false;return}
     await hostJ('/api/cutover',{on});Q.cut=await hostGet('/api/cutover').catch(()=>null);draw(true)});
   qBind()}
-const hostJ=async(p,b)=>{const r=await hostPost(p,b);let j={};try{j=JSON.parse(r.detail)}catch{}return {...j,_ok:r.ok}};
+const hostJ=async(p,b)=>{const r=await hostPost(p,b);let j={};if(r&&r.json&&typeof r.json==='object')j=r.json;else try{j=JSON.parse(r.detail)}catch{}return {...j,_ok:r.ok,_status:r.status,_detail:r.detail}};
 function cutoverCard(){if(Q.cut===undefined){hostGet('/api/cutover').then(c=>{Q.cut=c;if(route==='quick'&&Q.tab==='actions')draw(true)}).catch(()=>{Q.cut=null});return ''}
   const c=Q.cut;if(!c)return '';
   return `<div class="card" style="margin-bottom:10px"><div class="row wrap"><div class="grow"><b>Streamer.bot retired</b><div class="sm faint">${c.on?'The Suite runs every action itself.':'Streamer.bot is still the one running chat commands and alerts.'}${c.streamerBotRunning&&c.on?' <span style="color:var(--warn)">Streamer.bot is still running: close it or actions run twice.</span>':''}</div></div><label class="sw"><input type="checkbox" id="q-cut" ${c.on?'checked':''}><span></span></label>${hq('cutover',{module:'host'})}</div></div>`}
@@ -817,10 +817,10 @@ pages.accounts=()=>{
 function bindAccounts(){
   $$('[data-aext]').forEach(b=>b.onclick=()=>openExternal(b.dataset.aext));
   $('#ac-refresh')&&($('#ac-refresh').onclick=()=>{ACC.st=undefined;ACC.bots=undefined;draw(true)});
-  $('#ac-signin')&&($('#ac-signin').onclick=async()=>{try{const r=await hostJ('/api/account/streamer/signin',{open:false});if(r.url)openExternal(r.url);else if(!r.opened)throw new Error('no url');toast('Finish signing in in the browser window');
+  $('#ac-signin')&&($('#ac-signin').onclick=async()=>{try{const r=await hostJ('/api/account/streamer/signin',{open:false});if(r.url)openExternal(r.url);else if(!r.opened)throw new Error(r._ok?'the Host answered without a sign-in link':'HTTP '+(r._status||'?')+' '+String(r._detail||'').slice(0,160));toast('Finish signing in in the browser window');
       ACC.wait=Date.now();const t0=Date.now(),was=JSON.stringify((ACC.st&&ACC.st.scopes)||[]);
       const poll=async()=>{if(Date.now()-t0>90000||route!=='accounts'){ACC.wait=0;return}try{const n=await hostGet('/api/account/streamer');if(JSON.stringify(n.scopes||[])!==was||(!ACC.st.signedIn&&n.signedIn)){ACC.st=n;ACC.wait=0;toast('Twitch sign-in updated');ACC.restartHint=true;draw(true);return}}catch{}setTimeout(poll,3000)};poll();draw(true)}
-    catch{toast('Could not start the sign-in (is the Host updated and running?)')}});
+    catch(e){toast('Could not start the sign-in: '+(e&&e.message?e.message:e))}});
   $('#ac-restart')&&($('#ac-restart').onclick=async()=>{if(!confirm('Restart PinguinoHost now? Chat commands and alerts pause for a few seconds. Do not do this mid-stream unless you must.'))return;await post('/api/modules/host/restart');ACC.restartHint=false;toast('Restarting the Host…');draw(true)});
   $('#ac-signout')&&($('#ac-signout').onclick=async()=>{if(!confirm('Sign the streamer account out? Redeems, ads and clips stop until you sign in again.'))return;await hostJ('/api/account/streamer/signout',{});ACC.st=undefined;draw(true)})}
 const openExternal=u=>window.__TAURI__?(location.href=u):window.open(u,'_blank');
