@@ -69,3 +69,18 @@ Genre blocklist (`block_genres`, matched against the artist's Spotify genres, ca
 
 ## Cycle 3
 Quiet handling of dropped keep-alive connections (no tracebacks in the Console; idle connections time out after 30 s). Optional chat announcements: `announce_track_on` / `announce_request_on` (off by default) queue lines that the Host polls with `GET /api/announcements?since=<seq>` -> `{seq, lines:[{seq, ts, text}]}` and posts to chat (we have no chat connection of our own); wording is editable (`announce_track`, `announce_request` templates).
+
+## Cycle 4: Songify parity (see `Docs/SONGIFY_PARITY.md`)
+New settings (Settings tab, all in `config_schema.py`):
+- `chat_requests` (default on): turn off for reward-only requests; chat `!sr` then answers with the `reward_only` message. Redeems via `/api/chat-command` still work.
+- `refund_on` (list of `none, too_long, full, lookup, offline, limit, blocked`): when a redeem is rejected with one of these codes, `/api/chat-command` returns `"refund": true` and the reply uses the `refunded` message. The Host's redeem automation must act on that field (the Host has no `channel:manage:redemptions` scope yet).
+- `global_cooldown_s` (default 0): minimum seconds between any two requests; staff bypass.
+- `clear_on_offline` (default off): viewer requests are cleared when the stream goes offline.
+- `playlist_add`: playlist ID or URL; accepted requests are also added there. Needs the new playlist scopes, so reconnect Spotify once.
+- `cmd_roles`: lines like `skip=moderator,vip` to limit who may use a command (broadcaster always allowed); denied users get `cmd_denied`.
+
+New commands (all renamable): `!songpos` / `!pos`, `!songnext` / `!next`, `!songlike` / `!like` (staff; saves the playing track, needs `user-library-modify`), `!togglesr` (staff), alias `!songban` on blocksong, `!songcommands` on help.
+
+New endpoints: `POST /api/blocklist/import` (text of bare 22-char track IDs or URIs, one per line, `#` comments; returns `{added,total}`), `GET /api/queue.json` (public queue, no IDs or URIs), pages `/queue` and `/overlay/queue` (OBS widget; query `?count ?theme ?accent ?width ?size ?eta ?now`).
+
+Not done yet: synced lyrics widget, sub-tier or follower request caps, paying with pengs, public exposure of `/queue` through the site.

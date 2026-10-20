@@ -163,6 +163,14 @@ class _H(BaseHTTPRequestHandler):
                 return self._send(200, {"tracks": {"items": hits[:int(q.get("limit", 5))]}})
             if p == "/artists":
                 return self._send(200, {"artists": [{"id": i, "genres": ["black metal"] if i == "artSweary" else ["pop"]} for i in q["ids"].split(",")]})
+            if p.startswith("/playlists/") and p.endswith("/tracks") and method == "POST":
+                S.playlist_adds = getattr(S, "playlist_adds", [])
+                S.playlist_adds.extend(body.get("uris", []))
+                return self._send(201, {"snapshot_id": "fake"})
+            if p == "/me/tracks" and method == "PUT":
+                S.saved = getattr(S, "saved", [])
+                S.saved.append(q.get("ids", ""))
+                return self._send(200)
             if p.startswith("/playlists/") or p.startswith("/albums/"):
                 items = [{"track": S.tracks[f"t{n}"]} for n in range(10, 16)] if p.startswith("/playlists/") else [S.tracks[f"t{n}"] for n in range(10, 13)]
                 return self._send(200, {"items": items, "next": None})
