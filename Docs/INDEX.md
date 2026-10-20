@@ -155,8 +155,7 @@ Docs: `Docs/VOICE.md` (Speak, cycles 1-6). Each Speak .py file starts with an `#
 | Hourly review + incidents | `review.py` gather:58, analyse:215, Reviewer:281 |
 | Page | `static/index.html` (tab "Review & control" = `V.review`) |
 | Tests | `tests/` run `python -m unittest discover -s tests` |
-| Runtime data | `Data
-untimeoice\`: config, history.jsonl, reports/, incidents.jsonl, control.jsonl, speaking.json |
+| Runtime data | `Data/runtime/voice/`: config, history.jsonl, reports/, incidents.jsonl, control.jsonl, speaking.json |
 
 ### Listen - Suite/modules/listen
 | What | Where |
