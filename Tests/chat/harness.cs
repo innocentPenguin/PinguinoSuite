@@ -15,6 +15,8 @@ public static class Harness
     static int llmCalls;
     static List<string> studyPrompts = new List<string>();
     static string mergePrompt = "";
+    static List<string> opinionPrompts = new List<string>();
+    static string opinionReply = "";
     static string studyReply = "{\"viewers\":[],\"community\":[]}";
 
     static void Check(string name, bool ok, string extra = "")
@@ -71,6 +73,7 @@ public static class Harness
         {
             llmCalls++; lastSystem = s; lastPrompt = u;
             if (s.Contains("STUDY MODE")) { studyPrompts.Add(u); return studyReply; }
+            if (s.Contains("OPINION MODE")) { opinionPrompts.Add(u); return opinionReply; }
             if (s.Contains("maintain PinguinoBot")) { mergePrompt = u; return "{\"community\":\"A chill Rocket League crew that loves cat memes.\"}"; }
             return nextReply;
         }));
@@ -691,7 +694,45 @@ public static class Harness
         nextReply = "{\"reply\":\"ok\",\"remember\":[],\"opinion\":\"funny and always around\"}";
         Msg("Opn3", "@pinguinob0t hi");
         Msg("Opn3", "@pinguinob0t hello");
-        Check("the bot's opinion of a viewer is kept on their profile", lastPrompt.Contains("your opinion of this viewer (keep it consistent): funny and always around"), lastPrompt);
+        Check("the bot's opinion of a viewer is kept on their profile", lastPrompt.Contains("your PRIVATE opinion of this viewer (keep it consistent; let it colour your tone, but NEVER quote it, reveal it, or say you keep notes on their personality): funny and always around"), lastPrompt);
+
+        // ── 19b. weekly private opinion notes ──
+        Directory.CreateDirectory(Path.Combine(dir, "boards")); File.WriteAllText(Path.Combine(dir, "boards", "aliases.json"), "{\"aliases\":{\"opnxalt\":\"opnx\"}}");
+        for (int i = 0; i < 22; i++) Msg("Opnx", "chat message number " + i + " about the game");
+        for (int i = 0; i < 3; i++) Msg("OpnxAlt", "alt account says banana" + i + " here");
+        for (int i = 0; i < 25; i++) Msg("Opnbad", "plain talk number " + i);
+        for (int i = 0; i < 25; i++) Msg("Opnout", "secret chatter number " + i);
+        Msg("Opnout", "!forgetme");
+        for (int i = 0; i < 3; i++) Msg("Opnfew", "only a few messages " + i);
+        CPHProxy.Sent.Clear(); opinionPrompts.Clear();
+        opinionReply = "{\"opinions\":[{\"login\":\"opnx\",\"opinion\":\"Always here and always loud, a lovable derailer of chat.\"},{\"login\":\"opnbad\",\"opinion\":\"Is 12 years old and very sweaty.\"},{\"login\":\"opnout\",\"opinion\":\"Mysterious and quiet type honestly.\"},{\"login\":\"invented\",\"opinion\":\"Made up person who is not in the data.\"}]}";
+        Msg("Mod1", "!opinion refresh all", null, true);
+        var memO = Memory();
+        Check("a mod can run the weekly opinion pass on demand", opinionPrompts.Count >= 1, string.Join("|", CPHProxy.Sent));
+        Check("the note is saved on the viewer (alias folded in, under 300 characters)", memO["id_opnx"] != null && ((string)memO["id_opnx"]["Opinion"]).StartsWith("Always here") && ((string)memO["id_opnx"]["Opinion"]).Length <= 300);
+        Check("a private copy for mods is written under opinions/", File.Exists(Path.Combine(dir, "opinions", "opnx.json")) && File.ReadAllText(Path.Combine(dir, "opinions", "opnx.json")).Contains("\"private\": true"));
+        Check("the alias account's messages are part of the prompt", opinionPrompts.Any(p => p.Contains("banana1") && p.Contains("VIEWER: opnx ")), string.Join("|", opinionPrompts).Substring(0, 300));
+        Check("the alias is not its own person", !opinionPrompts.Any(p => p.Contains("VIEWER: opnxalt")));
+        Check("an unsafe note (age) is refused", memO["id_opnbad"] == null || string.IsNullOrEmpty((string)memO["id_opnbad"]["Opinion"]));
+        Check("someone who opted out (!forgetme) gets no note", !opinionPrompts.Any(p => p.Contains("VIEWER: opnout")) && (memO["id_opnout"] == null || string.IsNullOrEmpty((string)memO["id_opnout"]["Opinion"])));
+        Check("too few messages = no note", !opinionPrompts.Any(p => p.Contains("VIEWER: opnfew")));
+        Check("made-up names from the AI are ignored", memO["login:invented"] == null);
+        CPHProxy.Sent.Clear(); Msg("Opnx", "!opinion opnx");
+        Check("a normal viewer gets no answer to !opinion", CPHProxy.Sent.Count == 0, Last());
+        CPHProxy.Sent.Clear();
+        Msg("Mod1", "!opinion opnx", null, true);
+        Check("!opinion <user> never prints the note in public chat", CPHProxy.Sent.All(m => !m.Contains("lovable derailer")), string.Join("|", CPHProxy.Sent));
+        Msg("Mod1", "!opinion status", null, true);
+        Check("!opinion status", Last() != null && Last().Contains("Opinion notes:"), Last());
+        nextReply = "{\"reply\":\"yo\",\"remember\":[]}";
+        Msg("Opnx", "@pinguinob0t hi there");
+        Check("the reply prompt carries the private note with a do-not-reveal rule", lastPrompt.Contains("your PRIVATE opinion of this viewer") && lastPrompt.Contains("lovable derailer") && lastPrompt.Contains("NEVER quote it"), lastPrompt);
+        Msg("Mod1", "!opinion reset opnx", null, true);
+        Check("!opinion reset clears it and removes the file", string.IsNullOrEmpty((string)Memory()["id_opnx"]["Opinion"]) && !File.Exists(Path.Combine(dir, "opinions", "opnx.json")));
+        nextReply = "{\"reply\":\"ok\",\"remember\":[],\"opinion\":\"first impression\"}";
+        Msg("Opnx", "@pinguinob0t morning");
+        Msg("Opnx", "!forgetme");
+        Check("!forgetme also wipes the opinion", string.IsNullOrEmpty((string)Memory()["id_opnx"]["Opinion"]) && !File.Exists(Path.Combine(dir, "opinions", "opnx.json")));
 
         // ── 20. long-term history summaries reach the prompt ──
         nextReply = "{\"reply\":\"ok\",\"remember\":[]}";

@@ -84,6 +84,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 |---|---|---|
 | `!chatbot` | `!chatbot on\|off` | Switch ChattyPinguino on or off. |
 | `!golive` | `!golive [time]` | Set when the stream starts, for the countdown message. |
+| `!opinion` | `!opinion <user> \| !opinion reset <user> \| !opinion refresh <user\|all> \| !opinion status` | The bot's private weekly note on what it thinks of a regular (used only to colour its tone; never shown in chat or on the website). <user> whispers you the note. Alias accounts are merged; people who used !forgetme or !optmeout get none. |
 
 ### Community Games
 

@@ -797,6 +797,19 @@
       "usage": "!pg status | core|chat|helper on|off | test | cutover",
       "description": "Quick control of the bots from chat. Everyone else gets no answer.",
       "examples": []
+    },
+    {
+      "command": "!opinion",
+      "aliases": [],
+      "action": "PinguinoChat",
+      "category": "Chat bot",
+      "who": "mods",
+      "usage": "!opinion <user> | !opinion reset <user> | !opinion refresh <user|all> | !opinion status",
+      "description": "The bot's private weekly note on what it thinks of a regular (used only to colour its tone; never shown in chat or on the website). <user> whispers you the note. Alias accounts are merged; people who used !forgetme or !optmeout get none.",
+      "examples": [
+        "!opinion cyfirl",
+        "!opinion refresh all"
+      ]
     }
   ]
 }
