@@ -91,7 +91,7 @@ namespace PinguinoHost
         }
 
         // ---- who does not count ----
-        static readonly string[] KnownBots = { "nightbot", "streamelements", "soundalerts", "streamlabs", "moobot", "fossabot", "synchrabot", "pinguinob0t", "chattypinguino", "pinguinohelper", "potatbotat", "sery_bot", "wizebot", "commanderroot", "anotherttvviewer" };
+        static readonly string[] KnownBots = { "nightbot", "streamelements", "soundalerts", "streamlabs", "moobot", "fossabot", "synchrabot", "pinguinob0t", "chattypinguino", "pinguinohelper", "potatbotat", "rocketrankbot", "sery_bot", "wizebot", "commanderroot", "anotherttvviewer" };
         static HashSet<string> ExtraBots()
         {
             var s = new HashSet<string>();

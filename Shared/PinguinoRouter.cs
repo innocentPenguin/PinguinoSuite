@@ -302,7 +302,7 @@ public class CPHInline
 
     static readonly Regex RxYesNo = new Regex(@"^\s*@?\S*\s*(yes|yep|yeah|yea|ya|yup|y|ye|sure|ok|okay|k|please|pls|plz|do\s+it|go\s+ahead|confirm|no|nope|nah|n|cancel|nevermind|never\s*mind|nvm|no\s+thanks)\s*[.!?]*\s*$", RegexOptions.IgnoreCase);
     static readonly Regex RxPractical = new Regex(@"\b(queue|lobby|join|register|code|pass(word)?|play|custom|private|match|epic|game|pm|in\s+line)\b", RegexOptions.IgnoreCase);
-    static readonly string[] OtherBots = { "nightbot", "streamelements", "streamlabs", "moobot", "fossabot", "wizebot", "supibot", "botrix", "synchrabot", "soundalerts", "potatbotat" };
+    static readonly string[] OtherBots = { "nightbot", "streamelements", "streamlabs", "moobot", "fossabot", "wizebot", "supibot", "botrix", "synchrabot", "soundalerts", "potatbotat", "rocketrankbot" };
 
     // used by the tests (tests\bots)
     public void PgSetHelperContextPublic(string login) { PgSetHelperContext(login); }

@@ -1074,6 +1074,31 @@
       "examples": [
         "!economy status"
       ]
+    },
+    {
+      "command": "!rank",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Rocket League",
+      "who": "everyone",
+      "usage": "!rank [1s|2s|3s]",
+      "description": "Shows Innocentpenguin_'s Rocket League ranked playlists (1v1, 2v2, 3v3). Add 1s, 2s or 3s for just one.",
+      "examples": [
+        "!rank",
+        "!rank 2s"
+      ]
+    },
+    {
+      "command": "!setrank",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Rocket League",
+      "who": "mods",
+      "usage": "!setrank 1v1|2v2|3v3|peak <rank text>",
+      "description": "Mods update the rank !rank shows. You can also paste a whole 'Ranked 1v1: ... | Ranked 2v2: ...' line.",
+      "examples": [
+        "!setrank 2v2 Grand Champion I Div III (1532)"
+      ]
     }
   ]
 }

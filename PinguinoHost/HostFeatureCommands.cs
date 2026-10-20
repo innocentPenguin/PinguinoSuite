@@ -58,8 +58,8 @@ namespace PinguinoHost
             if (Teach.IsCommand(cmd)) { Teach.Handle(user, cmd, args, role, say); return true; }
             if (cmd == "!guess") { SiteShop.HandleGuess(user, args, say); return true; }   // hidden shop game: only the running round's player gets any answer
             string b = BoardOf(cmd);
-            bool viewer = b != "" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || Economy.IsViewerCommand(cmd);
-            bool modOnly = cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd);
+            bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || Economy.IsViewerCommand(cmd);
+            bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd);
             if (!viewer && !modOnly) return false;
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
             if (viewer)
@@ -70,6 +70,7 @@ namespace PinguinoHost
             {
                 if (b != "") { Top(b, args, say); return true; }
                 if (Economy.IsViewerCommand(cmd) || Economy.IsModCommand(cmd)) { Economy.Handle(user, cmd, args, mod, say, ParseMonth, MonthLabel); return true; }
+                if (Rank.IsCommand(cmd)) { Rank.Handle(user, cmd, args, mod, say); return true; }
                 if (Timers.IsCommand(cmd)) { Timers.Handle(args, say); return true; }
                 if (StreamTimers.IsCommand(cmd)) { StreamTimers.Handle(cmd, args, say); return true; }
                 if (cmd == "!remind" || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder") { Reminders.Handle(user, cmd, args, mod, say); return true; }

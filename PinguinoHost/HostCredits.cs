@@ -69,7 +69,7 @@ namespace PinguinoHost
         }
         public static JObject Settings()
         {
-            var d = new JObject { { "Exclude", new JArray("innocentpenguin_", "nightbot", "streamelements", "soundalerts", "pinguinob0t", "pinguinohelper", "chattypinguino") }, { "TopCount", 10 }, { "Sections", "follows,cheers,subs,reSubs,giftSubs,raided,rewardRedemptions,moderators,vips,subscribers,users,allBits,monthBits,weekBits,channelRewards" },
+            var d = new JObject { { "Exclude", new JArray("innocentpenguin_", "nightbot", "streamelements", "soundalerts", "rocketrankbot", "pinguinob0t", "pinguinohelper", "chattypinguino") }, { "TopCount", 10 }, { "Sections", "follows,cheers,subs,reSubs,giftSubs,raided,rewardRedemptions,moderators,vips,subscribers,users,allBits,monthBits,weekBits,channelRewards" },
                 { "Titles", new JObject { { "follows", "New Followers!" }, { "cheers", "Cheers!" }, { "subs", "New Subscribers!" }, { "reSubs", "Those who Resubscribed!" }, { "giftSubs", "Crazy peeps who gifted subs!" }, { "raided", "Thank you Raiders!" }, { "rewardRedemptions", "Wasted channel points" },
                     { "moderators", "Moderators" }, { "vips", "VIPs!" }, { "subscribers", "Subscribers" }, { "users", "Viewers" }, { "allBits", "All time top Bits!" }, { "monthBits", "Monthly Top Bits" }, { "weekBits", "Weekly Top bits!" }, { "channelRewards", "Biggest point spenders" } } },
                 { "Look", new JObject { { "TitleColor", "ffffff" }, { "NameColor", "ff9900" }, { "TitleSize", 85 }, { "NameSize", 72 }, { "Font", "Sour Gummy" }, { "Stroke", 9 }, { "Uppercase", true }, { "SpeedFactor", 120 } } } };
