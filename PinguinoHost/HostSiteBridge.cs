@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -172,9 +172,18 @@ namespace PinguinoHost
         static JObject ConfigBody()
         {
             var c = Cfg();
-            return new JObject { { "items", new JArray("guess_chatter", "buy_chatty") }, { "prices", new JObject { { "buy_chatty", I(c, "BuyChattyPrice") } } },
-                { "minStake", I(c, "MinStake") }, { "maxStake", I(c, "MaxStake") }, { "cooldowns", new JObject { { "userSeconds", I(c, "UserCooldownSec") }, { "globalSeconds", I(c, "GlobalCooldownSec") } } },
-                { "payoutMultiplier", 2 }, { "buyChattyUnlocked", ChattyUnlocked() }, { "currency", Economy.CurrencyName } };
+            return new JObject { { "currency", Economy.CurrencyName }, { "items", new JObject {   // the site's final contract (Docs/SHOP_BRIDGE.md section 5)
+                { "guess", new JObject { { "min", I(c, "MinStake") }, { "max", I(c, "MaxStake") }, { "payoutMultiplier", 2 }, { "cooldownUser", I(c, "UserCooldownSec") }, { "cooldownGlobal", I(c, "GlobalCooldownSec") } } },
+                { "chatty", new JObject { { "price", I(c, "BuyChattyPrice") } } } } } };
+        }
+
+        /// <summary>The site sends its item ids (guess-the-chatter, buy-chatty); the short keys and the old names are accepted too.</summary>
+        static string NormItem(string item)
+        {
+            item = (item ?? "").ToLowerInvariant().Replace('-', '_');
+            if (item == "guess" || item == "guess_the_chatter" || item == "guess_chatter") return "guess_chatter";
+            if (item == "chatty" || item == "buy_chatty") return "buy_chatty";
+            return item;
         }
 
         public static void Tick()
@@ -195,7 +204,7 @@ namespace PinguinoHost
             if (code == 401) { _result = "site refused the key (HTTP 401)"; Clog.Warn("site", "shop: the site refused the key (401)"); return; }
             if (code != 200 || j == null) { _result = code == 0 ? "site not reachable" : "site answered HTTP " + code; return; }
             int n = 0;
-            foreach (var s in (j["items"] as JArray ?? new JArray()).OfType<JObject>()) { Process(s); n++; }
+            foreach (var s in ((j["requests"] ?? j["items"]) as JArray ?? new JArray()).OfType<JObject>()) { Process(s); n++; }
             int posted = Flush(key);
             if (!_result.StartsWith("site refused")) _result = "ok (" + n + " seen, " + posted + " answers sent)";
         }
@@ -214,7 +223,7 @@ namespace PinguinoHost
             {
                 var d = Doc(); var pr = (JObject)d["processed"];
                 if (pr[id] != null) return;   // seen: its answer is (re)sent by Flush, never decided or charged again
-                string login = ((string)s["login"] ?? "").Trim().TrimStart('@').ToLowerInvariant(), item = ((string)s["item"] ?? "").ToLowerInvariant(); long stake = (long?)s["stake"] ?? 0;
+                string login = ((string)s["login"] ?? "").Trim().TrimStart('@').ToLowerInvariant(), item = NormItem((string)s["item"]); long stake = (long?)s["stake"] ?? 0;
                 string sid = "shop-" + id; var c = Cfg(); long now = Now();
                 Action<string> no = why => { Record(d, id, login, item, "rejected", 0, why, true); Save(d); };
                 if (!RxLogin.IsMatch(login)) { no("bad user"); return; }

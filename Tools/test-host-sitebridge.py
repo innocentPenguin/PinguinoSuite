@@ -5,7 +5,9 @@ import json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.requ
 from http.server import BaseHTTPRequestHandler, HTTPServer
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
-PORT, SITE = 8996, 8997; B = 'http://127.0.0.1:%d' % PORT; KEY = 'test-key-123'
+def _free():   # free ports each run: other suites' tests use 8996-8998 at the same time
+    import socket; s = socket.socket(); s.bind(('127.0.0.1', 0)); n = s.getsockname()[1]; s.close(); return n
+PORT, SITE, WSPORT = _free(), _free(), _free(); B = 'http://127.0.0.1:%d' % PORT; KEY = 'test-key-123'
 d = tempfile.mkdtemp(prefix='pgsite_'); outf = os.path.join(d, 'out.txt')
 json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 json.dump({'McSmpIp': 'smp.innocentpenguin.com'}, open(os.path.join(d, 'helper_facts.json'), 'w'))
@@ -23,7 +25,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.auth(): return
         if self.path.startswith('/api/bot/teach'): return self.send(200, {'items': [x for x in S['teach'].values() if x['status'] == 'pending']})
-        if self.path.startswith('/api/bot/shop'): return self.send(200, {'items': [x for x in S['shop'].values() if x['status'] == 'pending']})
+        if self.path.startswith('/api/bot/shop'): return self.send(200, {'requests': [x for x in S['shop'].values() if x['status'] == 'pending']})
         self.send(404, {})
     def do_POST(self):
         if not self.auth(): return
@@ -42,7 +44,7 @@ srv = HTTPServer(('127.0.0.1', SITE), H); threading.Thread(target=srv.serve_fore
 
 def start():
     env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
-    env.update({'PINGUINO_COMPAT_WS_PORT': '8998', 'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0', 'PINGUINO_SITE_BASE': 'http://127.0.0.1:%d' % SITE, 'BOT_API_KEY': KEY,
+    env.update({'PINGUINO_COMPAT_WS_PORT': str(WSPORT), 'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0', 'PINGUINO_SITE_BASE': 'http://127.0.0.1:%d' % SITE, 'BOT_API_KEY': KEY,
                 'PINGUINO_SITE_POLL_SEC': '1', 'PINGUINO_SHOP_USER_CD_SEC': '4', 'PINGUINO_SHOP_GLOBAL_CD_SEC': '2'})
     h = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(outf, 'ab'), stderr=subprocess.STDOUT)
     for _ in range(80):
@@ -72,7 +74,8 @@ def chk(n, ok, extra=None):
     res.append((n, bool(ok)))
     if not ok: print('   extra:', n, '|', extra)
 def tstat(): return {x['siteId']: x for x in api('/api/teach')['items'] if x.get('siteId')}
-def shopitem(i, login, item, stake=0): S['shop'][i] = {'id': i, 'login': login, 'item': item, 'stake': stake, 'at': 1, 'status': 'pending'}
+SITE_ITEM = {'guess_chatter': 'guess-the-chatter', 'buy_chatty': 'buy-chatty'}   # the ids the real site sends (Docs/SHOP_BRIDGE.md)
+def shopitem(i, login, item, stake=0): S['shop'][i] = {'id': i, 'login': login, 'item': SITE_ITEM.get(item, item), 'stake': stake, 'at': 1, 'status': 'pending'}
 
 # chat history for the guess game: one eligible author, one opted out, one with a link
 os.makedirs(os.path.join(d, 'chat_logs', 'live'), exist_ok=True)
@@ -118,7 +121,7 @@ try:
     chk('after the key works again the item arrives', wait(lambda: 't6' in tstat()))
 
     # ---- shop ----
-    chk('shop config pushed with limits, cooldowns and 2x', wait(lambda: S['cfg'] is not None) and S['cfg']['minStake'] == 100 and S['cfg']['maxStake'] == 2000 and S['cfg']['payoutMultiplier'] == 2 and S['cfg']['cooldowns']['globalSeconds'] == 2 and 'buy_chatty' in S['cfg']['prices'], S['cfg'])
+    chk('shop config pushed with limits, cooldowns and 2x', wait(lambda: S['cfg'] is not None) and S['cfg']['items']['guess']['min'] == 100 and S['cfg']['items']['guess']['max'] == 2000 and S['cfg']['items']['guess']['payoutMultiplier'] == 2 and S['cfg']['items']['guess']['cooldownGlobal'] == 2 and S['cfg']['items']['chatty']['price'] == 5000 and S['cfg']['currency'], S['cfg'])
     api('/api/economy', {'adjust': 'gambler', 'delta': 6000}); api('/api/economy', {'adjust': 'poorguy', 'delta': 50})
     b0 = bal('gambler'); chk('test balance exists', b0 >= 6000, b0)
     shopitem('s1', 'gambler', 'guess_chatter', 500)
