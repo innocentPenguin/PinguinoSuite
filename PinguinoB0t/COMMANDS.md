@@ -70,6 +70,12 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!toppoints` | `!toppoints [month]` | Top pengs holders, all time or for one month. |
 | `!topwatch` | `!topwatch [month]` | Most watch time, all time or for one month. |
 
+### Rocket League
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!rank` | `!rank [epic name] [1s\|2s\|3s\|4s\|hoops\|rumble\|dropshot\|snowday\|heatseeker]` | Rocket League ranks. With no name it shows Innocentpenguin_'s 1v1, 2v2 and 3v3; add a playlist (2s, 2v2, dropshot, heatseek, rumble, hoops...) for just that one. Every playlist is pulled in one tracker call per Epic account and cached for 15 minutes, so extra lookups cost nothing. |
+
 ### Subscribers
 
 | Command | Usage | What it does |
@@ -179,6 +185,12 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!addpoints` | `!addpoints @user <n>` | Give someone pengs. |
 | `!removepoints` | `!removepoints @user <n>` | Take pengs away from someone. |
 | `!economy` | `!economy status\|import\|apply <id>` | Points system status; import from StreamElements (dry run, then apply with the report id). |
+
+### Rocket League
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!setrank` | `!setrank 1v1\|2v2\|3v3\|peak <rank text>` | Mods update the rank !rank shows. You can also paste a whole 'Ranked 1v1: ... \| Ranked 2v2: ...' line. |
 
 ### Timers
 

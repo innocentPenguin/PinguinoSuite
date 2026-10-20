@@ -1081,11 +1081,13 @@
       "action": "PinguinoHost",
       "category": "Rocket League",
       "who": "everyone",
-      "usage": "!rank [1s|2s|3s]",
-      "description": "Shows Innocentpenguin_'s Rocket League ranked playlists (1v1, 2v2, 3v3). Add 1s, 2s or 3s for just one.",
+      "usage": "!rank [epic name] [1s|2s|3s|4s|hoops|rumble|dropshot|snowday|heatseeker]",
+      "description": "Rocket League ranks. With no name it shows Innocentpenguin_'s 1v1, 2v2 and 3v3; add a playlist (2s, 2v2, dropshot, heatseek, rumble, hoops...) for just that one. Every playlist is pulled in one tracker call per Epic account and cached for 15 minutes, so extra lookups cost nothing.",
       "examples": [
         "!rank",
-        "!rank 2s"
+        "!rank 2s",
+        "!rank dropshot",
+        "!rank someEpicName 3v3"
       ]
     },
     {
