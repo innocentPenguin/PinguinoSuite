@@ -195,3 +195,16 @@ Code: `PinguinoHost/HostSiteBridge.cs` (357 lines). Contract: [SHOP_BRIDGE.md](S
 | Private lore (never public) | `Data\lore\LORE_REPORT.md`, `proposals_for_bots.md`, `channel_lore.json`, `people_graph.json`, `person_cards\` |
 | Bot audits | `Docs\BOT_REMOVAL_AUDIT.md`, `Docs\SYNCHRABOT_AUDIT.md` |
 <!-- RUNNER2-INDEX-END -->
+
+<!-- COORD-INDEX-BEGIN -->
+## Coordinator (00 Pinguino) - plans, runbooks, memory
+
+| file | what it is |
+|---|---|
+| `C:\Users\ivanm\.claude\plans\elegant-seeking-minsky.md` | Plan 5 (top: Twitch scopes + control layer, raid by confirm only) and Plan 4 (command pack, XP, games, name history); REVISIONS block overrides |
+| `Docs\NIGHTLY_CHECKLIST.md` | 5-phase nightly runbook |
+| `Docs\APP_LOG.md` | newest-first log of every Host/module restart |
+| `Docs\ROCKETRANKBOT_AUDIT.md`, `SYNCHRABOT_AUDIT.md`, `BOT_REMOVAL_AUDIT.md` | old-bot replacement audits |
+| `Docs\SHOP_BRIDGE.md`, `NAMEHISTORY.md` | site-bridge contract, name-history rules |
+| `Data\config\raid_list.json` | NOT YET CREATED: Ivan's trusted raid list (Plan 5 B) |
+<!-- COORD-INDEX-END -->
