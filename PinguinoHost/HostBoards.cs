@@ -145,6 +145,8 @@ namespace PinguinoHost
 
         /// <summary>alias logins, sent as "drop" so the site can delete their stale rows (the site ignores it until it supports it).</summary>
         static JArray DropList() { lock (L) return new JArray(Aliases().Keys.OrderBy(k => k, StringComparer.Ordinal)); }
+        /// <summary>every login the site must treat as a bot: the known list, bots.json accounts and chat_profiles bot flags.</summary>
+        public static HashSet<string> AllBots() { var s = new HashSet<string>(KnownBots); try { foreach (var x in ExtraBots()) s.Add(x); } catch (Exception) { } return s; }
         public static bool IsBot(string login) { login = (login ?? "").ToLowerInvariant(); return BotName.IsMatch(login) || KnownBots.Contains(login); }
         public static string CanonLogin(string login) { lock (L) return Canon(Aliases(), (login ?? "").Trim().ToLowerInvariant()); }
         public static Dictionary<string, string> AliasMap() { lock (L) return Aliases(); }

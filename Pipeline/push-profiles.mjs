@@ -40,6 +40,31 @@ for (const f of readdirSync(profDir)) {
     profiles[login] = p;
   } catch { /* skip a broken file */ }
 }
+// LIVE DATA from the Host (refreshed every 10 min and on sub events): active subs straight from Twitch, profile pictures, bots.
+const dataRoot = join(here, '..', 'Data');
+const readJ = f => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
+const liveSubs = readJ(join(dataRoot, 'subs', 'live_subs.json')), avatars = readJ(join(dataRoot, 'avatars.json')) || {}, botFile = readJ(join(dataRoot, 'profile_bots.json'));
+const bots = new Set((botFile && botFile.bots) || []);
+let subFlagged = 0, subRemoved = 0, subStubs = 0, avaSet = 0, botSet = 0;
+if (liveSubs && liveSubs.users && liveSubs.count > 0) {
+  const ageH = (Date.now() / 1000 - (liveSubs.at || 0)) / 3600;
+  if (ageH > 1) console.log(`WARNING: the live sub list is ${ageH.toFixed(1)} h old (the Host refreshes it every 10 min while it runs).`);
+  for (const [lg, u] of Object.entries(liveSubs.users)) {
+    if (out.has(lg)) continue;
+    const p = profiles[lg] || (profiles[lg] = { login: lg, name: u.name || lg, roles: {} }); if (!p.roles) p.roles = {};
+    if (!readJ(join(profDir, lg + '.json'))) subStubs++;
+    if (p.roles.sub !== true || p.roles.lapsed) subFlagged++;
+    Object.assign(p.roles, { sub: true, subTier: u.tier || 1, subType: u.prime ? 'prime' : u.isGift ? 'gift' : 'paid', lapsed: false });
+    if (u.isGift && u.gifter) p.roles.giftedBy = u.gifter; else delete p.roles.giftedBy;
+  }
+  // a profile that still says subbed while Twitch has no active sub for it: the sub ended
+  for (const [lg, p] of Object.entries(profiles)) if (p.roles && p.roles.sub === true && !liveSubs.users[lg]) { p.roles.sub = false; p.roles.lapsed = true; subRemoved++; }
+} else console.log('No live sub list from the Host yet: subs come from the csv import and chat badges only.');
+for (const [lg, p] of Object.entries(profiles)) {
+  const a = avatars[lg]; if (a && a.url) { p.avatar = a.url; avaSet++; }
+  if (bots.has(lg)) { p.isBot = true; botSet++; }
+}
+console.log(`Live merge: ${liveSubs ? liveSubs.count : 0} active subs per Twitch (${subFlagged} fixed on profiles, ${subStubs} profiles created for subs without one, ${subRemoved} marked ended), ${avaSet} avatars, ${botSet} bots flagged isBot.`);
 const logins = Object.keys(profiles);
 console.log(`${logins.length} profiles ready (${out.size} opted-out people left out).`);
 if (dry) process.exit(0);
