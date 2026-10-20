@@ -27,3 +27,8 @@ Presets: Ivan (saved Synchra look), Simple, Penguino, Big and readable (chat); P
 - Ignore list (nightbot, StreamElements, PinguinoB0t, ...) and Multi's muted viewers never reach OBS. Activity rows come from event messages (Twitch events + Host follow/redeem feed).
 - Settings stored in Multi's kv (`obs:chat`, `obs:activity`); no secrets.
 - Custom CSS `@import` loads web fonts (Ivan's Typekit font needs internet in OBS).
+
+## Dashboard (Synchra-style app layout)
+`/?type=dash` (also Settings panel > Dashboard): profile / edit layout / add / lock bar, source tabs (platform logo, channel, status dot with tooltip, menu), Activity Feed panel (alerts bar: pause, next, skip, show all; rows with age, platform logo, type pill, user, chips such as "13 viewers" / "25 points", links under redeems, row menu), Chat panel (date divider, logos, badges, name colours, dimmed notices, message box with ONE platform picker, emoji, send), Ctrl+K search, per-panel settings gear (opens the Settings panel) and pop-out (`&panel=chat|activity`).
+Layout choices are remembered in this browser (localStorage). "Alerts" pause queues new activity rows; next/skip/all work on that queue. Alert sounds/animations on stream belong to the Host, not Multi.
+Not done: ban/unmod notices (needs moderation events from Twitch), custom emote picker.
