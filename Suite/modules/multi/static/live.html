@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pinguino Multi OBS live</title>
+<style>
+html,body{margin:0;background:transparent;overflow:hidden}
+body{font:700 28px/1.25 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 2px 3px #000,0 0 2px #000}
+#box{display:none;margin:12px;padding:16px 20px;background:#14110df0;border:2px solid #ff8a1f;border-radius:14px;max-width:760px}
+#box.on{display:block;animation:in .4s ease}@keyframes in{from{opacity:0;transform:translateY(14px)}}
+h1{margin:0 0 10px;font-size:1em;color:#ff8a1f}.sub{font-size:.6em;opacity:.8;font-weight:600;margin-bottom:8px}
+.row{margin:7px 0}.lab{display:flex;justify-content:space-between;gap:14px;font-size:.8em}.bar{height:16px;border-radius:8px;background:#ffffff1f;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#ff8a1f,#ffb35c);border-radius:8px;transition:width .6s}
+.row.win .bar i{background:linear-gradient(90deg,#4ade80,#86efac)}.row.win .lab b{color:#4ade80}
+.pill{display:inline-block;font-size:.55em;background:#ff8a1f;color:#1a1000;border-radius:10px;padding:0 10px;margin-left:8px;vertical-align:middle}
+</style></head><body><div id="box"></div>
+<script>
+const KIND = location.pathname.split('/').pop(), $ = s => document.querySelector(s), box = $('#box');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const num = v => Number(v) || 0;
+let FIX = null;
+try { const p = new URLSearchParams(location.search).get('fixture'); if (p) FIX = true; } catch (e) { /* ignore */ }
+const FIXTURE = {poll: {title: 'Which game next?', state: 'progress', choices: [{id: 'a', title: 'Celeste', votes: 42}, {id: 'b', title: 'Hades', votes: 77}, {id: 'c', title: 'Tunic', votes: 12}]},
+  prediction: {title: 'Will I beat the boss?', state: 'progress', outcomes: [{id: 'a', title: 'Yes', users: 31, channel_points: 52000}, {id: 'b', title: 'No', users: 14, channel_points: 18000}]},
+  hype: {state: 'progress', level: 2, progress: 640, goal: 1000, total: 2140}};
+function bars(items, valKey, win) {
+  const tot = items.reduce((a, c) => a + num(c[valKey]), 0) || 1;
+  return items.map(c => { const v = num(c[valKey]), pct = Math.round(v * 100 / tot);
+    return `<div class="row ${win && c.id === win ? 'win' : ''}"><div class="lab"><b>${esc(c.title)}</b><span>${v.toLocaleString()} (${pct}%)</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`; }).join('');
+}
+function draw(st) {
+  const d = st && st[KIND === 'predict' ? 'prediction' : KIND]; if (!d) { box.className = ''; return; }
+  const end = d.state === 'end', pill = `<span class="pill">${esc(d.state === 'begin' || d.state === 'progress' ? 'LIVE' : d.state === 'lock' ? 'LOCKED' : 'ENDED')}</span>`;
+  if (KIND === 'poll') box.innerHTML = `<h1>${esc(d.title)}${pill}</h1>${bars(d.choices || [], 'votes')}`;
+  else if (KIND === 'predict') box.innerHTML = `<h1>${esc(d.title)}${pill}</h1><div class="sub">Channel points on each side</div>${bars(d.outcomes || [], 'channel_points', end ? d.winningOutcomeId : '')}`;
+  else { const goal = num(d.goal) || 1, p = Math.min(100, Math.round(num(d.progress) * 100 / goal));
+    box.innerHTML = `<h1>Hype train - level ${esc(d.level)}${pill}</h1><div class="bar"><i style="width:${p}%"></i></div><div class="sub" style="margin-top:6px">${num(d.progress).toLocaleString()} / ${goal.toLocaleString()}</div>`; }
+  box.className = 'on';
+}
+async function tick() {
+  try { draw(FIX ? FIXTURE : await fetch('/api/live-state', {cache: 'no-store'}).then(r => r.json())); } catch (e) { /* Host down: keep what is shown */ }
+}
+tick(); setInterval(tick, 2000);
+</script></body></html>

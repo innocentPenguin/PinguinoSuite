@@ -95,6 +95,15 @@ def _say_sync(text):
         return {"ok": True, "via": "timed out (may have gone out, not repeated)"}
 
 
+async def live_state():
+    """Host GET /api/live-state -> {poll, prediction, hype}; {} when the Host is down."""
+    try:
+        d = await asyncio.to_thread(_get, "/api/live-state")
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
 async def say(text):
     """Say a line in Twitch chat through the Host (its 30 s duplicate guard applies to every bot). None = Host unreachable."""
     return await asyncio.to_thread(_say_sync, text)

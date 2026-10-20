@@ -1156,3 +1156,18 @@ def test_send_drops_duplicates_and_allows_retry_after_failure(tmp_path, monkeypa
     assert c.post("/api/send", json={"platform": "discord", "text": "hi"}, headers=h).json()["ok"] is True      # retry after a failure is allowed
     r = c.post("/api/send", json={"platform": "discord", "text": "  HI "}, headers=h).json()
     assert r["duplicate"] is True and len(calls) == 2                                                          # identical line within 30 s is not sent again
+
+
+def test_live_overlay_routes_and_state(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import server, host_feed
+
+    async def fake():
+        return {"poll": {"title": "x", "state": "progress", "choices": []}, "prediction": None}
+    monkeypatch.setattr(host_feed, "live_state", fake)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    for k in ("poll", "predict", "hype"):
+        r = c.get("/obs/" + k)
+        assert r.status_code == 200 and "api/live-state" in r.text and "no-store" in r.headers["cache-control"]
+    j = c.get("/api/live-state").json()
+    assert j["poll"]["title"] == "x" and j["prediction"] is None and j["hype"] is None

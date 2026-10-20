@@ -1,4 +1,4 @@
-# Multi end-to-end pass (2026-10-19 11:44)
+# Multi end-to-end pass (2026-10-20 09:21)
 
 Real server process on a throwaway port with a throwaway data folder; nothing audible, no network, no live accounts. Script: `Suite/modules/multi/tests/e2e_live.py`.
 
@@ -17,7 +17,7 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Cards | card action: snooze | PASS |  |
 | Cards | card action: reopen | PASS |  |
 | Cards | card action: answer | PASS |  |
-| Cards | hotkey dismiss acts on top card | PASS | {'ok': True, 'card': 'c:twitch:dev:1792428263640', 'state': 'dismissed'} |
+| Cards | hotkey dismiss acts on top card | PASS | {'ok': True, 'card': 'c:twitch:dev:1792506098578', 'state': 'dismissed'} |
 | Assist | mark to answer creates a card | PASS |  |
 | Cards | after-stream recap | PASS |  |
 | Cards | streamer-first claims endpoint | PASS |  |
@@ -31,12 +31,12 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Assist | translate degrades gracefully without a key | PASS |  |
 | Assist | unknown message -> 404 | PASS |  |
 | Safety | no broadcast-to-all send | PASS | {'detail': 'choose one platform that supports sending (no broadcast to all)'} |
-| Safety | send blocked while Twitch is not connected | PASS | {'detail': 'Twitch send is not authorised (needs user:write:chat)'} |
+| Safety | send blocked while Twitch is not connected | PASS | {'detail': 'Host refused (401)'} |
 | Safety | mod action refused without the scopes | PASS | {'detail': 'Moderation is not authorised: reconnect Twitch with moderator permissions'} |
 | Look | chat look loads defaults | PASS |  |
 | Look | chat look saved + validated | PASS |  |
 | Look | hostile style values are rejected | PASS |  |
-| Look | follow event pushed with the module token | PASS | {'ok': True, 'id': 'evt:twitch:1792428266066'} |
+| Look | follow event pushed with the module token | PASS | {'ok': True, 'id': 'evt:twitch:1792506101217'} |
 | Safety | event push without a token is refused | PASS | token required |
 | Look | stream-safe popout serves | PASS |  |
 | Look | style editor page serves | PASS |  |
@@ -53,7 +53,7 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Secrets | discord token stored write-only | PASS |  |
 | Secrets | no secret in /api/setup or /api/settings | PASS |  |
 | Console | prestream items all have help | PASS | ['ai', 'conn-discord', 'conn-tiktok', 'conn-twitch', 'conn-youtube', 'ding', 'file-rules', 'file-settings', 'pop', 'queue', 'store', 'window |
-| Console | Twitch down is a FAIL, optional ones WARN | PASS |  |
+| Console | Twitch down is a FAIL, optional ones pass (skipped) | PASS |  |
 | Console | integrations items with help + test path | PASS |  |
 | Console | integration Test fails honestly when not connected | PASS | {'detail': 'Twitch is needs_auth: Connect Twitch in Settings (Connect Multi)'} |
 | Console | help index incl. module overview + secrets | PASS |  |

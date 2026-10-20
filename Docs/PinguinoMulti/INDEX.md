@@ -26,4 +26,4 @@
 
 ## Changes log (night run)
 - 1e25f66 dashboard viewer counts, text size, resize, split halves. e4a8edc / ece3825 send duplicate guard + Twitch via Host say. 046b726 raid_out/poll/prediction/hype rows, gift counter. 58c1565 gift sub alerts (follow widget). Failed sends can be retried (guard entry removed on refusal), timeouts are never retried.
-- Not built: live /obs/poll, /obs/predict, hype bar overlays (need Host live-state route from 02).
+- 3rd night commit: live overlays /obs/poll, /obs/predict, /obs/hype (static/live.html, /api/live-state, host_feed.live_state).

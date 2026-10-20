@@ -203,7 +203,7 @@ async def local_only_writes(request: Request, call_next):
         if not same_origin and not token_ok(request):
             return HTMLResponse("token required", status_code=401)
     resp = await call_next(request)
-    if request.url.path.startswith("/assets") or request.url.path in ("/", "/popout", "/obs/chat", "/obs/activity"):
+    if request.url.path.startswith("/assets") or request.url.path in ("/", "/popout", "/obs/chat", "/obs/activity", "/obs/follow"):
         resp.headers["cache-control"] = "no-cache"     # always revalidate: a new Multi build must never show stale scripts
     return resp
 
@@ -232,6 +232,32 @@ def _obs_get(kind):
     if saved is None and kind == "chat":
         saved = obs_mod.IVAN_CHAT       # first run: the look Ivan already had in Synchra
     return obs_mod.sanitize(kind, saved)
+
+
+def _live_page():
+    return FileResponse(STATIC / "live.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/obs/poll")
+def obs_poll():
+    return _live_page()
+
+
+@app.get("/obs/predict")
+def obs_predict():
+    return _live_page()
+
+
+@app.get("/obs/hype")
+def obs_hype():
+    return _live_page()
+
+
+@app.get("/api/live-state")
+async def live_state():
+    """Current poll / prediction / hype train from the Host (null when none or the Host is down)."""
+    d = await host_feed.live_state()
+    return {"poll": d.get("poll"), "prediction": d.get("prediction"), "hype": d.get("hype")}
 
 
 @app.get("/obs/{kind}")
