@@ -1473,6 +1473,20 @@
       "importance": 49
     },
     {
+      "command": "!allow",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!allow [user]",
+      "description": "Releases a message AutoMod is holding (the newest one, or the newest from that user).",
+      "examples": [
+        "!allow leo"
+      ],
+      "section": "Stream",
+      "importance": 49
+    },
+    {
       "command": "!announce",
       "aliases": [],
       "action": "PinguinoHost",

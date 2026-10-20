@@ -17,7 +17,7 @@ namespace PinguinoHost
     public static class Control
     {
         [ThreadStatic] public static bool Synthetic;   // set around Dispatch calls that do not come from Twitch chat
-        static readonly string[] Cmds = { "!poll", "!predict", "!lock", "!resolve", "!cancel", "!slow", "!emote-only", "!emoteonly", "!followers", "!subs-only", "!subsonly", "!announce", "!title", "!game", "!shield", "!marker", "!ad", "!vip", "!unvip", "!raid", "!confirm", "!unraid" };
+        static readonly string[] Cmds = { "!poll", "!predict", "!lock", "!resolve", "!cancel", "!slow", "!emote-only", "!emoteonly", "!followers", "!subs-only", "!subsonly", "!announce", "!title", "!game", "!allow", "!shield", "!marker", "!ad", "!vip", "!unvip", "!raid", "!confirm", "!unraid" };
         public static bool IsCommand(string cmd) { return Cmds.Contains(cmd); }
         static string CfgP { get { return Path.Combine(HostApi.DataDir, "config", "control.json"); } }
         static string RaidP { get { return Path.Combine(HostApi.DataDir, "config", "raid_list.json"); } }
@@ -82,6 +82,7 @@ namespace PinguinoHost
                     case "!subs-only": case "!subsonly": res = Settings("subs", args, say); break;
                     case "!announce": res = Announce(args, say); break;
                     case "!title": case "!game": res = Retitle(cmd == "!title", a, say); break;
+                    case "!allow": res = AutomodHeld.Allow(args, say); break;
                     case "!marker": res = Marker(a, say); break;
                     case "!shield": if (!owner) { res = "refused: broadcaster only"; break; } res = Shield(args, say); break;
                     case "!ad": if (!owner) { res = "refused: broadcaster only"; break; } res = Ad(args, say); break;

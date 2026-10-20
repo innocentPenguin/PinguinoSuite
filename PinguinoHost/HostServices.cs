@@ -167,10 +167,11 @@ namespace PinguinoHost
                 new[] { "channel.poll.begin", "1", "broadcaster_user_id", "opt" }, new[] { "channel.poll.progress", "1", "broadcaster_user_id", "opt" }, new[] { "channel.poll.end", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.prediction.begin", "1", "broadcaster_user_id", "opt" }, new[] { "channel.prediction.progress", "1", "broadcaster_user_id", "opt" }, new[] { "channel.prediction.lock", "1", "broadcaster_user_id", "opt" }, new[] { "channel.prediction.end", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.hype_train.begin", "2", "broadcaster_user_id", "opt" }, new[] { "channel.hype_train.progress", "2", "broadcaster_user_id", "opt" }, new[] { "channel.hype_train.end", "2", "broadcaster_user_id", "opt" },
+                new[] { "automod.message.hold", "1", "broadcaster_user_id", "opt" }, new[] { "automod.message.update", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.goal.begin", "1", "broadcaster_user_id", "opt" }, new[] { "channel.goal.progress", "1", "broadcaster_user_id", "opt" }, new[] { "channel.goal.end", "1", "broadcaster_user_id", "opt" } };
             foreach (var s in subs)
             {
-                var cond = new JObject { { s[2], bid } }; if (s[0] == "channel.follow") cond["moderator_user_id"] = bid;
+                var cond = new JObject { { s[2], bid } }; if (s[0] == "channel.follow" || s[0].StartsWith("automod.")) cond["moderator_user_id"] = bid;
                 var body = new JObject { { "type", s[0] }, { "version", s[1] }, { "condition", cond }, { "transport", new JObject { { "method", "websocket" }, { "session_id", session } } } };
                 var resp = await http.PostAsync(HostApi.Helix + "/eventsub/subscriptions", new StringContent(body.ToString(), Encoding.UTF8, "application/json"));
                 if (!resp.IsSuccessStatusCode) { if (s.Length < 4) HostApi.EventSubRefused++; Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes"); Clog.Warn("eventsub", "subscription " + s[0] + " refused (HTTP " + (int)resp.StatusCode + (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : ", check token scopes") + ")"); }
@@ -214,6 +215,7 @@ namespace PinguinoHost
                 case "channel.goal.begin": case "channel.goal.progress": case "channel.goal.end":
                     a["eventType"] = "TwitchGoal"; a["state"] = t.Substring(13); a["userName"] = U("broadcaster_user_login"); a["x.id"] = U("id"); a["x.type"] = U("type"); a["x.description"] = U("description"); a["x.isAchieved"] = U("is_achieved");
                     a["x.current"] = U("current_amount"); a["x.target"] = U("target_amount"); a["x.startedAt"] = U("started_at"); break;
+                case "automod.message.hold": case "automod.message.update": AutomodHeld.Note(t, e); return;
                 case "stream.online": a["eventType"] = "StreamOnline"; break;
                 case "stream.offline": a["eventType"] = "StreamOffline"; break;
                 case "channel.channel_points_custom_reward_redemption.add": a["eventType"] = "TwitchRedeem"; a["userName"] = U("user_login"); a["title"] = (string)e["reward"]?["title"] ?? ""; a["input"] = U("user_input"); a["cost"] = (int?)e["reward"]?["cost"] ?? 0; break;
