@@ -201,7 +201,7 @@ def run():
         s, ps = call("GET", "/api/prestream")
         ids = {i["id"] for i in ps["items"]}
         check("Console", "prestream items all have help", s == 200 and all(i["help"] for i in ps["items"]), sorted(ids))
-        check("Console", "Twitch down is a FAIL, optional ones WARN", next(i for i in ps["items"] if i["id"] == "conn-twitch")["status"] == "fail" and next(i for i in ps["items"] if i["id"] == "conn-discord")["status"] == "warn")
+        check("Console", "Twitch down is a FAIL, optional ones pass (skipped)", next(i for i in ps["items"] if i["id"] == "conn-twitch")["status"] == "fail" and next(i for i in ps["items"] if i["id"] == "conn-discord")["status"] == "pass")
         s, it = call("GET", "/api/integrations")
         check("Console", "integrations items with help + test path", s == 200 and len(it["items"]) == 4 and all(i["help"] and i["test"] for i in it["items"]))
         s, r = call("POST", "/api/test/twitch")

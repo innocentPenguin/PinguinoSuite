@@ -780,7 +780,7 @@ async def geom_set(label: str, request: Request):
 async def events_in(request: Request):
     b = await request.json()
     ev = str(b.get("type", ""))
-    if ev not in ("follow", "redeem", "sub", "resub", "gift", "raid", "announcement"):
+    if ev not in ("follow", "redeem", "sub", "resub", "gift", "raid", "announcement", "raid_out", "poll", "prediction", "hype"):
         raise HTTPException(400, "unknown event type")
     plat = b.get("platform", "twitch")
     if plat not in connectors:
@@ -789,7 +789,7 @@ async def events_in(request: Request):
     user = str(b.get("user", "someone"))[:60]
     text = str(b.get("text") or {"follow": f"{user} followed", "redeem": f"{user} redeemed a reward", "sub": f"{user} subscribed",
                                   "resub": f"{user} resubscribed", "gift": f"{user} gifted subs", "raid": f"{user} is raiding",
-                                  "announcement": user}[ev])[:300]
+                                  "announcement": user}.get(ev, f"{ev} {user}"))[:300]
     m = ChatMessage(id=f"evt:{plat}:{n}", platform=plat, channel=config.settings()["channel"], user_id=str(b.get("user_id") or user),
                     user=user.lower(), display=user, text=text, ts=time.time(), raw_type=ev, event=ev, amount=int(b.get("amount") or 0))
     inbox.put(m)
