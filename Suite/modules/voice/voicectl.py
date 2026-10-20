@@ -276,8 +276,13 @@ class Control:
             if e.code == 404:
                 self._say("The Host cannot do that yet")
                 return self._log("unsupported", "the Host has no endpoint for this yet (ask 02 to add it)", action=act, by=by)
+            msg = ""
+            try:
+                msg = str(json.loads(e.read() or b"{}").get("error", ""))
+            except Exception:
+                pass
             self._say("That did not work")
-            return self._log("failed", f"Host answered HTTP {e.code}", action=act, by=by)
+            return self._log("failed", (msg or f"Host answered HTTP {e.code}")[:140], action=act, by=by)
         except Exception as e:
             self._say("That did not work")
             return self._log("failed", str(e)[:120], action=act, by=by)

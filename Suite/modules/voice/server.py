@@ -54,7 +54,7 @@ def token_ok(headers):
 # ------------------------------------------------------------------ Host activity feed -> events
 def _host_get(path):
     req = urllib.request.Request(HOST_URL + path)
-    tok = os.environ.get("PINGUINO_API_TOKEN")
+    tok = os.environ.get("PINGUINO_MODULE_TOKEN") or os.environ.get("PINGUINO_API_TOKEN")
     if tok:
         req.add_header("Authorization", "Bearer " + tok)
     with urllib.request.urlopen(req, timeout=4) as r:
