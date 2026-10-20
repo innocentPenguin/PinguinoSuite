@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:08 - Host restart (!rank live refresh)
+
+- Restarted Host via Update-Module: !rank for Ivan refreshes from the unofficial tracker.gg endpoint (5 min cache, 30 min pause when blocked, last-known fallback, !setrank override 24h). Not yet checked against the real tracker: watch Host log for rank warnings.
+
 ## 2026-10-20 08:05 - Host restart (refollow, Helper chime, !rank, Marsh opt-in)
 
 - Restarted Host via Update-Module: 6c9999f follow items carry refollow; 01be950 Helper random chime (rate limited, honours !unping); 8cda53f !rank/!setrank (rank.json) + rocketrankbot in bot lists; Marsh opt-in (hidden_sources emptied, default seed removed, trusted). /api/live 200. Marsh and checklist edits committed by 00 on Ivan's direct instruction.
