@@ -17,7 +17,7 @@ namespace PinguinoHost
     ///   streakBest / streakCurrent / streakAt   the watch streak they shared (Streaks).
     /// Gifts and bits are kept in their own permanent ledger (Data\boards\events.json): chat_events.json forgets old events, this one does not. It is filled from chat_events.json
     /// (merged, the same event within 20 s counts once) and from the live Twitch events. Bots, practice players and anonymous gifters are left out.
-    /// GET /api/boards, POST /api/boards/refresh. Pushed to the site (POST {SiteBoardsUrl}, default https://innocentpenguin.com/api/bot/boards, Bearer BOT_API_KEY) when
+    /// GET /api/boards, POST /api/boards/refresh. Gifts and bits are pushed to the site (POST {SiteSupportersUrl}, default https://innocentpenguin.com/api/bot/supporters {gifts:{login:n},bits:{login:n}}, Bearer BOT_API_KEY) when
     /// "ForwardToSite" is on, every 5 minutes if something changed.</summary>
     public static class Boards
     {
@@ -168,29 +168,32 @@ namespace PinguinoHost
             if (push && Lease.MayRun) PushToSite(r);
             return r;
         }
+        // The site reads lifetime gifts and bits from its supporter tally: POST /api/bot/supporters {gifts:{login:n}, bits:{login:n}} (each login's number REPLACES the earlier one, max 3000 logins a call).
+        // The watch streaks reach the site through the viewer profiles (roles.watchStreakBest / watchStreakCurrent, pushed by Pipeline/push-profiles.mjs).
         static void PushToSite(JObject r)
         {
             var s = Latest.Settings(); if ((bool?)s["ForwardToSite"] != true) { _pushNote = "off (ForwardToSite)"; return; }
             string key = Vault.Get("BOT_API_KEY"); if (key == "") key = Environment.GetEnvironmentVariable("BOT_API_KEY") ?? "";
             if (key == "") { _pushNote = "no key (vault name BOT_API_KEY)"; return; }
-            var body = new JObject { { "updatedAt", r["updatedAt"] }, { "users", r["users"] } };
-            string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(r["users"].ToString(Newtonsoft.Json.Formatting.None))));
+            string ch = (string)r["streamerLogin"] ?? "";
+            var rows = ((JObject)r["users"]).Properties().Where(p => p.Name != ch && ((int)p.Value["gifts"] > 0 || (int)p.Value["bits"] > 0)).OrderBy(p => p.Name, StringComparer.Ordinal).ToList();
+            string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(string.Join("|", rows.Select(p => p.Name + ":" + (int)p.Value["gifts"] + ":" + (int)p.Value["bits"])))));
             if (hash == _lastPushHash && (DateTime.UtcNow - _lastPush).TotalMinutes < 30) return;
-            if (!hash.Equals(_lastPushHash) || (DateTime.UtcNow - _lastPush).TotalMinutes >= 30)
+            try
             {
-                try
-                {
-                    using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(20) })
+                using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(20) })
+                    for (int i = 0; i < Math.Max(1, rows.Count); i += 2500)
                     {
-                        var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(body.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
+                        var gifts = new JObject(); var bits = new JObject();
+                        foreach (var p in rows.Skip(i).Take(2500)) { if ((int)p.Value["gifts"] > 0) gifts[p.Name] = (int)p.Value["gifts"]; if ((int)p.Value["bits"] > 0) bits[p.Name] = (int)p.Value["bits"]; }
+                        var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteSupportersUrl"] ?? "https://innocentpenguin.com/api/bot/supporters") { Content = new StringContent(new JObject { { "gifts", gifts }, { "bits", bits } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
                         rq.Headers.Add("Authorization", "Bearer " + key);
                         var resp = h.SendAsync(rq).Result;
                         if (!resp.IsSuccessStatusCode) { _pushNote = "site answered HTTP " + (int)resp.StatusCode; _lastPush = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the totals (HTTP " + (int)resp.StatusCode + ")"); return; }
                     }
-                    _lastPushHash = hash; _lastPush = DateTime.UtcNow; _pushNote = "ok (" + ((JObject)r["users"]).Count + " people)";
-                }
-                catch (Exception ex) { _pushNote = "error: " + ex.Message; _lastPush = DateTime.UtcNow.AddMinutes(-25); }
+                _lastPushHash = hash; _lastPush = DateTime.UtcNow; _pushNote = "ok (" + rows.Count + " people)";
             }
+            catch (Exception ex) { _pushNote = "error: " + ex.Message; _lastPush = DateTime.UtcNow.AddMinutes(-25); }
         }
         public static string PushNote() { return _pushNote; }
     }

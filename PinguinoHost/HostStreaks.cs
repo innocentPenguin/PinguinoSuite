@@ -180,8 +180,8 @@ namespace PinguinoHost
             if (group == "top")
             {
                 var b = (JArray)Api(5)["board"];
-                say(b.Count == 0 ? "Nobody has shared a watch streak yet. When Twitch offers it, share yours in chat and it lands on the board! " + LeaderLink
-                    : "Top watch streaks (best shared): " + string.Join(" | ", b.Select((x, i) => (i + 1) + ". " + (string)x["name"] + " " + (int)x["best"])) + " - full board: " + LeaderLink);
+                say(b.Count == 0 ? "Nobody has shared a watch streak yet. When Twitch offers it, share yours in chat and it lands on the board! Full list: " + LeaderLink
+                    : "Top watch streaks (best shared): " + string.Join(" | ", b.Select((x, i) => (i + 1) + ". " + (string)x["name"] + " " + (int)x["best"])) + " Full list: " + LeaderLink);
                 return true;
             }
             if (u == null)
