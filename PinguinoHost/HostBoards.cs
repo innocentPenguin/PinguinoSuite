@@ -97,6 +97,7 @@ namespace PinguinoHost
             var s = new HashSet<string>();
             try { var j = SubsImport.ParseJ(File.ReadAllText(Path.Combine(HostApi.DataDir, "chat_profiles.json")))["users"] as JObject; if (j != null) foreach (var p in j.Properties()) if ((bool?)p.Value["bot"] == true) s.Add(p.Name); } catch (Exception) { }
             try { var b = SubsImport.ParseJ(File.ReadAllText(Path.Combine(HostApi.DataDir, "bots.json")))["Bots"] as JObject; if (b != null) foreach (var p in b.Properties()) { string acc = ((string)p.Value["Account"] ?? "").ToLowerInvariant(); if (acc != "") s.Add(acc); } } catch (Exception) { }
+            try { var b = SubsImport.ParseJ(File.ReadAllText(Path.Combine(Root, "boards", "banned_accounts.json")))["accounts"] as JObject; if (b != null) foreach (var p in b.Properties()) s.Add(p.Name.ToLowerInvariant()); } catch (Exception) { }   // banned accounts are never credited
             return s;
         }
         static readonly Regex BotName = new Regex(@"(bot|b0t)$|^practice\d{2,3}$", RegexOptions.Compiled);
