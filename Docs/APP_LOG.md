@@ -4,6 +4,7 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 
 | When | Event | Details |
 |---|---|---|
+| 2026-10-20 ~02:58 | Host rebuild+restart (Update-Module host, stream offline): StreamerBotRunning checks the process, not port 8080. /api/cutover now streamerBotRunning:false. | 00 |
 | 2026-10-20 ~02:55 | Listen restart: an orphan Listen server from 16:17 (old code, no mic fix) still held port 8765, so the restarted Listen could not bind (errno 10048). Killed the orphan, restarted Listen; new one owns 8765. | 00 |
 | 2026-10-20 ~02:45 | Host restart (Update-Module host, stream offline): a39272c Helper follow-ups (Java/Bedrock -> just the IP, 4-min follow-up help, console steps, join/register answers). /api/live 200. | 00 |
 | 2026-10-20 ~01:40 | Host rebuild+restart (Update-Module host, stream offline): e105809 Helper context gate (only steps in on real asks, cooldowns, no repeats). Build 0 errors, /api/live 200. | 00 |
