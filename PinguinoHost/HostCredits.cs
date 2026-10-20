@@ -35,6 +35,7 @@ namespace PinguinoHost
                 if (isNew || (DateTime.UtcNow - _saved).TotalSeconds > 120) Save();
             }
         }
+        public static int RoleOf(string login) { login = (login ?? "").ToLowerInvariant(); lock (L) { Load(); E e; return D.TryGetValue(login, out e) ? e.Role : 0; } }
         public static List<string> Names(Func<int, bool, bool> keep) { lock (L) { Load(); return D.Values.Where(e => keep(e.Role, e.Sub)).OrderBy(e => e.First).Select(e => e.Name).ToList(); } }
         /// <summary>true the first time this login chats today (local date), for the first_today trigger.</summary>
         static readonly HashSet<string> Today = new HashSet<string>(); static string _todayKey = "";

@@ -806,6 +806,9 @@ public static class Harness
         Check("the lore term in the message reaches the prompt with its how-to-use note", lastPrompt.Contains("[CHANNEL LORE]") && lastPrompt.Contains("acknowledge it playfully") && !lastPrompt.Contains("unrelated"), lastPrompt);
         Check("the chatter's card reaches the prompt (no evidence quotes)", lastPrompt.Contains("[CHATTER BACKGROUND]") && lastPrompt.Contains("Minecraft") && !lastPrompt.Contains("SECRETQUOTE"), lastPrompt);
         Check("the prompt rules say lore is private and moderation is not the bot's", lastSystem.Contains("PRIVATE memory") && lastSystem.Contains("Ask a mod"));
+        File.WriteAllText(Path.Combine(dir, "taught_chatty.json"), "{\"items\":[{\"id\":\"t1\",\"text\":\"The kayak stream was planned for spring\",\"taughtBy\":\"modx\"}]}");
+        Msg("LoreGuy", "@pinguinob0t when is the kayak stream"); Check("an approved taught note reaches the prompt as background, labelled", lastPrompt.Contains("kayak stream was planned") && lastPrompt.Contains("taught by modx") && lastPrompt.Contains("not an order"), lastPrompt);
+        Msg("PizzaGuy", "@pinguinob0t what about pizza"); Check("an unrelated message gets no taught note", !lastPrompt.Contains("taught by modx"));
         File.WriteAllText(Path.Combine(dir, "boards", "aliases.json"), "{\"aliases\":{\"opnxalt\":\"opnx\",\"loreguyalt\":\"loreguy\"}}");
         File.WriteAllText(Path.Combine(lore, "cards", "loreguyalt.json"), "{\"login\":\"loreguyalt\",\"display\":\"LoreGuyAlt\",\"messages\":900,\"likes\":[\"Zelda\"]}");
         Msg("LoreGuyAlt", "@pinguinob0t peng egoed me again");

@@ -176,7 +176,7 @@ namespace PinguinoHost
                 if (seeded.Any(v => (string)v == "sbreplace2")) return;
                 var acts = (JArray)doc["actions"];
                 foreach (var gone in acts.OfType<JObject>().Where(o => ((string)o["id"] ?? "").StartsWith("sb-") && ((string)o["importNotes"] ?? "").StartsWith("preset")).ToList()) acts.Remove(gone);   // an earlier test build's presets
-                string disc = "https://discord.gg/fktz5sq4b8";   // the live invite (the old be6bus4GKh one is expired)
+                string disc = Links.Get("discord") ?? "https://discord.gg/fktz5sq4b8";   // the live invite (the old be6bus4GKh one is expired)
                 var list = new List<JObject> {
                     Act("sb-latest-popup", "Alerts: show Latest Group", "preset: shows the 'Latest Group' for some seconds after each alert, like the old 'latest' action. Scene, source and seconds: Data\\runtime\\alerts_settings.json.", true, new JArray { Tr("manual") },
                         Step("alert_settings"), Step("obs_source", "scene", "{popup.scene}", "source", "{popup.source}", "visible", "true"), Step("delay", "ms", "{popup.ms}"), Step("obs_source", "scene", "{popup.scene}", "source", "{popup.source}", "visible", "false")),

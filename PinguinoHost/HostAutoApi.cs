@@ -118,6 +118,11 @@ namespace PinguinoHost
                 if (p == "/api/helper/review" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, HelperReview.List(c.Request.QueryString["kind"], c.Request.QueryString["q"], lim).ToString(), "application/json"); return true; }
                 if (p == "/api/helper/review" && m == "POST") { var hb = Body(c); Write(c, HelperReview.SetNote((string)hb["id"], (string)hb["note"]).ToString(), "application/json"); return true; }
             }
+            if (p == "/api/teach" && m == "GET") { Write(c, Teach.Api(c.Request.QueryString["status"]).ToString(), "application/json"); return true; }
+            if (p == "/api/teach" && m == "POST") { Write(c, Teach.Post(Body(c)).ToString(), "application/json"); return true; }
+            if (p == "/api/teach/decide" && m == "POST") { Write(c, Teach.Decide(Body(c)).ToString(), "application/json"); return true; }
+            if (p == "/api/links" && m == "GET") { var lj = Links.Doc(); lj["mismatches"] = Links.Audit(ChannelLore.AllEntries()); Write(c, lj.ToString(), "application/json"); return true; }
+            if (p == "/api/links" && m == "POST") { var lb = Body(c); lock (typeof(Links)) { var ld = Links.Doc(); var lk = (JObject)ld["links"]; if (lb["links"] is JObject nl) foreach (var pr in nl.Properties()) lk[pr.Name.ToLowerInvariant()] = pr.Value; System.IO.File.WriteAllText(System.IO.Path.Combine(HostApi.DataDir, "links.json"), ld.ToString(), new UTF8Encoding(false)); } Write(c, "{\"ok\":true}", "application/json"); return true; }
             if (p == "/api/lore" && m == "GET") { Write(c, ChannelLore.Api().ToString(), "application/json"); return true; }
             if (p == "/api/lore" && m == "POST") { Write(c, ChannelLore.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/profile-sync" && m == "GET") { Write(c, ProfileSync.Api().ToString(), "application/json"); return true; }

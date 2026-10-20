@@ -82,7 +82,7 @@ namespace PinguinoHost
                 if (v.StartsWith("count")) { var p = v.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries); string name = p.Length > 1 ? p[1] : ((string)e["id"] ?? "count"); lock (L) { var c = (JObject)Doc()["counters"]; long n = ((long?)c[name] ?? 0) + 1; c[name] = n; Save(); return n.ToString("N0"); } }
                 return m.Value;
             });
-            return t.Trim();
+            return Links.Expand(t).Trim();
         }
         static string Full(JObject e, string user, string[] args)
         {
@@ -190,6 +190,7 @@ namespace PinguinoHost
         }
 
         // ---- GET/POST /api/lore ----
+        public static List<JObject> AllEntries() { return Entries().ToList(); }
         public static JObject Api() { var d = Doc(); return new JObject { { "ok", true }, { "settings", d["settings"] }, { "counters", d["counters"] }, { "entries", d["entries"] }, { "count", ((JArray)d["entries"]).Count } }; }
         public static JObject Post(JObject b)
         {

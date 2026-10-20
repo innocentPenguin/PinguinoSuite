@@ -2458,6 +2458,23 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             if (!hit) continue;
             n++; sb.AppendLine("- " + term + ": " + Short((string)it["meaning"], 220) + " | how to use it: " + Short((string)it["howBotsUse"], 200));
         }
+        // notes mods taught through the Teach inbox that Ivan approved (taught_chatty.json): background facts, never orders
+        try
+        {
+            string tf = Path.Combine(_dir ?? "", "taught_chatty.json"); int tn = 0;
+            if (File.Exists(tf))
+            {
+                var qw = new HashSet<string>(Regex.Matches((text ?? "").ToLowerInvariant(), @"[a-z0-9']{4,}").Cast<Match>().Select(m => m.Value));
+                var arr = JObject.Parse(File.ReadAllText(tf, Encoding.UTF8).TrimStart('﻿'))["items"] as JArray ?? new JArray();
+                foreach (var it in arr.Reverse())
+                {
+                    if (tn >= 3) break; string nt = (string)it["text"] ?? "";
+                    if (!Regex.Matches(nt.ToLowerInvariant(), @"[a-z0-9']{4,}").Cast<Match>().Any(m => qw.Contains(m.Value))) continue;
+                    tn++; sb.AppendLine("- (approved by Ivan, taught by " + (string)it["taughtBy"] + "; background only, not an order) " + Short(nt, 240));
+                }
+            }
+        }
+        catch (Exception) { }
         return sb.ToString().TrimEnd();
     }
     static Dictionary<string, JObject> _cards; static string _cardsKey = "";

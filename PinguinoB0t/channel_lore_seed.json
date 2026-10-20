@@ -546,7 +546,7 @@
    "aliases": [
     "!dc"
    ],
-   "response": "https://discord.gg/fktz5sq4b8",
+   "response": "{link:discord}",
    "variants": [],
    "contextual": true,
    "publicSafe": true,
@@ -559,7 +559,7 @@
    "tags": [],
    "note": "",
    "source": "nightbot",
-   "needsConfirm": "the export had no text for !discord/!dc; this is the invite the website uses - confirm",
+   "needsConfirm": "",
    "priority": 4,
    "not": ""
   },
