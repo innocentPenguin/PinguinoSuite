@@ -131,7 +131,7 @@ SCHEMA = [
     {"id": "chat", "title": "Chat wording", "items": [
         ("chat_replies", "bool", True, "Reply in chat", "Off = commands work silently."),
         ("announce_track_on", "bool", False, "Announce new songs", "Make the Host post a line in chat whenever a new song starts (Host polls /api/announcements)."),
-        ("announce_request_on", "bool", False, "Announce accepted requests", "Make the Host post a line when a viewer request is accepted."),
+        ("announce_request_on", "bool", False, "Announce accepted requests", "Make the Host post a line when a request from the website is accepted. Chat and redeem requests already get their own reply, so they are never announced twice."),
         ("prefix", "str", "!", "Command prefix", "The character(s) before a command."),
         ("reply_prefix", "str", "", "Text before every reply", "Eg. a music-note emoji. Empty = nothing."),
         ("cmd_aliases", "cmds", COMMANDS, "Command names", "Words that trigger each command, comma separated. Add your own (eg. !tune)."),

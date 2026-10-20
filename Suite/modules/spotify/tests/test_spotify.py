@@ -1108,7 +1108,7 @@ class Cycle2Tests(unittest.TestCase):
         self.api.playing = "spotify:track:t1"
         self.e.tick()
         a = self.e.announcements(0)
-        self.assertEqual([l["text"] for l in a["lines"]], ["ann requested Song 5!", "Now playing: Song 1 - Artist"])
+        self.assertEqual([l["text"] for l in a["lines"]], ["Now playing: Song 1 - Artist"])
         self.assertEqual(self.e.announcements(a["seq"])["lines"], [])
         self.clock.t += 200
         self.assertEqual(self.e.announcements(0)["lines"], [], "stale lines are not replayed")

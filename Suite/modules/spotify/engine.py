@@ -422,7 +422,7 @@ class Engine:
                 t = self._genre_tag(t, s, roles)
                 ok, code, ctx = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()), self.session_counts.get(user.lower(), 0), self.last_global)
                 if ok:
-                    return self._accept(t, user, roles, redeem)
+                    return self._accept(t, user, roles, redeem, from_site=track is not None)
                 first_fail = first_fail or (code, ctx, t)
                 if code in ("user_blocked", "closed", "mod_only", "sub_only", "full", "limit", "cooldown"):
                     break           # not a track problem: trying other search results won't help
@@ -450,7 +450,7 @@ class Engine:
                     return {**t, "_genre": g}
         return t
 
-    def _accept(self, t, user, roles, redeem):
+    def _accept(self, t, user, roles, redeem, from_site=False):
         s = self.settings
         tier = rules.tier_for(s, roles, redeem, user)
         self.session_counts[user.lower()] = self.session_counts.get(user.lower(), 0) + 1
@@ -469,7 +469,7 @@ class Engine:
         idx = self.queue.index(item["id"])
         mins = round(self.eta_ms(idx) / 60000)
         self.alert = {"id": item["id"], "text": f"{user} requested {t['name']}", "ts": self.clock()}
-        if s["announce_request_on"]:
+        if s["announce_request_on"] and from_site:  # chat/redeem requests already get the 'added' reply: one line per event
             self._announce("announce_request", user=user, song=label, title=t["name"], artist=base["artist"])
         r = self._r(True, "added", **base, pos=idx + 1, eta=f", plays in ~{mins} min" if mins >= 2 else "")
         r["item"] = item["id"]
