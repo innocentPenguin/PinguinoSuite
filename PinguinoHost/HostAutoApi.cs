@@ -106,6 +106,8 @@ namespace PinguinoHost
                 string f = IntroPage(p == "/subfooter" ? "subfooter_controls.html" : "subfooter.html"); if (f == null) { c.Response.StatusCode = 404; return true; }
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
+            if (p == "/api/boards" && m == "GET") { Write(c, Boards.Api().ToString(), "application/json"); return true; }
+            if (p == "/api/boards/refresh" && m == "POST") { Write(c, Boards.Refresh(true).ToString(), "application/json"); return true; }
             if (p == "/api/streaks" && m == "GET") { Write(c, Streaks.Api().ToString(), "application/json"); return true; }
             if (p == "/api/streaks/backfill" && m == "POST") { Write(c, Streaks.Backfill().ToString(), "application/json"); return true; }
             if (p == "/api/subs" && m == "GET") { Write(c, SubsImport.Api().ToString(), "application/json"); return true; }

@@ -162,6 +162,7 @@ namespace PinguinoHost
         // ---- chat commands ----
         static readonly Dictionary<string, DateTime> Cool = new Dictionary<string, DateTime>();
         static bool Cooling(string key, int sec) { lock (Cool) { DateTime t; if (Cool.TryGetValue(key, out t) && (DateTime.UtcNow - t).TotalSeconds < sec) return true; Cool[key] = DateTime.UtcNow; return false; } }
+        const string LeaderLink = "https://innocentpenguin.com/leaderboards#streaks";
         static int CoolSec(string env, int d) { int v; return int.TryParse(Environment.GetEnvironmentVariable(env), out v) ? v : d; }
         static string D(string iso) { DateTime t; return DateTime.TryParse(iso, null, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out t) ? t.ToString("MMM d, yyyy", CultureInfo.InvariantCulture) : ""; }
 
@@ -179,8 +180,8 @@ namespace PinguinoHost
             if (group == "top")
             {
                 var b = (JArray)Api(5)["board"];
-                say(b.Count == 0 ? "Nobody has shared a watch streak yet. When Twitch offers it, share yours in chat and it lands on the board!"
-                    : "Top watch streaks (best shared): " + string.Join(" | ", b.Select((x, i) => (i + 1) + ". " + (string)x["name"] + " " + (int)x["best"])));
+                say(b.Count == 0 ? "Nobody has shared a watch streak yet. When Twitch offers it, share yours in chat and it lands on the board! " + LeaderLink
+                    : "Top watch streaks (best shared): " + string.Join(" | ", b.Select((x, i) => (i + 1) + ". " + (string)x["name"] + " " + (int)x["best"])) + " - full board: " + LeaderLink);
                 return true;
             }
             if (u == null)
