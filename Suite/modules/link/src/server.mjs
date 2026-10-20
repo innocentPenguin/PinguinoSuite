@@ -1,3 +1,6 @@
+// INDEX server.mjs: HTTP server of the Link module. runMacro (macro runner + stream guards), readJson, tokenOk/hostOk (auth),
+// serve (all routes: peer routes first, then token-gated /api/*). Related: mesh.mjs (devices), obs.mjs (OBS), settings.mjs, macros.mjs, page.html.
+// Docs: Docs/PinguinoLink/INDEX.md
 import http from 'node:http';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';

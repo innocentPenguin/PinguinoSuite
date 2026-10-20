@@ -1,3 +1,5 @@
+// INDEX mesh.mjs: device mesh over Tailscale only. createMesh: addressing, pairing (code + Allow), peer messages, heartbeat, status.
+// Related: server.mjs (routes /api/mesh/*), settings.mjs (mesh.*), Docs/PinguinoLink/11-DEVICE-MESH.md, Docs/PinguinoLink/INDEX.md
 // Device mesh transport (P1): registry, pairing by code, per-message peer authentication, broadcast to peers and
 // forwarding of peer messages to the Suite core. Election of the master is the CORE's job (MODULE_CONTRACT "Devices: master / auxiliary").
 // Transport is Tailscale only: peers must be tailnet addresses. No custom crypto: the tailnet (WireGuard) encrypts,

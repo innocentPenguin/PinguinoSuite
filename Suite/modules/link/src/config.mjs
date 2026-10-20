@@ -28,7 +28,7 @@ export const DEFAULTS = {
     stop:  [{ type: 'StopStream' }],
     mute:  [{ type: 'ToggleInputMute', data: { inputName: 'Mic/Aux' } }],
   },
-  claude: { enabled: true, cli: 'claude' },   // doctor escalation; uses the local Claude Code CLI
+  claude: { enabled: false, cli: 'claude' },   // doctor escalation, OFF until you turn it on; uses the local Claude Code CLI
 };
 
 export function load() {
