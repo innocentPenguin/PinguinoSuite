@@ -73,6 +73,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 06:20 - Full rebuild + relaunch (01 b29ec25 sign-in fix, 02 cab671e Nightbot lore)
+
+- Core + app rebuilt and relaunched (first Build-All failed on a locked Host dll; leftover Host/module processes stopped, second build ok). Suite 'Sign in again' no longer cuts the OAuth url.
+- Host now serves channel lore: 135 Nightbot commands imported (16 exact-command-only), commands-doc 154 viewer / 53 mod / 115 channel. Link restarted earlier under the core.
+- Needs Ivan: confirm !discord invite (not in the Nightbot export); keep Nightbot and PotatBotat on until spam filters / economy are checked.
+
 ## 2026-10-20 06:06 - Host restart (02 aae0872 profile sync)
 
 - Live sub sync from Helix: Twitch 171 active subs vs 244 on profiles; 58 active subs had no profile (stubs now created); 131 profiles marked subbed but not on Twitch.
