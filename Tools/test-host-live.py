@@ -4,7 +4,7 @@ dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file_
 PORT = 8903; d = tempfile.mkdtemp(prefix='pglive_')
 json.dump({'Channel': 'trial', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 json.dump({'WasLive': False, 'LastLiveSeen': 1}, open(os.path.join(d, 'settings.json'), 'w'))
-json.dump({'bob': {'Username': 'bob', 'Platform': 'epic', 'GameId': 'x', 'TwitchId': '1', 'Strikes': 2, 'Wins': 0, 'Losses': 0, 'Points': 0}}, open(os.path.join(d, 'players.json'), 'w'))
+json.dump({'bob': {'Username': 'bob', 'Platform': 'epic', 'GameId': 'x', 'TwitchId': '1', 'Strikes': 2, 'StrikeDecayAt': int(time.time()) - 90000, 'Wins': 0, 'Losses': 0, 'Points': 0}}, open(os.path.join(d, 'players.json'), 'w'))
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env['PINGUINO_COMPAT_WS_PORT'] = '8904'; env['PINGUINO_LIVE'] = '1'
 host = subprocess.Popen(['dotnet', dll, '--sim', '--data', d], env=env, stdin=subprocess.PIPE, stdout=open(os.path.join(d, 'out.txt'), 'wb'), stderr=subprocess.STDOUT)
 res = []
@@ -18,7 +18,7 @@ try:
     st = json.load(open(os.path.join(d, 'settings.json')))
     res.append(('settings.json WasLive became true without a website key', st.get('WasLive') is True))
     pl = json.load(open(os.path.join(d, 'players.json')))
-    res.append(('new stream took one strike off', pl['bob']['Strikes'] == 1))
+    res.append(('one temporary strike expired after a full day (decay is per day, not per stream)', pl['bob']['Strikes'] == 1))
 finally:
     host.kill(); print(d)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)

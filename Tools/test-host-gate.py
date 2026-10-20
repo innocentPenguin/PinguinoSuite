@@ -5,7 +5,7 @@ PORT = 8899
 d = tempfile.mkdtemp(prefix='pggate_')
 json.dump({'Channel': 'trial', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 goal = datetime.datetime.now() + datetime.timedelta(seconds=45)
-json.dump({'LiveOnly': False, 'GateEnabled': True, 'GateQuietPerMin': 2, 'GateBusyPerMin': 6, 'GateWindowSec': 60, 'CountdownGoLiveAt': goal.strftime('%H:%M:%S'),
+json.dump({'LiveOnly': False, 'ChatReplies': True, 'GateEnabled': True, 'GateQuietPerMin': 2, 'GateBusyPerMin': 6, 'GateWindowSec': 60, 'CountdownGoLiveAt': goal.strftime('%H:%M:%S'),
            'CountdownTimes': '20s,10s', 'CountdownLine': 'COUNT {left}', 'CountdownLineNow': 'GO NOW'}, open(os.path.join(d, 'chat_settings.json'), 'w'))
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env['PINGUINO_COMPAT_WS_PORT'] = '8900'
 host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
