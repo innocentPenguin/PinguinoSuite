@@ -1,3 +1,4 @@
+# INDEX: HTTP API on 127.0.0.1:8772 (stdlib). Guards (host_ok/origin_ok/token_ok), Host polling (poll_loop, is_live), config/master/mute/speak/event/preset endpoints, chat-command, prestream, sounds, counters, control (g_control..p_control_try), review (g_reports..p_review_apply, g_incidents), router class H, main(). Related: brain.py, config.py, voicectl.py, review.py, static/index.html, module.json.
 """Pinguino Voice - talking co-host. stdlib HTTP on 127.0.0.1:8772. UI: /   API below.
 Silent unless the master switch is on. Page calls are same-origin; other callers need the module/app token."""
 import hmac

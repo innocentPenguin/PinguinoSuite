@@ -1,3 +1,4 @@
+# INDEX: Text cleaning: scrub_secrets, clean_name, profanity mask, squash repeats, pronounce, clean_message, finish, templates (render), quiet hours. Related: brain.py.
 """Turn raw event/chat text into something safe and pleasant to say aloud.
 
 Order: secrets -> links -> emoji -> repeats -> profanity -> pronunciation -> length. Secrets are NEVER read: anything that

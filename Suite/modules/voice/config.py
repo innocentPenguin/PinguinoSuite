@@ -1,3 +1,4 @@
+# INDEX: Defaults + validation: PERSONAS/EVENTS tables, HELP (one line per setting), defaults(), normalize() (clamps everything incl. review/control sections), load/save/backups, presets (preset_*), built-in presets (_cozy/_hype/_deadpan/_chaos). Related: server.py, brain.py.
 """Pinguino Voice settings: defaults, one-line help for every setting, validation, presets, backups.
 
 Everything is data: personas, event rules, role/platform overrides, limits, queue rules, quiet hours, pronunciation,

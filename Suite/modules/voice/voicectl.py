@@ -1,3 +1,4 @@
+# INDEX: Spoken control (OFF by default): wake-word + grammar parse (strip_wake, parse), name resolve, class Control (hear/propose/check/confirm/cancel/run/expire/state) calling Host /api/channel/update and /api/mod/timeout, read_loop polling Listen transcript. Related: server.py (endpoints), tests/test_review_control.py.
 """Spoken control: "pinguinobot change the game to ...", "... change the title to ...", "... timeout <user> for 5 minutes".
 
 Reads Ivan's lines from Listen (GET /api/segments of the live session - Listen is not changed) and acts through the Host.

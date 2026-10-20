@@ -1,3 +1,4 @@
+# INDEX: Writes Console jsonl lines (source 'voice'/'control'): log/info/warn/error. Related: Data/runtime/console.
 """Console contract logger: one JSON line per event in <PINGUINO_DATA_DIR>/console/voice.jsonl. Never raises; scrubs secrets."""
 import json
 import os

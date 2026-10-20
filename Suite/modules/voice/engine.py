@@ -1,3 +1,4 @@
+# INDEX: Audio: Sapi (PowerShell worker), Cloud (OpenAI/ElevenLabs, vault keys), numpy FX (stretch, pitch, echo, reverb, robot, radio, distortion, tremolo), stingers, render(), Player (sounddevice/winsound), devices(). Related: brain.py.
 """Speech engine: Windows SAPI (System.Speech via a resident PowerShell worker) -> numpy pitch/effects -> WAV -> winsound.
 
 Synthesis and playback are separate: `synth()` returns WAV bytes (used by page previews, which never touch the PC speakers),

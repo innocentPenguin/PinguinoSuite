@@ -1,3 +1,4 @@
+# INDEX: Decision pipeline class Brain: master/mute/quiet gate, _handle (rules, limits, persona, wording), _enqueue/_run (queue + playback), timers/milestones, soundcheck, panic, replay, history. Related: config.py, textproc.py, engine.py.
 """The decision layer: event in -> (rules, limits, wording, persona) -> queued line -> spoken, with every outcome logged.
 
 Safety contract: while `master` is off (or muted / quiet-mute) NOTHING is synthesised or played; the attempt is only logged

@@ -132,8 +132,15 @@ Code: `Suite\modules\spotify\` (stdlib Python, no extra deps). Each big file has
 ## Link (PinguinoLink, unit 04)
 Module code `Suite/modules/link/`; full map in [PinguinoLink/INDEX.md](PinguinoLink/INDEX.md). Design set in `PinguinoLink/00-..11-*.md`.
 
+## Multi (PinguinoMulti, unit 03, port 8766) - owner: 03
+Full file/function index: [PinguinoMulti/INDEX.md](PinguinoMulti/INDEX.md). Code: Suite/modules/multi. Server sections are listed in the INDEX block at the top of server.py.
+- Chat core: server.py (REST + /ws), pipeline.py, store.py (SQLite), connectors/{twitch,discord,youtube,tiktok}.py.
+- Dashboard `/?type=dash`: static/dash.js (Activity Feed + Chat, viewer counts, text size, resize, split halves, profiles). Viewer counts: viewers.py.
+- OBS widgets `/obs/{chat,activity,follow}`: obs.py (settings, Synchra import/export), static/obs.html, static/obs_ui.js (editor). Doc: PinguinoMulti/OBS_WIDGETS.md.
+- Host link: host_feed.py (reads Host /api/activity: follow, redeem, mod notices, raid_out, poll, prediction, hype; sends Twitch lines via Host POST /api/say).
+
 ## Voice (owner: 06) - Speak (module `voice`, :8772) and Listen (module `listen`, :8765)
-Docs: `Docs\VOICE.md` (Speak, cycles 1-6). Each Speak .py file starts with an `# INDEX:` line.
+Docs: `Docs/VOICE.md` (Speak, cycles 1-6). Each Speak .py file starts with an `# INDEX:` line.
 
 ### Speak - Suite/modules/voice
 | What | Where |
@@ -142,26 +149,20 @@ Docs: `Docs\VOICE.md` (Speak, cycles 1-6). Each Speak .py file starts with an `#
 | Spoken-control / review endpoints; settings never changed by config POST | `server.py` g_control:425, g_reports:460, g_incidents:478, _locked:136 |
 | Decision pipeline (gates, limits, persona, queue, play) | `brain.py` Brain:20, _handle:168, _run:300 |
 | Engines, FX, player | `engine.py` Sapi:45, Cloud:132, render:365, Player:402 |
-| Defaults, help text, validation, presets | `config.py` defaults:257, normalize\:356, preset_list:524 |
+| Defaults, help text, validation, presets | `config.py` defaults:257, normalize:356, preset_list:524 |
 | Text safety (secrets, profanity, links) | `textproc.py` scrub_secrets:29, clean_message:79 |
-| Spoken control (game/title/timeout; OFF by default; confirm + caps) | `voicectl.py` parse\:62, Control:133, read_loop:314 |
+| Spoken control (game/title/timeout; OFF by default; confirm + caps) | `voicectl.py` parse:62, Control:133, read_loop:314 |
 | Hourly review + incidents | `review.py` gather:58, analyse:215, Reviewer:281 |
 | Page | `static/index.html` (tab "Review & control" = `V.review`) |
 | Tests | `tests/` run `python -m unittest discover -s tests` |
-| Runtime data | `Datauntimeoice\`: config, history.jsonl, reports/, incidents.jsonl, control.jsonl, speaking.json |
+| Runtime data | `Data
+untimeoice\`: config, history.jsonl, reports/, incidents.jsonl, control.jsonl, speaking.json |
 
 ### Listen - Suite/modules/listen
 | What | Where |
 |---|---|
-| API (status, sessions, segments, voice-log, upload/ingest) | `server.py` routes by `@app`; autolearn_loop:10, start_mic:9 |
+| API (status, sessions, segments, voice-log, upload/ingest) | `server.py` routes by `@app`; autolearn_loop:198, start_mic:168 |
 | Mic capture, VAD, device fallback | `live.py` Live:134, resolve_device:34 |
 | Voice commands (phrase only) | `voice.py` matches:148, handle_segment:254 |
 | VOD/file ingest (bounded memory, restart recovery) | `ingest.py` recover:67, _run:128; `audioio.py` iter16k |
 | Correction learning | `learn.py` learn_from_correction:136 |
-
-## Multi (PinguinoMulti, unit 03, port 8766) - owner: 03
-Full file/function index: [PinguinoMulti/INDEX.md](PinguinoMulti/INDEX.md). Code: Suite/modules/multi. Server sections are listed in the INDEX block at the top of server.py.
-- Chat core: server.py (REST + /ws), pipeline.py, store.py (SQLite), connectors/{twitch,discord,youtube,tiktok}.py.
-- Dashboard `/?type=dash`: static/dash.js (Activity Feed + Chat, viewer counts, text size, resize, split halves, profiles). Viewer counts: viewers.py.
-- OBS widgets `/obs/{chat,activity,follow}`: obs.py (settings, Synchra import/export), static/obs.html, static/obs_ui.js (editor). Doc: PinguinoMulti/OBS_WIDGETS.md.
-- Host link: host_feed.py (reads Host /api/activity: follow, redeem, mod notices, raid_out, poll, prediction, hype; sends Twitch lines via Host POST /api/say).

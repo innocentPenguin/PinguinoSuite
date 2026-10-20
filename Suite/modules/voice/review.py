@@ -1,3 +1,4 @@
+# INDEX: Hourly self-review: gather() logs, chk_* checks, analyse() score, reports in Data/runtime/voice/reports, incidents.jsonl, apply_suggestion allow-list, class Reviewer (run/tick). Related: server.py, voicectl.py.
 """Hourly self-review: compare what Speak said with what Ivan said, what chat said and what the logs recorded.
 
 Rule based and local (no cloud, no AI call): every finding shows its evidence and, where a safe setting would help, a one-click suggestion
