@@ -73,6 +73,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 03:57 CDT - Host restart (leaderboard totals, e1a2e83)
+- Update-Module host; /api/live 200, /api/boards ok. Pushes totals to site /api/bot/boards every 5 min (05 adding endpoint). !topstreak links /leaderboards#streaks.
+
 ## 2026-10-20 03:53 CDT - Host restart (watch streaks, 88dd8b0)
 - Update-Module host; /api/live 200. First start backfilled /api/streaks: 130 people from chat logs (top: yoohoo15 240, flayir_ 210).
 
