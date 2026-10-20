@@ -311,7 +311,10 @@ public class CPHInline
         public int UserCooldownSec { get; set; } = 30;                // the same viewer gets the same kind of answer at most this often
         public int InfoCooldownSec { get; set; } = 8;                 // anti-flood between any two info answers
         public int McCooldownSec { get; set; } = 180;                 // the same viewer gets the Minecraft question / answer at most this often
-        public int McGlobalCooldownSec { get; set; } = 20;            // ...and chat as a whole at most this often
+        public int McGlobalCooldownSec { get; set; } = 45;            // ...and chat as a whole at most this often (a burst of "minecraft" gets ONE reply)
+        public bool ContextGate { get; set; } = true;                 // only step in when the viewer is really asking / wanting to join / needing help (reads the recent chat); off = the old pattern-only behaviour
+        public int AnsweredWindowSec { get; set; } = 120;             // someone else (a viewer or mod) already answered this person this recently: stay out
+        public int SameAnswerGapSec { get; set; } = 45;               // the same kind of info answer is not repeated to anyone within this many seconds
         public int ConfirmSeconds { get; set; } = 60;                 // how long a "say yes" question stays open
         public bool UseAi { get; set; } = true;                       // ask the AI only when the patterns do not understand a practical-sounding message
         public int MaxAiCallsPerHour { get; set; } = 40;
@@ -421,6 +424,7 @@ public class CPHInline
         if (text == "" || login == "") return false;
         if (login == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(login) || IsOtherBot(login)) return false;
         _curLogin = login; _curDisplay = display; _curText = text;
+        Remember(login, text, ArgS("reply.userName") != "" ? ArgS("reply.userName") : ArgS("reply.userLogin"));
         if (_cfg.LiveOnly && !IsLive()) return false;
         text = text.Trim();
 
@@ -463,8 +467,55 @@ public class CPHInline
                 AskAi(text, out intent, out epic);
 
             if (intent == "") return false;
+            if (_cfg.ContextGate && !ContextOk(login, text, intent)) return false;   // passing mention / talk between viewers / already answered: stay out
             return Respond(login, display, intent, epic);
         }
+    }
+
+    // ---- context gate: the helper only steps in when the viewer is really asking or needing help ----
+    class Line { public long At; public string Login, Text, ReplyTo; }
+    static readonly List<Line> _recent = new List<Line>();
+    static readonly Dictionary<string, long> _sameAnswer = new Dictionary<string, long>();
+    void Remember(string login, string text, string replyTo)
+    {
+        lock (_recent)
+        {
+            _recent.Add(new Line { At = Now(), Login = login, Text = text, ReplyTo = (replyTo ?? "").ToLower() });
+            if (_recent.Count > 60) _recent.RemoveRange(0, _recent.Count - 60);
+        }
+    }
+    // an explicit ask: a question, "how do I", "can I join", "I wanna play", "what's the ip", "is the server up", new here ...
+    static readonly Regex RxStrongAsk = new Regex(@"\?|\b(how\s+(do|can|to|does|would|should)\b|can\s+(i|we|someone|anyone|me)\b|could\s+(i|we|someone)\b|where('?s|\s+is|\s+do|\s+can)\b|what'?s\b|whats\b|what\s+is\b|is\s+(the|there|it)\b|i\s+(wanna|want\s+to|need|would\s+like|'?d\s+like)\b|wanna\s+(join|play)\b|let\s+me\b|lemme\b|add\s+me\b|put\s+me\b|gimme\b|give\s+me\b|tell\s+me\b|anyone\b|someone\b|help\b|new\s+here\b|first\s+time\b|how\s+does\b)|\b(pls|plz|please)\b", RegexOptions.IgnoreCase);
+    // a statement, a negation or a "why" rant is not a request for help
+    static readonly Regex RxNotAsk = new Regex(@"\b(i'?m|im)\s+not\b|\b(not|never|n'?t)\s+(even\s+)?(trying|going|gonna)\b|\bi\s+(don'?t|dont|didn'?t|haven'?t|havent|lwky|literally)\b|\bwhy\s+(would|do|does|did)\b|\bup\s+to\s+the\s+people\b", RegexOptions.IgnoreCase);
+    static readonly Regex RxAnswerish = new Regex(@"smp\.innocentpenguin|hc\.innocentpenguin|\bpeng\d\b|lobby\s*(name|code)|\b!(ip|mc|lobby|discord|register|join|queue)\b|\bbedrock\b|\bjava\b|\bport\b|\bpassword\b", RegexOptions.IgnoreCase);
+
+    bool ContextOk(string login, string text, string intent)
+    {
+        bool info = intent == "mc_info" || intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "do_join";
+        if (!info) return true;                                                   // register / leave / position / song / mmr are direct requests
+        long now = Now();
+        string replyTo = ArgS("reply.userName") != "" ? ArgS("reply.userName") : ArgS("reply.userLogin");
+        // 1) meant for somebody else: a reply to another viewer, or starting with their @name (the bots' own names do not count)
+        if (!string.IsNullOrEmpty(replyTo) && replyTo.ToLower() != (_cfg.BotAccount ?? "").ToLower() && !PgIsBotAccount(replyTo.ToLower()) && !IsOtherBot(replyTo.ToLower())) return false;
+        var at = Regex.Match(text, @"^@(\w+)");
+        if (at.Success)
+        {
+            string tgt = at.Groups[1].Value.ToLower();
+            if (tgt != (_cfg.BotAccount ?? "").ToLower() && !PgIsBotAccount(tgt) && !IsOtherBot(tgt) && !tgt.Contains("pinguino")) return false;
+        }
+        // 2) it has to be a real ask, not a statement or a passing mention
+        if (RxNotAsk.IsMatch(text) || !(RxStrongAsk.IsMatch(text) || (intent == "mc_info" && IsMcQuestion(text)))) return false;
+        lock (_recent)
+        {
+            // 3) somebody else (a viewer or mod) already answered this person a moment ago
+            foreach (var l in _recent.Where(x => now - x.At <= _cfg.AnsweredWindowSec && x.Login != login && !PgIsBotAccount(x.Login) && !IsOtherBot(x.Login)))
+                if ((l.Text ?? "").ToLower().Contains("@" + login) || l.ReplyTo == login) { if (RxAnswerish.IsMatch(l.Text ?? "") || (l.Text ?? "").Length >= 12) return false; }
+            // 4) the same kind of answer just went out to someone else: do not repeat it to everybody
+            long last; if (_sameAnswer.TryGetValue(intent, out last) && now - last < _cfg.SameAnswerGapSec) return false;
+        }
+        lock (_recent) _sameAnswer[intent] = now;
+        return true;
     }
 
     static readonly System.Text.RegularExpressions.Regex RxMcIp = new System.Text.RegularExpressions.Regex(@"\b(minecraft\s+)?(server\s+)?ip\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);

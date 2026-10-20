@@ -19,9 +19,9 @@ public static class Harness
     }
 
     static bool Routed;   // behave as if the router started the helper
-    static void Msg(string user, string text, bool mod = false)
+    static void Msg(string user, string text, bool mod = false, string reply = null)
     {
-        var a = CPHProxy.Args; a.Clear();
+        var a = CPHProxy.Args; a.Clear(); if (reply != null) a["reply.userName"] = reply;
         a["message"] = text; a["userName"] = user.ToLower(); a["user"] = user; a["userId"] = "id_" + user.ToLower();
         a["isModerator"] = mod; a["role"] = mod ? 3 : 1; a["isBroadcaster"] = false; a["rawInput"] = "orig raw";
         if (Routed) a["pinguinoRouted"] = true;
@@ -36,7 +36,7 @@ public static class Harness
     static void Settings(string extra = "")
     {
         string p = Path.Combine(dir, "helper_settings.json");
-        File.WriteAllText(p, "{\"LobbyName\":\"peng3\",\"LobbyPassword\":\"\",\"UserCooldownSec\":0,\"InfoCooldownSec\":0,\"McCooldownSec\":0,\"McGlobalCooldownSec\":0" + extra + "}");
+        File.WriteAllText(p, "{\"LobbyName\":\"peng3\",\"LobbyPassword\":\"\",\"UserCooldownSec\":0,\"InfoCooldownSec\":0,\"McCooldownSec\":0,\"McGlobalCooldownSec\":0,\"SameAnswerGapSec\":0" + extra + "}");
         File.SetLastWriteTimeUtc(p, DateTime.UtcNow.AddSeconds(++stamp));
         typeof(CPHInline).GetField("_cfgChecked", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.MinValue);
     }
@@ -254,7 +254,7 @@ public static class Harness
         Msg("F2", "u guys also play minecraft"); Check("'also play minecraft' is not a question either", Last() == null, Last());
         Msg("F3", "just use !ip for the minecraft server"); Check("talk about the !ip command is ignored", Last() == null, Last());
         Msg("F4", "how do I join the minecraft server?"); Check("a real question still gets Java or Bedrock", Last() != null && Last().Contains("Bedrock"), Last());
-        Settings(",\"FactsUrl\":\"\",\"McCooldownSec\":120,\"McGlobalCooldownSec\":0");
+        Settings(",\"FactsUrl\":\"\",\"McCooldownSec\":120,\"McGlobalCooldownSec\":0,\"SameAnswerGapSec\":0");
         Msg("R1", "what is the minecraft ip"); Check("first ask is answered with the question", Last() != null && Last().Contains("Bedrock"), Last());
         Msg("R1", "minecraft ip?"); Check("asking again is not answered with the same question again", Last() == null, Last());
         Msg("R1", "minecraft"); Check("typing just minecraft does nothing", Last() == null, Last());
@@ -268,6 +268,25 @@ public static class Harness
         Msg("S1", "what song is this?"); Check("what's playing comes from the Spotify module", Last() != null && Last().Contains("Song X") && Last().Contains("Band"), Last());
         T.GetField("_pgTestHttp", bf).SetValue(null, null);
         Msg("M1", "what's my mmr"); Check("MMR question points at !mmr", Last() != null && Last().Contains("!mmr"), Last());
+
+        // context gate (2026-10-19/20 chat log): passing mentions, talk between viewers and already-answered questions get no helper reply
+        Settings(",\"FactsUrl\":\"\""); aiReply = "x";
+        foreach (var fp in new[] { "i dont know what minecraft is", "Cg5 Minecraft animals and other stuff", "Meet me on Minecraft...", "Are you going to do Minecraft after this?", "hmm u guys also play minecraft interesting <:",
+                                    "About Minecraft", "when r we doing Minecraft", "i lwky haven't played Minecraft since 1.21 sooo idk", "why would we need a bot that tells us the Minecraft ip, when there's !ip",
+                                    "its still up to the people to know when to play and how to play", "I'm not even trying to join the match", "minecraft", "Minecraft", "rocket league" })
+        { Msg("G" + Math.Abs(fp.GetHashCode() % 9999), fp); Check("no helper reply to: " + fp, Last() == null, Last()); }
+        Msg("Gr1", "can i join?", false, "someone"); Check("a reply to another viewer is not the helper's business", Last() == null, Last());
+        Msg("Gr2", "@yoohoo15 you can join with the ip"); Check("a message addressed to another viewer is left alone", Last() == null, Last());
+        Msg("GmodX", "@Gnew1 the minecraft ip is smp.innocentpenguin.com java", true); Msg("Gnew1", "whats the minecraft ip"); Check("someone already answered this person: the helper stays out", Last() == null, Last());
+        Msg("Gnew2", "how do i join the minecraft server?"); Check("a real question with nobody answering still gets help", Last() != null && Last().Contains("Bedrock"), Last());
+        Msg("Gnew3", "is the minecraft server up?"); Check("'is the minecraft server up?' is a real ask", Last() != null, Last());
+        Msg("Gnew4", "i wanna join"); Check("'i wanna join' still gets the welcome help", Last() != null, Last());
+        Msg("Gnew5", "whats the code"); Check("'whats the code' still gets the lobby", Last() != null && Last().Contains("peng3"), Last());
+        Settings(",\"FactsUrl\":\"\",\"SameAnswerGapSec\":45");
+        ((System.Collections.IDictionary)T.GetField("_sameAnswer", bf).GetValue(null)).Clear();
+        Msg("Gb1", "whats the minecraft ip?"); Check("burst: the first ask is answered", Last() != null, Last());
+        Msg("Gb2", "what's the minecraft ip"); Msg("Gb3", "ip?"); Check("burst: the next askers inside the gap get no second reply", Last() == null, Last());
+        Settings(",\"FactsUrl\":\"\"");
 
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
