@@ -19,7 +19,7 @@ namespace PinguinoHost
         public static Func<bool> ObsConnected = () => false;
         static readonly string[] Secret = { "UserToken", "ObsPassword" };
         static readonly string[] Plain = { "Channel", "ClientId", "SenderId", "BroadcasterId", "ObsHost", "ObsPort", "OverlayPort" };
-        public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers moderation:read channel:read:redemptions channel:moderate clips:edit channel:read:ads moderator:manage:shoutouts moderator:read:chatters";
+        public const string Scopes = "chat:read chat:edit user:write:chat moderator:manage:banned_users channel:read:subscriptions bits:read moderator:read:followers moderation:read channel:read:redemptions channel:moderate clips:edit channel:read:ads moderator:manage:shoutouts moderator:read:chatters channel:manage:broadcast channel:manage:redemptions channel:read:goals channel:read:hype_train";
 
         static string FilePath { get { return Path.Combine(DataDir, "host_secrets.json"); } }
         // read-only views that also see the key vault (a plaintext value wins; Save always uses Load() so a vault value is never written back to a file)
@@ -59,6 +59,14 @@ namespace PinguinoHost
             if (a == "" && m == "") return !IsTauri(o);
             string h = r.Headers["Authorization"] ?? ""; string t = h.StartsWith("Bearer ") ? h.Substring(7) : (r.Headers["X-Pinguino-Token"] ?? "");
             return t != "" && (t == a || t == m);
+        }
+
+        /// <summary>module-only calls (Speak voice control): the module/API token is ALWAYS required, a same-origin page is not enough.</summary>
+        public static bool StrictTokenOk(HttpListenerRequest r)
+        {
+            string a = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? "", m = Environment.GetEnvironmentVariable("PINGUINO_MODULE_TOKEN") ?? "";
+            string h = r.Headers["Authorization"] ?? ""; string t = h.StartsWith("Bearer ") ? h.Substring(7) : (r.Headers["X-Pinguino-Token"] ?? "");
+            return t != "" && ((a != "" && t == a) || (m != "" && t == m));
         }
 
         // returns true when it answered the request

@@ -66,6 +66,14 @@ namespace PinguinoHost
                 if (f == null) { c.Response.StatusCode = 404; return true; }
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
+            if ((p == "/api/channel/update" || p == "/api/mod/timeout") && m == "POST")   // Speak module: module token always required, every call audit-logged
+            {
+                if (!HostApi.StrictTokenOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
+                var b = Body(c); JObject res; string who = "module:speak";
+                if (p == "/api/channel/update") { res = ChannelControl.Update((string)b["title"], (string)b["game"]); ChannelControl.Audit(who, "channel/update", "title=" + (string)b["title"] + " game=" + (string)b["game"] + " -> " + (bool?)res["ok"] + " " + (string)res["error"]); }
+                else { res = ChannelControl.Timeout((string)b["user"], (int?)b["seconds"] ?? 0, (string)b["reason"]); ChannelControl.Audit(who, "mod/timeout", "user=" + (string)b["user"] + " seconds=" + (int?)b["seconds"] + " reason=" + (string)b["reason"] + " -> " + (bool?)res["ok"] + " " + (string)res["error"]); }
+                Write(c, res.ToString(), "application/json"); return true;
+            }
             if (p == "/api/activity" && m == "GET")
             {
                 long since = long.TryParse(c.Request.QueryString["since"], out long sn) ? sn : 0; int lim = int.TryParse(c.Request.QueryString["limit"], out int ln) ? ln : 100;

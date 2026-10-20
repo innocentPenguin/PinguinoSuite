@@ -16,7 +16,9 @@ namespace PinguinoHost
             new[] { "moderator:manage:banned_users", "timeouts and bans from commands", "1" }, new[] { "channel:read:subscriptions", "sub alerts", "1" },
             new[] { "bits:read", "cheer alerts", "1" }, new[] { "moderator:read:followers", "follow alerts", "1" }, new[] { "moderation:read", "moderator checks", "1" },
             new[] { "channel:read:redemptions", "channel-point redemptions", "1" }, new[] { "channel:moderate", "bans/moderation events (ban alert)", "1" },
-            new[] { "clips:edit", "clips: !clip", "1" }, new[] { "channel:read:ads", "ads: !preroll / ad commands", "0" }, new[] { "moderator:manage:shoutouts", "native Twitch shoutouts (!shout)", "0" }, new[] { "moderator:read:chatters", "who is in the chatroom (points and watch time)", "0" } };
+            new[] { "clips:edit", "clips: !clip", "1" }, new[] { "channel:read:ads", "ads: !preroll / ad commands", "0" }, new[] { "moderator:manage:shoutouts", "native Twitch shoutouts (!shout)", "0" }, new[] { "moderator:read:chatters", "who is in the chatroom (points and watch time)", "0" },
+            new[] { "channel:manage:broadcast", "!title / !game and the Speak channel update", "0" }, new[] { "channel:manage:redemptions", "creating and editing channel-point rewards", "0" },
+            new[] { "channel:read:goals", "goal announcements", "0" }, new[] { "channel:read:hype_train", "hype train announcements", "0" } };
 
         static JObject AccountStreamer()
         {
