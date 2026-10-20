@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -119,12 +120,12 @@ namespace PinguinoHost
                 var firstDate = rs.Where(r => r.When > DateTime.MinValue).Select(r => r.When).DefaultIfEmpty(DateTime.MinValue).Min();
                 bool founder = rs.Any(r => r.Founder);
                 var u = users[grp.Key] as JObject;
-                if (u == null) { u = new JObject { { "login", grp.Key }, { "tier", tier }, { "tenure", tenure }, { "streak", streak }, { "subscribed", firstDate == DateTime.MinValue ? "" : firstDate.ToString("yyyy-MM-ddTHH:mm:ssZ") }, { "founder", founder }, { "subType", newest.SubType }, { "lapsed", false }, { "firstImportedAt", now }, { "importedAt", now }, { "source", Path.GetFileName(file) } }; users[grp.Key] = u; added++; continue; }
+                if (u == null) { u = new JObject { { "login", grp.Key }, { "tier", tier }, { "tenure", tenure }, { "streak", streak }, { "subscribed", firstDate == DateTime.MinValue ? "" : firstDate.ToString("yyyy-MM-ddTHH:mm:ssZ") }, { "founderCsv", founder }, { "founder", founder }, { "subType", newest.SubType }, { "lapsed", false }, { "firstImportedAt", now }, { "importedAt", now }, { "source", Path.GetFileName(file) } }; users[grp.Key] = u; added++; continue; }
                 var before = u.ToString(Newtonsoft.Json.Formatting.None);
                 u["tier"] = Math.Max((int?)u["tier"] ?? 0, tier); u["tenure"] = Math.Max((int?)u["tenure"] ?? 0, tenure); u["streak"] = Math.Max((int?)u["streak"] ?? 0, streak);
                 string old = (string)u["subscribed"] ?? ""; string nw = firstDate == DateTime.MinValue ? "" : firstDate.ToString("yyyy-MM-ddTHH:mm:ssZ");
                 if (nw != "" && (old == "" || string.CompareOrdinal(nw, old) < 0)) u["subscribed"] = nw;
-                if (founder) u["founder"] = true; else if (u["founder"] == null) u["founder"] = false;
+                if (founder) u["founderCsv"] = true; else if (u["founderCsv"] == null) u["founderCsv"] = (bool?)u["founder"] == true;
                 bool newerFile = string.CompareOrdinal(exportAt.ToString("o"), (string)master["lastExportAt"] ?? "") >= 0;
                 if (newerFile && newest.SubType != "") u["subType"] = newest.SubType;
                 if (newerFile) u["lapsed"] = false;
@@ -139,6 +140,89 @@ namespace PinguinoHost
             }
             ((JObject)master["processed"])[hash] = new JObject { { "file", Path.GetFileName(file) }, { "rows", rows.Count }, { "exportAt", exportAt.ToString("o") }, { "importedAt", now } };
             return new JObject { { "file", Path.GetFileName(file) }, { "rows", rows.Count }, { "added", added }, { "updated", updated }, { "lapsed", lapsed } };
+        }
+
+        // ---- FOUNDERS: Twitch's "Founders Badge Holders" page is the authority (the CSV flags only some). Data/subs/founders.json = {founders:{login:{entitledOn}}}.
+        // founder = in that list, or flagged by a CSV and not taken out of the list later. A CSV never clears it. A founders*.txt / founders*.json dropped in Data/subs/incoming REPLACES the list
+        // (a name that is no longer in it stops being a founder). txt: one login per line, optional date after it.
+        static string FoundersP { get { return Path.Combine(SubsDir, "founders.json"); } }
+        static readonly string[][] SeedFounders = {
+            new[] { "stinkyo1", "2026-03-13" }, new[] { "luhgeekski", "2026-03-13" }, new[] { "karebearr_", "2026-10-20" }, new[] { "yoohoo15", "2026-10-20" }, new[] { "wyatt104987", "2026-10-20" },
+            new[] { "ash_wagawaga", "2026-10-20" }, new[] { "shinobisninja1", "2026-10-20" }, new[] { "syddneeyyyy", "2026-10-20" }, new[] { "cosmicryozen", "2026-10-20" }, new[] { "phil_flock", "2026-10-20" } };
+        static JObject LoadFounders()
+        {
+            try { if (File.Exists(FoundersP)) { var f = ParseJ(File.ReadAllText(FoundersP)); if (f["founders"] == null) f["founders"] = new JObject(); if (f["processed"] == null) f["processed"] = new JObject(); return f; } } catch (Exception ex) { Clog.Warn("subs", "founders.json unreadable: " + ex.Message); }
+            var d = new JObject(); foreach (var x in SeedFounders) d[x[0]] = new JObject { { "entitledOn", x[1] } };
+            return new JObject { { "version", 1 }, { "updatedAt", DateTime.UtcNow.ToString("o") }, { "source", "seed (Twitch Founders Badge Holders page, Oct 20 2026)" }, { "founders", d }, { "processed", new JObject() } };
+        }
+        static JObject ParseFoundersFile(string text, string name)
+        {
+            var res = new JObject(); text = text.TrimStart('\uFEFF');
+            if (name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                var t = JToken.Parse(text); if (t is JObject && ((JObject)t)["founders"] != null) t = ((JObject)t)["founders"];
+                if (t is JArray) { foreach (var x in (JArray)t) { if (x.Type == JTokenType.String) res[((string)x).Trim().ToLowerInvariant()] = new JObject(); else if (x is JObject) { string lg = ((string)x["login"] ?? (string)x["username"] ?? "").Trim().ToLowerInvariant(); if (lg != "") res[lg] = new JObject { { "entitledOn", (string)x["entitledOn"] ?? "" } }; } } }
+                else if (t is JObject) foreach (var p in ((JObject)t).Properties()) res[p.Name.ToLowerInvariant()] = new JObject { { "entitledOn", p.Value.Type == JTokenType.String ? (string)p.Value : (string)p.Value["entitledOn"] ?? "" } };
+            }
+            else foreach (var line in text.Split('\n'))
+            {
+                var m = Regex.Match(line.Trim(), @"^@?([A-Za-z0-9_]{2,25})\b[\s,;:(-]*(.*?)\)?$"); if (!m.Success) continue;
+                if (line.TrimStart().StartsWith("#")) continue;
+                res[m.Groups[1].Value.ToLowerInvariant()] = new JObject { { "entitledOn", m.Groups[2].Value.Trim() } };
+            }
+            return res;
+        }
+        static bool EffectiveFounder(string login, JObject u, JObject list)
+        {
+            if (list[login] != null) return true;
+            return (bool?)u["founderCsv"] == true && (bool?)u["founderRemoved"] != true;
+        }
+        /// <summary>read the founders list (and any new founders file), then set master users' founder flag. returns true when the master changed.</summary>
+        static bool RefreshFounders(JObject master)
+        {
+            bool changed = false; var f = LoadFounders(); var list = (JObject)f["founders"]; bool listChanged = !File.Exists(FoundersP);
+            try
+            {
+                string inc = Path.Combine(SubsDir, "incoming");
+                if (Directory.Exists(inc))
+                    foreach (var fi in new DirectoryInfo(inc).GetFiles("founders*").Where(x => x.Extension.ToLowerInvariant() == ".txt" || x.Extension.ToLowerInvariant() == ".json").OrderBy(x => x.LastWriteTimeUtc))
+                    {
+                        string hash = BitConverter.ToString(SHA256.Create().ComputeHash(File.ReadAllBytes(fi.FullName))).Replace("-", "").ToLowerInvariant();
+                        if (((JObject)f["processed"])[hash] != null) continue;
+                        var nl = ParseFoundersFile(File.ReadAllText(fi.FullName, Encoding.UTF8), fi.Name);
+                        if (nl.Count == 0) { Clog.Warn("subs", fi.Name + ": no founders found in it, ignored"); continue; }
+                        foreach (var gone in list.Properties().Where(p => nl[p.Name] == null).Select(p => p.Name).ToList())   // taken out of the list = no longer a founder, whatever the CSV says
+                        { var mu = ((JObject)master["users"])[gone] as JObject; if (mu != null) mu["founderRemoved"] = true; }
+                        foreach (var p in nl.Properties()) { var mu = ((JObject)master["users"])[p.Name] as JObject; if (mu != null) mu["founderRemoved"] = false; }
+                        list = nl; f["founders"] = list; f["source"] = fi.Name; f["updatedAt"] = DateTime.UtcNow.ToString("o"); ((JObject)f["processed"])[hash] = fi.Name; listChanged = true; changed = true;
+                        Clog.Info("subs", "founders list replaced from " + fi.Name + " (" + list.Count + " founders)");
+                    }
+            }
+            catch (Exception ex) { Clog.Warn("subs", "founders file: " + ex.Message); }
+            foreach (var kv in ((JObject)master["users"]).Properties())
+            {
+                var u = (JObject)kv.Value; bool eff = EffectiveFounder(kv.Name, u, list);
+                if ((bool?)u["founder"] != eff) { u["founder"] = eff; changed = true; }
+                var fl = list[kv.Name] as JObject; string on = fl != null ? (string)fl["entitledOn"] ?? "" : ""; if (on != "" && (string)u["founderOn"] != on) { u["founderOn"] = on; changed = true; }
+            }
+            if (listChanged) { Directory.CreateDirectory(SubsDir); File.WriteAllText(FoundersP, f.ToString()); }
+            _founders = list;
+            return changed;
+        }
+        static JObject _founders = new JObject();
+
+        /// <summary>roles.founder for founders that are not subscribers in the master (they have no other sub fields).</summary>
+        static int ApplyFoundersToProfiles(JObject master)
+        {
+            int changed = 0; if (!Directory.Exists(ProfilesDir)) return 0;
+            var users = (JObject)master["users"];
+            foreach (var p in _founders.Properties().Where(p => users[p.Name] == null))
+            {
+                string f = Path.Combine(ProfilesDir, p.Name + ".json"); if (!File.Exists(f)) continue;
+                try { var prof = ParseJ(File.ReadAllText(f)); var roles = prof["roles"] as JObject ?? new JObject(); if ((bool?)roles["founder"] == true) continue; roles["founder"] = true; prof["roles"] = roles; File.WriteAllText(f, prof.ToString()); changed++; }
+                catch (Exception ex) { Clog.Warn("subs", "profile " + p.Name + ": " + ex.Message); }
+            }
+            return changed;
         }
 
         /// <summary>write the master into the profile files (only files that exist; a chatter without a profile is only in the master). Idempotent.</summary>
@@ -189,8 +273,9 @@ namespace PinguinoHost
                     catch (Exception ex) { Seen.Remove(fi.FullName); results.Add(new JObject { { "file", fi.Name }, { "error", ex.Message } }); Clog.Warn("subs", fi.Name + ": " + ex.Message); }
                 }
                 int profiles = 0;
+                if (RefreshFounders(master)) dirty = true;
                 if (dirty) { Directory.CreateDirectory(SubsDir); File.WriteAllText(MasterP, master.ToString()); }
-                if (dirty || File.Exists(MasterP)) profiles = ApplyToProfiles(master);   // also catches profiles rebuilt since the last pass
+                profiles = ApplyToProfiles(master) + ApplyFoundersToProfiles(master);   // also catches profiles rebuilt since the last pass
                 return new JObject { { "ok", true }, { "imported", results }, { "profilesUpdated", profiles }, { "users", ((JObject)master["users"]).Count } };
             }
         }
@@ -201,7 +286,7 @@ namespace PinguinoHost
             var active = users.Properties().Where(p => (bool?)p.Value["lapsed"] != true).ToList();
             return new JObject { { "ok", true }, { "lastExportAt", m["lastExportAt"] }, { "total", users.Count }, { "active", active.Count }, { "lapsed", users.Count - active.Count },
                 { "tiers", new JObject { { "t1", active.Count(p => (int?)p.Value["tier"] == 1) }, { "t2", active.Count(p => (int?)p.Value["tier"] == 2) }, { "t3", active.Count(p => (int?)p.Value["tier"] == 3) } } },
-                { "files", ((JObject)m["processed"]).Count }, { "watching", new JArray(WatchDirs()) }, { "users", users } };
+                { "files", ((JObject)m["processed"]).Count }, { "watching", new JArray(WatchDirs()) }, { "founders", LoadFounders()["founders"] }, { "users", users } };
         }
     }
 }

@@ -5,7 +5,7 @@ PORT = 8921; B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pgsubs_'); dl = tempfile.mkdtemp(prefix='pgdl_')
 json.dump({'Channel': 'trial', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 os.makedirs(os.path.join(d, 'profiles'))
-for u in ('shadowrlttv', 'carl', 'dana', 'nobody_here'):
+for u in ('shadowrlttv', 'carl', 'dana', 'nobody_here', 'yoohoo15', 'phil_flock'):
     json.dump({'login': u, 'roles': {'mod': False, 'vip': False, 'sub': False, 'subMonths': 0}, 'notes': 'keep'}, open(os.path.join(d, 'profiles', u + '.json'), 'w'))
 H = 'Username,Subscribe Date,Current Tier,Tenure,Streak,Sub Type,Founder\n'
 A = H + 'shadowrlttv,2026-09-17T01:28:47Z,Tier 2,6,6,recurring,false\nshadowrlttv,2026-06-21T03:24:37Z,Tier 1,6,6,recurring,false\ncarl,2026-10-11T22:36:11Z,Tier 1,1,1,gift,false\ndana,2026-01-02T00:00:00Z,Tier 3,9,4,recurring,true\n'
@@ -48,6 +48,20 @@ try:
     r = post('/api/subs/import'); a = get('/api/subs')
     chk('older export adds people but lapses nobody', a['total'] == 4 and a['users']['carl'].get('lapsed') is False and a['users']['shadowrlttv'].get('lapsed') is False)
     chk('files are copied next to the master', len(os.listdir(os.path.join(d, 'subs', 'files'))) == 3)
+    # founders: Twitch's list is the authority (seeded with the 10 badge holders); the CSV flags are kept; a founders file replaces the list
+    a = get('/api/subs')
+    chk('founders seeded with the 10 badge holders', len(a['founders']) == 10 and a['founders']['stinkyo1']['entitledOn'] == '2026-03-13')
+    chk('a founder who is not in any CSV gets roles.founder in the profile', prof('yoohoo15')['roles']['founder'] is True and prof('phil_flock')['roles']['founder'] is True)
+    chk('CSV founder flag is kept (dana) and carl is no founder', a['users']['dana']['founder'] is True and prof('dana')['roles']['founder'] is True and prof('carl')['roles']['founder'] is False)
+    inc = os.path.join(d, 'subs', 'incoming'); os.makedirs(inc, exist_ok=True)
+    open(os.path.join(inc, 'founders-test.txt'), 'w').write('# founders\ncarl 2026-01-01\nyoohoo15\n')
+    post('/api/subs/import'); a = get('/api/subs')
+    chk('a founders file replaces the list', set(a['founders']) == {'carl', 'yoohoo15'} and a['users']['carl']['founder'] is True and prof('carl')['roles']['founder'] is True)
+    chk('someone taken out of the list is no longer a founder', 'phil_flock' not in a['founders'] and a['founders']['carl']['entitledOn'] == '2026-01-01')
+    open(os.path.join(inc, 'founders-test2.json'), 'w').write('["carl"]')
+    post('/api/subs/import'); a = get('/api/subs')
+    chk('a json list works too; the same file is not applied twice', set(a['founders']) == {'carl'} and post('/api/subs/import')['imported'] == [])
+    chk('a later CSV import does not clear founders', a['users']['carl']['founder'] is True)
 finally:
     host.kill(); shutil.rmtree(dl, True)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)
