@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:02 - Listen restart (VODs memory fix)
+
+- Restarted Listen via Update-Module: 1c3b4ea decodes/transcribes VODs in 15-minute slices (was loading the whole VOD into RAM and dying), stranded jobs marked interrupted and re-queueable. Cause not reproduced live; Listen autolearn is ON (can transcribe on GPU during streams).
+
 ## 2026-10-20 07:58 - Host restart (site bridges, hidden shop)
 
 - Restarted Host via Update-Module: 813a60d (SiteTeach poller, hidden SiteShop, Economy Spend/Credit ledger, hidden !guess) and 73f2c94 (Chatty random chime only after buy_chatty). /api/live 200. Shop stays hidden (site flag OFF). Tests 33/33.
