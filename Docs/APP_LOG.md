@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 16:54 Host restarts (pre-stream batch)
+- Host rebuilt 0 errors, several times, now at 9684c2d: Plan 6 OBS/overlay API (e7fd136..4ec3ca0), clips-dump (e388e89, 278 clips), control layer ENABLED and live-tested (e55eaa5 era), Offline mode switch (8adb586, default OFF), !points regression fix + !downtime (e55eaa5), lore/fun replies sent as ChattyPinguino with Chatty canned file owning 87 commands (99190c7, 7257d8d, 3223158, 9684c2d), Helper Bedrock Connect console answer (03b719b); profiles re-pushed (1858).
+- Pending: Suite app rebuild (offline toggle 199ef63, c8ae770, b29ec25) after stream; !pm will keep printing the password (021/02 reversing e134683); customs/KOTH/lobby (051/05); 7 held edgy commands still answered by Host lore.
+
 ## 2026-10-20 16:14 Host restart (Plan 6 A-D)
 - Host rebuilt 0 errors with 02's e7fd136, ce87afe, e6bb0dd, 4ec3ca0: /api/obs/tree (live, connected), scene/item actions, overlay CRUD API, overlay assistant (OFF, needs key + enabled flag). /api/live 200.
 - Pending: 05 site UI for Master View, Anthropic key in vault, Ivan flips overlaychat enabled.
