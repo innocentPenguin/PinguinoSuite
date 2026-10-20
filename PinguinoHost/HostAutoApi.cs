@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
+using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -96,6 +96,14 @@ namespace PinguinoHost
                 if (p == "/api/channel/update") { res = ChannelControl.Update((string)b["title"], (string)b["game"]); ChannelControl.Audit(who, "channel/update", "title=" + (string)b["title"] + " game=" + (string)b["game"] + " -> " + (bool?)res["ok"] + " " + (string)res["error"]); }
                 else { res = ChannelControl.Timeout((string)b["user"], (int?)b["seconds"] ?? 0, (string)b["reason"]); ChannelControl.Audit(who, "mod/timeout", "user=" + (string)b["user"] + " seconds=" + (int?)b["seconds"] + " reason=" + (string)b["reason"] + " -> " + (bool?)res["ok"] + " " + (string)res["error"]); }
                 Write(c, res.ToString(), "application/json"); return true;
+            }
+            if (p == "/api/say" && m == "POST")   // modules (Multi, Speak): say one line in chat through the Host, so the 30 s duplicate guard and the no-retry-on-timeout rule apply
+            {
+                if (!HostApi.StrictTokenOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
+                var b = Body(c); string text = ((string)b["text"] ?? "").Trim();
+                if (text == "" || text.Length > 500) { Write(c, "{\"ok\":false,\"error\":\"text required (max 500 characters)\"}", "application/json"); return true; }
+                string via; bool ok = SendAs((string)b["bot"], text, out via);
+                Write(c, new JObject { { "ok", ok }, { "duplicate", via.StartsWith("duplicate") }, { "via", via } }.ToString(), "application/json"); return true;
             }
             if (p == "/api/activity" && m == "GET")
             {

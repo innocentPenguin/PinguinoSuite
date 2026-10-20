@@ -163,7 +163,10 @@ namespace PinguinoHost
                 new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.follow", "2", "broadcaster_user_id" },
                 new[] { "stream.online", "1", "broadcaster_user_id", "opt" }, new[] { "stream.offline", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.channel_points_custom_reward_redemption.add", "1", "broadcaster_user_id", "opt" },
-                new[] { "channel.ban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.unban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.add", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.remove", "1", "broadcaster_user_id", "opt" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" } };
+                new[] { "channel.ban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.unban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.add", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.remove", "1", "broadcaster_user_id", "opt" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" },
+                new[] { "channel.poll.begin", "1", "broadcaster_user_id", "opt" }, new[] { "channel.poll.progress", "1", "broadcaster_user_id", "opt" }, new[] { "channel.poll.end", "1", "broadcaster_user_id", "opt" },
+                new[] { "channel.prediction.begin", "1", "broadcaster_user_id", "opt" }, new[] { "channel.prediction.progress", "1", "broadcaster_user_id", "opt" }, new[] { "channel.prediction.lock", "1", "broadcaster_user_id", "opt" }, new[] { "channel.prediction.end", "1", "broadcaster_user_id", "opt" },
+                new[] { "channel.hype_train.begin", "2", "broadcaster_user_id", "opt" }, new[] { "channel.hype_train.progress", "2", "broadcaster_user_id", "opt" }, new[] { "channel.hype_train.end", "2", "broadcaster_user_id", "opt" } };
             foreach (var s in subs)
             {
                 var cond = new JObject { { s[2], bid } }; if (s[0] == "channel.follow") cond["moderator_user_id"] = bid;
@@ -173,6 +176,11 @@ namespace PinguinoHost
             }
         }
         static string _bid = "";
+        /// <summary>sim mode: "eventsub channel.poll.end {json event}" runs the same mapping as a real EventSub notification</summary>
+        public static void Simulate(string type, string json, Action<Dictionary<string, object>> raise)
+        {
+            var m = new JObject { { "metadata", new JObject { { "subscription_type", type } } }, { "payload", new JObject { { "event", JObject.Parse(json) } } } }; Handle(m, raise);
+        }
         static void Handle(JObject m, Action<Dictionary<string, object>> raise)
         {
             string t = (string)m["metadata"]["subscription_type"]; var e = m["payload"]["event"] as JObject; if (e == null) return;
@@ -182,7 +190,7 @@ namespace PinguinoHost
             {
                 case "channel.subscribe": if ((bool?)e["is_gift"] == true) return; a["eventType"] = "TwitchSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
                 case "channel.subscription.message": a["eventType"] = "TwitchReSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
-                case "channel.subscription.gift": a["eventType"] = "TwitchGiftBomb"; a["userName"] = (bool?)e["is_anonymous"] == true ? "Anonymous" : U("user_login"); a["tier"] = tier; a["total"] = (int?)e["total"] ?? 1; break;
+                case "channel.subscription.gift": a["eventType"] = "TwitchGiftBomb"; a["userName"] = (bool?)e["is_anonymous"] == true ? "Anonymous" : U("user_login"); a["tier"] = tier; a["total"] = (int?)e["total"] ?? 1; a["cumulative"] = (int?)e["cumulative_total"] ?? 0; a["anonymous"] = ((bool?)e["is_anonymous"] ?? false).ToString().ToLowerInvariant(); break;
                 case "channel.cheer": a["eventType"] = "TwitchCheer"; a["userName"] = U("user_login"); a["bits"] = (int?)e["bits"] ?? 0; break;
                 case "channel.raid":
                     if (U("from_broadcaster_user_id") == _bid && _bid != "") { a["eventType"] = "TwitchRaidOut"; a["userName"] = U("to_broadcaster_user_login"); a["target"] = U("to_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }
@@ -193,6 +201,15 @@ namespace PinguinoHost
                 case "channel.moderator.add": a["eventType"] = "TwitchMod"; a["userName"] = U("user_login"); a["moderator"] = U("broadcaster_user_login"); break;
                 case "channel.moderator.remove": a["eventType"] = "TwitchUnmod"; a["userName"] = U("user_login"); a["moderator"] = U("broadcaster_user_login"); break;
                 case "channel.follow": a["eventType"] = "TwitchFollow"; a["userName"] = U("user_login"); break;
+                case "channel.poll.begin": case "channel.poll.progress": case "channel.poll.end":
+                    a["eventType"] = "TwitchPoll"; a["state"] = t.Substring(13); a["userName"] = U("broadcaster_user_login"); a["x.id"] = U("id"); a["x.title"] = U("title"); a["x.choices"] = (e["choices"] ?? new JArray()).ToString(Newtonsoft.Json.Formatting.None);
+                    a["x.status"] = U("status"); a["x.endsAt"] = U("ends_at"); a["x.startedAt"] = U("started_at"); break;
+                case "channel.prediction.begin": case "channel.prediction.progress": case "channel.prediction.lock": case "channel.prediction.end":
+                    a["eventType"] = "TwitchPrediction"; a["state"] = t.Substring(19); a["userName"] = U("broadcaster_user_login"); a["x.id"] = U("id"); a["x.title"] = U("title"); a["x.outcomes"] = (e["outcomes"] ?? new JArray()).ToString(Newtonsoft.Json.Formatting.None);
+                    a["x.status"] = U("status"); a["x.winningOutcomeId"] = U("winning_outcome_id"); a["x.locksAt"] = U("locks_at"); a["x.startedAt"] = U("started_at"); break;
+                case "channel.hype_train.begin": case "channel.hype_train.progress": case "channel.hype_train.end":
+                    a["eventType"] = "TwitchHype"; a["state"] = t.Substring(18); a["userName"] = U("broadcaster_user_login"); a["x.id"] = U("id"); a["x.level"] = U("level"); a["x.total"] = U("total"); a["x.progress"] = U("progress"); a["x.goal"] = U("goal");
+                    a["x.type"] = U("type"); a["x.expiresAt"] = U("expires_at"); a["x.topContributions"] = (e["top_contributions"] ?? new JArray()).ToString(Newtonsoft.Json.Formatting.None); break;
                 case "stream.online": a["eventType"] = "StreamOnline"; break;
                 case "stream.offline": a["eventType"] = "StreamOffline"; break;
                 case "channel.channel_points_custom_reward_redemption.add": a["eventType"] = "TwitchRedeem"; a["userName"] = U("user_login"); a["title"] = (string)e["reward"]?["title"] ?? ""; a["input"] = U("user_input"); a["cost"] = (int?)e["reward"]?["cost"] ?? 0; break;

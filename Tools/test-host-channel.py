@@ -25,6 +25,9 @@ try:
     c, j = post('/api/mod/timeout', {'user': 'nightbot', 'seconds': 10}, 'test-module-token'); chk('bot refused', j['ok'] is False and 'bot' in j['error'], j)
     c, j = post('/api/mod/timeout', {'user': 'innocentpenguin_', 'seconds': 10}, 'test-module-token'); chk('broadcaster refused', j['ok'] is False and 'broadcaster' in j['error'], j)
     c, j = post('/api/mod/timeout', {'user': 'bad name!', 'seconds': 10}, 'test-module-token'); chk('bad name refused', j['ok'] is False, j)
+    c, j = post('/api/say', {'text': 'hi'}); chk('say: no token -> 401', c == 401, c)
+    c, j = post('/api/say', {'text': ''}, 'test-module-token'); chk('say: empty refused', j['ok'] is False, j)
+    c, j = post('/api/say', {'text': 'hello there'}, 'test-module-token'); chk('say: answers ok/duplicate/via', 'ok' in j and 'duplicate' in j and 'via' in j, j)
     log = os.path.join(d, 'runtime', 'mod_audit.log'); time.sleep(0.3)
     txt = open(log, encoding='utf-8').read() if os.path.exists(log) else ''
     chk('audit log has the calls', txt.count('\n') >= 5 and 'mod/timeout' in txt and 'channel/update' in txt, txt[:200])

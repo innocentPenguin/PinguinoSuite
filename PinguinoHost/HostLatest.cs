@@ -47,8 +47,9 @@ namespace PinguinoHost
         /// <summary>called for every Twitch event (Auto.OnEvent) and by the clip / shoutout steps: kind = follow|sub|resub|gift|cheer|raid|redeem|ban|clip|shoutout.</summary>
         public static void Record(string kind, Dictionary<string, string> ctx)
         {
-            if (!new[] { "follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "ban", "unban", "mod", "unmod", "clip", "replay", "first5", "shoutout" }.Contains(kind)) return;
+            if (!new[] { "follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "ban", "unban", "mod", "unmod", "clip", "replay", "first5", "shoutout", "raid_out", "poll", "prediction", "hype" }.Contains(kind)) return;
             Func<string, string> g = k => ctx.ContainsKey(k) ? ctx[k] : "";
+            if ((kind == "poll" || kind == "prediction" || kind == "hype") && g("state") == "progress") return;   // only begin / lock / end go in the feed (progress would flood it)
             string who = g("user") != "" ? g("user") : g("userName"), what = ""; int amount = 0, tier = 0; string message = "";
             int.TryParse(g("tier"), out tier);
             switch (kind)
@@ -64,11 +65,21 @@ namespace PinguinoHost
                 case "unmod": what = "unmodded"; break;
                 case "clip": case "replay": what = g("clip.url"); break;
                 case "shoutout": what = g("shoutoutUser"); break;
+                case "raid_out": int.TryParse(g("viewers"), out amount); what = g("target"); break;
+                case "poll": case "prediction": case "hype": what = kind == "hype" ? "level " + g("x.level") : g("x.title"); break;
                 case "first5": what = "place " + g("place"); int.TryParse(g("place"), out amount); break;
             }
             if (kind == "cheer") Credits.Add("bits", who, amount); else if (kind == "redeem") Credits.Add("points", who, amount);
             var e = new JObject { { "ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "kind", kind }, { "type", kind }, { "user", who }, { "what", what }, { "detail", what } };
             if (kind == "follow") e["refollow"] = RefollowCheck(who);
+            if (kind == "gift") { int cum; if (int.TryParse(g("cumulative"), out cum) && cum > 0) e["cumulative"] = cum; if (g("anonymous") == "true") e["anonymous"] = true; }
+            if (kind == "raid_out") e["target"] = g("target");
+            if (kind == "poll" || kind == "prediction" || kind == "hype")
+            {
+                e["state"] = g("state"); var data = new JObject();
+                foreach (var kv in ctx) if (kv.Key.StartsWith("x.")) { string v = kv.Value ?? ""; JToken jt = null; if (v.StartsWith("[") || v.StartsWith("{")) { try { jt = JToken.Parse(v); } catch (Exception) { } } data[kv.Key.Substring(2)] = jt ?? (JToken)v; }
+                e["data"] = data;
+            }
             if (amount > 0) e["amount"] = amount; if (tier > 0 && (kind == "sub" || kind == "resub" || kind == "gift")) e["tier"] = tier; if (message != "") e["message"] = message;
             if (g("moderator") != "" && (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod")) e["moderator"] = g("moderator");
             lock (L)
@@ -77,7 +88,7 @@ namespace PinguinoHost
                 e["seq"] = ++_seq; a.Add(e); while (a.Count > 500) a.RemoveAt(0);
                 try { File.WriteAllText(Path_, a.ToString()); } catch (Exception) { }
             }
-            if (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod" || kind == "clip" || kind == "replay" || kind == "shoutout" || kind == "first5") return;   // the overlay text only follows follower/sub/cheer/raid-type events
+            if (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod" || kind == "clip" || kind == "replay" || kind == "shoutout" || kind == "first5" || kind == "poll" || kind == "prediction" || kind == "hype" || kind == "raid_out") return;   // the overlay text only follows follower/sub/cheer/raid-type events
             try { string ts = (string)Settings()["TextSource"]; if (!string.IsNullOrWhiteSpace(ts)) Program.ObsRaw("SetInputSettings", new JObject { { "inputName", ts }, { "inputSettings", new JObject { { "text", Line(e) } } } }); }
             catch (Exception ex) { Clog.Warn("latest", "could not update the OBS text source: " + ex.Message); }
         }
