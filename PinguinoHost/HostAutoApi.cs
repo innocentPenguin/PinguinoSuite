@@ -105,6 +105,14 @@ namespace PinguinoHost
                 string via; bool ok = SendAs((string)b["bot"], text, out via);
                 Write(c, new JObject { { "ok", ok }, { "duplicate", via.StartsWith("duplicate") }, { "via", via } }.ToString(), "application/json"); return true;
             }
+            if (p == "/api/obs/tree" && m == "GET") { Write(c, ObsTree.Get(c.Request.QueryString["scene"]).ToString(), "application/json"); return true; }
+            if ((p == "/api/obs/scene" || p == "/api/obs/item") && m == "POST")
+            {
+                var b = Body(c); JObject res;
+                if (p == "/api/obs/scene") res = ObsTree.SetScene((string)b["scene"] ?? "");
+                else res = ObsTree.SetItem((string)b["scene"] ?? "", (int?)b["itemId"] ?? -1, (bool?)b["enabled"], (bool?)b["toggle"] == true);
+                Write(c, res.ToString(), "application/json"); return true;
+            }
             if (p == "/api/live-state" && m == "GET") { Write(c, Control.LiveState().ToString(), "application/json"); return true; }
             if (p == "/api/activity" && m == "GET")
             {
