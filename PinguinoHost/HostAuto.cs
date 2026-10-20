@@ -208,7 +208,7 @@ namespace PinguinoHost
         {
             object et; if (!args.TryGetValue("eventType", out et)) return; string kind;
             switch ((string)et) { case "TwitchFollow": kind = "follow"; break; case "TwitchSub": kind = "sub"; break; case "TwitchReSub": kind = "resub"; break; case "TwitchGiftBomb": kind = "gift"; break;
-                case "TwitchCheer": kind = "cheer"; break; case "TwitchRaid": kind = "raid"; break; case "TwitchRaidOut": kind = "raid_out"; break; case "TwitchBan": kind = "ban"; break; case "TwitchRedeem": kind = "redeem"; break; case "StreamOnline": kind = "stream_online"; break; case "StreamOffline": kind = "stream_offline"; break; default: return; }
+                case "TwitchCheer": kind = "cheer"; break; case "TwitchRaid": kind = "raid"; break; case "TwitchRaidOut": kind = "raid_out"; break; case "TwitchBan": kind = "ban"; break; case "TwitchUnban": kind = "unban"; break; case "TwitchMod": kind = "mod"; break; case "TwitchUnmod": kind = "unmod"; break; case "TwitchRedeem": kind = "redeem"; break; case "StreamOnline": kind = "stream_online"; break; case "StreamOffline": kind = "stream_offline"; break; default: return; }
             var ctx = new Dictionary<string, string>(); foreach (var kv in args) ctx[kv.Key] = Convert.ToString(kv.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
             string u = ctx.ContainsKey("userName") ? ctx["userName"] : ""; ctx["user"] = u; ctx["display"] = u; ctx["raider"] = u; ctx["channel"] = Channel(); ctx["event"] = kind;
             if (kind == "stream_online") { try { Program.ResetFirsts(); Session.Begin(); Roster.Reset(); } catch (Exception) { } }

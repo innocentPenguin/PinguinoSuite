@@ -253,7 +253,7 @@ namespace PinguinoHost
             {
                 if (line.StartsWith("@") && line.Contains(" USERNOTICE #")) { Streaks.OnUserNotice(line); continue; }   // sim: a raw IRC USERNOTICE line
                 if (line.StartsWith("event "))   // sim: event TwitchSub alice 2   (3rd word = tier / bits / viewers)
-                { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v } }); continue; }
+                { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v }, { "moderator", p.Length > 4 ? p[4] : "" } }); continue; }
                 int c = line.IndexOf(':'); if (c < 1) continue;
                 string who = line.Substring(0, c).Trim(); int role = 1;
                 if (who.StartsWith("*")) { role = 3; who = who.Substring(1); } else if (who.StartsWith("#")) { role = 4; who = who.Substring(1); }

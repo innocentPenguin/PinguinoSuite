@@ -163,7 +163,7 @@ namespace PinguinoHost
                 new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.follow", "2", "broadcaster_user_id" },
                 new[] { "stream.online", "1", "broadcaster_user_id", "opt" }, new[] { "stream.offline", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.channel_points_custom_reward_redemption.add", "1", "broadcaster_user_id", "opt" },
-                new[] { "channel.ban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" } };
+                new[] { "channel.ban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.unban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.add", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.remove", "1", "broadcaster_user_id", "opt" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" } };
             foreach (var s in subs)
             {
                 var cond = new JObject { { s[2], bid } }; if (s[0] == "channel.follow") cond["moderator_user_id"] = bid;
@@ -189,6 +189,9 @@ namespace PinguinoHost
                     else { a["eventType"] = "TwitchRaid"; a["userName"] = U("from_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }
                     break;
                 case "channel.ban": a["eventType"] = "TwitchBan"; a["userName"] = U("user_login"); a["moderator"] = U("moderator_user_login"); a["reason"] = U("reason"); a["permanent"] = ((bool?)e["is_permanent"] ?? false).ToString().ToLowerInvariant(); break;
+                case "channel.unban": a["eventType"] = "TwitchUnban"; a["userName"] = U("user_login"); a["moderator"] = U("moderator_user_login"); break;
+                case "channel.moderator.add": a["eventType"] = "TwitchMod"; a["userName"] = U("user_login"); a["moderator"] = U("broadcaster_user_login"); break;
+                case "channel.moderator.remove": a["eventType"] = "TwitchUnmod"; a["userName"] = U("user_login"); a["moderator"] = U("broadcaster_user_login"); break;
                 case "channel.follow": a["eventType"] = "TwitchFollow"; a["userName"] = U("user_login"); break;
                 case "stream.online": a["eventType"] = "StreamOnline"; break;
                 case "stream.offline": a["eventType"] = "StreamOffline"; break;
