@@ -148,6 +148,12 @@ namespace PinguinoHost
             catch (Exception ex) { Clog.Warn("streaks", "profile " + login + ": " + ex.Message); }
         }
 
+        /// <summary>every share ever recorded: (login, value, at ISO). For the monthly boards.</summary>
+        public static List<Tuple<string, int, string>> AllShares()
+        {
+            lock (L) return ((JObject)Doc()["users"]).Properties().SelectMany(p => ((JArray)p.Value["history"]).Select(e => Tuple.Create(p.Name, (int)e["value"], (string)e["at"]))).ToList();
+        }
+
         // ---- API ----
         public static JObject Api(int top = 0)
         {

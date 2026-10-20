@@ -182,6 +182,26 @@ namespace PinguinoHost
             return learned;
         }
 
+        /// <summary>profile.displayName (the real Twitch capitalisation, when we know it) and profile.aliasOf (on the alias account's profile). Only touches profiles that exist.</summary>
+        static void ApplyProfileMeta(Dictionary<string, JObject> users, Dictionary<string, string> al)
+        {
+            string pd = Path.Combine(Root, "profiles"); if (!Directory.Exists(pd)) return; var nm = Names();
+            Action<string, string, string> write = (login, dn, aliasOf) =>
+            {
+                string f = Path.Combine(pd, login + ".json"); if (!File.Exists(f)) return;
+                try
+                {
+                    var prof = SubsImport.ParseJ(File.ReadAllText(f)); bool diff = false;
+                    if (dn != "" && (string)prof["displayName"] != dn) { prof["displayName"] = dn; diff = true; }
+                    if (aliasOf != "" && (string)prof["aliasOf"] != aliasOf) { prof["aliasOf"] = aliasOf; diff = true; }
+                    if (diff) File.WriteAllText(f, prof.ToString());
+                }
+                catch (Exception) { }
+            };
+            foreach (var kv in users) { var e = nm[kv.Key] as JObject; string dn = e == null ? "" : (string)e["name"] ?? ""; if (dn == "" && (string)kv.Value["name"] != kv.Key) dn = (string)kv.Value["name"]; if (dn != "") write(kv.Key, dn, ""); }
+            foreach (var a in al) { var e = nm[a.Key] as JObject; write(a.Key, e == null ? "" : (string)e["name"] ?? "", Canon(al, a.Key)); }
+        }
+
         static string Channel()
         {
             try { return ((string)SubsImport.ParseJ(File.ReadAllText(Path.Combine(HostApi.DataDir, "host_secrets.json")))["Channel"] ?? "").ToLowerInvariant(); } catch (Exception) { return ""; }
@@ -194,6 +214,15 @@ namespace PinguinoHost
             {
                 try { ImportChatEvents(); } catch (Exception ex) { Clog.Warn("boards", "chat_events: " + ex.Message); }
                 var users = new Dictionary<string, JObject>();
+                var al = Aliases();
+                var mGifts = new Dictionary<string, Dictionary<string, int>>(); var mBits = new Dictionary<string, Dictionary<string, int>>(); var mMsgs = new Dictionary<string, Dictionary<string, int>>(); var mStreak = new Dictionary<string, Dictionary<string, int>>();
+                Action<Dictionary<string, Dictionary<string, int>>, string, string, int, bool> addM = (dict, month, login, v, max) =>
+                {
+                    if (month.Length != 7 || v <= 0) return; login = Canon(al, login);
+                    Dictionary<string, int> d; if (!dict.TryGetValue(month, out d)) dict[month] = d = new Dictionary<string, int>();
+                    int cur; d.TryGetValue(login, out cur); d[login] = max ? Math.Max(cur, v) : cur + v;
+                };
+                Func<long, string> monthOf = at => DateTimeOffset.FromUnixTimeSeconds(at).UtcDateTime.ToString("yyyy-MM");
                 Func<string, JObject> U = login => { JObject o; if (!users.TryGetValue(login, out o)) { o = new JObject { { "name", login }, { "gifts", 0 }, { "bits", 0 }, { "messages", 0 }, { "streakBest", 0 }, { "streakCurrent", 0 }, { "streakAt", "" }, { "bitsBadge", 0 } }; users[login] = o; } return o; };
                 var led = Ledger();
                 // gifts: a bomb line (no recipient) takes up to N recipient lines of the same gifter shortly after it; the rest are single gifts
@@ -203,13 +232,14 @@ namespace PinguinoHost
                     var used = new HashSet<int>(); int total = 0;
                     foreach (var b in bombs)
                     {
-                        int n = (int)b["amount"]; total += n; long bt = (long)b["at"];
+                        int n = (int)b["amount"]; total += n; long bt = (long)b["at"]; addM(mGifts, monthOf(bt), grp.Key, n, false);
                         for (int i = 0; i < ind.Count && n > 0; i++) if (!used.Contains(i) && (long)ind[i]["at"] >= bt - 5 && (long)ind[i]["at"] <= bt + 180) { used.Add(i); n--; }
                     }
                     total += ind.Count - used.Count;
+                    for (int i = 0; i < ind.Count; i++) if (!used.Contains(i)) addM(mGifts, monthOf((long)ind[i]["at"]), grp.Key, 1, false);
                     if (total > 0) U(grp.Key)["gifts"] = total;
                 }
-                foreach (var grp in led.Where(x => (string)x["type"] == "cheer").GroupBy(x => (string)x["user"])) U(grp.Key)["bits"] = grp.Sum(x => (int)x["amount"]);
+                foreach (var grp in led.Where(x => (string)x["type"] == "cheer").GroupBy(x => (string)x["user"])) { U(grp.Key)["bits"] = grp.Sum(x => (int)x["amount"]); foreach (var x in grp) addM(mBits, monthOf((long)x["at"]), grp.Key, (int)x["amount"], false); }
                 // messages (+ display names) from the viewer profiles
                 string pd = Path.Combine(Root, "profiles");
                 if (Directory.Exists(pd))
@@ -219,16 +249,17 @@ namespace PinguinoHost
                         {
                             string login = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(); if (login == "index") continue;
                             var p = SubsImport.ParseJ(File.ReadAllText(f)); int msgs = (int?)p["activity"]?["messages"] ?? 0;
+                            if (p["activity"]?["perMonth"] is JObject pm) foreach (var mm in pm.Properties()) addM(mMsgs, mm.Name, login, (int?)mm.Value ?? 0, false);
                             if (msgs > 0) { var o = U(login); o["messages"] = msgs; string pn = (string)p["name"]; if (!string.IsNullOrEmpty(pn)) o["name"] = pn; }
                         }
                         catch (Exception) { }
                     }
                 // watch streaks
+                foreach (var sh in Streaks.AllShares()) { if ((sh.Item3 ?? "").Length >= 7) addM(mStreak, sh.Item3.Substring(0, 7), sh.Item1, sh.Item2, true); }
                 foreach (JObject b in (JArray)Streaks.Api()["board"]) { var o = U((string)b["login"]); o["streakBest"] = (int)b["best"]; o["streakCurrent"] = (int)b["current"]; o["streakAt"] = (string)b["lastSharedAt"]; if (o["name"].ToString() == (string)b["login"] && !string.IsNullOrEmpty((string)b["name"])) o["name"] = (string)b["name"]; }
                 // real Twitch display names (from names.json) win over the name the logs happened to show
                 var nm = Names(); foreach (var kv in users) { var e = nm[kv.Key] as JObject; string dn = e == null ? "" : (string)e["name"] ?? ""; if (dn != "") kv.Value["name"] = dn; }
                 // aliases: fold the extra accounts of one person into the main login
-                var al = Aliases();
                 foreach (var kv in al)
                 {
                     string a = kv.Key, c = Canon(al, kv.Key); JObject ao;
@@ -243,12 +274,23 @@ namespace PinguinoHost
                 }
                 foreach (var kv in users) kv.Value["bitsBadge"] = BitsBadge((int)kv.Value["bits"]);
                 try { ApplyBitsToProfiles(users.Where(kv => !BotName.IsMatch(kv.Key) && !KnownBots.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value)); } catch (Exception ex) { Clog.Warn("boards", "bits roles: " + ex.Message); }
+                try { ApplyProfileMeta(users.Where(kv => !BotName.IsMatch(kv.Key) && !KnownBots.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value), al); } catch (Exception ex) { Clog.Warn("boards", "profile names: " + ex.Message); }
                 // names for gifters / bitters without a profile come from the ledger user itself (already the login)
                 var extra = ExtraBots(); string ch = Channel();
                 var keep = users.Where(kv => !BotName.IsMatch(kv.Key) && !KnownBots.Contains(kv.Key) && !extra.Contains(kv.Key) && ((int)kv.Value["gifts"] > 0 || (int)kv.Value["bits"] > 0 || (int)kv.Value["messages"] > 0 || (int)kv.Value["streakBest"] > 0)).ToList();
                 var map = new JObject(); foreach (var kv in keep.OrderBy(k => k.Key, StringComparer.Ordinal)) { if (ch != "" && kv.Key == ch) kv.Value["streamer"] = true; map[kv.Key] = kv.Value; }
                 Func<string, JArray> top = field => new JArray(keep.Where(kv => kv.Key != ch && (int)kv.Value[field] > 0).OrderByDescending(kv => (int)kv.Value[field]).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(25).Select(kv => new JObject { { "login", kv.Key }, { "name", kv.Value["name"] }, { "value", kv.Value[field] } }));
-                var res = new JObject { { "ok", true }, { "push", PushStatus() }, { "updatedAt", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }, { "streamerLogin", ch }, { "users", map },
+                // per-month boards (UTC months, Feb 2026 on): same people rules as the all-time board (no bots, streamer left out, aliases folded)
+                var months = new JObject(); var keepSet = new HashSet<string>(keep.Select(k => k.Key));
+                var allMonths = mGifts.Keys.Concat(mBits.Keys).Concat(mMsgs.Keys).Concat(mStreak.Keys).Distinct().Where(m => string.CompareOrdinal(m, "2026-02") >= 0).OrderBy(m => m, StringComparer.Ordinal).ToList();
+                Func<Dictionary<string, Dictionary<string, int>>, string, JArray> mtop = (dict, month) =>
+                {
+                    Dictionary<string, int> d; if (!dict.TryGetValue(month, out d)) return new JArray();
+                    return new JArray(d.Where(kv => keepSet.Contains(kv.Key) && kv.Key != ch).OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(50)
+                        .Select(kv => new JObject { { "login", kv.Key }, { "name", users.ContainsKey(kv.Key) ? users[kv.Key]["name"] : (JToken)kv.Key }, { "value", kv.Value } }));
+                };
+                foreach (var mo in allMonths) months[mo] = new JObject { { "gifters", mtop(mGifts, mo) }, { "bits", mtop(mBits, mo) }, { "yappers", mtop(mMsgs, mo) }, { "streaks", mtop(mStreak, mo) } };
+                var res = new JObject { { "ok", true }, { "push", PushStatus() }, { "months", months }, { "updatedAt", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }, { "streamerLogin", ch }, { "users", map },
                     { "top", new JObject { { "gifts", top("gifts") }, { "bits", top("bits") }, { "messages", top("messages") }, { "streaks", top("streakBest") } } },
                     { "note", "gifts and bits start in mid-Feb 2026 when the logs start; the streamer is flagged streamer:true and left out of the top lists" } };
                 _cache = res; _cacheAt = DateTime.UtcNow;
@@ -283,13 +325,13 @@ namespace PinguinoHost
         {
             var users = new JObject(); string ch = (string)r["streamerLogin"] ?? "";
             foreach (var p in ((JObject)r["users"]).Properties()) { if (p.Name == ch || !Regex.IsMatch(p.Name, "^[a-z0-9_]{2,25}$")) continue; var o = (JObject)p.Value; users[p.Name] = new JObject { { "name", o["name"] }, { "gifts", o["gifts"] }, { "bits", o["bits"] }, { "messages", o["messages"] }, { "streakBest", o["streakBest"] }, { "streakCurrent", o["streakCurrent"] }, { "streakAt", o["streakAt"] }, { "bitsBadge", o["bitsBadge"] } }; if (o["aka"] != null) users[p.Name]["aka"] = o["aka"]; }
-            string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(users.ToString(Newtonsoft.Json.Formatting.None))));
+            string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(users.ToString(Newtonsoft.Json.Formatting.None) + r["months"].ToString(Newtonsoft.Json.Formatting.None))));
             if (hash == _lastBoardsHash && (DateTime.UtcNow - _lastBoards).TotalMinutes < 30) return;
             try
             {
                 using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
                 {
-                    var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(new JObject { { "updatedAt", r["updatedAt"] }, { "users", users } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
+                    var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(new JObject { { "updatedAt", r["updatedAt"] }, { "users", users }, { "months", r["months"] } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
                     rq.Headers.Add("Authorization", "Bearer " + key); rq.Headers.UserAgent.ParseAdd("PinguinoHost/1.0");   // the site is behind Cloudflare, which refuses requests with no User-Agent (error 1010)
                     var resp = h.SendAsync(rq).Result;
                     if (!resp.IsSuccessStatusCode) { _pushNote += "; boards HTTP " + (int)resp.StatusCode; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the board (HTTP " + (int)resp.StatusCode + ")"); return; }

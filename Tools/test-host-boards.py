@@ -24,11 +24,12 @@ ev = [{'At': t0, 'Type': 'gift', 'User': 'generous', 'Amount': 5, 'To': ''}] + [
      [{'At': t0 + 500, 'Type': 'gift', 'User': 'generous', 'Amount': 1, 'To': 'solo1'}, {'At': t0 + 900, 'Type': 'gift', 'User': 'anonymous', 'Amount': 9, 'To': ''},
       {'At': t0 + 10, 'Type': 'cheer', 'User': 'bitty', 'Amount': 100, 'To': ''}, {'At': t0 + 99, 'Type': 'cheer', 'User': 'bitty', 'Amount': 250, 'To': ''}, {'At': t0 + 20, 'Type': 'cheer', 'User': 'nightbot', 'Amount': 5000, 'To': ''},
       {'At': t0 + 30, 'Type': 'sub', 'User': 'subber', 'Amount': 1, 'To': ''},
-      {'At': t0 + 2000, 'Type': 'gift', 'User': 'cyfirl', 'Amount': 3, 'To': ''}, {'At': t0 + 3000, 'Type': 'gift', 'User': 'sg_yen', 'Amount': 2, 'To': ''}, {'At': t0 + 3100, 'Type': 'cheer', 'User': 'sg_yen', 'Amount': 1500, 'To': ''}, {'At': t0 + 3200, 'Type': 'cheer', 'User': 'cyfirl', 'Amount': 100, 'To': ''}]
+      {'At': t0 + 2000, 'Type': 'gift', 'User': 'cyfirl', 'Amount': 3, 'To': ''}, {'At': t0 + 3000, 'Type': 'gift', 'User': 'sg_yen', 'Amount': 2, 'To': ''}, {'At': t0 + 3100, 'Type': 'cheer', 'User': 'sg_yen', 'Amount': 1500, 'To': ''}, {'At': t0 + 3200, 'Type': 'cheer', 'User': 'cyfirl', 'Amount': 100, 'To': ''},
+      {'At': 1792000000, 'Type': 'gift', 'User': 'oct', 'Amount': 4, 'To': ''}, {'At': 1792000100, 'Type': 'cheer', 'User': 'oct', 'Amount': 77, 'To': ''}]
 json.dump(ev, open(os.path.join(d, 'chat_events.json'), 'w'))
 os.makedirs(os.path.join(d, 'profiles'))
 for u, n in (('talker', 500), ('generous', 20), ('nightbot', 99999), ('trial', 4000), ('practice01', 5), ('silent', 0), ('bitty', 10), ('cyfirl', 600), ('sg_yen', 60)):
-    json.dump({'login': u, 'name': (u if u in ('generous', 'cyfirl') else u.capitalize()), 'activity': {'messages': n}, 'roles': ({'mod': True, 'sub': True, 'subTier': 2} if u == 'bitty' else {})}, open(os.path.join(d, 'profiles', u + '.json'), 'w'))
+    json.dump({'login': u, 'name': (u if u in ('generous', 'cyfirl') else u.capitalize()), 'activity': ({'messages': n, 'perMonth': {'2026-02': 100, '2026-10': n - 100}} if u == 'talker' else {'messages': n}), 'roles': ({'mod': True, 'sub': True, 'subTier': 2} if u == 'bitty' else {})}, open(os.path.join(d, 'profiles', u + '.json'), 'w'))
 os.makedirs(os.path.join(d, 'streaks'))
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env['PINGUINO_COMPAT_WS_PORT'] = '8963'; env['BOT_API_KEY'] = 'testkey'; env['PINGUINO_HELIX_BASE'] = 'http://127.0.0.1:%d/helix' % FAKE
 host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d], env=env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -54,7 +55,7 @@ try:
     chk('the streamer is flagged and kept out of the top lists', u['trial'].get('streamer') is True and all(x['login'] != 'trial' for x in a['top']['messages']))
     chk('top lists ranked', a['top']['messages'][0]['login'] == 'cyfirl' and a['top']['bits'][0]['login'] == 'cyfirl' and a['top']['gifts'][0]['login'] == 'generous')
     time.sleep(1); pushed = [g for g in got if g[0] == '/api/bot/supporters']
-    chk('gifts and bits pushed to /api/bot/supporters with the key', len(pushed) >= 1 and pushed[-1][1] == 'Bearer testkey' and pushed[-1][2]['gifts'] == {'generous': 6, 'cyfirl': 5} and pushed[-1][2]['bits'].get('bitty') == 350 and pushed[-1][2]['bits'].get('cyfirl') == 1600 and 'sg_yen' not in pushed[-1][2]['gifts'])
+    chk('gifts and bits pushed to /api/bot/supporters with the key', len(pushed) >= 1 and pushed[-1][1] == 'Bearer testkey' and pushed[-1][2]['gifts'] == {'generous': 6, 'cyfirl': 5, 'oct': 4} and pushed[-1][2]['bits'].get('bitty') == 350 and pushed[-1][2]['bits'].get('cyfirl') == 1600 and 'sg_yen' not in pushed[-1][2]['gifts'])
     chk('bots, practice players and the streamer are not in the push', all(k not in pushed[-1][2]['gifts'] and k not in pushed[-1][2]['bits'] for k in ('nightbot', 'practice01', 'trial')))
     bp = [g for g in got if g[0] == '/api/bot/boards']
     chk('the full board is pushed too, with streaks and messages, without the streamer', len(bp) >= 1 and bp[-1][1] == 'Bearer testkey' and bp[-1][2]['users']['talker']['streakBest'] == 33 and bp[-1][2]['users']['talker']['messages'] == 500 and 'trial' not in bp[-1][2]['users'] and 'nightbot' not in bp[-1][2]['users'])
@@ -69,6 +70,16 @@ try:
     chk('the merged person carries the combined bits badge (1600 -> 1000)', u2['cyfirl']['bitsBadge'] == 1000)
     chk('real Twitch capitalisation is used from Helix (and cached, one ask per login)', u2['generous']['name'] == 'GeNeRoUs' and u2['cyfirl']['name'] == 'CyFiRL' and asked.count('generous') == 1 and 'talker' not in asked)
     chk('aliases.json and names.json are written', os.path.exists(os.path.join(d, 'boards', 'aliases.json')) and os.path.exists(os.path.join(d, 'boards', 'names.json')))
+    mo = a2['months']
+    chk('months exist from Feb 2026 to Oct 2026', '2026-02' in mo and '2026-10' in mo and sorted(mo) == sorted(mo) and min(mo) == '2026-02')
+    chk('gifters per month (bomb counted once, alias folded)', mo['2026-02']['gifters'][0]['login'] == 'generous' and mo['2026-02']['gifters'][0]['value'] == 6 and {x['login']: x['value'] for x in mo['2026-02']['gifters']}.get('cyfirl') == 5 and mo['2026-10']['gifters'] == [{'login': 'oct', 'name': 'oct', 'value': 4}])
+    chk('bits per month', {x['login']: x['value'] for x in mo['2026-10']['bits']} == {'oct': 77, 'talker': 40} or {x['login']: x['value'] for x in mo['2026-10']['bits']} == {'oct': 77})
+    chk('yappers per month come from the chat logs per-month counts', mo['2026-10']['yappers'][0]['login'] == 'talker' and mo['2026-10']['yappers'][0]['value'] == 400 and mo['2026-02']['yappers'][0]['value'] in (100, 600, 60))
+    chk('watch streak per month = best share in that month', mo['2026-10']['streaks'] == [{'login': 'talker', 'name': 'Talker', 'value': 33}] and mo['2026-02']['streaks'] == [])
+    bp2 = [g for g in got if g[0] == '/api/bot/boards'][-1][2]
+    chk('the pushed board carries the months too', 'months' in bp2 and '2026-10' in bp2['months'] and 'oct' in {x['login'] for x in bp2['months']['2026-10']['gifters']})
+    pf = lambda u: json.load(open(os.path.join(d, 'profiles', u + '.json')))
+    chk('profiles get displayName and the alias gets aliasOf', pf('cyfirl').get('displayName') == 'CyFiRL' and pf('sg_yen').get('aliasOf') == 'cyfirl' and pf('generous').get('displayName') == 'GeNeRoUs')
     chk('the same totals are served on /api/boards', get('/api/boards')['users']['bitty']['bits'] == 350)
 finally:
     host.kill(); srv.shutdown(); time.sleep(0.5); shutil.rmtree(d, True)
