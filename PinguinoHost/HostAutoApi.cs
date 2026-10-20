@@ -118,6 +118,26 @@ namespace PinguinoHost
                 if (p == "/api/helper/review" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, HelperReview.List(c.Request.QueryString["kind"], c.Request.QueryString["q"], lim).ToString(), "application/json"); return true; }
                 if (p == "/api/helper/review" && m == "POST") { var hb = Body(c); Write(c, HelperReview.SetNote((string)hb["id"], (string)hb["note"]).ToString(), "application/json"); return true; }
             }
+            if (p == "/api/helix-ids" && m == "GET")
+            {   // reads Data\namehistory\lookups.json {ids:[...]}, asks Helix /users by id (batches of 100) with the Host's own streamer credentials, saves Data\namehistory\helix_ids.json {data:[{id,login}]}; credentials never leave the Host
+                try
+                {
+                    string dd = HostApi.DataDir.TrimEnd('\\', '/'); string root = string.Equals(Path.GetFileName(dd), "runtime", StringComparison.OrdinalIgnoreCase) ? Path.GetDirectoryName(dd) : dd;
+                    string dir = Path.Combine(root, "namehistory"); var ids = JObject.Parse(File.ReadAllText(Path.Combine(dir, "lookups.json"), Encoding.UTF8).TrimStart('﻿'))["ids"] as JArray ?? new JArray();
+                    var rows = new JArray(); string err = "", lastErr = "";
+                    for (int i = 0; i < ids.Count; i += 100)
+                    {
+                        string q = string.Join("&", ids.Skip(i).Take(100).Select(x => "id=" + Uri.EscapeDataString((string)x))); JToken data;
+                        string code = TwitchApi.Call(HttpMethod.Get, "/users?" + q, null, out data, out err);
+                        if (code != "200") { lastErr = err; if (code == "429") { System.Threading.Thread.Sleep(5000); i -= 100; continue; } break; }
+                        foreach (var u in (data as JArray) ?? new JArray()) rows.Add(new JObject { { "id", u["id"] }, { "login", u["login"] } });
+                    }
+                    if (rows.Count > 0) File.WriteAllText(Path.Combine(dir, "helix_ids.json"), new JObject { { "data", rows } }.ToString(), new UTF8Encoding(false));
+                    Write(c, new JObject { { "ok", rows.Count > 0 || lastErr == "" }, { "asked", ids.Count }, { "found", rows.Count }, { "error", lastErr } }.ToString(), "application/json");
+                }
+                catch (Exception ex) { Write(c, new JObject { { "ok", false }, { "error", ex.Message } }.ToString(), "application/json"); }
+                return true;
+            }
             if (p == "/api/livelog" && m == "GET") { Write(c, LiveLog.Api().ToString(), "application/json"); return true; }
             if (p == "/api/teach" && m == "GET") { Write(c, Teach.Api(c.Request.QueryString["status"]).ToString(), "application/json"); return true; }
             if (p == "/api/teach" && m == "POST") { Write(c, Teach.Post(Body(c)).ToString(), "application/json"); return true; }
