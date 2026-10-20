@@ -101,6 +101,28 @@ namespace PinguinoHost
         }
         static readonly Regex BotName = new Regex(@"(bot|b0t)$|^practice\d{2,3}$", RegexOptions.Compiled);
 
+        // Twitch's bits (cheer) badge tiers: the highest one at or below the lifetime bits cheered
+        static readonly int[] BitTiers = { 1, 100, 1000, 5000, 10000, 25000, 50000, 75000, 100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000, 900000, 1000000, 1250000, 1500000, 1750000, 2000000, 2500000, 3000000, 3500000, 4000000, 4500000, 5000000 };
+        public static int BitsBadge(int bits) { int b = 0; foreach (int t in BitTiers) if (bits >= t) b = t; return b; }
+
+        /// <summary>roles.bitsBadge / roles.bitsTotal in the viewer profiles (separate from sub and mod: a mod can carry both). Only touches profiles that exist.</summary>
+        static void ApplyBitsToProfiles(Dictionary<string, JObject> users)
+        {
+            string pd = Path.Combine(Root, "profiles"); if (!Directory.Exists(pd)) return;
+            foreach (var kv in users)
+            {
+                int bits = (int)kv.Value["bits"]; string f = Path.Combine(pd, kv.Key + ".json"); if (!File.Exists(f)) continue;
+                try
+                {
+                    var prof = SubsImport.ParseJ(File.ReadAllText(f)); var roles = prof["roles"] as JObject ?? new JObject(); int badge = BitsBadge(bits);
+                    if ((int?)roles["bitsBadge"] == badge && (int?)roles["bitsTotal"] == bits) continue;
+                    if (bits == 0 && roles["bitsBadge"] == null) continue;
+                    roles["bitsBadge"] = badge; roles["bitsTotal"] = bits; prof["roles"] = roles; File.WriteAllText(f, prof.ToString());
+                }
+                catch (Exception) { }
+            }
+        }
+
         static string Channel()
         {
             try { return ((string)SubsImport.ParseJ(File.ReadAllText(Path.Combine(HostApi.DataDir, "host_secrets.json")))["Channel"] ?? "").ToLowerInvariant(); } catch (Exception) { return ""; }
@@ -113,7 +135,7 @@ namespace PinguinoHost
             {
                 try { ImportChatEvents(); } catch (Exception ex) { Clog.Warn("boards", "chat_events: " + ex.Message); }
                 var users = new Dictionary<string, JObject>();
-                Func<string, JObject> U = login => { JObject o; if (!users.TryGetValue(login, out o)) { o = new JObject { { "name", login }, { "gifts", 0 }, { "bits", 0 }, { "messages", 0 }, { "streakBest", 0 }, { "streakCurrent", 0 }, { "streakAt", "" } }; users[login] = o; } return o; };
+                Func<string, JObject> U = login => { JObject o; if (!users.TryGetValue(login, out o)) { o = new JObject { { "name", login }, { "gifts", 0 }, { "bits", 0 }, { "messages", 0 }, { "streakBest", 0 }, { "streakCurrent", 0 }, { "streakAt", "" }, { "bitsBadge", 0 } }; users[login] = o; } return o; };
                 var led = Ledger();
                 // gifts: a bomb line (no recipient) takes up to N recipient lines of the same gifter shortly after it; the rest are single gifts
                 foreach (var grp in led.Where(x => (string)x["type"] == "gift").GroupBy(x => (string)x["user"]))
@@ -144,6 +166,8 @@ namespace PinguinoHost
                     }
                 // watch streaks
                 foreach (JObject b in (JArray)Streaks.Api()["board"]) { var o = U((string)b["login"]); o["streakBest"] = (int)b["best"]; o["streakCurrent"] = (int)b["current"]; o["streakAt"] = (string)b["lastSharedAt"]; if (o["name"].ToString() == (string)b["login"] && !string.IsNullOrEmpty((string)b["name"])) o["name"] = (string)b["name"]; }
+                foreach (var kv in users) kv.Value["bitsBadge"] = BitsBadge((int)kv.Value["bits"]);
+                try { ApplyBitsToProfiles(users.Where(kv => !BotName.IsMatch(kv.Key) && !KnownBots.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value)); } catch (Exception ex) { Clog.Warn("boards", "bits roles: " + ex.Message); }
                 // names for gifters / bitters without a profile come from the ledger user itself (already the login)
                 var extra = ExtraBots(); string ch = Channel();
                 var keep = users.Where(kv => !BotName.IsMatch(kv.Key) && !KnownBots.Contains(kv.Key) && !extra.Contains(kv.Key) && ((int)kv.Value["gifts"] > 0 || (int)kv.Value["bits"] > 0 || (int)kv.Value["messages"] > 0 || (int)kv.Value["streakBest"] > 0)).ToList();
@@ -158,7 +182,7 @@ namespace PinguinoHost
             }
         }
 
-        public static JObject Api() { lock (L) { if (_cache == null || (DateTime.UtcNow - _cacheAt).TotalSeconds > 120) return Compute(); return _cache; } }
+        public static JObject Api() { lock (L) { var r = (_cache == null || (DateTime.UtcNow - _cacheAt).TotalSeconds > 120) ? Compute() : _cache; r["push"] = PushStatus(); return r; } }
 
         /// <summary>recompute and (when forwarding to the site is on) push if the numbers changed or 30 minutes have passed.</summary>
         public static JObject Refresh(bool push)
@@ -182,7 +206,7 @@ namespace PinguinoHost
         static void PushBoards(JObject r, JObject s, string key)
         {
             var users = new JObject(); string ch = (string)r["streamerLogin"] ?? "";
-            foreach (var p in ((JObject)r["users"]).Properties()) { if (p.Name == ch || !Regex.IsMatch(p.Name, "^[a-z0-9_]{2,25}$")) continue; var o = (JObject)p.Value; users[p.Name] = new JObject { { "name", o["name"] }, { "gifts", o["gifts"] }, { "bits", o["bits"] }, { "messages", o["messages"] }, { "streakBest", o["streakBest"] }, { "streakCurrent", o["streakCurrent"] }, { "streakAt", o["streakAt"] } }; }
+            foreach (var p in ((JObject)r["users"]).Properties()) { if (p.Name == ch || !Regex.IsMatch(p.Name, "^[a-z0-9_]{2,25}$")) continue; var o = (JObject)p.Value; users[p.Name] = new JObject { { "name", o["name"] }, { "gifts", o["gifts"] }, { "bits", o["bits"] }, { "messages", o["messages"] }, { "streakBest", o["streakBest"] }, { "streakCurrent", o["streakCurrent"] }, { "streakAt", o["streakAt"] }, { "bitsBadge", o["bitsBadge"] } }; }
             string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(users.ToString(Newtonsoft.Json.Formatting.None))));
             if (hash == _lastBoardsHash && (DateTime.UtcNow - _lastBoards).TotalMinutes < 30) return;
             try

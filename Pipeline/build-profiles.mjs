@@ -39,6 +39,8 @@ let nicks = {}; try { nicks = JSON.parse(readFileSync(join(appData, 'chat_nickna
 // the Twitch subscriber roster (Data\subs\subscribers_master.json, kept by the Host's subscriber import): tier, months, streak, founder, type, lapsed
 let subMaster = {}; try { subMaster = JSON.parse(readFileSync(join(dirname(outDir), 'subs', 'subscribers_master.json'), 'utf8')).users || {}; } catch { /* none yet */ }
 let streakMaster = {}; try { streakMaster = JSON.parse(readFileSync(join(dirname(outDir), 'streaks', 'streaks.json'), 'utf8')).users || {}; } catch { /* none yet */ }
+let boardMaster = {}; try { boardMaster = JSON.parse(readFileSync(join(dirname(outDir), 'boards', 'totals.json'), 'utf8')).users || {}; } catch { /* none yet */ }
+const bitsRoles = u => { const m = boardMaster[u]; return m && m.bits > 0 ? { bitsBadge: m.bitsBadge || 0, bitsTotal: m.bits } : {}; };
 const streakRoles = u => { const m = streakMaster[u]; return m ? { watchStreakCurrent: m.current || 0, watchStreakBest: m.best || 0, watchStreakAt: m.lastSharedAt || '' } : {}; };
 const subRoles = u => { const m = subMaster[u]; if (!m) return {}; const lapsed = m.lapsed === true; return { sub: !lapsed, subTier: m.tier || 1, subMonths: m.tenure || 0, subStreak: m.streak || 0, founder: m.founder === true, subType: m.subType || '', lapsed }; };
 const isBot = u => !!roleInfo[u]?.bot || /bot$/.test(u) || ['nightbot', 'streamelements', 'soundalerts', 'streamlabs', 'moobot', 'fossabot', 'synchrabot', 'pinguinob0t', 'potatbotat', 'sery_bot'].includes(u);
@@ -286,7 +288,7 @@ for (const [u, a] of U) {
   let notes = ''; try { notes = JSON.parse(readFileSync(file, 'utf8')).notes || ''; } catch { /* new */ }
   const p = {
     login: u, name: r.name || u, built: buildDate,
-    roles: { mod: !!r.mod, vip: !!r.vip, sub: !!r.sub, subMonths: r.subMonths || 0, ...subRoles(u), ...streakRoles(u) },
+    roles: { mod: !!r.mod, vip: !!r.vip, sub: !!r.sub, subMonths: r.subMonths || 0, ...subRoles(u), ...streakRoles(u), ...bitsRoles(u) },
     nicknames: (nicks[u] || []).map(x => x.nick),
     seen,
     birthday: a.birthday ? { text: a.birthday.text, note: 'month and day only (said on ' + a.birthday.said + '); the year is never stored', example: a.birthday.example } : undefined,

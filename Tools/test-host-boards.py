@@ -20,8 +20,8 @@ ev = [{'At': t0, 'Type': 'gift', 'User': 'generous', 'Amount': 5, 'To': ''}] + [
       {'At': t0 + 30, 'Type': 'sub', 'User': 'subber', 'Amount': 1, 'To': ''}]
 json.dump(ev, open(os.path.join(d, 'chat_events.json'), 'w'))
 os.makedirs(os.path.join(d, 'profiles'))
-for u, n in (('talker', 500), ('generous', 20), ('nightbot', 99999), ('trial', 4000), ('practice01', 5), ('silent', 0)):
-    json.dump({'login': u, 'name': u.capitalize(), 'activity': {'messages': n}, 'roles': {}}, open(os.path.join(d, 'profiles', u + '.json'), 'w'))
+for u, n in (('talker', 500), ('generous', 20), ('nightbot', 99999), ('trial', 4000), ('practice01', 5), ('silent', 0), ('bitty', 10)):
+    json.dump({'login': u, 'name': u.capitalize(), 'activity': {'messages': n}, 'roles': ({'mod': True, 'sub': True, 'subTier': 2} if u == 'bitty' else {})}, open(os.path.join(d, 'profiles', u + '.json'), 'w'))
 os.makedirs(os.path.join(d, 'streaks'))
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env['PINGUINO_COMPAT_WS_PORT'] = '8963'; env['BOT_API_KEY'] = 'testkey'
 host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d], env=env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -53,6 +53,10 @@ try:
     chk('the full board is pushed too, with streaks and messages, without the streamer', len(bp) >= 1 and bp[-1][1] == 'Bearer testkey' and bp[-1][2]['users']['talker']['streakBest'] == 33 and bp[-1][2]['users']['talker']['messages'] == 500 and 'trial' not in bp[-1][2]['users'] and 'nightbot' not in bp[-1][2]['users'])
     n = len(pushed); post('/api/boards/refresh'); time.sleep(1)
     chk('unchanged totals are not pushed again', len([g for g in got if g[0] == '/api/bot/supporters']) == n and len([g for g in got if g[0] == '/api/bot/boards']) == len(bp))
+    pb = json.load(open(os.path.join(d, 'profiles', 'bitty.json')))['roles']
+    chk('bits badge tier written next to the mod and sub roles (350 bits -> 100)', pb['bitsBadge'] == 100 and pb['bitsTotal'] == 350 and pb['mod'] is True and pb['sub'] is True and pb['subTier'] == 2)
+    chk('people without bits get no bits role', 'bitsBadge' not in json.load(open(os.path.join(d, 'profiles', 'generous.json')))['roles'])
+    chk('/api/boards shows the push result', get('/api/boards')['push']['note'] != 'not pushed yet' and get('/api/boards')['users']['bitty']['bitsBadge'] == 100)
     chk('the same totals are served on /api/boards', get('/api/boards')['users']['bitty']['bits'] == 350)
 finally:
     host.kill(); srv.shutdown(); time.sleep(0.5); shutil.rmtree(d, True)
