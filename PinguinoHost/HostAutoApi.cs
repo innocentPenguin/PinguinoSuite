@@ -125,15 +125,21 @@ namespace PinguinoHost
                     string dd = HostApi.DataDir.TrimEnd('\\', '/'); string root = string.Equals(Path.GetFileName(dd), "runtime", StringComparison.OrdinalIgnoreCase) ? Path.GetDirectoryName(dd) : dd;
                     string dir = Path.Combine(root, "namehistory"); var ids = JObject.Parse(File.ReadAllText(Path.Combine(dir, "lookups.json"), Encoding.UTF8).TrimStart('﻿'))["ids"] as JArray ?? new JArray();
                     var rows = new JArray(); string err = "", lastErr = "";
-                    for (int i = 0; i < ids.Count; i += 100)
-                    {
-                        string q = string.Join("&", ids.Skip(i).Take(100).Select(x => "id=" + Uri.EscapeDataString((string)x))); JToken data;
+                    var todo = new Stack<List<string>>(); var all = ids.Select(x => (string)x).Where(x => !string.IsNullOrEmpty(x)).ToList();
+                    for (int i = all.Count - (all.Count % 100 == 0 ? 100 : all.Count % 100); i >= 0; i -= 100) todo.Push(all.Skip(i).Take(100).ToList());
+                    int bad = 0;
+                    while (todo.Count > 0)
+                    {   // a batch with an invalid id answers 400: split it until the bad single ids are known and skipped
+                        var batch = todo.Pop(); string q = string.Join("&", batch.Select(x => "id=" + Uri.EscapeDataString(x))); JToken data;
                         string code = TwitchApi.Call(HttpMethod.Get, "/users?" + q, null, out data, out err);
-                        if (code != "200") { lastErr = err; if (code == "429") { System.Threading.Thread.Sleep(5000); i -= 100; continue; } break; }
+                        if (code == "429") { System.Threading.Thread.Sleep(5000); todo.Push(batch); continue; }
+                        if (code == "400") { if (batch.Count == 1) bad++; else { int h = batch.Count / 2; todo.Push(batch.Skip(h).ToList()); todo.Push(batch.Take(h).ToList()); } continue; }
+                        if (code != "200") { lastErr = err; break; }
                         foreach (var u in (data as JArray) ?? new JArray()) rows.Add(new JObject { { "id", u["id"] }, { "login", u["login"] } });
                     }
+                    if (bad > 0) lastErr = lastErr == "" ? "" : lastErr;
                     if (rows.Count > 0) File.WriteAllText(Path.Combine(dir, "helix_ids.json"), new JObject { { "data", rows } }.ToString(), new UTF8Encoding(false));
-                    Write(c, new JObject { { "ok", rows.Count > 0 || lastErr == "" }, { "asked", ids.Count }, { "found", rows.Count }, { "error", lastErr } }.ToString(), "application/json");
+                    Write(c, new JObject { { "ok", rows.Count > 0 || lastErr == "" }, { "asked", ids.Count }, { "found", rows.Count }, { "invalidIds", bad }, { "error", lastErr } }.ToString(), "application/json");
                 }
                 catch (Exception ex) { Write(c, new JObject { { "ok", false }, { "error", ex.Message } }.ToString(), "application/json"); }
                 return true;
