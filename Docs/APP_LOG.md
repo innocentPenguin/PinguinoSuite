@@ -76,6 +76,13 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 07:05 - App rebuild + Spotify module restart (01 e799c22 Approvals tab, songify-music 368da9e)
+
+- App rebuilt and relaunched (Suite > System > Approvals tab for the Teach inbox). Host restarted earlier (aliases, Teach inbox, links, recorder). Boards refreshed, 1858 profiles re-pushed.
+- StreamElements points import applied: 2371 users, 4.1M points, 1.19M minutes (report uTQnYADzBE).
+- Spotify module restarted with Songify parity (queue widget /overlay/queue, blocklist import, new song commands, reward-only mode). Still needs Ivan's Spotify Client ID + login; requests stay closed by default.
+- Note: Link and Spotify were running outside the core (Update-Module could not stop them); killed and restarted under the core.
+
 ## 2026-10-20 06:20 - Full rebuild + relaunch (01 b29ec25 sign-in fix, 02 cab671e Nightbot lore)
 
 - Core + app rebuilt and relaunched (first Build-All failed on a locked Host dll; leftover Host/module processes stopped, second build ok). Suite 'Sign in again' no longer cuts the OAuth url.
