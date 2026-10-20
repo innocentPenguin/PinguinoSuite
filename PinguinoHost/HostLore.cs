@@ -170,7 +170,8 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("lore", "chat match failed: " + ex.Message); return false; }
         }
-        public static void Say(string s) { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }
+        /// <summary>lore and fun replies go out as ChattyPinguino (falls back to the B0t account if Chatty cannot send); PinguinoB0t stays game/stream.</summary>
+        public static void Say(string s) { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("chat", s, out via); } }
 
         // ---- the website's /help: the public entries, grouped ----
         static string Group(string kind) { switch (kind) { case "info": return "Info"; case "link": return "Links"; case "clip": return "Clips"; case "person": return "People"; default: return "Fun"; } }
