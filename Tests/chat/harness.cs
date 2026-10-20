@@ -103,6 +103,7 @@ public static class Harness
         Msg("Ana", "@pinguinob0t what is my win streak?");
         Check("record + streak included when relevant", lastPrompt.Contains("5W/1L") && lastPrompt.Contains("WIN streak: 3"), lastPrompt);
         Check("system prompt has the teasing rules", lastSystem.Contains("MESSING WITH PEOPLE") && lastSystem.Contains("Do NOT bring up wins"));
+        Check("system prompt: warm by default and friendly-but-not-possessive rules", lastSystem.Contains("DEFAULT WARMTH") && lastSystem.Contains("CLOSE FRIENDS, NOT POSSESSIVE") && lastSystem.Contains("FRIENDSHIP, NOT ROMANCE"));
         Check("live state present when queue is discussed", lastPrompt.Contains("activity: competitive") && lastPrompt.Contains("queue CLOSED"));
         Check("zed chat visible as context to ana", lastPrompt.Contains("my cat Luna says hi"));
 
