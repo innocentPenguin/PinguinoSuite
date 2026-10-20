@@ -759,6 +759,7 @@ public static class Harness
         Check("!forgetme also wipes the opinion", string.IsNullOrEmpty((string)Memory()["id_opnx"]["Opinion"]) && !File.Exists(Path.Combine(dir, "opinions", "opnx.json")));
 
         // ── 19b2. canned commands (ported from Nightbot) ──
+        SetCfgB("CannedOn", true);
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Canny", "!shadow", null, false);
         Check("!shadow is answered by the chat bot with the old Nightbot text", Last() != null && Last().Contains("plays way too many extra modes"), Last());

@@ -53,7 +53,37 @@ namespace PinguinoHost
                 return _idx;
             }
         }
-        public static bool IsCommand(string cmd) { return cmd == "!lore" || Index().ContainsKey(cmd); }
+        // Terms ChattyPinguino answers itself (PinguinoChat\canned_commands.json, enabled ones incl. aliases): the Host stays silent on them so nothing is answered twice. Reloads when the file changes.
+        static HashSet<string> _owned = new HashSet<string>(); static long _ownedStamp = -1;
+        static string CannedPath()
+        {
+            try { var cs = JObject.Parse(File.ReadAllText(Path.Combine(HostApi.DataDir, "chat_settings.json")).TrimStart((char)0xFEFF)); string p = (string)cs["CannedFile"]; if (!string.IsNullOrWhiteSpace(p)) return p; } catch (Exception) { }
+            return Path.Combine(Program.SuiteDir ?? "", "PinguinoChat", "canned_commands.json");
+        }
+        static bool ChattyOwns(string cmd)
+        {
+            try
+            {
+                string p = CannedPath(); long st = File.Exists(p) ? new FileInfo(p).LastWriteTimeUtc.Ticks : 0;
+                lock (L)
+                {
+                    if (st != _ownedStamp)
+                    {
+                        var h = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        if (st != 0) foreach (var x in (JObject.Parse(File.ReadAllText(p, Encoding.UTF8).TrimStart((char)0xFEFF))["commands"] as JArray) ?? new JArray())
+                        {
+                            var o = x as JObject; if (o == null || (bool?)o["enabled"] == false) continue;
+                            var names = new List<string> { (string)o["name"] ?? "" }; foreach (var al in (o["aliases"] as JArray) ?? new JArray()) names.Add((string)al ?? "");
+                            foreach (var n in names) if (n.Trim() != "") h.Add("!" + n.Trim().TrimStart('!').ToLowerInvariant());
+                        }
+                        _owned = h; _ownedStamp = st;
+                    }
+                    return _owned.Contains(cmd);
+                }
+            }
+            catch (Exception) { return false; }
+        }
+        public static bool IsCommand(string cmd) { return cmd == "!lore" || (Index().ContainsKey(cmd) && !ChattyOwns(cmd)); }
 
         // ---- rendering: the Nightbot variables ----
         static TimeZoneInfo Central()
@@ -101,10 +131,10 @@ namespace PinguinoHost
             try
             {
                 if (cmd == "!lore") { Admin(args, mod, say); return; }
-                JObject e; if (!Index().TryGetValue(cmd, out e)) return;
+                JObject e; if (!Index().TryGetValue(cmd, out e) || ChattyOwns(cmd)) return;
                 string key = (string)e["id"]; long now = Now(), cd = S("commandCooldownSec", 5);
                 lock (L) { long last; if (LastEntry.TryGetValue("c|" + key, out last) && now - last < cd) return; LastEntry["c|" + key] = now; }
-                say(Full(e, user, args));
+                (IsFun(e) ? (Action<string>)Say : say)(Full(e, user, args));   // fun / people lines: ChattyPinguino; info / link / clip lines stay with the account that got the command (B0t)
             }
             catch (Exception ex) { Clog.Warn("lore", cmd + " failed: " + ex.Message); }
         }
@@ -166,11 +196,13 @@ namespace PinguinoHost
                 }
                 string r = Full(e, user, new string[0]); if (r == "") return false;
                 bool bare = (string)e["bare"] != null; if (!bare && r.Length < 400) r = "@" + user + " " + r;
-                say(r); return true;
+                (IsFun(e) ? say : (Action<string>)SayCore)(r); return true;
             }
             catch (Exception ex) { Clog.Warn("lore", "chat match failed: " + ex.Message); return false; }
         }
         /// <summary>lore and fun replies go out as ChattyPinguino (falls back to the B0t account if Chatty cannot send); PinguinoB0t stays game/stream.</summary>
+        static bool IsFun(JObject e) { string k = (string)e["kind"] ?? "fun"; return k == "fun" || k == "person"; }
+        public static void SayCore(string s) { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }
         public static void Say(string s) { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("chat", s, out via); } }
 
         // ---- the website's /help: the public entries, grouped ----

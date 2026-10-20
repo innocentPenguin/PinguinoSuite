@@ -454,7 +454,7 @@ public class CPHInline
         public int PastContextMs { get; set; } = 4000;            // longest this search may take (a full search of 660k lines takes well under a second now)
         public string LoreFile { get; set; } = @"D:\PinguinoSuite\Data\lore.json";   // running jokes / catchphrases / emotes with where they came from (Pipeline\build-lore.mjs)
         public bool ChannelLoreOn { get; set; } = true;            // PRIVATE channel lore (Data\lore, built from the logs): the bot understands the running jokes and the regulars. Never quoted or sent anywhere.
-        public bool CannedOn { get; set; } = true;                 // the ported Nightbot canned-reply commands (CannedFile): works online and offline, ChatReplies off or on
+        public bool CannedOn { get; set; } = true;                 // the ported Nightbot canned-reply commands (CannedFile; the Host stays silent on these terms): works online and offline, ChatReplies off or on
         public string CannedFile { get; set; } = @"D:\PinguinoSuite\PinguinoChat\canned_commands.json";   // {cooldownSec, commands:[{name, aliases, text | choices, enabled}]}; reloads when saved
         public string ChannelLoreFile { get; set; } = @"D:\PinguinoSuite\Data\lore\channel_lore.json";   // {items:[{term, meaning, howBotsUse}]}
         public string PersonCardsDir { get; set; } = @"D:\PinguinoSuite\Data\lore\person_cards";        // one <login>.json per regular; only the busiest PersonCardsTop are loaded
