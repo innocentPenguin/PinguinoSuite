@@ -149,7 +149,7 @@ namespace PinguinoHost
                 var keep = users.Where(kv => !BotName.IsMatch(kv.Key) && !KnownBots.Contains(kv.Key) && !extra.Contains(kv.Key) && ((int)kv.Value["gifts"] > 0 || (int)kv.Value["bits"] > 0 || (int)kv.Value["messages"] > 0 || (int)kv.Value["streakBest"] > 0)).ToList();
                 var map = new JObject(); foreach (var kv in keep.OrderBy(k => k.Key, StringComparer.Ordinal)) { if (ch != "" && kv.Key == ch) kv.Value["streamer"] = true; map[kv.Key] = kv.Value; }
                 Func<string, JArray> top = field => new JArray(keep.Where(kv => kv.Key != ch && (int)kv.Value[field] > 0).OrderByDescending(kv => (int)kv.Value[field]).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(25).Select(kv => new JObject { { "login", kv.Key }, { "name", kv.Value["name"] }, { "value", kv.Value[field] } }));
-                var res = new JObject { { "ok", true }, { "updatedAt", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }, { "streamerLogin", ch }, { "users", map },
+                var res = new JObject { { "ok", true }, { "push", PushStatus() }, { "updatedAt", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }, { "streamerLogin", ch }, { "users", map },
                     { "top", new JObject { { "gifts", top("gifts") }, { "bits", top("bits") }, { "messages", top("messages") }, { "streaks", top("streakBest") } } },
                     { "note", "gifts and bits start in mid-Feb 2026 when the logs start; the streamer is flagged streamer:true and left out of the top lists" } };
                 _cache = res; _cacheAt = DateTime.UtcNow;
@@ -194,16 +194,16 @@ namespace PinguinoHost
                     var resp = h.SendAsync(rq).Result;
                     if (!resp.IsSuccessStatusCode) { _pushNote += "; boards HTTP " + (int)resp.StatusCode; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the board (HTTP " + (int)resp.StatusCode + ")"); return; }
                 }
-                _lastBoardsHash = hash; _lastBoards = DateTime.UtcNow; _pushNote += "; board ok (" + users.Count + " people)";
+                _lastBoardsHash = hash; _lastBoards = DateTime.UtcNow; _pushNote += "; board ok (" + users.Count + " people)"; Clog.Info("boards", "board pushed to the site: HTTP 200, " + users.Count + " people");
             }
-            catch (Exception ex) { _pushNote += "; boards error: " + ex.Message; _lastBoards = DateTime.UtcNow.AddMinutes(-25); }
+            catch (Exception ex) { _pushNote += "; boards error: " + ex.Message; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "board push failed: " + ex.Message); }
         }
 
         static void PushToSite(JObject r)
         {
-            var s = Latest.Settings(); if ((bool?)s["ForwardBoards"] == false) { _pushNote = "off (ForwardBoards = false)"; return; }   // on by default: the boards are public data; the events forwarding switch (ForwardToSite) is a different thing
+            var s = Latest.Settings(); if ((bool?)s["ForwardBoards"] == false) { _pushNote = "off (ForwardBoards = false)"; Clog.Info("boards", "push skipped: ForwardBoards is false"); return; }   // on by default: the boards are public data; the events forwarding switch (ForwardToSite) is a different thing
             string key = SiteKey();
-            if (key == "") { _pushNote = "no key (vault name BOT_API_KEY)"; return; }
+            if (key == "") { _pushNote = "no key (vault BOT_API_KEY or settings.json WebSyncKey)"; Clog.Warn("boards", "push skipped: no site key (vault BOT_API_KEY / settings.json WebSyncKey)"); return; }
             string ch = (string)r["streamerLogin"] ?? "";
             var rows = ((JObject)r["users"]).Properties().Where(p => p.Name != ch && ((int)p.Value["gifts"] > 0 || (int)p.Value["bits"] > 0)).OrderBy(p => p.Name, StringComparer.Ordinal).ToList();
             string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(string.Join("|", rows.Select(p => p.Name + ":" + (int)p.Value["gifts"] + ":" + (int)p.Value["bits"])))));
@@ -218,13 +218,14 @@ namespace PinguinoHost
                         var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteSupportersUrl"] ?? "https://innocentpenguin.com/api/bot/supporters") { Content = new StringContent(new JObject { { "gifts", gifts }, { "bits", bits } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
                         rq.Headers.Add("Authorization", "Bearer " + key);
                         var resp = h.SendAsync(rq).Result;
-                        if (!resp.IsSuccessStatusCode) { _pushNote = "site answered HTTP " + (int)resp.StatusCode; _lastPush = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the totals (HTTP " + (int)resp.StatusCode + ")"); return; }
+                        if (!resp.IsSuccessStatusCode) { _pushNote = "supporters: site answered HTTP " + (int)resp.StatusCode; _lastPush = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the totals (HTTP " + (int)resp.StatusCode + ")"); return; }
                     }
-                _lastPushHash = hash; _lastPush = DateTime.UtcNow; _pushNote = "supporters ok (" + rows.Count + " people)";
+                _lastPushHash = hash; _lastPush = DateTime.UtcNow; _pushNote = "supporters ok (" + rows.Count + " people)"; Clog.Info("boards", "gifts/bits pushed to the site (supporters): " + rows.Count + " people");
             }
-            catch (Exception ex) { _pushNote = "error: " + ex.Message; _lastPush = DateTime.UtcNow.AddMinutes(-25); }
+            catch (Exception ex) { _pushNote = "error: " + ex.Message; _lastPush = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "supporters push failed: " + ex.Message); }
             PushBoards(r, s, key);
         }
+        public static JObject PushStatus() { return new JObject { { "note", _pushNote }, { "lastSupportersPush", _lastPush == DateTime.MinValue ? "" : _lastPush.ToString("o") }, { "lastBoardPush", _lastBoards == DateTime.MinValue ? "" : _lastBoards.ToString("o") } }; }
         public static string PushNote() { return _pushNote; }
     }
 }
