@@ -35,6 +35,7 @@ const since = String(arg('since', ''));
 const listOnly = arg('list', false) === true;
 const noEvents = arg('no-events', false) === true;
 const forStudy = arg('for-study', false) === true;
+let kept = 0;   // lines kept from older day files that the sites no longer serve
 const rebuild = arg('rebuild', false) === true;   // download EVERY day again and rebuild the chatter profiles from zero
 const LOG_FORMAT = 2;   // 2 = year/month/day folders + notice / timeout lines in the files
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -156,7 +157,16 @@ const noticeText = p => {
     }
     rows.sort((a, b) => a.t - b.t);
     mkdirSync(join(file, '..'), { recursive: true });
-    writeFileSync(file, rows.map(r => `[${stamp(r.t)}] #${channel} ${r.u === '*' ? '* ' + r.m : r.u + ': ' + r.m}`).join('\n') + '\n', 'utf8');
+    // NEVER lose lines we already have: some people opted out of the public log sites (see Data\chat_logs\hidden_sources.json), so a fresh download can lack lines an older
+    // download held (a --rebuild would silently erase them). Lines in the old file but not in the new download are kept (merged by their timestamp).
+    let outLines = rows.map(r => `[${stamp(r.t)}] #${channel} ${r.u === '*' ? '* ' + r.m : r.u + ': ' + r.m}`);
+    if (existsSync(file)) {
+      try {
+        const have = new Set(outLines), old = readFileSync(file, 'utf8').split('\n').filter(l => /^\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\] /.test(l) && !have.has(l));
+        if (old.length) { outLines = outLines.concat(old); outLines.sort((a, b) => a.slice(0, 21) < b.slice(0, 21) ? -1 : a.slice(0, 21) > b.slice(0, 21) ? 1 : 0); kept += old.length; }
+      } catch { /* unreadable old file: write the new one */ }
+    }
+    writeFileSync(file, outLines.join('\n') + '\n', 'utf8');
     // merge this day into the chatter profiles (once per day; today / yesterday are still growing and are merged on a later run)
     if (!done.has(day) && !refresh) {
       for (const [u, p] of Object.entries(dayProf)) {
@@ -208,5 +218,6 @@ Every day of chat the public log sites have, from ${Object.keys(byMonth).sort()[
 * \`INDEX.md\` lists the days and message counts per month. Folders starting with "_" (like _original-downloads) are not read by the bot.
 * The chat bot searches all of these by itself. To update: \`node Pipeline\\fetch-chat-logs.mjs\` (new days only), then the other build scripts (see CHANGES.md).
 `);
+  if (kept) console.log(`Kept ${kept} line(s) from older day files that the log sites no longer serve (opted-out people).`);
   console.log(`Done: ${files} day file(s) written (${msgs} messages), ${skipped} already up to date` + (noEvents ? '' : `, ${evAdded} new event(s) in chat_events.json (${events.length} total)`) + `, ${Object.keys(prof.users).length} chatter profiles. INDEX.md written.`);
 })().catch(e => { console.error('ERROR: ' + e.message); process.exit(1); });

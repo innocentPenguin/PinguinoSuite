@@ -40,6 +40,23 @@ for (const f of readdirSync(profDir)) {
     profiles[login] = p;
   } catch { /* skip a broken file */ }
 }
+// OPTED-OUT PEOPLE (Data\chat_logs\hidden_sources.json): the public log sites will not serve them, so their messages since the "since" day come from our own recording
+// (Data\chat_logs\live, written by the Host; Chatty's own lines are copied in by the boards refresh). Day files are never touched.
+{
+  const hid = (() => { try { return JSON.parse(readFileSync(join(here, '..', 'Data', 'chat_logs', 'hidden_sources.json'), 'utf8').replace(/^\uFEFF/, '')).users || {}; } catch { return {}; } })();
+  const liveDir = join(here, '..', 'Data', 'chat_logs', 'live'); let liveFiles = []; try { liveFiles = readdirSync(liveDir).filter(f => f.endsWith('.jsonl')).sort(); } catch { /* none yet */ }
+  for (const [lg, info] of Object.entries(hid)) {
+    const p = profiles[lg.toLowerCase()]; if (!p) continue;
+    const cut = Date.parse((info.since || '') + 'T00:00:00Z') || 0; let n = Number(info.offset) || 0, lastAt = 0; const per = {};
+    for (const f of liveFiles) for (const ln of readFileSync(join(liveDir, f), 'utf8').split('\n')) {
+      if (!ln.includes('"u"')) continue; try { const j = JSON.parse(ln.replace(/^\uFEFF/, '')); if ((j.u || '').toLowerCase() !== lg.toLowerCase() || j.t < cut) continue; n++; lastAt = Math.max(lastAt, j.t); const mo = new Date(j.t).toISOString().slice(0, 7); per[mo] = (per[mo] || 0) + 1; } catch { /* bad line */ }
+    }
+    if (n === 0) continue; if (!p.activity) p.activity = {}; p.activity.messages = (p.activity.messages || 0) + n; p.activity.perMonth = p.activity.perMonth || {};
+    for (const [mo, c] of Object.entries(per)) p.activity.perMonth[mo] = (p.activity.perMonth[mo] || 0) + c;
+    if (lastAt && p.seen) p.seen.lastSeen = new Date(Math.max(lastAt, Date.parse(p.seen.lastSeen || '') || 0)).toISOString().replace(/\.\d+Z$/, 'Z');
+    console.log(`Opted-out ${lg}: +${n} messages from our own recording.`);
+  }
+}
 // LIVE DATA from the Host (refreshed every 10 min and on sub events): active subs straight from Twitch, profile pictures, bots.
 const dataRoot = join(here, '..', 'Data');
 const readJ = f => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };

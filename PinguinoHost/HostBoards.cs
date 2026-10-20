@@ -296,6 +296,13 @@ namespace PinguinoHost
                         }
                         catch (Exception) { }
                     }
+                // people the public log sites will not serve (opted out): their lines come from our own recording (Data\chat_logs\live), day files untouched
+                try
+                {
+                    LiveLog.BackfillFromChatty();
+                    foreach (var kv in LiveLog.Overlay()) { if (kv.Value.Total <= 0) continue; var o = U(kv.Key); o["messages"] = (int)o["messages"] + kv.Value.Total; foreach (var pm in kv.Value.PerMonth) addM(mMsgs, pm.Key, kv.Key, pm.Value, false); }
+                }
+                catch (Exception ex) { Clog.Warn("boards", "hidden-source overlay failed: " + ex.Message); }
                 // watch streaks
                 foreach (var sh in Streaks.AllShares()) { if ((sh.Item3 ?? "").Length >= 7) addM(mStreak, sh.Item3.Substring(0, 7), sh.Item1, sh.Item2, true); }
                 foreach (JObject b in (JArray)Streaks.Api()["board"]) { var o = U((string)b["login"]); o["streakBest"] = (int)b["best"]; o["streakCurrent"] = (int)b["current"]; o["streakAt"] = (string)b["lastSharedAt"]; if (o["name"].ToString() == (string)b["login"] && !string.IsNullOrEmpty((string)b["name"])) o["name"] = (string)b["name"]; }
