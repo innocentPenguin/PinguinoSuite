@@ -73,6 +73,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 05:25 - Host restart (8212f95 shoutouts, f463b61 strikes, 5bf5db0 !8ball, 47829e2 se_jwt secret)
+
+- Shoutouts: immediate temp chat line, then the Twitch card via Ivan's token after 1-5 s; 2 min gap and 60 min per target kept.
+- Strikes: temp (orange, one wears off per 24 h) vs permanent (red, never expire); commands-doc now 73 commands.
+- !8ball with public context; Host declares se_jwt vault secret. Profiles re-pushed.
+
 ## 2026-10-20 05:10 - Host restart (1a4af3b)
 
 - Weekly private opinion notes + mod-only !opinion enabled. Profiles re-pushed (1800).
