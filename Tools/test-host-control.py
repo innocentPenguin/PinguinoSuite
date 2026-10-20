@@ -10,7 +10,8 @@ class H(BaseHTTPRequestHandler):
     def _do(self):
         n = int(self.headers.get('Content-Length') or 0); body = json.loads(self.rfile.read(n) or b'{}') if n else {}
         (None if (self.path.startswith('/api/') or self.command == 'GET' and not self.path.startswith(('/predictions', '/users?login=patfromearth'))) else reqs.append((self.command, self.path, body))); code, out = 200, {'data': []}
-        if self.path.startswith('/users'): out = {'data': [{'id': '777', 'login': 'patfromearth'}]}
+        if self.path.startswith('/games'): out = {'data': [{'id': 'g1', 'name': 'Rocket League'}]}
+        elif self.path.startswith('/users'): out = {'data': [{'id': '777', 'login': 'patfromearth'}]}
         elif self.path.startswith('/predictions') and self.command == 'GET': out = {'data': [{'id': 'pr1', 'status': 'ACTIVE', 'outcomes': [{'id': 'o1', 'title': 'Yes'}, {'id': 'o2', 'title': 'No'}]}]}
         elif self.command in ('PATCH', 'DELETE') or self.path.startswith('/chat/settings'): code = 204
         if code == 204:
@@ -59,6 +60,10 @@ try:
     cool(); r = say('#ivan: !resolve no'); chk('resolve by name', last()[2] == {'broadcaster_id': '111', 'id': 'pr1', 'status': 'RESOLVED', 'winning_outcome_id': 'o2'}, last())
     cool(); r = say('#ivan: !cancel'); chk('cancel', last()[2]['status'] == 'CANCELED', last())
     r = say('#ivan: !announce orange Giveaway soon'); chk('announce colour', last()[1].startswith('/chat/announcements?broadcaster_id=111&moderator_id=111') and last()[2] == {'message': 'Giveaway soon', 'color': 'orange'}, last())
+    r = say('*modguy: !title New PM system tonight'); chk('mod !title', last()[0] == 'PATCH' and last()[1].startswith('/channels?broadcaster_id=111') and last()[2] == {'title': 'New PM system tonight'} and 'Title changed' in r, (last(), r))
+    r = say('*modguy: !game rocket league'); chk('mod !game', last()[0] == 'PATCH' and last()[2] == {'game_id': 'g1'} and 'Rocket League' in r, (last(), r))
+    n0 = len(reqs); r = say('viewer1: !title hacked'); chk('viewer !title does nothing', len(reqs) == n0 and not r, r)
+    r = say('*modguy: !title'); chk('!title usage', len(reqs) == n0 and 'Use: !title' in r, r)
     r = say('#ivan: !marker nice'); chk('marker', last()[1] == '/streams/markers' and last()[2]['description'] == 'nice', last())
     n0 = len(reqs); r = say('*modguy: !shield on'); chk('shield is broadcaster only', len(reqs) == n0, r)
     r = say('#ivan: !shield on'); chk('shield', last()[0] == 'PUT' and last()[2] == {'is_active': True} and len(reqs) == n0 + 1, last())

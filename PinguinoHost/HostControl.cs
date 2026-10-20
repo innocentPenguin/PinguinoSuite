@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace PinguinoHost
     public static class Control
     {
         [ThreadStatic] public static bool Synthetic;   // set around Dispatch calls that do not come from Twitch chat
-        static readonly string[] Cmds = { "!poll", "!predict", "!lock", "!resolve", "!cancel", "!slow", "!emote-only", "!emoteonly", "!followers", "!subs-only", "!subsonly", "!announce", "!shield", "!marker", "!ad", "!vip", "!unvip", "!raid", "!confirm", "!unraid" };
+        static readonly string[] Cmds = { "!poll", "!predict", "!lock", "!resolve", "!cancel", "!slow", "!emote-only", "!emoteonly", "!followers", "!subs-only", "!subsonly", "!announce", "!title", "!game", "!shield", "!marker", "!ad", "!vip", "!unvip", "!raid", "!confirm", "!unraid" };
         public static bool IsCommand(string cmd) { return Cmds.Contains(cmd); }
         static string CfgP { get { return Path.Combine(HostApi.DataDir, "config", "control.json"); } }
         static string RaidP { get { return Path.Combine(HostApi.DataDir, "config", "raid_list.json"); } }
@@ -81,6 +81,7 @@ namespace PinguinoHost
                     case "!followers": res = Settings("followers", args, say); break;
                     case "!subs-only": case "!subsonly": res = Settings("subs", args, say); break;
                     case "!announce": res = Announce(args, say); break;
+                    case "!title": case "!game": res = Retitle(cmd == "!title", a, say); break;
                     case "!marker": res = Marker(a, say); break;
                     case "!shield": if (!owner) { res = "refused: broadcaster only"; break; } res = Shield(args, say); break;
                     case "!ad": if (!owner) { res = "refused: broadcaster only"; break; } res = Ad(args, say); break;
@@ -183,6 +184,13 @@ namespace PinguinoHost
             if (!Ok(r)) say("Could not announce: " + Why(r)); return Ok(r) ? "ok" : Why(r);
         }
 
+        static string Retitle(bool title, string a, Action<string> say)
+        {
+            if (a == "") { say(title ? "Use: !title <new stream title>" : "Use: !game <category name>"); return "usage"; }
+            var r = ChannelControl.Update(title ? a : null, title ? null : a);
+            if ((bool?)r["ok"] == true) { say(title ? "Title changed to: " + Clip((string)r["title"], 120) : "Game changed to: " + (string)r["game"]); return "ok"; }
+            string e = (string)r["error"] ?? "unknown"; say("Could not change the " + (title ? "title" : "game") + ": " + Clip(e, 140)); return e;
+        }
         static string Marker(string a, Action<string> say)
         {
             JToken d; var body = new JObject { { "user_id", TwitchApi.BroadcasterId() } }; if (a != "") body["description"] = Clip(a, 140);

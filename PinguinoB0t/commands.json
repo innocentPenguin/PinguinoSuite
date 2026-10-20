@@ -1445,6 +1445,34 @@
       "importance": 48
     },
     {
+      "command": "!title",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!title <new stream title>",
+      "description": "Changes the stream title.",
+      "examples": [
+        "!title New PM system tonight"
+      ],
+      "section": "Stream",
+      "importance": 49
+    },
+    {
+      "command": "!game",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!game <category name>",
+      "description": "Changes the stream category (game).",
+      "examples": [
+        "!game Rocket League"
+      ],
+      "section": "Stream",
+      "importance": 49
+    },
+    {
       "command": "!announce",
       "aliases": [],
       "action": "PinguinoHost",
