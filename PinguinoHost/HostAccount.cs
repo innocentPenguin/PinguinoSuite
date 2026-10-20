@@ -18,7 +18,16 @@ namespace PinguinoHost
             new[] { "channel:read:redemptions", "channel-point redemptions", "1" }, new[] { "channel:moderate", "bans/moderation events (ban alert)", "1" },
             new[] { "clips:edit", "clips: !clip", "1" }, new[] { "channel:read:ads", "ads: !preroll / ad commands", "0" }, new[] { "moderator:manage:shoutouts", "native Twitch shoutouts (!shout)", "0" }, new[] { "moderator:read:chatters", "who is in the chatroom (points and watch time)", "0" },
             new[] { "channel:manage:broadcast", "!title / !game and the Speak channel update", "0" }, new[] { "channel:manage:redemptions", "creating and editing channel-point rewards", "0" },
-            new[] { "channel:read:goals", "goal announcements", "0" }, new[] { "channel:read:hype_train", "hype train announcements", "0" } };
+            new[] { "channel:read:goals", "goal announcements", "0" }, new[] { "channel:read:hype_train", "hype train announcements", "0" },
+            new[] { "channel:manage:polls", "!poll", "0" }, new[] { "channel:read:polls", "poll events and results", "0" }, new[] { "channel:manage:predictions", "!predict / !lock / !resolve / !cancel", "0" }, new[] { "channel:read:predictions", "prediction events and results", "0" },
+            new[] { "channel:manage:raids", "!raid (Ivan only, trusted list, confirmed)", "0" }, new[] { "channel:manage:moderators", "adding and removing moderators (Ivan only)", "0" }, new[] { "channel:read:vips", "!vips list", "0" }, new[] { "channel:manage:vips", "!vip / !unvip", "0" },
+            new[] { "moderator:manage:chat_settings", "!slow / !emote-only / !followers / !subs-only", "0" }, new[] { "moderator:manage:announcements", "!announce and milestone announcements", "0" }, new[] { "moderator:manage:automod", "approving or denying held messages", "0" },
+            new[] { "moderator:manage:blocked_terms", "blocked terms list", "0" }, new[] { "moderator:manage:chat_messages", "deleting chat messages", "0" }, new[] { "moderator:manage:warnings", "chat warnings", "0" }, new[] { "moderator:manage:unban_requests", "unban requests queue", "0" },
+            new[] { "moderator:read:automod_settings", "reading AutoMod settings", "0" }, new[] { "moderator:read:suspicious_users", "suspicious user list", "0" }, new[] { "moderator:read:shield_mode", "shield mode state", "0" }, new[] { "moderator:manage:shield_mode", "!shield", "0" },
+            new[] { "user:manage:whispers", "opt-in whisper reminders", "0" }, new[] { "channel:manage:schedule", "stream schedule edits", "0" }, new[] { "channel:edit:commercial", "!ad (Ivan only)", "0" }, new[] { "channel:read:charity", "charity campaign alerts", "0" },
+            new[] { "channel:read:guest_star", "Guest Star state", "0" }, new[] { "channel:manage:guest_star", "Guest Star control", "0" }, new[] { "channel:read:editors", "channel editors list", "0" }, new[] { "user:read:chat", "EventSub chat events", "0" },
+            new[] { "user:read:follows", "followed channels", "0" }, new[] { "user:read:subscriptions", "subscription checks", "0" }, new[] { "user:read:emotes", "emote lists", "0" }, new[] { "user:bot", "bot accounts in chat (EventSub)", "0" }, new[] { "channel:bot", "bot accounts in chat (EventSub)", "0" },
+            new[] { "analytics:read:games", "game analytics", "0" }, new[] { "moderator:read:moderators", "moderator list", "0" }, new[] { "moderator:read:vips", "VIP list", "0" }, new[] { "channel:manage:ads", "ad schedule snooze", "0" } };
 
         static JObject AccountStreamer()
         {
