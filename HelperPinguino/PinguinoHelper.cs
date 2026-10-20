@@ -12,22 +12,23 @@ using Newtonsoft.Json.Linq;
 
 // ═══════════════════════════════════════
 //  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
-//    47    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
-//    353   HelperSettings (every setting + default)
-//    394   State (static caches, cooldowns, test hooks)
-//    413   Patterns (free pass regexes)
-//    437   Entry point Execute()
-//    495   Help-review log (private review.jsonl)
-//    549   Handle() / HandleCore(): the message pipeline
-//    658   !helper / !ask / !pinguino (knowledge pack answers)
-//    793   Random chime + OptedOutOfBots
-//    833   Context gate (only help when really asked)
-//    883   Minecraft + website facts, Taught notes, site answers
+//    48    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    354   HelperSettings (every setting + default)
+//    395   State (static caches, cooldowns, test hooks)
+//    414   Patterns (free pass regexes)
+//    438   Entry point Execute()
+//    496   Help-review log (private review.jsonl)
+//    550   Handle() / HandleCore(): the message pipeline
+//    659   !helper / !ask / !pinguino (knowledge pack answers)
+//    794   Random chime + OptedOutOfBots
+//    834   Context gate (only help when really asked)
+//    884   Minecraft + website facts, Taught notes, site answers
 //    1135  AI intent picker + Ask() (Claude/OpenAI)
 //    1212  Answers and actions (Respond/Do, queue, register)
 //    1370  Text building (lobby line, how-to-join)
 //    1443  Reading game manager files, Say()
 // ═══════════════════════════════════════
+
 
 
 
@@ -1038,11 +1039,10 @@ public class CPHInline
         if (now - fu.Last < 20) return true;                                                  // one follow-up per 20 s
         fu.Last = now; fu.Until = now + 240;
         var f = Facts(); string ip = F(f, "McSmpIp"), port = F(f, "McBedrockPort"); if (port == "") port = "19132";
-        string ver = F(f, "McVersion"), dns = F(f, "McBedrockConnectDns"), friend = f["McConsoleFriend"] == null ? "BedrockGo2" : F(f, "McConsoleFriend");   // from the chat: add BedrockGo2 as a friend, join its world, add the server
+        string ver = F(f, "McVersion"), bcUrl = F(f, "McBedrockConnectUrl"); if (bcUrl == "") bcUrl = "https://github.com/Pugmatt/BedrockConnect";
         string who = "@" + display + " ";
         if (console || fu.Ed == "bedrock" && RxConsole.IsMatch(_curText))
-            Say(who + "Consoles (Xbox / PlayStation / Switch) can't type a server IP, so use Bedrock Connect: set your console's DNS to the Bedrock Connect server" + (dns == "" ? " (ask a mod for the current address)" : " (" + dns + ")") +
-                ", open Minecraft > Servers, pick the Bedrock Connect entry, then add " + ip + " port " + port + "." + (friend == "" ? "" : " Chat's other trick: add " + friend + " as a friend, join its world, then add the server there."));
+            Say(who + "Thanks for asking! Consoles join through Bedrock Connect, the steps are on its official page: " + bcUrl + " then add " + ip + " port " + port + ".");
         else if (fu.Ed == "java")
             Say(who + "Java not connecting? 1) Type the IP exactly: " + ip + " (no port). 2) Use the server's version" + (ver == "" ? "" : " (" + ver + ")") + ". 3) Turn off a VPN or mods that change the version. Still stuck? Tell me the exact error.");
         else

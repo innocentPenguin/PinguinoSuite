@@ -296,7 +296,7 @@ public static class Harness
         Msg("Fl1", "it doesnt work"); Check("java follow-up 'it doesn't work' gets troubleshooting", Last() != null && Last().Contains("Java not connecting") && Last().Contains("play.example.net"), Last());
         Msg("Fl2", "how do i join the minecraft server?"); Msg("Fl2", "bedrock");
         Check("bedrock: IP + port and a pointer to console help", Last() != null && Last().Contains("11111") && Last().Contains("console"), Last());
-        Msg("Fl2", "console"); Check("'console' explains Bedrock Connect (and the BedrockGo2 trick from chat)", Last() != null && Last().Contains("Bedrock Connect") && Last().Contains("BedrockGo2") && Last().Contains("play.example.net"), Last());
+        Msg("Fl2", "console"); Check("'console' is one short thankful line pointing at the official Bedrock Connect page, no console list, no chat trick", Last() != null && Last().Contains("Bedrock Connect") && Last().Contains("github.com/Pugmatt/BedrockConnect") && Last().Contains("Thanks") && Last().Length < 230 && !Last().Contains("BedrockGo2") && !Last().Contains("trick") && !Last().Contains("PlayStation") && !Last().Contains("Xbox"), Last());
         Msg("Fl3", "how do i join the minecraft server?"); Msg("Fl3", "bedrock"); Msg("Fl3", "it says cant connect");
         Check("bedrock follow-up gets the bedrock checklist", Last() != null && Last().Contains("Bedrock not connecting") && Last().Contains("separate boxes"), Last());
         Msg("Fl4", "how do i join the minecraft server?"); Msg("Fl4", "java"); Msg("Fl4", "no bedrock");
