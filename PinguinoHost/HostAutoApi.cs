@@ -113,6 +113,16 @@ namespace PinguinoHost
                 else res = ObsTree.SetItem((string)b["scene"] ?? "", (int?)b["itemId"] ?? -1, (bool?)b["enabled"], (bool?)b["toggle"] == true);
                 Write(c, res.ToString(), "application/json"); return true;
             }
+            if (p == "/api/overlays" && m == "GET") { Write(c, OverlayFiles.List().ToString(), "application/json"); return true; }
+            if (p == "/api/overlays/file" && m == "GET") { Write(c, OverlayFiles.Read(c.Request.QueryString["path"]).ToString(), "application/json"); return true; }
+            if ((p == "/api/overlays/write" || p == "/api/overlays/delete" || p == "/api/overlays/rename") && m == "POST")
+            {
+                var b = Body(c); string who = "overlay-api"; JObject res;
+                if (p.EndsWith("/write")) res = OverlayFiles.Write((string)b["path"], (string)b["text"], (string)b["base64"], who);
+                else if (p.EndsWith("/delete")) res = OverlayFiles.Delete((string)b["path"], who);
+                else res = OverlayFiles.Rename((string)b["from"], (string)b["to"], who);
+                Write(c, res.ToString(), "application/json"); return true;
+            }
             if (p == "/api/live-state" && m == "GET") { Write(c, Control.LiveState().ToString(), "application/json"); return true; }
             if (p == "/api/activity" && m == "GET")
             {

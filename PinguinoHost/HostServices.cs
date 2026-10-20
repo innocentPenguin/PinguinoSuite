@@ -230,6 +230,7 @@ namespace PinguinoHost
         {
             var l = new HttpListener(); l.Prefixes.Add("http://127.0.0.1:" + port + "/");
             try { l.Start(); } catch (Exception ex) { Console.WriteLine("overlay server not started: " + ex.Message); return; }
+            OverlayFiles.Root = roots.Take(2).FirstOrDefault(x => !string.IsNullOrEmpty(x) && Directory.Exists(x)) ?? "";   // the managed (writable) overlay folder: OverlayDir, else the suite overlays
             Console.WriteLine("overlays: http://127.0.0.1:" + port + "/players.html");
             Task.Run(async () =>
             {
