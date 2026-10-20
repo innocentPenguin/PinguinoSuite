@@ -122,11 +122,11 @@ try:
     api('/api/economy', {'adjust': 'gambler', 'delta': 6000}); api('/api/economy', {'adjust': 'poorguy', 'delta': 50})
     b0 = bal('gambler'); chk('test balance exists', b0 >= 6000, b0)
     shopitem('s1', 'gambler', 'guess_chatter', 500)
-    chk('s1 accepted and pengs taken', wait(lambda: S['shop']['s1']['status'] == 'accepted') and bal('gambler') == b0 - 500, (S['shop']['s1'], bal('gambler')))
+    chk('s1 accepted and points taken', wait(lambda: S['shop']['s1']['status'] == 'accepted') and bal('gambler') == b0 - 500, (S['shop']['s1'], bal('gambler')))
     shopitem('s2', 'gambler', 'guess_chatter', 500)
     chk('s2 (user cooldown) rejected, no charge', wait(lambda: S['shop']['s2']['status'] == 'rejected') and bal('gambler') == b0 - 500)
     shopitem('s3', 'poorguy', 'guess_chatter', 500)
-    chk('s3 not enough pengs rejected', wait(lambda: S['shop']['s3']['status'] == 'rejected'))
+    chk('s3 not enough points rejected', wait(lambda: S['shop']['s3']['status'] == 'rejected'))
     shopitem('s4', 'gambler', 'guess_chatter', 50)
     chk('s4 stake below the minimum rejected', wait(lambda: S['shop']['s4']['status'] == 'rejected'))
     g = rj('site_shop.json')['game']

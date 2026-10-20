@@ -16,7 +16,7 @@ namespace PinguinoHost
     /// what the Host earns afterwards), then our own earning loop (every minute while live, everyone in the chatroom, bots left out, sub/VIP multipliers).
     /// Store: Data\economy\points.json {baseline:{at,source,users}, earned:{login:{points,minutes}}, months:{yyyy-MM:{login:{points,minutes}}}, adjust:{login:n}}. Aliases (Data\boards\aliases.json) fold at read time.
     /// The StreamElements JWT is read from the vault key se_jwt (or PINGUINO_SE_JWT in tests) and is never logged, echoed or stored.
-    /// Chat: !points [user] (also !pengs), !watchtime [user], !toppoints [month], !topwatch [month]; mods: !addpoints @user n, !removepoints @user n, !economy status|import|apply &lt;id&gt;.</summary>
+    /// Chat: !points [user], !watchtime [user], !toppoints [month], !topwatch [month]; mods: !addpoints @user n, !removepoints @user n, !economy status|import|apply &lt;id&gt;.</summary>
     public static class Economy
     {
         static readonly object L = new object();
@@ -31,13 +31,13 @@ namespace PinguinoHost
         static int MinuteSec { get { int v; return int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_MINUTE_SEC"), out v) && v > 0 ? v : 60; } }
         static string _note = "", _chatterNote = ""; static DateTime _lastTick = DateTime.MinValue; static int _lastPaid;
 
-        public static string CurrencyName { get { lock (L) return (string)Settings()["CurrencyName"] ?? "pengs"; } }
+        public static string CurrencyName { get { lock (L) { string n = (string)Settings()["CurrencyName"] ?? "points"; return n == "pengs" ? "points" : n; } } }   // "pengs" was the old name: always points now
 
         // ---- settings + store ----
         static JObject Settings()
         {
             if (_set != null) return _set;
-            var d = new JObject { { "CurrencyName", "pengs" }, { "PointsPerMinute", 1.0 }, { "SubMultiplier", 2.0 }, { "VipMultiplier", 1.5 }, { "ModMultiplier", 1.0 }, { "OnlyWhileLive", true }, { "Earning", true },
+            var d = new JObject { { "CurrencyName", "points" }, { "PointsPerMinute", 1.0 }, { "SubMultiplier", 2.0 }, { "VipMultiplier", 1.5 }, { "ModMultiplier", 1.0 }, { "OnlyWhileLive", true }, { "Earning", true },
                 { "FallbackActiveMinutes", 30 }, { "Exclude", new JArray() } };
             try { if (File.Exists(SetP)) foreach (var p in JObject.Parse(File.ReadAllText(SetP, Encoding.UTF8))) d[p.Key] = p.Value; else File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
             _set = d; return d;
@@ -278,10 +278,10 @@ namespace PinguinoHost
         }
 
         // ---- spending (the hidden shop): every change carries an id, so a retry or a restart never applies it twice ----
-        /// <summary>whole pengs the user can spend right now</summary>
+        /// <summary>whole points the user can spend right now</summary>
         public static bool Applied(string id) { lock (L) return Ledger()[id] != null; }
         public static long Balance(string login) { return (long)Math.Floor(Me(login).Points); }
-        /// <summary>takes `amount` pengs for good. Returns null on success (also when this id was already applied: nothing is taken twice), otherwise the reason it was refused.</summary>
+        /// <summary>takes `amount` points for good. Returns null on success (also when this id was already applied: nothing is taken twice), otherwise the reason it was refused.</summary>
         public static string Spend(string id, string login, long amount, string reason)
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return "bad spend";
@@ -296,7 +296,7 @@ namespace PinguinoHost
             }
             Clog.Info("economy", login + " spent " + amount + " (" + reason + ")"); return null;
         }
-        /// <summary>gives `amount` pengs (a prize). Same id twice is applied once.</summary>
+        /// <summary>gives `amount` points (a prize). Same id twice is applied once.</summary>
         public static bool Credit(string id, string login, long amount, string reason)
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return false;
@@ -349,7 +349,7 @@ namespace PinguinoHost
         static int CoolSec(string env, int d) { int v; return int.TryParse(Environment.GetEnvironmentVariable(env), out v) ? v : d; }
         const string Link = "https://innocentpenguin.com/leaderboards";
 
-        public static bool IsViewerCommand(string c) { return c == "!points" || c == "!pengs" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch"; }
+        public static bool IsViewerCommand(string c) { return c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch"; }
         public static bool IsModCommand(string c) { return c == "!addpoints" || c == "!removepoints" || c == "!economy"; }
 
         public static void Handle(string user, string cmd, string[] args, bool mod, Action<string> say, Func<string, string> parseMonth, Func<string, string> monthLabel)

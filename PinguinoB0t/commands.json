@@ -1165,17 +1165,15 @@
     },
     {
       "command": "!points",
-      "aliases": [
-        "!pengs"
-      ],
+      "aliases": [],
       "action": "PinguinoHost",
       "category": "Points",
       "who": "everyone",
       "usage": "!points [user]",
-      "description": "Your pengs balance and rank (earned by watching, imported from StreamElements).",
+      "description": "Your points balance and rank (earned by watching, imported from StreamElements).",
       "examples": [
         "!points",
-        "!pengs cyfirl"
+        "!points cyfirl"
       ],
       "section": "Essentials",
       "importance": 10
@@ -1201,7 +1199,7 @@
       "category": "Points",
       "who": "everyone",
       "usage": "!toppoints [month]",
-      "description": "Top pengs holders, all time or for one month.",
+      "description": "Top points holders, all time or for one month.",
       "examples": [
         "!toppoints",
         "!toppoints oct"
@@ -1230,7 +1228,7 @@
       "category": "Points",
       "who": "mods",
       "usage": "!addpoints @user <n>",
-      "description": "Give someone pengs.",
+      "description": "Give someone points.",
       "examples": [
         "!addpoints @ana 500"
       ],
@@ -1244,7 +1242,7 @@
       "category": "Points",
       "who": "mods",
       "usage": "!removepoints @user <n>",
-      "description": "Take pengs away from someone.",
+      "description": "Take points away from someone.",
       "examples": [
         "!removepoints @ana 50"
       ],

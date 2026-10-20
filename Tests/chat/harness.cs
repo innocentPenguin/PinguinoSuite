@@ -156,6 +156,11 @@ public static class Harness
         Msg("Cmd1", "pinguinb0t why doesn't !join work?");
         Check("answers name without @", Last() == "@Cmd1 Queue is closed right now", Last());
         Check("command help + earlier !join in context", lastPrompt.Contains("[COMMANDS]") && lastPrompt.Contains("!join @pinguinob0t"));
+        { int b4 = llmCalls; Msg("Cmd3", "pinguinb0t how do i join the queue"); Check("how-to questions are left to the helper and the site", llmCalls == b4 && Last() != "@Cmd3 fair enough"); }
+        Msg("CmdNoise", "!zzcmdmarker 123");
+        nextReply = "{\"reply\":\"fair enough\",\"remember\":[]}";
+        Msg("Cmd2", "pinguinb0t what do you think of rocket league");
+        Check("other people's !commands stay out of the room context", lastPrompt != null && !lastPrompt.Contains("!zzcmdmarker"), "prompt had the command");
         Msg("Viewer9", "thanks!", null, false, "pinguinob0t");
         Check("reply to the bot's message counts", Last() != null && Last().StartsWith("@Viewer9"));
 
@@ -839,7 +844,7 @@ public static class Harness
         Check("a join question to the chatbot is deferred to the helper (no AI call, nothing said)", Result() == "defer" && llmCalls == callsRt, Result() + " " + (llmCalls - callsRt));
         Extra["pinguinoNoDefer"] = true;
         Msg("Rt2", "@pinguinob0t how do i join the queue?");
-        Check("when the router hands it back the chatbot answers", Result() == "handled" && llmCalls == callsRt + 1, Result() + " " + (llmCalls - callsRt));
+        Check("when the router hands it back the chatbot still stays out of how-to questions", Result() != "handled" && llmCalls == callsRt, Result() + " " + (llmCalls - callsRt));
         Extra.Clear(); Extra["pinguinoRouted"] = true; Extra["pinguinoNext"] = "helper";
         Msg("Rt3", "@pinguinob0t that was a sick play");
         Check("other mentions are answered, not deferred", Result() == "handled");

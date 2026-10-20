@@ -77,6 +77,13 @@ if (liveSubs && liveSubs.users && liveSubs.count > 0) {
   // a profile that still says subbed while Twitch has no active sub for it: the sub ended
   for (const [lg, p] of Object.entries(profiles)) if (p.roles && p.roles.sub === true && !liveSubs.users[lg]) { p.roles.sub = false; p.roles.lapsed = true; subRemoved++; }
 } else console.log('No live sub list from the Host yet: subs come from the csv import and chat badges only.');
+// ROCKET LEAGUE RANKS from the Host (!rank pulls every playlist per linked Epic account, at most once per 15 min): profile.rocketLeague = {updated, ranks:{'1v1','2v2','3v3','4v4',hoops,rumble,dropshot,snowday,heatseeker,tournament}}
+let rlSet = 0;
+{
+  const rl = readJ(join(dataRoot, 'ranks', 'rl_ranks.json'));
+  if (rl && rl.users) for (const [lg, u] of Object.entries(rl.users)) { const p = profiles[lg.toLowerCase()]; if (!p || !u.ranks || !Object.keys(u.ranks).length) continue; p.rocketLeague = { updated: new Date((u.at || 0) * 1000).toISOString(), ranks: u.ranks }; rlSet++; }
+  console.log(`Rocket League ranks: ${rlSet} profiles.`);
+}
 for (const [lg, p] of Object.entries(profiles)) {
   const a = avatars[lg]; if (a && a.url) { p.avatar = a.url; avaSet++; }
   if (bots.has(lg)) { p.isBot = true; botSet++; }

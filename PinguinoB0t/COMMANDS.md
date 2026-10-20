@@ -49,6 +49,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | Command | Usage | What it does |
 |---|---|---|
 | `!commands` | `!commands` | Link to the website help page with every chat command and a search box. |
+| `!helper` | `!helper <question>` | Ask the helper a question about the stream, commands, the queue or the website. It answers in one short line from its knowledge pack and points you to the right page. Once every 30 seconds per person; it stays silent for anyone who opted out or used !unping. |
 
 ### Leaderboards
 
@@ -65,9 +66,9 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
-| `!points` | `!points [user]` | Your pengs balance and rank (earned by watching, imported from StreamElements). |
+| `!points` | `!points [user]` | Your points balance and rank (earned by watching, imported from StreamElements). |
 | `!watchtime` | `!watchtime [user]` | How long you have watched the channel, and your rank. |
-| `!toppoints` | `!toppoints [month]` | Top pengs holders, all time or for one month. |
+| `!toppoints` | `!toppoints [month]` | Top points holders, all time or for one month. |
 | `!topwatch` | `!topwatch [month]` | Most watch time, all time or for one month. |
 
 ### Rocket League
@@ -182,8 +183,8 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
-| `!addpoints` | `!addpoints @user <n>` | Give someone pengs. |
-| `!removepoints` | `!removepoints @user <n>` | Take pengs away from someone. |
+| `!addpoints` | `!addpoints @user <n>` | Give someone points. |
+| `!removepoints` | `!removepoints @user <n>` | Take points away from someone. |
 | `!economy` | `!economy status\|import\|apply <id>` | Points system status; import from StreamElements (dry run, then apply with the report id). |
 
 ### Rocket League

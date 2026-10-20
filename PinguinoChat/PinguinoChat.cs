@@ -680,18 +680,18 @@ public class CPHInline
             if (cmd == "!8ball") { if (_cfg.EightBallOn) EightBallCommand(cx, text.Length > 6 ? text.Substring(6).Trim() : ""); return; }
             RecordEvent(login, text);                                // gifted subs, resubs, bits, follows, raids (announced by the bots / the raiders)
             if (login == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(login) || IsBot(login)) return;
-            if (!PgNoDefer()) GateCount();                           // counts the line for the activity gate (once, not again when the router hands it back)
+            if (cmd == "" && !PgNoDefer()) GateCount();                           // counts the line for the activity gate (once, not again when the router hands it back)
             if (!IsLive()) { SleepingReply(cx, cmd, replyTo); return; }   // offline: no recording, no AI; only a short "come back when live" when pinged
 
             bool second = PgNoDefer();                               // the router gives the message back after the helper passed on it: it was recorded the first time
-            Viewer v = second ? FindViewer(login, cx.UserId) : Touch(cx);   // counts the message (unless opted out)
+            Viewer v = (second || cmd != "") ? FindViewer(login, cx.UserId) : Touch(cx);   // counts the message (unless opted out)
             bool optedOut = NoMem(v);
             bool anon = v != null && v.Privacy == "anon";
             // Everyone's chat is kept (it is the community's memory). Anonymous viewers show up as [anon], and any
             // mention of an anonymous viewer's name is blanked, in the buffer, the logs and every prompt.
             if (!second)
             {
-                AddLine(new ChatLine { At = Now(), Login = login, Display = anon ? AnonTag : cx.Display, Text = Redact(text), Command = cmd != "" });
+                AddLine(new ChatLine { At = Now(), Login = login, Display = anon ? AnonTag : cx.Display, Text = Redact(text), Command = cmd != "" });   // flagged: !commands stay out of the room context and the counts; only the sender's own recent ones help when they ask why a command failed
                 LogLine(cx, cmd != "", anon);
                 MaybeStudy(false);                                   // stream is live: learn from the logs since last time
                 MaybeOpinions(false, null);                          // once a week: rewrite the private notes on the regulars
@@ -709,6 +709,7 @@ public class CPHInline
             }
             // A lobby / join / register question belongs to the helper: when the router has the helper next in line, hand it over without answering.
             if (mention && PgRouted() && PgNextHas("helper") && !PgNoDefer() && PgHelperTopic(text)) { _pgDefer = true; return; }
+            if (mention && PgHelperTopic(text) && !text.Contains("!") && !ToneJoke.IsMatch(text)) { _pgPass = true; return; }   // "how do I join" and other things the helper / the website already answer: never the chatter (a failing !command is still fair game)
             if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { welcome = true; _lastWelcome = Now(); }
             if (mention)
@@ -1171,6 +1172,13 @@ STYLE
 - LENGTH: always the SHORTEST reply that fully does the job. Banter is a few words. A real question gets as many words as the answer needs, no more, and it is never cut off. Do NOT keep the conversation going: no follow-up questions, no 'anything else?', no 'let me know', no filler, unless a question is truly the only way to help. At most one emoji.
 - Never start with a '!', '/' or '.', never output links, never use @everyone.
 - DEFAULT WARMTH: your default voice is warm, kind and genuinely glad to talk to people: a friend, not a sarcastic comedian. Lead with friendliness (use their name or nickname, notice what they said, a small kind reaction), tease only people who tease you first or who clearly enjoy it, and never be cold, dismissive or snarky to someone who was nice to you. Humour stays light and gentle.
+
+PERSONALITY (be a character, not a help desk)
+- You have a real voice: dry, quick, a little cocky and secretly soft. Have takes on games, plays, food and memes (light stuff) and commit to them with a short reason; never 'it depends' and never 'as a bot'.
+- NOT YOUR JOB: how-to and findable stuff ('how do I join', how the queue or commands work, rules, schedules, anything the helper or the website already explains, or anything a quick search would answer) gets no answer from you, and you never recite generic stock phrases ('great question', 'happy to help', 'let me know', 'hope that helps'). If it is not banter, say nothing.
+- Answer what THIS person actually said: a callback to their last line, a mock-serious ruling, a one-word verdict. Generic hype is the worst reply.
+- Change your move every time: roast, fake outrage, deadpan, a sudden compliment, a confident absurd claim. A small surprise beats a long joke.
+- FAIR PLAY: every chatter gets the same energy and the same teasing level, regulars, newcomers, mods and subs alike. No favourites, no piling on anyone, no keeping a grudge. Lines that start with ! are chat commands, not conversation: never react to them or to what other bots answered.
 
 HARD RULES
 - MATCH THE TONE (very important): read how the viewer is talking. When they ask for information or help and sound serious (a real question, a request to explain something, someone who wants an actual answer, a problem they need solved), be serious back: answer directly, clearly and correctly in plain words, with the real information first. NO jokes, roasting, sass, slang filler, catchphrases or deflecting with humor, and don't answer a real question with a joke. If you don't know, say so plainly (or use web search). Be playful ONLY when they are playful (banter, memes, teasing, jokes, emotes). Mixed message: answer the serious part first and properly. Being kind and warm is fine, being flippant is not.
@@ -1780,7 +1788,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         else sb.AppendLine(c.Display + " is not in a conversation with you yet, and you have room: this starts a new one.");
 
         sb.AppendLine("[CHAT, LAST " + _cfg.ContextAllSeconds + "s, everyone]");
-        foreach (var l in _buf.Where(x => now - x.At <= _cfg.ContextAllSeconds).Reverse().Take(40).Reverse())
+        foreach (var l in _buf.Where(x => !x.Command && now - x.At <= _cfg.ContextAllSeconds).Reverse().Take(40).Reverse())
             sb.AppendLine(Short(l.Display ?? l.Login, 20) + ": " + Short(l.Text, 200));
         sb.AppendLine("[" + c.Display.ToUpper() + "'S OWN CHAT, LAST " + (_cfg.ContextUserSeconds / 60) + " MIN]");
         foreach (var l in _buf.Where(x => x.Login == c.Login && now - x.At <= _cfg.ContextUserSeconds).Reverse().Take(15).Reverse())
@@ -2060,7 +2068,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
                     // who we raided: the last "raid <name>" / "!raid <name>" a mod or the streamer typed in the last 10 minutes
                     long now = Now();
                     string target = "";
-                    foreach (var l in _buf.Where(x => !x.FromBot && now - x.At <= 600).Reverse())
+                    foreach (var l in _buf.Where(x => !x.FromBot && !x.Command && now - x.At <= 600).Reverse())
                     {
                         var rm = Regex.Match(l.Text ?? "", @"^!?raid\s+@?([A-Za-z0-9_]{3,25})", RegexOptions.IgnoreCase);
                         if (rm.Success) { target = rm.Groups[1].Value; break; }

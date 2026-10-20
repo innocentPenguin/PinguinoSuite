@@ -739,7 +739,7 @@ public class CPHInline
     static long _chimeGlobal; static readonly Dictionary<string, long> _chimeUser = new Dictionary<string, long>(); static int _chimeNext;
     static Func<double> _pgTestRoll;
     static readonly string[] ChimeTips = {
-        "Tip: !points shows your pengs, you earn them just by hanging out.",
+        "Tip: !points shows your points, you earn them just by hanging out.",
         "Fun one: ask !8ball a question and see what the penguin says.",
         "Need a nudge? !remindme 10m stretch and I will ping you.",
         "Did you know !watchtime tells you how long you have been here?",
