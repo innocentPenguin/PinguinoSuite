@@ -5,7 +5,7 @@ The Settings tab is generated from SCHEMA, rules.DEFAULTS is derived from it."""
 VARS = {"user": "Ann", "song": "Song 1 - Artist", "title": "Song 1", "artist": "Artist", "pos": 3, "eta": ", plays in ~8 min", "by": " (requested by Ann)", "limit": 2,
         "max_min": 10, "min_s": 30, "votes": 1, "need": 3, "link": "https://open.spotify.com/track/abc", "requester": "Ann",
         "count": 5, "next": "1. Song 2 - Artist | 2. Song 3 - Artist", "cooldown": 60, "cmds": "!sr !song !queue !skip !oops",
-        "last": "Song 0 - Artist", "genre": "death metal", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120}
+        "last": "Song 0 - Artist", "genre": "death metal", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120, "mins": 8}
 
 MSGS = {
     "added": ("Song added", "@{user} added '{song}' (#{pos} in queue{eta}).", "Viewer request accepted."),
@@ -58,19 +58,31 @@ MSGS = {
     "volume_set": ("!volume set", "Volume set to {vol}%.", "Mods: volume changed."),
     "playnext": ("!playnext", "Playing '{title}' next.", "A mod put a song first in line."),
     "help": ("!songhelp", "Song commands: {cmds}", "List of commands."),
+    "reward_only": ("Requests are reward-only", "@{user} song requests are made with the channel-point reward.", "!sr typed in chat while requests are redeem-only."),
+    "refunded": ("Refund note", " Your points have been refunded.", "Appended to a rejected redeem request."),
+    "pos": ("!songpos", "@{user} your next song is #{pos} in the queue, plays in ~{mins} min.", "Viewer asks where their song is."),
+    "pos_none": ("!songpos (none)", "@{user} you have nothing in the queue.", "!songpos with nothing pending."),
+    "next": ("!songnext", "Up next: {next}", "The next song in line."),
+    "next_none": ("!songnext (empty)", "Nothing is queued after this song.", "!songnext with an empty queue."),
+    "liked": ("!songlike", "Saved '{title}' to the liked songs.", "A mod liked the current song on Spotify."),
+    "liked_none": ("!songlike (failed)", "Could not like the song right now.", "!songlike failed."),
+    "cmd_denied": ("Command not allowed", "@{user} you are not allowed to use that command.", "Per-command role gate."),
 }
 
 COMMANDS = {"sr": ["sr", "request", "songrequest"], "skip": ["skip", "voteskip"], "queue": ["queue", "q", "songqueue", "srqueue"],
-            "song": ["song", "currentsong", "nowplaying", "np"], "oops": ["oops", "wrongsong"], "blocksong": ["blocksong"],
-            "clear": ["srclear"], "last": ["lastsong", "previoussong"], "mine": ["mysongs", "myrequests"], "help": ["songhelp"],
-            "volume": ["volume", "vol"], "playnext": ["playnext"]}
+            "song": ["song", "currentsong", "nowplaying", "np"], "oops": ["oops", "wrongsong"], "blocksong": ["blocksong", "songban"],
+            "clear": ["srclear"], "last": ["lastsong", "previoussong"], "mine": ["mysongs", "myrequests"], "help": ["songhelp", "songcommands"],
+            "volume": ["volume", "vol"], "playnext": ["playnext"],
+            "pos": ["songpos", "pos"], "next": ["songnext", "next"], "like": ["songlike", "like"], "toggle": ["togglesr"]}
 COMMAND_HELP = {"sr": "request a song (and mods: open/close/clear)", "skip": "vote to skip (mods: instant)", "queue": "show the next songs",
                 "song": "what is playing", "oops": "remove your last request", "blocksong": "mods: block + skip the current song",
-                "clear": "mods: clear viewer requests", "volume": "mods: show or set the volume", "playnext": "mods: put a song first in line", "last": "the previous song", "mine": "your pending requests", "help": "list commands"}
+                "clear": "mods: clear viewer requests", "volume": "mods: show or set the volume", "playnext": "mods: put a song first in line", "last": "the previous song", "pos": "where your request is in line", "next": "the song after this one", "like": "mods: like the current song on Spotify", "toggle": "mods: open/close requests", "mine": "your pending requests", "help": "list commands"}
 
 # kinds: bool int str list choice color msgs cmds
 SCHEMA = [
     {"id": "requests", "title": "Who can request", "items": [
+        ("chat_requests", "bool", True, "Allow !sr in chat", "Off = requests only through the channel-point reward (redeem); typed !sr is refused for non-mods."),
+        ("refund_on", "list", ["none", "too_long", "full", "lookup", "offline", "limit", "blocked"], "Refund redeems when", "Rejection codes that should refund the channel points (one per line). Needs the Host redeem-refund support."),
         ("requests_open", "bool", False, "Requests open", "Master switch; ships closed. Mods can flip it with !sr open / !sr close."),
         ("mod_only", "bool", False, "Mods only", "Only mods and the broadcaster may request."),
         ("sub_only", "bool", False, "Subs / VIPs only", "Only subs, VIPs and mods may request."),
@@ -93,6 +105,7 @@ SCHEMA = [
         ("limit_vip", "int", -1, "VIP limit override", "Exact limit for VIPs; -1 = viewer limit + extra."),
         ("limit_sub", "int", -1, "Sub limit override", "Exact limit for subs; -1 = viewer limit + extra."),
         ("mods_bypass_limits", "bool", True, "Mods skip the limits", "Mods ignore the per-viewer limit and cooldown."),
+        ("global_cooldown_s", "int", 0, "Global cooldown (s)", "Minimum seconds between ANY two accepted requests (0 = off). Mods bypass."),
         ("cooldown_s", "int", 0, "Cooldown between requests (s)", "Seconds a viewer must wait after a request (0 = none)."),
         ("cooldown_sub_s", "int", -1, "Sub cooldown (s)", "Cooldown for subs/VIPs; -1 = same as viewers."),
         ("max_per_artist", "int", 0, "Max songs per artist in queue", "Keeps variety: 0 = no cap."),
@@ -141,6 +154,9 @@ SCHEMA = [
         ("json_file", "bool", True, "Write nowplaying.json", "A JSON file with the current song for other tools (Streamer.bot etc.)."),
         ("queue_file_lines", "int", 0, "Queue text file lines", "Writes the next N songs to queue.txt for an OBS text source (0 = off)."),
         ("jit_ms", "int", 25000, "Send next song this early (ms)", "How long before the end the next song goes to Spotify's queue."),
+        ("clear_on_offline", "bool", False, "Clear the queue when stream ends", "Empties viewer requests when the stream goes offline (Songify: autoClearQueue)."),
+        ("playlist_add", "str", "", "Also save requests to playlist", "A Spotify playlist link/ID; accepted requests are added to it (Songify: addSrToPlaylist)."),
+        ("cmd_roles", "list", [], "Command role gates", "One per line: command=role,role (roles: mod, vip, sub, broadcaster). e.g. songban=mod. Empty = default rules."),
         ("close_on_offline", "bool", True, "Close requests when stream ends", "Closes song requests when the stream goes offline."),
         ("np_template", "str", "{title} - {artist}", "Text file template", "Written to nowplaying.txt: {title} {artist} {album} {requester}."),
         ("np_idle_text", "str", "", "Text file when idle", "Written when nothing is playing."),

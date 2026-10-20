@@ -25,7 +25,8 @@ REDIRECT = f"http://127.0.0.1:{PORT}/callback"
 START = time.time()
 TAURI_ORIGINS = ("tauri://localhost", "http://tauri.localhost", "https://tauri.localhost")
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
-PAGES = {"/": "static/index.html", "/overlay": "static/overlay.html"}
+PAGES = {"/": "static/index.html", "/overlay": "static/overlay.html",
+         "/overlay/queue": "static/queue.html", "/queue": "static/queue.html"}
 
 auth = Auth()
 engine = Engine(Client(auth), auth)
@@ -229,7 +230,12 @@ def page(title, msg):
             f"display:grid;place-items:center;height:90vh'><div><h2 style='color:#ff9900'>{t}</h2><p>{m}</p></div>").encode()
 
 
-GET = {"/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
+def g_queue_public(h, q):
+    """Read-only queue for the OBS queue widget / public page: no ids, no user roles."""
+    return engine.public_queue()
+
+
+GET = {"/api/queue.json": g_queue_public, "/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
        "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/setup": g_setup, "/callback": g_callback, "/auth/login": g_login}
 
 
@@ -375,7 +381,8 @@ def p_chat_command(h, b):
         return {"ok": False, "say": "", "error": "unknown command"}
     if cmd.lower() in ("skip", "voteskip", "blocksong"):
         console_log.info(src, f"{cmd} by {user}: {r['code']}")
-    return {"ok": bool(r["ok"]), "say": "" if b.get("silent") else r["reply"][:400], "error": "" if r["ok"] else r["code"], "code": r["code"]}
+    return {"ok": bool(r["ok"]), "say": "" if b.get("silent") else r["reply"][:400], "error": "" if r["ok"] else r["code"], "code": r["code"],
+            "refund": bool(r.get("refund"))}
 
 
 def p_test_key(h, b):
@@ -398,6 +405,10 @@ def p_live_stop(h, b):
     if engine.settings["requests_open"] and engine.settings["close_on_offline"]:
         engine.save_settings({"requests_open": False})
         console_log.info("server", "stream ended: song requests closed")
+    if engine.settings["clear_on_offline"]:
+        engine.queue.clear(only_viewers=True)
+        engine.persist()
+        engine._bump()
     return {"ok": True}
 
 
@@ -439,7 +450,14 @@ def p_block(h, b):
     return {"ok": True}
 
 
-POST = {"/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
+def p_blocklist_import(h, b):
+    text = str(b.get("text", ""))
+    if not text.strip():
+        raise QueueError("text required")
+    return {"ok": True, **engine.import_blocklist(text[:200000])}
+
+
+POST = {"/api/blocklist/import": p_blocklist_import, "/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
         "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/shuffle": p_shuffle, "/api/queue/add_context": p_add_context, "/api/presets/save": p_user_preset, "/api/presets/delete": p_user_preset_del, "/api/queue/remove_user": p_remove_user, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
         "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/preset": p_preset, "/api/settings/reset": p_reset, "/api/msgs/preview": p_msg_preview, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}

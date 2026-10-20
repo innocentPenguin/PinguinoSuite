@@ -22,7 +22,8 @@ AUTH_URL = _ACC + "/authorize"
 TOKEN_URL = _ACC + "/api/token"
 API = os.environ.get("SPOTIFY_API_BASE", "https://api.spotify.com/v1")
 SCOPES = ("user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-private "
-          "user-read-recently-played playlist-read-private playlist-read-collaborative")
+          "user-read-recently-played playlist-read-private playlist-read-collaborative "
+          "playlist-modify-public playlist-modify-private user-library-modify")
 
 
 class ApiError(Exception):
@@ -214,6 +215,12 @@ class Client:
     # control
     def add_to_queue(self, uri, device_id=None):
         self._req("POST", "/me/player/queue", {"uri": uri, "device_id": device_id})
+
+    def playlist_add(self, playlist_id, uri):
+        self._req("POST", f"/playlists/{playlist_id}/tracks", body={"uris": [uri]})
+
+    def save_track(self, track_id):
+        self._req("PUT", "/me/tracks", params={"ids": track_id})
 
     def next(self):
         self._req("POST", "/me/player/next")

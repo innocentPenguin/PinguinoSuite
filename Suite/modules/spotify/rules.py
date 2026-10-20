@@ -87,8 +87,9 @@ def blocked_reason(settings, track):
     hay = _norm(track.get("name", "")) + " | " + " | ".join(_norm(a) for a in track.get("artists", []))
     ids = {_norm(track.get("id", "")), _norm(track.get("uri", ""))}
     for b in settings["blocklist"]:
+        tid = _norm(track_id_from(b) or "")
         b = _norm(b)
-        if b and (b in ids or b in hay):
+        if b and (b in ids or b in hay or (tid and tid in ids)):
             return b
     return None
 
@@ -117,7 +118,7 @@ def cooldown_for(settings, roles):
     return settings["cooldown_s"]
 
 
-def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=None, session_count=0):
+def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=None, session_count=0, last_global=None):
     """-> (ok, code, ctx). `code` is a message key (see config_schema.MSGS); ctx = placeholder values for the reply."""
     now = now or time.time()
     roles = set(roles)
@@ -173,10 +174,32 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
     sl = settings["session_limit"]
     if sl and not staff and session_count >= sl:
         return False, "session_limit", {**ctx, "limit": sl}
+    gc = settings["global_cooldown_s"]
+    if gc and not staff and last_global and now - last_global < gc:
+        return False, "cooldown", {**ctx, "wait": math.ceil(gc - (now - last_global)), "cooldown": gc}
     cool = cooldown_for(settings, roles)
     if cool and last_ts and now - last_ts < cool:
         return False, "cooldown", {**ctx, "wait": math.ceil(cool - (now - last_ts)), "cooldown": cool}
     return True, "ok", ctx
+
+
+def command_allowed(settings, cmd, roles):
+    """cmd_roles lines 'cmd=role,role'. No line for the command = allowed (the command's own staff checks still apply)."""
+    roles = set(roles)
+    if "broadcaster" in roles:
+        return True
+    for line in settings.get("cmd_roles", []):
+        name, _, rs = str(line).partition("=")
+        name = name.strip().lower().lstrip("!")
+        if name != cmd and name not in settings["cmd_aliases"].get(cmd, []):
+            continue
+        want = {r.strip().lower() for r in rs.split(",") if r.strip()}
+        if not want:
+            return True
+        if "mod" in want and is_staff(roles):
+            return True
+        return bool(want & roles)
+    return True
 
 
 def needs_approval(settings, roles, user=""):

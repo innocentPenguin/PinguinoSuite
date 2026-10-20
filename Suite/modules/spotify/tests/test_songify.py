@@ -1,0 +1,112 @@
+"""Songify-parity features: reward-only requests, refunds, global cooldown, playlist add, !songpos/!songnext/!songlike, role gates, blocklist import."""
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import rules  # noqa: E402
+import store  # noqa: E402
+from engine import Engine  # noqa: E402
+from test_spotify import Clock, FakeApi, FakeAuth, T  # noqa: E402
+
+
+class SongifyTests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.api.added, self.api.liked = [], []
+        self.api.playlist_add = lambda pid, uri: self.api.added.append((pid, uri))
+        self.api.save_track = lambda tid: self.api.liked.append(tid)
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True, "per_user_limit": 0})
+
+    def sr(self, user, n, roles=("viewer",), redeem=False):
+        return self.e.chat(user, f"!sr song {n}", roles, redeem)
+
+    def test_reward_only_blocks_chat_but_not_redeem_or_mods(self):
+        self.e.save_settings({"chat_requests": False})
+        r = self.sr("ann", 3)
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["code"], "reward_only")
+        self.assertTrue(self.sr("ann", 3, redeem=True)["ok"])
+        self.assertTrue(self.sr("mod", 2, roles=("mod",))["ok"])
+
+    def test_refund_flag_on_redeem_rejections_only(self):
+        self.e.save_settings({"max_length_s": 60})
+        r = self.sr("ann", 3, redeem=True)               # 200s track > 60s
+        self.assertEqual(r["code"], "too_long")
+        self.assertTrue(r["refund"])
+        self.assertIn("refunded", r["reply"])
+        self.assertFalse(self.sr("bob", 3)["refund"], "a typed !sr has no points to refund")
+        self.e.save_settings({"refund_on": []})
+        self.assertFalse(self.sr("cy", 3, redeem=True)["refund"])
+
+    def test_public_queue_widget_payload(self):
+        self.sr("ann", 3)
+        q = self.e.public_queue()
+        self.assertEqual(q["count"], 1)
+        self.assertEqual(q["items"][0]["requester"], "ann")
+        self.assertNotIn("id", q["items"][0])
+        self.assertNotIn("uri", q["items"][0])
+
+    def test_global_cooldown_between_any_two_requests(self):
+        self.e.save_settings({"global_cooldown_s": 30})
+        self.assertTrue(self.sr("ann", 3)["ok"])
+        r = self.sr("bob", 2)
+        self.assertEqual(r["code"], "cooldown")
+        self.assertTrue(self.sr("mod", 4, roles=("mod",))["ok"], "mods bypass")
+        self.clock.t += 31
+        self.assertTrue(self.sr("bob", 2)["ok"])
+
+    def test_playlist_add_on_accept_and_failure_is_harmless(self):
+        self.e.save_settings({"playlist_add": "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=x"})
+        self.assertTrue(self.sr("ann", 3)["ok"])
+        self.assertEqual(self.api.added, [("37i9dQZF1DXcBWIGoYBM5M", "spotify:track:t3")])
+        self.api.playlist_add = lambda *a: (_ for _ in ()).throw(RuntimeError("403"))
+        self.assertTrue(self.sr("bob", 2)["ok"])
+
+    def test_pos_next_and_like(self):
+        self.sr("ann", 3)
+        self.sr("bob", 2)
+        self.assertIn("#2", self.e.chat("bob", "!songpos", ("viewer",))["reply"])
+        self.assertIn("nothing", self.e.chat("zed", "!songpos", ("viewer",))["reply"])
+        self.assertIn("Song 3", self.e.chat("zed", "!songnext", ("viewer",))["reply"])
+        self.api.playing = "spotify:track:t5"
+        self.e.tick()
+        self.assertEqual(self.e.chat("mod", "!songlike", ("mod",))["code"], "liked")
+        self.assertEqual(self.api.liked, ["id5xxxxxxxxxxxxxxxxxxx"])
+        self.assertFalse(self.e.chat("zed", "!songlike", ("viewer",))["ok"], "viewers cannot like")
+
+    def test_skip_redeem_skips_immediately(self):
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        r = self.e.chat("ann", "!skip", ("viewer",), redeem=True)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["code"], "skipped")
+        self.assertIn(("next",), [c[:1] for c in self.api.calls])
+
+    def test_command_role_gate(self):
+        self.e.save_settings({"cmd_roles": ["songnext=sub,mod", "!queue=mod"]})
+        self.assertFalse(self.e.chat("zed", "!songnext", ("viewer",))["ok"])
+        self.assertTrue(self.e.chat("sue", "!songnext", ("sub",))["ok"])
+        self.assertTrue(self.e.chat("mo", "!queue", ("mod",))["ok"])
+        self.assertEqual(self.e.chat("zed", "!queue", ("viewer",))["code"], "denied")
+        self.assertTrue(self.e.chat("boss", "!queue", ("broadcaster",))["ok"])
+        self.assertTrue(rules.command_allowed(self.e.settings, "song", ("viewer",)))
+
+    def test_blocklist_import_dedupes_and_blocks(self):
+        txt = "# comment\n4uLU6hMCjMI75M1A2tKUQC\nspotify:track:4uLU6hMCjMI75M1A2tKUQC\n\nBad Word\n"
+        r = self.e.import_blocklist(txt)
+        self.assertEqual(r["added"], 2)
+        self.assertEqual(self.e.import_blocklist(txt)["added"], 0)
+        t = T(1)
+        t["id"], t["uri"] = "4uLU6hMCjMI75M1A2tKUQC", "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+        self.assertTrue(rules.blocked_reason(self.e.settings, t))
+
+
+if __name__ == "__main__":
+    unittest.main()
+

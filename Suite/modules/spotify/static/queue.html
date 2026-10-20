@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Song queue</title>
+<!-- OBS browser source: http://127.0.0.1:8771/overlay/queue   Public page (if you expose the port): /queue
+     Query: ?count=8 ?theme=dark|light|glass|minimal ?accent=ff9900 ?width=420 ?size=100 ?eta=0 ?now=0 -->
+<style>
+:root{--fg:#fff;--bg:rgba(14,14,16,.86);--accent:#ff9900;--w:420px;--s:1;font-family:"Segoe UI",system-ui,sans-serif}
+body{margin:0;background:transparent;color:var(--fg)}
+body.light{--fg:#111;--bg:rgba(255,255,255,.9)}
+body.glass{--bg:rgba(20,20,24,.45)}
+body.minimal{--bg:transparent}
+body.minimal #card{box-shadow:none}body.minimal #card *{text-shadow:0 1px 4px #000,0 0 2px #000}
+body.page{background:#16161a}body.page #card{margin:24px auto}
+#card{width:var(--w);max-width:100%;background:var(--bg);border-radius:14px;padding:12px 14px;box-sizing:border-box;zoom:var(--s);box-shadow:0 4px 18px rgba(0,0,0,.4)}
+h1{margin:0 0 6px;font-size:15px;color:var(--accent);letter-spacing:.04em;text-transform:uppercase;display:flex;justify-content:space-between}
+h1 span{opacity:.75;font-weight:400;color:var(--fg)}
+.now{font-size:15px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.15)}
+.now b{color:var(--accent)}
+ol{list-style:none;margin:0;padding:0}
+li{display:flex;gap:8px;padding:3px 0;font-size:15px;align-items:baseline}
+.n{width:22px;color:var(--accent);font-weight:700;flex:none}
+.t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t i{opacity:.7;font-style:normal}
+.r{font-size:12px;opacity:.75;flex:none}
+.e{font-size:12px;opacity:.6;flex:none;width:44px;text-align:right}
+.empty{opacity:.7;font-size:14px;padding:4px 0}
+</style></head>
+<body><div id="card"><h1>Song queue <span id="cnt"></span></h1><div class="now" id="now"></div><ol id="list"></ol></div>
+<script>
+const P=new URLSearchParams(location.search),$=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+if(location.pathname==='/queue')document.body.classList.add('page');
+document.body.classList.add(P.get('theme')||'dark');
+const r=document.documentElement.style,acc=P.get('accent');
+if(acc)r.setProperty('--accent',acc.startsWith('#')?acc:'#'+acc);
+if(P.has('width'))r.setProperty('--w',(+P.get('width'))+'px');
+if(P.has('size'))r.setProperty('--s',(+P.get('size'))/100);
+const max=+(P.get('count')||8),eta=P.get('eta')!=='0',showNow=P.get('now')!=='0';
+async function poll(){
+  try{
+    const q=await (await fetch('/api/queue.json',{cache:'no-store'})).json();
+    $('cnt').textContent=q.count?q.count+' queued':(q.open?'open':'closed');
+    $('now').style.display=showNow&&q.now?'block':'none';
+    if(q.now)$('now').innerHTML='Now: <b>'+esc(q.now.title)+'</b> <i style="opacity:.7;font-style:normal">'+esc(q.now.artist)+'</i>';
+    $('list').innerHTML=q.items.length?q.items.slice(0,max).map(i=>'<li><span class="n">'+i.n+'</span><span class="t">'+esc(i.title)+' <i>'+esc(i.artist)+'</i></span>'+
+      (i.requester?'<span class="r">'+esc(i.requester)+'</span>':'')+(eta?'<span class="e">~'+i.eta_min+'m</span>':'')+'</li>').join('')
+      :'<div class="empty">'+(q.open?'Queue is empty - !sr to request a song':'Requests are closed')+'</div>';
+  }catch(e){}
+  setTimeout(poll,2000);
+}
+poll();
+</script></body></html>

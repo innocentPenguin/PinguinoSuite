@@ -1,6 +1,7 @@
 """Engine: polls Spotify, keeps our queue in step, pushes the next track just in time, runs chat commands."""
 import copy
 import math
+import re
 import threading
 import time
 import uuid
@@ -45,6 +46,7 @@ class Engine:
         self._sched_last = None
         self._fallback_try = 0.0
         self._autostart_try = 0.0
+        self.last_global = 0           # time of the last accepted request (global cooldown)
         self.last_req = {}             # viewer -> time of last accepted request (cooldown)
         self.me = None
         self.devices = []
@@ -312,6 +314,14 @@ class Engine:
                     "log": self.log[-40:][::-1], "settings": self._own_settings(), "skip_votes": len(self.skip_votes),
                     "error": self.last_error or self.auth.last_error, "me": self.me, "version": self.version}
 
+    def public_queue(self):
+        with self.lock:
+            cur = self.pb["track"] if self.pb and self.pb["track"] else None
+            items = [{"n": i + 1, "title": it["name"], "artist": ", ".join(it["artists"]), "requester": it["requester"] if it["source"] == "viewer" else "",
+                      "eta_min": round(self.eta_ms(i) / 60000)} for i, it in enumerate(self.queue.items[:50])]
+            return {"open": self.settings["requests_open"], "now": ({"title": cur["name"], "artist": ", ".join(cur["artists"])} if cur else None),
+                    "count": len(self.queue.items), "items": items, "version": self.version}
+
     def overlay(self):
         with self.lock:
             now = self.clock()
@@ -374,9 +384,19 @@ class Engine:
 
     # ---- viewer requests
     def request(self, user, query, roles, redeem=False, track=None):
-        """Returns {ok, reply, code}. Shared by chat, the site and the Host."""
+        """Returns {ok, reply, code, refund}. Shared by chat, the site and the Host. `refund` = a redeem was rejected for a refundable reason."""
         s = self.settings
         roles = set(roles)
+        if not redeem and track is None and not s["chat_requests"] and not rules.is_staff(roles):
+            return {**self._r(False, "reward_only", user=user), "refund": False}
+        r = self._request(user, query, roles, redeem, track)
+        r["refund"] = bool(redeem and not r["ok"] and r["code"] in s["refund_on"])
+        if r["refund"] and s["msgs"].get("refunded"):
+            r["reply"] = (r["reply"] + self.say("refunded")[len(s["reply_prefix"]):])[:400] if r["reply"] else r["reply"]
+        return r
+
+    def _request(self, user, query, roles, redeem=False, track=None):
+        s = self.settings
         if not query and not track:
             return self._r(False, "usage", user=user)
         if not self.auth.connected():
@@ -400,7 +420,7 @@ class Engine:
         with self.lock:
             for t in cands:
                 t = self._genre_tag(t, s, roles)
-                ok, code, ctx = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()), self.session_counts.get(user.lower(), 0))
+                ok, code, ctx = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()), self.session_counts.get(user.lower(), 0), self.last_global)
                 if ok:
                     return self._accept(t, user, roles, redeem)
                 first_fail = first_fail or (code, ctx, t)
@@ -435,7 +455,7 @@ class Engine:
         tier = rules.tier_for(s, roles, redeem, user)
         self.session_counts[user.lower()] = self.session_counts.get(user.lower(), 0) + 1
         label = f"{t['name']} - {', '.join(t['artists'])}"
-        self.last_req[user.lower()] = self.clock()
+        self.last_req[user.lower()] = self.last_global = self.clock()
         base = {"user": user, "song": label, "title": t["name"], "artist": t["artists"][0] if t["artists"] else ""}
         if rules.needs_approval(s, roles, user):
             self.inbox.append({"id": uuid.uuid4().hex[:8], "track": t, "user": user, "roles": sorted(roles), "tier": tier,
@@ -445,6 +465,7 @@ class Engine:
             self._bump()
             return self._r(True, "pending", **base)
         item = self.add_track(t, "end", user, "viewer", tier)
+        self._to_playlist(t)
         idx = self.queue.index(item["id"])
         mins = round(self.eta_ms(idx) / 60000)
         self.alert = {"id": item["id"], "text": f"{user} requested {t['name']}", "ts": self.clock()}
@@ -453,6 +474,42 @@ class Engine:
         r = self._r(True, "added", **base, pos=idx + 1, eta=f", plays in ~{mins} min" if mins >= 2 else "")
         r["item"] = item["id"]
         return r
+
+    def _to_playlist(self, t):
+        """Songify's addSrToPlaylist: also save an accepted request to a Spotify playlist. Failures never block the request."""
+        pid = self._playlist_id()
+        if not pid or not t.get("uri"):
+            return
+        try:
+            self.api.playlist_add(pid, t["uri"])
+        except Exception as e:                      # noqa: BLE001 - ApiError, missing scope, offline
+            console_log.warn("request", f"playlist add failed: {e}", dedupe_s=300)
+
+    def _playlist_id(self):
+        v = str(self.settings["playlist_add"]).strip()
+        m = re.search(r"playlist[/:]([A-Za-z0-9]+)", v)
+        return m.group(1) if m else (v if re.fullmatch(r"[A-Za-z0-9]{10,}", v) else "")
+
+    def import_blocklist(self, text):
+        """Merge track IDs / links / URIs / words (one per line, # comments) into the blocklist -> {added, total}."""
+        cur = list(self.settings["blocklist"])
+        have = {rules.track_id_from(c) or c.lower() for c in cur}
+        added = 0
+        for line in str(text).splitlines():
+            v = line.split("#")[0].strip()
+            if not v:
+                continue
+            if re.fullmatch(r"[A-Za-z0-9]{22}", v):          # Songify exports bare track IDs
+                v = "spotify:track:" + v
+            key = rules.track_id_from(v) or v.lower()
+            if key in have:
+                continue
+            have.add(key)
+            cur.append(v if rules.track_id_from(v) else v.lower())
+            added += 1
+        if added:
+            self.save_settings({"blocklist": cur})
+        return {"added": added, "total": len(cur)}
 
     def eta_ms(self, idx):
         """Milliseconds until queue item `idx` starts (rest of the current track + everything before it)."""
@@ -469,6 +526,7 @@ class Engine:
             r["status"] = "approved" if approve else "denied"
             if approve:
                 self.add_track(r["track"], "end", r["user"], "viewer", r["tier"])
+                self._to_playlist(r["track"])
             else:
                 self._event("deny", r["user"], r["track"]["name"], False)
             self.persist()
@@ -482,6 +540,12 @@ class Engine:
             return {"handled": False, "ok": False, "reply": "", "code": "not_a_command"}
         roles = set(r.lower() for r in roles)
         staff = rules.is_staff(roles)
+        if not redeem and not rules.command_allowed(self.settings, cmd, roles):
+            out = self._r(False, "denied", "cmd_denied", user=user)
+            out["handled"] = True
+            if not self.settings["chat_replies"]:
+                out["reply"] = ""
+            return out
         out = self._chat_cmd(cmd, arg, user, roles, staff, redeem)
         out["handled"] = True
         if not self.settings["chat_replies"]:
@@ -508,12 +572,39 @@ class Engine:
         if cmd == "queue":
             return self.queue_reply(user)
         if cmd == "skip":
+            if redeem:                       # the "Skip Song" channel-point reward: points already paid, skip now
+                if not (self.pb and self.pb["track"]):
+                    return {**self._r(False, "none", "skip_none", user=user), "refund": "none" in s["refund_on"]}
+                self.skip(force=True)
+                return self._r(True, "skipped", user=user)
             return self.vote_skip(user, staff)
         if cmd == "last":
             h = self.queue.history[0] if self.queue.history else None
             if not h:
                 return self._r(True, "last", "last_none", user=user)
             return self._r(True, "last", "last", user=user, last=f"{h['name']} - {', '.join(h['artists'])}")
+        if cmd == "pos":
+            mine = [it for it in self.queue.items if it["requester"].lower() == user.lower()]
+            if not mine:
+                return self._r(True, "pos", "pos_none", user=user)
+            idx = self.queue.index(mine[0]["id"])
+            return self._r(True, "pos", user=user, pos=idx + 1, mins=max(1, round(self.eta_ms(idx) / 60000)))
+        if cmd == "next":
+            if not self.queue.items:
+                return self._r(True, "next", "next_none", user=user)
+            it = self.queue.items[0]
+            return self._r(True, "next", user=user, next=f"{it['name']} - {it['artists'][0] if it['artists'] else ''}", title=it["name"])
+        if cmd == "like" and staff:
+            t = self.pb["track"] if self.pb and self.pb["track"] else None
+            if not t:
+                return self._r(False, "none", "skip_none", user=user)
+            try:
+                self.api.save_track(t["id"])
+            except Exception:                # noqa: BLE001
+                return self._r(False, "like", "liked_none", user=user)
+            return self._r(True, "liked", user=user, title=t["name"])
+        if cmd == "toggle" and staff:
+            return self._chat_cmd("sr", "close" if s["requests_open"] else "open", user, roles, staff, False)
         if cmd == "mine":
             mine = [it for it in self.queue.items if it["source"] == "viewer" and it["requester"].lower() == user.lower()]
             if not mine:
