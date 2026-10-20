@@ -55,6 +55,7 @@ namespace PinguinoHost
             var parts = (text ?? "").Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries); if (parts.Length == 0 || !parts[0].StartsWith("!")) return false;
             string cmd = parts[0].ToLowerInvariant(); string[] args = parts.Skip(1).ToArray(); string me = user.ToLowerInvariant();
             bool mod = role >= 3;
+            if (Control.IsCommand(cmd)) { Control.Handle(user, cmd, args, role, say); return true; }
             if (Teach.IsCommand(cmd)) { Teach.Handle(user, cmd, args, role, say); return true; }
             if (cmd == "!guess") { SiteShop.HandleGuess(user, args, say); return true; }   // hidden shop game: only the running round's player gets any answer
             string b = BoardOf(cmd);

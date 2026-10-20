@@ -220,6 +220,7 @@ namespace PinguinoHost
         {
             if (!Lease.MayRun) return;
             try { Boards.OnEvent(args); } catch (Exception) { }
+            try { Control.OnEvent(args); } catch (Exception) { }
             try { StreamTimers.OnEvent(args); } catch (Exception) { }
             try { ProfileSync.OnEvent(args); } catch (Exception) { }
             try { Auto.OnEvent(args); } catch (Exception ex) { Clog.Warn("automation", "event trigger failed: " + ex.Message); }

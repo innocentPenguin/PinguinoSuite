@@ -1310,6 +1310,265 @@
       ],
       "section": "Essentials",
       "importance": 1
+    },
+    {
+      "command": "!poll",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!poll \"question\" a|b|c [seconds]",
+      "description": "Starts a Twitch poll (2-5 options, 15-1800 s). The result is said in chat when it ends.",
+      "examples": [
+        "!poll \"Best map?\" Mannfield|Champions 90"
+      ],
+      "section": "Stream",
+      "importance": 40
+    },
+    {
+      "command": "!predict",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!predict \"question\" a|b [seconds]",
+      "description": "Starts a Twitch prediction. Streamer and mods the streamer allows.",
+      "examples": [
+        "!predict \"Win this one?\" Yes|No 120"
+      ],
+      "section": "Stream",
+      "importance": 41
+    },
+    {
+      "command": "!lock",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!lock",
+      "description": "Locks the open prediction (no more votes).",
+      "examples": [
+        "!lock"
+      ],
+      "section": "Stream",
+      "importance": 42
+    },
+    {
+      "command": "!resolve",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!resolve <number or name>",
+      "description": "Pays out the prediction to the winning outcome.",
+      "examples": [
+        "!resolve 1"
+      ],
+      "section": "Stream",
+      "importance": 43
+    },
+    {
+      "command": "!cancel",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!cancel",
+      "description": "Cancels the prediction and refunds the points.",
+      "examples": [
+        "!cancel"
+      ],
+      "section": "Stream",
+      "importance": 44
+    },
+    {
+      "command": "!slow",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!slow [seconds|off]",
+      "description": "Slow mode (3-120 s, default 30).",
+      "examples": [
+        "!slow 10",
+        "!slow off"
+      ],
+      "section": "Stream",
+      "importance": 45
+    },
+    {
+      "command": "!emote-only",
+      "aliases": [
+        "!emoteonly"
+      ],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!emote-only [off]",
+      "description": "Emote-only chat on or off.",
+      "examples": [
+        "!emote-only",
+        "!emote-only off"
+      ],
+      "section": "Stream",
+      "importance": 46
+    },
+    {
+      "command": "!followers",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!followers [minutes|off]",
+      "description": "Followers-only chat.",
+      "examples": [
+        "!followers 10",
+        "!followers off"
+      ],
+      "section": "Stream",
+      "importance": 47
+    },
+    {
+      "command": "!subs-only",
+      "aliases": [
+        "!subsonly"
+      ],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!subs-only [off]",
+      "description": "Subscriber-only chat on or off.",
+      "examples": [
+        "!subs-only off"
+      ],
+      "section": "Stream",
+      "importance": 48
+    },
+    {
+      "command": "!announce",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!announce [blue|green|orange|purple] <text>",
+      "description": "Posts a highlighted Twitch announcement.",
+      "examples": [
+        "!announce orange Giveaway in 5 minutes!"
+      ],
+      "section": "Stream",
+      "importance": 49
+    },
+    {
+      "command": "!marker",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!marker [note]",
+      "description": "Adds a stream marker at this moment.",
+      "examples": [
+        "!marker great clutch"
+      ],
+      "section": "Stream",
+      "importance": 50
+    },
+    {
+      "command": "!shield",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!shield on|off",
+      "description": "Shield mode on or off (streamer only).",
+      "examples": [
+        "!shield on"
+      ],
+      "section": "Stream",
+      "importance": 51
+    },
+    {
+      "command": "!ad",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!ad [30|60|90|120|150|180]",
+      "description": "Runs an ad break after a 30 second warning in chat (streamer only).",
+      "examples": [
+        "!ad 60"
+      ],
+      "section": "Stream",
+      "importance": 52
+    },
+    {
+      "command": "!vip",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!vip <name>",
+      "description": "Makes someone a VIP (streamer only).",
+      "examples": [
+        "!vip somebody"
+      ],
+      "section": "Stream",
+      "importance": 53
+    },
+    {
+      "command": "!unvip",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!unvip <name>",
+      "description": "Removes someone's VIP (streamer only).",
+      "examples": [
+        "!unvip somebody"
+      ],
+      "section": "Stream",
+      "importance": 54
+    },
+    {
+      "command": "!raid",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!raid <channel>",
+      "description": "Streamer only, and only channels on the raid list. The bot asks you to say !confirm raid within 20 seconds. Never starts by itself.",
+      "examples": [
+        "!raid patfromearth"
+      ],
+      "section": "Stream",
+      "importance": 55
+    },
+    {
+      "command": "!confirm",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!confirm raid",
+      "description": "Confirms the pending raid. Must be typed in Twitch chat.",
+      "examples": [
+        "!confirm raid"
+      ],
+      "section": "Stream",
+      "importance": 56
+    },
+    {
+      "command": "!unraid",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Channel control (mods)",
+      "who": "mods",
+      "usage": "!unraid",
+      "description": "Cancels the pending raid, or the raid that is counting down.",
+      "examples": [
+        "!unraid"
+      ],
+      "section": "Stream",
+      "importance": 57
     }
   ]
 }

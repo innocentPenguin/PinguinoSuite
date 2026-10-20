@@ -93,7 +93,7 @@ namespace PinguinoHost
                 if (p == "/api/config" && c.Request.HttpMethod == "POST") { Write(c, SaveConfig(Body(c)).ToString(), "application/json"); return true; }
                 if (p == "/api/run" && c.Request.HttpMethod == "POST")   // Stream Deck / hotkeys: {"text":"!next","user":"ivan"} runs as broadcaster
                 { var b = Body(c); string t = (string)b["text"] ?? ""; string u = (string)b["user"] ?? "broadcaster"; if (t == "") { Write(c, "{\"ok\":false,\"error\":\"text required\"}", "application/json"); return true; }
-                  System.Threading.Tasks.Task.Run(() => Program.Dispatch(u, t, null, 4, "deck", false, null)); Write(c, "{\"ok\":true}", "application/json"); return true; }
+                  System.Threading.Tasks.Task.Run(() => { Control.Synthetic = true; try { Program.Dispatch(u, t, null, 4, "deck", false, null); } finally { Control.Synthetic = false; } }); Write(c, "{\"ok\":true}", "application/json"); return true; }
                 if (p == "/api/signin" && c.Request.HttpMethod == "POST")   // opens Twitch's sign-in in the PC's default browser (an embedded window may block pop-ups)
                 {
                     var b = Body(c); string role = ((string)b["role"] ?? "").Trim().ToLowerInvariant(); var cfg = Config(); string cid = (string)cfg["ClientId"];

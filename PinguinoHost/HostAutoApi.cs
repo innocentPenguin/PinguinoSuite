@@ -105,6 +105,7 @@ namespace PinguinoHost
                 string via; bool ok = SendAs((string)b["bot"], text, out via);
                 Write(c, new JObject { { "ok", ok }, { "duplicate", via.StartsWith("duplicate") }, { "via", via } }.ToString(), "application/json"); return true;
             }
+            if (p == "/api/live-state" && m == "GET") { Write(c, Control.LiveState().ToString(), "application/json"); return true; }
             if (p == "/api/activity" && m == "GET")
             {
                 long since = long.TryParse(c.Request.QueryString["since"], out long sn) ? sn : 0; int lim = int.TryParse(c.Request.QueryString["limit"], out int ln) ? ln : 100;
