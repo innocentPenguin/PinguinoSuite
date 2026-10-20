@@ -110,3 +110,21 @@ Each big file below starts with its own INDEX block (routes/functions with line 
 - `Suite/modules/listen/` - PinguinoListen (port 8765): `server.py` (API), `live.py` (mic: `resolve_device`, `candidates`, silence watchdog), `asr.py`, `ingest.py`, `learn.py`, `twitch.py`, `voice.py`, `config.py`, `db.py`, `static/index.html` (Listen page). Settings: `Suite/modules/listen/data/settings.json`.
 - Ports: core 8760, Listen 8765, Multi 8766, Host 8770, Voice 8772.
 - Tests: `Suite/.venv/Scripts/python.exe -m unittest discover -s Suite/tests` (mic, vault, help, prestream, device, portable, prefs).
+
+## Music (PinguinoMusic / Spotify module, port 8771)
+Code: `Suite\modules\spotify\` (stdlib Python, no extra deps). Each big file has an INDEX block at the top of its docstring (functions with line numbers).
+
+| Area | Where |
+|---|---|
+| Brain: polling, queue state, just-in-time push, requests, chat commands, announcements, automation | `engine.py` (INDEX at top) |
+| HTTP routes, Host/Origin/token guards, background loop | `server.py` (INDEX at top) |
+| Request rules, settings merge/validation, chat parsing | `rules.py` |
+| Every setting, reply template, command alias, preset (single source; Settings tab is generated from it) | `config_schema.py` |
+| Fair queue ordering, undo, locked/pushed head | `queue_core.py` |
+| Spotify OAuth PKCE + Web API client | `spotify_api.py` |
+| Website bridge (outbound only, key from vault) | `site_bridge.py`, contract `Docs\SPOTIFY_CONTRACT.md` |
+| Pages: queue UI, OBS overlay, queue widget | `static\index.html`, `static\overlay.html`, `static\queue.html` |
+| Offline tests (fake Spotify + fake site) | `tests\test_spotify.py`, `tests\test_songify.py`, `tests\e2e.py`, `tests\fakes.py` |
+| Docs | `Docs\SPOTIFY.md` (setup, API, settings), `Docs\SONGIFY_PARITY.md` (feature parity status) |
+| Host command API (`/api/chat-command`, `/api/chat`, `/api/announcements`, `/api/now`) | `Docs\SPOTIFY.md` sections "Chat wiring" and "Host command API" |
+| Runtime data | `Data\runtime\spotify\` (tokens.json, config.json, queue state, nowplaying.txt, queue.txt), logs `Suite\logs\spotify.log` |

@@ -1,4 +1,13 @@
-"""Engine: polls Spotify, keeps our queue in step, pushes the next track just in time, runs chat commands."""
+"""Engine: polls Spotify, keeps our queue in step, pushes the next track just in time, runs chat commands.
+INDEX (keep in step when moving code)
+What: the brain. Polls Spotify, owns queue state, JIT push, request pipeline, chat commands, announcements, automation.
+  Lifecycle/settings: __init__:30, save_settings:78, apply_preset:96, reset_settings:102, persist:134, tick:148, _apply:177, _track_changed:197
+  Queue push: _jit:259, _verify_pushed:288, _push:301, add_track:372, eta_ms:523, skip:703, control:715, start_queue:743, play_now:754, shuffle_queue:854, remove_user:861, add_context:801
+  Requests: request:395, _request:407, _accept:462, _genre_tag:443, _to_playlist:487, import_blocklist:502, inbox_decide:530, vote_skip:686
+  Chat: chat:545, _chat_cmd:564, song_reply:665, queue_reply:673, say:382
+  Views/API: public_state:315, public_queue:326, overlay:334, announcements:238, stats:868, site_snapshot:771, prestream:926, automation_tick:880
+Related: rules.py, queue_core.py, config_schema.py, spotify_api.py, server.py, tests/test_spotify.py, tests/e2e.py, Docs/SPOTIFY.md
+"""
 import copy
 import math
 import re

@@ -1,4 +1,9 @@
-"""Song-request rules, settings merge and chat command parsing. Pure functions, no network."""
+"""Song-request rules, settings merge and chat command parsing. Pure functions, no network.
+INDEX (keep in step when moving code)
+What: pure rules, settings merge/validation, chat parsing. No network.
+  API: merged:29, tier_for:74, evaluate:126, limit_for:102, cooldown_for:118, needs_approval:210, command_allowed:191, parse:237, track_id_from:252, blocked_reason:91, is_staff:66
+Related: config_schema.py (defaults), engine.py
+"""
 import math
 import re
 import time

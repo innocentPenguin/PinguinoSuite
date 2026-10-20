@@ -1,5 +1,13 @@
 """PinguinoSpotify - queue system for Spotify. stdlib HTTP server on 127.0.0.1:8771 (no extra dependencies).
-UI: /   Overlay (OBS browser source): /overlay   API: see Docs/SPOTIFY.md"""
+UI: /   Overlay (OBS browser source): /overlay   API: see Docs/SPOTIFY.md
+INDEX (keep in step when moving code)
+What: stdlib HTTP server (127.0.0.1:8771), routes, Host/Origin/token guards, background loop.
+  Guards/handler: host_ok:44, origin_ok:50, token_ok:54, H:73, do_GET:118, do_POST:121, loop:474, main:491
+  GET: g_status:170, g_state:174, g_overlay:178, g_prestream:182, g_search:192, g_devices:197, g_setup:202, g_login:209, g_callback:219, g_queue_public:241, g_schema:439
+  POST queue: p_add:275, p_remove:292, p_move:299, p_play_next:306, p_play_now:313, p_clear:338, p_undo:345, p_control:352, p_start:357
+  POST chat/other: p_chat:362, p_chat_command:375, p_settings:271, p_preset:423, p_block:452, p_blocklist_import:461, p_site:403, p_live_auto:408, p_live_stop:412, p_test_key:396
+Related: engine.py, config_schema.py, static/*.html, Docs/SPOTIFY.md (route table)
+"""
 import hmac
 import html
 import json
