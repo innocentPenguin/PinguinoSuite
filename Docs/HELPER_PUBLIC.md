@@ -31,3 +31,6 @@ Daily Rocket League with viewers, Monday to Friday from 5:00 PM to 6:30 PM Centr
 
 ## Joining the Minecraft server from a console
 Consoles join through Bedrock Connect. The steps are on its official page: https://github.com/Pugmatt/BedrockConnect then add the server address and Bedrock port from !ip.
+
+## Asking the helper to do an action
+The helper only answers questions. It cannot change the title, ban, mod or unmod anyone, release held messages, or change settings. For those, ask a mod in chat.
