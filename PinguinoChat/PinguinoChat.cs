@@ -402,6 +402,7 @@ public class CPHInline
         public bool LogChat { get; set; } = true;                 // save live chat to %AppData%\BVQ\chat_logs (Twitch has no chat history to download later)
         public bool StudyOnStreamStart { get; set; } = true;      // when the stream goes live, read the new logs and learn
         public int StudyMinHours { get; set; } = 3;               // at most one study every N hours
+        public bool ChatReplies { get; set; } = false;             // ChattyPinguino's own chatting (answering mentions, random chimes, welcomes, the offline nap line). OFF while HelperPinguino is being trained: set true to bring it back. Logging, studying, !8ball, !forgetme and mod commands still work.
         public bool EightBallOn { get; set; } = true;              // !8ball: a fun answer that nods to the asker's public context (roles, streak, what chat was just talking about)
         public int EightBallUserSec { get; set; } = 45;            // per viewer
         public int EightBallGlobalSec { get; set; } = 8;           // whole chat
@@ -689,6 +690,7 @@ public class CPHInline
                 NoteHistory();                                       // remember which game / activity is on today
             }
             if (cmd != "") return;                                   // commands are only recorded, the AI never answers them
+            if (!_cfg.ChatReplies) { _pgPass = true; return; }       // chatting is switched off (ChatReplies): everything above (logging, studying) still ran
             if (!second) LinkThreads(login, text, replyTo);          // people talking to each other share a thread
 
             bool mention = IsMention(text) || (!string.IsNullOrEmpty(replyTo) && (replyTo.ToLower() == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(replyTo)));
@@ -762,7 +764,7 @@ public class CPHInline
     static long _napAny;
     void SleepingReply(Ctx cx, string cmd, string replyTo)
     {
-        if (cmd != "" || string.IsNullOrWhiteSpace(_cfg.OfflineReply)) return;
+        if (!_cfg.ChatReplies || cmd != "" || string.IsNullOrWhiteSpace(_cfg.OfflineReply)) return;
         bool mention = IsMention(cx.Text) || (!string.IsNullOrEmpty(replyTo) && (replyTo.ToLower() == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(replyTo)));
         if (!mention) return;
         long now = Now(); long last;

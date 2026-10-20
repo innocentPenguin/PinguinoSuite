@@ -37,6 +37,11 @@ public static class Harness
         new CPHInline().Execute();
     }
 
+    static void SetCfgB(string prop, bool v)
+    {
+        var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+        cfg.GetType().GetProperty(prop).SetValue(cfg, v, null);
+    }
     static void SetCfg(string prop, int v)
     {
         var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
@@ -57,7 +62,7 @@ public static class Harness
         Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dir);
         Environment.SetEnvironmentVariable("BVQ_CHAT_INLINE", "1");
         File.WriteAllText(Path.Combine(dir, "chat_settings.json"),
-            "{\"RolesUrl\":\"http://test/roles\",\"GlobalCooldownSec\":0,\"UserCooldownSec\":0,\"RandomChance\":0,\"GateEnabled\":false,\"MinReplyGapSec\":0,\"MaxRepliesPerViewer10Min\":0,\"StreamerInfo\":\"Peng is 24 and streams daily at 5pm CDT\",\"ApiKey\":\"test\",\"HistoryDir\":\"" + Path.Combine(dir, "history").Replace("\\", "\\\\") + "\",\"UpdatesFile\":\"" + Path.Combine(dir, "updates.json").Replace("\\", "\\\\") + "\",\"OpinionsFile\":\"" + Path.Combine(dir, "opinions.json").Replace("\\", "\\\\") + "\",\"CommandsFile\":\"" + Path.Combine(dir, "commands.json").Replace("\\", "\\\\") + "\"}");
+            "{\"ChatReplies\":true,\"RolesUrl\":\"http://test/roles\",\"GlobalCooldownSec\":0,\"UserCooldownSec\":0,\"RandomChance\":0,\"GateEnabled\":false,\"MinReplyGapSec\":0,\"MaxRepliesPerViewer10Min\":0,\"StreamerInfo\":\"Peng is 24 and streams daily at 5pm CDT\",\"ApiKey\":\"test\",\"HistoryDir\":\"" + Path.Combine(dir, "history").Replace("\\", "\\\\") + "\",\"UpdatesFile\":\"" + Path.Combine(dir, "updates.json").Replace("\\", "\\\\") + "\",\"OpinionsFile\":\"" + Path.Combine(dir, "opinions.json").Replace("\\", "\\\\") + "\",\"CommandsFile\":\"" + Path.Combine(dir, "commands.json").Replace("\\", "\\\\") + "\"}");
         File.WriteAllText(Path.Combine(dir, "updates.json"), "[{\"At\":\"2026-10-18T10:00:00-05:00\",\"By\":\"test\",\"Title\":\"Older update\",\"Details\":\"first\"},{\"At\":\"2026-10-19T08:15:00-05:00\",\"By\":\"test\",\"Title\":\"Names and trust\",\"Details\":\"nicknames follow trust\"}]");
         Directory.CreateDirectory(Path.Combine(dir, "history", "daily")); Directory.CreateDirectory(Path.Combine(dir, "history", "monthly", "hist1")); Directory.CreateDirectory(Path.Combine(dir, "history", "monthly", "histforget"));
         File.WriteAllText(Path.Combine(dir, "history", "daily", "2026-10-17.json"), "{\"summary\":\"Horror game night with mod talk.\",\"games\":[\"Minecraft\"],\"topics\":[\"mods\"],\"moments\":[\"19:00 - mod talk\"]}");
@@ -758,6 +763,17 @@ public static class Harness
         CPHProxy.Sent.Clear(); Msg("Ballguy", "!8ball is this a trick?", null, false);
         Check("a link or a leading ! from the model never reaches chat", Last() != null && !Last().Contains("http") && !Last().Contains("🎱 !") , Last());
         SetCfg("EightBallUserSec", 600);
+
+        // ── 19d. ChatReplies off: Chatty stays quiet; !8ball, logging and mod commands keep working ──
+        SetCfgB("ChatReplies", false);
+        CPHProxy.Sent.Clear(); int callsOff = llmCalls; nextReply = "{\"reply\":\"should not be sent\",\"remember\":[]}";
+        Msg("Quiet1", "@pinguinob0t hello there, how are you?");
+        Check("ChatReplies off: a mention gets no reply and no AI call", CPHProxy.Sent.Count == 0 && llmCalls == callsOff, string.Join("|", CPHProxy.Sent));
+        SetCfg("EightBallUserSec", 0);
+        Msg("Quiet1", "!8ball does this still work?");
+        Check("ChatReplies off: !8ball still answers", Last() != null && Last().Contains("🎱"), Last());
+        Check("ChatReplies off: the message was still logged for studying", File.ReadAllText(Directory.GetFiles(Path.Combine(dir, "chat_logs"), "*.jsonl").OrderBy(x => x).Last()).Contains("how are you"));
+        SetCfgB("ChatReplies", true);
 
         // ── 20. long-term history summaries reach the prompt ──
         nextReply = "{\"reply\":\"ok\",\"remember\":[]}";
