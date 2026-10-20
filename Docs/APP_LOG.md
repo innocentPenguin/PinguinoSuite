@@ -77,6 +77,10 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 08:37 - Host restart (channel update + mod timeout endpoints)
+
+- Restarted Host via Update-Module: 72349a4 HostChannel.cs: POST /api/channel/update (title/game) and POST /api/mod/timeout (module token required, protected users refused, audit log Data/runtime/mod_audit.log). New scopes (channel:manage:broadcast, channel:manage:redemptions, channel:read:goals, channel:read:hype_train) need Ivan's one Twitch re-sign-in. /api/live 200.
+
 ## 2026-10-20 08:26 - Host restart (!rank all playlists, points rename, Chatty fixes)
 
 - Restarted Host via Update-Module: 30684aa/6f141c1/b3e3efe: !rank [epic] [playlist] for every playlist (15 min cache per account, 30 min pause when blocked), ranks saved to Data/ranks/rl_ranks.json for profile push, currency renamed pengs -> points (!pengs removed), Chatty ignores ! lines and stays quiet on how-to questions (ChatReplies still false). /api/live 200. Profiles need push-profiles after the first live !rank.
