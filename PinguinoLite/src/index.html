@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PinguinoLite</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+/* Penguino palette (same tokens as the full app's theme.css, copied: Lite runs no core to serve it). Orange on near-black only. */
+:root{
+  --bg:#050505;--bg2:#0a0a0b;--panel:#101012;--panel2:#17171a;--line:#232326;--line2:#34343a;
+  --fg:#f2f0ec;--dim:#a39f98;--faint:#85827b;
+  --accent:#ff9900;--accent-hover:#ffad33;--accent-active:#e68a00;--accent-soft:#ff990022;--accent-line:#ff990066;--on-accent:#140b00;--focus:#ffc266;
+  --ok:#3ddc97;--warn:#e8d44d;--bad:#ff5c5c;--info:#9fb4c7;--muted-tag:#b9a58a;--r:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.app{display:grid;grid-template-columns:200px 1fr;height:100%}
+nav{background:var(--bg2);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;padding:4px 8px 16px}
+.brand i{width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-style:normal}
+nav button{all:unset;cursor:pointer;padding:9px 12px;border-radius:10px;color:var(--dim)}
+nav button:hover{background:#ffffff0d;color:var(--fg)}
+nav button[aria-current=page]{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent-line)}
+nav .sp{flex:1}
+nav .ver{color:var(--faint);font-size:12px;padding:0 12px}
+main{overflow:auto;padding:24px 28px}
+h1{margin:0 0 4px;font-size:22px}
+.sub{color:var(--dim);margin:0 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.card{background:linear-gradient(var(--panel),#0c0c0e);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.card h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.big{font-size:26px;font-weight:700}
+.note{color:var(--faint);font-size:12px;margin-top:4px;word-break:break-all}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;border:1px solid var(--line2);background:var(--panel2);color:var(--info)}
+.pill.ok{color:var(--ok);border-color:#3ddc9755}.pill.bad{color:var(--bad);border-color:#ff5c5c55}.pill.warn{color:var(--warn);border-color:#e8d44d55}.pill.stub{color:var(--muted-tag)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:18px 0 0}
+.btn{all:unset;cursor:pointer;padding:7px 14px;border-radius:10px;background:var(--panel2);border:1px solid var(--line2);color:var(--fg)}
+.btn:hover{border-color:var(--accent-line)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.pri:hover{background:var(--accent-hover)}
+.btn[aria-disabled=true]{opacity:.45;cursor:default}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px;border-bottom:1px solid var(--line)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:middle}
+td .d{color:var(--dim);font-size:13px}
+.empty{padding:36px;text-align:center;color:var(--dim)}
+.banner{border:1px solid var(--accent-line);background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;margin:0 0 16px;color:var(--fg)}
+.toast{position:fixed;right:20px;bottom:20px;background:var(--panel2);border:1px solid var(--accent-line);border-radius:12px;padding:10px 16px;display:none}
+.mono{font-family:Consolas,monospace}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav>
+    <div class="brand"><i>L</i>PinguinoLite</div>
+    <button data-page="dashboard">Dashboard</button>
+    <button data-page="modules">Modules</button>
+    <div class="sp"></div>
+    <div class="ver" id="ver"></div>
+  </nav>
+  <main id="main"></main>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+// All native access goes through 5 Tauri commands (src-tauri/src/main.rs). Contract: Docs/LITE_APP.md.
+const inv = (c, a) => window.__TAURI__ && window.__TAURI__.core ? window.__TAURI__.core.invoke(c, a) : Promise.reject(new Error('not running inside PinguinoLite'));
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ago = ms => { if (!ms) return 'never'; const s = Math.max(0, (Date.now() - ms) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.floor(s/60) + ' min ago' : s < 86400 ? Math.floor(s/3600) + ' h ago' : Math.floor(s/86400) + ' d ago'; };
+const iso = t => { const n = Date.parse(t); return isNaN(n) ? 0 : n; };
+// dotted numeric compare: 1.10.0 > 1.9.0
+const cmpVer = (a, b) => { const x = String(a).split('.').map(n => parseInt(n) || 0), y = String(b).split('.').map(n => parseInt(n) || 0); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
+
+let info = null, state = { host: null, catalog: null, installed: null, upd: null, status: null, manifest: null };
+let page = 'dashboard';
+
+function toast(t) { const e = $('#toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', 3500); }
+
+async function refresh() {
+  const rd = n => inv('read_contract', { name: n }).catch(() => ({ exists: false }));
+  const [host, catalog, installed, upd, status, manifest] = await Promise.all([inv('host_live').catch(() => ({ reachable: false })), rd('modules_catalog'), rd('installed'), rd('update_status'), rd('status'), rd('update_manifest')]);
+  state = { host, catalog, installed, upd, status, manifest };
+  render();
+}
+
+// Merge catalog + installed -> rows. A module is "installed" only if installed.json says so; "update" if catalog version is newer.
+function rows() {
+  const cat = state.catalog && state.catalog.data && Array.isArray(state.catalog.data.modules) ? state.catalog.data.modules : [];
+  const inst = state.installed && state.installed.data && state.installed.data.modules || {};
+  const busy = state.status && state.status.data && state.status.data.busy || {};
+  return cat.map(m => {
+    const i = inst[m.id];
+    return { ...m, installed: !!i, installed_version: i && i.version, update: !!i && cmpVer(m.latest_version, i.version) > 0, busy: busy[m.id] || '' };
+  });
+}
+
+function dashboard() {
+  const h = state.host || {}, r = rows(), n = r.filter(x => x.installed).length, u = r.filter(x => x.update).length;
+  const us = state.upd && state.upd.data || {};
+  const writer = state.status && state.status.data && state.status.data.writer;
+  const conn = state.status && state.status.data && state.status.data.connector;
+  const selfUpd = state.manifest && state.manifest.data && info && cmpVer(state.manifest.data.latest_version, info.version) > 0;
+  return `<h1>Dashboard</h1><p class="sub">PinguinoLite is a light shell: no modules are loaded by default.</p>
+  ${selfUpd ? `<div class="banner">PinguinoLite ${esc(state.manifest.data.latest_version)} is ready. <button class="btn pri" data-act="selfupdate-apply">Restart &amp; update</button> <span class="pill stub">STUB until PinguinoLink applies updates</span></div>` : ''}
+  <div class="grid">
+   <div class="card"><h3>Host (127.0.0.1:8770)</h3><div class="big">${h.reachable ? '<span style="color:var(--ok)">Reachable</span>' : '<span style="color:var(--bad)">Not reachable</span>'}</div>
+     <div class="note">${h.reachable ? `/api/live answered HTTP ${esc(h.status)} in ${esc(h.ms)} ms` : 'Host is not running (or not on this PC). Lite works without it.'}</div></div>
+   <div class="card"><h3>App version</h3><div class="big">${esc(info && info.version)}</div><div class="note">PinguinoLite</div></div>
+   <div class="card"><h3>Modules installed</h3><div class="big">${n}</div><div class="note">${r.length ? `${r.length} available${u ? `, <span style="color:var(--warn)">${u} update${u > 1 ? 's' : ''}</span>` : ''}` : 'no catalog yet'}</div></div>
+   <div class="card"><h3>Last update check</h3><div class="big" style="font-size:20px">${us.last_check_at ? ago(iso(us.last_check_at)) : 'never'}</div>
+     <div class="note">${us.last_check_at ? esc(us.result || '') + (us.error ? ' - ' + esc(us.error) : '') : 'PinguinoLink has not written update_status.json'}</div></div>
+   <div class="card"><h3>PinguinoLink</h3><div class="big" style="font-size:20px">${writer ? esc(writer.name + ' ' + (writer.version || '')) : '<span style="color:var(--faint)">not connected</span>'}</div>
+     <div class="note">${conn ? 'connector: ' + esc(conn.state) + (conn.detail ? ' - ' + esc(conn.detail) : '') : 'no status.json yet'}</div></div>
+  </div>
+  <div class="row"><button class="btn" data-open="host">Open Host dashboard</button><button class="btn" data-open="folder">Open Lite data folder</button><button class="btn" data-act="check">Check for updates</button> <span class="pill stub">check is STUB until 04 reads requests\\</span></div>
+  <p class="note">Contract folder: <span class="mono">${esc(info && info.lite_dir)}</span></p>`;
+}
+
+function modules() {
+  const r = rows();
+  const c = state.catalog;
+  let body;
+  if (!c || !c.exists) body = `<div class="empty">No catalog yet.<br>PinguinoLink writes <span class="mono">modules_catalog.json</span> into <span class="mono">${esc(info && info.lite_dir)}</span>.</div>`;
+  else if (c.error) body = `<div class="empty" style="color:var(--bad)">modules_catalog.json is not readable: ${esc(c.error)}</div>`;
+  else if (!r.length) body = `<div class="empty">The catalog is empty.</div>`;
+  else body = `<table><thead><tr><th>Module</th><th>Version</th><th>Status</th><th></th></tr></thead><tbody>${r.map(m => `<tr>
+    <td><b>${esc(m.name || m.id)}</b><div class="d">${esc(m.description)}</div></td>
+    <td class="mono">${m.installed ? esc(m.installed_version) : '-'}${m.installed && m.update ? ` -> ${esc(m.latest_version)}` : m.installed ? '' : ` <span class="d">(${esc(m.latest_version)})</span>`}</td>
+    <td>${m.busy ? `<span class="pill warn">${esc(m.busy)}...</span>` : m.update ? '<span class="pill warn">Update available</span>' : m.installed ? '<span class="pill ok">Installed</span>' : '<span class="pill">Not installed</span>'}</td>
+    <td style="text-align:right">${m.busy ? '' : m.update ? `<button class="btn pri" data-act="update" data-id="${esc(m.id)}">Update</button>` : m.installed ? '' : `<button class="btn pri" data-act="install" data-id="${esc(m.id)}">Install</button>`}</td></tr>`).join('')}</tbody></table>`;
+  const gen = c && c.data && c.data.generated_at;
+  return `<h1>Modules</h1><p class="sub">Modules available from PinguinoLink${gen ? ` - catalog from ${esc(ago(iso(gen)))}` : ''}.
+   <span class="pill stub">Install/Update are STUBS: they only drop a request file for PinguinoLink</span></p>
+   <div class="card" style="padding:4px 8px">${body}</div>
+   <div class="row"><button class="btn" data-act="check">Check for updates</button><button class="btn" data-open="folder">Open Lite data folder</button></div>`;
+}
+
+function render() {
+  document.querySelectorAll('nav button[data-page]').forEach(b => b.setAttribute('aria-current', b.dataset.page === page ? 'page' : 'false'));
+  $('#ver').textContent = info ? 'v' + info.version : '';
+  $('#main').innerHTML = page === 'modules' ? modules() : dashboard();
+}
+
+document.addEventListener('click', async e => {
+  const nav = e.target.closest('nav button[data-page]');
+  if (nav) { page = nav.dataset.page; try { localStorage.setItem('page', page); } catch {} return render(); }
+  const o = e.target.closest('[data-open]');
+  if (o) return inv('open_target', { target: o.dataset.open }).catch(err => toast(String(err)));
+  const a = e.target.closest('[data-act]');
+  if (a) {
+    try { const r = await inv('send_request', { action: a.dataset.act, id: a.dataset.id || null }); toast('Request sent to PinguinoLink (' + r.file + ')'); }
+    catch (err) { toast('Could not send request: ' + err); }
+    setTimeout(refresh, 1200);
+  }
+});
+
+(async () => {
+  try { page = localStorage.getItem('page') || 'dashboard'; } catch {}
+  info = await inv('lite_info').catch(() => null);
+  await refresh();
+  setInterval(refresh, 5000);   // cheap: 1 loopback probe + up to 5 tiny local files
+})();
+</script>
+</body>
+</html>
