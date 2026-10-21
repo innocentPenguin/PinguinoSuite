@@ -39,7 +39,7 @@ namespace PinguinoHost
         {
             if (_set != null) return _set;
             var d = new JObject { { "CurrencyName", "points" }, { "PointsPerMinute", 1.0 }, { "SubMultiplier", 2.0 }, { "VipMultiplier", 1.5 }, { "ModMultiplier", 1.0 }, { "OnlyWhileLive", true }, { "Earning", true },
-                { "FallbackActiveMinutes", 30 }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
+                { "WelcomeBonus", 100 }, { "FallbackActiveMinutes", 30 }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
             try { if (File.Exists(SetP)) foreach (var p in JObject.Parse(File.ReadAllText(SetP, Encoding.UTF8))) d[p.Key] = p.Value; else File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
             _set = d; return d;
         }

@@ -157,6 +157,7 @@ namespace PinguinoHost
             if (!Lease.MayRun) return;
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
+            try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
             try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
             try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
             try { if (CmdProfiles.Gate(user, text, role, isSub, subTier)) return; } catch (Exception ex) { Clog.Warn("cmdprofiles", "command gate failed: " + ex.Message); }   // edited tier / disabled / archived / cooldown: silent
@@ -276,10 +277,11 @@ namespace PinguinoHost
                 int c = line.IndexOf(':'); if (c < 1) continue;
                 string who = line.Substring(0, c).Trim(); int role = 1;
                 if (who.StartsWith("*")) { role = 3; who = who.Substring(1); } else if (who.StartsWith("#")) { role = 4; who = who.Substring(1); } else if (who.StartsWith("%")) { role = 2; who = who.Substring(1); }   // sim: "%alice: hi" = a VIP
+                bool simFirst = false; if (who.StartsWith("^")) { simFirst = true; who = who.Substring(1); }   // sim: "^alice: hi" = alice's first message ever (Twitch first-msg flag)
                 int simTier = 0; if (who.StartsWith("$") && who.Length > 2 && char.IsDigit(who[1])) { simTier = who[1] - '0'; who = who.Substring(2); }   // sim: "$2alice: hi" = a tier 2 sub
                 HostApi.Messages++; HostApi.LastMessage = DateTime.UtcNow;
                 ChatStats.Note(who, role);
-                Dispatch(who, line.Substring(c + 1).Trim(), "sim-" + (++n), role, "id-" + who.ToLowerInvariant(), false, null, false, simTier);
+                Dispatch(who, line.Substring(c + 1).Trim(), "sim-" + (++n), role, "id-" + who.ToLowerInvariant(), simFirst, null, false, simTier);
             }
         }
 
