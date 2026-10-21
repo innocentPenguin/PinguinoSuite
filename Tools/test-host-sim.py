@@ -123,6 +123,13 @@ try:
     real_after = files()
     leaked = [k for k, v in real_after.items() if 'sim_' in open(os.path.join(d, k), encoding='utf-8-sig', errors='replace').read() and not k.endswith('names.json')]
     chk('no sim_ in any saved file', not leaked, leaked)
+    time.sleep(2)
+    leaked2 = [k for k in files() if k.endswith('.json') and any(n in open(os.path.join(d, k), encoding='utf-8-sig', errors='replace').read() for n in names) and not k.endswith('names.json')]
+    def _ctx(k):
+        s = __import__('re').sub(r'\s+', ' ', open(os.path.join(d, k), encoding='utf-8-sig', errors='replace').read())
+        for n in names:
+            if n in s: return s[max(0, s.find(n) - 150):s.find(n) + 60]
+    chk('no sim display name in any saved file (wheel feed, wheel_public)', not leaked2, [(k, _ctx(k)) for k in leaked2])
     chk('real ledger unchanged', real_after.get(os.path.join('economy', 'points.json')) == real_before.get(os.path.join('economy', 'points.json')) and real_after.get(os.path.join('runtime', 'economy', 'points.json')) == real_before.get(os.path.join('runtime', 'economy', 'points.json')))
     for f in ['players.json', 'matches.json', 'queue.json']:
         a = real_before.get(f) or real_before.get(os.path.join('runtime', f)); b = real_after.get(f) or real_after.get(os.path.join('runtime', f))

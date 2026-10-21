@@ -811,7 +811,7 @@ public class CPHInline
         _matches.RemoveAll(IsPracticeMatch);
         _practice.Clear(); _practiceOn = false;
         if (hadMatch) { _lastBalance = LoadJson<LastBalanceData>("current_match.json"); _holdMatch = null; }
-        if (hadWheel) { _wheel = LoadJson<WheelSession>("wheel_session.json"); _wheelDirty = true; }   // back to the real sign-ups (practice entrants were never saved)
+        if (hadWheel) { _wheel = LoadJson<WheelSession>("wheel_session.json"); _wheelDirty = true; if (_wheel != null) WheelSave(); }   // back to the real sign-ups (practice entrants were never saved)
         _standingsDirty = true; _matchesDirty = true;
         SavePlayers(); SaveQueue(); SaveMatches();
     }
@@ -820,6 +820,7 @@ public class CPHInline
     // Same rules as practice mode (memory only, never saved, never counted), plus: they carry a real viewer's name for show (login "sim_<name>"), they join and leave the queue and
     // the wheel sign-ups through the real structures (join/leave feed included), their wheel announcements never reach chat, and the website push can leave them out (sim site off).
     static readonly Dictionary<string, string> _sim = new Dictionary<string, string>();   // sim login -> display name
+    static readonly HashSet<string> _simSeen = new HashSet<string>();                    // every sim display name of this run (lower-case): their join/leave notes never reach wheel_session.json
     static bool _simSite = true;                                                          // false: the website push is built without the sim players
     [ThreadStatic] static bool _forSite;                                                  // true only while the web sync builds a payload for the website
     bool IsSim(string login) { return _sim.Count > 0 && login != null && _sim.ContainsKey(login); }
@@ -841,7 +842,7 @@ public class CPHInline
                 (_wheel != null && _wheel.Entrants.Any(e => string.Equals(e.Name, clean, StringComparison.OrdinalIgnoreCase) || e.Login == clean.ToLower()))) continue;
             int mmr = 450 + SimHash(login);
             _players[login] = new Player { Username = login, GameId = clean, MmrSource = "manual", PeakMmr = mmr, MmrLastUpdated = Now() };
-            _sim[login] = clean; _practice.Add(login); _practiceOn = true;
+            _simSeen.Add(clean.ToLower()); _sim[login] = clean; _practice.Add(login); _practiceOn = true;
             AddToQueue(login);
             if (_wheel != null && _wheel.Status == "open" && !_wheel.Entrants.Any(e => e.Login == login))
             {
@@ -1089,13 +1090,21 @@ public class CPHInline
             {
                 var real = JObject.FromObject(_wheel);
                 var arr = (JArray)real["Entrants"];
+                var pnames = new HashSet<string>(arr.OfType<JObject>().Where(t => (bool?)t["Practice"] == true).Select(t => ((string)t["Name"] ?? "").ToLower()));
                 foreach (var t in arr.OfType<JObject>().Where(t => (bool?)t["Practice"] == true).ToList()) t.Remove();
+                if (real["Feed"] is JArray fd) foreach (var f in fd.OfType<JObject>().Where(f => pnames.Contains(((string)f["Name"] ?? "").ToLower()) || _simSeen.Contains(((string)f["Name"] ?? "").ToLower())).ToList()) f.Remove();   // join/leave notes of practice + sim players never reach the disk either
                 SaveJson("wheel_session.json", real);
             }
             try { SaveJson("wheel_public.json", WheelPublic()); } catch (Exception) { }
             return;
         }
-        SaveJson("wheel_session.json", _wheel);
+        if (_simSeen.Count > 0 && _wheel != null && _wheel.Feed.Any(f => _simSeen.Contains((f.Name ?? "").ToLower())))
+        {
+            var cl = JObject.FromObject(_wheel);
+            if (cl["Feed"] is JArray fd2) foreach (var f in fd2.OfType<JObject>().Where(f => _simSeen.Contains(((string)f["Name"] ?? "").ToLower())).ToList()) f.Remove();
+            SaveJson("wheel_session.json", cl);
+        }
+        else SaveJson("wheel_session.json", _wheel);
         try { SaveJson("wheel_public.json", WheelPublic()); } catch (Exception) { }   // the local overlay (Host /api/wheel/public) reads this
     }
 
