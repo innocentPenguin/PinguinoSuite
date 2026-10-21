@@ -264,6 +264,7 @@ namespace PinguinoHost
                 if (who.StartsWith("*")) { role = 3; who = who.Substring(1); } else if (who.StartsWith("#")) { role = 4; who = who.Substring(1); }
                 int simTier = 0; if (who.StartsWith("$") && who.Length > 2 && char.IsDigit(who[1])) { simTier = who[1] - '0'; who = who.Substring(2); }   // sim: "$2alice: hi" = a tier 2 sub
                 HostApi.Messages++; HostApi.LastMessage = DateTime.UtcNow;
+                ChatStats.Note(who, role);
                 Dispatch(who, line.Substring(c + 1).Trim(), "sim-" + (++n), role, "id-" + who.ToLowerInvariant(), false, null, false, simTier);
             }
         }

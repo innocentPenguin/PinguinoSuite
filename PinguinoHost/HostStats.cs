@@ -27,6 +27,12 @@ namespace PinguinoHost
             lock (_l) { var now = DateTime.UtcNow; return _hits.Where(h => (now - h.At).TotalMinutes <= minutes).Select(h => h.Login).Where(x => x != "").Distinct().ToList(); }
         }
 
+        /// <summary>chat lines per login since `since` (UTC)</summary>
+        public static Dictionary<string, int> LinesSince(DateTime since)
+        {
+            lock (_l) { return _hits.Where(h => h.At >= since && h.Login != "").GroupBy(h => h.Login).ToDictionary(g => g.Key, g => g.Count()); }
+        }
+
         public static JObject Chat()
         {
             lock (_l)

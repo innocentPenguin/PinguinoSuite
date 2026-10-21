@@ -29,7 +29,8 @@ namespace PinguinoHost
         static string SeBase { get { return (Environment.GetEnvironmentVariable("PINGUINO_SE_BASE") ?? "https://api.streamelements.com/kappa/v2").TrimEnd('/'); } }
         static int SeDelayMs { get { int v; return int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_SE_DELAY_MS"), out v) ? v : 1000; } }
         static int MinuteSec { get { int v; return int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_MINUTE_SEC"), out v) && v > 0 ? v : 60; } }
-        static string _note = "", _chatterNote = ""; static DateTime _lastTick = DateTime.MinValue; static int _lastPaid;
+        static string _note = "", _chatterNote = ""; static DateTime _lastTick = DateTime.MinValue, _lastRun = DateTime.MinValue; static int _lastPaid; static string _lastWhy = "never ran"; static double _lastPoints;
+        static readonly Dictionary<string, KeyValuePair<DateTime, int>> Bonus = new Dictionary<string, KeyValuePair<DateTime, int>>();
 
         public static string CurrencyName { get { lock (L) { string n = (string)Settings()["CurrencyName"] ?? "points"; return n == "pengs" ? "points" : n; } } }   // "pengs" was the old name: always points now
 
@@ -38,7 +39,7 @@ namespace PinguinoHost
         {
             if (_set != null) return _set;
             var d = new JObject { { "CurrencyName", "points" }, { "PointsPerMinute", 1.0 }, { "SubMultiplier", 2.0 }, { "VipMultiplier", 1.5 }, { "ModMultiplier", 1.0 }, { "OnlyWhileLive", true }, { "Earning", true },
-                { "FallbackActiveMinutes", 30 }, { "Exclude", new JArray() } };
+                { "FallbackActiveMinutes", 30 }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
             try { if (File.Exists(SetP)) foreach (var p in JObject.Parse(File.ReadAllText(SetP, Encoding.UTF8))) d[p.Key] = p.Value; else File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
             _set = d; return d;
         }
@@ -221,9 +222,9 @@ namespace PinguinoHost
         static void Tick()
         {
             if (!Lease.MayRun) return;
-            JObject set; lock (L) set = Settings();
-            if ((bool?)set["Earning"] == false) return;
-            if ((bool?)set["OnlyWhileLive"] != false && !IsLive()) { _lastTick = DateTime.MinValue; return; }
+            JObject set; lock (L) set = Settings(); _lastRun = DateTime.UtcNow;
+            if ((bool?)set["Earning"] == false) { _lastPaid = 0; _lastPoints = 0; _lastWhy = "earning is switched off"; Clog.Info("economy", "tick: paid 0 (earning switched off)"); return; }
+            if ((bool?)set["OnlyWhileLive"] != false && !IsLive()) { _lastTick = DateTime.MinValue; _lastPaid = 0; _lastPoints = 0; _lastWhy = "not live"; Clog.Info("economy", "tick: paid 0 (stream not live, live flag false)"); return; }
             var now = DateTime.UtcNow; double minutes = _lastTick == DateTime.MinValue ? 1 : Math.Min(2, Math.Max(0.5, (now - _lastTick).TotalSeconds / MinuteSec)); _lastTick = now;
             var people = Chatters();
             string streamer = Norm((string)HostApi.StreamerCreds()["Channel"]);
@@ -240,7 +241,19 @@ namespace PinguinoHost
                 var role = ProfileRole(c); if (role == "vip") mult = Math.Max(mult, vipM); else if (role == "mod") mult = Math.Max(mult, modM);
                 double p; paid.TryGetValue(c, out p); paid[c] = Math.Max(p, rate * mult * minutes);
             }
-            string month = DateTime.UtcNow.ToString("yyyy-MM");
+            if ((bool?)set["ActivityBonus"] != false)
+            {
+                int per = Math.Max(1, (int?)set["ActivityLinesPerPoint"] ?? 5), cap = Math.Max(0, (int?)set["ActivityCapPer10Min"] ?? 2); var nowU = DateTime.UtcNow;
+                foreach (var kv in ChatStats.LinesSince(nowU.AddMinutes(-10)))
+                {
+                    string c = Canon(al, kv.Key); if (c == streamer || ex.Contains(c) || ex.Contains(kv.Key) || Boards.IsBot(c)) continue;
+                    int want = Math.Min(cap, kv.Value / per); KeyValuePair<DateTime, int> got; Bonus.TryGetValue(c, out got);
+                    int already = (nowU - got.Key).TotalMinutes < 10 ? got.Value : 0; int give = want - already; if (give <= 0) continue;
+                    Bonus[c] = new KeyValuePair<DateTime, int>(already == 0 ? nowU : got.Key, already + give);
+                    double p; paid.TryGetValue(c, out p); paid[c] = p + give;
+                }
+            }
+            string month = DateTime.UtcNow.ToString("yyyy-MM"); bool announce = false;
             lock (L)
             {
                 var d = Doc(); var earned = (JObject)d["earned"]; var mon = (JObject)d["months"]; var mm = (JObject)(mon[month] ?? (mon[month] = new JObject()));
@@ -251,8 +264,12 @@ namespace PinguinoHost
                     var m = (JObject)(mm[kv.Key] ?? (mm[kv.Key] = new JObject { { "points", 0.0 }, { "minutes", 0.0 } }));
                     m["points"] = D(m["points"]) + kv.Value; m["minutes"] = D(m["minutes"]) + minutes;
                 }
-                _lastPaid = paid.Count; if (paid.Count > 0) Save();
+                _lastPaid = paid.Count; _lastPoints = Math.Round(paid.Values.Sum(), 2); _lastWhy = "paid"; if (paid.Count > 0) Save();
+                var dd = Doc(); if (dd["announced"] == null && ((JObject)dd["baseline"]["users"]).Count > 0 && Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_NO_ANNOUNCE") != "1")
+                { dd["announced"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Save(); announce = true; }
             }
+            Clog.Info("economy", "tick: paid " + paid.Count + " people (" + _lastPoints + " " + CurrencyName + "), source: " + _chatterNote + ", live: " + IsLive());
+            if (announce) { try { ChannelLore.Say("Your StreamElements points were imported, so your balance is still here. Check it with !points. Thanks for hanging out!"); } catch (Exception) { } }
         }
         static readonly Dictionary<string, KeyValuePair<DateTime, string>> RoleCache = new Dictionary<string, KeyValuePair<DateTime, string>>();
         static string ProfileRole(string login)
@@ -320,7 +337,7 @@ namespace PinguinoHost
                 var d = Doc(); var set = Settings();
                 return new JObject { { "ok", true }, { "currency", set["CurrencyName"] }, { "settings", set }, { "people", s.Users.Count }, { "totalPoints", Math.Round(s.Users.Values.Sum(r => r.Points)) }, { "totalMinutes", Math.Round(s.Users.Values.Sum(r => r.Minutes)) },
                     { "baseline", new JObject { { "at", d["baseline"]["at"] }, { "source", d["baseline"]["source"] }, { "people", ((JObject)d["baseline"]["users"]).Count } } },
-                    { "earning", new JObject { { "on", (bool?)set["Earning"] != false }, { "live", IsLive() }, { "lastPaidPeople", _lastPaid }, { "source", _chatterNote } } },
+                    { "earning", new JObject { { "on", (bool?)set["Earning"] != false }, { "live", IsLive() }, { "lastPaidPeople", _lastPaid }, { "paidLastTick", _lastPaid }, { "pointsLastTick", _lastPoints }, { "lastTick", _lastRun == DateTime.MinValue ? "" : _lastRun.ToString("o") }, { "lastTickResult", _lastWhy }, { "source", _chatterNote } } },
                     { "seToken", Jwt() != "" ? "set" : "not set" }, { "note", _note } };
             }
         }
