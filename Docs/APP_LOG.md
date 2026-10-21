@@ -77,6 +77,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 07:20 - Link module restart (Lite self-update check)
+- Link restarted via D:\PinguinoSuite\App\Update-Module.ps1 link on 04's bcf4fd9: local Lite self-update check (Data\lite\staging\PinguinoLite-<ver>-setup.exe + .sha256; never executed). The old Link (PID 40600, started 00:59) ignored the control stop file, so I killed it and Update-Module started the new one. /api/health ok.
+
 ## 2026-10-21 04:42 - Host restart (Firsts payout)
 - Host restarted via D:\PinguinoSuite\App\Update-Module.ps1 host: loads 023's a2a7afe (Firsts payout via native PinguinoGrantPoints / Economy.Grant, idempotent ids, no !addpoints line in chat). /api/live and /api/commands/profiles 200. Live Firsts game unverified.
 
