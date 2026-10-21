@@ -15,6 +15,8 @@ use serde_json::{json, Value};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
 /// PinguinoLink (session 04) is the one bundled component: Lite starts it at launch and stops it on exit.
@@ -264,6 +266,31 @@ fn main() {
                 mainwin::place(&w); // saved size/position/maximized, or ~62% of the monitor, centred
                 let _ = w.show();
             }
+            // tray: left click shows the window, right click menu has Show / Quit (closing the window still quits Lite and stops Link)
+            let open = MenuItem::with_id(app, "open", "Show PinguinoLite", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit])?;
+            TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("PinguinoLite")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, ev| match ev.id.as_ref() {
+                    "open" => show_main(app),
+                    "quit" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            mainwin::save(&w, true);
+                        }
+                        app.exit(0)
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, ev| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = ev {
+                        show_main(tray.app_handle());
+                    }
+                })
+                .build(app)?;
             let child = spawn_link(&app.package_info().version.to_string()); // None = no Link bundled here (dev without Link): Lite still opens
             *app.state::<Link>().0.lock().unwrap() = child;
             Ok(())
