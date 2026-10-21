@@ -749,6 +749,14 @@ public static class Harness
         Check(Q().Contains("rc2") && State()["queue"].First(q => (string)q["user"] == "rc2")["recycle"].ToString() == "True" && !Q().Contains("rc3") && !Q().Contains("rc5"), "recycler: after a win only the recycler player is queued again: " + string.Join(",", Q()));
         Run("rc2", "!leave");
         Check(!Q().Contains("rc2") && Players()["rc2"]["Recycler"].ToString() == "False", "recycler: !leave removes the player and ends recycling");
+        // ===== [NEW] linked Epic name wins over a typed one; both are kept =====
+        var bt0 = typeof(CPHInline); var linkF = bt0.GetField("_siteEpicLinked", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance); var typedF = bt0.GetField("_siteEpicTyped", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Run("el1", "!register", "typedname"); Check(Players()["el1"]["GameId"].ToString() == "typedname" && Players()["el1"]["EpicLinked"].ToString() == "False", "epic link: a typed name is stored unlinked");
+        linkF.SetValue(bot, true); typedF.SetValue(bot, "typedname"); Run("mod1", "!register", "@el1 LinkedName", true); linkF.SetValue(bot, false); typedF.SetValue(bot, "");
+        Check(Players()["el1"]["GameId"].ToString() == "LinkedName" && Players()["el1"]["EpicLinked"].ToString() == "True" && Players()["el1"]["EpicTyped"].ToString() == "typedname", "epic link: the linked name is shown and the typed one is kept beside it");
+        Run("mod1", "!register", "@el1 SomethingElse", true);
+        Check(Players()["el1"]["GameId"].ToString() == "LinkedName" && Players()["el1"]["EpicTyped"].ToString() == "SomethingElse" && CPHProxy.Sent.Any(m => m.Contains("is linked to Epic as LinkedName")), "epic link: a chat/mod !register cannot displace the linked name: " + string.Join("|", CPHProxy.Sent));
+        Run("el1", "!register", "again"); Check(Players()["el1"]["GameId"].ToString() == "LinkedName", "epic link: the person themself cannot overwrite it either");
         // inactivity timeout
         var botT = typeof(CPHInline);
         var setF = botT.GetField("_settings", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);

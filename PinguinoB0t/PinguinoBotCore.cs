@@ -374,7 +374,9 @@ public class CPHInline
     {
         public string Username { get; set; }
         public string Platform { get; set; }
-        public string GameId { get; set; }
+        public string GameId { get; set; }     // the name shown everywhere (queue, teams, boards, overlays): the LINKED Epic name when there is one, else the typed one
+        public bool EpicLinked { get; set; }   // GameId came from the member's linked Epic account (site "Link Epic account"); a typed name never replaces it
+        public string EpicTyped { get; set; }  // the name the person typed themselves, kept next to a linked name so an unlink falls back to it
         public string TwitchId { get; set; }   // [NEW] never changes, even when they rename on Twitch
         public int? PeakMmr { get; set; }
         public string MmrSource { get; set; } = "none";
@@ -2148,6 +2150,8 @@ public class CPHInline
         public bool privileged { get; set; }
         public bool quiet { get; set; }   // website-only player: don't post the reply in Twitch chat
         public string epic { get; set; }
+        public bool epicLinked { get; set; }   // optional: true when `epic` is the member's linked Epic display name (site epicLink.name)
+        public string epicTyped { get; set; }  // optional: the name the member typed in Settings, sent alongside a linked name
         public string userId { get; set; }   // [NEW][WHEEL] the viewer's Twitch id when the site knows it (a site "Join" for the tournament)
         public bool sub { get; set; }        // [NEW][WHEEL] is a subscriber (tournament eligibility "subs")
         public string name { get; set; }  // [NEW][WEB] site display name, used in chat for website-only players  // [NEW][WEB] Epic name saved in the member's site Settings (sent with !join)
@@ -2205,11 +2209,13 @@ public class CPHInline
                     string epic = (wc.epic ?? "").Trim();
                     Player known;
                     if (epic.Length > 0 && !(_players.TryGetValue(webUser, out known) &&
-                        string.Equals(known.GameId, epic, StringComparison.OrdinalIgnoreCase)))
+                        string.Equals(known.GameId, epic, StringComparison.OrdinalIgnoreCase) && known.EpicLinked == wc.epicLinked))
                     {
                         // privileged=true lets it UPDATE an existing name (the site already
                         // requires a mod unlock before a member can change their Epic name).
-                        HandleRegister(webUser, epic.StartsWith("@") ? epic.TrimStart('@') : epic, true);
+                        _siteEpicLinked = wc.epicLinked; _siteEpicTyped = (wc.epicTyped ?? "").Trim();
+                        try { HandleRegister(webUser, epic.StartsWith("@") ? epic.TrimStart('@') : epic, true); }
+                        finally { _siteEpicLinked = false; _siteEpicTyped = ""; }
                         _capture.Clear();
                     }
                     // [NEW][WHEEL] a site "Join" for the tournament runs !me with the same rules as chat (open sign-ups, subs-only, dedupe by id or name)
@@ -2965,6 +2971,9 @@ public class CPHInline
     //  COMMAND HANDLERS — viewers
     // ══════════════════════════════════════════════════════════════
 
+    // set only while a SITE command registers the name: the linked-account flag and the typed name the site also holds
+    bool _siteEpicLinked; string _siteEpicTyped = "";
+
     bool HandleRegister(string user, string input, bool isPrivileged)
     {
         if (string.IsNullOrEmpty(input))
@@ -3036,6 +3045,20 @@ public class CPHInline
             _players[targetUser] = player;
         }
         player.Platform = "epic";
+        if (player.EpicLinked && !_siteEpicLinked && _siteEpicTyped == "" && string.IsNullOrEmpty(_webId) && !string.Equals(player.GameId, gameId, StringComparison.OrdinalIgnoreCase))
+        {
+            // a chat/mod !register must not displace a linked Epic name: keep the typed name beside it (the linked one stays what everyone sees)
+            player.EpicTyped = gameId; SavePlayers();
+            Say("@" + user + " " + targetUser + " is linked to Epic as " + player.GameId + ", so that name stays. Saved " + gameId + " as the typed fallback.");
+            return true;
+        }
+        if (_siteEpicLinked)
+        {
+            if (!player.EpicLinked && !string.IsNullOrEmpty(player.GameId) && !string.Equals(player.GameId, gameId, StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(_siteEpicTyped)) player.EpicTyped = player.GameId;
+            if (!string.IsNullOrEmpty(_siteEpicTyped)) player.EpicTyped = _siteEpicTyped;
+            player.EpicLinked = true;
+        }
+        else if (player.EpicLinked && !string.IsNullOrEmpty(_webId)) { player.EpicLinked = false; player.EpicTyped = null; }   // the site says the account is no longer linked: the name it now sends is the typed one
         player.GameId = gameId;
 
         if (result.Mmr.HasValue)
