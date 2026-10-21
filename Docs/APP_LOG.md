@@ -77,6 +77,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 01:14 Shell rebuild + Host restart 01:10 (player simulator)
+
+- 01:10 Update-Module host on 31ffac3 (02: player simulator, /api/sim/*, sim ledger, sendSimToSite). 01:14 Build-All --no-launch (host/core up to date, shell rebuilt) + PinguinoApp.bat. /api/live, /api/sim/status, /wheel.html, /api/obs/status all 200.
+- In the app now: Simulator panel (3ecc4ff) on Wheel & Games. Link module restarted 00:55 (orphan PID 13580 killed) and 00:59 (58ddc58 install/update/uninstall).
+- Pending: site GET /api/bot/names + sim:true handling (asked 05); SEO batch 43cdd28 push by 05.
+
 ## 2026-10-21 00:52 Full rebuild + app launch (core + shell)
 
 - Build-All --no-launch: host unchanged (23:38 dll), core rebuilt (templates routes), shell 00:47; launched via PinguinoApp.bat. Verified /api/live, /wheel.html, /api/obs/status, /api/commands/profiles all 200.
