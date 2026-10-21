@@ -44,6 +44,7 @@ namespace PinguinoHost
         static JObject Load() { try { return File.Exists(FilePath) ? JObject.Parse(File.ReadAllText(FilePath)) : new JObject(); } catch (Exception) { return new JObject(); } }
         static void Save(JObject o) { File.WriteAllText(FilePath, o.ToString()); }
 
+        public static bool EventsOk(HttpListenerRequest r) { return LocalOk(r); }
         static bool LocalOk(HttpListenerRequest r)
         {
             string h = r.Headers["Host"] ?? ""; if (!(h.StartsWith("127.0.0.1:") || h.StartsWith("localhost:"))) return false;

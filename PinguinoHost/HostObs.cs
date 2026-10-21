@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -72,6 +72,9 @@ namespace PinguinoHost
         }
 
         /// <summary>the tree for the Master View: every scene (with folder) and the items of one scene (default: the live one).</summary>
+        /// <summary>OBS told us something changed (scene switch, item shown/hidden, ...): drop the short caches so the next read is fresh</summary>
+        public static void Invalidate() { lock (L) { _scenesAt = DateTime.MinValue; _items.Clear(); } }
+
         public static JObject Get(string scene)
         {
             var sl = SceneList(false);

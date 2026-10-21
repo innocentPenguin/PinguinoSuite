@@ -145,6 +145,7 @@ namespace PinguinoHost
             if (!Lease.MayRun) return;
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
+            try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
             try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
             try { if (CmdProfiles.Gate(user, text, role, isSub, subTier)) return; } catch (Exception ex) { Clog.Warn("cmdprofiles", "command gate failed: " + ex.Message); }   // edited tier / disabled / archived / cooldown: silent
             try { bool swallowed; text = CmdFix.Fix(user, text, m => { if (HostApi.SimMode) Console.WriteLine("[say] " + m); else { string via; HostApi.SendAs("core", m, out via); } }, out swallowed); if (swallowed) return; } catch (Exception ex) { Clog.Warn("cmdfix", "typo check failed: " + ex.Message); }   // "! join", "!jon", "!rejoin" -> !join; near misses answer once

@@ -215,7 +215,7 @@ namespace PinguinoHost
             if (p == "/api/tune" && m == "GET") { Write(c, TuneGet().ToString(), "application/json"); return true; }
             if (p == "/api/tune" && m == "POST") { Write(c, TunePost(Body(c)).ToString(), "application/json"); return true; }
             if (m == "POST" && (p == "/api/wheel/spin" || p == "/api/wheel/new" || p == "/api/wheel/reset"))
-            { RunAsStreamer("!wheel " + p.Substring("/api/wheel/".Length)); Write(c, "{\"ok\":true}", "application/json"); return true; }
+            { RunAsStreamer("!wheel " + p.Substring("/api/wheel/".Length)); System.Threading.Thread.Sleep(600); Events.Kick(); Write(c, new JObject { { "ok", true }, { "wheel", Events.WheelState() } }.ToString(), "application/json"); return true; }
             if (p == "/api/gamble/simulate" && m == "POST") { Write(c, GambleSim(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/economy/grant" && m == "POST") { var b = Body(c); if (b["by"] == null) b["by"] = "suite"; Write(c, Economy.Grant(b).ToString(), "application/json"); return true; }
             return false;

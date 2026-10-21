@@ -52,6 +52,7 @@ namespace PinguinoHost
                         var msg = await Receive();
                         if (msg == null) break;
                         int op = (int)msg["op"]; var d = msg["d"] as JObject;
+                        if (op == 5 && d != null) { try { Events.OnObsEvent((string)d["eventType"]); } catch (Exception) { } }   // Master View: scene / item / output change -> push at once
                         if (op == 0)   // Hello -> Identify
                         {
                             var id = new JObject { { "rpcVersion", 1 } };
@@ -252,9 +253,10 @@ namespace PinguinoHost
             {
                 while (true)
                 {
-                    var c = await l.GetContextAsync();
+                    var c = await l.GetContextAsync(); bool keepOpen = false;
                     try
                     {
+                        if (c.Request.HttpMethod == "GET" && c.Request.Url.AbsolutePath == "/api/events" && HostApi.EventsOk(c.Request)) { keepOpen = Events.Accept(c); continue; }   // SSE: a long-lived response owned by Events
                         if (HostApi.Handle(c)) continue;
                         string rel = Uri.UnescapeDataString(c.Request.Url.AbsolutePath.TrimStart('/')); if (rel == "") rel = "queue.html";
                         string file = null;
@@ -273,7 +275,7 @@ namespace PinguinoHost
                         }
                     }
                     catch (Exception) { try { c.Response.StatusCode = 500; } catch (Exception) { } }
-                    finally { try { c.Response.Close(); } catch (Exception) { } }
+                    finally { if (!keepOpen) { try { c.Response.Close(); } catch (Exception) { } } }
                 }
             });
         }
