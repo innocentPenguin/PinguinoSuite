@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod mainwin;
+mod splash;
 mod windows;
 
 use std::io::{Read, Write};
@@ -181,7 +182,7 @@ fn main() {
         .plugin(nav_guard())
         .manage(Core { child: Mutex::new(child), token })
         .manage(windows::Layouts::load(data_dir().join("windows.json")))
-        .invoke_handler(tauri::generate_handler![core_config, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows])
+        .invoke_handler(tauri::generate_handler![core_config, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows, splash::app_ready])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Show PinguinoSuite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit (stops all modules)", true, None::<&str>)?;
@@ -214,12 +215,8 @@ fn main() {
                     let _ = w.hide();
                 }
             } else {
-                if let Some(w) = app.get_webview_window("main") {
-                    mainwin::place(&w); // a normal window sized from the monitor, or where it was last time
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-                windows::restore(app.handle());
+                // Splash first; it hands over to the main window and the pop-outs when the UI is ready (see splash.rs).
+                splash::start(app.handle());
             }
             Ok(())
         })
