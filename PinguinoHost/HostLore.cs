@@ -60,7 +60,7 @@ namespace PinguinoHost
             try { var cs = JObject.Parse(File.ReadAllText(Path.Combine(HostApi.DataDir, "chat_settings.json")).TrimStart((char)0xFEFF)); string p = (string)cs["CannedFile"]; if (!string.IsNullOrWhiteSpace(p)) return p; } catch (Exception) { }
             return Path.Combine(Program.SuiteDir ?? "", "PinguinoChat", "canned_commands.json");
         }
-        static bool ChattyOwns(string cmd)
+        public static bool ChattyOwns(string cmd)
         {
             try
             {
