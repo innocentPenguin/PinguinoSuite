@@ -302,6 +302,11 @@ Host rebuilt+restarted; /api/live 200; /api/boards push ok (supporters 67, board
 - Update-Module host; /api/live 200. First scan imported 1 file: 172 unique subs (T1 168, T2 1, T3 3), master at Data\subs\subscribers_master.json.
 - Monthly Twitch export scheduled (twitch-subscriber-export-monthly, 1st of month 9:00).
 
+## 2026-10-21 09:00 - Link, Listen, Host restarts (00)
+- 08:47 Link: Update-Module failed first (still answered), killed the 7777 listener, reran OK; Lite local-update flow live (04 d62daf7+).
+- 08:57 Listen: port 8765 was held by a stray `python -m http.server 8765` plus an orphan listen server.py that ignored stop. Killed both, reran Update-Module listen, running, 200. Ingest flapping / 82 MB log (duplicate-VOD bug) NOT fixed, with 06.
+- 08:58 Host: Update-Module host for 02 046d1eb (song refunds via Helix) and e3adc12 (welcome bonus 100 pts). /api/live 200.
+
 ## Rules
 - Only 00 launches/kills/restarts/rebuilds. Other sessions message 00; Ivan's yes is asked in 00's session before each rebuild.
 - Update this file on every rebuild or relaunch with: time, who asked, what changed (commit hashes), result.

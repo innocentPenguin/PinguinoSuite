@@ -28,6 +28,7 @@ export const SCHEMA = [
   { group: 'Buttons and safety', fields: [
     { key: 'cooldown.macroMs', label: 'Repeat-press guard (ms)', type: 'number', min: 0, max: 10000, def: 600, help: 'A macro pressed again within this time is ignored (stops double taps and Stream Deck bounce). 0 = off.' },
     { key: 'cooldown.riskyMs', label: 'Repeat-press guard for start/stop (ms)', type: 'number', min: 0, max: 30000, def: 3000, help: 'Same, for macros that start or stop the stream or stop recording.' },
+    { key: 'safety.allowStartStream', label: 'Allow Start Stream (goes live!)', type: 'bool', def: false, danger: true, help: 'OFF by default. While off, no macro, timer, voice command or paired device can start the stream; Stop, BRB and scene buttons still work. Turn on only if you want Link to be able to go live.' },
     { key: 'ui.sceneButtons', label: 'Show a button for every OBS scene', type: 'bool', def: false, help: 'Adds quick scene buttons under OBS (this PC must be the hub and OBS connected).' },
     { key: 'ui.activityCount', label: 'Recent activity lines', type: 'number', min: 0, max: 50, def: 15, help: 'How many recent macro/scene actions to list on this page. 0 hides the list.' },
   ] },

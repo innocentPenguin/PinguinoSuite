@@ -7,7 +7,12 @@ const sha = s => crypto.createHash('sha256').update(s).digest('base64');
 /** Test safety: with PINGUINO_NEVER_REAL_OBS=1 (set by every *check.mjs) the real OBS port 4455 is never contacted, so no test can go live. */
 function noRealObs(port) { if (process.env.PINGUINO_NEVER_REAL_OBS && Number(port) === 4455) throw new Error('blocked: tests never talk to the real OBS (port 4455)'); }
 
-export function runRequests({ host, port, password }, requests, timeoutMs = 5000) {
+/** Going live is OFF unless the owner turned on "Allow Start Stream" (Settings > Buttons and safety). Every OBS request passes through here. */
+const GO_LIVE = new Set(['StartStream', 'ToggleStream']);
+export const goesLive = requests => requests.some(r => GO_LIVE.has(r.type));
+
+export function runRequests({ host, port, password }, requests, timeoutMs = 5000, { allowStartStream = false } = {}) {
+  if (goesLive(requests) && !allowStartStream) return Promise.reject(Object.assign(new Error('Start Stream is turned off. Turn on "Allow Start Stream" in Link settings (Buttons and safety) to use it.'), { status: 403 }));
   noRealObs(port);
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://${host}:${port}`);

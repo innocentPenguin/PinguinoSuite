@@ -8,7 +8,7 @@ import { createLite, listShared, sharedPath, liteDir } from './lite.mjs';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import * as ts from './tailscale.mjs';
-import { runRequests, obsState, forgetState, diagnoseObs } from './obs.mjs';
+import { runRequests, goesLive, obsState, forgetState, diagnoseObs } from './obs.mjs';
 import { log, setLevel } from './log.mjs';
 import { prestream } from './prestream.mjs';
 import { createMesh } from './mesh.mjs';
@@ -24,13 +24,15 @@ export async function runMacro(cfg, name) {
     const conn = await obsConn(cfg);
     // State-aware guard so a double press cannot end or restart a live stream by mistake.
     const wants = t => steps.some(s => s.type === t);
+    const allowStartStream = cfg.safety?.allowStartStream === true;
+    if (goesLive(steps) && !allowStartStream) throw Object.assign(new Error('Start Stream is turned off. Turn on "Allow Start Stream" in Link settings (Buttons and safety) to use it.'), { status: 403 });
     if (wants('StartStream') || wants('StopStream')) {
       const st = await obsState(conn, { fresh: true });   // never trust a cached value for a guard
       if (!st.connected) throw Object.assign(new Error(`OBS not reachable: ${st.error}`), { status: 502 });
       if (wants('StartStream') && st.streaming) throw Object.assign(new Error('already live; start ignored'), { status: 409 });
       if (wants('StopStream') && !st.streaming) throw Object.assign(new Error('not streaming; stop ignored'), { status: 409 });
     }
-    try { return await runRequests(conn, steps); } finally { forgetState(); }
+    try { return await runRequests(conn, steps, 5000, { allowStartStream }); } finally { forgetState(); }
   }
   const st = await ts.status();
   const hub = st.peers?.find(p => p.name === cfg.hub);

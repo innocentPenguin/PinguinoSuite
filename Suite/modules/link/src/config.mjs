@@ -24,7 +24,6 @@ export const DEFAULTS = {
   macros: {
     brb:  [{ type: 'SetCurrentProgramScene', data: { sceneName: 'BRB' } }],
     live: [{ type: 'SetCurrentProgramScene', data: { sceneName: 'Main' } }],
-    start: [{ type: 'StartStream' }],
     stop:  [{ type: 'StopStream' }],
     mute:  [{ type: 'ToggleInputMute', data: { inputName: 'Mic/Aux' } }],
   },

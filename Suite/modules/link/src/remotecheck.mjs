@@ -33,7 +33,7 @@ async function node(name, port, role, extra = {}) {
 }
 
 const pa = 8000 + Math.floor(Math.random() * 40), pb = pa + 50;
-const A = await node('A', pa, 'hub'), B = await node('B', pb, 'client');
+const A = await node('A', pa, 'hub', { safety: { allowStartStream: true } }), B = await node('B', pb, 'client');
 try {
   await A.call('POST', '/api/settings', { changes: { 'device.name': 'hubpc' } });
   await B.call('POST', '/api/settings', { changes: { 'device.name': 'clientpc' } });

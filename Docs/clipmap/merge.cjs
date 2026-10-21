@@ -3,7 +3,7 @@ const fs=require('fs');
 const f=process.argv[2],write=process.argv.includes('--write');
 const data=JSON.parse(fs.readFileSync(f,'utf8'));
 const BLOCK=new Set(['!vhoggie','!snowy','!shadow','!kara','!koops']); // innuendo / unclear / low
-const ok=s=>/\b(solid|good|high|medium)\b/i.test(s)&&!/\b(loose|low)\b/i.test(s);
+const ok=s=>!/\b(loose|low|weakest)\b/i.test(s);
 const picks={};
 for(const x of 'abcd'){
   const p=__dirname+'/slice-'+x+'.md';if(!fs.existsSync(p))continue;

@@ -6,7 +6,7 @@ import * as cfgm from './config.mjs';
 
 export const KINDS = {
   scene:          { label: 'Switch scene',            param: 'scene', build: p => ({ type: 'SetCurrentProgramScene', data: { sceneName: p } }) },
-  'stream-start': { label: 'Start stream',            risky: true,  build: () => ({ type: 'StartStream' }) },
+  'stream-start': { label: 'Start stream (off unless allowed in Settings)', risky: true,  build: () => ({ type: 'StartStream' }) },
   'stream-stop':  { label: 'Stop stream',             risky: true,  build: () => ({ type: 'StopStream' }) },
   'record-start': { label: 'Start recording',         build: () => ({ type: 'StartRecord' }) },
   'record-stop':  { label: 'Stop recording',          risky: true,  build: () => ({ type: 'StopRecord' }) },

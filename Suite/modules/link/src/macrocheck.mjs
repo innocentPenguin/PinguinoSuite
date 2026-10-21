@@ -18,12 +18,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const { obs, obsPort, close: closeObs } = await startFakeObs('pw-secret-1');
 
 // ---- Link instance (hub role) pointed at the fake OBS ----
-async function link(password) {
+async function link(password, allowStart = true) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plink-mc-'));
   fs.mkdirSync(path.join(dir, 'link'), { recursive: true });
   const cfg = { role: 'hub', hub: 'x', port: 7777, token: 'module-token-module-token-0001', inbox: dir, obs: { host: '127.0.0.1', port: obsPort, password },
     macros: { brb: [{ type: 'SetCurrentProgramScene', data: { sceneName: 'BRB' } }], live: [{ type: 'SetCurrentProgramScene', data: { sceneName: 'Main' } }],
-      start: [{ type: 'StartStream' }], stop: [{ type: 'StopStream' }], mute: [{ type: 'ToggleInputMute', data: { inputName: 'Mic/Aux' } }] }, claude: { enabled: false, cli: 'claude' }, cooldown: { macroMs: 0, riskyMs: 0 }, ui: { sceneButtons: true } };
+      start: [{ type: 'StartStream' }], stop: [{ type: 'StopStream' }], mute: [{ type: 'ToggleInputMute', data: { inputName: 'Mic/Aux' } }] }, claude: { enabled: false, cli: 'claude' }, cooldown: { macroMs: 0, riskyMs: 0 }, ui: { sceneButtons: true }, ...(allowStart ? { safety: { allowStartStream: true } } : {}) };
   fs.writeFileSync(path.join(dir, 'link', 'config.json'), JSON.stringify(cfg));
   const port = 7950 + Math.floor(Math.random() * 40);
   const child = spawn(process.execPath, [cli, 'serve'], { stdio: 'ignore', windowsHide: true,
@@ -37,7 +37,7 @@ async function link(password) {
   return { dir, child, call, port };
 }
 
-const good = await link('pw-secret-1'), bad = await link('bad-secret-2');
+const good = await link('pw-secret-1'), bad = await link('bad-secret-2'), off = await link('pw-secret-1', false);
 try {
   const st = await good.call('GET', '/api/obs');
   check('OBS state: connected, scene Main, not live', st.json.connected && st.json.scene === 'Main' && st.json.streaming === false, JSON.stringify(st.json));
@@ -45,6 +45,9 @@ try {
   check('prestream: OBS pass', ps.find(i => i.id === 'obs')?.status === 'pass');
   check('prestream: macro targets pass', ps.find(i => i.id === 'macros')?.status === 'pass', JSON.stringify(ps.find(i => i.id === 'macros')));
 
+  check('DEFAULT: start macro is refused (403) and nothing goes live', (await off.call('POST', '/api/macro/start')).status === 403 && obs.streaming === false);
+  check('DEFAULT: scene macros still work', (await off.call('POST', '/api/macro/brb')).status === 200 && obs.scene === 'BRB');
+  await off.call('POST', '/api/macro/live');
   check('macro brb switches scene', (await good.call('POST', '/api/macro/brb')).status === 200 && obs.scene === 'BRB');
   check('macro live switches back', (await good.call('POST', '/api/macro/live')).status === 200 && obs.scene === 'Main');
   check('macro mute toggles input', (await good.call('POST', '/api/macro/mute')).status === 200 && obs.muted === true);
@@ -106,7 +109,7 @@ try {
   check('prestream: wrong password = fail', bp?.status === 'fail');
   check('no password text in any output', !JSON.stringify([ps, ps2, b, bp]).match(/pw-secret-1|bad-secret-2/));
 } finally {
-  for (const n of [good, bad]) { n.child.kill(); try { fs.rmSync(n.dir, { recursive: true, force: true }); } catch {} }
+  for (const n of [good, bad, off]) { n.child.kill(); try { fs.rmSync(n.dir, { recursive: true, force: true }); } catch {} }
   closeObs();
 }
 const failed = results.filter(r => !r).length;
