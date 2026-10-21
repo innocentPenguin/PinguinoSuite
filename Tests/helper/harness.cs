@@ -119,8 +119,8 @@ public static class Harness
         Msg("Ana", "put me in the queue"); Msg("Ana", "yes please");
         run = CoreRun();
         Check("yes runs !join", run != null && (string)run["command"] == "!join" && (string)run["userName"] == "ana");
-        Msg("Ana", "take me out of the queue"); Msg("Ana", "yep");
-        run = CoreRun(); Check("leave: !leave after yes", run != null && (string)run["command"] == "!leave");
+        Msg("Ana", "take me out of the queue"); Check("leave: one line telling them to type !leave, nothing is run for them", Last() != null && Last().Contains("Type !leave") && Last().Length < 120, Last());
+        Msg("Ana", "yep"); run = CoreRun(); Check("leave: a later yes does not run anything", run == null || (string)run["command"] != "!leave");
         Msg("Ana", "where am i in the queue");
         run = CoreRun(); Check("position runs !pos at once (read only)", run != null && (string)run["command"] == "!pos" && !Forwarded());
 

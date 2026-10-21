@@ -28,3 +28,9 @@ The helper cannot ban, time out, mod, unmod or change settings. Point the person
 
 ## Add a command or send an idea
 Mods can send an idea with !teach <text> and Penguin approves it. The helper cannot add commands itself.
+
+## Where is the wheel
+The tournament wheel is mod only. Viewers who ask about it should be pointed to a mod.
+
+## Mark a game incomplete
+Mods can mark a game as incomplete when it did not finish normally.

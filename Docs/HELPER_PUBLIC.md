@@ -34,3 +34,15 @@ Consoles join through Bedrock Connect. The steps are on its official page: https
 
 ## Asking the helper to do an action
 The helper only answers questions. It cannot change the title, ban, mod or unmod anyone, release held messages, or change settings. For those, ask a mod in chat.
+
+## Leaving the queue
+Type !leave to take yourself out of the queue, and !pos to see your spot.
+
+## Your points
+Type !points to see your points. The leaderboards are at https://innocentpenguin.com/leaderboards.
+
+## Joined players who played a game (the recycler)
+Players without a strike can stay in the queue and are put back in line after they play. !queue shows the line.
+
+## Customs time out
+A custom game times out after 15 minutes of inactivity.

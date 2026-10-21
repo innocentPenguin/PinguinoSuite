@@ -12,22 +12,23 @@ using Newtonsoft.Json.Linq;
 
 // ═══════════════════════════════════════
 //  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
-//    49    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
-//    355   HelperSettings (every setting + default)
-//    399   State (static caches, cooldowns, test hooks)
-//    418   Patterns (free pass regexes)
-//    442   Entry point Execute()
-//    500   Help-review log (private review.jsonl)
-//    554   Handle() / HandleCore(): the message pipeline
-//    663   !helper / !ask / !pinguino (knowledge pack answers)
-//    798   Random chime + OptedOutOfBots
-//    838   Context gate (only help when really asked)
-//    888   Minecraft + website facts, Taught notes, site answers
-//    1139  AI intent picker + Ask() (Claude/OpenAI)
-//    1216  Answers and actions (Respond/Do, queue, register)
-//    1374  Text building (lobby line, how-to-join)
-//    1449  Reading game manager files, Say()
+//    50    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    356   HelperSettings (every setting + default)
+//    400   State (static caches, cooldowns, test hooks)
+//    419   Patterns (free pass regexes)
+//    443   Entry point Execute()
+//    501   Help-review log (private review.jsonl)
+//    555   Handle() / HandleCore(): the message pipeline
+//    664   !helper / !ask / !pinguino (knowledge pack answers)
+//    799   Random chime + OptedOutOfBots
+//    839   Context gate (only help when really asked)
+//    889   Minecraft + website facts, Taught notes, site answers
+//    1140  AI intent picker + Ask() (Claude/OpenAI)
+//    1217  Answers and actions (Respond/Do, queue, register)
+//    1376  Text building (lobby line, how-to-join)
+//    1451  Reading game manager files, Say()
 // ═══════════════════════════════════════
+
 
 
 
@@ -1288,7 +1289,8 @@ public class CPHInline
             case "site_emotes": Say(who + "The channel's 7TV emotes, searchable: " + SiteUrl("/emotes")); return true;
             case "mmr_info": Say(who + "Type !mmr to see your MMR, or !stats for your wins and points."); return true;
             case "do_leave":
-                return AskConfirm(login, display, "leave", "", "Take you out of the queue? Say yes to confirm.");
+                Say(who + "Thanks for asking! Type !leave and you are out of the queue.");   // read-only: the viewer types the command themselves
+                return true;
             case "position":
                 return Do(login, display, "position", "");
         }
