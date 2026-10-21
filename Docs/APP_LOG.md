@@ -77,6 +77,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 04:42 - Host restart (Firsts payout)
+- Host restarted via D:\PinguinoSuite\App\Update-Module.ps1 host: loads 023's a2a7afe (Firsts payout via native PinguinoGrantPoints / Economy.Grant, idempotent ids, no !addpoints line in chat). /api/live and /api/commands/profiles 200. Live Firsts game unverified.
+
 ## 2026-10-21 03:58 - Host restart (Chatty updates)
 - Host restarted via D:\PinguinoSuite\App\Update-Module.ps1 host: loads 022's 7257d8d (87 canned fun commands, 20 s cooldown, 7 risky held disabled), 3223158/9684c2d (HostLore sender split, no double replies), 2b403fe (ChatReplies default on, title/commands answers, bare-name line), c24ce4e (Chatty stays out of Helper intents), 30684aa, !rank. Build 0 errors; /api/live, /api/commands/profiles, /api/wheel/state 200. Live chat checks pending (each canned command answered once).
 
