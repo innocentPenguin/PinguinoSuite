@@ -80,6 +80,7 @@ try:
     feed('viewer3: !sr never gonna give you up')
     until(lambda: said('queued: never gonna give you up'), 10, 'module command round trip')
     if not MOCK_POSTS or MOCK_POSTS[0].get('command') != 'sr' or MOCK_POSTS[0].get('user') != 'viewer3': fails.append('module command body: ' + str(MOCK_POSTS[:1]))
+    elif MOCK_POSTS[0].get('subTier') != 0 or MOCK_POSTS[0].get('isVip') is not False: fails.append('module command body lacks subTier/isVip: ' + str(MOCK_POSTS[:1]))
 
     t = api('/api/automations/test', {'id': 'lurk'})
     if not t.get('ok') or not any('(dry run) would say' in o for o in t['run']['output']): fails.append('dry run: ' + str(t))

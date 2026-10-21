@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -154,7 +154,7 @@ namespace PinguinoHost
         static int UserRank(int role, bool sub) { return role >= 4 ? 4 : role >= 3 ? 3 : role == 2 ? 2 : sub ? 1 : 0; }
 
         /// <summary>chat line: returns true when a command trigger consumed it (the bots should not also answer it).</summary>
-        public static bool OnChat(string display, string text, int role, bool isSub, bool first, string msgId, string replyTo)
+        public static bool OnChat(string display, string text, int role, bool isSub, bool first, string msgId, string replyTo, int subTier = 0)
         {
             bool consumed = false;
             string login = (display ?? "").ToLowerInvariant(); text = (text ?? "").Trim(); if (text == "") return false;
@@ -170,7 +170,7 @@ namespace PinguinoHost
                     else if (type == "first_today") hit = firstToday;
                     if (!hit) continue;
                     if (UserRank(role, isSub) < PermRank((string)t["permission"])) continue;
-                    var ctx = BaseCtx(login, display, text, role, isSub, msgId, replyTo); ctx["command"] = cmd; ctx["args"] = rest;
+                    var ctx = BaseCtx(login, display, text, role, isSub, msgId, replyTo); ctx["subTier"] = (isSub ? Math.Max(1, subTier >= 1000 ? subTier / 1000 : subTier) : 0).ToString(); ctx["command"] = cmd; ctx["args"] = rest;
                     var parts = rest.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries); for (int i = 0; i < parts.Length && i < 9; i++) ctx["arg" + (i + 1)] = parts[i];
                     ctx["input"] = rest;
                     if (!CooldownOk(a, t, login, role)) continue;
@@ -410,7 +410,7 @@ namespace PinguinoHost
                 using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(8) })
                 {
                     var body = new JObject { { "command", cmd }, { "args", ctx.ContainsKey("args") && ctx["args"] != "" ? ctx["args"] : ctx.ContainsKey("input") ? ctx["input"] : "" }, { "redeem", (bool?)st["redeem"] == true }, { "user", ctx.ContainsKey("userName") ? ctx["userName"] : "" }, { "display", ctx.ContainsKey("display") ? ctx["display"] : "" },
-                        { "role", ctx.ContainsKey("role") ? ctx["role"] : "1" }, { "isMod", ctx.ContainsKey("isMod") && ctx["isMod"] == "true" }, { "isSub", ctx.ContainsKey("isSub") && ctx["isSub"] == "true" }, { "msgId", ctx.ContainsKey("msgId") ? ctx["msgId"] : "" } };
+                        { "role", ctx.ContainsKey("role") ? ctx["role"] : "1" }, { "isMod", ctx.ContainsKey("isMod") && ctx["isMod"] == "true" }, { "isSub", ctx.ContainsKey("isSub") && ctx["isSub"] == "true" }, { "isVip", ctx.ContainsKey("isVip") && ctx["isVip"] == "true" }, { "subTier", ctx.ContainsKey("subTier") && int.TryParse(ctx["subTier"], out var stv) ? stv : 0 }, { "msgId", ctx.ContainsKey("msgId") ? ctx["msgId"] : "" } };
                     var rq = new HttpRequestMessage(HttpMethod.Post, u) { Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json") };
                     string tok = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? ""; if (tok != "" && ((IPAddress.TryParse(u.Host, out var ip) && IPAddress.IsLoopback(ip)) || u.Host == "localhost")) rq.Headers.Add("Authorization", "Bearer " + tok);
                     var r = h.SendAsync(rq).Result; var j = JObject.Parse(r.Content.ReadAsStringAsync().Result);
