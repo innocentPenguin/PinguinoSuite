@@ -720,6 +720,7 @@ public class CPHInline
             if (!mod && _askUserCd.TryGetValue(login, out last) && now - last < Math.Max(0, _cfg.AskUserCooldownSec)) return true;
             if (now - _askGlobalAt < Math.Max(0, _cfg.AskGlobalCooldownSec)) return true;
             _askUserCd[login] = now; _askGlobalAt = now;
+            if (_askUserCd.Count > 500) foreach (string k in _askUserCd.Where(kv => now - kv.Value > 3600).Select(kv => kv.Key).ToList()) _askUserCd.Remove(k);   // the cooldown list stays small on a long stream
         }
         _revIntent = "ask";
         string who = "@" + display + " ";

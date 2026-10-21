@@ -503,6 +503,13 @@ public static class Harness
             Msg("Cd2", "!helper how do I join the queue?"); Check("per-user cooldown does not block other viewers", Last() != null, Last());
             Msg("CdMod", "!helper how do I join the queue?", true); Msg("CdMod", "!helper how do I join the queue?", true);
             Check("mods are exempt from the per-user cooldown", Last() != null, Last());
+            {   // the per-user list is pruned: old entries go once it holds more than 500
+                var cd = (Dictionary<string, long>)typeof(CPHInline).GetField("_askUserCd", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+                for (int ci = 0; ci < 600; ci++) cd["old" + ci] = 1;
+                Msg("CdPrune", "!helper how do I join the queue?");
+                Check("the per-user ask cooldown list is pruned past 500 entries", cd.Count < 50, cd.Count.ToString());
+                resetAsk();
+            }
             Settings(",\"FactsUrl\":\"\",\"MaxAiCallsPerHour\":1000,\"AskUserCooldownSec\":30,\"AskGlobalCooldownSec\":10"); resetAsk();
             Msg("Cg1", "!helper how do I join the queue?"); Msg("Cg2", "!helper how do I join the queue?");
             Check("global cooldown: a second viewer inside 10 s is ignored", Last() == null, Last());
