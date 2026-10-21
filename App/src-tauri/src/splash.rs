@@ -21,6 +21,9 @@ pub fn start(app: &AppHandle) {
         .title("PinguinoSuite")
         .inner_size(440.0, 440.0)
         .decorations(false)
+        .transparent(true) // the rounded card is the only thing drawn: no square window behind it
+        .shadow(false)
+        .background_color(tauri::window::Color(0, 0, 0, 0))
         .resizable(false)
         .always_on_top(true)
         .skip_taskbar(true)
