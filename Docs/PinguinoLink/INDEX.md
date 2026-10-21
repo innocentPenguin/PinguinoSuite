@@ -24,4 +24,4 @@ Tailscale only; no custom VPN/crypto; no remote shell; no key injection; risky a
 ## PinguinoLite update pipeline (local only, decided by Ivan)
 Source of truth: `Data\lite\packages\<id>-<ver>.zip` (+ `.sha256`) and `Data\lite\staging\PinguinoLite-<ver>-setup.exe` (+ `.sha256`) on the update-host PC.
 Other PCs pull them over the Tailscale mesh from paired PCs (`/api/mesh/updates/list|get`, peer-auth only), on "Check for updates" and every 5 min, hash-verified. Settings: Devices > share / fetch updates.
-Code: lite.mjs (contract, sync, sharing), pkg.mjs (unzip, install, rollback). Tests: litecheck, pkgcheck, updcheck. Nothing installs or runs without a click; Lite self-update apply is not built.
+Make a package on the update host: `node Suite/modules/link/src/cli.mjs pack <module-id>` (module.json needs "version"; data/ and db/log files are left out). Code: lite.mjs (contract, sync, sharing), pkg.mjs (zip, pack, install, rollback). Tests: litecheck, pkgcheck, updcheck. Nothing installs or runs without a click; Lite self-update apply is not built.

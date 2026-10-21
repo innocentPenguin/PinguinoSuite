@@ -136,3 +136,42 @@ export function rollbackModule({ liteDir, modulesRoot, id }) {
   fs.renameSync(pick, target);
   return { restored: list.at(-1) };
 }
+
+const SKIP_DIRS = new Set(['data', 'node_modules', '__pycache__', '.git', '.staging']);
+const SKIP_FILE = /\.(db|db-shm|db-wal|log|tmp|pyc)$/i;
+/** Zip writer (deflate). entries: [{name, data}] */
+export function writeZip(entries) {
+  const parts = [], cd = []; let off = 0;
+  for (const { name, data } of entries) {
+    const comp = zlib.deflateRawSync(data), nm = Buffer.from(name), crc = zlib.crc32(data);
+    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(8, 8); lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(nm.length, 26);
+    parts.push(lh, nm, comp);
+    const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(8, 10); ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(comp.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(nm.length, 28); ch.writeUInt32LE(off, 42);
+    cd.push(ch, nm); off += 30 + nm.length + comp.length;
+  }
+  const cdb = Buffer.concat(cd), end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10); end.writeUInt32LE(cdb.length, 12); end.writeUInt32LE(off, 16);
+  return Buffer.concat([...parts, cdb, end]);
+}
+/** Pack Suite/modules/<id> into <lite>/packages/<id>-<version>.zip + .sha256. Skips data/, caches, logs and db files (user state belongs in data/). */
+export function packModule({ liteDir, modulesRoot, id }) {
+  if (!ID.test(id || '')) throw new Error('bad module id');
+  const src = path.join(modulesRoot, id), mf = readManifest(src);
+  if (!mf || mf.id !== id) throw new Error(`${id}: no valid module.json`);
+  if (!/^\d+(\.\d+)*$/.test(String(mf.version || ''))) throw new Error(`${id}: module.json needs a "version" like 1.2.0`);
+  const entries = [];
+  const walk = (d, rel) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(path.join(d, e.name), rel + e.name + '/'); }
+      else if (e.isFile() && !SKIP_FILE.test(e.name)) entries.push({ name: rel + e.name, data: fs.readFileSync(path.join(d, e.name)) });
+    }
+  };
+  walk(src, '');
+  if (entries.length > MAX_FILES) throw new Error('too many files');
+  const zip = writeZip(entries), file = path.join(liteDir, 'packages', `${id}-${mf.version}.zip`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file + '.tmp', zip); fs.renameSync(file + '.tmp', file);
+  const h = crypto.createHash('sha256').update(zip).digest('hex');
+  fs.writeFileSync(file + '.sha256', `${h}  ${path.basename(file)}\n`);
+  return { file, version: String(mf.version), files: entries.length, sha256: h };
+}

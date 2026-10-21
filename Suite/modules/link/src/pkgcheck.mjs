@@ -62,6 +62,16 @@ try {
   check('install of link is refused', /Link/.test(rd('update_status.json').error || ''));
   await req(12, 'uninstall', '..');
   check('bad id is refused', /bad module id/.test(rd('update_status.json').error || ''));
+  const { packModule } = await import('./pkg.mjs');
+  fs.mkdirSync(path.join(mods, 'mine', 'data'), { recursive: true });
+  fs.writeFileSync(path.join(mods, 'mine', 'module.json'), mj('mine', '2.0.0')); fs.writeFileSync(path.join(mods, 'mine', 'run.js'), 'ok'); fs.writeFileSync(path.join(mods, 'mine', 'data', 'secret.db'), 'private');
+  const packed = packModule({ liteDir: dir, modulesRoot: mods, id: 'mine' });
+  check('pack makes zip + sha256 and leaves out data/', packed.files === 2 && fs.existsSync(packed.file + '.sha256'));
+  fs.renameSync(path.join(mods, 'mine'), path.join(tmp, 'mine-moved'));
+  await req(13, 'install', 'mine');
+  check('a packed module installs back (round trip) without data/', rf('mine', 'run.js') === 'ok' && !fs.existsSync(path.join(mods, 'mine', 'data')));
+  let noVer = ''; try { fs.mkdirSync(path.join(mods, 'nover')); fs.writeFileSync(path.join(mods, 'nover', 'module.json'), JSON.stringify({ id: 'nover' })); packModule({ liteDir: dir, modulesRoot: mods, id: 'nover' }); } catch (e) { noVer = e.message; }
+  check('pack refuses a module without a version', /version/.test(noVer));
   check('busy is clear when done', Object.keys(rd('status.json').busy).length === 0);
   lite.stop();
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

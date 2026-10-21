@@ -16,6 +16,7 @@ const HELP = `PinguinoLink
   macro <name>                    run an OBS macro (forwarded to the hub if this is a client)
   send <file> <device>            send a file (Taildrop, encrypted, works on any network)
   receive                         pull incoming files into ${cfg.inbox}
+  pack <module-id>                make an update package (zip + sha256) of a module on this PC
   doctor [--no-ai]                run checks; on failure ask Claude and offer fixes`;
 
 /** Tailscale must be running for send/receive; says what to do instead of a raw error. */
@@ -77,6 +78,13 @@ usage: pinguinolink macro <name>`); break; }
     if (!(await needTailscale())) break;
     fs.mkdirSync(cfg.inbox, { recursive: true });
     const r = await ts.receiveFiles(cfg.inbox); console.log(r.ok ? `saved to ${cfg.inbox}` : r.stderr);
+    break;
+  }
+  case 'pack': {                                   // make an update package of a module on this PC (the update host)
+    const { packModule } = await import('./pkg.mjs'), { liteDir } = await import('./lite.mjs');
+    const modulesRoot = (await import('node:url')).fileURLToPath(new URL('../../', import.meta.url));
+    try { const r = packModule({ liteDir: liteDir(), modulesRoot, id: args[0] }); console.log(`packed ${args[0]} ${r.version}: ${r.files} files, sha256 ${r.sha256.slice(0, 12)}...\n${r.file}`); }
+    catch (e) { console.log('Cannot pack:', e.message); process.exitCode = 1; }
     break;
   }
   case 'doctor': await doctor(cfg, { ask: !args.includes('--no-ai') }); break;

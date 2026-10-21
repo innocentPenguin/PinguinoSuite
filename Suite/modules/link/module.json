@@ -1,5 +1,6 @@
 {
   "id": "link",
+  "version": "0.3.0",
   "name": "PinguinoLink",
   "desc": "Secure device link: Tailscale status, remote OBS macros, device pairing, file send/receive (Windows + macOS)",
   "cmd": ["node", "src/cli.mjs", "serve"],
