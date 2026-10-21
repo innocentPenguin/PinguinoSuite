@@ -12,7 +12,7 @@ Status: **DONE** = goes through the door today, **NEXT** = to wire (owner in bra
 | 3 | `!gamble` / `!bet` stake and win | **DONE** (ledgered via Spend/Credit) | `gamble` | stake = viewer's choice | Source is derived from the reason text; move to explicit `Award(..., "gamble", ...)` when HostGamble is next touched [02]. |
 | 4 | `!slots` | **DONE** (ledgered) | `slots` | - | same |
 | 5 | `!duel` (stakes, win, refund) | **DONE** (ledgered) | `duel` | - | same |
-| 6 | `!give` between viewers | **DONE** (ledgered) | `gifts` | - | Both sides get a line. Design for real lending: `Docs\ECONOMY_CONTRACT.md` section "Viewer lending (design)" below. |
+| 6 | `!give` between viewers | **DONE** (ledgered) | `gifts` | - | Both sides get a line. Design for real lending: the "Viewer lending (design)" section below. |
 | 7 | Welcome bonus (first-ever message) | **DONE** | `welcome` | WelcomeBonus 100 | one per login (`welcome:<login>`) |
 | 8 | Hidden shop (buy chatty, guess the chatter) | **DONE** | `shop` | site-set prices | ids `shop-<site id>` |
 | 9 | Loans: take / repay / interest | **DONE** | `loan`, `loan_repay` | see settings | interest is debt, not a points movement |
