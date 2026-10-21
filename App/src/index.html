@@ -70,7 +70,11 @@ button{background:var(--panel2);border:1px solid var(--line2);border-radius:9px;
 button:hover{border-color:var(--ice)}
 button.pri{background:linear-gradient(180deg,var(--ice),var(--ice2));color:var(--on-accent);border-color:transparent;font-weight:600}
 button.danger{background:var(--live);border-color:transparent;color:#fff;font-weight:600}
-input[type=text],input[type=password],select{background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:6px 10px}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=button]):not([type=submit]),select,textarea{background:color-mix(in srgb,var(--fg) 12%,var(--panel2));color:var(--fg);border:1px solid color-mix(in srgb,var(--fg) 28%,transparent);border-radius:9px;padding:6px 10px;color-scheme:dark}
+input::placeholder,textarea::placeholder{color:var(--faint);opacity:1}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+select option{background:#2a2a2e;color:#eee}
+input:disabled,select:disabled,textarea:disabled{opacity:.55}
 .dim{color:var(--dim)}.faint{color:var(--faint)}.sm{font-size:12.5px}
 .row{display:flex;align-items:center;gap:10px}.sp{margin-left:auto}.wrap{flex-wrap:wrap}
 /* sidebar */
@@ -1206,8 +1210,8 @@ function wgPreviewInit(){
   wgScale();if(WG.ro)WG.ro.disconnect();if(window.ResizeObserver){WG.ro=new ResizeObserver(wgScale);WG.ro.observe(f)}
   $('#wg-expand').onclick=()=>wgFull(true);$('#wg-close').onclick=()=>wgFull(false);
   box.onclick=e=>{if(WG.full&&e.target===box)wgFull(false)};
-  // a 404 or a stopped Host cannot be seen from inside the frame, so ask through the core
-  fetch('/api/modules/host/get?path='+encodeURIComponent('/wheel.html')).then(r=>{if(!r.ok)throw 0}).catch(()=>{const e=$('#wg-err');if(e)e.style.display='flex'})}
+  // the frame is a plain local page: probe the Host directly (opaque no-cors answer is enough, only a refused connection fails)
+  fetch(WG_PREVIEW.split('?')[0],{mode:'no-cors',cache:'no-store'}).catch(()=>{const e=$('#wg-err');if(e)e.style.display='flex'})}
 function bindWheel(){
   const a=(WG.d||[]).find(x=>x.id===WG.tab);
   $$('[data-wgt]').forEach(b=>b.onclick=()=>{TPLM.menu=null;WG.tab=b.dataset.wgt;WG.msg='';draw(true)});
