@@ -27,7 +27,7 @@ Say !unping to stop the bots pinging you, and !forgetme to have the chat bot for
 For anything the helper cannot answer, ask in chat and a mod or Ivan will see it. The helper cannot ban, time out or change settings.
 
 ## Stream schedule
-Daily Rocket League with viewers, Monday to Friday from 5:00 PM to 6:30 PM Central. Then Minecraft Monday (6:30 to 8 PM Central) and Fortnite Friday (6:30 to 8 PM Central), and Scary Saturday. The full schedule is on the Twitch channel's Schedule tab: https://twitch.tv/innocentpenguin_/schedule
+Ivan streams every day at 5:00 PM Central. Rocket League with viewers comes first for a couple of hours, then other games (Minecraft Monday, Fortnite Friday, Scary Saturday). The full schedule is on the Twitch channel's Schedule tab: https://twitch.tv/innocentpenguin_/schedule
 
 ## Joining the Minecraft server from a console
 Consoles join through Bedrock Connect. The steps are on its official page: https://github.com/Pugmatt/BedrockConnect then add the server address and Bedrock port from !ip.
