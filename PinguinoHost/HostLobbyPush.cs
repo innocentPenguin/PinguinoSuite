@@ -21,6 +21,7 @@ namespace PinguinoHost
             int sec; if (!int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_LOBBY_POLL_SEC"), out sec) || sec < 1) sec = 10;
             Task.Run(async () => { await Task.Delay(3000); while (true) { try { Tick(); } catch (Exception ex) { _result = "error: " + ex.Message; } await Task.Delay(Math.Min(300, sec * (1 + Math.Min(_fails, 6) * 4)) * 1000); } });
         }
+        static int _lastCode;
         public static void Tick()
         {
             string f = Path.Combine(HostApi.DataDir, "helper_settings.json"); if (!File.Exists(f)) { _result = "no helper_settings.json"; return; }
@@ -32,7 +33,7 @@ namespace PinguinoHost
             var body = new JObject { { "name", name.Length > 60 ? name.Substring(0, 60) : name }, { "active", name != "" } };
             JObject r; int code = SiteHttp.Call("POST", "/api/bot/match-private", body, k, out r);
             if (code >= 200 && code < 300) { _fails = 0; SiteHttp.WriteJ(P, new JObject { { "key", key }, { "pushedAt", DateTime.UtcNow.ToString("o") } }); _result = "pushed"; Clog.Info("lobby", "private match pushed to the site"); }
-            else { _fails++; _result = "site answered " + code; Clog.Warn("lobby", "private match push failed (HTTP " + code + ")"); }
+            else { _fails++; _result = "site answered " + code; if (_fails == 1 || code != _lastCode || _fails % 20 == 0) Clog.Warn("lobby", "private match push failed (HTTP " + code + ")" + (_fails > 1 ? ", " + _fails + " tries in a row (the site endpoint may not be live yet)" : "")); _lastCode = code; }
         }
     }
 }
