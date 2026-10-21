@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html><head><meta http-equiv="x-ua-compatible" content="ie=edge"><title>PinguinoSuite Installer</title>
+<HTA:APPLICATION ID="pi" APPLICATIONNAME="PinguinoSuite Installer" BORDER="thin" SCROLL="no" SINGLEINSTANCE="yes" MAXIMIZEBUTTON="no" />
+<style>
+body{margin:0;background:#17120f;color:#f3e9df;font:14px Segoe UI,Arial,sans-serif;padding:22px}
+h1{margin:0 0 4px;color:#ff8a1f;font-size:22px} p.sub{margin:0 0 16px;color:#b9a898}
+label{display:block;margin:10px 0 3px;color:#b9a898;font-size:12px}
+input{width:100%;box-sizing:border-box;background:#241c17;color:#f3e9df;border:1px solid #4a3a2e;padding:7px;font:13px Segoe UI}
+button{margin-top:16px;background:#ff8a1f;color:#17120f;border:0;padding:9px 22px;font:bold 14px Segoe UI;cursor:pointer}
+button[disabled]{background:#5a4630;color:#9a8a7a}
+#bar{height:8px;background:#241c17;margin-top:16px;overflow:hidden;display:none}#fill{height:8px;width:30%;background:#ff8a1f;position:relative;left:0}
+#log{margin-top:12px;font:12px Consolas,monospace;color:#d8c9b8;white-space:pre-wrap;min-height:70px}
+.ok{color:#7ddc7d}.bad{color:#ff6a5a}
+</style></head>
+<body>
+<h1>PinguinoSuite Installer</h1><p class="sub">Tries git first, then the network, then a local folder or USB. Nothing secret is asked for or copied.</p>
+<label>Install into (an empty folder)</label><input id="target" value="">
+<label>Git repository (optional)</label><input id="repo" placeholder="https://github.com/.../PinguinoSuite.git">
+<label>Release manifest address (optional, https)</label><input id="url" placeholder="https://.../manifest.json">
+<label>Local release folder or zip (optional)</label><input id="local" placeholder="E:\PinguinoRelease">
+<button id="go" onclick="run()">Install</button>
+<div id="bar"><div id="fill"></div></div><div id="log"></div>
+<script>
+var sh=new ActiveXObject('WScript.Shell'),fso=new ActiveXObject('Scripting.FileSystemObject');
+document.getElementById('target').value=sh.ExpandEnvironmentStrings('%LOCALAPPDATA%')+'\PinguinoSuite';
+var dir=decodeURI(location.pathname.replace(/^\//,'')).replace(/\//g,'\');dir=dir.substring(0,dir.lastIndexOf('\'));
+var proc=null,pos=0,t=null,shownSteps='';
+function v(i){return document.getElementById(i).value.replace(/^\s+|\s+$/g,'')}
+function q(s){return '"'+s.replace(/"/g,'')+'"'}
+function log(s,c){var l=document.getElementById('log');l.innerHTML+='<span class="'+(c||'')+'">'+s.replace(/</g,'&lt;')+'</span>\n'}
+function run(){
+ var a='node '+q(dir+'\install.mjs')+' --progress --target '+q(v('target'));
+ if(v('repo'))a+=' --repo '+q(v('repo'));if(v('url'))a+=' --url '+q(v('url'));if(v('local'))a+=' --local '+q(v('local'));
+ if(!v('repo')&&!v('url')&&!v('local')){log('Give at least one source.','bad');return}
+ document.getElementById('go').disabled=true;document.getElementById('log').innerHTML='';document.getElementById('bar').style.display='block';
+ log('Installing...');
+ proc=sh.Exec('cmd /c '+a);t=setInterval(tick,200);
+}
+function tick(){
+ var f=document.getElementById('fill');pos=(pos+6)%100;f.style.left=pos+'%';
+ while(!proc.StdOut.AtEndOfStream){var line=proc.StdOut.ReadLine();try{var o=eval('('+line+')')}catch(e){continue}
+  if(o.progress)log('  '+o.progress);
+  else{done(o)}}
+ if(proc.Status==1&&proc.StdOut.AtEndOfStream&&document.getElementById('go').disabled&&!window._d){done({ok:false,message:'The installer stopped unexpectedly (is Node.js installed?)'})}
+}
+function done(o){window._d=1;clearInterval(t);document.getElementById('bar').style.display='none';document.getElementById('go').disabled=false;
+ if(o.ok){log('Done: '+(o.message||'installed')+' (source used: '+o.via+')','ok')}
+ else{log('Failed: '+o.message,'bad');if(o.tried)for(var i=0;i<o.tried.length;i++)log('  '+o.tried[i])}
+ window._d=0;}
+window.resizeTo(560,640);
+</script></body></html>

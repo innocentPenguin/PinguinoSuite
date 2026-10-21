@@ -30,3 +30,9 @@ Suite/modules/listen/data/
 **/bin/
 **/obj/
 App/src-tauri/binaries/
+
+# built by Suite/updater/exe/Build-Exes.bat
+Suite/updater/exe/*.exe
+Suite/updater/exe/*.pdb
+Installer/*.exe
+Installer/*.pdb

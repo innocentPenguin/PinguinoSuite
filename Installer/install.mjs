@@ -35,6 +35,7 @@ async function main() {
   if (opt('local')) attempts.push(['local', () => installRelease({ target, channel, source: { type: 'local', path: opt('local') }, pubkey: opt('pubkey') || null })]);
   if (!attempts.length) return out({ ok: false, message: 'give at least one source: --repo, --url or --local' });
   for (const [name, run] of attempts) {
+    if (has('progress')) out({ progress: `trying ${name}` });
     try {
       const r = await run();
       if (r.ok) {
