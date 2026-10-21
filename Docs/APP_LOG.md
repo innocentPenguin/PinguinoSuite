@@ -2,6 +2,7 @@
 
 Kept by session 00 (the only session that launches, restarts or rebuilds the app). One entry per rebuild, relaunch or notable app change, newest first. Times are local (CDT).
 
+| 2026-10-21 ~16:57 | Host restart (Update-Module host, stream offline): economy phase 2 (29dc7df Award/ledger, match awards, depreciation in PRACTICE RUN, loans, 5aa453c site bridge, f9dd7f2/91f6486 docs, refund scope) plus e7642ae/85cf8f8. /api/live 200. Depreciation dry run: 3 holders over 100k, 47,569 would be taken (nothing taken). | 00 |
 | 2026-10-20 ~07:10 | Spotify module restart (Update-Module spotify) for pinguinoMusic cycle 4: 368da9e Songify parity, c6e18b9 fakes/docs (reward-only mode, refund flag, playlist-add, blocklist import, /overlay/queue). Up again; requests still ship CLOSED; Ivan must reconnect Spotify once for the new scopes. | 00 |
 | 2026-10-20 ~07:05 | Host restart (Update-Module host): 206f2ce Host records all chat to Data/chat_logs/live (independent of Chatty), hidden-user overlay for lvlmarshmello, fetch-chat-logs never drops lines; 5ed5df1 Chatty timeout/make-me-mod rules. /api/live 200, /api/livelog ok. Boards NOT refreshed yet: waiting for 02 to add the Streamer.bot sidecar counts (Marsh 82,116 merged). | 00 |
 | 2026-10-20 ~06:40 | Host restart (Update-Module host): 2fdcc44 helper negative-feedback mute, ads/TTS/Roblox answers, join guard; Chatty private lore memory + moderation refusal + repeat guard (Chatty chatting stays off); viewer !next, !pm from helper_settings. commands-doc 207 (Channel/Custom from the Nightbot import). /api/live 200. | 00 |
@@ -19,7 +20,8 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 ~23:15 | FULL REBUILD core+shell via Build-All (stream offline, Ivan's OK; app quit first, then relaunched): 361c4ae Listen mic saved by name + fallback alert + silence watchdog (mic_alert banner), plus earlier Accounts page c3b386b and dashboard chat card b558bf0. Core answers (8760), Host live check OK. Not tested against real mic hardware. | 00 |
 | 2026-10-19 ~22:25 | Host rebuild+restart (Update-Module host, stream offline, Ivan's OK): dc0f5eb ban alert permanent-only, 2cfaca8 viewer-feedback batch (Chatty pacing/fairness, Helper minecraft fix, !lobbyname/!lobbypass, song/MMR answers), 71e6f24 sub intro clips (/overlay/intro?slot=t1|t2|t3|t3v, controls /intro). Build 0 errors, /api/intro 200. | 00 |
 | 2026-10-19 ~22:35 | STREAMER.BOT REMOVED at Ivan's request: first archived to Archive/streamerbot-2026-10-19 (raw data, own backup zips, logs.zip, readable ACTIONS/COMMANDS/REWARDS.md: 44 actions, 35 commands, 77 rewards), then deleted the Documents/PinguinoB0t install folder and its Startup shortcut. Host automations now own all alerts. Documents/PinguinoB0t.zip (older copy) left untouched. | 00 |
-| 2026-10-19 ~22:10 | Host-only restart (Update-Module host -NoBuild, stream offline, at Ivan's OK): ban alert sb-ban now has condition {permanent} == true in Datauntimeutomations.json (timeouts no longer play the eject sound); same condition added to the preset in HostAutoTwitch.cs (needs a build to ship in the DLL). NOT yet live: 02's 2cfaca8 chat/helper batch and the intro alerts (waiting for a build). Streamer.bot's own Add Ban action may still play the sound: Ivan to filter/disable it. | 00 |
+| 2026-10-19 ~22:10 | Host-only restart (Update-Module host -NoBuild, stream offline, at Ivan's OK): ban alert sb-ban now has condition {permanent} == true in Data
+untimeutomations.json (timeouts no longer play the eject sound); same condition added to the preset in HostAutoTwitch.cs (needs a build to ship in the DLL). NOT yet live: 02's 2cfaca8 chat/helper batch and the intro alerts (waiting for a build). Streamer.bot's own Add Ban action may still play the sound: Ivan to filter/disable it. | 00 |
 | 2026-10-19 ~19:55 | Host restart WITH build (Update-Module host), DURING STREAM at Ivan's OK: 894effa ChattyPinguino persona (warmer default, close friends but not possessive, steps back from intense viewers). Build 0 errors; Host up, stream LIVE, Chat ready. | 00 |
 | 2026-10-19 ~19:38 | Host restart WITH build (Update-Module host), DURING STREAM at Ivan's OK: 0cb1ee9 wheel manual spin (!wheel spin / !spin, per-team "Team N: A & B!" lines, final "TOURNAMENT TEAMS - A & B | C & D" list in chat) plus other sessions' uncommitted PinguinoBotCore.cs edits (bot aliases/voice routing). Build 0 errors; Host up, stream LIVE, Chat ready. Build-All still pending. | 00 |
 | 2026-10-19 ~18:50 | Host-only restart (Update-Module host -NoBuild, DURING STREAM at Ivan's OK): helper lobby name peng2 -> peng3 (helper_settings.json + source defaults), Chatty now also answers to chattypinguino / chatty pinguino / chatty penguino / chatty. Chat, Helper ready after restart. | 00 |
@@ -307,9 +309,67 @@ Host rebuilt+restarted; /api/live 200; /api/boards push ok (supporters 67, board
 - 08:57 Listen: port 8765 was held by a stray `python -m http.server 8765` plus an orphan listen server.py that ignored stop. Killed both, reran Update-Module listen, running, 200. Ingest flapping / 82 MB log (duplicate-VOD bug) NOT fixed, with 06.
 - 08:58 Host: Update-Module host for 02 046d1eb (song refunds via Helix) and e3adc12 (welcome bonus 100 pts). /api/live 200.
 
+## 2026-10-21 10:21 CDT - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (latest update Oct 21 13:40 UTC: no change, builds paused in all regions, support platform down). Not resolved, so no push approval sent to 05. Stream checked: /api/live live=false.
+- Nothing else done this run; will re-check next hour.
+
 ## Rules
 - Only 00 launches/kills/restarts/rebuilds. Other sessions message 00; Ivan's yes is asked in 00's session before each rebuild.
 - Update this file on every rebuild or relaunch with: time, who asked, what changed (commit hashes), result.
 
 
 
+
+## 2026-10-21 12:21 CDT - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (latest update Oct 21 17:18 UTC: "Builds and deployments remain paused", support site down, next update promised 17:45 UTC). Not resolved, so no push approval sent to 05. Stream checked: /api/live live=false.
+- Nothing else done this run; will re-check next hour.
+
+## 2026-10-21 14:21 CDT (18:21 UTC) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage; latest update Oct 21 18:15 UTC: "Builds and deployments remain paused", API/dashboard/station.railway.com still affected, next update promised 18:45 UTC). Not resolved, so no push approval sent to 05. Stream not checked this run (no push step reached).
+- Nothing else done this run; will re-check next hour.
+
+## 2026-10-21 14:xx CDT - Scheduled 2pm full run (00, Ivan gave PC control)
+- Sessions: all 17 idle (isRunning false) before work started.
+- Stream: NOT live (host.log last state offline). OBS connected only at websocket level, not streaming; no OBS action taken.
+- Railway: status.railway.com still Major Outage, builds paused. Site push HELD.
+- Build: Build-All --no-launch. Core built (stale). Host build failed first (dll locked by running Host). Host stopped via control file, rebuilt OK (--only host), started again, 8770 answers 200. Shell up to date (exe 02:01 newer than all shell sources), not rebuilt. Core change is staged; takes effect at next full app restart (not done: Suite /api/quit needs a token, so no clean quit from here).
+- Ports: 8760, 8765, 8766, 7777, 8770, 8771, 8772 all answer. Health /api/status 200 on listen, multi, host. Link /api/status returns 401 without token (see Link item below).
+- UI smoke (built-in browser, read only, no action buttons pressed): dashboard loads, only failing request is /assets/logo.png 404.
+- Logs: listen.log 82 MB, mostly yt-dlp progress with no newlines; move failed (supervisor holds the handle). Listen restarted via Update-Module (OK) and still locked; not growing since 09:43. Routed to 01 for size-based rotation at core start.
+- events.jsonl: flapping today is from dev restarts. Last listen crash 10-20 08:39 (exit 3); no crashes today.
+- host console: commands-all push HTTP 404. Expected: site endpoint in source but not deployed (batch on hold).
+- voice.log: about 20 ConnectionResetError tracebacks from client disconnects in the request handler. Routed to 06.
+- Link /api/status 401 on health probe. Routed to 04.
+- Audit: round 1-3 requested from 02 (and its forks 30e19219, 7135181f, 6f5d97c2). Engine reports requested from 01, 02, 03, 04, 05, 06. Nightly docs (4 tiers) wait for those reports. Not finished in this run.
+- No deletions. No duplicate sends (one message per session).
+- CORRECTION (04 Phase 3 report): the Link 401 was my probe error, not a bug. Link's manifest health path is /api/health (unauthenticated, 200). /api/status carries device data and must stay authenticated. Item closed; nothing to route to 04.
+- 04 report: Link has committed but un-restarted changes (Lite contract, module install/update, Lite self-update apply d0674ab, Start Stream OFF by default b2edff4, Lite reuses Link on 7777 fd10c1a). The running Link needs a restart to load them. That restart is pending Ivan's go-ahead via 00. Ten Link test suites passed at last run. Known gaps: Lite module start/stop not built, real OBS, Tailscale pairing and macOS unverified. Needs from Ivan: OBS password in the vault, hub role plus real macro names, Tailscale on.
+- 05 Phase 3 report (Site): HEAD db668a9, 5 local commits ahead of origin/main (323b484, 0239e90, 9222597, c4f1a40, db668a9), NOT pushed. Production runs 43cdd28. Build + npm test + smoke 91/91 green. Commands-all 404 confirmed (endpoint exists only in 0239e90, undeployed); the Host retries harmlessly. Push needs Ivan's typed OK and Railway recovered. Open for Ivan: 1200x630 share image, /tourney start date, Search Console/Bing verification code. Long poll (?wait) needs a Host restart after deploy.
+- Docs copy (from 05): Mods: /mod/commands has "Everything the bots have" (all commands incl. disabled, mod-only, broadcaster-only, archived). Viewers: /help commands start as buttons; "Show more" for the full list, full list on /commands; "?" bubble answers quick questions. Schedule: every day 5 PM Central, Rocket League first, then other games.
+- 01 report: committed 2a21da3 (core only, nothing restarted or rebuilt; 59 core tests pass). Added GET /assets/{name} (serves plain image names from App/src/assets; fixes the logo 404). Added size-based log rotation at module start: logs over 10 MB move to Suite/logs/Archive/ (moved, never deleted); the 82 MB listen.log rotates on the next Listen start under the new core. Recommends one full app restart tonight for the new core and routes (needs rebuild first: the binary predates 2a21da3). NOT done in this run: restart and rebuild need Ivan's call, since the Suite quit endpoint requires a token and the restart takes all modules down. Timing left to Ivan.
+
+## 2026-10-21 14:22 CDT - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage; latest update Oct 21 19:15 UTC: "Builds and deployments remain paused", re-enable to be staged Enterprise, then Pro, Hobby, Free/Trial, none announced yet; next update promised 19:45 UTC). Not resolved, so no push approval sent to 05.
+- Stream checked: /api/live live=false (offline). No push step reached.
+- Nothing else done this run; will re-check next hour.
+
+## 2026-10-21 15:21 CDT (20:21 UTC) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage; latest update Oct 21 20:19 UTC: "continuing to work on a fix for build issues", builds paused, Enterprise builds expected by 20:30 UTC, Pro/Hobby/Free re-enabled in stages after; API, dashboard and station.railway.com still affected). Not resolved, so no push approval sent to 05.
+- Stream and push steps not reached. Nothing else done this run; will re-check next hour.
+
+## 2026-10-21 15:34 CDT - Full rebuild + app restart (00)
+- Build-All (host, core, shell) BUILD OK; old app/cores stopped, orphan listeners killed by port, PinguinoApp.bat relaunched; ports 8760/8765/8766/7777/8770/8771/8772 all listening, Host /api/live 200, Link /api/health 200. Update-Module listen run once more.
+- listen.log still 82 MB: rotation did not trigger on start and the file is locked by a running process, so not moved. Report to 01/06.
+- Lite (4a47563) relaunched 10:22 and left open. Site: 5 local commits, not pushed (Railway outage).
+
+## 2026-10-21 16:01 CDT - Host restart + Multi restarts (00)
+- Host was down after the 15:3x app relaunch (lease rule: core unreachable 60 s -> Host exits; I did not restart it right away). Update-Module host rebuilt and started it; /api/live ok. Loaded: Helper 74fd13a/54a6ad0/54ef677/bc6138c, Chatty a4a6a21/d0ecab5/28970e5, B0t e1e1fde/80a4f41/4cbda13, streak 613b609, 75349e9 and earlier queue.
+- Multi restarted twice (feca866, then streak celebration f5c57ac). Pending: 022 tuck/raid/rank, 02 sounds + Epic names + replays endpoint, 05 Epic link + Commands header (db668a9 local), 01 Sources page (shell rebuild), 012 replays scanner.
+
+## 2026-10-21 16:16 CDT - Host restart (00)
+- Update-Module host: build clean, /api/live 200. Loaded 85cf8f8 (default chime WAVs in Data\runtime\sounds, alerts_settings defaults + alertsound1 migration, welcome chime, /api/alerts-settings) and 022's 1515390 (!tuck, canned raid text, rank ids). Chatty ships inside the Host (no separate module). Sounds are Cut-gated for sb-* alerts; welcome chime needs live or Offline mode.
+
+## 2026-10-21 16:21 CDT (21:21 UTC) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage). Latest update Oct 21 21:01 UTC: "We do not yet have additional information to provide about the availability of builds." Last explicit build status (20:35 UTC): Enterprise builds being validated, Pro/Hobby/Free to follow in stages; no confirmation any stage is re-enabled. Not resolved, so no push approval sent to 05 (no duplicate message).
+- Stream checked: /api/live live=false (offline). Push step not reached.
+- Nothing else done this run; will re-check next hour.
