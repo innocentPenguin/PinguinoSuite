@@ -361,7 +361,7 @@ public class CPHInline
         public string LobbyPassword { get; set; } = "";               // blank = "no password"; NEVER said in chat, the Host copies it to the site's private lobby store (Docs/LOBBY_CONTRACT.md)
         public string LobbyUpdatedAt { get; set; } = "";              // UTC ISO time of the last !lobbyname / !lobbypass; the Host bridge pushes when it changes
         public string LobbyUpdatedBy { get; set; } = "";              // the mod's login
-        public string LobbyPagePath { get; set; } = "/lobby";        // the site's private page (players and staff sign in to see the password)
+        public string LobbyPagePath { get; set; } = "/customs";        // the site's private page (players and staff sign in to see the password)
         public string CoreActionName { get; set; } = "PinguinoBot";   // the Streamer.bot action that runs PinguinoBotCore.cs
         public string ChatActionName { get; set; } = "PinguinoChat";  // messages the helper does not handle are handed to this action
         public bool ForwardHandled { get; set; } = false;             // also hand handled messages on (needs the helperHandled hook in the chatbot)
@@ -1419,7 +1419,7 @@ public class CPHInline
     }
 
     // the password is never said in chat: viewers are pointed at the site's private lobby page (staff write it, players and staff read it)
-    string LobbyPassWord() { return string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? "no password" : "the password is on " + SiteUrl(string.IsNullOrWhiteSpace(_cfg.LobbyPagePath) ? "/lobby" : _cfg.LobbyPagePath) + " (sign in), or ask a mod"; }
+    string LobbyPassWord() { return string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? "no password" : "the password is on " + SiteUrl(string.IsNullOrWhiteSpace(_cfg.LobbyPagePath) ? "/customs" : _cfg.LobbyPagePath) + " (sign in), or ask a mod"; }
     string LobbyHint() { return "Private match name: " + (_cfg.LobbyName ?? "").Trim() + (string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? " (no password)." : ", " + LobbyPassWord() + "."); }
 
     string QueueHint(string registered)
