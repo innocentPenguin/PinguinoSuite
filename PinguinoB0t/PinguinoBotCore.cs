@@ -2074,13 +2074,32 @@ public class CPHInline
             {
                 try { lock (_sync) { HandleWebSync(); } }
                 catch (Exception ex) { CPH.LogVerbose("[BVQ] Web sync error: " + ex.Message); }
-                System.Threading.Thread.Sleep(3000);
+                _webWake.WaitOne(3000);   // wakes at once when the long poll brings a website command
             }
         });
         t.IsBackground = true;   // never keeps Streamer.bot from closing
         t.Name = "BVQ Web Sync";
         t.Start();
+        // Long poll: GET /api/bot/commands?wait=20 is held by the site up to 20 s and answers the moment a command is queued, so the site is asked once per ~20 s instead of every few seconds.
+        var lp = new System.Threading.Thread(() =>
+        {
+            while ((AppDomain.CurrentDomain.GetData(SyncOwnerKey) as string) == id)
+            {
+                var t0 = DateTime.UtcNow; int got = 0;
+                try
+                {
+                    var list = JObject.Parse(WebCall("GET", "/api/bot/commands?wait=20", null, 30000))["commands"]?.ToObject<List<WebCommand>>();
+                    if (list != null) foreach (var wc in list) { _webQueue.Enqueue(wc); got++; }
+                    if (got > 0) _webWake.Set();
+                }
+                catch (Exception) { System.Threading.Thread.Sleep(3000); }
+                if (got == 0 && (DateTime.UtcNow - t0).TotalSeconds < 1) System.Threading.Thread.Sleep(2000);   // a site without ?wait answers at once: do not spin
+            }
+        });
+        lp.IsBackground = true; lp.Name = "BVQ Web Commands"; lp.Start();
     }
+    static readonly System.Collections.Concurrent.ConcurrentQueue<WebCommand> _webQueue = new System.Collections.Concurrent.ConcurrentQueue<WebCommand>();
+    static readonly System.Threading.AutoResetEvent _webWake = new System.Threading.AutoResetEvent(false);
     static List<string> _capture;
     static bool _quiet;   // [NEW][WEB] true while running a website-only player's command
     static string _webId, _webName;   // [NEW][WEB] that player's bot ID and site display name
@@ -2093,10 +2112,11 @@ public class CPHInline
 
     class TimeoutWebClient : WebClient
     {
+        public int Ms = 4000;
         protected override WebRequest GetWebRequest(Uri address)
         {
             WebRequest r = base.GetWebRequest(address);
-            r.Timeout = 4000;
+            r.Timeout = Ms;
             return r;
         }
     }
@@ -2115,10 +2135,11 @@ public class CPHInline
         public string name { get; set; }  // [NEW][WEB] site display name, used in chat for website-only players  // [NEW][WEB] Epic name saved in the member's site Settings (sent with !join)
     }
 
-    string WebCall(string method, string path, string body)
+    string WebCall(string method, string path, string body) { return WebCall(method, path, body, 4000); }
+    string WebCall(string method, string path, string body, int timeoutMs)
     {
         ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-        using (var client = new TimeoutWebClient())
+        using (var client = new TimeoutWebClient { Ms = timeoutMs })
         {
             client.Encoding = System.Text.Encoding.UTF8;
             client.Headers[HttpRequestHeader.Authorization] = "Bearer " + _settings.WebSyncKey;
@@ -2144,8 +2165,9 @@ public class CPHInline
         try
         {
             // 1) Website requests -> same code as chat.
-            var pending = JObject.Parse(WebCall("GET", "/api/bot/commands", null))["commands"]?.ToObject<List<WebCommand>>()
-                          ?? new List<WebCommand>();
+            // (the long-poll thread below does the GET and queues what the site wants; this loop just takes it)
+            var pending = new List<WebCommand>(); WebCommand queued;
+            while (_webQueue.TryDequeue(out queued)) pending.Add(queued);
             var results = new List<object>();
             foreach (var wc in pending)
             {
