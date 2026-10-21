@@ -77,6 +77,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 23:27 Host restart (command profiles backend, Music subTier)
+
+- Command: Update-Module.ps1 host. Build 0 errors, Host up. /api/commands/profiles 200, /api/commands/archive 200, /api/live 200.
+- Now live: 84b744a (command permissions/profiles/archive/restore, central silent enforcement, usage counts), 4be2c07 (subTier + isVip to Music /api/chat-command).
+- Pending: replay-buffer auto-start (queued to 02), next app rebuild (sidebar scroll, preview-trap fix, Commands page wiring).
+
 ## 2026-10-20 23:05 Host restart (wheel restored, act live while recording, !addpoints/!editpoints)
 
 - Command: Update-Module.ps1 host. Build 0 errors, Host up, /wheel.html 200, /api/wheel/public returns the original-overlay shape.
