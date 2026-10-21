@@ -77,6 +77,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 00:52 Full rebuild + app launch (core + shell)
+
+- Build-All --no-launch: host unchanged (23:38 dll), core rebuilt (templates routes), shell 00:47; launched via PinguinoApp.bat. Verified /api/live, /wheel.html, /api/obs/status, /api/commands/profiles all 200.
+- In this build (01): Save/Defaults split buttons with saved templates (cf50a01), wheel preview probe fix + dark grey inputs app-wide (462804f), splash transparent fix, Commands page.
+- Not running yet: Link module changes (95d10a7): old node PID 13580 from 10/20 05:57 ignores stop; asked 04 for the safe restart. Simulator (02/01) not built yet.
+
 ## 2026-10-20 23:42 Full rebuild + app launch (commands page, replay buffer, wheel preview fix)
 
 - Build-All --no-launch (Host 23:38:40, shell 23:38:46) then PinguinoApp.bat. Earlier attempts at 23:36 did not build (log file locked by a stale shell); Music module restarted 23:30 (1d336fd subTier/isVip, c39ca11 song log).
