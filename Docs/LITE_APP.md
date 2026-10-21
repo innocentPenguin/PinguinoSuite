@@ -126,7 +126,9 @@ Status 2026-10-21 (04, commit 58ddc58): install/update/uninstall/rollback/check 
 Lite does not poll the internet. 04 owns the whole chain:
 1. 04 finds a newer Lite, downloads the NSIS installer to `<lite dir>\staging\`, verifies sha256, writes `update_manifest.json` with `staged_file`.
 2. Lite sees `latest_version` > its own version and shows a banner with **Restart & update** (stub until 04 implements step 3).
-3. Click writes `requests\...-selfupdate-apply.json`. 04 picks it up, and (a) waits for `PinguinoLite.exe` to exit, (b) runs the installer silently (`/S`), (c) relaunches Lite. **Agreed with 04**: Lite exits right after writing `selfupdate-apply` (the installer cannot replace a running exe); 04 sets `status.busy.lite="updating"`. The Lite-side exit is not wired yet (v0.1 only writes the request).
+3. Click writes `requests\...-selfupdate-apply.json`. 04 picks it up, and (a) waits for `PinguinoLite.exe` to exit, (b) runs the installer silently (`/S`), (c) relaunches Lite. **Agreed with 04**: Lite exits right after writing `selfupdate-apply` (the installer cannot replace a running exe); 04 sets `status.busy.lite="updating"`. Wired (2026-10-21): Lite exits ~0.8 s after writing the request; 04's helper waits up to 90 s for the exe to close, verifies sha256, backs up, runs the staged setup /S, relaunches Lite, restores on failure.
+
+If Lite spawns Link while a Link already answers its port, Lite does not spawn (see launcher); if a spawned Link exits 0 because it found one ("reusing it") that is not a crash and Lite never respawns on exit.
 
 ## What Lite shows
 - **Dashboard**: Host reachable? (`GET http://127.0.0.1:8770/api/live`, any HTTP answer = reachable; probed from Rust, no CORS/token issue), app version, modules installed (+ updates count), last update check, PinguinoLink state, buttons: Open Host dashboard, Open Lite data folder, Check for updates (request).

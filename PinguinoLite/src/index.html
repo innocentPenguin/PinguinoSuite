@@ -104,7 +104,7 @@ function dashboard() {
   const lm = state.manifest && state.manifest.data && (state.manifest.data.lite || { latest: state.manifest.data.latest_version });
   const selfUpd = lm && lm.latest && info && cmpVer(lm.latest, info.version) > 0;
   return `<h1>Dashboard</h1><p class="sub">PinguinoLite is a light shell: no modules are loaded by default.</p>
-  ${selfUpd ? `<div class="banner">PinguinoLite ${esc(lm.latest)} is ready. <button class="btn pri" data-act="selfupdate-apply">Restart &amp; update</button> <span class="pill stub">STUB until PinguinoLink applies updates</span></div>` : ''}
+  ${selfUpd ? `<div class="banner">PinguinoLite ${esc(lm.latest)} is ready. <button class="btn pri" data-act="selfupdate-apply">Restart &amp; update</button> <span class="d">Lite closes, updates and reopens.</span></div>` : ''}
   <div class="grid">
    <div class="card"><h3>Host (127.0.0.1:8770)</h3><div class="big">${h.reachable ? '<span style="color:var(--ok)">Reachable</span>' : '<span style="color:var(--bad)">Not reachable</span>'}</div>
      <div class="note">${h.reachable ? `/api/live answered HTTP ${esc(h.status)} in ${esc(h.ms)} ms` : 'Host is not running (or not on this PC). Lite works without it.'}</div></div>

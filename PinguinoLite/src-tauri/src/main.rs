@@ -223,6 +223,17 @@ fn send_request(app: AppHandle, action: String, id: Option<String>) -> Result<Va
     let tmp = dir.join(format!("{name}.tmp"));
     std::fs::write(&tmp, serde_json::to_string_pretty(&body).unwrap()).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, dir.join(&name)).map_err(|e| e.to_string())?; // atomic: 04 only ever sees whole files (it ignores *.tmp)
+    if action == "selfupdate-apply" {
+        // the installer cannot replace a running exe: Link's helper waits for us to exit (04 contract)
+        let a = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(800));
+            if let Some(w) = a.get_webview_window("main") {
+                mainwin::save(&w, true);
+            }
+            a.exit(0);
+        });
+    }
     Ok(json!({"file": name}))
 }
 
