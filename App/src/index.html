@@ -919,7 +919,7 @@ const CMD_MOCK=(()=>{const n=Math.floor(Date.now()/1000);
     ['song','Fun','everyone',330,'What is playing now.','Chatty'],['hug','Fun','everyone',521,'Hug a viewer.','Chatty'],['joke','Fun','sub',77,'Tell a joke.','Chatty']];
   const mr=p=>p==='everyone'?['everyone']:p==='broadcaster'?['broadcaster']:[p,'broadcaster'];
   return L.map((x,i)=>({id:'mock-'+x[0],name:x[0],aliases:x[0]==='shoutout'?['so']:[],description:x[4],category:x[1],permission:x[2],cooldownGlobal:x[3]>400?10:5,cooldownUser:30,enabled:true,uses:x[3],lastUsed:n-i*5400,ownerBot:x[5],editedBy:'',editedAt:0,archived:false,roles:mr(x[2]),defaultRoles:mr(x[2])}))})();
-const CMD={all:false,ask:null,menu:null,roleOpts:null,d:undefined,arch:null,tab:'cmds',sort:'uses',q:'',sel:new Set(),open:null,mock:false,collapsed:(()=>{try{return JSON.parse(localStorage.getItem('cmdCollapsed')||'{}')}catch{return {}}})()};
+const CMD={allD:undefined,all:false,ask:null,menu:null,roleOpts:null,d:undefined,arch:null,tab:'cmds',sort:'uses',q:'',sel:new Set(),open:null,mock:false,collapsed:(()=>{try{return JSON.parse(localStorage.getItem('cmdCollapsed')||'{}')}catch{return {}}})()};
 const CMD_WHO='Ivan';
 const cmdN=n=>String(n||'').startsWith('!')?n:'!'+n;
 const cmdAgo=ts=>ts?aprAgo(ts):'never';
@@ -942,6 +942,7 @@ async function loadCommands(){
   try{const j=await hostGet('/api/commands/profiles');if(!j||j.ok===false||!Array.isArray(j.commands))throw new Error('shape');CMD.d=j.commands;CMD.roleOpts=Array.isArray(j.roleOptions)?j.roleOptions:null;CMD.mock=false}
   catch{CMD.d=CMD.d&&CMD.mock?CMD.d:CMD_MOCK.map(x=>({...x,aliases:[...x.aliases]}));CMD.mock=true}
   draw(true)}
+async function loadCmdAll(){try{const j=await hostGet('/api/commands/all');CMD.allD=(j&&j.ok!==false&&Array.isArray(j.commands))?j.commands:null}catch{CMD.allD=null}draw(true)}
 async function loadCmdArchive(){
   try{const j=await hostGet('/api/commands/archive');CMD.arch=(j&&Array.isArray(j.commands))?j.commands:[]}catch{CMD.arch=CMD.arch||[]}
   draw(true)}
@@ -968,7 +969,8 @@ function cmdFiltered(){const q=CMD.q.trim().toLowerCase().replace(/^!/,'');
 const cmdSorter=(a,b)=>CMD.sort==='az'?String(a.name).localeCompare(String(b.name)):((b.uses||0)-(a.uses||0)||String(a.name).localeCompare(String(b.name)));
 pages.commands=()=>{
   if(CMD.d===undefined){loadCommands();return '<div class="dim">Loading commands…</div>'}
-  if((CMD.tab==='arch'||CMD.all)&&CMD.arch===null)loadCmdArchive();
+  if(CMD.all&&CMD.allD===undefined&&!CMD.mock)loadCmdAll();
+  if((CMD.tab==='arch'||(CMD.all&&!CMD.allD))&&CMD.arch===null)loadCmdArchive();
   const chip=(k,t,on,a)=>`<span class="chip${on?' on':''}" ${a}="${k}">${t}</span>`;
   const head=`<div class="row wrap" style="margin-bottom:10px">${chip('cmds','Commands'+(CMD.d.length?' ('+CMD.d.length+')':''),CMD.tab==='cmds','data-ct')}${chip('arch','Archive'+(CMD.arch?' ('+CMD.arch.length+')':''),CMD.tab==='arch','data-ct')}<span class="sp"></span><label class="sm" title="Every command with every usage count: archived ones included, no search, no grouping, nothing collapsed"><input type="checkbox" id="cm-all"${CMD.all?' checked':''}> Show all (unfiltered)</label><button class="sm" id="cm-refresh">Refresh</button></div>`;
   const note=CMD.mock?`<div class="pnote">Preview data: the Host has no command profiles yet, so changes here are only kept until you leave this page and are not sent to the bots.</div>`:'';
@@ -977,7 +979,7 @@ pages.commands=()=>{
     return `<div style="max-width:980px">${head}${note}<div class="pnote">Archived commands do not answer in chat. Nothing is ever deleted: Restore brings a command back with its settings.</div>
       ${A.length?A.map(c=>`<div class="card" data-id="${esc(c.id)}"><div class="row wrap"><b>${esc(cmdN(c.name))}</b><span class="pill">${esc(c.category||'other')}</span><span class="pill">${esc(cmdRoleText(c))}</span><span class="sp"></span><span class="sm faint">archived by ${esc(c.archivedBy||'?')} ${cmdAgo(c.archivedAt)}</span><button class="sm" data-restore="1">Restore</button></div>${c.description?`<div class="sm faint" style="margin-top:4px">${esc(c.description)}</div>`:''}</div>`).join(''):'<div class="card dim">Nothing archived.</div>'}</div>`}
   if(CMD.all&&CMD.tab==='cmds'){
-    const rows=(CMD.d||[]).map(c=>({...c,_arch:false})).concat((CMD.arch||[]).map(c=>({...c,_arch:true}))).sort(cmdSorter),tot=rows.reduce((n,c)=>n+(c.uses||0),0);
+    const rows=(CMD.allD?CMD.allD.map(c=>({...c,_arch:!!c.archived})):(CMD.d||[]).map(c=>({...c,_arch:false})).concat((CMD.arch||[]).map(c=>({...c,_arch:true})))).sort(cmdSorter),tot=rows.reduce((n,c)=>n+(c.uses||0),0);
     return `<div style="max-width:1240px">${head}${note}<div class="pnote">Unfiltered: ${rows.length} command(s) including archived and role-restricted ones, ${tot.toLocaleString()} uses in total. Search and groups are ignored here.</div>
       <div class="row wrap" style="margin-bottom:8px"><span class="sm faint">Sort</span>${chip('uses','Most used',CMD.sort==='uses','data-cs')}${chip('az','A-Z',CMD.sort==='az','data-cs')}</div>
       <div class="card" style="overflow:auto"><table class="tbl"><tr><th>Command</th><th>Category</th><th>Who</th><th>Status</th><th>Uses</th><th>Last used</th><th>Bot</th></tr>${rows.map(c=>`<tr class="${c._arch||c.enabled===false?'faint':''}"><td><b>${esc(cmdN(c.name))}</b>${(c.aliases||[]).length?`<div class="sm faint">${c.aliases.map(a=>esc(cmdN(a))).join(' ')}</div>`:''}</td><td>${esc(c.category||'other')}</td><td>${esc(cmdRoleText(c))}</td><td>${c._arch?'archived':c.enabled===false?'off':'on'}</td><td>${(c.uses||0).toLocaleString()}</td><td>${cmdAgo(c.lastUsed)}</td><td>${esc(c.ownerBot||'')}</td></tr>`).join('')}</table></div></div>`}
@@ -1004,9 +1006,9 @@ pages.commands=()=>{
 document.addEventListener('click',e=>{if(CMD.menu&&!e.target.closest('.rwrap')){CMD.menu=null;if(route==='commands')draw(true)}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&CMD.menu&&route==='commands'){CMD.menu=null;draw(true)}});
 function bindCommands(){
-  const re=()=>{CMD.d=undefined;CMD.arch=null;draw(true)};
+  const re=()=>{CMD.d=undefined;CMD.arch=null;CMD.allD=undefined;draw(true)};
   $('#cm-refresh')&&($('#cm-refresh').onclick=re);
-  $('#cm-all')&&($('#cm-all').onchange=e=>{CMD.all=e.target.checked;draw(true)});
+  $('#cm-all')&&($('#cm-all').onchange=e=>{CMD.all=e.target.checked;CMD.allD=undefined;draw(true)});
   $$('[data-ct]').forEach(b=>b.onclick=()=>{CMD.tab=b.dataset.ct;draw(true)});
   $$('[data-cs]').forEach(b=>b.onclick=()=>{CMD.sort=b.dataset.cs;draw(true)});
   const q=$('#cm-q');if(q)q.oninput=()=>{CMD.q=q.value;draw(true);const n=$('#cm-q');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}};
