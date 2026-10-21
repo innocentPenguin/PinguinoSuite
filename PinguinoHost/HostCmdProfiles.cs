@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,11 +15,41 @@ namespace PinguinoHost
     {
         static readonly object L = new object();
         static readonly string[] Tiers = { "everyone", "sub", "vip", "mod", "broadcaster" };
+        /// <summary>Allowed role tags, in display order. "everyone" is exclusive; "broadcaster" is always present. "follower" is not offered: the chat feed carries no follower flag.
+        /// A caller matches: sub = subscribed at any tier, sub1/2/3 = that exact tier, vip = VIP (role 2), mod = moderator (role 3), broadcaster = the streamer (role 4).
+        /// Legacy ladder mapping (reproduces the old single tier exactly): everyone -> [everyone]; sub -> [sub,vip,mod,broadcaster]; vip -> [vip,mod,broadcaster]; mod -> [mod,broadcaster]; broadcaster -> [broadcaster].</summary>
+        public static readonly string[] RoleIds = { "everyone", "sub", "sub1", "sub2", "sub3", "vip", "mod", "broadcaster" };
+        public static readonly string[] RoleLabelList = { "Everyone", "Subscriber (any tier)", "Sub tier 1", "Sub tier 2", "Sub tier 3", "VIP", "Moderator", "Broadcaster" };
+        static List<string> TierToRoles(string tier)
+        {
+            switch ((tier ?? "").ToLowerInvariant()) { case "sub": return new List<string> { "sub", "vip", "mod", "broadcaster" }; case "vip": return new List<string> { "vip", "mod", "broadcaster" }; case "mod": return new List<string> { "mod", "broadcaster" }; case "broadcaster": return new List<string> { "broadcaster" }; default: return new List<string> { "everyone" }; }
+        }
+        /// <summary>everyone is exclusive; otherwise dedupe, broadcaster always in, canonical order. Null when an id is not allowed.</summary>
+        static List<string> NormRoles(IEnumerable<string> roles, out string bad)
+        {
+            bad = null; var set = new HashSet<string>();
+            foreach (var r0 in roles) { string r = (r0 ?? "").Trim().ToLowerInvariant(); if (Array.IndexOf(RoleIds, r) < 0) { bad = r0; return null; } set.Add(r); }
+            if (set.Contains("everyone")) return new List<string> { "everyone" };
+            set.Add("broadcaster"); return RoleIds.Where(set.Contains).ToList();
+        }
+        /// <summary>legacy single tier derived from a role set: the lowest ladder step any tag reaches</summary>
+        static string DerivePermission(List<string> r)
+        {
+            if (r.Contains("everyone")) return "everyone"; if (r.Any(x => x == "sub" || x == "sub1" || x == "sub2" || x == "sub3")) return "sub"; if (r.Contains("vip")) return "vip"; if (r.Contains("mod")) return "mod"; return "broadcaster";
+        }
+        static bool RolesAllow(List<string> r, int role, bool sub, int subTier)
+        {
+            if (r.Contains("everyone") || role >= 4) return true;
+            if (r.Contains("mod") && role == 3) return true;
+            if (r.Contains("vip") && role == 2) return true;
+            if (sub && (r.Contains("sub") || (subTier == 1 && r.Contains("sub1")) || (subTier == 2 && r.Contains("sub2")) || (subTier == 3 && r.Contains("sub3")))) return true;
+            return false;
+        }
         static JObject _over, _use, _arch; static DateTime _loadAt = DateTime.MinValue; static bool _useDirty; static DateTime _useSaved = DateTime.UtcNow;
         static List<Prof> _reg; static DateTime _regAt = DateTime.MinValue; static Dictionary<string, Prof> _byName = new Dictionary<string, Prof>();
         static readonly Dictionary<string, DateTime> _cool = new Dictionary<string, DateTime>();
 
-        class Prof { public string Id, Name, Description, Category, Permission, DefaultPermission, Owner, Source; public List<string> Aliases = new List<string>(); public int CdG, CdU; public bool Enabled = true; }
+        class Prof { public string Id, Name, Description, Category, Permission, DefaultPermission, Owner, Source; public List<string> Roles = new List<string> { "everyone" }, DefaultRoles = new List<string> { "everyone" }; public List<string> Aliases = new List<string>(); public int CdG, CdU; public bool Enabled = true; }
 
         static string Dir { get { return Path.Combine(HostApi.DataDir, "config"); } }
         static string F(string n) { return Path.Combine(Dir, n); }
@@ -71,6 +101,7 @@ namespace PinguinoHost
                     }
             }
             catch (Exception ex) { Clog.Warn("cmdprofiles", "automations: " + ex.Message); }
+            foreach (var p in list) { p.DefaultRoles = TierToRoles(p.DefaultPermission); p.Roles = new List<string>(p.DefaultRoles); }
             var by = new Dictionary<string, Prof>(); foreach (var p in list) { by[p.Id] = p; foreach (var a in p.Aliases) if (!by.ContainsKey(a)) by[a] = p; }
             _byName = by; _reg = list; _regAt = DateTime.UtcNow; return list;
         }
@@ -79,14 +110,16 @@ namespace PinguinoHost
         static void Apply(Prof p)   // layer the saved edits over the defaults
         {
             var o = Over(p.Id); if (o == null) return;
-            if (o["permission"] != null) p.Permission = (string)o["permission"]; if (o["cooldownGlobal"] != null) p.CdG = (int)o["cooldownGlobal"]; if (o["cooldownUser"] != null) p.CdU = (int)o["cooldownUser"];
+            string badRole; var rs = o["roles"] is JArray ra ? NormRoles(ra.Select(x => (string)x), out badRole) : o["permission"] != null ? TierToRoles((string)o["permission"]) : null;
+            if (rs != null) { p.Roles = rs; p.Permission = DerivePermission(rs); }
+            if (o["cooldownGlobal"] != null) p.CdG = (int)o["cooldownGlobal"]; if (o["cooldownUser"] != null) p.CdU = (int)o["cooldownUser"];
             if (o["enabled"] != null) p.Enabled = (bool)o["enabled"]; if (o["description"] != null) p.Description = (string)o["description"]; if (o["category"] != null) p.Category = (string)o["category"];
         }
         static bool IsArchived(string id) { return ((JArray)_arch["archived"]).OfType<JObject>().Any(a => (string)a["id"] == id); }
         static JObject View(Prof p)
         {
             var o = Over(p.Id); var u = _use[p.Id] as JObject;
-            return new JObject { { "id", p.Id }, { "name", p.Name }, { "aliases", new JArray(p.Aliases) }, { "description", p.Description }, { "category", p.Category }, { "permission", p.Permission }, { "defaultPermission", p.DefaultPermission },
+            return new JObject { { "id", p.Id }, { "name", p.Name }, { "aliases", new JArray(p.Aliases) }, { "description", p.Description }, { "category", p.Category }, { "permission", p.Permission }, { "defaultPermission", p.DefaultPermission }, { "roles", new JArray(p.Roles) }, { "defaultRoles", new JArray(p.DefaultRoles) },
                 { "cooldownGlobal", p.CdG }, { "cooldownUser", p.CdU }, { "enabled", p.Enabled }, { "uses", (long?)u?["uses"] ?? 0 }, { "lastUsed", (long?)u?["last"] ?? 0 }, { "ownerBot", p.Owner }, { "source", p.Source },
                 { "createdBy", (string)o?["createdBy"] ?? "system" }, { "createdAt", (long?)o?["createdAt"] ?? 0 }, { "editedBy", (string)o?["editedBy"] ?? "" }, { "editedAt", (long?)o?["editedAt"] ?? 0 }, { "archived", false } };
         }
@@ -96,7 +129,7 @@ namespace PinguinoHost
 
         // ---------------- central gate ----------------
         /// <summary>true = swallow this chat line (disabled, archived, tier too low, cooldown). Counts usage of the commands that run. Silent: no chat reply.</summary>
-        public static bool Gate(string user, string text, int role, bool isSub)
+        public static bool Gate(string user, string text, int role, bool isSub, int subTier = 0)
         {
             text = (text ?? "").TrimStart(); if (!text.StartsWith("!")) return false;
             string tok = text.Split(' ')[0].ToLowerInvariant();
@@ -106,7 +139,7 @@ namespace PinguinoHost
                 if (IsArchived(p.Id)) return true;
                 Apply(p);
                 if (!p.Enabled && p.Source != "custom") return true;   // custom commands: Actions & Events already skips a disabled action
-                var ov = Over(p.Id); if (ov?["permission"] != null && UserRank(role, isSub) < Rank(p.Permission)) return true;   // only an edited tier is enforced here: unedited commands keep their own checks
+                var ov = Over(p.Id); if ((ov?["roles"] != null || ov?["permission"] != null) && !RolesAllow(p.Roles, role, isSub || subTier > 0, subTier)) return true;   // only an edited tier is enforced here: unedited commands keep their own checks
                 int cg = ov?["cooldownGlobal"] != null ? p.CdG : 0, cu = ov?["cooldownUser"] != null ? p.CdU : 0;   // likewise: only edited cooldowns
                 if (role < 4 && (cg > 0 || cu > 0))
                 {
@@ -128,7 +161,7 @@ namespace PinguinoHost
 
         public static JObject List()
         {
-            lock (L) { Load(); var arr = new JArray(); foreach (var p in Registry()) { if (IsArchived(p.Id)) continue; Apply(p); arr.Add(View(p)); } if (_useDirty) FlushUse(); return new JObject { { "ok", true }, { "commands", arr } }; }
+            lock (L) { Load(); var arr = new JArray(); foreach (var p in Registry()) { if (IsArchived(p.Id)) continue; Apply(p); arr.Add(View(p)); } if (_useDirty) FlushUse(); return new JObject { { "ok", true }, { "commands", arr }, { "roleOptions", new JArray(RoleIds.Select((r, i) => new JObject { { "id", r }, { "label", RoleLabelList[i] } })) } }; }
         }
         public static JObject ArchiveList() { lock (L) { Load(); var arr = new JArray(); foreach (var a in ((JArray)_arch["archived"]).OfType<JObject>()) { var o = (JObject)((JObject)a["profile"]).DeepClone(); o["archived"] = true; o["archivedBy"] = a["archivedBy"]; o["archivedAt"] = a["archivedAt"]; arr.Add(o); } return new JObject { { "ok", true }, { "commands", arr } }; } }
 
@@ -143,14 +176,20 @@ namespace PinguinoHost
                     string k = kv.Name; if (k == "id" || k == "by") continue;
                     switch (k)
                     {
-                        case "permission": { string v = ((string)kv.Value ?? "").ToLowerInvariant(); if (Array.IndexOf(Tiers, v) < 0) { errs.Add("permission must be one of " + string.Join("|", Tiers)); break; } if (v != p.Permission) { ch.Add("permission " + p.Permission + " -> " + v); p.Permission = v; } over["permission"] = v; break; }
+                        case "roles":
+                        {
+                            var arr = kv.Value as JArray; if (arr == null || arr.Any(x => x.Type != JTokenType.String)) { errs.Add("roles must be an array of role ids: " + string.Join("|", RoleIds)); break; }
+                            string bad; var nr = NormRoles(arr.Select(x => (string)x), out bad); if (nr == null) { errs.Add("unknown role '" + bad + "' (allowed: " + string.Join("|", RoleIds) + ")"); break; }
+                            if (!nr.SequenceEqual(p.Roles)) ch.Add("roles " + string.Join(",", p.Roles) + " -> " + string.Join(",", nr)); p.Roles = nr; p.Permission = DerivePermission(nr); over["roles"] = new JArray(nr); over["permission"] = p.Permission; break;
+                        }
+                        case "permission": { if (b["roles"] != null) break; string v = ((string)kv.Value ?? "").ToLowerInvariant(); if (Array.IndexOf(Tiers, v) < 0) { errs.Add("permission must be one of " + string.Join("|", Tiers)); break; } var nr = TierToRoles(v); if (!nr.SequenceEqual(p.Roles)) ch.Add("roles " + string.Join(",", p.Roles) + " -> " + string.Join(",", nr) + " (legacy permission " + v + ")"); p.Roles = nr; p.Permission = v; over["permission"] = v; over["roles"] = new JArray(nr); break; }
                         case "cooldownGlobal": case "cooldownUser": { int v; if (kv.Value.Type != JTokenType.Integer || (v = (int)kv.Value) < 0 || v > 86400) { errs.Add(k + " must be a whole number of seconds 0-86400"); break; } int old = k == "cooldownGlobal" ? p.CdG : p.CdU; if (v != old) ch.Add(k + " " + old + " -> " + v); if (k == "cooldownGlobal") p.CdG = v; else p.CdU = v; over[k] = v; break; }
                         case "enabled": { if (kv.Value.Type != JTokenType.Boolean) { errs.Add("enabled must be true or false"); break; } bool v = (bool)kv.Value; if (v != p.Enabled) ch.Add("enabled " + p.Enabled + " -> " + v); p.Enabled = v; over["enabled"] = v; break; }
                         case "description": { string v = ((string)kv.Value ?? "").Trim(); if (v.Length > 400) { errs.Add("description is limited to 400 characters"); break; } if (v != p.Description) ch.Add("description edited"); p.Description = v; over["description"] = v; break; }
                         case "category": { string v = ((string)kv.Value ?? "").Trim(); if (v.Length > 40 || v == "") { errs.Add("category must be 1-40 characters"); break; } if (v != p.Category) ch.Add("category " + p.Category + " -> " + v); p.Category = v; over["category"] = v; break; }
                         case "name": if (!string.Equals(Bang((string)kv.Value), p.Name)) errs.Add("name cannot be changed (the bots recognise the built-in name)"); break;
                         case "aliases": if (!string.Join(",", ((kv.Value as JArray) ?? new JArray()).Select(x => Bang((string)x))).Equals(string.Join(",", p.Aliases))) errs.Add("aliases cannot be changed here (use the typo/alias settings)"); break;
-                        case "uses": case "lastUsed": case "ownerBot": case "editedBy": case "editedAt": case "archived": case "defaultPermission": case "source": case "createdBy": case "createdAt": break;   // read-only echoes are ignored
+                        case "uses": case "lastUsed": case "ownerBot": case "editedBy": case "editedAt": case "archived": case "defaultPermission": case "defaultRoles": case "source": case "createdBy": case "createdAt": break;   // read-only echoes are ignored
                         default: errs.Add("unknown field " + k); break;
                     }
                 }
@@ -190,7 +229,7 @@ namespace PinguinoHost
         /// <summary>for the public /commands doc: false = hide the entry (archived or disabled); tier = the effective permission (null when the command was never edited).</summary>
         public static bool DocVisible(string name, out string tier)
         {
-            tier = null; lock (L) { Load(); Registry(); Prof p; if (!_byName.TryGetValue(Bang(name), out p)) return true; if (IsArchived(p.Id)) return false; Apply(p); if (!p.Enabled && p.Source != "custom") return false; if (Over(p.Id)?["permission"] != null) tier = p.Permission; return true; }
+            tier = null; lock (L) { Load(); Registry(); Prof p; if (!_byName.TryGetValue(Bang(name), out p)) return true; if (IsArchived(p.Id)) return false; Apply(p); if (!p.Enabled && p.Source != "custom") return false; if (Over(p.Id)?["roles"] != null || Over(p.Id)?["permission"] != null) { tier = p.Roles.Any(x => x == "everyone" || x.StartsWith("sub")) ? p.Permission : p.Roles.Contains("mod") || p.Roles.Contains("vip") ? "mod" : "broadcaster"; } return true; }
         }
     }
 }
