@@ -1,6 +1,6 @@
 # Game presence: gaming PC -> Discord (design, 2026-10-21)
 
-Status: DESIGN ONLY. Not built yet. Off by default when built.
+Status: CANCELLED by Ivan (2026-10-21). Design kept for reference only; nothing was built and no code exists.
 
 ## Goal
 The gaming PC has no Discord. Ivan wants the game he is playing shown in Discord so his status stays current.
