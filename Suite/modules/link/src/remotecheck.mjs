@@ -32,7 +32,7 @@ async function node(name, port, role, extra = {}) {
   return { dir, child, call, base };
 }
 
-const pa = 8000 + Math.floor(Math.random() * 40), pb = pa + 50;
+const pa = 8300 + Math.floor(Math.random() * 400), pb = pa + 50;
 const A = await node('A', pa, 'hub', { safety: { allowStartStream: true } }), B = await node('B', pb, 'client');
 try {
   await A.call('POST', '/api/settings', { changes: { 'device.name': 'hubpc' } });

@@ -250,7 +250,14 @@ export async function serve(cfg) {
 
   // Loopback must bind; if not, exit nonzero so the Suite shows the module as failed.
   try { await listen('127.0.0.1'); log('info', 'server', `listening on 127.0.0.1:${port} (role ${cfg.role})`); }
-  catch (e) { log('error', 'server', `cannot listen on 127.0.0.1:${port} (${e.code})`); process.exit(1); }
+  catch (e) {
+    // PinguinoLite starts its own Link child; if a Link already answers on this port, Lite reuses it (that one writes the Lite files).
+    if (e.code === 'EADDRINUSE' && process.env.PINGUINO_LITE_DIR && !process.env.PINGUINO_API_TOKEN) {
+      let up = false; try { up = (await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(2000) })).ok; } catch {}
+      if (up) { log('info', 'server', `Link is already running on 127.0.0.1:${port}; PinguinoLite reuses it`); process.exit(0); }
+    }
+    log('error', 'server', `cannot listen on 127.0.0.1:${port} (${e.code})`); process.exit(1);
+  }
 
   // Never 0.0.0.0: loopback plus the Tailscale address, bound as soon as Tailscale is up (re-checked every 15 s).
   let tailBound = null;
