@@ -181,8 +181,35 @@ namespace PinguinoHost
         }
         /// <summary>forget every learned display name so the next refresh asks Twitch again.</summary>
         public static void NamesReset() { lock (L) { _names = new JObject(); try { if (File.Exists(NamesP)) File.Delete(NamesP); } catch (Exception) { } } }
+        static HashSet<string> _anon; static DateTime _anonAt = DateTime.MinValue;
+        /// <summary>true when the person typed !optmeout (Privacy "anon" in chat_memory.json): their name must not appear on any public line or board. Cached for 20 s.</summary>
+        public static bool IsAnon(string login)
+        {
+            login = (login ?? "").Trim().TrimStart('@').ToLowerInvariant(); if (login == "") return false;
+            lock (L)
+            {
+                if (_anon == null || (DateTime.UtcNow - _anonAt).TotalSeconds > 20)
+                {
+                    var set = new HashSet<string>();
+                    try
+                    {
+                        string p = Path.Combine(HostApi.DataDir, "chat_memory.json");
+                        if (File.Exists(p)) foreach (var pr in JObject.Parse(File.ReadAllText(p)).Properties())
+                        {
+                            var v = pr.Value as JObject; if (v == null || (string)v["Privacy"] != "anon") continue;
+                            set.Add(pr.Name.ToLowerInvariant()); string lg = ((string)v["Login"] ?? "").ToLowerInvariant(); if (lg != "") set.Add(lg);
+                        }
+                    }
+                    catch (Exception) { }
+                    _anon = set; _anonAt = DateTime.UtcNow;
+                }
+                return _anon.Contains(login);
+            }
+        }
+        public const string AnonName = "Anonymous Penguin";
         public static string DisplayName(string login)
         {
+            if (IsAnon(login)) return AnonName;
             lock (L) { var e = Names()[login] as JObject; string dn = e == null ? "" : (string)e["name"] ?? ""; if (dn != "") return dn; var u = (_cache?["users"] as JObject)?[login] as JObject; return u != null ? (string)u["name"] : login; }
         }
 

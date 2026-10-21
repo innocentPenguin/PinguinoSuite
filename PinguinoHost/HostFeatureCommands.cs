@@ -118,7 +118,7 @@ namespace PinguinoHost
             string baseTitle = def[2].Replace(" (best shared)", "");
             string title = board == "streaks" ? (month == "" ? def[2] : baseTitle + " (" + when + ")") : baseTitle + " (" + when + ", " + def[4] + ")";
             if (list.Count == 0) { say("Nobody on the " + def[2].ToLowerInvariant().Replace(" (best shared)", "") + " board for " + when + " yet. " + Link + "#" + def[3]); return; }
-            say(title + ": " + string.Join(" | ", list.Take(5).Select((x, i) => (i + 1) + ". " + (string)x["name"] + " " + Num((long)x["value"]))) + " - full list: " + Link + "#" + def[3]);
+            say(title + ": " + string.Join(" | ", list.Take(5).Select((x, i) => (i + 1) + ". " + (Boards.IsAnon((string)x["login"]) ? Boards.AnonName : (string)x["name"]) + " " + Num((long)x["value"]))) + " - full list: " + Link + "#" + def[3]);
         }
 
         static List<KeyValuePair<string, JObject>> Ranked(JObject d, string field)
@@ -131,7 +131,7 @@ namespace PinguinoHost
             var d = Data(); var def = Boards_[board]; string who = args.Length > 0 ? args[0].TrimStart('@').ToLowerInvariant() : me; bool self = who == me;
             who = Boards.CanonLogin(who); string label = self ? "@" + display + " you have" : who + " has";
             var rank = Ranked(d, def[0]); int pos = rank.FindIndex(k => k.Key == who);
-            var u = ((JObject)d["users"])[who] as JObject; string nm = u != null ? (string)u["name"] : who;
+            var u = ((JObject)d["users"])[who] as JObject; string nm = Boards.IsAnon(who) ? Boards.AnonName : u != null ? (string)u["name"] : who;
             if (pos < 0) { say(self ? "@" + display + " I have no " + (board == "gifters" ? "gifted subs" : "bits") + " recorded for you yet. " + Link + "#" + def[3] : "No " + (board == "gifters" ? "gifted subs" : "bits") + " recorded for " + who + " yet."); return; }
             string extra = board == "bits" && (int)u["bitsBadge"] > 0 ? ", bits badge " + Num((int)u["bitsBadge"]) : "";
             say((self ? "@" + display + " you have " : nm + " has ") + (board == "gifters" ? "gifted " + Num((int)u["gifts"]) + " sub" + ((int)u["gifts"] == 1 ? "" : "s") : "cheered " + Num((int)u["bits"]) + " bits") + extra + " - rank #" + (pos + 1) + " of " + rank.Count + ". " + Link + "#" + def[3]);

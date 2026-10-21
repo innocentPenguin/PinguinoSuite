@@ -182,12 +182,12 @@ namespace PinguinoHost
             int cg = CoolSec("PINGUINO_STREAK_COOL_GLOBAL", 8), cu = CoolSec("PINGUINO_STREAK_COOL_USER", 20);
             if (Cooling("g|" + group, cg) || Cooling("u|" + group + "|" + user.ToLowerInvariant(), cu)) return true;   // quiet while cooling down, like the other commands
             JObject u; lock (L) u = ((JObject)Doc()["users"])[who] as JObject;
-            string name = u != null ? (string)u["name"] : who;
+            string name = Boards.IsAnon(who) ? Boards.AnonName : u != null ? (string)u["name"] : who;
             if (group == "top")
             {
                 var b = (JArray)Api(5)["board"];
                 say(b.Count == 0 ? "Nobody has shared a watch streak yet. When Twitch offers it, share yours in chat and it lands on the board! Full list: " + LeaderLink
-                    : "Top watch streaks (best shared): " + string.Join(" | ", b.Select((x, i) => (i + 1) + ". " + (string)x["name"] + " " + (int)x["best"])) + " Full list: " + LeaderLink);
+                    : "Top watch streaks (best shared): " + string.Join(" | ", b.Select((x, i) => (i + 1) + ". " + (Boards.IsAnon((string)x["login"]) ? Boards.AnonName : (string)x["name"]) + " " + (int)x["best"])) + " Full list: " + LeaderLink);
                 return true;
             }
             if (u == null)
