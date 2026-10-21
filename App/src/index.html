@@ -86,7 +86,7 @@ nav h6{margin:14px 12px 4px;font-size:10.5px;letter-spacing:1.2px;color:var(--fa
 .tag{margin-left:auto;font-size:9.5px;padding:1px 7px;border-radius:8px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
 .tag.live{background:#3ddc9722;color:var(--ok)}.tag.prev{background:#b9a58a22;color:var(--vio)}.tag.off{background:var(--hover2);color:var(--faint)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);margin-left:auto}.dot.running{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot.starting{background:var(--warn)}
-.navfoot{margin-top:auto;padding:10px;border-top:1px solid var(--line)}
+.navfoot{margin-top:auto;padding:10px;border-top:1px solid var(--line)}nav{min-height:0}.brand{flex:none}.navfoot{flex:none}.navscroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -8px 0 -4px;padding:0 6px 6px 4px;scrollbar-width:thin;scrollbar-color:var(--accent) transparent}.navscroll::-webkit-scrollbar{width:6px}.navscroll::-webkit-scrollbar-track{background:transparent}.navscroll::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--accent) 70%,transparent);border-radius:3px}.navscroll::-webkit-scrollbar-thumb:hover{background:var(--accent)}
 /* main */
 .col{flex:1;display:flex;flex-direction:column;min-width:0}
 .top{display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(6px)}
@@ -231,6 +231,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 <body>
 <nav>
   <div class="brand"><div class="logo"><img src="assets/logo.png" alt=""></div><div><b>PinguinoSuite</b><small>stream command center</small></div></div>
+  <div class="navscroll">
   <div class="item" data-r="dashboard"><span class="ic">▦</span>Dashboard</div>
   <div id="modnav"></div>
   <h6>System</h6>
@@ -244,6 +245,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
   <div class="item" data-r="console"><span class="ic">▤</span>Console<span class="cbadge" id="cbadge"></span></div>
   <div class="item" data-r="personalize"><span class="ic">🎨</span>Personalize</div>
   <div class="item" data-r="settings"><span class="ic">⚙</span>Settings</div>
+  </div>
   <div class="navfoot sm dim" id="navfoot"></div>
 </nav>
 <div class="col">
@@ -1384,7 +1386,7 @@ function renderNav(){if(!S)return;
   $('#modnav').innerHTML=h;$$('#modnav .item').forEach(i=>i.onclick=()=>go(i.dataset.r));navStatic()}
 const isMod=r=>r.startsWith('m:');
 const flushed=()=>isMod(route)&&modOf(route)?.state==='running';
-function go(r){if(r==='voice'){V.style=null;V.err=null}if(r==='integrations'){I.items=null;VT.keys=null;VT.edit=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));
+function go(r){if(r==='voice'){V.style=null;V.err=null}if(r==='integrations'){I.items=null;VT.keys=null;VT.edit=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));{const a=$('nav .item.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest'})}
   const m=isMod(r)?modOf(r):null;$('#title').textContent=m?(m.ui?.nav||m.name):(titles[r]||r);
   $('#page').classList.toggle('flush',flushed());draw(true)}
 let lastHtml='';
