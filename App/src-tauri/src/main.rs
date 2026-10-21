@@ -11,6 +11,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -20,6 +21,9 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
+
+/// Set by the tray's "Quit and stop all modules". A plain quit leaves the modules running (they are separate programs; the next core adopts them).
+static STOP_MODULES: AtomicBool = AtomicBool::new(false);
 
 fn port() -> u16 {
     std::env::var("PINGUINO_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8760)
@@ -121,7 +125,8 @@ fn spawn_core(token: &str) -> Option<Child> {
 fn stop_core(core: &Core) {
     if let Ok(mut s) = TcpStream::connect_timeout(&format!("127.0.0.1:{}", port()).parse().unwrap(), Duration::from_millis(500)) {
         let req = format!(
-            "POST /api/quit HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            "POST /api/quit{} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            if STOP_MODULES.load(Ordering::SeqCst) { "?modules=stop" } else { "" },
             port(),
             core.token
         );
@@ -195,15 +200,19 @@ fn main() {
         .invoke_handler(tauri::generate_handler![core_config, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows, windows::open_site_window, windows::clear_site_data, splash::app_ready])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Show PinguinoSuite", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit (stops all modules)", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let quit = MenuItem::with_id(app, "quit", "Quit (modules keep running)", true, None::<&str>)?;
+            let quit_all = MenuItem::with_id(app, "quit_all", "Quit and stop all modules", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit, &quit_all])?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("PinguinoSuite")
                 .menu(&menu)
                 .on_menu_event(|app, ev| match ev.id.as_ref() {
                     "open" => show_main(app),
-                    "quit" => {
+                    "quit" | "quit_all" => {
+                        if ev.id.as_ref() == "quit_all" {
+                            STOP_MODULES.store(true, Ordering::SeqCst);
+                        }
                         if let Some(w) = app.get_webview_window("main") {
                             mainwin::save(&w, true);
                         }

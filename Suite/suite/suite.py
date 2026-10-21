@@ -3,169 +3,172 @@ tells modules about it, and serves the dashboard. Run via PinguinoSuite.bat (or 
 # INDEX-BEGIN (regenerate: scratch idx.py; line numbers are of this file)
 # INDEX: Suite core (FastAPI, 127.0.0.1:8760): module supervision, vault/help/prestream/devices/console APIs, serves the shell UI. Routes + public functions:
 # Related: Suite/modules.json (module manifests), Docs/MODULE_CONTRACT.md, Suite/suite/{vault,helpdb,prestream,device,consolelog,integrations}.py, App/src/index.html
-#   213  def rotate_log
-#   233  def module_token
-#   263  def load_settings
-#   274  def save_settings
-#   306  def tail_lines
-#   334  class Bus
-#   359  def kill_tree
-#   374  class Module
-#   497  def discover_specs
-#   520  def on_transition
-#   531  def apply_stream
-#   551  def twitch_loop
-#   566  def process_control
-#   608  def run_prestream
-#   634  def prestream_loop
-#   653  def reconcile_devices
-#   674  def status_loop
-#   692  def device_sync_loop
-#   710  def health_loop
-#   728  def autostart_enabled
-#   740  def set_autostart
-#   757  def lifespan
-#   787  def guard
-#   813  GET    /
-#   814  def index
-#   820  GET    /assets/{name}
-#   821  def shell_asset
-#   833  GET    /theme.css
-#   834  def theme_css
-#   842  GET    /bootstrap.js
-#   843  def bootstrap_js
-#   854  def read_update_status
-#   870  GET    /api/update/status
-#   871  def update_status
-#   875  GET    /api/capabilities
-#   876  def capabilities
-#   882  WEBSOCKET /ws
-#   883  def ws
-#   899  GET    /api/state
-#   900  def state
-#   906  class Opt
-#   912  GET    /api/modules/{mid}/probe
-#   913  def module_probe
-#   969  def declared_secrets
-#   991  def vault_prestream_items
-#  1019  GET    /api/prefs
-#  1020  def prefs_get
-#  1025  POST   /api/prefs
-#  1026  def prefs_set
-#  1030  POST   /api/prefs/reset
-#  1031  def prefs_reset
-#  1042  GET    /api/templates
-#  1043  def templates_list
-#  1049  POST   /api/templates
-#  1050  def templates_save
-#  1056  POST   /api/templates/rename
-#  1057  def templates_rename
-#  1062  POST   /api/templates/delete
-#  1063  def templates_delete
-#  1068  GET    /api/help
-#  1069  def help_get
-#  1087  GET    /api/help/all
-#  1088  def help_all
-#  1093  GET    /api/vault
-#  1094  def vault_list
-#  1114  class VaultValue
-#  1118  GET    /api/vault/{name}
-#  1119  def vault_read
-#  1137  POST   /api/vault/import-plaintext
-#  1138  def vault_import
-#  1146  class Scrub
-#  1151  POST   /api/vault/scrub
-#  1152  def vault_scrub
-#  1165  class Passphrase
-#  1169  POST   /api/vault/backup
-#  1170  def vault_backup
-#  1180  POST   /api/vault/restore
-#  1181  def vault_restore
-#  1191  POST   /api/vault/{name}/set
-#  1192  def vault_set
-#  1209  POST   /api/vault/{name}/delete
-#  1210  def vault_delete
-#  1217  POST   /api/vault/{name}/test
-#  1218  def vault_test
-#  1234  GET    /api/integrations
-#  1235  def integrations_get
-#  1270  class PostReq
-#  1275  POST   /api/modules/{mid}/post
-#  1276  def module_post
-#  1297  GET    /api/modules/{mid}/get
-#  1298  def module_get
-#  1313  GET    /api/modules/{mid}/logs
-#  1314  def module_logs
-#  1320  class DevConfig
-#  1329  class Setup
-#  1335  GET    /api/setup
-#  1336  def setup_get
-#  1342  POST   /api/setup
-#  1343  def setup_post
-#  1354  class ExportReq
-#  1359  POST   /api/export
-#  1360  def export_config
-#  1382  def backup_cfg
-#  1387  def backup_list
-#  1395  def run_backup
-#  1410  def backup_loop
-#  1423  GET    /api/backup/auto
-#  1424  def backup_auto_get
-#  1428  POST   /api/backup/auto
-#  1429  def backup_auto_set
-#  1437  POST   /api/backup/auto/run
-#  1438  def backup_auto_run
-#  1446  POST   /api/import
-#  1447  def import_config
-#  1459  GET    /api/device
-#  1460  def device_get
-#  1464  POST   /api/device/config
-#  1465  def device_config
-#  1470  POST   /api/device/take
-#  1471  def device_take
-#  1478  POST   /api/device/release
-#  1479  def device_release
-#  1485  POST   /api/device/peer
-#  1486  def device_peer
-#  1492  class Streaming
-#  1496  POST   /api/device/streaming
-#  1497  def device_streaming
-#  1502  GET    /api/device/lease
-#  1503  def device_lease
-#  1509  POST   /api/voice/dispatch
-#  1510  def voice_dispatch
-#  1530  GET    /api/console
-#  1531  def console_get
-#  1536  GET    /api/prestream/schedule
-#  1537  def prestream_schedule_get
-#  1541  POST   /api/prestream/schedule
-#  1542  def prestream_schedule_set
-#  1549  GET    /api/prestream
-#  1550  def prestream_get
-#  1554  POST   /api/prestream/run
-#  1555  def prestream_run
-#  1559  GET    /api/events/log
-#  1560  def event_log
-#  1571  POST   /api/modules/{mid}/enable
-#  1572  def module_enable
-#  1590  POST   /api/modules/{mid}/options
-#  1591  def module_options
-#  1598  POST   /api/modules/{mid}/{action}
-#  1599  def module_action
-#  1610  class Chan
-#  1614  POST   /api/channel
-#  1615  def set_channel
-#  1622  class Sim
-#  1626  POST   /api/simulate
-#  1627  def simulate
-#  1639  class Auto
-#  1643  POST   /api/windows-autostart
-#  1644  def windows_autostart
-#  1649  POST   /api/quit
-#  1650  def quit_suite
-#  1662  def open_app
-#  1673  def start_tray
-#  1693  def already_running
+#   216  def rotate_log
+#   236  def module_token
+#   266  def load_settings
+#   277  def save_settings
+#   309  def tail_lines
+#   337  class Bus
+#   362  def kill_tree
+#   377  def listening_pid
+#   395  def kill_pid_tree
+#   408  def pid_alive
+#   422  class Module
+#   606  def discover_specs
+#   629  def on_transition
+#   640  def apply_stream
+#   660  def twitch_loop
+#   675  def process_control
+#   717  def run_prestream
+#   743  def prestream_loop
+#   762  def reconcile_devices
+#   783  def status_loop
+#   801  def device_sync_loop
+#   819  def health_loop
+#   837  def autostart_enabled
+#   849  def set_autostart
+#   866  def lifespan
+#   896  def guard
+#   922  GET    /
+#   923  def index
+#   929  GET    /assets/{name}
+#   930  def shell_asset
+#   942  GET    /theme.css
+#   943  def theme_css
+#   951  GET    /bootstrap.js
+#   952  def bootstrap_js
+#   963  def read_update_status
+#   979  GET    /api/update/status
+#   980  def update_status
+#   984  GET    /api/capabilities
+#   985  def capabilities
+#   991  WEBSOCKET /ws
+#   992  def ws
+#  1008  GET    /api/state
+#  1009  def state
+#  1015  class Opt
+#  1021  GET    /api/modules/{mid}/probe
+#  1022  def module_probe
+#  1078  def declared_secrets
+#  1100  def vault_prestream_items
+#  1128  GET    /api/prefs
+#  1129  def prefs_get
+#  1134  POST   /api/prefs
+#  1135  def prefs_set
+#  1139  POST   /api/prefs/reset
+#  1140  def prefs_reset
+#  1151  GET    /api/templates
+#  1152  def templates_list
+#  1158  POST   /api/templates
+#  1159  def templates_save
+#  1165  POST   /api/templates/rename
+#  1166  def templates_rename
+#  1171  POST   /api/templates/delete
+#  1172  def templates_delete
+#  1177  GET    /api/help
+#  1178  def help_get
+#  1196  GET    /api/help/all
+#  1197  def help_all
+#  1202  GET    /api/vault
+#  1203  def vault_list
+#  1223  class VaultValue
+#  1227  GET    /api/vault/{name}
+#  1228  def vault_read
+#  1246  POST   /api/vault/import-plaintext
+#  1247  def vault_import
+#  1255  class Scrub
+#  1260  POST   /api/vault/scrub
+#  1261  def vault_scrub
+#  1274  class Passphrase
+#  1278  POST   /api/vault/backup
+#  1279  def vault_backup
+#  1289  POST   /api/vault/restore
+#  1290  def vault_restore
+#  1300  POST   /api/vault/{name}/set
+#  1301  def vault_set
+#  1318  POST   /api/vault/{name}/delete
+#  1319  def vault_delete
+#  1326  POST   /api/vault/{name}/test
+#  1327  def vault_test
+#  1343  GET    /api/integrations
+#  1344  def integrations_get
+#  1379  class PostReq
+#  1384  POST   /api/modules/{mid}/post
+#  1385  def module_post
+#  1406  GET    /api/modules/{mid}/get
+#  1407  def module_get
+#  1422  GET    /api/modules/{mid}/logs
+#  1423  def module_logs
+#  1429  class DevConfig
+#  1438  class Setup
+#  1444  GET    /api/setup
+#  1445  def setup_get
+#  1451  POST   /api/setup
+#  1452  def setup_post
+#  1463  class ExportReq
+#  1468  POST   /api/export
+#  1469  def export_config
+#  1491  def backup_cfg
+#  1496  def backup_list
+#  1504  def run_backup
+#  1519  def backup_loop
+#  1532  GET    /api/backup/auto
+#  1533  def backup_auto_get
+#  1537  POST   /api/backup/auto
+#  1538  def backup_auto_set
+#  1546  POST   /api/backup/auto/run
+#  1547  def backup_auto_run
+#  1555  POST   /api/import
+#  1556  def import_config
+#  1568  GET    /api/device
+#  1569  def device_get
+#  1573  POST   /api/device/config
+#  1574  def device_config
+#  1579  POST   /api/device/take
+#  1580  def device_take
+#  1587  POST   /api/device/release
+#  1588  def device_release
+#  1594  POST   /api/device/peer
+#  1595  def device_peer
+#  1601  class Streaming
+#  1605  POST   /api/device/streaming
+#  1606  def device_streaming
+#  1611  GET    /api/device/lease
+#  1612  def device_lease
+#  1618  POST   /api/voice/dispatch
+#  1619  def voice_dispatch
+#  1639  GET    /api/console
+#  1640  def console_get
+#  1645  GET    /api/prestream/schedule
+#  1646  def prestream_schedule_get
+#  1650  POST   /api/prestream/schedule
+#  1651  def prestream_schedule_set
+#  1658  GET    /api/prestream
+#  1659  def prestream_get
+#  1663  POST   /api/prestream/run
+#  1664  def prestream_run
+#  1668  GET    /api/events/log
+#  1669  def event_log
+#  1680  POST   /api/modules/{mid}/enable
+#  1681  def module_enable
+#  1699  POST   /api/modules/{mid}/options
+#  1700  def module_options
+#  1707  POST   /api/modules/{mid}/{action}
+#  1708  def module_action
+#  1719  class Chan
+#  1723  POST   /api/channel
+#  1724  def set_channel
+#  1731  class Sim
+#  1735  POST   /api/simulate
+#  1736  def simulate
+#  1748  class Auto
+#  1752  POST   /api/windows-autostart
+#  1753  def windows_autostart
+#  1758  POST   /api/quit
+#  1759  def quit_suite
+#  1774  def open_app
+#  1785  def start_tray
+#  1806  def already_running
 # INDEX-END
 import asyncio
 import json
@@ -371,6 +374,51 @@ def kill_tree(proc):
             pass
 
 
+def listening_pid(port):
+    """Pid that LISTENS on 127.0.0.1:port, or 0. Used to adopt/stop a module this core did not spawn itself (never guesses: 0 when unsure)."""
+    if not port:
+        return 0
+    try:
+        if IS_WIN:
+            out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, timeout=8, creationflags=subprocess.CREATE_NO_WINDOW).stdout
+            for ln in out.splitlines():
+                parts = ln.split()
+                if len(parts) >= 5 and parts[3].upper() == "LISTENING" and parts[1].rsplit(":", 1)[-1] == str(port):
+                    return int(parts[4])
+            return 0
+        out = subprocess.run(["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"], capture_output=True, text=True, timeout=8).stdout.split()
+        return int(out[0]) if out else 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def kill_pid_tree(pid):
+    if IS_WIN:
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        return
+    try:
+        os.killpg(os.getpgid(pid), signal.SIGTERM)
+    except Exception:  # noqa: BLE001
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def pid_alive(pid):
+    try:
+        if IS_WIN:
+            out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True, timeout=8, creationflags=subprocess.CREATE_NO_WINDOW).stdout
+            return str(pid) in out
+        os.kill(pid, 0)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+PIDS = Path(DATA_DIR) / "pids"
+
+
 class Module:
     def __init__(self, spec):
         self.spec = spec
@@ -384,6 +432,8 @@ class Module:
         self.deferred = False  # singleton waiting for this device to become master
         self.port_warned = 0.0
         self.last_try = 0.0
+        self.adopted = False  # already running when this core started (or started by an older core): we supervise it but hold no process handle
+        self.adopt_pid = 0
 
     @property
     def singleton(self):
@@ -406,8 +456,38 @@ class Module:
     def running(self):
         return self.proc is not None and self.proc.poll() is None
 
+    def _pidfile(self):
+        return PIDS / f"{self.id}.json"
+
+    def _write_pid(self, pid):
+        try:
+            PIDS.mkdir(parents=True, exist_ok=True)
+            self._pidfile().write_text(json.dumps({"pid": pid, "port": self.port(), "at": time.time()}), "utf8")
+        except OSError:
+            pass
+
+    def adopt(self):
+        """The module already answers: keep it (never start a second copy), supervise it, remember whose process it is so Stop works."""
+        if not self.adopted:
+            console_log.log("info", "supervisor", f"{self.id}: already running, adopted", module=self.id)
+        self.wanted, self.failed, self.adopted, self.deferred = True, False, True, False
+        pid = 0
+        try:
+            rec = json.loads(self._pidfile().read_text("utf8"))
+            if int(rec.get("port", 0)) == self.port():
+                pid = int(rec.get("pid", 0))
+        except (OSError, ValueError):
+            pass
+        owner = listening_pid(self.port())
+        # the pid file may name a launcher that exited; the port owner is the truth when we can see it
+        self.adopt_pid = owner or (pid if pid and pid_alive(pid) else 0)
+        bus.emit("module", id=self.id, state="running")
+
     def start(self):
-        if self.running or self._ping():
+        if self.running:
+            return
+        if self._ping():
+            self.adopt()
             return
         if self.singleton and not devices.is_master():  # only the master device runs bots/Host/Spotify: never two instances
             self.deferred = True
@@ -428,8 +508,19 @@ class Module:
             extra = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
         else:
             extra = {"start_new_session": True}
-        self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log,
-                                     env={**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"]), "PINGUINO_DATA_DIR": DATA_DIR, "PINGUINO_CORE_URL": f"http://127.0.0.1:{PORT}"}, **extra)
+        env = {**os.environ, "PINGUINO_API_TOKEN": module_token(self.spec["id"]), "PINGUINO_DATA_DIR": DATA_DIR, "PINGUINO_CORE_URL": f"http://127.0.0.1:{PORT}"}
+        self.adopted, self.adopt_pid = False, 0
+        try:
+            if IS_WIN:   # leave any job object the shell/launcher is in, so closing the app never takes the module with it
+                try:
+                    self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log, env=env, creationflags=extra["creationflags"] | 0x01000000, **{k: v for k, v in extra.items() if k != "creationflags"})  # CREATE_BREAKAWAY_FROM_JOB
+                except OSError:
+                    self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log, env=env, **extra)
+            else:
+                self.proc = subprocess.Popen(cmd, cwd=ROOT / self.spec["cwd"], stdout=log, stderr=log, env=env, **extra)
+        finally:
+            log.close()
+        self._write_pid(self.proc.pid)
         bus.emit("module", id=self.id, state="starting")
         if self.spec.get("on_start"):   # manifest hook fired once after launch (Listen: start the mic even when not live)
             threading.Thread(target=self.call, args=("on_start",), daemon=True).start()
@@ -439,7 +530,17 @@ class Module:
         self.deferred = deferred  # True when stopped only because this device lost the master role: restart on promotion
         if self.running:
             kill_tree(self.proc)
-        self.proc, self.healthy = None, False
+        elif self.adopted and self.adopt_pid:
+            owner = listening_pid(self.port())   # only kill what still owns this module's port: never a stranger that reused the pid
+            if owner and owner == self.adopt_pid:
+                kill_pid_tree(owner)
+            elif owner:
+                console_log.log("warn", "supervisor", f"{self.id}: port {self.port()} is owned by pid {owner}, not the adopted pid {self.adopt_pid}; not killing it", module=self.id)
+        self.proc, self.healthy, self.adopted, self.adopt_pid = None, False, False, 0
+        try:
+            self._pidfile().unlink()
+        except OSError:
+            pass
         bus.emit("module", id=self.id, state="stopped")
 
     def _ping(self):
@@ -468,7 +569,15 @@ class Module:
     def refresh(self):
         self.supervise()
         if self.wanted and not self.failed and self.proc is None and not self.deferred and time.time() - self.last_try > 15 and not self._ping():
-            self.last_try = time.time()      # wanted but nothing running (e.g. start was skipped because a hung copy held the port): try again
+            self.last_try = time.time()      # wanted but nothing running (e.g. start was skipped because a hung copy held the port, or an adopted module died): try again
+            if self.adopted:
+                self.adopted, self.adopt_pid = False, 0
+                now = time.time()
+                self.crashes = [x for x in self.crashes if now - x < 300] + [now]
+                if len(self.crashes) > 5:
+                    self.failed = True
+                    bus.emit("module", id=self.id, state="failed", detail="stopped answering 5 times in 5 minutes; start it manually")
+                    return
             self.start()
         was = self.healthy
         self.healthy = self._ping()
@@ -1647,14 +1756,17 @@ def windows_autostart(b: Auto):
 
 
 @app.post("/api/quit")
-def quit_suite():
-    threading.Thread(target=lambda: (time.sleep(0.3), _shutdown()), daemon=True).start()
-    return {"ok": True}
+def quit_suite(modules: str = ""):
+    """Quit the core. Modules KEEP RUNNING unless ?modules=stop (they are separate programs and the next core adopts them)."""
+    stop_all = modules.lower() in ("stop", "1", "true", "all")
+    threading.Thread(target=lambda: (time.sleep(0.3), _shutdown(stop_all)), daemon=True).start()
+    return {"ok": True, "modules": "stopped" if stop_all else "left running"}
 
 
-def _shutdown():
-    for m in modules.values():
-        m.stop()
+def _shutdown(stop_modules=False):
+    if stop_modules:
+        for m in modules.values():
+            m.stop()
     os._exit(0)
 
 
@@ -1685,7 +1797,8 @@ def start_tray():
     d.ellipse((36, 24, 40, 28), fill=(0, 0, 0, 255))
     menu = pystray.Menu(
         pystray.MenuItem("Open PinguinoSuite", lambda: open_app(), default=True),
-        pystray.MenuItem("Quit (stops all modules)", lambda: _shutdown()),
+        pystray.MenuItem("Quit (modules keep running)", lambda: _shutdown(False)),
+        pystray.MenuItem("Quit and stop all modules", lambda: _shutdown(True)),
     )
     pystray.Icon("PinguinoSuite", img, "PinguinoSuite", menu).run_detached()
 

@@ -2,63 +2,64 @@
 <!-- INDEX-BEGIN (line numbers are of this file)
 INDEX: PinguinoSuite shell UI (single file, Tauri webview). Sections, pages.* renderers and key functions:
 Related: Suite/suite/suite.py (core API it calls), App/src-tauri (Tauri shell), App/src/theme.css, App/src/bootstrap.js, Docs/ARCHITECTURE.md
-  296  section: pages
-  298  page pages.dashboard
-  350  section: Sources: every OBS browser source we serve, live preview + Copy OBS URL
-  374  page pages.sources
-  397  page pages.master
-  398  page pages.module
-  403  section: Integrations hub (core: GET /api/integrations; contract in Docs/MODULE_CONTRACT.md)
-  442  section: Help drawer
-  498  page pages.help
-  503  section: Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, m
-  510  page pages.activity
-  527  fn bindActivity
-  535  section: Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md)
-  581  section: Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MO
-  660  fn sfx
-  682  page pages.personalize
-  722  fn bindPersonalize
-  743  section: Pre-stream schedule (core: GET/POST /api/prestream/schedule)
-  762  section: PenguinComm page
-  764  page pages.comm
-  792  section: Chat activity card (Host: GET /api/chat-rate)
-  803  section: Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log)
-  809  page pages.quick
-  824  fn bindQuick
-  887  section: Command palette (Ctrl+K)
-  911  section: Automatic config backup (core: /api/backup/auto)
-  925  section: Accounts: the STREAMER's Twitch sign-in (Host: GET /api/account/streamer, POST .../signin, .../signout) + bot 
-  927  fn loadAccounts
-  933  page pages.accounts
-  951  fn bindAccounts
-  968  section: Commands: per-command role permissions, profiles, archive (Host: GET /api/commands/profiles, POST /api/command
- 1025  page pages.commands
- 1107  section: Approvals: the Teach inbox (Host: GET /api/teach?status=, POST /api/teach/decide {id, action approve|reject|ed
- 1111  fn loadApprovals
- 1120  page pages.approvals
- 1141  fn bindApprovals
- 1156  section: Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy
- 1213  page pages.wheel
- 1391  page pages.integrations
- 1404  fn bindIntegrations
- 1412  section: Console + pre-stream checks (core: /api/console, /api/prestream; format in Docs/MODULE_CONTRACT.md)
- 1416  page pages.console
- 1452  fn bindConsole
- 1463  page pages.settings
- 1484  page pages.chat
- 1495  page pages.bots
- 1503  page pages.actions
- 1512  section: Voice Studio: built on Listen (/api/style, /api/commands, /api/markers); see Suite/modules/listen/voice.py
- 1520  page pages.voice
- 1555  fn bindVoice
- 1575  section: device settings, backup/move, first-run wizard (core: /api/device, /api/export, /api/import, /api/setup)
- 1613  section: shell
- 1632  fn go
- 1636  fn draw
- 1652  fn bind
- 1682  fn toast
- 1696  fn load
+  297  section: pages
+  299  page pages.dashboard
+  351  section: Sources: every OBS browser source we serve, live preview + Copy OBS URL
+  375  page pages.sources
+  398  page pages.master
+  399  page pages.module
+  404  section: Integrations hub (core: GET /api/integrations; contract in Docs/MODULE_CONTRACT.md)
+  443  section: Help drawer
+  499  page pages.help
+  504  section: Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, m
+  511  page pages.activity
+  528  fn bindActivity
+  536  section: Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md)
+  583  section: Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MO
+  662  fn sfx
+  684  page pages.personalize
+  724  fn bindPersonalize
+  745  section: Pre-stream schedule (core: GET/POST /api/prestream/schedule)
+  764  section: Sounds + Replays card (Settings)
+  800  section: PenguinComm page
+  802  page pages.comm
+  830  section: Chat activity card (Host: GET /api/chat-rate)
+  841  section: Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log)
+  847  page pages.quick
+  862  fn bindQuick
+  925  section: Command palette (Ctrl+K)
+  949  section: Automatic config backup (core: /api/backup/auto)
+  963  section: Accounts: the STREAMER's Twitch sign-in (Host: GET /api/account/streamer, POST .../signin, .../signout) + bot 
+  965  fn loadAccounts
+  971  page pages.accounts
+  989  fn bindAccounts
+ 1006  section: Commands: per-command role permissions, profiles, archive (Host: GET /api/commands/profiles, POST /api/command
+ 1063  page pages.commands
+ 1145  section: Approvals: the Teach inbox (Host: GET /api/teach?status=, POST /api/teach/decide {id, action approve|reject|ed
+ 1149  fn loadApprovals
+ 1158  page pages.approvals
+ 1179  fn bindApprovals
+ 1194  section: Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy
+ 1251  page pages.wheel
+ 1429  page pages.integrations
+ 1442  fn bindIntegrations
+ 1450  section: Console + pre-stream checks (core: /api/console, /api/prestream; format in Docs/MODULE_CONTRACT.md)
+ 1454  page pages.console
+ 1490  fn bindConsole
+ 1501  page pages.settings
+ 1523  page pages.chat
+ 1534  page pages.bots
+ 1542  page pages.actions
+ 1551  section: Voice Studio: built on Listen (/api/style, /api/commands, /api/markers); see Suite/modules/listen/voice.py
+ 1559  page pages.voice
+ 1594  fn bindVoice
+ 1614  section: device settings, backup/move, first-run wizard (core: /api/device, /api/export, /api/import, /api/setup)
+ 1652  section: shell
+ 1671  fn go
+ 1675  fn draw
+ 1691  fn bind
+ 1721  fn toast
+ 1740  fn load
 INDEX-END -->
 <html lang="en">
 <head>
@@ -1730,7 +1731,12 @@ async function modWatch(force){if(POP&&!isMod(route))return;if(!isMod(route))ret
   if(!ok){CONN.modDown=m.id;connShow(dispName(m)+' is not answering. Retrying…');return}
   const f=$('#mif'),stuck=f&&!f.dataset.ok;
   if(CONN.modDown===m.id||force||stuck){CONN.modDown=null;if(!CONN.fails)connShow('');mifReload()}}
-async function load(){try{const r=await fetch('/api/state');if(!r.ok)throw new Error('http '+r.status);S=await r.json()}catch{CONN.fails++;if(CONN.fails>=2){connShow('Lost contact with the PinguinoSuite core. Retrying…');try{PG.reconfig()}catch{}}return}
+/* Modules are separate programs: while the core is restarting each one is judged by its OWN port, never by the core being away. */
+async function probeModules(){if(!S||!S.modules)return;
+  await Promise.all(S.modules.map(async m=>{if(!m.url)return;let up=false;try{const c=new AbortController(),tm=setTimeout(()=>c.abort(),1500);await fetch(m.url,{mode:'no-cors',cache:'no-store',signal:c.signal});clearTimeout(tm);up=true}catch{}
+    m.state=up?'running':'stopped'}));
+  try{renderNav()}catch{}}
+async function load(){try{const r=await fetch('/api/state');if(!r.ok)throw new Error('http '+r.status);S=await r.json()}catch{CONN.fails++;probeModules();if(CONN.fails>=2){connShow('The core is restarting. Modules keep running on their own. Retrying…');try{PG.reconfig()}catch{}}return}
   if(CONN.fails){CONN.fails=0;connShow('');if(isMod(route))mifReload()}
   const l=S.live;$('#pill').classList.toggle('on',l.live);$('#pill-t').textContent=l.live?PF.text.live_pill:PF.text.offline_pill;
   $('#pill-sub').textContent=l.live?`${l.viewers} watching · ${up(l.since)}`:(l.error?'Twitch check: '+l.error.slice(0,60):'');

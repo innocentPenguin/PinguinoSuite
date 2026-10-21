@@ -59,6 +59,9 @@ Anything OS-specific is optional. `GET /api/capabilities` reports what exists. T
 | Nothing under those | The script reports "up to date" and you just relaunch. |
 `Rebuild-App.bat --installer` also builds the NSIS setup; `--force` rebuilds everything. Only session 00 runs it.
 
+## Isolation: modules outlive the app and each other
+Modules are separate programs. Closing or restarting the app shell or the core does NOT stop them (only "Quit and stop all modules" or a module's own Stop does), and a restarted core ADOPTS a module that already answers its health URL instead of starting a second copy. Rules for module authors: never exit because another module is down (report `degraded` in your health payload and retry with backoff); exit only on your own fatal errors or when the core stops you. See `Docs/MODULE_ISOLATION.md`.
+
 ## Updating one module without restarting the app
 `App\Update-Module.bat <id> [-NoBuild]` stops that module, runs its manifest `build` command if it has one (Host: `dotnet build`, which needs the DLL unlocked, hence the stop first), starts it again and waits until its health URL answers. The app and the other modules are never touched.
 It talks to the core through a file-drop folder, so no API token is needed: the core polls `Data\runtime\control\` every second and consumes files named `start-<id>`, `stop-<id>` or `restart-<id>` (only registered module ids). Anyone who can write to `Data\runtime` can do this, which is the same trust level as the data itself. Needs a core that includes this feature (after the next core rebuild).
