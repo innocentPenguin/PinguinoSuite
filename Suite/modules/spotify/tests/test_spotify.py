@@ -15,6 +15,7 @@ import rules  # noqa: E402
 import spotify_api  # noqa: E402
 import store  # noqa: E402
 from engine import Engine  # noqa: E402
+Engine._schedule_refresh = lambda self: None      # a delayed re-poll from one test must not touch the shared store during the next
 from queue_core import Queue, QueueError, new_item  # noqa: E402
 
 

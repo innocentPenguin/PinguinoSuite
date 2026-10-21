@@ -2,10 +2,10 @@
 UI: /   Overlay (OBS browser source): /overlay   API: see Docs/SPOTIFY.md
 INDEX (keep in step when moving code)
 What: stdlib HTTP server (127.0.0.1:8771), routes, Host/Origin/token guards, background loop.
-  Guards/handler: host_ok:44, origin_ok:50, token_ok:54, H:73, do_GET:118, do_POST:121, loop:474, main:491
-  GET: g_status:170, g_state:174, g_overlay:178, g_prestream:182, g_search:192, g_devices:197, g_setup:202, g_login:209, g_callback:219, g_queue_public:241, g_schema:439
+  Guards/handler: host_ok:44, origin_ok:50, token_ok:54, H:73, do_GET:118, do_POST:121, loop:478, main:495
+  GET: g_status:170, g_state:174, g_overlay:178, g_prestream:182, g_search:192, g_devices:197, g_setup:202, g_login:209, g_callback:219, g_queue_public:241, g_schema:443
   POST queue: p_add:275, p_remove:292, p_move:299, p_play_next:306, p_play_now:313, p_clear:338, p_undo:345, p_control:352, p_start:357
-  POST chat/other: p_chat:362, p_chat_command:375, p_settings:271, p_preset:423, p_block:452, p_blocklist_import:461, p_site:403, p_live_auto:408, p_live_stop:412, p_test_key:396
+  POST chat/other: p_chat:362, p_chat_command:375, p_settings:271, p_preset:427, p_block:456, p_blocklist_import:465, p_site:407, p_live_auto:412, p_live_stop:416, p_test_key:400
 Related: engine.py, config_schema.py, static/*.html, Docs/SPOTIFY.md (route table)
 """
 import hmac
@@ -244,7 +244,7 @@ def g_queue_public(h, q):
 
 
 GET = {"/api/queue.json": g_queue_public, "/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
-       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/setup": g_setup, "/callback": g_callback, "/auth/login": g_login}
+       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/song-log": lambda h, q: engine.song_log(int(q.get("limit") or 50), int(q.get("minutes") or 60)), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/setup": g_setup, "/callback": g_callback, "/auth/login": g_login}
 
 
 # ---- POST routes
@@ -383,6 +383,10 @@ def p_chat_command(h, b):
         roles.add("mod")
     if b.get("isSub"):
         roles.add("sub")
+        tier = str(b.get("subTier") or "").strip().lower().lstrip("t")      # 1/2/3 or Twitch's 1000/2000/3000
+        tier = {"1000": "1", "2000": "2", "3000": "3"}.get(tier, tier)
+        if tier in ("1", "2", "3"):
+            roles.add("sub_t" + tier)
     src = str(b.get("source") or ("voice" if b.get("silent") else "chat"))[:20]
     r = engine.chat(user, f"{engine.settings['prefix']}{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")))
     if not r["handled"]:

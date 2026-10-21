@@ -1,7 +1,7 @@
 """Song-request rules, settings merge and chat command parsing. Pure functions, no network.
 INDEX (keep in step when moving code)
 What: pure rules, settings merge/validation, chat parsing. No network.
-  API: merged:29, tier_for:74, evaluate:126, limit_for:102, cooldown_for:118, needs_approval:210, command_allowed:191, parse:237, track_id_from:252, blocked_reason:91, is_staff:66
+  API: merged:29, tier_for:88, evaluate:143, limit_for:116, cooldown_for:135, needs_approval:233, command_allowed:214, parse:260, track_id_from:275, blocked_reason:105, is_staff:69
 Related: config_schema.py (defaults), engine.py
 """
 import math
@@ -32,6 +32,9 @@ def merged(saved):
          for k, v in DEFAULTS.items()}
     if not isinstance(saved, dict):
         return s
+    if "sub_extra" in saved and isinstance(saved["sub_extra"], int) and not any(k.startswith("bonus_") for k in saved):
+        for k in ("bonus_t1", "bonus_t2", "bonus_t3", "bonus_vip"):        # old single "extra for subs" setting -> bonus queues
+            s[k] = saved["sub_extra"]
     for k, v in saved.items():
         if k not in DEFAULTS:
             continue
@@ -68,7 +71,18 @@ def is_staff(roles):
 
 
 def is_sub(roles):
-    return bool(set(roles) & {"sub", "vip"})
+    return bool(set(roles) & {"sub", "sub_t1", "sub_t2", "sub_t3", "vip"})
+
+
+def sub_tier(roles):
+    """Sub tier 1-3 from roles ('sub' alone = Tier 1, 'sub_t2' / 'sub_t3' for higher), 0 = not a sub."""
+    best = 0
+    for r in roles:
+        if r == "sub":
+            best = max(best, 1)
+        elif r in ("sub_t1", "sub_t2", "sub_t3"):
+            best = max(best, int(r[-1]))
+    return best
 
 
 def tier_for(settings, roles, redeem=False, user=""):
@@ -108,10 +122,13 @@ def limit_for(settings, roles):
     if base == 0:
         return 0
     best = base
-    for role, key in (("vip", "limit_vip"), ("sub", "limit_sub")):
-        if role in roles:
-            v = settings[key]
-            best = max(best, base + settings["sub_extra"] if v < 0 else v)
+    if "vip" in roles:
+        v = settings["limit_vip"]
+        best = max(best, base + settings["bonus_vip"] if v < 0 else v)
+    n = sub_tier(roles)
+    if n:
+        v = settings["limit_sub"]
+        best = max(best, base + settings[f"bonus_t{n}"] if v < 0 else v)
     return best
 
 
@@ -164,9 +181,15 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
     if queue.contains_uri(uri) or uri == now_uri:
         return False, "dup_queue", ctx
     cd = settings["dup_cooldown_min"] * 60
-    if cd:
+    sk = settings["skip_cooldown_min"] * 60
+    if cd or sk:
         for h in queue.history:
-            if h.get("uri") == uri and now - h.get("played_at", 0) < cd:
+            if h.get("uri") != uri:
+                continue
+            age = now - h.get("played_at", 0)
+            if sk and h.get("outcome") == "skipped" and age < sk:
+                return False, "dup_skipped", ctx
+            if cd and age < cd:
                 return False, "dup_recent", ctx
     cap = settings["max_per_artist"]
     if cap and not staff:

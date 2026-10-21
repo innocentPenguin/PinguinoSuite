@@ -87,3 +87,10 @@ Not done yet: synced lyrics widget, sub-tier or follower request caps, paying wi
 
 ## Request bans: !srban / !srunban
 Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply: "can no longer request songs", templates `ban_ok`/`unban_ok`/`ban_usage`); `!srunban <user>` lifts it. Stored in the `blocked_users` setting (persists across restarts, shown and editable in Settings -> Blocked viewers, returned by `GET /api/settings`). Banned viewers get the `user_blocked` reply on `!sr`. Site-pulled bans are kept separately and are not removed by `!srunban`.
+
+## Cycle 5: song outcomes, bonus queues, sub tiers
+- **Outcomes:** every history entry has `outcome` (`played` or `skipped`) and `skipped_by` (mod name, `vote`, `streamer`, or `spotify` when cut off with >20 s left). Songs withdrawn before playing (`!oops` = wrong song, mod block, denied from the inbox, removed while queued) go to a `rejects` log.
+- **PinguinoBot feed:** `GET /api/song-log?limit=50&minutes=60` -> `now`, `recent` (with outcome), `lastHour` (what played in the last hour, to avoid repeats), `skipped` (per-song skip counts = not liked), `withdrawn`. `outcome` is also on the site history rows.
+- **No repeats:** `dup_cooldown_min` (60) already blocks anything played in the last hour; new `skip_cooldown_min` (180) blocks songs that were skipped (reply `dup_skipped`).
+- **Bonus queues:** extra request slots on top of `per_user_limit`: `bonus_t1/t2/t3` (defaults 2/3/4) for Tier 1/2/3 subs and `bonus_vip`; the best one applies. `limit_sub`/`limit_vip` still set an exact total. The old `sub_extra` migrates into all bonus settings.
+- **Sub tier input:** `/api/chat-command` accepts `subTier` (1/2/3 or 1000/2000/3000) next to `isSub`; `/api/chat` accepts roles `sub_t1|sub_t2|sub_t3`. Plain `sub` = Tier 1. The Host must send the tier for T2/T3 to count.

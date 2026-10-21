@@ -26,6 +26,54 @@ class SongifyTests(unittest.TestCase):
     def sr(self, user, n, roles=("viewer",), redeem=False):
         return self.e.chat(user, f"!sr song {n}", roles, redeem)
 
+    def play(self, n, progress=0):
+        self.api.playing, self.api.progress = f"spotify:track:t{n}", progress
+        self.e.tick()
+
+    def test_bonus_queues_per_sub_tier(self):
+        st = {"per_user_limit": 2, "bonus_t1": 1, "bonus_t2": 3, "bonus_t3": 5, "bonus_vip": 2, "limit_sub": -1, "limit_vip": -1}
+        self.e.save_settings(st)
+        s = self.e.settings
+        lim = lambda *r: rules.limit_for(s, set(r))
+        self.assertEqual(lim("viewer"), 2)
+        self.assertEqual(lim("sub"), 3)          # plain "sub" = Tier 1
+        self.assertEqual(lim("sub", "sub_t1"), 3)
+        self.assertEqual(lim("sub", "sub_t2"), 5)
+        self.assertEqual(lim("sub", "sub_t3"), 7)
+        self.assertEqual(lim("vip"), 4)
+        self.assertEqual(lim("vip", "sub", "sub_t3"), 7)   # best bonus wins, not the sum
+        self.assertEqual(rules.merged({"sub_extra": 4})["bonus_t3"], 4)    # old setting migrates
+
+    def test_outcomes_played_vs_skipped(self):
+        self.play(1, 5000)
+        self.play(2, 5000)                                   # cut off 195s early by hand in Spotify
+        self.assertEqual(self.e.queue.history[0]["outcome"], "skipped")
+        self.assertEqual(self.e.queue.history[0]["skipped_by"], "spotify")
+        self.play(2, 199000)
+        self.play(3, 0)                                      # ran to the end
+        self.assertEqual(self.e.queue.history[0]["outcome"], "played")
+        self.play(3, 10000)
+        self.e.chat("mod", "!skip", ("mod",))                # skipped through chat
+        self.e._prev_pb = None
+        self.play(4, 0)
+        self.assertEqual((self.e.queue.history[0]["outcome"], self.e.queue.history[0]["skipped_by"]), ("skipped", "mod"))
+
+    def test_skipped_song_cooldown_and_song_log(self):
+        self.e.save_settings({"skip_cooldown_min": 60, "dup_cooldown_min": 0})
+        self.play(5, 1000)
+        self.play(6, 0)                                      # t5 skipped
+        r = self.sr("ann", 5)
+        self.assertEqual(r["code"], "dup_skipped")
+        self.e.save_settings({"skip_cooldown_min": 0})
+        self.assertTrue(self.sr("ann", 5)["ok"])
+        self.e.chat("ann", "!oops", ("viewer",))             # wrong song
+        log = self.e.song_log()
+        self.assertEqual(log["now"]["title"], "Song 6")
+        self.assertEqual(log["recent"][0]["outcome"], "skipped")
+        self.assertEqual(log["skipped"][0]["title"], "Song 5")
+        self.assertEqual([x["title"] for x in log["lastHour"]], ["Song 5"])
+        self.assertEqual((log["withdrawn"][0]["reason"], log["withdrawn"][0]["user"]), ("oops", "ann"))
+
     def test_srban_srunban(self):
         self.assertEqual(self.e.chat("ann", "!srban troll", ("viewer",))["code"], "denied")      # viewers can't
         self.assertTrue(self.sr("troll", 2)["ok"])

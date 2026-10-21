@@ -1,11 +1,11 @@
 """Engine: polls Spotify, keeps our queue in step, pushes the next track just in time, runs chat commands.
 INDEX (keep in step when moving code)
 What: the brain. Polls Spotify, owns queue state, JIT push, request pipeline, chat commands, announcements, automation.
-  Lifecycle/settings: __init__:30, save_settings:78, apply_preset:96, reset_settings:102, persist:134, tick:148, _apply:177, _track_changed:197
-  Queue push: _jit:259, _verify_pushed:288, _push:301, add_track:372, eta_ms:523, skip:715, control:727, start_queue:755, play_now:766, shuffle_queue:866, remove_user:873, add_context:813
-  Requests: request:395, _request:407, _accept:462, _genre_tag:443, _to_playlist:487, import_blocklist:502, inbox_decide:530, vote_skip:698
-  Chat: chat:545, _chat_cmd:564, song_reply:677, queue_reply:685, say:382
-  Views/API: public_state:315, public_queue:326, overlay:334, announcements:238, stats:880, site_snapshot:783, prestream:938, automation_tick:892
+  Lifecycle/settings: __init__:31, save_settings:82, apply_preset:100, reset_settings:106, persist:138, tick:152, _apply:181, _track_changed:218
+  Queue push: _jit:283, _verify_pushed:312, _push:325, add_track:396, eta_ms:547, skip:742, control:756, start_queue:784, play_now:795, shuffle_queue:896, remove_user:903, add_context:843
+  Requests: request:419, _request:431, _accept:486, _genre_tag:467, _to_playlist:511, import_blocklist:526, inbox_decide:554, vote_skip:725
+  Chat: chat:570, _chat_cmd:589, song_reply:704, queue_reply:712, say:406
+  Views/API: public_state:339, public_queue:350, overlay:358, announcements:262, stats:932, site_snapshot:812, prestream:990, automation_tick:944
 Related: rules.py, queue_core.py, config_schema.py, spotify_api.py, server.py, tests/test_spotify.py, tests/e2e.py, Docs/SPOTIFY.md
 """
 import copy
@@ -22,6 +22,7 @@ from queue_core import Queue, QueueError, new_item
 from spotify_api import ApiError, NotConnected, RateLimited, norm_playback
 
 VERIFY_EVERY_S = 20
+SKIP_EARLY_MS = 20000     # cut off with more than this left = counted as skipped
 IDLE_UNPUSH_S = 8
 LOG_MAX = 100
 
@@ -34,6 +35,9 @@ class Engine:
         self.cfg = cfg
         st = store.load("state.json", {})
         self.queue = Queue(st.get("items", []), st.get("history", []))
+        self.rejects = list(st.get("rejects", []))   # songs withdrawn before playing: !oops (wrong song), blocked, denied
+        self._skip_mark = None                         # {uri, by, at}: set by skip(), read when the track changes
+        self._prev_pb = None
         self.inbox = st.get("inbox", [])
         self.log = st.get("log", [])
         self.pb = None                 # normalized playback
@@ -135,7 +139,7 @@ class Engine:
         self._write_queue_file()
         with self.lock:
             store.save("state.json", {"items": self.queue.items, "history": self.queue.history[:200],
-                                      "inbox": self.inbox[-100:], "log": self.log[-LOG_MAX:]})
+                                      "inbox": self.inbox[-100:], "log": self.log[-LOG_MAX:], "rejects": self.rejects[-100:]})
 
     def _bump(self):
         self.version += 1
@@ -188,15 +192,35 @@ class Engine:
         cur = pb["track"] if pb and pb["track"] else None
         cur_uri = cur["uri"] if cur else None
         if cur_uri != self.last_uri:
+            self._prev_pb = prev
             self._track_changed(self.last_track, cur)
             self.last_uri = cur_uri
         if cur:
             self.last_track = cur
         self._bump()
 
+    def _outcome(self, prev_track):
+        """('played'|'skipped', who) for the track that just ended: skipped = skip() was used, or it was cut off well before its end."""
+        m, self._skip_mark = self._skip_mark, None
+        if m and m["uri"] == prev_track["uri"] and self.clock() - m["at"] < 30:
+            return "skipped", m["by"]
+        pb = self._prev_pb
+        if pb and pb.get("track") and pb["track"]["uri"] == prev_track["uri"] and pb["is_playing"]:
+            if prev_track["duration_ms"] - pb["progress_ms"] > SKIP_EARLY_MS:
+                return "skipped", "spotify"
+        return "played", ""
+
+    def _reject(self, track, user, reason):
+        self.rejects.append({"uri": track.get("uri", ""), "name": track.get("name", ""), "artists": track.get("artists", []), "user": user,
+                             "reason": reason, "at": self.clock()})
+        del self.rejects[:-100]
+
     def _track_changed(self, prev_track, cur):
+        if prev_track and self.now_item and self.now_item["skip_on_play"]:
+            self._reject(prev_track, self.now_item["requester"], "removed")
         if prev_track and not (self.now_item and self.now_item["skip_on_play"]):
-            self.queue.add_history({"uri": prev_track["uri"], "id": prev_track["id"], "name": prev_track["name"], "artists": prev_track["artists"],
+            outcome, by = self._outcome(prev_track)
+            self.queue.add_history({"outcome": outcome, "skipped_by": by, "uri": prev_track["uri"], "id": prev_track["id"], "name": prev_track["name"], "artists": prev_track["artists"],
                                     "album": prev_track["album"], "duration_ms": prev_track["duration_ms"], "explicit": prev_track["explicit"],
                                     "art": prev_track["art"], "requester": self.now_item["requester"] if self.now_item else "",
                                     "source": self.now_item["source"] if self.now_item else "spotify", "played_at": self.clock()})
@@ -538,6 +562,7 @@ class Engine:
                 self._to_playlist(r["track"])
             else:
                 self._event("deny", r["user"], r["track"]["name"], False)
+                self._reject(r["track"], r["user"], "denied")
             self.persist()
             self._bump()
 
@@ -645,6 +670,7 @@ class Engine:
             if not it:
                 return self._r(False, "none", "oops_none", user=user)
             self._event("remove", user, it["name"])
+            self._reject(it, user, "oops")
             self.persist()
             self._bump()
             return self._r(True, "removed", user=user, title=it["name"], song=it["name"])
@@ -670,7 +696,8 @@ class Engine:
             if not t:
                 return self._r(False, "none", "skip_none", user=user)
             self.save_settings({"blocklist": self._own_settings()["blocklist"] + [t["uri"]]})
-            self.skip(force=True)
+            self._reject(t, user, "blocked")
+            self.skip(force=True, by=user)
             return self._r(True, "blocked", "blocked_song", user=user, title=t["name"], artist=t["artists"][0] if t["artists"] else "")
         return {"ok": False, "code": "denied", "reply": ""}
 
@@ -700,20 +727,22 @@ class Engine:
         if not (self.pb and self.pb["track"]):
             return self._r(False, "none", "skip_none", user=user)
         if staff and s["skip_mod_instant"]:
-            self.skip(force=True)
+            self.skip(force=True, by=user)
             return self._r(True, "skipped", user=user)
         self.skip_votes.add(user.lower())
         need = max(1, int(s["skip_votes"]))
         n = len(self.skip_votes)
         if n >= need:
-            self.skip(force=True)
+            self.skip(force=True, by="vote")
             return self._r(True, "skipped", "vote_skipped", user=user, votes=n, need=need)
         self._bump()
         return self._r(True, "vote", user=user, votes=n, need=need)
 
     # ---- playback control (UI + chat)
-    def skip(self, force=False):
+    def skip(self, force=False, by=""):
         with self.lock:
+            if self.pb and self.pb["track"]:
+                self._skip_mark = {"uri": self.pb["track"]["uri"], "by": by or "streamer", "at": self.clock()}
             head = self.queue.items[0] if self.queue.items else None
         if head and not head["pushed"]:
             self._push(head)          # JIT means Spotify's queue may be empty: send ours first so "next" plays it
@@ -800,7 +829,8 @@ class Engine:
                                "durationMs": i["duration_ms"], "requestedBy": i["requester"] or "", "votes": len(i.get("voters", []))}
                               for i in self.queue.items[:100]],
                     "history": [{"id": h["uri"].split(":")[-1], "title": h["name"], "artists": h["artists"], "art": h.get("art", ""),
-                                 "playedAt": int(h["played_at"] * 1000), "requestedBy": h.get("requester") or None}
+                                 "playedAt": int(h["played_at"] * 1000), "requestedBy": h.get("requester") or None,
+                                 "outcome": h.get("outcome", "played")}
                                 for h in self.queue.history[:50]]}
 
     def now_info(self):
@@ -876,6 +906,28 @@ class Engine:
             self.persist()
             self._bump()
             return n
+
+    def song_log(self, limit=50, since_min=60):
+        """What PinguinoBot needs to know about music: the current song, how each recent song ended (played/skipped), what was played in
+        the last hour (to avoid repeats), per-song skip counts (not liked) and requests withdrawn before playing (!oops = wrong song)."""
+        from collections import Counter
+        with self.lock:
+            now = self.clock()
+            hist = list(self.queue.history)
+            pb = self.pb["track"] if self.pb and self.pb["track"] else None
+
+            def row(h):
+                return {"uri": h["uri"], "title": h["name"], "artists": h.get("artists", []), "requester": h.get("requester", ""),
+                        "source": h.get("source", ""), "outcome": h.get("outcome", "played"), "skippedBy": h.get("skipped_by", ""),
+                        "playedAt": int(h.get("played_at", 0) * 1000)}
+            skips = Counter((h["uri"], h["name"], ", ".join(h.get("artists", []))) for h in hist if h.get("outcome") == "skipped")
+            return {"v": 1, "now": ({"uri": pb["uri"], "title": pb["name"], "artists": pb["artists"],
+                                     "requester": (self.now_item or {}).get("requester", "")} if pb else None),
+                    "recent": [row(h) for h in hist[:max(1, min(int(limit), 200))]],
+                    "lastHour": [{"uri": h["uri"], "title": h["name"]} for h in hist if now - h.get("played_at", 0) < since_min * 60],
+                    "skipped": [{"uri": u, "title": t, "artists": a, "count": n} for (u, t, a), n in skips.most_common(20)],
+                    "withdrawn": [{"uri": r["uri"], "title": r["name"], "user": r["user"], "reason": r["reason"], "at": int(r["at"] * 1000)}
+                                  for r in reversed(self.rejects[-30:])]}
 
     def stats(self):
         from collections import Counter
