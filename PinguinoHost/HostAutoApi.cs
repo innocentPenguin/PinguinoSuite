@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -130,7 +130,7 @@ namespace PinguinoHost
                 Write(c, res.ToString(), "application/json"); return true;
             }
             if (p == "/api/offline-mode" && m == "GET") { Write(c, OfflineMode.Api().ToString(), "application/json"); return true; }
-            if (p == "/api/offline-mode" && m == "POST") { var b = Body(c); bool? en = (bool?)b["enabled"]; if (en == null) { Write(c, new JObject { { "ok", false }, { "error", "enabled (true/false) required" } }.ToString(), "application/json"); return true; } Write(c, OfflineMode.Set(en.Value, "api").ToString(), "application/json"); return true; }
+            if (p == "/api/offline-mode" && m == "POST") { var b = Body(c); bool? en = (bool?)b["enabled"], ar = (bool?)b["actLiveWhileRecording"]; if (en == null && ar == null) { Write(c, new JObject { { "ok", false }, { "error", "enabled or actLiveWhileRecording (true/false) required" } }.ToString(), "application/json"); return true; } JObject res = null; if (ar != null) res = OfflineMode.SetActLiveWhileRecording(ar.Value, "api"); if (en != null) res = OfflineMode.Set(en.Value, "api"); Write(c, res.ToString(), "application/json"); return true; }
             if (p == "/api/live-state" && m == "GET") { Write(c, Control.LiveState().ToString(), "application/json"); return true; }
             if (p == "/api/activity" && m == "GET")
             {

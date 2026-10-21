@@ -42,6 +42,7 @@ def auth():
 # scenes for the live tree test (OBS lists bottom-first, sceneIndex 0 = bottom); item ids are unique per scene, group members belong to the group
 SCENES = ["Starting", "Games / Rocket League", "Games / Fortnite", "[RL] Main", "Chat - Talk", "Chat - Solo", "Just Me"]
 CUR = ["Games / Rocket League"]
+REC = {"active": False, "paused": False}; CLIENTS = []; CTRL = sys.argv[3] if len(sys.argv) > 3 else None
 ITEMS = {"Games / Rocket League": [{"sceneItemId": 1, "sourceName": "Camera", "sceneItemEnabled": True, "isGroup": False, "inputKind": "dshow_input"},
                                    {"sceneItemId": 2, "sourceName": "Overlays", "sceneItemEnabled": True, "isGroup": True},
                                    {"sceneItemId": 3, "sourceName": "Game", "sceneItemEnabled": False, "isGroup": False, "inputKind": "game_capture"}],
@@ -52,14 +53,15 @@ async def h(ws):
     await ws.send(json.dumps({"op": 0, "d": {"obsWebSocketVersion": "5.0.0", "rpcVersion": 1, "authentication": {"salt": salt, "challenge": chal}}}))
     m = json.loads(await ws.recv())
     if m["d"].get("authentication") != auth(): print("AUTH FAIL", flush=True); await ws.close(4009); return
-    print("AUTH OK", flush=True); await ws.send(json.dumps({"op": 2, "d": {"negotiatedRpcVersion": 1}}))
+    CLIENTS.append(ws); print("AUTH OK", flush=True); await ws.send(json.dumps({"op": 2, "d": {"negotiatedRpcVersion": 1}}))
     async for raw in ws:
         m = json.loads(raw)
         if m["op"] == 6:
             d = m["d"]; print("REQ", d["requestType"], json.dumps(d.get("requestData")), flush=True)
             r = {"requestType": d["requestType"], "requestId": d["requestId"], "requestStatus": {"result": True, "code": 100}}
             t, rd = d["requestType"], d.get("requestData") or {}
-            if t == "GetSceneItemId": r["responseData"] = {"sceneItemId": 7}
+            if t == "GetRecordStatus": r["responseData"] = {"outputActive": REC["active"], "outputPaused": REC["paused"]}
+            elif t == "GetSceneItemId": r["responseData"] = {"sceneItemId": 7}
             elif t == "GetSceneList": r["responseData"] = {"currentProgramSceneName": CUR[0], "scenes": [{"sceneName": n, "sceneIndex": i} for i, n in enumerate(SCENES)]}
             elif t in ("GetSceneItemList", "GetGroupSceneItemList"): r["responseData"] = {"sceneItems": items_of(rd.get("sceneName"))}
             elif t == "SetCurrentProgramScene": CUR[0] = rd["sceneName"]
@@ -69,7 +71,28 @@ async def h(ws):
                 elif t == "GetSceneItemEnabled": r["responseData"] = {"sceneItemEnabled": it["sceneItemEnabled"]}
                 else: it["sceneItemEnabled"] = rd["sceneItemEnabled"]
             await ws.send(json.dumps({"op": 7, "d": r}))
+async def ctrl():
+    # test control: write start|stop|pause|resume|drop into the file named by argv[3]; the mock emits RecordStateChanged / closes sockets
+    while True:
+        await asyncio.sleep(0.2)
+        if not CTRL: continue
+        try: cmd = open(CTRL).read().strip(); open(CTRL, "w").write("")
+        except OSError: continue
+        if not cmd: continue
+        st = {"start": ("OBS_WEBSOCKET_OUTPUT_STARTED", True, False), "stop": ("OBS_WEBSOCKET_OUTPUT_STOPPED", False, False), "pause": ("OBS_WEBSOCKET_OUTPUT_PAUSED", True, True), "resume": ("OBS_WEBSOCKET_OUTPUT_RESUMED", True, False)}.get(cmd)
+        if cmd == "drop":
+            REC["active"] = REC["paused"] = False
+            for c in list(CLIENTS):
+                try: c.w.close()
+                except Exception: pass
+            CLIENTS.clear(); continue
+        if st:
+            REC["active"], REC["paused"] = st[1], st[2]
+            for c in list(CLIENTS):
+                try: await c.send(json.dumps({"op": 5, "d": {"eventType": "RecordStateChanged", "eventIntent": 64, "eventData": {"outputActive": st[1] and not st[2] or st[2], "outputState": st[0]}}}))
+                except Exception: pass
 async def main():
+    asyncio.ensure_future(ctrl())
     srv = await serve(h, "127.0.0.1", PORT)
     async with srv: await srv.serve_forever()
 asyncio.run(main())

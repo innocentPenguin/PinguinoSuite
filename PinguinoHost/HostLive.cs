@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -11,10 +11,27 @@ namespace PinguinoHost
         static DateTime? _startedAt; static bool? _live; static string _source = "unknown"; static DateTime _at = DateTime.MinValue; static bool _started;
         public static bool? Live { get { return _live; } }
         /// <summary>true when the stream is live OR Offline mode is on: what timers, chimes, intros and the economy gate on (the real state in Live stays honest).</summary>
-        public static bool Active { get { return OfflineMode.Enabled || _live == true; } }
+        public static bool Active { get { return OfflineMode.Enabled || _live == true || RecordingActsLive; } }
+        /// <summary>what the chat bots (Helper/Chatty/B0t) follow: offline mode OR a recording that counts as live. The real Twitch state (pinguino.live) is never faked.</summary>
+        public static bool BotsActLive { get { return OfflineMode.Enabled || RecordingActsLive; } }
+        static volatile bool _rec; static DateTime _recSince = DateTime.MinValue;
+        /// <summary>OBS is recording (paused counts); false when OBS is not connected</summary>
+        public static bool Recording { get { return _rec; } }
+        /// <summary>a recording counts as live ("Act live while recording" is on)</summary>
+        public static bool RecordingActsLive { get { return _rec && OfflineMode.ActLiveWhileRecording; } }
+        /// <summary>why the bots behave live right now: live | recording | offline-mode | idle</summary>
+        public static string Source { get { return _live == true ? "live" : RecordingActsLive ? "recording" : OfflineMode.Enabled ? "offline-mode" : "idle"; } }
+        /// <summary>called by the OBS client on RecordStateChanged / (dis)connect</summary>
+        public static void OnRecording(bool on)
+        {
+            if (_rec == on) return; _rec = on; _recSince = on ? DateTime.UtcNow : DateTime.MinValue;
+            Clog.Info("live", "OBS recording " + (on ? "STARTED" : "stopped") + " -> bots act live: " + (Active ? "yes (" + Source + ")" : "no"));
+            OfflineMode.Publish();
+        }
         /// <summary>!uptime: how long the stream has been live (Twitch start time when known).</summary>
         public static string UptimeLine()
         {
+            if (_live != true && RecordingActsLive) { var rt = DateTime.UtcNow - _recSince; if (rt < TimeSpan.Zero) rt = TimeSpan.Zero; return "Not live on Twitch, but recording for " + (rt.TotalHours >= 1 ? (int)rt.TotalHours + "h " + rt.Minutes + "m" : Math.Max(1, rt.Minutes) + "m") + "."; }
             if (_live != true || _startedAt == null) return "The stream is offline right now.";
             var t = DateTime.UtcNow - _startedAt.Value; if (t < TimeSpan.Zero) t = TimeSpan.Zero;
             string s = t.TotalHours >= 1 ? (int)t.TotalHours + "h " + t.Minutes + "m" : Math.Max(1, t.Minutes) + "m";
@@ -55,6 +72,7 @@ namespace PinguinoHost
                 if (code == "200" && d is JArray a) { v = a.Count > 0; src = "twitch"; DateTime st; _startedAt = a.Count > 0 && DateTime.TryParse((string)a[0]["started_at"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out st) ? st : (DateTime?)null; }
                 else { bool? o = cph.ObsStreaming(); if (o != null) { v = o; src = "obs"; } }
             }
+            try { bool? rc = cph.ObsRecording(); if (rc != null) OnRecording(rc.Value); } catch (Exception) { }
             OfflineMode.Publish();
             if (v == null) return;
             if (_live != true && v == true) SubBoard.ResetChat();
