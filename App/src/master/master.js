@@ -362,7 +362,7 @@
       if (m.event === 'snapshot' && d) { d.obs && applyTree(d.obs); d.obsstatus && S.set({ obsStatus: d.obsstatus }); d.live && S.set({ live: d.live }); d.customs && S.set({ customs: d.customs, customsOk: true }); d.wheel && S.set({ wheel: normWheel(d.wheel) }); d.chat && addChat(d.chat);  d.activity && addActivity(d.activity); }
       else if (m.event === 'obs') applyTree(d); else if (m.event === 'obsstatus') S.set({ obsStatus: d }); else if (m.event === 'live') S.set({ live: d });
       else if (m.event === 'customs') S.set({ customs: d, customsOk: true }); else if (m.event === 'wheel') S.set({ wheel: normWheel(d) });
-      else if (m.event === 'chat') { ui.chatOk = true; addChat([d]); } else if (m.event === 'activity') addActivity([d]); else if (m.event === 'playerlog') { ui.logsOk = true; addLogs([Object.assign({ kind: 'players' }, d)]); }
+      else if (m.event === 'chat') { ui.chatOk = true; addChat([d]); } else if (m.event === 'activity') addActivity([d]); else if (m.event === 'backendlog') { ui.logsOk = true; addLogs([Object.assign({ kind: 'backend' }, d)]); } else if (m.event === 'playerlog') { ui.logsOk = true; addLogs([Object.assign({ kind: 'players' }, d)]); }
     },
   });
 
