@@ -671,6 +671,25 @@ public class CPHInline
     static bool _pgPass, _pgDefer;
     bool PgNoDefer() { object o; return CPH.TryGetArg("pinguinoNoDefer", out o) && o != null && Convert.ToString(o).ToLower() == "true"; }
 
+    // One chat message is handled once per pass: Streamer.bot / the router can deliver the same message id twice (a replay, a double trigger). The router's own second pass
+    // (pinguinoNoDefer) is a separate pass on purpose, so it has its own key.
+    static readonly Dictionary<string, long> _seenMsgs = new Dictionary<string, long>();
+    bool SeenMessage()
+    {
+        object o; string id = "";
+        if (CPH.TryGetArg("pinguinoMsgId", out o) && o != null) id = Convert.ToString(o);
+        if (string.IsNullOrEmpty(id) && CPH.TryGetArg("msgId", out o) && o != null) id = Convert.ToString(o);
+        if (string.IsNullOrEmpty(id)) return false;
+        string key = id + (PgNoDefer() ? "#2" : "#1"); long now = Now();
+        lock (_seenMsgs)
+        {
+            if (_seenMsgs.ContainsKey(key)) { return true; }
+            _seenMsgs[key] = now;
+            if (_seenMsgs.Count > 400) { foreach (var k in _seenMsgs.Where(kv => now - kv.Value > 600).Select(kv => kv.Key).ToList()) _seenMsgs.Remove(k); }
+        }
+        return false;
+    }
+
     void Handle()
     {
         if (HandleTwitchEvent()) return;
@@ -691,6 +710,7 @@ public class CPHInline
         login = (login ?? "").ToLower().Trim();
         string text = (message ?? "").Trim();
         if (login == "" || text == "") return;
+        if (SeenMessage()) return;                                   // the same chat message delivered twice (a replayed trigger): handled once
         var cx = new Ctx
         {
             Login = login, Display = string.IsNullOrEmpty(display) ? login : display, UserId = userId ?? "", Text = text,
@@ -758,7 +778,7 @@ public class CPHInline
                 accept = !quiet && TakeCooldown(login, false);
                 if (!quiet && !accept) Miss(login);                                // pinged but the cooldown / hourly cap dropped it: they are still waiting
             }
-            else if (!optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
+            else if (!welcome && !optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
                      && GateAllowsChime() && Now() - _lastRandom >= _cfg.RandomMinGapSec && TakeCooldown(login, true))
             { cx.Random = true; _lastRandom = Now(); accept = true; }
         }
@@ -3629,7 +3649,7 @@ Do not predict or advise about health, death, pregnancy, money, legal matters, p
         ctx.Add("asker: " + (v != null && !NoMem(v) ? NickLineShort(c.Login, v) : c.Display));
         var roles = new List<string>(); if (c.Broadcaster) roles.Add("the streamer"); if (c.Mod) roles.Add("mod"); if (c.Vip) roles.Add("VIP"); if (c.Sub) roles.Add("subscriber");
         if (roles.Count > 0) ctx.Add("roles: " + string.Join(", ", roles));
-        string pl = EightBallProfileLine(c.Login); if (pl != "") ctx.Add(pl);
+        string pl = (v != null && NoMem(v)) ? "" : EightBallProfileLine(c.Login); if (pl != "") ctx.Add(pl);   // an opted-out viewer gets no profile facts
         var recent = _buf.Where(l => !l.Command && !l.FromBot && l.Login != c.Login && !string.IsNullOrEmpty(l.Text)).Reverse().Take(6).Reverse().Select(l => Short(l.Display + ": " + l.Text, 100)).ToList();
         if (recent.Count > 0) ctx.Add("what chat was just saying:\n  - " + string.Join("\n  - ", recent));
         string user = "QUESTION: " + question + "\nCONTEXT (public, use lightly):\n" + string.Join("\n", ctx);

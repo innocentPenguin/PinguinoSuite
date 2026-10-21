@@ -804,6 +804,14 @@ public static class Harness
           Check("canned audit: one canned line per 2 s for the whole chat", CPHProxy.Sent.Count == n1, Last());
           _cannedReset(false); }
 
+        // ── 19b2c. audit: the same message id delivered twice is handled once ──
+        { Extra.Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); _cannedReset(false);
+          int cl0 = llmCalls; nextReply = "{\"reply\":\"pineapple is fine on pizza\",\"remember\":[]}";
+          Extra["msgId"] = "dup-msg-1"; Msg("Dupey", "@ChattyPinguino is pineapple on pizza ok?", null, false); int sent1 = CPHProxy.Sent.Count, calls1 = llmCalls;
+          Msg("Dupey", "@ChattyPinguino is pineapple on pizza ok?", null, false);
+          Check("audit: a replayed message id gets one reply and one AI call", sent1 >= 1 && CPHProxy.Sent.Count == sent1 && llmCalls == calls1 && calls1 == cl0 + 1, "sent " + sent1 + "/" + CPHProxy.Sent.Count + " calls " + (llmCalls - cl0));
+          Extra.Clear(); }
+
         // ── 19b3. capability questions + bare calls ──
         { int cl0 = llmCalls;
           CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
