@@ -264,6 +264,7 @@ namespace PinguinoHost
                 {
                     var e = (JObject)(earned[kv.Key] ?? (earned[kv.Key] = new JObject { { "points", 0.0 }, { "minutes", 0.0 } }));
                     e["points"] = D(e["points"]) + kv.Value; e["minutes"] = D(e["minutes"]) + minutes;
+                    Periods.AddBuffered(kv.Key, "watchtime", minutes); if (kv.Value > 0) Periods.AddBuffered(kv.Key, "points", kv.Value);
                     var m = (JObject)(mm[kv.Key] ?? (mm[kv.Key] = new JObject { { "points", 0.0 }, { "minutes", 0.0 } }));
                     m["points"] = D(m["points"]) + kv.Value; m["minutes"] = D(m["minutes"]) + minutes;
                 }
@@ -393,8 +394,8 @@ namespace PinguinoHost
         }
 
         // ---- chat ----
-        static string Num(double n) { return Math.Floor(n).ToString("N0", CultureInfo.InvariantCulture); }
-        static string Dur(double min) { long m = (long)Math.Floor(min); if (m < 60) return m + "m"; if (m < 1440) return (m / 60) + "h " + (m % 60) + "m"; return (m / 1440) + "d " + ((m % 1440) / 60) + "h"; }
+        internal static string Num(double n) { return Math.Floor(n).ToString("N0", CultureInfo.InvariantCulture); }
+        internal static string Dur(double min) { long m = (long)Math.Floor(min); if (m < 60) return m + "m"; if (m < 1440) return (m / 60) + "h " + (m % 60) + "m"; return (m / 1440) + "d " + ((m % 1440) / 60) + "h"; }
         static readonly Dictionary<string, DateTime> Cool = new Dictionary<string, DateTime>();
         static bool Cooling(string key, int sec) { lock (Cool) { DateTime t; if (Cool.TryGetValue(key, out t) && (DateTime.UtcNow - t).TotalSeconds < sec) return true; Cool[key] = DateTime.UtcNow; return false; } }
         static int CoolSec(string env, int d) { int v; return int.TryParse(Environment.GetEnvironmentVariable(env), out v) ? v : d; }
@@ -414,7 +415,7 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("economy", "hidden command failed: " + ex.Message); }
         }
-        public static bool IsViewerCommand(string c) { return c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch" || IsBankCommand(c); }
+        public static bool IsViewerCommand(string c) { return c == "!top" || c == "!leaders" || c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch" || IsBankCommand(c); }
         public static bool IsModCommand(string c) { return c == "!removepoints" || c == "!economy"; }
 
         public static void Handle(string user, string cmd, string[] args, bool mod, Action<string> say, Func<string, string> parseMonth, Func<string, string> monthLabel)
@@ -427,6 +428,7 @@ namespace PinguinoHost
                 {
                     if (Cooling("g|" + cmd, CoolSec("PINGUINO_STREAK_COOL_GLOBAL", 8)) || Cooling("u|" + cmd + "|" + me, CoolSec("PINGUINO_STREAK_COOL_USER", 20))) return;
                     string cur = CurrencyName;
+                    if (cmd == "!top" || cmd == "!leaders") { Periods.ChatTop(args, say, Link); return; }
                     if (cmd == "!toppoints" || cmd == "!topwatch")
                     {
                         bool pts = cmd == "!toppoints"; string month = ""; foreach (var a in args) { month = parseMonth(a); if (month != "") break; }
@@ -443,9 +445,9 @@ namespace PinguinoHost
                     var u = User(target); string disp = Boards.DisplayName((string)u["login"]);
                     double p = (double)u["points"], m = (double)u["minutes"];
                     if (cmd == "!watchtime")
-                        say(m < 1 ? (self ? "@" + user + " I have no watch time recorded for you yet." : disp + " has no watch time recorded yet.") : (self ? "@" + user + " you have watched " : disp + " has watched ") + Dur(m) + " (#" + (int)u["watchRank"] + " of " + (int)u["of"] + ").");
+                        say(m < 1 ? (self ? "@" + user + " I have no watch time recorded for you yet." : disp + " has no watch time recorded yet.") : (self ? "@" + user + " you have watched " : disp + " has watched ") + Dur(m) + " (#" + (int)u["watchRank"] + " of " + (int)u["of"] + ")" + Periods.Line(target, "watchtime") + ".");
                     else
-                        say(p < 1 && m < 1 ? (self ? "@" + user + " you have 0 " + cur + " yet. You earn them by hanging out while the stream is live." : disp + " has no " + cur + " yet.") : (self ? "@" + user + " you have " : disp + " has ") + Num(p) + " " + cur + " (#" + (int)u["pointsRank"] + " of " + (int)u["of"] + ").");
+                        say(p < 1 && m < 1 ? (self ? "@" + user + " you have 0 " + cur + " yet. You earn them by hanging out while the stream is live." : disp + " has no " + cur + " yet.") : (self ? "@" + user + " you have " : disp + " has ") + Num(p) + " " + cur + " (#" + (int)u["pointsRank"] + " of " + (int)u["of"] + ")" + Periods.Line(target, "points") + ".");
                     return;
                 }
                 if (!mod) return;   // the rest is mods only, silent for everyone else

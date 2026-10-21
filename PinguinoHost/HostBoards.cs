@@ -24,6 +24,7 @@ namespace PinguinoHost
         static List<JObject> _ledger; static bool _started; static string _lastPushHash = ""; static DateTime _lastPush = DateTime.MinValue; static string _pushNote = "not pushed yet";
         static JObject _cache; static DateTime _cacheAt = DateTime.MinValue;
         static string Root { get { string d = HostApi.DataDir.TrimEnd('\\', '/'); return string.Equals(Path.GetFileName(d), "runtime", StringComparison.OrdinalIgnoreCase) ? Path.GetDirectoryName(d) : d; } }
+        internal static string RootDir { get { return Root; } }
         static string LedgerP { get { return Path.Combine(Root, "boards", "events.json"); } }
         static string TotalsP { get { return Path.Combine(Root, "boards", "totals.json"); } }
 
@@ -57,7 +58,8 @@ namespace PinguinoHost
         {
             user = (user ?? "").Trim().ToLowerInvariant().TrimStart('@'); to = (to ?? "").Trim().ToLowerInvariant();
             if (user == "" || user == "anonymous" || amount <= 0 || Has(l, type, user, to, amount, at)) return false;
-            l.Add(new JObject { { "at", at }, { "type", type }, { "user", user }, { "amount", amount }, { "to", to } }); return true;
+            l.Add(new JObject { { "at", at }, { "type", type }, { "user", user }, { "amount", amount }, { "to", to } });
+            var pid = type + ":" + user + ":" + to + ":" + at; System.Threading.Tasks.Task.Run(() => Periods.Add(user, type == "gift" ? "gifts" : "bits", amount, at, pid)); return true;
         }
 
         /// <summary>a live Twitch event (called from Program.DispatchEvent): gift bombs and cheers.</summary>
@@ -419,13 +421,14 @@ namespace PinguinoHost
         {
             var users = new JObject(); string ch = (string)r["streamerLogin"] ?? "";
             foreach (var p in ((JObject)r["users"]).Properties()) { if (p.Name == ch || !Regex.IsMatch(p.Name, "^[a-z0-9_]{2,25}$")) continue; var o = (JObject)p.Value; users[p.Name] = new JObject { { "name", o["name"] }, { "gifts", o["gifts"] }, { "bits", o["bits"] }, { "messages", o["messages"] }, { "streakBest", o["streakBest"] }, { "streakCurrent", o["streakCurrent"] }, { "streakAt", o["streakAt"] }, { "bitsBadge", o["bitsBadge"] }, { "points", o["points"] }, { "watchMinutes", o["watchMinutes"] } }; if (o["aka"] != null) users[p.Name]["aka"] = o["aka"]; }
-            string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(users.ToString(Newtonsoft.Json.Formatting.None) + r["months"].ToString(Newtonsoft.Json.Formatting.None))));
+            JObject periods; try { periods = Periods.ForSite(); } catch (Exception ex) { periods = new JObject(); Clog.Warn("boards", "periods for the site: " + ex.Message); }
+            string hash = Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(users.ToString(Newtonsoft.Json.Formatting.None) + r["months"].ToString(Newtonsoft.Json.Formatting.None) + periods.ToString(Newtonsoft.Json.Formatting.None))));
             if (hash == _lastBoardsHash && (DateTime.UtcNow - _lastBoards).TotalMinutes < 30) return;
             try
             {
                 using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
                 {
-                    var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(new JObject { { "updatedAt", r["updatedAt"] }, { "users", users }, { "months", r["months"] }, { "pointsName", Economy.CurrencyName }, { "drop", DropList() }, { "aliases", JObject.FromObject(AliasMap()) } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
+                    var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(new JObject { { "updatedAt", r["updatedAt"] }, { "users", users }, { "months", r["months"] }, { "pointsName", Economy.CurrencyName }, { "periods", periods }, { "drop", DropList() }, { "aliases", JObject.FromObject(AliasMap()) } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
                     rq.Headers.Add("Authorization", "Bearer " + key); rq.Headers.UserAgent.ParseAdd("PinguinoHost/1.0");   // the site is behind Cloudflare, which refuses requests with no User-Agent (error 1010)
                     var resp = h.SendAsync(rq).Result;
                     if (!resp.IsSuccessStatusCode) { _pushNote += "; boards HTTP " + (int)resp.StatusCode; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the board (HTTP " + (int)resp.StatusCode + ")"); return; }

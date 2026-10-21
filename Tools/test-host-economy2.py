@@ -99,7 +99,7 @@ try:
     post('/api/economy/loan', {'action': 'repay', 'login': 'zed', 'amount': 0, 'id': 'rp1'}); post('/api/economy/loan', {'action': 'take', 'login': 'ann', 'amount': 0, 'id': 'x'})
     # ---- default handling: interest stops, new loans blocked, nothing else
     post('/api/economy', {'settings': {'LoanDefaultStreams': 1}})
-    feed('#streamer1: !addpoints zed 1000'); feed('zed: !repay all', 1.0)
+    feed('#streamer1: !addpoints zed 1000'); feed('zed: !repay all', 1.6)
     feed('zed: !loan 100', 1.5); live(True); live(False); lv = me('zed')['loans']
     chk('defaulted after the limit, interest stops', lv['defaulted'] is True, lv)
     o = lv['owed']; live(True); live(False); chk('interest stops once defaulted', me('zed')['loans']['owed'] == o, me('zed')['loans'])

@@ -63,6 +63,7 @@ namespace PinguinoHost
                 led[id] = new JObject { { "login", login }, { "delta", delta }, { "reason", note != "" ? note : source }, { "source", source }, { "note", note }, { "balance", before + delta }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 Save();
             }
+            if (source != "loan" && source != "loan_repay" && source != "depreciation") Periods.Add(login, delta > 0 ? "points" : "points_spent", Math.Abs((double)delta), 0, "ap:" + id);
             return null;
         }
 
@@ -152,6 +153,7 @@ namespace PinguinoHost
                     {
                         string login = Norm((string)p["Username"]); if (login == "" || login == streamer || ex.Contains(login) || Boards.IsBot(login)) continue;
                         if (play > 0) { string id = "match:" + mid + ":play:" + login; if (!Applied(id) && Award(login, play, KindSource(kind, false), label + ", played", id) == null) paid++; }
+                        if (side == winner) Periods.Add(login, "wins", 1, 0, "win:" + mid + ":" + login);
                         if (win > 0 && side == winner) { string id = "match:" + mid + ":win:" + login; if (!Applied(id) && Award(login, win, KindSource(kind, true), label + ", won", id) == null) paid++; }
                     }
             }

@@ -243,6 +243,9 @@ namespace PinguinoHost
             if (p == "/api/timers" && m == "POST") { Write(c, Timers.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/emotes" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, Emotes.Api(c.Request.QueryString["q"], c.Request.QueryString["month"], lim).ToString(), "application/json"); return true; }
             if (p == "/api/emotes/refresh" && m == "POST") { Write(c, Emotes.Refresh(true).ToString(), "application/json"); return true; }
+            if (p == "/api/boards" && m == "GET" && c.Request.QueryString["metric"] != null) { var q = c.Request.QueryString; int tp; Write(c, Periods.Query(q["metric"], q["period"], q["key"], q["login"] ?? q["me"], int.TryParse(q["top"], out tp) ? tp : 10).ToString(), "application/json"); return true; }
+            if (p == "/api/boards/reload" && m == "POST") { Write(c, Periods.Reload().ToString(), "application/json"); return true; }
+            if (p == "/api/boards/event" && m == "POST") { Write(c, Periods.TestEvent(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/boards" && m == "GET") { Write(c, Boards.Api().ToString(), "application/json"); return true; }
             if (p == "/api/boards/refresh" && m == "POST") { Write(c, Boards.Refresh(true).ToString(), "application/json"); return true; }
             if (p == "/api/streaks" && m == "GET") { Write(c, Streaks.Api().ToString(), "application/json"); return true; }
