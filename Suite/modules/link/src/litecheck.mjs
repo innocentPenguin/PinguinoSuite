@@ -20,9 +20,9 @@ try {
   await lite.poll();
   check('check request is consumed and finds the newer package', !fs.existsSync(path.join(dir, 'requests', '1-check.json')) && rd('update_status.json').updates_available === 1);
   check('*.tmp requests are ignored', fs.existsSync(path.join(dir, 'requests', '2-check.json.tmp')));
-  fs.writeFileSync(path.join(dir, 'requests', '3-install-aaa.json'), JSON.stringify({ schema: 1, action: 'install', id: 'aaa' }));
+  fs.writeFileSync(path.join(dir, 'requests', '3-start-aaa.json'), JSON.stringify({ schema: 1, action: 'start', id: 'aaa' }));
   await lite.poll();
-  check('install is consumed and reported as not available (not silent)', rd('update_status.json').result === 'error' && /not available/.test(rd('update_status.json').error) && fs.readdirSync(path.join(dir, 'requests')).every(f => f.endsWith('.tmp')));
+  check('start is consumed and reported as not available (not silent)', rd('update_status.json').result === 'error' && /not available/.test(rd('update_status.json').error) && fs.readdirSync(path.join(dir, 'requests')).every(f => f.endsWith('.tmp')));
   lite.stop();
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 const failed = results.filter(r => !r).length; console.log(failed ? `\n${failed} FAILED` : '\nAll lite checks passed'); process.exit(failed ? 1 : 0);

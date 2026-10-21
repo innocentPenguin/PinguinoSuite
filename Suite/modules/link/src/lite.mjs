@@ -1,11 +1,13 @@
-// INDEX lite.mjs: Link's side of the PinguinoLite contract (Docs/LITE_APP.md). File drop in <lite dir>.
+// INDEX lite.mjs: Link's side of the PinguinoLite contract (Docs/LITE_APP.md). File drop in <lite dir>. Package ops live in pkg.mjs; tests litecheck.mjs + pkgcheck.mjs.
 // Writes: status.json (heartbeat), installed.json, modules_catalog.json, update_status.json. Reads+consumes: requests/*.json.
 // Sources are LOCAL only (Suite/modules/*/module.json, optional <lite dir>/packages). No internet, no downloads, no executing anything.
-// Install/update/uninstall/selfupdate are not implemented yet: such requests are consumed and reported as an error, never silently dropped.
+// install/update/uninstall/rollback: local zip packages (pkg.mjs), only for a stopped module. start/stop/restart/selfupdate-apply are
+// not implemented yet: such requests are consumed and reported as an error, never silently dropped.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { log } from './log.mjs';
+import { installPackage, uninstallModule, rollbackModule } from './pkg.mjs';
 
 const SUITE = fileURLToPath(new URL('../../../../', import.meta.url));   // .../PinguinoSuite/
 const MODULES = path.join(SUITE, 'Suite', 'modules');
@@ -47,6 +49,11 @@ export function scanModules(root = MODULES) {
 export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modulesRoot = MODULES } = {}) {
   const busy = {};
   let timer = null, polling = false, lastError = null, mstate = {};
+  const errors = {};                                           // last failure per module id (shown in installed.json)
+  const fail = (msg, keepStatus) => {
+    lastError = msg; log('warn', 'lite', msg);
+    writeJson(dir, 'update_status.json', { ...(readJson(path.join(dir, 'update_status.json')) || {}), result: 'error', error: msg });
+  };
 
   async function moduleState(m) {
     if (m.id === 'link') return 'running';                       // we are Link
@@ -57,7 +64,7 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
   async function writeInstalled() {
     const mods = {};
     mstate = {};
-    for (const m of scanModules(modulesRoot)) { const state = await moduleState(m); mods[m.id] = { version: m.version, installed_at: iso(), path: m.path, state }; mstate[m.id] = { state, detail: state === 'running' ? 'answers on its health check' : 'not answering', ...(state === 'stopped' ? { fix_hint: 'Start it from the full Suite' } : {}) }; }
+    for (const m of scanModules(modulesRoot)) { const state = await moduleState(m); mods[m.id] = { version: m.version, installed_at: iso(), path: m.path, state, ...(errors[m.id] ? { error: errors[m.id] } : {}) }; mstate[m.id] = { state, detail: state === 'running' ? 'answers on its health check' : 'not answering', ...(state === 'stopped' ? { fix_hint: 'Start it from the full Suite' } : {}) }; }
     writeJson(dir, 'installed.json', { updated_at: iso(), modules: mods });
     return mods;
   }
@@ -70,7 +77,7 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
     for (const f of pk) {
       const mm = /^([a-z0-9_-]{1,40})-(\d+(?:\.\d+)*)\.zip$/.exec(f); if (!mm) continue;
       const [, id, v] = mm, cur = best[id] || { id, name: id, description: '', latest_version: '0' };
-      if (cmpVersion(v, cur.latest_version) > 0) { best[id] = { ...cur, latest_version: v, size_bytes: fs.statSync(path.join(dir, 'packages', f)).size }; }
+      if (cmpVersion(v, cur.latest_version) > 0) { let sha; try { sha = fs.readFileSync(path.join(dir, 'packages', f + '.sha256'), 'utf8').trim().split(/\s+/)[0]; } catch {} best[id] = { ...cur, latest_version: v, size_bytes: fs.statSync(path.join(dir, 'packages', f)).size, package: 'packages/' + f, ...(sha ? { sha256: sha } : {}) }; }
     }
     writeJson(dir, 'modules_catalog.json', { generated_at: iso(), channel: 'stable', source: 'local', modules: Object.values(best) });
     return Object.values(best);
@@ -82,9 +89,9 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
     return n;
   }
 
-  async function refresh(result = 'ok') {
+  async function refresh(result = 'ok', error) {
     const installed = await writeInstalled(), catalog = writeCatalog();
-    return writeUpdateStatus(installed, catalog, result);
+    return writeUpdateStatus(installed, catalog, result, error);
   }
 
   function writeStatus() {
@@ -96,7 +103,26 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
   async function handle(req) {
     const action = req?.action, id = req?.id;
     if (action === 'check') { busy.lite = 'checking'; writeStatus(); try { await refresh(); } finally { delete busy.lite; } return; }
-    if (['install', 'update', 'uninstall', 'start', 'stop', 'restart', 'selfupdate-apply'].includes(action)) {
+    if (['install', 'update', 'uninstall', 'rollback'].includes(action)) {
+      if (!ID.test(id || '')) { fail(`${action}: missing or bad module id`); return; }
+      const verb = { install: 'installing', update: 'updating', uninstall: 'uninstalling', rollback: 'updating' }[action];
+      busy[id] = verb; writeStatus();
+      try {
+        const cur = scanModules(modulesRoot).find(m => m.id === id);
+        if (cur && action !== 'install' && (await moduleState(cur)) === 'running') throw new Error(`${id} is running; stop it first, then try again`);
+        const a = { liteDir: dir, modulesRoot, id, cmp: cmpVersion };
+        const r = action === 'install' ? installPackage(a) : action === 'update' ? installPackage({ ...a, update: true }) : action === 'uninstall' ? uninstallModule(a) : rollbackModule(a);
+        delete errors[id];
+        log('info', 'lite', `${action} ${id} ok${r.version ? ' -> ' + r.version : ''}`);
+        await refresh();
+      } catch (e) {
+        errors[id] = String(e.message || e).slice(0, 200);
+        fail(`${action} ${id}: ${errors[id]}`, true);
+        await refresh('error', errors[id]).catch(() => {});
+      } finally { delete busy[id]; writeStatus(); }
+      return;
+    }
+    if (['start', 'stop', 'restart', 'selfupdate-apply'].includes(action)) {
       const msg = `${action} is not available yet (Link currently supports local listing and checking only)`;
       lastError = msg; log('warn', 'lite', msg + (id && ID.test(id) ? ` [${id}]` : ''));
       writeJson(dir, 'update_status.json', { ...(readJson(path.join(dir, 'update_status.json')) || {}), result: 'error', error: msg });
