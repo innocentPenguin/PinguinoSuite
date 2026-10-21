@@ -49,7 +49,8 @@ try:
     for c in ('!test', '!trapaccount', '!banlist', '!stop', '!intro'): chk(c + ' is not imported', ask(host, 'viewer1: ' + c, 0.4) == [])
     chk('!commands stays ours (answers with the site link)', any('innocentpenguin.com/commands' in x for x in ask(host, 'viewer1: !commands')))
     chk('!bits stays ours (the bits board), not the clip', not any('clip' in x for x in ask(host, 'viewer1: !bits')))
-    r = ask(host, 'viewer1: !gay'); chk('held edgy commands (disabled in Chatty canned_commands.json) stay silent everywhere until Ivan decides', r == [], r)
+    r = ask(host, 'viewer1: !gay'); chk('!gay is enabled (Ivan) so the exact command answers when Chatty does not own it', r != [], r)
+    r = ask(host, 'viewer1: !goon'); chk('held commands (!goon, !weiner: disabled in Chatty canned_commands.json) stay silent everywhere until Ivan decides', r == [] and ask(host, 'viewer1: !weiner') == [], r)
     r = ask(host, 'viewer1: !pm'); chk('!pm reads the one shared private-match setting', r == ['Private match -> Name: peng7.'], r)
     chk('!pm never prints a stored lobby password', not any('SeCr3tPw9' in x for x in r), r)
     # ---- natural questions ----

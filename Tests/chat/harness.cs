@@ -774,8 +774,12 @@ public static class Harness
         Check("$(user) and $(touser) are filled in", Last() != null && Last().Contains("Canny wraps their arms around Bobby"), Last());
         Msg("Canny", "!luck", null, false);
         Check("!luck rolls a number", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), @"You got \d+% luck"), Last());
-        cn = CPHProxy.Sent.Count; Msg("Canny", "!gay", null, false);
+        cn = CPHProxy.Sent.Count; Msg("Canny", "!goon", null, false);
         Check("a command held with enabled:false says nothing", CPHProxy.Sent.Count == cn);
+        CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Canny2", "!onlyfans", null, false);
+        Check("!onlyfans points to the Discord", Last() != null && Last().Contains("Join the Discord: https://discord.gg/"), Last());
+        cn = CPHProxy.Sent.Count; Msg("Canny3", "!trapaccount", null, false);
+        Check("!trapaccount is gone, says nothing", CPHProxy.Sent.Count == cn);
 
         // ── 19b3. capability questions + bare calls ──
         { int cl0 = llmCalls;
