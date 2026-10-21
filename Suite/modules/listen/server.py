@@ -458,9 +458,14 @@ def list_jobs():
 
 @app.get("/api/sessions")
 def sessions():
-    return db.rows("SELECT s.id,s.kind,s.title,s.status,s.duration,s.created,(SELECT COUNT(*) FROM segments g WHERE g.session_id=s.id) segments,"
-                   "(SELECT COUNT(*) FROM segments g WHERE g.session_id=s.id AND g.status='new' AND g.unsure>0) to_review "
-                   "FROM sessions s ORDER BY s.created DESC LIMIT 200")
+    # one pass over segments (covering index seg_counts) instead of two correlated subqueries per session: those took ~13 s on 23k lines
+    # and, holding the database lock, froze every other tab of the page
+    rows = db.rows("SELECT s.id,s.kind,s.title,s.status,s.duration,s.created FROM sessions s ORDER BY s.created DESC LIMIT 200")
+    cnt = {r["session_id"]: r for r in db.rows("SELECT session_id,COUNT(*) n,SUM(status='new' AND unsure>0) r FROM segments GROUP BY session_id")}
+    for r in rows:
+        c = cnt.get(r["id"])
+        r["segments"], r["to_review"] = (c["n"], c["r"] or 0) if c else (0, 0)
+    return rows
 
 
 # ------------------------------------------------------------------ segments / learning
