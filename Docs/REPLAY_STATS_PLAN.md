@@ -53,7 +53,7 @@ Path: `<lite dir>\replays\results\<match-guid>.json` (written atomically: tmp + 
 4. If Lite runs on a different PC from the Suite, the folder `Data\lite\replays\results` is what has to reach the Suite machine (sync/copy of small JSONs, or an authenticated POST to a Host endpoint 02 defines). Not built now.
 
 ## What step 1 delivers (this session)
-- `src-tauri/src/replays.rs`: scanner thread (every 30 s + "Scan now"), dedupe state, boxcars header parse, pure `extract()` (unit-tested), atomic result + index writers.
+- `src-tauri/src/replays.rs`: scanner thread (stat-only tick every 3 s while RocketLeague.exe runs or within 2 min of a new replay, else 30 s; file must be unchanged across two ticks before parsing; + "Scan now"), dedupe state, boxcars header parse, pure `extract()` (unit-tested), atomic result + index writers.
 - Lite **Replays** page: folders being watched (and whether they exist), the last matches (score, winner, players), "Scan now", honest empty state ("no replay saved yet: in Rocket League, save a replay from the match history").
 - Out of scope now: network-frame data (ball/boost/possession), uploads, site pages, Host endpoint, MMR.
 

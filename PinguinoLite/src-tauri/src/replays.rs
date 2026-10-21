@@ -9,6 +9,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde_json::{json, Map, Value};
 
 static SCAN_LOCK: Mutex<()> = Mutex::new(());
+// Seen-state kept in memory so a tick is stat-only; the file on disk is written only when something changes.
+static STATE: Mutex<Option<Map<String, Value>>> = Mutex::new(None);
+// path -> (size, mtime) from the previous tick: a file is parsed only once it has stopped growing.
+static PENDING: Mutex<Option<HashMap<PathBuf, (u64, u64)>>> = Mutex::new(None);
 
 fn root() -> PathBuf {
     crate::lite_dir().join("replays")
@@ -186,8 +190,12 @@ pub fn scan() -> Value {
     let _g = SCAN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dirs = scan_dirs();
     let state_path = root().join("state.json");
-    let mut state: Map<String, Value> = std::fs::read_to_string(&state_path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-    let tw = twitch_map();
+    let mut state_g = STATE.lock().unwrap_or_else(|e| e.into_inner());
+    let state = state_g.get_or_insert_with(|| std::fs::read_to_string(&state_path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default());
+    let mut pend_g = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+    let pend = pend_g.get_or_insert_with(HashMap::new);
+    let mut tw: Option<TwitchMap> = None;
+    let mut seen_now: HashMap<PathBuf, (u64, u64)> = HashMap::new();
     let (mut new, mut errors, mut scanned) = (0, 0, 0);
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     for d in &dirs {
@@ -198,19 +206,21 @@ pub fn scan() -> Value {
                 continue;
             }
             let (Some(mt), Ok(meta)) = (mtime_secs(&path), e.metadata()) else { continue };
-            if now.saturating_sub(mt) < 5 {
-                continue; // still being written
-            }
+            seen_now.insert(path.clone(), (meta.len(), mt));
             scanned += 1;
             // state key = hash-free fingerprint (name + size + mtime); no full path is stored in any output
             let key = format!("{}|{}|{}", path.file_name().and_then(|n| n.to_str()).unwrap_or(""), meta.len(), mt);
             if state.contains_key(&key) {
                 continue;
             }
+            // wait for the file to stop growing: same size+mtime on two consecutive ticks and untouched for 2 s
+            if pend.get(&path) != Some(&(meta.len(), mt)) || now.saturating_sub(mt) < 2 {
+                continue;
+            }
             let Ok(data) = std::fs::read(&path) else { continue };
             match parse_file(&data) {
                 Ok(rep) => {
-                    let res = extract(&rep, &tw, &fnv(&data));
+                    let res = extract(&rep, tw.get_or_insert_with(twitch_map), &fnv(&data));
                     let id = safe_name(res["match_id"].as_str().unwrap_or(""));
                     if id.is_empty() || write_atomic(&root().join("results").join(format!("{id}.json")), &serde_json::to_string_pretty(&res).unwrap_or_default()).is_err() {
                         errors += 1;
@@ -227,8 +237,9 @@ pub fn scan() -> Value {
             }
         }
     }
+    *pend = seen_now;
     if new > 0 || errors > 0 || !state_path.exists() {
-        let _ = write_atomic(&state_path, &serde_json::to_string_pretty(&state).unwrap_or_default());
+        let _ = write_atomic(&state_path, &serde_json::to_string_pretty(&*state).unwrap_or_default());
         rebuild_index(&dirs);
     }
     json!({"scanned": scanned, "new": new, "errors": errors, "dirs": dirs.iter().map(|d| json!({"name": d.file_name().and_then(|n| n.to_str()), "exists": d.is_dir()})).collect::<Vec<_>>()})
@@ -252,11 +263,40 @@ fn rebuild_index(dirs: &[PathBuf]) {
     let _ = write_atomic(&root().join("index.json"), &serde_json::to_string_pretty(&json!({"schema": 1, "updated_at_ms": ms, "scan_dirs": names, "items": items})).unwrap_or_default());
 }
 
-/// Background loop: scan at start and every 30 s. Never blocks the UI; never touches anything but the replay folders (read) and <lite dir>\replays (write).
+/// Is Rocket League running? (tasklist, no window; cheap enough at one call per few seconds)
+fn rl_running() -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        if let Ok(o) = std::process::Command::new("tasklist").args(["/FI", "IMAGENAME eq RocketLeague.exe", "/NH"]).creation_flags(0x0800_0000).output() {
+            return String::from_utf8_lossy(&o.stdout).to_lowercase().contains("rocketleague.exe");
+        }
+    }
+    false
+}
+
+/// Pure pacing rule: fast (3 s) while RL runs or for 2 minutes after a new replay; otherwise slow (30 s).
+pub fn tick_secs(rl: bool, secs_since_new: Option<u64>) -> u64 {
+    if rl || secs_since_new.map(|s| s < 120).unwrap_or(false) { 3 } else { 30 }
+}
+
+/// Background loop. Stat-only ticks every 3 s while Rocket League is running (30 s when idle, so a replay saved after closing the game is still found).
+/// Never blocks the UI; reads only the replay folders and writes only the eplays folder in the lite dir.
 pub fn start() {
-    std::thread::spawn(|| loop {
-        let _ = scan();
-        std::thread::sleep(Duration::from_secs(30));
+    std::thread::spawn(|| {
+        let mut last_new: Option<std::time::Instant> = None;
+        let (mut rl, mut rl_at) = (false, std::time::Instant::now() - Duration::from_secs(60));
+        loop {
+            if rl_at.elapsed() >= Duration::from_secs(6) {
+                rl = rl_running();
+                rl_at = std::time::Instant::now();
+            }
+            let r = scan();
+            if r["new"].as_i64().unwrap_or(0) > 0 {
+                last_new = Some(std::time::Instant::now());
+            }
+            std::thread::sleep(Duration::from_secs(tick_secs(rl, last_new.map(|t| t.elapsed().as_secs()))));
+        }
     });
 }
 
@@ -327,6 +367,14 @@ mod tests {
         assert_eq!(r["status"], "incomplete");
         assert_eq!(r["winner"], Value::Null);
         assert_eq!(r["match_id"], "f123");
+    }
+
+    #[test]
+    fn pacing() {
+        assert_eq!(tick_secs(true, None), 3);
+        assert_eq!(tick_secs(false, None), 30);
+        assert_eq!(tick_secs(false, Some(60)), 3);
+        assert_eq!(tick_secs(false, Some(500)), 30);
     }
 
     #[test]
