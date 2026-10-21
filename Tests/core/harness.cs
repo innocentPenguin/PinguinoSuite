@@ -688,6 +688,21 @@ public static class Harness
         Check(WS()["Entrants"].Count() == 2 && !onDisk("practice0"), "practice: after off the real wheel sign-ups are back");
         wheel("end", "");
 
+        // ===== [NEW] !tune: silent settings from the Suite =====
+        CPHProxy.Sent.Clear();
+        Run("mod1", "!tune", "recycler off", true); Run("mod1", "!tune", "idle 30", true);
+        Check(!(bool)State()["recyclerEnabled"] && (int)State()["inactivityMinutes"] == 30, "tune: recycler off + idle 30 reach the state");
+        Run("mod1", "!tune", "recycler on", true); Run("mod1", "!tune", "idle 15", true);
+        Run("viewer1", "!tune", "idle 0", false);
+        Check((int)State()["inactivityMinutes"] == 15, "tune: viewers cannot change it");
+        Run("mod1", "!tune", "idle 999", true);
+        Check((int)State()["inactivityMinutes"] == 15, "tune: out of range is ignored");
+        Run("mod1", "!wheel", "end", true);
+        Run("mod1", "!tune", "wheel speed 3000", true); Run("mod1", "!tune", "wheel feed 1.5", true); Run("mod1", "!tune", "wheel signed off", true);
+        var wp = JObject.Parse(File.ReadAllText(Path.Combine(dir, "wheel_public.json")));
+        Check((int)wp["prefs"]["spinMs"] == 3000 && (double)wp["prefs"]["feedSec"] == 1.5 && (int)wp["feedMs"] == 1500 && (bool)wp["showSignedUp"] == false && (string)wp["status"] == "closed", "tune: wheel settings are staged before the first round and published");
+        Check(CPHProxy.Sent.Count == 0, "tune: nothing was said in chat: " + string.Join("|", CPHProxy.Sent));
+        Run("mod1", "!wheel", "end", true);
         // ===== [NEW] recycler, !incomplete, inactivity timeout =====
         Run("mod1", "!activity", "competitive", true);
         Run("mod1", "!queue", "clear", true); Run("mod1", "!queue", "open", true);

@@ -922,7 +922,8 @@ public class CPHInline
         public List<WheelMsg> Msgs = new List<WheelMsg>();
         public string AnnState = "idle";       // idle | sending | done | failed
         public List<WheelFeed> Feed = new List<WheelFeed>();   // the last joins/leaves ONLY (the overlay feed)
-        public int FeedSec = 2;                // how long a feed line stays visible (1..10)
+        public double FeedSec = 2;             // how long a feed line stays visible (0.5..10)
+        public bool ShowSigned = true;         // the overlay shows the "N signed up" badge
     }
 
     // splitmix64 over a SHA-256 of the seed: the same seed always gives the same draw.
@@ -1135,14 +1136,17 @@ public class CPHInline
         if (sub == "new" || sub == "open")
         {
             if (w == null) { _wheel = w = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed() }; w.Status = "open"; WheelSave(); Say("The tournament wheel is open! Type !me to join."); return true; }
+            if (w.Round < 0) { w.Round = 0; w.Status = "open"; WheelSave(); Say("The tournament wheel is open! Type !me to join."); return true; }
             if (sub == "open" && w.Status == "open") { Say("Sign-ups are already open."); return true; }
             if (sub == "open" && w.Status == "closed") { w.Status = "open"; WheelSave(); Say("Tournament sign-ups are OPEN! Type !me to join."); return true; }
             if (sub == "open") { Say("A round is running; people can still join with !me."); return true; }
             WheelNewRound(w, false);
             return true;
         }
+        if (w == null && new[] { "mode", "size", "odd", "eligibility", "auto", "feed", "signed", "hold", "speed" }.Contains(sub))
+        { _wheel = w = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed(), Status = "closed", Round = -1 }; }   // settings staged before the first round: the overlay stays off until !wheel new
         if (w == null) { Say("There is no wheel yet. Type !wheel new."); return true; }
-        bool started = w.Picks.Count > 0 && w.Status == "drawing";
+        bool started =w.Picks.Count > 0 && w.Status == "drawing";
         switch (sub)
         {
             case "close":
@@ -1182,12 +1186,17 @@ public class CPHInline
                 return true;
             case "feed":
                 {
-                    int fs;
-                    if (!int.TryParse(arg, out fs) || fs < 1 || fs > 10) { Say("Usage: !wheel feed <1-10 seconds a join/leave line stays on the overlay>"); return true; }
+                    double fs;
+                    if (!double.TryParse(arg, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out fs) || fs < 0.5 || fs > 10) { Say("Usage: !wheel feed <0.5-10 seconds a join/leave line stays on the overlay>"); return true; }
                     w.FeedSec = fs; WheelSave();
-                    Say("Join/leave lines stay on the overlay for " + fs + " s.");
+                    Say("Join/leave lines stay on the overlay for " + fs.ToString(System.Globalization.CultureInfo.InvariantCulture) + " s.");
                     return true;
                 }
+            case "signed":
+                if (arg != "on" && arg != "off") { Say("Usage: !wheel signed on|off (the 'N signed up' badge on the overlay)"); return true; }
+                w.ShowSigned = arg == "on"; WheelSave();
+                Say("Signed-up badge: " + arg + ".");
+                return true;
             case "hold":
                 {
                     int s;
@@ -1228,7 +1237,7 @@ public class CPHInline
                 }
             case "reset":
                 if (!WheelOwner(user)) { Say("@" + user + " only the streamer can reset the wheel. !wheel new starts a fresh round."); return true; }
-                _wheel = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed(), Status = "open", Mode = w.Mode, TeamSize = w.TeamSize, OddPolicy = w.OddPolicy, Eligibility = w.Eligibility, AutoNew = w.AutoNew, HoldSec = w.HoldSec, SpinMs = w.SpinMs };
+                _wheel = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed(), Status = "open", Mode = w.Mode, TeamSize = w.TeamSize, OddPolicy = w.OddPolicy, Eligibility = w.Eligibility, AutoNew = w.AutoNew, HoldSec = w.HoldSec, SpinMs = w.SpinMs, FeedSec = w.FeedSec, ShowSigned = w.ShowSigned };
                 WheelSave();
                 Say("The wheel was reset. Sign-ups are open: type !me.");
                 return true;
@@ -1578,7 +1587,7 @@ public class CPHInline
     object WheelPublic()
     {
         var w = _wheel;
-        if (w == null) return new { status = "none", queue = new string[0], picks = new object[0], teams = new object[0], waitlist = new string[0], signedUp = 0, feed = new object[0], feedMs = 2000 };
+        if (w == null) return new { status = "none", queue = new string[0], picks = new object[0], teams = new object[0], waitlist = new string[0], signedUp = 0, showSignedUp = true, feed = new object[0], feedMs = 2000, prefs = new { mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all", autoNew = true, holdSec = 40, spinMs = 8500, feedSec = 2.0, showSignedUp = true } };
         bool pending = WheelPending(w);
         var last = w.Draw != null ? w.Draw.Last : new List<string>();
         return new
@@ -1589,7 +1598,8 @@ public class CPHInline
             teams = w.Teams.Select(t => new { n = t.N, members = t.Members, partial = t.Partial, avg = t.Avg }).ToList(),
             waitlist = w.Final ? w.Waitlist : new List<string>(),
             spin = w.Draw == null ? null : new { id = w.Draw.Id, at = w.Draw.SpunAt, ms = WheelSpinMs(w), landing = last, revealed = w.Draw.Revealed },
-            signedUp = w.Entrants.Count, feed = w.Feed.Select(f => new { name = f.Name, kind = f.Kind, at = f.At }).ToList(), feedMs = w.FeedSec * 1000,
+            signedUp = w.Entrants.Count, feed = w.Feed.Select(f => new { name = f.Name, kind = f.Kind, at = f.At }).ToList(), feedMs = (int)(w.FeedSec * 1000), showSignedUp = w.ShowSigned,
+            prefs = new { mode = w.Mode, teamSize = w.TeamSize, oddPolicy = w.OddPolicy, eligibility = w.Eligibility, autoNew = w.AutoNew, holdSec = w.HoldSec, spinMs = w.SpinMs, feedSec = w.FeedSec, showSignedUp = w.ShowSigned },
             holdUntil = w.HoldUntil, now = NowMs(), practice = w.Entrants.Any(e => e.Practice)
         };
     }
@@ -1846,6 +1856,7 @@ public class CPHInline
         switch (cmdKey)
         {
             case "!notme":    return HandleNotMe(userLower);
+            case "!tune":     return HandleTune(userLower, input, isPrivileged);
             case "!recycle":  return HandleRecycle(userLower, input, isPrivileged);
             case "!incomplete": _lastCustomsActivity = NowMs(); return HandleIncomplete(userLower, isPrivileged);
             case "!register": return HandleRegister(userLower, input, isPrivileged);
@@ -1901,8 +1912,10 @@ public class CPHInline
         }
     }
 
+    static bool _silentTune;   // true while !tune runs a setting: the Suite changes it, chat hears nothing
     void Say(string message)
     {
+        if (_silentTune) return;
         // [NEW][WEB] Status updates always reach the stream, even when the change
         // came from the website. For website-only players (no Twitch, IDs like
         // "kick-penguinkick") the "@kick-penguinkick" is swapped for their site
@@ -2317,6 +2330,22 @@ public class CPHInline
     }
 
     // !recycle on|off  (yourself)     !recycle on|off <user>  (mods)     !recycle  (shows yours)
+    // !tune recycler on|off | !tune idle <0-240 minutes>: set from the Suite (/api/tune); mods only and silent in chat.
+    bool HandleTune(string user, string input, bool isPrivileged)
+    {
+        if (!isPrivileged) return true;
+        string[] p = (input ?? "").Trim().ToLower().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (p.Length < 2) return true;
+        if (p[0] == "wheel" && p.Length >= 3)
+        {
+            _silentTune = true;
+            try { HandleWheel(user, p[1] + " " + p[2], true); } finally { _silentTune = false; }
+        }
+        else if (p[0] == "recycler" && (p[1] == "on" || p[1] == "off")) { _settings.RecyclerEnabled = p[1] == "on"; SaveSettings(); PublishState("tune", "recycler"); }
+        else if (p[0] == "idle") { int m; if (int.TryParse(p[1], out m) && m >= 0 && m <= 240) { _settings.InactivityMinutes = m; SaveSettings(); PublishState("tune", "idle"); } }
+        return true;
+    }
+
     bool HandleRecycle(string user, string input, bool isPrivileged)
     {
         string[] a = (input ?? "").Trim().ToLower().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);

@@ -121,7 +121,7 @@
     else if (d.status === 'open') banner.innerHTML = 'Type <b>!me</b> to join (' + names.length + ' waiting)';
     else banner.innerHTML = '';
 
-    document.getElementById('signed').innerHTML = '<b>' + (d.signedUp || 0) + '</b> signed up';
+    var sg = document.getElementById('signed'); sg.style.display = d.showSignedUp === false ? 'none' : ''; sg.innerHTML = '<b>' + (d.signedUp || 0) + '</b> signed up';
     var fh = '', fm = d.feedMs || 2000;
     (d.feed || []).forEach(function (f) {
       var age = nowAdj() - f.at;

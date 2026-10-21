@@ -326,6 +326,35 @@ namespace PinguinoHost
             }
             return true;
         }
+        /// <summary>Hidden grant: gives (or takes, negative) points to one user or to everyone known, with NO chat message. Every call is written to Data\economy\grants.log (who, amount, reason).
+        /// Body {target:"user"|"everyone", login, amount, reason, silent, by, id?}. An id makes a retry apply once.</summary>
+        public static JObject Grant(JObject b)
+        {
+            string target = ((string)b["target"] ?? "user").Trim().ToLowerInvariant(), reason = ((string)b["reason"] ?? "").Trim(), by = ((string)b["by"] ?? "api").Trim(), id = ((string)b["id"] ?? "").Trim();
+            double amt; try { amt = D(b["amount"]); } catch (Exception) { amt = 0; }
+            if (target != "user" && target != "everyone") return new JObject { { "ok", false }, { "error", "target must be user or everyone" } };
+            if (amt == 0 || double.IsNaN(amt) || Math.Abs(amt) > 1e9) return new JObject { { "ok", false }, { "error", "amount must be a non-zero number" } };
+            amt = Math.Round(amt);
+            var logins = new List<string>();
+            if (target == "user") { string one = Canon(Boards.AliasMap(), (string)b["login"]); if (one == "") return new JObject { { "ok", false }, { "error", "login required" } }; logins.Add(one); }
+            else { var al = Boards.AliasMap(); logins = Snapshot(al).Users.Keys.Where(k => !Boards.IsBot(k)).ToList(); }
+            lock (L)
+            {
+                var led = Ledger(); string key = id == "" ? "" : "grant-" + id;
+                if (key != "" && led[key] != null) return new JObject { { "ok", true }, { "message", "already applied" }, { "affected", 0 } };
+                var adj = (JObject)Doc()["adjust"];
+                foreach (var l in logins) adj[l] = D(adj[l]) + amt;
+                if (key != "") led[key] = new JObject { { "login", target == "user" ? logins[0] : "*" }, { "delta", amt }, { "reason", reason }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
+                Save();
+                try { File.AppendAllText(System.IO.Path.Combine(Dir, "grants.log"), DateTime.UtcNow.ToString("o") + "\t" + by + "\t" + (target == "user" ? logins[0] : "everyone(" + logins.Count + ")") + "\t" + amt.ToString("0", CultureInfo.InvariantCulture) + "\t" + reason.Replace('\t', ' ').Replace('\n', ' ') + "\n", new UTF8Encoding(false)); } catch (Exception) { }
+            }
+            Clog.Info("economy", "grant by " + by + ": " + amt.ToString("0", CultureInfo.InvariantCulture) + " to " + (target == "user" ? logins[0] : "everyone (" + logins.Count + ")") + " (" + reason + ")");
+            return new JObject { { "ok", true }, { "message", (amt > 0 ? "Gave " : "Took ") + Num(Math.Abs(amt)) + " " + CurrencyName + (target == "user" ? " to " + logins[0] : " to " + logins.Count + " people") + "." }, { "affected", logins.Count } };
+        }
+        /// <summary>live economy settings (a copy)</summary>
+        public static JObject SettingsView() { lock (L) return (JObject)Settings().DeepClone(); }
+        /// <summary>writes known keys only, in place, and saves</summary>
+        public static void SetSettings(JObject patch) { lock (L) { var s = Settings(); foreach (var p in patch.Properties()) if (s[p.Name] != null) s[p.Name] = p.Value; File.WriteAllText(SetP, s.ToString(), new UTF8Encoding(false)); } }
         static JObject Ledger() { var d = Doc(); var l = d["ledger"] as JObject; if (l == null) d["ledger"] = l = new JObject(); return l; }
 
         // ---- API ----
@@ -367,7 +396,7 @@ namespace PinguinoHost
         const string Link = "https://innocentpenguin.com/leaderboards";
 
         public static bool IsViewerCommand(string c) { return c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch"; }
-        public static bool IsModCommand(string c) { return c == "!addpoints" || c == "!removepoints" || c == "!economy"; }
+        public static bool IsModCommand(string c) { return c == "!addpoints" || c == "!removepoints" || c == "!economy" || c == "!pgrant"; }
 
         public static void Handle(string user, string cmd, string[] args, bool mod, Action<string> say, Func<string, string> parseMonth, Func<string, string> monthLabel)
         {
@@ -404,6 +433,13 @@ namespace PinguinoHost
                 {
                     double n; if (args.Length < 2 || !double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out n) || n <= 0) { say("Usage: " + cmd + " @user <amount>"); return; }
                     say(Adjust(args[0], cmd == "!addpoints" ? n : -n, user)); return;
+                }
+                if (cmd == "!pgrant")   // hidden: !pgrant @user|everyone <amount, negative takes> [reason...]. Never answers in chat; the result is in the log.
+                {
+                    double n; if (args.Length < 2 || !double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out n)) return;
+                    bool all = args[0].ToLowerInvariant() == "everyone";
+                    var r = Grant(new JObject { { "target", all ? "everyone" : "user" }, { "login", args[0] }, { "amount", n }, { "reason", string.Join(" ", args.Skip(2)) }, { "by", user } });
+                    Clog.Info("economy", "!pgrant by " + user + ": " + (string)(r["message"] ?? r["error"])); return;
                 }
                 if (cmd == "!economy")
                 {
