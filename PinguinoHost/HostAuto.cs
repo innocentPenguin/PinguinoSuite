@@ -414,6 +414,12 @@ namespace PinguinoHost
                     var rq = new HttpRequestMessage(HttpMethod.Post, u) { Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json") };
                     string tok = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? ""; if (tok != "" && ((IPAddress.TryParse(u.Host, out var ip) && IPAddress.IsLoopback(ip)) || u.Host == "localhost")) rq.Headers.Add("Authorization", "Bearer " + tok);
                     var r = h.SendAsync(rq).Result; var j = JObject.Parse(r.Content.ReadAsStringAsync().Result);
+                    if ((bool?)st["redeem"] == true && ctx.ContainsKey("redemptionId") && ctx["redemptionId"] != "")
+                    {
+                        string rid = ctx["redemptionId"], rw = ctx.ContainsKey("rewardId") ? ctx["rewardId"] : "";
+                        if ((bool?)j["refund"] == true) Redeems.Cancel(rid, rw);   // the module turned the song down: give the points back
+                        else if ((bool?)j["ok"] != false) Redeems.Record(ctx.ContainsKey("userName") ? ctx["userName"] : "", rid, rw, ctx.ContainsKey("title") ? ctx["title"] : "");
+                    }
                     string say = (string)j["say"] ?? ""; if (say == "" && (bool?)j["ok"] == false) say = (string)j["error"] != null && (bool?)st["sayErrors"] == true ? (string)j["error"] : "";
                     return "module " + cmd + " -> " + (int)r.StatusCode + (say != "" ? " | " + Say((string)st["as"] ?? "core", say, false) : "");
                 }

@@ -233,7 +233,7 @@ namespace PinguinoHost
                 case "automod.message.hold": case "automod.message.update": AutomodHeld.Note(t, e); return;
                 case "stream.online": a["eventType"] = "StreamOnline"; break;
                 case "stream.offline": a["eventType"] = "StreamOffline"; break;
-                case "channel.channel_points_custom_reward_redemption.add": a["eventType"] = "TwitchRedeem"; a["userName"] = U("user_login"); a["title"] = (string)e["reward"]?["title"] ?? ""; a["input"] = U("user_input"); a["cost"] = (int?)e["reward"]?["cost"] ?? 0; break;
+                case "channel.channel_points_custom_reward_redemption.add": a["eventType"] = "TwitchRedeem"; a["userName"] = U("user_login"); a["title"] = (string)e["reward"]?["title"] ?? ""; a["input"] = U("user_input"); a["cost"] = (int?)e["reward"]?["cost"] ?? 0; a["redemptionId"] = (string)e["id"] ?? ""; a["rewardId"] = (string)e["reward"]?["id"] ?? ""; break;
                 default: return;
             }
             raise(a);

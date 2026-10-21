@@ -69,7 +69,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); SiteTeach.Start(); LobbyPush.Start(); SiteShop.Start(); OverlayChat.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start(); Streaks.Start(); Boards.Start(); Emotes.Start(); Timers.Start(); StreamTimers.Start(); Reminders.Start(); Economy.Start(); ProfileSync.Start();
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); SiteTeach.Start(); LobbyPush.Start(); Redeems.Start(); SiteShop.Start(); OverlayChat.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start(); Streaks.Start(); Boards.Start(); Emotes.Start(); Timers.Start(); StreamTimers.Start(); Reminders.Start(); Economy.Start(); ProfileSync.Start();
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -273,7 +273,7 @@ namespace PinguinoHost
                 if (line.StartsWith("@") && line.Contains(" USERNOTICE #")) { Streaks.OnUserNotice(line); continue; }   // sim: a raw IRC USERNOTICE line
                 if (line.StartsWith("eventsub ")) { var q = line.Split(new[] { ' ' }, 3); try { EventSub.Simulate(q[1], q[2], x => DispatchEvent(x)); } catch (Exception ex) { Console.WriteLine("ERROR eventsub: " + ex.Message); } continue; }
                 if (line.StartsWith("event "))   // sim: event TwitchSub alice 2   (3rd word = tier / bits / viewers)
-                { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v }, { "moderator", p.Length > 4 ? p[4] : "" } }); continue; }
+                { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v }, { "moderator", p.Length > 4 ? p[4] : "" }, { "title", "Song Request" }, { "input", v }, { "redemptionId", "red-" + v }, { "rewardId", "rw1" } }); continue; }   // TwitchRedeem: 3rd word = the song text
                 int c = line.IndexOf(':'); if (c < 1) continue;
                 string who = line.Substring(0, c).Trim(); int role = 1;
                 if (who.StartsWith("*")) { role = 3; who = who.Substring(1); } else if (who.StartsWith("#")) { role = 4; who = who.Substring(1); } else if (who.StartsWith("%")) { role = 2; who = who.Substring(1); }   // sim: "%alice: hi" = a VIP
