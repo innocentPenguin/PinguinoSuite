@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 
 namespace PinguinoHost
@@ -15,6 +15,7 @@ namespace PinguinoHost
             if (Sim.IsSim(login) || Boards.IsBot(login) || Boards.AllBots().Contains(login)) return;
             string ch = ""; try { ch = ((string)HostApi.StreamerCreds()["Channel"] ?? "").ToLowerInvariant(); } catch (Exception) { }
             if (login == ch) return;
+            Sounds.OnFirstChat(login);   // the welcome chime is its own setting (alerts_settings.json), independent of the bonus
             long amount = Amount(); if (amount <= 0) return;
             string id = "welcome:" + login; if (Economy.Applied(id)) return;
             int delay; if (!int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_WELCOME_DELAY_SEC"), out delay) || delay < 0) delay = 45;

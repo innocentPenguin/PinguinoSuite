@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -137,7 +137,7 @@ namespace PinguinoHost
                 {
                     var al = AlertCfg.Settings(); if ((bool?)al["MuteSounds"] == true) return "alert sounds are muted";
                     var so = al["Sounds"]?[x("kind")]; string file = (string)so?["File"] ?? ""; if (file == "") return "no sound set for " + x("kind");
-                    return Sound(file, (double?)so["Volume"] ?? 0.6, test);
+                    return Sounds.Play(x("kind"), file, (double?)so["Volume"] ?? 0.6, test);
                 }
                 case "session_say": ctx["session.line"] = Session.Line(); return "session: " + ctx["session.line"];
                 case "goal_say": ctx["goal.line"] = Session.GoalLine(x("id")); return "goal: " + ctx["goal.line"];
@@ -188,8 +188,27 @@ namespace PinguinoHost
 
         /// <summary>Streamer.bot replacement actions (Docs\STREAMERBOT_REPLACEMENT.md). The ones Ivan asked to be live are created ENABLED, the rest disabled.
         /// Remembered in "seeded", so deleting or editing one sticks.</summary>
+        /// <summary>one-time (marker "alertsound1"): the seeded follow/sub/resub/gift/cheer/raid actions saved before the alert_sound step existed get it, placed before the popup step.
+        /// Sounds come from alerts_settings.json, so a kind with no file stays silent.</summary>
+        static void AddAlertSoundSteps()
+        {
+            var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
+            if (seeded.Any(v => (string)v == "alertsound1")) return;
+            if (!seeded.Any(v => (string)v == "sbreplace2")) return;   // not seeded yet: the fresh seed already carries the steps
+            foreach (var a in ((JArray)doc["actions"]).OfType<JObject>())
+            {
+                string id = (string)a["id"] ?? ""; var kinds = new Dictionary<string, string> { { "sb-follow", "follow" }, { "sb-sub", "sub" }, { "sb-resub", "resub" }, { "sb-gift", "gift" }, { "sb-cheer", "cheer" }, { "sb-raid", "raid" } };
+                string kind; if (!kinds.TryGetValue(id, out kind)) continue;
+                var steps = a["steps"] as JArray; if (steps == null || steps.OfType<JObject>().Any(s => (string)s["type"] == "alert_sound")) continue;
+                int at = steps.Count; for (int i = 0; i < steps.Count; i++) if ((string)steps[i]["type"] == "run_action") { at = i; break; }
+                steps.Insert(at, Step("alert_sound", "kind", kind));
+            }
+            seeded.Add("alertsound1"); doc["seeded"] = seeded; Save(doc);
+        }
+
         public static void SeedStreamerBotPresets()
         {
+            try { AddAlertSoundSteps(); } catch (Exception ex) { Clog.Warn("automation", "alert sound migration failed: " + ex.Message); }
             try
             {
                 var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();

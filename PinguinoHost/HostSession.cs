@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -99,16 +99,27 @@ namespace PinguinoHost
     {
         public static JObject Settings()
         {
-            var sounds = new JObject(); foreach (var k in new[] { "follow", "sub", "resub", "gift", "cheer", "raid", "ban" }) sounds[k] = new JObject { { "File", "" }, { "Volume", 0.6 } };
-            var d = new JObject { { "PopupScene", "Alerts" }, { "PopupSource", "Latest Group" }, { "PopupSeconds", 10 }, { "MuteSounds", false }, { "Sounds", sounds } };
+            var f = Path.Combine(HostApi.DataDir, "alerts_settings.json"); bool fresh = !File.Exists(f); if (fresh) Sounds.EnsureDefaults();   // first run: write the tiny default chimes and use them
+            var sounds = new JObject(); foreach (var k in Sounds.Kinds) sounds[k] = new JObject { { "File", fresh ? Sounds.DefaultFile(k) : "" }, { "Volume", 0.6 } };
+            var welcome = new JObject { { "Enabled", true }, { "File", fresh ? Sounds.DefaultFile("welcome") : "" }, { "Volume", 0.6 }, { "OnlyWhileLive", true } };
+            var d = new JObject { { "PopupScene", "Alerts" }, { "PopupSource", "Latest Group" }, { "PopupSeconds", 10 }, { "MuteSounds", false }, { "Sounds", sounds }, { "Welcome", welcome } };
             try
             {
-                var f = Path.Combine(HostApi.DataDir, "alerts_settings.json");
-                if (File.Exists(f)) { foreach (var p in JObject.Parse(File.ReadAllText(f))) { if (p.Key == "Sounds" && p.Value is JObject so) foreach (var q in so) d["Sounds"][q.Key] = q.Value; else d[p.Key] = p.Value; } }
+                if (!fresh) { foreach (var p in JObject.Parse(File.ReadAllText(f))) { if ((p.Key == "Sounds" || p.Key == "Welcome") && p.Value is JObject so) foreach (var q in so) { if (p.Key == "Sounds" && q.Value is JObject qo) { foreach (var r in qo) d["Sounds"][q.Key][r.Key] = r.Value; } else d[p.Key][q.Key] = q.Value; } else d[p.Key] = p.Value; } }
                 else File.WriteAllText(f, d.ToString());
             }
             catch (Exception) { }
             return d;
+        }
+        /// <summary>merges a partial settings object into alerts_settings.json (the caller has validated it)</summary>
+        public static void Save(JObject patch)
+        {
+            lock (typeof(AlertCfg))
+            {
+                var cur = Settings();
+                foreach (var p in patch) { if ((p.Key == "Sounds" || p.Key == "Welcome") && p.Value is JObject so) foreach (var q in so) { if (p.Key == "Sounds" && q.Value is JObject qo) { foreach (var r in qo) cur["Sounds"][q.Key][r.Key] = r.Value; } else cur[p.Key][q.Key] = q.Value; } else cur[p.Key] = p.Value; }
+                File.WriteAllText(Path.Combine(HostApi.DataDir, "alerts_settings.json"), cur.ToString());
+            }
         }
     }
 }

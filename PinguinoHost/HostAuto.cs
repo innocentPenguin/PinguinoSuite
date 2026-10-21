@@ -360,7 +360,7 @@ namespace PinguinoHost
         }
         static string Obs(Func<bool> f, string what) { try { return f() ? "OBS " + what : "OBS not connected or refused: " + what; } catch (Exception ex) { return "OBS error: " + ex.Message; } }
 
-        static string Sound(string file, double vol, bool test)
+        internal static string Sound(string file, double vol, bool test)
         {
             if (string.IsNullOrWhiteSpace(file) || !File.Exists(file)) return "sound file not found: " + file;
             if (test) return "(test) would play " + Path.GetFileName(file);
