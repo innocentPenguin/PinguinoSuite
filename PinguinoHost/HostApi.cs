@@ -87,7 +87,8 @@ namespace PinguinoHost
                 if (AutoRoutes(c, p)) return true;
                 if (p == "/api/wheel/public" && c.Request.HttpMethod == "GET")   // the tournament wheel overlay: picks made so far + the current spin (no future picks exist)
                 { string wp = Path.Combine(DataDir, "wheel_public.json"); if (!File.Exists(wp)) wp = Path.Combine(DataDir, "runtime", "wheel_public.json");
-                  c.Response.Headers["Cache-Control"] = "no-store"; Write(c, File.Exists(wp) ? File.ReadAllText(wp) : "{\"status\":\"none\",\"queue\":[],\"picks\":[],\"teams\":[],\"waitlist\":[]}", "application/json"); return true; }
+                  c.Response.Headers["Cache-Control"] = "no-store"; JObject wj; try { wj = JObject.Parse(File.Exists(wp) ? File.ReadAllText(wp).TrimStart((char)0xFEFF) : "{\"status\":\"none\"}"); } catch (Exception) { wj = new JObject { { "status", "none" } }; }
+                  Write(c, WheelPublic.Adapt(wj).ToString(), "application/json"); return true; }
                 if (p == "/api/summary" && c.Request.HttpMethod == "GET") { Write(c, Summary().ToString(), "application/json"); return true; }
                 if (p == "/api/lease" && c.Request.HttpMethod == "GET") { Write(c, Lease.State().ToString(), "application/json"); return true; }
                 if (p == "/api/prestream" && c.Request.HttpMethod == "GET") { Write(c, PrestreamCached().ToString(), "application/json"); return true; }

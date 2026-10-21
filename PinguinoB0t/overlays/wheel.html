@@ -1,165 +1,245 @@
 <!doctype html>
-<!--
-  PinguinoB0t - TOURNAMENT WHEEL overlay (OBS Browser Source), served by PinguinoHost:  http://127.0.0.1:8770/wheel.html
-  Size 1280 x 720 (transparent background). Reads /api/wheel/public every half second.
-  Every spin makes ONE pick the moment a mod presses SPIN (!wheel spin / !spin / the PinguinoSuite button): this page only
-  ever sees picks that already exist, and keeps the newest one hidden until the wheel has stopped.
-  Preview without the bot: wheel.html?demo
--->
-<html>
-<head>
-<meta charset="utf-8">
-<title>Tournament Wheel</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Tournament Wheel Overlay</title>
+<!-- OBS browser source for the tournament teams. Public and tokenless: it only reads /api/wheel/public (no ids, MMR or seed).
+     MANUAL SPIN: the wheel is always on screen with everyone who can still be picked. A mod presses "Spin" on /mod/wheel: ONE pick spins, lands on the name the
+     server committed, the name leaves the wheel and joins its team card. Nothing advances by itself. (The old timed reveal still exists as a fallback: "Auto reveal" on the mod page.)
+     Options (query string): cam=right|left|none (default right: keeps everything out of the right 32% where the webcam sits) | camw=0..60 (percent kept free, default 32)
+     | bg=transparent|RRGGBB | accent, card, fg = RRGGBB | font=Name | duration=ms (auto fallback only: length of one pick) | sound=1 (ticks while the wheel spins, a chime when it lands;
+     click the source once, or enable "Control audio via OBS") -->
 <style>
-  :root { --orange:#ff9900; --panel:rgba(20,22,17,.94); --line:#36382f; --gold:#ffd166; --text:#f5f2eb; --muted:#a9aaa1; }
-  html, body { margin:0; width:1280px; height:720px; overflow:hidden; background:transparent; font-family:"Rubik","Segoe UI",sans-serif; color:var(--text); }
-  #root { position:absolute; inset:0; display:flex; gap:28px; align-items:center; justify-content:center; transition:opacity .5s; }
-  #root.off { opacity:0; }
-  .wheelbox { position:relative; width:520px; height:560px; }
-  canvas { position:absolute; left:10px; top:40px; }
-  .pointer { position:absolute; left:50%; top:22px; margin-left:-16px; width:0; height:0; border-left:16px solid transparent; border-right:16px solid transparent; border-top:44px solid var(--gold); filter:drop-shadow(0 3px 4px rgba(0,0,0,.6)); z-index:3; }
-  .banner { position:absolute; left:0; right:0; bottom:0; text-align:center; font-size:30px; font-weight:800; color:#fff; text-shadow:0 2px 8px #000; min-height:40px; }
-  .banner b { color:var(--orange); }
-  .card { width:380px; max-height:620px; overflow:hidden; padding:18px 18px 14px; background:var(--panel); border:1px solid var(--line); border-radius:18px; box-shadow:0 10px 30px rgba(0,0,0,.5); }
-  h1 { margin:0 0 4px; font-size:22px; font-weight:800; letter-spacing:1px; text-transform:uppercase; }
-  h1 span { color:var(--orange); }
-  .sub { font-size:14px; color:var(--muted); margin-bottom:12px; letter-spacing:.5px; }
-  .team { display:flex; gap:10px; align-items:center; padding:7px 10px; margin-bottom:6px; border:1px solid var(--line); border-left:5px solid var(--orange); border-radius:10px; background:rgba(255,255,255,.04); font-size:20px; font-weight:700; }
-  .team i { font-style:normal; color:var(--orange); min-width:26px; }
-  .team.empty { opacity:.55; }
-  .wait { margin-top:8px; font-size:15px; color:var(--muted); }
-  .wait b { color:var(--gold); }
-  .pill { display:inline-block; padding:3px 10px; margin:2px; border-radius:999px; background:rgba(255,255,255,.08); font-size:15px; }
-  .win { color:var(--gold); }
-  .signed { position:absolute; left:0; top:0; padding:5px 14px; border-radius:999px; background:var(--panel); border:1px solid var(--line); font-size:18px; font-weight:800; z-index:4; }
-  .signed b { color:var(--orange); }
-  .feed { position:absolute; left:0; top:44px; width:230px; z-index:4; }
-  .feed div { margin-bottom:4px; padding:4px 10px; border-radius:8px; background:rgba(20,22,17,.9); border-left:4px solid var(--orange); font-size:16px; font-weight:700; }
-  .feed .leave { border-left-color:#a9aaa1; color:var(--muted); }
-</style>
-</head>
-<body>
-<div id="root" class="off">
-  <div class="wheelbox">
-    <div class="signed" id="signed"></div>
-    <div class="feed" id="feed"></div>
-    <div class="pointer"></div>
-    <canvas id="cv" width="500" height="500"></canvas>
-    <div class="banner" id="banner"></div>
-  </div>
-  <div class="card">
-    <h1 id="title">Tournament <span>wheel</span></h1>
-    <div class="sub" id="sub"></div>
-    <div id="list"></div>
-    <div class="wait" id="wait"></div>
-  </div>
-</div>
-<script>
-(function () {
-  var DEMO = /[?&]demo/.test(location.search);
-  var cv = document.getElementById('cv'), cx = cv.getContext('2d');
-  var skew = 0, data = null, spinKey = '', spinFrom = 0, spinTo = 0, spinStartMs = 0, spinMs = 8500, landName = '', landedShown = '', angle = 0;
-  var COLORS = ['#ff9900', '#3a3d33', '#e07a00', '#4a4d41', '#ffb84d', '#2c2e26'];
-
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
-  function ease(t) { return 1 - Math.pow(1 - t, 4); }
-
-  function draw(names, ang) {
-    var n = names.length, R = 240, c = 250;
-    cx.clearRect(0, 0, 500, 500);
-    if (!n) {
-      cx.beginPath(); cx.arc(c, c, R, 0, 7); cx.fillStyle = '#2c2e26'; cx.fill();
-      cx.fillStyle = '#a9aaa1'; cx.font = '700 26px Rubik, sans-serif'; cx.textAlign = 'center'; cx.fillText('type !me to join', c, c + 8);
-      return;
-    }
-    var seg = Math.PI * 2 / n;
-    for (var i = 0; i < n; i++) {
-      var a0 = ang + i * seg - Math.PI / 2 - seg / 2, a1 = a0 + seg;
-      cx.beginPath(); cx.moveTo(c, c); cx.arc(c, c, R, a0, a1); cx.closePath();
-      cx.fillStyle = COLORS[i % COLORS.length]; cx.fill();
-      cx.strokeStyle = '#14160f'; cx.lineWidth = 2; cx.stroke();
-      if (n <= 60) {
-        cx.save(); cx.translate(c, c); cx.rotate(a0 + seg / 2); cx.textAlign = 'right'; cx.fillStyle = (i % 2 === 0) ? '#14160f' : '#f5f2eb';
-        var fs = Math.max(11, Math.min(24, 300 / n * 1.6)); cx.font = '700 ' + fs + 'px Rubik, sans-serif';
-        var nm = String(names[i]); if (nm.length > 14) nm = nm.slice(0, 13) + '…';
-        cx.fillText(nm, R - 14, fs / 3); cx.restore();
-      }
-    }
-    cx.beginPath(); cx.arc(c, c, 34, 0, 7); cx.fillStyle = '#14160f'; cx.fill(); cx.strokeStyle = '#ff9900'; cx.lineWidth = 4; cx.stroke();
+:root{--bg:#141414;--face:#2c2f35;--grey:#1d1d1d;--down:0vh;--sw:calc(100vw - var(--l) - var(--r));--fg:#fff;--accent:#ff9900;--card:#1b1610;--font:system-ui,Segoe UI,Arial,sans-serif;--l:0vw;--r:32vw}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--font);overflow:hidden}
+body.clear{background:transparent}
+#stage{position:fixed;top:var(--down);bottom:0;left:calc(var(--l) + 1vw);right:calc(var(--r) + 1vw);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1.2vmin;padding:1.2vmin 2vmin 0}
+#head{flex:none;display:flex;flex-direction:column;align-items:center;gap:.4vmin;text-align:center;width:100%}
+#body{flex:1;min-height:0;width:100%;position:relative;container-type:size;display:flex;align-items:center;justify-content:center}
+#side{position:absolute;bottom:0;left:0;width:30vmin;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:1.6vmin;text-align:center}
+#wheelbox.off ~ #side{top:0;right:0;width:auto;justify-content:center}
+#title{font-size:7.25vmin;font-weight:900;letter-spacing:.03em;color:var(--accent);-webkit-text-stroke:.9vmin #0a0a0a;paint-order:stroke fill;text-shadow:0 2px 10px #000b}
+#label{font-size:4.25vmin;font-weight:900;letter-spacing:.03em;color:#fff;-webkit-text-stroke:.7vmin #0a0a0a;paint-order:stroke fill;text-shadow:0 2px 8px #000}
+#label:empty{display:none}
+#wheelbox{position:relative;flex:none;width:var(--wd);height:var(--wd);--wd:min(calc(100vh - var(--down) - 3vh - 14vmin),calc(var(--sw) - 4vmin));--wd:min(112cqw,112cqh);left:2.5vmin}
+#wheelbox.off{display:none}
+#cv{width:100%;height:100%;display:block}
+#wheelbox.landed #cv{animation:glow .9s ease-out}
+#hub{position:absolute;left:50%;top:50%;width:calc(var(--wd) * .216);height:calc(var(--wd) * .216);transform:translate(-50%,-50%);border-radius:50%;object-fit:cover;border:calc(var(--wd) * .008) solid #ff9900;background:#22252b;pointer-events:none}
+#pick{z-index:2;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;text-align:center;font-weight:900;color:#fff;background:#141414e6;border:.5vmin solid var(--accent);border-radius:50vmin;padding:1vmin 2.6vmin;font-size:calc(var(--wd) * .07);-webkit-text-stroke:.5vmin #000;paint-order:stroke fill;box-shadow:0 0 4vmin #000c;overflow-wrap:anywhere;animation:slam .5s cubic-bezier(.2,1.6,.4,1)}
+#pick[hidden]{display:none}
+#teams{width:100%}
+#teams:empty{display:none}
+.team{background:var(--card);border:.4vmin solid #ff990088;border-radius:2vmin;padding:1.6vmin 2vmin;animation:pop .4s ease-out}
+.team h3{margin:0 0 .8vmin;font-size:3.2vmin;color:var(--accent)}
+.team div{font-size:4vmin;font-weight:800;overflow-wrap:anywhere}
+.team div.empty{opacity:.35;font-weight:400}
+.team.wip{border-style:dashed;opacity:.9}
+#wheelbox:not(.off) ~ #side .team div{font-size:3vmin}#wheelbox:not(.off) ~ #side .team h3{font-size:2.4vmin}#wheelbox:not(.off) ~ #side .team{padding:1.2vmin 1.4vmin;background:#141414ee}
+.team.part h3::after{content:" (partial)";opacity:.7;font-size:1.8vmin}
+.team.fresh{border-color:var(--accent);box-shadow:0 0 3vmin #ff990088}
+#big{font-size:5.5vmin;font-weight:900;color:var(--accent);text-shadow:0 2px 14px #000c;text-align:center}
+#big:empty{display:none}
+#final{font-size:2.6vmin;font-weight:700;text-align:center;max-width:100%;overflow-wrap:anywhere;line-height:1.35;background:var(--card);border:.3vmin solid #ff990066;border-radius:1.8vmin;padding:1.2vmin 2vmin}
+#final:empty{display:none}
+#wait{font-size:2.1vmin;opacity:.8;text-align:center}
+@keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
+@keyframes slam{from{transform:translate(-50%,-50%) scale(.3);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes glow{0%{filter:drop-shadow(0 0 5vmin #ffcc66)}100%{filter:none}}
+</style></head><body>
+<div id="stage"><div id="head"><div id="title"></div><div id="label"></div></div><div id="body"><div id="wheelbox"><canvas id="cv"></canvas><img id="hub" src="penguin-anim.webp" alt=""><div id="pick" hidden></div></div><div id="side"><div id="big"></div><div id="teams"></div><div id="final"></div><div id="wait"></div></div></div></div>
+<script>(()=>{
+const q=new URLSearchParams(location.search),R=document.documentElement.style;
+const ok=v=>/^#?[0-9a-fA-F]{3,8}$/.test(v||''),hex=v=>v.startsWith('#')?v:'#'+v;
+if(q.get('bg')==='transparent')document.body.classList.add('clear');else if(ok(q.get('bg')))R.setProperty('--bg',hex(q.get('bg')));
+for(const k of ['accent','card','fg'])if(ok(q.get(k)))R.setProperty('--'+k,hex(q.get(k)));
+const f=q.get('font');if(f&&/^[\w ,-]{1,60}$/.test(f))R.setProperty('--font',f+',system-ui,sans-serif');
+// Webcam safe area: the stage never uses the side where the camera sits (default right, 32% of the width).
+{const cam=q.get('cam')==='left'?'left':q.get('cam')==='none'?'none':'right';const w=cam==='none'?0:Math.max(0,Math.min(60,q.get('camw')==null||q.get('camw')===''?32:+q.get('camw')||0));
+ R.setProperty('--l',cam==='left'?w+'vw':'0vw');R.setProperty('--r',cam==='right'?w+'vw':'0vw')}
+if(q.get('down')!=null&&q.get('down')!==''&&isFinite(+q.get('down')))R.setProperty('--down',Math.max(-20,Math.min(40,+q.get('down')))+'vh');   // how far the whole overlay sits lower on screen (default 6)
+const dur=+q.get('duration')>0?Math.max(300,Math.min(30000,+q.get('duration'))):0;
+const sound=q.get('sound')==='1';
+let actx=null;
+const beep=(f1,len,vol)=>{if(!sound)return;try{actx=actx||new AudioContext();const o=actx.createOscillator(),g=actx.createGain();o.type='triangle';o.frequency.value=f1;g.gain.setValueAtTime(vol,actx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+len);o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+len)}catch{}};
+const tick=()=>beep(900,.04,.05),chime=()=>{beep(660,.35,.08);setTimeout(()=>beep(990,.5,.08),120)};
+if(sound)addEventListener('click',()=>{try{(actx=actx||new AudioContext()).resume()}catch{}});
+const $=id=>document.getElementById(id);
+// What the pick pill says: the name just picked, or the WHOLE team ('A + B') when this pick completes it.
+function pickText(steps,upto,sizes){const cur=steps[upto-1],mem=steps.slice(0,upto).filter(s=>s.team===cur.team).map(s=>s.name),sz=sizes&&sizes[cur.team];return mem.length>1&&mem.length>=sz?mem.join(' + '):cur.name}
+const TAU=Math.PI*2,SPIN=.78; // timed fallback: the first 78% of a pick is the spin. Manual: SPINF of the spin time is movement, the rest shows the landed name
+const SPINF=.66;
+const hashStr=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0};
+const rng=seed=>{let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}};
+const ease=p=>1-Math.pow(1-p,4);
+// Slice order: a stable, seeded shuffle of the names (same for every viewer/refresh, and removing a name keeps the others where they are).
+const orderOf=(names,salt)=>names.slice().sort((a,b)=>hashStr(salt+'|'+a)-hashStr(salt+'|'+b)||(a<b?-1:1));
+const GREY=getComputedStyle(document.documentElement).getPropertyValue('--face').trim()||'#3a3f47';   // the wheel face (a different shade from the page and the stage panel)
+const cv=$('cv'),ctx=cv.getContext('2d');let size=0;
+function fit(){const r=cv.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1),s=Math.max(10,Math.round(r.width*dpr));if(s!==size){size=s;cv.width=s;cv.height=s}}
+// ---- colours: flat, vibrant, one per player. Ivan = Penguino orange; everyone else = their Twitch chat colour (the site sends it), else one of the 15 default Twitch colours by name.
+const TW15=['#FF0000','#0000FF','#00FF00','#B22222','#FF7F50','#9ACD32','#FF4500','#2E8B57','#DAA520','#D2691E','#5F9EA0','#1E90FF','#FF69B4','#8A2BE2','#00FF7F'];
+const isIvan=n=>/^innocentpenguin_?$/i.test(n||'');
+function toHsl(x){const r=parseInt(x.slice(1,3),16)/255,g=parseInt(x.slice(3,5),16)/255,b=parseInt(x.slice(5,7),16)/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2;let h=0,s=0;
+ if(mx!==mn){const d=mx-mn;s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;h*=60}return {h,s,l}}
+function toHex(c){const h=((c.h%360)+360)%360,s=c.s,l=c.l,a=s*Math.min(l,1-l),k=n=>(n+h/30)%12,fn=n=>{const v=l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1));return Math.round(v*255).toString(16).padStart(2,'0')};return '#'+fn(0)+fn(8)+fn(4)}
+function lum(x){const ch=i=>{const v=parseInt(x.slice(i,i+2),16)/255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)};return .2126*ch(1)+.7152*ch(3)+.0722*ch(5)}
+const alike=(a,b)=>{const dh=Math.abs(a.h-b.h),d=Math.min(dh,360-dh);return d<18&&Math.abs(a.l-b.l)<.1};
+let cmapKey='',cmap={};
+// Classic even palette (same saturation/brightness all round); Ivan stays Penguino orange. The colour follows the player's place in a stable name order, so it never changes when somebody leaves the wheel.
+const PALETTE=['#e53935','#fb8c00','#fdd835','#43a047','#00acc1','#1e88e5','#8e24aa','#ec407a'];
+function colorMap(names){
+ const key=names.join('\u0001');if(key===cmapKey)return cmap;
+ const out={};let i=0;
+ for(const nm of names.slice().sort((a,b)=>hashStr(a)-hashStr(b)||(a<b?-1:1))){out[nm]={bg:isIvan(nm)?'#ff9900':PALETTE[i%PALETTE.length],fg:'#ffffff'};i++}
+ cmapKey=key;cmap=out;return out;
+}
+let kick=0;
+function arcText(s,txt,r,fs,mid){ // text curved along the top of a circle, centred on angle mid
+ ctx.save();ctx.font='800 '+fs+'px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle='#ffffff';ctx.textAlign='center';ctx.textBaseline='middle';
+ const step=fs*.62/r,start=mid-step*(txt.length-1)/2;
+ for(let i=0;i<txt.length;i++){ctx.save();ctx.rotate(start+i*step+Math.PI/2);ctx.translate(0,-r);ctx.fillText(txt[i],0,0);ctx.restore()}
+ ctx.restore();
+}
+function drawWheel(order,rot){
+ fit();const s=size,c=s/2,Rr=s*.43,hub=s*.12,n=order.length,a=TAU/Math.max(1,n);ctx.clearRect(0,0,s,s);
+ ctx.save();ctx.translate(c,c);
+ // white rim with a soft shadow
+ ctx.save();ctx.shadowColor='rgba(0,0,0,.55)';ctx.shadowBlur=s*.03;ctx.shadowOffsetY=s*.01;ctx.beginPath();ctx.arc(0,0,Rr+s*.0047,0,TAU);ctx.fillStyle='#555a63';ctx.fill();ctx.restore();
+ ctx.save();ctx.rotate(rot);
+ ctx.beginPath();ctx.arc(0,0,Rr,0,TAU);ctx.fillStyle=GREY;ctx.fill();   // penguin grey wheel background
+ const fs=Math.min(s*.06,Rr*a*.55),text=fs>=s*.017,fam=getComputedStyle(document.body).fontFamily,maxW=Rr*.95-hub*1.12;
+ for(let j=0;j<n;j++){
+  const st=j*a,col=cmap[order[j]]||{bg:'#ff9900',fg:'#14100a'};
+  if(n===1){ctx.beginPath();ctx.arc(0,0,Rr,0,TAU);ctx.fillStyle=col.bg;ctx.fill()}
+  else{ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,Rr,st,st+a);ctx.closePath();ctx.fillStyle=col.bg;ctx.fill();ctx.lineWidth=Math.max(1,s*.005);ctx.strokeStyle=GREY;ctx.stroke()}
+  if(text){ctx.save();ctx.rotate(st+a/2);ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillStyle='#ffffff';ctx.lineJoin='round';ctx.strokeStyle='#000';ctx.lineWidth=4*(s/Math.max(1,cv.getBoundingClientRect().width));ctx.font='800 '+Math.max(s*.028,fs)+'px '+fam;
+   let t=order[j];const w0=ctx.measureText(t).width;if(w0>maxW)ctx.font='800 '+Math.max(s*.02,Math.max(s*.028,fs)*maxW/w0)+'px '+fam;
+   while(ctx.measureText(t).width>maxW&&t.length>2)t=t.slice(0,-2)+'\u2026';
+   ctx.strokeText(t,Rr*.95,0);ctx.fillText(t,Rr*.95,0);ctx.restore()}
+ }
+ ctx.restore();
+ // centre hub: dark disc behind the animated penguin (the <img id="hub"> on top of the canvas)
+ ctx.save();ctx.shadowColor='rgba(0,0,0,.5)';ctx.shadowBlur=s*.02;ctx.beginPath();ctx.arc(0,0,hub,0,TAU);ctx.fillStyle='#22252b';ctx.fill();ctx.restore();
+ // pointer: small static penguin-orange arrow on the right edge, pointing into the wheel
+ ctx.save();const px=Rr+s*.07,ow=s*.007;ctx.beginPath();ctx.moveTo(px,-s*.035);ctx.lineTo(px,s*.035);ctx.lineTo(Rr-s*.045,0);ctx.closePath();
+ ctx.lineJoin='round';ctx.lineCap='round';ctx.lineWidth=ow*2;ctx.strokeStyle='#0a0a0a';ctx.stroke();ctx.fillStyle='#ff9900';ctx.fill();ctx.restore();   // outline = ow all round
+ ctx.restore();
+}
+// Where the wheel stops: the picked slice's centre (plus a little seeded jitter) under the pointer (right edge), after 5-7 full turns.
+function planFor(order,name,key){
+ const n=order.length,a=TAU/n,k=Math.max(0,order.indexOf(name)),r=rng(hashStr(key)),jit=(r()-.5)*.6,turns=5+Math.floor(r()*3);
+ return {n,a,k,total:turns*TAU-(k+.5+jit)*a};
+}
+let off=0,w=null,lastKey='',lastCount=-1,lastSlice='',landedFor='',lastDraw='';
+async function poll(){
+ try{const t0=Date.now();const r=await fetch('/api/wheel/public',{cache:'no-store'});const j=await r.json();const t1=Date.now();off=j.serverNow-(t0+t1)/2;w=j}catch{}
+ setTimeout(poll,2000);
+}
+// team cards. `steps` = picks shown so far, `sizes` = {team: members}; unfinished teams show "?" for the missing slots (dashed card).
+function renderTeams(steps,sizes,fresh,done,partial){
+ const teams=$('teams');teams.textContent='';
+ if(done||!steps.length)return;   // ONE card only: the team being built (the finished team is replaced when the next one starts); the end shows just the final line
+ const tm=steps[steps.length-1].team,mem=steps.filter(s=>s.team===tm).map(s=>s.name),sz=sizes&&sizes[tm]||mem.length,wip=mem.length<sz;
+ const c=document.createElement('div');c.className='team'+(wip?' wip':'')+(fresh&&!wip?' fresh':'');
+ const h=document.createElement('h3');h.textContent='Team '+tm;c.append(h);
+ for(const m of mem){const x=document.createElement('div');x.textContent=m;c.append(x)}
+ for(let k=mem.length;k<sz;k++){const x=document.createElement('div');x.className='empty';x.textContent='?';c.append(x)}
+ teams.append(c);
+}
+function setTop(){
+ $('title').textContent=w.status==='none'?'':((w.teamSize||2)+"'s Tournament");
+ const lobby=!w.draw||!w.draw.steps||!w.draw.steps.length;
+ $('label').textContent=(w.status==='open'||(w.status==='closed'&&lobby)||(w.status==='none'&&(w.names||[]).length))?'!me to join':'';
+ if(w.practice&&w.status!=='none')$('label').textContent=($('label').textContent?$('label').textContent+'  ·  ':'')+'PRACTICE';
+}
+// ---- manual spin (default) ----
+function paintManual(now){
+ const m=w.manual,d=w.draw,pool=w.pool||[],wb=$('wheelbox'),pick=$('pick'),big=$('big'),fin=$('final'),wait=$('wait');
+ if(d.id!==lastDraw){lastDraw=d.id;lastKey='';lastCount=-1;landedFor='';$('teams').textContent=''}
+ const Rv=m.revealed,total=m.total,t=Math.max(0,now-m.spunAt),spinning=Rv>0&&t<m.spinMs,moving=Rv>0&&t<m.spinMs*SPINF,landed=Rv>0&&t>=m.spinMs*SPINF;
+ const cur=Rv>0?d.steps[Rv-1]:null,finished=(Rv>=total&&Rv>0&&!spinning)||(!!m.last&&!spinning);   // only one name left = it is assigned by itself, no extra spin
+ const salt=d.id;
+ let shown=pool;
+ // the pool contains the pick being spun; once the spin is over the name leaves the wheel
+ if(cur&&!spinning){const i=pool.indexOf(cur.name);shown=pool.filter((x,j)=>j!==i)}
+ if(finished){wb.classList.add('off')}else wb.classList.remove('off');
+ big.textContent='';fin.textContent='';wait.textContent='';
+ if(!finished){
+  const order=orderOf(shown,salt);
+  if(moving){
+   const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv),ph=t/(m.spinMs*SPINF),rot=p.total*ease(Math.min(1,ph));
+   const under=Math.floor((((-rot)%TAU)+TAU)%TAU/p.a),sk=Rv+':'+under;
+   if(sk!==lastSlice){tick();kick=Math.min(1,kick+.7)}lastSlice=sk;
+   drawWheel(full,rot);pick.hidden=true;
+  }else if(landed&&spinning){
+   const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv);drawWheel(full,p.total);
+   if(landedFor!==d.id+':'+Rv){landedFor=d.id+':'+Rv;chime();pick.hidden=false;pick.textContent=pickText(d.steps,Rv,w.teamSizes);pick.style.animation='none';void pick.offsetWidth;pick.style.animation='';wb.classList.remove('landed');void wb.offsetWidth;wb.classList.add('landed')}
+  }else{
+   pick.hidden=true;landedFor=d.id+':'+Rv;
+   drawWheel(order,performance.now()/1000*.07);   // idle: the wheel turns slowly while it waits for the next spin
+   big.textContent='';
   }
-
-  function nowAdj() { return Date.now() - skew; }
-
-  function render() {
-    var d = data, root = document.getElementById('root');
-    if (!d || d.status === 'none' || d.status === 'closed') { root.className = 'off'; return; }
-    root.className = '';
-    var sp = d.spin, names = (d.queue || []).slice(), pending = false, t = 1;
-    if (sp && sp.at) {
-      t = sp.ms > 0 ? (nowAdj() - sp.at) / sp.ms : 1;
-      pending = t < 1;
-    }
-    // start (or resume) an animation when a new spin shows up
-    var key = sp ? sp.id + ':' + sp.at : '';
-    if (key && key !== spinKey && sp.landing && sp.landing.length) {
-      spinKey = key; landName = sp.landing[0]; spinMs = sp.ms; spinStartMs = sp.at;
-      var idx = Math.max(0, names.indexOf(landName)), n = Math.max(1, names.length);
-      spinFrom = angle % (Math.PI * 2);
-      var target = -idx * (Math.PI * 2 / n);
-      spinTo = spinFrom + (Math.PI * 2 * 6) + ((target - spinFrom) % (Math.PI * 2) - Math.PI * 2) % (Math.PI * 2);
-    }
-    if (spinKey === key && key) {
-      var tt = Math.min(1, Math.max(0, spinMs > 0 ? (nowAdj() - spinStartMs) / spinMs : 1));
-      angle = spinFrom + (spinTo - spinFrom) * ease(tt);
-    }
-    draw(names, angle);
-
-    var landed = !pending, hide = pending && sp ? (sp.landing || []) : [];
-    var banner = document.getElementById('banner');
-    if (landed && sp && sp.landing && sp.landing.length && !d.final) banner.innerHTML = '<span class="win">' + esc(sp.landing.join(' & ')) + '</span>';
-    else if (d.final) banner.innerHTML = 'TEAMS <b>LOCKED IN</b>';
-    else if (d.status === 'open') banner.innerHTML = 'Type <b>!me</b> to join (' + names.length + ' waiting)';
-    else banner.innerHTML = '';
-
-    var sg = document.getElementById('signed'); sg.style.display = d.showSignedUp === false ? 'none' : ''; sg.innerHTML = '<b>' + (d.signedUp || 0) + '</b> signed up';
-    var fh = '', fm = d.feedMs || 2000;
-    (d.feed || []).forEach(function (f) {
-      var age = nowAdj() - f.at;
-      if (age < 0 || age >= fm) return;
-      fh += '<div class="' + f.kind + '" style="opacity:' + Math.max(0, Math.min(1, (fm - age) / 400)).toFixed(2) + '">' + esc(f.name) + (f.kind === 'join' ? ' joined' : ' left') + '</div>';
-    });
-    document.getElementById('feed').innerHTML = fh;
-
-    var title = document.getElementById('title'), sub = document.getElementById('sub'), list = document.getElementById('list'), wait = document.getElementById('wait');
-    title.innerHTML = d.final ? 'Final <span>teams</span>' : 'Tournament <span>wheel</span>';
-    sub.textContent = (d.mode === 'balanced' ? 'Rigged / balanced by MMR' : 'True random') + ' · teams of ' + d.teamSize + (d.round ? ' · round ' + (d.round + 1) : '');
-    var h = '';
-    if (d.teams && d.teams.length) {
-      d.teams.forEach(function (tm) {
-        var mem = tm.members.filter(function (m) { return hide.indexOf(m) < 0; });
-        h += '<div class="team' + (mem.length ? '' : ' empty') + '"><i>' + tm.n + '</i>' + (mem.length ? esc(mem.join(' & ')) : '…') + '</div>';
-      });
-    } else if (d.picks && d.picks.length) {
-      d.picks.forEach(function (p) { if (hide.indexOf(p.name) < 0) h += '<span class="pill">' + esc(p.name) + '</span>'; });
-    } else if (d.status === 'open') h = '<div class="sub">Waiting for the first spin…</div>';
-    list.innerHTML = h;
-    wait.innerHTML = (d.final && d.waitlist && d.waitlist.length) ? '<b>Waiting:</b> ' + d.waitlist.map(esc).join(', ') : '';
-  }
-
-  function demoData() {
-    var q = ['Ana', 'Bo', 'Cy', 'Dee', 'Eli', 'Flo', 'Gus', 'Hal'];
-    return { status: 'drawing', mode: 'random', teamSize: 2, round: 0, final: false, queue: q, picks: [{ name: 'Cy', team: 1 }], teams: [{ n: 1, members: ['Cy'], partial: false }],
-             signedUp: 8, feed: [{ name: 'Ana', kind: 'join', at: Date.now() - 300 }, { name: 'Bo', kind: 'leave', at: Date.now() - 900 }], feedMs: 2000, waitlist: [], spin: { id: 'demo', at: Date.now() - 1500, ms: 8500, landing: ['Cy'], revealed: 1 }, now: Date.now() };
-  }
-
-  function poll() {
-    if (DEMO) { data = data || demoData(); skew = 0; return; }
-    var t0 = Date.now();
-    fetch('/api/wheel/public', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) { data = j; skew = t0 - (j.now || t0); }).catch(function () { });
-  }
-  poll(); setInterval(poll, 500);
-  (function loop() { try { render(); } catch (e) { } requestAnimationFrame(loop); })();
-})();
-</script>
-</body>
-</html>
+ }else{
+  pick.hidden=true;
+  fin.textContent=(w.teams||[]).map(x=>x.members.join(' & ')).join('  |  ');
+  wait.textContent=(w.waitlist||[]).length?'Waitlist: '+w.waitlist.join(', '):'';
+ }
+ // cards: the pick joins its team once the wheel has landed on it
+ // cards: ONE team at a time (the team of the latest pick: it builds up, shows complete, then the next team starts); at the end every team is listed
+ const count=finished?d.steps.length:Rv-(Rv>0&&moving?1:0),key=count+':'+(finished?1:0);
+ if(key!==lastKey){lastKey=key;
+  const part=new Set((w.teams||[]).filter(x=>x.partial).map(x=>x.n));
+  if(finished)renderTeams(d.steps.slice(0,count),w.teamSizes,false,true,part);
+  else if(count>0){const tm=d.steps[count-1].team,sub=d.steps.slice(0,count).filter(x=>x.team===tm),sz=(w.teamSizes&&w.teamSizes[tm])||sub.length;renderTeams(sub,w.teamSizes,sub.length>=sz,false,part)}
+  else $('teams').textContent='';
+ }
+}
+// ---- timed reveal (old behaviour, fallback) ----
+const plans=new Map();
+function planAuto(d,i){
+ const key=d.id+':'+i;let p=plans.get(key);if(p)return p;
+ const full=orderOf(d.steps.slice(i).map(s=>s.name),d.id);p=Object.assign({order:full},planFor(full,d.steps[i].name,key));plans.set(key,p);if(plans.size>200)plans.delete(plans.keys().next().value);return p;
+}
+function paintAuto(now){
+ const d=w.draw,wb=$('wheelbox'),pick=$('pick'),big=$('big'),wait=$('wait');
+ if(d.id!==lastDraw){lastDraw=d.id;lastCount=-1;lastSlice='';landedFor='';$('teams').textContent='';plans.clear()}
+ $('final').textContent='';
+ const step=dur||d.stepMs,len=d.steps.length,t=now-d.startedAt,done=t>=len*step;
+ let count;
+ if(done){count=len;wb.classList.add('off');pick.hidden=true;big.textContent='';wait.textContent=(w.waitlist||[]).length?'Waitlist: '+w.waitlist.join(', '):''}
+ else{
+  const i=Math.min(len-1,Math.max(0,Math.floor(t/step))),ph=t<0?0:Math.min(1,(t-i*step)/step),landed=ph>=SPIN,p=planAuto(d,i);
+  wb.classList.remove('off');wait.textContent='';big.textContent=t<0?'Get ready...':'';
+  const rot=p.total*ease(Math.min(1,ph/SPIN)),under=Math.floor((((-rot)%TAU)+TAU)%TAU/p.a),sk=i+':'+under;
+  if(sk!==lastSlice&&!landed&&t>=0){tick();kick=Math.min(1,kick+.7)}lastSlice=sk;
+  drawWheel(p.order,rot);
+  if(landed){if(landedFor!==d.id+':'+i){landedFor=d.id+':'+i;chime();pick.hidden=false;{const sz={};for(const x of d.steps)sz[x.team]=(sz[x.team]||0)+1;pick.textContent=pickText(d.steps,i+1,sz)}pick.style.animation='none';void pick.offsetWidth;pick.style.animation='';wb.classList.remove('landed');void wb.offsetWidth;wb.classList.add('landed')}}else pick.hidden=true;
+  count=i+(landed?1:0);
+ }
+ if(count!==lastCount){lastCount=count;const sizes={};for(const x of d.steps)sizes[x.team]=(sizes[x.team]||0)+1;renderTeams(d.steps.slice(0,count),sizes,!done,done,new Set((w.teams||[]).filter(x=>x.partial).map(x=>x.n)))}
+}
+// ---- lobby: the wheel with everyone who signed up ----
+function paintLobby(){
+ const wb=$('wheelbox'),pick=$('pick');
+ lastDraw='';lastKey='';lastCount=-1;lastSlice='';landedFor='';$('teams').textContent='';$('final').textContent='';$('wait').textContent='';pick.hidden=true;wb.classList.remove('off');
+ const names=w.names||[];
+ drawWheel(orderOf(names,'lobby'),performance.now()/1000*.07);
+ $('big').textContent='';   // no head count on stream
+}
+function paint(){
+ if(w){
+  const d=w.draw,now=Date.now()+off;setTop();colorMap(w.names||[],w.colors);
+  if(d&&d.steps&&(w.status==='drawing'||w.status==='drawn')&&w.manual&&w.manual.on)paintManual(now);
+  else if(d&&d.steps.length&&(w.status==='drawing'||w.status==='drawn'))paintAuto(now);
+  else paintLobby();
+ }
+ requestAnimationFrame(paint);
+}
+poll();paint();
+})();</script><script>/* OPTIONAL join/leave feed + "N signed up" (off by default; add ?feed=1). Additive only: the original overlay code above is untouched. */
+(()=>{if(new URLSearchParams(location.search).get('feed')!=='1')return;
+const box=document.createElement('div');box.style.cssText='position:fixed;left:8px;top:8px;font:600 13px system-ui,Segoe UI,Arial,sans-serif;color:#fff;opacity:.85;pointer-events:none;z-index:9';document.body.appendChild(box);
+async function tick(){try{const j=await (await fetch('/api/wheel/public',{cache:'no-store'})).json(),now=Date.now(),ms=j.feedMs||2000;
+ box.textContent='';if(j.showSignedUp!==false&&j.signedUp){const s=document.createElement('div');s.textContent=j.signedUp+' signed up';box.append(s)}
+ for(const f of (j.feed||[])){if(now-f.at>ms)continue;const d=document.createElement('div');d.style.cssText='margin-top:3px;font-size:12px;opacity:.9';d.textContent=(f.kind==='leave'?'- ':'+ ')+f.name;box.append(d)}}catch(e){}
+ setTimeout(tick,500)}tick()})();</script>
+</body></html>
