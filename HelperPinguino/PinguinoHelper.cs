@@ -522,7 +522,10 @@ public class CPHInline
         string root = string.Equals(Path.GetFileName(d), "runtime", StringComparison.OrdinalIgnoreCase) ? (Path.GetDirectoryName(d) ?? d) : d;
         string dir = Path.Combine(root, "helper"); Directory.CreateDirectory(dir); return Path.Combine(dir, "review.jsonl");
     }
-    void ReviewAppend(JObject row) { try { File.AppendAllText(ReviewPath(), row.ToString(Formatting.None) + "\n", new UTF8Encoding(false)); } catch (Exception ex) { CPH.LogWarn("[Helper] review log: " + ex.Message); } }
+    // anything that looks like a secret never reaches a log file: labelled passwords, tokens, long keys, e-mail addresses
+    static readonly Regex RxLogSecret = new Regex(@"(?:(?:pass(?:word|wd|code)?|pw|secret|token|api[_ -]?key)\s*(?:is|=|:)?\s*\S+)|oauth:\S+|bearer\s+\S+|eyJ[A-Za-z0-9_\-]{10,}|[A-Za-z0-9_\-]{32,}|[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[a-z]{2,}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    static string LogScrub(string s) { return string.IsNullOrEmpty(s) ? s : RxLogSecret.Replace(s, "[hidden]"); }
+    void ReviewAppend(JObject row) { try { foreach (string k in new[] { "text", "reply", "reason", "t" }) { var v = row[k] as JValue; if (v != null && v.Type == JTokenType.String) row[k] = LogScrub((string)v); } var w = row["window"] as JArray; if (w != null) foreach (JObject x in w.OfType<JObject>()) { var tv = x["t"] as JValue; if (tv != null && tv.Type == JTokenType.String) x["t"] = LogScrub((string)tv); } File.AppendAllText(ReviewPath(), row.ToString(Formatting.None) + "\n", new UTF8Encoding(false)); } catch (Exception ex) { CPH.LogWarn("[Helper] review log: " + ex.Message); } }
 
     // every incoming line goes into the "after" part of the reviews that are still open
     void ReviewFollow(string login, string text)
@@ -800,7 +803,7 @@ public class CPHInline
     {
         const string Head = "## Helper unanswered";
         string f = NightlyFile();
-        string line = "- " + DateTime.Now.ToString("HH:mm") + " " + login + ": " + Regex.Replace(q, @"[\r\n`]+", " ") + (why == "" ? "" : " (" + why + ")");
+        string line = "- " + DateTime.Now.ToString("HH:mm") + " " + login + ": " + LogScrub(Regex.Replace(q, @"[\r\n`]+", " ")) + (why == "" ? "" : " (" + why + ")");
         string txt = File.Exists(f) ? File.ReadAllText(f, Encoding.UTF8) : "# Nightly " + DateTime.Now.ToString("yyyy-MM-dd") + "\n";
         int h = txt.IndexOf(Head, StringComparison.Ordinal);
         if (h < 0) txt = txt.TrimEnd() + "\n\n" + Head + "\n" + line + "\n";

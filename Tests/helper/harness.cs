@@ -391,6 +391,8 @@ public static class Harness
         Msg("Neg2", "what are the rules?"); Check("others still get answers", Last() != null, Last());
         string rvn = Path.Combine(dir, "helper", "review.jsonl");
         Check("negative feedback is logged as negative", File.ReadAllLines(rvn).Any(l => l.Contains("\"kind\":\"negative\"") && l.Contains("neg1")), "");
+        Msg("Rv9", "how do i join the minecraft server? my password is hunter9yy"); string rvAll = File.ReadAllText(rvn);
+        Check("the review log keeps the question but never a typed password", rvAll.Contains("rv9") && !rvAll.Contains("hunter9yy"), "");
         Msg("Neg3", "wrong context bro"); Check("negative from a viewer the helper never answered is not a trigger", Last() == null, Last());
         Msg("Lob1", "whats the code"); Check("lobby setup", Last() != null && Last().Contains("peng3"), Last());
         Msg("Lob2", "its peng4"); Check("someone says another name: thanks + mod hint, once", Last() != null && Last().Contains("peng4") && Last().Contains("!lobbyname"), Last());
@@ -482,6 +484,9 @@ public static class Harness
             nt = File.ReadAllText(nf);
             Check("a new line lands inside its own section, other sections stay", nt.IndexOf("un3: zebra giraffe cloud again") > nt.IndexOf("old question") && nt.IndexOf("un3: zebra giraffe cloud again") < nt.IndexOf("## Other section") && nt.Contains("keep me"), nt);
 
+            Msg("Sec1", "!helper zebra giraffe my password is hunter2zz and mail me a@b.com");
+            nt = File.ReadAllText(nf);
+            Check("secrets typed into a question never reach the nightly log", nt.Contains("sec1:") && !nt.Contains("hunter2zz") && !nt.Contains("a@b.com") && nt.Contains("[hidden]"), nt);
             // no AI: the best pack entry is read out
             Settings(",\"FactsUrl\":\"\",\"UseAi\":false,\"AskUserCooldownSec\":0,\"AskGlobalCooldownSec\":0"); resetAsk();
             c0 = aiCalls; Msg("NoAi", "!helper how do I join the queue?");
