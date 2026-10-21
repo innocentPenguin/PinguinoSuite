@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -11,7 +11,7 @@ namespace PinguinoHost
     /// help questions with Helper; a line that also names another bot is left to that bot. Rate limited per user and globally; the send path has its own duplicate guard.</summary>
     public static class BotMention
     {
-        static readonly string[] Names = { "pinguinob0t", "pinguinb0t", "pinguinobot", "pinguinbot", "pinguino b0t", "pinguino bot", "pinguin b0t", "pinguin bot", "penguinob0t", "penguinb0t", "penguinobot", "penguinbot", "pinguino_bot", "pinguino_b0t" };
+        static readonly string[] Names = { "pinguinob0t", "pinguinb0t", "pinguinobot", "pinguinbot", "pinguino b0t", "pinguino bot", "pinguin b0t", "pinguin bot", "penguinob0t", "penguinb0t", "penguinobot", "penguinbot", "pinguino_bot", "pinguino_b0t", "pinguino", "pinguinos", "penguino", "penguinos", "penguins" };   // Ivan is penguin/peng/peg; the bots are pinguino(s)/penguins (@name only)
         static readonly Regex Others = new Regex(@"@?(chattypinguino|chatty ?pinguino|helperpinguino|helper ?pinguino)", RegexOptions.IgnoreCase);
         static readonly Regex Named = new Regex("@(" + string.Join("|", Names.Select(Regex.Escape)) + @")(?![a-z0-9_])", RegexOptions.IgnoreCase);
         static readonly Regex ModSit = new Regex(@"\b(slur|slurs|racis\w*|toxic\w*|harass\w*|threat\w*|doxx?\w*|spammer|spamming|trolling|troll|should i (report|ban|timeout)|what (should|do) i do|report (him|her|them|this)|unmod|un-mod|ban me|timeout me|ban him|ban her)\b", RegexOptions.IgnoreCase);
