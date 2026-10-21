@@ -11,6 +11,7 @@
   TEST WITHOUT THE BOT (open in a browser):
     players_vertical.html?demo            3v3 live lineup
     players_vertical.html?demo=4          4v4 (tallest case)
+    players_vertical.html?demo&n=1|2|3    team size; add &alt=4&fade=400 to set the name swap time (seconds / ms)
     players_vertical.html?demo&win=blue   same, with Blue marked as the winner (or win=orange)
 -->
 <html>
@@ -30,8 +31,14 @@
   .list { display:flex; flex-direction:column; gap:calc(var(--u)*4); flex:1; min-height:0; }
   .p { flex:1 1 0; min-height:0; display:flex; align-items:center; gap:calc(var(--u)*10); padding:0 calc(var(--u)*12); border-radius:calc(var(--u)*9); background:rgba(0,0,0,.24); font-size:calc(var(--u)*var(--fs,34)); line-height:1.05; font-weight:800; box-sizing:border-box; overflow:hidden; }
   #stage.n3 { --fs:30; } #stage.n4 { --fs:27; } #stage.n5, #stage.n6 { --fs:18; }
-  .p b { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:800; }
-  .p i { font-style:normal; flex:0 1 auto; max-width:30%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:calc(var(--u)*14); font-weight:500; color:var(--muted); }
+
+  /* One name at a time: the stream name and the Epic name crossfade (html.alt = showing the Epic name). Timing: ALT_SECONDS / FADE_MS below. */
+  :root { --fade:.4s; }
+  .nm { position:relative; flex:1 1 auto; min-width:0; display:block; overflow:hidden; white-space:nowrap; }
+  .nm > span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:opacity var(--fade) ease, transform var(--fade) ease; }
+  .nm .n2 { position:absolute; left:0; right:0; top:0; opacity:0; transform:translateY(40%); }
+  html.alt .nm:not(.one) .n1 { opacity:0; transform:translateY(-40%); }
+  html.alt .nm .n2 { opacity:1; transform:none; }
   .p.empty { background:transparent; border:1px dashed rgba(255,255,255,.3); color:rgba(255,255,255,.55); font-weight:500; }
   .vs { align-self:center; font-size:calc(var(--u)*30); font-weight:800; text-shadow:0 3px 10px rgba(0,0,0,.6); }
   /* Winner: gold glow + WINNER tag; the other team dims. */
@@ -50,12 +57,34 @@
 </div>
 <script>
   // â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  var SHOW_EPIC = true;      // show the in-game (display) name next to the stream name
+  var SHOW_EPIC = true;      // include the in-game (Epic) name (it alternates with the stream name)
 
   var params = new URLSearchParams(location.search);
   var DEMO = params.has("demo");
   var stage = document.getElementById("stage");
   var lastKey = "";
+
+  // Alternating names: one name per seat at full size, crossfading between the stream name and the Epic name.
+  var ALT_SECONDS = 4;      // how long each name stays (0 = never alternate, stream name only)
+  var FADE_MS = 400;        // crossfade time. Both can be overridden by ?alt=4&fade=400 or by LIVE_STATE.overlay {altSeconds, fadeMs} (Host JSON)
+  function norm(s) { return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  function nameHtml(p) {
+    var u = f(p, "Username"), e = f(p, "Epic");
+    if (!SHOW_EPIC || !e || !u || norm(e) === norm(u)) return '<span class="nm one"><span class="n1">' + esc(u || e) + '</span></span>';
+    return '<span class="nm"><span class="n1">' + esc(u) + '</span><span class="n2">' + esc(e) + '</span></span>';
+  }
+  var altTimer = null, altKey = "";
+  function applyAlt(s) {
+    var o = (s && s.overlay) || {}, q = new URLSearchParams(location.search);
+    var sec = q.has("alt") ? parseFloat(q.get("alt")) : (o.altSeconds != null ? o.altSeconds : ALT_SECONDS);
+    var fade = q.has("fade") ? parseFloat(q.get("fade")) : (o.fadeMs != null ? o.fadeMs : FADE_MS);
+    if (!(sec >= 0)) sec = ALT_SECONDS;
+    if (!(fade >= 0)) fade = FADE_MS;
+    document.documentElement.style.setProperty("--fade", (fade / 1000) + "s");
+    if (altKey === sec + "|" + fade) return;
+    altKey = sec + "|" + fade; clearInterval(altTimer); document.documentElement.classList.remove("alt");
+    if (sec > 0) altTimer = setInterval(function () { document.documentElement.classList.toggle("alt"); }, sec * 1000);
+  }
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
   function f(p, k) { return p[k] != null ? p[k] : p[k.charAt(0).toLowerCase() + k.slice(1)]; }
@@ -63,21 +92,12 @@
   // One row per seat (so the layout never jumps); empty seats are dashed.
   function rows(list, size) {
     var out = (list || []).map(function (p) {
-      var epic = f(p, "Epic");
-      return '<div class="p"><b>' + esc(f(p, "Username")) + '</b>' + (SHOW_EPIC && epic ? '<i>' + esc(epic) + '</i>' : '') + '</div>';
+      return '<div class="p">' + nameHtml(p) + '</div>';
     });
     while (out.length < size) out.push('<div class="p empty">Empty slot</div>');
     return out.slice(0, 6).join("");
   }
 
-  // Shrink a name until it fits its row (long usernames), down to 55% of the base size.
-  function fit() {
-    var bs = document.querySelectorAll(".p b");
-    for (var i = 0; i < bs.length; i++) {
-      var e = bs[i]; e.style.fontSize = ""; var base = parseFloat(getComputedStyle(e).fontSize), px = base;
-      while (e.scrollWidth > e.clientWidth + 1 && px > base * 0.45) { px -= 1; e.style.fontSize = px + "px"; }
-    }
-  }
   window.addEventListener("resize", function () { lastKey = ""; });
 
   function winnerOf(s) {
@@ -89,6 +109,7 @@
   }
 
   function render(s) {
+    applyAlt(s);
     var m = s && s.currentMatch;
     if (!m) { stage.classList.remove("show"); lastKey = ""; return; }
     var key = JSON.stringify([m.id, m.blue, m.orange, s.game]);
@@ -98,7 +119,6 @@
       document.getElementById("blue").innerHTML = rows(m.blue, size);
       document.getElementById("orange").innerHTML = rows(m.orange, size);
       stage.className = (stage.className.replace(/n\d/g, '') + ' n' + Math.min(size, 6)).trim();
-      fit();
 
 
     }
@@ -121,9 +141,9 @@
 
   if (DEMO) {
     var four = params.get("demo") === "4";
-    var bl = [{Username:"penguinfan",Epic:"Penguin Fan"},{Username:"rocketboi",Epic:"RocketBoi"},{Username:"aerialqueen",Epic:"AerialQueen"},{Username:"youtube-tankjakvcgic4947",Epic:"tankjakvcgic4947"}];
-    var og = [{Username:"flipreset",Epic:"FlipReset99"},{Username:"boostgoblin",Epic:"Boost Goblin"},{Username:"savemachine",Epic:"SaveMachine"},{Username:"innocentpenguin_",Epic:"InnocentPenguin"}];
-    var n = four ? 4 : 3;
+    var bl = [{Username:"penguinfan",Epic:"Penguin Fan"},{Username:"xx",Epic:"xx"},{Username:"youtube-tankjakvcgic4947",Epic:"tankjakvcgic4947_epicname"},{Username:"short",Epic:"ShortEpic"}];
+    var og = [{Username:"flipreset",Epic:"FlipReset99"},{Username:"innocentpenguin_",Epic:"InnocentPenguin"},{Username:"boostgoblin"},{Username:"innocentpenguin_",Epic:"InnocentPenguin"}];
+    var n = parseInt(params.get("n") || "", 10) || (four ? 4 : 3);
     render({ game:"rocket-league", currentMatch:{ id:7, format:n + "v" + n, status: params.get("win") ? "finished" : "live", blueAvg:1120, orangeAvg:1105, blue:bl.slice(0, n), orange:og.slice(0, n) } });
   } else {
     poll();
