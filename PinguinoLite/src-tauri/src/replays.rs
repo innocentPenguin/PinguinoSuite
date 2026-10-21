@@ -275,27 +275,68 @@ fn rl_running() -> bool {
     false
 }
 
-/// Pure pacing rule: fast (3 s) while RL runs or for 2 minutes after a new replay; otherwise slow (30 s).
-pub fn tick_secs(rl: bool, secs_since_new: Option<u64>) -> u64 {
-    if rl || secs_since_new.map(|s| s < 120).unwrap_or(false) { 3 } else { 30 }
+/// Activity gates: which Suite activities make fast scanning worthwhile. "ranked" is reserved and deliberately NOT enabled yet.
+pub const GATES_ENABLED: &[&str] = &["casual", "competitive", "koth"];
+
+/// Pure gate over the Host's GET /api/customs/state body. Fail-safe: unreadable / not ok / simulated => false.
+/// Active = a real (non-sim) session of an enabled kind with the queue open or a match in progress.
+pub fn gate_active(st: &Value, enabled: &[&str]) -> bool {
+    if st.get("ok").and_then(|v| v.as_bool()) != Some(true) || st.get("sim").and_then(|v| v.as_bool()).unwrap_or(false) {
+        return false;
+    }
+    let kind = if st.get("koth").and_then(|v| v.as_bool()).unwrap_or(false) { "koth" } else { st.get("activity").and_then(|v| v.as_str()).unwrap_or("") };
+    if !enabled.contains(&kind) {
+        return false;
+    }
+    st.get("open").and_then(|v| v.as_bool()).unwrap_or(false) || st.get("match").map(|m| !m.is_null()).unwrap_or(false)
 }
 
-/// Background loop. Stat-only ticks every 3 s while Rocket League is running (30 s when idle, so a replay saved after closing the game is still found).
-/// Never blocks the UI; reads only the replay folders and writes only the eplays folder in the lite dir.
+/// GET http://127.0.0.1:8770/api/customs/state (loopback only, short timeouts). None = Host not reachable / unparsable.
+fn customs_state() -> Option<Value> {
+    use std::io::{Read, Write};
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8770));
+    let mut s = std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(500)).ok()?;
+    s.set_read_timeout(Some(Duration::from_millis(1500))).ok()?;
+    s.write_all(b"GET /api/customs/state HTTP/1.1
+Host: 127.0.0.1:8770
+Connection: close
+
+").ok()?;
+    let mut buf = Vec::new();
+    s.take(512 * 1024).read_to_end(&mut buf).ok()?;
+    let t = String::from_utf8_lossy(&buf);
+    serde_json::from_str(t.split_once("
+
+")?.1.trim()).ok()
+}
+
+/// Pure pacing rule: fast (3 s) only when Rocket League runs AND a gated activity is active (or was within the last 2 min, or a replay was just found); otherwise slow (30 s).
+pub fn tick_secs(rl: bool, gate: bool, secs_since_gate: Option<u64>, secs_since_new: Option<u64>) -> u64 {
+    let recent = |s: Option<u64>| s.map(|s| s < 120).unwrap_or(false);
+    if rl && (gate || recent(secs_since_gate) || recent(secs_since_new)) { 3 } else { 30 }
+}
+
+/// Background loop. Stat-only ticks; 3 s only inside a gated activity with RocketLeague.exe running, else 30 s (so a replay saved later is still found).
+/// Fail-safe: Host unreachable / state unreadable => slow poll. Reads only the replay folders + loopback Host, writes only the replays folder in the lite dir.
 pub fn start() {
     std::thread::spawn(|| {
-        let mut last_new: Option<std::time::Instant> = None;
-        let (mut rl, mut rl_at) = (false, std::time::Instant::now() - Duration::from_secs(60));
+        let (mut last_new, mut last_gate): (Option<std::time::Instant>, Option<std::time::Instant>) = (None, None);
+        let (mut rl, mut gate, mut chk_at) = (false, false, std::time::Instant::now() - Duration::from_secs(60));
         loop {
-            if rl_at.elapsed() >= Duration::from_secs(6) {
+            if chk_at.elapsed() >= Duration::from_secs(5) {
                 rl = rl_running();
-                rl_at = std::time::Instant::now();
+                gate = rl && customs_state().map(|s| gate_active(&s, GATES_ENABLED)).unwrap_or(false);
+                if gate {
+                    last_gate = Some(std::time::Instant::now());
+                }
+                chk_at = std::time::Instant::now();
             }
             let r = scan();
             if r["new"].as_i64().unwrap_or(0) > 0 {
                 last_new = Some(std::time::Instant::now());
             }
-            std::thread::sleep(Duration::from_secs(tick_secs(rl, last_new.map(|t| t.elapsed().as_secs()))));
+            let el = |t: Option<std::time::Instant>| t.map(|t| t.elapsed().as_secs());
+            std::thread::sleep(Duration::from_secs(tick_secs(rl, gate, el(last_gate), el(last_new))));
         }
     });
 }
@@ -371,10 +412,26 @@ mod tests {
 
     #[test]
     fn pacing() {
-        assert_eq!(tick_secs(true, None), 3);
-        assert_eq!(tick_secs(false, None), 30);
-        assert_eq!(tick_secs(false, Some(60)), 3);
-        assert_eq!(tick_secs(false, Some(500)), 30);
+        assert_eq!(tick_secs(true, true, None, None), 3);
+        assert_eq!(tick_secs(true, false, None, None), 30); // RL running but no Suite activity
+        assert_eq!(tick_secs(false, true, None, None), 30); // activity but RL not running
+        assert_eq!(tick_secs(true, false, Some(60), None), 3); // grace after the activity ended
+        assert_eq!(tick_secs(true, false, Some(500), Some(10)), 3); // replay just found
+        assert_eq!(tick_secs(true, false, Some(500), Some(500)), 30);
+    }
+
+    #[test]
+    fn gate() {
+        let en = GATES_ENABLED;
+        assert!(gate_active(&json!({"ok": true, "activity": "casual", "open": true, "sim": false}), en));
+        assert!(gate_active(&json!({"ok": true, "activity": "competitive", "open": false, "match": {"status": "live"}}), en));
+        assert!(gate_active(&json!({"ok": true, "activity": "casual", "koth": true, "open": true}), en));
+        assert!(!gate_active(&json!({"ok": true, "activity": "casual", "open": false, "match": null}), en)); // nothing running
+        assert!(!gate_active(&json!({"ok": true, "activity": "casual", "open": true, "sim": true}), en)); // simulation
+        assert!(!gate_active(&json!({"ok": true, "activity": "ranked", "open": true}), en)); // ranked not enabled
+        assert!(gate_active(&json!({"ok": true, "activity": "ranked", "open": true}), &["ranked"])); // but pluggable later
+        assert!(!gate_active(&json!({"ok": false}), en));
+        assert!(!gate_active(&Value::Null, en)); // unreadable => fail safe
     }
 
     #[test]
