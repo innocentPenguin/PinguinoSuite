@@ -197,7 +197,7 @@ jobs = ingest.Jobs(asr, hub.emit)
 
 def autolearn_loop():
     while True:
-        if cfg.settings()["autolearn"]:
+        if cfg.settings()["autolearn"] and not mic.running:  # never compete with live transcription for the GPU; next round catches up
             _safe_sync()
         time.sleep(1800)  # turning the toggle on also syncs immediately (see /api/settings)
 
