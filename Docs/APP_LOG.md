@@ -77,6 +77,11 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 21:42 Host restart (Plan 7 step 1)
+- Live: typo/alias router (!jon, "! join", !unjoin, did-you-mean), !queue first 5 + own position, !mmr for viewers, gambling (!gamble/!slots/!duel/!give via Data\economy\gambling.json, no default max bet), economy tick logging + chat-activity bonus, StreamElements import note, Offline mode OFF.
+- Earlier unlogged restarts since 16:54 (clips-dump, !title/!game, mention replies, !allow, half strikes, Chatty fixes, !srban) were also applied.
+- Known: !pm still reads LobbyPassword until 02's name-only fix lands.
+
 ## 2026-10-20 16:54 Host restarts (pre-stream batch)
 - Host rebuilt 0 errors, several times, now at 9684c2d: Plan 6 OBS/overlay API (e7fd136..4ec3ca0), clips-dump (e388e89, 278 clips), control layer ENABLED and live-tested (e55eaa5 era), Offline mode switch (8adb586, default OFF), !points regression fix + !downtime (e55eaa5), lore/fun replies sent as ChattyPinguino with Chatty canned file owning 87 commands (99190c7, 7257d8d, 3223158, 9684c2d), Helper Bedrock Connect console answer (03b719b); profiles re-pushed (1858).
 - Pending: Suite app rebuild (offline toggle 199ef63, c8ae770, b29ec25) after stream; !pm will keep printing the password (021/02 reversing e134683); customs/KOTH/lobby (051/05); 7 held edgy commands still answered by Host lore.
