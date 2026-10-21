@@ -23,7 +23,8 @@ TOKEN_URL = _ACC + "/api/token"
 API = os.environ.get("SPOTIFY_API_BASE", "https://api.spotify.com/v1")
 SCOPES = ("user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-private "
           "user-read-recently-played playlist-read-private playlist-read-collaborative "
-          "playlist-modify-public playlist-modify-private user-library-modify")
+          "playlist-modify-public playlist-modify-private user-library-modify "
+          "streaming user-read-email")     # streaming + user-read-email: Web Playback SDK (native player); older logins need one reconnect
 
 
 class ApiError(Exception):

@@ -159,6 +159,10 @@ SCHEMA = [
     {"id": "player", "title": "Playback & text files", "items": [
         ("volume_min", "int", 0, "Minimum volume", "Volume controls never go below this."),
         ("volume_max", "int", 100, "Maximum volume", "Volume controls (and !volume) never go above this."),
+        ("player_native", "bool", True, "Use the built-in player", "Play inside the Pinguino app (device 'PinguinoSuite', page /player) instead of the Spotify desktop app. Needs Premium; reconnect Spotify once after updating."),
+        ("player_volume", "int", 70, "Built-in player volume", "0-100. Applied by the /player page; independent of the Spotify app and the Windows master volume. !volume changes it too."),
+        ("player_sink", "str", "", "Audio output device id", "Output the /player page tries to use (set from the player section; empty = system default)."),
+        ("player_sink_label", "str", "", "Audio output device name", "Display name of the chosen output."),
         ("json_file", "bool", True, "Write nowplaying.json", "A JSON file with the current song for other tools (Streamer.bot etc.)."),
         ("queue_file_lines", "int", 0, "Queue text file lines", "Writes the next N songs to queue.txt for an OBS text source (0 = off)."),
         ("jit_ms", "int", 25000, "Send next song this early (ms)", "How long before the end the next song goes to Spotify's queue."),

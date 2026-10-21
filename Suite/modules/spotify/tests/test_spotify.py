@@ -1146,5 +1146,104 @@ class Cycle2Tests(unittest.TestCase):
         self.assertEqual([t["name"] for t in c.context_tracks("playlist", "x" * 22)], ["P"])
 
 
+class PlayerApi(FakeApi):
+    def __init__(self):
+        super().__init__()
+        self.devs = [{"id": "d1", "name": "PC", "is_active": True}, {"id": "pg", "name": "PinguinoSuite", "is_active": False}]
+        self.transfers, self.plays = [], []
+
+    def devices(self):
+        return self.devs
+
+    def transfer(self, dev, play=False):
+        self.transfers.append((dev, play))
+
+    def play_uris(self, uris, device_id=None):
+        self.plays.append(device_id)
+        super().play_uris(uris, device_id)
+
+    def volume(self, pct):
+        self.calls.append(("volume", pct))
+
+
+class PlayerTests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = PlayerApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.api.playing = "spotify:track:t1"
+
+    def test_scopes_include_streaming(self):
+        self.assertIn("streaming", spotify_api.SCOPES.split())
+        self.assertIn("user-read-email", spotify_api.SCOPES.split())
+
+    def test_not_selected_until_page_reports(self):
+        self.e.tick()
+        self.assertEqual(self.api.transfers, [])
+        self.assertFalse(self.e.player_info()["live"])
+
+    def test_selected_when_it_appears_and_not_repeated(self):
+        self.e.player_report({"device_id": "pg", "state": "ready"})
+        self.e.tick()
+        self.assertEqual(self.api.transfers, [("pg", True)])
+        self.clock.t += 7
+        self.api.devs[0]["is_active"] = False
+        self.e.tick()                                    # pb still reports d1 (fake) -> retried only after the check interval
+        self.assertEqual(len(self.api.transfers), 2)
+
+    def test_device_not_visible_to_spotify_yet(self):
+        self.api.devs = self.api.devs[:1]
+        self.e.player_report({"device_id": "pg", "state": "ready"})
+        self.e.tick()
+        self.assertEqual(self.api.transfers, [])
+
+    def test_stale_page_or_switched_off_is_ignored(self):
+        self.e.player_report({"device_id": "pg", "state": "ready"})
+        self.clock.t += 60                               # page stopped reporting
+        self.e.tick()
+        self.assertEqual(self.api.transfers, [])
+        self.assertEqual(self.e.player_info()["state"], "closed")
+        self.e.player_report({"device_id": "pg", "state": "ready"})
+        self.e.save_settings({"player_native": False})
+        self.e.tick()
+        self.assertEqual(self.api.transfers, [])
+
+    def test_manual_transfer_is_respected_then_released(self):
+        self.e.player_report({"device_id": "pg", "state": "ready"})
+        self.e.control("transfer", "d1")
+        self.clock.t += 7
+        self.e.tick()
+        self.assertEqual(self.api.transfers[-1], ("d1", True))
+        self.assertEqual(len(self.api.transfers), 1)
+        self.clock.t += 700
+        self.e.player_report({"device_id": "pg", "state": "ready"})
+        self.e.tick()
+        self.assertEqual(self.api.transfers[-1], ("pg", True))
+
+    def test_start_queue_targets_the_player(self):
+        self.e.player_report({"device_id": "pg", "state": "ready"})
+        self.e.add_track(T(2), "end", "bob", "viewer")
+        self.e.start_queue()
+        self.assertEqual(self.api.plays, ["pg"])
+
+    def test_volume_is_stored_for_the_page(self):
+        self.api.playing = None
+        self.e.player_report({"device_id": "pg", "state": "ready"})
+        self.e.control("volume", 40)
+        self.assertEqual(self.e.player_info()["volume"], 40)
+
+    def test_player_info_flags_missing_scope(self):
+        self.e.auth.tokens = {"scope": "user-read-private"}
+        self.assertTrue(self.e.player_info()["needs_reauth"])
+        self.e.auth.tokens = {"scope": "streaming user-read-private"}
+        self.assertFalse(self.e.player_info()["needs_reauth"])
+
+    def test_report_truncates_and_never_holds_a_token(self):
+        self.e.player_report({"device_id": "x" * 500, "state": "ready", "error": "e" * 999, "access_token": "SECRET"})
+        self.assertNotIn("SECRET", json.dumps(self.e.player_info()))
+        self.assertLessEqual(len(self.e.player["device_id"]), 80)
+
+
 if __name__ == "__main__":
     unittest.main()

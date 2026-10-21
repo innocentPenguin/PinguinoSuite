@@ -6,6 +6,7 @@ What: stdlib HTTP server (127.0.0.1:8771), routes, Host/Origin/token guards, bac
   GET: g_status:170, g_state:174, g_overlay:178, g_prestream:182, g_search:192, g_devices:197, g_setup:219, g_login:226, g_callback:236, g_queue_public:258, g_schema:467
   POST queue: p_add:297, p_remove:314, p_move:321, p_play_next:328, p_play_now:335, p_clear:360, p_undo:367, p_control:374, p_start:379
   POST chat/other: p_chat:384, p_chat_command:397, p_settings:293, p_preset:451, p_block:480, p_blocklist_import:489, p_site:431, p_live_auto:436, p_live_stop:440, p_test_key:424
+  Player: g_player_token (guarded), /api/player, p_player_status, page /player (static/player.html)
 Related: engine.py, config_schema.py, static/*.html, Docs/SPOTIFY.md (route table)
 """
 import hmac

@@ -99,7 +99,7 @@ class _H(BaseHTTPRequestHandler):
                 S.token_n += 1
                 at = f"A-{S.token_n}"
                 S.valid_access.add(at)
-                return self._send(200, {"access_token": at, "refresh_token": rt, "expires_in": 3600, "scope": "x"})
+                return self._send(200, {"access_token": at, "refresh_token": rt, "expires_in": 3600, "scope": "streaming user-read-private"})
             if path.startswith("/_sim/"):
                 return self._sim(path[6:], q, raw)
             if not path.startswith("/v1/"):
@@ -192,6 +192,8 @@ class _H(BaseHTTPRequestHandler):
         elif what == "nodevice":
             for d in S.devices:
                 d["is_active"] = False
+        elif what == "adddevice":
+            S.devices.append({"id": q["id"], "name": q.get("name", "PinguinoSuite"), "is_active": False, "volume_percent": 50})
         elif what == "clearqueue":
             S.queue.clear()
         elif what == "expire":

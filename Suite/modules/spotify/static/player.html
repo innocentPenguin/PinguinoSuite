@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PinguinoSuite Player</title>
+<!-- Built-in Spotify player (Web Playback SDK). Keep this page open (own window/tab, or the iframe in the module UI).
+     Needs Spotify Premium and a Widevine-capable browser (Edge/Chrome/WebView2). The engine (engine.py _player_tick) selects this device.
+     NOT verifiable offline: SDK load, DRM playback and output routing are browser-side. See Docs/SPOTIFY.md "Built-in player". -->
+<style>
+:root{--bg:#0b0b0d;--panel:#141417;--fg:#ececef;--dim:#8d8d96;--accent:#ff9900;--ok:#3ecf8e;--bad:#ff5d5d;--line:#2a2a30}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px "Segoe UI",system-ui,sans-serif;padding:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+button,select{font:inherit;color:inherit;background:#1d1d22;border:1px solid var(--line);border-radius:7px;padding:5px 10px}
+button{cursor:pointer}.dim{color:var(--dim)}.small{font-size:12px}
+#st{font-weight:700}.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--accent)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+</style></head><body>
+<div class="card"><div class="row"><b>PinguinoSuite Player</b><span id="st" class="warn">starting…</span><span style="flex:1"></span><button id="bact" title="Browsers block audio until you click once">Enable audio</button></div>
+  <div class="small dim" id="msg" style="margin-top:6px"></div></div>
+<div class="card"><div class="row"><span>Volume</span><b id="vol">–</b><span class="small dim">set in the Spotify module (Settings / !volume), independent of the Spotify app and Windows volume</span></div></div>
+<div class="card"><div class="row"><span>Output</span><select id="sink"><option value="">System default</option></select><button id="bsink">Choose another…</button></div>
+  <div class="small dim" id="sinknote" style="margin-top:6px">The Spotify SDK plays inside its own frame, so the page cannot always redirect it. If the note says "not applied", route this window with Windows Settings &gt; Sound &gt; Volume mixer (per-app output) or capture it as an OBS source.</div></div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let player = null, deviceId = "", state = "loading", err = "", sinkOk = null, sinkNote = "", cfg = {volume: 70, sink: "", sink_label: ""}, tokenErr = "";
+
+async function jget(p){const r = await fetch(p, {cache: "no-store"}); let j = {}; try{j = await r.json()}catch(e){} if(!r.ok||j.ok===false){const e = new Error(j.error||("HTTP "+r.status)); e.code = j.code; throw e} return j}
+async function report(){
+  try{await fetch("/api/player/status", {method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify({device_id: deviceId, state, error: err, sink_ok: sinkOk, sink_note: sinkNote})})}catch(e){}
+  const label = {ready: "ready - " + (deviceId ? "device 'PinguinoSuite'" : ""), loading: "starting…", not_ready: "offline", error: "problem"}[state] || state;
+  $("st").textContent = label; $("st").className = state === "ready" ? "ok" : state === "error" ? "bad" : "warn";
+  $("msg").textContent = err;
+}
+function fail(m){err = m; state = "error"; report()}
+
+// Token comes from the module (never stored in the page, never logged). The SDK calls this whenever it needs a fresh one.
+async function getToken(cb){
+  try{const j = await jget("/api/player-token"); tokenErr = ""; cb(j.access_token)}
+  catch(e){tokenErr = e.code === "NEEDS_REAUTH" ? "Reconnect Spotify once in the module (Setup > Connect) so the player is allowed." : e.message; fail(tokenErr)}
+}
+
+function applyVolume(){
+  const v = Math.max(0, Math.min(100, +cfg.volume || 0));
+  $("vol").textContent = v + "%";
+  if(player) player.setVolume(v/100).catch(()=>{});
+}
+
+// ---- output device. The SDK media element lives in a cross-origin iframe (sdk.scdn.co), so setSinkId on it usually cannot be reached.
+function mediaEls(){
+  const out = [...document.querySelectorAll("audio,video")];
+  for(const f of document.querySelectorAll("iframe")){try{if(f.contentDocument) out.push(...f.contentDocument.querySelectorAll("audio,video"))}catch(e){}}
+  return out;
+}
+async function applySink(){
+  const id = cfg.sink || "";
+  if(!("setSinkId" in HTMLMediaElement.prototype)){sinkOk = false; sinkNote = "this browser cannot choose an output"; return report()}
+  const els = mediaEls();
+  if(!els.length){sinkOk = id ? false : null; sinkNote = id ? "not applied: the SDK audio frame is not reachable; use Windows per-app output or an OBS source" : ""; return report()}
+  try{await Promise.all(els.map(e => e.setSinkId(id))); sinkOk = true; sinkNote = id ? "applied to " + els.length + " element(s)" : ""}
+  catch(e){sinkOk = false; sinkNote = "not applied: " + (e.message || e)}
+  $("sinknote").textContent = sinkNote || $("sinknote").textContent; report();
+}
+async function listSinks(){
+  try{
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audiooutput");
+    $("sink").innerHTML = '<option value="">System default</option>' + ds.map(d => `<option value="${d.deviceId}">${(d.label||d.deviceId).replace(/[<&]/g,"")}</option>`).join("");
+    $("sink").value = cfg.sink || "";
+  }catch(e){}
+}
+async function saveSink(id, label){
+  cfg.sink = id; cfg.sink_label = label;
+  try{await fetch("/api/settings", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({player_sink: id, player_sink_label: label})})}catch(e){}
+  applySink();
+}
+$("sink").onchange = () => saveSink($("sink").value, $("sink").selectedOptions[0].textContent);
+$("bsink").onclick = async () => {
+  try{const d = await navigator.mediaDevices.selectAudioOutput(); await listSinks(); await saveSink(d.deviceId, d.label)}catch(e){}
+};
+
+// ---- SDK
+window.onSpotifyWebPlaybackSDKReady = () => {
+  player = new Spotify.Player({name: "PinguinoSuite", getOAuthToken: getToken, volume: Math.max(0, Math.min(1, (+cfg.volume || 0)/100))});
+  player.addListener("ready", ({device_id}) => {deviceId = device_id; state = "ready"; err = ""; applyVolume(); report()});
+  player.addListener("not_ready", () => {state = "not_ready"; report()});
+  for(const [ev, m] of [["initialization_error", "this browser cannot run the player (needs Widevine/EME)"], ["authentication_error", "Spotify login rejected: reconnect in the module"],
+                        ["account_error", "Spotify Premium is required for the player"], ["playback_error", "playback error"]])
+    player.addListener(ev, e => fail(m + (e && e.message ? " (" + e.message + ")" : "")));
+  player.connect().then(ok => {if(!ok) fail("could not connect the player")});
+  $("bact").onclick = () => player.activateElement().then(() => $("bact").textContent = "Audio enabled");
+};
+function loadSdk(){
+  const s = document.createElement("script"); s.src = "https://sdk.scdn.co/spotify-player.js"; s.async = true;
+  s.onerror = () => fail("could not load the Spotify player library (offline?)");
+  document.head.appendChild(s);
+}
+
+async function poll(){
+  try{
+    const j = await jget("/api/player");
+    cfg = j;
+    if(!j.native){state = "not_ready"; err = "built-in player is switched off in settings"; report()}
+    applyVolume();
+    if($("sink").value !== (j.sink||"") && document.activeElement !== $("sink")) $("sink").value = j.sink || "";
+  }catch(e){}
+}
+(async () => {
+  await poll(); await listSinks();
+  loadSdk(); report();
+  setInterval(poll, 3000);
+  setInterval(() => {applySink(); report()}, 5000);        // heartbeat: the engine treats a silent page as closed after ~20 s
+  if(navigator.mediaDevices) navigator.mediaDevices.addEventListener("devicechange", listSinks);
+})();
+</script></body></html>

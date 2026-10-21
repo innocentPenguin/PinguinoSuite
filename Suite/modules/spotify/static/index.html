@@ -111,6 +111,11 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
 </section>
 
 <section id="t-setup" hidden>
+  <div class="card"><h3 style="margin-top:0">Built-in player <span id="plstat" class="small dim"></span></h3>
+    <div class="small dim" style="margin-bottom:8px">Plays Spotify inside Pinguino as the device <b>PinguinoSuite</b> (no Spotify desktop app). Needs Premium and a Widevine-capable browser. Keep the player page open.</div>
+    <div class="ctl"><button class="pri" id="bplopen">Open player window</button><label><input type="checkbox" id="plon"> use the built-in player</label>
+      <span>Volume <input type="number" id="plvol" min="0" max="100" style="width:70px"> %</span><button id="bplvol">Set</button></div>
+    <div class="small dim" id="pldetail" style="margin-top:6px"></div></div>
   <div class="card"><h3 style="margin-top:0">Connect Spotify <span id="constat"></span></h3>
     <div class="step"><b>1</b><div>Open the <a id="dashlink" href="#" target="_blank" style="color:var(--accent)">Spotify developer dashboard</a> (log in with the Spotify account you stream with) and press <i>Create app</i>. Any name. Choose <i>Web API</i>.</div></div>
     <div class="step"><b>2</b><div>Under <i>Redirect URIs</i> add exactly this and save: <code id="redir"></code> <button id="bcopyredir">Copy</button><br><span class="small dim">Spotify wants the literal 127.0.0.1, not "localhost".</span></div></div>
@@ -289,7 +294,16 @@ $('bcopyov').onclick=()=>copy($('ovurl').textContent);
 async function loadSite(){try{const s=await api('/api/site');if(document.activeElement!==$('siteurl'))$('siteurl').value=s.url;$('siteon').checked=s.enabled;
   $('sitestat').innerHTML=!s.enabled?'<span class="pill bad">off</span>':s.online?'<span class="pill ok">online</span>':'<span class="pill bad">'+esc(s.last_error||'connecting')+(s.has_key?'':' · key missing: add SPOTIFY_API_KEY in Integrations > Key vault')+'</span>'}catch(e){}}
 $('bsite').onclick=async()=>{await act('/api/site',{url:$('siteurl').value,key:$('sitekey').value||undefined,enabled:$('siteon').checked},'Saved');$('sitekey').value='';loadSite()};
-async function loadSetup(){loadSite();try{setup=await api('/api/setup');$('redir').textContent=setup.redirect_uri;$('ovurl').textContent=setup.overlay_url;$('npfile').textContent=setup.nowplaying_file;
+async function loadPlayer(){try{const p=await api('/api/player');
+  const st=p.needs_reauth?'reconnect Spotify once (Connect below)':!p.native?'off':p.live?(p.active?'playing here':'ready, not the active device'):'player page not open';
+  $('plstat').textContent='- '+st;$('plstat').style.color=p.live&&!p.needs_reauth?'var(--ok)':'var(--warn)';
+  if(document.activeElement!==$('plvol'))$('plvol').value=p.volume;$('plon').checked=p.native;
+  $('pldetail').textContent=(p.active_device?'Active device: '+p.active_device+'. ':'')+(p.error||'')+(p.sink_label?' Output: '+p.sink_label+(p.sink_note?' ('+p.sink_note+')':''):'')}catch(e){}}
+$('bplopen').onclick=()=>window.open('/player','pinguino-player','width=460,height=420');
+$('plon').onchange=async()=>{await act('/api/settings',{player_native:$('plon').checked},'Saved');loadPlayer()};
+$('bplvol').onclick=async()=>{await act('/api/control',{action:'volume',value:+$('plvol').value},'Volume set');loadPlayer()};
+setInterval(()=>{if(tab==='setup')loadPlayer()},4000);
+async function loadSetup(){loadSite();loadPlayer();try{setup=await api('/api/setup');$('redir').textContent=setup.redirect_uri;$('ovurl').textContent=setup.overlay_url;$('npfile').textContent=setup.nowplaying_file;
   $('dashlink').href=setup.dashboard;if(document.activeElement!==$('cid'))$('cid').value=setup.client_id;
   $('constat').innerHTML=setup.connected?'<span class="pill ok">connected</span>':'<span class="pill bad">not connected</span>'}catch(e){}}
 const copy=t=>navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy failed: select the text manually',true));

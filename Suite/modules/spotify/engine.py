@@ -6,6 +6,7 @@ What: the brain. Polls Spotify, owns queue state, JIT push, request pipeline, ch
   Requests: request:419, _request:431, _accept:486, _genre_tag:467, _to_playlist:511, import_blocklist:526, inbox_decide:554, vote_skip:725
   Chat: chat:570, _chat_cmd:589, song_reply:704, queue_reply:712, say:406
   Views/API: public_state:339, public_queue:350, overlay:358, announcements:262, stats:932, site_snapshot:812, prestream:990, automation_tick:944
+  Built-in player (Web Playback SDK device 'PinguinoSuite'): player_live, player_device, player_report, _player_tick, _set_volume, player_info (search the names)
 Related: rules.py, queue_core.py, config_schema.py, spotify_api.py, server.py, tests/test_spotify.py, tests/e2e.py, Docs/SPOTIFY.md
 """
 import copy
@@ -25,6 +26,10 @@ VERIFY_EVERY_S = 20
 SKIP_EARLY_MS = 20000     # cut off with more than this left = counted as skipped
 IDLE_UNPUSH_S = 8
 LOG_MAX = 100
+PLAYER_NAME = "PinguinoSuite"      # Spotify Connect name of the built-in (Web Playback SDK) player
+PLAYER_STALE_S = 20                # the /player page reports every few seconds; older = page closed
+PLAYER_CHECK_S = 6
+MANUAL_HOLD_S = 600                # after the streamer picks another device by hand, don't pull playback back for this long
 
 
 class Engine:
@@ -65,6 +70,9 @@ class Engine:
         self.devices = []
         self.version = 0               # bumped on any visible change (UI/overlay can poll cheaply)
         self._last_np = None
+        self.player = {"device_id": "", "state": "", "error": "", "sink_ok": None, "sink_note": "", "at": 0.0}   # reported by /player
+        self._player_try = 0.0
+        self._manual_until = 0.0
         self.site_block = {}           # blocklist pulled from the site (tracks/artists/users)
 
     # ---- settings
@@ -170,6 +178,7 @@ class Engine:
             return
         with self.lock:
             self._apply(pb)
+        self._player_tick()
         try:
             self._jit()
         except RateLimited as e:
@@ -649,7 +658,7 @@ class Engine:
             if arg.strip().lstrip("+-").isdigit():
                 v = int(arg.strip())
                 v = self.clamp_volume(v if not arg.strip()[0] in "+-" else (cur.get("volume") or 0) + v)
-                self.api.volume(v)
+                self._set_volume(v)
                 return self._r(True, "volume", "volume_set", user=user, vol=v)
             return self._r(True, "volume", user=user, vol=cur.get("volume") if cur.get("volume") is not None else "?")
         if cmd == "playnext" and staff:
@@ -770,12 +779,81 @@ class Engine:
         elif action == "seek":
             a.seek(int(value))
         elif action == "volume":
-            a.volume(self.clamp_volume(value))
+            v = self.clamp_volume(value)
+            self._set_volume(v)
         elif action == "transfer":
             a.transfer(str(value), play=True)
+            if str(value) != self.player_device():
+                self._manual_until = self.clock() + MANUAL_HOLD_S     # the streamer chose another device on purpose
         else:
             raise QueueError("unknown action")
         self._schedule_refresh()
+
+    # ---- built-in player (Spotify Web Playback SDK in the /player page)
+    def player_live(self):
+        """Device id of the PinguinoSuite player while its page is open and ready, else ''."""
+        p = self.player
+        if self.settings["player_native"] and p["device_id"] and p["state"] != "not_ready" and self.clock() - p["at"] < PLAYER_STALE_S:
+            return p["device_id"]
+        return ""
+
+    def player_device(self):
+        """Where to start playback: the built-in player when it is live and not deliberately overridden, else None (Spotify decides)."""
+        return self.player_live() if self.clock() >= self._manual_until else None
+
+    def player_report(self, b):
+        """Status posted by the /player page: {device_id, state: ready|not_ready|error|loading, error, sink_ok, sink_note}. No tokens here."""
+        with self.lock:
+            p = self.player
+            new_dev = str(b.get("device_id") or "")[:80]
+            if new_dev and new_dev != p["device_id"]:
+                self._player_try = 0.0            # just (re)appeared: select it on the next tick
+                self._manual_until = 0.0
+            p.update(device_id=new_dev or p["device_id"], state=str(b.get("state") or "")[:20], error=str(b.get("error") or "")[:200],
+                     sink_ok=b.get("sink_ok") if isinstance(b.get("sink_ok"), bool) else None, sink_note=str(b.get("sink_note") or "")[:200],
+                     at=self.clock())
+            self._bump()
+
+    def _player_tick(self):
+        """Prefer the PinguinoSuite device: when it is live and something else is the playback target, transfer playback to it."""
+        dev = self.player_device()
+        if not dev or self.clock() - self._player_try < PLAYER_CHECK_S:
+            return
+        cur = ((self.pb or {}).get("device") or {}).get("id")
+        if cur == dev:
+            return
+        self._player_try = self.clock()
+        try:
+            known = [d for d in self.api.devices() if d.get("id") == dev]
+            if not known:
+                return                              # not visible to Spotify (yet): try again later
+            self.api.transfer(dev, play=bool(self.pb and self.pb.get("is_playing")))
+            console_log.info("player", "playback moved to the PinguinoSuite player")
+            self._schedule_refresh()
+        except ApiError as e:
+            console_log.warn("player", f"could not select the PinguinoSuite player: {e}", dedupe_s=60)
+
+    def _set_volume(self, v):
+        """Volume for the active device. With the built-in player live and active (or idle) it is stored as player_volume, which the page applies via setVolume."""
+        own = self.player_live() and ((self.pb or {}).get("device") or {}).get("id") in (None, self.player["device_id"])
+        if own:
+            self.save_settings({"player_volume": v})
+        try:
+            self.api.volume(v)
+        except ApiError:
+            if not own:
+                raise                               # the page still applies the stored volume when Spotify has no active device yet
+
+    def player_info(self):
+        p = self.player
+        s = self._own_settings()
+        scope = (getattr(self.auth, "tokens", None) or {}).get("scope", "")
+        live = self.player_live()
+        cur = ((self.pb or {}).get("device") or {})
+        return {"native": s["player_native"], "name": PLAYER_NAME, "volume": s["player_volume"], "sink": s["player_sink"], "sink_label": s["player_sink_label"],
+                "state": p["state"] if live else ("closed" if p["device_id"] else ""), "error": p["error"], "device_id": p["device_id"], "live": bool(live),
+                "active": bool(live and cur.get("id") == live), "active_device": cur.get("name", ""), "sink_ok": p["sink_ok"], "sink_note": p["sink_note"],
+                "needs_reauth": bool(self.auth.connected() and scope and "streaming" not in scope.split()), "premium": (self.me or {}).get("product") == "premium"}
 
     def clamp_volume(self, v):
         s = self.settings
@@ -787,7 +865,7 @@ class Engine:
             head = self.queue.items[0] if self.queue.items else None
         if not head:
             raise QueueError("queue is empty")
-        self.api.play_uris([head["uri"]])
+        self.api.play_uris([head["uri"]], self.player_device())
         with self.lock:
             head["pushed"] = True
         self._schedule_refresh()
@@ -964,7 +1042,7 @@ class Engine:
                     try:
                         if s["fallback_shuffle"]:
                             self.api.shuffle(True)
-                        self.api.play_context(uri)
+                        self.api.play_context(uri, self.player_device())
                         console_log.info("player", "idle: started the background playlist")
                     except ApiError as e:
                         console_log.warn("player", f"background playlist failed: {e}", dedupe_s=60)
