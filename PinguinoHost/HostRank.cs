@@ -23,6 +23,7 @@ namespace PinguinoHost
         const int CacheSec = 900, ManualHours = 24, PauseMin = 30;   // ONE tracker call per Epic account per 15 min; that call reads every playlist, !rank only shows the one asked for
         static long _pausedUntil, _lastReq;
         static readonly string[] AllLists = { "1v1", "2v2", "3v3", "4v4", "hoops", "rumble", "dropshot", "snowday", "heatseeker", "tournament" };
+        // ids 10 11 13 27 28 29 30 34 checked against the Psyonix playlist table (rlapi PopulationPlaylist: Ranked Duel/Doubles/Standard/Hoops/Rumble/Dropshot/Snow Day, Official Tournament); 61 (Quads) and 63 (Heatseeker) are not in any public table, so the name match is what carries them
         static readonly int[] PlaylistIds = { 10, 11, 13, 61, 27, 28, 29, 30, 63, 34 };
         static readonly string[] Names = { "Ranked Duel 1v1", "Ranked Doubles 2v2", "Ranked Standard 3v3", "Ranked Quads 4v4", "Hoops", "Rumble", "Dropshot", "Snowday", "Heatseeker", "Tournament Matches" };
         static readonly Dictionary<string, JObject> _cache = new Dictionary<string, JObject>(); static bool _cacheLoaded;
@@ -30,13 +31,18 @@ namespace PinguinoHost
 
         static string Label(string k) { return char.IsDigit(k[0]) ? "Ranked " + k : char.ToUpperInvariant(k[0]) + k.Substring(1); }
 
+        /// <summary>playlist names compare without case, spaces and a leading "Ranked", so "Ranked Hoops" = "Hoops", "Ranked 4v4 Quads" = "Quads 4v4"; these are the same playlist</summary>
+        static string NameKey(string n) { var w = System.Text.RegularExpressions.Regex.Matches((n ?? "").ToLowerInvariant(), "[a-z0-9]+").Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).Where(x => x != "ranked").OrderBy(x => x, StringComparer.Ordinal); return string.Concat(w); }   // word order does not matter: "Ranked Quads 4v4" = "Ranked 4v4 Quads"
+        static string FlatKey(string n) { return string.Concat(System.Text.RegularExpressions.Regex.Matches((n ?? "").ToLowerInvariant(), "[a-z0-9]+").Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).Where(x => x != "ranked")); }   // "Snow Day" = "Snowday"
+        static bool SameName(string a, string b) { return NameKey(a) != "" && (NameKey(a) == NameKey(b) || FlatKey(a) == FlatKey(b)); }
+
         /// <summary>fills every playlist it finds ("1v1".."tournament") with "Champion I Div II (999)" from a tracker.gg profile JSON; returns how many were read. Playlists match by id first, then by name.</summary>
         public static int ParseProfile(string body, JObject into)
         {
             int n = 0; var segs = JObject.Parse(body)["data"]?["segments"] as JArray; if (segs == null) return 0;
             for (int i = 0; i < AllLists.Length; i++)
             {
-                var seg = segs.OfType<JObject>().FirstOrDefault(x => (string)x["type"] == "playlist" && ((int?)x["attributes"]?["playlistId"] == PlaylistIds[i] || ((string)x["metadata"]?["name"] ?? "") == Names[i])); if (seg == null) continue;
+                var seg = segs.OfType<JObject>().FirstOrDefault(x => (string)x["type"] == "playlist" && ((int?)x["attributes"]?["playlistId"] == PlaylistIds[i] || SameName((string)x["metadata"]?["name"], Names[i]))); if (seg == null) continue;
                 string tier = (string)seg["stats"]?["tier"]?["metadata"]?["name"] ?? ""; string div = ((string)seg["stats"]?["division"]?["metadata"]?["name"] ?? "").Replace("Division", "Div");
                 double r; bool has = double.TryParse((string)seg["stats"]?["rating"]?["value"], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out r);
                 if (tier == "" && !has) continue;

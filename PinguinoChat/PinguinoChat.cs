@@ -2571,6 +2571,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     bool CannedCommand(Ctx c, string cmd, string text)
     {
         JObject o; if (!CannedMap().TryGetValue(cmd, out o)) return false;
+        if ((bool?)o["skipBroadcaster"] == true && c.Broadcaster && (text ?? "").Trim().IndexOf(' ') > 0) return false;   // !raid <channel> from the streamer belongs to the Host; a bare !raid still gets the raid-call line
         long now = Now(); long last; string ck = ((string)o["name"] ?? cmd).ToLower();   // the cooldown belongs to the command, so an alias does not get around it
         if (_cannedAt.TryGetValue(ck, out last) && now - last < _cannedSec) return true;   // answered a moment ago: stay quiet, but the command is still handled here
         long lu; if (_cannedAt.TryGetValue("u|" + c.Login, out lu) && now - lu < 6) return true;   // one canned line per person per 6 s (cycling through the list is not a way to spam)

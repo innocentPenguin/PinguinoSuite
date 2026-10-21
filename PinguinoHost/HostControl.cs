@@ -232,7 +232,7 @@ namespace PinguinoHost
             if (cmd == "!raid")
             {
                 string name = args.Length > 0 ? args[0].TrimStart('@').ToLowerInvariant() : "";
-                if (name == "") { say("Use: !raid <channel> (only channels on the raid list)"); return "usage"; }
+                if (name == "") return "ignored: bare !raid is the raid-call line, answered by Chatty";
                 if (!RaidList().Contains(name)) { say(name + " is not on the raid list."); return "refused: not on list"; }
                 _raidName = name; _raidAt = DateTime.UtcNow; say("Raid " + name + "? Say !confirm raid within 20 seconds. !unraid cancels."); return "pending";
             }

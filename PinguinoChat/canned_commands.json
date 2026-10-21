@@ -138,6 +138,16 @@
    "text": "$(user) wraps their arms around $(touser) and gives them a big, warm hug! 🤗"
   },
   {
+   "name": "tuck",
+   "text": "$(user) tucks $(touser) in nice and snug. Sweet dreams, and thank you for hanging out tonight! 🛏️🐧"
+  },
+  {
+   "name": "raid",
+   "_note": "text only: the raid-call line viewers copy. Real raids stay Ivan-only (!raid <channel> + !confirm raid in the Host). Edit the text here.",
+   "skipBroadcaster": true,
+   "text": "🐧 PENGUIN RAID 🐧 Thank you all for hanging out with InnocentPenguin tonight, you are awesome! Waddle on over and say hi!"
+  },
+  {
    "name": "intro",
    "text": "Yo lwk the intros kinda broken, peng will fix it later, geeg."
   },

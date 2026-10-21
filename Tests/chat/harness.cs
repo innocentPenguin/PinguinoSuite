@@ -786,6 +786,14 @@ public static class Harness
         Check("!onlyfans points to the Discord", Last() != null && Last().Contains("Join the Discord: https://discord.gg/"), Last());
         cn = CPHProxy.Sent.Count; Msg("Canny3", "!trapaccount", null, false);
         Check("!trapaccount is gone, says nothing", CPHProxy.Sent.Count == cn);
+        _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Tucker", "!tuck @Bobby", null, false);
+        Check("!tuck tucks the named viewer in", Last() != null && Last().Contains("Tucker tucks Bobby in"), Last());
+        _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Tucker2", "!tuck https://evil.example/x", null, false);
+        Check("!tuck: a link as the target never goes out", Last() != null && !Last().Contains("http"), Last());
+        _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Viewer1", "!raid", null, false);
+        Check("!raid gives the raid-call line, not the old placeholder", Last() != null && Last().Contains("PENGUIN RAID") && !Last().Contains("Let me know"), Last());
+        _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); cn = CPHProxy.Sent.Count; Extra["isBroadcaster"] = true; Msg("innocentpenguin", "!raid patfromearth", null, true); Extra.Remove("isBroadcaster");
+        Check("the streamer's !raid <channel> is left to the Host (no raid-call line)", CPHProxy.Sent.Count == cn, Last());
 
         // ── 19b2b. canned audit: alias cooldown, per-person and chat-wide gates, no links through $(touser) ──
         { _cannedReset(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");

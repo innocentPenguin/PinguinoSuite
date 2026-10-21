@@ -54,6 +54,10 @@ try:
     r = say('*modguy: !setrank Ranked 1v1: Grand Champion I Div I (1400) | Ranked 2v2: GC2 (1700) | Ranked 3v3: Champion III (1300)'); chk('bulk set', r and 'saved' in r.lower(), r)
     r = say('*modguy: !setrank peak SSL'); chk('peak', r and 'saved' in r.lower(), r)
     r = say('viewer: !rank'); chk('final line (manual wins for 24 h)', r == 'Ranked 1v1: Grand Champion I Div I (1400) | Ranked 2v2: GC2 (1700) | Ranked 3v3: Champion III (1300) | Peak: SSL', r)
+    # playlist matching: ids first (10 11 13 27 28 29 30 34), then names without case / "Ranked" / spaces
+    json.dump({'data': {'segments': [seg('Whatever Psyonix Calls It', 'Gold I', 'Division I', 500, 27), seg('Ranked Snow Day', 'Silver II', 'Division II', 400), seg('Ranked Rumble', 'Bronze III', 'Division I', 300), seg('Official Tournament', 'Platinum II', 'Division III', 800, 34), seg('Ranked 4v4 Quads', 'Diamond I', 'Division I', 900)], 'platformInfo': {'platformUserHandle': 'Namer'}}}, open(os.path.join(d, 'profile.namer.json'), 'w'))
+    for q, want in (('hoops', 'Hoops: Gold I Div I (500)'), ('snowday', 'Snowday: Silver II Div II (400)'), ('rumble', 'Rumble: Bronze III Div I (300)'), ('tournament', 'Tournament: Platinum II Div III (800)'), ('4s', 'Ranked 4v4: Diamond I Div I (900)')):
+        r = say('viewer: !rank namer ' + q); chk('playlist match for namer ' + q, r == 'Namer - ' + want, r)
     sys.path.insert(0, here)
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
