@@ -308,8 +308,10 @@
       "examples": [
         "!mmr @viewer123"
       ],
-      "section": "Viewers",
-      "importance": 13
+      "section": "Fun",
+      "importance": 13,
+      "modSection": "Viewers",
+      "modImportance": 13
     },
     {
       "command": "!setmmr",
