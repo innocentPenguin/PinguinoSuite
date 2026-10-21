@@ -23,7 +23,7 @@ try:
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
     t = get('/api/tune'); ids = [a['id'] for a in t['areas']]
-    chk('areas', ids == ['wheel', 'queue', 'gambling', 'economy', 'alias'], ids)
+    chk('areas', ids == ['wheel', 'queue', 'gambling', 'economy', 'alias', 'obs'], ids)
     f = {a['id']: {x['key']: x for x in a['fields']} for a in t['areas']}
     chk('wheel field shape', f['wheel']['spinSpeed']['type'] == 'number' and f['wheel']['spinSpeed']['min'] == 1500 and f['wheel']['mode']['options'] == ['random', 'balanced'], f['wheel']['spinSpeed'])
     chk('maxBet optional + empty', f['gambling']['maxBet'].get('optional') and f['gambling']['maxBet']['value'] is None, f['gambling']['maxBet'])
