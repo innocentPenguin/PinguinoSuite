@@ -77,6 +77,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 23:05 Host restart (wheel restored, act live while recording, !addpoints/!editpoints)
+
+- Command: Update-Module.ps1 host. Build 0 errors, Host up, /wheel.html 200, /api/wheel/public returns the original-overlay shape.
+- Now live: f7f6a38 (exact site wheel overlay + HostWheelPublic adapter, ?feed=1 join/leave feed), ca07943 (bots act live while OBS records), 87df867 (hidden broadcaster-only !addpoints/!editpoints).
+- Not in the running app exe yet: sidebar scroll, wheel preview-trap fix (need next Build-All).
+
 ## 2026-10-20 22:38 Full rebuild + app launch (Plan 7 UI)
 - Rebuilt core + Host + shell via Build-All (first two attempts failed: Host stopped, then a half-edited HostEconomy.cs broke the compile; third OK). App launched 22:38.
 - In the app: Wheel & Games page, Commands page (preview data until Host backend lands), Accounts offline/recording toggle UI, window placement (62% default, remembered), splash + new logo, website pop-out (own icon/profile/taskbar id).
