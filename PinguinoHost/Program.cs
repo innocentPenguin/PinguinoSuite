@@ -69,7 +69,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); SiteTeach.Start(); LobbyPush.Start(); Redeems.Start(); SiteCommands.Start(); SiteShop.Start(); OverlayChat.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start(); Streaks.Start(); Boards.Start(); Emotes.Start(); Timers.Start(); StreamTimers.Start(); Reminders.Start(); Economy.Start(); ProfileSync.Start();
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); SiteTeach.Start(); LobbyPush.Start(); Redeems.Start(); SiteCommands.Start(); EventLog.Start(); SiteShop.Start(); OverlayChat.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start(); Streaks.Start(); Boards.Start(); Emotes.Start(); Timers.Start(); StreamTimers.Start(); Reminders.Start(); Economy.Start(); ProfileSync.Start();
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();
@@ -158,7 +158,8 @@ namespace PinguinoHost
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
             try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
-            try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
+            try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier); } catch (Exception) { }
+            try { EventLog.OnChat(user, text, role); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
             try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
             try { if (CmdProfiles.Gate(user, text, role, isSub, subTier)) return; } catch (Exception ex) { Clog.Warn("cmdprofiles", "command gate failed: " + ex.Message); }   // edited tier / disabled / archived / cooldown: silent
             try { bool swallowed; text = CmdFix.Fix(user, text, m => { if (HostApi.SimMode) Console.WriteLine("[say] " + m); else { string via; HostApi.SendAs("core", m, out via); } }, out swallowed); if (swallowed) return; } catch (Exception ex) { Clog.Warn("cmdfix", "typo check failed: " + ex.Message); }   // "! join", "!jon", "!rejoin" -> !join; near misses answer once
