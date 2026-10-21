@@ -28,6 +28,8 @@
     open: req => inv('open_window', { req }),                 // {label, url, title?, width?, height?, monitor?, place?: full|top|bottom|left|right, always_on_top?, decorations?, reset?}
     close: (label, forget) => inv('close_window', { label, forget: !!forget }),
     onTop: (label, on) => inv('set_window_on_top', { label, on }),
+    openSite: path => inv('open_site_window', { path: path || null }),   // the website in its own window (own icon, taskbar entry and login profile); optional path like '/customs'
+    clearSiteData: () => inv('clear_site_data'),                          // forget the site login (close the site window first)
   };
   window.PG = { ready, ws: () => open() };
   function open() {

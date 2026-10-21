@@ -401,7 +401,138 @@ pub fn list_windows(app: AppHandle) -> Vec<WinInfo> {
 pub fn restore(app: &AppHandle) {
     let lay = app.state::<Layouts>();
     for (label, s) in lay.open_labels() {
+        if label == SITE_LABEL {
+            let _ = open_site_window(app.clone(), None);
+            continue;
+        }
         let req = OpenReq { label, url: s.url.clone(), title: Some(s.title.clone()), width: None, height: None, monitor: None, place: None, always_on_top: Some(s.on_top), decorations: Some(s.decorations), reset: None, bounds: None, remember: None, soft: None };
         let _ = open_window(app.clone(), req);
     }
+}
+
+// ---- Website pop-out (055): innocentpenguin.com in its own window, own icon/taskbar entry and own login profile ----
+// Not a general remote opener: the address is fixed to SITE_HOME (+ an optional plain path on that host), and navigation is
+// limited to the site and its sign-in providers. Everything else opens in the system browser (see site_nav_allowed / nav_guard).
+// Contract: Docs/SITE_POPOUT.md.
+pub const SITE_LABEL: &str = "pop-site";
+const SITE_HOME: &str = "https://innocentpenguin.com";
+const SITE_TITLE: &str = "Innocent Penguin - Website";
+const SITE_AUMID: &str = "gg.pinguino.suite.site";
+const SITE_HOSTS: &[&str] = &["innocentpenguin.com", "www.innocentpenguin.com"];
+const SIGNIN_HOSTS: &[&str] = &["id.twitch.tv", "passport.twitch.tv", "www.twitch.tv", "accounts.google.com", "id.kick.com", "kick.com", "www.tiktok.com"];
+
+/// True if the site window may navigate to `u` (https only: the site itself or one of its sign-in providers).
+pub fn site_nav_allowed(u: &tauri::Url) -> bool {
+    u.scheme() == "https" && u.host_str().map_or(false, |h| SITE_HOSTS.contains(&h) || SIGNIN_HOSTS.contains(&h))
+}
+
+fn site_path_ok(p: &str) -> bool {
+    p.starts_with('/') && !p.contains("//") && !p.contains("..") && p.len() <= 80 && p.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_'))
+}
+
+fn site_url(path: Option<&str>) -> Result<tauri::Url, String> {
+    let p = path.map(str::trim).filter(|p| !p.is_empty() && *p != "/");
+    if let Some(p) = p {
+        if !site_path_ok(p) {
+            return Err("site path: letters, digits, '/', '-' and '_' only".into());
+        }
+    }
+    format!("{}{}", SITE_HOME, p.unwrap_or("/")).parse::<tauri::Url>().map_err(|_| "bad site url".to_string())
+}
+
+fn site_profile_dir(app: &AppHandle) -> PathBuf {
+    // Cookies/localStorage of the site login live here (WebView2 encrypts them). Outside the Suite data folder and the repo.
+    app.path().app_local_data_dir().unwrap_or_else(|_| crate::data_dir()).join("webview-site")
+}
+
+fn open_in_system_browser(app: &AppHandle, u: &tauri::Url) {
+    if matches!(u.scheme(), "http" | "https") {
+        #[allow(deprecated)]
+        let _ = tauri_plugin_shell::ShellExt::shell(app).open(u.as_str(), None);
+    }
+}
+
+#[tauri::command]
+pub fn open_site_window(app: AppHandle, path: Option<String>) -> Result<WinInfo, String> {
+    let url = site_url(path.as_deref())?;
+    let lay = app.state::<Layouts>();
+
+    if let Some(w) = app.get_webview_window(SITE_LABEL) {
+        let _ = w.show();
+        let _ = w.unminimize();
+        if path.as_deref().map_or(false, |p| !p.trim().is_empty() && p.trim() != "/") {
+            let _ = w.navigate(url);
+        }
+        let _ = w.set_focus();
+        return Ok(info(&app, SITE_LABEL));
+    }
+
+    let prev = lay.map.lock().unwrap().get(SITE_LABEL).cloned();
+    let on_top = prev.as_ref().map_or(false, |p| p.on_top);
+    let icon = tauri::image::Image::new(include_bytes!("../icons/site.rgba"), 256, 256);
+    let nav_app = app.clone();
+    let win = WebviewWindowBuilder::new(&app, SITE_LABEL, WebviewUrl::External(url))
+        .title(SITE_TITLE)
+        .icon(icon)
+        .map_err(|e| e.to_string())?
+        .inner_size(1280.0, 860.0)
+        .min_inner_size(480.0, 400.0)
+        .always_on_top(on_top)
+        .data_directory(site_profile_dir(&app))
+        .on_navigation(site_nav_allowed)
+        .on_new_window(move |u, _| {
+            // target=_blank / window.open: stay in this window for the site and its sign-in, otherwise the system browser
+            if site_nav_allowed(&u) {
+                if let Some(w) = nav_app.get_webview_window(SITE_LABEL) {
+                    let _ = w.navigate(u);
+                }
+            } else {
+                open_in_system_browser(&nav_app, &u);
+            }
+            tauri::webview::NewWindowResponse::Deny
+        })
+        .visible(false)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    crate::siteicon::set_window_aumid(&win, SITE_AUMID);
+
+    lay.map.lock().unwrap().insert(
+        SITE_LABEL.to_string(),
+        Saved { url: SITE_HOME.to_string(), title: SITE_TITLE.to_string(), on_top, decorations: true, open: true, x: prev.as_ref().map_or(0, |p| p.x), y: prev.as_ref().map_or(0, |p| p.y), w: prev.as_ref().map_or(0, |p| p.w), h: prev.as_ref().map_or(0, |p| p.h), monitor: prev.as_ref().and_then(|p| p.monitor.clone()) },
+    );
+    let req = OpenReq { label: SITE_LABEL.into(), url: SITE_HOME.into(), title: None, width: None, height: None, monitor: None, place: None, always_on_top: None, decorations: None, reset: None, bounds: None, remember: None, soft: None };
+    place(&app, &win, &req, prev.as_ref(), false);
+    let _ = win.show();
+    let _ = win.set_focus();
+    snapshot(&app, &win, true);
+
+    let handle = app.clone();
+    let w2 = win.clone();
+    win.on_window_event(move |ev| match ev {
+        WindowEvent::Moved(_) | WindowEvent::Resized(_) => snapshot(&handle, &w2, true),
+        WindowEvent::CloseRequested { .. } => {
+            let lay = handle.state::<Layouts>();
+            if let Some(e) = lay.map.lock().unwrap().get_mut(w2.label()) {
+                e.open = false;
+            }
+            lay.flush(true);
+        }
+        _ => {}
+    });
+    lay.flush(true);
+    Ok(info(&app, SITE_LABEL))
+}
+
+/// Sign out of the site window for good: deletes its own WebView2 profile folder (only that one). The window must be closed.
+#[tauri::command]
+pub fn clear_site_data(app: AppHandle) -> Result<(), String> {
+    if app.get_webview_window(SITE_LABEL).is_some() {
+        return Err("close the site window first".into());
+    }
+    let dir = site_profile_dir(&app);
+    if dir.file_name().map_or(false, |n| n == "webview-site") && dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }

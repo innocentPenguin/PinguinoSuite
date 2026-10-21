@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod mainwin;
+mod siteicon;
 mod splash;
 mod windows;
 
@@ -141,6 +142,15 @@ fn stop_core(core: &Core) {
 fn nav_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::new("nav-guard")
         .on_navigation(|webview, url| {
+            if webview.label() == windows::SITE_LABEL {
+                // the website pop-out: only the site and its sign-in pages; everything else goes to the system browser
+                let ok = windows::site_nav_allowed(url);
+                if !ok && matches!(url.scheme(), "http" | "https") {
+                    #[allow(deprecated)]
+                    let _ = tauri_plugin_shell::ShellExt::shell(webview).open(url.as_str(), None);
+                }
+                return ok;
+            }
             let local = match url.scheme() {
                 "http" | "https" => matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("tauri.localhost")),
                 "https+tauri" | "tauri" | "about" | "data" | "blob" => true,
@@ -182,7 +192,7 @@ fn main() {
         .plugin(nav_guard())
         .manage(Core { child: Mutex::new(child), token })
         .manage(windows::Layouts::load(data_dir().join("windows.json")))
-        .invoke_handler(tauri::generate_handler![core_config, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows, splash::app_ready])
+        .invoke_handler(tauri::generate_handler![core_config, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows, windows::open_site_window, windows::clear_site_data, splash::app_ready])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Show PinguinoSuite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit (stops all modules)", true, None::<&str>)?;
