@@ -77,6 +77,12 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 23:42 Full rebuild + app launch (commands page, replay buffer, wheel preview fix)
+
+- Build-All --no-launch (Host 23:38:40, shell 23:38:46) then PinguinoApp.bat. Earlier attempts at 23:36 did not build (log file locked by a stale shell); Music module restarted 23:30 (1d336fd subTier/isVip, c39ca11 song log).
+- Now live: 595a655/560d36f replay-buffer auto-start (start only, never toggle; /api/obs/status: connected, replayBuffer active), 84b744a command profiles, 4be2c07, f7f6a38 wheel, 01's Commands page, sidebar scroll, wheel preview fix.
+- Known: splash window shows white corners (01 fixing).
+
 ## 2026-10-20 23:27 Host restart (command profiles backend, Music subTier)
 
 - Command: Update-Module.ps1 host. Build 0 errors, Host up. /api/commands/profiles 200, /api/commands/archive 200, /api/live 200.
