@@ -373,3 +373,8 @@ Host rebuilt+restarted; /api/live 200; /api/boards push ok (supporters 67, board
 - status.railway.com: incident QH8L8B3E still "Identified" (Major Outage). Latest update Oct 21 21:01 UTC: "We do not yet have additional information to provide about the availability of builds." Last explicit build status (20:35 UTC): Enterprise builds being validated, Pro/Hobby/Free to follow in stages; no confirmation any stage is re-enabled. Not resolved, so no push approval sent to 05 (no duplicate message).
 - Stream checked: /api/live live=false (offline). Push step not reached.
 - Nothing else done this run; will re-check next hour.
+
+## 2026-10-21 17:04 CDT - Host restart for lease fix (00)
+- Update-Module host: 02 ea99365 (Host stays up degraded when the core is unreachable). /api/live ok but state unknown (source unknown); host.log shows LIVE/offline flapping at start, OBS is running. Restart done without a confirmed-offline stream check: noted for next time (check Helix live before any restart).
+
+- 2026-10-21 18:16 (00): Build-All OK (host, core, shell). Stream offline (decapi). Relaunched app (suite+core), all 7 ports 200. Host restarted (killed stale pid 48244; Update-Module stop signal did not take) with ea99365, 69e67ab, 8c5b9ab, 2fd0628; rebuild-buckets ran (3952 events), /api/boards watchtime month OK. Lite relaunches at 16:46 not logged earlier. Site push held: Railway builds still paused (status 22:45 UTC).
