@@ -3,166 +3,169 @@ tells modules about it, and serves the dashboard. Run via PinguinoSuite.bat (or 
 # INDEX-BEGIN (regenerate: scratch idx.py; line numbers are of this file)
 # INDEX: Suite core (FastAPI, 127.0.0.1:8760): module supervision, vault/help/prestream/devices/console APIs, serves the shell UI. Routes + public functions:
 # Related: Suite/modules.json (module manifests), Docs/MODULE_CONTRACT.md, Suite/suite/{vault,helpdb,prestream,device,consolelog,integrations}.py, App/src/index.html
-#   210  def rotate_log
-#   230  def module_token
-#   260  def load_settings
-#   271  def save_settings
-#   303  def tail_lines
-#   331  class Bus
-#   356  def kill_tree
-#   371  class Module
-#   494  def discover_specs
-#   517  def on_transition
-#   528  def apply_stream
-#   548  def twitch_loop
-#   563  def process_control
-#   605  def run_prestream
-#   631  def prestream_loop
-#   650  def reconcile_devices
-#   671  def status_loop
-#   689  def device_sync_loop
-#   707  def health_loop
-#   725  def autostart_enabled
-#   737  def set_autostart
-#   754  def lifespan
-#   784  def guard
-#   810  GET    /
-#   811  def index
-#   817  GET    /assets/{name}
-#   818  def shell_asset
-#   830  GET    /theme.css
-#   831  def theme_css
-#   839  GET    /bootstrap.js
-#   840  def bootstrap_js
-#   848  GET    /api/capabilities
-#   849  def capabilities
-#   855  WEBSOCKET /ws
-#   856  def ws
-#   872  GET    /api/state
-#   873  def state
-#   879  class Opt
-#   885  GET    /api/modules/{mid}/probe
-#   886  def module_probe
-#   942  def declared_secrets
-#   964  def vault_prestream_items
-#   992  GET    /api/prefs
-#   993  def prefs_get
-#   998  POST   /api/prefs
-#   999  def prefs_set
-#  1003  POST   /api/prefs/reset
-#  1004  def prefs_reset
-#  1015  GET    /api/templates
-#  1016  def templates_list
-#  1022  POST   /api/templates
-#  1023  def templates_save
-#  1029  POST   /api/templates/rename
-#  1030  def templates_rename
-#  1035  POST   /api/templates/delete
-#  1036  def templates_delete
-#  1041  GET    /api/help
-#  1042  def help_get
-#  1060  GET    /api/help/all
-#  1061  def help_all
-#  1066  GET    /api/vault
-#  1067  def vault_list
-#  1087  class VaultValue
-#  1091  GET    /api/vault/{name}
-#  1092  def vault_read
-#  1110  POST   /api/vault/import-plaintext
-#  1111  def vault_import
-#  1119  class Scrub
-#  1124  POST   /api/vault/scrub
-#  1125  def vault_scrub
-#  1138  class Passphrase
-#  1142  POST   /api/vault/backup
-#  1143  def vault_backup
-#  1153  POST   /api/vault/restore
-#  1154  def vault_restore
-#  1164  POST   /api/vault/{name}/set
-#  1165  def vault_set
-#  1182  POST   /api/vault/{name}/delete
-#  1183  def vault_delete
-#  1190  POST   /api/vault/{name}/test
-#  1191  def vault_test
-#  1207  GET    /api/integrations
-#  1208  def integrations_get
-#  1243  class PostReq
-#  1248  POST   /api/modules/{mid}/post
-#  1249  def module_post
-#  1270  GET    /api/modules/{mid}/get
-#  1271  def module_get
-#  1286  GET    /api/modules/{mid}/logs
-#  1287  def module_logs
-#  1293  class DevConfig
-#  1302  class Setup
-#  1308  GET    /api/setup
-#  1309  def setup_get
-#  1315  POST   /api/setup
-#  1316  def setup_post
-#  1327  class ExportReq
-#  1332  POST   /api/export
-#  1333  def export_config
-#  1355  def backup_cfg
-#  1360  def backup_list
-#  1368  def run_backup
-#  1383  def backup_loop
-#  1396  GET    /api/backup/auto
-#  1397  def backup_auto_get
-#  1401  POST   /api/backup/auto
-#  1402  def backup_auto_set
-#  1410  POST   /api/backup/auto/run
-#  1411  def backup_auto_run
-#  1419  POST   /api/import
-#  1420  def import_config
-#  1432  GET    /api/device
-#  1433  def device_get
-#  1437  POST   /api/device/config
-#  1438  def device_config
-#  1443  POST   /api/device/take
-#  1444  def device_take
-#  1451  POST   /api/device/release
-#  1452  def device_release
-#  1458  POST   /api/device/peer
-#  1459  def device_peer
-#  1465  class Streaming
-#  1469  POST   /api/device/streaming
-#  1470  def device_streaming
-#  1475  GET    /api/device/lease
-#  1476  def device_lease
-#  1482  POST   /api/voice/dispatch
-#  1483  def voice_dispatch
-#  1503  GET    /api/console
-#  1504  def console_get
-#  1509  GET    /api/prestream/schedule
-#  1510  def prestream_schedule_get
-#  1514  POST   /api/prestream/schedule
-#  1515  def prestream_schedule_set
-#  1522  GET    /api/prestream
-#  1523  def prestream_get
-#  1527  POST   /api/prestream/run
-#  1528  def prestream_run
-#  1532  GET    /api/events/log
-#  1533  def event_log
-#  1544  POST   /api/modules/{mid}/enable
-#  1545  def module_enable
-#  1563  POST   /api/modules/{mid}/options
-#  1564  def module_options
-#  1571  POST   /api/modules/{mid}/{action}
-#  1572  def module_action
-#  1583  class Chan
-#  1587  POST   /api/channel
-#  1588  def set_channel
-#  1595  class Sim
-#  1599  POST   /api/simulate
-#  1600  def simulate
-#  1612  class Auto
-#  1616  POST   /api/windows-autostart
-#  1617  def windows_autostart
-#  1622  POST   /api/quit
-#  1623  def quit_suite
-#  1635  def open_app
-#  1646  def start_tray
-#  1666  def already_running
+#   213  def rotate_log
+#   233  def module_token
+#   263  def load_settings
+#   274  def save_settings
+#   306  def tail_lines
+#   334  class Bus
+#   359  def kill_tree
+#   374  class Module
+#   497  def discover_specs
+#   520  def on_transition
+#   531  def apply_stream
+#   551  def twitch_loop
+#   566  def process_control
+#   608  def run_prestream
+#   634  def prestream_loop
+#   653  def reconcile_devices
+#   674  def status_loop
+#   692  def device_sync_loop
+#   710  def health_loop
+#   728  def autostart_enabled
+#   740  def set_autostart
+#   757  def lifespan
+#   787  def guard
+#   813  GET    /
+#   814  def index
+#   820  GET    /assets/{name}
+#   821  def shell_asset
+#   833  GET    /theme.css
+#   834  def theme_css
+#   842  GET    /bootstrap.js
+#   843  def bootstrap_js
+#   854  def read_update_status
+#   870  GET    /api/update/status
+#   871  def update_status
+#   875  GET    /api/capabilities
+#   876  def capabilities
+#   882  WEBSOCKET /ws
+#   883  def ws
+#   899  GET    /api/state
+#   900  def state
+#   906  class Opt
+#   912  GET    /api/modules/{mid}/probe
+#   913  def module_probe
+#   969  def declared_secrets
+#   991  def vault_prestream_items
+#  1019  GET    /api/prefs
+#  1020  def prefs_get
+#  1025  POST   /api/prefs
+#  1026  def prefs_set
+#  1030  POST   /api/prefs/reset
+#  1031  def prefs_reset
+#  1042  GET    /api/templates
+#  1043  def templates_list
+#  1049  POST   /api/templates
+#  1050  def templates_save
+#  1056  POST   /api/templates/rename
+#  1057  def templates_rename
+#  1062  POST   /api/templates/delete
+#  1063  def templates_delete
+#  1068  GET    /api/help
+#  1069  def help_get
+#  1087  GET    /api/help/all
+#  1088  def help_all
+#  1093  GET    /api/vault
+#  1094  def vault_list
+#  1114  class VaultValue
+#  1118  GET    /api/vault/{name}
+#  1119  def vault_read
+#  1137  POST   /api/vault/import-plaintext
+#  1138  def vault_import
+#  1146  class Scrub
+#  1151  POST   /api/vault/scrub
+#  1152  def vault_scrub
+#  1165  class Passphrase
+#  1169  POST   /api/vault/backup
+#  1170  def vault_backup
+#  1180  POST   /api/vault/restore
+#  1181  def vault_restore
+#  1191  POST   /api/vault/{name}/set
+#  1192  def vault_set
+#  1209  POST   /api/vault/{name}/delete
+#  1210  def vault_delete
+#  1217  POST   /api/vault/{name}/test
+#  1218  def vault_test
+#  1234  GET    /api/integrations
+#  1235  def integrations_get
+#  1270  class PostReq
+#  1275  POST   /api/modules/{mid}/post
+#  1276  def module_post
+#  1297  GET    /api/modules/{mid}/get
+#  1298  def module_get
+#  1313  GET    /api/modules/{mid}/logs
+#  1314  def module_logs
+#  1320  class DevConfig
+#  1329  class Setup
+#  1335  GET    /api/setup
+#  1336  def setup_get
+#  1342  POST   /api/setup
+#  1343  def setup_post
+#  1354  class ExportReq
+#  1359  POST   /api/export
+#  1360  def export_config
+#  1382  def backup_cfg
+#  1387  def backup_list
+#  1395  def run_backup
+#  1410  def backup_loop
+#  1423  GET    /api/backup/auto
+#  1424  def backup_auto_get
+#  1428  POST   /api/backup/auto
+#  1429  def backup_auto_set
+#  1437  POST   /api/backup/auto/run
+#  1438  def backup_auto_run
+#  1446  POST   /api/import
+#  1447  def import_config
+#  1459  GET    /api/device
+#  1460  def device_get
+#  1464  POST   /api/device/config
+#  1465  def device_config
+#  1470  POST   /api/device/take
+#  1471  def device_take
+#  1478  POST   /api/device/release
+#  1479  def device_release
+#  1485  POST   /api/device/peer
+#  1486  def device_peer
+#  1492  class Streaming
+#  1496  POST   /api/device/streaming
+#  1497  def device_streaming
+#  1502  GET    /api/device/lease
+#  1503  def device_lease
+#  1509  POST   /api/voice/dispatch
+#  1510  def voice_dispatch
+#  1530  GET    /api/console
+#  1531  def console_get
+#  1536  GET    /api/prestream/schedule
+#  1537  def prestream_schedule_get
+#  1541  POST   /api/prestream/schedule
+#  1542  def prestream_schedule_set
+#  1549  GET    /api/prestream
+#  1550  def prestream_get
+#  1554  POST   /api/prestream/run
+#  1555  def prestream_run
+#  1559  GET    /api/events/log
+#  1560  def event_log
+#  1571  POST   /api/modules/{mid}/enable
+#  1572  def module_enable
+#  1590  POST   /api/modules/{mid}/options
+#  1591  def module_options
+#  1598  POST   /api/modules/{mid}/{action}
+#  1599  def module_action
+#  1610  class Chan
+#  1614  POST   /api/channel
+#  1615  def set_channel
+#  1622  class Sim
+#  1626  POST   /api/simulate
+#  1627  def simulate
+#  1639  class Auto
+#  1643  POST   /api/windows-autostart
+#  1644  def windows_autostart
+#  1649  POST   /api/quit
+#  1650  def quit_suite
+#  1662  def open_app
+#  1673  def start_tray
+#  1693  def already_running
 # INDEX-END
 import asyncio
 import json
@@ -843,6 +846,30 @@ def bootstrap_js():
     if not f.exists():
         return Response(status_code=404)
     return Response(f.read_text("utf8"), media_type="application/javascript")
+
+
+UPDATES_DIR = ROOT.parent / "Data" / "updates"   # written by the PinguinoUpdater (Suite/updater), read-only here
+
+
+def read_update_status(folder=None):
+    """Last Updater result + a pending 'waiting until you are off stream' notice, for the shell to show. Missing files just mean nothing happened yet."""
+    base = folder or UPDATES_DIR
+    out = {"version": None, "result": None, "deferred": None}
+    for key, name in (("result", "update_result.json"), ("deferred", "update_deferred.json")):
+        try:
+            out[key] = json.loads((base / name).read_text("utf8"))
+        except (OSError, ValueError):
+            pass
+    try:
+        out["version"] = json.loads((base.parent.parent / "install.json").read_text("utf8")).get("version")
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+@app.get("/api/update/status")
+def update_status():
+    return read_update_status()
 
 
 @app.get("/api/capabilities")
