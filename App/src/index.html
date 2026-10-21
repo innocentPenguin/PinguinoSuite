@@ -1049,7 +1049,7 @@ function bindApprovals(){
     catch(e){toast('Could not '+a+': '+(e&&e.message?e.message:e));b.disabled=false;return}
     re();aprPoll()})}
 /* ============ Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy also via /api/economy) + live wheel preview + test-bet simulator ============ */
-const WG_PREVIEW='http://127.0.0.1:8770/wheel.html';   // verified 200 by 00 (/overlay/ and /overlays/ paths are 404); ?demo gives a static preview
+const WG_PREVIEW='http://127.0.0.1:8770/wheel.html?feed=1';   // verified 200 by 00 (/overlay/ and /overlays/ paths are 404); ?demo gives a static preview
 const WG={d:undefined,mock:false,tab:'wheel',edit:{},msg:'',sim:null,key:0};
 const WG_MOCK=[
  {id:'wheel',title:'Wheel',help:'The tournament team wheel.',fields:[
