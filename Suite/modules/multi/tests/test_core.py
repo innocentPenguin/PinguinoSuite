@@ -1171,3 +1171,13 @@ def test_live_overlay_routes_and_state(tmp_path, monkeypatch):
         assert r.status_code == 200 and "api/live-state" in r.text and "no-store" in r.headers["cache-control"]
     j = c.get("/api/live-state").json()
     assert j["poll"]["title"] == "x" and j["prediction"] is None and j["hype"] is None
+
+
+def test_loop_handler_ignores_client_disconnects(monkeypatch):
+    import server, console_log
+    seen = []
+    monkeypatch.setattr(console_log, "error", lambda *a, **k: seen.append(a))
+    server._loop_exception(None, {"message": "cb", "exception": ConnectionResetError(10054, "reset")})
+    assert seen == []
+    server._loop_exception(None, {"message": "cb", "exception": ValueError("real")})
+    assert len(seen) == 1

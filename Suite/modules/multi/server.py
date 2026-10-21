@@ -108,11 +108,19 @@ async def tick_loop():
             store.prune(config.settings()["retention_days"])
 
 
+def _loop_exception(loop, ctx):
+    """asyncio's last-resort handler. A browser / OBS source closing its socket raises ConnectionResetError (10054) inside the Windows
+    event loop's connection_lost callback; that is the client leaving, not a fault, so it is not logged as an error."""
+    exc = ctx.get("exception")
+    if isinstance(exc, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+        return
+    console_log.error("server", f"unhandled: {ctx.get('message', '')} {repr(exc or '')}", dedupe_s=60)
+
+
 @asynccontextmanager
 async def lifespan(app):
     hub.loop = asyncio.get_running_loop()
-    hub.loop.set_exception_handler(lambda loop, ctx: console_log.error(
-        "server", f"unhandled: {ctx.get('message', '')} {repr(ctx.get('exception', ''))}", dedupe_s=60))
+    hub.loop.set_exception_handler(_loop_exception)
     console_log.info("server", f"Multi started on port {config.PORT}")
     store.prune(config.settings()["retention_days"])
     _seed_defaults()
