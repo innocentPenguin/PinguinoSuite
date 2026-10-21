@@ -285,10 +285,10 @@ namespace PinguinoHost
                 var pm = new JObject();
                 foreach (var per in Pers)
                 {
-                    var first = Query(met, per, "", null, 10); var all = new JObject(); var keys = ((JArray)first["keys"]).Select(x => (string)x).ToList();
+                    var first = Query(met, per, "", null, 100); var all = new JObject(); var keys = ((JArray)first["keys"]).Select(x => (string)x).ToList();
                     int n = per == "all" ? 1 : keep[per];
                     string cur = (string)first["key"]; if (!keys.Contains(cur)) keys.Insert(0, cur);
-                    foreach (var k in keys.Take(n)) { var r = k == cur ? first : Query(met, per, k, null, 10); if (((JArray)r["rows"]).Count > 0) all[k] = new JObject { { "total", r["total"] }, { "rows", r["rows"] } }; }
+                    foreach (var k in keys.Take(n)) { var r = k == cur ? first : Query(met, per, k, null, 100); if (((JArray)r["rows"]).Count > 0) all[k] = new JObject { { "total", r["total"] }, { "rows", r["rows"] } }; }
                     pm[per] = new JObject { { "current", cur }, { "keys", new JArray(keys) }, { "boards", all } };
                 }
                 o[met] = pm;

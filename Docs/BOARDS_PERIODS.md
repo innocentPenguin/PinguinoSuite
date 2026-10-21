@@ -18,7 +18,7 @@ Owner: 02 (Host). Code: `PinguinoHost/HostPeriods.cs`. Test: `Tools/test-host-pe
  "rows":[{"rank":1,"login":"penguinfan","name":"PenguinFan","value":1620}], "me":{"rank":15,"value":540}}
 ```
 Empty `key` = the current period; `me` only when `login` is given and ranked; `level` rows also carry `pct`. `GET /api/boards` without `metric` is the old snapshot. `POST /api/boards/event` (test hook only) and `POST /api/boards/reload`.
-The site push `POST /api/bot/boards` now also carries `periods`: `{metric:{period:{current, keys:[...], boards:{key:{total, rows:[top 10]}}}}}` for watchtime, points, messages, level, gifts, bits (last 14 days, 12 weeks, every month and year, all time).
+The site push `POST /api/bot/boards` now also carries `periods`: `{metric:{period:{current, keys:[...], boards:{key:{total, rows:[top 100]}}}}}` for watchtime, points, messages, level, gifts, bits (last 14 days, 12 weeks, every month and year, all time).
 
 ## Chat
 `!top` / `!leaders <watchtime|points|messages|level|gifts|bits> [day|week|month|year|all]` (default week); `!watchtime` and `!points` add "today X, this week Y, this month Z" (points = earned). LOTD / LOTW / LOTM read the same thing: `Periods.Query(metric, "day"|"week"|"month", "")` row 1.
