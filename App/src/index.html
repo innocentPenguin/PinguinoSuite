@@ -1089,6 +1089,7 @@ async function loadWheel(){
   try{const j=await hostGet('/api/tune');if(j&&j.ok&&Array.isArray(j.areas))areas=j.areas}catch{}
   if(!areas){mock=true;areas=JSON.parse(JSON.stringify(WG.keepMock||WG_MOCK))}
   if(!areas.some(a=>a.id==='economy')){try{areas.push(wgEconomy(await hostGet('/api/economy')))}catch{}}
+  try{WG.obs=await hostGet('/api/obs/status')}catch{WG.obs=null}
   WG.d=areas;WG.mock=mock;WG.keepMock=mock?areas.filter(a=>a.id!=='economy'):null;
   if(route==='wheel'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
 const wgVal=(f,aid)=>{const e=WG.edit[aid];return e&&f.key in e?e[f.key]:f.value};
@@ -1111,7 +1112,7 @@ pages.wheel=()=>{
    <div><div class="row wrap" style="margin-bottom:8px">${areas.map(x=>`<span class="chip${x.id===WG.tab?' on':''}" data-wgt="${x.id}">${esc(x.title)}</span>`).join('')}</div>
     ${WG.mock&&a.id!=='economy'?'<div class="pnote" style="color:var(--warn)">Preview data: the Host has no /api/tune yet, so these values are examples and are not saved.</div>':''}
     <div class="card"><div class="row"><h3 style="margin:0">${esc(a.title)}</h3><span class="sp"></span><button class="sm" id="wg-save"${nChanged?'':' disabled'}>Save${nChanged?' ('+nChanged+')':''}</button><button class="sm" id="wg-def">Defaults</button></div>
-     ${a.help?`<div class="pnote">${esc(a.help)}</div>`:''}${a.fields.map(f=>wgField(a,f)).join('')}${WG.msg?`<div class="sm" style="margin-top:8px">${esc(WG.msg)}</div>`:''}</div>
+     ${a.help?`<div class="pnote">${esc(a.help)}</div>`:''}${a.id==='obs'?wgObsStatus():''}${a.fields.map(f=>wgField(a,f)).join('')}${WG.msg?`<div class="sm" style="margin-top:8px">${esc(WG.msg)}</div>`:''}</div>
     ${a.id==='economy'?`<div class="card"><h3>Give points silently</h3><div class="pnote">No chat message is sent. Use a negative amount to take points away.</div>
      <div class="row wrap"><select id="gv-who"><option value="user">One viewer</option><option value="everyone">Everyone (in the database)</option></select><input id="gv-login" placeholder="login" style="width:140px"><input id="gv-amt" type="number" value="100" style="width:90px"><input id="gv-why" placeholder="reason" style="width:180px"><button class="sm" id="gv-go">Give</button></div>${WG.gmsg?`<div class="sm" style="margin-top:6px">${esc(WG.gmsg)}</div>`:''}</div>`:''}</div>
    <div><div class="card"><div class="row"><h3 style="margin:0">Live wheel preview</h3><span class="sp"></span><button class="sm" data-wgact="spin">SPIN</button><button class="sm" data-wgact="new">New round</button><button class="sm" data-wgact="reset">Reset</button></div>
@@ -1123,6 +1124,8 @@ pages.wheel=()=>{
 function wgSimLocal(g,bet,n){const gm=WG.d.find(x=>x.id==='gambling'),v=k=>{const f=gm?.fields.find(x=>x.key===k);return f?wgVal(f,'gambling'):null};
   const p=(v('winChance')??45)/100,mult=v('payout')??2;let w=0,net=0;for(let i=0;i<n;i++){if(Math.random()<p){w++;net+=bet*(mult-1)}else net-=bet}
   return {wins:w,losses:n-w,net:Math.round(net),avgPayout:Math.round(w?bet*mult:0),local:true}}
+function wgObsStatus(){const o=WG.obs;if(!o||o.ok===false)return '<div class="sm faint" style="margin-bottom:6px">OBS status is not available (the Host is older, or not running).</div>';
+  const rb=o.replayBuffer||{};return `<div class="sm" style="margin-bottom:8px"><span class="dot ${o.connected?'running':'stopped'}" style="margin:0 6px 0 0"></span>${o.connected?'Connected to OBS':'Not connected to OBS'}${o.recording?' · recording':''}${o.connected?' · replay buffer '+(rb.active?'running':'stopped'):''}${rb.lastAutoStart?' · auto-started '+aprAgo(rb.lastAutoStart):''}${rb.lastError?`<div class="faint">Last error: ${esc(rb.lastError)}</div>`:''}${o.connected&&o.replayBufferEnabled===false?'<div class="faint">The replay buffer is not enabled in OBS. Enable Replay Buffer in OBS Settings &gt; Output.</div>':''}</div>`}
 function wgScale(){const f=$('#wg-frame'),i=$('#wg-prev');if(f&&i)i.style.transform='scale('+(f.clientWidth/1280)+')'}
 function wgFull(on){WG.full=!!on;const b=$('#wg-box');if(b)b.classList.toggle('full',WG.full);wgScale()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&WG.full){e.preventDefault();wgFull(false)}});
