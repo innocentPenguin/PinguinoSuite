@@ -228,6 +228,59 @@
     return changed;
   }
 
+  /* ---------- logs: Chat / Players / Backend (+ Twitch events) ---------- */
+  // item: {k, t:'c'|'e'|'p'|'b', ts(sec), type, user, text, group, matchId, blue[], orange[], by, reason}
+  const LOG_CATS = { all: null, chat: 'c', events: 'e', players: 'p', backend: 'b' };
+  function logText(x) {
+    if (x.text) return x.text;
+    const u = x.user || '?', by = x.by ? ' by ' + x.by : '', why = x.reason ? ' (' + x.reason + ')' : '';
+    switch (x.type) {
+      case 'join': return u + ' joined the queue';
+      case 'leave': return u + ' left the queue';
+      case 'kick': return u + ' was kicked' + by + why;
+      case 'strike': return u + ' got a strike' + by + why;
+      case 'removed': return u + ' was removed' + by + why;
+      case 'overlay': return (x.file || 'overlay') + ' ' + (x.action || 'changed') + by;
+      default: return (x.type || 'log') + (x.user ? ': ' + x.user : '');
+    }
+  }
+  // Turns the merged item list into display rows: filters by category + search, and folds runs of same-group removals ("6 players", click to open).
+  function logRows(items, cat, q, open, cap) {
+    const want = LOG_CATS[cat || 'all'], needle = (q || '').toLowerCase(), out = [];
+    const list = items.filter(x => (!want || x.t === want) && (!needle || ((x.user || '') + ' ' + logText(x)).toLowerCase().includes(needle))).slice(-(cap || 400));
+    for (let i = 0; i < list.length; i++) {
+      const x = list[i];
+      if (x.group && (x.type === 'leave' || x.type === 'removed')) {
+        let j = i; while (j + 1 < list.length && list[j + 1].group === x.group && list[j + 1].type === x.type) j++;
+        const run = list.slice(i, j + 1);
+        if (run.length > 1) {
+          const key = 'g:' + x.group + ':' + x.type, isOpen = !!(open && open.has(key));
+          out.push({ key, kind: 'group', ts: run[0].ts, n: run.length, label: run.length + ' players', open: isOpen, text: x.type === 'removed' ? 'removed after the game' : 'left after the game', names: run.map(r => r.user).join(', ') });
+          if (isOpen) run.forEach(r => out.push({ key: r.k, kind: 'sub', ts: r.ts, text: logText(r), t: r.t }));
+          i = j; continue;
+        }
+      }
+      out.push({ key: x.k, kind: x.type === 'teams' ? 'teams' : 'line', t: x.t, ts: x.ts, user: x.user || '', type: x.type || '', text: x.type === 'teams' ? ('Match' + (x.matchId != null ? ' #' + x.matchId : '') + ' teams') : logText(x), blue: x.blue || [], orange: x.orange || [] });
+    }
+    return out;
+  }
+  // Client-side Players log from customs state changes (used only while the Host has no /api/logs).
+  function diffCustoms(prev, next, now) {
+    if (!prev || !next || next.ok === false) return [];
+    const ts = now || Date.now() / 1000, out = [], names = s => (s && s.queue || []).map(p => p.username || p.user || p.name).filter(Boolean);
+    const pq = new Set(names(prev)), nq = new Set(names(next)), inMatch = new Set(((next.match && next.match.players) || []).map(p => p.username)), pm = prev.match, nm = next.match;
+    const ended = pm && (!nm || nm.id !== pm.id);
+    const gone = [...pq].filter(u => !nq.has(u) && !inMatch.has(u)), inPrevMatch = new Set(((pm && pm.players) || []).map(p => p.username));
+    for (const u of nq) if (!pq.has(u) && !inPrevMatch.has(u)) out.push({ k: 'cl:' + ts + ':j:' + u, t: 'p', ts, type: 'join', user: u, src: 'app' });
+    for (const u of gone) out.push({ k: 'cl:' + ts + ':l:' + u, t: 'p', ts, type: 'leave', user: u, src: 'app' });
+    if (ended) {
+      const stay = new Set([...nq, ...inMatch]), rem = [...inPrevMatch].filter(u => !stay.has(u));
+      rem.forEach(u => out.push({ k: 'cl:' + ts + ':r:' + u, t: 'p', ts, type: 'removed', user: u, group: 'm' + pm.id, src: 'app' }));
+    }
+    if (nm && (!pm || nm.id !== pm.id)) out.push({ k: 'cl:t:' + nm.id, t: 'p', ts, type: 'teams', matchId: nm.id, blue: nm.blue || [], orange: nm.orange || [], src: 'app' });
+    return out;
+  }
+
   function fmtAgo(sec) { sec = Math.max(0, Math.round(sec)); if (sec < 60) return sec + 's'; if (sec < 3600) return Math.floor(sec / 60) + 'm'; return Math.floor(sec / 3600) + 'h ' + Math.floor(sec % 3600 / 60) + 'm'; }
   function activityLine(a) {
     const who = a.user || '?', n = a.amount, w = a.what && a.what !== String(n) ? a.what : '';
@@ -243,5 +296,5 @@
     }
   }
 
-  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, fmtAgo, activityLine, sig };
+  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });

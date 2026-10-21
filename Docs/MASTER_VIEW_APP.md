@@ -68,3 +68,11 @@ Against the running Host (GET only, writes stubbed): 18 scenes/17 sources, SSE p
 ## Layout v2 (Ivan's redesign)
 
 Scenes and Sources are ONE column split 50/50 (`#col-obs`); the side pane (Customs / Feed / Commands / Overlays) takes all remaining width and height. Customs is categorised like the website (Activity, Queue, Next match, Match, Teams, Settings, KOTH, Players, Wheel) in a multi-column flow, colour coded: green open/Fill/In, red close/clear/kick/destructive (two-click confirm), orange/blue team results and "stays", Activity red with the live one ringed. Mode / size / game mode / KOTH are one-click segmented buttons; the current one is greyed (`.cur`). Orange/Blue wins are disabled with no live match; the Manual pick row shows only in Manual mode. Control bar: any control click takes control at once (the Host runs actions as the broadcaster, so there is no lock step); it shows `controlHolder` from the Host if one is set, else "you (app)" after a click. New allow-listed actions: `activity` (`rl|fn <name>` or `end`), `pick`, `streamer` (sent through `/api/run`; the Host's `/api/customs/mod` does not carry them yet).
+
+## Logs (Feed tab)
+
+Chips: All / Chat / Players / Backend / Events. Players = join, leave, kick, strike, removals, team making; Backend = overlay actions, bot actions, errors; Events = Twitch events. Removals that share a `group` (end of a game) fold into one underlined "6 players" row; click to show or hide the names. Team making is one line: `Blue: a, b, c  Orange: d, e, f`, coloured. Search (`/`) filters the log too.
+
+Host contract asked of 02: `GET /api/logs?cat=all&since=<seq>&limit=500` -> `{ok, seq, items:[{seq, ts(sec), cat: players|backend, type, user, by, reason, group, matchId, blue[], orange[], file, action, text}]}`, the same items pushed as SSE `log`, and a `logs` array in the snapshot (backfilled from history). Until it exists (404), the page builds the Players log itself from customs changes (no history) and logs its own button presses as Backend lines; the feed says so.
+
+Overlays tab: shows a clear "not connected yet: <reason>" note when `/api/overlays` fails, "Loading…" before the first answer, and "No overlay files" when the folder is empty.

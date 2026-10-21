@@ -14,7 +14,7 @@ export function startMock(port = 8798, opts = {}) {
     tree: fx('obs_tree'), status: fx('obs_status'), live: fx('live'), act: fx('activity_limit_30'), wheel: fx('wheel_public'),
     cmds: fx('commands_profiles'), overlays: fx('overlays'), ochat: fx('overlaychat_status'),
     customs: { open: true, activity: 'competitive', mode: 'balanced', format: '3v3', queue: [{ username: 'spywobbles', display: 'spywobbles', mmr: 800 }, { username: 'pineyapplie', display: 'PineyApplie', mmr: 1700 }], match: null },
-    chat: [], seq: 0, runs: [], modCalls: [], posts: [], sse: new Set(), delayMs: opts.delayMs || 0, noEvents: !!opts.noEvents, failNext: new Set(), eventId: 0,
+    logs: [], chat: [], seq: 0, runs: [], modCalls: [], posts: [], sse: new Set(), delayMs: opts.delayMs || 0, noEvents: !!opts.noEvents, failNext: new Set(), eventId: 0,
   };
   st.tree.items.forEach(i => { if (i.id === 140) i.children = [{ id: 1, name: 'Child A', kind: 'image_source', enabled: true }, { id: 2, name: 'Child B', kind: 'image_source', enabled: false }]; });
   const send = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, X-Pinguino-Token, Content-Type' }); res.end(JSON.stringify(obj)); };
@@ -68,10 +68,12 @@ export function startMock(port = 8798, opts = {}) {
     if (p === '/api/chat/recent') { if (opts.noChat) return send(res, 404, {}); const since = +u.searchParams.get('since') || 0; return send(res, 200, { ok: true, seq: st.seq, messages: st.chat.filter(c => c.seq > since) }); }
     if (p === '/api/wheel/state') return send(res, 200, { ok: true, status: 'open', round: 3, teamSize: 3, entrants: [], signedUp: 0, public: st.wheel });
     if (p === '/api/commands/profiles') return send(res, 200, st.cmds);
+    if (p === '/api/logs') { if (opts.noLogs) return send(res, 404, {}); const since = +u.searchParams.get('since') || 0; return send(res, 200, { ok: true, seq: st.logs.length, items: st.logs.filter(l => l.seq > since) }); }
     if (p === '/api/overlays') return send(res, 200, st.overlays);
     if (p === '/api/overlaychat/status') return send(res, 200, { enabled: true, hasKey: true, callsToday: 1, dailyCalls: 40, pendingProposals: 0, bridge: 'off' });
     send(res, 404, { ok: false });
   });
+  server.addLog = l => { const x = Object.assign({ seq: st.logs.length + 1, ts: Date.now() / 1000 }, l); st.logs.push(x); push('log', x); return x; };
   server.st = st; server.addChat = (user, text) => { const c = { seq: ++st.seq, user: user.toLowerCase(), display: user, text, ts: Date.now(), badges: [], color: '#ff8a00' }; st.chat.push(c); push('chat', c); };
   return new Promise(r => server.listen(port, '127.0.0.1', () => r(server)));
 }

@@ -154,6 +154,23 @@ await t('customs: activity / pick / streamer map like the website and reject jun
   assert.equal(C.customsText('activity', 'rl koth'), '!activity rl koth'); assert.equal(C.customsText('activity', 'end'), '!activity end'); assert.equal(C.customsText('activity', 'rl; !ban x'), null);
   assert.equal(C.customsText('pick', 'auto'), '!pick auto'); assert.equal(C.customsText('pick', 'a b'), '!pick a b'); assert.equal(C.customsText('pick', 'a b c d e'), null); assert.equal(C.customsText('streamer', 'out'), '!streamer out'); assert.equal(C.customsText('streamer', 'x'), null);
 });
+await t('logs: end-of-game removals fold into one "6 players" row, teams stay one line, filters split the logs', () => {
+  const rm = ['a', 'b', 'c', 'd', 'e', 'f'].map((u, i) => ({ k: 'r' + i, t: 'p', ts: 10 + i, type: 'removed', user: u, group: 'm7' }));
+  const items = [{ k: 't', t: 'p', ts: 5, type: 'teams', matchId: 7, blue: ['x', 'y', 'z'], orange: ['a', 'b', 'c'] }, ...rm, { k: 'j', t: 'p', ts: 20, type: 'join', user: 'n' }, { k: 'o', t: 'b', ts: 21, type: 'overlay', file: 'goal.html', action: 'changed', by: 'ivan' }, { k: 'c1', t: 'c', ts: 22, user: 'q', text: 'hi' }];
+  const open = new Set(), rows = C.logRows(items, 'players', '', open);
+  assert.deepEqual(rows.map(r => r.kind), ['teams', 'group', 'line']); assert.equal(rows[1].label, '6 players'); assert.equal(rows[0].blue.join(), 'x,y,z');
+  open.add(rows[1].key); assert.equal(C.logRows(items, 'players', '', open).length, 3 + 6);
+  assert.equal(C.logRows(items, 'backend', '', open)[0].text, 'goal.html changed by ivan'); assert.equal(C.logRows(items, 'chat', '', open).length, 1); assert.equal(C.logRows(items, 'all', 'ivan', open).length, 1);
+  assert.equal(C.logRows(rm.slice(0, 1), 'all', '', open)[0].kind, 'line');
+});
+await t('logs: Players log derived from customs changes (join, leave, match start teams, end-of-game removals)', () => {
+  const q = u => ({ username: u }), A = { queue: [q('a'), q('b')], match: null }, B = { queue: [q('a'), q('b'), q('c')], match: null };
+  assert.deepEqual(C.diffCustoms(A, B, 1).map(x => x.type + ':' + x.user), ['join:c']); assert.deepEqual(C.diffCustoms(B, A, 1).map(x => x.type + ':' + x.user), ['leave:c']);
+  const M = { queue: [q('c')], match: { id: 3, players: [{ username: 'a' }, { username: 'b' }], blue: ['a'], orange: ['b'] } };
+  const started = C.diffCustoms(B, M, 2); assert.deepEqual(started.map(x => x.type), ['teams']); assert.equal(started[0].blue[0], 'a');
+  const over = C.diffCustoms(M, { queue: [q('c')], match: null }, 3); assert.deepEqual(over.map(x => x.type + ':' + x.group), ['removed:m3', 'removed:m3']);
+  assert.deepEqual(C.diffCustoms(null, A), []);
+});
 await t('customs/mod and chat/recent answer in the Host b9fad8f shapes', async () => {
   const r = await api.post('/api/customs/mod', { action: 'queue', value: 'close' }); assert.equal(r.json.ran, '!queue close'); assert.equal(r.json.customs.open, false);
   mock.addChat('X', 'hi'); const c = await api.get('/api/chat/recent?since=0'); assert.ok(Array.isArray(c.json.messages) && c.json.messages.at(-1).ts > 1e11);

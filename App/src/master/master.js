@@ -24,13 +24,13 @@
   const S = C.createStore({
     tree: cached.tree || { connected: false, current: '', scene: '', scenes: [], folders: [], items: [] }, treeStale: !!cached.tree,
     obsStatus: null, live: null, host: null, hostUp: null, customs: cached.customs || null, customsOk: null, wheel: null,
-    customsMod: null, cmds: [], overlays: null, ochat: null, link: { sse: false, ms: null }, tick: 0,
+    customsMod: null, cmds: [], overlays: null, ovErr: null, ochat: null, link: { sse: false, ms: null }, tick: 0,
   });
   const opt = C.createOptimistic(2500);
   const ui = {
     view: null, query: '', tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
-    itemsBy: {}, tookControl: false, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
+    itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logSeq: 0, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
   const saveCache = () => ls.set('cache', { tree: S.get('tree'), customs: S.get('customs') });
 
@@ -48,7 +48,7 @@
     ui.sent.set(text, now); flash(btn);
     await tokenReady;
     const r = await api.post('/api/run', { text, user: 'broadcaster' });
-    if (r.ok) { toast('Sent ' + text); pollers.customs.kick(); pollers.wheel.kick(); } else { ui.sent.delete(text); toast(text + ': ' + r.error, true); }
+    if (r.ok) { logLocal('bot', 'You ran ' + text); toast('Sent ' + text); pollers.customs.kick(); pollers.wheel.kick(); } else { ui.sent.delete(text); toast(text + ': ' + r.error, true); }
   }
 
   /* customs button -> POST /api/customs/mod {action,value} (answers with the new state); old Host (404) or gamemode -> /api/run chat command */
@@ -218,26 +218,49 @@
   const normWheel = w => (w && w.public && typeof w.public === 'object' ? Object.assign({}, w.public, { status: w.status || w.public.status, round: w.round, teamSize: w.teamSize || w.public.teamSize }) : w);
 
   /* ---------- feed ---------- */
-  function mkFeed() { $('#tab-feed').innerHTML = '<div class="row sm faint" style="margin-bottom:6px"><span id="feed-note"></span><span class="sp"></span><label><input type="checkbox" id="feed-ev" checked> events</label>&nbsp;<label><input type="checkbox" id="feed-ch" checked> chat</label></div><div id="feedlist"></div>'; }
+  function mkFeed() {
+    $('#tab-feed').innerHTML = '<div class="row sm" style="margin-bottom:6px;gap:4px" id="feed-chips">' + [['all', 'All'], ['chat', 'Chat'], ['players', 'Players'], ['backend', 'Backend'], ['events', 'Events']].map(([k, l]) => `<button class="sm chip" data-lc="${k}">${l}</button>`).join('') + '</div><div class="faint sm" id="feed-note" style="margin-bottom:6px"></div><div id="feedlist"></div>';
+  }
+  const fmtT = ts => new Date(ts * 1000).toTimeString().slice(0, 5);
   function renderFeed() {
-    const showEv = $('#feed-ev').checked, showCh = $('#feed-ch').checked, q = ui.query.toLowerCase();
-    const items = ui.feed.filter(x => (x.t === 'e' ? showEv : showCh) && (!q || (x.user + ' ' + x.text).toLowerCase().includes(q))).slice(-150);
+    $$('#feed-chips .chip').forEach(c => c.classList.toggle('on', c.dataset.lc === ui.logCat));
+    const rows = C.logRows(ui.feed, ui.logCat, ui.query, ui.openGroups, 300).map(r => Object.assign(r, { sg: r.kind + '|' + (r.open ? 1 : 0) + '|' + r.text + '|' + (r.label || '') + '|' + (r.blue || []) + '|' + (r.orange || []) }));
     const box = $('#tab-feed'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-    C.reconcile($('#feedlist'), items, x => x.k, () => { const d = h('div', 'feeditem'); d.append(h('span', 'ts'), h('span', 't')); return d; },
-      (d, x) => { d.className = 'feeditem' + (x.t === 'e' ? ' ev' : ''); d.children[0].textContent = new Date(x.ts * 1000).toTimeString().slice(0, 5); const t = d.children[1]; t.textContent = ''; if (x.t === 'c') { t.append(h('span', 'who', x.user), document.createTextNode(': ' + x.text)); } else t.append(h('span', 'who', x.text)); });
+    C.reconcile($('#feedlist'), rows, x => x.key, () => { const d = h('div', 'feeditem'); d.append(h('span', 'ts'), h('span', 't')); return d; },
+      (d, x) => {
+        d.className = 'feeditem ' + (x.kind === 'sub' ? 'sub ' : '') + 'k-' + (x.t || (x.kind === 'group' ? 'p' : '')) + (x.t === 'e' ? ' ev' : ''); d.dataset.k = x.key;
+        d.children[0].textContent = fmtT(x.ts); const t = d.children[1]; t.textContent = '';
+        if (x.kind === 'group') { const a = h('a', 'grp', x.label); a.title = x.names; a.dataset.g = x.key; t.append(a, document.createTextNode(' ' + x.text + (x.open ? '' : ' (click to show)'))); }
+        else if (x.kind === 'teams') { t.append(h('span', 'who', x.text + ': '), h('span', 'tb', 'Blue: ' + (x.blue.join(', ') || '–')), document.createTextNode('  '), h('span', 'to', 'Orange: ' + (x.orange.join(', ') || '–'))); }
+        else if (x.t === 'c') t.append(h('span', 'who', x.user), document.createTextNode(': ' + x.text));
+        else t.append(h('span', x.t === 'e' ? 'who' : 'lg lg-' + (x.type || 'x'), x.text));
+      });
     if (stick) box.scrollTop = box.scrollHeight;
-    $('#feed-note').textContent = ui.chatOk === false ? 'Live chat needs a Host chat feed (asked 02); events work.' : '';
+    const n = [];
+    if (ui.chatOk === false) n.push('Live chat needs the Host chat feed.');
+    if (ui.logsOk === false && (ui.logCat === 'backend' || ui.logCat === 'all')) n.push('Backend log (bot + overlay actions) needs the Host /api/logs: not connected yet. Players log is built here from queue changes (no history before this window opened).');
+    if (ui.logsOk === true && !rows.length) n.push('Nothing in this log yet.');
+    $('#feed-note').textContent = n.join(' ');
   }
   function addActivity(list) {
-    const add = (list || []).map(a => ({ k: 'a' + a.seq, t: 'e', ts: a.ts, user: a.user || '', text: C.activityLine(a) }));
+    const add = (list || []).map(a => ({ k: 'a' + a.seq, t: 'e', ts: a.ts, user: a.user || '', type: a.kind, text: C.activityLine(a) }));
     if ((list || []).length) ui.actSeq = Math.max(ui.actSeq, ...list.map(a => a.seq || 0));
-    if (C.mergeFeed(ui.feed, add, x => x.k, 400)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
+    if (C.mergeFeed(ui.feed, add, x => x.k, 800)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
   }
   function addChat(list) {
     const add = (list || []).map(m => ({ k: 'c' + (m.seq != null ? m.seq : m.ts + m.user), t: 'c', ts: m.ts ? (m.ts > 1e11 ? m.ts / 1000 : m.ts) : Date.now() / 1000, user: m.display || m.user || '?', text: m.text || '' }));
     if ((list || []).length) ui.chatSeq = Math.max(ui.chatSeq, ...list.map(m => m.seq || 0));
-    if (C.mergeFeed(ui.feed, add, x => x.k, 400)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
+    if (C.mergeFeed(ui.feed, add, x => x.k, 800)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
   }
+  // Host logs ({seq, ts, cat: players|backend, type, ...}); chat lines come from /api/chat/recent so cat chat is skipped here
+  function addLogs(list) {
+    const T = { players: 'p', backend: 'b' };
+    const add = (list || []).filter(x => T[x.cat]).map(x => Object.assign({}, x, { k: 'L' + x.seq, t: T[x.cat], ts: x.ts > 1e11 ? x.ts / 1000 : x.ts }));
+    if ((list || []).length) ui.logSeq = Math.max(ui.logSeq, ...list.map(x => x.seq || 0));
+    if (C.mergeFeed(ui.feed, add, x => x.k, 800)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
+  }
+  // my own actions are backend log lines too, until the Host logs them itself
+  function logLocal(type, text) { if (ui.logsOk === true) return; const ts = Date.now() / 1000; C.mergeFeed(ui.feed, [{ k: 'ap:' + ts + type, t: 'b', ts, type, text, src: 'app' }], x => x.k, 800); schedule('feed'); }
 
   /* ---------- commands + overlays tabs ---------- */
   function mkCmds() { $('#tab-cmds').innerHTML = '<div class="row sm faint" style="margin-bottom:6px"><span>Toggle a chat command on/off for everyone. The search box at the bottom filters this list.</span></div><div id="cmdlist"></div>'; }
@@ -255,7 +278,7 @@
     if (!r.ok) { opt.drop(k); renderCmds(); toast(id + ': ' + r.error, true); } else { c.enabled = want; setTimeout(() => { opt.drop(k); pollers.cmds.kick(); }, 400); }
   }
   function mkOverlays() {
-    $('#tab-overlays').innerHTML = `<div class="sec"><h4>Files <span class="faint" id="ov-n"></span></h4><div id="ovlist"></div></div>
+    $('#tab-overlays').innerHTML = `<div class="sec"><h4>Files <span class="faint" id="ov-n"></span></h4><div id="ov-note" class="note" hidden></div><div id="ovlist"></div></div>
       <div class="sec"><h4>Overlay chat <span class="faint" id="oc-st"></span></h4><div class="msgs" id="oc-msgs"></div>
       <div class="chatbox"><textarea id="oc-text" placeholder="Ask for an overlay change, e.g. “make the goal bar orange”" rows="2"></textarea><div class="row"><span class="faint sm" id="oc-hint">Ctrl+Enter sends</span><span class="sp"></span><button class="pri sm" id="oc-send">Send</button></div></div></div>`;
   }
@@ -264,6 +287,7 @@
     const o = S.get('overlays'), q = ui.query.toLowerCase();
     const files = ((o && o.files) || []).filter(f => !q || f.path.toLowerCase().includes(q)).map(f => ({ path: f.path, size: f.size, url: f.url, text: f.text, ren: ui.renaming === f.path }));
     $('#ov-n').textContent = o ? '· ' + (o.files || []).length : '';
+    const oe = S.get('ovErr'), on = $('#ov-note'); on.hidden = !(oe || !o || !(o.files || []).length); on.textContent = oe ? 'Overlay files are not connected yet: ' + oe + '. The Host serves them from /api/overlays.' : !o ? 'Loading overlay files from the Host…' : 'No overlay files in the Host overlays folder yet.';
     if (ui.renaming) return;
     C.reconcile($('#ovlist'), files, r => r.path, () => { const d = h('div', 'of'); d.append(h('span', 't'), h('span', 'd')); for (const [a, l] of [['open', 'Open'], ['copy', 'Copy URL'], ['ren', 'Rename'], ['del', 'Delete']]) { const b = h('button', 'sm ghost' + (a === 'del' ? ' warn' : ''), l); b.dataset.ov = a; d.append(b); } return d; },
       (d, r) => { d.dataset.p = r.path; d.dataset.u = r.url; d.children[0].textContent = r.path; d.children[1].textContent = fsize(r.size); });
@@ -291,8 +315,9 @@
     if (ch.includes('tree')) schedule('scenes', 'sources', 'bar');
     if (ch.some(k => ['obsStatus', 'live', 'host', 'hostUp', 'link'].includes(k))) schedule('bar');
     if (ch.includes('customs') || ch.includes('wheel') || ch.includes('customsOk')) schedule('customs');
+    if (ch.includes('customs')) { const nx = S.get('customs'); if (ui.logsOk !== true) { const add = C.diffCustoms(ui.prevCustoms, nx); if (add.length && C.mergeFeed(ui.feed, add, x => x.k, 800)) { ui.feed.sort((a, b2) => a.ts - b2.ts); schedule('feed'); } } ui.prevCustoms = nx; }
     if (ch.includes('cmds')) schedule('cmds');
-    if (ch.includes('overlays') || ch.includes('ochat')) schedule('overlays');
+    if (ch.includes('overlays') || ch.includes('ochat') || ch.includes('ovErr')) schedule('overlays');
   });
 
   /* ---------- pollers ---------- */
@@ -318,8 +343,13 @@
       if (r.status === 404) { ui.chatOk = false; schedule('feed'); return; }
       if (r.ok) { ui.chatOk = true; addChat(Array.isArray(r.json) ? r.json : r.json.items || r.json.messages); }
     }),
+    logs: P(() => (ui.logsOk === false ? 30000 : (sse() ? 5000 : 1200)), async () => {
+      const r = await api.get('/api/logs?cat=all&since=' + ui.logSeq + '&limit=500');
+      if (r.status === 404) { if (ui.logsOk !== false) { ui.logsOk = false; schedule('feed'); } return; }
+      if (r.ok) { if (ui.logsOk !== true) { ui.logsOk = true; schedule('feed'); } addLogs(r.json.items); }
+    }),
     cmds: P(5000, async () => { const r = await api.get('/api/commands/profiles'); if (r.ok) S.set({ cmds: r.json.commands || [] }); }, () => visible() && ui.tab === 'cmds'),
-    overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = {}; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
+    overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = { ovErr: a.ok ? null : (a.error || 'HTTP ' + a.status) }; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
   };
   let cacheT = 0; function saveCacheSoon() { if (!cacheT) cacheT = setTimeout(() => { cacheT = 0; saveCache(); }, 3000); }
   setInterval(() => { if (opt.expire().length) { schedule('scenes', 'sources', 'cmds'); } }, 500);   // unconfirmed optimistic changes fall back to what the Host says
@@ -330,10 +360,10 @@
     onState: on => { S.set({ link: { sse: on, ms: S.get('link').ms } }); if (!on) Object.values(pollers).forEach(p => p.kick()); },
     onMessage: m => {
       const d = m.data;
-      if (m.event === 'snapshot' && d) { d.obs && applyTree(d.obs); d.obsstatus && S.set({ obsStatus: d.obsstatus }); d.live && S.set({ live: d.live }); d.customs && S.set({ customs: d.customs, customsOk: true }); d.wheel && S.set({ wheel: normWheel(d.wheel) }); d.chat && addChat(d.chat); d.activity && addActivity(d.activity); }
+      if (m.event === 'snapshot' && d) { d.obs && applyTree(d.obs); d.obsstatus && S.set({ obsStatus: d.obsstatus }); d.live && S.set({ live: d.live }); d.customs && S.set({ customs: d.customs, customsOk: true }); d.wheel && S.set({ wheel: normWheel(d.wheel) }); d.chat && addChat(d.chat); d.logs && (ui.logsOk = true, addLogs(d.logs)); d.activity && addActivity(d.activity); }
       else if (m.event === 'obs') applyTree(d); else if (m.event === 'obsstatus') S.set({ obsStatus: d }); else if (m.event === 'live') S.set({ live: d });
       else if (m.event === 'customs') S.set({ customs: d, customsOk: true }); else if (m.event === 'wheel') S.set({ wheel: normWheel(d) });
-      else if (m.event === 'chat') { ui.chatOk = true; addChat([d]); } else if (m.event === 'activity') addActivity([d]);
+      else if (m.event === 'chat') { ui.chatOk = true; addChat([d]); } else if (m.event === 'activity') addActivity([d]); else if (m.event === 'log') { ui.logsOk = true; addLogs([d]); }
     },
   });
 
@@ -416,7 +446,8 @@
 
   /* ---------- start ---------- */
   mkCustomsSkeleton(); mkFeed(); mkCmds(); mkOverlays();
-  $('#feed-ev').onchange = $('#feed-ch').onchange = renderFeed;
+  $('#feed-chips').addEventListener('click', e => { const b = e.target.closest('[data-lc]'); if (b) { ui.logCat = b.dataset.lc; ls.set('logcat', ui.logCat); renderFeed(); } });
+  $('#feedlist').addEventListener('click', e => { const g = e.target.closest('a.grp'); if (g) { const k = g.dataset.g; ui.openGroups.has(k) ? ui.openGroups.delete(k) : ui.openGroups.add(k); renderFeed(); } });
   setTab(ui.tab);
   renderBar(); renderScenes(); renderSources(); renderCustoms(); renderFeed();    // first paint from the cached state, before any request returns
   tokenReady.then(() => { Object.values(pollers).forEach(p => p.start()); events.start(); });
