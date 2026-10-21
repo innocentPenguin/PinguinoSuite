@@ -77,6 +77,11 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 22:07 Host restarts (Plan 7 step 2)
+- Live: tournament wheel on the Host (live random picks, no precommitted teams, auto new round, join/leave anytime, wheel-only !notme), overlay at http://127.0.0.1:8770/wheel.html, wheel signed-up count + join/leave feed, customs recycler (!recycle), !incomplete, 15-min customs idle timeout, lobby push and !pm name-only (no passwords).
+- Site: new build live (wheel removed, queue + final teams only, mobile pass); site accepts old and new wheel payloads.
+- Pending: one app rebuild (Wheel & Games page, window placement, splash/logo, Offline toggle), after 02 ships /api/tune.
+
 ## 2026-10-20 21:42 Host restart (Plan 7 step 1)
 - Live: typo/alias router (!jon, "! join", !unjoin, did-you-mean), !queue first 5 + own position, !mmr for viewers, gambling (!gamble/!slots/!duel/!give via Data\economy\gambling.json, no default max bet), economy tick logging + chat-activity bonus, StreamElements import note, Offline mode OFF.
 - Earlier unlogged restarts since 16:54 (clips-dump, !title/!game, mention replies, !allow, half strikes, Chatty fixes, !srban) were also applied.
