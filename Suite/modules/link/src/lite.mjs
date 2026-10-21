@@ -1,12 +1,14 @@
 // INDEX lite.mjs: Link's side of the PinguinoLite contract (Docs/LITE_APP.md). File drop in <lite dir>. Package ops live in pkg.mjs; tests litecheck.mjs + pkgcheck.mjs.
 // Writes: status.json (heartbeat), installed.json, modules_catalog.json, update_status.json. Reads+consumes: requests/*.json.
 // Sources are LOCAL only (Suite/modules/*/module.json, optional <lite dir>/packages). No internet, no downloads, no executing anything.
-// install/update/uninstall/rollback: local zip packages (pkg.mjs), only for a stopped module. start/stop/restart/selfupdate-apply are
+// install/update/uninstall/rollback: local zip packages (pkg.mjs), only for a stopped module. selfupdate-apply starts the detached
+// applyupdate.mjs helper (hash re-check, backup, silent install, relaunch, auto-restore). start/stop/restart are
 // not implemented yet: such requests are consumed and reported as an error, never silently dropped.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { spawn, execFile } from 'node:child_process';
 import { log } from './log.mjs';
 import { installPackage, uninstallModule, rollbackModule } from './pkg.mjs';
 
@@ -168,13 +170,47 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
       } finally { delete busy[id]; writeStatus(); }
       return;
     }
-    if (['start', 'stop', 'restart', 'selfupdate-apply'].includes(action)) {
+    if (action === 'selfupdate-apply') { await applyLiteUpdate(); return; }
+    if (['start', 'stop', 'restart'].includes(action)) {
       const msg = `${action} is not available yet (Link currently supports local listing and checking only)`;
       lastError = msg; log('warn', 'lite', msg + (id && ID.test(id) ? ` [${id}]` : ''));
       writeJson(dir, 'update_status.json', { ...(readJson(path.join(dir, 'update_status.json')) || {}), result: 'error', error: msg });
       return;
     }
     log('warn', 'lite', 'ignored a request with an unknown action');
+  }
+
+  /** Where the running PinguinoLite.exe lives (so the helper can back it up and relaunch it). */
+  function findLiteExe() {
+    return new Promise(res => {
+      if (process.env.PINGUINO_LITE_EXE) return res(process.env.PINGUINO_LITE_EXE);
+      const fallback = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'PinguinoLite', 'PinguinoLite.exe') : '';
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "(Get-Process -Name PinguinoLite -ErrorAction SilentlyContinue | Select-Object -First 1).Path"], { timeout: 8000, windowsHide: true },
+        (e, out) => { const p = String(out || '').trim(); res(!e && /PinguinoLite.exe$/i.test(p) ? p : (fallback && fs.existsSync(fallback) ? fallback : '')); });
+    });
+  }
+  /** The user clicked Update in Lite. Re-verify the staged installer, then hand over to the detached helper (Lite is exiting and takes Link with it). */
+  async function applyLiteUpdate() {
+    if (!checkLiteUpdate()) { fail('Lite update: no verified installer is staged (needs PinguinoLite-<version>-setup.exe with a matching .sha256)'); return; }
+    const man = readJson(path.join(dir, 'update_manifest.json'));
+    const installer = path.join(dir, ...String(man.staged_file || '').split(/[\\/]/));
+    const exe = await findLiteExe();
+    if (!exe) { fail('Lite update: cannot find the installed PinguinoLite.exe to update'); return; }
+    const job = { liteDir: dir, installer, sha256: man.sha256, exe, from: process.env.PINGUINO_LITE_VERSION || '0.0.0', to: man.latest_version };
+    if (process.env.PINGUINO_LITE_TEST === '1' && process.env.PINGUINO_LITE_TEST_JOB) Object.assign(job, JSON.parse(process.env.PINGUINO_LITE_TEST_JOB));
+    const jf = path.join(dir, 'lite_apply_job.json');
+    fs.writeFileSync(jf, JSON.stringify(job, null, 2));
+    busy.lite = 'updating'; writeStatus();
+    spawn(process.execPath, [fileURLToPath(new URL('./applyupdate.mjs', import.meta.url)), jf], { detached: true, stdio: 'ignore', windowsHide: true, env: process.env }).unref();
+    log('warn', 'lite', `Lite update ${job.from} -> ${job.to} handed to the helper (Lite must close; it relaunches itself)`);
+  }
+  /** After a restart: report what the helper did. */
+  function reportApply() {
+    const f = path.join(dir, 'lite_apply_result.json'), r = readJson(f);
+    if (!r) return;
+    try { fs.renameSync(f, f.replace(/.json$/, '.seen.json')); } catch {}
+    log(r.ok ? 'info' : 'warn', 'lite', `last Lite update: ${r.message}`);
+    if (!r.ok) fail(`Lite update failed: ${r.message}`);
   }
 
   async function poll() {
@@ -195,7 +231,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
   return {
     async start() {
       fs.mkdirSync(path.join(dir, 'requests'), { recursive: true });
-      await refresh(); writeStatus();
+      await refresh(); reportApply(); writeStatus();
       let n = 0;
       timer = setInterval(() => { poll().catch(() => {}); if (++n % 15 === 0) { writeStatus(); } if (n % 300 === 0) syncFromPeers().catch(() => {}).then(() => refresh()).catch(() => {}); }, 1000);
       timer.unref?.();

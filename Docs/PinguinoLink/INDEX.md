@@ -28,3 +28,6 @@ Make a package on the update host: `node Suite/modules/link/src/cli.mjs pack <mo
 
 ## Going live is off by default
 Setting `safety.allowStartStream` (Settings > Buttons and safety) is OFF. While off, `runMacro` and `runRequests` (obs.mjs) refuse StartStream/ToggleStream with 403 for every caller: dashboard, Stream Deck CLI, paired devices, any future timer or voice. Stop, BRB and scene macros are unaffected. The default `start` macro was removed from new configs. Tests: macrocheck and remotecheck.
+
+## Lite self-update apply (Ivan approved 2026-10-21)
+Only after the user clicks Update in Lite: Lite writes `selfupdate-apply` and exits (killing Link). `lite.mjs applyLiteUpdate` first re-verifies the staged installer (hash vs .sha256), finds the running PinguinoLite.exe (or %LOCALAPPDATA%\PinguinoLite), writes `lite_apply_job.json` and starts the detached helper `applyupdate.mjs`, which: waits up to 90 s for Lite to close (never kills it), re-checks the hash, copies the install folder to `Data\lite\backup\lite-<ver>-<stamp>`, runs `<setup>.exe /S`, relaunches Lite. If the installer fails the backup is copied back and the old Lite relaunched. Result in `lite_apply_result.json` (+ `lite_apply.log`); the next Link start reports it in update_status.json. Test: `applycheck.mjs` (fake installer, never runs a real one).
