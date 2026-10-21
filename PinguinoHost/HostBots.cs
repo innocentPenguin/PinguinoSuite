@@ -133,6 +133,7 @@ namespace PinguinoHost
                     rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("Client-Id", cid);
                     string who = (string)bot["Account"];
                     string text = "[test] " + title + " is working" + (r == id ? "." : " (speaking through " + (string)bot["Title"] + ").");
+                    if (HostApi.SaidRecently(text)) return new JObject { { "ok", true }, { "speaker", who }, { "own", r == id }, { "note", "That test line was just sent; it is not sent twice in a row." } };   // never the same line twice
                     rq.Content = new System.Net.Http.StringContent(new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", text } }.ToString(), System.Text.Encoding.UTF8, "application/json");
                     var resp = http.SendAsync(rq).Result;
                     if (resp.IsSuccessStatusCode) return new JObject { { "ok", true }, { "speaker", who }, { "own", r == id }, { "note", (r == id ? title + " spoke as " : title + " has no account of its own, so " + (string)bot["Title"] + " spoke as ") + who + "." } };
