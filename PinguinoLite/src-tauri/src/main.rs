@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// PinguinoLink (session 04) is the one bundled component: Lite starts it at launch and stops it on exit.
 struct Link(Mutex<Option<Child>>);
@@ -174,6 +174,18 @@ async fn host_live() -> Value {
     json!({"reachable": status.is_some(), "ms": t0.elapsed().as_millis() as u64, "status": status, "live": live})
 }
 
+/// Availability probe for the sidebar dots: which of the Suite's fixed local ports answer right now (TCP connect, 300 ms each).
+/// Returns {"8760": true, ...}. Only these ports can be asked about.
+#[tauri::command]
+async fn probe_ports() -> Value {
+    let mut m = serde_json::Map::new();
+    for port in [8760u16, 8765, 8766, 7777, 8770, 8771] {
+        let up = TcpStream::connect_timeout(&std::net::SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_millis(300)).is_ok();
+        m.insert(port.to_string(), Value::Bool(up));
+    }
+    Value::Object(m)
+}
+
 /// Read one contract file (<lite dir>\<name>.json). Returns {exists, data?, error?, mtime_ms?}; a missing file is normal ("04 has not written it yet").
 #[tauri::command]
 fn read_contract(name: String) -> Value {
@@ -279,12 +291,24 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .manage(Link(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![lite_info, host_live, read_contract, send_request, open_target])
+        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target])
         .setup(|app| {
-            if let Some(w) = app.get_webview_window("main") {
-                mainwin::place(&w); // saved size/position/maximized, or ~62% of the monitor, centred
-                let _ = w.show();
-            }
+            // Splash (the lightning bolt) first; the main window is placed and shown when it closes.
+            let a = app.handle().clone();
+            let splash = WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
+                .title("PinguinoLite").inner_size(340.0, 340.0).decorations(false).resizable(false).always_on_top(true).skip_taskbar(true).center().build();
+            let wait = if splash.is_ok() { 1500 } else { 0 };
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(wait));
+                if let Some(s) = a.get_webview_window("splash") {
+                    let _ = s.close();
+                }
+                if let Some(w) = a.get_webview_window("main") {
+                    mainwin::place(&w); // saved size/position/maximized, or ~62% of the monitor, centred
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            });
             // tray: left click shows the window, right click menu has Show / Quit (closing the window still quits Lite and stops Link)
             let open = MenuItem::with_id(app, "open", "Show PinguinoLite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;

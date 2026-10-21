@@ -1,6 +1,6 @@
 # Generates PinguinoLite icons (pure python, no PIL). Run from D:\PinguinoSuite\PinguinoLite:  python ..\Tools\lite-make-icon.py
 # Family look = the Suite icon (App\src-tauri\icons\icon.png: orange ring + baby penguin photo).
-# Lite variant = same ring and photo, photo toned down to a warm half-tone duotone ("lighter"), plus a dark badge with an orange lightning bolt.
+# Lite variant = same ring, the ORIGINAL photo in black and white, plus a dark badge with a big orange lightning bolt.
 import zlib, struct, math, os, sys
 SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'App', 'src-tauri', 'icons', 'icon.png')
 
@@ -34,7 +34,7 @@ def src(x, y):
 def cov(d):  # 1px anti-aliased edge: d<0 inside
     return min(1.0, max(0.0, 0.5 - d))
 # lightning bolt, coordinates in badge space (centre 0,0), y down
-BOLT = [(14, -64), (-38, 6), (-6, 6), (-18, 66), (38, -10), (6, -10)]
+BOLT = [(16, -74), (-44, 8), (-7, 8), (-21, 76), (44, -12), (7, -12)]
 def in_poly(px, py, poly):
     c = False; j = len(poly) - 1
     for i in range(len(poly)):
@@ -43,19 +43,18 @@ def in_poly(px, py, poly):
         j = i
     return c
 
-BX, BY, BR = 380, 386, 92  # badge centre / radius in 512 space
+BX, BY, BR = 368, 374, 94  # badge centre / radius in 512 space
 def master(x, y):
     """pixel (x,y) of the 512 master -> (r,g,b,a) with a in 0..255"""
     cx = cy = 256.0; d = math.hypot(x + .5 - cx, y + .5 - cy)
     s = src(x, y)
     if s[3] == 0 and d > 255: return (0, 0, 0, 0)
     r, g, b, a = s
-    # half-tone: luminance duotone dark->warm orange, blended 55/45 with the original; ring pixels (already orange) stay untouched
+    # black and white: plain luminance of the original photo (ring pixels, already orange, stay untouched)
     ringish = r > 200 and g > 90 and g < 190 and b < 90
     if not ringish:
-        l = (0.3 * r + 0.59 * g + 0.11 * b) / 255.0
-        du = (22 + (255 - 22) * l, 17 + (170 - 17) * l, 12 + (90 - 12) * l)
-        r, g, b = (0.45 * r + 0.55 * du[0], 0.45 * g + 0.55 * du[1], 0.45 * b + 0.55 * du[2])
+        l = 0.3 * r + 0.59 * g + 0.11 * b
+        r = g = b = l
     out = [r, g, b, a / 255.0]
     # badge
     db = math.hypot(x + .5 - BX, y + .5 - BY)
