@@ -195,6 +195,11 @@ public static class Harness
         { Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; Chat("viewer1", nm); Check("'" + nm + "' goes to the chatbot", Runs() == "PinguinoChat", Runs()); }
         foreach (var nm in new[] { "@pinguinohelper hi", "pinguino helper hi", "helper pinguino hi", "@HelperPinguino hi", "pinguinhelper hi", "hey pinguino_helper" })
         { Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; Chat("viewer1", nm); Check("'" + nm + "' goes to the helper", Runs() == "PinguinoHelper", Runs()); }
+        foreach (var nm in new[] { "PINGUINO!", "pinguinos", "penguins are great", "hey penguinos", "pinguin", "pingino hi" })
+        { Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; Chat("viewer1", nm); Check("'" + nm + "' calls a bot", Runs() == "PinguinoChat", Runs()); }
+        Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; Chat("viewer1", "hello there everyone"); string ctl = Runs();
+        foreach (var nm in new[] { "penguin", "peng is late", "peg", "pengiun", "pegg", "is peng here", "penguin is late again" })
+        { Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled"; Chat("viewer1", nm); Check("'" + nm + "' means Ivan: not addressed to the helper or the main bot (same as any unaddressed line)", Runs() == ctl, Runs()); }
         Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; Chat("chattypinguino", "hello"); Chat("pinguinohelper", "hello");
         Check("the new bot accounts' own lines start nothing", Runs() == "", Runs());
         // its own login first, the main account only when that fails
