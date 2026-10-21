@@ -150,6 +150,10 @@ await t('optimistic scene change rolls back when the Host refuses, and the error
   const opt = C.createOptimistic(2500); opt.set('scene', 'Rocket'); st.failNext.add('/api/obs/scene'); const r = await api.post('/api/obs/scene', { scene: 'Rocket' });
   if (!r.ok) opt.drop('scene'); assert.equal(opt.has('scene'), false); assert.equal(r.error, 'OBS refused the change');
 });
+await t('customs/mod and chat/recent answer in the Host b9fad8f shapes', async () => {
+  const r = await api.post('/api/customs/mod', { action: 'queue', value: 'close' }); assert.equal(r.json.ran, '!queue close'); assert.equal(r.json.customs.open, false);
+  mock.addChat('X', 'hi'); const c = await api.get('/api/chat/recent?since=0'); assert.ok(Array.isArray(c.json.messages) && c.json.messages.at(-1).ts > 1e11);
+});
 await t('customs: a !next goes out exactly once through /api/run', async () => {
   st.posts.length = 0; const text = C.customsText('next', ''); await api.post('/api/run', { text, user: 'broadcaster' }); assert.deepEqual(st.posts.map(p => p.b.text), ['!next']); assert.equal(st.runs.at(-1), '!next');
 });

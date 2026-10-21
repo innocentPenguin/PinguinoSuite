@@ -24,7 +24,7 @@
   const S = C.createStore({
     tree: cached.tree || { connected: false, current: '', scene: '', scenes: [], folders: [], items: [] }, treeStale: !!cached.tree,
     obsStatus: null, live: null, host: null, hostUp: null, customs: cached.customs || null, customsOk: null, wheel: null,
-    cmds: [], overlays: null, ochat: null, link: { sse: false, ms: null }, tick: 0,
+    customsMod: null, cmds: [], overlays: null, ochat: null, link: { sse: false, ms: null }, tick: 0,
   });
   const opt = C.createOptimistic(2500);
   const ui = {
@@ -49,6 +49,22 @@
     await tokenReady;
     const r = await api.post('/api/run', { text, user: 'broadcaster' });
     if (r.ok) { toast('Sent ' + text); pollers.customs.kick(); pollers.wheel.kick(); } else { ui.sent.delete(text); toast(text + ': ' + r.error, true); }
+  }
+
+  /* customs button -> POST /api/customs/mod {action,value} (answers with the new state); old Host (404) or gamemode -> /api/run chat command */
+  async function sendCustom(action, value, btn) {
+    const text = C.customsText(action, value); if (!text) { toast('Not allowed: ' + action, true); return; }
+    const now = Date.now(), last = ui.sent.get(text) || 0;
+    if (now - last < 1200) { toast('Already sent ' + text); return; }
+    ui.sent.set(text, now); flash(btn); await tokenReady;
+    let r = null;
+    if (action !== 'gamemode' && S.get('customsMod') !== false) {
+      r = await api.post('/api/customs/mod', action.startsWith('queue-') ? { action: 'queue', value: action.slice(6) } : { action, value: value || '' });
+      if (r.status === 404) { S.set({ customsMod: false }); r = null; }
+    }
+    if (!r) r = await api.post('/api/run', { text, user: 'broadcaster' });
+    if (r.ok) { toast('Sent ' + text); if (r.json && r.json.customs) S.set({ customs: r.json.customs, customsOk: true }); else pollers.customs.kick(); }
+    else { ui.sent.delete(text); toast(text + ': ' + r.error, true); }
   }
 
   /* ---------- status bar ---------- */
@@ -174,12 +190,14 @@
       (li, r) => { li.dataset.u = r.u; li.children[0].textContent = r.n; li.children[1].textContent = r.d + (r.m ? ' · ' + r.m : ''); });
     const m = c && c.match;
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '';
-    for (const [k, v] of [['mode', c && c.mode], ['format', c && c.format], ['gamemode', c && c.gamemode], ['casual', c && c.casualStyle]]) { const s = $(`[data-cuset="${k}"]`); if (s && v && s.value !== v && document.activeElement !== s) s.value = v; }
+    for (const [k, v] of [['mode', c && c.mode], ['format', c && c.format], ['gamemode', c && (c.gameMode || c.gamemode)], ['casual', c && c.casualStyle]]) { const s = $(`[data-cuset="${k}"]`); if (s && v && s.value !== v && document.activeElement !== s) s.value = v; }
     const w = S.get('wheel');
     $('#wh-badge').textContent = w ? '· ' + (w.status || '?') : '';
     const kv = [['Entrants', w ? (w.entrantCount ?? (w.names || []).length) : '–'], ['Mode', w ? [w.label || w.mode, w.teamSize ? w.teamSize + 'v' + w.teamSize : ''].filter(Boolean).join(' · ') : '–'], ['Revealed', w && w.manual ? w.manual.revealed + ' / ' + w.manual.total : '–'], ['Teams', w ? (w.teams || []).length : '–'], ['Waitlist', w ? (w.waitlist || []).length : '–']];
     const box = $('#wh-kv'), sigv = C.sig(kv); if (box._s !== sigv) { box._s = sigv; box.textContent = ''; kv.forEach(([a, b]) => box.append(h('b', '', a), h('span', '', String(b)))); }
   }
+
+  const normWheel = w => (w && w.public && typeof w.public === 'object' ? Object.assign({}, w.public, { status: w.status || w.public.status, round: w.round, teamSize: w.teamSize || w.public.teamSize }) : w);
 
   /* ---------- feed ---------- */
   function mkFeed() { $('#tab-feed').innerHTML = '<div class="row sm faint" style="margin-bottom:6px"><span id="feed-note"></span><span class="sp"></span><label><input type="checkbox" id="feed-ev" checked> events</label>&nbsp;<label><input type="checkbox" id="feed-ch" checked> chat</label></div><div id="feedlist"></div>'; }
@@ -198,7 +216,7 @@
     if (C.mergeFeed(ui.feed, add, x => x.k, 400)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
   }
   function addChat(list) {
-    const add = (list || []).map(m => ({ k: 'c' + (m.seq != null ? m.seq : m.ts + m.user), t: 'c', ts: m.ts || Date.now() / 1000, user: m.display || m.user || '?', text: m.text || '' }));
+    const add = (list || []).map(m => ({ k: 'c' + (m.seq != null ? m.seq : m.ts + m.user), t: 'c', ts: m.ts ? (m.ts > 1e11 ? m.ts / 1000 : m.ts) : Date.now() / 1000, user: m.display || m.user || '?', text: m.text || '' }));
     if ((list || []).length) ui.chatSeq = Math.max(ui.chatSeq, ...list.map(m => m.seq || 0));
     if (C.mergeFeed(ui.feed, add, x => x.k, 400)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
   }
@@ -275,7 +293,7 @@
       const r = await api.get('/api/customs/state'); if (r.status === 404 || r.status === 0) { if (S.get('customsOk') !== false) S.set({ customsOk: false }); return; }
       if (r.ok) { S.set({ customs: r.json, customsOk: true }); saveCacheSoon(); }
     }),
-    wheel: P(() => (sse() ? 4000 : 1500), async () => { const r = await api.get('/api/wheel/public'); if (r.ok) S.set({ wheel: r.json }); }),
+    wheel: P(() => (sse() ? 4000 : 1500), async () => { const r = await api.get('/api/wheel/public'); if (r.ok) S.set({ wheel: normWheel(r.json) }); }),
     activity: P(() => (sse() ? 5000 : 1500), async () => { const r = await api.get('/api/activity?since=' + ui.actSeq + '&limit=60'); if (r.ok) addActivity(r.json.items); }),
     chat: P(() => (ui.chatOk === false ? 30000 : (sse() ? 4000 : 800)), async () => {
       const r = await api.get('/api/chat/recent?since=' + ui.chatSeq + '&limit=50');
@@ -294,9 +312,9 @@
     onState: on => { S.set({ link: { sse: on, ms: S.get('link').ms } }); if (!on) Object.values(pollers).forEach(p => p.kick()); },
     onMessage: m => {
       const d = m.data;
-      if (m.event === 'snapshot' && d) { d.obs && applyTree(d.obs); d.obsstatus && S.set({ obsStatus: d.obsstatus }); d.live && S.set({ live: d.live }); d.customs && S.set({ customs: d.customs, customsOk: true }); d.wheel && S.set({ wheel: d.wheel }); d.chat && addChat(d.chat); d.activity && addActivity(d.activity); }
+      if (m.event === 'snapshot' && d) { d.obs && applyTree(d.obs); d.obsstatus && S.set({ obsStatus: d.obsstatus }); d.live && S.set({ live: d.live }); d.customs && S.set({ customs: d.customs, customsOk: true }); d.wheel && S.set({ wheel: normWheel(d.wheel) }); d.chat && addChat(d.chat); d.activity && addActivity(d.activity); }
       else if (m.event === 'obs') applyTree(d); else if (m.event === 'obsstatus') S.set({ obsStatus: d }); else if (m.event === 'live') S.set({ live: d });
-      else if (m.event === 'customs') S.set({ customs: d, customsOk: true }); else if (m.event === 'wheel') S.set({ wheel: d });
+      else if (m.event === 'customs') S.set({ customs: d, customsOk: true }); else if (m.event === 'wheel') S.set({ wheel: normWheel(d) });
       else if (m.event === 'chat') { ui.chatOk = true; addChat([d]); } else if (m.event === 'activity') addActivity([d]);
     },
   });
@@ -319,12 +337,12 @@
   $('#q').addEventListener('input', e => { ui.query = e.target.value; renderScenes(); renderSources(); renderCmds(); renderOverlays(); renderFeed(); });
   $('#tab-customs').addEventListener('click', e => {
     const b = e.target.closest('button'), li = e.target.closest('.qlist li');
-    if (li && b && b.classList.contains('x')) { sendCmd(C.customsText('kick', li.dataset.u), b); return; }
-    if (b && b.dataset.cu) { if (b.classList.contains('warn') && !armed(b)) return; const t = C.customsText(b.dataset.cu, b.dataset.v); t ? sendCmd(t, b) : toast('Unknown action', true); }
-    else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { r.ok ? toast('Wheel: ' + b.dataset.wh) : toast('Wheel: ' + r.error, true); pollers.wheel.kick(); }); }
-    else if (b && b.id === 'cu-kickgo') { const t = C.customsText('kick', $('#cu-kick').value); t ? (sendCmd(t, b), $('#cu-kick').value = '') : toast('Type a Twitch name first', true); }
+    if (li && b && b.classList.contains('x')) { sendCustom('kick', li.dataset.u, b); return; }
+    if (b && b.dataset.cu) { if (b.classList.contains('warn') && !armed(b)) return; sendCustom(b.dataset.cu, b.dataset.v, b); }
+    else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
+    else if (b && b.id === 'cu-kickgo') { C.customsText('kick', $('#cu-kick').value) ? (sendCustom('kick', $('#cu-kick').value, b), $('#cu-kick').value = '') : toast('Type a Twitch name first', true); }
   });
-  $('#tab-customs').addEventListener('change', e => { const k = e.target.dataset.cuset; if (!k || !e.target.value) return; const t = C.customsText(k, e.target.value); t && sendCmd(t, e.target); });
+  $('#tab-customs').addEventListener('change', e => { const k = e.target.dataset.cuset; if (!k || !e.target.value) return; sendCustom(k, e.target.value, e.target); });
   $('#tab-customs').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'cu-kick') $('#cu-kickgo').click(); });
   $('#tab-cmds').addEventListener('click', e => { const row = e.target.closest('.cmd'); if (row && e.target.closest('.sw, .t')) toggleCmd(row.dataset.id); });
   $('#tab-overlays').addEventListener('click', async e => {
@@ -362,7 +380,7 @@
     if (e.key === '[' || e.key === ']') { ui.pane = ui.pane === 'scenes' ? 'sources' : 'scenes'; $('#' + ui.pane).focus(); return; }
     if (e.shiftKey && !e.repeat) {
       const m = { N: ['next', ''], O: ['queue-open'], C: ['queue-close'] }[e.key.toUpperCase()];
-      if (m) { e.preventDefault(); sendCmd(C.customsText(m[0], m[1]), null); return; }
+      if (m) { e.preventDefault(); sendCustom(m[0], m[1] || '', null); return; }
       if (e.key.toUpperCase() === 'S') { e.preventDefault(); tokenReady.then(() => api.post('/api/wheel/spin')).then(r => r.ok ? toast('Wheel: spin') : toast(r.error, true)); return; }
     }
     if (/^[1-4]$/.test(e.key) && !e.shiftKey) { setTab(['customs', 'feed', 'cmds', 'overlays'][+e.key - 1]); return; }

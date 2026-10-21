@@ -41,7 +41,11 @@ Nav entry `Master View` (route `master`) = a full-size `<iframe src="master/mast
 ## Keyboard
 `/` search - `Esc` clear - `Alt+1..9` scene N - `Up/Down` move - `Enter` scene live / fold - `Space` or `E` toggle source - `[` `]` or `Tab` switch list - `Shift+N` next match, `Shift+O` / `Shift+C` open / close queue, `Shift+S` spin wheel - `1..4` side tab - `?` help.
 
-## Host contract wanted from 02 (page works without all of it)
+## Host contract: DELIVERED by 02 in Host commit `b9fad8f` (live after the Host module restarts)
+
+`/api/events` (SSE, snapshot with activity+chat), `/api/customs/state` (`gameMode`), `POST /api/customs/mod {action,value}` (returns state + `ran`; page falls back to `/api/run` on 404), `/api/wheel/state`, `/api/chat/recent` -> `{ok,seq,messages}` (chat `ts` in ms, converted by the page). Nav entry: 01's route `master`, pop-out `pop-master` (needs `Rebuild-App.bat`). Still missing on the Host: OBS stream/record/replay-buffer controls and a `streaming` flag on `/api/obs/status`.
+
+Original wish list (kept for reference; the page works without any of it):
 1. `GET /api/events` (SSE, loopback, `retry: 1000`, 15 s heartbeat comment, `id:` per message, `Last-Event-ID` resume). First message `snapshot` = `{obs, obsstatus, live, customs, wheel, chat[], activity[]}`. Then `obs` (same shape as `/api/obs/tree`; invalidate the 2 s tree cache on obs-websocket events so changes made in OBS itself show at once), `obsstatus`, `live`, `customs`, `wheel`, `chat` {seq,user,display,text,ts}, `activity` (one `/api/activity` item).
 2. `GET /api/customs/state` -> `{open, activity, mode, format, gamemode, casualStyle, koth, queue:[{username,display,mmr}], match:{id,status,orange,blue}|null}`.
 3. `GET /api/chat/recent?since=&limit=` -> `[{seq,user,display,text,ts}]`.
