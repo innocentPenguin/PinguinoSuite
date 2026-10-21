@@ -42,6 +42,11 @@ fn spawn_link(version: &str) -> Option<Child> {
     let dir = link_dir()?;
     let cfg: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("link.json")).ok()?).ok()?;
     let argv: Vec<String> = cfg.get("cmd")?.as_array()?.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+    // A Link already answering on its port (e.g. the Suite's own) is reused: no second copy, and Lite never owns (so never kills) it.
+    let port = cfg.get("port").and_then(|v| v.as_u64()).unwrap_or(7777) as u16;
+    if TcpStream::connect_timeout(&std::net::SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_millis(500)).is_ok() {
+        return None;
+    }
     let (exe, args) = argv.split_first()?;
     let cwd = dir.join(cfg.get("cwd").and_then(|v| v.as_str()).unwrap_or("."));
     let ld = lite_dir();
@@ -190,6 +195,9 @@ fn read_contract(name: String) -> Value {
 fn send_request(app: AppHandle, action: String, id: Option<String>) -> Result<Value, String> {
     if action == "restart-link" {
         // handled here, not by Link (it cannot restart itself while swapping its own files)
+        if app.state::<Link>().0.lock().unwrap().is_none() {
+            return Ok(json!({"restarted": false, "reason": "Link is not owned by Lite (external or absent); not touched"}));
+        }
         stop_link(&app);
         let child = spawn_link(&app.package_info().version.to_string());
         let started = child.is_some();
