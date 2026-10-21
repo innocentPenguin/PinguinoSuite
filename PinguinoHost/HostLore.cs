@@ -83,7 +83,7 @@ namespace PinguinoHost
             }
             catch (Exception) { return false; }
         }
-        public static bool IsCommand(string cmd) { return cmd == "!lore" || (Index().ContainsKey(cmd) && !ChattyOwns(cmd)); }
+        public static bool IsCommand(string cmd) { if (Gamble.IsCommand(cmd)) return false; return cmd == "!lore" || (Index().ContainsKey(cmd) && !ChattyOwns(cmd)); }
 
         // ---- rendering: the Nightbot variables ----
         static TimeZoneInfo Central()
