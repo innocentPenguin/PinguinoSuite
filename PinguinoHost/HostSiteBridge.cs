@@ -42,7 +42,7 @@ namespace PinguinoHost
         internal static string Key() { return Boards.SiteKey(); }
         internal static JObject ReadJ(string f) { try { if (File.Exists(f)) return JObject.Parse(File.ReadAllText(f, Encoding.UTF8)); } catch (Exception) { } return new JObject(); }
         internal static void WriteJ(string f, JObject d) { try { Directory.CreateDirectory(HostApi.DataDir); string tmp = f + ".tmp"; File.WriteAllText(tmp, d.ToString(Newtonsoft.Json.Formatting.None), new UTF8Encoding(false)); if (File.Exists(f)) File.Delete(f); File.Move(tmp, f); } catch (Exception ex) { Clog.Warn("site", "could not save " + Path.GetFileName(f) + ": " + ex.Message); } }
-        public static JObject Status() { return new JObject { { "ok", true }, { "teach", SiteTeach.Status() }, { "shop", SiteShop.Status() } }; }
+        public static JObject Status() { return new JObject { { "ok", true }, { "teach", SiteTeach.Status() }, { "shop", SiteShop.Status() }, { "economy", SiteEconomy.Status() } }; }
     }
 
     /// <summary>Teach bridge: the site's pending teach notes (GET /api/bot/teach?status=pending) go into the normal Teach inbox, once per site id. The Host checks the author itself

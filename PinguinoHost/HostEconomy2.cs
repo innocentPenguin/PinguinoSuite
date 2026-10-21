@@ -254,17 +254,17 @@ namespace PinguinoHost
 
         // ================= loans =================
         static JObject Loans() { var d = Doc(); var l = d["loans"] as JObject; if (l == null) d["loans"] = l = new JObject(); return l; }
-        public static long MaxLoan(string login, JObject set = null)
+        public static long MaxLoan(string login, JObject set = null, double? minutes = null)
         {
             if (set == null) lock (L) set = Settings();
-            double hours = Math.Floor(Me(login).Minutes) / 60.0; if (hours < D(set["LoanMinWatchHours"])) return 0;
+            double hours = Math.Floor(minutes ?? Me(login).Minutes) / 60.0; if (hours < D(set["LoanMinWatchHours"])) return 0;
             return (long)Math.Min(D(set["LoanCap"]), Math.Floor(hours * D(set["LoanPerHour"])));
         }
 
-        static JObject LoanView(string login, JObject set)
+        static JObject LoanView(string login, JObject set, double? minutes = null)
         {
             JObject ln; lock (L) ln = Loans()[login] as JObject;
-            long max = MaxLoan(login, set); bool on = (bool?)set["LoansOn"] != false;
+            long max = MaxLoan(login, set, minutes); bool on = (bool?)set["LoansOn"] != false;
             var o = new JObject { { "on", on }, { "maxLoan", max }, { "interestPct", D(set["LoanInterestPct"]) }, { "defaultAfterStreams", D(set["LoanDefaultStreams"]) }, { "owed", ln == null ? 0 : D(ln["owed"]) }, { "principal", ln == null ? 0 : D(ln["principal"]) },
                 { "streamsOpen", ln == null ? 0 : (int?)ln["streams"] ?? 0 }, { "defaulted", ln != null && (bool?)ln["defaulted"] == true }, { "takenAt", ln == null ? null : ln["takenAt"] } };
             o["canBorrow"] = on && ln == null && max > 0; return o;
@@ -361,15 +361,29 @@ namespace PinguinoHost
         static string Label(string s) { string l; return Labels.TryGetValue(s, out l) ? l : s; }
 
         /// <summary>everything the Points page needs for one person: GET /api/economy/me?login=</summary>
-        public static JObject Me2(string login, int ledgerLimit = 50)
+        /// <summary>one read of the whole economy (balances, ranks, ledger per person) so the site push builds thousands of views without rereading it for each</summary>
+        public class Ctx { public Dictionary<string, string> Al; public Snap S; public Dictionary<string, int> Rank = new Dictionary<string, int>(); public int Of; public Dictionary<string, List<JObject>> Led = new Dictionary<string, List<JObject>>(); }
+        public static Ctx BuildCtx()
         {
-            var u = User(login); string c = (string)u["login"]; JObject set; lock (L) set = Settings();
-            double bal = (double)u["points"]; long dep = DepreciationFor(bal, set);
-            var rows = new List<JObject>();
+            var cx = new Ctx { Al = Boards.AliasMap() }; cx.S = Snapshot(cx.Al);
+            var order = cx.S.Users.OrderByDescending(k => k.Value.Points).Where(k => !Boards.IsBot(k.Key)).Select(k => k.Key).ToList(); cx.Of = order.Count;
+            for (int i = 0; i < order.Count; i++) cx.Rank[order[i]] = i + 1;
             lock (L)
-            {
-                foreach (var p in Ledger().Properties()) { var e = p.Value as JObject; if (e != null && (string)e["login"] == c) { var x = (JObject)e.DeepClone(); x["id"] = p.Name; if (x["source"] == null) x["source"] = SourceOf((string)x["reason"]); rows.Add(x); } }
-            }
+                foreach (var p in Ledger().Properties())
+                {
+                    var e = p.Value as JObject; string lg = e == null ? null : (string)e["login"]; if (lg == null || lg == "*") continue;
+                    var x = (JObject)e.DeepClone(); x["id"] = p.Name; if (x["source"] == null) x["source"] = SourceOf((string)x["reason"]);
+                    List<JObject> l; if (!cx.Led.TryGetValue(lg, out l)) cx.Led[lg] = l = new List<JObject>(); l.Add(x);
+                }
+            return cx;
+        }
+
+        public static JObject Me2(string login, int ledgerLimit = 50, Ctx cx = null)
+        {
+            if (cx == null) cx = BuildCtx();
+            string c = Canon(cx.Al, login); JObject set; lock (L) set = Settings();
+            Row row; cx.S.Users.TryGetValue(c, out row); double bal = row == null ? 0 : Math.Floor(row.Points); double minutes = row == null ? 0 : Math.Floor(row.Minutes); long dep = DepreciationFor(bal, set);
+            List<JObject> rows; if (!cx.Led.TryGetValue(c, out rows)) rows = new List<JObject>();
             rows = rows.OrderBy(x => (long)x["at"]).ToList();
             var groups = new Dictionary<string, JObject>();
             Action<string, double, double, int> add = (src, earned, spent, cnt) => { JObject g; if (!groups.TryGetValue(src, out g)) groups[src] = g = new JObject { { "source", src }, { "label", Label(src) }, { "earned", 0.0 }, { "spent", 0.0 }, { "count", 0 } }; g["earned"] = (double)g["earned"] + earned; g["spent"] = (double)g["spent"] + spent; g["count"] = (int)g["count"] + cnt; };
@@ -379,12 +393,23 @@ namespace PinguinoHost
             if (watched >= 1) add("watching", Math.Floor(watched), 0, 0); if (imported >= 1) add("imported", Math.Floor(imported), 0, 0);
             JObject st; lock (L) st = StreamDoc();
             bool open = (bool?)st["open"] == true; bool dry = (bool?)set["DepreciationDryRun"] != false;
-            return new JObject { { "ok", true }, { "login", c }, { "currency", CurrencyName }, { "balance", Math.Floor(bal) }, { "rank", (int)u["pointsRank"] }, { "of", (int)u["of"] }, { "minutes", (double)u["minutes"] },
+            return new JObject { { "ok", true }, { "login", c }, { "currency", CurrencyName }, { "balance", Math.Floor(bal) }, { "rank", cx.Rank.ContainsKey(c) ? cx.Rank[c] : 0 }, { "of", cx.Of }, { "minutes", minutes },
                 { "depreciation", new JObject { { "on", (bool?)set["DepreciationOn"] != false }, { "dryRun", dry }, { "pct", D(set["DepreciationPct"]) }, { "threshold", D(set["DepreciationThreshold"]) }, { "basis", (string)set["DepreciationBasis"] ?? "total" },
                     { "amount", dep }, { "applies", dep > 0 }, { "when", open ? "end of this stream" : "end of the next stream" }, { "streamOpen", open } } },
-                { "loans", LoanView(c, set) },
+                { "loans", LoanView(c, set, minutes) },
                 { "earnings", new JArray(groups.Values.OrderByDescending(g => (double)g["earned"] + (double)g["spent"])) },
                 { "ledger", new JArray(Enumerable.Reverse(rows).Take(Math.Max(1, Math.Min(500, ledgerLimit)))) } };
+        }
+
+        // ---- helpers for the site bridge ----
+        public static IEnumerable<string> LoanLogins() { lock (L) return Loans().Properties().Select(x => x.Name).ToList(); }
+        public static double LoanOwed(string login) { var c = Canon(Boards.AliasMap(), login); lock (L) { var ln = Loans()[c] as JObject; return ln == null ? 0 : Math.Ceiling(D(ln["owed"])); } }
+        /// <summary>the knobs the Points page explains to viewers (no secrets in there)</summary>
+        public static JObject PublicSettings()
+        {
+            JObject s; lock (L) s = Settings(); var o = new JObject();
+            foreach (var k in new[] { "CurrencyName", "ActivityAwards", "CustomsPlay", "CustomsWin", "CompPlay", "CompWin", "CasPlay", "CasWin", "DepreciationOn", "DepreciationDryRun", "DepreciationPct", "DepreciationThreshold", "DepreciationBasis", "LoansOn", "LoanPerHour", "LoanCap", "LoanMinWatchHours", "LoanInterestPct", "LoanDefaultStreams" }) o[k] = s[k];
+            return o;
         }
 
         // ================= HTTP =================
