@@ -138,7 +138,7 @@ function modules() {
     <td style="text-align:right">${m.busy ? '' : m.update ? `<button class="btn pri" data-act="update" data-id="${esc(m.id)}">Update</button>` : m.installed ? `<button class="btn" data-act="rollback" data-id="${esc(m.id)}" title="Restore the previous version kept by PinguinoLink">Rollback</button>` : `<button class="btn pri" data-act="install" data-id="${esc(m.id)}">Install</button>`}</td></tr>`).join('')}</tbody></table>`;
   const gen = c && c.data && (c.data.generated || c.data.generated_at);
   return `<h1>Modules</h1><p class="sub">Modules available from PinguinoLink${gen ? ` - catalog from ${esc(ago(iso(gen)))}` : ''}.
-   <span class="pill stub">Install/Update are STUBS: they only drop a request file for PinguinoLink</span></p>
+   <span class="pill">Local packages only for now</span></p>
    ${errBanner()}<div class="card" style="padding:4px 8px">${body}</div>
    <div class="row"><button class="btn" data-act="check">Check for updates</button><button class="btn" data-open="folder">Open Lite data folder</button></div>`;
 }
