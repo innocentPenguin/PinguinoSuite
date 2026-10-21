@@ -144,7 +144,7 @@ class Jobs:
         if have:
             return have  # a retry reuses the copy already on disk
         if sources_bytes() > MAX_SOURCES_BYTES:
-            raise RuntimeError(f"data\sources holds more than {MAX_SOURCES_BYTES >> 30} GB of downloads; free space there, then press Learn again")
+            raise RuntimeError(f"data/sources holds more than {MAX_SOURCES_BYTES >> 30} GB of downloads; free space there, then press Learn again")
         import yt_dlp
         out = cfg.SOURCES / stem
 
