@@ -23,6 +23,7 @@ from queue_core import Queue, QueueError, new_item
 from spotify_api import ApiError, NotConnected, RateLimited, norm_playback
 
 VERIFY_EVERY_S = 20
+NO_REFUND = {"blocked", "user_blocked", "dup_recent", "dup_skipped"}   # troll codes: never refunded
 SKIP_EARLY_MS = 20000     # cut off with more than this left = counted as skipped
 IDLE_UNPUSH_S = 8
 LOG_MAX = 100
@@ -40,6 +41,7 @@ class Engine:
         self.cfg = cfg
         st = store.load("state.json", {})
         self.queue = Queue(st.get("items", []), st.get("history", []))
+        self.refunds, self._ref_seq = [], 0
         self.rejects = list(st.get("rejects", []))   # songs withdrawn before playing: !oops (wrong song), blocked, denied
         self._skip_mark = None                         # {uri, by, at}: set by skip(), read when the track changes
         self._prev_pb = None
@@ -219,6 +221,25 @@ class Engine:
                 return "skipped", "spotify"
         return "played", ""
 
+    def refund_item(self, item, track=None, why="skipped"):
+        """Queue a channel-point refund for an accepted redeem that never played. Trolls (banned song) get none."""
+        if not item or not item.get("redeem"):
+            return False
+        t = track or item
+        if rules.blocked_reason(self.settings, {"name": t.get("name", ""), "artists": t.get("artists", []), "id": t.get("track_id") or t.get("id", ""), "uri": t.get("uri", "")}):
+            return False
+        with self.lock:
+            self._ref_seq += 1
+            self.refunds.append({"seq": self._ref_seq, "user": item.get("requester", ""), "song": t.get("name", ""), "why": why, "ts": self.clock()})
+            del self.refunds[:-50]
+        self._event("refund", item.get("requester", ""), t.get("name", ""))
+        return True
+
+    def pending_refunds(self, since=0):
+        """The Host polls this and refunds the channel points of each entry (needs channel:manage:redemptions)."""
+        with self.lock:
+            return {"seq": self._ref_seq, "refunds": [r for r in self.refunds if r["seq"] > since and self.clock() - r["ts"] < 3600]}
+
     def _reject(self, track, user, reason):
         self.rejects.append({"uri": track.get("uri", ""), "name": track.get("name", ""), "artists": track.get("artists", []), "user": user,
                              "reason": reason, "at": self.clock()})
@@ -227,8 +248,11 @@ class Engine:
     def _track_changed(self, prev_track, cur):
         if prev_track and self.now_item and self.now_item["skip_on_play"]:
             self._reject(prev_track, self.now_item["requester"], "removed")
+            self.refund_item(self.now_item, prev_track, "removed")
         if prev_track and not (self.now_item and self.now_item["skip_on_play"]):
             outcome, by = self._outcome(prev_track)
+            if outcome == "skipped":
+                self.refund_item(self.now_item, prev_track, "skipped")
             self.queue.add_history({"outcome": outcome, "skipped_by": by, "uri": prev_track["uri"], "id": prev_track["id"], "name": prev_track["name"], "artists": prev_track["artists"],
                                     "album": prev_track["album"], "duration_ms": prev_track["duration_ms"], "explicit": prev_track["explicit"],
                                     "art": prev_track["art"], "requester": self.now_item["requester"] if self.now_item else "",
@@ -432,7 +456,7 @@ class Engine:
         if not redeem and track is None and not s["chat_requests"] and not rules.is_staff(roles):
             return {**self._r(False, "reward_only", user=user), "refund": False}
         r = self._request(user, query, roles, redeem, track)
-        r["refund"] = bool(redeem and not r["ok"] and r["code"] in s["refund_on"])
+        r["refund"] = bool(redeem and not r["ok"] and r["code"] in s["refund_on"] and r["code"] not in NO_REFUND)
         if r["refund"] and s["msgs"].get("refunded"):
             r["reply"] = (r["reply"] + self.say("refunded")[len(s["reply_prefix"]):])[:400] if r["reply"] else r["reply"]
         return r
@@ -507,6 +531,8 @@ class Engine:
             self._bump()
             return self._r(True, "pending", **base)
         item = self.add_track(t, "end", user, "viewer", tier)
+        if redeem:
+            item["redeem"] = True
         self._to_playlist(t)
         idx = self.queue.index(item["id"])
         mins = round(self.eta_ms(idx) / 60000)

@@ -5,7 +5,7 @@ Songify (C:\Users\ivanm\Documents\Songify) was reverse-read for its config, comm
 | Feature (Songify) | PinguinoMusic before | Gap | Plan / status |
 |---|---|---|---|
 | Redeem-only requests ("Song Request" reward) | `!sr` open to chat, rules + fair queue | no way to require the reward | **done** `chat_requests` off = chat `!sr` refused (`reward_only`), redeems + mods still work |
-| Refund points on rejected request | none | rejection never told Twitch | **done** engine/API return `refund:true` for redeems rejected for a code in `refund_on` (too_long, full, lookup, offline, limit, blocked, none). **blocked** actual Twitch refund needs `channel:manage:redemptions` in HostAccount.cs ScopeInfo + Automations spotify-redeem acting on `refund` (00/02) |
+| Refund points on rejected request | none | rejection never told Twitch | **done** engine/API return `refund:true` for redeems rejected for a code in `refund_on` (everything except trolls: blocked/user_blocked/dup_recent/dup_skipped never refund); skipped/removed accepted redeems are refunded via `GET /api/refunds`. **blocked** actual Twitch refund needs `channel:manage:redemptions` in HostAccount.cs ScopeInfo + Automations spotify-redeem acting on `refund` (00/02) |
 | Skip Song reward | `!skip` vote/staff | no paid skip | **done** skip from a redeem force-skips (refund flag if nothing playing) |
 | Global cooldown (1 s) | per-user cooldown only | no all-viewers gap | **done** `global_cooldown_s`, staff bypass |
 | Max pending / per-role caps / max length | per-user, per-role, length limits | – | already had (kept) |

@@ -83,7 +83,7 @@ Quiet handling of dropped keep-alive connections (no tracebacks in the Console; 
 ## Cycle 4: Songify parity (see `Docs/SONGIFY_PARITY.md`)
 New settings (Settings tab, all in `config_schema.py`):
 - `chat_requests` (default on): turn off for reward-only requests; chat `!sr` then answers with the `reward_only` message. Redeems via `/api/chat-command` still work.
-- `refund_on` (list of `none, too_long, full, lookup, offline, limit, blocked`): when a redeem is rejected with one of these codes, `/api/chat-command` returns `"refund": true` and the reply uses the `refunded` message. The Host's redeem automation must act on that field (the Host has no `channel:manage:redemptions` scope yet).
+- `refund_on` (list of rejection codes; default = every failure except trolls): Ivan's rule. A redeem rejected with a listed code gets `"refund": true` from `/api/chat-command` and the `refunded` reply. **Never refunded** (hard-coded, even if listed): `blocked`, `user_blocked`, `dup_recent` (same song in the last `dup_cooldown_min`, default 60), `dup_skipped`. An *accepted* redeem that is later skipped or removed by staff is refunded too, unless the song is banned/blocklisted. Those late refunds are queued and polled by the Host at `GET /api/refunds?since=<seq>` -> `{seq, refunds:[{seq,user,song,why:"skipped|removed",ts}]}` (entries live 1 h); the Host refunds the user's redeem via Helix (needs `channel:manage:redemptions`, owned by 02).
 - `global_cooldown_s` (default 0): minimum seconds between any two requests; staff bypass.
 - `clear_on_offline` (default off): viewer requests are cleared when the stream goes offline.
 - `playlist_add`: playlist ID or URL; accepted requests are also added there. Needs the new playlist scopes, so reconnect Spotify once.

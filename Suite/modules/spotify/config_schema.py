@@ -86,7 +86,7 @@ COMMAND_HELP = {"sr": "request a song (and mods: open/close/clear)", "skip": "vo
 SCHEMA = [
     {"id": "requests", "title": "Who can request", "items": [
         ("chat_requests", "bool", True, "Allow !sr in chat", "Off = requests only through the channel-point reward (redeem); typed !sr is refused for non-mods."),
-        ("refund_on", "list", ["none", "too_long", "full", "lookup", "offline", "limit", "blocked"], "Refund redeems when", "Rejection codes that should refund the channel points (one per line). Needs the Host redeem-refund support."),
+        ("refund_on", "list", ["none", "too_long", "too_short", "full", "lookup", "offline", "limit", "session_limit", "closed", "cooldown", "dup_queue", "explicit", "genre", "artist_cap", "mod_only", "sub_only"], "Refund redeems when", "Rejection codes that refund the channel points (one per line). Never refund blocked, user_blocked, dup_recent or dup_skipped (troll requests): those codes are ignored here. Accepted redeems that are later skipped or removed are refunded too, unless the song is banned. Needs the Host redeem-refund support."),
         ("requests_open", "bool", False, "Requests open", "Master switch; ships closed. Mods can flip it with !sr open / !sr close."),
         ("mod_only", "bool", False, "Mods only", "Only mods and the broadcaster may request."),
         ("sub_only", "bool", False, "Subs / VIPs only", "Only subs, VIPs and mods may request."),

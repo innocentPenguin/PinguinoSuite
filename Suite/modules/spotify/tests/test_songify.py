@@ -137,6 +137,32 @@ class SongifyTests(unittest.TestCase):
         self.e.save_settings({"refund_on": []})
         self.assertFalse(self.sr("cy", 3, redeem=True)["refund"])
 
+    def test_refund_rule_trolls_get_nothing(self):
+        self.e.save_settings({"blocklist": ["song 9"], "refund_on": ["blocked", "dup_recent", "dup_skipped", "full"]})
+        self.assertFalse(self.sr("ann", 9, redeem=True)["refund"], "banned song: no refund even if listed")
+        self.assertTrue(self.sr("bo", 4, redeem=True)["ok"])
+        self.play(4, 199000)
+        self.assertFalse(self.sr("cy", 4, redeem=True)["refund"], "same song within the hour: no refund")
+        self.assertIn("full", self.e.settings["refund_on"])
+
+    def test_skipped_or_removed_redeem_is_refunded(self):
+        self.sr("ann", 1, redeem=True)
+        self.sr("bo", 2, redeem=True)
+        self.sr("cy", 3)                                     # typed, no points
+        self.play(1, 5000)
+        self.e.chat("mod", "!skip", ("mod",))
+        self.e._prev_pb = None
+        self.play(2, 0)
+        r = self.e.pending_refunds(0)["refunds"]
+        self.assertEqual([x["user"] for x in r], ["ann"])
+        self.assertEqual(r[0]["why"], "skipped")
+        self.assertEqual(self.e.pending_refunds(r[0]["seq"])["refunds"], [])
+        self.e.save_settings({"blocklist": ["song 2"]})           # banned after the fact: troll, no refund
+        self.e.chat("mod", "!skip", ("mod",))
+        self.e._prev_pb = None
+        self.play(3, 0)
+        self.assertEqual(len(self.e.pending_refunds(0)["refunds"]), 1)
+
     def test_public_queue_widget_payload(self):
         self.sr("ann", 3)
         q = self.e.public_queue()
