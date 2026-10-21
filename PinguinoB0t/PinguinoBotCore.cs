@@ -2842,9 +2842,12 @@ public class CPHInline
 
             default:
             {
-                int count = GetWaitingCount();
+                var waiting = GetWaitingQueue();
+                int count = waiting.Count;
                 string status = _settings.QueueOpen ? "OPEN" : "CLOSED";
-                Say("Queue is " + status + " — " + count + " player" + (count == 1 ? "" : "s") + " waiting.");
+                string first5 = count == 0 ? "" : ": " + string.Join(" | ", waiting.Take(5).Select((e, i) => (i + 1) + ". " + e.Username)) + (count > 5 ? " (+" + (count - 5) + " more)" : "");
+                int mine = waiting.FindIndex(e => e.Username == user);
+                Say("Queue is " + status + " — " + count + " player" + (count == 1 ? "" : "s") + " waiting" + first5 + (mine >= 5 ? ". You are #" + (mine + 1) : "") + ".");
                 PublishState("queue_show", null);   // [NEW][OBS] makes the queue overlay pop up for a few seconds
                 break;
             }
@@ -4114,16 +4117,11 @@ public class CPHInline
 
     bool HandleMmrLookup(string user, string input, bool isPrivileged)
     {
-        if (!isPrivileged)
-        {
-            Say("@" + user + " Only mods can look up other players' MMR.");
-            return true;
-        }
-
         string target = string.IsNullOrEmpty(input) ? "" : input.Split(' ')[0].ToLower().TrimStart('@');
-        if (string.IsNullOrEmpty(target))
+        if (string.IsNullOrEmpty(target)) target = user;      // viewers may look up their own MMR
+        if (!isPrivileged && target != user)
         {
-            Say("@" + user + " Usage: !mmr @username");
+            Say("@" + user + " You can look up your own MMR with !mmr. Mods can look up other players.");
             return true;
         }
         if (!_players.ContainsKey(target))

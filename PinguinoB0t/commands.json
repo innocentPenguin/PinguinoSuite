@@ -302,9 +302,9 @@
       "aliases": [],
       "action": "PinguinoBotCore",
       "category": "Community Games",
-      "who": "mods",
-      "usage": "!mmr @user",
-      "description": "Look up a player's MMR.",
+      "who": "everyone (mods can look up others)",
+      "usage": "!mmr [@user]",
+      "description": "Your own MMR (mods can look up anybody).",
       "examples": [
         "!mmr @viewer123"
       ],

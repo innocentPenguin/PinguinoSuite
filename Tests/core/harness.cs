@@ -220,6 +220,12 @@ public static class Harness
         Check(!Q().Contains("innocentpenguin_"), "sitting out takes him out of the queue");
         Run("mod1", "!streamer", "in", true);
         Check(Q().Contains("innocentpenguin_") && Q()[0] == "innocentpenguin_", "turning the switch back ON puts him back in the queue at #1");
+        CPHProxy.Sent.Clear(); Run("p3", "!queue", "", false);
+        Check(CPHProxy.Sent.Any(m => m.Contains("1. innocentpenguin_")), "!queue lists the first players, not only a count");
+        CPHProxy.Sent.Clear(); Run("p3", "!mmr", "", false);
+        Check(CPHProxy.Sent.Any(m => m.Contains("MMR") || m.Contains("not registered")) && !CPHProxy.Sent.Any(m => m.Contains("Only mods")), "a viewer may look up their own MMR");
+        CPHProxy.Sent.Clear(); Run("p3", "!mmr", "@p1", false);
+        Check(CPHProxy.Sent.Any(m => m.Contains("own MMR")), "a viewer may not look up somebody else's MMR");
         Run("mod1", "!queue", "close", true);
         Run("mod1", "!streamer", "out", true);
         Run("mod1", "!streamer", "in", true);
