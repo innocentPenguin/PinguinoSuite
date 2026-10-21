@@ -238,6 +238,15 @@
       case 'join': return u + ' joined the queue';
       case 'leave': return u + ' left the queue';
       case 'kick': return u + ' was kicked' + by + why;
+      case 'queue_clear': return 'Queue cleared' + by;
+      case 'queue_open': return 'Queue opened' + by;
+      case 'queue_close': return 'Queue closed' + by;
+      case 'game_end': return 'Game ended' + (x.matchId != null ? ' (#' + x.matchId + ')' : '');
+      case 'match_clear': return u + ' left the match';
+      case 'strike_removed': return u + ' strike removed' + by;
+      case 'strike_expired': return u + ' strike expired';
+      case 'wheel_join': return u + ' joined the wheel';
+      case 'wheel_leave': return u + ' left the wheel';
       case 'strike': return u + ' got a strike' + by + why;
       case 'removed': return u + ' was removed' + by + why;
       case 'overlay': return (x.file || 'overlay') + ' ' + (x.action || 'changed') + by;
@@ -250,19 +259,24 @@
     const list = items.filter(x => (!want || x.t === want) && (!needle || ((x.user || '') + ' ' + logText(x)).toLowerCase().includes(needle))).slice(-(cap || 400));
     for (let i = 0; i < list.length; i++) {
       const x = list[i];
-      if (x.group && (x.type === 'leave' || x.type === 'removed')) {
+      if (x.group && x.t === 'p' && (x.type === 'leave' || x.type === 'removed' || x.type === 'match_clear')) {
         let j = i; while (j + 1 < list.length && list[j + 1].group === x.group && list[j + 1].type === x.type) j++;
         const run = list.slice(i, j + 1);
         if (run.length > 1) {
           const key = 'g:' + x.group + ':' + x.type, isOpen = !!(open && open.has(key));
-          out.push({ key, kind: 'group', ts: run[0].ts, n: run.length, label: run.length + ' players', open: isOpen, text: x.type === 'removed' ? 'removed after the game' : 'left after the game', names: run.map(r => r.user).join(', ') });
+          out.push({ key, kind: 'group', ts: run[0].ts, n: run.length, label: run.length + ' players', open: isOpen, text: x.type === 'leave' ? 'left' : x.type === 'removed' ? 'removed' : 'cleared after the game', names: run.map(r => r.user).join(', ') });
           if (isOpen) run.forEach(r => out.push({ key: r.k, kind: 'sub', ts: r.ts, text: logText(r), t: r.t }));
           i = j; continue;
         }
       }
-      out.push({ key: x.k, kind: x.type === 'teams' ? 'teams' : 'line', t: x.t, ts: x.ts, user: x.user || '', type: x.type || '', text: x.type === 'teams' ? ('Match' + (x.matchId != null ? ' #' + x.matchId : '') + ' teams') : logText(x), blue: x.blue || [], orange: x.orange || [] });
+      out.push({ key: x.k, kind: x.type === 'teams' ? 'teams' : 'line', t: x.t, lvl: x.level || '', ts: x.ts, user: x.user || '', type: x.type || '', text: x.type === 'teams' ? ('Match' + (x.matchId != null ? ' #' + x.matchId : '') + ' teams') : logText(x), blue: x.blue || [], orange: x.orange || [] });
     }
     return out;
+  }
+  // 02's /api/eventlog event {id, ts(ms), kind, type, user, text, group, detail} -> feed item
+  function normLog(e) {
+    const d = e.detail || {}, T = { players: 'p', backend: 'b', chat: 'c' };
+    return { k: 'E' + e.id, t: T[e.kind] || 'b', ts: e.ts > 1e11 ? e.ts / 1000 : e.ts, type: e.type, user: e.user || '', text: e.type === 'teams' ? '' : (e.text || ''), group: e.group || '', level: d.level || '', matchId: d.id, blue: d.blue || [], orange: d.orange || [], by: d.by, reason: d.reason };
   }
   // Client-side Players log from customs state changes (used only while the Host has no /api/logs).
   function diffCustoms(prev, next, now) {
@@ -296,5 +310,5 @@
     }
   }
 
-  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });

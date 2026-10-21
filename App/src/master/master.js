@@ -30,7 +30,7 @@
   const ui = {
     view: null, query: '', tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
-    itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logSeq: 0, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
+    itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
   const saveCache = () => ls.set('cache', { tree: S.get('tree'), customs: S.get('customs') });
 
@@ -228,17 +228,17 @@
     const box = $('#tab-feed'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
     C.reconcile($('#feedlist'), rows, x => x.key, () => { const d = h('div', 'feeditem'); d.append(h('span', 'ts'), h('span', 't')); return d; },
       (d, x) => {
-        d.className = 'feeditem ' + (x.kind === 'sub' ? 'sub ' : '') + 'k-' + (x.t || (x.kind === 'group' ? 'p' : '')) + (x.t === 'e' ? ' ev' : ''); d.dataset.k = x.key;
+        d.className = 'feeditem ' + (x.lvl === 'error' ? 'lvl-error ' : '') + (x.kind === 'sub' ? 'sub ' : '') + 'k-' + (x.t || (x.kind === 'group' ? 'p' : '')) + (x.t === 'e' ? ' ev' : ''); d.dataset.k = x.key;
         d.children[0].textContent = fmtT(x.ts); const t = d.children[1]; t.textContent = '';
         if (x.kind === 'group') { const a = h('a', 'grp', x.label); a.title = x.names; a.dataset.g = x.key; t.append(a, document.createTextNode(' ' + x.text + (x.open ? '' : ' (click to show)'))); }
         else if (x.kind === 'teams') { t.append(h('span', 'who', x.text + ': '), h('span', 'tb', 'Blue: ' + (x.blue.join(', ') || '–')), document.createTextNode('  '), h('span', 'to', 'Orange: ' + (x.orange.join(', ') || '–'))); }
         else if (x.t === 'c') t.append(h('span', 'who', x.user), document.createTextNode(': ' + x.text));
-        else t.append(h('span', x.t === 'e' ? 'who' : 'lg lg-' + (x.type || 'x'), x.text));
+        else t.append(h('span', x.t === 'e' ? 'who' : 'lg lg-' + (x.lvl === 'error' ? 'error' : (x.type || 'x')), x.text));
       });
     if (stick) box.scrollTop = box.scrollHeight;
     const n = [];
     if (ui.chatOk === false) n.push('Live chat needs the Host chat feed.');
-    if (ui.logsOk === false && (ui.logCat === 'backend' || ui.logCat === 'all')) n.push('Backend log (bot + overlay actions) needs the Host /api/logs: not connected yet. Players log is built here from queue changes (no history before this window opened).');
+    if (ui.logsOk === false && (ui.logCat === 'backend' || ui.logCat === 'all')) n.push('Backend log (bot + overlay actions) needs the Host /api/eventlog: not connected yet. Players log is built here from queue changes (no history before this window opened).');
     if (ui.logsOk === true && !rows.length) n.push('Nothing in this log yet.');
     $('#feed-note').textContent = n.join(' ');
   }
@@ -252,12 +252,11 @@
     if ((list || []).length) ui.chatSeq = Math.max(ui.chatSeq, ...list.map(m => m.seq || 0));
     if (C.mergeFeed(ui.feed, add, x => x.k, 800)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
   }
-  // Host logs ({seq, ts, cat: players|backend, type, ...}); chat lines come from /api/chat/recent so cat chat is skipped here
+  // Host logs: 02's /api/eventlog events (players + backend; chat comes from /api/chat/recent)
   function addLogs(list) {
-    const T = { players: 'p', backend: 'b' };
-    const add = (list || []).filter(x => T[x.cat]).map(x => Object.assign({}, x, { k: 'L' + x.seq, t: T[x.cat], ts: x.ts > 1e11 ? x.ts / 1000 : x.ts }));
-    if ((list || []).length) ui.logSeq = Math.max(ui.logSeq, ...list.map(x => x.seq || 0));
-    if (C.mergeFeed(ui.feed, add, x => x.k, 800)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
+    const add = (list || []).filter(e => e.kind === 'players' || e.kind === 'backend').map(C.normLog);
+    (list || []).forEach(e => { if (e.ts > (ui.logTs[e.kind] || 0)) ui.logTs[e.kind] = e.ts; });
+    if (C.mergeFeed(ui.feed, add, x => x.k, 1500)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
   }
   // my own actions are backend log lines too, until the Host logs them itself
   function logLocal(type, text) { if (ui.logsOk === true) return; const ts = Date.now() / 1000; C.mergeFeed(ui.feed, [{ k: 'ap:' + ts + type, t: 'b', ts, type, text, src: 'app' }], x => x.k, 800); schedule('feed'); }
@@ -344,9 +343,9 @@
       if (r.ok) { ui.chatOk = true; addChat(Array.isArray(r.json) ? r.json : r.json.items || r.json.messages); }
     }),
     logs: P(() => (ui.logsOk === false ? 30000 : (sse() ? 5000 : 1200)), async () => {
-      const r = await api.get('/api/logs?cat=all&since=' + ui.logSeq + '&limit=500');
-      if (r.status === 404) { if (ui.logsOk !== false) { ui.logsOk = false; schedule('feed'); } return; }
-      if (r.ok) { if (ui.logsOk !== true) { ui.logsOk = true; schedule('feed'); } addLogs(r.json.items); }
+      const got = await Promise.all(['players', 'backend'].map(k => api.get('/api/eventlog?kind=' + k + '&limit=' + (ui.logTs[k] ? 500 : 300) + (ui.logTs[k] ? '&since=' + ui.logTs[k] : ''))));
+      if (got.every(r => r.status === 404)) { if (ui.logsOk !== false) { ui.logsOk = false; schedule('feed'); } return; }
+      if (got.some(r => r.ok)) { if (ui.logsOk !== true) { ui.logsOk = true; schedule('feed'); } got.forEach(r => r.ok && addLogs(r.json.events)); }
     }),
     cmds: P(5000, async () => { const r = await api.get('/api/commands/profiles'); if (r.ok) S.set({ cmds: r.json.commands || [] }); }, () => visible() && ui.tab === 'cmds'),
     overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = { ovErr: a.ok ? null : (a.error || 'HTTP ' + a.status) }; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
@@ -360,10 +359,10 @@
     onState: on => { S.set({ link: { sse: on, ms: S.get('link').ms } }); if (!on) Object.values(pollers).forEach(p => p.kick()); },
     onMessage: m => {
       const d = m.data;
-      if (m.event === 'snapshot' && d) { d.obs && applyTree(d.obs); d.obsstatus && S.set({ obsStatus: d.obsstatus }); d.live && S.set({ live: d.live }); d.customs && S.set({ customs: d.customs, customsOk: true }); d.wheel && S.set({ wheel: normWheel(d.wheel) }); d.chat && addChat(d.chat); d.logs && (ui.logsOk = true, addLogs(d.logs)); d.activity && addActivity(d.activity); }
+      if (m.event === 'snapshot' && d) { d.obs && applyTree(d.obs); d.obsstatus && S.set({ obsStatus: d.obsstatus }); d.live && S.set({ live: d.live }); d.customs && S.set({ customs: d.customs, customsOk: true }); d.wheel && S.set({ wheel: normWheel(d.wheel) }); d.chat && addChat(d.chat);  d.activity && addActivity(d.activity); }
       else if (m.event === 'obs') applyTree(d); else if (m.event === 'obsstatus') S.set({ obsStatus: d }); else if (m.event === 'live') S.set({ live: d });
       else if (m.event === 'customs') S.set({ customs: d, customsOk: true }); else if (m.event === 'wheel') S.set({ wheel: normWheel(d) });
-      else if (m.event === 'chat') { ui.chatOk = true; addChat([d]); } else if (m.event === 'activity') addActivity([d]); else if (m.event === 'log') { ui.logsOk = true; addLogs([d]); }
+      else if (m.event === 'chat') { ui.chatOk = true; addChat([d]); } else if (m.event === 'activity') addActivity([d]); else if (m.event === 'playerlog') { ui.logsOk = true; addLogs([Object.assign({ kind: 'players' }, d)]); }
     },
   });
 

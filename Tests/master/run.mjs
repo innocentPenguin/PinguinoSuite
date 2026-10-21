@@ -171,6 +171,13 @@ await t('logs: Players log derived from customs changes (join, leave, match star
   const over = C.diffCustoms(M, { queue: [q('c')], match: null }, 3); assert.deepEqual(over.map(x => x.type + ':' + x.group), ['removed:m3', 'removed:m3']);
   assert.deepEqual(C.diffCustoms(null, A), []);
 });
+await t('logs: 02 eventlog events normalise (ms -> s, teams detail, groups, error level)', () => {
+  const tm = C.normLog({ id: 5, ts: 1792592000000, kind: 'players', type: 'teams', group: 'match-7', detail: { id: 7, blue: ['a', 'b'], orange: ['c'] } });
+  assert.equal(tm.t, 'p'); assert.equal(tm.ts, 1792592000); assert.equal(tm.blue.join(), 'a,b'); assert.equal(tm.matchId, 7);
+  const mc = [1, 2, 3].map(i => C.normLog({ id: 10 + i, ts: 1792592100000 + i, kind: 'players', type: 'match_clear', user: 'u' + i, group: 'end-7', text: 'u' + i + ' cleared' }));
+  const rows = C.logRows([tm, ...mc], 'players', '', new Set()); assert.deepEqual(rows.map(r => r.kind), ['teams', 'group']); assert.equal(rows[1].label, '3 players');
+  assert.equal(C.normLog({ id: 1, ts: 1, kind: 'backend', type: 'obs', text: 'x', detail: { level: 'error' } }).level, 'error');
+});
 await t('customs/mod and chat/recent answer in the Host b9fad8f shapes', async () => {
   const r = await api.post('/api/customs/mod', { action: 'queue', value: 'close' }); assert.equal(r.json.ran, '!queue close'); assert.equal(r.json.customs.open, false);
   mock.addChat('X', 'hi'); const c = await api.get('/api/chat/recent?since=0'); assert.ok(Array.isArray(c.json.messages) && c.json.messages.at(-1).ts > 1e11);
