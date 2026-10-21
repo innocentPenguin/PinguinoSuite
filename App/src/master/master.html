@@ -22,6 +22,7 @@
   </header>
   <div id="offline" class="banner" hidden></div>
   <main id="grid">
+    <div id="col-obs">
     <section class="pane" id="pane-scenes" data-pane="scenes">
       <div class="ph"><h3>Scenes</h3><span class="faint sm" id="scene-count"></span><span class="sp"></span><button class="sm ghost" id="scenes-fold" title="Collapse / expand all folders">⇕</button></div>
       <div class="list" id="scenes" tabindex="0" role="listbox" aria-label="OBS scenes"></div>
@@ -30,6 +31,7 @@
       <div class="ph"><h3>Sources</h3><span class="faint sm ell" id="src-scene"></span><span class="sp"></span><button class="sm ghost" id="src-follow" title="Follow the live scene again">⟲ live</button></div>
       <div class="list" id="sources" tabindex="0" role="listbox" aria-label="Sources of the scene"></div>
     </section>
+    </div>
     <section class="pane" id="pane-side">
       <div class="tabs" id="tabs" role="tablist">
         <button data-tab="customs" class="on">Customs</button><button data-tab="feed">Feed</button><button data-tab="cmds">Commands</button><button data-tab="overlays">Overlays</button>

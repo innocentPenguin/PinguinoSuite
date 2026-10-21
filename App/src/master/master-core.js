@@ -109,6 +109,9 @@
     format: v => (['1v1', '2v2', '3v3', '4v4'].includes(v) ? '!format ' + v : null),
     gamemode: v => (['standard', 'dropshot', 'rumble'].includes(v) ? '!gamemode ' + v : null),
     casual: v => (['group', 'teams'].includes(v) ? '!casual ' + v : null),
+    activity: v => (/^(?:(?:rl|fn) )?(?:competitive|casual|koth|viewers|boxfights|zonewars|fnviewers|end)$/.test(v) ? '!activity ' + v : null),
+    pick: v => (v === 'auto' || /^[A-Za-z0-9_]{1,25}( [A-Za-z0-9_]{1,25}){0,3}$/.test(v) ? '!pick ' + v : null),
+    streamer: v => (['in', 'out'].includes(v) ? '!streamer ' + v : null),
     kick: v => { v = String(v || '').trim().replace(/^@/, ''); return /^[A-Za-z0-9_]{2,25}$/.test(v) ? '!kick ' + v : null; },
   };
   function customsText(action, value) { const f = CUSTOMS[action]; return f ? f(value == null ? '' : String(value)) : null; }

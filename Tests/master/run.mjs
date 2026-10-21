@@ -150,6 +150,10 @@ await t('optimistic scene change rolls back when the Host refuses, and the error
   const opt = C.createOptimistic(2500); opt.set('scene', 'Rocket'); st.failNext.add('/api/obs/scene'); const r = await api.post('/api/obs/scene', { scene: 'Rocket' });
   if (!r.ok) opt.drop('scene'); assert.equal(opt.has('scene'), false); assert.equal(r.error, 'OBS refused the change');
 });
+await t('customs: activity / pick / streamer map like the website and reject junk', () => {
+  assert.equal(C.customsText('activity', 'rl koth'), '!activity rl koth'); assert.equal(C.customsText('activity', 'end'), '!activity end'); assert.equal(C.customsText('activity', 'rl; !ban x'), null);
+  assert.equal(C.customsText('pick', 'auto'), '!pick auto'); assert.equal(C.customsText('pick', 'a b'), '!pick a b'); assert.equal(C.customsText('pick', 'a b c d e'), null); assert.equal(C.customsText('streamer', 'out'), '!streamer out'); assert.equal(C.customsText('streamer', 'x'), null);
+});
 await t('customs/mod and chat/recent answer in the Host b9fad8f shapes', async () => {
   const r = await api.post('/api/customs/mod', { action: 'queue', value: 'close' }); assert.equal(r.json.ran, '!queue close'); assert.equal(r.json.customs.open, false);
   mock.addChat('X', 'hi'); const c = await api.get('/api/chat/recent?since=0'); assert.ok(Array.isArray(c.json.messages) && c.json.messages.at(-1).ts > 1e11);
