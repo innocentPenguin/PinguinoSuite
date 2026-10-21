@@ -77,6 +77,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 08:50 - Host + Spotify restarts (00)
+Host had died overnight (EventSub/chat lost 13:33Z); restarted via Update-Module host. Spotify restarted (orphan on 8771 killed) for Music 34052e6 refund rules; /api/refunds now answers 200.
+
 ## 2026-10-21 08:35 - App relaunch (00)
 Module pages showed offline/blank after hours idle (all services answered 200). Relaunched shell + core via PinguinoApp.bat; pages load again. Host/modules untouched. Listen still flaps (06 investigating).
 
