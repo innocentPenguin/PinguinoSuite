@@ -255,7 +255,9 @@ export async function serve(cfg) {
   const inTest = process.env.PINGUINO_MESH_TEST || (process.env.PINGUINO_DATA_DIR || '').toLowerCase().startsWith(os.tmpdir().toLowerCase());
   if (!inTest || process.env.PINGUINO_LITE_DIR) {
     const probe = async m => { try { return (await fetch(`http://127.0.0.1:${m.port}${m.health || '/'}`, { signal: AbortSignal.timeout(800) })).status < 500; } catch { return false; } };
-    createLite({ getHealth: probe }).start().catch(e => log('warn', 'lite', `could not start: ${e.message}`));
+    const lite = createLite({ getHealth: probe });
+    lite.start().catch(e => log('warn', 'lite', `could not start: ${e.message}`));
+    for (const sig of ['SIGTERM', 'SIGINT', 'SIGBREAK']) process.on(sig, () => { lite.stop(); log('info', 'server', `stopping (${sig})`); process.exit(0); });
   }
   mesh.start();
   await bindTail();
