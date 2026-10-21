@@ -77,6 +77,11 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 01:37 Host restart (simulator leak fix b35d30d)
+
+- Update-Module.ps1 host. /api/live, /api/sim/status, /wheel.html, /api/wheel/public 200. Fix: sim clear rewrites wheel files, sim names kept out of saved wheel feed.
+- 02 live check passed: start 8, ticks (gamble/slots/duel on sim ledger), remove, clear; wheel sign-ups back to real 8; real ledger md5 unchanged; no sim_ in saved files. Not exercised: live-stream auto-stop, spin. namesSource still boards until 05's /api/bot/names (cab2c51) is pushed.
+
 ## 2026-10-21 01:14 Shell rebuild + Host restart 01:10 (player simulator)
 
 - 01:10 Update-Module host on 31ffac3 (02: player simulator, /api/sim/*, sim ledger, sendSimToSite). 01:14 Build-All --no-launch (host/core up to date, shell rebuilt) + PinguinoApp.bat. /api/live, /api/sim/status, /wheel.html, /api/obs/status all 200.
