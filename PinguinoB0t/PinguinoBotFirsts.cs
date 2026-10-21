@@ -58,7 +58,8 @@ public class CPHInline
 
     static readonly int[] PlacePoints = { 15000, 10500, 7500, 4500, 3000 };
 
-    const int PayoutDelayMs = 5 * 60 * 1000;
+    // 5 minutes between payouts (the env var is for tests only)
+    static readonly int PayoutDelayMs = int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_FIRSTS_PAYOUT_MS"), out int pms) ? pms : 5 * 60 * 1000;
 
     // ── Entry point ─────────────────────────────────────────────────
     public bool Execute()
@@ -168,13 +169,14 @@ public class CPHInline
 
         Say($"🏁 Firsts are locked in! 🥇 {names[0]} | 🥈 {names[1]} | 🥉 {names[2]} | 4th: {names[3]} | 5th: {names[4]}");
 
+        long stamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         // payouts every PayoutDelayMs, on their own thread so the chat is never held up (a restart before they finish drops the rest)
         System.Threading.Tasks.Task.Run(() =>
         {
             for (int i = 0; i < 5; i++)
             {
                 System.Threading.Thread.Sleep(PayoutDelayMs);
-                CPH.SendMessage($"!addpoints {names[i]} {PlacePoints[i]}");
+                GrantPoints(names[i], PlacePoints[i], "firsts-" + stamp + "-" + (i + 1) + "-" + names[i].ToLowerInvariant(), "First 5 place " + (i + 1));
             }
         });
 
@@ -182,6 +184,19 @@ public class CPHInline
     }
 
     // ── Helpers ─────────────────────────────────────────────────────
+    // The payout goes straight to the economy (Host action "PinguinoGrantPoints"), never as a chat line: "!addpoints" in chat is the hidden broadcaster command.
+    static readonly object GrantLock = new object();
+    void GrantPoints(string login, int amount, string id, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(login) || login == "N/A") return;
+        lock (GrantLock)
+        {
+            CPH.SetGlobalVar("pinguino.grant.request", JsonConvert.SerializeObject(new { login = login, amount = amount, id = id, reason = reason }), false);
+            if (!CPH.RunAction("PinguinoGrantPoints", true))
+                CPH.LogWarn("[Firsts] payout for " + login + " skipped: no PinguinoGrantPoints action (needs the Host)");
+        }
+    }
+
     string GetArg(string name)
     {
         return CPH.TryGetArg(name, out string argVal) && argVal != null ? argVal : "";

@@ -122,6 +122,18 @@ namespace PinguinoHost
                     Console.WriteLine("loaded " + kv.Key + "  (" + kv.Value + ")");
                 }
             }
+            // Native action for the First 5 payout: the script puts {login, amount, id, reason} in the global "pinguino.grant.request" and runs this. The id makes a retry harmless.
+            cph.Actions["PinguinoGrantPoints"] = c =>
+            {
+                try
+                {
+                    var req = JObject.Parse(c.GetGlobalVar<string>("pinguino.grant.request", false) ?? "{}");
+                    var r = Economy.Grant(new JObject { { "target", "user" }, { "login", (string)req["login"] }, { "amount", req["amount"] }, { "mode", "add" }, { "id", (string)req["id"] }, { "reason", (string)req["reason"] }, { "by", "firsts" } });
+                    Clog.Info("firsts", "payout " + (string)req["login"] + ": " + (string)(r["message"] ?? r["error"]));
+                    return (bool?)r["ok"] != false;
+                }
+                catch (Exception ex) { Clog.Warn("firsts", "payout failed: " + ex.Message); return false; }
+            };
             return ok;
         }
 

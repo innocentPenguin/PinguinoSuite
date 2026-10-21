@@ -1,6 +1,6 @@
 # PinguinoBot commands
 
-The website reads `commands.json`, which is the source of truth (the Host also serves it at `GET /api/commands-doc` with viewer / mod lists and a permission field). This page is generated from it; edit the JSON, not this page.
+The website reads `commands.json`, which is the source of truth (the Host also serves it at `GET /api/commands-doc` with viewer / mod lists and a permission field). This page is generated from it (python Tools/gen-commands-md.py); edit the JSON, not this page.
 
 ## Viewer commands
 
@@ -27,6 +27,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!stats` | `!stats [user]` | Wins, losses and points for you or another player. |
 | `!topwins` | `!topwins` | Top 5 community-games players by wins (ties broken by points). |
 | `!queue` | `!queue  \|  !queue list  \|  mods: !queue open \| close \| clear` | Queue status. Mods open, close, or clear (clear also closes and ends the lobby). |
+| `!mmr` | `!mmr [@user]` | Your own MMR (mods can look up anybody). |
 | `!strikes` | `!strikes` | How many strikes you have (3 = cannot join customs), split into permanent (red, never expire) and temporary (orange, one wears off per day). |
 
 ### Emotes
@@ -77,6 +78,13 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 |---|---|---|
 | `!rank` | `!rank [epic name] [1s\|2s\|3s\|4s\|hoops\|rumble\|dropshot\|snowday\|heatseeker]` | Rocket League ranks. With no name it shows Innocentpenguin_'s 1v1, 2v2 and 3v3; add a playlist (2s, 2v2, dropshot, heatseek, rumble, hoops...) for just that one. Every playlist is pulled in one tracker call per Epic account and cached for 15 minutes, so extra lookups cost nothing. |
 
+### Stream
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!uptime` | `!uptime` | How long the stream has been live. |
+| `!downtime` | `!downtime` | How long ago the last stream ended. |
+
 ### Subscribers
 
 | Command | Usage | What it does |
@@ -117,6 +125,32 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!check` | `!check` | Self-test: problems go to the website log. |
 | `!pg` | `!pg status \| core\|chat\|helper on\|off \| test \| cutover` | Quick control of the bots from chat. Everyone else gets no answer. |
 
+### Channel control (mods)
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!poll` | `!poll "question" a\|b\|c [seconds]` | Starts a Twitch poll (2-5 options, 15-1800 s). The result is said in chat when it ends. |
+| `!predict` | `!predict "question" a\|b [seconds]` | Starts a Twitch prediction. Streamer and mods the streamer allows. |
+| `!lock` | `!lock` | Locks the open prediction (no more votes). |
+| `!resolve` | `!resolve <number or name>` | Pays out the prediction to the winning outcome. |
+| `!cancel` | `!cancel` | Cancels the prediction and refunds the points. |
+| `!slow` | `!slow [seconds\|off]` | Slow mode (3-120 s, default 30). |
+| `!emote-only` | `!emote-only [off]` | Emote-only chat on or off. |
+| `!followers` | `!followers [minutes\|off]` | Followers-only chat. |
+| `!subs-only` | `!subs-only [off]` | Subscriber-only chat on or off. |
+| `!title` | `!title <new stream title>` | Changes the stream title. |
+| `!game` | `!game <category name>` | Changes the stream category (game). |
+| `!allow` | `!allow [user]` | Releases a message AutoMod is holding (the newest one, or the newest from that user). |
+| `!announce` | `!announce [blue\|green\|orange\|purple] <text>` | Posts a highlighted Twitch announcement. |
+| `!marker` | `!marker [note]` | Adds a stream marker at this moment. |
+| `!shield` | `!shield on\|off` | Shield mode on or off (streamer only). |
+| `!ad` | `!ad [30\|60\|90\|120\|150\|180]` | Runs an ad break after a 30 second warning in chat (streamer only). |
+| `!vip` | `!vip <name>` | Makes someone a VIP (streamer only). |
+| `!unvip` | `!unvip <name>` | Removes someone's VIP (streamer only). |
+| `!raid` | `!raid <channel>` | Streamer only, and only channels on the raid list. The bot asks you to say !confirm raid within 20 seconds. Never starts by itself. |
+| `!confirm` | `!confirm raid` | Confirms the pending raid. Must be typed in Twitch chat. |
+| `!unraid` | `!unraid` | Cancels the pending raid, or the raid that is counting down. |
+
 ### Chat bot
 
 | Command | Usage | What it does |
@@ -138,7 +172,6 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!pick` | `!pick <names for Blue>  \|  !pick auto` | In picks mode, after !balance: listed players go Blue, the rest Orange. 'auto' balances instead. |
 | `!format` | `!format <2v2\|3v3\|4v4>` | Team size for the next match. |
 | `!kick` | `!kick @user` | Remove someone from the queue. Follow with !reroll if they were in the lobby. |
-| `!mmr` | `!mmr @user` | Look up a player's MMR. |
 | `!setmmr` | `!setmmr @user <mmr\|rank\|auto>` | Manually set MMR (number or rank like gc1, c2, d3). 'auto' goes back to Tracker Network. |
 | `!koth` | `!koth on\|off` | Switch King of the Hill on or off. |
 | `!strike` | `!strike @user [perma\|toxicity\|slurs]` | Give a temporary strike (wears off after a day). Add perma, toxicity or slurs for a PERMANENT strike (red, never expires). |
@@ -183,7 +216,8 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
-| `!addpoints` | `!addpoints @user <n>` | Give someone points. |
+| `!addpoints` | `!addpoints <@user\|all> <n>` | Broadcaster only, silent. Adds points (a negative number takes them, never below 0). Hidden: no chat reply, logged. |
+| `!editpoints` | `!editpoints @user <n>` | Broadcaster only, silent. Sets someone's points to exactly this number. Hidden: no chat reply, logged. |
 | `!removepoints` | `!removepoints @user <n>` | Take points away from someone. |
 | `!economy` | `!economy status\|import\|apply <id>` | Points system status; import from StreamElements (dry run, then apply with the report id). |
 
