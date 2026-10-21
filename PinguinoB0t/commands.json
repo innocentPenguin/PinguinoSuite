@@ -1227,10 +1227,27 @@
       "action": "PinguinoHost",
       "category": "Points",
       "who": "mods",
-      "usage": "!addpoints @user <n>",
-      "description": "Give someone points.",
+      "tier": "broadcaster",
+      "usage": "!addpoints <@user|all> <n>",
+      "description": "Broadcaster only, silent. Adds points (a negative number takes them, never below 0). Hidden: no chat reply, logged.",
       "examples": [
-        "!addpoints @ana 500"
+        "!addpoints @ana 500",
+        "!addpoints all 100"
+      ],
+      "section": "Viewers",
+      "importance": 11
+    },
+    {
+      "command": "!editpoints",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Points",
+      "who": "mods",
+      "tier": "broadcaster",
+      "usage": "!editpoints @user <n>",
+      "description": "Broadcaster only, silent. Sets someone's points to exactly this number. Hidden: no chat reply, logged.",
+      "examples": [
+        "!editpoints @ana 1000"
       ],
       "section": "Viewers",
       "importance": 11

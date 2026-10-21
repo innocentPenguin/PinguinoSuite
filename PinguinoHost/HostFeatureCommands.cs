@@ -55,6 +55,7 @@ namespace PinguinoHost
             var parts = (text ?? "").Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries); if (parts.Length == 0 || !parts[0].StartsWith("!")) return false;
             string cmd = parts[0].ToLowerInvariant(); string[] args = parts.Skip(1).ToArray(); string me = user.ToLowerInvariant();
             bool mod = role >= 3;
+            if (Economy.IsHiddenCommand(cmd)) { if (role >= 4) Economy.HandleHidden(user, cmd, args); return true; }   // broadcaster only, silent for everyone else (not even the lore bot answers)
             if (cmd == "!offlinemode") { OfflineMode.Handle(user, args, role, say); return true; }
             if (Control.IsCommand(cmd)) { Control.Handle(user, cmd, args, role, say); return true; }
             if (Teach.IsCommand(cmd)) { Teach.Handle(user, cmd, args, role, say); return true; }
@@ -215,6 +216,6 @@ namespace PinguinoHost
             var viewer = new JArray(all.Where(c => who(c).Contains("everyone") || who(c) == "automatic").Select(Norm)); var chan = ChannelLore.DocRows(); foreach (var r in chan) { viewer.Add(r); } var mod = new JArray(all.Where(c => who(c).Contains("mod")).Select(c => { var o = (JObject)Norm(c); if (o["modSection"] != null) { o["section"] = o["modSection"]; o["importance"] = o["modImportance"]; } return o; }));
             return new JObject { { "ok", true }, { "version", src["version"] }, { "updated", src["updated"] }, { "viewer", viewer }, { "mod", mod }, { "all", new JArray(all.Concat(chan)) }, { "counts", new JObject { { "viewer", viewer.Count }, { "mod", mod.Count }, { "channel", chan.Count } } } };
         }
-        static JToken Norm(JToken c) { var o = (JObject)c.DeepClone(); string w = ((string)o["who"] ?? "").ToLowerInvariant(); o["permission"] = w.Contains("everyone") && w.Contains("mod") ? "everyone (mods can do more)" : w.Contains("mod") ? "mods" : w.Contains("everyone") ? "everyone" : w; return o; }
+        static JToken Norm(JToken c) { var o = (JObject)c.DeepClone(); string w = ((string)o["who"] ?? "").ToLowerInvariant(); o["permission"] = w.Contains("everyone") && w.Contains("mod") ? "everyone (mods can do more)" : w.Contains("mod") ? "mods" : w.Contains("everyone") ? "everyone" : w; if (o["tier"] != null) o["permission"] = o["tier"]; return o; }
     }
 }

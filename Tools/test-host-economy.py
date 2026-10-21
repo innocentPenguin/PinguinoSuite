@@ -75,7 +75,8 @@ try:
     feed(host, 'viewer1: !toppoints'); chk('!toppoints', any(m.startswith('Top points (all time): 1. cyfirl 1,250 | 2. ana 400 | 3. newguy 70') for m in says()[-1:]), says()[-1:])
     feed(host, 'viewer1: !topwatch'); chk('!topwatch', any(m.startswith('Most watch time (all time): 1. ana 1d 1h') for m in says()[-1:]), says()[-1:])
     n0 = len(says()); feed(host, 'viewer1: !addpoints @ana 500'); chk('viewers cannot add points', len(says()) == n0 and api('/api/economy/user?login=ana')['points'] == 400)
-    feed(host, '*mod1: !addpoints @ana 500'); chk('mods can add points', api('/api/economy/user?login=ana')['points'] == 900, says()[-1:])
+    feed(host, '*mod1: !addpoints @ana 500'); chk('mods can NOT add points (broadcaster only)', api('/api/economy/user?login=ana')['points'] == 400, says()[-1:])
+    n1 = len(says()); feed(host, '#ivan: !addpoints @ana 500'); chk('the broadcaster can, silently', api('/api/economy/user?login=ana')['points'] == 900 and len(says()) == n1, says()[-1:])
     feed(host, '*mod1: !removepoints @ana 50'); chk('and remove points', api('/api/economy/user?login=ana')['points'] == 850)
     feed(host, '*mod1: !economy status'); chk('!economy status', any(m.startswith('Economy: 4 people') for m in says()[-1:]) or any(m.startswith('Economy:') for m in says()[-1:]), says()[-1:])
     # boards

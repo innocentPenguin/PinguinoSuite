@@ -16,7 +16,7 @@ namespace PinguinoHost
     /// what the Host earns afterwards), then our own earning loop (every minute while live, everyone in the chatroom, bots left out, sub/VIP multipliers).
     /// Store: Data\economy\points.json {baseline:{at,source,users}, earned:{login:{points,minutes}}, months:{yyyy-MM:{login:{points,minutes}}}, adjust:{login:n}}. Aliases (Data\boards\aliases.json) fold at read time.
     /// The StreamElements JWT is read from the vault key se_jwt (or PINGUINO_SE_JWT in tests) and is never logged, echoed or stored.
-    /// Chat: !points [user], !watchtime [user], !toppoints [month], !topwatch [month]; mods: !addpoints @user n, !removepoints @user n, !economy status|import|apply &lt;id&gt;.</summary>
+    /// Chat: !points [user], !watchtime [user], !toppoints [month], !topwatch [month]; mods: !removepoints @user n, !economy status|import|apply &lt;id&gt;.</summary>
     public static class Economy
     {
         static readonly object L = new object();
@@ -326,30 +326,44 @@ namespace PinguinoHost
             }
             return true;
         }
-        /// <summary>Hidden grant: gives (or takes, negative) points to one user or to everyone known, with NO chat message. Every call is written to Data\economy\grants.log (who, amount, reason).
-        /// Body {target:"user"|"everyone", login, amount, reason, silent, by, id?}. An id makes a retry apply once.</summary>
+        /// <summary>Hidden grant: gives (or takes, negative) points to one user or to everyone known, with NO chat message. A take never goes below 0.
+        /// Body {target:"user"|"everyone", login, amount, mode:"add"|"set", reason, silent, by, id?}. mode "set" (one user) makes the balance exactly `amount` (>= 0).
+        /// Every call is one ledger entry (a retry with the same id applies once) and one line in Data\economy\grants.log (when, who, target, change, reason).</summary>
         public static JObject Grant(JObject b)
         {
             string target = ((string)b["target"] ?? "user").Trim().ToLowerInvariant(), reason = ((string)b["reason"] ?? "").Trim(), by = ((string)b["by"] ?? "api").Trim(), id = ((string)b["id"] ?? "").Trim();
-            double amt; try { amt = D(b["amount"]); } catch (Exception) { amt = 0; }
+            string mode = ((string)b["mode"] ?? "add").Trim().ToLowerInvariant();
+            double amt; try { amt = D(b["amount"]); } catch (Exception) { return new JObject { { "ok", false }, { "error", "amount must be a number" } }; }
             if (target != "user" && target != "everyone") return new JObject { { "ok", false }, { "error", "target must be user or everyone" } };
-            if (amt == 0 || double.IsNaN(amt) || Math.Abs(amt) > 1e9) return new JObject { { "ok", false }, { "error", "amount must be a non-zero number" } };
+            if (mode != "add" && mode != "set") return new JObject { { "ok", false }, { "error", "mode must be add or set" } };
+            if (mode == "set" && target != "user") return new JObject { { "ok", false }, { "error", "set works on one user" } };
+            if (double.IsNaN(amt) || double.IsInfinity(amt) || Math.Abs(amt) > 1e9) return new JObject { { "ok", false }, { "error", "amount out of range" } };
+            if (mode == "add" && amt == 0) return new JObject { { "ok", false }, { "error", "amount must be a non-zero number" } };
+            if (mode == "set" && amt < 0) return new JObject { { "ok", false }, { "error", "a balance cannot be negative" } };
             amt = Math.Round(amt);
-            var logins = new List<string>();
-            if (target == "user") { string one = Canon(Boards.AliasMap(), (string)b["login"]); if (one == "") return new JObject { { "ok", false }, { "error", "login required" } }; logins.Add(one); }
-            else { var al = Boards.AliasMap(); logins = Snapshot(al).Users.Keys.Where(k => !Boards.IsBot(k)).ToList(); }
+            var al = Boards.AliasMap(); var snap = Snapshot(al); var targets = new List<string>();
+            if (target == "user") { string one = Canon(al, (string)b["login"]); if (one == "") return new JObject { { "ok", false }, { "error", "login required" } }; targets.Add(one); }
+            else targets = snap.Users.Keys.Where(k => !Boards.IsBot(k)).ToList();
+            double total = 0; int changed = 0;
             lock (L)
             {
-                var led = Ledger(); string key = id == "" ? "" : "grant-" + id;
-                if (key != "" && led[key] != null) return new JObject { { "ok", true }, { "message", "already applied" }, { "affected", 0 } };
+                var led = Ledger(); string key = id == "" ? "grant-" + Guid.NewGuid().ToString("N") : "grant-" + id;
+                if (led[key] != null) return new JObject { { "ok", true }, { "message", "already applied" }, { "affected", 0 } };
                 var adj = (JObject)Doc()["adjust"];
-                foreach (var l in logins) adj[l] = D(adj[l]) + amt;
-                if (key != "") led[key] = new JObject { { "login", target == "user" ? logins[0] : "*" }, { "delta", amt }, { "reason", reason }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
+                foreach (var l in targets)
+                {
+                    Row r; double bal = Math.Floor(snap.Users.TryGetValue(l, out r) ? r.Points : 0);
+                    double delta = mode == "set" ? amt - bal : (amt < 0 ? Math.Max(amt, -bal) : amt);
+                    if (delta == 0) continue;
+                    adj[l] = D(adj[l]) + delta; total += delta; changed++;
+                }
+                led[key] = new JObject { { "login", target == "user" ? targets[0] : "*" }, { "delta", total }, { "reason", reason }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 Save();
-                try { File.AppendAllText(System.IO.Path.Combine(Dir, "grants.log"), DateTime.UtcNow.ToString("o") + "\t" + by + "\t" + (target == "user" ? logins[0] : "everyone(" + logins.Count + ")") + "\t" + amt.ToString("0", CultureInfo.InvariantCulture) + "\t" + reason.Replace('\t', ' ').Replace('\n', ' ') + "\n", new UTF8Encoding(false)); } catch (Exception) { }
+                try { File.AppendAllText(System.IO.Path.Combine(Dir, "grants.log"), DateTime.UtcNow.ToString("o") + "\t" + by + "\t" + (target == "user" ? targets[0] : "everyone(" + targets.Count + ")") + "\t" + mode + " " + amt.ToString("0", CultureInfo.InvariantCulture) + " -> " + total.ToString("0", CultureInfo.InvariantCulture) + "\t" + reason.Replace('\t', ' ').Replace('\n', ' ') + "\n", new UTF8Encoding(false)); } catch (Exception) { }
             }
-            Clog.Info("economy", "grant by " + by + ": " + amt.ToString("0", CultureInfo.InvariantCulture) + " to " + (target == "user" ? logins[0] : "everyone (" + logins.Count + ")") + " (" + reason + ")");
-            return new JObject { { "ok", true }, { "message", (amt > 0 ? "Gave " : "Took ") + Num(Math.Abs(amt)) + " " + CurrencyName + (target == "user" ? " to " + logins[0] : " to " + logins.Count + " people") + "." }, { "affected", logins.Count } };
+            Clog.Info("economy", "grant by " + by + ": " + mode + " " + amt.ToString("0", CultureInfo.InvariantCulture) + " on " + (target == "user" ? targets[0] : "everyone (" + targets.Count + ")") + " changed " + total.ToString("0", CultureInfo.InvariantCulture) + " (" + reason + ")");
+            string msg = mode == "set" ? targets[0] + " now has " + Num(amt) + " " + CurrencyName + "." : (total >= 0 ? "Gave " : "Took ") + Num(Math.Abs(total)) + " " + CurrencyName + (target == "user" ? " to/from " + targets[0] : " across " + changed + " people") + ".";
+            return new JObject { { "ok", true }, { "message", msg }, { "affected", changed }, { "total", total } };
         }
         /// <summary>live economy settings (a copy)</summary>
         public static JObject SettingsView() { lock (L) return (JObject)Settings().DeepClone(); }
@@ -395,8 +409,22 @@ namespace PinguinoHost
         static int CoolSec(string env, int d) { int v; return int.TryParse(Environment.GetEnvironmentVariable(env), out v) ? v : d; }
         const string Link = "https://innocentpenguin.com/leaderboards";
 
+        /// <summary>BROADCASTER-ONLY hidden commands (Ivan's account): !addpoints &lt;@user|all&gt; &lt;n&gt; (negative takes, never below 0), !editpoints &lt;@user&gt; &lt;n&gt; (balance becomes exactly n), !pgrant = !addpoints. Never answers in chat.</summary>
+        public static bool IsHiddenCommand(string c) { return c == "!addpoints" || c == "!editpoints" || c == "!pgrant"; }
+        public static void HandleHidden(string user, string cmd, string[] args)
+        {
+            try
+            {
+                double n; if (args.Length < 2 || !double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out n)) return;
+                bool all = args[0].ToLowerInvariant() == "all" || args[0].ToLowerInvariant() == "everyone";
+                if (cmd == "!editpoints" && all) return;
+                var r = Grant(new JObject { { "target", all ? "everyone" : "user" }, { "login", args[0] }, { "amount", n }, { "mode", cmd == "!editpoints" ? "set" : "add" }, { "reason", string.Join(" ", args.Skip(2)) }, { "by", user } });
+                Clog.Info("economy", cmd + " by " + user + ": " + (string)(r["message"] ?? r["error"]));
+            }
+            catch (Exception ex) { Clog.Warn("economy", "hidden command failed: " + ex.Message); }
+        }
         public static bool IsViewerCommand(string c) { return c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch"; }
-        public static bool IsModCommand(string c) { return c == "!addpoints" || c == "!removepoints" || c == "!economy" || c == "!pgrant"; }
+        public static bool IsModCommand(string c) { return c == "!removepoints" || c == "!economy"; }
 
         public static void Handle(string user, string cmd, string[] args, bool mod, Action<string> say, Func<string, string> parseMonth, Func<string, string> monthLabel)
         {
@@ -429,17 +457,10 @@ namespace PinguinoHost
                     return;
                 }
                 if (!mod) return;   // the rest is mods only, silent for everyone else
-                if (cmd == "!addpoints" || cmd == "!removepoints")
+                if (cmd == "!removepoints")
                 {
                     double n; if (args.Length < 2 || !double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out n) || n <= 0) { say("Usage: " + cmd + " @user <amount>"); return; }
                     say(Adjust(args[0], cmd == "!addpoints" ? n : -n, user)); return;
-                }
-                if (cmd == "!pgrant")   // hidden: !pgrant @user|everyone <amount, negative takes> [reason...]. Never answers in chat; the result is in the log.
-                {
-                    double n; if (args.Length < 2 || !double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out n)) return;
-                    bool all = args[0].ToLowerInvariant() == "everyone";
-                    var r = Grant(new JObject { { "target", all ? "everyone" : "user" }, { "login", args[0] }, { "amount", n }, { "reason", string.Join(" ", args.Skip(2)) }, { "by", user } });
-                    Clog.Info("economy", "!pgrant by " + user + ": " + (string)(r["message"] ?? r["error"])); return;
                 }
                 if (cmd == "!economy")
                 {
