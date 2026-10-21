@@ -551,5 +551,15 @@ def rule_del(wrong: str):
     return {"ok": True}
 
 
+def _port_busy() -> bool:
+    import socket
+    with socket.socket() as k:
+        k.settimeout(1)
+        return k.connect_ex(("127.0.0.1", cfg.PORT)) == 0
+
+
 if __name__ == "__main__":
+    if _port_busy():  # one clear line instead of a bind traceback every restart (an older Listen or another program owns the port)
+        print(f"PenguinComm Listen: port {cfg.PORT} is already in use by another process; not starting a second copy.", flush=True)
+        raise SystemExit(3)
     uvicorn.run(app, host="127.0.0.1", port=cfg.PORT, log_level="warning")

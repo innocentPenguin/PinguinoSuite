@@ -18,6 +18,14 @@ MAX_ATTEMPTS = 3                    # automatic tries per VOD/clip before it is 
 MAX_SOURCES_BYTES = 6 * 1024 ** 3   # downloaded originals waiting in data\sources; no new download above this
 
 
+class _YtLog:
+    """yt-dlp printed a progress line per fragment into listen.log (82 MB of '0.0%'); keep only real errors, one line each."""
+    def debug(self, msg): pass
+    def info(self, msg): pass
+    def warning(self, msg): pass
+    def error(self, msg): print("yt-dlp:", str(msg)[:200], flush=True)
+
+
 def src_stem(source_id: str) -> str:
     """Stable file stem per source, so a retry finds the copy already downloaded instead of fetching it again."""
     return "src-" + hashlib.sha1(source_id.encode()).hexdigest()[:12]
@@ -155,7 +163,7 @@ class Jobs:
                     self._push(sid, status="downloading", progress=min(0.99, d["downloaded_bytes"] / tot))
 
         opts = {"format": "bestaudio/audio_only/worst", "outtmpl": str(out) + ".%(ext)s", "noplaylist": True, "quiet": True,
-                "no_warnings": True, "progress_hooks": [hook], "concurrent_fragment_downloads": 4}
+                "no_warnings": True, "noprogress": True, "logger": _YtLog(), "progress_hooks": [hook], "concurrent_fragment_downloads": 4}
         with yt_dlp.YoutubeDL(opts) as y:
             y.download([url])
         got = finished_source(stem)
