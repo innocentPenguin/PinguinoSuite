@@ -1050,25 +1050,27 @@ const WG_MOCK=[
   {key:'autoReopen',label:'Re-open entry after a spin',type:'bool',value:false,default:false},
   {key:'holdTimeSec',label:'Hold the result on screen (s)',type:'number',min:0,max:120,step:1,value:15,default:15},
   {key:'teamSize',label:'Team size',type:'number',min:1,max:4,step:1,value:2,default:2},
-  {key:'joinFeedSec',label:'Join / leave feed duration (s)',type:'number',min:1,max:2,step:0.5,value:1.5,default:1.5,unit:'s',help:'How long each join or leave line shows on the overlay.'},
+  {key:'joinFeedSec',label:'Join / leave feed duration (s)',type:'number',min:0.5,max:10,step:0.5,value:1.5,default:1.5,unit:'s',help:'How long each join or leave line shows on the overlay.'},
   {key:'showSignedUp',label:'Show "N signed up"',type:'bool',value:true,default:true}]},
  {id:'queue',title:'Queue',help:'The customs / lobby queue.',fields:[
   {key:'open',label:'Queue is open',type:'bool',value:true,default:true},
-  {key:'strikes',label:'Strikes before blocked (half strikes count 0.5)',type:'number',min:0,max:10,step:0.5,value:3,default:3},
   {key:'recycler',label:'Recycler (move skipped people to the back)',type:'bool',value:true,default:true},
-  {key:'inactivityMinutes',label:'Inactivity timeout (minutes)',type:'number',min:1,max:120,step:1,value:15,default:15},
-  {key:'incomplete',label:'Allow incomplete entries',type:'bool',value:false,default:false}]},
+  {key:'inactivityMinutes',label:'Inactivity timeout (minutes)',type:'number',min:0,max:240,step:1,value:15,default:15,help:'0 = never time out.'}]},
  {id:'gambling',title:'Gambling',help:'Chat games that spend points.',fields:[
   {key:'winChance',label:'Win chance (%)',type:'number',min:1,max:99,step:1,value:45,default:45,unit:'%'},
   {key:'payout',label:'Payout multiplier',type:'number',min:1,max:10,step:0.1,value:2,default:2,unit:'x'},
-  {key:'min',label:'Minimum bet',type:'number',min:1,max:100000,step:1,value:10,default:10},
-  {key:'max',label:'Maximum bet (empty = none)',type:'number',min:1,max:1000000,step:1,value:null,default:null,optional:true},
+  {key:'pairPayout',label:'Slots pair payout (x)',type:'number',min:1,max:100,step:0.5,value:2,default:2},
+  {key:'triplePayout',label:'Slots triple payout (x)',type:'number',min:1,max:1000,step:1,value:10,default:10},
+  {key:'jackpotPayout',label:'Slots jackpot payout (x)',type:'number',min:1,max:10000,step:1,value:50,default:50},
+  {key:'minBet',label:'Minimum bet',type:'number',min:1,max:100000,step:1,value:10,default:10},
+  {key:'maxBet',label:'Maximum bet (empty = none)',type:'number',min:1,max:1000000,step:1,value:null,default:null,optional:true},
   {key:'cooldownSec',label:'Cooldown per viewer (s)',type:'number',min:0,max:3600,step:1,value:30,default:30},
-  {key:'slotsOn',label:'Slots enabled',type:'bool',value:true,default:true},
-  {key:'coinflipOn',label:'Coin flip enabled',type:'bool',value:true,default:true}]},
+  {key:'slotsEnabled',label:'Slots enabled',type:'bool',value:true,default:true},
+  {key:'duelEnabled',label:'Duels enabled',type:'bool',value:true,default:true},
+  {key:'giveEnabled',label:'!give enabled',type:'bool',value:true,default:true}]},
  {id:'alias',title:'Aliases',help:'Name matching for the wheel / queue.',fields:[
-  {key:'nearMiss',label:'Accept near-miss names (typos)',type:'bool',value:true,default:true},
-  {key:'aliases',label:'Use saved aliases',type:'bool',value:true,default:true}]}];
+  {key:'enabled',label:'Use saved aliases',type:'bool',value:true,default:true},
+  {key:'didYouMean',label:'Suggest "did you mean" for typos',type:'bool',value:true,default:true}]}];
 const wgKind=v=>typeof v==='boolean'?'bool':typeof v==='number'?'number':Array.isArray(v)?'list':'text';
 function wgEconomy(j){const st=j.settings||{};return {id:'economy',title:'Economy',help:'Points and watch time ('+(j.people||0)+' people). Saved straight to the Host.',real:true,fields:Object.keys(st).map(k=>({key:k,label:k.replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase()),type:wgKind(st[k]),value:st[k],default:st[k],step:wgKind(st[k])==='number'?(Number.isInteger(st[k])?1:0.1):undefined,min:0}))}}
 async function loadWheel(){
