@@ -47,6 +47,17 @@ try:
     time.sleep(2.5)
     chk('a different line still goes out', 'other line' in chats, chats)
     api('/api/timers', {'id': 'three', 'enabled': False})
+    # ---- the newer send paths (Master View customs/mod, wheel POSTs, Suite !run) go through the same guard
+    chats.clear()
+    for _ in range(3): api('/api/customs/mod', {'action': 'queue', 'value': 'close'})
+    time.sleep(1.5)
+    closes = [m for m in chats if 'queue' in m.lower() and ('clos' in m.lower())]
+    print('   customs/mod x3 chat lines:', closes)
+    chk('customs/mod "queue close" x3 sends no repeated chat line (this harness has no Core, so it proves the endpoint adds none of its own)', len(closes) <= 1, closes)
+    chats.clear()
+    for _ in range(3): api('/api/wheel/new', {})
+    time.sleep(1.5)
+    chk('wheel/new x3 sends no repeated chat line (same limit: the Host adds none of its own)', len(chats) == len(set(m.lower().replace(' ', '') for m in chats)), chats)
     host.kill(); time.sleep(1); chats.clear()
     host = start('0')
     api('/api/timers', {'globalGapSec': 0})
