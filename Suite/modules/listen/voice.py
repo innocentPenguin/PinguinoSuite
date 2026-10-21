@@ -105,6 +105,18 @@ def load_cmds():
     return d
 
 
+# HARD RULE (Ivan): a voice command must never be able to start or stop the stream or touch OBS. Only these modules may be called,
+# and any path that even looks like stream/OBS/recording control is refused, whatever the saved command file says.
+CALLABLE_MODULES = {"spotify", "voice"}
+_FORBIDDEN = re.compile(r"stream|obs|live|record|broadcast|golive|go-live|go_live|scene|start", re.I)
+
+
+def action_allowed(a: dict) -> bool:
+    if a.get("type") == "marker":
+        return True
+    return str(a.get("module", "")).lower() in CALLABLE_MODULES and not _FORBIDDEN.search(str(a.get("path", "")))
+
+
 def save_cmds(d):
     clean = {"enabled": bool(d.get("enabled")), "wake_word": learn.norm(str(d.get("wake_word", ""))), "cooldown_s": max(1, min(600, int(d.get("cooldown_s", 8)))),
              "max_unsure": float(d.get("max_unsure", 0.6)), "commands": []}
@@ -119,6 +131,8 @@ def save_cmds(d):
             a["label"] = str(act.get("label") or ph)[:40]
         else:
             a.update({"module": str(act.get("module", ""))[:30], "path": str(act.get("path", ""))[:200], "body": act.get("body") if isinstance(act.get("body"), (dict, list)) else {}})
+        if not action_allowed(a):
+            continue  # never store a command that could reach the stream or OBS
         clean["commands"].append({"id": re.sub(r"[^\w-]", "", str(c.get("id") or f"c{i}"))[:30] or f"c{i}", "phrase": ph, "enabled": bool(c.get("enabled")), "action": a})
     with _lock:
         CMD_FILE.write_text(json.dumps(clean, indent=2), "utf8")
@@ -195,6 +209,8 @@ def run_action(cmd, text, seg, log):
     if a["type"] == "marker":
         _marker(a.get("label", cmd["phrase"]), text, seg)
         return {"ok": True, "detail": "marker saved"}
+    if not action_allowed(a):
+        return {"ok": False, "detail": "refused: voice commands may never control the stream or OBS"}
     core = os.environ.get("PINGUINO_CORE_URL", "http://127.0.0.1:8760")
     tok = os.environ.get("PINGUINO_API_TOKEN", "")
     body = json.loads(json.dumps(a.get("body") or {}).replace("{channel}", cfg.settings().get("channel", "").rstrip("_") or "streamer"))
