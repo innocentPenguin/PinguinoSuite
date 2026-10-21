@@ -74,6 +74,27 @@ class SongifyTests(unittest.TestCase):
         self.assertEqual([x["title"] for x in log["lastHour"]], ["Song 5"])
         self.assertEqual((log["withdrawn"][0]["reason"], log["withdrawn"][0]["user"]), ("oops", "ann"))
 
+    def test_host_sub_tier_fields_drive_bonus_queues(self):
+        import server
+        server.engine = self.e
+        self.e.save_settings({"per_user_limit": 1, "bonus_t1": 1, "bonus_t2": 2, "bonus_t3": 4, "bonus_vip": 3})
+
+        def n_accepted(user, **host):
+            ok = 0
+            for i in range(10, 20):
+                r = server.p_chat_command(None, {"command": "sr", "args": f"song {i + hash(user) % 5 * 0}", "user": user, "role": "viewer", **host})
+                ok += bool(r["ok"])
+            return ok
+        self.assertEqual(n_accepted("v0", subTier=0), 1)
+        self.e.queue.clear()
+        self.assertEqual(n_accepted("t1", isSub=True, subTier=1), 2)
+        self.e.queue.clear()
+        self.assertEqual(n_accepted("t2", isSub=True, subTier=2), 3)
+        self.e.queue.clear()
+        self.assertEqual(n_accepted("t3", isSub=True, subTier=3000), 5)
+        self.e.queue.clear()
+        self.assertEqual(n_accepted("vv", isVip=True, subTier=0), 4)
+
     def test_srban_srunban(self):
         self.assertEqual(self.e.chat("ann", "!srban troll", ("viewer",))["code"], "denied")      # viewers can't
         self.assertTrue(self.sr("troll", 2)["ok"])

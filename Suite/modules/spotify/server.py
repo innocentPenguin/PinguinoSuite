@@ -2,10 +2,10 @@
 UI: /   Overlay (OBS browser source): /overlay   API: see Docs/SPOTIFY.md
 INDEX (keep in step when moving code)
 What: stdlib HTTP server (127.0.0.1:8771), routes, Host/Origin/token guards, background loop.
-  Guards/handler: host_ok:44, origin_ok:50, token_ok:54, H:73, do_GET:118, do_POST:121, loop:478, main:495
-  GET: g_status:170, g_state:174, g_overlay:178, g_prestream:182, g_search:192, g_devices:197, g_setup:202, g_login:209, g_callback:219, g_queue_public:241, g_schema:443
-  POST queue: p_add:275, p_remove:292, p_move:299, p_play_next:306, p_play_now:313, p_clear:338, p_undo:345, p_control:352, p_start:357
-  POST chat/other: p_chat:362, p_chat_command:375, p_settings:271, p_preset:427, p_block:456, p_blocklist_import:465, p_site:407, p_live_auto:412, p_live_stop:416, p_test_key:400
+  Guards/handler: host_ok:44, origin_ok:50, token_ok:54, H:73, do_GET:118, do_POST:121, loop:502, main:519
+  GET: g_status:170, g_state:174, g_overlay:178, g_prestream:182, g_search:192, g_devices:197, g_setup:219, g_login:226, g_callback:236, g_queue_public:258, g_schema:467
+  POST queue: p_add:297, p_remove:314, p_move:321, p_play_next:328, p_play_now:335, p_clear:360, p_undo:367, p_control:374, p_start:379
+  POST chat/other: p_chat:384, p_chat_command:397, p_settings:293, p_preset:451, p_block:480, p_blocklist_import:489, p_site:431, p_live_auto:436, p_live_stop:440, p_test_key:424
 Related: engine.py, config_schema.py, static/*.html, Docs/SPOTIFY.md (route table)
 """
 import hmac
@@ -34,7 +34,7 @@ START = time.time()
 TAURI_ORIGINS = ("tauri://localhost", "http://tauri.localhost", "https://tauri.localhost")
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 PAGES = {"/": "static/index.html", "/overlay": "static/overlay.html",
-         "/overlay/queue": "static/queue.html", "/queue": "static/queue.html"}
+         "/overlay/queue": "static/queue.html", "/queue": "static/queue.html", "/player": "static/player.html"}
 
 auth = Auth()
 engine = Engine(Client(auth), auth)
@@ -199,6 +199,23 @@ def g_devices(h, q):
     return {"devices": engine.devices}
 
 
+def g_player_token(h, q):
+    """Access token for the Web Playback SDK in /player. Guarded harder than other GETs: never cross-site, never logged, never cached."""
+    sfs = (h.headers.get("sec-fetch-site") or "").lower()
+    origin = h.headers.get("origin")
+    if sfs in ("cross-site", "same-site") or (origin and not origin_ok(origin)):
+        return h._send(403, {"ok": False, "error": "forbidden"})
+    same = sfs in ("same-origin", "none") or (bool(origin) and origin.split("://", 1)[-1] == h.headers.get("host"))
+    if not (same or token_ok(h.headers)) or (not same and not os.environ.get("PINGUINO_API_TOKEN")):
+        return h._send(401, {"ok": False, "error": "token required"})
+    if not engine.settings["player_native"]:
+        return h._send(409, {"ok": False, "error": "built-in player is off", "code": "PLAYER_OFF"})
+    tok = auth.access_token()
+    if "streaming" not in (auth.tokens.get("scope") or "").split():
+        return h._send(409, {"ok": False, "error": "reconnect Spotify once to allow the built-in player", "code": "NEEDS_REAUTH"})
+    return {"ok": True, "access_token": tok, "expires_in": auth.seconds_left()}
+
+
 def g_setup(h, q):
     return {"redirect_uri": REDIRECT, "client_id": auth.client_id, "connected": auth.connected(), "me": engine.me,
             "dashboard": "https://developer.spotify.com/dashboard", "port": PORT,
@@ -244,7 +261,7 @@ def g_queue_public(h, q):
 
 
 GET = {"/api/queue.json": g_queue_public, "/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
-       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/song-log": lambda h, q: engine.song_log(int(q.get("limit") or 50), int(q.get("minutes") or 60)), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/setup": g_setup, "/callback": g_callback, "/auth/login": g_login}
+       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/song-log": lambda h, q: engine.song_log(int(q.get("limit") or 50), int(q.get("minutes") or 60)), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/setup": g_setup, "/api/player": lambda h, q: engine.player_info(), "/api/player-token": g_player_token, "/callback": g_callback, "/auth/login": g_login}
 
 
 # ---- POST routes
@@ -266,6 +283,11 @@ def p_auth_start(h, b):
 def p_disconnect(h, b):
     auth.disconnect()
     return {"ok": True}
+
+
+def p_player_status(h, b):
+    engine.player_report(b)
+    return {"ok": True, "player": engine.player_info()}
 
 
 def p_settings(h, b):
@@ -381,12 +403,14 @@ def p_chat_command(h, b):
     roles = set(ROLE_MAP.get(str(b.get("role", "viewer")).lower(), []))
     if b.get("isMod"):
         roles.add("mod")
-    if b.get("isSub"):
+    tier = str(b.get("subTier") or "").strip().lower().lstrip("t")      # 1/2/3 or Twitch's 1000/2000/3000; 0 = not a sub
+    tier = {"1000": "1", "2000": "2", "3000": "3"}.get(tier, tier)
+    if b.get("isSub") or tier in ("1", "2", "3"):
         roles.add("sub")
-        tier = str(b.get("subTier") or "").strip().lower().lstrip("t")      # 1/2/3 or Twitch's 1000/2000/3000
-        tier = {"1000": "1", "2000": "2", "3000": "3"}.get(tier, tier)
         if tier in ("1", "2", "3"):
             roles.add("sub_t" + tier)
+    if b.get("isVip"):
+        roles.add("vip")
     src = str(b.get("source") or ("voice" if b.get("silent") else "chat"))[:20]
     r = engine.chat(user, f"{engine.settings['prefix']}{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")))
     if not r["handled"]:
@@ -469,7 +493,7 @@ def p_blocklist_import(h, b):
     return {"ok": True, **engine.import_blocklist(text[:200000])}
 
 
-POST = {"/api/blocklist/import": p_blocklist_import, "/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
+POST = {"/api/player/status": p_player_status, "/api/blocklist/import": p_blocklist_import, "/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
         "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/shuffle": p_shuffle, "/api/queue/add_context": p_add_context, "/api/presets/save": p_user_preset, "/api/presets/delete": p_user_preset_del, "/api/queue/remove_user": p_remove_user, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
         "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/preset": p_preset, "/api/settings/reset": p_reset, "/api/msgs/preview": p_msg_preview, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
