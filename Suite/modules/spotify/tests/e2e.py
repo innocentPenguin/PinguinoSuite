@@ -283,6 +283,29 @@ def main():
     T("host contract: unknown command", cmd("bogus")["error"] == "unknown command")
     T("host contract: alias songqueue", cmd("songqueue")["ok"] is True)
     T("host contract: missing user", post("/api/chat-command", {"command": "sr"}, headers={"Origin": ""})[1]["ok"] is False)
+    # ---------------- bonus queues by sub tier (Host sends subTier / isVip), srban, song log
+    post("/api/settings", {"per_user_limit": 1, "bonus_t1": 1, "bonus_t2": 2, "bonus_t3": 4, "bonus_vip": 3})
+    nxt = iter(range(21, 29))   # 1 + 2 + 3 accepted + spare
+
+    def fill(user, **host):
+        ok, n = 0, next(nxt)
+        for _ in range(6):
+            r = cmd("sr", f"song {n}", user, **host)
+            if r["ok"]:
+                ok += 1
+                n = next(nxt, 20)          # a fresh song only after an accepted one; rejections retry the same
+        return ok
+    T("tier: viewer gets the base limit", fill("tv0", subTier=0) == 1)
+    T("tier: Tier 1 sub gets base + bonus_t1", fill("tt1", isSub=True, subTier=1) == 2)
+    T("tier: Tier 2 sub gets base + bonus_t2", fill("tt2", isSub=True, subTier=2) == 3)
+    T("tier: limit reply names the limit", cmd("sr", "song 20", "tv0", subTier=0)["error"] == "limit")
+    post("/api/settings", {"per_user_limit": 2, "bonus_t1": 2, "bonus_t2": 3, "bonus_t3": 4, "bonus_vip": 2})
+    T("srban: viewer cannot ban", cmd("srban", "tbad", "tv0")["error"] == "denied")
+    T("srban: mod bans", cmd("srban", "@TBad", "mod1", "mod")["ok"] is True and "tbad" in state()["settings"]["blocked_users"])
+    T("srban: banned viewer refused", cmd("sr", "song 20", "tbad")["error"] == "user_blocked")
+    T("srunban: mod lifts", cmd("srunban", "tbad", "mod1", "mod")["ok"] is True and "tbad" not in state()["settings"]["blocked_users"])
+    sl = get("/api/song-log")[1]
+    T("song-log shape", {"now", "recent", "lastHour", "skipped", "withdrawn"} <= set(sl) and all("outcome" in r for r in sl["recent"]))
     chat("mod1", "!sr close", ["mod"])
     cur = state()["playback"]["track"]["name"]
     r = cmd("skip", "", "ivan", "broadcaster", isMod=True, silent=True)

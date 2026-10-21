@@ -130,6 +130,7 @@ SCHEMA = [
     {"id": "fair", "title": "Order & priority", "items": [
         ("fair_queue", "bool", True, "Fair queue", "Round-robin: everyone's first request before anyone's second. Off = plain first-come order."),
         ("sub_priority", "bool", True, "Subs / VIPs go first", "Within the same round subs and VIPs are ahead."),
+        ("sub_tier_priority", "bool", True, "Higher sub tiers first", "Within the same round Tier 3 subs go ahead of Tier 2, ahead of Tier 1 (needs 'Subs / VIPs go first')."),
         ("redeem_priority", "bool", True, "Channel-point requests go first", "Redeem requests jump to the front of their round."),
     ]},
     {"id": "skip", "title": "Skipping", "items": [

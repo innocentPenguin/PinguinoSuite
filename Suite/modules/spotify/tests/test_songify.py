@@ -95,6 +95,13 @@ class SongifyTests(unittest.TestCase):
         self.e.queue.clear()
         self.assertEqual(n_accepted("vv", isVip=True, subTier=0), 4)
 
+    def test_higher_sub_tiers_rank_first_in_a_round(self):
+        for user, roles, n in (("v", {"viewer"}, 3), ("a", {"sub", "sub_t1"}, 4), ("c", {"sub", "sub_t3"}, 5), ("b", {"sub", "sub_t2"}, 6)):
+            self.assertTrue(self.e.chat(user, f"!sr song {n}", roles)["ok"])
+        self.assertEqual([i["requester"] for i in self.e.queue.items], ["c", "b", "a", "v"])
+        self.e.save_settings({"sub_tier_priority": False})
+        self.assertEqual(rules.tier_for(self.e.settings, {"sub", "sub_t3"}), 1)
+
     def test_srban_srunban(self):
         self.assertEqual(self.e.chat("ann", "!srban troll", ("viewer",))["code"], "denied")      # viewers can't
         self.assertTrue(self.sr("troll", 2)["ok"])

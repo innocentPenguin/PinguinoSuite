@@ -89,6 +89,9 @@ def tier_for(settings, roles, redeem=False, user=""):
     if redeem and settings["redeem_priority"]:
         return TIER_REDEEM
     if settings["sub_priority"] and (is_sub(roles) or _listed(settings["priority_users"], user)):
+        n = sub_tier(roles)
+        if settings["sub_tier_priority"] and n > 1:
+            return TIER_SUB + 0.1 * (n - 1)          # Tier 2 / Tier 3 subs rank just ahead of Tier 1 within the same round
         return TIER_SUB
     return TIER_NORMAL
 

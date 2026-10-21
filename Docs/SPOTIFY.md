@@ -104,3 +104,6 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 - **No repeats:** `dup_cooldown_min` (60) already blocks anything played in the last hour; new `skip_cooldown_min` (180) blocks songs that were skipped (reply `dup_skipped`).
 - **Bonus queues:** extra request slots on top of `per_user_limit`: `bonus_t1/t2/t3` (defaults 2/3/4) for Tier 1/2/3 subs and `bonus_vip`; the best one applies. `limit_sub`/`limit_vip` still set an exact total. The old `sub_extra` migrates into all bonus settings.
 - **Sub tier input:** `/api/chat-command` accepts `subTier` (1/2/3 or 1000/2000/3000) next to `isSub`; `/api/chat` accepts roles `sub_t1|sub_t2|sub_t3`. Plain `sub` = Tier 1. The Host must send the tier for T2/T3 to count.
+
+## Cycle 6: tier order
+`sub_tier_priority` (default on): within a round Tier 3 subs rank ahead of Tier 2, ahead of Tier 1 (item `tier` 1.2 / 1.1 / 1; redeems 2 still go first). Needs `sub_priority`. The Host's `subTier`/`isVip` fields are covered by e2e (viewer / T1 / T2 limits, !srban, /api/song-log).

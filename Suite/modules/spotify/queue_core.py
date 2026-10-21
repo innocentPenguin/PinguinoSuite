@@ -21,7 +21,7 @@ def new_item(track, requester="", source="streamer", tier=0):
     return {"id": uuid.uuid4().hex[:10], "uri": track["uri"], "track_id": track.get("id", ""),
             "name": track.get("name", ""), "artists": list(track.get("artists", [])), "album": track.get("album", ""),
             "art": track.get("art", ""), "duration_ms": int(track.get("duration_ms", 0)), "explicit": bool(track.get("explicit")),
-            "requester": requester, "source": source, "tier": int(tier), "added": time.time(),
+            "requester": requester, "source": source, "tier": (lambda t: int(t) if t == int(t) else round(t, 2))(float(tier)), "added": time.time(),
             "locked": source != "viewer", "pushed": False, "skip_on_play": False, "key": None}
 
 
