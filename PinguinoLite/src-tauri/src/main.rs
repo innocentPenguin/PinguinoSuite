@@ -4,6 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod mainwin;
+mod replays;
 
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -92,7 +93,7 @@ pub fn state_dir() -> PathBuf {
 }
 
 /// The suite root (folder holding Suite/suite/suite.py): env, then <state dir>/suite_root.txt, then walking up from the exe / source folder.
-fn suite_root() -> Option<PathBuf> {
+pub fn suite_root() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("PINGUINO_SUITE_ROOT") {
         return Some(PathBuf::from(p));
     }
@@ -119,7 +120,7 @@ fn suite_root() -> Option<PathBuf> {
 }
 
 /// The contract folder shared with PinguinoLink: env PINGUINO_LITE_DIR, else <suite root>\Data\lite, else <state dir>\lite.
-fn lite_dir() -> PathBuf {
+pub fn lite_dir() -> PathBuf {
     if let Ok(p) = std::env::var("PINGUINO_LITE_DIR") {
         return PathBuf::from(p);
     }
@@ -291,8 +292,9 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .manage(Link(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target])
+        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, replays::replay_scan, replays::replay_index])
         .setup(|app| {
+            replays::start();
             // Splash (the lightning bolt) first; the main window is placed and shown when it closes.
             let a = app.handle().clone();
             let splash = WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
