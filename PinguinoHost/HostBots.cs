@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
 using Newtonsoft.Json.Linq;
@@ -62,7 +62,7 @@ namespace PinguinoHost
         public static void NoteLog(string action, string level, string text)
         { text = text ?? ""; LastError[action ?? "host"] = new[] { DateTime.UtcNow.ToString("o"), level + ": " + (text.Length > 300 ? text.Substring(0, 300) : text) }; }
 
-        /// <summary>The ONE private-match name/password: helper_settings.json (HelperPinguino reads it, mods change it with !lobbyname / !lobbypass, !pm shows it).</summary>
+        /// <summary>The ONE private-match name: helper_settings.json (HelperPinguino reads it, mods change it with !lobbyname, !pm shows the NAME only; a stored password is never printed).</summary>
         public static string PrivateMatchLine()
         {
             var j = LoadFile("helper_settings.json"); string n = ((string)j["LobbyName"] ?? "").Trim();   // the bots never keep or say a lobby password: name only

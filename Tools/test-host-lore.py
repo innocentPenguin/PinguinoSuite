@@ -25,7 +25,7 @@ res = []
 def chk(n, ok, extra=None):
     res.append((n, bool(ok)))
     if not ok: print('   extra:', n, '|', extra)
-json.dump({'LobbyName': 'peng7', 'LobbyPassword': ''}, open(os.path.join(d, 'helper_settings.json'), 'w'))
+json.dump({'LobbyName': 'peng7', 'LobbyPassword': 'SeCr3tPw9'}, open(os.path.join(d, 'helper_settings.json'), 'w'))
 host = start()
 try:
     seed = json.load(open(os.path.join(suite, 'PinguinoB0t', 'channel_lore_seed.json'), encoding='utf-8')); ids = {e['id'] for e in seed['entries']}
@@ -51,6 +51,7 @@ try:
     chk('!bits stays ours (the bits board), not the clip', not any('clip' in x for x in ask(host, 'viewer1: !bits')))
     r = ask(host, 'viewer1: !gay'); chk('the exact !command of an unsafe entry still works', r != [], r)
     r = ask(host, 'viewer1: !pm'); chk('!pm reads the one shared private-match setting', r == ['Private match -> Name: peng7.'], r)
+    chk('!pm never prints a stored lobby password', not any('SeCr3tPw9' in x for x in r), r)
     # ---- natural questions ----
     r = ask(host, 'viewer3: what pc does penguin have?'); chk('"what pc does penguin have?" -> specs + streaming pc', r and 'Ryzen 9 7950X3D' in r[0] and r[0].startswith('@viewer3 '), r)
     r = ask(host, 'viewer4: what are his specs'); chk('the same entry is rate limited for 90 s', r == [], r)
