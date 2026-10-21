@@ -4,7 +4,11 @@ import net from 'node:net';
 
 const sha = s => crypto.createHash('sha256').update(s).digest('base64');
 
+/** Test safety: with PINGUINO_NEVER_REAL_OBS=1 (set by every *check.mjs) the real OBS port 4455 is never contacted, so no test can go live. */
+function noRealObs(port) { if (process.env.PINGUINO_NEVER_REAL_OBS && Number(port) === 4455) throw new Error('blocked: tests never talk to the real OBS (port 4455)'); }
+
 export function runRequests({ host, port, password }, requests, timeoutMs = 5000) {
+  noRealObs(port);
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://${host}:${port}`);
     const results = [];
@@ -39,6 +43,7 @@ export function runRequests({ host, port, password }, requests, timeoutMs = 5000
 
 // Small helper: one connection, returns each request's responseData.
 export function getData({ host, port, password }, types, timeoutMs = 4000) {
+  noRealObs(port);
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://${host}:${port}`);
     const res = [];
@@ -80,6 +85,7 @@ export const forgetState = () => { cache = { at: 0, key: '', v: null }; };
 
 /** One true sentence about OBS: not running / no password stored / wrong password / fine. Used by pre-stream and the key's Test button. */
 export async function diagnoseObs(conn) {
+  noRealObs(conn.port);
   const addr = `${conn.host}:${conn.port}`;
   const open = await new Promise(res => {
     const sock = net.connect({ host: conn.host, port: conn.port });

@@ -1,4 +1,5 @@
 // Update files shared between two paired PCs (local-only update source). Run: node src/updcheck.mjs
+process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import fs from 'node:fs';

@@ -1,4 +1,5 @@
 // Remote macros through pairing: a CLIENT presses a macro, the paired HUB runs it in a FAKE OBS. Run: node src/remotecheck.mjs
+process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import fs from 'node:fs';

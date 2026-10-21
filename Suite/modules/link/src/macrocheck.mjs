@@ -1,5 +1,6 @@
 // OBS control self-check against a FAKE obs-websocket v5 server (never touches the real OBS or stream).
 // Run: node src/macrocheck.mjs
+process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import os from 'node:os';

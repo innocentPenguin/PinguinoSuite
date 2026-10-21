@@ -1,5 +1,6 @@
 // Cross-platform integration self-check. Run: node src/selfcheck.mjs
 // Starts the server on a spare port and verifies health, token, Origin and Host handling.
+process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import fs from 'node:fs';

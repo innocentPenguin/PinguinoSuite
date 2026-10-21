@@ -1,4 +1,5 @@
 // PinguinoLite contract checks in a temp folder. Run: node src/litecheck.mjs
+process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { createLite, cmpVersion } from './lite.mjs';
 const results = []; const check = (n, ok, x = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${ok ? '' : '  ' + x}`); };

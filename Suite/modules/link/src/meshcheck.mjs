@@ -1,5 +1,6 @@
 // Mesh self-check: two Link instances on this PC pair, exchange messages, unpair. Run: node src/meshcheck.mjs
 // Uses PINGUINO_MESH_TEST=1 (allows loopback peers) and fake cores; touches no real config, port 7777 or Suite process.
+process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import os from 'node:os';

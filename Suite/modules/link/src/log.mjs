@@ -24,6 +24,7 @@ export function log(level, source, msg) {
   const line = JSON.stringify({ ts: Date.now() / 1000, module: 'link', level, source, msg: String(msg).slice(0, 2000) });
   if (level !== 'debug') (level === 'info' ? console.log : console.error)(`[${level}] ${source}: ${msg}`);
   try {
+    if (process.env.PINGUINO_NEVER_REAL_OBS && !process.env.PINGUINO_DATA_DIR) return;   // in-process tests must not write to the real Console
     if (!ready) { fs.mkdirSync(DIR, { recursive: true }); ready = true; }
     fs.appendFileSync(FILE, line + '\n');
   } catch {}   // logging must never break the service
