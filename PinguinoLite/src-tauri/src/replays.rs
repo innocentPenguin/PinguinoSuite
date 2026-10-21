@@ -8,6 +8,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Map, Value};
 
+/// Latest activity-gate verdict (RocketLeague.exe running AND a gated Suite activity active). Decides attribution only, never whether we scan.
+static GATE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static SCAN_LOCK: Mutex<()> = Mutex::new(());
 // Seen-state kept in memory so a tick is stat-only; the file on disk is written only when something changes.
 static STATE: Mutex<Option<Map<String, Value>>> = Mutex::new(None);
@@ -152,6 +154,17 @@ pub fn extract(replay: &Value, tw: &TwitchMap, fallback_id: &str) -> Value {
     })
 }
 
+/// Attribution rule: inside a gated activity the winner is auto-set. Outside it (or when the gate can't be read) the result is still written,
+/// but `winner` stays null and the decoded value is kept in `winner_detected` so nothing is lost and nothing is attributed to a session by accident.
+pub fn apply_gate(mut res: Value, gate: bool) -> Value {
+    res["attributed"] = json!(gate);
+    if !gate {
+        res["winner_detected"] = res["winner"].clone();
+        res["winner"] = Value::Null;
+    }
+    res
+}
+
 // ---------- scanning ----------
 
 fn fnv(data: &[u8]) -> String {
@@ -220,7 +233,7 @@ pub fn scan() -> Value {
             let Ok(data) = std::fs::read(&path) else { continue };
             match parse_file(&data) {
                 Ok(rep) => {
-                    let res = extract(&rep, tw.get_or_insert_with(twitch_map), &fnv(&data));
+                    let res = apply_gate(extract(&rep, tw.get_or_insert_with(twitch_map), &fnv(&data)), GATE.load(std::sync::atomic::Ordering::Relaxed));
                     let id = safe_name(res["match_id"].as_str().unwrap_or(""));
                     if id.is_empty() || write_atomic(&root().join("results").join(format!("{id}.json")), &serde_json::to_string_pretty(&res).unwrap_or_default()).is_err() {
                         errors += 1;
@@ -310,36 +323,24 @@ Connection: close
 ")?.1.trim()).ok()
 }
 
-/// Pure pacing rule: fast (3 s) only when Rocket League runs AND a gated activity is active (or was within the last 2 min, or a replay was just found); otherwise slow (30 s).
-pub fn tick_secs(rl: bool, gate: bool, secs_since_gate: Option<u64>, secs_since_new: Option<u64>) -> u64 {
-    let recent = |s: Option<u64>| s.map(|s| s < 120).unwrap_or(false);
-    if rl && (gate || recent(secs_since_gate) || recent(secs_since_new)) { 3 } else { 30 }
-}
-
-/// Background loop. Stat-only ticks; 3 s only inside a gated activity with RocketLeague.exe running, else 30 s (so a replay saved later is still found).
-/// Fail-safe: Host unreachable / state unreadable => slow poll. Reads only the replay folders + loopback Host, writes only the replays folder in the lite dir.
+/// Background loop: ALWAYS a stat-only scan every 3 s (cheap: directory listing + size/mtime, parse only new stable files).
+/// The activity gate (refreshed every 5 s; unreadable Host state = false) only decides whether new results get the winner attributed.
 pub fn start() {
     std::thread::spawn(|| {
-        let (mut last_new, mut last_gate): (Option<std::time::Instant>, Option<std::time::Instant>) = (None, None);
-        let (mut rl, mut gate, mut chk_at) = (false, false, std::time::Instant::now() - Duration::from_secs(60));
+        let mut chk_at = std::time::Instant::now() - Duration::from_secs(60);
         loop {
             if chk_at.elapsed() >= Duration::from_secs(5) {
-                rl = rl_running();
-                gate = rl && customs_state().map(|s| gate_active(&s, GATES_ENABLED)).unwrap_or(false);
-                if gate {
-                    last_gate = Some(std::time::Instant::now());
-                }
+                let g = rl_running() && customs_state().map(|s| gate_active(&s, GATES_ENABLED)).unwrap_or(false);
+                GATE.store(g, std::sync::atomic::Ordering::Relaxed);
                 chk_at = std::time::Instant::now();
             }
-            let r = scan();
-            if r["new"].as_i64().unwrap_or(0) > 0 {
-                last_new = Some(std::time::Instant::now());
-            }
-            let el = |t: Option<std::time::Instant>| t.map(|t| t.elapsed().as_secs());
-            std::thread::sleep(Duration::from_secs(tick_secs(rl, gate, el(last_gate), el(last_new))));
+            let _ = scan();
+            std::thread::sleep(Duration::from_secs(SCAN_EVERY_SECS));
         }
     });
 }
+
+pub const SCAN_EVERY_SECS: u64 = 3;
 
 #[tauri::command]
 pub async fn replay_scan() -> Value {
@@ -411,13 +412,17 @@ mod tests {
     }
 
     #[test]
-    fn pacing() {
-        assert_eq!(tick_secs(true, true, None, None), 3);
-        assert_eq!(tick_secs(true, false, None, None), 30); // RL running but no Suite activity
-        assert_eq!(tick_secs(false, true, None, None), 30); // activity but RL not running
-        assert_eq!(tick_secs(true, false, Some(60), None), 3); // grace after the activity ended
-        assert_eq!(tick_secs(true, false, Some(500), Some(10)), 3); // replay just found
-        assert_eq!(tick_secs(true, false, Some(500), Some(500)), 30);
+    fn gate_only_attributes() {
+        let base = extract(&sample(), &TwitchMap::new(), "x");
+        let on = apply_gate(base.clone(), true);
+        assert_eq!(on["winner"], "blue");
+        assert_eq!(on["attributed"], true);
+        let off = apply_gate(base, false); // gate closed / unreadable: still parsed, not attributed
+        assert_eq!(off["winner"], Value::Null);
+        assert_eq!(off["winner_detected"], "blue");
+        assert_eq!(off["attributed"], false);
+        assert_eq!(off["blue"]["score"], 4);
+        assert_eq!(SCAN_EVERY_SECS, 3);
     }
 
     #[test]

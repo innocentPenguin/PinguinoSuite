@@ -30,7 +30,9 @@ Path: `<lite dir>\replays\results\<match-guid>.json` (written atomically: tmp + 
   "duration_s": 312,
   "blue":   { "score": 4, "players": [ {"name":"we1rdshark2.0","platform":"epic","twitch":"yoohoo15","score":512,"goals":2,"assists":1,"saves":3,"shots":5,"bot":false} ] },
   "orange": { "score": 2, "players": [ ... ] },
-  "winner": "blue|orange|draw|null",
+  "winner": "blue|orange|draw|null",   // null when not attributed (gate closed) or undecidable
+  "attributed": true,                   // gate state at parse time; false => see winner_detected
+  "winner_detected": "blue",            // only present when attributed=false
   "goals": [ {"team":"blue","player":"we1rdshark2.0","t_s":41.2} ],   // t_s only when the header gives frame + fps
   "mvp": "we1rdshark2.0",               // highest in-game Score (ties: null)
   "source": "lite-replay-v1"
@@ -53,7 +55,7 @@ Path: `<lite dir>\replays\results\<match-guid>.json` (written atomically: tmp + 
 4. If Lite runs on a different PC from the Suite, the folder `Data\lite\replays\results` is what has to reach the Suite machine (sync/copy of small JSONs, or an authenticated POST to a Host endpoint 02 defines). Not built now.
 
 ## What step 1 delivers (this session)
-- `src-tauri/src/replays.rs`: scanner thread (stat-only tick every 3 s only while RocketLeague.exe runs AND a gated Suite activity is active (Host GET /api/customs/state: casual, competitive or koth, non-sim, queue open or match live; ranked reserved, off), plus 2 min grace; otherwise 30 s; unreadable state = slow; file must be unchanged across two ticks before parsing; + "Scan now"), dedupe state, boxcars header parse, pure `extract()` (unit-tested), atomic result + index writers.
+- `src-tauri/src/replays.rs`: scanner thread: ALWAYS a stat-only tick every 3 s (no slow mode); a new file is parsed once size+mtime are unchanged across two ticks. The activity gate (RocketLeague.exe running AND Host GET /api/customs/state = casual, competitive or koth, non-sim, queue open or match live; ranked reserved/off; unreadable = closed) only decides attribution: gate open => result `winner` auto-set, `attributed:true`; gate closed => result still written, `winner:null`, decoded value kept in `winner_detected`, `attributed:false`. + "Scan now", dedupe state, boxcars header parse, pure `extract()` (unit-tested), atomic result + index writers.
 - Lite **Replays** page: folders being watched (and whether they exist), the last matches (score, winner, players), "Scan now", honest empty state ("no replay saved yet: in Rocket League, save a replay from the match history").
 - Out of scope now: network-frame data (ball/boost/possession), uploads, site pages, Host endpoint, MMR.
 
