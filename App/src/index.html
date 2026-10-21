@@ -759,6 +759,42 @@ function bindSched(){
   $$('[data-sday]').forEach(c=>c.onclick=()=>{const d=+c.dataset.sday,a=SCH.v.days;a.includes(d)?a.splice(a.indexOf(d),1):a.push(d);SCH.v.days=a.sort();draw(true)});
   g('sch-save').onclick=async()=>{const b={enabled:SCH.v.enabled,slots:g('sch-slots').value.split(/[ ,;]+/).filter(Boolean),days:SCH.v.days,tz:g('sch-tz').value};
     try{SCH.v=await post('/api/prestream/schedule',b);toast('Schedule saved: '+schedText());draw(true)}catch{toast('Could not save the schedule')}}}
+/* ============ Sounds + Replays card (Settings) ============ */
+const SND={v:null,rp:null,err:null,busy:false};
+async function loadSnd(){if(SND.busy)return;SND.busy=true;
+  try{const j=await hostGet('/api/alerts-settings');SND.v=j.ok?j:null;SND.err=j.ok?null:(j.error||'Host said no')}catch{SND.v=null;SND.err='The Host is not answering (is PinguinoHost on?).'}
+  try{const r=await hostGet('/api/replays/settings');SND.rp=r.ok?r:null}catch{SND.rp=null}
+  SND.busy=false;if(route==='settings'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
+const sndKind=k=>({follow:'Follow',sub:'Sub',resub:'Resub',gift:'Gift sub',cheer:'Cheer',raid:'Raid',ban:'Ban'}[k]||k);
+function sndRow(k,o,welcome){o=o||{};const id='sn-'+k;
+  return `<div class="prow" data-sn-row="${k}"><div class="grow"><b>${welcome?'Welcome (first chatter)':esc(sndKind(k))}</b></div>
+    <input type="text" data-sn="${k}:File" value="${esc(o.File||'')}" placeholder="path to a sound file" style="width:210px">
+    <input type="range" min="0" max="1" step="0.05" data-sn="${k}:Volume" value="${o.Volume??0.6}" style="width:90px" title="Volume">
+    ${welcome?`<label class="sm faint">live only ${sw(id+'-live',o.OnlyWhileLive,`data-sn="${k}:OnlyWhileLive"`)}</label>${sw(id+'-en',o.Enabled!==false,`data-sn="${k}:Enabled"`)}`:''}
+    <button class="sm" data-sn-test="${k}">Test</button></div>`}
+function sndCard(){
+  if(!SND.v&&!SND.err){loadSnd();return '<div class="sm faint">Loading…</div>'}
+  if(!SND.v)return `<div class="sm faint">${esc(SND.err)}</div><div class="row" style="margin-top:8px"><button class="sm" id="sn-retry">Retry</button></div>`;
+  const st=SND.v.settings||{},kinds=SND.v.kinds||[],rec=(SND.v.recent||[]).slice(-8).reverse(),rp=SND.rp;
+  return `<div class="pnote">Alert sounds the Host plays for follows, subs, raids and more. Pick a file, set the volume, press Test. Nothing here touches OBS or your stream.</div>
+   ${prow('Mute all sounds','Silences every alert and welcome sound.',sw('sn-mute',!!st.MuteSounds))}
+   ${kinds.map(k=>sndRow(k,(st.Sounds||{})[k],false)).join('')}
+   ${sndRow('welcome',st.Welcome,true)}
+   <div class="row" style="margin-top:8px"><button class="pri sm" id="sn-save">Save sounds</button><span class="sm faint" id="sn-msg"></span></div>
+   <div class="sm faint" style="margin-top:10px">Recent plays</div>
+   ${rec.length?`<table class="sm">${rec.map(r=>`<tr><td>${new Date(r.ts).toLocaleTimeString()}</td><td>${esc(r.kind)}</td><td>${esc(r.file)}</td><td class="faint">${esc(typeof r.result==='string'?r.result:JSON.stringify(r.result||''))}</td></tr>`).join('')}</table>`:'<div class="sm faint">Nothing played yet.</div>'}
+   <div style="margin-top:12px">${prow('Replays: pick winners automatically',rp?`Rocket League customs: when a replay matches the roster exactly, the winner is applied once. ${rp.pending||0} waiting for you to approve.`:'The Host replay settings are not available yet.',rp?sw('rp-auto',!!rp.ReplayAutoWinner):'')}
+   ${prow('Watch streak sound','Set in the Multi editor, under the streak celebration.',`<button class="sm" data-go="multi">Open Multi</button>`)}</div>`}
+function bindSnd(){
+  const g=id=>document.getElementById(id);if(g('sn-retry'))g('sn-retry').onclick=()=>{SND.err=null;loadSnd()};
+  if(!g('sn-save')&&!g('rp-auto'))return;
+  const msg=t=>{const m=g('sn-msg');if(m)m.textContent=t};
+  const gather=()=>{const b={MuteSounds:g('sn-mute').checked,Sounds:{},Welcome:{}};
+    $$('[data-sn]').forEach(i=>{const[k,f]=i.dataset.sn.split(':');const v=i.type==='checkbox'?i.checked:i.type==='range'?+i.value:i.value.trim();
+      if(k==='welcome')b.Welcome[f]=v;else{(b.Sounds[k]=b.Sounds[k]||{})[f]=v}});return b};
+  g('sn-save')&&(g('sn-save').onclick=async()=>{try{const j=await hostPost('/api/alerts-settings',gather());if(j.ok===false){msg(j.error||'Not saved');toast('Sounds not saved: '+(j.error||'error'))}else{SND.v=j;toast('Sounds saved');draw(true)}}catch{msg('The Host is not answering');toast('Could not reach the Host')}});
+  $$('[data-sn-test]').forEach(b=>b.onclick=async()=>{const k=b.dataset.snTest;try{const j=await hostPost('/api/alerts-settings',{test:k});toast(j.ok===false?(j.error||'No sound to test'):'Played the '+k+' sound')}catch{toast('Could not reach the Host')}});
+  g('rp-auto')&&(g('rp-auto').onchange=async e=>{try{const j=await hostPost('/api/replays/settings',{ReplayAutoWinner:e.target.checked});if(j.ok===false){toast(j.error||'Not saved');e.target.checked=!e.target.checked}else{SND.rp=j;toast('Replay winners: '+(j.ReplayAutoWinner?'automatic':'ask me first'))}}catch{toast('Could not reach the Host');e.target.checked=!e.target.checked}})}
 /* ============ PenguinComm page ============ */
 const commMod=id=>S&&S.modules.find(m=>m.id===id);
 pages.comm=()=>{const l=commMod('listen'),v=commMod('voice');
@@ -1469,6 +1505,7 @@ pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max
     <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Automatic config backup</h3>${hq('autobackup')}</div>${backupCard()}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Pre-stream check schedule</h3>${hq('prestream')}</div>${schedCard()}</div>
+  <div class="card" style="grid-column:1/-1"><div class="row"><h3 style="margin:0">Sounds &amp; replays</h3></div>${sndCard()}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Pop-out windows</h3>${hq('popout')}</div>${popoutCard()}</div>
   <div class="card"><h3>This device</h3>
     <div class="setrow"><div class="grow">Name<div class="sm faint">Shown to your other devices</div></div><input type="text" id="dv-name" value="${esc(D?D.me.name:'')}" style="width:190px"></div>
@@ -1670,7 +1707,7 @@ function bind(){
   $('#d-listen')&&($('#d-listen').onclick=async()=>{try{await fetch(LISTEN+'/api/live/auto',{method:'POST'});toast('Listening started');loadListen()}catch{toast('Listen is not running')}});
   $('#s-chan')&&($('#s-chan').onchange=async e=>{await post('/api/channel',{channel:e.target.value});toast('Channel saved')});
   $('#s-wa')&&($('#s-wa').onchange=async e=>{await post('/api/windows-autostart',{on:e.target.checked});toast(e.target.checked?'Will start with Windows':'Autostart off')});
-  bindPopout();bindSched();bindBackup();
+  bindPopout();bindSched();bindBackup();bindSnd();
   bindSwitches();
   $$('[data-mlog]').forEach(b=>b.onclick=()=>showLogs(b.dataset.mlog));
   $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));
