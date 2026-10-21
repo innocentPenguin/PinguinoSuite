@@ -115,6 +115,7 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
     <div class="small dim" style="margin-bottom:8px">Plays Spotify inside Pinguino as the device <b>PinguinoSuite</b> (no Spotify desktop app). Needs Premium and a Widevine-capable browser. Keep the player page open.</div>
     <div class="ctl"><button class="pri" id="bplopen">Open player window</button><button id="bplcopy" title="Copy the player URL">Copy URL</button><label><input type="checkbox" id="plon"> use the built-in player</label>
       <span>Volume <input type="number" id="plvol" min="0" max="100" style="width:70px"> %</span><button id="bplvol">Set</button></div>
+    <div id="plfallback" hidden class="small" style="margin-top:6px">Window did not open? <a href="/player" target="_blank" rel="noopener" style="color:var(--accent)">Open player in browser</a></div>
     <div class="small dim" id="pldetail" style="margin-top:6px"></div></div>
   <div class="card"><h3 style="margin-top:0">Connect Spotify <span id="constat"></span></h3>
     <div class="step"><b>1</b><div>Open the <a id="dashlink" href="#" target="_blank" style="color:var(--accent)">Spotify developer dashboard</a> (log in with the Spotify account you stream with) and press <i>Create app</i>. Any name. Choose <i>Web API</i>.</div></div>
@@ -145,9 +146,12 @@ window.addEventListener('unhandledrejection',e=>{try{toast('Error: '+((e.reason&
 async function busy(btn,fn){if(btn.disabled)return;const t=btn.textContent;btn.disabled=true;btn.textContent='…';try{await fn()}catch(e){toast(e.message||String(e),true)}finally{btn.disabled=false;btn.textContent=t}}
 function copyText(t){try{navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy failed: select the text and press Ctrl+C',true))}catch(e){toast('Copy failed: select the text and press Ctrl+C',true)}}
 // Pop-out through the shell (Docs/MODULE_CONTRACT.md: parent.postMessage {pinguino:'window',op:'open'}); falls back to window.open outside the shell.
+window.addEventListener('message',e=>{const d=e.data;if(d&&d.pinguino==='window-error'){toast('Could not open the window: '+(d.error||'unknown error'),true);showFallback()}});
+function showFallback(){const el=$('plfallback');if(el)el.hidden=false}
 function popOut(label,url,title,w,h){
-  if(window.parent&&window.parent!==window){window.parent.postMessage({pinguino:'window',op:'open',label,url,title,size:{w,h},remember:true},'*');toast('Opening '+title+'…');return}
-  const x=window.open(url,label,'width='+w+',height='+h);toast(x?'Opening '+title+'…':'Pop-up blocked: open '+url+' in a browser',!x)}
+  if(window.parent&&window.parent!==window){window.parent.postMessage({pinguino:'window',op:'open',label,url,title,size:{w,h},remember:true},'*');toast('Opening '+title+'…');
+    setTimeout(showFallback,2000);return}      // the shell sends no success ack: after 2 s offer the plain link
+  const x=window.open(url,label,'width='+w+',height='+h);toast(x?'Opening '+title+'…':'Pop-up blocked: use the link below',!x);if(!x)showFallback()}
 async function act(p,b,ok){try{await api(p,b||{});if(ok)toast(ok);refresh()}catch(e){toast(e.message,true)}}
 const fmt=ms=>{ms=Math.max(0,ms|0);const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 
@@ -318,7 +322,9 @@ async function loadSetup(){loadSite();loadPlayer();try{setup=await api('/api/set
   $('constat').innerHTML=setup.connected?'<span class="pill ok">connected</span>':'<span class="pill bad">not connected</span>'}catch(e){}}
 const copy=t=>navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy failed: select the text manually',true));
 $('bcopyredir').onclick=()=>copy($('redir').textContent);$('bcid').onclick=()=>busy($('bcid'),async()=>{await api('/api/setup',{client_id:$('cid').value});toast('Client ID saved');loadSetup()});
-$('bconnect').onclick=()=>busy($('bconnect'),async()=>{await api('/api/setup',{client_id:$('cid').value});const r=await api('/api/auth/start',{});
+$('bconnect').onclick=()=>busy($('bconnect'),async()=>{const cid=$('cid').value.trim();
+  if(!cid&&!(setup&&setup.client_id)){toast('Paste and save your Client ID first (step 3)',true);$('cid').focus();return}
+  await api('/api/setup',{client_id:cid||setup.client_id});const r=await api('/api/auth/start',{});
   $('conlink').hidden=false;$('conurl').value=r.url;toast('Spotify approval page opened in your browser: approve there, then come back. If nothing opened, use the link below.')});
 $('bcopyurl').onclick=()=>copyText($('conurl').value);
 $('bdisc').onclick=()=>{if($('bdisc').dataset.sure){delete $('bdisc').dataset.sure;$('bdisc').textContent='Disconnect';act('/api/disconnect',{},'Disconnected').then(loadSetup)}else{$('bdisc').dataset.sure=1;$('bdisc').textContent='Click again to disconnect';setTimeout(()=>{delete $('bdisc').dataset.sure;$('bdisc').textContent='Disconnect'},4000)}};   // no confirm(): blocked in webviews
