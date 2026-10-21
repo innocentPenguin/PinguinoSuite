@@ -19,7 +19,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.
 nav{background:var(--bg2);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow:auto}
 .brand{display:flex;align-items:center;gap:10px;padding:6px 10px 14px}
 .brand img{width:36px;height:36px;border-radius:50%;display:block}
-.brand b{font-size:16px;letter-spacing:.2px;color:var(--accent,#ff9900)}.brand small{display:block;color:var(--faint);font-size:11px;margin-top:-3px}
+.brand b{font-size:16px;letter-spacing:.2px}.brand b .accent{color:var(--accent)}.brand small{display:block;color:var(--faint);font-size:11px;margin-top:-3px}
 nav h6{margin:14px 12px 4px;font-size:10.5px;letter-spacing:1.2px;color:var(--faint);text-transform:uppercase;font-weight:600}
 .item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;color:var(--dim);cursor:pointer;border:1px solid transparent;user-select:none}
 .item:hover{background:#ffffff08;color:var(--fg)}
@@ -170,7 +170,7 @@ function renderNav() {
   const cls = st => st === 'running' ? 'running' : st === 'degraded' ? 'warn' : st === 'error' ? 'bad' : '';
   const inst = r.filter(x => x.installed);
   // Only things that exist in Lite: its two pages, the two services it talks to, and what is installed. Availability = probes at launch + every 5 s.
-  $('#nav').innerHTML = `<div class="brand"><img src="logo.png" alt=""><div><b>PinguinoLite</b><small>${info ? 'v' + esc(info.version) : ''}</small></div></div>
+  $('#nav').innerHTML = `<div class="brand"><img src="logo.png" alt=""><div><b>Pinguino<span class="accent">Lite</span></b><small>${info ? 'v' + esc(info.version) : ''}</small></div></div>
    <div class="item${page === 'dashboard' ? ' on' : ''}" data-page="dashboard"><span class="ic">🏠</span>Dashboard</div>
    <div class="item${page === 'modules' ? ' on' : ''}" data-page="modules"><span class="ic">🧩</span>Modules${u ? `<span class="tag">${u} update${u > 1 ? 's' : ''}</span>` : ''}</div>
    <div class="item${page === 'replays' ? ' on' : ''}" data-page="replays"><span class="ic">🎮</span>Replays${(state.replays && state.replays.items.length) ? `<span class="tag">${state.replays.items.length}</span>` : ''}</div>
