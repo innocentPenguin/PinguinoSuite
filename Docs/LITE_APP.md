@@ -30,7 +30,7 @@ Docs\LITE_APP.md              this file
 ## Link is bundled (decision by Ivan via 00, 2026-10-20)
 - Link is part of the Lite package, not a catalog item. It still updates itself through the same mechanism (below).
 - **Launcher (Rust, `main.rs`)**: at start Lite looks for Link's folder (env `PINGUINO_LITE_LINK_DIR`, else `<exe dir>\link`, else dev `<suite root>\Suite\modules\link`), reads `link.json` there and spawns it hidden; on quit it kills it. Missing = Lite still opens ("PinguinoLink not connected").
-  `link.json`: `{"cmd": ["node", "src/cli.mjs", "serve"], "cwd": "."}` (cwd relative to that folder). Env passed: `PINGUINO_LITE_DIR`, `PINGUINO_LITE_VERSION`. **04 must add `link.json`.** The shipped build must bring its own runtime (node >= 22 or a single exe); that is 04's packaging call.
+  `link.json`: `{"cmd": ["node", "src/cli.mjs", "serve"], "cwd": "."}` (cwd relative to that folder). Env passed: `PINGUINO_LITE_DIR`, `PINGUINO_LITE_VERSION`. **04 must add `link.json`.** The shipped build bundles `node.exe` (>= 22) next to `link\` (or next to the Lite exe); a `cmd` starting with `node` uses it first, then PATH.
 - Link runs `lite.mjs` inside it (1 s poll of `requests\`, `status.json` heartbeat every 15 s). Everything below is implemented by Link.
 - Start/stop/restart of an installed module: Lite sends `start|stop|restart` requests, Link does it. Lite never manages module processes.
 - **Link self-update**: Link cannot swap its own running files. It stages `modules\.staging\link-<ver>` and asks Lite (request `restart-link`, which Lite handles itself: kills Link, respawns it). The swap-before-launch hook is part of Link's own start command (put it in the `cmd` bootstrap; the old folder is kept for rollback). Lite itself never moves files.

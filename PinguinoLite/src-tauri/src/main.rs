@@ -44,7 +44,15 @@ fn spawn_link(version: &str) -> Option<Child> {
     let cwd = dir.join(cfg.get("cwd").and_then(|v| v.as_str()).unwrap_or("."));
     let ld = lite_dir();
     let _ = std::fs::create_dir_all(&ld);
-    let mut cmd = Command::new(exe);
+    // "node" resolves to a bundled node.exe (next to link\ or next to the Lite exe) before falling back to PATH
+    let bundled = if exe == "node" {
+        let mut c = vec![dir.parent().map(|p| p.join("node.exe"))];
+        c.push(std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("node.exe"))));
+        c.into_iter().flatten().find(|p| p.exists())
+    } else {
+        None
+    };
+    let mut cmd = Command::new(bundled.unwrap_or_else(|| PathBuf::from(exe)));
     cmd.args(args).current_dir(cwd).env("PINGUINO_LITE_DIR", &ld).env("PINGUINO_LITE_VERSION", version).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(windows)]
     {
