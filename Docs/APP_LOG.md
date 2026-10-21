@@ -77,6 +77,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 07:22 - Music module restart (sub tier priority)
+- Spotify module restarted via D:\PinguinoSuite\App\Update-Module.ps1 spotify (orphan PID 43632 ignored the stop file, killed, then started). Loads 'higher sub tiers rank first' (Tier 3 > 2 > 1 within a round, redeems first). 117 unit + 200/200 e2e per Music. Native in-app player still needs a real Premium run and re-login for the streaming scope.
+
 ## 2026-10-21 07:16 - Host restart (strike limit, overlay timing)
 - Host restarted via D:\PinguinoSuite\App\Update-Module.ps1 host: loads d213195 (tunable strike limit !tune strikes 1-10, overlay altSeconds/fadeMs in live_state, !tune names), 788940d, nightly-review tool. Build 0 errors; /api/live, /api/commands/profiles, /api/sim/status checked. 02's nightly report notes 47 lobby push HTTP failure warnings in the host log (site endpoint not deployed yet); under review.
 
