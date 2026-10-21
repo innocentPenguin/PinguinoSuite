@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -95,7 +95,7 @@ namespace PinguinoHost
                 string tmp = full + ".tmp"; File.WriteAllBytes(tmp, data); if (existed) File.Delete(full); File.Move(tmp, full);
             }
             catch (Exception ex) { return Err("could not write: " + ex.Message); }
-            ChannelControl.Audit(who, "overlay/write", Rel(full) + " bytes=" + data.Length + (existed ? " replaced" : " new"));
+            ChannelControl.Audit(who, "overlay/write", Rel(full) + " bytes=" + data.Length + (existed ? " replaced" : " new")); EventLog.Overlay(Rel(full), existed ? "changed" : "created", who);
             return new JObject { { "ok", true }, { "path", Rel(full) }, { "created", !existed }, { "size", data.Length } };
         }
 
@@ -104,7 +104,7 @@ namespace PinguinoHost
             string e, full = Resolve(rel, true, out e); if (full == null) return Err(e);
             if (!File.Exists(full)) return Err("no such file");
             try { Backup(full, "delete"); File.Delete(full); } catch (Exception ex) { return Err("could not delete: " + ex.Message); }
-            ChannelControl.Audit(who, "overlay/delete", Rel(full) + " (moved to overlay_trash)");
+            ChannelControl.Audit(who, "overlay/delete", Rel(full) + " (moved to overlay_trash)"); EventLog.Overlay(Rel(full), "deleted", who);
             return new JObject { { "ok", true } };
         }
 
@@ -119,7 +119,7 @@ namespace PinguinoHost
                 string cand = Path.Combine(dir, r); if (!File.Exists(cand)) continue;
                 try { Backup(full, "undo"); Directory.CreateDirectory(Path.GetDirectoryName(full)); File.Copy(cand, full, true); File.Delete(cand); }
                 catch (Exception ex) { return Err("could not restore: " + ex.Message); }
-                ChannelControl.Audit(who, "overlay/restore", Rel(full) + " from " + Path.GetFileName(dir));
+                ChannelControl.Audit(who, "overlay/restore", Rel(full) + " from " + Path.GetFileName(dir)); EventLog.Overlay(Rel(full), "changed", who, "restored an earlier version");
                 return new JObject { { "ok", true }, { "path", Rel(full) } };
             }
             return Err("no earlier version of that file");
@@ -133,7 +133,7 @@ namespace PinguinoHost
             if (File.Exists(b) || Directory.Exists(b)) return Err("a file with that name already exists");
             if (!string.Equals(Path.GetExtension(a), Path.GetExtension(b), StringComparison.OrdinalIgnoreCase)) return Err("keep the same file type");
             try { Directory.CreateDirectory(Path.GetDirectoryName(b)); File.Move(a, b); } catch (Exception ex) { return Err("could not rename: " + ex.Message); }
-            ChannelControl.Audit(who, "overlay/rename", Rel(a) + " -> " + Rel(b));
+            ChannelControl.Audit(who, "overlay/rename", Rel(a) + " -> " + Rel(b)); EventLog.Overlay(Rel(b), "renamed", who, "was " + Rel(a));
             return new JObject { { "ok", true }, { "path", Rel(b) } };
         }
     }

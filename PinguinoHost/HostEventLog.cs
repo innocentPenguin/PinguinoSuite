@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -86,9 +86,21 @@ namespace PinguinoHost
             }
             return res;
         }
+        /// <summary>overlay file change for the backend feed: {type:"overlay", text:"players.html changed", detail:{file, action: changed|created|deleted|renamed, by}}</summary>
+        public static void Overlay(string file, string action, string by, string note = null)
+        {
+            try
+            {
+                var d = new JObject { { "file", file }, { "action", action }, { "by", by ?? "" }, { "level", "info" }, { "module", "host" } }; if (note != null) d["note"] = note;
+                var e = Ev(NowMs(), "backend", "overlay", by ?? "", file + " " + action + (by != null && by != "" ? " by " + by : ""), null, d);
+                lock (L) { Directory.CreateDirectory(Dir); File.AppendAllText(Path.Combine(Dir, "backend.jsonl"), e.ToString(Newtonsoft.Json.Formatting.None) + "\n", new UTF8Encoding(false)); }
+                try { Events.Publish("backendlog", e); } catch (Exception) { }
+            }
+            catch (Exception) { }
+        }
         static List<JObject> AllBackend()
         {
-            var res = new List<JObject>(); string dir = Path.Combine(HostApi.DataDir, "runtime", "console");
+            var res = new List<JObject>(); res.AddRange(Cached(Path.Combine(Dir, "backend.jsonl"), t => Lines(t).Select(l => { try { return JObject.Parse(l); } catch (Exception) { return null; } }).Where(x => x != null).ToList())); string dir = Path.Combine(HostApi.DataDir, "runtime", "console");
             foreach (var m in new[] { "host", "core" }) { string mm = m; res.AddRange(Cached(Path.Combine(dir, mm + ".jsonl"), t => ParseConsole(t, mm))); }
             return res;
         }

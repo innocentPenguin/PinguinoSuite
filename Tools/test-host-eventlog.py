@@ -6,6 +6,7 @@ PORT = 8992; B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pgel_'); os.makedirs(os.path.join(d, 'config')); os.makedirs(os.path.join(d, 'runtime', 'console')); os.makedirs(os.path.join(d, 'chat_logs', 'live'))
 json.dump({'Channel': 'elog', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 now = int(time.time() * 1000)
+os.makedirs(os.path.join(d, 'ovl')); json.dump({'OverlayDir': os.path.join(d, 'ovl')}, open(os.path.join(d, 'settings.json'), 'w'))
 # backfill sources: a finished match and a chat log with a !join / !kick
 json.dump([{'Id': 7, 'Format': '2v2', 'Mode': 'random', 'CreatedAt': now // 1000 - 3600, 'FinishedAt': now // 1000 - 3000, 'Winner': 'Blue',
             'Blue': [{'Username': 'ann'}, {'Username': 'ben'}], 'Orange': [{'Username': 'cat'}, {'Username': 'dan'}]}], open(os.path.join(d, 'runtime', 'matches.json'), 'w'))
@@ -49,6 +50,16 @@ try:
     b = get('/api/eventlog?kind=backend&limit=1000')['events']
     chk('backend has info/error, not debug', any(e['text'] == 'scene switched' for e in b) and any(e['detail']['level'] == 'error' for e in b) and not any(e['text'] == 'noise' for e in b))
     chk('backend type = source, level filter', [e['text'] for e in get('/api/eventlog?kind=backend&level=error')['events'] if e['text'] == 'broke'] == ['broke'] and any(e['type'] == 'obs' for e in b))
+    # ---- overlay change entries (backend)
+    ovl = None
+    try:
+        import urllib.request as ur
+        rq = ur.Request(B + '/api/overlays/write', json.dumps({'path': 'zz_test.html', 'text': '<html></html>'}).encode(), {'Content-Type': 'application/json', 'Origin': B}); ovl = json.load(ur.urlopen(rq, timeout=10))
+    except Exception as ex: ovl = {'ok': False, 'error': str(ex)}
+    chk('overlay write ok', ovl.get('ok'), ovl)
+    if ovl.get('ok'):
+        ob = [e for e in get('/api/eventlog?kind=backend&type=overlay')['events']]
+        chk('overlay change in backend feed', ob and ob[-1]['detail']['file'] == 'zz_test.html' and ob[-1]['detail']['action'] == 'created', ob)
     # ---- paging
     allp = get('/api/eventlog?kind=players&limit=1000')['events']
     p1 = get('/api/eventlog?kind=players&limit=3'); chk('limit + more + newest first page', p1['count'] == 3 and p1['more'] and p1['events'] == allp[-3:], p1['count'])
