@@ -271,7 +271,8 @@ namespace PinguinoHost
                         {
                             string ext = Path.GetExtension(file).ToLowerInvariant();
                             c.Response.ContentType = ext == ".html" ? "text/html; charset=utf-8" : ext == ".js" ? "application/javascript" : ext == ".json" ? "application/json" : ext == ".css" ? "text/css" : ext == ".png" ? "image/png" : ext == ".webp" ? "image/webp" : ext == ".gif" ? "image/gif" : ext == ".svg" ? "image/svg+xml" : ext == ".jpg" ? "image/jpeg" : ext == ".webm" ? "video/webm" : ext == ".mp4" ? "video/mp4" : "application/octet-stream";
-                            c.Response.Headers["Cache-Control"] = "no-store"; var bytes = File.ReadAllBytes(file); c.Response.OutputStream.Write(bytes, 0, bytes.Length);
+                            c.Response.Headers["Cache-Control"] = (ext == ".webp" || ext == ".png" || ext == ".gif" || ext == ".jpg" || ext == ".woff2") ? "max-age=3600" : "no-store"; var bytes = File.ReadAllBytes(file);   // art can be cached (no re-download / animation restart); pages and data stay fresh
+                             c.Response.OutputStream.Write(bytes, 0, bytes.Length);
                         }
                     }
                     catch (Exception) { try { c.Response.StatusCode = 500; } catch (Exception) { } }

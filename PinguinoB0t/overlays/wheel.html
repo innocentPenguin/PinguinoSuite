@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Tournament Wheel Overlay</title>
 <!-- OBS browser source for the tournament teams. Public and tokenless: it only reads /api/wheel/public (no ids, MMR or seed).
      MANUAL SPIN: the wheel is always on screen with everyone who can still be picked. A mod presses "Spin" on /mod/wheel: ONE pick spins, lands on the name the
@@ -23,7 +23,7 @@ body.clear{background:transparent}
 #wheelbox.off{display:none}
 #cv{width:100%;height:100%;display:block}
 #wheelbox.landed #cv{animation:glow .9s ease-out}
-#hub{position:absolute;left:50%;top:50%;width:calc(var(--wd) * .216);height:calc(var(--wd) * .216);transform:translate(-50%,-50%);border-radius:50%;object-fit:cover;border:calc(var(--wd) * .008) solid #ff9900;background:#22252b;pointer-events:none}
+#hub{position:absolute;left:50%;top:50%;width:min(calc(var(--wd) * .216),220px);height:min(calc(var(--wd) * .216),220px);transform:translate(-50%,-50%);border-radius:50%;object-fit:cover;border:calc(var(--wd) * .008) solid #ff9900;background:#22252b;pointer-events:none;image-rendering:auto;will-change:transform;backface-visibility:hidden}
 #pick{z-index:2;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;text-align:center;font-weight:900;color:#fff;background:#141414e6;border:.5vmin solid var(--accent);border-radius:50vmin;padding:1vmin 2.6vmin;font-size:calc(var(--wd) * .07);-webkit-text-stroke:.5vmin #000;paint-order:stroke fill;box-shadow:0 0 4vmin #000c;overflow-wrap:anywhere;animation:slam .5s cubic-bezier(.2,1.6,.4,1)}
 #pick[hidden]{display:none}
 #teams{width:100%}
@@ -74,6 +74,9 @@ const ease=p=>1-Math.pow(1-p,4);
 const orderOf=(names,salt)=>names.slice().sort((a,b)=>hashStr(salt+'|'+a)-hashStr(salt+'|'+b)||(a<b?-1:1));
 const GREY=getComputedStyle(document.documentElement).getPropertyValue('--face').trim()||'#3a3f47';   // the wheel face (a different shade from the page and the stage panel)
 const cv=$('cv'),ctx=cv.getContext('2d');let size=0;
+let _fam='';const FAM=()=>_fam||(_fam=getComputedStyle(document.body).fontFamily);   // read once, not per frame
+// repaint-free: the paint loop re-sets labels every frame; writing the same text again re-lays-out the page and made the preview flicker. Skip no-op writes.
+(()=>{const d=Object.getOwnPropertyDescriptor(Node.prototype,'textContent');Object.defineProperty(Node.prototype,'textContent',{get:d.get,set(v){v=v==null?'':String(v);if(this.nodeType===1){const k=this.firstChild;if((!k&&v==='')||(k&&k===this.lastChild&&k.nodeType===3&&k.data===v))return}d.set.call(this,v)},configurable:true})})();
 function fit(){const r=cv.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1),s=Math.max(10,Math.round(r.width*dpr));if(s!==size){size=s;cv.width=s;cv.height=s}}
 // ---- colours: flat, vibrant, one per player. Ivan = Penguino orange; everyone else = their Twitch chat colour (the site sends it), else one of the 15 default Twitch colours by name.
 const TW15=['#FF0000','#0000FF','#00FF00','#B22222','#FF7F50','#9ACD32','#FF4500','#2E8B57','#DAA520','#D2691E','#5F9EA0','#1E90FF','#FF69B4','#8A2BE2','#00FF7F'];
@@ -94,7 +97,7 @@ function colorMap(names){
 }
 let kick=0;
 function arcText(s,txt,r,fs,mid){ // text curved along the top of a circle, centred on angle mid
- ctx.save();ctx.font='800 '+fs+'px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle='#ffffff';ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.save();ctx.font='800 '+fs+'px '+FAM();ctx.fillStyle='#ffffff';ctx.textAlign='center';ctx.textBaseline='middle';
  const step=fs*.62/r,start=mid-step*(txt.length-1)/2;
  for(let i=0;i<txt.length;i++){ctx.save();ctx.rotate(start+i*step+Math.PI/2);ctx.translate(0,-r);ctx.fillText(txt[i],0,0);ctx.restore()}
  ctx.restore();
@@ -106,7 +109,7 @@ function drawWheel(order,rot){
  ctx.save();ctx.shadowColor='rgba(0,0,0,.55)';ctx.shadowBlur=s*.03;ctx.shadowOffsetY=s*.01;ctx.beginPath();ctx.arc(0,0,Rr+s*.0047,0,TAU);ctx.fillStyle='#555a63';ctx.fill();ctx.restore();
  ctx.save();ctx.rotate(rot);
  ctx.beginPath();ctx.arc(0,0,Rr,0,TAU);ctx.fillStyle=GREY;ctx.fill();   // penguin grey wheel background
- const fs=Math.min(s*.06,Rr*a*.55),text=fs>=s*.017,fam=getComputedStyle(document.body).fontFamily,maxW=Rr*.95-hub*1.12;
+ const fs=Math.min(s*.06,Rr*a*.55),text=fs>=s*.017,fam=FAM(),maxW=Rr*.95-hub*1.12;
  for(let j=0;j<n;j++){
   const st=j*a,col=cmap[order[j]]||{bg:'#ff9900',fg:'#14100a'};
   if(n===1){ctx.beginPath();ctx.arc(0,0,Rr,0,TAU);ctx.fillStyle=col.bg;ctx.fill()}
