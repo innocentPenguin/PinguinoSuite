@@ -2,61 +2,63 @@
 <!-- INDEX-BEGIN (line numbers are of this file)
 INDEX: PinguinoSuite shell UI (single file, Tauri webview). Sections, pages.* renderers and key functions:
 Related: Suite/suite/suite.py (core API it calls), App/src-tauri (Tauri shell), App/src/theme.css, App/src/bootstrap.js, Docs/ARCHITECTURE.md
-  293  section: pages
-  295  page pages.dashboard
-  347  page pages.master
-  348  page pages.module
-  353  section: Integrations hub (core: GET /api/integrations; contract in Docs/MODULE_CONTRACT.md)
-  392  section: Help drawer
-  448  page pages.help
-  453  section: Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, m
-  460  page pages.activity
-  477  fn bindActivity
-  485  section: Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md)
-  531  section: Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MO
-  610  fn sfx
-  632  page pages.personalize
-  672  fn bindPersonalize
-  693  section: Pre-stream schedule (core: GET/POST /api/prestream/schedule)
-  712  section: PenguinComm page
-  714  page pages.comm
-  742  section: Chat activity card (Host: GET /api/chat-rate)
-  753  section: Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log)
-  759  page pages.quick
-  774  fn bindQuick
-  837  section: Command palette (Ctrl+K)
-  861  section: Automatic config backup (core: /api/backup/auto)
-  875  section: Accounts: the STREAMER's Twitch sign-in (Host: GET /api/account/streamer, POST .../signin, .../signout) + bot 
-  877  fn loadAccounts
-  883  page pages.accounts
-  901  fn bindAccounts
-  918  section: Commands: per-command role permissions, profiles, archive (Host: GET /api/commands/profiles, POST /api/command
-  975  page pages.commands
- 1057  section: Approvals: the Teach inbox (Host: GET /api/teach?status=, POST /api/teach/decide {id, action approve|reject|ed
- 1061  fn loadApprovals
- 1070  page pages.approvals
- 1091  fn bindApprovals
- 1106  section: Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy
- 1163  page pages.wheel
- 1341  page pages.integrations
- 1354  fn bindIntegrations
- 1362  section: Console + pre-stream checks (core: /api/console, /api/prestream; format in Docs/MODULE_CONTRACT.md)
- 1366  page pages.console
- 1402  fn bindConsole
- 1413  page pages.settings
- 1434  page pages.chat
- 1445  page pages.bots
- 1453  page pages.actions
- 1462  section: Voice Studio: built on Listen (/api/style, /api/commands, /api/markers); see Suite/modules/listen/voice.py
- 1470  page pages.voice
- 1505  fn bindVoice
- 1525  section: device settings, backup/move, first-run wizard (core: /api/device, /api/export, /api/import, /api/setup)
- 1563  section: shell
- 1582  fn go
- 1586  fn draw
- 1601  fn bind
- 1630  fn toast
- 1644  fn load
+  296  section: pages
+  298  page pages.dashboard
+  350  section: Sources: every OBS browser source we serve, live preview + Copy OBS URL
+  374  page pages.sources
+  397  page pages.master
+  398  page pages.module
+  403  section: Integrations hub (core: GET /api/integrations; contract in Docs/MODULE_CONTRACT.md)
+  442  section: Help drawer
+  498  page pages.help
+  503  section: Activity feed (Host: GET /api/activity?since=&limit=  ->  {seq, items:[{seq, ts, type, user, amount?, tier?, m
+  510  page pages.activity
+  527  fn bindActivity
+  535  section: Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md)
+  581  section: Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MO
+  660  fn sfx
+  682  page pages.personalize
+  722  fn bindPersonalize
+  743  section: Pre-stream schedule (core: GET/POST /api/prestream/schedule)
+  762  section: PenguinComm page
+  764  page pages.comm
+  792  section: Chat activity card (Host: GET /api/chat-rate)
+  803  section: Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log)
+  809  page pages.quick
+  824  fn bindQuick
+  887  section: Command palette (Ctrl+K)
+  911  section: Automatic config backup (core: /api/backup/auto)
+  925  section: Accounts: the STREAMER's Twitch sign-in (Host: GET /api/account/streamer, POST .../signin, .../signout) + bot 
+  927  fn loadAccounts
+  933  page pages.accounts
+  951  fn bindAccounts
+  968  section: Commands: per-command role permissions, profiles, archive (Host: GET /api/commands/profiles, POST /api/command
+ 1025  page pages.commands
+ 1107  section: Approvals: the Teach inbox (Host: GET /api/teach?status=, POST /api/teach/decide {id, action approve|reject|ed
+ 1111  fn loadApprovals
+ 1120  page pages.approvals
+ 1141  fn bindApprovals
+ 1156  section: Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy
+ 1213  page pages.wheel
+ 1391  page pages.integrations
+ 1404  fn bindIntegrations
+ 1412  section: Console + pre-stream checks (core: /api/console, /api/prestream; format in Docs/MODULE_CONTRACT.md)
+ 1416  page pages.console
+ 1452  fn bindConsole
+ 1463  page pages.settings
+ 1484  page pages.chat
+ 1495  page pages.bots
+ 1503  page pages.actions
+ 1512  section: Voice Studio: built on Listen (/api/style, /api/commands, /api/markers); see Suite/modules/listen/voice.py
+ 1520  page pages.voice
+ 1555  fn bindVoice
+ 1575  section: device settings, backup/move, first-run wizard (core: /api/device, /api/export, /api/import, /api/setup)
+ 1613  section: shell
+ 1632  fn go
+ 1636  fn draw
+ 1652  fn bind
+ 1682  fn toast
+ 1696  fn load
 INDEX-END -->
 <html lang="en">
 <head>
@@ -217,7 +219,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;margin:8px 0}.swatch{border:2px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;background:var(--panel2)}.swatch.on{border-color:var(--accent)}
 .swatch .sp1{height:34px;border-radius:8px;margin-bottom:6px;display:flex;overflow:hidden;border:1px solid var(--line)}.swatch .sp1 i{flex:1}
 .prow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}.prow:last-child{border:0}.prow .grow{flex:1;min-width:0}.prow.off .grow{opacity:.45}
-.pnote{color:var(--faint);font-size:12.5px;margin:2px 0 8px}.rchips{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}.rchip{display:inline-flex;align-items:center;gap:3px;font-size:12px;padding:1px 4px 1px 9px;border-radius:999px;background:color-mix(in srgb,var(--accent) 20%,transparent);border:1px solid var(--accent);color:var(--fg)}.rchip.lock{padding-right:9px;opacity:.85}.rchip .rx{border:0;background:none;padding:0 5px;border-radius:999px;cursor:pointer;line-height:1.2;font-size:14px;color:var(--fg)}.rchip .rx:hover,.rchip .rx:focus-visible{background:#0004;outline:none}.rwrap{position:relative;display:inline-block}.rwrap .smenu{left:0;right:auto;width:230px}.cm-roles{flex:0 1 330px;min-width:150px}body.disconnected nav .dot{opacity:.35}.obsurl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--bg2);border:1px solid var(--line2);border-radius:7px;padding:1px 8px;color:var(--ice)}.simban{background:#c62828;color:#fff;font-weight:800;letter-spacing:1.2px;text-align:center;padding:9px 14px;border-radius:10px;margin-bottom:12px;box-shadow:0 0 0 2px #ff6b6b66}.simban small{font-weight:500;letter-spacing:0;margin-left:10px}.simlog{max-height:120px;overflow:auto;margin-top:6px}.simtag{font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;background:#c6282833;color:#ff8a80;margin-left:4px}.cm-wrap{display:flex;gap:12px;align-items:flex-start}.cm-list{flex:1;min-width:0}.cm-panel{width:330px;flex:none;position:sticky;top:8px}.cm-row{display:flex;align-items:center;gap:10px;padding:5px 2px;border-top:1px solid var(--line)}.cm-name{flex:1;min-width:0}.cm-open{cursor:pointer}.cm-open:hover{color:var(--accent)}.cm-uses{width:80px;text-align:right}.cm-gh{cursor:pointer;gap:8px;margin-bottom:4px}.cm-f{margin:8px 0}.cm-f label{display:block;font-size:12px;color:var(--faint);margin-bottom:3px}.cm-f input[type=text],.cm-f textarea{width:100%;display:block}.cm-f textarea{resize:vertical}@media(max-width:900px){.cm-wrap{flex-direction:column}.cm-panel{width:100%;position:static}}input[type=range]{accent-color:var(--accent);width:150px}input[type=color]{width:38px;height:28px;padding:0;border:1px solid var(--line2);border-radius:8px;background:transparent;cursor:pointer}
+.pnote{color:var(--faint);font-size:12.5px;margin:2px 0 8px}.rchips{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}.rchip{display:inline-flex;align-items:center;gap:3px;font-size:12px;padding:1px 4px 1px 9px;border-radius:999px;background:color-mix(in srgb,var(--accent) 20%,transparent);border:1px solid var(--accent);color:var(--fg)}.rchip.lock{padding-right:9px;opacity:.85}.rchip .rx{border:0;background:none;padding:0 5px;border-radius:999px;cursor:pointer;line-height:1.2;font-size:14px;color:var(--fg)}.rchip .rx:hover,.rchip .rx:focus-visible{background:#0004;outline:none}.rwrap{position:relative;display:inline-block}.rwrap .smenu{left:0;right:auto;width:230px}.cm-roles{flex:0 1 330px;min-width:150px}body.disconnected nav .dot{opacity:.35}.obsurl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--bg2);border:1px solid var(--line2);border-radius:7px;padding:1px 8px;color:var(--ice)}.srcg{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;align-items:start}.srct{padding:10px 12px}.srct .row{gap:8px}.srcbox{position:relative;overflow:hidden;border-radius:8px;background:#000;border:1px solid var(--line2);margin:8px 0}.srcbox iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;pointer-events:none;background:transparent}.srcerr{display:none;position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;padding:8px;font-size:12px;color:#ddd;background:#000c}.srct.down .srcerr{display:flex}.simban{background:#c62828;color:#fff;font-weight:800;letter-spacing:1.2px;text-align:center;padding:9px 14px;border-radius:10px;margin-bottom:12px;box-shadow:0 0 0 2px #ff6b6b66}.simban small{font-weight:500;letter-spacing:0;margin-left:10px}.simlog{max-height:120px;overflow:auto;margin-top:6px}.simtag{font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;background:#c6282833;color:#ff8a80;margin-left:4px}.cm-wrap{display:flex;gap:12px;align-items:flex-start}.cm-list{flex:1;min-width:0}.cm-panel{width:330px;flex:none;position:sticky;top:8px}.cm-row{display:flex;align-items:center;gap:10px;padding:5px 2px;border-top:1px solid var(--line)}.cm-name{flex:1;min-width:0}.cm-open{cursor:pointer}.cm-open:hover{color:var(--accent)}.cm-uses{width:80px;text-align:right}.cm-gh{cursor:pointer;gap:8px;margin-bottom:4px}.cm-f{margin:8px 0}.cm-f label{display:block;font-size:12px;color:var(--faint);margin-bottom:3px}.cm-f input[type=text],.cm-f textarea{width:100%;display:block}.cm-f textarea{resize:vertical}@media(max-width:900px){.cm-wrap{flex-direction:column}.cm-panel{width:100%;position:static}}input[type=range]{accent-color:var(--accent);width:150px}input[type=color]{width:38px;height:28px;padding:0;border:1px solid var(--line2);border-radius:8px;background:transparent;cursor:pointer}
 .commgrid{display:grid;gap:12px;grid-template-columns:1fr}.commgrid.both{grid-template-columns:1fr 1fr}.commgrid section{display:flex;flex-direction:column;min-width:0;gap:8px}
 .cshead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}.cshead .grow{flex:1;min-width:140px}
 .csbody iframe{width:100%;height:calc(100vh - 250px);min-height:320px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}.commsum{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -245,6 +247,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
   <div class="navscroll">
   <div class="item" data-r="dashboard"><span class="ic">▦</span>Dashboard</div>
   <div class="item" data-r="master"><span class="ic">🎛</span>Master View</div>
+  <div class="item" data-r="sources"><span class="ic">🎥</span>Sources</div>
   <div id="modnav"></div>
   <h6>System</h6>
   <div class="item" data-r="accounts"><span class="ic">👤</span>Accounts</div>
@@ -344,6 +347,53 @@ const COMM={tab:(()=>{try{return localStorage.getItem('commTab')||'both'}catch{r
 const COMMNAME={listen:'PenguinComm · Listen',voice:'PenguinComm · Speak'};
 const dispName=m=>COMMNAME[m.id]||m.name;
 const modSrc=m=>m.url.replace(/\/$/,'')+(m.ui?.path||'/');
+/* ============ Sources: every OBS browser source we serve, live preview + Copy OBS URL ============ */
+const SRC_BASE={host:'http://127.0.0.1:8770',multi:'http://127.0.0.1:8766',spotify:'http://127.0.0.1:8771'};
+const SRC=[
+  {id:'wheel',g:'Host',mod:'host',name:'Wheel',path:'/wheel.html',w:1920,h:1080},
+  {id:'queue',g:'Host',mod:'host',name:'Queue',path:'/queue.html',w:1920,h:1080},
+  {id:'players',g:'Host',mod:'host',name:'Players',path:'/players.html',w:1920,h:1080},
+  {id:'playersv',g:'Host',mod:'host',name:'Players (vertical)',path:'/players_vertical.html',w:1080,h:1920},
+  {id:'chat',g:'Multi',mod:'multi',name:'Chat',path:'/obs/chat',w:500,h:900},
+  {id:'activity',g:'Multi',mod:'multi',name:'Activity feed',path:'/obs/activity',w:600,h:900},
+  {id:'follow',g:'Multi',mod:'multi',name:'Follow alerts',path:'/obs/follow',w:1920,h:1080},
+  {id:'poll',g:'Multi',mod:'multi',name:'Poll',path:'/obs/poll',w:1920,h:1080},
+  {id:'predict',g:'Multi',mod:'multi',name:'Prediction',path:'/obs/predict',w:1920,h:1080},
+  {id:'hype',g:'Multi',mod:'multi',name:'Hype train',path:'/obs/hype',w:1920,h:1080},
+  {id:'nowplaying',g:'Spotify',mod:'spotify',name:'Now playing',path:'/overlay',w:1920,h:1080},
+  {id:'spqueue',g:'Spotify',mod:'spotify',name:'Song queue',path:'/overlay/queue',w:1920,h:1080},
+  {id:'player',g:'Spotify',mod:'spotify',name:'Player',path:'/player',w:1920,h:1080}];
+const SRCS={filter:'all',extra:null,paused:false,down:{}};
+const srcUrl=x=>(SRC_BASE[x.mod]||SRC_BASE.host)+x.path;
+const srcAll=()=>SRC.concat(SRCS.extra||[]);
+// other .html files in the Host overlay folder show up here without a code change
+async function srcLoadExtra(){if(SRCS.extra)return;SRCS.extra=[];try{const j=await hostGet('/api/overlays'),known=new Set(SRC.filter(x=>x.mod==='host').map(x=>x.path.slice(1)));
+  SRCS.extra=(j.files||[]).filter(f=>/^[^/]+\.html$/i.test(f.path)&&!known.has(f.path)).map(f=>({id:'x-'+f.path,g:'Other Host overlays',mod:'host',name:f.path.replace(/\.html$/i,''),path:'/'+encodeURI(f.path),w:1920,h:1080}));
+  if(route==='sources')draw(true)}catch{}}
+const srcState=x=>{const m=S&&S.modules.find(y=>y.id===x.mod);return m?m.state:'stopped'};
+pages.sources=()=>{srcLoadExtra();const all=srcAll(),groups=[...new Set(all.map(x=>x.g))],list=all.filter(x=>SRCS.filter==='all'||x.g===SRCS.filter);
+  return `<div style="max-width:1500px"><div class="pnote">Every browser source the Suite serves. In OBS: Sources &gt; + &gt; Browser, paste the URL and set the size shown. Nothing here controls OBS or your stream. Link has no browser source (it only runs OBS macros).</div>
+   <div class="row wrap" style="margin-bottom:10px;gap:8px"><span class="chips"><span class="chip ${SRCS.filter==='all'?'on':''}" data-sf="all">All</span>${groups.map(g=>`<span class="chip ${SRCS.filter===g?'on':''}" data-sf="${esc(g)}">${esc(g)}</span>`).join('')}</span><span class="sp"></span><label class="sm"><input type="checkbox" id="src-pause"${SRCS.paused?' checked':''}> Pause previews</label><button class="sm" data-go="master">Open Master View</button></div>
+   <div class="srcg" id="src-grid">${list.map(x=>{const u=srcUrl(x);return `<div class="card srct" data-sid="${esc(x.id)}"><div class="row"><span class="dot ${esc(srcState(x))}" data-sdot style="margin:0"></span><b>${esc(x.name)}</b><span class="pill">${esc(x.g)}</span><span class="sp"></span><span class="sm faint" data-sst>${esc(srcState(x))}</span></div>
+     <div class="srcbox" style="aspect-ratio:${x.w}/${x.h}" data-w="${x.w}" data-h="${x.h}"><iframe data-src="${esc(u)}" title="${esc(x.name)}" tabindex="-1" style="width:${x.w}px;height:${x.h}px"></iframe><div class="srcerr">Not answering. Start the ${esc(x.g)} module, or copy the URL anyway.</div></div>
+     ${obsUrl(u,x.w,x.h,x.name)}
+     <div class="row" style="margin-top:8px"><button class="sm" data-sopen="${esc(u)}">Open in new window</button><button class="sm" data-sref>Refresh preview</button></div></div>`}).join('')}</div></div>`};
+function srcScale(){$$('#src-grid .srcbox').forEach(b=>{const f=b.querySelector('iframe'),k=b.clientWidth/(+b.dataset.w||1920);if(f&&k>0)f.style.transform=`scale(${k})`})}
+function srcLoadFrame(card){const f=card.querySelector('iframe');if(!f||SRCS.paused||!f.dataset.src)return;if(!f.src||f.src==='about:blank'||f.dataset.stale){f.dataset.stale='';f.src=f.dataset.src}}
+function srcUpdate(){$$('#src-grid .srct').forEach(c=>{const x=srcAll().find(y=>y.id===c.dataset.sid);if(!x)return;const st=srcState(x),d=c.querySelector('[data-sdot]'),l=c.querySelector('[data-sst]');
+  if(d)d.className='dot '+st;if(l)l.textContent=st;c.classList.toggle('down',!!SRCS.down[x.id]||st==='stopped')})}
+function bindSources(){if(!$('#src-grid'))return;
+  $$('[data-sf]').forEach(c=>c.onclick=()=>{SRCS.filter=c.dataset.sf;draw(true)});
+  $('#src-pause').onchange=e=>{SRCS.paused=e.target.checked;if(SRCS.paused)$$('#src-grid iframe').forEach(f=>{f.src='about:blank'});else draw(true)};
+  $$('[data-sopen]').forEach(b=>b.onclick=()=>openExternal(b.dataset.sopen));
+  $$('#src-grid .srct').forEach(c=>{const b=c.querySelector('[data-sref]'),f=c.querySelector('iframe');b.onclick=()=>{f.dataset.stale='1';srcLoadFrame(c)}});
+  srcScale();if(window.ResizeObserver){if(SRCS.ro)SRCS.ro.disconnect();SRCS.ro=new ResizeObserver(srcScale);SRCS.ro.observe($('#src-grid'))}
+  // probe each source once (opaque answer is enough; only a refused connection fails) and load previews as tiles scroll into view
+  $$('#src-grid .srct').forEach(c=>{const x=srcAll().find(y=>y.id===c.dataset.sid);if(!x)return;
+    fetch(srcUrl(x),{mode:'no-cors',cache:'no-store'}).then(()=>{SRCS.down[x.id]=false;srcUpdate()}).catch(()=>{SRCS.down[x.id]=true;srcUpdate()})});
+  if(window.IntersectionObserver){if(SRCS.io)SRCS.io.disconnect();SRCS.io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)srcLoadFrame(e.target)}),{root:$('#page'),rootMargin:'200px'});$$('#src-grid .srct').forEach(c=>SRCS.io.observe(c))}
+  else $$('#src-grid .srct').forEach(srcLoadFrame);
+  srcUpdate()}
 pages.master=()=>`<iframe id="mif-master" src="master/master.html" title="Master View"></iframe>`;
 pages.module=r=>{const m=modOf(r);
   if(!m)return `<div class="card" style="max-width:520px"><h3>Module not found</h3><div class="dim">It may have been removed from the registry.</div></div>`;
@@ -484,7 +534,7 @@ setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
 setInterval(()=>{if(route!=='activity'&&anyActSound()&&!document.hidden)pollActivity()},5000);   // keeps follow / sub / raid sounds alive on any page
 /* ============ Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PW={mons:null,wins:[],err:null,sel:{page:'console',mon:'',place:'free',top:false}};
-const popRoutes=()=>[['dashboard','Dashboard'],['master','Master View'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['accounts','Accounts'],['commands','Commands'],['approvals','Approvals'],['wheel','Wheel & Games'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
+const popRoutes=()=>[['dashboard','Dashboard'],['master','Master View'],['sources','Sources'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['accounts','Accounts'],['commands','Commands'],['approvals','Approvals'],['wheel','Wheel & Games'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
 function popTarget(route){   // module pages open directly (they are plain local pages); shell pages open the shell in chrome-less mode
   if(route==='master')return {url:'master/master.html?popout=1',title:'Master View'};   // 013's self-contained page
   if(isMod(route)){const m=modOf(route);if(!m)return null;return {url:modSrc(m),title:m.ui?.nav||m.name}}
@@ -589,7 +639,7 @@ function navStatic(){const foot=$('#navfoot');if(!foot)return;
   const order=STATIC_SYS.map((r,i)=>[r,i]).sort((a,b)=>(navIdx(a[0])-navIdx(b[0]))||(a[1]-b[1])).map(x=>x[0]).filter(r=>r!=='settings').concat(['settings']);
   order.forEach(r=>{const e=els[r];if(e){foot.parentNode.insertBefore(e,foot);e.style.display=(r!=='settings'&&navHid(r))?'none':''}})}
 const FIXED=['dashboard','settings','personalize'];
-function navCatalog(){const out=[{id:'dashboard',label:'Dashboard',fixed:true},{id:'master',label:'Master View'}];
+function navCatalog(){const out=[{id:'dashboard',label:'Dashboard',fixed:true},{id:'master',label:'Master View'},{id:'sources',label:'Sources'}];
   const mods=S?navSort(navEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100)),x=>x.rid):[];
   mods.forEach(m=>out.push({id:m.rid,label:m.ui.nav||m.name}));REAL.forEach(x=>out.push({id:x[0],label:x[2]}));
   const sys={activity:'Activity',accounts:'Accounts',commands:'Commands',approvals:'Approvals',wheel:'Wheel & Games',integrations:'Integrations',help:'Help',console:'Console',personalize:'Personalize',settings:'Settings'};
@@ -1561,7 +1611,7 @@ function showWizard(){let role='streaming';const el=document.createElement('div'
       D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
 
 /* ============ shell ============ */
-const titles={master:'Master View',commands:'Commands',wheel:'Wheel & Games',approvals:'Approvals',accounts:'Accounts',quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={master:'Master View',sources:'Sources',commands:'Commands',wheel:'Wheel & Games',approvals:'Approvals',accounts:'Accounts',quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const REAL=[['quick','⚡','Quick actions'],['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
@@ -1587,6 +1637,7 @@ function draw(force){if(!S)return;renderNav();
   if(route==='wheel'&&$('#wg-prevcard')&&WG.d){const tp=document.createElement('template');tp.innerHTML=pages.wheel();
     const ids=['wg-left','wg-sim','wg-test'];
     if(ids.every(i=>tp.content.querySelector('#'+i)&&$('#'+i))){ids.forEach(i=>{const n=tp.content.querySelector('#'+i).innerHTML,o=$('#'+i);if(o.innerHTML!==n)o.innerHTML=n});bind();return}}
+  if(route==='sources'&&!force&&$('#src-grid')){srcUpdate();return}
   if(route==='master'){$('#page').classList.add('flush');if(!$('#mif-master'))$('#page').innerHTML=pages.master();lastHtml='';return}
   const html=isMod(route)?pages.module(route):pages[route]();
   if(route==='console'&&!force&&html===lastHtml)return;
@@ -1609,6 +1660,7 @@ function bind(){
   if(route==='approvals')bindApprovals();
   if(route==='commands')bindCommands();
   if(route==='wheel')bindWheel();
+  if(route==='sources')bindSources();
   if(route==='integrations')bindIntegrations();
   if(route==='settings')bindPortable();
   $$('[data-go]').forEach(e=>e.onclick=()=>{if(e.dataset.commtab){COMM.tab=e.dataset.commtab;try{localStorage.setItem('commTab',COMM.tab)}catch{}}go(e.dataset.go)});
