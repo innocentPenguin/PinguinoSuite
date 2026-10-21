@@ -46,7 +46,7 @@ export function scanModules(root = MODULES) {
 
 export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modulesRoot = MODULES } = {}) {
   const busy = {};
-  let timer = null, polling = false, lastError = null;
+  let timer = null, polling = false, lastError = null, mstate = {};
 
   async function moduleState(m) {
     if (m.id === 'link') return 'running';                       // we are Link
@@ -56,7 +56,8 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
 
   async function writeInstalled() {
     const mods = {};
-    for (const m of scanModules(modulesRoot)) mods[m.id] = { version: m.version, installed_at: iso(), path: m.path, state: await moduleState(m) };
+    mstate = {};
+    for (const m of scanModules(modulesRoot)) { const state = await moduleState(m); mods[m.id] = { version: m.version, installed_at: iso(), path: m.path, state }; mstate[m.id] = { state, detail: state === 'running' ? 'answers on its health check' : 'not answering', ...(state === 'stopped' ? { fix_hint: 'Start it from the full Suite' } : {}) }; }
     writeJson(dir, 'installed.json', { updated_at: iso(), modules: mods });
     return mods;
   }
@@ -88,14 +89,14 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
 
   function writeStatus() {
     writeJson(dir, 'status.json', { writer: { name: 'PinguinoLink', version, pid: process.pid, heartbeat_at: iso() },
-      connector: { state: 'connected', detail: 'local sources only (no update server)' }, busy: { ...busy }, ...(lastError ? { last_error: lastError } : {}) });
+      connector: { state: 'connected', detail: 'local sources only (no update server)' }, busy: { ...busy }, modules: mstate, ...(lastError ? { last_error: lastError } : {}) });
   }
 
   /** Handle one request file (already parsed). */
   async function handle(req) {
     const action = req?.action, id = req?.id;
     if (action === 'check') { busy.lite = 'checking'; writeStatus(); try { await refresh(); } finally { delete busy.lite; } return; }
-    if (['install', 'update', 'uninstall', 'selfupdate-apply'].includes(action)) {
+    if (['install', 'update', 'uninstall', 'start', 'stop', 'restart', 'selfupdate-apply'].includes(action)) {
       const msg = `${action} is not available yet (Link currently supports local listing and checking only)`;
       lastError = msg; log('warn', 'lite', msg + (id && ID.test(id) ? ` [${id}]` : ''));
       writeJson(dir, 'update_status.json', { ...(readJson(path.join(dir, 'update_status.json')) || {}), result: 'error', error: msg });
