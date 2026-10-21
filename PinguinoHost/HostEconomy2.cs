@@ -267,7 +267,9 @@ namespace PinguinoHost
             long max = MaxLoan(login, set, minutes); bool on = (bool?)set["LoansOn"] != false;
             var o = new JObject { { "on", on }, { "maxLoan", max }, { "interestPct", D(set["LoanInterestPct"]) }, { "defaultAfterStreams", D(set["LoanDefaultStreams"]) }, { "owed", ln == null ? 0 : D(ln["owed"]) }, { "principal", ln == null ? 0 : D(ln["principal"]) },
                 { "streamsOpen", ln == null ? 0 : (int?)ln["streams"] ?? 0 }, { "defaulted", ln != null && (bool?)ln["defaulted"] == true }, { "takenAt", ln == null ? null : ln["takenAt"] } };
-            o["canBorrow"] = on && ln == null && max > 0; return o;
+            o["canBorrow"] = on && ln == null && max > 0; o["ratePct"] = D(set["LoanInterestPct"]);
+            o["items"] = new JArray(); if (ln != null && D(ln["owed"]) > 0) ((JArray)o["items"]).Add(new JObject { { "id", "loan-" + login }, { "principal", D(ln["principal"]) }, { "owed", Math.Ceiling(D(ln["owed"])) }, { "at", ln["takenAt"] } });
+            return o;
         }
 
         /// <summary>take a loan (chat or site). reqId (site request id) makes a retry apply once.</summary>
@@ -378,6 +380,24 @@ namespace PinguinoHost
             return cx;
         }
 
+        /// <summary>the Points page's "where it came from" list: play/win pairs of one activity folded into one row (points, wins, games)</summary>
+        static JArray PageEarned(Dictionary<string, JObject> groups, List<JObject> rows)
+        {
+            var o = new JArray(); var done = new HashSet<string>();
+            foreach (var g in groups.Values.OrderByDescending(g => (double)g["earned"]))
+            {
+                string src = (string)g["source"]; string act = src.EndsWith("_play") ? src.Substring(0, src.Length - 5) : src.EndsWith("_win") ? src.Substring(0, src.Length - 4) : null;
+                if (act != null && (src.EndsWith("_play") || src.EndsWith("_win")) && groups.ContainsKey(act + "_play") | groups.ContainsKey(act + "_win"))
+                {
+                    if (!done.Add(act)) continue; JObject pl, wn; groups.TryGetValue(act + "_play", out pl); groups.TryGetValue(act + "_win", out wn);
+                    string lab = act == "comp" ? "Competitive matches" : act == "cas" ? "Casual matches" : "Customs";
+                    o.Add(new JObject { { "source", act }, { "label", lab }, { "points", Math.Floor((pl == null ? 0 : (double)pl["earned"]) + (wn == null ? 0 : (double)wn["earned"])) }, { "wins", wn == null ? 0 : (int)wn["count"] }, { "games", pl == null ? 0 : (int)pl["count"] } });
+                }
+                else if ((double)g["earned"] > 0) o.Add(new JObject { { "source", src }, { "label", g["label"] }, { "points", Math.Floor((double)g["earned"]) }, { "wins", 0 }, { "games", (int)g["count"] } });
+            }
+            return o;
+        }
+
         public static JObject Me2(string login, int ledgerLimit = 50, Ctx cx = null)
         {
             if (cx == null) cx = BuildCtx();
@@ -393,12 +413,15 @@ namespace PinguinoHost
             if (watched >= 1) add("watching", Math.Floor(watched), 0, 0); if (imported >= 1) add("imported", Math.Floor(imported), 0, 0);
             JObject st; lock (L) st = StreamDoc();
             bool open = (bool?)st["open"] == true; bool dry = (bool?)set["DepreciationDryRun"] != false;
-            return new JObject { { "ok", true }, { "login", c }, { "currency", CurrencyName }, { "balance", Math.Floor(bal) }, { "rank", cx.Rank.ContainsKey(c) ? cx.Rank[c] : 0 }, { "of", cx.Of }, { "minutes", minutes },
+            var res = new JObject { { "ok", true }, { "login", c }, { "currency", CurrencyName }, { "balance", Math.Floor(bal) }, { "rank", cx.Rank.ContainsKey(c) ? cx.Rank[c] : 0 }, { "of", cx.Of }, { "minutes", minutes },
                 { "depreciation", new JObject { { "on", (bool?)set["DepreciationOn"] != false }, { "dryRun", dry }, { "pct", D(set["DepreciationPct"]) }, { "threshold", D(set["DepreciationThreshold"]) }, { "basis", (string)set["DepreciationBasis"] ?? "total" },
                     { "amount", dep }, { "applies", dep > 0 }, { "when", open ? "end of this stream" : "end of the next stream" }, { "streamOpen", open } } },
                 { "loans", LoanView(c, set, minutes) },
                 { "earnings", new JArray(groups.Values.OrderByDescending(g => (double)g["earned"] + (double)g["spent"])) },
-                { "ledger", new JArray(Enumerable.Reverse(rows).Take(Math.Max(1, Math.Min(500, ledgerLimit)))) } };
+                { "ledger", new JArray(Enumerable.Reverse(rows).Take(Math.Max(1, Math.Min(500, ledgerLimit))).Select(x => { var y = (JObject)x.DeepClone(); y["label"] = Label((string)y["source"]); return y; })) },
+                { "players", cx.Of }, { "earned", PageEarned(groups, rows) } };
+            var dp = (JObject)res["depreciation"]; dp["ratePct"] = dp["pct"]; dp["nextAmount"] = dp["amount"]; dp["nextAt"] = null; dp["nextAtKind"] = open ? "end_of_stream" : "next_stream_start";
+            return res;
         }
 
         // ---- helpers for the site bridge ----
@@ -418,7 +441,8 @@ namespace PinguinoHost
         {
             try
             {
-                if (path == "/api/economy/me" && method == "GET") return Me2(login);
+                if ((path == "/api/economy/me" || path == "/api/points") && method == "GET") return Me2(login);
+                if (path == "/api/points/loan" && method == "POST") { var q = new JObject { { "action", body["action"] }, { "login", body["login"] ?? login }, { "amount", body["amount"] }, { "id", body["id"] } }; return Phase2Api("/api/economy/loan", "POST", login, q); }
                 if (path == "/api/economy/depreciation" && method == "GET") return DepreciationPreview();
                 if (path == "/api/economy/loan" && method == "POST")
                 {

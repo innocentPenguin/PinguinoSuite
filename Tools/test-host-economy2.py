@@ -40,6 +40,10 @@ try:
         except Exception: time.sleep(0.5)
     time.sleep(3)   # a few award passes
     # ---- match awards
+    pg = get('/api/points?login=ann')
+    chk('points page shape', all(k in pg for k in ['balance','rank','players','depreciation','loans','earned','ledger']) and all(k in pg['depreciation'] for k in ['threshold','ratePct','nextAmount','nextAt']) and all(k in pg['loans'] for k in ['maxLoan','ratePct','items']), list(pg))
+    ce = [e for e in pg['earned'] if e['source'] == 'comp']
+    chk('earned folds play+win', ce and ce[0]['points'] == 35 and ce[0]['wins'] == 1 and ce[0]['games'] == 1 and all('label' in l for l in pg['ledger']), (ce, pg['ledger'][:1]))
     chk('comp play + win', bal('ann') == 35 and bal('cat') == 10, (bal('ann'), bal('cat')))
     chk('casual play + win', bal('gus') == 20 and bal('eve') == 5, (bal('gus'), bal('eve')))
     chk('customs (viewers) play + win', bal('ivy') == 15 and bal('kim') == 5, (bal('ivy'), bal('kim')))

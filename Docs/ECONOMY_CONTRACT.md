@@ -58,3 +58,20 @@ Once per stream, when the stream ends, anyone holding more than `DepreciationThr
 ## 5. Where points come from now (one door)
 
 Everything moves through `Economy.Award(login, amount, source, note, id)`: one ledger line per movement with the balance after. Finished PinguinoBot matches pay the roster for playing and the winners for winning (`customs`, `comp`, `cas` amounts above). See `Docs\ECONOMY_EVERYWHERE.md` for the rest of the places that must use the same door.
+
+## 6. Points-page shape (05's `GET /api/points`, `POST /api/points/loan`)
+
+The pushed `<view>` (section 1) and the Host's `GET /api/economy/me` / `GET /api/points?login=` now ALSO carry the page's shape, so the site can serve a view as is. Old fields are unchanged; these are additions:
+
+| page field | where in the view |
+|---|---|
+| `balance`, `rank` | same |
+| `players` | = `of` (how many non-bot holders) |
+| `depreciation` | `{threshold, ratePct, nextAmount, nextAt}` added next to the old keys (`pct`, `amount`, ...). `nextAmount` = what this person would lose at the next stream end. `nextAt` is `null` (the Host does not know the end time of a stream); `nextAtKind` is `"end_of_stream"` while a stream is open, else `"next_stream_start"`: show "at the end of this stream" / "after the next stream". `dryRun:true` = practice run, nothing is taken. |
+| `loans` | `{maxLoan, ratePct, items:[{id, principal, owed, at}]}` added (at most one open loan: `id` = `loan-<login>`, `at` = unix seconds taken) |
+| `earned` | `[{source, label, points, wins, games}]`, biggest first. Customs / competitive / casual play+win are folded into one row each (`source` `customs`, `comp`, `cas`; `games` = matches played, `wins` = matches won, `points` = earned from both); every other source is its own row (`wins` 0, `games` = number of ledger lines). |
+| `ledger` | `[{at, source, label, delta, balance, note, id}]`, newest first (`label` added) |
+
+`POST /api/points/loan {action:'take'|'repay', amount}` on the Host (local) = `POST /api/economy/loan` (`login` is needed there because the Host never sees a viewer's token). From the site the loan still travels through the request queue of section 2 (`loan_take` / `loan_repay`).
+
+**Depreciation basis (confirmed):** 2.5% of the WHOLE balance (`basis:"total"`) for anyone above 100,000; `basis:"excess"` (only the part above 100,000) is a setting but not the default.
