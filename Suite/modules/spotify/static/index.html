@@ -130,7 +130,8 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
     <div class="grid"><label>Site URL<input type="text" id="siteurl" placeholder="https://innocentpenguin.com"></label><label>API key (write-only)<input type="text" id="sitekey" placeholder="leave empty to keep the saved key"></label></div>
     <div class="ctl" style="margin-top:8px"><label><input type="checkbox" id="siteon"> enabled</label><button id="bsite" class="pri">Save</button></div></div>
 </section>
-</div><div id="toast"></div>
+</div><div id="dlg" hidden style="position:fixed;inset:0;background:#000a;display:grid;place-items:center;z-index:50"><div class="card" style="min-width:300px;max-width:440px;margin:0"><div id="dlgmsg" style="margin-bottom:10px"></div><input type="text" id="dlgin" hidden style="margin-bottom:10px"><div class="ctl" style="justify-content:flex-end"><button id="dlgno">Cancel</button><button class="pri" id="dlgyes">OK</button></div></div></div>
+<div id="toast"></div>
 <script>
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let S=null,setup=null,tab='queue',dragId=null,pollT=0,lastVer=-1,editing=false;
@@ -141,6 +142,11 @@ async function api(path,body){
   return j;
 }
 function toast(m,bad){const t=$('toast');t.textContent=m;t.style.borderColor=bad?'var(--bad)':'var(--accent)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',3500)}
+// In-page confirm/prompt: window.confirm/prompt are blocked in the app webview. ask(msg) -> true|false ; ask(msg,{input:true}) -> string|null
+function ask(msg,o){o=o||{};return new Promise(res=>{const d=$('dlg'),i=$('dlgin');$('dlgmsg').textContent=msg;i.hidden=!o.input;i.value='';d.hidden=false;(o.input?i:$('dlgyes')).focus();
+  const done=v=>{d.hidden=true;$('dlgyes').onclick=$('dlgno').onclick=i.onkeydown=null;res(v)};
+  $('dlgyes').onclick=()=>done(o.input?(i.value.trim()||null):true);$('dlgno').onclick=()=>done(o.input?null:false);
+  i.onkeydown=e=>{if(e.key==='Enter')$('dlgyes').click();else if(e.key==='Escape')$('dlgno').click()}})}
 window.addEventListener('error',e=>{try{toast('Page error: '+(e.message||e.error),true)}catch(_){}});
 window.addEventListener('unhandledrejection',e=>{try{toast('Error: '+((e.reason&&e.reason.message)||e.reason),true)}catch(_){}});
 async function busy(btn,fn){if(btn.disabled)return;const t=btn.textContent;btn.disabled=true;btn.textContent='…';try{await fn()}catch(e){toast(e.message||String(e),true)}finally{btn.disabled=false;btn.textContent=t}}
@@ -225,8 +231,8 @@ $('queue').ondragover=e=>{const r=e.target.closest('.row');if(!r||!dragId)return
 $('queue').ondrop=e=>{const r=e.target.closest('.row');if(!r||!dragId)return;e.preventDefault();const to=+r.dataset.i;const id=dragId;dragId=null;editing=false;act('/api/queue/move',{id,index:to})};
 $('bundo').onclick=()=>act('/api/queue/undo');
 $('bshuf').onclick=()=>act('/api/queue/shuffle',{},'Shuffled');
-$('brmuser').onclick=()=>{const u=prompt('Remove all queued songs requested by:');if(u)act('/api/queue/remove_user',{user:u},'Removed')};
-$('bclear').onclick=()=>confirm('Remove all viewer requests from the queue?')&&act('/api/queue/clear',{only_viewers:true});
+$('brmuser').onclick=async()=>{const u=await ask('Remove all queued songs requested by:',{input:true});if(u)act('/api/queue/remove_user',{user:u},'Removed')};
+$('bclear').onclick=async()=>{if(await ask('Remove all viewer requests from the queue?'))act('/api/queue/clear',{only_viewers:true})};
 $('bstart').onclick=()=>act('/api/queue/start');
 $('qopen').onchange=e=>act('/api/settings',{requests_open:e.target.checked});
 $('qsafe').onchange=e=>act('/api/settings',{stream_safe:e.target.checked},e.target.checked?'Stream-safe on: no explicit songs, requests need approval':'Stream-safe off');
@@ -287,19 +293,19 @@ $('t-set').addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(!k)ret
   else if(t.dataset.cmd)setVal(k,t.value.split(',').map(x=>x.trim()).filter(Boolean),t.dataset.sub);
   else if(t.dataset.list)setVal(k,t.value.split('\n').map(x=>x.trim()).filter(Boolean));
   else if(t.type==='checkbox')setVal(k,t.checked);else if(t.type==='number')setVal(k,+t.value);else setVal(k,t.value)});
-$('t-set').addEventListener('click',e=>{
+$('t-set').addEventListener('click',async e=>{
   const a=e.target.closest('a[data-reset]'),m=e.target.closest('a[data-resetmsg]'),p=e.target.closest('button[data-preset]');
   if(a){e.preventDefault();setVal(a.dataset.reset,JSON.parse(JSON.stringify(dflt(a.dataset.reset))));drawSettings()}
   if(m){e.preventDefault();const d=SCHEMA.msgs[m.dataset.resetmsg].default;setVal('msgs',d,m.dataset.resetmsg);drawSettings()}
   const up=e.target.closest('button[data-upreset]'),ud=e.target.closest('button[data-udel]');
   if(up)act('/api/preset',{name:up.dataset.upreset},'Applied '+up.dataset.upreset).then(()=>{dirty.clear();DRAFT=null});
-  if(ud&&confirm('Delete preset '+ud.dataset.udel+'?'))act('/api/presets/delete',{name:ud.dataset.udel}).then(()=>{SCHEMA=null;dirty.clear();DRAFT=null;drawnSig='';loadSchema().then(drawSettings)});
+  if(ud&&await ask('Delete preset '+ud.dataset.udel+'?'))act('/api/presets/delete',{name:ud.dataset.udel}).then(()=>{SCHEMA=null;dirty.clear();DRAFT=null;drawnSig='';loadSchema().then(drawSettings)});
   if(p)act('/api/preset',{name:p.dataset.preset},'Preset applied: '+SCHEMA.presets[p.dataset.preset].label).then(()=>{dirty.clear();DRAFT=null})});
 $('bsave').onclick=async()=>{const patch={};for(const f of dirty){const[k,sub]=f.split('.');if(sub){patch[k]=patch[k]||{};patch[k][sub]=DRAFT[k][sub]}else patch[k]=DRAFT[k]}
   try{await api('/api/settings',patch);dirty.clear();DRAFT=null;editing=false;toast('Settings saved');refresh()}catch(e){toast(e.message,true)}};
-$('bsavepreset').onclick=async()=>{const n=prompt('Name for this preset (saves all settings except open/closed):');if(!n)return;try{await api('/api/presets/save',{name:n});SCHEMA=null;await loadSchema();drawnSig='';drawSettings();toast('Saved preset '+n)}catch(e){toast(e.message,true)}};
+$('bsavepreset').onclick=async()=>{const n=await ask('Name for this preset (saves all settings except open/closed):',{input:true});if(!n)return;try{await api('/api/presets/save',{name:n});SCHEMA=null;await loadSchema();drawnSig='';drawSettings();toast('Saved preset '+n)}catch(e){toast(e.message,true)}};
 $('bdiscard').onclick=()=>{dirty.clear();DRAFT=null;editing=false;drawSettings()};
-$('breset').onclick=()=>confirm('Reset ALL settings to their defaults (requests stay closed)?')&&act('/api/settings/reset',{},'Back to defaults').then(()=>{dirty.clear();DRAFT=null});
+$('breset').onclick=async()=>{if(await ask('Reset ALL settings to their defaults (requests stay closed)?'))act('/api/settings/reset',{},'Back to defaults').then(()=>{dirty.clear();DRAFT=null})};
 $('bexport').onclick=()=>{$('porter').hidden=!$('porter').hidden;$('porttext').value=JSON.stringify(S.settings,null,1)};
 $('bimport').onclick=async()=>{try{await api('/api/settings',JSON.parse($('porttext').value));toast('Imported');dirty.clear();DRAFT=null;refresh()}catch(e){toast('Import failed: '+e.message,true)}};
 $('bcopyov').onclick=()=>copy($('ovurl').textContent);
