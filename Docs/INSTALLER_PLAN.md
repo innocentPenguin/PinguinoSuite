@@ -1,6 +1,6 @@
 # PinguinoSuite Installer + PinguinoUpdater: plan
 
-Owner: 01 (Core). Status: built and tested in temp dirs: `Suite/updater/` (library, CLI, 19 node tests), `Installer/` (CLI), read-only `GET /api/update/status` in the core. NOT wired into the live launch path yet (needs 00's go-ahead and a release source).
+Owner: 01 (Core). Status: built and tested in temp dirs: `Suite/updater/` (library, CLI, signing, launch hook, 25 node tests), `Installer/` (CLI), read-only `GET /api/update/status` in the core. The launch hook exists (`updater.mjs launch`) but is NOT called from any launcher yet: 00 reviews, then adds one line to PinguinoApp.bat.
 Related: `Docs/LITE_APP.md` (Lite's own update, owned by 012/04), `Suite/modules/link/src/applyupdate.mjs` (the apply pattern reused here), `App/Setup-Suite.ps1`, `Docs/MODULE_CONTRACT.md`.
 
 ## Goals and hard limits
@@ -20,7 +20,7 @@ A release is:
   ```
   `url` may be relative (resolved against the manifest location, so a folder or USB works the same as a web server).
 - Channels: `stable` (default) and `beta`. Version compare is numeric per dot part (`0.10.0 > 0.9.2`).
-- Integrity: every file is sha256-checked before use and again right before the swap. v1 trusts HTTPS plus the pinned hash in the manifest. **First hardening item: a detached Ed25519 signature over `manifest.json`** (needs a signing key from Ivan, listed under open items).
+- Integrity: every file is sha256-checked before use and again right before the swap. v1 trusts HTTPS plus the pinned hash in the manifest. **Optional Ed25519 signing is built** (`lib/sign.mjs`): a base64 `manifest.sig` next to `manifest.json` (or inside a zip bundle) signs the exact manifest bytes. It is verified only when a public key is configured (`install.json` `pubkey`, `--pubkey`); with a key set an unsigned, tampered or wrong-key release is refused before anything is downloaded. No key configured = hash-only trust over HTTPS. Ivan generates the key pair (the private seed never goes in the repo).
 
 ## Update sources (tried in this order, all yield the same manifest object)
 1. **git**: when the install folder is a clone and `git` exists: `git fetch --tags`, then fast-forward to the newest tag for the channel. Local edits stop the update with a notice (never discarded).
@@ -49,6 +49,9 @@ Keep the last 3 backups. `rollback` restores the newest backup on request.
 5. Register the Updater: write `install.json` and point the Suite launcher at `updater check --apply-if-safe`. No Windows service, no scheduled task.
 6. Uninstall removes program files only, never `Data\`.
 
+## Launch hook (built, not yet called)
+`node Suite/updater/updater.mjs launch` (= `check --apply-if-safe`). It does nothing when: `install.json` has `"auto_update": false`, there is no `source`, the core already answers on 8760 (never swaps files under a running Suite), or the Host says live / unclear. Otherwise it applies with backup + rollback. Default is on once a source is set; no source = no-op, so the live git install is untouched. Tested: apply, setting off, app running, corrupt hash, live defer, failed post-check rollback.
+
 ## What runs at launch
 `Suite launcher` -> `updater check --apply-if-safe` (cap 20 s for check, longer only when applying) -> app window opens. If the updater fails or times out the app still opens on the old version. The shell reads `GET /api/update/status` (read-only, from `update_result.json` / `update_deferred.json`) to show a one-line notice.
 
@@ -62,5 +65,5 @@ Fake release dir with zip + manifest: success; bad hash changes nothing; newer-o
 ## Open items for Ivan
 - Where releases are hosted (`update.url`) and whether the GitHub repo is public for the git path.
 - Release signing key (Ed25519) so v2 can drop plain-hash trust.
-- Exe wrapping of the Updater/Installer (Rust vs a single-file Node build) and whether the Installer needs a GUI.
+- Exe wrapping: Node SEA needs `esbuild` + `postject` from npm (a download, so needs Ivan's/00's ok); the alternative is a tiny Rust launcher exe that needs node installed. Installer window: a Penguino-styled HTA (built into Windows, no downloads) driven by a progress file is the proposed no-dependency route.
 - Whether beta should be offered to Ivan's own PC only.

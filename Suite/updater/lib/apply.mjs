@@ -38,20 +38,20 @@ function takeLock(file, staleMs = 30 * 60 * 1000) {
   return null;
 }
 
-export async function checkUpdate({ source, current, channel = 'stable' }) {
-  const src = await openSource(source);
+export async function checkUpdate({ source, current, channel = 'stable', pubkey = null }) {
+  const src = await openSource(source, { pubkey });
   const m = src.manifest;
   if (m.channel !== channel && !(channel === 'beta' && m.channel === 'stable')) return { available: false, why: `release is on the ${m.channel} channel`, manifest: m };
   return { available: cmpVersion(m.version, current) > 0, manifest: m, src };
 }
 
-export async function applyUpdate({ installDir, source, current, channel = 'stable', liveCheck = hostLiveCheck, keepBackups = 3, postCheck = null, force = false }) {
+export async function applyUpdate({ installDir, source, current, channel = 'stable', pubkey = null, liveCheck = hostLiveCheck, keepBackups = 3, postCheck = null, force = false }) {
   const D = dirs(installDir), res = (ok, message, extra = {}) => { const r = { schema: 1, at: iso(), ok, message, from: current, ...extra }; writeJson(D.result, r); return r; };
   const unlock = takeLock(D.lock);
   if (!unlock) return { schema: 1, ok: true, message: 'another update is already running', skipped: true };
   let backupDir = null, started = false;
   try {
-    const chk = await checkUpdate({ source, current, channel });
+    const chk = await checkUpdate({ source, current, channel, pubkey });
     if (!chk.available) { try { fs.unlinkSync(D.deferred); } catch {} return res(true, chk.why || 'already up to date', { upToDate: true, to: chk.manifest.version }); }
     const m = chk.manifest, to = m.version;
     // never while live (or when we cannot tell)

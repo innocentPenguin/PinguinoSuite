@@ -169,3 +169,63 @@ test('installer CLI falls back from a dead network source to the local one', () 
   const o = JSON.parse(execFileSync('node', [CLI, '--target', target, '--url', 'http://127.0.0.1:1/manifest.json', '--local', rel], { stdio: 'pipe' }).toString());
   assert.equal(o.ok, true, JSON.stringify(o)); assert.equal(o.via, 'local'); assert.match(o.tried[0], /^network:/); assert.equal(read(target, 'App/app.txt'), 'app');
 });
+
+// ---- Optional Ed25519 signing ----
+import { generateKeyPair, signManifest } from '../lib/sign.mjs';
+const sign = (rel, seed) => fs.writeFileSync(path.join(rel, 'manifest.sig'), signManifest(fs.readFileSync(path.join(rel, 'manifest.json')), seed));
+
+test('signing: no key configured means unsigned releases still work', async () => {
+  const inst = makeInstall(), rel = makeRelease('1.1.0', [['App/app.txt', 'new']]);
+  assert.equal((await applyUpdate({ installDir: inst, source: { type: 'local', path: rel }, current: '1.0.0', liveCheck: notLive })).ok, true);
+});
+
+test('signing: a valid signature applies; unsigned, tampered and wrong-key are refused with nothing changed', async () => {
+  const k = generateKeyPair(), other = generateKeyPair();
+  const src = r => ({ type: 'local', path: r });
+  const run = async (rel, pub) => { const inst = makeInstall(); const r = await applyUpdate({ installDir: inst, source: src(rel), current: '1.0.0', pubkey: pub, liveCheck: notLive }); return [inst, r]; };
+  const ok = makeRelease('1.1.0', [['App/app.txt', 'new']]); sign(ok, k.seed);
+  let [inst, r] = await run(ok, k.pubkey); assert.equal(r.ok, true, r.message); assert.equal(read(inst, 'App/app.txt'), 'new');
+  const unsigned = makeRelease('1.1.0', [['App/app.txt', 'new']]);
+  [inst, r] = await run(unsigned, k.pubkey); assert.equal(r.ok, false); assert.match(r.message, /not signed/); assert.equal(read(inst, 'App/app.txt'), 'old app');
+  const tampered = makeRelease('1.1.0', [['App/app.txt', 'new']]); sign(tampered, k.seed);
+  fs.writeFileSync(path.join(tampered, 'manifest.json'), fs.readFileSync(path.join(tampered, 'manifest.json'), 'utf8').replace('1.1.0', '9.9.9'));
+  [inst, r] = await run(tampered, k.pubkey); assert.equal(r.ok, false); assert.match(r.message, /signature/); assert.equal(read(inst, 'App/app.txt'), 'old app');
+  const wrong = makeRelease('1.1.0', [['App/app.txt', 'new']]); sign(wrong, other.seed);
+  [inst, r] = await run(wrong, k.pubkey); assert.equal(r.ok, false); assert.match(r.message, /signature/);
+});
+
+test('signing: a zip bundle carries manifest.sig and installer honours the key', async () => {
+  const k = generateKeyPair(), rel = makeRelease('2.0.0', [['App/app.txt', 'app']]); sign(rel, k.seed);
+  const z = path.join(tmp('bun-'), 'bundle.zip');
+  fs.writeFileSync(z, writeZip(fs.readdirSync(rel).map(n => ({ name: n, data: fs.readFileSync(path.join(rel, n)) }))));
+  const t = path.join(tmp('sg-'), 'S'), r = await installRelease({ target: t, source: { type: 'local', path: z }, pubkey: k.pubkey });
+  assert.equal(r.ok, true, r.message); assert.equal(JSON.parse(read(t, 'install.json')).pubkey, k.pubkey);
+  const t2 = path.join(tmp('sg2-'), 'S'); await assert.rejects(() => installRelease({ target: t2, source: { type: 'local', path: z }, pubkey: generateKeyPair().pubkey }), /signature/);
+  assert.ok(!fs.existsSync(path.join(t2, 'App')));
+});
+
+// ---- Launch hook (updater launch) ----
+import net from 'node:net';
+const UPD = path.join(path.dirname(CLI), '..', 'Suite', 'updater', 'updater.mjs');
+const launch = (inst, extra = []) => JSON.parse(execFileSync('node', [UPD, 'launch', '--install', inst, '--core-port', '1', ...extra], { stdio: 'pipe' }).toString());
+function withSource(inst, rel, more = {}) { const j = JSON.parse(read(inst, 'install.json')); fs.writeFileSync(path.join(inst, 'install.json'), JSON.stringify({ ...j, source: { type: 'local', path: rel }, ...more })); }
+
+test('launch hook: applies from the configured source when the app is not running and the setting allows it', () => {
+  const inst = makeInstall(), rel = makeRelease('1.2.0', [['App/app.txt', 'launched']]); withSource(inst, rel);
+  const o = launch(inst); assert.equal(o.ok, true, JSON.stringify(o)); assert.equal(read(inst, 'App/app.txt'), 'launched'); assert.equal(read(inst, 'Data/keep.txt'), 'my data');
+});
+
+test('launch hook: setting off, no source, or app already running changes nothing', async () => {
+  const rel = makeRelease('1.2.0', [['App/app.txt', 'launched']]);
+  let inst = makeInstall(); withSource(inst, rel, { auto_update: false }); assert.match(launch(inst).message, /off/); assert.equal(read(inst, 'App/app.txt'), 'old app');
+  inst = makeInstall(); assert.match(launch(inst).message, /no update source/);
+  inst = makeInstall(); withSource(inst, rel);
+  const srv = net.createServer().listen(0, '127.0.0.1'); await new Promise(r => srv.on('listening', r));
+  const o = JSON.parse(execFileSync('node', [UPD, 'launch', '--install', inst, '--core-port', String(srv.address().port)], { stdio: 'pipe' }).toString()); srv.close();
+  assert.match(o.message, /already running/); assert.equal(read(inst, 'App/app.txt'), 'old app');
+});
+
+test('launch hook: a corrupt release leaves the old version and reports it', () => {
+  const inst = makeInstall(), rel = makeRelease('1.2.0', [['App/app.txt', 'x']], { badHash: true }); withSource(inst, rel);
+  const o = launch(inst); assert.equal(o.ok, false); assert.equal(read(inst, 'App/app.txt'), 'old app');
+});

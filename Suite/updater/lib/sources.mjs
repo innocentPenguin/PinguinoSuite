@@ -5,6 +5,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { parseManifest, cmpVersion } from './manifest.mjs';
 import { readZip } from './zip.mjs';
+import { verifyManifestSignature } from './sign.mjs';
 
 const MAX_MANIFEST = 256 * 1024, MAX_FILE = 2 * 1024 * 1024 * 1024;
 
@@ -22,24 +23,31 @@ async function httpGet(url, { timeoutMs = 10000, maxBytes = MAX_FILE, allowHttpL
   return buf;
 }
 
+/** opts.pubkey (base64 raw Ed25519 key): when set the manifest must carry a valid manifest.sig. */
 export async function openSource(spec, opts = {}) {
+  const guard = (raw, sig) => { if (opts.pubkey) verifyManifestSignature(raw, sig, opts.pubkey); };
   if (spec.type === 'local') {
     const p = path.resolve(spec.path);
     const st = fs.statSync(p);
     if (st.isDirectory()) {
       const mp = path.join(p, 'manifest.json');
       if (fs.statSync(mp).size > MAX_MANIFEST) throw new Error('update manifest is too large');
-      return { type: 'local', manifest: parseManifest(fs.readFileSync(mp, 'utf8'), p), fetchFile: async f => {
+      const raw = fs.readFileSync(mp), sp = path.join(p, 'manifest.sig');
+      guard(raw, fs.existsSync(sp) ? fs.readFileSync(sp, 'utf8') : '');
+      return { type: 'local', manifest: parseManifest(raw.toString('utf8'), p), fetchFile: async f => {
         const fp = path.resolve(p, f.url); if (!fp.startsWith(p + path.sep)) throw new Error('release file is outside the release folder');
         return fs.readFileSync(fp); } };
     }
     const entries = readZip(fs.readFileSync(p)), byName = Object.fromEntries(entries.map(e => [e.name, e]));
     if (!byName['manifest.json']) throw new Error('that zip has no manifest.json');
-    return { type: 'local', manifest: parseManifest(byName['manifest.json'].data().toString('utf8'), p), fetchFile: async f => {
+    const rawZ = byName['manifest.json'].data();
+    guard(rawZ, byName['manifest.sig'] ? byName['manifest.sig'].data().toString('utf8') : '');
+    return { type: 'local', manifest: parseManifest(rawZ.toString('utf8'), p), fetchFile: async f => {
       const e = byName[f.url]; if (!e) throw new Error(`the zip does not contain ${f.url}`); return e.data(); } };
   }
   if (spec.type === 'https') {
     const body = await httpGet(spec.url, { maxBytes: MAX_MANIFEST, ...opts });
+    if (opts.pubkey) { let sig = ''; try { sig = (await httpGet(new URL('manifest.sig', spec.url).toString(), { maxBytes: 4096, ...opts })).toString('utf8'); } catch {} guard(body, sig); }
     const manifest = parseManifest(body.toString('utf8'), spec.url);
     return { type: 'https', manifest, fetchFile: f => httpGet(new URL(f.url, spec.url).toString(), opts) };
   }

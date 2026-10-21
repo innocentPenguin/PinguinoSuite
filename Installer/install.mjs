@@ -31,8 +31,8 @@ async function main() {
   const tried = [];
   const attempts = [];
   if (opt('repo')) attempts.push(['git', () => viaGit(opt('repo'), opt('tag'))]);
-  if (opt('url')) attempts.push(['network', () => installRelease({ target, channel, source: { type: 'https', url: opt('url') } })]);
-  if (opt('local')) attempts.push(['local', () => installRelease({ target, channel, source: { type: 'local', path: opt('local') } })]);
+  if (opt('url')) attempts.push(['network', () => installRelease({ target, channel, source: { type: 'https', url: opt('url') }, pubkey: opt('pubkey') || null })]);
+  if (opt('local')) attempts.push(['local', () => installRelease({ target, channel, source: { type: 'local', path: opt('local') }, pubkey: opt('pubkey') || null })]);
   if (!attempts.length) return out({ ok: false, message: 'give at least one source: --repo, --url or --local' });
   for (const [name, run] of attempts) {
     try {
