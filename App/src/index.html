@@ -212,7 +212,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;margin:8px 0}.swatch{border:2px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;background:var(--panel2)}.swatch.on{border-color:var(--accent)}
 .swatch .sp1{height:34px;border-radius:8px;margin-bottom:6px;display:flex;overflow:hidden;border:1px solid var(--line)}.swatch .sp1 i{flex:1}
 .prow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}.prow:last-child{border:0}.prow .grow{flex:1;min-width:0}.prow.off .grow{opacity:.45}
-.pnote{color:var(--faint);font-size:12.5px;margin:2px 0 8px}.cm-wrap{display:flex;gap:12px;align-items:flex-start}.cm-list{flex:1;min-width:0}.cm-panel{width:330px;flex:none;position:sticky;top:8px}.cm-row{display:flex;align-items:center;gap:10px;padding:5px 2px;border-top:1px solid var(--line)}.cm-name{flex:1;min-width:0}.cm-open{cursor:pointer}.cm-open:hover{color:var(--accent)}.cm-uses{width:80px;text-align:right}.cm-gh{cursor:pointer;gap:8px;margin-bottom:4px}.cm-f{margin:8px 0}.cm-f label{display:block;font-size:12px;color:var(--faint);margin-bottom:3px}.cm-f input[type=text]{width:100%}@media(max-width:900px){.cm-wrap{flex-direction:column}.cm-panel{width:100%;position:static}}input[type=range]{accent-color:var(--accent);width:150px}input[type=color]{width:38px;height:28px;padding:0;border:1px solid var(--line2);border-radius:8px;background:transparent;cursor:pointer}
+.pnote{color:var(--faint);font-size:12.5px;margin:2px 0 8px}.simban{background:#c62828;color:#fff;font-weight:800;letter-spacing:1.2px;text-align:center;padding:9px 14px;border-radius:10px;margin-bottom:12px;box-shadow:0 0 0 2px #ff6b6b66}.simban small{font-weight:500;letter-spacing:0;margin-left:10px}.simlog{max-height:120px;overflow:auto;margin-top:6px}.simtag{font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;background:#c6282833;color:#ff8a80;margin-left:4px}.cm-wrap{display:flex;gap:12px;align-items:flex-start}.cm-list{flex:1;min-width:0}.cm-panel{width:330px;flex:none;position:sticky;top:8px}.cm-row{display:flex;align-items:center;gap:10px;padding:5px 2px;border-top:1px solid var(--line)}.cm-name{flex:1;min-width:0}.cm-open{cursor:pointer}.cm-open:hover{color:var(--accent)}.cm-uses{width:80px;text-align:right}.cm-gh{cursor:pointer;gap:8px;margin-bottom:4px}.cm-f{margin:8px 0}.cm-f label{display:block;font-size:12px;color:var(--faint);margin-bottom:3px}.cm-f input[type=text]{width:100%}@media(max-width:900px){.cm-wrap{flex-direction:column}.cm-panel{width:100%;position:static}}input[type=range]{accent-color:var(--accent);width:150px}input[type=color]{width:38px;height:28px;padding:0;border:1px solid var(--line2);border-radius:8px;background:transparent;cursor:pointer}
 .commgrid{display:grid;gap:12px;grid-template-columns:1fr}.commgrid.both{grid-template-columns:1fr 1fr}.commgrid section{display:flex;flex-direction:column;min-width:0;gap:8px}
 .cshead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}.cshead .grow{flex:1;min-width:140px}
 .csbody iframe{width:100%;height:calc(100vh - 250px);min-height:320px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}.commsum{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -1095,6 +1095,7 @@ async function loadWheel(){
   if(!areas){mock=true;areas=JSON.parse(JSON.stringify(WG.keepMock||WG_MOCK))}
   if(!areas.some(a=>a.id==='economy')){try{areas.push(wgEconomy(await hostGet('/api/economy')))}catch{}}
   try{WG.obs=await hostGet('/api/obs/status')}catch{WG.obs=null}
+  simLoad();
   WG.d=areas;WG.mock=mock;WG.keepMock=mock?areas.filter(a=>a.id!=='economy'):null;
   if(route==='wheel'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
 const wgVal=(f,aid)=>{const e=WG.edit[aid];return e&&f.key in e?e[f.key]:f.value};
@@ -1113,19 +1114,52 @@ pages.wheel=()=>{
   const a=areas.find(x=>x.id===WG.tab);if(!a)return '<div class="card dim">No settings available.</div>';
   const nChanged=Object.keys(WG.edit[a.id]||{}).length;
   const sims=(areas.find(x=>x.id==='gambling')?.fields||[]).filter(f=>/On$|Enabled$/.test(f.key)).map(f=>f.key.replace(/On$|Enabled$/,''));
-  return `<div class="grid g2" style="align-items:start;max-width:1200px">
+  return `${simBanner()}<div class="grid g2" style="align-items:start;max-width:1200px">
    <div><div class="row wrap" style="margin-bottom:8px">${areas.map(x=>`<span class="chip${x.id===WG.tab?' on':''}" data-wgt="${x.id}">${esc(x.title)}</span>`).join('')}</div>
     ${WG.mock&&a.id!=='economy'?'<div class="pnote" style="color:var(--warn)">Preview data: the Host has no /api/tune yet, so these values are examples and are not saved.</div>':''}
     <div class="card"><div class="row"><h3 style="margin:0">${esc(a.title)}</h3><span class="sp"></span>${splitBtn('wg-save','Save'+(nChanged?' ('+nChanged+')':''),!nChanged,TPLM.menu&&TPLM.menu.kind==='save',TPLM.menu&&TPLM.menu.kind==='save'?tplMenu(a,'save'):'')}<span style="width:8px"></span>${splitBtn('wg-def','Defaults',false,TPLM.menu&&TPLM.menu.kind==='def',TPLM.menu&&TPLM.menu.kind==='def'?tplMenu(a,'def'):'')}</div>
      ${a.help?`<div class="pnote">${esc(a.help)}</div>`:''}${a.id==='obs'?wgObsStatus():''}${a.fields.map(f=>wgField(a,f)).join('')}${WG.msg?`<div class="sm" style="margin-top:8px">${esc(WG.msg)}</div>`:''}</div>
     ${a.id==='economy'?`<div class="card"><h3>Give points silently</h3><div class="pnote">No chat message is sent. Use a negative amount to take points away.</div>
      <div class="row wrap"><select id="gv-who"><option value="user">One viewer</option><option value="everyone">Everyone (in the database)</option></select><input id="gv-login" placeholder="login" style="width:140px"><input id="gv-amt" type="number" value="100" style="width:90px"><input id="gv-why" placeholder="reason" style="width:180px"><button class="sm" id="gv-go">Give</button></div>${WG.gmsg?`<div class="sm" style="margin-top:6px">${esc(WG.gmsg)}</div>`:''}</div>`:''}</div>
-   <div><div class="card"><div class="row"><h3 style="margin:0">Live wheel preview</h3><span class="sp"></span><button class="sm" data-wgact="spin">SPIN</button><button class="sm" data-wgact="new">New round</button><button class="sm" data-wgact="reset">Reset</button></div>
+   <div>${simPanel()}<div class="card"><div class="row"><h3 style="margin:0">Live wheel preview</h3><span class="sp"></span><button class="sm" data-wgact="spin">SPIN</button><button class="sm" data-wgact="new">New round</button><button class="sm" data-wgact="reset">Reset</button></div>
      <div id="wg-box" class="wgbox${WG.full?' full':''}"><button class="wgclose" id="wg-close" title="Close (Esc)">✕ Close</button><div class="wgframe" id="wg-frame"><iframe id="wg-prev" src="${WG_PREVIEW}" title="Live wheel preview"></iframe><div class="wgerr sm" id="wg-err" style="display:none">The wheel preview did not load. Is the Host running? You can still use the buttons above.</div></div></div>
      <div class="row sm faint" style="margin-top:6px"><span>The same overlay OBS shows.</span><span class="sp"></span><button class="sm" id="wg-expand">⤢ Expand</button><button class="sm" data-aext="${WG_PREVIEW}">Open in its own window</button></div></div>
     <div class="card"><h3>Test-bet simulator</h3><div class="pnote">Plays the game with the current gambling settings. No real points move.</div>
      <div class="row wrap"><select id="sm-game">${['gamble','slots'].map(g=>`<option>${esc(g)}</option>`).join('')}</select><input id="sm-bet" type="number" min="1" value="100" style="width:80px"><input id="sm-n" type="number" min="1" max="1000" value="100" style="width:80px"><span class="sm faint">bet × rounds</span><button class="sm" id="sm-run">Simulate</button></div>
      ${WG.sim?`<div style="margin-top:8px" class="sm"><b>${WG.sim.wins}</b> wins · <b>${WG.sim.losses}</b> losses · net <b style="color:${WG.sim.net<0?'var(--warn)':'inherit'}">${WG.sim.net}</b> · avg payout ${WG.sim.avgPayout}${WG.sim.local?' <span class="faint">(estimated locally)</span>':''}</div>`:''}</div></div></div>`};
+/* ---- Player simulator (Host: GET /api/sim/status, POST /api/sim/start|add|remove|join|leave|tick|clear|config). Sim points never touch real ones. ---- */
+const SIMP={st:undefined,msg:'',count:20,n:5};
+async function simLoad(){try{const j=await hostGet('/api/sim/status');SIMP.st=j&&j.ok?j:null}catch{SIMP.st=null}
+  if(route==='wheel'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
+async function simCall(path,body){let r;try{r=await hostJ('/api/sim/'+path,body||{})}catch{r=null}
+  if(r&&r.ok!==false&&r._ok!==false&&r.on!==undefined){SIMP.st=r;SIMP.msg=''}else SIMP.msg=(r&&(r.error||r._detail))||'The Host did not answer. Is it running with the simulator update?';
+  draw(true)}
+setInterval(()=>{if(route==='wheel'&&!document.hidden&&SIMP.st&&SIMP.st.on)simLoad()},3000);
+function simBanner(){const s=SIMP.st;return s&&s.simulation?`<div class="simban" role="alert">SIMULATION ON<small>${s.count} fake player(s)${s.sendSimToSite?' · results are sent to the site':' · not sent to the site'}</small></div>`:''}
+function simPanel(){const s=SIMP.st;
+  if(s===undefined)return '';
+  if(s===null)return `<div class="card"><h3>Player simulator</h3><div class="pnote">Not available: the Host is not running or is older than the simulator update.</div>${SIMP.msg?`<div class="sm" style="color:var(--warn)">${esc(SIMP.msg)}</div>`:''}<button class="sm" id="sim-retry">Check again</button></div>`;
+  const on=!!s.on,dis=on?'':' disabled';
+  return `<div class="card" style="${s.simulation?'border-color:#c62828':''}"><div class="row"><h3 style="margin:0">Player simulator</h3><span class="sp"></span>${on?'<button class="danger sm" id="sim-stop">Stop &amp; clear</button>':'<button class="pri sm" id="sim-start">Start</button>'}</div>
+   <div class="pnote">Fake players use names from ${esc(s.namesSource==='site'?'the site':s.namesSource||'a built-in list')}${s.namesAvailable!=null?' ('+s.namesAvailable+' available)':''}. Their points are separate from real points.</div>
+   ${s.realStreamLive?'<div class="sm" style="color:var(--warn);margin-bottom:6px">The real stream is live: the simulator will refuse to start, and a running one is stopped.</div>':''}
+   ${on?'':`<div class="prow"><div class="grow"><b>Players</b></div><div class="row" style="gap:6px"><input type="range" id="sim-count" min="1" max="200" value="${SIMP.count}"><b id="sim-count-v" style="width:34px">${SIMP.count}</b></div></div>`}
+   <div class="prow"><div class="grow"><b>Joins / leaves per minute</b><div class="sm faint">0 = off. The Host does this on its own.</div></div><div class="row" style="gap:6px"><input type="range" id="sim-churn" min="0" max="120" value="${s.churnPerMin||0}"><b id="sim-churn-v" style="width:34px">${s.churnPerMin||0}</b></div></div>
+   <div class="prow"><div class="grow"><b>Send to the site</b><div class="sm faint">Fake players show on the website wheel and queue.</div></div><label class="sw"><input type="checkbox" id="sim-site" ${s.sendSimToSite?'checked':''}><span></span></label></div>
+   <div class="prow"><div class="grow"><b>Gambling</b><div class="sm faint">Fake players place bets.</div></div><label class="sw"><input type="checkbox" id="sim-gam" ${s.gambling?'checked':''}><span></span></label></div>
+   <div class="row wrap" style="margin-top:8px"><input type="number" id="sim-n" min="1" max="200" value="${SIMP.n}" style="width:70px"><button class="sm" id="sim-add"${dis}>Add</button><button class="sm" id="sim-rem"${dis}>Remove</button><button class="sm" id="sim-tick"${dis}>Step once</button><span class="sp"></span><button class="sm" id="sim-clear"${on||s.count?'':' disabled'}>Clear</button></div>
+   ${SIMP.msg?`<div class="sm" style="color:var(--warn);margin-top:6px">${esc(SIMP.msg)}</div>`:''}
+   ${on?`<div class="sm" style="margin-top:8px"><b>${s.count}</b> players · joins <b>${s.stats?.joins??0}</b> · leaves <b>${s.stats?.leaves??0}</b> · bets <b>${s.stats?.bets??0}</b> · wins <b>${s.stats?.wins??0}</b>${s.queueSim!=null?' · in queue <b>'+s.queueSim+'</b>':''}${s.wheelSignedUp!=null?' · on the wheel <b>'+s.wheelSignedUp+'</b>':''}</div>
+   <div class="sm" style="margin-top:6px">${(s.players||[]).slice(0,40).map(p=>`<span title="${esc(p.points)} sim points">${esc(p.name)}<span class="simtag">sim</span></span>`).join(' ')}${(s.players||[]).length>40?' …':''}</div>
+   <div class="simlog sm faint">${(s.log||[]).slice(-8).reverse().map(l=>`<div>${esc(l.text)}</div>`).join('')}</div>`:(s.stopReason?`<div class="sm faint" style="margin-top:6px">Last stopped: ${esc(s.stopReason)}</div>`:'')}</div>`}
+function simBind(){
+  const c=(id,fn)=>{const e=$('#'+id);if(e)e.onclick=fn},n=()=>Math.max(1,Math.min(200,+$('#sim-n').value||1));
+  c('sim-retry',simLoad);c('sim-start',()=>simCall('start',{count:SIMP.count,mode:'both'}));c('sim-stop',()=>simCall('clear'));c('sim-clear',()=>simCall('clear'));
+  c('sim-add',()=>{SIMP.n=n();simCall('add',{n:SIMP.n})});c('sim-rem',()=>{SIMP.n=n();simCall('remove',{n:SIMP.n})});c('sim-tick',()=>simCall('tick'));
+  const cnt=$('#sim-count');if(cnt)cnt.oninput=()=>{SIMP.count=+cnt.value;$('#sim-count-v').textContent=cnt.value};
+  const ch=$('#sim-churn');if(ch){ch.oninput=()=>{$('#sim-churn-v').textContent=ch.value};ch.onchange=()=>simCall('config',{churnPerMin:+ch.value})}
+  const si=$('#sim-site');if(si)si.onchange=()=>simCall('config',{sendSimToSite:si.checked});
+  const ga=$('#sim-gam');if(ga)ga.onchange=()=>simCall('config',{gambling:ga.checked})}
 function wgSimLocal(g,bet,n){const gm=WG.d.find(x=>x.id==='gambling'),v=k=>{const f=gm?.fields.find(x=>x.key===k);return f?wgVal(f,'gambling'):null};
   const p=(v('winChance')??45)/100,mult=v('payout')??2;let w=0,net=0;for(let i=0;i<n;i++){if(Math.random()<p){w++;net+=bet*(mult-1)}else net-=bet}
   return {wins:w,losses:n-w,net:Math.round(net),avgPayout:Math.round(w?bet*mult:0),local:true}}
@@ -1213,6 +1247,7 @@ function wgPreviewInit(){
   // the frame is a plain local page: probe the Host directly (opaque no-cors answer is enough, only a refused connection fails)
   fetch(WG_PREVIEW.split('?')[0],{mode:'no-cors',cache:'no-store'}).catch(()=>{const e=$('#wg-err');if(e)e.style.display='flex'})}
 function bindWheel(){
+  simBind();
   const a=(WG.d||[]).find(x=>x.id===WG.tab);
   $$('[data-wgt]').forEach(b=>b.onclick=()=>{TPLM.menu=null;WG.tab=b.dataset.wgt;WG.msg='';draw(true)});
   $$('[data-aext]').forEach(b=>b.onclick=e=>{e.preventDefault();openExternal(b.dataset.aext)});
