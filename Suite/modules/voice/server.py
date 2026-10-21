@@ -4,6 +4,7 @@ Silent unless the master switch is on. Page calls are same-origin; other callers
 import hmac
 import json
 import os
+import sys
 import threading
 import time
 import urllib.parse
@@ -501,6 +502,18 @@ PAGES = {"/": "static/index.html"}
 OPEN_POST = {"/api/chat-command"}      # local bots (Host) with no Origin may call this one: it has its own role checks and is silent in chat
 
 
+class Server(ThreadingHTTPServer):
+    """A client that hangs up mid-request is normal; log one line, not a traceback."""
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionError, TimeoutError, BrokenPipeError)):
+            print("client dropped:", type(exc).__name__, flush=True)
+            return
+        super().handle_error(request, client_address)
+
+
 class H(BaseHTTPRequestHandler):
     server_version = "PinguinoVoice"
     protocol_version = "HTTP/1.1"
@@ -581,7 +594,7 @@ def main():
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=voicectl.read_loop, args=(ctl, LISTEN_URL), daemon=True).start()
     threading.Thread(target=review_loop, daemon=True).start()
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    Server(("127.0.0.1", PORT), H).serve_forever()
 
 
 if __name__ == "__main__":
