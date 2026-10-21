@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -92,7 +92,11 @@ namespace PinguinoHost
             if (msgId == "viewermilestone" && T("msg-param-category") == "watch-streak")
             {
                 int v; if (!int.TryParse(T("msg-param-value"), out v)) return;
-                if (Record(login, T("display-name"), v, at, T("msg-param-id"), "live", msg)) Clog.Info("streaks", login + " shared a watch streak of " + v);
+                if (Record(login, T("display-name"), v, at, T("msg-param-id"), "live", msg))
+                {
+                    Clog.Info("streaks", login + " shared a watch streak of " + v);
+                    try { Latest.Record("streak", new Dictionary<string, string> { { "user", string.IsNullOrEmpty(T("display-name")) ? login : T("display-name") }, { "count", v.ToString() } }); } catch (Exception ex) { Clog.Warn("streaks", "activity item failed: " + ex.Message); }   // Multi (03) plays the streak celebration + sound from this item {type:"streak", user, amount}
+                }
             }
         }
         static string Unescape(string s) { return s.Replace("\\s", " ").Replace("\\:", ";").Replace("\\r", "\r").Replace("\\n", "\n").Replace("\\\\", "\\"); }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -47,7 +47,7 @@ namespace PinguinoHost
         /// <summary>called for every Twitch event (Auto.OnEvent) and by the clip / shoutout steps: kind = follow|sub|resub|gift|cheer|raid|redeem|ban|clip|shoutout.</summary>
         public static void Record(string kind, Dictionary<string, string> ctx)
         {
-            if (!new[] { "follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "ban", "unban", "mod", "unmod", "clip", "replay", "first5", "shoutout", "raid_out", "poll", "prediction", "hype" }.Contains(kind)) return;
+            if (!new[] { "follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "ban", "unban", "mod", "unmod", "clip", "replay", "first5", "shoutout", "raid_out", "poll", "prediction", "hype", "streak" }.Contains(kind)) return;
             Func<string, string> g = k => ctx.ContainsKey(k) ? ctx[k] : "";
             if ((kind == "poll" || kind == "prediction" || kind == "hype") && g("state") == "progress") return;   // only begin / lock / end go in the feed (progress would flood it)
             string who = g("user") != "" ? g("user") : g("userName"), what = ""; int amount = 0, tier = 0; string message = "";
@@ -67,6 +67,7 @@ namespace PinguinoHost
                 case "shoutout": what = g("shoutoutUser"); break;
                 case "raid_out": int.TryParse(g("viewers"), out amount); what = g("target"); break;
                 case "poll": case "prediction": case "hype": what = kind == "hype" ? "level " + g("x.level") : g("x.title"); break;
+                case "streak": int.TryParse(g("count"), out amount); what = amount + " streams"; break;
                 case "first5": what = "place " + g("place"); int.TryParse(g("place"), out amount); break;
             }
             if (kind == "cheer") Credits.Add("bits", who, amount); else if (kind == "redeem") Credits.Add("points", who, amount);
@@ -88,7 +89,7 @@ namespace PinguinoHost
                 e["seq"] = ++_seq; a.Add(e); while (a.Count > 500) a.RemoveAt(0);
                 try { File.WriteAllText(Path_, a.ToString()); } catch (Exception) { }
             }
-            if (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod" || kind == "clip" || kind == "replay" || kind == "shoutout" || kind == "first5" || kind == "poll" || kind == "prediction" || kind == "hype" || kind == "raid_out") return;   // the overlay text only follows follower/sub/cheer/raid-type events
+            if (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod" || kind == "clip" || kind == "replay" || kind == "shoutout" || kind == "first5" || kind == "poll" || kind == "prediction" || kind == "hype" || kind == "raid_out" || kind == "streak") return;   // the overlay text only follows follower/sub/cheer/raid-type events
             try { string ts = (string)Settings()["TextSource"]; if (!string.IsNullOrWhiteSpace(ts)) Program.ObsRaw("SetInputSettings", new JObject { { "inputName", ts }, { "inputSettings", new JObject { { "text", Line(e) } } } }); }
             catch (Exception ex) { Clog.Warn("latest", "could not update the OBS text source: " + ex.Message); }
         }

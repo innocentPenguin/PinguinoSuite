@@ -40,6 +40,8 @@ try:
     a = get('/api/streaks'); board = {b['login']: b for b in a['board']}
     chk('live USERNOTICE is recorded, and the same msg-param-id twice only once', board['fresh_face']['best'] == 7 and board['fresh_face']['shares'] == 1)
     say(tag.replace('abc-1', 'abc-2') % (8, 8)); board = {b['login']: b for b in get('/api/streaks')['board']}
+    act = get('/api/activity?type=streak')['items']
+    chk('live streak share adds ONE activity item {type:streak,user,amount} for Multi (same msg id twice = once)', len(act) == 2 and act[0]['type'] == 'streak' and act[0]['user'] == 'Fresh_Face' and act[0]['amount'] == 7)
     chk('a later share raises current and best', board['fresh_face']['current'] == 8 and board['fresh_face']['best'] == 8)
     say('@msg-id=sub;msg-param-sub-plan=2000;msg-param-cumulative-months=5;login=some_sub;tmi-sent-ts=1792500001000 :tmi.twitch.tv USERNOTICE #trial :hi')
     notices = open(os.path.join(d, 'streaks', 'usernotices.jsonl'), encoding='utf-8').read()
