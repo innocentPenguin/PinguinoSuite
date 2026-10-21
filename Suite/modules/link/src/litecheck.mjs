@@ -34,6 +34,9 @@ try {
   check('verified staged Lite is offered in update_manifest.json', rd('update_manifest.json').latest_version === '0.2.0' && /^staging.PinguinoLite-0\.2\.0-setup\.exe$/.test(rd('update_manifest.json').staged_file) && rd('update_status.json').lite_update_available === true);
   process.env.PINGUINO_LITE_VERSION = '0.2.0'; await lite.refresh();
   check('no offer when Lite is already current', !fs.existsSync(path.join(dir, 'update_manifest.json')));
+  const { sharedPath, listShared } = await import('./lite.mjs');
+  check('sharedPath refuses traversal and odd names', ['../config.json', '..\\x.zip', 'a/b-1.0.zip', 'C:\\x-1.zip', 'demo-1.0.0.zip/../../x', 'config.json'].every(n => sharedPath(dir, n) === null));
+  check('listShared offers only hash-sidecar files', listShared(dir).every(f => /^[0-9a-f]{64}$/.test(f.sha256)));
   lite.stop();
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 const failed = results.filter(r => !r).length; console.log(failed ? `\n${failed} FAILED` : '\nAll lite checks passed'); process.exit(failed ? 1 : 0);

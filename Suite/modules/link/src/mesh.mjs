@@ -110,6 +110,15 @@ export function createMesh(cfg, { port }) {
       return { status: res.status, json: await res.json().catch(() => ({})) };
     } catch (e) { throw Object.assign(new Error(`cannot reach ${p.name}: ${e.name === 'TimeoutError' ? 'no answer' : (e.cause?.code || e.message)}`), { status: 502 }); }
   }
+  /** Raw POST to a paired peer by name; returns the fetch Response (caller reads/streams it). Used for update files. */
+  async function rawByName(name, route, body, timeout = 30000) {
+    const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
+    if (!p) throw new Error(`${name} is not paired`);
+    const res = await fetch(url(p, route), { method: 'POST', headers: headersFor(p), body: JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
+    if (res.status === 401) throw new Error('peer no longer trusts this device');
+    seen(p);
+    return res;
+  }
   /** Items from the hub's own pre-stream report (client view), prefixed so they read as "Hub: ...". */
   async function hubPrestream(name) {
     const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
@@ -291,5 +300,5 @@ export function createMesh(cfg, { port }) {
     setInterval(tick, BEAT_MS).unref();
     tick();
   }
-  return { hubPrestream, hasPeer: name => peerList().some(p => p.name.toLowerCase() === String(name).toLowerCase()), peerAuth: authPeer, callByName, start, tick, status, pairRequest, approve, join, heartbeat, broadcast, receive, peerUnpaired, removePeer, startPairing, setName, getName, prestreamItems };
+  return { rawByName, peerNames: () => peerList().map(p => p.name), hubPrestream, hasPeer: name => peerList().some(p => p.name.toLowerCase() === String(name).toLowerCase()), peerAuth: authPeer, callByName, start, tick, status, pairRequest, approve, join, heartbeat, broadcast, receive, peerUnpaired, removePeer, startPairing, setName, getName, prestreamItems };
 }

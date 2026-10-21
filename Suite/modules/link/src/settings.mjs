@@ -43,6 +43,8 @@ export const SCHEMA = [
     { key: 'mesh.allowRemoteMacros', label: 'Let paired devices run my OBS macros', type: 'bool', def: true, help: 'A paired client can press the macros on this PC (scene, mute...). Turn off to make this PC ignore remote presses.' },
     { key: 'mesh.remoteRisky', label: 'Let paired devices start/stop my stream', type: 'bool', def: false, help: 'Allows remote start/stop-stream macros. Off by default: only press those on this PC.' },
     { key: 'mesh.codeMinutes', label: 'Pairing code lifetime (minutes)', type: 'number', min: 1, max: 15, def: 5, help: 'How long a pairing code stays valid. It always works only once.' },
+    { key: 'mesh.shareUpdates', label: 'Share update files with my paired PCs', type: 'bool', def: true, help: 'Paired PCs may download module packages and Lite installers from this PC (hash-checked, nothing runs by itself).' },
+    { key: 'mesh.fetchUpdates', label: 'Fetch update files from my paired PCs', type: 'bool', def: true, help: 'On "Check for updates", pull newer packages from paired PCs into this PC. Installing still needs your click.' },
   ] },
   { group: 'Logging', fields: [
     { key: 'log.level', label: 'Console log level', type: 'select', options: ['debug', 'info', 'warn', 'error'], def: 'info', help: 'Lowest level written to the Suite console (warn = only problems).' },

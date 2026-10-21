@@ -4,7 +4,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
-import { createLite } from './lite.mjs';
+import { createLite, listShared, sharedPath, liteDir } from './lite.mjs';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import * as ts from './tailscale.mjs';
@@ -135,6 +135,15 @@ export async function serve(cfg) {
         return json(200, { ok: true, results: await guarded(name, `from ${p.name}`) });
       }
       if (req.method === 'POST' && req.url === '/api/mesh/forget') return json(200, mesh.peerUnpaired(...peer));
+      if (req.method === 'POST' && (req.url === '/api/mesh/updates/list' || req.url === '/api/mesh/updates/get')) {   // paired PCs fetch update files from this PC
+        mesh.peerAuth(...peer);
+        if (cfg.mesh?.shareUpdates === false) throw Object.assign(new Error('this PC does not share updates (Link > Settings > Devices)'), { status: 403 });
+        if (req.url.endsWith('/list')) { await readJson(req); return json(200, { files: listShared() }); }
+        const f = sharedPath(liteDir(), (await readJson(req)).name);
+        if (!f) throw Object.assign(new Error('no such update file'), { status: 404 });
+        res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': fs.statSync(f).size, 'cache-control': 'no-store' });
+        return fs.createReadStream(f).pipe(res);
+      }
       // The dashboard page on loopback gets the token injected (same-origin only; Host/Origin checks stop other sites).
       if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html') && local) {
         res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store', 'content-security-policy': FRAME });
@@ -255,7 +264,7 @@ export async function serve(cfg) {
   const inTest = process.env.PINGUINO_MESH_TEST || (process.env.PINGUINO_DATA_DIR || '').toLowerCase().startsWith(os.tmpdir().toLowerCase());
   if (!inTest || process.env.PINGUINO_LITE_DIR) {
     const probe = async m => { try { return (await fetch(`http://127.0.0.1:${m.port}${m.health || '/'}`, { signal: AbortSignal.timeout(800) })).status < 500; } catch { return false; } };
-    const lite = createLite({ getHealth: probe });
+    const lite = createLite({ getHealth: probe, peers: { names: () => mesh.peerNames(), enabled: () => cfg.mesh?.fetchUpdates !== false, post: (n, route, body, t) => mesh.rawByName(n, route, body, t) } });
     lite.start().catch(e => log('warn', 'lite', `could not start: ${e.message}`));
     for (const sig of ['SIGTERM', 'SIGINT', 'SIGBREAK']) process.on(sig, () => { lite.stop(); log('info', 'server', `stopping (${sig})`); process.exit(0); });
   }

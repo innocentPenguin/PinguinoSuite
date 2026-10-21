@@ -20,3 +20,8 @@ Code: `Suite/modules/link/` (Node >=22, no deps, port 7777). Docs: this folder. 
 
 ## Rules that shape the code
 Tailscale only; no custom VPN/crypto; no remote shell; no key injection; risky actions (start/stop stream) need confirmation and a guard; role/hub changes need a visible confirm; Link posts no chat lines (if it ever does: only via Host say endpoint).
+
+## PinguinoLite update pipeline (local only, decided by Ivan)
+Source of truth: `Data\lite\packages\<id>-<ver>.zip` (+ `.sha256`) and `Data\lite\staging\PinguinoLite-<ver>-setup.exe` (+ `.sha256`) on the update-host PC.
+Other PCs pull them over the Tailscale mesh from paired PCs (`/api/mesh/updates/list|get`, peer-auth only), on "Check for updates" and every 5 min, hash-verified. Settings: Devices > share / fetch updates.
+Code: lite.mjs (contract, sync, sharing), pkg.mjs (unzip, install, rollback). Tests: litecheck, pkgcheck, updcheck. Nothing installs or runs without a click; Lite self-update apply is not built.

@@ -47,7 +47,7 @@ export function scanModules(root = MODULES) {
   return out;
 }
 
-export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modulesRoot = MODULES } = {}) {
+export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(), modulesRoot = MODULES } = {}) {
   const busy = {};
   let timer = null, polling = false, lastError = null, mstate = {};
   const errors = {};                                           // last failure per module id (shown in installed.json)
@@ -104,6 +104,37 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
     return n;
   }
 
+  /** Fetch newer packages / Lite installers from paired PCs into the local folders. Hash-checked; nothing is installed or run. */
+  async function syncFromPeers() {
+    if (!peers || peers.enabled?.() === false) return { fetched: 0 };
+    let fetched = 0;
+    for (const peer of peers.names()) {
+      let items;
+      try { const r = await peers.post(peer, '/api/mesh/updates/list', {}, 8000); if (!r.ok) continue; items = (await r.json()).files || []; } catch { continue; }
+      const installed = Object.fromEntries(scanModules(modulesRoot).map(m => [m.id, m.version]));
+      const live = process.env.PINGUINO_LITE_VERSION || '0.0.0';
+      for (const it of items.slice(0, 50)) {
+        if (!SHARE_RE.test(it?.name || '') || !/^[0-9a-f]{64}$/.test(it.sha256 || '') || !(it.size <= MAX_SHARE)) continue;
+        const zip = /^([a-z0-9_-]+)-(\d+(?:\.\d+)*)\.zip$/.exec(it.name), exe = /^PinguinoLite-(\d+(?:\.\d+)*)-setup\.exe$/.exec(it.name);
+        const ver = zip ? zip[2] : exe[1];
+        if (zip ? (zip[1] === 'link' || (installed[zip[1]] && cmpVersion(ver, installed[zip[1]]) <= 0)) : cmpVersion(ver, live) <= 0) continue;
+        const dest = path.join(shareDir(dir, it.name), it.name);
+        if (fs.existsSync(dest) && sidecarHash(dest) === it.sha256) continue;
+        try {
+          const r = await peers.post(peer, '/api/mesh/updates/get', { name: it.name }, 120000);
+          if (!r.ok) continue;
+          const buf = Buffer.from(await r.arrayBuffer());
+          if (buf.length > MAX_SHARE || crypto.createHash('sha256').update(buf).digest('hex') !== it.sha256) { log('warn', 'lite', `${it.name} from ${peer} failed the hash check; discarded`); continue; }
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.writeFileSync(dest + '.tmp', buf); fs.renameSync(dest + '.tmp', dest);
+          fs.writeFileSync(dest + '.sha256.tmp', it.sha256 + '\n'); fs.renameSync(dest + '.sha256.tmp', dest + '.sha256');
+          fetched++; log('info', 'lite', `fetched ${it.name} from ${peer} (hash verified)`);
+        } catch (e) { log('warn', 'lite', `could not fetch ${it.name} from ${peer}: ${e.message}`); }
+      }
+    }
+    return { fetched };
+  }
+
   async function refresh(result = 'ok', error) {
     const installed = await writeInstalled(), catalog = writeCatalog();
     return writeUpdateStatus(installed, catalog, result, error);
@@ -117,7 +148,7 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
   /** Handle one request file (already parsed). */
   async function handle(req) {
     const action = req?.action, id = req?.id;
-    if (action === 'check') { busy.lite = 'checking'; writeStatus(); try { await refresh(); } finally { delete busy.lite; } return; }
+    if (action === 'check') { busy.lite = 'checking'; writeStatus(); try { await syncFromPeers().catch(() => {}); await refresh(); } finally { delete busy.lite; } return; }
     if (['install', 'update', 'uninstall', 'rollback'].includes(action)) {
       if (!ID.test(id || '')) { fail(`${action}: missing or bad module id`); return; }
       const verb = { install: 'installing', update: 'updating', uninstall: 'uninstalling', rollback: 'updating' }[action];
@@ -166,11 +197,40 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
       fs.mkdirSync(path.join(dir, 'requests'), { recursive: true });
       await refresh(); writeStatus();
       let n = 0;
-      timer = setInterval(() => { poll().catch(() => {}); if (++n % 15 === 0) { writeStatus(); } if (n % 300 === 0) refresh().catch(() => {}); }, 1000);
+      timer = setInterval(() => { poll().catch(() => {}); if (++n % 15 === 0) { writeStatus(); } if (n % 300 === 0) syncFromPeers().catch(() => {}).then(() => refresh()).catch(() => {}); }, 1000);
       timer.unref?.();
       log('info', 'lite', `PinguinoLite contract folder: ${dir}`);
     },
     stop() { clearInterval(timer); },
-    poll, refresh, handle, writeStatus,
+    poll, refresh, handle, writeStatus, syncFromPeers,
   };
+}
+
+// ---- sharing update files between this user's own paired PCs (served only to paired peers, see server.mjs) ----
+const SHARE_RE = /^(?:[a-z0-9_-]{1,40}-\d+(?:\.\d+)*\.zip|PinguinoLite-\d+(?:\.\d+)*-setup\.exe)$/;
+const MAX_SHARE = 300 * 1024 * 1024;
+const shareDir = (dir, name) => path.join(dir, name.endsWith('.zip') ? 'packages' : 'staging');
+const sidecarHash = f => { try { const h = fs.readFileSync(f + '.sha256', 'utf8').trim().split(/\s+/)[0].toLowerCase(); return /^[0-9a-f]{64}$/.test(h) ? h : ''; } catch { return ''; } };
+
+/** Files this PC offers to paired PCs: only hash-sidecar'd packages and staged Lite installers. */
+export function listShared(dir = liteDir()) {
+  const out = [];
+  for (const sub of ['packages', 'staging']) {
+    let names = []; try { names = fs.readdirSync(path.join(dir, sub)); } catch {}
+    for (const name of names) {
+      if (!SHARE_RE.test(name)) continue;
+      const f = path.join(dir, sub, name), sha = sidecarHash(f);
+      let st; try { st = fs.statSync(f); } catch { continue; }
+      if (sha && st.isFile() && st.size <= MAX_SHARE) out.push({ name, size: st.size, sha256: sha });
+    }
+  }
+  return out;
+}
+/** Absolute path of a shared file, or null. The name is checked against a strict pattern: nothing else can be read. */
+export function sharedPath(dir, name) {
+  const n = String(name || '');
+  const base = n.endsWith('.sha256') ? n.slice(0, -7) : n;
+  if (!SHARE_RE.test(base)) return null;
+  const f = path.join(shareDir(dir, base), n);
+  return fs.existsSync(f) && fs.statSync(f).isFile() ? f : null;
 }
