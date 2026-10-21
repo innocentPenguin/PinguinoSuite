@@ -12,22 +12,23 @@ using Newtonsoft.Json.Linq;
 
 // ═══════════════════════════════════════
 //  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
-//    51    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
-//    358   HelperSettings (every setting + default)
-//    398   State (static caches, cooldowns, test hooks)
-//    417   Patterns (free pass regexes)
-//    441   Entry point Execute()
-//    507   Help-review log (private review.jsonl)
-//    561   Handle() / HandleCore(): the message pipeline
-//    670   !helper / !ask / !pinguino (knowledge pack answers)
-//    805   Random chime + OptedOutOfBots
-//    845   Context gate (only help when really asked)
-//    895   Minecraft + website facts, Taught notes, site answers
-//    1146  AI intent picker + Ask() (Claude/OpenAI)
-//    1223  Answers and actions (Respond/Do, queue, register)
-//    1382  Text building (lobby line, how-to-join)
-//    1451  Reading game manager files, Say()
+//    52    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    359   HelperSettings (every setting + default)
+//    399   State (static caches, cooldowns, test hooks)
+//    418   Patterns (free pass regexes)
+//    442   Entry point Execute()
+//    508   Help-review log (private review.jsonl)
+//    562   Handle() / HandleCore(): the message pipeline
+//    671   !helper / !ask / !pinguino (knowledge pack answers)
+//    806   Random chime + OptedOutOfBots
+//    846   Context gate (only help when really asked)
+//    896   Minecraft + website facts, Taught notes, site answers
+//    1147  AI intent picker + Ask() (Claude/OpenAI)
+//    1224  Answers and actions (Respond/Do, queue, register)
+//    1384  Text building (lobby line, how-to-join)
+//    1453  Reading game manager files, Say()
 // ═══════════════════════════════════════
+
 
 
 
@@ -422,7 +423,7 @@ public class CPHInline
     static readonly Regex RxHowReg = new Regex(@"\bhow\b.{0,25}\b(register|sign\s*up|link)\b|\bwhat('?s|\s+is)\b.{0,12}\bregister\b|\b(register|registration)\b.{0,20}\b(work|how|help|not\s+working|doesn'?t|wont|won'?t|fail|error)|\bhow\b.{0,15}\b(epic|link\s+my)\b", RX);
     static readonly Regex RxDoReg = new Regex(@"^\s*(please\s+|pls\s+|plz\s+)?(register|sign)\s+me\s+(up\s+)?(as|with|under|using)\s+(?<n>.+?)\s*[.!?]*\s*$|\bmy\s+(epic|epic\s+games|epic\s+name|epic\s+id|game\s*id|rl\s+name|username\s+is)\s*(name\s*|id\s*)?(is|=|:)\s*(?<n>.+?)\s*[.!?]*\s*$|^\s*(please\s+)?register\s+me\s*[:\-]\s*(?<n>.+?)\s*$", RX);
     static readonly Regex RxDoJoin = new Regex(@"\b(add|put|throw|stick|sign|get|let)\s+(me|us)\s+(in|into|on|to)?\s*(the\s+)?(queue|list|game|lobby|match|custom)|\b(let|lemme|lemme|gonna|wanna|want\s+to|can\s+i|can\s+you)\s+(me\s+)?(join|get\s+in)\b|^\s*(i\s+)?(wanna|want\s+to|would\s+like\s+to|'?d\s+like\s+to)\s+(play|join)\s*[.!?]*\s*$|^\s*(join\s+me|i'?m\s+in|im\s+in|count\s+me\s+in|queue\s+me)\s*[.!?]*\s*$", RX);
-    static readonly Regex RxDoLeave = new Regex(@"\b(take|remove|get|pull|drop)\s+me\s+(out|off)\b.{0,20}\b(queue|list|game|lobby)?|\b(leave|exit|quit)\s+(the\s+)?(queue|lobby|game|list)\b|\bi\s+(have\s+to|gotta|need\s+to|must)\s+(go|leave)\b.{0,25}\b(queue|game|lobby)\b|\b(cancel|unqueue|dequeue)\s+me\b|\bi'?m\s+out\b.{0,12}\b(queue|game)", RX);
+    static readonly Regex RxDoLeave = new Regex(@"\b(take|remove|get|pull|drop)\s+me\s+(out|off)\b.{0,20}\b(queue|list|game|lobby)?|\b(leave|exit|quit)\s+(the\s+)?(queue|lobby|game|list|wheel)\b|\bi\s+(have\s+to|gotta|need\s+to|must)\s+(go|leave)\b.{0,25}\b(queue|game|lobby)\b|\b(cancel|unqueue|dequeue)\s+me\b|\bi'?m\s+out\b.{0,12}\b(queue|game)", RX);
     static readonly Regex RxPos = new Regex(@"\b(where|what('?s|\s+is))\b.{0,12}\b(am\s+i|my\s+(place|position|spot|pos|turn))\b.{0,18}\b(queue|line|list)?|\b(my\s+)?(position|spot|place)\s+(in\s+)?(the\s+)?(queue|line|list)\b|\bhow\s+(long|far|many)\b.{0,25}\b(until|till|before|to)\b.{0,15}\b(my\s+turn|play|i\s+play|im\s+up|i'?m\s+up)|\bam\s+i\s+(in|on)\s+(the\s+)?(queue|list)\b|\bwhen\s+(do|will|am)\s+(i|we)\b.{0,12}\b(play|up|next|go)\b", RX);
     // the viewer is telling the helper it got it wrong ("wasn't talking to you", "wrong context", "i didn't ask", "rustbucket")
     static readonly Regex RxNegFeedback = new Regex(@"\b(wasn'?t|was\s+not|not|weren'?t|isn'?t)\s+(even\s+)?(talking|speaking|asking)\s+(to|with)\s+(you|u|the\s+bot)\b|\bwrong\s+context\b|\bi\s+(didn'?t|did\s+not|never)\s+(ask|call)\b|\bnobody\s+asked\b|\bnot\s+(asking|talking\s+to)\s+you\b|\b(rust\s*bucket|clanker)\b.{0,20}\b(stop|shut|quiet|go\s+away)\b|\b(stop|shut\s+up|be\s+quiet|go\s+away)\b.{0,12}\b(helper|bot|pinguino\w*)\b|\bnot\s+you\b", RX);
@@ -1295,7 +1296,8 @@ public class CPHInline
             case "site_emotes": Say(who + "The channel's 7TV emotes, searchable: " + SiteUrl("/emotes")); return true;
             case "mmr_info": Say(who + "Type !mmr to see your MMR, or !stats for your wins and points."); return true;
             case "do_leave":
-                Say(who + "Thanks for asking! Type !leave and you are out of the queue.");   // read-only: the viewer types the command themselves
+                if (Regex.IsMatch(_curText ?? "", @"\bwheel\b", RegexOptions.IgnoreCase)) Say(who + "Thanks for asking! Type !notme to take yourself off the wheel. (!leave is only for the custom queue.)");
+                else Say(who + "Thanks for asking! Type !leave and you are out of the queue.");   // read-only: the viewer types the command themselves
                 return true;
             case "position":
                 return Do(login, display, "position", "");

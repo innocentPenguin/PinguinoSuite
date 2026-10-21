@@ -46,3 +46,6 @@ Players without a strike can stay in the queue and are put back in line after th
 
 ## Customs time out
 A custom game times out after 15 minutes of inactivity.
+
+## Leaving the tournament wheel
+Type !notme to take yourself off the wheel. !leave is only for the custom queue and does not touch the wheel.
