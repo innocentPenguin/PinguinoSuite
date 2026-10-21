@@ -3,163 +3,166 @@ tells modules about it, and serves the dashboard. Run via PinguinoSuite.bat (or 
 # INDEX-BEGIN (regenerate: scratch idx.py; line numbers are of this file)
 # INDEX: Suite core (FastAPI, 127.0.0.1:8760): module supervision, vault/help/prestream/devices/console APIs, serves the shell UI. Routes + public functions:
 # Related: Suite/modules.json (module manifests), Docs/MODULE_CONTRACT.md, Suite/suite/{vault,helpdb,prestream,device,consolelog,integrations}.py, App/src/index.html
-#   212  def module_token
-#   242  def load_settings
-#   253  def save_settings
-#   285  def tail_lines
-#   313  class Bus
-#   338  def kill_tree
-#   353  class Module
-#   475  def discover_specs
-#   498  def on_transition
-#   509  def apply_stream
-#   529  def twitch_loop
-#   544  def process_control
-#   586  def run_prestream
-#   612  def prestream_loop
-#   631  def reconcile_devices
-#   652  def status_loop
-#   670  def device_sync_loop
-#   688  def health_loop
-#   706  def autostart_enabled
-#   718  def set_autostart
-#   735  def lifespan
-#   765  def guard
-#   791  GET    /
-#   792  def index
-#   798  GET    /theme.css
-#   799  def theme_css
-#   807  GET    /bootstrap.js
-#   808  def bootstrap_js
-#   816  GET    /api/capabilities
-#   817  def capabilities
-#   823  WEBSOCKET /ws
-#   824  def ws
-#   840  GET    /api/state
-#   841  def state
-#   847  class Opt
-#   853  GET    /api/modules/{mid}/probe
-#   854  def module_probe
-#   910  def declared_secrets
-#   932  def vault_prestream_items
-#   960  GET    /api/prefs
-#   961  def prefs_get
-#   966  POST   /api/prefs
-#   967  def prefs_set
-#   971  POST   /api/prefs/reset
-#   972  def prefs_reset
-#   983  GET    /api/templates
-#   984  def templates_list
-#   990  POST   /api/templates
-#   991  def templates_save
-#   997  POST   /api/templates/rename
-#   998  def templates_rename
-#  1003  POST   /api/templates/delete
-#  1004  def templates_delete
-#  1009  GET    /api/help
-#  1010  def help_get
-#  1028  GET    /api/help/all
-#  1029  def help_all
-#  1034  GET    /api/vault
-#  1035  def vault_list
-#  1055  class VaultValue
-#  1059  GET    /api/vault/{name}
-#  1060  def vault_read
-#  1078  POST   /api/vault/import-plaintext
-#  1079  def vault_import
-#  1087  class Scrub
-#  1092  POST   /api/vault/scrub
-#  1093  def vault_scrub
-#  1106  class Passphrase
-#  1110  POST   /api/vault/backup
-#  1111  def vault_backup
-#  1121  POST   /api/vault/restore
-#  1122  def vault_restore
-#  1132  POST   /api/vault/{name}/set
-#  1133  def vault_set
-#  1150  POST   /api/vault/{name}/delete
-#  1151  def vault_delete
-#  1158  POST   /api/vault/{name}/test
-#  1159  def vault_test
-#  1175  GET    /api/integrations
-#  1176  def integrations_get
-#  1211  class PostReq
-#  1216  POST   /api/modules/{mid}/post
-#  1217  def module_post
-#  1238  GET    /api/modules/{mid}/get
-#  1239  def module_get
-#  1254  GET    /api/modules/{mid}/logs
-#  1255  def module_logs
-#  1261  class DevConfig
-#  1270  class Setup
-#  1276  GET    /api/setup
-#  1277  def setup_get
-#  1283  POST   /api/setup
-#  1284  def setup_post
-#  1295  class ExportReq
-#  1300  POST   /api/export
-#  1301  def export_config
-#  1323  def backup_cfg
-#  1328  def backup_list
-#  1336  def run_backup
-#  1351  def backup_loop
-#  1364  GET    /api/backup/auto
-#  1365  def backup_auto_get
-#  1369  POST   /api/backup/auto
-#  1370  def backup_auto_set
-#  1378  POST   /api/backup/auto/run
-#  1379  def backup_auto_run
-#  1387  POST   /api/import
-#  1388  def import_config
-#  1400  GET    /api/device
-#  1401  def device_get
-#  1405  POST   /api/device/config
-#  1406  def device_config
-#  1411  POST   /api/device/take
-#  1412  def device_take
-#  1419  POST   /api/device/release
-#  1420  def device_release
-#  1426  POST   /api/device/peer
-#  1427  def device_peer
-#  1433  class Streaming
-#  1437  POST   /api/device/streaming
-#  1438  def device_streaming
-#  1443  GET    /api/device/lease
-#  1444  def device_lease
-#  1450  POST   /api/voice/dispatch
-#  1451  def voice_dispatch
-#  1471  GET    /api/console
-#  1472  def console_get
-#  1477  GET    /api/prestream/schedule
-#  1478  def prestream_schedule_get
-#  1482  POST   /api/prestream/schedule
-#  1483  def prestream_schedule_set
-#  1490  GET    /api/prestream
-#  1491  def prestream_get
-#  1495  POST   /api/prestream/run
-#  1496  def prestream_run
-#  1500  GET    /api/events/log
-#  1501  def event_log
-#  1512  POST   /api/modules/{mid}/enable
-#  1513  def module_enable
-#  1531  POST   /api/modules/{mid}/options
-#  1532  def module_options
-#  1539  POST   /api/modules/{mid}/{action}
-#  1540  def module_action
-#  1551  class Chan
-#  1555  POST   /api/channel
-#  1556  def set_channel
-#  1563  class Sim
-#  1567  POST   /api/simulate
-#  1568  def simulate
-#  1580  class Auto
-#  1584  POST   /api/windows-autostart
-#  1585  def windows_autostart
-#  1590  POST   /api/quit
-#  1591  def quit_suite
-#  1603  def open_app
-#  1614  def start_tray
-#  1634  def already_running
+#   210  def rotate_log
+#   230  def module_token
+#   260  def load_settings
+#   271  def save_settings
+#   303  def tail_lines
+#   331  class Bus
+#   356  def kill_tree
+#   371  class Module
+#   494  def discover_specs
+#   517  def on_transition
+#   528  def apply_stream
+#   548  def twitch_loop
+#   563  def process_control
+#   605  def run_prestream
+#   631  def prestream_loop
+#   650  def reconcile_devices
+#   671  def status_loop
+#   689  def device_sync_loop
+#   707  def health_loop
+#   725  def autostart_enabled
+#   737  def set_autostart
+#   754  def lifespan
+#   784  def guard
+#   810  GET    /
+#   811  def index
+#   817  GET    /assets/{name}
+#   818  def shell_asset
+#   830  GET    /theme.css
+#   831  def theme_css
+#   839  GET    /bootstrap.js
+#   840  def bootstrap_js
+#   848  GET    /api/capabilities
+#   849  def capabilities
+#   855  WEBSOCKET /ws
+#   856  def ws
+#   872  GET    /api/state
+#   873  def state
+#   879  class Opt
+#   885  GET    /api/modules/{mid}/probe
+#   886  def module_probe
+#   942  def declared_secrets
+#   964  def vault_prestream_items
+#   992  GET    /api/prefs
+#   993  def prefs_get
+#   998  POST   /api/prefs
+#   999  def prefs_set
+#  1003  POST   /api/prefs/reset
+#  1004  def prefs_reset
+#  1015  GET    /api/templates
+#  1016  def templates_list
+#  1022  POST   /api/templates
+#  1023  def templates_save
+#  1029  POST   /api/templates/rename
+#  1030  def templates_rename
+#  1035  POST   /api/templates/delete
+#  1036  def templates_delete
+#  1041  GET    /api/help
+#  1042  def help_get
+#  1060  GET    /api/help/all
+#  1061  def help_all
+#  1066  GET    /api/vault
+#  1067  def vault_list
+#  1087  class VaultValue
+#  1091  GET    /api/vault/{name}
+#  1092  def vault_read
+#  1110  POST   /api/vault/import-plaintext
+#  1111  def vault_import
+#  1119  class Scrub
+#  1124  POST   /api/vault/scrub
+#  1125  def vault_scrub
+#  1138  class Passphrase
+#  1142  POST   /api/vault/backup
+#  1143  def vault_backup
+#  1153  POST   /api/vault/restore
+#  1154  def vault_restore
+#  1164  POST   /api/vault/{name}/set
+#  1165  def vault_set
+#  1182  POST   /api/vault/{name}/delete
+#  1183  def vault_delete
+#  1190  POST   /api/vault/{name}/test
+#  1191  def vault_test
+#  1207  GET    /api/integrations
+#  1208  def integrations_get
+#  1243  class PostReq
+#  1248  POST   /api/modules/{mid}/post
+#  1249  def module_post
+#  1270  GET    /api/modules/{mid}/get
+#  1271  def module_get
+#  1286  GET    /api/modules/{mid}/logs
+#  1287  def module_logs
+#  1293  class DevConfig
+#  1302  class Setup
+#  1308  GET    /api/setup
+#  1309  def setup_get
+#  1315  POST   /api/setup
+#  1316  def setup_post
+#  1327  class ExportReq
+#  1332  POST   /api/export
+#  1333  def export_config
+#  1355  def backup_cfg
+#  1360  def backup_list
+#  1368  def run_backup
+#  1383  def backup_loop
+#  1396  GET    /api/backup/auto
+#  1397  def backup_auto_get
+#  1401  POST   /api/backup/auto
+#  1402  def backup_auto_set
+#  1410  POST   /api/backup/auto/run
+#  1411  def backup_auto_run
+#  1419  POST   /api/import
+#  1420  def import_config
+#  1432  GET    /api/device
+#  1433  def device_get
+#  1437  POST   /api/device/config
+#  1438  def device_config
+#  1443  POST   /api/device/take
+#  1444  def device_take
+#  1451  POST   /api/device/release
+#  1452  def device_release
+#  1458  POST   /api/device/peer
+#  1459  def device_peer
+#  1465  class Streaming
+#  1469  POST   /api/device/streaming
+#  1470  def device_streaming
+#  1475  GET    /api/device/lease
+#  1476  def device_lease
+#  1482  POST   /api/voice/dispatch
+#  1483  def voice_dispatch
+#  1503  GET    /api/console
+#  1504  def console_get
+#  1509  GET    /api/prestream/schedule
+#  1510  def prestream_schedule_get
+#  1514  POST   /api/prestream/schedule
+#  1515  def prestream_schedule_set
+#  1522  GET    /api/prestream
+#  1523  def prestream_get
+#  1527  POST   /api/prestream/run
+#  1528  def prestream_run
+#  1532  GET    /api/events/log
+#  1533  def event_log
+#  1544  POST   /api/modules/{mid}/enable
+#  1545  def module_enable
+#  1563  POST   /api/modules/{mid}/options
+#  1564  def module_options
+#  1571  POST   /api/modules/{mid}/{action}
+#  1572  def module_action
+#  1583  class Chan
+#  1587  POST   /api/channel
+#  1588  def set_channel
+#  1595  class Sim
+#  1599  POST   /api/simulate
+#  1600  def simulate
+#  1612  class Auto
+#  1616  POST   /api/windows-autostart
+#  1617  def windows_autostart
+#  1622  POST   /api/quit
+#  1623  def quit_suite
+#  1635  def open_app
+#  1646  def start_tray
+#  1666  def already_running
 # INDEX-END
 import asyncio
 import json
@@ -201,6 +204,21 @@ FROZEN = getattr(sys, "frozen", False)
 ROOT = Path(os.environ["PINGUINO_SUITE_DIR"]) if FROZEN and os.environ.get("PINGUINO_SUITE_DIR") else Path(__file__).resolve().parents[1]
 LOGS = ROOT / "logs"
 LOGS.mkdir(exist_ok=True)
+LOG_MAX = 10 * 1024 * 1024   # a module log bigger than this is moved to logs/Archive/ the next time its module starts (never deleted)
+
+
+def rotate_log(f, limit=LOG_MAX):
+    """Move an oversized log into logs/Archive/<name>-<timestamp>.log. Best effort: if something still holds the file (Windows), leave it."""
+    try:
+        if not f.exists() or f.stat().st_size <= limit:
+            return None
+        dest_dir = f.parent / "Archive"
+        dest_dir.mkdir(exist_ok=True)
+        dest = dest_dir / f"{f.stem}-{datetime.now().strftime('%Y%m%d-%H%M%S')}{f.suffix}"
+        os.replace(f, dest)
+        return dest
+    except OSError:
+        return None
 SETTINGS = ROOT / "suite_settings.json"
 PORT = int(os.environ.get("PINGUINO_PORT", "8760"))
 PY = os.environ.get("PINGUINO_PYTHON") or (("python" if os.name == "nt" else "python3") if FROZEN else sys.executable)
@@ -401,6 +419,7 @@ class Module:
                 console_log.log("error", "supervisor", f"{self.id}: port {port} is held by a process that does not answer; not starting a second copy. Stop that process (or restart the Suite) to recover.", module=self.id)
             return
         cmd = [PY if c == "{py}" else c for c in self.spec["cmd"]]
+        rotate_log(LOGS / f"{self.id}.log")
         log = open(LOGS / f"{self.id}.log", "ab")
         if IS_WIN:
             extra = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -793,6 +812,19 @@ def index():
     """Standalone/browser mode only (the Tauri shell loads the UI itself and gets the token via IPC)."""
     html = UI_INDEX.read_text("utf8") if UI_INDEX else "<h1>PinguinoSuite core</h1>"
     return HTMLResponse(html.replace("<head>", f'<head><meta name="pinguino-token" content="{TOKEN}">', 1))
+
+
+@app.get("/assets/{name}")
+def shell_asset(name: str):
+    """Images the shell page links with a root-relative path (App/src/assets). Plain file names only."""
+    base = (UI_INDEX.parent / "assets") if UI_INDEX else None
+    f = base / name if base else None
+    if not f or not name.replace("-", "").replace("_", "").replace(".", "").isalnum() or ".." in name or not f.is_file():
+        raise HTTPException(404)
+    mt = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".webp": "image/webp"}.get(f.suffix.lower())
+    if not mt:
+        raise HTTPException(404)
+    return Response(f.read_bytes(), media_type=mt, headers={"Cache-Control": "max-age=3600"})
 
 
 @app.get("/theme.css")
