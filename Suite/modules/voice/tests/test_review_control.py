@@ -214,5 +214,14 @@ class Review(unittest.TestCase):
         self.assertIsNone(r.tick())
 
 
+class ReadJsonl(unittest.TestCase):
+    def test_text_or_odd_times_in_other_modules_logs_do_not_crash(self):
+        path = os.path.join(tempfile.mkdtemp(), "x.jsonl")
+        with open(path, "w", encoding="utf8") as f:
+            f.write('{"ts": "100"}\n{"ts": "abc"}\n{"ts": [1]}\n[1,2]\n{"ts": 120.5}\nnot json\n{"ts": "1970-01-01T00:03:20+0000"}\n')
+        rows = rv.read_jsonl(path, 0, 1000)
+        self.assertEqual(sorted(r["_t"] for r in rows), [100.0, 120.5, 200.0])
+
+
 if __name__ == "__main__":
     unittest.main()

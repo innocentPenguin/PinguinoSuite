@@ -30,6 +30,16 @@ def fmt_ts(t):
     return datetime.datetime.fromtimestamp(t).strftime("%H:%M:%S")
 
 
+def _as_epoch(v):
+    """Seconds since 1970 from a number, a numeric string or an ISO timestamp (the Multi log writes those)."""
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            return datetime.datetime.strptime(v, "%Y-%m-%dT%H:%M:%S%z").timestamp()
+    return float(v or 0)
+
+
 def read_jsonl(path, since, until, key="ts", tail=6000, scale=1.0):
     out = []
     try:
@@ -42,7 +52,12 @@ def read_jsonl(path, since, until, key="ts", tail=6000, scale=1.0):
             r = json.loads(ln)
         except ValueError:
             continue
-        t = (r.get(key) or 0) * scale
+        if not isinstance(r, dict):
+            continue
+        try:  # other modules' logs may hold the time as text or something odd: coerce, never crash the review
+            t = _as_epoch(r.get(key)) * scale
+        except (TypeError, ValueError, OverflowError):
+            continue
         if since <= t <= until:
             r["_t"] = t
             out.append(r)
