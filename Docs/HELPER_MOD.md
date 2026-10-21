@@ -2,8 +2,8 @@
 
 Only the MOD knowledge pack gets these (the helper reads it only when the asker has role 3 or higher). Short, practical, no secrets and no tokens. One `## Title` section per entry.
 
-## Change the private match name or password
-!lobbyname NAME sets the private match name and !lobbypass PASS sets the password (!lobbypass off clears it). The helper and !pm both read the new value at once.
+## Change the private match name
+!lobbyname NAME sets the private match name. Customs use a name only: the bots never save or say a password. The helper and !pm both read the new name at once.
 
 ## Strikes
 !strike @user gives a temporary strike, !strike @user perma adds a permanent one (add a reason such as toxicity, slurs, racist or hate). !unstrike @user removes one and !unstrike @user perma removes a permanent one. Temporary strikes fade by one per full day.

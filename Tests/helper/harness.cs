@@ -58,12 +58,12 @@ public static class Harness
         foreach (var q in new[] { "whats the code", "what's the code?", "name and pass?", "lobby password?", "gimme the pass", "what is the private match name", "whats the lobby name", "pass?", "can someone give me the password" })
         {
             Msg("Newbie", q);
-            Check("lobby: " + q, Last() != null && Last().Contains("Name: peng3") && Last().Contains("no password") && !Forwarded(), Last());
+            Check("lobby: " + q, Last() != null && Last().Contains("Name: peng3") && !Last().ToLower().Contains("password") && !Forwarded(), Last());
         }
         Check("reply names the viewer", Last().StartsWith("@Newbie "));
         Settings(",\"LobbyName\":\"zzz9\",\"LobbyPassword\":\"hunter2\"");
         Msg("Newbie", "whats the code");
-        Check("values come from the config file, not code; the password is never said, the private site page is named", Last().Contains("zzz9") && !Last().Contains("hunter2") && Last().Contains("/customs") && !Last().Contains("peng3"), Last());
+        Check("values come from the config file, not code; the name only, a stored password is never said and is scrubbed from the file", Last().Contains("zzz9") && !Last().Contains("hunter2") && !Last().ToLower().Contains("password") && !Last().Contains("peng3") && !File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("hunter2"), Last());
         Settings();
 
         // 2. how to join / register: right example, no brackets
@@ -262,10 +262,10 @@ public static class Harness
         Settings(",\"FactsUrl\":\"\"");
         Msg("L1", "!lobbyname arena7", false); Check("lobby name: non-mods are refused", Last() != null && Last().Contains("Only mods"), Last());
         Msg("L2", "!lobbyname arena7", true); Check("a mod sets the lobby name", Last() != null && Last().Contains("arena7") && File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("arena7"), Last());
-        Msg("L2", "!lobbypass hunter2", true); Check("a mod sets the lobby password: chat does not echo it, the site page is named, the file keeps it with who/when", Last() != null && !Last().Contains("hunter2") && Last().Contains("/customs") && File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("hunter2") && File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("LobbyUpdatedAt\": \"20"), Last());
-        Msg("L3", "what's the lobby code"); Check("viewers get the new name but never the password", Last() != null && Last().Contains("arena7") && !Last().Contains("hunter2") && Last().Contains("/customs"), Last());
-        Msg("L3", "when does the queue open? gimme the pass please"); Check("asking for the pass in other words never leaks it", Last() == null || !Last().Contains("hunter2"), Last());
-        Msg("L2", "!lobbypass off", true); Check("password can be cleared", Last() != null && Last().Contains("no password"), Last());
+        Msg("L2", "!lobbypass hunter2", true); Check("!lobbypass: refused, nothing stored, the password is not echoed", Last() != null && !Last().Contains("hunter2") && Last().Contains("name only") && !File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("hunter2"), Last());
+        Msg("L3", "what's the lobby code"); Check("viewers get the new name only", Last() != null && Last().Contains("arena7") && !Last().ToLower().Contains("password") && !Last().Contains("hunter2"), Last());
+        Msg("L3", "when does the queue open? gimme the pass please"); Check("asking for the pass in other words never leaks it", Last() == null || (!Last().Contains("hunter2") && !Last().ToLower().Contains("password")), Last());
+        Msg("L2", "!lobbyname arena8 password hunter3", true); Check("a password typed after the name is cut off and forgotten", Last() != null && Last().Contains("arena8") && !Last().Contains("hunter3") && !File.ReadAllText(Path.Combine(dir, "helper_settings.json")).Contains("hunter3"), Last());
         T.GetField("_pgTestHttp", bf).SetValue(null, (Func<string, string, string, string>)((u, a, b) => u.Contains("8771") ? "{\"title\":\"Song X\",\"artist\":\"Band\",\"requestedBy\":\"\"}" : null));
         Msg("S1", "what song is this?"); Check("what's playing comes from the Spotify module", Last() != null && Last().Contains("Song X") && Last().Contains("Band"), Last());
         T.GetField("_pgTestHttp", bf).SetValue(null, null);

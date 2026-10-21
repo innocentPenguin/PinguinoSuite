@@ -12,22 +12,23 @@ using Newtonsoft.Json.Linq;
 
 // ═══════════════════════════════════════
 //  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
-//    50    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
-//    356   HelperSettings (every setting + default)
-//    400   State (static caches, cooldowns, test hooks)
-//    419   Patterns (free pass regexes)
-//    443   Entry point Execute()
-//    501   Help-review log (private review.jsonl)
-//    555   Handle() / HandleCore(): the message pipeline
-//    664   !helper / !ask / !pinguino (knowledge pack answers)
-//    799   Random chime + OptedOutOfBots
-//    839   Context gate (only help when really asked)
-//    889   Minecraft + website facts, Taught notes, site answers
-//    1140  AI intent picker + Ask() (Claude/OpenAI)
-//    1217  Answers and actions (Respond/Do, queue, register)
-//    1376  Text building (lobby line, how-to-join)
+//    51    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    358   HelperSettings (every setting + default)
+//    398   State (static caches, cooldowns, test hooks)
+//    417   Patterns (free pass regexes)
+//    441   Entry point Execute()
+//    507   Help-review log (private review.jsonl)
+//    561   Handle() / HandleCore(): the message pipeline
+//    670   !helper / !ask / !pinguino (knowledge pack answers)
+//    805   Random chime + OptedOutOfBots
+//    845   Context gate (only help when really asked)
+//    895   Minecraft + website facts, Taught notes, site answers
+//    1146  AI intent picker + Ask() (Claude/OpenAI)
+//    1223  Answers and actions (Respond/Do, queue, register)
+//    1382  Text building (lobby line, how-to-join)
 //    1451  Reading game manager files, Say()
 // ═══════════════════════════════════════
+
 
 
 
@@ -358,10 +359,6 @@ public class CPHInline
     {
         public bool Enabled { get; set; } = true;
         public string LobbyName { get; set; } = "peng3";
-        public string LobbyPassword { get; set; } = "";               // blank = "no password"; NEVER said in chat, the Host copies it to the site's private lobby store (Docs/LOBBY_CONTRACT.md)
-        public string LobbyUpdatedAt { get; set; } = "";              // UTC ISO time of the last !lobbyname / !lobbypass; the Host bridge pushes when it changes
-        public string LobbyUpdatedBy { get; set; } = "";              // the mod's login
-        public string LobbyPagePath { get; set; } = "/customs";        // the site's private page (players and staff sign in to see the password)
         public string CoreActionName { get; set; } = "PinguinoBot";   // the Streamer.bot action that runs PinguinoBotCore.cs
         public string ChatActionName { get; set; } = "PinguinoChat";  // messages the helper does not handle are handed to this action
         public bool ForwardHandled { get; set; } = false;             // also hand handled messages on (needs the helperHandled hook in the chatbot)
@@ -488,7 +485,15 @@ public class CPHInline
                 try
                 {
                     DateTime stamp = File.GetLastWriteTimeUtc(p);
-                    if (stamp != _cfgStamp) { var c = JsonConvert.DeserializeObject<HelperSettings>(File.ReadAllText(p)); if (c != null) { _cfg = c; _cfgStamp = stamp; } }
+                    if (stamp != _cfgStamp)
+                    {
+                        string raw = File.ReadAllText(p); var c = JsonConvert.DeserializeObject<HelperSettings>(raw);
+                        if (c != null) { _cfg = c; _cfgStamp = stamp; }
+                        if (raw.IndexOf("\"LobbyPassword\"", StringComparison.OrdinalIgnoreCase) >= 0)   // the bots never keep a lobby password: drop it from the file
+                        {
+                            var jo = JObject.Parse(raw); jo.Remove("LobbyPassword"); File.WriteAllText(p, jo.ToString(Formatting.Indented)); _cfgStamp = File.GetLastWriteTimeUtc(p);
+                        }
+                    }
                 }
                 catch (Exception ex) { CPH.LogWarn("[Helper] helper_settings.json is not valid JSON: " + ex.Message); }
             }
@@ -1390,18 +1395,17 @@ public class CPHInline
     }
     static Func<string, string> _testHttpGet;   // tests only
 
-    // mods only: !lobbyname NAME / !lobbypass PASS|off  (writes helper_settings.json, so the lobby answers change at once)
+    // mods only: !lobbyname NAME  (writes helper_settings.json, so the lobby answers change at once). The bots never take, keep or say a lobby password.
+    static readonly Regex RxLobbyPassWord = new Regex(@"\b(pass(word|wd|code)?|pw)\b.*$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
     bool LobbyCommand(string cmd, string value, string display)
     {
         int roleN = 0; bool mod = ArgB("isModerator") || ArgB("isBroadcaster") || (int.TryParse(ArgS("role"), out roleN) && roleN >= 3);
         if (!mod) { Say("@" + display + " Only mods can change the lobby."); return true; }
-        value = (value ?? "").Trim();
-        bool isName = cmd.StartsWith("lobbyname");
-        if (value == "") { Say("@" + display + " " + (isName ? "Lobby name: " + (_cfg.LobbyName ?? "").Trim() + ". Change it with !lobbyname NewName" : LobbyHint() + " Change it with !lobbypass NewPass (or !lobbypass off)")); return true; }
-        if (value.Length > 32 || Regex.IsMatch(value, @"[@/\\<>]")) { Say("@" + display + " That doesn't look like a valid " + (isName ? "lobby name" : "password") + " (32 characters max, no @ / < >)."); return true; }
-        if (isName) _cfg.LobbyName = value;
-        else _cfg.LobbyPassword = Regex.IsMatch(value, @"^(off|none|clear|no)$", RegexOptions.IgnoreCase) ? "" : value;
-        _cfg.LobbyUpdatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"); _cfg.LobbyUpdatedBy = (ArgS("user") ?? display ?? "").ToLowerInvariant();
+        if (!cmd.StartsWith("lobbyname")) { Say("@" + display + " Customs use a lobby name only. I never save or say passwords."); return true; }
+        value = RxLobbyPassWord.Replace((value ?? "").Trim(), "").Trim();   // anything labelled password / pass / pw is cut off and forgotten
+        if (value == "") { Say("@" + display + " Lobby name: " + (_cfg.LobbyName ?? "").Trim() + ". Change it with !lobbyname NewName"); return true; }
+        if (value.Length > 32 || Regex.IsMatch(value, @"[@/\\<>]")) { Say("@" + display + " That doesn't look like a valid lobby name (32 characters max, no @ / < >)."); return true; }
+        _cfg.LobbyName = value;
         try
         {
             string p = Path.Combine(_dir, "helper_settings.json");
@@ -1413,14 +1417,9 @@ public class CPHInline
         return true;
     }
 
-    string LobbyLine()
-    {
-        return "Private match -> Name: " + (_cfg.LobbyName ?? "").Trim() + ", " + LobbyPassWord() + ". ";
-    }
+    string LobbyLine() { return "Private match -> Name: " + (_cfg.LobbyName ?? "").Trim() + ". "; }
 
-    // the password is never said in chat: viewers are pointed at the site's private lobby page (staff write it, players and staff read it)
-    string LobbyPassWord() { return string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? "no password" : "the password is on " + SiteUrl(string.IsNullOrWhiteSpace(_cfg.LobbyPagePath) ? "/customs" : _cfg.LobbyPagePath) + " (sign in), or ask a mod"; }
-    string LobbyHint() { return "Private match name: " + (_cfg.LobbyName ?? "").Trim() + (string.IsNullOrWhiteSpace(_cfg.LobbyPassword) ? " (no password)." : ", " + LobbyPassWord() + "."); }
+    string LobbyHint() { return "Private match name: " + (_cfg.LobbyName ?? "").Trim() + "."; }
 
     string QueueHint(string registered)
     {

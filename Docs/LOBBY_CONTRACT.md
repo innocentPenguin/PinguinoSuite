@@ -1,32 +1,30 @@
 # Private match (lobby) store: contract
 
-Owners: Helper = chat side and the local source file, Host (02) = bridge, Site (05) = store and page. This matches what the site built (05, site commit bec0647).
+Owners: Helper = chat side and the local name file, Host (02) = bridge, Site (05) = store and page. Matches the site built by 05 (site commit bec0647).
 
-Goal: the private match name and password live on the site in a PRIVATE store, readable only by staff and by the signed-in players of the current match.
+DECISION (Ivan): the bots NEVER grab, store or say a lobby password. Customs use a lobby NAME only. Everything below carries the name alone.
 
 ## Data flow
 
-1. A mod types `!lobbyname NAME` or `!lobbypass PASS|off` in chat. The Helper writes `Data/runtime/helper_settings.json` (`LobbyName`, `LobbyPassword`, `LobbyUpdatedAt` UTC ISO, `LobbyUpdatedBy` login). That file is the one local source of truth (the Helper, `!pm` and the Host read it).
-2. The Host bridge (02) pushes it to the site when a match starts and when the values change while a match is live. It uses the same bot key as the other bridges, never logs the password, and ends the push with `active:false` when the match ends.
-3. The site keeps it in memory only, and shows it to the right readers.
+1. A mod types `!lobbyname NAME` in chat. The Helper writes `Data/runtime/helper_settings.json` (`LobbyName`). Anything in that value labelled password / pass / pw is cut off and dropped. `!lobbypass` is refused ("Customs use a lobby name only").
+2. If the settings file still holds a `LobbyPassword` key from before, the Helper removes it the next time it reloads the file.
+3. The Host (02) pushes the NAME to the site when a match starts, with the bot key, and ends it with `active:false` at match end. The push has NO password field (send `password: ""` or omit it).
+4. The site keeps it in memory only and shows it to the right readers.
 
 ## Site endpoints (built)
 
 | Call | Auth | Body / answer |
 |---|---|---|
-| `POST /api/bot/match-private` | bot key | `{ "matchId": "optional", "name": "peng3", "password": "", "active": true }`. Name and password are capped at 60 characters. Memory only. Cleared on `active:false`, when the match ends, or when the bot state has no live match (cleared at match end, Ivan's rule). |
-| `GET /api/customs/match-private` | session | `{ "available": true, "name": "...", "password": "..." }`, `Cache-Control: no-store`. Readers: staff, or a signed-in player whose Twitch name or site member is in the current match (blue or orange of the bot state). Everyone else gets `{ "available": false }`, logged-out users get 401. |
+| `POST /api/bot/match-private` | bot key | `{ "matchId": "optional", "name": "peng3", "active": true }`. Memory only. Cleared on `active:false`, at match end, or when the bot state has no live match. Name capped at 60 characters. |
+| `GET /api/customs/match-private` | session | `{ "available": true, "name": "..." }`, `Cache-Control: no-store`. Readers: staff, or a signed-in player of the current match. Everyone else `{ "available": false }`, logged-out 401. |
 
-The private match box is on the `/customs` page for those readers. It is in no public endpoint (the site tests check it).
+The private match box is on `/customs` for those readers and in no public endpoint.
 
-## Chat side (the Helper, commit e134683 plus the pointer fix)
+## Chat side (the Helper)
 
-- Chat answers (`what's the lobby code`, a queue answer, `!lobbypass` with no value) give the NAME and, when a password exists, `the password is on <site>/customs (sign in), or ask a mod`. With no password they say `no password`. `LobbyPagePath` in `helper_settings.json` (default `/customs`) is the page named.
-- The mod command reply does not echo the password.
-- The public and mod knowledge packs never contain it (`Tools/test-helper-pack.py` fails if the current password text appears in either pack).
+- Lobby answers say `Private match -> Name: <name>.` and nothing about a password.
+- A password that slips into chat is never repeated: no chat answer reads one, and the packs never contain one (`Tools/test-helper-pack.py` fails if the settings file's `LobbyPassword` text appears in either pack).
 
 ## Open points
 
-- A standing lobby that survives restarts and is readable by queue members needs `POST/GET /api/bot/lobby`, `GET /api/lobby` and staff edit. 05 will build it only if 05 or 00 approves it. Until then the store above is the one in use.
-- 02: push at match start to `/api/bot/match-private`, and fix `!pm` (`PinguinoHost/HostBots.cs` lines 68-70), which still prints the password in chat.
-- Pending decision (Ivan): whether chat answers say the password again. Nothing about that is built yet.
+- 02: push the name at match start to `/api/bot/match-private`, and change `!pm` (`PinguinoHost/HostBots.cs` lines 68-70) to print the name only, with no password.
