@@ -9,7 +9,7 @@ namespace PinguinoHost
 {
     /// <summary>Only ONE Host may run the bots (several PCs can have the Suite). The Suite core decides which device is master (Docs\MODULE_CONTRACT.md,
     /// "Devices: master / auxiliary"); Host is a singleton module: it asks GET /api/device/lease every 10 s, does nothing until it has seen is_master:true, and
-    /// shuts down cleanly (chat and EventSub disconnected first) when that turns false or the core stays unreachable for 60 s. Standalone runs (no core token) are not gated.
+    /// shuts down cleanly (chat and EventSub disconnected first) when the core says this device is no longer the master. An UNREACHABLE core never stops the Host (modules are isolated): it keeps running degraded, logs once after the grace period and reconnects by itself. Standalone runs (no core token) are not gated.
     /// A per-data-folder mutex also keeps two Hosts off one PC.</summary>
     public static class Lease
     {
@@ -20,7 +20,7 @@ namespace PinguinoHost
         public static readonly bool Enabled = ApiToken != "" || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PINGUINO_LEASE_URL"));
         static readonly int PollSec = int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_LEASE_POLL"), out int p) && p >= 1 ? p : 10;
         static readonly int GraceSec = int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_LEASE_GRACE"), out int g) && g >= 2 ? g : 60;
-        static volatile string _state = "none"; static string _masterName = "", _error = ""; static DateTime _lastOk = DateTime.MinValue; static int _falses;
+        static volatile string _state = "none"; static string _masterName = "", _error = ""; static DateTime _lastOk = DateTime.MinValue; static int _falses; static volatile bool _warnedDown;
         static CancellationTokenSource _cts = new CancellationTokenSource(); static readonly object _l = new object();
         static Mutex _mutex; static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
 
@@ -62,7 +62,7 @@ namespace PinguinoHost
                 if ((int)r.StatusCode == 404) { _falses = 0; Became("single device (this core has no device lease yet)"); return; }   // an older core: one device, we are the master
                 string txt = await r.Content.ReadAsStringAsync();
                 if (!r.IsSuccessStatusCode) throw new Exception("lease check answered HTTP " + (int)r.StatusCode);
-                var j = JObject.Parse(txt); _lastOk = DateTime.UtcNow; _error = ""; _masterName = (string)j["master_name"] ?? "";
+                var j = JObject.Parse(txt); _lastOk = DateTime.UtcNow; _error = ""; if (_warnedDown) { _warnedDown = false; Clog.Info("lease", "the core is back: reconnected"); } _masterName = (string)j["master_name"] ?? "";
                 if ((bool?)j["is_master"] == true) { _falses = 0; Became("this device is the master"); return; }
                 _falses++;
                 if (_state == "master" || _falses >= 2) Stop("this device is not the master (master: " + (_masterName == "" ? "another device" : _masterName) + ")");
@@ -71,7 +71,7 @@ namespace PinguinoHost
             catch (Exception ex)
             {
                 _error = "lease check failed: " + ex.Message;
-                if (_state == "master" && (DateTime.UtcNow - _lastOk).TotalSeconds > GraceSec) Stop("the core has been unreachable for " + GraceSec + " s");
+                if (_state == "master" && !_warnedDown && (DateTime.UtcNow - _lastOk).TotalSeconds > GraceSec) { _warnedDown = true; Clog.Warn("lease", "the core has been unreachable for " + GraceSec + " s: staying up (degraded), retrying every " + PollSec + " s"); }   // modules are isolated: a restarting core or app never takes the Host down
             }
         }
 

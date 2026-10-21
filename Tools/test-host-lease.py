@@ -67,9 +67,18 @@ try:
     MODE['v'] = 'old'
     o = host(8853); procs.append(o)
     until(lambda: state(8853)[0] == 'master' and state(8853)[1] is True, 30, 'old core (404): Host runs as the only device')
-    # core vanishes: after the grace period the Host stops
+    # core vanishes: the Host must NOT stop (modules are isolated); it stays up degraded for the whole outage and reconnects when the core returns
     srv.shutdown(); srv.server_close()
-    until(lambda: o.poll() is not None, 40, 'Host stops when the core stays unreachable')
+    outage = int(os.environ.get('LEASE_OUTAGE', '90')); t0 = time.time()
+    while time.time() - t0 < outage:
+        time.sleep(3)
+        if o.poll() is not None: fails.append('Host exited %ds into the core outage' % (time.time() - t0)); break
+        if get(8853, '/api/status') is None: fails.append('Host API stopped answering during the core outage'); break
+    else:
+        pass
+    MODE['v'] = 'master'
+    srv = ThreadingHTTPServer(('127.0.0.1', 8841), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+    until(lambda: o.poll() is None and state(8853)[0] == 'master' and (get(8853, '/api/status') or {}).get('lease', {}).get('ok') is not False, 30, 'Host still running and master after the core returns')
 finally:
     for p in procs:
         try: p.kill()
