@@ -43,35 +43,39 @@ def in_poly(px, py, poly):
         j = i
     return c
 
-BX, BY, BR = 368, 374, 94  # badge centre / radius in 512 space
+BX, BY, BR = 368, 374, 94  # badge centre / radius in 512 space (large sizes)
+SMALL = False  # sizes <= 64: dedicated art, badge ~45% of the icon, pure grayscale with extra contrast
 def master(x, y):
     """pixel (x,y) of the 512 master -> (r,g,b,a) with a in 0..255"""
     cx = cy = 256.0; d = math.hypot(x + .5 - cx, y + .5 - cy)
     s = src(x, y)
     if s[3] == 0 and d > 255: return (0, 0, 0, 0)
     r, g, b, a = s
-    # black and white: plain luminance of the original photo (ring pixels, already orange, stay untouched)
-    ringish = r > 200 and g > 90 and g < 190 and b < 90
-    if not ringish:
+    # black and white: pure grayscale for everything inside the ring (no sepia); only the orange ring itself keeps its colour
+    if d < 212:
         l = 0.3 * r + 0.59 * g + 0.11 * b
+        if SMALL: l = min(255, max(0, (l - 120) * 1.35 + 128))
         r = g = b = l
     out = [r, g, b, a / 255.0]
     # badge
-    db = math.hypot(x + .5 - BX, y + .5 - BY)
-    if db < BR + 6:
+    bx, by, br = (366, 366, 120) if SMALL else (BX, BY, BR); k = br / 94.0
+    db = math.hypot(x + .5 - bx, y + .5 - by)
+    if db < br + 6:
         # dark halo cuts the badge out of the photo (matches the Suite's dark surfaces)
-        for (rad, col) in ((BR + 5, DARK), (BR - 5, ORANGE), (BR - 17, DARK)):
+        for (rad, col) in ((br + 5, DARK), (br - 5 * k, ORANGE), (br - 17 * k, DARK)):
             c = cov(db - rad)
             if c > 0: out = [out[k] * (1 - c) + col[k] * c for k in range(3)] + [max(out[3], c)]
         # bolt, 2x2 supersampled
         hit = 0
         for oy in (.25, .75):
             for ox in (.25, .75):
-                if in_poly(x + ox - BX, y + oy - BY, BOLT): hit += 1
+                if in_poly((x + ox - bx) / k, (y + oy - by) / k, BOLT): hit += 1
         if hit: c = hit / 4.0; out = [out[k] * (1 - c) + ORANGE[k] * c for k in range(3)] + [max(out[3], c)]
     return tuple(out)
 
 def render(n):
+    global SMALL
+    SMALL = n <= 256
     ss = max(1, 512 // n) if n < 512 else 1
     rows = []
     for y in range(n):
@@ -104,4 +108,5 @@ hdr = struct.pack('<HHH', 0, 1, len(ico)); off = 6 + 16 * len(ico); ent = b''; d
 for s, p in ico:
     ent += struct.pack('<BBBBHHII', s % 256, s % 256, 0, 0, 1, 32, len(p), off + len(data)); data += p
 open(out + 'icon.ico', 'wb').write(hdr + ent + data)
+open('src/logo.png', 'wb').write(P(96))  # sidebar logo (shown ~36 px): small-size art
 print('ok')

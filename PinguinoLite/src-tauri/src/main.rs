@@ -306,6 +306,7 @@ fn main() {
                     let _ = s.close();
                 }
                 if let Some(w) = a.get_webview_window("main") {
+                    if let Ok(ic) = tauri::image::Image::from_bytes(include_bytes!("../icons/64x64.png")) { let _ = w.set_icon(ic); } // small-size art for the taskbar
                     mainwin::place(&w); // saved size/position/maximized, or ~62% of the monitor, centred
                     let _ = w.show();
                     let _ = w.set_focus();
