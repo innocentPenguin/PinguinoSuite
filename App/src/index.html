@@ -897,7 +897,7 @@ function bindAccounts(){
 const openExternal=u=>{
   if(!window.__TAURI__)return window.open(u,'_blank');
   // A local page (127.0.0.1) must never replace the shell itself (the shell would be stuck on it): give it its own window with a title bar and close button.
-  if(/^https?:\/\/(127\.0\.0\.1|localhost)[:\/]/i.test(u)&&window.PGWin){const slug=u.replace(/^https?:\/\//,'').replace(/[^a-z0-9]+/gi,'-').slice(0,40).toLowerCase();
+  if(/^https?:\/\/(127\.0\.0\.1|localhost)[:\/]/i.test(u)&&window.PGWin){const slug=u.replace(/^https?:\/\//,'').replace(/[^a-z0-9]+/gi,'-').slice(0,28).toLowerCase();
     return PGWin.open({label:'pop-ext-'+slug,url:u,title:'PinguinoSuite: '+u.replace(/^https?:\/\//,''),width:1100,height:700,remember:false}).catch(e=>toast('Could not open the page: '+(e&&e.message?e.message:e)))}
   location.href=u};   // other sites: the shell hands them to the system browser and stays where it is
 /* ============ Commands: per-command role permissions, profiles, archive (Host: GET /api/commands/profiles, POST /api/commands/profile|archive|restore, GET /api/commands/archive) ============ */
