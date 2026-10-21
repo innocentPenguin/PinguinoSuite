@@ -961,14 +961,14 @@ pages.commands=()=>{
   const bulk=CMD.sel.size?`<div class="card row wrap"><b>${CMD.sel.size} selected</b>${cmdRoleSel('cm-bulkrole',CMD_ROLES[0][0])}<button class="sm" id="cm-bulkgo">Set role</button><button class="sm" id="cm-bulkarch">Archive</button><button class="sm" id="cm-bulkclear">Clear</button></div>`:'';
   const o=CMD.open&&CMD.d.find(x=>x.id===CMD.open);
   const panel=o?`<div class="card cm-panel" data-id="${esc(o.id)}"><div class="row"><h3 style="margin:0">${esc(cmdN(o.name))}</h3><span class="sp"></span><button class="sm" id="pf-close">Close</button></div>
-    <div class="cm-f"><label>Aliases (comma separated)</label><input type="text" id="pf-aliases" value="${esc((o.aliases||[]).join(', '))}"></div>
+    <div class="cm-f"><label>Aliases (comma separated)</label><input type="text" id="pf-aliases" value="${esc((o.aliases||[]).join(', '))}"${o.source==='builtin'?' disabled title="Built-in commands keep their names"':''}></div>
     <div class="cm-f"><label>Description</label><textarea id="pf-desc" rows="2" style="width:100%">${esc(o.description||'')}</textarea></div>
     <div class="cm-f"><label>Category</label><input type="text" id="pf-cat" value="${esc(o.category||'')}"></div>
-    <div class="cm-f"><label>Who can use it</label>${cmdRoleSel('',o.permission).replace('<select ','<select id="pf-perm" ')}</div>
+    <div class="cm-f"><label>Who can use it</label>${cmdRoleSel('',o.permission).replace('<select ','<select id="pf-perm" ')}${o.defaultPermission&&o.defaultPermission!==o.permission?`<div class="sm faint">Changed from the default (${esc(cmdRole(o.defaultPermission))}).</div>`:''}<div class="sm faint">Opening a command up cannot give more than the command's own check allows.</div></div>
     <div class="cm-f"><label>Cooldown, everyone (s)</label><input type="number" min="0" id="pf-cdg" value="${esc(o.cooldownGlobal??0)}" style="width:90px"></div>
     <div class="cm-f"><label>Cooldown, per viewer (s)</label><input type="number" min="0" id="pf-cdu" value="${esc(o.cooldownUser??0)}" style="width:90px"></div>
     <div class="cm-f"><label><input type="checkbox" id="pf-en"${o.enabled!==false?' checked':''}> Enabled</label></div>
-    <div class="sm faint">Used ${(o.uses||0).toLocaleString()} times, last ${cmdAgo(o.lastUsed)}<br>Owner bot: ${esc(o.ownerBot||'?')}<br>${o.editedAt?`Edited by ${esc(o.editedBy||'?')} ${cmdAgo(o.editedAt)}`:'Not edited yet'}</div>
+    <div class="sm faint">${o.source?`Source: ${esc(o.source)}${o.createdBy?' (by '+esc(o.createdBy)+')':''}<br>`:''}Used ${(o.uses||0).toLocaleString()} times, last ${cmdAgo(o.lastUsed)}<br>Owner bot: ${esc(o.ownerBot||'?')}<br>${o.editedAt?`Edited by ${esc(o.editedBy||'?')} ${cmdAgo(o.editedAt)}`:'Not edited yet'}</div>
     <div class="row wrap" style="margin-top:10px"><button id="pf-save">Save</button><span class="sp"></span><button class="sm" id="pf-arch">Archive…</button></div></div>`:'';
   return `<div style="max-width:1240px">${head}${note}
     <div class="row wrap" style="margin-bottom:8px"><input type="text" id="cm-q" placeholder="Search commands, aliases, categories" value="${esc(CMD.q)}" style="min-width:260px"><span class="sp"></span><span class="sm faint">Sort</span>${chip('uses','Most used',CMD.sort==='uses','data-cs')}${chip('az','A-Z',CMD.sort==='az','data-cs')}</div>
@@ -993,8 +993,11 @@ function bindCommands(){
     let ok=0;for(const id of ids)if(await cmdArchive(id))ok++;toast(`${ok} archived`);CMD.sel.clear();CMD.open=null;draw(true)});
   $('#pf-close')&&($('#pf-close').onclick=()=>{CMD.open=null;draw(true)});
   $('#pf-save')&&($('#pf-save').onclick=async()=>{const id=idOf($('#pf-save'));
-    const patch={aliases:$('#pf-aliases').value.split(',').map(x=>x.trim().replace(/^!/,'')).filter(Boolean),description:$('#pf-desc').value.trim(),category:$('#pf-cat').value.trim()||'other',permission:$('#pf-perm').value,
-      cooldownGlobal:Math.max(0,+$('#pf-cdg').value||0),cooldownUser:Math.max(0,+$('#pf-cdu').value||0),enabled:$('#pf-en').checked};
+    const o=CMD.d.find(x=>x.id===id)||{},cur={aliases:$('#pf-aliases').value.split(',').map(x=>x.trim().replace(/^!/,'')).filter(Boolean),description:$('#pf-desc').value.trim(),category:$('#pf-cat').value.trim()||'other',permission:$('#pf-perm').value,
+      cooldownGlobal:Math.max(0,Math.round(+$('#pf-cdg').value||0)),cooldownUser:Math.max(0,Math.round(+$('#pf-cdu').value||0)),enabled:$('#pf-en').checked};
+    const patch={};for(const k in cur)if(JSON.stringify(cur[k])!==JSON.stringify(k==='aliases'?(o.aliases||[]):(o[k]??(k==='description'?'':undefined))))patch[k]=cur[k];
+    if(o.source==='builtin')delete patch.aliases;
+    if(!Object.keys(patch).length){toast('Nothing changed');return}
     if(await cmdSave(id,patch))toast('Saved');draw(true)});
   $('#pf-arch')&&($('#pf-arch').onclick=async()=>{const id=idOf($('#pf-arch'));if(!confirm('Archive this command? It stops answering in chat. Nothing is deleted: you can restore it from the Archive tab.'))return;
     if(await cmdArchive(id)){toast('Archived');CMD.open=null}draw(true)});
