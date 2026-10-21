@@ -33,7 +33,7 @@ def chk(n, ok, x=''):
 h = start()
 try:
     chk('pushed at start', wait(1), got); g = mine()[0] if mine() else ('', '', {})
-    chk('bot key and body', g[1] == 'Bearer ' + KEY and g[2] == {'name': 'peng3', 'password': PW, 'active': True}, g)
+    chk('bot key and body', g[1] == 'Bearer ' + KEY and g[2] == {'name': 'peng3', 'active': True}, g)
     time.sleep(3); chk('not pushed twice', len(mine()) == 1, len(mine()))
     setl('peng4', 'newpw', '2026-10-20T22:00:00Z'); chk('change pushed', wait(2) and mine()[-1][2]['name'] == 'peng4', mine()[-1:])
     setl('', '', '2026-10-20T23:00:00Z'); chk('clear pushed as inactive', wait(3) and mine()[-1][2]['active'] is False, mine()[-1:])

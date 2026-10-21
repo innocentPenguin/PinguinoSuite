@@ -379,6 +379,7 @@ public class CPHInline
         // PERMANENT strikes (red on the site): !strike @user toxicity|slurs|perma. They never wear off; only !unstrike @user perma removes one.
         public int PermaStrikes { get; set; }
         public string PermaReason { get; set; }
+        public bool Recycler { get; set; }                 // [NEW][RECYCLER] !recycle on: after a game this player goes back to the end of the queue (only while they have no strike)
         public int HalfStrike { get; set; }                // 0/1: one HALF strike waiting (two halves = one temporary strike); wears off after a day
         public long HalfStrikeAt { get; set; }             // unix s when the half strike was given
         public long StrikeDecayAt { get; set; }            // unix s: when the oldest temporary strike was given / last wore off (a day after it, one goes)
@@ -405,6 +406,7 @@ public class CPHInline
         public string Status { get; set; } = "waiting";   // "waiting" | "active"
         public int GamesPlayedSession { get; set; }
         public long JoinedAt { get; set; }
+        public bool Recycle { get; set; }                 // [NEW][RECYCLER] waiting again because the recycler put them back after a game (shown as a marker)
     }
 
     class TeamPlayer
@@ -442,6 +444,7 @@ public class CPHInline
         public int? PtsLoss { get; set; }                 // points given to the losers
         public string Category { get; set; }              // [NEW][WEB] standings tab it counts for: 2v2 | 3v3 | dropshot | rumble (old records: the format)
         public bool Group { get; set; }                   // [NEW][WEB] casual "group" style: shown as one grid, no teams
+        public bool Incomplete { get; set; }              // [NEW] !incomplete: the game did not finish; no winner, no points, no wins/losses
     }
 
     class MmrCacheEntry
@@ -456,6 +459,10 @@ public class CPHInline
         public int DefaultMmr { get; set; } = 800;
         public int DefaultSr { get; set; } = 1000;          // [NEW][WEB] Fortnite SR for players nobody has rated yet
         public bool QueueOpen { get; set; }
+        public bool RecyclerEnabled { get; set; } = true;   // [NEW][RECYCLER] master switch (PinguinoSuite): players who turned !recycle on go back to the end of the queue after a game
+        public int InactivityMinutes { get; set; } = 15;    // [NEW] customs close by themselves after this many idle minutes (0 = never)
+        public bool TimedOut { get; set; }                  // [NEW] the queue was closed by the inactivity timer (the website shows it until the queue opens again)
+        public long TimedOutAt { get; set; }
 
         // [FIX] The old version hard-coded a TRN API key here. It was never
         // actually sent with any request, and it was published in the source.
@@ -570,6 +577,7 @@ public class CPHInline
         public BalanceResult Result { get; set; }
         public bool ResultRecorded { get; set; }          // [NEW] prevents double-scoring a match
         public string Winner { get; set; }                // [NEW] "blue" | "orange" once finalized
+        public bool Incomplete { get; set; }              // [NEW] marked with !incomplete
     }
 
     class TrnResult
@@ -888,6 +896,7 @@ public class CPHInline
         public long SpunAt;          // ms since 1970: when the latest spin started
         public List<string> Last = new List<string>();   // names the latest spin landed on (1, or 2 when the last entrant came along): hidden by the overlay until it has landed
     }
+    class WheelFeed { public string Name; public string Kind; public long At; }   // a sign-up / leave shown for a moment on the overlay
     class WheelMsg { public string Text; public bool Sent; public int Team; public long Due; }   // Due (ms since 1970): do not send before this (after the overlay landed)
     class WheelSession
     {
@@ -912,6 +921,8 @@ public class CPHInline
         public List<string> Waitlist = new List<string>();
         public List<WheelMsg> Msgs = new List<WheelMsg>();
         public string AnnState = "idle";       // idle | sending | done | failed
+        public List<WheelFeed> Feed = new List<WheelFeed>();   // the last joins/leaves ONLY (the overlay feed)
+        public int FeedSec = 2;                // how long a feed line stays visible (1..10)
     }
 
     // splitmix64 over a SHA-256 of the seed: the same seed always gives the same draw.
@@ -1046,6 +1057,7 @@ public class CPHInline
         }
         en.Flagged = !en.Mmr.HasValue;
         _wheel.Entrants.Add(en);
+        WheelNote(_wheel, en.Name, "join");
         WheelSave();
         string joined = "@" + user + " you're on the wheel! (" + _wheel.Entrants.Count(e => !e.Placed) + " waiting)";
         if (_quiet) { if (_capture != null) _capture.Add(joined); } else Say(joined);
@@ -1063,8 +1075,15 @@ public class CPHInline
         return true;
     }
 
+    void WheelNote(WheelSession w, string name, string kind)
+    {
+        w.Feed.Add(new WheelFeed { Name = name, Kind = kind, At = NowMs() });
+        while (w.Feed.Count > 10) w.Feed.RemoveAt(0);
+    }
+
     void WheelRemoveEntrant(WheelSession w, WheelEntrant e)
     {
+        WheelNote(w, e.Name, "leave");
         w.Entrants.Remove(e);
         if (e.Placed)
         {
@@ -1161,6 +1180,14 @@ public class CPHInline
                 w.AutoNew = arg == "on"; WheelSave();
                 Say("Automatic new round: " + arg + ".");
                 return true;
+            case "feed":
+                {
+                    int fs;
+                    if (!int.TryParse(arg, out fs) || fs < 1 || fs > 10) { Say("Usage: !wheel feed <1-10 seconds a join/leave line stays on the overlay>"); return true; }
+                    w.FeedSec = fs; WheelSave();
+                    Say("Join/leave lines stay on the overlay for " + fs + " s.");
+                    return true;
+                }
             case "hold":
                 {
                     int s;
@@ -1535,12 +1562,12 @@ public class CPHInline
             return new { id = "", status = "none", round = 0, mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all",
                          queue = new string[0], finalTeams = new object[0], waitlist = new string[0], practice = false };
         bool fin = w.Final;
-        string status = w.Status == "drawn" ? "final" : w.Status;
+        string status = w.Status == "drawn" ? "final" : (w.Status == "drawing" ? "spinning" : w.Status);
         return new
         {
             id = w.Id, status = status, round = w.Round, mode = w.Mode, teamSize = w.TeamSize, oddPolicy = w.OddPolicy, eligibility = w.Eligibility,
-            queue = w.Entrants.Where(e => !fin || !e.Placed).Select(e => e.Name).ToList(),
-            finalTeams = fin ? w.Teams.Select(t => new { n = t.N, members = t.Members, avg = t.Avg, partial = t.Partial }).ToList<object>() : new List<object>(),
+            queue = w.Entrants.Where(e => !fin || !e.Placed).Select(e => new { name = e.Name, login = e.Login }).ToList(),
+            finalTeams = fin ? w.Teams.Select(t => new { n = t.N, members = t.Members }).ToList<object>() : new List<object>(),
             waitlist = fin ? w.Waitlist : new List<string>(),
             practice = w.Entrants.Any(e => e.Practice)
         };
@@ -1551,7 +1578,7 @@ public class CPHInline
     object WheelPublic()
     {
         var w = _wheel;
-        if (w == null) return new { status = "none", queue = new string[0], picks = new object[0], teams = new object[0], waitlist = new string[0] };
+        if (w == null) return new { status = "none", queue = new string[0], picks = new object[0], teams = new object[0], waitlist = new string[0], signedUp = 0, feed = new object[0], feedMs = 2000 };
         bool pending = WheelPending(w);
         var last = w.Draw != null ? w.Draw.Last : new List<string>();
         return new
@@ -1562,6 +1589,7 @@ public class CPHInline
             teams = w.Teams.Select(t => new { n = t.N, members = t.Members, partial = t.Partial, avg = t.Avg }).ToList(),
             waitlist = w.Final ? w.Waitlist : new List<string>(),
             spin = w.Draw == null ? null : new { id = w.Draw.Id, at = w.Draw.SpunAt, ms = WheelSpinMs(w), landing = last, revealed = w.Draw.Revealed },
+            signedUp = w.Entrants.Count, feed = w.Feed.Select(f => new { name = f.Name, kind = f.Kind, at = f.At }).ToList(), feedMs = w.FeedSec * 1000,
             holdUntil = w.HoldUntil, now = NowMs(), practice = w.Entrants.Any(e => e.Practice)
         };
     }
@@ -1652,7 +1680,7 @@ public class CPHInline
                 id = _lastBalance.MatchId,
                 winner = _lastBalance.ResultRecorded ? _lastBalance.Winner : null,   // [NEW][KOTH] for the winner animation
                 format = _lastBalance.Format,
-                status = _lastBalance.ResultRecorded ? "finished" : "live",
+                status = _lastBalance.Incomplete ? "incomplete" : (_lastBalance.ResultRecorded ? "finished" : "live"),
                 startedAt = _matches.Where(r => r.Id == _lastBalance.MatchId).Select(r => r.CreatedAt).FirstOrDefault(),   // when the teams were made (unix seconds), for the lobby overlay
                 // [NEW][WEB] Casual customs: the bot just picks a GROUP (no Orange/Blue teams shown). Internally the group is still
                 // split in two (so !next etc. keep working); the website shows one grid.
@@ -1690,7 +1718,9 @@ public class CPHInline
             mode = _settings.TeamMode,
             streamerPlaying = _settings.StreamerPlaying,   // [NEW][WEB] 5 gold (playing) vs 6 gold (sitting out) on the site
             spotsNeeded = Math.Max(0, GetTotalSlots(_settings.DefaultFormat) - waiting.Count),
-            queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username), practice = IsPractice(e.Username) }),
+            queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username), practice = IsPractice(e.Username), recycle = e.Recycle }),
+            timedOut = _settings.TimedOut && !_settings.QueueOpen, timedOutAt = (_settings.TimedOut && !_settings.QueueOpen) ? (long?)_settings.TimedOutAt : null,
+            recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes,
             activity = _settings.Activity,            currentMatch = match,
             liveMatch = hold ? live : null,   // [NEW][KOTH] only while the public view is being held
             hold = hold,
@@ -1811,17 +1841,22 @@ public class CPHInline
     bool RunCommand(string command, string input, string userLower, bool isPrivileged)
     {
         _cmdUser = userLower ?? "";
-        switch (command?.ToLower())
+        string cmdKey = (command ?? "").ToLower().TrimEnd('.', '!', ',');
+        if (cmdKey == "!not" && (input ?? "").Trim().TrimEnd('.', '!').ToLower() == "me") cmdKey = "!notme";   // "!not me"
+        switch (cmdKey)
         {
+            case "!notme":    return HandleNotMe(userLower);
+            case "!recycle":  return HandleRecycle(userLower, input, isPrivileged);
+            case "!incomplete": _lastCustomsActivity = NowMs(); return HandleIncomplete(userLower, isPrivileged);
             case "!register": return HandleRegister(userLower, input, isPrivileged);
-            case "!join":     return HandleJoin(userLower);
-            case "!leave":    return HandleLeave(userLower);
+            case "!join":     _lastCustomsActivity = NowMs(); return HandleJoin(userLower);
+            case "!leave":    _lastCustomsActivity = NowMs(); return HandleLeave(userLower);
             case "!pos":      return HandlePos(userLower);
             case "!myrank":   return HandleRank(userLower);                        // renamed from !rank (clashed with another bot)
-            case "!queue":    return HandleQueue(userLower, input, isPrivileged);
-            case "!balance":  return HandleBalance(userLower, isPrivileged);
-            case "!next":     return HandleNext(userLower, input, isPrivileged);
-            case "!win":      return HandleWin(userLower, input, isPrivileged);    // [NEW]
+            case "!queue":    if (isPrivileged) _lastCustomsActivity = NowMs(); return HandleQueue(userLower, input, isPrivileged);
+            case "!balance":  if (isPrivileged) _lastCustomsActivity = NowMs(); return HandleBalance(userLower, isPrivileged);
+            case "!next":     if (isPrivileged) _lastCustomsActivity = NowMs(); return HandleNext(userLower, input, isPrivileged);
+            case "!win":      if (isPrivileged) _lastCustomsActivity = NowMs(); return HandleWin(userLower, input, isPrivileged);    // [NEW]
             case "!reroll":   return HandleReroll(userLower, isPrivileged);
             case "!format":   return HandleFormat(userLower, input, isPrivileged);
             case "!mode":     return HandleMode(userLower, input, isPrivileged);   // [NEW]
@@ -1982,6 +2017,7 @@ public class CPHInline
     bool HandleWebSync()
     {
         HostLive();   // the Host knows by itself whether the stream is live (no website key needed)
+        try { CustomsIdleTick(); } catch (Exception ex) { CPH.LogError("[BVQ] Idle check failed: " + ex); }
         if (string.IsNullOrEmpty(_settings.WebSyncKey) || string.IsNullOrEmpty(_settings.WebSyncUrl))
             return true;   // bridge turned off
         try
@@ -2077,7 +2113,7 @@ public class CPHInline
                 var hist = _matches.Where(m => !IsPracticeMatch(m)).OrderByDescending(m => m.Id).Take(100).Select(m => new
                 {
                     id = m.Id, format = m.Format, category = m.Category ?? m.Format, mode = m.Mode, activity = m.Activity ?? "competitive",
-                    counted = IsCounted(m), createdAt = m.CreatedAt, finishedAt = m.FinishedAt, winner = m.Winner,
+                    counted = IsCounted(m), status = m.Incomplete ? "incomplete" : (m.FinishedAt.HasValue ? "finished" : "live"), createdAt = m.CreatedAt, finishedAt = m.FinishedAt, winner = m.Winner,
                     blue = (m.Blue ?? new List<TeamPlayer>()).Select(p => new object[] { p.Username, p.Mmr }).ToList(),
                     orange = (m.Orange ?? new List<TeamPlayer>()).Select(p => new object[] { p.Username, p.Mmr }).ToList(),
                     blueAvg = m.BlueAvg, orangeAvg = m.OrangeAvg
@@ -2223,7 +2259,7 @@ public class CPHInline
     {
         // Entries are references into _queue, so setting Status here updates the list.
         var batch = GetWaitingQueue().Take(count).ToList();
-        foreach (var entry in batch) entry.Status = "active";
+        foreach (var entry in batch) { entry.Status = "active"; entry.Recycle = false; }
         SaveQueue();
         return batch;
     }
@@ -2258,12 +2294,77 @@ public class CPHInline
                 entry.Position = frontPos--;
                 entry.GamesPlayedSession++;
             }
+            else if (CanRecycle(entry.Username))
+            {
+                entry.Status = "waiting";
+                entry.Position = backPos++;
+                entry.GamesPlayedSession++;
+                entry.Recycle = true;
+            }
             else
             {
                 _queue.Remove(entry);
             }
         }
         CompactPositions();
+    }
+
+    // [NEW][RECYCLER] Back to the end of the queue after a game: the switch is on, the player turned !recycle on, and they have NO strike (not even half).
+    bool CanRecycle(string login)
+    {
+        Player p;
+        return _settings.RecyclerEnabled && _players.TryGetValue(login, out p) && p.Recycler && StrikeTotal(p) == 0 && p.HalfStrike == 0 && !IsPractice(login);
+    }
+
+    // !recycle on|off  (yourself)     !recycle on|off <user>  (mods)     !recycle  (shows yours)
+    bool HandleRecycle(string user, string input, bool isPrivileged)
+    {
+        string[] a = (input ?? "").Trim().ToLower().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        string who = a.Length > 1 ? a[1].TrimStart('@') : user;
+        if (who != user && !isPrivileged) { Say("@" + user + " Only mods can change someone else's recycle setting."); return true; }
+        Player p;
+        if (!_players.TryGetValue(who, out p)) { Say("@" + user + " " + (who == user ? "Register first with !register." : who + " is not registered.")); return true; }
+        if (a.Length == 0 || (a[0] != "on" && a[0] != "off"))
+        {
+            Say("@" + user + " Recycle is " + (p.Recycler ? "ON" : "OFF") + (who == user ? "" : " for " + who) + (_settings.RecyclerEnabled ? "" : " (the recycler is switched off right now)") + ". Type !recycle on or !recycle off.");
+            return true;
+        }
+        if (a[0] == "on" && (StrikeTotal(p) > 0 || p.HalfStrike > 0)) { Say("@" + user + " " + (who == user ? "You have" : who + " has") + " a strike, so the recycler is not available."); return true; }
+        p.Recycler = a[0] == "on";
+        SavePlayers();
+        if (!p.Recycler) { var qe = GetEntry(who); if (qe != null && qe.Recycle) { qe.Recycle = false; SaveQueue(); } }
+        Say("@" + user + " Recycle " + (p.Recycler ? "ON: after a game " + (who == user ? "you go" : who + " goes") + " back to the end of the queue." : "OFF.") );
+        PublishState("queue_update", who + " recycle " + a[0]);
+        return true;
+    }
+
+    // [NEW] !incomplete (mods): the live game did not finish. No winner, no wins/losses/points, no strikes; the players come back by the recycler rules; shown as "incomplete" in history.
+    bool HandleIncomplete(string user, bool isPrivileged)
+    {
+        if (!isPrivileged) { Say("@" + user + " Only mods can mark a game incomplete."); return true; }
+        if (_lastBalance == null || _lastBalance.Result == null || _lastBalance.ResultRecorded) { Say("@" + user + " There is no live game to mark incomplete."); return true; }
+        var rec = _matches.FirstOrDefault(m => m.Id == _lastBalance.MatchId);
+        if (rec != null) { rec.Incomplete = true; rec.Winner = null; rec.FinishedAt = Now(); rec.Counted = false; rec.PtsWin = 0; rec.PtsLoss = 0; SaveMatches(); }
+        _lastBalance.ResultRecorded = true; _lastBalance.Winner = null; _lastBalance.Incomplete = true;
+        SaveCurrentMatch();
+        SendToBack(_queue.Where(e => e.Status == "active").Select(e => e.Username).ToList());
+        Say("Match #" + _lastBalance.MatchId + " marked INCOMPLETE: no result, no points. Players with the recycler are back in the queue.");
+        PublishState("match_result", "incomplete");
+        return true;
+    }
+
+    // [NEW] Called every sync tick: customs that sat idle for InactivityMinutes close by themselves (one short chat line).
+    static long _lastCustomsActivity = NowMs();
+    void CustomsIdleTick()
+    {
+        int mins = _settings.InactivityMinutes;
+        if (mins <= 0 || !_settings.QueueOpen) return;
+        if (_lastBalance != null && _lastBalance.Result != null && !_lastBalance.ResultRecorded) return;   // a game is running
+        if (NowMs() - _lastCustomsActivity < (long)mins * 60000L) return;
+        _settings.QueueOpen = false; _settings.TimedOut = true; _settings.TimedOutAt = Now();
+        SaveSettings();
+        Say("Customs closed after " + mins + " minutes with no activity. A mod can reopen with !queue open.");
+        PublishState("queue_close", "timeout");
     }
 
     void RotateQueue()
@@ -2815,17 +2916,25 @@ public class CPHInline
     {
         // [NEW][WEB] The streamer typing !leave = sitting out (otherwise the next !balance re-adds him).
         if (IsStreamer(user) && _settings.StreamerPlaying) { _settings.StreamerPlaying = false; SaveSettings(); }
-        bool leftWheel = WheelLeave(user);
-        if (leftWheel) Say("@" + user + " You left the tournament wheel.");
+        Player lp;
+        if (_players.TryGetValue(user, out lp) && lp.Recycler) { lp.Recycler = false; SavePlayers(); }   // leaving ends recycling
         if (RemoveFromQueue(user))
         {
             Say("@" + user + " You left the queue.");
             PublishState("queue_update", user + " left");
         }
-        else if (!leftWheel)
+        else
         {
             Say("@" + user + " You're not in the queue.");
         }
+        return true;
+    }
+
+    // [NEW][WHEEL] !notme / !not me / !notme. : off the tournament wheel only (customs !leave is separate). Works while the wheel is spinning.
+    bool HandleNotMe(string user)
+    {
+        string msg = WheelLeave(user) ? "@" + user + " you're off the wheel." : "@" + user + " you're not on the wheel.";
+        WheelSayOnce(user, msg);
         return true;
     }
 
@@ -2922,7 +3031,7 @@ public class CPHInline
         switch (sub)
         {
             case "open":
-                _settings.QueueOpen = true;
+                _settings.QueueOpen = true; _settings.TimedOut = false; _lastCustomsActivity = NowMs();
                 SaveSettings();
                 Say("The queue is now OPEN! Type !join to enter.");
                 PublishState("queue_open", null);
@@ -4319,6 +4428,12 @@ public class CPHInline
         SavePlayers();
         _standingsDirty = true;
         string extra = "";
+        if (StrikeTotal(p) > 0 || p.HalfStrike > 0)   // any strike (even half) ends recycling
+        {
+            p.Recycler = false; SavePlayers();
+            QueueEntry re = GetEntry(target);
+            if (re != null && re.Recycle) { RemoveFromQueue(target); extra = " They were taken out of the recycler queue."; }
+        }
         if (StrikeTotal(p) >= MaxStrikes)
         {
             QueueEntry qe = GetEntry(target);

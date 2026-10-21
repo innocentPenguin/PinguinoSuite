@@ -31,11 +31,18 @@
   .wait b { color:var(--gold); }
   .pill { display:inline-block; padding:3px 10px; margin:2px; border-radius:999px; background:rgba(255,255,255,.08); font-size:15px; }
   .win { color:var(--gold); }
+  .signed { position:absolute; left:0; top:0; padding:5px 14px; border-radius:999px; background:var(--panel); border:1px solid var(--line); font-size:18px; font-weight:800; z-index:4; }
+  .signed b { color:var(--orange); }
+  .feed { position:absolute; left:0; top:44px; width:230px; z-index:4; }
+  .feed div { margin-bottom:4px; padding:4px 10px; border-radius:8px; background:rgba(20,22,17,.9); border-left:4px solid var(--orange); font-size:16px; font-weight:700; }
+  .feed .leave { border-left-color:#a9aaa1; color:var(--muted); }
 </style>
 </head>
 <body>
 <div id="root" class="off">
   <div class="wheelbox">
+    <div class="signed" id="signed"></div>
+    <div class="feed" id="feed"></div>
     <div class="pointer"></div>
     <canvas id="cv" width="500" height="500"></canvas>
     <div class="banner" id="banner"></div>
@@ -114,6 +121,15 @@
     else if (d.status === 'open') banner.innerHTML = 'Type <b>!me</b> to join (' + names.length + ' waiting)';
     else banner.innerHTML = '';
 
+    document.getElementById('signed').innerHTML = '<b>' + (d.signedUp || 0) + '</b> signed up';
+    var fh = '', fm = d.feedMs || 2000;
+    (d.feed || []).forEach(function (f) {
+      var age = nowAdj() - f.at;
+      if (age < 0 || age >= fm) return;
+      fh += '<div class="' + f.kind + '" style="opacity:' + Math.max(0, Math.min(1, (fm - age) / 400)).toFixed(2) + '">' + esc(f.name) + (f.kind === 'join' ? ' joined' : ' left') + '</div>';
+    });
+    document.getElementById('feed').innerHTML = fh;
+
     var title = document.getElementById('title'), sub = document.getElementById('sub'), list = document.getElementById('list'), wait = document.getElementById('wait');
     title.innerHTML = d.final ? 'Final <span>teams</span>' : 'Tournament <span>wheel</span>';
     sub.textContent = (d.mode === 'balanced' ? 'Rigged / balanced by MMR' : 'True random') + ' · teams of ' + d.teamSize + (d.round ? ' · round ' + (d.round + 1) : '');
@@ -133,7 +149,7 @@
   function demoData() {
     var q = ['Ana', 'Bo', 'Cy', 'Dee', 'Eli', 'Flo', 'Gus', 'Hal'];
     return { status: 'drawing', mode: 'random', teamSize: 2, round: 0, final: false, queue: q, picks: [{ name: 'Cy', team: 1 }], teams: [{ n: 1, members: ['Cy'], partial: false }],
-             waitlist: [], spin: { id: 'demo', at: Date.now() - 1500, ms: 8500, landing: ['Cy'], revealed: 1 }, now: Date.now() };
+             signedUp: 8, feed: [{ name: 'Ana', kind: 'join', at: Date.now() - 300 }, { name: 'Bo', kind: 'leave', at: Date.now() - 900 }], feedMs: 2000, waitlist: [], spin: { id: 'demo', at: Date.now() - 1500, ms: 8500, landing: ['Cy'], revealed: 1 }, now: Date.now() };
   }
 
   function poll() {

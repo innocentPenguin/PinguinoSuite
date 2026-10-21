@@ -65,9 +65,9 @@ namespace PinguinoHost
         /// <summary>The ONE private-match name/password: helper_settings.json (HelperPinguino reads it, mods change it with !lobbyname / !lobbypass, !pm shows it).</summary>
         public static string PrivateMatchLine()
         {
-            var j = LoadFile("helper_settings.json"); string n = ((string)j["LobbyName"] ?? "").Trim(), pw = ((string)j["LobbyPassword"] ?? "").Trim();
+            var j = LoadFile("helper_settings.json"); string n = ((string)j["LobbyName"] ?? "").Trim();   // the bots never keep or say a lobby password: name only
             if (n == "") return "No private match is set right now. Ask a mod.";
-            return "Private match -> Name: " + n + ", " + (pw == "" ? "no password" : "password: " + pw) + ".";
+            return "Private match -> Name: " + n + ".";
         }
         static JObject LoadFile(string name) { try { var f = Path.Combine(DataDir, name); return File.Exists(f) ? JObject.Parse(File.ReadAllText(f)) : new JObject(); } catch (Exception) { return new JObject(); } }
         static void SaveFile(string name, JObject o)

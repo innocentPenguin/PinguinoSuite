@@ -50,7 +50,7 @@ try:
     chk('!commands stays ours (answers with the site link)', any('innocentpenguin.com/commands' in x for x in ask(host, 'viewer1: !commands')))
     chk('!bits stays ours (the bits board), not the clip', not any('clip' in x for x in ask(host, 'viewer1: !bits')))
     r = ask(host, 'viewer1: !gay'); chk('the exact !command of an unsafe entry still works', r != [], r)
-    r = ask(host, 'viewer1: !pm'); chk('!pm reads the one shared private-match setting', r == ['Private match -> Name: peng7, no password.'], r)
+    r = ask(host, 'viewer1: !pm'); chk('!pm reads the one shared private-match setting', r == ['Private match -> Name: peng7.'], r)
     # ---- natural questions ----
     r = ask(host, 'viewer3: what pc does penguin have?'); chk('"what pc does penguin have?" -> specs + streaming pc', r and 'Ryzen 9 7950X3D' in r[0] and r[0].startswith('@viewer3 '), r)
     r = ask(host, 'viewer4: what are his specs'); chk('the same entry is rate limited for 90 s', r == [], r)

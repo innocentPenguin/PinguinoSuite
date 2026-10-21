@@ -25,11 +25,11 @@ namespace PinguinoHost
         {
             string f = Path.Combine(HostApi.DataDir, "helper_settings.json"); if (!File.Exists(f)) { _result = "no helper_settings.json"; return; }
             var j = JObject.Parse(File.ReadAllText(f, Encoding.UTF8).TrimStart((char)0xFEFF));
-            string name = ((string)j["LobbyName"] ?? "").Trim(), pw = ((string)j["LobbyPassword"] ?? "").Trim();
-            string h = Convert.ToBase64String(SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(name + "\n" + pw))), key = h;
+            string name = ((string)j["LobbyName"] ?? "").Trim();   // NAME only: the bots never keep or send a lobby password
+            string h = Convert.ToBase64String(SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(name))), key = h;
             var last = SiteHttp.ReadJ(P); if ((string)last["key"] == key) { _result = "up to date"; return; }
             string k = SiteHttp.Key(); if (k == "") { _result = "no site key"; return; }
-            var body = new JObject { { "name", name.Length > 60 ? name.Substring(0, 60) : name }, { "password", pw.Length > 60 ? pw.Substring(0, 60) : pw }, { "active", name != "" || pw != "" } };
+            var body = new JObject { { "name", name.Length > 60 ? name.Substring(0, 60) : name }, { "active", name != "" } };
             JObject r; int code = SiteHttp.Call("POST", "/api/bot/match-private", body, k, out r);
             if (code >= 200 && code < 300) { _fails = 0; SiteHttp.WriteJ(P, new JObject { { "key", key }, { "pushedAt", DateTime.UtcNow.ToString("o") } }); _result = "pushed"; Clog.Info("lobby", "private match pushed to the site"); }
             else { _fails++; _result = "site answered " + code; Clog.Warn("lobby", "private match push failed (HTTP " + code + ")"); }

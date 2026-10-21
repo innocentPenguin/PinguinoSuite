@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
@@ -558,7 +558,7 @@ public static class Harness
         Check((string)ws["Status"] == "drawing" && ws["Picks"].Count() == 1, "wheel: one spin = exactly one pick");
         Check(ws["Teams"].Sum(t => t["Members"].Count()) == 1 && ws["Msgs"].Count() == 0, "wheel: after the first pick there is one team member and nothing queued");
         var snap = priv("WheelSnapshot");
-        Check((string)snap["status"] == "drawing" && snap["finalTeams"].Count() == 0 && snap["queue"].Count() == 6 && snap["waitlist"].Count() == 0 && snap["picks"] == null && snap["teams"] == null, "wheel: the site snapshot has only queue + status while drawing: " + snap.ToString(Newtonsoft.Json.Formatting.None));
+        Check((string)snap["status"] == "spinning" && snap["finalTeams"].Count() == 0 && snap["queue"].Count() == 6 && snap["waitlist"].Count() == 0 && snap["picks"] == null && snap["teams"] == null, "wheel: the site snapshot has only queue + status while drawing: " + snap.ToString(Newtonsoft.Json.Formatting.None));
         wheel("mode", "balanced");
         Check(CPHProxy.Sent.Any(m => m.Contains("round is running")), "wheel: mode can't change mid-round");
         wheel("spin", "");
@@ -607,9 +607,9 @@ public static class Harness
         fresh(2); signUp("x", 4);
         wheel("spin", "");
         string firstPick = (string)WS()["Picks"][0]["Login"];
-        Run(firstPick, "!leave");
+        Run(firstPick, "!notme");
         ws = WS();
-        Check(ws["Picks"].Count() == 0 && ws["Entrants"].Count() == 3 && CPHProxy.Sent.Any(m => m.Contains("left the tournament wheel")), "wheel: leaving mid-round removes their pick; the wheel text is separate from the queue text");
+        Check(ws["Picks"].Count() == 0 && ws["Entrants"].Count() == 3 && CPHProxy.Sent.Any(m => m.Contains("off the wheel")), "wheel: leaving mid-round removes their pick; the wheel text is separate from the queue text");
         Run("xjoin", "!me");
         Check(WS()["Entrants"].Count() == 4, "wheel: joining mid-round works");
         spinAll();
@@ -622,7 +622,7 @@ public static class Harness
         Check((bool)ws["Final"] && ws["Waitlist"].Count() == 1, "wheel: 5 players -> 2 teams + 1 on the waitlist");
         string leaver = (string)ws["Picks"][0]["Login"];
         wlog.Clear();
-        Run(leaver, "!leave"); wheel("tick", "");
+        Run("zz1", "!not", "me"); Run(leaver, "!notme."); wheel("tick", "");
         ws = WS();
         Check(ws["Teams"].All(t => t["Members"].Count() == 2) && ws["Waitlist"].Count() == 0 && wlog.Any(m => m.Contains("takes the spot")), "wheel: a leaver after the draw is replaced from the waitlist");
 
@@ -688,6 +688,53 @@ public static class Harness
         Check(WS()["Entrants"].Count() == 2 && !onDisk("practice0"), "practice: after off the real wheel sign-ups are back");
         wheel("end", "");
 
+        // ===== [NEW] recycler, !incomplete, inactivity timeout =====
+        Run("mod1", "!activity", "competitive", true);
+        Run("mod1", "!queue", "clear", true); Run("mod1", "!queue", "open", true);
+        Run("mod1", "!format", "2v2", true); Run("mod1", "!streamer", "out", true);
+        for (int i = 1; i <= 5; i++) Run("rc" + i, "!register", "epicrc" + i);
+        Run("rc1", "!recycle", "on"); Run("rc2", "!recycle", "on");
+        Check(Players()["rc1"]["Recycler"].ToString() == "True", "recycler: !recycle on sets the flag");
+        Run("rc3", "!recycle", "on", false); Run("rc3", "!recycle", "off");
+        foreach (var n in new[] { "rc1", "rc2", "rc3", "rc4" }) Run(n, "!join");
+        Run("mod1", "!balance", "", true);
+        Check(State()["currentMatch"] != null && State()["currentMatch"].Type != Newtonsoft.Json.Linq.JTokenType.Null, "recycler test: a 2v2 game is live");
+        Run("mod1", "!incomplete", "", true);
+        Check((string)State()["currentMatch"]["status"] == "incomplete", "incomplete: the match shows status incomplete");
+        Check(Q().OrderBy(x => x).SequenceEqual(new[] { "rc1", "rc2" }) && State()["queue"].All(q => (bool)q["recycle"]), "incomplete: only the recycler players are back, with the recycle marker: " + string.Join(",", Q()));
+        var mjs = JArray.Parse(File.ReadAllText(Path.Combine(dir, "matches.json"))).Last;
+        Check((bool)mjs["Incomplete"] && mjs["Winner"].Type == Newtonsoft.Json.Linq.JTokenType.Null && Players()["rc4"]["Wins"].ToString() == "0" && Players()["rc4"]["Losses"].ToString() == "0", "incomplete: no winner and no wins/losses recorded");
+        Run("rc1", "!join");
+        Check(CPHProxy.Sent.Any(m => m.Contains("already in the queue")), "recycler: a recycled player is simply in the queue");
+        // any strike ends recycling
+        Run("mod1", "!strike", "@rc1", true);
+        Check(!Q().Contains("rc1") && Players()["rc1"]["Recycler"].ToString() == "False", "recycler: a strike removes the player from the recycler queue and turns the flag off");
+        Run("rc1", "!recycle", "on");
+        Check(Players()["rc1"]["Recycler"].ToString() == "False" && CPHProxy.Sent.Any(m => m.Contains("strike")), "recycler: with a strike the recycler can't be turned on");
+        Run("mod1", "!unstrike", "@rc1", true);
+        // a normal finished game: the recycler player comes back, the others leave
+        foreach (var n in new[] { "rc3", "rc4", "rc5" }) Run(n, "!join");
+        Run("mod1", "!balance", "", true);
+        var rcPlayers = Team("blue").Concat(Team("orange")).ToList();
+        Run("mod1", "!win", "blue", true);
+        Check(Q().Contains("rc2") && State()["queue"].First(q => (string)q["user"] == "rc2")["recycle"].ToString() == "True" && !Q().Contains("rc3") && !Q().Contains("rc5"), "recycler: after a win only the recycler player is queued again: " + string.Join(",", Q()));
+        Run("rc2", "!leave");
+        Check(!Q().Contains("rc2") && Players()["rc2"]["Recycler"].ToString() == "False", "recycler: !leave removes the player and ends recycling");
+        // inactivity timeout
+        var botT = typeof(CPHInline);
+        var setF = botT.GetField("_settings", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var actF = botT.GetField("_lastCustomsActivity", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Run("mod1", "!queue", "open", true);
+        var idleM = botT.GetMethod("CustomsIdleTick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        idleM.Invoke(bot, null);
+        Check((bool)State()["queueOpen"] && !(bool)State()["timedOut"], "timeout: a fresh queue is not closed");
+        actF.SetValue(null, 1L);
+        CPHProxy.Sent.Clear();
+        idleM.Invoke(bot, null);
+        Check(!(bool)State()["queueOpen"] && (bool)State()["timedOut"] && (long)State()["timedOutAt"] > 0 && CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Contains("15 minutes"), "timeout: idle customs close after 15 minutes with ONE chat line: " + string.Join("|", CPHProxy.Sent));
+        Run("mod1", "!queue", "open", true);
+        Check((bool)State()["queueOpen"] && !(bool)State()["timedOut"], "timeout: opening the queue clears the timed-out flag");
+        Run("mod1", "!streamer", "in", true);
         { var qBefore = Q(); Run("curious", "!next");
           Check(CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].StartsWith("@curious ") && !CPHProxy.Sent[0].Contains("Only mods") && (CPHProxy.Sent[0].Contains("Next up") || CPHProxy.Sent[0].Contains("queue is empty")) && Q().SequenceEqual(qBefore), "a viewer's !next is a short read-only 'who is next' line and never advances the queue: " + string.Join("|", CPHProxy.Sent)); }
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
