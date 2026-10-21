@@ -5,6 +5,7 @@
 // not implemented yet: such requests are consumed and reported as an error, never silently dropped.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { log } from './log.mjs';
 import { installPackage, uninstallModule, rollbackModule } from './pkg.mjs';
@@ -83,9 +84,23 @@ export function createLite({ getHealth, version = '0.3.0', dir = liteDir(), modu
     return Object.values(best);
   }
 
+  /** Lite's own update from a LOCAL file: <dir>/staging/PinguinoLite-<ver>-setup.exe + .sha256. Verified hash -> update_manifest.json. Never executed here. */
+  function checkLiteUpdate() {
+    const cur = process.env.PINGUINO_LITE_VERSION || '0.0.0';
+    let best = null;
+    try { for (const f of fs.readdirSync(path.join(dir, 'staging'))) { const m = /^PinguinoLite-(\d+(?:\.\d+)*)-setup\.exe$/.exec(f); if (m && (!best || cmpVersion(m[1], best.v) > 0)) best = { v: m[1], f }; } } catch {}
+    if (!best || cmpVersion(best.v, cur) <= 0) { try { fs.unlinkSync(path.join(dir, 'update_manifest.json')); } catch {} return false; }
+    const file = path.join(dir, 'staging', best.f);
+    let want = ''; try { want = fs.readFileSync(file + '.sha256', 'utf8').trim().split(/\s+/)[0].toLowerCase(); } catch {}
+    const got = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    if (!/^[0-9a-f]{64}$/.test(want) || want !== got) { log('warn', 'lite', `staged Lite ${best.v} has no valid .sha256 or the hash differs; not offered`); return false; }
+    writeJson(dir, 'update_manifest.json', { app: 'pinguino-lite', latest_version: best.v, published_at: iso(), notes: 'local file', staged_file: 'staging\\' + best.f, sha256: got, min_os: '10.0' });
+    return true;
+  }
+
   function writeUpdateStatus(installed, catalog, result = 'ok', error) {
     const n = catalog.filter(c => installed[c.id] && cmpVersion(c.latest_version, installed[c.id].version) > 0).length;
-    writeJson(dir, 'update_status.json', { last_check_at: iso(), result, ...(error ? { error } : {}), updates_available: n, lite_update_available: false });
+    writeJson(dir, 'update_status.json', { last_check_at: iso(), result, ...(error ? { error } : {}), updates_available: n, lite_update_available: checkLiteUpdate() });
     return n;
   }
 

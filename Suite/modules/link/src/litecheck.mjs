@@ -23,6 +23,17 @@ try {
   fs.writeFileSync(path.join(dir, 'requests', '3-start-aaa.json'), JSON.stringify({ schema: 1, action: 'start', id: 'aaa' }));
   await lite.poll();
   check('start is consumed and reported as not available (not silent)', rd('update_status.json').result === 'error' && /not available/.test(rd('update_status.json').error) && fs.readdirSync(path.join(dir, 'requests')).every(f => f.endsWith('.tmp')));
+  process.env.PINGUINO_LITE_VERSION = '0.1.0';
+  fs.mkdirSync(path.join(dir, 'staging'), { recursive: true });
+  const exe = path.join(dir, 'staging', 'PinguinoLite-0.2.0-setup.exe'); fs.writeFileSync(exe, 'fake installer');
+  await lite.refresh();
+  check('staged Lite without .sha256 is not offered', !fs.existsSync(path.join(dir, 'update_manifest.json')) && rd('update_status.json').lite_update_available === false);
+  const { createHash } = await import('node:crypto');
+  fs.writeFileSync(exe + '.sha256', createHash('sha256').update('fake installer').digest('hex'));
+  await lite.refresh();
+  check('verified staged Lite is offered in update_manifest.json', rd('update_manifest.json').latest_version === '0.2.0' && /^staging.PinguinoLite-0\.2\.0-setup\.exe$/.test(rd('update_manifest.json').staged_file) && rd('update_status.json').lite_update_available === true);
+  process.env.PINGUINO_LITE_VERSION = '0.2.0'; await lite.refresh();
+  check('no offer when Lite is already current', !fs.existsSync(path.join(dir, 'update_manifest.json')));
   lite.stop();
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 const failed = results.filter(r => !r).length; console.log(failed ? `\n${failed} FAILED` : '\nAll lite checks passed'); process.exit(failed ? 1 : 0);
