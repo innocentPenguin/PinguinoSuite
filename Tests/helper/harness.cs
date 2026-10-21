@@ -432,6 +432,11 @@ public static class Harness
             Check("!helper never goes to the core or the chatbot as a normal message", CoreRun() == null && !Forwarded());
             Msg("Ana", "!ask how do I join the queue?"); Check("!ask is an alias", Last() != null && Last().StartsWith("@Ana "), Last());
             Msg("Ana", "!pinguino how do I join the queue?"); Check("!pinguino is an alias", Last() != null && Last().StartsWith("@Ana "), Last());
+            c0 = aiCalls; Msg("Ana", "!helper pinguinos how do i join the queue?");
+            Check("addressing the bots (pinguinos) is ignored, answer found", Last() != null && Last().StartsWith("@Ana ") && aiCalls == c0 + 1 && lastSystem.Contains("How to join"), Last());
+            Msg("Ana", "!helper pinguinoo how do i join the queue?"); Check("a typo of the bot name is ignored too", lastSystem.Contains("How to join") && !lastSystem.Contains("pinguinoo"), lastSystem);
+            Check("the prompt knows Ivan is also called penguin/peng/peg", lastSystem.Contains("peng") && lastSystem.Contains("peg"), lastSystem);
+            Msg("Ana", "!helper does peng answer how to join the queue"); Check("peng counts as Ivan", Last() != null && Last().StartsWith("@Ana "), Last());
             Msg("Ana", "!helper"); Check("empty question: short usage, friendly", Last() != null && Last().Contains("!helper how do I join") && Last().Contains("Thanks"), Last());
 
             Msg("Mod1", "!helper how do I change the private match lobby name", true); sayLog.Add(Last() ?? "");
