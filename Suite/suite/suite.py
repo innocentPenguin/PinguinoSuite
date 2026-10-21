@@ -186,6 +186,7 @@ import integrations  # noqa: E402
 import vault as vaultlib  # noqa: E402
 import helpdb  # noqa: E402
 import prefs as prefslib  # noqa: E402
+import templates as tplib  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -212,6 +213,7 @@ DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "ru
 console_log = consolelog.Console(Path(DATA_DIR) / "console", LOGS)  # live log stream for the Console page
 CONSOLE_DIR = Path(DATA_DIR) / "console"
 prefs_store = prefslib.Prefs(Path(DATA_DIR) / "prefs.json")
+templates_store = tplib.Templates(Path(DATA_DIR) / "templates.json")  # saved settings templates per settings area
 livedetect.ENV_FILES.append(ROOT.parent / "PinguinoSite" / ".env")  # frozen core: __file__ is inside the bundle, ROOT is the real Suite folder
 try:
     vault = vaultlib.Vault(Path(DATA_DIR) / "vault.bin")  # encrypted key store (DPAPI on Windows, OS keychain elsewhere)
@@ -961,6 +963,39 @@ def prefs_set(b: dict):
 @app.post("/api/prefs/reset")
 def prefs_reset():
     return prefs_store.reset()
+
+
+def _tpl(fn, *a, **kw):
+    try:
+        return fn(*a, **kw)
+    except tplib.TemplateError as e:
+        return JSONResponse({"ok": False, "error": e.msg, **e.extra}, status_code=e.status)
+
+
+@app.get("/api/templates")
+def templates_list(area: str):
+    """Saved settings templates of one settings area (name, createdAt, values)."""
+    r = _tpl(templates_store.list, area)
+    return r if isinstance(r, JSONResponse) else {"ok": True, "area": area, "templates": r, "max": tplib.MAX_PER_AREA}
+
+
+@app.post("/api/templates")
+def templates_save(b: dict):
+    """Save the current values of a settings area under a name. 409 {exists:true} when the name is taken and overwrite is not set."""
+    r = _tpl(templates_store.save, b.get("area"), b.get("name"), b.get("values"), bool(b.get("overwrite")))
+    return r if isinstance(r, JSONResponse) else {"ok": True, "template": r}
+
+
+@app.post("/api/templates/rename")
+def templates_rename(b: dict):
+    r = _tpl(templates_store.rename, b.get("area"), b.get("id"), b.get("name"))
+    return r if isinstance(r, JSONResponse) else {"ok": True, "template": r}
+
+
+@app.post("/api/templates/delete")
+def templates_delete(b: dict):
+    r = _tpl(templates_store.delete, b.get("area"), b.get("id"))
+    return r if isinstance(r, JSONResponse) else {"ok": True}
 
 
 @app.get("/api/help")

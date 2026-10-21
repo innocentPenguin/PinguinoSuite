@@ -86,6 +86,7 @@ nav h6{margin:14px 12px 4px;font-size:10.5px;letter-spacing:1.2px;color:var(--fa
 .tag{margin-left:auto;font-size:9.5px;padding:1px 7px;border-radius:8px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
 .tag.live{background:#3ddc9722;color:var(--ok)}.tag.prev{background:#b9a58a22;color:var(--vio)}.tag.off{background:var(--hover2);color:var(--faint)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);margin-left:auto}.dot.running{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot.starting{background:var(--warn)}
+.split{position:relative;display:inline-flex}.split>button:first-child{border-top-right-radius:0;border-bottom-right-radius:0}.split>.sarr{border-top-left-radius:0;border-bottom-left-radius:0;margin-left:-1px;padding:0 9px;border-left:1px solid var(--line2)}.split.open>.sarr{background:color-mix(in srgb,var(--accent) 14%,transparent)}.smenu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:320px;max-width:86vw;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;padding:6px;box-shadow:0 10px 28px rgba(0,0,0,.5);text-align:left;font-size:13px}.smenu .mi{display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px;border:0;border-radius:7px;background:none;color:var(--fg);text-align:left;cursor:pointer;font:inherit}.smenu .mi:hover,.smenu .mi:focus-visible{background:color-mix(in srgb,var(--accent) 14%,transparent);outline:none}.smenu .msep{height:1px;background:var(--line);margin:6px 0}.smenu .mh{font-size:10.5px;letter-spacing:1.1px;text-transform:uppercase;color:var(--faint);padding:0 8px 4px}.smenu .trow{display:flex;align-items:center;gap:4px;padding:1px 0}.smenu .trow .grow{flex:1;min-width:0;padding:0 8px}.smenu input.tn{flex:1;min-width:0}
 .wgframe{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border:1px solid var(--line2);border-radius:8px;margin-top:8px;background:#0b0b0e}.wgframe iframe{position:absolute;left:0;top:0;width:1280px;height:720px;flex:none;transform-origin:0 0;border:0;background:transparent}.wgerr{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:16px;color:var(--dim);background:#0b0b0e}.wgclose{display:none}.wgbox.full{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center}.wgbox.full .wgframe{width:min(94vw,calc(86vh*16/9));margin:0}.wgbox.full .wgclose{display:block;position:fixed;top:14px;right:14px;z-index:9001;font-size:18px;padding:10px 20px;cursor:pointer}
 .navfoot{margin-top:auto;padding:10px;border-top:1px solid var(--line)}nav{min-height:0}.brand{flex:none}.navfoot{flex:none}.navscroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -8px 0 -4px;padding:0 6px 6px 4px;scrollbar-width:thin;scrollbar-color:var(--accent) transparent}.navscroll::-webkit-scrollbar{width:6px}.navscroll::-webkit-scrollbar-track{background:transparent}.navscroll::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--accent) 70%,transparent);border-radius:3px}.navscroll::-webkit-scrollbar-thumb:hover{background:var(--accent)}
 /* main */
@@ -1111,7 +1112,7 @@ pages.wheel=()=>{
   return `<div class="grid g2" style="align-items:start;max-width:1200px">
    <div><div class="row wrap" style="margin-bottom:8px">${areas.map(x=>`<span class="chip${x.id===WG.tab?' on':''}" data-wgt="${x.id}">${esc(x.title)}</span>`).join('')}</div>
     ${WG.mock&&a.id!=='economy'?'<div class="pnote" style="color:var(--warn)">Preview data: the Host has no /api/tune yet, so these values are examples and are not saved.</div>':''}
-    <div class="card"><div class="row"><h3 style="margin:0">${esc(a.title)}</h3><span class="sp"></span><button class="sm" id="wg-save"${nChanged?'':' disabled'}>Save${nChanged?' ('+nChanged+')':''}</button><button class="sm" id="wg-def">Defaults</button></div>
+    <div class="card"><div class="row"><h3 style="margin:0">${esc(a.title)}</h3><span class="sp"></span>${splitBtn('wg-save','Save'+(nChanged?' ('+nChanged+')':''),!nChanged,TPLM.menu&&TPLM.menu.kind==='save',TPLM.menu&&TPLM.menu.kind==='save'?tplMenu(a,'save'):'')}<span style="width:8px"></span>${splitBtn('wg-def','Defaults',false,TPLM.menu&&TPLM.menu.kind==='def',TPLM.menu&&TPLM.menu.kind==='def'?tplMenu(a,'def'):'')}</div>
      ${a.help?`<div class="pnote">${esc(a.help)}</div>`:''}${a.id==='obs'?wgObsStatus():''}${a.fields.map(f=>wgField(a,f)).join('')}${WG.msg?`<div class="sm" style="margin-top:8px">${esc(WG.msg)}</div>`:''}</div>
     ${a.id==='economy'?`<div class="card"><h3>Give points silently</h3><div class="pnote">No chat message is sent. Use a negative amount to take points away.</div>
      <div class="row wrap"><select id="gv-who"><option value="user">One viewer</option><option value="everyone">Everyone (in the database)</option></select><input id="gv-login" placeholder="login" style="width:140px"><input id="gv-amt" type="number" value="100" style="width:90px"><input id="gv-why" placeholder="reason" style="width:180px"><button class="sm" id="gv-go">Give</button></div>${WG.gmsg?`<div class="sm" style="margin-top:6px">${esc(WG.gmsg)}</div>`:''}</div>`:''}</div>
@@ -1126,6 +1127,77 @@ function wgSimLocal(g,bet,n){const gm=WG.d.find(x=>x.id==='gambling'),v=k=>{cons
   return {wins:w,losses:n-w,net:Math.round(net),avgPayout:Math.round(w?bet*mult:0),local:true}}
 function wgObsStatus(){const o=WG.obs;if(!o||o.ok===false)return '<div class="sm faint" style="margin-bottom:6px">OBS status is not available (the Host is older, or not running).</div>';
   const rb=o.replayBuffer||{};return `<div class="sm" style="margin-bottom:8px"><span class="dot ${o.connected?'running':'stopped'}" style="margin:0 6px 0 0"></span>${o.connected?'Connected to OBS':'Not connected to OBS'}${o.recording?' · recording':''}${o.connected?' · replay buffer '+(rb.active?'running':'stopped'):''}${rb.lastAutoStart?' · auto-started '+aprAgo(rb.lastAutoStart):''}${rb.lastError?`<div class="faint">Last error: ${esc(rb.lastError)}</div>`:''}${o.connected&&o.replayBufferEnabled===false?'<div class="faint">The replay buffer is not enabled in OBS. Enable Replay Buffer in OBS Settings &gt; Output.</div>':''}</div>`}
+/* ---- Save ▾ / Defaults ▾: one reusable split button + saved templates per settings area (core: GET|POST /api/templates, /rename, /delete; stored in <data dir>/templates.json) ---- */
+const TPL={};   // area -> {list:[{id,name,createdAt,values}]|null, err:''}
+const TPLM={menu:null};   // the open menu: {kind:'save'|'def', mode:'list'|'name'|'over'|'ren:<id>'|'del:<id>', name:''}
+function splitBtn(id,label,disabled,open,menu){
+  return `<span class="split${open?' open':''}"><button class="sm" id="${id}"${disabled?' disabled':''}>${label}</button><button class="sm sarr" id="${id}-arr" aria-haspopup="menu" aria-expanded="${open?'true':'false'}" title="Templates and more">▾</button>${open?`<div class="smenu" role="menu" data-for="${id}">${menu}</div>`:''}</span>`}
+async function tplLoad(area){
+  const T=TPL[area]=TPL[area]||{list:null,err:''};
+  try{const r=await fetch('/api/templates?area='+encodeURIComponent(area)).then(x=>x.json());
+    if(!r||r.ok!==true||!Array.isArray(r.templates))throw new Error('old');T.list=r.templates;T.err=''}
+  catch{T.list=[];T.err='Templates need the updated core (it has not been restarted since the update).'}
+  if(route==='wheel'&&TPLM.menu)draw(true)}
+const tplDate=ts=>ts?new Date(ts*1000).toLocaleDateString():'';
+function tplMenu(a,kind){
+  const M=TPLM.menu,T=TPL[a.id]||{list:null},nm=esc(M.name||'');
+  let h='';
+  if(kind==='save'){
+    if(M.mode==='name')h+=`<div class="trow"><input class="tn" id="tpl-name" placeholder="Template name" maxlength="40" value="${nm}" aria-label="Template name"><button class="sm" data-mi="name-ok">Save</button><button class="sm" data-mi="cancel" title="Cancel">✕</button></div>`;
+    else if(M.mode==='over')h+=`<div class="trow"><span class="grow">Replace “${nm}”?</span><button class="sm" data-mi="over-yes">Yes</button><button class="sm" data-mi="cancel">No</button></div>`;
+    else h+=`<button class="mi" role="menuitem" data-mi="saveas">＋ Save current values as a template…</button>`}
+  else h+=`<button class="mi" role="menuitem" data-mi="reset">↺ Reset to defaults</button>`;
+  h+='<div class="msep"></div><div class="mh">Templates</div>';
+  if(T.list===null)h+='<div class="sm faint" style="padding:4px 8px">Loading…</div>';
+  else if(T.err)h+=`<div class="sm faint" style="padding:4px 8px">${esc(T.err)}</div>`;
+  else if(!T.list.length)h+='<div class="sm faint" style="padding:4px 8px">None yet. Use Save ▾ then “Save current values as a template”.</div>';
+  else h+=T.list.map(t=>{const id=esc(t.id);
+    if(M.mode==='ren:'+t.id)return `<div class="trow" data-id="${id}"><input class="tn" id="tpl-ren" maxlength="40" value="${nm}" aria-label="New name"><button class="sm" data-mi="ren-ok">OK</button><button class="sm" data-mi="cancel" title="Cancel">✕</button></div>`;
+    if(M.mode==='del:'+t.id)return `<div class="trow" data-id="${id}"><span class="grow">Delete “${esc(t.name)}”?</span><button class="sm" data-mi="del-yes">Yes</button><button class="sm" data-mi="cancel">No</button></div>`;
+    return `<div class="trow" data-id="${id}"><button class="mi grow" role="menuitem" data-mi="apply" title="Stage these values. Press Save to keep them.">${esc(t.name)} <span class="sm faint">${tplDate(t.createdAt)}</span></button><button class="sm" data-mi="ren">Rename</button><button class="sm" data-mi="del">Delete</button></div>`}).join('');
+  return h}
+const tplValues=a=>{const v={};a.fields.forEach(f=>{const x=wgVal(f,a.id);if(x==null||['string','number','boolean'].includes(typeof x))v[f.key]=x});return v};
+function tplApply(a,t){const ed=WG.edit[a.id]=WG.edit[a.id]||{};let n=0,skip=0;
+  Object.keys(t.values||{}).forEach(k=>{const f=a.fields.find(x=>x.key===k);if(!f){skip++;return}
+    const v=t.values[k];if(v===f.value||(v==null&&f.value==null)){delete ed[k]}else{ed[k]=v;n++}});
+  WG.msg=`Applied “${t.name}”: ${n} setting(s) staged${skip?', '+skip+' unknown one(s) skipped':''}. Press Save to keep them.`;
+  TPLM.menu=null;draw(true)}
+async function tplAct(a,act,el){
+  const M=TPLM.menu,T=TPL[a.id]=TPL[a.id]||{list:[],err:''},row=el.closest('[data-id]'),tid=row&&row.dataset.id,cur=tid&&(T.list||[]).find(x=>x.id===tid);
+  const redraw=(focus)=>{draw(true);const f=focus&&$(focus);if(f){f.focus();if(f.select)f.select()}};
+  const fail=r=>toast((r&&r.error)||'Templates need the updated core');
+  if(act==='reset'){WG.edit[a.id]={};a.fields.forEach(f=>{if(f.default!==f.value)WG.edit[a.id][f.key]=f.default});WG.msg='Defaults staged. Press Save to keep them.';TPLM.menu=null;return redraw()}
+  if(act==='saveas'){M.mode='name';M.name='';return redraw('#tpl-name')}
+  if(act==='cancel'){M.mode='list';return redraw()}
+  if(act==='apply'&&cur)return tplApply(a,cur);
+  if(act==='ren'&&cur){M.mode='ren:'+cur.id;M.name=cur.name;return redraw('#tpl-ren')}
+  if(act==='del'&&cur){M.mode='del:'+cur.id;return redraw()}
+  if(act==='name-ok'||act==='over-yes'){const name=act==='name-ok'?($('#tpl-name').value||'').trim():M.name;M.name=name;
+    if(!name){toast('Give the template a name');return}
+    const r=await post('/api/templates',{area:a.id,name,values:tplValues(a),overwrite:act==='over-yes'}).catch(()=>null);
+    if(r&&r.ok){toast('Template saved');M.mode='list';await tplLoad(a.id);return redraw()}
+    if(r&&r.exists){M.mode='over';return redraw()}
+    return fail(r)}
+  if(act==='ren-ok'&&cur){const name=($('#tpl-ren').value||'').trim();
+    const r=await post('/api/templates/rename',{area:a.id,id:cur.id,name}).catch(()=>null);
+    if(r&&r.ok){M.mode='list';await tplLoad(a.id);return redraw()}
+    return fail(r)}
+  if(act==='del-yes'&&cur){const r=await post('/api/templates/delete',{area:a.id,id:cur.id}).catch(()=>null);
+    if(r&&r.ok){toast('Template deleted');M.mode='list';await tplLoad(a.id);return redraw()}
+    return fail(r)}}
+function tplBind(a){
+  ['save','def'].forEach(kind=>{const arr=$('#wg-'+kind+'-arr');if(!arr)return;
+    arr.onclick=()=>{const open=TPLM.menu&&TPLM.menu.kind===kind;TPLM.menu=open?null:{kind,mode:'list',name:''};
+      if(!open&&!(TPL[a.id]&&TPL[a.id].list))tplLoad(a.id);draw(true);const b=$('#wg-'+kind+'-arr');if(b&&!TPLM.menu)b.focus();else{const f=$('.smenu [data-mi],.smenu input');if(f)f.focus()}}});
+  $$('.smenu [data-mi]').forEach(b=>b.onclick=()=>tplAct(a,b.dataset.mi,b));
+  $$('.smenu input.tn').forEach(i=>i.oninput=()=>{TPLM.menu.name=i.value;});
+  const m=$('.smenu');if(m)m.onkeydown=e=>{const items=[...m.querySelectorAll('[data-mi],input')];const i=items.indexOf(document.activeElement);
+    if(e.key==='ArrowDown'){e.preventDefault();(items[i+1]||items[0]).focus()}
+    else if(e.key==='ArrowUp'){e.preventDefault();(items[i-1]||items[items.length-1]).focus()}
+    else if(e.key==='Enter'&&e.target.matches('input.tn')){e.preventDefault();const ok=m.querySelector('[data-mi="name-ok"],[data-mi="ren-ok"]');ok&&ok.click()}}}
+document.addEventListener('click',e=>{if(TPLM.menu&&e.target.isConnected&&!e.target.closest('.split')){TPLM.menu=null;if(route==='wheel')draw(true)}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&TPLM.menu){e.preventDefault();const kind=TPLM.menu.kind;
+  if(TPLM.menu.mode!=='list')TPLM.menu.mode='list';else TPLM.menu=null;draw(true);const b=$('#wg-'+kind+'-arr');if(!TPLM.menu&&b)b.focus()}});
 function wgScale(){const f=$('#wg-frame'),i=$('#wg-prev');if(f&&i)i.style.transform='scale('+(f.clientWidth/1280)+')'}
 function wgFull(on){WG.full=!!on;const b=$('#wg-box');if(b)b.classList.toggle('full',WG.full);wgScale()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&WG.full){e.preventDefault();wgFull(false)}});
@@ -1138,9 +1210,10 @@ function wgPreviewInit(){
   fetch('/api/modules/host/get?path='+encodeURIComponent('/wheel.html')).then(r=>{if(!r.ok)throw 0}).catch(()=>{const e=$('#wg-err');if(e)e.style.display='flex'})}
 function bindWheel(){
   const a=(WG.d||[]).find(x=>x.id===WG.tab);
-  $$('[data-wgt]').forEach(b=>b.onclick=()=>{WG.tab=b.dataset.wgt;WG.msg='';draw(true)});
+  $$('[data-wgt]').forEach(b=>b.onclick=()=>{TPLM.menu=null;WG.tab=b.dataset.wgt;WG.msg='';draw(true)});
   $$('[data-aext]').forEach(b=>b.onclick=e=>{e.preventDefault();openExternal(b.dataset.aext)});
   wgPreviewInit();
+  tplBind(a);
   $$('#page [data-k]').forEach(el=>el.oninput=el.onchange=()=>{const f=a.fields.find(x=>x.key===el.dataset.k);let v;
     if(f.type==='bool')v=el.checked;else if(f.type==='number'){v=el.value===''?null:Number(el.value);if(v==null&&!f.optional)return}else if(f.type==='list')v=el.value.split(',').map(x=>x.trim()).filter(Boolean);else v=el.value;
     (WG.edit[a.id]=WG.edit[a.id]||{})[f.key]=v;
@@ -1409,7 +1482,7 @@ function renderNav(){if(!S)return;
   $('#modnav').innerHTML=h;$$('#modnav .item').forEach(i=>i.onclick=()=>go(i.dataset.r));navStatic()}
 const isMod=r=>r.startsWith('m:');
 const flushed=()=>isMod(route)&&modOf(route)?.state==='running';
-function go(r){if(r==='voice'){V.style=null;V.err=null}if(r==='integrations'){I.items=null;VT.keys=null;VT.edit=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));{const a=$('nav .item.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest'})}
+function go(r){TPLM.menu=null;if(r==='voice'){V.style=null;V.err=null}if(r==='integrations'){I.items=null;VT.keys=null;VT.edit=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));{const a=$('nav .item.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest'})}
   const m=isMod(r)?modOf(r):null;$('#title').textContent=m?(m.ui?.nav||m.name):(titles[r]||r);
   $('#page').classList.toggle('flush',flushed());draw(true)}
 let lastHtml='';
