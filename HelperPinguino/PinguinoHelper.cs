@@ -653,7 +653,8 @@ public class CPHInline
                 return false;   // every other command belongs to the game manager (and the chatbot sees it through the hand-over)
             }
 
-            // 3. patterns
+            // 3. patterns (a viewer who opted out of the bots, or used !unping, gets no organic help either)
+            if (OptedOutOfBots(login)) { _gateWhy = "viewer opted out of the bots"; return false; }
             string intent, epic = "";
             Classify(text, out intent, out epic);
             if (intent == "" && RxStrongAsk.IsMatch(text)) { _taughtHit = TaughtMatch(text); if (_taughtHit != null) intent = "site_taught"; }

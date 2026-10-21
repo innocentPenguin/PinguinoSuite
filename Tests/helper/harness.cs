@@ -494,6 +494,8 @@ public static class Harness
             File.WriteAllText(Path.Combine(dir, "unping.json"), "{\"logins\":[\"muted\"]}");
             c0 = aiCalls; Msg("Quiet", "!helper how do I join the queue?"); Check("opted out (chat memory privacy): silence, no AI call", Last() == null && aiCalls == c0, Last());
             Msg("Muted", "!ask how do I join the queue?"); Check("!unping: silence, no AI call", Last() == null && aiCalls == c0, Last());
+            c0 = aiCalls; Msg("Quiet", "how do i join the minecraft server?"); Check("opted out: even an ordinary question in chat gets no helper answer", Last() == null, Last());
+            Msg("Muted", "how do i join the minecraft server?"); Check("!unping: an ordinary question gets no helper answer either", Last() == null, Last());
             Msg("Loud", "!helper how do I join the queue?"); Check("not opted out: answered", Last() != null && Last().StartsWith("@Loud "), Last());
 
             // cooldowns: per user 30 s (mods exempt), global 10 s
