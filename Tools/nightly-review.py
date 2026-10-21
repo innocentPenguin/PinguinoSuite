@@ -62,10 +62,15 @@ for r in human:
         if known and c not in known: unknown[c] += 1
 bot_lines = [r for r in rows if r['u'].lower() in OURS]
 per_bot = collections.Counter(r['u'].lower() for r in bot_lines)
-# duplicate bot replies: the same bot saying the same text twice within 60 s
+# duplicate bot replies: the same bot saying the same text twice within 60 s with NO viewer line in between
+# (a repeat answer to a repeated !command is correct, not a duplicate)
 dups = []; last = {}
-for r in bot_lines:
-    k = (r['u'].lower(), (r.get('m') or '').strip().lower())
+for r in rows:
+    u = r['u'].lower()
+    if u not in OURS:
+        if u not in BOTS: last.clear()
+        continue
+    k = (u, (r.get('m') or '').strip().lower())
     if k in last and r['t'] - last[k] < 60000: dups.append((clock(r['t']), k[0], k[1][:80]))
     last[k] = r['t']
 # answer speed: a human !command followed by the next bot line, in seconds
