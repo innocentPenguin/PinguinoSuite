@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -105,9 +105,12 @@ namespace PinguinoHost
         static JObject CmdFixDoc() { try { return JObject.Parse(File.ReadAllText(CmdFixP).TrimStart((char)0xFEFF)); } catch (Exception) { return new JObject(); } }
         static JObject AliasValues() { var c = CmdFixDoc(); return new JObject { { "enabled", (bool?)c["enabled"] != false }, { "didYouMean", (bool?)c["didYouMean"] != false } }; }
 
-        static readonly string[] AreaIds = { "wheel", "queue", "gambling", "economy", "alias" };
-        static List<TF> Fields(string a) { return a == "wheel" ? WheelFields() : a == "queue" ? QueueFields() : a == "gambling" ? GamblingFields() : a == "economy" ? EconomyFields() : a == "alias" ? AliasFields() : null; }
-        static JObject Values(string a) { return a == "wheel" ? WheelValues() : a == "queue" ? QueueValues() : a == "gambling" ? GamblingValues() : a == "economy" ? EconomyValues() : AliasValues(); }
+        static List<TF> ObsFields() { return new List<TF> { Bool("autoStartReplayBuffer", "Auto-start the replay buffer", true, "Starts the OBS replay buffer when OBS connects and when the stream or a recording starts. It only ever starts it, never toggles.") }; }
+        static JObject ObsValues() { return new JObject { { "autoStartReplayBuffer", ReplayBuf.AutoStart } }; }
+
+        static readonly string[] AreaIds = { "wheel", "queue", "gambling", "economy", "alias", "obs" };
+        static List<TF> Fields(string a) { return a == "wheel" ? WheelFields() : a == "queue" ? QueueFields() : a == "gambling" ? GamblingFields() : a == "economy" ? EconomyFields() : a == "alias" ? AliasFields() : a == "obs" ? ObsFields() : null; }
+        static JObject Values(string a) { return a == "wheel" ? WheelValues() : a == "queue" ? QueueValues() : a == "gambling" ? GamblingValues() : a == "economy" ? EconomyValues() : a == "obs" ? ObsValues() : AliasValues(); }
         static JObject TuneGet()
         {
             var titles = new Dictionary<string, string[]> {
@@ -115,7 +118,8 @@ namespace PinguinoHost
                 { "queue", new[] { "Customs queue", "Open/close, recycler and the idle timeout." } },
                 { "gambling", new[] { "Gambling", "Chances, payouts, bet limits and cooldown for !gamble, !slots, !duel and !give." } },
                 { "economy", new[] { "Points", "How points are earned." } },
-                { "alias", new[] { "Command typos", "Near-miss command handling." } } };
+                { "alias", new[] { "Command typos", "Near-miss command handling." } },
+                { "obs", new[] { "OBS", "Replay buffer auto-start." } } };
             var areas = new JArray();
             foreach (var id in AreaIds)
             {
@@ -179,6 +183,10 @@ namespace PinguinoHost
             {
                 var patch = new JObject(); foreach (var kv in clean) { patch[kv.Key] = kv.Value; applied[kv.Key] = kv.Value; }
                 if (patch.Count > 0) Economy.SetSettings(patch);
+            }
+            else if (area == "obs")
+            {
+                foreach (var kv in clean) { if (kv.Key == "autoStartReplayBuffer") ReplayBuf.SetAutoStart((bool)kv.Value); applied[kv.Key] = kv.Value; }
             }
             else if (area == "alias")
             {

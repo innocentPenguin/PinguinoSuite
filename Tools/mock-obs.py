@@ -42,6 +42,7 @@ def auth():
 # scenes for the live tree test (OBS lists bottom-first, sceneIndex 0 = bottom); item ids are unique per scene, group members belong to the group
 SCENES = ["Starting", "Games / Rocket League", "Games / Fortnite", "[RL] Main", "Chat - Talk", "Chat - Solo", "Just Me"]
 CUR = ["Games / Rocket League"]
+RB = {"active": __import__("os").environ.get("RB_ACTIVE") == "1", "enabled": True}
 REC = {"active": False, "paused": False}; CLIENTS = []; CTRL = sys.argv[3] if len(sys.argv) > 3 else None
 ITEMS = {"Games / Rocket League": [{"sceneItemId": 1, "sourceName": "Camera", "sceneItemEnabled": True, "isGroup": False, "inputKind": "dshow_input"},
                                    {"sceneItemId": 2, "sourceName": "Overlays", "sceneItemEnabled": True, "isGroup": True},
@@ -61,6 +62,13 @@ async def h(ws):
             r = {"requestType": d["requestType"], "requestId": d["requestId"], "requestStatus": {"result": True, "code": 100}}
             t, rd = d["requestType"], d.get("requestData") or {}
             if t == "GetRecordStatus": r["responseData"] = {"outputActive": REC["active"], "outputPaused": REC["paused"]}
+            elif t == "GetReplayBufferStatus":
+                if not RB["enabled"]: r["requestStatus"] = {"result": False, "code": 604, "comment": "replay buffer not available"}
+                else: r["responseData"] = {"outputActive": RB["active"]}
+            elif t == "StartReplayBuffer":
+                if not RB["enabled"]: r["requestStatus"] = {"result": False, "code": 604, "comment": "replay buffer not available"}
+                else: RB["active"] = True
+            elif t == "ToggleReplayBuffer": RB["active"] = not RB["active"]
             elif t == "GetSceneItemId": r["responseData"] = {"sceneItemId": 7}
             elif t == "GetSceneList": r["responseData"] = {"currentProgramSceneName": CUR[0], "scenes": [{"sceneName": n, "sceneIndex": i} for i, n in enumerate(SCENES)]}
             elif t in ("GetSceneItemList", "GetGroupSceneItemList"): r["responseData"] = {"sceneItems": items_of(rd.get("sceneName"))}
@@ -80,6 +88,15 @@ async def ctrl():
         except OSError: continue
         if not cmd: continue
         st = {"start": ("OBS_WEBSOCKET_OUTPUT_STARTED", True, False), "stop": ("OBS_WEBSOCKET_OUTPUT_STOPPED", False, False), "pause": ("OBS_WEBSOCKET_OUTPUT_PAUSED", True, True), "resume": ("OBS_WEBSOCKET_OUTPUT_RESUMED", True, False)}.get(cmd)
+        if cmd in ("rbon", "rboff", "rbdisable", "rbenable"):
+            if cmd in ("rbon", "rboff"): RB["active"] = cmd == "rbon"
+            else: RB["enabled"] = cmd == "rbenable"
+            continue
+        if cmd == "streamstart":
+            for c in list(CLIENTS):
+                try: await c.send(json.dumps({"op": 5, "d": {"eventType": "StreamStateChanged", "eventIntent": 64, "eventData": {"outputActive": True, "outputState": "OBS_WEBSOCKET_OUTPUT_STARTED"}}}))
+                except Exception: pass
+            continue
         if cmd == "drop":
             REC["active"] = REC["paused"] = False
             for c in list(CLIENTS):

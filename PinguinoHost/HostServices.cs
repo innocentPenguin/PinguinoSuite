@@ -63,9 +63,13 @@ namespace PinguinoHost
                             }
                             await Send(new JObject { { "op", 1 }, { "d", id } });
                         }
-                        else if (op == 2) { identified = true; backoff = 3; Console.WriteLine("OBS connected"); Clog.Info("obs", "OBS connected"); Task.Run(() => { try { var rs = Data("GetRecordStatus", null); if (rs != null) SetRec((bool?)rs["outputActive"] == true); } catch (Exception) { } }); }
+                        else if (op == 2) { identified = true; backoff = 3; Console.WriteLine("OBS connected"); Clog.Info("obs", "OBS connected"); Task.Run(() => { try { var rs = Data("GetRecordStatus", null); if (rs != null) SetRec((bool?)rs["outputActive"] == true); } catch (Exception) { } }); ReplayBuf.Ensure(this, "OBS connected"); }
+                        else if (op == 5 && d != null && (string)d["eventType"] == "StreamStateChanged")
+                        { var ed = d["eventData"] as JObject; if (ed != null && (bool?)ed["outputActive"] == true) ReplayBuf.Ensure(this, "stream started"); }
+                        else if (op == 5 && d != null && (string)d["eventType"] == "ReplayBufferStateChanged")
+                        { var ed = d["eventData"] as JObject; if (ed != null) ReplayBuf.OnState((bool?)ed["outputActive"] == true); }
                         else if (op == 5 && d != null && (string)d["eventType"] == "RecordStateChanged")   // started / stopped / paused / resumed
-                        { var ed = d["eventData"] as JObject; if (ed != null) { string st = (string)ed["outputState"] ?? ""; SetRec((bool?)ed["outputActive"] == true || st.IndexOf("PAUSED", StringComparison.OrdinalIgnoreCase) >= 0); } }
+                        { var ed = d["eventData"] as JObject; if (ed != null) { if ((bool?)ed["outputActive"] == true && (string)ed["outputState"] == "OBS_WEBSOCKET_OUTPUT_STARTED") ReplayBuf.Ensure(this, "recording started"); string st = (string)ed["outputState"] ?? ""; SetRec((bool?)ed["outputActive"] == true || st.IndexOf("PAUSED", StringComparison.OrdinalIgnoreCase) >= 0); } }
                         else if (op == 7)
                         {
                             string rid = (string)d["requestId"]; TaskCompletionSource<JObject> tcs;
@@ -76,7 +80,7 @@ namespace PinguinoHost
                 }
                 catch (Exception) { }
                 if (identified) Clog.Warn("obs", "OBS connection lost");
-                identified = false; SetRec(false);
+                identified = false; SetRec(false); ReplayBuf.OnDisconnect();
                 await Task.Delay(backoff * 1000); backoff = Math.Min(backoff * 2, 30);
             }
         }
@@ -103,6 +107,8 @@ namespace PinguinoHost
             }
             catch (Exception) { return null; }
         }
+        /// <summary>the raw obs-websocket response (requestStatus + responseData); null when OBS did not answer</summary>
+        public JObject Raw(string type, JObject data) { return Call(type, data); }
         public JObject Data(string type, JObject data) { var r = Call(type, data); return r != null && (bool)r["requestStatus"]["result"] ? r["responseData"] as JObject : null; }
         public bool Toggle(string scene, string source)
         {

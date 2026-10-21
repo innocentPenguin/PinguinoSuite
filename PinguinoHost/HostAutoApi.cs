@@ -105,6 +105,11 @@ namespace PinguinoHost
                 string via; bool ok = SendAs((string)b["bot"], text, out via);
                 Write(c, new JObject { { "ok", ok }, { "duplicate", via.StartsWith("duplicate") }, { "via", via } }.ToString(), "application/json"); return true;
             }
+            if (p == "/api/obs/status" && m == "GET")
+            {
+                bool con = ObsConnected(); var rb = ReplayBuf.Status();
+                Write(c, new JObject { { "ok", true }, { "connected", con }, { "recording", LiveState.Recording }, { "autoStartReplayBuffer", ReplayBuf.AutoStart }, { "replayBufferEnabled", ReplayBuf.Enabled }, { "replayBuffer", rb } }.ToString(), "application/json"); return true;
+            }
             if (p == "/api/obs/tree" && m == "GET") { Write(c, ObsTree.Get(c.Request.QueryString["scene"]).ToString(), "application/json"); return true; }
             if ((p == "/api/obs/scene" || p == "/api/obs/item") && m == "POST")
             {
