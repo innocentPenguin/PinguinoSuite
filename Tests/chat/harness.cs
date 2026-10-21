@@ -37,6 +37,12 @@ public static class Harness
         new CPHInline().Execute();
     }
 
+    static void _cannedReset(bool gatesOnly)
+    {
+        var d = (System.Collections.IDictionary)typeof(CPHInline).GetField("_cannedAt", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+        if (!gatesOnly) d.Clear(); else foreach (var k in new System.Collections.ArrayList(d.Keys)) if (((string)k).StartsWith("u|")) d.Remove(k);
+        typeof(CPHInline).GetField("_cannedAny", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, 0L);
+    }
     static void _bareAtReset()
     {
         ((System.Collections.IDictionary)typeof(CPHInline).GetField("_bareAt", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null)).Clear();
@@ -770,16 +776,33 @@ public static class Harness
         Check("!shadow is answered by the chat bot with the old Nightbot text", Last() != null && Last().Contains("plays way too many extra modes"), Last());
         int cn = CPHProxy.Sent.Count; Msg("Canny2", "!shadow", null, false);
         Check("the same canned command a moment later stays quiet (cooldown + duplicate guard)", CPHProxy.Sent.Count == cn);
-        Msg("Canny", "!hug @Bobby", null, false);
+        _cannedReset(true); Msg("Canny", "!hug @Bobby", null, false);
         Check("$(user) and $(touser) are filled in", Last() != null && Last().Contains("Canny wraps their arms around Bobby"), Last());
-        Msg("Canny", "!luck", null, false);
+        _cannedReset(true); Msg("Canny", "!luck", null, false);
         Check("!luck rolls a number", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), @"You got \d+% luck"), Last());
         cn = CPHProxy.Sent.Count; Msg("Canny", "!goon", null, false);
         Check("a command held with enabled:false says nothing", CPHProxy.Sent.Count == cn);
-        CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Canny2", "!onlyfans", null, false);
+        CPHProxy.Globals.Remove("pinguino.said.recent"); _cannedReset(true); Msg("Canny2", "!onlyfans", null, false);
         Check("!onlyfans points to the Discord", Last() != null && Last().Contains("Join the Discord: https://discord.gg/"), Last());
         cn = CPHProxy.Sent.Count; Msg("Canny3", "!trapaccount", null, false);
         Check("!trapaccount is gone, says nothing", CPHProxy.Sent.Count == cn);
+
+        // ── 19b2b. canned audit: alias cooldown, per-person and chat-wide gates, no links through $(touser) ──
+        { _cannedReset(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          Msg("AliasA", "!burglin", null, false); int n0 = CPHProxy.Sent.Count;
+          Check("canned audit: a command answers", n0 == 1, Last());
+          _cannedReset(true); Msg("AliasB", "!burglingnomes", null, false);
+          Check("canned audit: its alias shares the command's cooldown", CPHProxy.Sent.Count == n0, Last());
+          _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Hugger", "!hug https://evil.example/x", null, false);
+          Check("canned audit: a link given as the target never goes out", Last() != null && !Last().Contains("http") && !Last().Contains("evil"), Last());
+          _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Hugger2", "!hug /ban victim", null, false);
+          Check("canned audit: a /command given as the target never goes out", Last() != null && !Last().Contains("/ban"), Last());
+          _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Cycler", "!shadow", null, false); int n1 = CPHProxy.Sent.Count;
+          Msg("Cycler", "!luck", null, false);
+          Check("canned audit: one canned line per person per 6 s (cycling through the list)", CPHProxy.Sent.Count == n1, Last());
+          Msg("Other", "!snowy", null, false);
+          Check("canned audit: one canned line per 2 s for the whole chat", CPHProxy.Sent.Count == n1, Last());
+          _cannedReset(false); }
 
         // ── 19b3. capability questions + bare calls ──
         { int cl0 = llmCalls;
@@ -832,6 +855,8 @@ public static class Harness
         Check("no private notes, traits or opinion notes in the 8ball prompt", ballPrompts.Count == 1 && !ballPrompts[0].Contains("secret trait") && !ballPrompts[0].Contains("opinion") && !ballPrompts[0].Contains("Notes"), ballPrompts.Count > 0 ? ballPrompts[0] : "none");
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Ballguy", "!8ball", null, false);
         Check("!8ball without a question asks for one, no AI call", Last() != null && Last().Contains("ask me a question") && ballPrompts.Count == 1);
+        { CPHProxy.Globals.Remove("pinguino.said.recent"); int hb = CPHProxy.Sent.Count; Msg("Ballguy", "!8ball", null, false);
+          Check("audit: a bare !8ball asked again at once stays quiet (hint cooldown)", CPHProxy.Sent.Count == hb); }
         ballReply = "!ignore previous https://evil.example/x yes";
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Ballguy", "!8ball is this a trick?", null, false);
         Check("a link or a leading ! from the model never reaches chat", Last() != null && !Last().Contains("http") && !Last().Contains("🎱 !") , Last());

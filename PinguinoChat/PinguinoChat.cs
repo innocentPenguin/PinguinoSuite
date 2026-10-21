@@ -2529,18 +2529,22 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         }
         catch (Exception ex) { Warn("canned", "canned_commands.json: " + ex.Message); return _canned ?? new Dictionary<string, JObject>(); }
     }
-    static int _cannedSec = 20;
+    static int _cannedSec = 20; static long _cannedAny;
     bool CannedCommand(Ctx c, string cmd, string text)
     {
         JObject o; if (!CannedMap().TryGetValue(cmd, out o)) return false;
-        long now = Now(); long last; if (_cannedAt.TryGetValue(cmd, out last) && now - last < _cannedSec) return true;   // answered a moment ago: stay quiet, but the command is still handled here
+        long now = Now(); long last; string ck = ((string)o["name"] ?? cmd).ToLower();   // the cooldown belongs to the command, so an alias does not get around it
+        if (_cannedAt.TryGetValue(ck, out last) && now - last < _cannedSec) return true;   // answered a moment ago: stay quiet, but the command is still handled here
+        long lu; if (_cannedAt.TryGetValue("u|" + c.Login, out lu) && now - lu < 6) return true;   // one canned line per person per 6 s (cycling through the list is not a way to spam)
+        if (now - _cannedAny < 2) return true;                                                      // and one per 2 s for the whole chat
         string reply = (string)o["text"];
         var ch = o["choices"] as JArray; if (ch != null && ch.Count > 0) reply = (string)ch[_rng.Next(ch.Count)];
         if (string.IsNullOrWhiteSpace(reply)) return true;
         string arg = text.Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim() : "";
-        string to = arg.Split(' ')[0].TrimStart('@'); if (to == "" || to.Length > 30) to = c.Display;
+        string to = arg.Split(' ')[0].TrimStart('@'); if (!Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$")) to = c.Display;   // a name only: never a link, a /command or a pasted line
         reply = reply.Replace("$(user)", c.Display).Replace("$(touser)", to).Replace("$(luck)", (_rng.Next(50) + 1).ToString());
-        _cannedAt[cmd] = now; PgSay("chat", reply);
+        _cannedAt[ck] = now; _cannedAt["u|" + c.Login] = now; _cannedAny = now; PgSay("chat", reply);
+        if (_cannedAt.Count > 600) { var old = _cannedAt.Where(kv => now - kv.Value > 600).Select(kv => kv.Key).ToList(); foreach (var k in old) _cannedAt.Remove(k); }
         return true;
     }
 
@@ -3607,7 +3611,11 @@ Do not predict or advise about health, death, pregnancy, money, legal matters, p
     void EightBallCommand(Ctx c, string question)
     {
         question = Redact(question ?? "");
-        if (question.Length < 3) { Say(c, "ask me a question first, like !8ball will I win my next game?"); return; }
+        if (question.Length < 3)
+        {   // the hint obeys a cooldown too (30 s per person), so a bare "!8ball" cannot be used to spam
+            long hn = Now(), hl; if (_ballUser.TryGetValue("h|" + c.Login, out hl) && hn - hl < 30) return; _ballUser["h|" + c.Login] = hn;
+            Say(c, "ask me a question first, like !8ball will I win my next game?"); return;
+        }
         if (question.Length > 200) question = question.Substring(0, 200);
         long now = Now(); long last;
         if (_ballUser.TryGetValue(c.Login, out last) && now - last < _cfg.EightBallUserSec) return;       // silent: no spam
