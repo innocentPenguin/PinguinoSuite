@@ -1,0 +1,387 @@
+/* Master View page (UI). Talks straight to the Host on 127.0.0.1:8770: no website, no core hop. Logic lives in master-core.js (tested in Tests/master). */
+(() => {
+  'use strict';
+  const C = MasterCore;
+  const HOST = (new URLSearchParams(location.search).get('host')) || 'http://127.0.0.1:8770';
+  const $ = (s, r) => (r || document).querySelector(s), $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+  const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const ls = { get(k, d) { try { const v = localStorage.getItem('mv.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('mv.' + k, JSON.stringify(v)); } catch (e) { /* storage may be blocked */ } } };
+  if (/popout=1/.test(location.search)) document.body.classList.add('pop');
+
+  /* ---------- token + api ---------- */
+  let token = '';
+  const tokenReady = (async () => {
+    try {
+      const T = window.__TAURI__ || (window.parent && window.parent !== window && window.parent.__TAURI__);
+      if (T && T.core) token = (await T.core.invoke('core_config')).token || '';
+      else { const m = document.querySelector('meta[name="pinguino-token"]'); token = m ? m.content : ''; }
+    } catch (e) { /* GETs work without it; writes will say so */ }
+  })();
+  const api = C.createApi({ base: HOST, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000 });
+
+  /* ---------- state ---------- */
+  const cached = ls.get('cache', {});
+  const S = C.createStore({
+    tree: cached.tree || { connected: false, current: '', scene: '', scenes: [], folders: [], items: [] }, treeStale: !!cached.tree,
+    obsStatus: null, live: null, host: null, hostUp: null, customs: cached.customs || null, customsOk: null, wheel: null,
+    cmds: [], overlays: null, ochat: null, link: { sse: false, ms: null }, tick: 0,
+  });
+  const opt = C.createOptimistic(2500);
+  const ui = {
+    view: null, query: '', tab: ls.get('tab', 'customs'), pane: 'scenes',
+    folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
+    itemsBy: {}, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
+  };
+  const saveCache = () => ls.set('cache', { tree: S.get('tree'), customs: S.get('customs') });
+
+  /* ---------- toasts, arming, command sending ---------- */
+  function toast(msg, bad) { const t = h('div', 'toast' + (bad ? ' bad' : ''), msg); $('#toasts').append(t); setTimeout(() => t.remove(), bad ? 5000 : 2200); }
+  function flash(btn) { if (!btn) return; btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 220); }
+  function armed(btn) {   // second click within 2.5 s confirms; returns true when this click is the confirming one
+    if (btn._armT) { clearTimeout(btn._armT); btn._armT = null; btn.classList.remove('arm'); btn.textContent = btn._lbl; return true; }
+    btn._lbl = btn.textContent; btn.textContent = 'Sure?'; btn.classList.add('arm');
+    btn._armT = setTimeout(() => { btn._armT = null; btn.classList.remove('arm'); btn.textContent = btn._lbl; }, 2500); return false;
+  }
+  async function sendCmd(text, btn) {
+    const now = Date.now(), last = ui.sent.get(text) || 0;
+    if (now - last < 1200) { toast('Already sent ' + text); return; }   // never send the same line twice in a burst
+    ui.sent.set(text, now); flash(btn);
+    await tokenReady;
+    const r = await api.post('/api/run', { text, user: 'broadcaster' });
+    if (r.ok) { toast('Sent ' + text); pollers.customs.kick(); pollers.wheel.kick(); } else { ui.sent.delete(text); toast(text + ': ' + r.error, true); }
+  }
+
+  /* ---------- status bar ---------- */
+  function pill(id, cls, label) { const e = $('#' + id); if (!e) return; e.className = 'pill ' + cls; e.lastChild.textContent = label; }
+  function renderBar() {
+    const live = S.get('live'), os = S.get('obsStatus'), ho = S.get('host'), tree = S.get('tree'), up = S.get('hostUp'), link = S.get('link');
+    pill('p-live', live ? (live.live ? 'live' : '') : '', live ? (live.live ? 'LIVE' : 'Offline') : '…');
+    const obsOn = os ? os.connected : tree.connected;
+    pill('p-obs', obsOn ? 'ok' : 'bad', obsOn ? 'OBS' : 'OBS off');
+    pill('p-rec', os && os.recording ? 'live' : '', os && os.recording ? 'Recording' : 'Not recording');
+    const rb = os && os.replayBuffer; pill('p-rb', rb && rb.active ? 'ok' : (os && os.replayBufferEnabled ? 'warn' : ''), rb && rb.active ? 'Replay on' : 'Replay off');
+    pill('p-chat', ho ? (ho.chatConnected && ho.eventSubConnected ? 'ok' : 'warn') : '', ho ? (ho.chatConnected ? 'Chat' : 'Chat off') + (ho.eventSubConnected ? '' : ' · no events') : 'Chat');
+    pill('p-link', up === false ? 'bad' : (link.sse ? 'acc' : 'ok'), up === false ? 'Host offline' : (link.sse ? '⚡ push' : 'poll') + (link.ms != null ? ' ' + link.ms + ' ms' : ''));
+    const off = $('#offline'); let msg = '';
+    if (up === false) msg = 'The Host is not answering on ' + HOST.replace('http://', '') + '. Showing the last known state; controls are paused until it is back.';
+    else if (!tree.connected) msg = 'OBS is not connected to the Host. Scenes below are the last ones seen (greyed); start OBS or check the websocket settings.';
+    off.hidden = !msg; off.textContent = msg;
+    $('#pane-scenes').style.opacity = tree.connected && up !== false ? '' : '.6';
+    $('#pane-sources').style.opacity = tree.connected && up !== false ? '' : '.6';
+  }
+
+  /* ---------- scenes + sources ---------- */
+  let rowsScenes = [], rowsSources = [];
+  const effCurrent = () => (opt.has('scene') ? opt.get('scene') : S.get('tree').current);
+  const viewScene = () => ui.view || effCurrent();
+  const itemKey = id => 'i:' + viewScene() + ':' + id;
+
+  function mkSceneRow() { const d = h('div', 'r'); d.setAttribute('role', 'option'); d.append(h('span', 'tw'), h('span', 't')); return d; }
+  function updSceneRow(el, r) {
+    el.className = 'r ' + (r.type === 'folder' ? 'folder' : 'scene') + (r.current || r.hasCurrent ? ' cur' : '') + (r.type === 'scene' && r.view ? ' view' : '') + (r.kb ? ' kb' : '');
+    el.style.paddingLeft = 6 + (r.indent || 0) * 16 + 'px';
+    el.dataset.a = r.type; el.dataset.n = r.name; el.title = r.type === 'scene' ? r.name : r.name + ' (folder)';
+    el.firstChild.textContent = r.type === 'folder' ? (r.collapsed ? '▸' : '▾') : '';
+    el.lastChild.textContent = r.label;
+    if (r.type === 'folder') { el.lastChild.textContent = r.label; el.lastChild.dataset.n = r.count; }
+    el.setAttribute('aria-selected', r.current ? 'true' : 'false');
+  }
+  function renderScenes() {
+    const tree = S.get('tree'), cur = effCurrent(), vs = viewScene();
+    const rows = C.buildSceneRows(tree.scenes, { query: ui.query, collapsed: ui.folders, current: cur });
+    rows.forEach(r => { r.kb = ui.pane === 'scenes' && ui.kb.scenes === r.key; r.view = r.type === 'scene' && r.name === vs && vs !== cur; });
+    rowsScenes = rows;
+    C.reconcile($('#scenes'), rows, r => r.key, mkSceneRow, updSceneRow);
+    $('#scene-count').textContent = tree.scenes.length ? tree.scenes.length + ' scenes' : '';
+  }
+  function mkItemRow() { const d = h('div', 'r'); d.setAttribute('role', 'option'); d.append(h('span', 'tw'), h('span', 'eye'), h('span', 't'), h('span', 'k')); return d; }
+  function updItemRow(el, r) {
+    el.className = 'r ' + r.type + (r.enabled ? ' on' : '') + (r.dimmed ? ' dim' : '') + (r.kb ? ' kb' : '') + (r.pend ? ' pend' : '');
+    el.style.paddingLeft = 6 + r.depth * 16 + 'px';
+    el.dataset.a = r.type; el.dataset.id = r.id; el.title = r.name + (r.kind ? ' · ' + r.kind : '');
+    const [tw, eye, t, k] = el.children;
+    tw.textContent = r.type === 'group' ? (r.collapsed ? '▸' : '▾') : ''; eye.textContent = r.enabled ? '◉' : '○'; t.textContent = r.name;
+    k.textContent = r.type === 'group' ? r.count + ' items' : shortKind(r.kind);
+  }
+  const shortKind = k => String(k || '').replace(/_source$/, '').replace(/^OBS_SOURCE_TYPE_/, '').replace(/_/g, ' ').toLowerCase();
+  function renderSources() {
+    const tree = S.get('tree'), vs = viewScene();
+    const items = tree.scene === vs ? tree.items : (ui.itemsBy[vs] || []);   // last seen items of that scene, so a switch never flashes an empty list
+    const rows = C.buildItemRows(items, { query: ui.query, collapsed: ui.groups, override: id => (opt.has(itemKey(id)) ? opt.get(itemKey(id)) : undefined) });
+    rows.forEach(r => { r.kb = ui.pane === 'sources' && ui.kb.sources === r.key; r.pend = opt.has(itemKey(r.id)); });
+    rowsSources = rows;
+    C.reconcile($('#sources'), rows, r => r.key, mkItemRow, updItemRow);
+    $('#src-scene').textContent = vs ? '· ' + vs + (ui.view && ui.view !== tree.current ? ' (viewing)' : '') : '';
+    $('#src-follow').style.visibility = ui.view ? '' : 'hidden';
+  }
+
+  async function goScene(name, onlyView) {
+    if (!name) return;
+    if (onlyView) { ui.view = name; renderSources(); renderScenes(); pollers.tree.kick(); return; }
+    ui.view = null; opt.set('scene', name); renderScenes(); renderSources();     // instant: the click is visible before the Host answers
+    pollers.tree.kick();    // fetch the new scene's sources in parallel with the switch
+    await tokenReady;
+    const r = await api.post('/api/obs/scene', { scene: name });
+    if (!r.ok) { opt.drop('scene'); renderScenes(); renderSources(); toast('Scene: ' + r.error, true); } else setTimeout(() => pollers.tree.kick(), 60);
+  }
+  async function toggleItem(id) {
+    const tree = S.get('tree'), vs = viewScene(), items = tree.scene === vs ? tree.items : (ui.itemsBy[vs] || []);
+    const it = C.findItem(items, id); if (!it) return;
+    const k = itemKey(id), now = opt.has(k) ? opt.get(k) : !!it.enabled, want = !now;
+    opt.set(k, want); renderSources();
+    await tokenReady;
+    const r = await api.post('/api/obs/item', { scene: vs, itemId: id, enabled: want });
+    if (!r.ok) { opt.drop(k); renderSources(); toast(it.name + ': ' + r.error, true); } else setTimeout(() => pollers.tree.kick(), 60);
+  }
+
+  function applyTree(t, fromCache) {
+    if (!t || typeof t !== 'object') return;
+    if (t.connected === false && S.get('tree').scenes.length) { S.set({ tree: Object.assign({}, S.get('tree'), { connected: false }), treeStale: true }); return; }   // keep the last scenes while OBS is away
+    if (t.scene) ui.itemsBy[t.scene] = t.items || [];
+    S.set({ tree: t, treeStale: false });
+    if (opt.has('scene')) opt.settle('scene', t.current);
+    (function settle(list) { for (const it of list || []) { opt.settle('i:' + t.scene + ':' + it.id, !!it.enabled); if (Array.isArray(it.children)) settle(it.children); } })(t.items);
+  }
+
+  /* ---------- customs / wheel ---------- */
+  function mkCustomsSkeleton() {
+    const b = (label, a, v, extra) => `<button class="sm${extra || ''}" data-cu="${a}" ${v != null ? `data-v="${v}"` : ''}>${label}</button>`;
+    $('#tab-customs').innerHTML = `
+      <div class="sec"><h4>Queue <span class="faint" id="cu-badge"></span></h4>
+        <div class="btns">${b('Open', 'queue-open')}${b('Close', 'queue-close')}${b('Next match', 'next', '', ' pri')}${b('Next · Orange won', 'next', 'orange')}${b('Next · Blue won', 'next', 'blue')}${b('Clear', 'queue-clear', null, ' warn')}</div>
+        <div id="cu-note" class="note" style="margin-top:8px" hidden></div>
+        <ul class="qlist" id="cu-queue"></ul></div>
+      <div class="sec"><h4>Match <span class="faint" id="cu-match"></span></h4>
+        <div class="btns">${b('Balance', 'balance')}${b('Reroll', 'reroll')}${b('Fill', 'match', 'fill')}${b('Back to queue', 'match', 'queue')}${b('End match', 'match', 'clear', ' warn')}</div>
+        <div class="btns" style="margin-top:6px">${b('Orange wins', 'finish', 'orange')}${b('Blue wins', 'finish', 'blue')}${b('KOTH on', 'koth', 'on')}${b('KOTH off', 'koth', 'off')}</div>
+        <div class="row wrap" style="margin-top:8px">
+          <select data-cuset="mode"><option value="">Team mode…</option><option>balanced</option><option>random</option><option>picks</option></select>
+          <select data-cuset="format"><option value="">Size…</option><option>1v1</option><option>2v2</option><option>3v3</option><option>4v4</option></select>
+          <select data-cuset="gamemode"><option value="">Game mode…</option><option>standard</option><option>dropshot</option><option>rumble</option></select>
+          <select data-cuset="casual"><option value="">Casual…</option><option>group</option><option>teams</option></select></div>
+        <div class="row" style="margin-top:8px"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm warn" id="cu-kickgo">Kick</button></div></div>
+      <div class="sec"><h4>Wheel <span class="faint" id="wh-badge"></span></h4>
+        <div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm warn" data-wh="reset">Reset</button></div>
+        <div class="kv" style="margin-top:8px" id="wh-kv"></div></div>`;
+  }
+  function renderCustoms() {
+    const c = S.get('customs'), ok = S.get('customsOk'), note = $('#cu-note');
+    const msg = ok === false ? (c ? 'Customs state is stale (the Host stopped answering it).' : 'The Host has no /api/customs/state yet (asked 02). Buttons still work: they run the same chat commands the website sends. The live queue appears here once the endpoint exists.') : '';
+    note.hidden = !msg; note.textContent = msg;
+    const q = (c && Array.isArray(c.queue)) ? c.queue : [];
+    $('#cu-badge').textContent = c ? (c.open === true ? '· open' : c.open === false ? '· closed' : '') + (c.activity ? ' · ' + c.activity : '') + ' · ' + q.length + ' waiting' : '';
+    C.reconcile($('#cu-queue'), q.map((p, i) => ({ u: p.username || p.user || p.name || '?', d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr })), r => r.u, () => { const li = h('li'); li.append(h('span', 'num'), h('span', 't'), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
+      (li, r) => { li.dataset.u = r.u; li.children[0].textContent = r.n; li.children[1].textContent = r.d + (r.m ? ' · ' + r.m : ''); });
+    const m = c && c.match;
+    $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '';
+    for (const [k, v] of [['mode', c && c.mode], ['format', c && c.format], ['gamemode', c && c.gamemode], ['casual', c && c.casualStyle]]) { const s = $(`[data-cuset="${k}"]`); if (s && v && s.value !== v && document.activeElement !== s) s.value = v; }
+    const w = S.get('wheel');
+    $('#wh-badge').textContent = w ? '· ' + (w.status || '?') : '';
+    const kv = [['Entrants', w ? (w.entrantCount ?? (w.names || []).length) : '–'], ['Mode', w ? [w.label || w.mode, w.teamSize ? w.teamSize + 'v' + w.teamSize : ''].filter(Boolean).join(' · ') : '–'], ['Revealed', w && w.manual ? w.manual.revealed + ' / ' + w.manual.total : '–'], ['Teams', w ? (w.teams || []).length : '–'], ['Waitlist', w ? (w.waitlist || []).length : '–']];
+    const box = $('#wh-kv'), sigv = C.sig(kv); if (box._s !== sigv) { box._s = sigv; box.textContent = ''; kv.forEach(([a, b]) => box.append(h('b', '', a), h('span', '', String(b)))); }
+  }
+
+  /* ---------- feed ---------- */
+  function mkFeed() { $('#tab-feed').innerHTML = '<div class="row sm faint" style="margin-bottom:6px"><span id="feed-note"></span><span class="sp"></span><label><input type="checkbox" id="feed-ev" checked> events</label>&nbsp;<label><input type="checkbox" id="feed-ch" checked> chat</label></div><div id="feedlist"></div>'; }
+  function renderFeed() {
+    const showEv = $('#feed-ev').checked, showCh = $('#feed-ch').checked, q = ui.query.toLowerCase();
+    const items = ui.feed.filter(x => (x.t === 'e' ? showEv : showCh) && (!q || (x.user + ' ' + x.text).toLowerCase().includes(q))).slice(-150);
+    const box = $('#tab-feed'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    C.reconcile($('#feedlist'), items, x => x.k, () => { const d = h('div', 'feeditem'); d.append(h('span', 'ts'), h('span', 't')); return d; },
+      (d, x) => { d.className = 'feeditem' + (x.t === 'e' ? ' ev' : ''); d.children[0].textContent = new Date(x.ts * 1000).toTimeString().slice(0, 5); const t = d.children[1]; t.textContent = ''; if (x.t === 'c') { t.append(h('span', 'who', x.user), document.createTextNode(': ' + x.text)); } else t.append(h('span', 'who', x.text)); });
+    if (stick) box.scrollTop = box.scrollHeight;
+    $('#feed-note').textContent = ui.chatOk === false ? 'Live chat needs a Host chat feed (asked 02); events work.' : '';
+  }
+  function addActivity(list) {
+    const add = (list || []).map(a => ({ k: 'a' + a.seq, t: 'e', ts: a.ts, user: a.user || '', text: C.activityLine(a) }));
+    if ((list || []).length) ui.actSeq = Math.max(ui.actSeq, ...list.map(a => a.seq || 0));
+    if (C.mergeFeed(ui.feed, add, x => x.k, 400)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
+  }
+  function addChat(list) {
+    const add = (list || []).map(m => ({ k: 'c' + (m.seq != null ? m.seq : m.ts + m.user), t: 'c', ts: m.ts || Date.now() / 1000, user: m.display || m.user || '?', text: m.text || '' }));
+    if ((list || []).length) ui.chatSeq = Math.max(ui.chatSeq, ...list.map(m => m.seq || 0));
+    if (C.mergeFeed(ui.feed, add, x => x.k, 400)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
+  }
+
+  /* ---------- commands + overlays tabs ---------- */
+  function mkCmds() { $('#tab-cmds').innerHTML = '<div class="row sm faint" style="margin-bottom:6px"><span>Toggle a chat command on/off for everyone. The search box at the bottom filters this list.</span></div><div id="cmdlist"></div>'; }
+  function renderCmds() {
+    const q = ui.query.toLowerCase(), all = S.get('cmds') || [];
+    const rows = all.filter(c => !c.archived && (!q || (c.name + ' ' + (c.aliases || []).join(' ') + ' ' + (c.description || '') + ' ' + (c.category || '')).toLowerCase().includes(q))).slice(0, 250)
+      .map(c => ({ id: c.id, name: c.name, d: (c.permission || '') + (c.uses ? ' · ' + c.uses + ' uses' : ''), on: opt.has('c:' + c.id) ? opt.get('c:' + c.id) : c.enabled !== false, p: opt.has('c:' + c.id) }));
+    C.reconcile($('#cmdlist'), rows, r => r.id, () => { const d = h('div', 'cmd'); d.append(h('span', 't'), h('span', 'd'), h('span', 'sw')); return d; },
+      (d, r) => { d.dataset.id = r.id; d.children[0].textContent = r.name; d.children[1].textContent = r.d; d.children[2].className = 'sw' + (r.on ? ' on' : ''); d.style.opacity = r.p ? '.7' : ''; });
+  }
+  async function toggleCmd(id) {
+    const c = (S.get('cmds') || []).find(x => x.id === id); if (!c) return;
+    const k = 'c:' + id, want = !(opt.has(k) ? opt.get(k) : c.enabled !== false); opt.set(k, want); renderCmds(); await tokenReady;
+    const r = await api.post('/api/commands/profile', { id, enabled: want, by: 'master-view' });
+    if (!r.ok) { opt.drop(k); renderCmds(); toast(id + ': ' + r.error, true); } else { c.enabled = want; setTimeout(() => { opt.drop(k); pollers.cmds.kick(); }, 400); }
+  }
+  function mkOverlays() {
+    $('#tab-overlays').innerHTML = `<div class="sec"><h4>Files <span class="faint" id="ov-n"></span></h4><div id="ovlist"></div></div>
+      <div class="sec"><h4>Overlay chat <span class="faint" id="oc-st"></span></h4><div class="msgs" id="oc-msgs"></div>
+      <div class="chatbox"><textarea id="oc-text" placeholder="Ask for an overlay change, e.g. “make the goal bar orange”" rows="2"></textarea><div class="row"><span class="faint sm" id="oc-hint">Ctrl+Enter sends</span><span class="sp"></span><button class="pri sm" id="oc-send">Send</button></div></div></div>`;
+  }
+  const fsize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n > 1024 ? Math.round(n / 1024) + ' KB' : n + ' B';
+  function renderOverlays() {
+    const o = S.get('overlays'), q = ui.query.toLowerCase();
+    const files = ((o && o.files) || []).filter(f => !q || f.path.toLowerCase().includes(q)).map(f => ({ path: f.path, size: f.size, url: f.url, text: f.text, ren: ui.renaming === f.path }));
+    $('#ov-n').textContent = o ? '· ' + (o.files || []).length : '';
+    if (ui.renaming) return;
+    C.reconcile($('#ovlist'), files, r => r.path, () => { const d = h('div', 'of'); d.append(h('span', 't'), h('span', 'd')); for (const [a, l] of [['open', 'Open'], ['copy', 'Copy URL'], ['ren', 'Rename'], ['del', 'Delete']]) { const b = h('button', 'sm ghost' + (a === 'del' ? ' warn' : ''), l); b.dataset.ov = a; d.append(b); } return d; },
+      (d, r) => { d.dataset.p = r.path; d.dataset.u = r.url; d.children[0].textContent = r.path; d.children[1].textContent = fsize(r.size); });
+    const st = S.get('ochat'); $('#oc-st').textContent = st ? (st.enabled && st.hasKey ? '· ' + st.callsToday + '/' + st.dailyCalls + ' calls today' : '· off') : '';
+    $('#oc-hint').textContent = st && !(st.enabled && st.hasKey) ? 'Overlay chat is switched off in the Host (needs overlaychat.json enabled + a Claude key in the vault).' : 'Ctrl+Enter sends';
+    $('#oc-send').disabled = !!st && !(st.enabled && st.hasKey);
+  }
+  function renderOcMsgs() {
+    C.reconcile($('#oc-msgs'), ui.ochatLog, m => m.k, () => h('div', 'msg'), (d, m) => { d.className = 'msg' + (m.me ? ' me' : ''); d.textContent = ''; d.append(document.createTextNode(m.text)); (m.proposals || []).forEach(p => { const b = h('button', 'sm', 'Apply ' + (p.path || p.id)); b.dataset.apply = p.id; b.style.display = 'block'; b.style.marginTop = '6px'; d.append(b); }); });
+    $('#oc-msgs').scrollTop = 1e9;
+  }
+  async function askOverlay() {
+    const ta = $('#oc-text'), text = ta.value.trim(); if (!text) return;
+    ta.value = ''; ui.ochatLog.push({ k: 'm' + ui.ochatLog.length, me: true, text }); renderOcMsgs();
+    const pend = { k: 'm' + ui.ochatLog.length, text: '…' }; ui.ochatLog.push(pend); renderOcMsgs(); await tokenReady;
+    const r = await api.post('/api/overlaychat/ask', { text, user: 'master-view' }, { timeoutMs: 120000 });
+    pend.text = r.ok ? (r.json.text || 'Done.') + ((r.json.files || []).length ? '\nFiles: ' + r.json.files.join(', ') : '') : 'Error: ' + r.error; pend.proposals = r.ok ? r.json.proposals : null; pend.k += 'r'; renderOcMsgs();
+  }
+
+  /* ---------- rendering scheduler (poll-driven renders coalesce to one per tick; clicks render synchronously) ---------- */
+  const dirty = new Set(); let raf = 0;
+  function schedule(...names) { names.forEach(n => dirty.add(n)); if (!raf) raf = setTimeout(() => { raf = 0; const d = [...dirty]; dirty.clear(); d.forEach(n => R[n] && R[n]()); }, 0); }
+  const R = { scenes: renderScenes, sources: renderSources, bar: renderBar, customs: renderCustoms, feed: renderFeed, cmds: renderCmds, overlays: renderOverlays };
+  S.subscribe(ch => {
+    if (ch.includes('tree')) schedule('scenes', 'sources', 'bar');
+    if (ch.some(k => ['obsStatus', 'live', 'host', 'hostUp', 'link'].includes(k))) schedule('bar');
+    if (ch.includes('customs') || ch.includes('wheel') || ch.includes('customsOk')) schedule('customs');
+    if (ch.includes('cmds')) schedule('cmds');
+    if (ch.includes('overlays') || ch.includes('ochat')) schedule('overlays');
+  });
+
+  /* ---------- pollers ---------- */
+  const visible = () => !document.hidden;
+  let linkMs = []; const noteMs = ms => { linkMs.push(ms); if (linkMs.length > 8) linkMs.shift(); S.set({ link: { sse: S.get('link').sse, ms: Math.round(linkMs.reduce((a, b) => a + b, 0) / linkMs.length) } }); };
+  const sse = () => S.get('link').sse;
+  function seen(r) { if (r.status > 0) { if (S.get('hostUp') !== true) S.set({ hostUp: true }); noteMs(r.ms); } else if (S.get('hostUp') !== false) S.set({ hostUp: false }); }
+  const P = (interval, run, shouldRun) => C.createPoller({ interval, run, shouldRun: shouldRun || visible });
+  const pollers = {
+    tree: P(() => (sse() ? 4000 : 450), async () => { const vs = viewScene(), q = vs && vs !== S.get('tree').current ? '?scene=' + encodeURIComponent(vs) : ''; const r = await api.get('/api/obs/tree' + q); seen(r); if (r.ok) { applyTree(r.json); saveCacheSoon(); } }),
+    slow: P(() => (sse() ? 6000 : 2000), async () => {
+      const [a, b, c] = await Promise.all([api.get('/api/obs/status'), api.get('/api/status'), api.get('/api/live')]);
+      seen(a); const p = {}; if (a.ok) p.obsStatus = a.json; if (b.ok) p.host = b.json; if (c.ok) p.live = c.json; S.set(p);
+    }),
+    customs: P(() => (sse() ? 4000 : 1000), async () => {
+      const r = await api.get('/api/customs/state'); if (r.status === 404 || r.status === 0) { if (S.get('customsOk') !== false) S.set({ customsOk: false }); return; }
+      if (r.ok) { S.set({ customs: r.json, customsOk: true }); saveCacheSoon(); }
+    }),
+    wheel: P(() => (sse() ? 4000 : 1500), async () => { const r = await api.get('/api/wheel/public'); if (r.ok) S.set({ wheel: r.json }); }),
+    activity: P(() => (sse() ? 5000 : 1500), async () => { const r = await api.get('/api/activity?since=' + ui.actSeq + '&limit=60'); if (r.ok) addActivity(r.json.items); }),
+    chat: P(() => (ui.chatOk === false ? 30000 : (sse() ? 4000 : 800)), async () => {
+      const r = await api.get('/api/chat/recent?since=' + ui.chatSeq + '&limit=50');
+      if (r.status === 404) { ui.chatOk = false; schedule('feed'); return; }
+      if (r.ok) { ui.chatOk = true; addChat(Array.isArray(r.json) ? r.json : r.json.items || r.json.messages); }
+    }),
+    cmds: P(5000, async () => { const r = await api.get('/api/commands/profiles'); if (r.ok) S.set({ cmds: r.json.commands || [] }); }, () => visible() && ui.tab === 'cmds'),
+    overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = {}; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
+  };
+  let cacheT = 0; function saveCacheSoon() { if (!cacheT) cacheT = setTimeout(() => { cacheT = 0; saveCache(); }, 3000); }
+  setInterval(() => { if (opt.expire().length) { schedule('scenes', 'sources', 'cmds'); } }, 500);   // unconfirmed optimistic changes fall back to what the Host says
+
+  /* ---------- live push from the Host (/api/events, see Docs/MASTER_VIEW_APP.md); polling keeps running slowly as a safety net ---------- */
+  const events = C.createEvents({
+    url: HOST + '/api/events', fetch: (u, o) => fetch(u, o),
+    onState: on => { S.set({ link: { sse: on, ms: S.get('link').ms } }); if (!on) Object.values(pollers).forEach(p => p.kick()); },
+    onMessage: m => {
+      const d = m.data;
+      if (m.event === 'snapshot' && d) { d.obs && applyTree(d.obs); d.obsstatus && S.set({ obsStatus: d.obsstatus }); d.live && S.set({ live: d.live }); d.customs && S.set({ customs: d.customs, customsOk: true }); d.wheel && S.set({ wheel: d.wheel }); d.chat && addChat(d.chat); d.activity && addActivity(d.activity); }
+      else if (m.event === 'obs') applyTree(d); else if (m.event === 'obsstatus') S.set({ obsStatus: d }); else if (m.event === 'live') S.set({ live: d });
+      else if (m.event === 'customs') S.set({ customs: d, customsOk: true }); else if (m.event === 'wheel') S.set({ wheel: d });
+      else if (m.event === 'chat') { ui.chatOk = true; addChat([d]); } else if (m.event === 'activity') addActivity([d]);
+    },
+  });
+
+  /* ---------- events: one delegated listener per area ---------- */
+  function paneOf(el) { return el.closest('#scenes') ? 'scenes' : el.closest('#sources') ? 'sources' : null; }
+  function setKb(pane, key) { ui.pane = pane; ui.kb[pane] = key; pane === 'scenes' ? renderScenes() : renderSources(); }
+  $('#scenes').addEventListener('click', e => {
+    const row = e.target.closest('.r'); if (!row) return; setKb('scenes', rowsScenes.find(r => r.name === row.dataset.n && r.type === row.dataset.a)?.key);
+    if (row.dataset.a === 'folder') { const f = row.dataset.n; ui.folders.has(f) ? ui.folders.delete(f) : ui.folders.add(f); ls.set('folders', [...ui.folders]); renderScenes(); }
+    else goScene(row.dataset.n, e.ctrlKey || e.metaKey);
+  });
+  $('#sources').addEventListener('click', e => {
+    const row = e.target.closest('.r'); if (!row) return; const id = +row.dataset.id; setKb('sources', 'i:' + id);
+    if (row.dataset.a === 'group' && e.target.closest('.tw')) { ui.groups.has(id) ? ui.groups.delete(id) : ui.groups.add(id); ls.set('groups', [...ui.groups]); renderSources(); } else toggleItem(id);
+  });
+  $('#sources').addEventListener('contextmenu', e => { const row = e.target.closest('.r.group'); if (row) { e.preventDefault(); const id = +row.dataset.id; ui.groups.has(id) ? ui.groups.delete(id) : ui.groups.add(id); ls.set('groups', [...ui.groups]); renderSources(); } });
+  $('#scenes-fold').onclick = () => { const f = S.get('tree').folders; if (ui.folders.size) ui.folders.clear(); else f.forEach(x => ui.folders.add(x)); ls.set('folders', [...ui.folders]); renderScenes(); };
+  $('#src-follow').onclick = () => { ui.view = null; renderScenes(); renderSources(); pollers.tree.kick(); };
+  $('#q').addEventListener('input', e => { ui.query = e.target.value; renderScenes(); renderSources(); renderCmds(); renderOverlays(); renderFeed(); });
+  $('#tab-customs').addEventListener('click', e => {
+    const b = e.target.closest('button'), li = e.target.closest('.qlist li');
+    if (li && b && b.classList.contains('x')) { sendCmd(C.customsText('kick', li.dataset.u), b); return; }
+    if (b && b.dataset.cu) { if (b.classList.contains('warn') && !armed(b)) return; const t = C.customsText(b.dataset.cu, b.dataset.v); t ? sendCmd(t, b) : toast('Unknown action', true); }
+    else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { r.ok ? toast('Wheel: ' + b.dataset.wh) : toast('Wheel: ' + r.error, true); pollers.wheel.kick(); }); }
+    else if (b && b.id === 'cu-kickgo') { const t = C.customsText('kick', $('#cu-kick').value); t ? (sendCmd(t, b), $('#cu-kick').value = '') : toast('Type a Twitch name first', true); }
+  });
+  $('#tab-customs').addEventListener('change', e => { const k = e.target.dataset.cuset; if (!k || !e.target.value) return; const t = C.customsText(k, e.target.value); t && sendCmd(t, e.target); });
+  $('#tab-customs').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'cu-kick') $('#cu-kickgo').click(); });
+  $('#tab-cmds').addEventListener('click', e => { const row = e.target.closest('.cmd'); if (row && e.target.closest('.sw, .t')) toggleCmd(row.dataset.id); });
+  $('#tab-overlays').addEventListener('click', async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'oc-send') return askOverlay();
+    if (b.dataset.apply) { await tokenReady; const r = await api.post('/api/overlaychat/apply', { id: b.dataset.apply, user: 'master-view' }); r.ok ? (toast('Applied'), b.remove(), pollers.overlays.kick()) : toast(r.error, true); return; }
+    const row = b.closest('.of'); if (!row || !b.dataset.ov) return; const p = row.dataset.p, url = HOST + row.dataset.u;
+    if (b.dataset.ov === 'open') { window.PGWin ? PGWin.open({ label: 'ov-' + p.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 30), url, title: 'Overlay · ' + p, width: 960, height: 540, remember: false }).catch(x => toast(String(x.message || x), true)) : window.open(url, '_blank'); }
+    else if (b.dataset.ov === 'copy') { try { await navigator.clipboard.writeText(url); toast('Copied ' + url); } catch (x) { toast(url); } }
+    else if (b.dataset.ov === 'del') { if (!armed(b)) return; await tokenReady; const r = await api.post('/api/overlays/delete', { path: p }); r.ok ? (toast('Moved to the overlay trash'), pollers.overlays.kick()) : toast(r.error, true); }
+    else if (b.dataset.ov === 'ren') {
+      ui.renaming = p; const t = row.children[0], inp = h('input'); inp.type = 'text'; inp.value = p; inp.style.cssText = 'width:100%;padding:2px 6px'; t.replaceChildren(inp); inp.focus(); inp.select();
+      const done = async ok => { const v = inp.value.trim(); ui.renaming = null; if (ok && v && v !== p) { await tokenReady; const r = await api.post('/api/overlays/rename', { from: p, to: v }); r.ok ? toast('Renamed') : toast(r.error, true); } pollers.overlays.kick(); row._s = undefined; t.textContent = p; renderOverlays(); };
+      inp.onkeydown = ev => { if (ev.key === 'Enter') done(true); else if (ev.key === 'Escape') done(false); }; inp.onblur = () => ui.renaming && done(false);
+    }
+  });
+  document.addEventListener('keydown', e => { if (e.target.id === 'oc-text' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); askOverlay(); } });
+  function setTab(t) {
+    ui.tab = t; ls.set('tab', t); $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabbody').forEach(d => d.hidden = d.id !== 'tab-' + t);
+    if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') renderFeed();
+  }
+  $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
+  $('#b-help').onclick = () => { $('#help').hidden = false; }; $('#help-close').onclick = () => { $('#help').hidden = true; };
+  $('#help').addEventListener('click', e => { if (e.target.id === 'help') $('#help').hidden = true; });
+  ['scenes', 'sources'].forEach(p => $('#' + p).addEventListener('focus', () => { ui.pane = p; p === 'scenes' ? renderScenes() : renderSources(); }));
+
+  document.addEventListener('keydown', e => {
+    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if (e.key === 'Escape') { if (!$('#help').hidden) { $('#help').hidden = true; return; } if (ui.query || inField) { $('#q').value = ''; ui.query = ''; document.activeElement.blur(); renderScenes(); renderSources(); renderCmds(); renderOverlays(); renderFeed(); } return; }
+    if (inField) return;
+    if (e.altKey && /^[1-9]$/.test(e.key)) { const s = rowsScenes.filter(r => r.type === 'scene')[+e.key - 1]; if (s) { e.preventDefault(); goScene(s.name); } return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === '/') { e.preventDefault(); $('#q').focus(); return; }
+    if (e.key === '?') { $('#help').hidden = !$('#help').hidden; return; }
+    if (e.key === '[' || e.key === ']') { ui.pane = ui.pane === 'scenes' ? 'sources' : 'scenes'; $('#' + ui.pane).focus(); return; }
+    if (e.shiftKey && !e.repeat) {
+      const m = { N: ['next', ''], O: ['queue-open'], C: ['queue-close'] }[e.key.toUpperCase()];
+      if (m) { e.preventDefault(); sendCmd(C.customsText(m[0], m[1]), null); return; }
+      if (e.key.toUpperCase() === 'S') { e.preventDefault(); tokenReady.then(() => api.post('/api/wheel/spin')).then(r => r.ok ? toast('Wheel: spin') : toast(r.error, true)); return; }
+    }
+    if (/^[1-4]$/.test(e.key) && !e.shiftKey) { setTab(['customs', 'feed', 'cmds', 'overlays'][+e.key - 1]); return; }
+    const pane = paneOf(document.activeElement) || ui.pane, rows = pane === 'scenes' ? rowsScenes : rowsSources;
+    if (!rows.length) return;
+    let i = rows.findIndex(r => r.key === ui.kb[pane]);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); i = i < 0 ? 0 : Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))); setKb(pane, rows[i].key); const el = $$('.r.kb', $('#' + pane))[0]; el && el.scrollIntoView({ block: 'nearest' }); return; }
+    if (i < 0) return; const r = rows[i];
+    if (pane === 'scenes' && e.key === 'Enter') { e.preventDefault(); if (r.type === 'folder') { ui.folders.has(r.name) ? ui.folders.delete(r.name) : ui.folders.add(r.name); ls.set('folders', [...ui.folders]); renderScenes(); } else goScene(r.name, false); }
+    if (pane === 'sources' && (e.key === ' ' || e.key.toLowerCase() === 'e' || e.key === 'Enter')) { e.preventDefault(); toggleItem(r.id); }
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) Object.values(pollers).forEach(p => p.kick()); });
+  window.addEventListener('focus', () => Object.values(pollers).forEach(p => p.kick()));
+
+  /* ---------- start ---------- */
+  mkCustomsSkeleton(); mkFeed(); mkCmds(); mkOverlays();
+  $('#feed-ev').onchange = $('#feed-ch').onchange = renderFeed;
+  setTab(ui.tab);
+  renderBar(); renderScenes(); renderSources(); renderCustoms(); renderFeed();    // first paint from the cached state, before any request returns
+  tokenReady.then(() => { Object.values(pollers).forEach(p => p.start()); events.start(); });
+  window.MasterView = { S, ui, opt, pollers, api, goScene, toggleItem, sendCmd, applyTree };   // for the browser console / tests
+})();

@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "connected": true,
+  "recording": false,
+  "autoStartReplayBuffer": true,
+  "replayBufferEnabled": true,
+  "replayBuffer": {
+    "active": true,
+    "lastAutoStart": 0,
+    "lastError": ""
+  }
+}

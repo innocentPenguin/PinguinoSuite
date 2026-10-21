@@ -1,0 +1,58 @@
+# Master View (in the app) - 2026-10-21, session 013
+
+The website's staff Master View (`/mod/master`) as a native Suite page that talks **straight to the Host on 127.0.0.1:8770**: no website, no core hop, no round trip through Cloudflare. Penguino orange/dark only.
+
+## Files (all new, nothing of the shell is edited)
+| File | What |
+|---|---|
+| `App/src/master/master.html` | page fragment (own document, links `../theme.css`) |
+| `App/src/master/master.css` | compact 25 px OBS-style rows, dark inputs, no white boxes |
+| `App/src/master/master-core.js` | pure logic + transport (store, optimistic, row builders, SSE parser, poller, API client, keyed DOM reconcile). UMD: tested in node |
+| `App/src/master/master.js` | UI wiring |
+| `Tests/master/run.mjs`, `mock-host.mjs`, `fixtures/*.json` | node harness, mock Host (serves recorded real answers from 2026-10-21, mutable OBS state, SSE), `node Tests/master/run.mjs` |
+
+## Integration hook (agreed with 01; see the notes below for the final state)
+Nav entry `Master View` (route `master`) = a full-size `<iframe src="master/master.html">`; pop-out = `PGWin.open({label:'master', url:'master/master.html?popout=1'})`. The page reads the core token itself (`window.__TAURI__.core.invoke('core_config')`, also tried on `window.parent`) and sends it as `Authorization: Bearer` on writes. CSP already allows `connect-src http://127.0.0.1:*`. `?host=http://127.0.0.1:PORT` points it at another Host (used with the mock).
+
+## Responsiveness design
+- **Click feedback is synchronous** (measured 2-3 ms in the browser pane): an optimistic override (`createOptimistic`, 2.5 s ttl) flips the scene / eye / command switch before the request leaves. The override is dropped when the Host's own data agrees, when the request fails (rollback + toast with the Host's error) or when it times out.
+- **Diffed DOM**: every list is rendered through `reconcile()` (keyed, reuses nodes, patches only rows whose data changed; 500 rows with one toggle costs <2 ms). Event delegation, one listener per list. Poll-driven renders coalesce into one per tick; polls whose data is unchanged do nothing (`store.set` deep-compares).
+- **Transport**: SSE `GET /api/events` (fetch stream, so abort + Last-Event-ID work, backoff 1 s...30 s) *plus* polling that is fast without SSE (OBS tree 450 ms, customs 1 s, wheel/activity 1.5 s, chat 0.8 s, status/obs-status/live 2 s) and slows to 4-6 s as a safety net while SSE is connected. One request in flight per poller, never overlapping; paused when the window is hidden, kicked on focus. Commands/Overlays tabs only poll while open.
+- **Cache**: last tree + customs state are kept in localStorage and painted before the first request returns; when OBS or the Host is away the last scenes stay (greyed) under an offline banner.
+- **Scene switch** also fetches the new scene's sources in parallel with the switch and remembers the last items of every scene (no empty flash).
+- The header pill shows the link: `push 6 ms` (SSE) or `poll 3 ms` plus the average round trip.
+- Never sends a chat line twice: the same command text within 1.2 s is dropped; risky buttons (clear queue, end match, wheel reset, delete overlay) need a second click.
+
+## What the page shows / does
+| Area | Source | Notes |
+|---|---|---|
+| Scenes (folders, LIVE highlight, collapse, search) | `GET /api/obs/tree`, `POST /api/obs/scene {scene}` | click = go live; Ctrl+click = view only |
+| Sources (nested groups, eye toggle, search) | `GET /api/obs/tree?scene=`, `POST /api/obs/item {scene,itemId,enabled}` | right-click / chevron folds a group; children of a hidden group are dimmed |
+| Header pills: live, OBS, recording, replay buffer, chat/EventSub, link | `/api/live`, `/api/obs/status`, `/api/status` | |
+| Customs buttons (open/close/clear, next, balance, reroll, fill, end match, wins, KOTH, mode/size/game mode/casual, kick) | `POST /api/run {text:"!queue open", user:"broadcaster"}` | exactly the chat commands the website's `MOD_ACTIONS` allows, allow-listed in `customsText()` |
+| Customs queue list / match / mode | `GET /api/customs/state` | **missing in the Host** (asked 02); shows a note, buttons still work |
+| Wheel spin / new round / reset | `POST /api/wheel/spin\|new\|reset`, `GET /api/wheel/public` | |
+| Feed: activity events | `GET /api/activity?since=` | |
+| Feed: live chat | `GET /api/chat/recent?since=` or SSE `chat` | **missing in the Host** (asked 02) |
+| Commands on/off | `GET /api/commands/profiles`, `POST /api/commands/profile {id,enabled,by}` | optimistic switch |
+| Overlay folder (list, open in a window, copy URL, rename, delete -> trash) | `/api/overlays`, `/api/overlays/rename`, `/api/overlays/delete` | |
+| Overlay chat | `/api/overlaychat/status\|ask\|apply` | Host has it switched off today (no key / `enabled:false`): the box says so |
+
+## Keyboard
+`/` search - `Esc` clear - `Alt+1..9` scene N - `Up/Down` move - `Enter` scene live / fold - `Space` or `E` toggle source - `[` `]` or `Tab` switch list - `Shift+N` next match, `Shift+O` / `Shift+C` open / close queue, `Shift+S` spin wheel - `1..4` side tab - `?` help.
+
+## Host contract wanted from 02 (page works without all of it)
+1. `GET /api/events` (SSE, loopback, `retry: 1000`, 15 s heartbeat comment, `id:` per message, `Last-Event-ID` resume). First message `snapshot` = `{obs, obsstatus, live, customs, wheel, chat[], activity[]}`. Then `obs` (same shape as `/api/obs/tree`; invalidate the 2 s tree cache on obs-websocket events so changes made in OBS itself show at once), `obsstatus`, `live`, `customs`, `wheel`, `chat` {seq,user,display,text,ts}, `activity` (one `/api/activity` item).
+2. `GET /api/customs/state` -> `{open, activity, mode, format, gamemode, casualStyle, koth, queue:[{username,display,mmr}], match:{id,status,orange,blue}|null}`.
+3. `GET /api/chat/recent?since=&limit=` -> `[{seq,user,display,text,ts}]`.
+4. `/api/obs/status` is missing the OBS **stream** output state (`streaming`) and there are no start/stop record, start/stop stream or save-replay endpoints, so those are read-only pills today.
+5. `/api/wheel/spin|new|reset` return only `{ok}`; returning the new wheel state would save one poll.
+
+## Stubbed / not done
+No OBS recording/stream/replay *controls* (no Host endpoint). No source reorder / lock. Overlay file *editing* is not in the page (the overlay chat covers changes). Chat sending is not offered (`/api/say` needs the module token by design). Scene folders come from the Host's prefix/override logic only.
+
+## What needs a rebuild
+`App/src/**` is new: **one `App\Rebuild-App.bat` (shell only)**, after 01 adds the nav entry. No core rebuild. Host additions (SSE etc.) need only a Host module restart.
+
+## Test
+`node Tests/master/run.mjs` (26 tests: row builders, folders, groups, search, optimistic/rollback, customs allow-list, SSE parser + reconnect + Last-Event-ID, poller, reconcile cost, round trip against the mock). Visual check: `python -m http.server 8799 --bind 127.0.0.1` in `App/src`, `MOCK_OPEN=1 node Tests/master/mock-host.mjs 8798`, open `http://127.0.0.1:8799/master/master.html?host=http://127.0.0.1:8798`. The real OBS was never toggled; the one-off live fixtures were read with GETs only.

@@ -1,0 +1,237 @@
+{
+  "connected": true,
+  "current": "Rocket",
+  "scene": "Rocket",
+  "scenes": [
+    {
+      "name": "Rocket",
+      "folder": "",
+      "label": "Rocket",
+      "current": true
+    },
+    {
+      "name": "Minecraft",
+      "folder": "",
+      "label": "Minecraft",
+      "current": false
+    },
+    {
+      "name": "Rocket but simple",
+      "folder": "",
+      "label": "Rocket but simple",
+      "current": false
+    },
+    {
+      "name": "game and audio",
+      "folder": "",
+      "label": "game and audio",
+      "current": false
+    },
+    {
+      "name": "just game and audio",
+      "folder": "",
+      "label": "just game and audio",
+      "current": false
+    },
+    {
+      "name": "Chatless",
+      "folder": "",
+      "label": "Chatless",
+      "current": false
+    },
+    {
+      "name": "Rocket 2",
+      "folder": "",
+      "label": "Rocket 2",
+      "current": false
+    },
+    {
+      "name": "Ending soon",
+      "folder": "",
+      "label": "Ending soon",
+      "current": false
+    },
+    {
+      "name": "Droidcam",
+      "folder": "",
+      "label": "Droidcam",
+      "current": false
+    },
+    {
+      "name": "Alerts",
+      "folder": "",
+      "label": "Alerts",
+      "current": false
+    },
+    {
+      "name": "First Time",
+      "folder": "",
+      "label": "First Time",
+      "current": false
+    },
+    {
+      "name": "Audio",
+      "folder": "",
+      "label": "Audio",
+      "current": false
+    },
+    {
+      "name": "Chat",
+      "folder": "",
+      "label": "Chat",
+      "current": false
+    },
+    {
+      "name": "Blank",
+      "folder": "",
+      "label": "Blank",
+      "current": false
+    },
+    {
+      "name": "Displays",
+      "folder": "",
+      "label": "Displays",
+      "current": false
+    },
+    {
+      "name": "Webcam Scene",
+      "folder": "",
+      "label": "Webcam Scene",
+      "current": false
+    },
+    {
+      "name": "Dual Record",
+      "folder": "",
+      "label": "Dual Record",
+      "current": false
+    },
+    {
+      "name": "Ban Alert",
+      "folder": "",
+      "label": "Ban Alert",
+      "current": false
+    }
+  ],
+  "folders": [],
+  "items": [
+    {
+      "id": 141,
+      "name": "Players",
+      "kind": "browser_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 140,
+      "name": "Queue",
+      "kind": "browser_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 135,
+      "name": "Audio",
+      "kind": "OBS_SOURCE_TYPE_SCENE",
+      "enabled": true,
+      "group": false
+    },
+    {
+      "id": 105,
+      "name": "Alerts",
+      "kind": "OBS_SOURCE_TYPE_SCENE",
+      "enabled": true,
+      "group": false
+    },
+    {
+      "id": 136,
+      "name": "First Time",
+      "kind": "OBS_SOURCE_TYPE_SCENE",
+      "enabled": true,
+      "group": false
+    },
+    {
+      "id": 115,
+      "name": "gc logo",
+      "kind": "image_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 118,
+      "name": "top gifter",
+      "kind": "browser_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 123,
+      "name": "Droidcam",
+      "kind": "OBS_SOURCE_TYPE_SCENE",
+      "enabled": true,
+      "group": false
+    },
+    {
+      "id": 86,
+      "name": "Webcam Scene",
+      "kind": "OBS_SOURCE_TYPE_SCENE",
+      "enabled": true,
+      "group": false
+    },
+    {
+      "id": 22,
+      "name": "Heartrate",
+      "kind": "browser_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 101,
+      "name": "Chat",
+      "kind": "OBS_SOURCE_TYPE_SCENE",
+      "enabled": true,
+      "group": false
+    },
+    {
+      "id": 134,
+      "name": "Epic2",
+      "kind": "ffmpeg_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 142,
+      "name": "wheel",
+      "kind": "browser_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 93,
+      "name": "ice",
+      "kind": "image_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 122,
+      "name": "ice2",
+      "kind": "image_source",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 132,
+      "name": "Discord",
+      "kind": "window_capture",
+      "enabled": false,
+      "group": false
+    },
+    {
+      "id": 102,
+      "name": "Displays",
+      "kind": "OBS_SOURCE_TYPE_SCENE",
+      "enabled": true,
+      "group": false
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Master View</title>
+<link rel="stylesheet" href="../theme.css">
+<link rel="stylesheet" href="master.css">
+</head>
+<body>
+<div id="app">
+  <header id="bar">
+    <b class="brand">🎛 Master View</b>
+    <span class="pill" id="p-live" title="Twitch live status"><i></i><span>…</span></span>
+    <span class="pill" id="p-obs" title="OBS connection"><i></i><span>OBS</span></span>
+    <span class="pill" id="p-rec" title="Recording"><i></i><span>Rec</span></span>
+    <span class="pill" id="p-rb" title="Replay buffer"><i></i><span>Replay</span></span>
+    <span class="pill" id="p-chat" title="Twitch chat / EventSub"><i></i><span>Chat</span></span>
+    <span class="sp"></span>
+    <span class="pill" id="p-link" title="Link to the Host: live push (SSE) or polling, and round trip time"><i></i><span>Host …</span></span>
+    <button id="b-help" class="sm" title="Keyboard shortcuts (?)">?</button>
+  </header>
+  <div id="offline" class="banner" hidden></div>
+  <main id="grid">
+    <section class="pane" id="pane-scenes" data-pane="scenes">
+      <div class="ph"><h3>Scenes</h3><span class="faint sm" id="scene-count"></span><span class="sp"></span><button class="sm ghost" id="scenes-fold" title="Collapse / expand all folders">⇕</button></div>
+      <div class="list" id="scenes" tabindex="0" role="listbox" aria-label="OBS scenes"></div>
+    </section>
+    <section class="pane" id="pane-sources" data-pane="sources">
+      <div class="ph"><h3>Sources</h3><span class="faint sm ell" id="src-scene"></span><span class="sp"></span><button class="sm ghost" id="src-follow" title="Follow the live scene again">⟲ live</button></div>
+      <div class="list" id="sources" tabindex="0" role="listbox" aria-label="Sources of the scene"></div>
+    </section>
+    <section class="pane" id="pane-side">
+      <div class="tabs" id="tabs" role="tablist">
+        <button data-tab="customs" class="on">Customs</button><button data-tab="feed">Feed</button><button data-tab="cmds">Commands</button><button data-tab="overlays">Overlays</button>
+      </div>
+      <div class="tabbody" id="tab-customs"></div>
+      <div class="tabbody" id="tab-feed" hidden></div>
+      <div class="tabbody" id="tab-cmds" hidden></div>
+      <div class="tabbody" id="tab-overlays" hidden></div>
+    </section>
+  </main>
+  <div class="searchbar"><input id="q" type="text" placeholder="Search scenes and sources   ( / )" autocomplete="off" spellcheck="false"><span class="faint sm" id="status-line"></span></div>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<div id="help" hidden>
+  <div class="card helpcard">
+    <h3>Keyboard</h3>
+    <table class="kb">
+      <tr><td><kbd>/</kbd></td><td>search scenes + sources</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>clear search / leave field</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd></td><td>switch to scene 1…9 (as listed)</td></tr>
+      <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>move in the focused list (<kbd>Tab</kbd> or <kbd>[</kbd> <kbd>]</kbd> change list)</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>scene: go live · folder: fold</td></tr>
+      <tr><td><kbd>Space</kbd> / <kbd>E</kbd></td><td>source: show / hide</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>customs: next match (sends !next)</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>O</kbd> / <kbd>Shift</kbd>+<kbd>C</kbd></td><td>customs: open / close queue</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>S</kbd></td><td>wheel: spin</td></tr>
+      <tr><td><kbd>1</kbd>…<kbd>4</kbd> (not in a field)</td><td>side tab: Customs, Feed, Commands, Overlays</td></tr>
+      <tr><td><kbd>?</kbd></td><td>this help</td></tr>
+    </table>
+    <p class="faint sm">Clicking a scene goes live at once. <kbd>Ctrl</kbd>+click only shows its sources. Risky buttons (clear queue, wheel reset, delete) ask for a second click.</p>
+    <div class="row"><span class="sp"></span><button id="help-close" class="pri sm">Close</button></div>
+  </div>
+</div>
+<script src="master-core.js"></script>
+<script src="master.js"></script>
+</body>
+</html>

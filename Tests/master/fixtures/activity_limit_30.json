@@ -1,0 +1,597 @@
+{
+  "ok": true,
+  "seq": 169,
+  "items": [
+    {
+      "ts": 1792539073,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "stefan77777777f",
+      "what": "Song Request",
+      "detail": "Song Request",
+      "amount": 25,
+      "message": "Crab wave",
+      "seq": 140
+    },
+    {
+      "ts": 1792539197,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "kage2am",
+      "what": "Posture Check",
+      "detail": "Posture Check",
+      "amount": 75,
+      "seq": 141
+    },
+    {
+      "ts": 1792539752,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "snowyroses_",
+      "what": "Song Request",
+      "detail": "Song Request",
+      "amount": 25,
+      "message": "https://open.spotify.com/track/75IQVo8hqI1iwVZyvkN2VT?si=1yENeWACR1CcKT0_4vEW2w&utm_source=copy-link",
+      "seq": 142
+    },
+    {
+      "ts": 1792539799,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "blizzyfvv",
+      "what": "Song Request",
+      "detail": "Song Request",
+      "amount": 25,
+      "message": "valentina - daniel",
+      "seq": 143
+    },
+    {
+      "ts": 1792539917,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "should we do bullet ball or knockout?",
+      "detail": "should we do bullet ball or knockout?",
+      "state": "begin",
+      "data": {
+        "id": "727954a5-f5c0-4019-9ebe-e926d6b1fec9",
+        "title": "should we do bullet ball or knockout?",
+        "choices": [
+          {
+            "id": "5238b6d8-1034-41ac-92c6-7435e925f336",
+            "title": "yes i love both"
+          },
+          {
+            "id": "b40800cb-15a6-4fa0-afc8-65da0401cd9c",
+            "title": "yes im a bullet enjoyer"
+          },
+          {
+            "id": "4ad2a879-cdc1-404f-bd18-62793d215fac",
+            "title": "yes i have taste"
+          },
+          {
+            "id": "7cdf2050-fcd8-4556-90f5-01180397bcef",
+            "title": "yes i like knockout"
+          },
+          {
+            "id": "828a60fd-3d34-45c7-8afb-06aa1c65f51e",
+            "title": "no (im a boring L player)"
+          }
+        ],
+        "status": "",
+        "endsAt": "2026-10-20T23:47:15.502975148Z",
+        "startedAt": "2026-10-20T23:45:15.502975148Z"
+      },
+      "seq": 144
+    },
+    {
+      "ts": 1792540038,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "should we do bullet ball or knockout?",
+      "detail": "should we do bullet ball or knockout?",
+      "state": "end",
+      "data": {
+        "id": "727954a5-f5c0-4019-9ebe-e926d6b1fec9",
+        "title": "should we do bullet ball or knockout?",
+        "choices": [
+          {
+            "id": "5238b6d8-1034-41ac-92c6-7435e925f336",
+            "title": "yes i love both",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "b40800cb-15a6-4fa0-afc8-65da0401cd9c",
+            "title": "yes im a bullet enjoyer",
+            "votes": 0,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "4ad2a879-cdc1-404f-bd18-62793d215fac",
+            "title": "yes i have taste",
+            "votes": 0,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "7cdf2050-fcd8-4556-90f5-01180397bcef",
+            "title": "yes i like knockout",
+            "votes": 0,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "828a60fd-3d34-45c7-8afb-06aa1c65f51e",
+            "title": "no (im a boring L player)",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          }
+        ],
+        "status": "completed",
+        "endsAt": "",
+        "startedAt": "2026-10-20T23:45:15.502975148Z"
+      },
+      "seq": 145
+    },
+    {
+      "ts": 1792540098,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "should we do bullet ball or knockout?",
+      "detail": "should we do bullet ball or knockout?",
+      "state": "end",
+      "data": {
+        "id": "727954a5-f5c0-4019-9ebe-e926d6b1fec9",
+        "title": "should we do bullet ball or knockout?",
+        "choices": [
+          {
+            "id": "5238b6d8-1034-41ac-92c6-7435e925f336",
+            "title": "yes i love both",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "b40800cb-15a6-4fa0-afc8-65da0401cd9c",
+            "title": "yes im a bullet enjoyer",
+            "votes": 0,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "4ad2a879-cdc1-404f-bd18-62793d215fac",
+            "title": "yes i have taste",
+            "votes": 0,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "7cdf2050-fcd8-4556-90f5-01180397bcef",
+            "title": "yes i like knockout",
+            "votes": 0,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "828a60fd-3d34-45c7-8afb-06aa1c65f51e",
+            "title": "no (im a boring L player)",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          }
+        ],
+        "status": "archived",
+        "endsAt": "",
+        "startedAt": "2026-10-20T23:45:15.502975148Z"
+      },
+      "seq": 146
+    },
+    {
+      "ts": 1792540381,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "bulletball?",
+      "detail": "bulletball?",
+      "state": "begin",
+      "data": {
+        "id": "f37c8d6e-3d25-4e84-a595-84f8a0983ded",
+        "title": "bulletball?",
+        "choices": [
+          {
+            "id": "dcf67a96-0cfb-433b-b330-b193b0ad270e",
+            "title": "yes"
+          },
+          {
+            "id": "f2455fe0-f1d2-4d4e-9f86-f435d61d6f6f",
+            "title": "now"
+          },
+          {
+            "id": "3aa8c535-eb4f-49b4-9c44-015d81ebca15",
+            "title": "piney is W"
+          }
+        ],
+        "status": "",
+        "endsAt": "2026-10-20T23:54:59.387723629Z",
+        "startedAt": "2026-10-20T23:52:59.387723629Z"
+      },
+      "seq": 147
+    },
+    {
+      "ts": 1792540501,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "bulletball?",
+      "detail": "bulletball?",
+      "state": "end",
+      "data": {
+        "id": "f37c8d6e-3d25-4e84-a595-84f8a0983ded",
+        "title": "bulletball?",
+        "choices": [
+          {
+            "id": "dcf67a96-0cfb-433b-b330-b193b0ad270e",
+            "title": "yes",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "f2455fe0-f1d2-4d4e-9f86-f435d61d6f6f",
+            "title": "now",
+            "votes": 1,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "3aa8c535-eb4f-49b4-9c44-015d81ebca15",
+            "title": "piney is W",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          }
+        ],
+        "status": "completed",
+        "endsAt": "",
+        "startedAt": "2026-10-20T23:52:59.387723629Z"
+      },
+      "seq": 148
+    },
+    {
+      "ts": 1792540542,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "snowyroses_",
+      "what": "Song Request",
+      "detail": "Song Request",
+      "amount": 25,
+      "message": "https://open.spotify.com/track/736PP5LTtREkDgktNmX3Gu?si=YBMhLrSET1anCLuiCNHMlA&utm_source=copy-link&rowId=8aad10d6f3f8606c",
+      "seq": 149
+    },
+    {
+      "ts": 1792540562,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "bulletball?",
+      "detail": "bulletball?",
+      "state": "end",
+      "data": {
+        "id": "f37c8d6e-3d25-4e84-a595-84f8a0983ded",
+        "title": "bulletball?",
+        "choices": [
+          {
+            "id": "dcf67a96-0cfb-433b-b330-b193b0ad270e",
+            "title": "yes",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "f2455fe0-f1d2-4d4e-9f86-f435d61d6f6f",
+            "title": "now",
+            "votes": 1,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "3aa8c535-eb4f-49b4-9c44-015d81ebca15",
+            "title": "piney is W",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          }
+        ],
+        "status": "archived",
+        "endsAt": "",
+        "startedAt": "2026-10-20T23:52:59.387723629Z"
+      },
+      "seq": 150
+    },
+    {
+      "ts": 1792540582,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "skyrltn",
+      "what": "Song Request",
+      "detail": "Song Request",
+      "amount": 25,
+      "message": "japan by throttle",
+      "seq": 151
+    },
+    {
+      "ts": 1792542351,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "slickzpretzl",
+      "what": "Hydrate",
+      "detail": "Hydrate",
+      "amount": 325,
+      "seq": 152
+    },
+    {
+      "ts": 1792542576,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "starstruck2004",
+      "what": "Posture Check",
+      "detail": "Posture Check",
+      "amount": 75,
+      "seq": 153
+    },
+    {
+      "ts": 1792542634,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "tourny?",
+      "detail": "tourny?",
+      "state": "begin",
+      "data": {
+        "id": "d38a96d3-fdf1-4137-9705-93694a43c018",
+        "title": "tourny?",
+        "choices": [
+          {
+            "id": "45ef1cc0-5f90-4e8b-8760-fd6f5225ad95",
+            "title": "yes 2v2 tourn"
+          },
+          {
+            "id": "77c473ed-3ba2-463f-894d-9fe77c06e59a",
+            "title": "naur more custy"
+          },
+          {
+            "id": "ef971a6a-77ed-4dae-ac2a-b05529d611d4",
+            "title": "im cool and i want bullet"
+          }
+        ],
+        "status": "",
+        "endsAt": "2026-10-21T00:33:31.89200066Z",
+        "startedAt": "2026-10-21T00:30:31.89200066Z"
+      },
+      "seq": 154
+    },
+    {
+      "ts": 1792542814,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "tourny?",
+      "detail": "tourny?",
+      "state": "end",
+      "data": {
+        "id": "d38a96d3-fdf1-4137-9705-93694a43c018",
+        "title": "tourny?",
+        "choices": [
+          {
+            "id": "45ef1cc0-5f90-4e8b-8760-fd6f5225ad95",
+            "title": "yes 2v2 tourn",
+            "votes": 5,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "77c473ed-3ba2-463f-894d-9fe77c06e59a",
+            "title": "naur more custy",
+            "votes": 3,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "ef971a6a-77ed-4dae-ac2a-b05529d611d4",
+            "title": "im cool and i want bullet",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          }
+        ],
+        "status": "completed",
+        "endsAt": "",
+        "startedAt": "2026-10-21T00:30:31.89200066Z"
+      },
+      "seq": 155
+    },
+    {
+      "ts": 1792542874,
+      "kind": "poll",
+      "type": "poll",
+      "user": "innocentpenguin_",
+      "what": "tourny?",
+      "detail": "tourny?",
+      "state": "end",
+      "data": {
+        "id": "d38a96d3-fdf1-4137-9705-93694a43c018",
+        "title": "tourny?",
+        "choices": [
+          {
+            "id": "45ef1cc0-5f90-4e8b-8760-fd6f5225ad95",
+            "title": "yes 2v2 tourn",
+            "votes": 5,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "77c473ed-3ba2-463f-894d-9fe77c06e59a",
+            "title": "naur more custy",
+            "votes": 3,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          },
+          {
+            "id": "ef971a6a-77ed-4dae-ac2a-b05529d611d4",
+            "title": "im cool and i want bullet",
+            "votes": 2,
+            "channel_points_votes": 0,
+            "bits_votes": 0
+          }
+        ],
+        "status": "archived",
+        "endsAt": "",
+        "startedAt": "2026-10-21T00:30:31.89200066Z"
+      },
+      "seq": 156
+    },
+    {
+      "ts": 1792543995,
+      "kind": "ban",
+      "type": "ban",
+      "user": "rocketrankbot",
+      "what": "banned",
+      "detail": "banned",
+      "moderator": "yoohoo15",
+      "seq": 157
+    },
+    {
+      "ts": 1792544484,
+      "kind": "follow",
+      "type": "follow",
+      "user": "ydorb7",
+      "what": "",
+      "detail": "",
+      "refollow": false,
+      "seq": 158
+    },
+    {
+      "ts": 1792545077,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "stefan77777777f",
+      "what": "Song Request",
+      "detail": "Song Request",
+      "amount": 25,
+      "message": "Vibrant eyes by cg5",
+      "seq": 159
+    },
+    {
+      "ts": 1792545195,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "skyrltn",
+      "what": "Song Request",
+      "detail": "Song Request",
+      "amount": 25,
+      "message": "saucin",
+      "seq": 160
+    },
+    {
+      "ts": 1792545243,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "stefan77777777f",
+      "what": "Song Request",
+      "detail": "Song Request",
+      "amount": 25,
+      "message": "Locked away by cg5",
+      "seq": 161
+    },
+    {
+      "ts": 1792545456,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "lvlmarshmello",
+      "what": "Pushups",
+      "detail": "Pushups",
+      "amount": 1350,
+      "seq": 162
+    },
+    {
+      "ts": 1792545536,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "stefan77777777f",
+      "what": "Time Yourself Out",
+      "detail": "Time Yourself Out",
+      "amount": 800,
+      "message": "5",
+      "seq": 163
+    },
+    {
+      "ts": 1792545667,
+      "kind": "ban",
+      "type": "ban",
+      "user": "stefan77777777f",
+      "what": "timed out",
+      "detail": "timed out",
+      "moderator": "blizzyfvv",
+      "seq": 164
+    },
+    {
+      "ts": 1792545711,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "ytabdul",
+      "what": "Show the Stream",
+      "detail": "Show the Stream",
+      "amount": 2500,
+      "message": "My new vid in yt yt is ytabdul 51 subs",
+      "seq": 165
+    },
+    {
+      "ts": 1792546617,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "lvlmarshmello",
+      "what": "Pushups",
+      "detail": "Pushups",
+      "amount": 1350,
+      "seq": 166
+    },
+    {
+      "ts": 1792546741,
+      "kind": "redeem",
+      "type": "redeem",
+      "user": "yoohoo15",
+      "what": "1v1",
+      "detail": "1v1",
+      "amount": 9000,
+      "seq": 167
+    },
+    {
+      "ts": 1792547613,
+      "kind": "gift",
+      "type": "gift",
+      "user": "innocentpenguin_",
+      "what": "1 sub(s)",
+      "detail": "1 sub(s)",
+      "amount": 1,
+      "tier": 1,
+      "seq": 168
+    },
+    {
+      "ts": 1792547805,
+      "kind": "raid_out",
+      "type": "raid_out",
+      "user": "eddywaps",
+      "what": "eddywaps",
+      "detail": "eddywaps",
+      "target": "eddywaps",
+      "amount": 12,
+      "seq": 169
+    }
+  ]
+}

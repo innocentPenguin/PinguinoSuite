@@ -1,0 +1,46 @@
+{
+  "status": "open",
+  "mode": "random",
+  "teamSize": 2,
+  "names": [
+    "spywobbles",
+    "salman201223",
+    "SkyRLTN",
+    "LvLMarshmello",
+    "pineyapplie",
+    "gonkilluagg",
+    "InnocentPenguin_",
+    "yoohoo15"
+  ],
+  "entrantCount": 8,
+  "pool": [
+    "gonkilluagg",
+    "InnocentPenguin_",
+    "LvLMarshmello",
+    "pineyapplie",
+    "salman201223",
+    "SkyRLTN",
+    "spywobbles",
+    "yoohoo15"
+  ],
+  "teams": [],
+  "teamSizes": {},
+  "waitlist": [],
+  "manual": {
+    "on": true,
+    "revealed": 0,
+    "total": 8,
+    "last": false,
+    "spunAt": 0,
+    "spinMs": 8000
+  },
+  "practice": false,
+  "label": "True random",
+  "serverNow": 1792565429092,
+  "botOnline": true,
+  "signedUp": 8,
+  "feed": [],
+  "feedMs": 2000,
+  "showSignedUp": true,
+  "draw": null
+}
