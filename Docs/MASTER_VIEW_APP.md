@@ -60,3 +60,7 @@ No OBS recording/stream/replay *controls* (no Host endpoint). No source reorder 
 
 ## Test
 `node Tests/master/run.mjs` (26 tests: row builders, folders, groups, search, optimistic/rollback, customs allow-list, SSE parser + reconnect + Last-Event-ID, poller, reconcile cost, round trip against the mock). Visual check: `python -m http.server 8799 --bind 127.0.0.1` in `App/src`, `MOCK_OPEN=1 node Tests/master/mock-host.mjs 8798`, open `http://127.0.0.1:8799/master/master.html?host=http://127.0.0.1:8798`. The real OBS was never toggled; the one-off live fixtures were read with GETs only.
+
+## Live verification (2026-10-21, Host b9fad8f, read-only)
+
+Against the running Host (GET only, writes stubbed): 18 scenes/17 sources, SSE push 17 ms, customs queue + `gameMode`, wheel, 30 feed events, commands and overlays tabs all load; view-only scene click and search work. Chat rendering (ms to s timestamps) and the optimistic scene click (3 ms visible, rollback on refusal) were checked against the mock in a real browser. Writes with the Tauri token can only be exercised inside the app; outside it the Host answers 401 and the page rolls back with a toast, as designed.
