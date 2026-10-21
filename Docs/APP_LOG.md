@@ -77,6 +77,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 01:52 - Host restart (roles tags backend)
+- Host restarted via D:\PinguinoSuite\App\Update-Module.ps1 host on 02's d4d309a: command permissions are role tags (roleOptions on /api/commands/profiles). /api/live 200. App not rebuilt; the Commands page tags UI (01) is still pending.
+
 ## 2026-10-21 01:37 Host restart (simulator leak fix b35d30d)
 
 - Update-Module.ps1 host. /api/live, /api/sim/status, /wheel.html, /api/wheel/public 200. Fix: sim clear rewrites wheel files, sim names kept out of saved wheel feed.
