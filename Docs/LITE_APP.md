@@ -3,7 +3,7 @@
 Status: v0.1 shell, 2026-10-20 (session 012). Project: `PinguinoLite\`. Owner of the shell: 012 (via 00). Owner of everything behind the Modules tab: **04 (PinguinoLink)**.
 
 ## What it is
-A second, much lighter desktop app: a UI shell with **Dashboard** and **Modules** pages, nothing baked in. It is not a copy of PinguinoSuite: no Python core, no module supervisor, no sidecar, no tray, no pop-outs, no Host code. It reads files that PinguinoLink writes and writes small request files that PinguinoLink picks up. Penguino orange/dark look only.
+A second, much lighter desktop app: a UI shell with **Dashboard** and **Modules** pages. The ONE bundled component is **PinguinoLink** (session 04): it is the shipper/updater/checker/connector and powers the Modules tab from the first launch. Every other module is optional and arrives through Link. It is not a copy of PinguinoSuite: no Python core, no module supervisor, no sidecar other than Link, no tray, no pop-outs, no Host code. It reads files that PinguinoLink writes and writes small request files that PinguinoLink picks up. Penguino orange/dark look only.
 
 | | PinguinoSuite (full) | PinguinoLite |
 |---|---|---|
@@ -27,9 +27,19 @@ Data\lite\                     THE CONTRACT FOLDER (written by 04, read by Lite)
 Docs\LITE_APP.md              this file
 ```
 
+## Link is bundled (decision by Ivan via 00, 2026-10-20)
+- Link is part of the Lite package, not a catalog item. It still updates itself through the same mechanism (below).
+- **Launcher (Rust, `main.rs`)**: at start Lite looks for Link's folder (env `PINGUINO_LITE_LINK_DIR`, else `<exe dir>\link`, else dev `<suite root>\Suite\modules\link`), reads `link.json` there and spawns it hidden; on quit it kills it. Missing = Lite still opens ("PinguinoLink not connected").
+  `link.json`: `{"cmd": ["node", "src/cli.mjs", "serve"], "cwd": "."}` (cwd relative to that folder). Env passed: `PINGUINO_LITE_DIR`, `PINGUINO_LITE_VERSION`. **04 must add `link.json`.** The shipped build must bring its own runtime (node >= 22 or a single exe); that is 04's packaging call.
+- Link runs `lite.mjs` inside it (1 s poll of `requests\`, `status.json` heartbeat every 15 s). Everything below is implemented by Link.
+- Start/stop/restart of an installed module: Lite sends `start|stop|restart` requests, Link does it. Lite never manages module processes.
+- **Link self-update**: Link cannot swap its own running files. It stages `modules\.staging\link-<ver>` and asks Lite (request `restart-link`, which Lite handles itself: kills Link, respawns it). The swap-before-launch hook is part of Link's own start command (put it in the `cmd` bootstrap; the old folder is kept for rollback). Lite itself never moves files.
+- Packages ship as **zip** (`packages\<id>-<ver>.zip`), sha256 verified, never run package scripts (04's rules, agreed).
+- Update source: LOCAL only until Ivan names a remote HTTPS source (open decision for Ivan).
+
 ## Where the contract folder is
 `<lite dir>` = env `PINGUINO_LITE_DIR`, else `<suite root>\Data\lite`, else `%APPDATA%\gg.pinguino.lite\lite`.
-Suite root = env `PINGUINO_SUITE_ROOT`, else `%APPDATA%\gg.pinguino.lite\suite_root.txt`, else walking up from the exe/source until `Suite\suite\suite.py` exists. 04 should use the same resolution (or just `D:\PinguinoSuite\Data\lite`).
+Suite root = env `PINGUINO_SUITE_ROOT`, else `%APPDATA%\gg.pinguino.lite\suite_root.txt`, else walking up from the exe/source until `Suite\suite\suite.py` exists. 04 should use the same resolution (or just `D:\PinguinoSuite\Data\lite`; env `PINGUINO_LITE_DIR` is set for Link by the launcher).
 All files: UTF-8 JSON (BOM tolerated), top-level `"schema": 1`, timestamps ISO-8601 UTC strings unless named `_ms`. **Write atomically** (write `x.json.tmp`, then rename). Lite ignores unknown fields, so 04 may add fields without a Lite rebuild.
 
 ## Files 04 writes (Lite only reads)
@@ -95,11 +105,12 @@ A module is "Installed" in the UI iff it has an entry here. "Update available" i
 
 ### `requests\<ms>-<action>[-<id>].json`
 ```json
-{ "schema": 1, "action": "install|update|uninstall|check|selfupdate-apply", "id": "spotify", "requested_at": 1792479000000, "from": "pinguino-lite" }
+{ "schema": 1, "action": "install|update|uninstall|start|stop|restart|check|selfupdate-apply", "id": "spotify", "requested_at": 1792479000000, "from": "pinguino-lite" }
 ```
 - Written atomically (`*.tmp` then rename): **04 must ignore `*.tmp`**.
 - 04 polls the folder (1 s, same file-drop idea as `Data\runtime\control\` in MODULE_CONTRACT.md), handles requests oldest-first, **deletes the file when taken**, sets `status.json.busy`, and updates `installed.json` / `update_status.json` when finished. Failures: set `installed.json.modules[id].error` (or `update_status.error`); Lite shows them on the next refresh (it re-reads every 5 s).
-- `id` is null for `check` and `selfupdate-apply`.
+- `id` is null for `check` and `selfupdate-apply`. `restart-link` is handled inside Lite (never written to disk).
+- Optional extras 04 may add: per-module `enabled` in installed.json, and `status.json.modules` = `{id:{state:"not-installed|stopped|running|degraded|error",detail,fix_hint}}` (Lite shows non-running states as a pill). Catalog also accepts 04's draft names `desc`/`version`/`sha256`/`package`/`platforms`/`requires`/`secrets`/`help_url` (Lite reads `desc||description`, `version||latest_version`).
 - Why files and not an endpoint: Lite has no core/token; the file drop needs no port, works when 04's server is down (request waits) and matches an existing pattern. If 04 prefers an HTTP endpoint (e.g. on the Link module, port 7777), Lite's `send_request` is the single place to change.
 
 ## What 04 must provide (the contract, concretely)
@@ -113,8 +124,7 @@ A module is "Installed" in the UI iff it has an entry here. "Update available" i
 Lite does not poll the internet. 04 owns the whole chain:
 1. 04 finds a newer Lite, downloads the NSIS installer to `<lite dir>\staging\`, verifies sha256, writes `update_manifest.json` with `staged_file`.
 2. Lite sees `latest_version` > its own version and shows a banner with **Restart & update** (stub until 04 implements step 3).
-3. Click writes `requests\...-selfupdate-apply.json`. 04 picks it up, and (a) waits for `PinguinoLite.exe` to exit, (b) runs the installer silently (`/S`), (c) relaunches Lite. Lite quitting is 04's job to request; Lite v0.1 does **not** exit by itself on this click (open question for 04: should Lite exit right after writing the request? Proposal: yes, 04 relaunches it). 
-Settle this with 04 before wiring the exit.
+3. Click writes `requests\...-selfupdate-apply.json`. 04 picks it up, and (a) waits for `PinguinoLite.exe` to exit, (b) runs the installer silently (`/S`), (c) relaunches Lite. **Agreed with 04**: Lite exits right after writing `selfupdate-apply` (the installer cannot replace a running exe); 04 sets `status.busy.lite="updating"`. The Lite-side exit is not wired yet (v0.1 only writes the request).
 
 ## What Lite shows
 - **Dashboard**: Host reachable? (`GET http://127.0.0.1:8770/api/live`, any HTTP answer = reachable; probed from Rust, no CORS/token issue), app version, modules installed (+ updates count), last update check, PinguinoLink state, buttons: Open Host dashboard, Open Lite data folder, Check for updates (request).
@@ -134,7 +144,7 @@ Refresh every 5 s (one loopback probe + five small local reads).
 - Lite never downloads or executes anything. 04 does, and must verify sha256 before staging.
 
 ## Not included (on purpose)
-No modules, no Python core, no module start/stop, no chat/bots/Spotify/voice/multi pages, no pop-out windows, no tray or autostart, no Console page, no personalisation/themes, no website pop-out, no direct internet access, no auto-launch of Host. Anything beyond the Dashboard and the Modules list is a new decision.
+No modules except bundled Link, no Python core, no module start/stop, no chat/bots/Spotify/voice/multi pages, no pop-out windows, no tray or autostart, no Console page, no personalisation/themes, no website pop-out, no direct internet access, no auto-launch of Host. Anything beyond the Dashboard and the Modules list is a new decision.
 
 ## Build / run (session 00 only launches)
 ```

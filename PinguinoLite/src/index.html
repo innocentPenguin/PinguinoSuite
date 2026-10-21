@@ -89,9 +89,10 @@ function rows() {
   const cat = state.catalog && state.catalog.data && Array.isArray(state.catalog.data.modules) ? state.catalog.data.modules : [];
   const inst = state.installed && state.installed.data && state.installed.data.modules || {};
   const busy = state.status && state.status.data && state.status.data.busy || {};
+  const cs = state.status && state.status.data && state.status.data.modules || {};
   return cat.map(m => {
-    const i = inst[m.id];
-    return { ...m, installed: !!i, installed_version: i && i.version, update: !!i && cmpVer(m.latest_version, i.version) > 0, busy: busy[m.id] || '' };
+    const i = inst[m.id], latest = m.version || m.latest_version;
+    return { ...m, description: m.desc || m.description, latest_version: latest, installed: !!i, installed_version: i && i.version, update: !!i && cmpVer(latest, i.version) > 0, busy: busy[m.id] || '', conn: cs[m.id] };
   });
 }
 
@@ -100,9 +101,10 @@ function dashboard() {
   const us = state.upd && state.upd.data || {};
   const writer = state.status && state.status.data && state.status.data.writer;
   const conn = state.status && state.status.data && state.status.data.connector;
-  const selfUpd = state.manifest && state.manifest.data && info && cmpVer(state.manifest.data.latest_version, info.version) > 0;
+  const lm = state.manifest && state.manifest.data && (state.manifest.data.lite || { latest: state.manifest.data.latest_version });
+  const selfUpd = lm && lm.latest && info && cmpVer(lm.latest, info.version) > 0;
   return `<h1>Dashboard</h1><p class="sub">PinguinoLite is a light shell: no modules are loaded by default.</p>
-  ${selfUpd ? `<div class="banner">PinguinoLite ${esc(state.manifest.data.latest_version)} is ready. <button class="btn pri" data-act="selfupdate-apply">Restart &amp; update</button> <span class="pill stub">STUB until PinguinoLink applies updates</span></div>` : ''}
+  ${selfUpd ? `<div class="banner">PinguinoLite ${esc(lm.latest)} is ready. <button class="btn pri" data-act="selfupdate-apply">Restart &amp; update</button> <span class="pill stub">STUB until PinguinoLink applies updates</span></div>` : ''}
   <div class="grid">
    <div class="card"><h3>Host (127.0.0.1:8770)</h3><div class="big">${h.reachable ? '<span style="color:var(--ok)">Reachable</span>' : '<span style="color:var(--bad)">Not reachable</span>'}</div>
      <div class="note">${h.reachable ? `/api/live answered HTTP ${esc(h.status)} in ${esc(h.ms)} ms` : 'Host is not running (or not on this PC). Lite works without it.'}</div></div>
@@ -127,9 +129,9 @@ function modules() {
   else body = `<table><thead><tr><th>Module</th><th>Version</th><th>Status</th><th></th></tr></thead><tbody>${r.map(m => `<tr>
     <td><b>${esc(m.name || m.id)}</b><div class="d">${esc(m.description)}</div></td>
     <td class="mono">${m.installed ? esc(m.installed_version) : '-'}${m.installed && m.update ? ` -> ${esc(m.latest_version)}` : m.installed ? '' : ` <span class="d">(${esc(m.latest_version)})</span>`}</td>
-    <td>${m.busy ? `<span class="pill warn">${esc(m.busy)}...</span>` : m.update ? '<span class="pill warn">Update available</span>' : m.installed ? '<span class="pill ok">Installed</span>' : '<span class="pill">Not installed</span>'}</td>
+    <td>${m.installed && m.conn && m.conn.state && m.conn.state !== 'running' && !m.busy ? `<span class="pill ${m.conn.state === 'error' || m.conn.state === 'degraded' ? 'bad' : ''}" title="${esc(m.conn.detail)} ${esc(m.conn.fix_hint)}">${esc(m.conn.state)}</span> ` : ''}${m.busy ? `<span class="pill warn">${esc(m.busy)}...</span>` : m.update ? '<span class="pill warn">Update available</span>' : m.installed ? '<span class="pill ok">Installed</span>' : '<span class="pill">Not installed</span>'}</td>
     <td style="text-align:right">${m.busy ? '' : m.update ? `<button class="btn pri" data-act="update" data-id="${esc(m.id)}">Update</button>` : m.installed ? '' : `<button class="btn pri" data-act="install" data-id="${esc(m.id)}">Install</button>`}</td></tr>`).join('')}</tbody></table>`;
-  const gen = c && c.data && c.data.generated_at;
+  const gen = c && c.data && (c.data.generated || c.data.generated_at);
   return `<h1>Modules</h1><p class="sub">Modules available from PinguinoLink${gen ? ` - catalog from ${esc(ago(iso(gen)))}` : ''}.
    <span class="pill stub">Install/Update are STUBS: they only drop a request file for PinguinoLink</span></p>
    <div class="card" style="padding:4px 8px">${body}</div>

@@ -12,14 +12,61 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
+
 use tauri::{AppHandle, Manager};
+
+/// PinguinoLink (session 04) is the one bundled component: Lite starts it at launch and stops it on exit.
+struct Link(Mutex<Option<Child>>);
+
+/// Folder holding Link's code + link.json ({"cmd": ["node","src/cli.mjs","lite"], "cwd": "."} relative to that folder).
+/// env PINGUINO_LITE_LINK_DIR, else <exe dir>\link (installed), else <suite root>\Suite\modules\link (dev).
+fn link_dir() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("PINGUINO_LITE_LINK_DIR") {
+        return Some(PathBuf::from(p));
+    }
+    let mut c: Vec<PathBuf> = Vec::new();
+    if let Some(d) = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("link"))) {
+        c.push(d);
+    }
+    if let Some(r) = suite_root() {
+        c.push(r.join("Suite").join("modules").join("link"));
+    }
+    c.into_iter().find(|d| d.join("link.json").exists())
+}
+
+fn spawn_link(version: &str) -> Option<Child> {
+    let dir = link_dir()?;
+    let cfg: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("link.json")).ok()?).ok()?;
+    let argv: Vec<String> = cfg.get("cmd")?.as_array()?.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+    let (exe, args) = argv.split_first()?;
+    let cwd = dir.join(cfg.get("cwd").and_then(|v| v.as_str()).unwrap_or("."));
+    let ld = lite_dir();
+    let _ = std::fs::create_dir_all(&ld);
+    let mut cmd = Command::new(exe);
+    cmd.args(args).current_dir(cwd).env("PINGUINO_LITE_DIR", &ld).env("PINGUINO_LITE_VERSION", version).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd.spawn().ok()
+}
+
+fn stop_link(app: &AppHandle) {
+    if let Some(mut c) = app.state::<Link>().0.lock().unwrap().take() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+}
 
 const HOST: &str = "127.0.0.1:8770";
 
 /// Contract files 04 writes into <lite dir>. Only these names can be read by the UI.
 const CONTRACT_FILES: &[&str] = &["modules_catalog", "installed", "update_manifest", "update_status", "status"];
 /// Actions the UI may ask 04 for (request files, see send_request).
-const ACTIONS: &[&str] = &["install", "update", "uninstall", "check", "selfupdate-apply"];
+const ACTIONS: &[&str] = &["install", "update", "uninstall", "start", "stop", "restart", "check", "selfupdate-apply", "restart-link"];
 
 /// Per-device UI state (window placement). Own folder, never shared with the full app.
 pub fn state_dir() -> PathBuf {
@@ -70,6 +117,7 @@ fn now_ms() -> u128 {
 
 #[derive(Serialize)]
 struct Info {
+    link_dir: Option<String>,
     version: String,
     lite_dir: String,
     state_dir: String,
@@ -85,6 +133,7 @@ fn lite_info(app: AppHandle) -> Info {
         state_dir: state_dir().display().to_string(),
         suite_root: suite_root().map(|p| p.display().to_string()),
         host: HOST.to_string(),
+        link_dir: link_dir().map(|p| p.display().to_string()),
     }
 }
 
@@ -128,7 +177,15 @@ fn read_contract(name: String) -> Value {
 /// Ask PinguinoLink to do something: writes <lite dir>\requests\<ms>-<action>[-<id>].json ({schema, action, id?, requested_at, from}).
 /// 04 consumes (deletes) the file and reports progress in status.json / installed.json. No endpoint call, so nothing here needs a token.
 #[tauri::command]
-fn send_request(action: String, id: Option<String>) -> Result<Value, String> {
+fn send_request(app: AppHandle, action: String, id: Option<String>) -> Result<Value, String> {
+    if action == "restart-link" {
+        // handled here, not by Link (it cannot restart itself while swapping its own files)
+        stop_link(&app);
+        let child = spawn_link(&app.package_info().version.to_string());
+        let started = child.is_some();
+        *app.state::<Link>().0.lock().unwrap() = child;
+        return Ok(json!({"restarted": started}));
+    }
     if !ACTIONS.contains(&action.as_str()) {
         return Err("unknown action".into());
     }
@@ -192,12 +249,15 @@ fn show_main(app: &AppHandle) {
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        .manage(Link(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![lite_info, host_live, read_contract, send_request, open_target])
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {
                 mainwin::place(&w); // saved size/position/maximized, or ~62% of the monitor, centred
                 let _ = w.show();
             }
+            let child = spawn_link(&app.package_info().version.to_string()); // None = no Link bundled here (dev without Link): Lite still opens
+            *app.state::<Link>().0.lock().unwrap() = child;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -220,5 +280,9 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while building PinguinoLite");
-    app.run(|_, _| {});
+    app.run(|handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            stop_link(handle);
+        }
+    });
 }
