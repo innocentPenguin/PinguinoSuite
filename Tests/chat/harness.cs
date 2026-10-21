@@ -786,6 +786,16 @@ public static class Harness
           int cb = CPHProxy.Sent.Count; Msg("Shouty", "ASK @CHATTYPINGUINO!", null, false);
           Check("the same bare call again stays quiet", CPHProxy.Sent.Count == cb); }
 
+        // ── 19b4. Helper intents: Chatty stays out so nobody double-replies ──
+        { string[] helperAsks = { "@ChattyPinguino take me out of the queue", "@ChattyPinguino how many points do i have", "@ChattyPinguino how does the recycler work", "@ChattyPinguino what is the 15 minute custom timeout", "@ChattyPinguino my game was incomplete did it count", "@ChattyPinguino how do i join", "@ChattyPinguino who is on the wheel" };
+          int hi = 0; foreach (string ask in helperAsks)
+          { hi++; int cl1 = llmCalls; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("Intent" + hi, ask, null, false);
+            Check("Helper intent stays with the Helper, Chatty silent: " + ask.Substring(17), CPHProxy.Sent.Count == 0 && llmCalls == cl1, Last()); }
+          int cl2 = llmCalls; nextReply = "{\"reply\":\"pineapple belongs on pizza, fight me\",\"remember\":[]}";
+          CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Intent9", "@ChattyPinguino pineapple on pizza, yes or no?", null, false);
+          Check("control: an ordinary mention is still answered", Last() != null && llmCalls == cl2 + 1, Last()); }
+
         // ── 19c. !8ball ──
         SetCfg("EightBallUserSec", 0); SetCfg("EightBallGlobalSec", 0);
         Directory.CreateDirectory(Path.Combine(dir, "profiles"));
