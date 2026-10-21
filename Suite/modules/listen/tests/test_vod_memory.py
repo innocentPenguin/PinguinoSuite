@@ -57,7 +57,8 @@ class JobsRecovery(unittest.TestCase):
         c.executescript(
             "CREATE TABLE sessions(id TEXT PRIMARY KEY, kind TEXT, title TEXT, source_id TEXT UNIQUE, url TEXT, audio TEXT,"
             " duration REAL DEFAULT 0, status TEXT, progress REAL DEFAULT 0, error TEXT, created REAL);"
-            "CREATE TABLE segments(id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT);")
+            "CREATE TABLE segments(id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT);"
+            "CREATE TABLE attempts(source_id TEXT PRIMARY KEY, n INTEGER DEFAULT 0, last REAL, err TEXT);")
         db._c = c
         self.j = ingest.Jobs.__new__(ingest.Jobs)  # no worker thread
         self.j.asr, self.j.emit, self.j.q, self.j.jobs = None, lambda *_: None, queue.Queue(), {}

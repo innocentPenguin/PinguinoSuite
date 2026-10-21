@@ -431,7 +431,7 @@ class Queue(BaseModel):
 
 @app.post("/api/queue")
 def queue_item(b: Queue):
-    return {"session": jobs.submit(b.kind, b.title, b.source_id, url=b.url)}
+    return {"session": jobs.submit(b.kind, b.title, b.source_id, url=b.url, force=True)}
 
 
 class UrlIn(BaseModel):
@@ -440,7 +440,7 @@ class UrlIn(BaseModel):
 
 @app.post("/api/ingest-url")
 def ingest_url(b: UrlIn):
-    return {"session": jobs.submit("url", b.url, "url:" + b.url, url=b.url)}
+    return {"session": jobs.submit("url", b.url, "url:" + b.url, url=b.url, force=True)}
 
 
 @app.post("/api/upload")

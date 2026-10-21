@@ -1,4 +1,5 @@
 """VOD / clip / file ingestion: download audio -> compact 16k opus -> transcribe in chunks -> segments. One job at a time."""
+import hashlib
 import queue
 import re
 import threading
@@ -13,6 +14,25 @@ import twitch
 from audioio import iter16k
 
 CHUNK_S = 900  # transcribe long audio in 15-minute slices (bounded memory, steady progress)
+MAX_ATTEMPTS = 3                    # automatic tries per VOD/clip before it is left alone (Learn again by hand resets it)
+MAX_SOURCES_BYTES = 6 * 1024 ** 3   # downloaded originals waiting in data\sources; no new download above this
+
+
+def src_stem(source_id: str) -> str:
+    """Stable file stem per source, so a retry finds the copy already downloaded instead of fetching it again."""
+    return "src-" + hashlib.sha1(source_id.encode()).hexdigest()[:12]
+
+
+def sources_bytes() -> int:
+    return sum(f.stat().st_size for f in cfg.SOURCES.iterdir() if f.is_file())
+
+
+def finished_source(stem: str) -> Path | None:
+    """A completed download (yt-dlp only renames to the final name when it is whole; .part files are unfinished)."""
+    for f in sorted(cfg.SOURCES.glob(stem + ".*")):
+        if ".part" not in f.name and f.suffix != ".ytdl":
+            return f
+    return None
 
 
 def to_ogg(src: Path, dst: Path) -> float:
@@ -73,10 +93,15 @@ class Jobs:
                      f"WHERE {live}")
         return cur.rowcount
 
-    def submit(self, kind, title, source_id, url=None, path=None) -> str | None:
+    def submit(self, kind, title, source_id, url=None, path=None, force=False) -> str | None:
+        """force=True is a person pressing Learn again: it forgets earlier failed attempts. The automatic sync never forces."""
         old = db.one("SELECT id,status FROM sessions WHERE source_id=?", (source_id,))
         if old and old["status"] not in ("interrupted", "error"):
             return None  # already ingested / queued
+        if force:
+            db.run("DELETE FROM attempts WHERE source_id=?", (source_id,))
+        elif not path and self.attempts(source_id) >= MAX_ATTEMPTS:
+            return None  # tried enough times automatically: leave the failed row as it is, do not download it again
         if old:  # failed or interrupted earlier: drop the empty shell and queue it again
             if db.one("SELECT 1 x FROM segments WHERE session_id=?", (old["id"],)):
                 return None  # has lines already: never throw learned/corrected text away
@@ -88,6 +113,11 @@ class Jobs:
         self.q.put((sid, url, path))
         self._push(sid)
         return sid
+
+    @staticmethod
+    def attempts(source_id) -> int:
+        r = db.one("SELECT n FROM attempts WHERE source_id=?", (source_id,))
+        return r["n"] if r else 0
 
     def sync_twitch(self) -> int:
         st = cfg.settings()
@@ -109,9 +139,14 @@ class Jobs:
             except Exception as e:  # noqa: BLE001
                 self._push(sid, status="error", error=str(e)[:300])
 
-    def _download(self, sid, url) -> Path:
+    def _download(self, sid, url, stem) -> Path:
+        have = finished_source(stem)
+        if have:
+            return have  # a retry reuses the copy already on disk
+        if sources_bytes() > MAX_SOURCES_BYTES:
+            raise RuntimeError(f"data\sources holds more than {MAX_SOURCES_BYTES >> 30} GB of downloads; free space there, then press Learn again")
         import yt_dlp
-        out = cfg.SOURCES / sid
+        out = cfg.SOURCES / stem
 
         def hook(d):
             if d.get("status") == "downloading":
@@ -123,11 +158,32 @@ class Jobs:
                 "no_warnings": True, "progress_hooks": [hook], "concurrent_fragment_downloads": 4}
         with yt_dlp.YoutubeDL(opts) as y:
             y.download([url])
-        return next(cfg.SOURCES.glob(sid + ".*"))
+        got = finished_source(stem)
+        if not got:
+            raise RuntimeError("download finished but no file was produced")
+        return got
 
     def _run(self, sid, url, path):
+        row = db.one("SELECT source_id FROM sessions WHERE id=?", (sid,)) or {}
+        source_id = row.get("source_id") or sid
+        stem = src_stem(source_id)
+        if not path:
+            db.run("INSERT INTO attempts(source_id,n,last) VALUES(?,1,?) ON CONFLICT(source_id) DO UPDATE SET n=n+1,last=excluded.last",
+                   (source_id, time.time()))
+        try:
+            self._ingest(sid, url, path, stem)
+        except Exception as e:
+            if not path:
+                db.run("UPDATE attempts SET err=? WHERE source_id=?", (str(e)[:200], source_id))
+                if self.attempts(source_id) >= MAX_ATTEMPTS:  # giving up: do not leave the big original behind
+                    for f in cfg.SOURCES.glob(stem + ".*"):
+                        f.unlink(missing_ok=True)
+            raise
+        db.run("DELETE FROM attempts WHERE source_id=?", (source_id,))
+
+    def _ingest(self, sid, url, path, stem):
         self._push(sid, status="downloading", progress=0.0)
-        src = Path(path) if path else self._download(sid, url)
+        src = Path(path) if path else self._download(sid, url, stem)
         self._push(sid, status="converting", progress=0.0)
         rel = f"audio/{sid}.ogg"
         dur = to_ogg(src, cfg.DATA / rel)
