@@ -258,6 +258,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 <div class="col">
   <div class="top"><button class="sm" id="nav-toggle" title="Show / hide the sidebar (Ctrl+B)">☰</button><h2 id="title">Dashboard</h2><div class="livepill" id="pill"><i></i><span id="pill-t">Offline</span></div><span class="dim sm" id="pill-sub"></span><button class="hq" id="hq-page" title="How this page works">?</button><button class="sm" id="popout-btn" title="Open this page in its own window">⤢ Pop out</button>
     <div class="row sp"><button id="simon" class="sm" title="Pretend we went live to test auto-start">▶ Test go-live</button><button id="simoff" class="sm">■ End test</button></div></div>
+  <div id="simglobal" class="simban" role="alert" style="display:none;margin:8px 16px 0;cursor:pointer" title="Open the simulator"></div>
   <div id="page"></div>
 </div>
 <div id="pal"><div class="pbox"><input type="text" id="pal-in" placeholder="Type a page, action or command…  (Esc closes)" autocomplete="off"><div class="plist" id="pal-list"></div></div></div>
@@ -917,7 +918,7 @@ const CMD_MOCK=(()=>{const n=Math.floor(Date.now()/1000);
     ['song','Fun','everyone',330,'What is playing now.','Chatty'],['hug','Fun','everyone',521,'Hug a viewer.','Chatty'],['joke','Fun','sub',77,'Tell a joke.','Chatty']];
   const mr=p=>p==='everyone'?['everyone']:p==='broadcaster'?['broadcaster']:[p,'broadcaster'];
   return L.map((x,i)=>({id:'mock-'+x[0],name:x[0],aliases:x[0]==='shoutout'?['so']:[],description:x[4],category:x[1],permission:x[2],cooldownGlobal:x[3]>400?10:5,cooldownUser:30,enabled:true,uses:x[3],lastUsed:n-i*5400,ownerBot:x[5],editedBy:'',editedAt:0,archived:false,roles:mr(x[2]),defaultRoles:mr(x[2])}))})();
-const CMD={menu:null,roleOpts:null,d:undefined,arch:null,tab:'cmds',sort:'uses',q:'',sel:new Set(),open:null,mock:false,collapsed:(()=>{try{return JSON.parse(localStorage.getItem('cmdCollapsed')||'{}')}catch{return {}}})()};
+const CMD={ask:null,menu:null,roleOpts:null,d:undefined,arch:null,tab:'cmds',sort:'uses',q:'',sel:new Set(),open:null,mock:false,collapsed:(()=>{try{return JSON.parse(localStorage.getItem('cmdCollapsed')||'{}')}catch{return {}}})()};
 const CMD_WHO='Ivan';
 const cmdN=n=>String(n||'').startsWith('!')?n:'!'+n;
 const cmdAgo=ts=>ts?aprAgo(ts):'never';
@@ -977,7 +978,7 @@ pages.commands=()=>{
   const row=c=>`<div class="cm-row" data-id="${esc(c.id)}"><input type="checkbox" class="cm-sel"${CMD.sel.has(c.id)?' checked':''}><span class="cm-name"><b class="cm-open" title="Open the profile">${esc(cmdN(c.name))}</b>${(c.aliases||[]).length?` <span class="sm faint">${c.aliases.map(a=>esc(cmdN(a))).join(' ')}</span>`:''}</span><span class="cm-roles">${cmdChips(c,'row')}</span><label class="sm faint"><input type="checkbox" class="cm-en"${c.enabled!==false?' checked':''}> on</label><span class="sm faint cm-uses">${(c.uses||0).toLocaleString()} uses</span></div>`;
   const grp=Object.keys(groups).sort((a,b)=>a.localeCompare(b)).map(k=>{const L=groups[k].sort(cmdSorter),col=CMD.collapsed[k]&&!CMD.q.trim();
     return `<div class="card cm-grp"><div class="row cm-gh" data-g="${esc(k)}"><span>${col?'▸':'▾'}</span><b>${esc(k)}</b><span class="pill">${L.length}</span></div>${col?'':L.map(row).join('')}</div>`}).join('');
-  const bulk=CMD.sel.size?`<div class="card row wrap"><b>${CMD.sel.size} selected</b>${cmdBulkMenu('badd')}${cmdBulkMenu('brm')}<button class="sm" id="cm-bulkarch">Archive</button><button class="sm" id="cm-bulkclear">Clear</button></div>`:'';
+  const bulk=CMD.sel.size?`<div class="card row wrap"><b>${CMD.sel.size} selected</b>${cmdBulkMenu('badd')}${cmdBulkMenu('brm')}${CMD.ask&&CMD.ask.k==='bulk'?`<span class="sm">Archive ${CMD.sel.size} command(s)? They stop answering in chat; you can restore them from the Archive tab.</span><button class="danger sm" id="cm-bulkarch-yes">Yes, archive</button><button class="sm" id="cm-bulkarch-no">No</button>`:'<button class="sm" id="cm-bulkarch">Archive</button>'}<button class="sm" id="cm-bulkclear">Clear</button></div>`:'';
   const o=CMD.open&&CMD.d.find(x=>x.id===CMD.open);
   const panel=o?`<div class="card cm-panel" data-id="${esc(o.id)}"><div class="row"><h3 style="margin:0">${esc(cmdN(o.name))}</h3><span class="sp"></span><button class="sm" id="pf-close">Close</button></div>
     <div class="cm-f"><label>Aliases (comma separated)</label><input type="text" id="pf-aliases" value="${esc((o.aliases||[]).join(', '))}"${o.source==='builtin'?' disabled title="Built-in commands keep their names"':''}></div>
@@ -988,7 +989,7 @@ pages.commands=()=>{
     <div class="cm-f"><label>Cooldown, per viewer (s)</label><input type="number" min="0" id="pf-cdu" value="${esc(o.cooldownUser??0)}" style="width:90px"></div>
     <div class="cm-f"><label><input type="checkbox" id="pf-en"${o.enabled!==false?' checked':''}> Enabled</label></div>
     <div class="sm faint">${o.source?`Source: ${esc(o.source)}${o.createdBy?' (by '+esc(o.createdBy)+')':''}<br>`:''}Used ${(o.uses||0).toLocaleString()} times, last ${cmdAgo(o.lastUsed)}<br>Owner bot: ${esc(o.ownerBot||'?')}<br>${o.editedAt?`Edited by ${esc(o.editedBy||'?')} ${cmdAgo(o.editedAt)}`:'Not edited yet'}</div>
-    <div class="row wrap" style="margin-top:10px"><button id="pf-save">Save</button><span class="sp"></span><button class="sm" id="pf-arch">Archive…</button></div></div>`:'';
+    <div class="row wrap" style="margin-top:10px"><button id="pf-save">Save</button><span class="sp"></span>${CMD.ask&&CMD.ask.k==='one'&&CMD.ask.id===o.id?`<span class="sm">Archive this command?</span><button class="danger sm" id="pf-arch-yes">Yes</button><button class="sm" id="pf-arch-no">No</button>`:'<button class="sm" id="pf-arch">Archive…</button>'}</div></div>`:'';
   return `<div style="max-width:1240px">${head}${note}
     <div class="row wrap" style="margin-bottom:8px"><input type="text" id="cm-q" placeholder="Search commands, aliases, categories" value="${esc(CMD.q)}" style="min-width:260px"><span class="sp"></span><span class="sm faint">Sort</span>${chip('uses','Most used',CMD.sort==='uses','data-cs')}${chip('az','A-Z',CMD.sort==='az','data-cs')}</div>
     <div class="pnote">Pick who may use each command. Click a command name to open its profile. Archiving keeps the command and lets you restore it.</div>${bulk}
@@ -1023,8 +1024,9 @@ function bindCommands(){
     if(e.key==='ArrowDown'){e.preventDefault();(it[i+1]||it[0]).focus()}else if(e.key==='ArrowUp'){e.preventDefault();(it[i-1]||it[it.length-1]).focus()}});
   $$('.cm-en').forEach(b=>b.onchange=async()=>{await cmdSave(idOf(b),{enabled:b.checked});draw(true)});
   $('#cm-bulkclear')&&($('#cm-bulkclear').onclick=()=>{CMD.sel.clear();draw(true)});
-  $('#cm-bulkarch')&&($('#cm-bulkarch').onclick=async()=>{const ids=[...CMD.sel];if(!confirm(`Archive ${ids.length} command(s)? They stop answering in chat, and you can restore them from the Archive tab.`))return;
-    let ok=0;for(const id of ids)if(await cmdArchive(id))ok++;toast(`${ok} archived`);CMD.sel.clear();CMD.open=null;draw(true)});
+  $('#cm-bulkarch')&&($('#cm-bulkarch').onclick=()=>{CMD.ask={k:'bulk'};draw(true)});
+  $('#cm-bulkarch-no')&&($('#cm-bulkarch-no').onclick=()=>{CMD.ask=null;draw(true)});
+  $('#cm-bulkarch-yes')&&($('#cm-bulkarch-yes').onclick=async()=>{const ids=[...CMD.sel];CMD.ask=null;let ok=0;for(const id of ids)if(await cmdArchive(id))ok++;toast(`${ok} archived`);CMD.sel.clear();CMD.open=null;draw(true)});
   $('#pf-close')&&($('#pf-close').onclick=()=>{CMD.open=null;draw(true)});
   $('#pf-save')&&($('#pf-save').onclick=async()=>{const id=idOf($('#pf-save'));
     const o=CMD.d.find(x=>x.id===id)||{},cur={aliases:$('#pf-aliases').value.split(',').map(x=>x.trim().replace(/^!/,'')).filter(Boolean),description:$('#pf-desc').value.trim(),category:$('#pf-cat').value.trim()||'other',
@@ -1033,8 +1035,9 @@ function bindCommands(){
     if(o.source==='builtin')delete patch.aliases;
     if(!Object.keys(patch).length){toast('Nothing changed');return}
     if(await cmdSave(id,patch))toast('Saved');draw(true)});
-  $('#pf-arch')&&($('#pf-arch').onclick=async()=>{const id=idOf($('#pf-arch'));if(!confirm('Archive this command? It stops answering in chat. Nothing is deleted: you can restore it from the Archive tab.'))return;
-    if(await cmdArchive(id)){toast('Archived');CMD.open=null}draw(true)});
+  $('#pf-arch')&&($('#pf-arch').onclick=()=>{CMD.ask={k:'one',id:idOf($('#pf-arch'))};draw(true)});
+  $('#pf-arch-no')&&($('#pf-arch-no').onclick=()=>{CMD.ask=null;draw(true)});
+  $('#pf-arch-yes')&&($('#pf-arch-yes').onclick=async()=>{const id=idOf($('#pf-arch-yes'));CMD.ask=null;if(await cmdArchive(id)){toast('Archived');CMD.open=null}draw(true)});
   $$('[data-restore]').forEach(b=>b.onclick=async()=>{if(await cmdRestore(idOf(b)))toast('Restored');draw(true)})}
 /* ============ Approvals: the Teach inbox (Host: GET /api/teach?status=, POST /api/teach/decide {id, action approve|reject|edit|undo, text, note, target}) ============ */
 const APR={d:undefined,filter:'pending',edit:null};
@@ -1143,7 +1146,7 @@ pages.wheel=()=>{
   const a=areas.find(x=>x.id===WG.tab);if(!a)return '<div class="card dim">No settings available.</div>';
   const nChanged=Object.keys(WG.edit[a.id]||{}).length;
   const sims=(areas.find(x=>x.id==='gambling')?.fields||[]).filter(f=>/On$|Enabled$/.test(f.key)).map(f=>f.key.replace(/On$|Enabled$/,''));
-  return `${simBanner()}<div class="grid g2" style="align-items:start;max-width:1200px">
+  return `<div class="grid g2" style="align-items:start;max-width:1200px">
    <div><div class="row wrap" style="margin-bottom:8px">${areas.map(x=>`<span class="chip${x.id===WG.tab?' on':''}" data-wgt="${x.id}">${esc(x.title)}</span>`).join('')}</div>
     ${WG.mock&&a.id!=='economy'?'<div class="pnote" style="color:var(--warn)">Preview data: the Host has no /api/tune yet, so these values are examples and are not saved.</div>':''}
     <div class="card"><div class="row"><h3 style="margin:0">${esc(a.title)}</h3><span class="sp"></span>${splitBtn('wg-save','Save'+(nChanged?' ('+nChanged+')':''),!nChanged,TPLM.menu&&TPLM.menu.kind==='save',TPLM.menu&&TPLM.menu.kind==='save'?tplMenu(a,'save'):'')}<span style="width:8px"></span>${splitBtn('wg-def','Defaults',false,TPLM.menu&&TPLM.menu.kind==='def',TPLM.menu&&TPLM.menu.kind==='def'?tplMenu(a,'def'):'')}</div>
@@ -1159,11 +1162,16 @@ pages.wheel=()=>{
 /* ---- Player simulator (Host: GET /api/sim/status, POST /api/sim/start|add|remove|join|leave|tick|clear|config). Sim points never touch real ones. ---- */
 const SIMP={st:undefined,msg:'',count:20,n:5};
 async function simLoad(){try{const j=await hostGet('/api/sim/status');SIMP.st=j&&j.ok?j:null}catch{SIMP.st=null}
+  simGlobal();
   if(route==='wheel'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
 async function simCall(path,body){let r;try{r=await hostJ('/api/sim/'+path,body||{})}catch{r=null}
   if(r&&r.ok!==false&&r._ok!==false&&r.on!==undefined){SIMP.st=r;SIMP.msg=''}else SIMP.msg=(r&&(r.error||r._detail))||'The Host did not answer. Is it running with the simulator update?';
-  draw(true)}
-setInterval(()=>{if(route==='wheel'&&!document.hidden&&SIMP.st&&SIMP.st.on)simLoad()},3000);
+  simGlobal();draw(true)}
+setInterval(()=>{if(!document.hidden&&route==='wheel'&&SIMP.st&&SIMP.st.on)simLoad()},3000);
+setInterval(()=>{if(!document.hidden&&route!=='wheel')hostGet('/api/sim/status').then(j=>{SIMP.st=j&&j.ok?j:null;simGlobal()}).catch(()=>{SIMP.st=null;simGlobal()})},8000);setTimeout(()=>{hostGet('/api/sim/status').then(j=>{SIMP.st=j&&j.ok?j:null;simGlobal()}).catch(()=>{})},5000);
+document.addEventListener('click',e=>{if(e.target.closest('#simglobal'))go('wheel')});
+function simGlobal(){const e=$('#simglobal');if(!e)return;const s=SIMP.st;const on=!!(s&&s.simulation);e.style.display=on?'':'none';
+  if(on)e.innerHTML=`SIMULATION ON<small>${s.count} fake player(s)${s.sendSimToSite?' · results are sent to the site':' · not sent to the site'} · click to open the simulator</small>`}
 function simBanner(){const s=SIMP.st;return s&&s.simulation?`<div class="simban" role="alert">SIMULATION ON<small>${s.count} fake player(s)${s.sendSimToSite?' · results are sent to the site':' · not sent to the site'}</small></div>`:''}
 function simPanel(){const s=SIMP.st;
   if(s===undefined)return '';
@@ -1550,7 +1558,7 @@ function renderNav(){if(!S)return;
   $('#modnav').innerHTML=h;$$('#modnav .item').forEach(i=>i.onclick=()=>go(i.dataset.r));navStatic()}
 const isMod=r=>r.startsWith('m:');
 const flushed=()=>route==='master'||(isMod(route)&&modOf(route)?.state==='running');
-function go(r){TPLM.menu=null;if(r==='voice'){V.style=null;V.err=null}if(r==='integrations'){I.items=null;VT.keys=null;VT.edit=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));{const a=$('nav .item.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest'})}
+function go(r){TPLM.menu=null;CMD.ask=null;CMD.menu=null;if(r==='voice'){V.style=null;V.err=null}if(r==='integrations'){I.items=null;VT.keys=null;VT.edit=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));{const a=$('nav .item.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest'})}
   const m=isMod(r)?modOf(r):null;$('#title').textContent=m?(m.ui?.nav||m.name):(titles[r]||r);
   $('#page').classList.toggle('flush',flushed());draw(true)}
 let lastHtml='';
