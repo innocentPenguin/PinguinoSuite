@@ -19,6 +19,7 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path); q = urllib.parse.parse_qs(u.query)
         if u.path.endswith('/subscriptions'):
+            if state['subs'] is None: return self._send({'message': 'boom'}, 500)   # the 'failing sub list' scenario: answer an error instead of crashing the handler
             subs = state['subs']; off = int(q.get('after', ['0'])[0]); page = subs[off:off + 2]
             return self._send({'data': page, 'pagination': {'cursor': str(off + 2)} if off + 2 < len(subs) else {}})
         if u.path.endswith('/users'):

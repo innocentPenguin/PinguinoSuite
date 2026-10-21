@@ -23,7 +23,10 @@ def until(fn, secs, what):
         except Exception: pass
         time.sleep(0.4)
     fails.append('timeout: ' + what); return False
-def run(aid): return ' | '.join(api('/api/automations/test', {'id': aid, 'dry': False})['run']['output'])
+def run(aid):
+    r = api('/api/automations/test', {'id': aid, 'dry': False})
+    if 'run' not in r: return 'NO RUN: ' + json.dumps(r)[:200]   # an error answer must fail the check with its text, not a KeyError
+    return ' | '.join(r['run']['output'])
 o = Obs()
 def enabled(scene, src):
     i = o.call('GetSceneItemId', {'sceneName': scene, 'sourceName': src})['responseData']['sceneItemId']
