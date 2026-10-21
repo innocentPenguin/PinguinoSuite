@@ -98,6 +98,62 @@ namespace PinguinoHost
             return res;
         }
 
+        // ---- automatic winners: a replay that matches a finished, winner-less queue match exactly settles it (same strict rules as the proposals), once per replay id
+        static readonly object _lk = new object(); static HashSet<string> _applied; static System.Threading.Timer _timer;
+        static string SettingsFile() { return Path.Combine(HostApi.DataDir, "replays_settings.json"); }
+        static string AppliedFile() { return Path.Combine(HostApi.DataDir, "replays_applied.json"); }
+        public static bool AutoWinner() { try { var j = Read(SettingsFile()); return (bool?)j?["ReplayAutoWinner"] != false; } catch (Exception) { return true; } }
+        public static JObject Settings(string method, JObject body)
+        {
+            if (method == "POST")
+            {
+                if (body == null || body["ReplayAutoWinner"] == null || body["ReplayAutoWinner"].Type != JTokenType.Boolean) return new JObject { { "ok", false }, { "error", "ReplayAutoWinner must be true or false" } };
+                File.WriteAllText(SettingsFile(), new JObject { { "ReplayAutoWinner", (bool)body["ReplayAutoWinner"] } }.ToString());
+            }
+            return new JObject { { "ok", true }, { "ReplayAutoWinner", AutoWinner() }, { "autoApplied", new JArray(Applied().OrderBy(x => x)) }, { "pending", Proposals().Count } };
+        }
+        static HashSet<string> Applied()
+        {
+            lock (_lk)
+            {
+                if (_applied == null) { _applied = new HashSet<string>(); try { foreach (var s in (JArray.Parse(File.ReadAllText(AppliedFile())) as JArray) ?? new JArray()) _applied.Add((string)s); } catch (Exception) { } }
+                return new HashSet<string>(_applied);
+            }
+        }
+        static void MarkApplied(string id)
+        {
+            lock (_lk) { Applied(); _applied.Add(id); try { File.WriteAllText(AppliedFile(), new JArray(_applied).ToString()); } catch (Exception) { } }
+        }
+        static bool ActivityActive()
+        {
+            try
+            {
+                var s = CustomsView.State(); if ((bool?)s["sim"] == true && Environment.GetEnvironmentVariable("PINGUINO_REPLAY_ALLOW_SIM") != "1") return false;
+                string a = ((string)s["activity"] ?? "competitive").ToLowerInvariant(); return a == "competitive" || a == "casual" || a == "koth";
+            }
+            catch (Exception) { return false; }
+        }
+        public static void Start()
+        {
+            int sec; if (!int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_REPLAY_TICK_SEC"), out sec) || sec < 1) sec = 20;
+            _timer = new System.Threading.Timer(_ => { try { Tick(); } catch (Exception ex) { Clog.Warn("replays", "auto winner tick failed: " + ex.Message); } }, null, sec * 1000, sec * 1000);
+        }
+        public static int Tick()
+        {
+            if (!AutoWinner() || !ActivityActive()) return 0;
+            int n = 0; var done = Applied();
+            foreach (var p in Proposals().OfType<JObject>())
+            {
+                string rid = (string)p["replayId"]; if (done.Contains(rid)) continue;
+                var r = Apply(new JObject { { "matchId", (string)p["matchId"] }, { "replayId", rid }, { "by", "auto" } });
+                MarkApplied(rid); done.Add(rid);   // once per replay id, whatever the outcome (a wrong auto result is corrected with !matchwin)
+                bool ok = (bool?)r["ok"] == true; if (ok) n++;
+                EventLog.Backend("replays", ok ? "replay " + rid + " set match #" + p["matchId"] + " winner " + p["winner"] : "replay " + rid + " could not be applied: " + (string)r["error"], new JObject { { "replayId", rid }, { "matchId", p["matchId"] }, { "winner", p["winner"] }, { "auto", true } }, ok ? "info" : "warn");
+                done.Add(rid);
+            }
+            return n;
+        }
+
         public static JObject Apply(JObject body)
         {
             string rid = Str(body["replayId"]); long mid; if (!long.TryParse((string)body["matchId"], out mid) || SafeId(rid) == null) return new JObject { { "ok", false }, { "error", "matchId and replayId are required" } };

@@ -1,4 +1,4 @@
-"""Replays: GET /api/replays, /api/replays/{id} (public-safe), /api/replays/proposals (roster-matched winner for a match with no winner) and POST /api/replays/apply (runs !matchwin).
+﻿"""Replays: GET /api/replays, /api/replays/{id} (public-safe), /api/replays/proposals (roster-matched winner for a match with no winner) and POST /api/replays/apply (runs !matchwin).
 Usage: python Tools/test-host-replays.py [dll]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
@@ -17,10 +17,10 @@ rep('BBB222', '2026-10-21T16:00:00', [pl('Cat', 'cat'), pl('Dan', 'dan')], [pl('
 rep('CCC333', '2026-10-21T17:00:00', [pl('Ann', 'ann'), pl('Zed', None)], [pl('Cat', 'cat'), pl('Dan', 'dan')], 'blue')         # unknown twitch name: never proposed
 rep('DDD444', '2026-10-21T18:00:00', [pl('Eve', 'eve'), pl('Fay', 'fay')], [pl('Gus', 'gus'), pl('Hal', 'hal')], 'orange')       # no such match
 now = int(time.time())
-def match(i, w): return {'Id': i, 'Format': '2v2', 'Mode': 'random', 'CreatedAt': now - 3600, 'FinishedAt': now - 3000, 'Winner': w, 'Blue': [{'Username': 'ann'}, {'Username': 'ben'}], 'Orange': [{'Username': 'cat'}, {'Username': 'dan'}]}
+def match(i, w, b=('ann', 'ben'), o=('cat', 'dan')): return {'Id': i, 'Format': '2v2', 'Mode': 'random', 'CreatedAt': now - 3600, 'FinishedAt': now - 3000, 'Winner': w, 'Blue': [{'Username': u} for u in b], 'Orange': [{'Username': u} for u in o]}
 for sub in ('', 'runtime'):
-    os.makedirs(os.path.join(d, sub), exist_ok=True); json.dump([match(7, None), match(8, 'Blue')], open(os.path.join(d, sub, 'matches.json'), 'w'))
-env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8983', 'PINGUINO_LITE_DIR': lite})
+    os.makedirs(os.path.join(d, sub), exist_ok=True); json.dump({'ReplayAutoWinner': False}, open(os.path.join(d, sub, 'replays_settings.json'), 'w')); json.dump([match(7, None), match(8, 'Blue'), match(9, None, ('eve', 'fay'), ('gus', 'hal'))], open(os.path.join(d, sub, 'matches.json'), 'w'))
+env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8983', 'PINGUINO_LITE_DIR': lite, 'PINGUINO_REPLAY_ALLOW_SIM': '1', 'PINGUINO_REPLAY_TICK_SEC': '2'})
 fails = []
 def chk(n, ok, x=''):
     if not ok: fails.append('%s %s' % (n, x))
@@ -39,7 +39,7 @@ try:
     o = get('/api/replays/AAA111'); chk('one replay', o['ok'] and o['replay']['blue']['players'][0]['twitch'] == 'ann' and o['replay']['winner'] == 'blue' and 'SECRET' not in json.dumps(o), o)
     chk('unknown id', get('/api/replays/nope')['ok'] is False); chk('bad id rejected', get('/api/replays/..%5Cx')['ok'] is False)
     pr = get('/api/replays/proposals')['proposals']; ids = sorted((p['replayId'], p['matchId'], p['winner']) for p in pr)
-    chk('proposals: exact roster only, sides mapped, unknown-name replay skipped', ids == [('AAA111', 7, 'blue'), ('BBB222', 7, 'orange')], ids)
+    chk('proposals: exact roster only, sides mapped, unknown-name replay skipped', ids == [('AAA111', 7, 'blue'), ('BBB222', 7, 'orange'), ('DDD444', 9, 'orange')], ids)
     bad = post('/api/replays/apply', {'matchId': 8, 'replayId': 'AAA111'}); chk('apply rejects a match that is not proposed', bad['ok'] is False, bad)
     chk('nothing applied by itself', all(m['Winner'] in (None, 'Blue') for m in json.load(open(os.path.join(d, 'runtime', 'matches.json')))))
     ok = post('/api/replays/apply', {'matchId': 7, 'replayId': 'AAA111', 'by': 'ivan'}); chk('apply ok', ok['ok'] and ok['winner'] == 'blue', ok); time.sleep(2)
@@ -49,6 +49,20 @@ try:
         except Exception as e: got[sub] = str(e)
     chk('winner written to matches.json', any(str(v).lower() == 'blue' for v in got.values()), got)
     chk('no longer proposed', not any(p['matchId'] == 7 for p in get('/api/replays/proposals')['proposals']))
+    # ---- automatic winners (default ON; here switched off by the seeded settings until now)
+    st = get('/api/replays/settings'); chk('setting reads off', st['ok'] and st['ReplayAutoWinner'] is False and st['pending'] >= 1, st)
+    time.sleep(4); chk('auto off: match 9 untouched', any(p['matchId'] == 9 for p in get('/api/replays/proposals')['proposals']))
+    chk('bad setting rejected', post('/api/replays/settings', {'ReplayAutoWinner': 'yes'})['ok'] is False)
+    chk('setting on', post('/api/replays/settings', {'ReplayAutoWinner': True})['ReplayAutoWinner'] is True)
+    time.sleep(6)
+    w = {}
+    for sub in ('', 'runtime'):
+        try: w[sub] = [m for m in json.load(open(os.path.join(d, sub, 'matches.json'))) if m['Id'] == 9][0]['Winner']
+        except Exception as e: w[sub] = str(e)
+    chk('auto: exact-roster match settled by its replay', any(str(v).lower() == 'orange' for v in w.values()), w)
+    st = get('/api/replays/settings'); chk('applied once, remembered', 'DDD444' in st['autoApplied'] and st['pending'] == 0, st)
+    bl = get('/api/eventlog?kind=backend&type=replays')['events']; chk('logged to the backend feed once', len([e for e in bl if 'DDD444' in e['text']]) == 1, bl)
+    time.sleep(5); chk('not applied twice', len([e for e in get('/api/eventlog?kind=backend&type=replays')['events'] if 'DDD444' in e['text']]) == 1)
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS replays'); sys.exit(1 if fails else 0)

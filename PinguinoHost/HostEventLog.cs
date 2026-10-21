@@ -98,6 +98,18 @@ namespace PinguinoHost
             }
             catch (Exception) { }
         }
+        /// <summary>a plain backend-feed entry (type = the module, e.g. "replays")</summary>
+        public static void Backend(string type, string text, JObject detail = null, string level = "info")
+        {
+            try
+            {
+                var d = detail ?? new JObject(); d["level"] = level; d["module"] = "host";
+                var e = Ev(NowMs(), "backend", type, "", text, null, d);
+                lock (L) { Directory.CreateDirectory(Dir); File.AppendAllText(Path.Combine(Dir, "backend.jsonl"), e.ToString(Newtonsoft.Json.Formatting.None) + "\n", new UTF8Encoding(false)); }
+                try { Events.Publish("backendlog", e); } catch (Exception) { }
+            }
+            catch (Exception) { }
+        }
         static List<JObject> AllBackend()
         {
             var res = new List<JObject>(); res.AddRange(Cached(Path.Combine(Dir, "backend.jsonl"), t => Lines(t).Select(l => { try { return JObject.Parse(l); } catch (Exception) { return null; } }).Where(x => x != null).ToList())); string dir = Path.Combine(HostApi.DataDir, "runtime", "console");
