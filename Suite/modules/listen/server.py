@@ -1,6 +1,6 @@
 """PinguinoBot Ears - local web UI + API. Listen-only: transcribes and learns, never acts.
 Run:  run.bat   (http://127.0.0.1:8765)"""
-# INDEX-BEGIN (line numbers are of this file)
+# INDEX-BEGIN (regenerate: scratch idx.py; line numbers are of this file)
 # INDEX: PinguinoListen (8765): live mic + file ASR, speaker learning, Twitch VOD ingest, prestream checks. Routes + functions:
 # Related: live.py (mic stream, resolve_device/candidates, watchdog), config.py, Suite/tests/test_mic.py, Docs/MODULE_CONTRACT.md, static/index.html
 #   107  def clog
@@ -56,27 +56,27 @@ Run:  run.bat   (http://127.0.0.1:8765)"""
 #   455  def list_jobs
 #   459  GET    /api/sessions
 #   460  def sessions
-#   467  GET    /api/segments
-#   468  def segments
-#   472  GET    /api/review/next
-#   473  def review_next
-#   488  class Correction
-#   492  POST   /api/segments/{sid}/correct
-#   493  def correct
-#   510  POST   /api/regrade
-#   511  def regrade
-#   515  GET    /api/vocab
-#   516  def vocab
-#   521  class Term
-#   525  POST   /api/vocab
-#   526  def vocab_add
-#   531  DELETE /api/vocab
-#   532  def vocab_del
-#   537  class Rule
-#   542  POST   /api/rules
-#   543  def rule_add
-#   548  DELETE /api/rules
-#   549  def rule_del
+#   472  GET    /api/segments
+#   473  def segments
+#   477  GET    /api/review/next
+#   478  def review_next
+#   493  class Correction
+#   497  POST   /api/segments/{sid}/correct
+#   498  def correct
+#   515  POST   /api/regrade
+#   516  def regrade
+#   520  GET    /api/vocab
+#   521  def vocab
+#   526  class Term
+#   530  POST   /api/vocab
+#   531  def vocab_add
+#   536  DELETE /api/vocab
+#   537  def vocab_del
+#   542  class Rule
+#   547  POST   /api/rules
+#   548  def rule_add
+#   553  DELETE /api/rules
+#   554  def rule_del
 # INDEX-END
 import asyncio
 import json
