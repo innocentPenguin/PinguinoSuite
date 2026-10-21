@@ -77,6 +77,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 08:35 - App relaunch (00)
+Module pages showed offline/blank after hours idle (all services answered 200). Relaunched shell + core via PinguinoApp.bat; pages load again. Host/modules untouched. Listen still flaps (06 investigating).
+
 ## 2026-10-21 07:22 - Music module restart (sub tier priority)
 - Spotify module restarted via D:\PinguinoSuite\App\Update-Module.ps1 spotify (orphan PID 43632 ignored the stop file, killed, then started). Loads 'higher sub tiers rank first' (Tier 3 > 2 > 1 within a round, redeems first). 117 unit + 200/200 e2e per Music. Native in-app player still needs a real Premium run and re-login for the streaming scope.
 
