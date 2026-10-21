@@ -933,16 +933,15 @@ function bindApprovals(){
     catch(e){toast('Could not '+a+': '+(e&&e.message?e.message:e));b.disabled=false;return}
     re();aprPoll()})}
 /* ============ Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy also via /api/economy) + live wheel preview + test-bet simulator ============ */
-const WG_PREVIEW='http://127.0.0.1:8770/overlays/wheel.html';   // 02 confirms the exact overlay path
+const WG_PREVIEW='http://127.0.0.1:8770/overlay/wheel.html';   // confirmed by 02; ?demo gives a static preview
 const WG={d:undefined,mock:false,tab:'wheel',edit:{},msg:'',sim:null,key:0};
 const WG_MOCK=[
  {id:'wheel',title:'Wheel',help:'The tournament team wheel.',fields:[
-  {key:'spinSpeed',label:'Spin speed',type:'number',min:1,max:10,step:1,value:5,default:5,help:'1 slow, 10 fast.'},
-  {key:'steps',label:'Steps (ticks) per spin',type:'number',min:10,max:200,step:5,value:60,default:60},
+  {key:'spinSpeed',label:'Spin length',type:'number',min:1500,max:30000,step:500,value:6000,default:6000,unit:'ms',help:'How long one spin takes. Each spin draws one pick live.'},
   {key:'mode',label:'Mode',type:'select',options:['random','balanced'],value:'random',default:'random',help:'Balanced is labelled RIGGED/BALANCED by MMR everywhere.'},
   {key:'autoReopen',label:'Re-open entry after a spin',type:'bool',value:false,default:false},
   {key:'holdTimeSec',label:'Hold the result on screen (s)',type:'number',min:0,max:120,step:1,value:15,default:15},
-  {key:'teamSize',label:'Team size',type:'number',min:1,max:8,step:1,value:2,default:2},
+  {key:'teamSize',label:'Team size',type:'number',min:1,max:4,step:1,value:2,default:2},
   {key:'joinFeedSec',label:'Join / leave feed duration (s)',type:'number',min:1,max:2,step:0.5,value:1.5,default:1.5,unit:'s',help:'How long each join or leave line shows on the overlay.'},
   {key:'showSignedUp',label:'Show "N signed up"',type:'bool',value:true,default:true}]},
  {id:'queue',title:'Queue',help:'The customs / lobby queue.',fields:[
@@ -998,7 +997,7 @@ pages.wheel=()=>{
      <iframe id="wg-prev" src="${WG_PREVIEW}" style="width:100%;height:340px;border:1px solid var(--line2);border-radius:8px;margin-top:8px;background:#0b0b0e"></iframe>
      <div class="sm faint" style="margin-top:6px">The same overlay OBS shows. <a href="#" data-aext="${WG_PREVIEW}">Open it in the browser</a>.</div></div>
     <div class="card"><h3>Test-bet simulator</h3><div class="pnote">Plays the game with the current gambling settings. No real points move.</div>
-     <div class="row wrap"><select id="sm-game">${(sims.length?sims:['slots','coinflip']).map(g=>`<option>${esc(g)}</option>`).join('')}</select><input id="sm-bet" type="number" min="1" value="100" style="width:80px"><input id="sm-n" type="number" min="1" max="1000" value="100" style="width:80px"><span class="sm faint">bet × rounds</span><button class="sm" id="sm-run">Simulate</button></div>
+     <div class="row wrap"><select id="sm-game">${['gamble','slots','duel'].map(g=>`<option>${esc(g)}</option>`).join('')}</select><input id="sm-bet" type="number" min="1" value="100" style="width:80px"><input id="sm-n" type="number" min="1" max="1000" value="100" style="width:80px"><span class="sm faint">bet × rounds</span><button class="sm" id="sm-run">Simulate</button></div>
      ${WG.sim?`<div style="margin-top:8px" class="sm"><b>${WG.sim.wins}</b> wins · <b>${WG.sim.losses}</b> losses · net <b style="color:${WG.sim.net<0?'var(--warn)':'inherit'}">${WG.sim.net}</b> · avg payout ${WG.sim.avgPayout}${WG.sim.local?' <span class="faint">(estimated locally)</span>':''}</div>`:''}</div></div></div>`};
 function wgSimLocal(g,bet,n){const gm=WG.d.find(x=>x.id==='gambling'),v=k=>{const f=gm?.fields.find(x=>x.key===k);return f?wgVal(f,'gambling'):null};
   const p=(v('winChance')??45)/100,mult=v('payout')??2;let w=0,net=0;for(let i=0;i<n;i++){if(Math.random()<p){w++;net+=bet*(mult-1)}else net-=bet}
