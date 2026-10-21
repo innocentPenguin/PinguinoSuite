@@ -60,3 +60,6 @@ One alert at a time (queued), Synchra-style options: size, canvas scale, font, c
 - The follow alert widget (/obs/follow) also shows gift sub alerts ("{user} gifted {amount} subs!", same sound, setting "Show gift sub alerts"; "Test gift" button in the editor).
 - Activity widget / dashboard rows: raid out, poll, prediction, hype train (from Host /api/activity). Live overlays: /obs/poll, /obs/predict, /obs/hype (transparent, orange/dark, poll the Host /api/live-state every 2 s via /api/live-state; add ?fixture=1 to preview with sample data).
 - Dashboard top bar: gifts this session and top gifter.
+
+## Watch streak celebrations
+- Host item `{"type":"streak","user":"...","amount":<count>}` (02 to emit; `count` also accepted). Shows as a "Streak" row in the activity feed and dashboard, and as a celebration in the follow alert widget (/obs/follow): text "{user} is on a {amount}-stream watch streak!", its own sound slot (built-in chime or a file address), enable + volume + text in the editor, "Test streak" button. Test event: POST /api/events {"type":"streak","user":"x","amount":10}.

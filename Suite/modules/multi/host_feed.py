@@ -15,12 +15,12 @@ import console_log
 from models import ChatMessage
 
 HOST = "http://127.0.0.1:8770"
-ALWAYS = ("follow", "redeem", "ban", "unban", "unmod", "mod", "shoutout", "raid_out", "poll", "prediction", "hype")                 # not available through the Twitch chat connection
+ALWAYS = ("follow", "redeem", "ban", "unban", "unmod", "mod", "shoutout", "raid_out", "poll", "prediction", "hype", "streak")                 # not available through the Twitch chat connection
 FALLBACK = ("sub", "resub", "gift", "cheer", "raid")
 MODWORDS = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "modded"}
 MODPASSIVE = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "made a moderator"}
 WORDS = {"shoutout": "{u} was given a shoutout", "follow": "{u} followed", "redeem": "{u} redeemed {d}", "sub": "{u} subscribed", "resub": "{u} resubscribed",
-         "gift": "{u} gifted subs", "cheer": "{u} cheered", "raid": "{u} is raiding"}
+         "gift": "{u} gifted subs", "cheer": "{u} cheered", "raid": "{u} is raiding", "streak": "{u} hit a {n}-stream watch streak"}
 
 
 def _live_text(t, item):
@@ -65,12 +65,12 @@ def to_message(item, channel):
             text += f" ({str(item['message'])[:100]})"
         return ChatMessage(id=f"host:{item['seq']}", platform="twitch", channel=channel, user_id=shown.lower(), user=shown.lower(), display=shown,
                            text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or 0))
-    text = WORDS[t].format(u=user, d=detail or "a reward")
+    text = WORDS[t].format(u=user, d=detail or "a reward", n=int(item.get("amount") or item.get("count") or 0))
     if t == "redeem" and item.get("message"):
         text += ": " + str(item["message"])[:200]
     flags = ["refollow"] if t == "follow" and str(item.get("refollow", "")).lower() in ("true", "1") else []
     return ChatMessage(id=f"host:{item['seq']}", platform="twitch", channel=channel, user_id=user.lower(), user=user.lower(), display=user,
-                       text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or 0), flags=flags)
+                       text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or item.get("count") or 0), flags=flags)
 
 
 def _get(path):

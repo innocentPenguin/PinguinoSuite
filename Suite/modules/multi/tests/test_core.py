@@ -1181,3 +1181,14 @@ def test_loop_handler_ignores_client_disconnects(monkeypatch):
     assert seen == []
     server._loop_exception(None, {"message": "cb", "exception": ValueError("real")})
     assert len(seen) == 1
+
+
+def test_watch_streak_event_and_alert_settings():
+    import host_feed, obs
+    m = host_feed.to_message({"seq": 9, "type": "streak", "user": "Fan", "amount": 12}, "me")
+    assert m.event == "streak" and m.amount == 12 and "12-stream" in m.text and "streak" in host_feed.ALWAYS
+    s = obs.sanitize("follow", {"streak_sound_url": "javascript:x", "streak_sound_volume": 500})
+    assert s["streak_sound_url"] == "" and s["streak_sound_volume"] == 100 and s["show_streaks"]
+    assert obs.hidden("follow", s, {"event": "streak"}) is False
+    assert obs.hidden("follow", obs.sanitize("follow", {"show_streaks": False}), {"event": "streak"}) is True
+    assert "streak" in obs.ACT_TYPES

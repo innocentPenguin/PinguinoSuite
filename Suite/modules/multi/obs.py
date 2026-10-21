@@ -8,7 +8,7 @@ STYLES = ("simple", "bubble", "boxed")
 ENTRANCE = ("none", "fade", "slide", "pop")
 KINDS = ("chat", "activity", "follow")
 FOLLOW_ANIM = ("fade", "slide", "pop", "bounce")
-ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement", "shoutout", "ban", "timeout", "unban", "mod", "unmod", "raid_out", "poll", "prediction", "hype")
+ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement", "shoutout", "ban", "timeout", "unban", "mod", "unmod", "raid_out", "poll", "prediction", "hype", "streak")
 FONTS = {"nunito": "Nunito, 'Segoe UI', sans-serif", "system": "'Segoe UI', Arial, sans-serif", "roboto": "Roboto, Arial, sans-serif",
          "arial": "Arial, sans-serif", "georgia": "Georgia, serif", "consolas": "Consolas, monospace", "comic": "'Comic Sans MS', cursive",
          "impact": "Impact, sans-serif", "trebuchet": "'Trebuchet MS', sans-serif", "verdana": "Verdana, sans-serif"}
@@ -34,7 +34,7 @@ FOLLOW_DEFAULT = {
     "border_width": 3, "border_color": "#ff8a1f", "border_radius": 16, "font_family_id": "nunito", "message_fade_duration_seconds": 0, "message_delay_seconds": 0,
     "ignore_names": [], "provider_logo": False, "providers": ["all"], "style_type": "boxed", "entrance_animation_type": "pop", "custom_css": "",
     "max_messages": 1, "message_order": "bottom", "message_alignment": "center", "accent_color": "#ff8a1f",
-    "follow_text": "{user} just followed!", "refollow_text": "{user} followed again", "show_refollow": True, "show_gifts": True, "gift_text": "{user} gifted {amount} subs!", "duration_seconds": 6, "gap_seconds": 1,
+    "follow_text": "{user} just followed!", "refollow_text": "{user} followed again", "show_refollow": True, "show_gifts": True, "gift_text": "{user} gifted {amount} subs!", "show_streaks": True, "streak_text": "{user} is on a {amount}-stream watch streak!", "streak_sound_enabled": True, "streak_sound_volume": 70, "streak_sound_url": "", "duration_seconds": 6, "gap_seconds": 1,
     "sound_enabled": True, "sound_volume": 60, "sound_url": "", "image_url": "",
 }
 DEFAULTS = {"chat": CHAT_DEFAULT, "activity": ACTIVITY_DEFAULT, "follow": FOLLOW_DEFAULT}
@@ -126,6 +126,12 @@ def sanitize(kind, src):
         d["show_refollow"] = bool(s.get("show_refollow", d["show_refollow"]))
         d["show_gifts"] = bool(s.get("show_gifts", d["show_gifts"]))
         d["gift_text"] = str(s.get("gift_text", d["gift_text"]))[:120] or d["gift_text"]
+        d["show_streaks"] = bool(s.get("show_streaks", d["show_streaks"]))
+        d["streak_text"] = str(s.get("streak_text", d["streak_text"]))[:120] or d["streak_text"]
+        d["streak_sound_enabled"] = bool(s.get("streak_sound_enabled", d["streak_sound_enabled"]))
+        d["streak_sound_volume"] = int(_num(s.get("streak_sound_volume", d["streak_sound_volume"]), 0, 100, 70))
+        u = str(s.get("streak_sound_url", d["streak_sound_url"]) or "")[:300].strip()
+        d["streak_sound_url"] = u if u.startswith(("http://", "https://", "/")) else ""
         d["duration_seconds"] = round(_num(s.get("duration_seconds", d["duration_seconds"]), 1, 60, 6), 1)
         d["gap_seconds"] = round(_num(s.get("gap_seconds", d["gap_seconds"]), 0, 30, 1), 1)
         d["sound_enabled"] = bool(s.get("sound_enabled", d["sound_enabled"]))
@@ -184,5 +190,7 @@ def hidden(kind, settings, m, muted=()):
     if kind == "follow":
         if ev == "gift":
             return not settings["show_gifts"]
+        if ev == "streak":
+            return not settings["show_streaks"]
         return ev != "follow" or (bool(m.get("flags") and "refollow" in m["flags"]) and not settings["show_refollow"])
     return ev not in settings["types"]
