@@ -119,6 +119,11 @@ function dashboard() {
   <p class="note">Contract folder: <span class="mono">${esc(info && info.lite_dir)}</span></p>`;
 }
 
+function errBanner() {
+  const u = state.upd && state.upd.data;
+  return u && u.result === 'error' && u.error ? `<div class="banner" style="border-color:#ff5c5c66">PinguinoLink: ${esc(u.error)}</div>` : '';
+}
+
 function modules() {
   const r = rows();
   const c = state.catalog;
@@ -130,11 +135,11 @@ function modules() {
     <td><b>${esc(m.name || m.id)}</b><div class="d">${esc(m.description)}</div></td>
     <td class="mono">${m.installed ? esc(m.installed_version) : '-'}${m.installed && m.update ? ` -> ${esc(m.latest_version)}` : m.installed ? '' : ` <span class="d">(${esc(m.latest_version)})</span>`}</td>
     <td>${m.installed && m.conn && m.conn.state && m.conn.state !== 'running' && !m.busy ? `<span class="pill ${m.conn.state === 'error' || m.conn.state === 'degraded' ? 'bad' : ''}" title="${esc(m.conn.detail)} ${esc(m.conn.fix_hint)}">${esc(m.conn.state)}</span> ` : ''}${m.busy ? `<span class="pill warn">${esc(m.busy)}...</span>` : m.update ? '<span class="pill warn">Update available</span>' : m.installed ? '<span class="pill ok">Installed</span>' : '<span class="pill">Not installed</span>'}</td>
-    <td style="text-align:right">${m.busy ? '' : m.update ? `<button class="btn pri" data-act="update" data-id="${esc(m.id)}">Update</button>` : m.installed ? '' : `<button class="btn pri" data-act="install" data-id="${esc(m.id)}">Install</button>`}</td></tr>`).join('')}</tbody></table>`;
+    <td style="text-align:right">${m.busy ? '' : m.update ? `<button class="btn pri" data-act="update" data-id="${esc(m.id)}">Update</button>` : m.installed ? `<button class="btn" data-act="rollback" data-id="${esc(m.id)}" title="Restore the previous version kept by PinguinoLink">Rollback</button>` : `<button class="btn pri" data-act="install" data-id="${esc(m.id)}">Install</button>`}</td></tr>`).join('')}</tbody></table>`;
   const gen = c && c.data && (c.data.generated || c.data.generated_at);
   return `<h1>Modules</h1><p class="sub">Modules available from PinguinoLink${gen ? ` - catalog from ${esc(ago(iso(gen)))}` : ''}.
    <span class="pill stub">Install/Update are STUBS: they only drop a request file for PinguinoLink</span></p>
-   <div class="card" style="padding:4px 8px">${body}</div>
+   ${errBanner()}<div class="card" style="padding:4px 8px">${body}</div>
    <div class="row"><button class="btn" data-act="check">Check for updates</button><button class="btn" data-open="folder">Open Lite data folder</button></div>`;
 }
 

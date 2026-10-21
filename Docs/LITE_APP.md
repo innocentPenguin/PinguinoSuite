@@ -105,13 +105,15 @@ A module is "Installed" in the UI iff it has an entry here. "Update available" i
 
 ### `requests\<ms>-<action>[-<id>].json`
 ```json
-{ "schema": 1, "action": "install|update|uninstall|start|stop|restart|check|selfupdate-apply", "id": "spotify", "requested_at": 1792479000000, "from": "pinguino-lite" }
+{ "schema": 1, "action": "install|update|uninstall|rollback|start|stop|restart|check|selfupdate-apply", "id": "spotify", "requested_at": 1792479000000, "from": "pinguino-lite" }
 ```
 - Written atomically (`*.tmp` then rename): **04 must ignore `*.tmp`**.
 - 04 polls the folder (1 s, same file-drop idea as `Data\runtime\control\` in MODULE_CONTRACT.md), handles requests oldest-first, **deletes the file when taken**, sets `status.json.busy`, and updates `installed.json` / `update_status.json` when finished. Failures: set `installed.json.modules[id].error` (or `update_status.error`); Lite shows them on the next refresh (it re-reads every 5 s).
 - `id` is null for `check` and `selfupdate-apply`. `restart-link` is handled inside Lite (never written to disk).
 - Optional extras 04 may add: per-module `enabled` in installed.json, and `status.json.modules` = `{id:{state:"not-installed|stopped|running|degraded|error",detail,fix_hint}}` (Lite shows non-running states as a pill). Catalog also accepts 04's draft names `desc`/`version`/`sha256`/`package`/`platforms`/`requires`/`secrets`/`help_url` (Lite reads `desc||description`, `version||latest_version`).
 - Why files and not an endpoint: Lite has no core/token; the file drop needs no port, works when 04's server is down (request waits) and matches an existing pattern. If 04 prefers an HTTP endpoint (e.g. on the Link module, port 7777), Lite's `send_request` is the single place to change.
+
+Status 2026-10-21 (04, commit 58ddc58): install/update/uninstall/rollback/check are real for local zips in `Data\lite\packages` (+ `.sha256`); update/uninstall of a running module errors "<id> is running; stop it first"; start/stop/restart/selfupdate-apply still answer "not available yet" (shown as the red banner on Modules from `update_status.error`).
 
 ## What 04 must provide (the contract, concretely)
 1. **Catalog writer**: produce `modules_catalog.json` (from its own source of truth; local file or remote), refresh on `check` and on a timer.

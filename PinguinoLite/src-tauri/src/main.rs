@@ -74,7 +74,7 @@ const HOST: &str = "127.0.0.1:8770";
 /// Contract files 04 writes into <lite dir>. Only these names can be read by the UI.
 const CONTRACT_FILES: &[&str] = &["modules_catalog", "installed", "update_manifest", "update_status", "status"];
 /// Actions the UI may ask 04 for (request files, see send_request).
-const ACTIONS: &[&str] = &["install", "update", "uninstall", "start", "stop", "restart", "check", "selfupdate-apply", "restart-link"];
+const ACTIONS: &[&str] = &["install", "update", "uninstall", "rollback", "start", "stop", "restart", "check", "selfupdate-apply", "restart-link"];
 
 /// Per-device UI state (window placement). Own folder, never shared with the full app.
 pub fn state_dir() -> PathBuf {
