@@ -65,7 +65,7 @@ namespace PinguinoHost
             bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd);
             if (!viewer && !modOnly) return false;
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
-            if (viewer && !Gamble.IsCommand(cmd))
+            if (viewer && !Gamble.IsCommand(cmd) && !Economy.IsBankCommand(cmd))
             {
                 if (Cooling("g|" + cmd, CoolSec("PINGUINO_STREAK_COOL_GLOBAL", 8)) || Cooling("u|" + cmd + "|" + me, CoolSec("PINGUINO_STREAK_COOL_USER", 20))) return true;
             }

@@ -231,6 +231,7 @@ namespace PinguinoHost
             if (p == "/api/lore" && m == "POST") { Write(c, ChannelLore.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/profile-sync" && m == "GET") { Write(c, ProfileSync.Api().ToString(), "application/json"); return true; }
             if (p == "/api/profile-sync" && m == "POST") { Write(c, ProfileSync.Post(Body(c)).ToString(), "application/json"); return true; }
+            if (p.StartsWith("/api/economy/") && (p == "/api/economy/me" || p == "/api/economy/depreciation" || p == "/api/economy/loan" || p == "/api/economy/stream")) { var r2 = Economy.Phase2Api(p, m, c.Request.QueryString["login"] ?? "", m == "POST" ? Body(c) : new Newtonsoft.Json.Linq.JObject()); if (r2 != null) { Write(c, r2.ToString(), "application/json"); return true; } }
             if (p == "/api/economy" && m == "GET") { Write(c, Economy.Api().ToString(), "application/json"); return true; }
             if (p == "/api/economy/user" && m == "GET") { Write(c, Economy.User(c.Request.QueryString["login"] ?? "").ToString(), "application/json"); return true; }
             if (p == "/api/economy/import" && m == "POST") { Write(c, Economy.Post(Body(c)).ToString(), "application/json"); return true; }

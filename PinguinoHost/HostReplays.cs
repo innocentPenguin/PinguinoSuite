@@ -69,7 +69,7 @@ namespace PinguinoHost
         }
         static bool Same(List<string> a, List<string> b) { return a.Count > 0 && a.SequenceEqual(b); }
 
-        static JArray Matches()
+        internal static JArray Matches()
         {
             foreach (var f in new[] { Path.Combine(HostApi.DataDir, "runtime", "matches.json"), Path.Combine(HostApi.DataDir, "matches.json") }.Where(File.Exists).OrderByDescending(File.GetLastWriteTimeUtc))   // the live layout varies: the file the Core wrote last wins
                 try { return JArray.Parse(File.ReadAllText(f, Encoding.UTF8).TrimStart((char)0xFEFF)); } catch (Exception) { }

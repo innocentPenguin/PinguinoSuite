@@ -17,7 +17,7 @@ namespace PinguinoHost
     /// Store: Data\economy\points.json {baseline:{at,source,users}, earned:{login:{points,minutes}}, months:{yyyy-MM:{login:{points,minutes}}}, adjust:{login:n}}. Aliases (Data\boards\aliases.json) fold at read time.
     /// The StreamElements JWT is read from the vault key se_jwt (or PINGUINO_SE_JWT in tests) and is never logged, echoed or stored.
     /// Chat: !points [user], !watchtime [user], !toppoints [month], !topwatch [month]; mods: !removepoints @user n, !economy status|import|apply &lt;id&gt;.</summary>
-    public static class Economy
+    public static partial class Economy
     {
         static readonly object L = new object();
         static JObject _doc, _set; static bool _started;
@@ -40,6 +40,7 @@ namespace PinguinoHost
             if (_set != null) return _set;
             var d = new JObject { { "CurrencyName", "points" }, { "PointsPerMinute", 1.0 }, { "SubMultiplier", 2.0 }, { "VipMultiplier", 1.5 }, { "ModMultiplier", 1.0 }, { "OnlyWhileLive", true }, { "Earning", true },
                 { "WelcomeBonus", 100 }, { "FallbackActiveMinutes", 30 }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
+            Phase2Defaults(d);
             try { if (File.Exists(SetP)) foreach (var p in JObject.Parse(File.ReadAllText(SetP, Encoding.UTF8))) d[p.Key] = p.Value; else File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
             _set = d; return d;
         }
@@ -192,6 +193,7 @@ namespace PinguinoHost
                 while (true)
                 {
                     try { Tick(); } catch (Exception ex) { Clog.Warn("economy", "tick failed: " + ex.Message); }
+                    try { Phase2Tick(); } catch (Exception ex) { Clog.Warn("economy", "phase 2 failed: " + ex.Message); }
                     Thread.Sleep(MinuteSec * 1000);
                 }
             }) { IsBackground = true };
@@ -200,6 +202,7 @@ namespace PinguinoHost
 
         static bool IsLive()
         {
+            if (TestHook && _forceLive.HasValue) return _forceLive.Value;
             string o = Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_LIVE"); if (o == "1") return true; if (o == "0") return false;
             return LiveState.Active;
         }
@@ -304,30 +307,14 @@ namespace PinguinoHost
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return "bad spend";
             if (Sim.IsSim(login)) return Sim.Spend(login, amount);   // simulated players: separate in-memory ledger, the real one is never touched
-            login = Canon(Boards.AliasMap(), login); if (login == "") return "no user";
-            long bal = Balance(login);
-            lock (L)
-            {
-                var led = Ledger(); if (led[id] != null) return null;
-                if (bal < amount) return "not enough " + CurrencyName;
-                var adj = (JObject)Doc()["adjust"]; adj[login] = D(adj[login]) - amount;
-                led[id] = new JObject { { "login", login }, { "delta", -amount }, { "reason", reason ?? "" }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } }; Save();
-            }
-            Clog.Info("economy", login + " spent " + amount + " (" + reason + ")"); return null;
+            string err = Apply(id, login, -amount, SourceOf(reason), reason ?? ""); if (err == null) Clog.Info("economy", login + " spent " + amount + " (" + reason + ")"); return err;
         }
         /// <summary>gives `amount` points (a prize). Same id twice is applied once.</summary>
         public static bool Credit(string id, string login, long amount, string reason)
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return false;
             if (Sim.IsSim(login)) return Sim.Credit(login, amount);
-            login = Canon(Boards.AliasMap(), login); if (login == "") return false;
-            lock (L)
-            {
-                var led = Ledger(); if (led[id] != null) return true;
-                var adj = (JObject)Doc()["adjust"]; adj[login] = D(adj[login]) + amount;
-                led[id] = new JObject { { "login", login }, { "delta", amount }, { "reason", reason ?? "" }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } }; Save();
-            }
-            return true;
+            return Apply(id, login, amount, SourceOf(reason), reason ?? "") == null;
         }
         /// <summary>Hidden grant: gives (or takes, negative) points to one user or to everyone known, with NO chat message. A take never goes below 0.
         /// Body {target:"user"|"everyone", login, amount, mode:"add"|"set", reason, silent, by, id?}. mode "set" (one user) makes the balance exactly `amount` (>= 0).
@@ -361,7 +348,7 @@ namespace PinguinoHost
                     if (delta == 0) continue;
                     adj[l] = D(adj[l]) + delta; total += delta; changed++;
                 }
-                led[key] = new JObject { { "login", target == "user" ? targets[0] : "*" }, { "delta", total }, { "reason", reason }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
+                led[key] = new JObject { { "login", target == "user" ? targets[0] : "*" }, { "delta", total }, { "reason", reason }, { "source", "grant" }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 Save();
                 try { File.AppendAllText(System.IO.Path.Combine(Dir, "grants.log"), DateTime.UtcNow.ToString("o") + "\t" + by + "\t" + (target == "user" ? targets[0] : "everyone(" + targets.Count + ")") + "\t" + mode + " " + amt.ToString("0", CultureInfo.InvariantCulture) + " -> " + total.ToString("0", CultureInfo.InvariantCulture) + "\t" + reason.Replace('\t', ' ').Replace('\n', ' ') + "\n", new UTF8Encoding(false)); } catch (Exception) { }
             }
@@ -427,7 +414,7 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("economy", "hidden command failed: " + ex.Message); }
         }
-        public static bool IsViewerCommand(string c) { return c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch"; }
+        public static bool IsViewerCommand(string c) { return c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch" || IsBankCommand(c); }
         public static bool IsModCommand(string c) { return c == "!removepoints" || c == "!economy"; }
 
         public static void Handle(string user, string cmd, string[] args, bool mod, Action<string> say, Func<string, string> parseMonth, Func<string, string> monthLabel)
@@ -435,6 +422,7 @@ namespace PinguinoHost
             string me = user.ToLowerInvariant();
             try
             {
+                if (IsBankCommand(cmd)) { HandleBank(user, cmd, args, say); return; }
                 if (IsViewerCommand(cmd))
                 {
                     if (Cooling("g|" + cmd, CoolSec("PINGUINO_STREAK_COOL_GLOBAL", 8)) || Cooling("u|" + cmd + "|" + me, CoolSec("PINGUINO_STREAK_COOL_USER", 20))) return;

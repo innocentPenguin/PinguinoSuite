@@ -158,6 +158,7 @@ namespace PinguinoHost
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
             try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
+            try { Economy.OnChat(user, text, s => ChannelLore.Say(s)); } catch (Exception) { }
             try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier); } catch (Exception) { }
             try { EventLog.OnChat(user, text, role); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
             try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
