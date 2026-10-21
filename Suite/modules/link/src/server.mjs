@@ -3,6 +3,8 @@
 // Docs: Docs/PinguinoLink/INDEX.md
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
+import { createLite } from './lite.mjs';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import * as ts from './tailscale.mjs';
@@ -249,6 +251,12 @@ export async function serve(cfg) {
     try { await listen(ip); tailBound = ip; log('info', 'server', `listening on tailnet address ${ip}:${port}`); }
     catch (e) { log('warn', 'server', `could not listen on ${ip}:${port} (${e.code})`); }
   };
+  // PinguinoLite contract folder (Docs/LITE_APP.md): local listing/checking only for now.
+  const inTest = process.env.PINGUINO_MESH_TEST || (process.env.PINGUINO_DATA_DIR || '').toLowerCase().startsWith(os.tmpdir().toLowerCase());
+  if (!inTest || process.env.PINGUINO_LITE_DIR) {
+    const probe = async m => { try { return (await fetch(`http://127.0.0.1:${m.port}${m.health || '/'}`, { signal: AbortSignal.timeout(800) })).status < 500; } catch { return false; } };
+    createLite({ getHealth: probe }).start().catch(e => log('warn', 'lite', `could not start: ${e.message}`));
+  }
   mesh.start();
   await bindTail();
   if (!tailBound) log('warn', 'server', 'Tailscale is not running; only this machine can reach the service until it is');
