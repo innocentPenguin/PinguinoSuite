@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PinguinoSpotify</title>
 <style>
+#dlg[hidden],#dlgin[hidden]{display:none!important}
 :root{--bg:#0b0b0d;--panel:#141417;--panel2:#1d1d22;--fg:#ececef;--dim:#8d8d96;--accent:#ff9900;--ok:#3ecf8e;--warn:#e6d34a;--bad:#ff5d5d;--line:#2a2a30}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px "Segoe UI",system-ui,sans-serif}
@@ -75,7 +76,7 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
 
 <section id="t-queue">
   <div class="ctl" style="margin-bottom:8px">
-    <button id="bundo">↶ Undo</button><button id="bclear">Clear viewer requests</button><button id="bshuf" title="Shuffle viewer requests nobody placed by hand">🔀 Shuffle</button><button id="brmuser" title="Remove every song requested by one viewer">Remove viewer…</button><button id="bstart" class="pri" style="display:none">▶ Start queue</button>
+    <div id="offnote" class="small" style="display:none;color:var(--bad);margin:0 0 6px">Connect Spotify first: queue, search and playback buttons are off until you are connected (use the banner above).</div><button id="bundo">↶ Undo</button><button id="bclear">Clear viewer requests</button><button id="bshuf" title="Shuffle viewer requests nobody placed by hand">🔀 Shuffle</button><button id="brmuser" title="Remove every song requested by one viewer">Remove viewer…</button><button id="bstart" class="pri" style="display:none">▶ Start queue</button>
     <span style="flex:1"></span>
     <label class="small"><input type="checkbox" id="qopen"> requests open</label>
     <label class="small"><input type="checkbox" id="qsafe"> stream-safe</label>
@@ -130,7 +131,7 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
     <div class="grid"><label>Site URL<input type="text" id="siteurl" placeholder="https://innocentpenguin.com"></label><label>API key (write-only)<input type="text" id="sitekey" placeholder="leave empty to keep the saved key"></label></div>
     <div class="ctl" style="margin-top:8px"><label><input type="checkbox" id="siteon"> enabled</label><button id="bsite" class="pri">Save</button></div></div>
 </section>
-</div><div id="dlg" hidden style="position:fixed;inset:0;background:#000a;display:grid;place-items:center;z-index:50"><div class="card" style="min-width:300px;max-width:440px;margin:0"><div id="dlgmsg" style="margin-bottom:10px"></div><input type="text" id="dlgin" hidden style="margin-bottom:10px"><div class="ctl" style="justify-content:flex-end"><button id="dlgno">Cancel</button><button class="pri" id="dlgyes">OK</button></div></div></div>
+</div><style>#dlg{position:fixed;inset:0;background:#000a;place-items:center;z-index:50}#dlg:not([hidden]){display:grid}#dlg[hidden]{display:none!important}</style><div id="dlg" hidden><div class="card" style="min-width:300px;max-width:440px;margin:0"><div id="dlgtitle" style="font-weight:700;margin-bottom:6px"></div><div id="dlgmsg" style="margin-bottom:10px"></div><input type="text" id="dlgin" hidden style="margin-bottom:10px"><div class="ctl" style="justify-content:flex-end"><button id="dlgno">Cancel</button><button class="pri" id="dlgyes">OK</button></div></div></div>
 <div id="toast"></div>
 <script>
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -143,7 +144,8 @@ async function api(path,body){
 }
 function toast(m,bad){const t=$('toast');t.textContent=m;t.style.borderColor=bad?'var(--bad)':'var(--accent)';t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',3500)}
 // In-page confirm/prompt: window.confirm/prompt are blocked in the app webview. ask(msg) -> true|false ; ask(msg,{input:true}) -> string|null
-function ask(msg,o){o=o||{};return new Promise(res=>{const d=$('dlg'),i=$('dlgin');$('dlgmsg').textContent=msg;i.hidden=!o.input;i.value='';d.hidden=false;(o.input?i:$('dlgyes')).focus();
+function ask(msg,o){o=o||{};return new Promise(res=>{const d=$('dlg'),i=$('dlgin');
+  $('dlgtitle').textContent=o.title||'Please confirm';$('dlgmsg').textContent=msg||o.title||'Are you sure?';$('dlgyes').textContent=o.yes||'OK';i.hidden=!o.input;i.value='';d.hidden=false;(o.input?i:$('dlgyes')).focus();
   const done=v=>{d.hidden=true;$('dlgyes').onclick=$('dlgno').onclick=i.onkeydown=null;res(v)};
   $('dlgyes').onclick=()=>done(o.input?(i.value.trim()||null):true);$('dlgno').onclick=()=>done(o.input?null:false);
   i.onkeydown=e=>{if(e.key==='Enter')$('dlgyes').click();else if(e.key==='Escape')$('dlgno').click()}})}
@@ -153,6 +155,9 @@ async function busy(btn,fn){if(btn.disabled)return;const t=btn.textContent;btn.d
 function copyText(t){try{navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy failed: select the text and press Ctrl+C',true))}catch(e){toast('Copy failed: select the text and press Ctrl+C',true)}}
 // Pop-out through the shell (Docs/MODULE_CONTRACT.md: parent.postMessage {pinguino:'window',op:'open'}); falls back to window.open outside the shell.
 window.addEventListener('message',e=>{const d=e.data;if(d&&d.pinguino==='window-error'){toast('Could not open the window: '+(d.error||'unknown error'),true);showFallback()}});
+// External links: target=_blank is dead inside the shell webview, so ask the shell to open the system browser (op:'external') and also copy the link as a fallback.
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a[target=_blank]');if(!a||!/^https:\/\//i.test(a.href))return;
+  if(window.parent&&window.parent!==window){e.preventDefault();window.parent.postMessage({pinguino:'window',op:'external',url:a.href},'*');copyText(a.href);toast('Opening in your browser. Link copied too: '+a.href)}});
 function showFallback(){const el=$('plfallback');if(el)el.hidden=false}
 function popOut(label,url,title,w,h){
   if(window.parent&&window.parent!==window){window.parent.postMessage({pinguino:'window',op:'open',label,url,title,size:{w,h},remember:true},'*');toast('Opening '+title+'…');
@@ -176,10 +181,13 @@ function render(){
   if(!S)return;
   drawTabs();
   const bn=$('banner');
-  if(!S.client_id_set){bn.style.display='block';if(!bn.dataset.k||bn.dataset.k!=='id')bn.innerHTML='<b>Connect Spotify (2 minutes, once).</b> Paste your app\'s Client ID, then Connect. <span class="small">No Client ID yet? Open the <a href="#" data-gosetup style="color:var(--accent)">Setup tab</a> for the exact steps.</span><div class="ctl" style="margin-top:6px"><input type="text" id="qcid" placeholder="Client ID" style="max-width:320px"><button class="pri" id="qconnect">Save &amp; connect</button></div>';bn.dataset.k='id'}
+  if(!S.client_id_set){bn.style.display='block';if(!bn.dataset.k||bn.dataset.k!=='id')bn.innerHTML='<b>Not connected: paste your Client ID.</b> Paste your Spotify app\'s Client ID below, then press Save &amp; connect (2 minutes, once). <span class="small">No Client ID yet? Open the <a href="#" data-gosetup style="color:var(--accent)">Setup tab</a> for the exact steps.</span><div class="ctl" style="margin-top:6px"><input type="text" id="qcid" placeholder="Client ID" style="max-width:320px"><button class="pri" id="qconnect">Save &amp; connect</button></div>';bn.dataset.k='id'}
   else if(!S.connected){bn.style.display='block';bn.dataset.k='conn';bn.innerHTML='Spotify is not connected. <button class="pri" id="qconnect2">Connect to Spotify</button> <span class="small">(opens Spotify in your browser; approve, then come back)</span>'}
   else if(S.error){bn.style.display='block';bn.dataset.k='err';bn.textContent=S.error}
   else{bn.style.display='none';bn.dataset.k=''}
+  const off=!S.connected;
+  for(const id of ['bundo','bclear','bshuf','brmuser','bstart','bsearch','bctx','bprev','bplay','bnext']){const b=$(id);if(!b)continue;if(off){b.disabled=true;b.dataset.offdis='1';b.title='Connect Spotify first'}else if(b.dataset.offdis){b.disabled=false;delete b.dataset.offdis;b.removeAttribute('title')}}
+  $('offnote').style.display=off?'block':'none';
   drawNow();
   if(tab==='queue')drawQueue();
   if(tab==='req')drawReq();
@@ -231,8 +239,8 @@ $('queue').ondragover=e=>{const r=e.target.closest('.row');if(!r||!dragId)return
 $('queue').ondrop=e=>{const r=e.target.closest('.row');if(!r||!dragId)return;e.preventDefault();const to=+r.dataset.i;const id=dragId;dragId=null;editing=false;act('/api/queue/move',{id,index:to})};
 $('bundo').onclick=()=>act('/api/queue/undo');
 $('bshuf').onclick=()=>act('/api/queue/shuffle',{},'Shuffled');
-$('brmuser').onclick=async()=>{const u=await ask('Remove all queued songs requested by:',{input:true});if(u)act('/api/queue/remove_user',{user:u},'Removed')};
-$('bclear').onclick=async()=>{if(await ask('Remove all viewer requests from the queue?'))act('/api/queue/clear',{only_viewers:true})};
+$('brmuser').onclick=async()=>{const u=await ask('Remove all queued songs requested by which viewer? Type their name.',{input:true,title:'Remove viewer',yes:'Remove'});if(u)act('/api/queue/remove_user',{user:u},'Removed')};
+$('bclear').onclick=async()=>{if(await ask('Remove all viewer requests from the queue? Songs already sent to Spotify stay.',{title:'Clear viewer requests',yes:'Clear'}))act('/api/queue/clear',{only_viewers:true})};
 $('bstart').onclick=()=>act('/api/queue/start');
 $('qopen').onchange=e=>act('/api/settings',{requests_open:e.target.checked});
 $('qsafe').onchange=e=>act('/api/settings',{stream_safe:e.target.checked},e.target.checked?'Stream-safe on: no explicit songs, requests need approval':'Stream-safe off');
@@ -299,13 +307,13 @@ $('t-set').addEventListener('click',async e=>{
   if(m){e.preventDefault();const d=SCHEMA.msgs[m.dataset.resetmsg].default;setVal('msgs',d,m.dataset.resetmsg);drawSettings()}
   const up=e.target.closest('button[data-upreset]'),ud=e.target.closest('button[data-udel]');
   if(up)act('/api/preset',{name:up.dataset.upreset},'Applied '+up.dataset.upreset).then(()=>{dirty.clear();DRAFT=null});
-  if(ud&&await ask('Delete preset '+ud.dataset.udel+'?'))act('/api/presets/delete',{name:ud.dataset.udel}).then(()=>{SCHEMA=null;dirty.clear();DRAFT=null;drawnSig='';loadSchema().then(drawSettings)});
+  if(ud&&await ask('Delete the preset "'+ud.dataset.udel+'"?',{title:'Delete preset',yes:'Delete'}))act('/api/presets/delete',{name:ud.dataset.udel}).then(()=>{SCHEMA=null;dirty.clear();DRAFT=null;drawnSig='';loadSchema().then(drawSettings)});
   if(p)act('/api/preset',{name:p.dataset.preset},'Preset applied: '+SCHEMA.presets[p.dataset.preset].label).then(()=>{dirty.clear();DRAFT=null})});
 $('bsave').onclick=async()=>{const patch={};for(const f of dirty){const[k,sub]=f.split('.');if(sub){patch[k]=patch[k]||{};patch[k][sub]=DRAFT[k][sub]}else patch[k]=DRAFT[k]}
   try{await api('/api/settings',patch);dirty.clear();DRAFT=null;editing=false;toast('Settings saved');refresh()}catch(e){toast(e.message,true)}};
-$('bsavepreset').onclick=async()=>{const n=await ask('Name for this preset (saves all settings except open/closed):',{input:true});if(!n)return;try{await api('/api/presets/save',{name:n});SCHEMA=null;await loadSchema();drawnSig='';drawSettings();toast('Saved preset '+n)}catch(e){toast(e.message,true)}};
-$('bdiscard').onclick=()=>{dirty.clear();DRAFT=null;editing=false;drawSettings()};
-$('breset').onclick=async()=>{if(await ask('Reset ALL settings to their defaults (requests stay closed)?'))act('/api/settings/reset',{},'Back to defaults').then(()=>{dirty.clear();DRAFT=null})};
+$('bsavepreset').onclick=async()=>{const n=await ask('Name for this preset (saves all settings except open/closed):',{input:true,title:'Save preset',yes:'Save'});if(!n)return;try{await api('/api/presets/save',{name:n});SCHEMA=null;await loadSchema();drawnSig='';drawSettings();toast('Saved preset '+n)}catch(e){toast(e.message,true)}};
+$('bdiscard').onclick=()=>{const n=dirty.size;dirty.clear();DRAFT=null;editing=false;drawSettings();toast(n?'Changes discarded':'Nothing to discard')};
+$('breset').onclick=async()=>{if(await ask('Reset ALL settings to their defaults? Requests stay closed.',{title:'Reset settings',yes:'Reset'}))act('/api/settings/reset',{},'Back to defaults').then(()=>{dirty.clear();DRAFT=null})};
 $('bexport').onclick=()=>{$('porter').hidden=!$('porter').hidden;$('porttext').value=JSON.stringify(S.settings,null,1)};
 $('bimport').onclick=async()=>{try{await api('/api/settings',JSON.parse($('porttext').value));toast('Imported');dirty.clear();DRAFT=null;refresh()}catch(e){toast('Import failed: '+e.message,true)}};
 $('bcopyov').onclick=()=>copy($('ovurl').textContent);
