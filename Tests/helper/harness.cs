@@ -458,6 +458,11 @@ public static class Harness
             aiReply = new string('a', 40) + " " + new string('b', 400) + " queue";
             Msg("Clean3", "!helper tell me about joining the queue"); Check("long replies are cut to about 200 characters", Last() != null && Last().Length <= 215 && Last().EndsWith("..."), Last() == null ? "" : Last().Length.ToString());
 
+            aiReply = "Register with !register YourEpicName. Thanks for asking!";
+            c0 = aiCalls; Msg("Syn1", "!helper ways to enter");
+            Check("a synonym of a title word finds the entry (enter -> join)", aiCalls == c0 + 1 && lastSystem.Contains("How to join the viewer games") && Last() != null && Last().Contains("register"), Last());
+            c0 = aiCalls; Msg("Syn2", "!helper ways to zebra");
+            Check("a synonym does not make unrelated questions match", aiCalls == c0, Last());
             // unanswered: NO_ANSWER from the AI, and no pack match at all (no AI call)
             aiReply = "NO_ANSWER";
             Msg("Un1", "!helper how do I join the queue tonight?");

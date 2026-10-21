@@ -370,6 +370,14 @@ public static class Harness
         Check(Players()["p2"]["HalfStrike"].ToString() == "0" && Players()["p2"]["Strikes"].ToString() == "1", "!unstrike half takes the half back");
         Run("mod1", "!unstrike", "@p2", true);
         Check(Players()["p2"]["Strikes"].ToString() == "0", "back to zero");
+        Run("p2", "!tune", "strikes 2", false);
+        Run("mod1", "!tune", "strikes 2", true);
+        Run("mod1", "!strike", "@p2", true); Run("mod1", "!strike", "@p2", true);
+        Run("p2", "!join");
+        Check(!Q().Contains("p2") && CPHProxy.Sent.Any(m => m.Contains("You have 2 strikes")), "tunable strike limit: 2 strikes block joining when the limit is 2");
+        Run("mod1", "!tune", "strikes 99", true); Run("mod1", "!tune", "strikes 3", true);
+        Run("mod1", "!unstrike", "@p2", true); Run("mod1", "!unstrike", "@p2", true);
+        Check(Players()["p2"]["Strikes"].ToString() == "0", "strike limit back at 3, strikes cleared");
         var decay = typeof(CPHInline).GetMethod("DecayStrikes", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         long dayLater = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 86400 + 30;
         decay.Invoke(bot, new object[] { dayLater });
@@ -697,6 +705,12 @@ public static class Harness
         Check((int)State()["inactivityMinutes"] == 15, "tune: viewers cannot change it");
         Run("mod1", "!tune", "idle 999", true);
         Check((int)State()["inactivityMinutes"] == 15, "tune: out of range is ignored");
+        Check((double)State()["overlay"]["altSeconds"] == 4 && (int)State()["overlay"]["fadeMs"] == 400, "overlay: name swap timing defaults to 4 s / 400 ms in the state");
+        Run("mod1", "!tune", "names 6 250", true);
+        Check((double)State()["overlay"]["altSeconds"] == 6 && (int)State()["overlay"]["fadeMs"] == 250, "overlay: !tune names sets the swap timing");
+        Run("mod1", "!tune", "names 999 250", true); Run("viewer1", "!tune", "names 1 1", false);
+        Check((double)State()["overlay"]["altSeconds"] == 6, "overlay: out of range and viewers are ignored");
+        Run("mod1", "!tune", "names 4 400", true);
         Run("mod1", "!wheel", "end", true);
         Run("mod1", "!tune", "wheel speed 3000", true); Run("mod1", "!tune", "wheel feed 1.5", true); Run("mod1", "!tune", "wheel signed off", true);
         var wp = JObject.Parse(File.ReadAllText(Path.Combine(dir, "wheel_public.json")));

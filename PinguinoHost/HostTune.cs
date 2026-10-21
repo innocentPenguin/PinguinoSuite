@@ -63,11 +63,12 @@ namespace PinguinoHost
         static List<TF> QueueFields() { return new List<TF> {
             Bool("open", "Queue open", false, "Open or close the customs queue."),
             Bool("recycler", "Recycler allowed", true, "Players who turned !recycle on go back to the end of the queue after a game."),
-            Num("inactivityMinutes", "Close after idle", 0, 240, 5, "min", 15, "The queue closes by itself after this many minutes with no activity (0 = never).") }; }
+            Num("inactivityMinutes", "Close after idle", 0, 240, 5, "min", 15, "The queue closes by itself after this many minutes with no activity (0 = never)."),
+            Num("strikeLimit", "Strikes that block joining", 1, 10, 1, "strikes", 3, "At this many strikes (temporary + permanent) a player cannot join customs or the tournament wheel.") }; }
         static JObject QueueValues()
         {
             var s = ReadState("live_state.json");
-            return new JObject { { "open", Pick(s["queueOpen"], false) }, { "recycler", Pick(s["recyclerEnabled"], true) }, { "inactivityMinutes", Pick(s["inactivityMinutes"], 15) } };
+            return new JObject { { "open", Pick(s["queueOpen"], false) }, { "recycler", Pick(s["recyclerEnabled"], true) }, { "inactivityMinutes", Pick(s["inactivityMinutes"], 15) }, { "strikeLimit", Pick(s["strikeLimit"], 3) } };
         }
         static List<TF> GamblingFields() { return new List<TF> {
             Bool("enabled", "Gambling on", true, "Master switch for !gamble, !slots, !duel and !give."),
@@ -170,6 +171,7 @@ namespace PinguinoHost
                 {
                     if (kv.Key == "open") RunAsStreamer("!queue " + ((bool)kv.Value ? "open" : "close"));
                     else if (kv.Key == "recycler") RunAsStreamer("!tune recycler " + ((bool)kv.Value ? "on" : "off"));
+                    else if (kv.Key == "strikeLimit") RunAsStreamer("!tune strikes " + (long)kv.Value);
                     else RunAsStreamer("!tune idle " + (long)kv.Value);
                     applied[kv.Key] = kv.Value;
                 }

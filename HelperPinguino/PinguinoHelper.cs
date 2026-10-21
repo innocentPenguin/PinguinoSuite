@@ -12,22 +12,23 @@ using Newtonsoft.Json.Linq;
 
 // ═══════════════════════════════════════
 //  INDEX (line numbers of this file; regenerate with the scratch script after edits). Public pack material lives in Docs\HELPER_PUBLIC.md, never here.
-//    52    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
-//    359   HelperSettings (every setting + default)
-//    399   State (static caches, cooldowns, test hooks)
-//    418   Patterns (free pass regexes)
-//    442   Entry point Execute()
-//    508   Help-review log (private review.jsonl)
-//    562   Handle() / HandleCore(): the message pipeline
-//    671   !helper / !ask / !pinguino (knowledge pack answers)
-//    806   Random chime + OptedOutOfBots
-//    846   Context gate (only help when really asked)
-//    896   Minecraft + website facts, Taught notes, site answers
-//    1147  AI intent picker + Ask() (Claude/OpenAI)
-//    1224  Answers and actions (Respond/Do, queue, register)
-//    1384  Text building (lobby line, how-to-join)
-//    1453  Reading game manager files, Say()
+//    53    Shared router/registry block (synced from Shared\PinguinoBots.cs.txt)
+//    360   HelperSettings (every setting + default)
+//    400   State (static caches, cooldowns, test hooks)
+//    419   Patterns (free pass regexes)
+//    443   Entry point Execute()
+//    509   Help-review log (private review.jsonl)
+//    563   Handle() / HandleCore(): the message pipeline
+//    672   !helper / !ask / !pinguino (knowledge pack answers)
+//    812   Random chime + OptedOutOfBots
+//    852   Context gate (only help when really asked)
+//    902   Minecraft + website facts, Taught notes, site answers
+//    1173  AI intent picker + Ask() (Claude/OpenAI)
+//    1250  Answers and actions (Respond/Do, queue, register)
+//    1410  Text building (lobby line, how-to-join)
+//    1479  Reading game manager files, Say()
 // ═══════════════════════════════════════
+
 
 
 
@@ -726,6 +727,9 @@ public class CPHInline
         if (q.Length > 300) q = q.Substring(0, 300);
 
         var qw = TaughtWords(q);
+        var qx = AskSynonyms(qw);                                                      // words that mean the same thing as a word in the question (small fixed groups)
+        string qLow = " " + string.Join(" ", Regex.Matches(q.ToLowerInvariant(), "[a-z0-9']+").Cast<Match>().Select(m => m.Value)) + " ";
+        var qPairs = new List<string>(); { var qt = qLow.Trim().Split(' '); for (int qi = 0; qi + 1 < qt.Length; qi++) if (qt[qi].Length >= 3 && qt[qi + 1].Length >= 3 && !TaughtStop.Contains(qt[qi]) && !TaughtStop.Contains(qt[qi + 1])) qPairs.Add(qt[qi] + " " + qt[qi + 1]); }
         var scored = new List<KeyValuePair<int, JObject>>();
         foreach (var e in KbEntries(mod))
         {
@@ -733,6 +737,8 @@ public class CPHInline
             string rest = ((string)e["keywords"] ?? "") + " " + ((string)e["text"] ?? "");
             var tw = TaughtWords(title);
             int sc = tw.Count(w => qw.Contains(w)) * 3 + TaughtWords(rest).Count(w => qw.Contains(w) && !tw.Contains(w));   // a title hit counts triple: the entry IS about that
+            sc += tw.Count(w => !qw.Contains(w) && qx.Contains(w)) * 2;   // a synonym of a question word in the TITLE counts a little less than the exact word (body synonyms are ignored: they pull in unrelated entries)
+            if (qPairs.Count > 0) { string tl = " " + string.Join(" ", Regex.Matches((title + " " + ((string)e["keywords"] ?? "")).ToLowerInvariant(), "[a-z0-9']+").Cast<Match>().Select(m => m.Value)) + " "; foreach (var pr in qPairs) if (tl.IndexOf(" " + pr + " ", StringComparison.Ordinal) >= 0) sc += 2; }   // two words in a row from the question appear together in the title or keywords
             foreach (Match cm in Regex.Matches(title, @"![a-z0-9]+", RegexOptions.IgnoreCase)) if (q.IndexOf(cm.Value, StringComparison.OrdinalIgnoreCase) >= 0) sc += 10;   // the question names the command itself
             if (sc > 0) scored.Add(new KeyValuePair<int, JObject>(sc, e));
         }
@@ -1095,6 +1101,26 @@ public class CPHInline
     // A question matches a note when at least two meaningful words overlap; the answer is the note's text, kept short, plus the site help page.
     JObject _taughtHit;
     static readonly HashSet<string> TaughtStop = new HashSet<string>(new[] { "what", "when", "where", "which", "does", "this", "that", "with", "have", "from", "your", "about", "there", "their", "they", "will", "would", "could", "should", "how", "the", "can", "you", "are", "for", "and", "any", "who", "why", "is", "do", "to", "of", "in", "on", "it", "a", "an", "pinguino", "penguin", "stream", "channel", "chat", "guys", "please", "tell", "know" });
+    static readonly string[][] AskSyn = {
+        new[] { "join", "enter", "register", "signup" },
+        new[] { "leave", "quit", "exit", "remove", "unqueue" },
+        new[] { "command", "commands", "cmds" },
+        new[] { "schedule", "timetable" },
+        new[] { "ip", "address" },
+        new[] { "lobby", "private", "match", "custom", "customs" },
+        new[] { "point", "balance", "score" },
+        new[] { "emote", "emotes", "7tv" },
+        new[] { "strike", "rule", "rules", "punish", "warning" },
+        new[] { "optout", "unping", "forget", "privacy" },
+        new[] { "leaderboard", "leaderboards", "ranking" },
+        new[] { "discord", "community" },
+    };
+    static HashSet<string> AskSynonyms(HashSet<string> words)
+    {
+        var h = new HashSet<string>();
+        foreach (var g in AskSyn) if (g.Any(w => words.Contains(w) || words.Contains(w.Length > 4 && w.EndsWith("s") ? w.Substring(0, w.Length - 1) : w))) foreach (var w in g) h.Add(w.Length > 4 && w.EndsWith("s") ? w.Substring(0, w.Length - 1) : w);
+        return h;
+    }
     static HashSet<string> TaughtWords(string t)
     {
         var h = new HashSet<string>();

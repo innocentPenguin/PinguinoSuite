@@ -460,7 +460,10 @@ public class CPHInline
         public int DefaultSr { get; set; } = 1000;          // [NEW][WEB] Fortnite SR for players nobody has rated yet
         public bool QueueOpen { get; set; }
         public bool RecyclerEnabled { get; set; } = true;   // [NEW][RECYCLER] master switch (PinguinoSuite): players who turned !recycle on go back to the end of the queue after a game
+        public int StrikeLimit { get; set; } = 3;           // strikes (temporary + permanent) that block joining customs / the tournament wheel
         public int InactivityMinutes { get; set; } = 15;    // [NEW] customs close by themselves after this many idle minutes (0 = never)
+        public double OverlayAltSeconds { get; set; } = 4;   // players overlays: seconds each name (stream name / Epic name) stays; 0 = never alternate
+        public int OverlayFadeMs { get; set; } = 400;        // players overlays: crossfade time between the two names
         public bool TimedOut { get; set; }                  // [NEW] the queue was closed by the inactivity timer (the website shows it until the queue opens again)
         public long TimedOutAt { get; set; }
 
@@ -1833,7 +1836,8 @@ public class CPHInline
             spotsNeeded = Math.Max(0, GetTotalSlots(_settings.DefaultFormat) - waiting.Count),
             queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username), practice = IsPractice(e.Username), sim = IsSim(e.Username), recycle = e.Recycle }),
             timedOut = _settings.TimedOut && !_settings.QueueOpen, timedOutAt = (_settings.TimedOut && !_settings.QueueOpen) ? (long?)_settings.TimedOutAt : null,
-            recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes,
+            recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes, strikeLimit = MaxStrikes,
+            overlay = new { altSeconds = _settings.OverlayAltSeconds, fadeMs = _settings.OverlayFadeMs },   // read by players.html / players_vertical.html
             activity = _settings.Activity,            currentMatch = match,
             liveMatch = hold ? live : null,   // [NEW][KOTH] only while the public view is being held
             hold = hold,
@@ -2436,7 +2440,7 @@ public class CPHInline
     }
 
     // !recycle on|off  (yourself)     !recycle on|off <user>  (mods)     !recycle  (shows yours)
-    // !tune recycler on|off | !tune idle <0-240 minutes>: set from the Suite (/api/tune); mods only and silent in chat.
+    // !tune recycler on|off | !tune idle <0-240 minutes> | !tune names <seconds> <fadeMs> (overlay name swap): set from the Suite (/api/tune); mods only and silent in chat.
     bool HandleTune(string user, string input, bool isPrivileged)
     {
         if (!isPrivileged) return true;
@@ -2448,6 +2452,8 @@ public class CPHInline
             try { HandleWheel(user, p[1] + " " + p[2], true); } finally { _silentTune = false; }
         }
         else if (p[0] == "recycler" && (p[1] == "on" || p[1] == "off")) { _settings.RecyclerEnabled = p[1] == "on"; SaveSettings(); PublishState("tune", "recycler"); }
+        else if (p[0] == "names" && p.Length >= 3) { double s; int f; if (double.TryParse(p[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out s) && int.TryParse(p[2], out f) && s >= 0 && s <= 60 && f >= 0 && f <= 3000) { _settings.OverlayAltSeconds = s; _settings.OverlayFadeMs = f; SaveSettings(); PublishState("tune", "names"); } }   // !tune names <seconds> <fadeMs>
+        else if (p[0] == "strikes") { int n; if (int.TryParse(p[1], out n) && n >= 1 && n <= 10) { _settings.StrikeLimit = n; SaveSettings(); PublishState("tune", "strikes"); } }
         else if (p[0] == "idle") { int m; if (int.TryParse(p[1], out m) && m >= 0 && m <= 240) { _settings.InactivityMinutes = m; SaveSettings(); PublishState("tune", "idle"); } }
         return true;
     }
@@ -4507,7 +4513,7 @@ public class CPHInline
     //  0-3 per player. Rule breakers / people getting in the way of customs get one from a mod; 3 = not allowed to play.
     //  Every time the stream goes live everybody loses one. Shown on the website profile (standings column 9).
     // ══════════════════════════════════════════════════════════════
-    const int MaxStrikes = 3;
+    int MaxStrikes { get { int n = _settings != null ? _settings.StrikeLimit : 3; return n < 1 ? 3 : n > 10 ? 10 : n; } }   // 3 by default; tunable from the Suite (!tune strikes <1-10>)
     static int StrikeTotal(Player p) { return p.Strikes + p.PermaStrikes; }
     static readonly System.Text.RegularExpressions.Regex PermaWords = new System.Text.RegularExpressions.Regex(@"\b(perma|permanent|toxic|toxicity|slur|slurs|racism|racist|hate)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
