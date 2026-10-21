@@ -77,6 +77,11 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-20 22:38 Full rebuild + app launch (Plan 7 UI)
+- Rebuilt core + Host + shell via Build-All (first two attempts failed: Host stopped, then a half-edited HostEconomy.cs broke the compile; third OK). App launched 22:38.
+- In the app: Wheel & Games page, Commands page (preview data until Host backend lands), Accounts offline/recording toggle UI, window placement (62% default, remembered), splash + new logo, website pop-out (own icon/profile/taskbar id).
+- Not in this build: sidebar scroll bar (cf19b27, 22:49) - needs next rebuild. Spotify module restarted 22:27 (song log, skip cooldown, sub-tier bonus queues). Host also restarted on f3f57f5 (/api/tune etc.).
+
 ## 2026-10-20 22:07 Host restarts (Plan 7 step 2)
 - Live: tournament wheel on the Host (live random picks, no precommitted teams, auto new round, join/leave anytime, wheel-only !notme), overlay at http://127.0.0.1:8770/wheel.html, wheel signed-up count + join/leave feed, customs recycler (!recycle), !incomplete, 15-min customs idle timeout, lobby push and !pm name-only (no passwords).
 - Site: new build live (wheel removed, queue + final teams only, mobile pass); site accepts old and new wheel payloads.
