@@ -812,6 +812,16 @@ public static class Harness
           Check("audit: a replayed message id gets one reply and one AI call", sent1 >= 1 && CPHProxy.Sent.Count == sent1 && llmCalls == calls1 && calls1 == cl0 + 1, "sent " + sent1 + "/" + CPHProxy.Sent.Count + " calls " + (llmCalls - cl0));
           Extra.Clear(); }
 
+        // ── 19b2d. audit: logs never carry a secret ──
+        { var scrub = typeof(CPHInline).GetMethod("PgScrub", BindingFlags.NonPublic | BindingFlags.Static);
+          Func<string, string> S = x => (string)scrub.Invoke(null, new object[] { x });
+          string k1 = S("401 Incorrect API key provided: sk-ant-api03-AbCdEfGhIjKlMnOp1234 more"), k2 = S("Authorization: Bearer abcdEFGH12345678xyz failed"), k3 = S("https://x/y?apikey=ZZZZ1111yyyy2222 oops"), k4 = S("oauth:abcdefghij0123456789 bad"), k5 = S("could not load chat_settings.json: unexpected character at line 4");
+          Check("audit: an API key in a log line is blanked", !k1.Contains("AbCdEf") && k1.Contains("[key]"), k1);
+          Check("audit: a bearer token in a log line is blanked", !k2.Contains("abcdEFGH12345678xyz"), k2);
+          Check("audit: a key=value secret in a URL is blanked", !k3.Contains("ZZZZ1111yyyy2222"), k3);
+          Check("audit: an oauth token is blanked", !k4.Contains("abcdefghij0123456789"), k4);
+          Check("audit: an ordinary log line is untouched", k5 == "could not load chat_settings.json: unexpected character at line 4", k5); }
+
         // ── 19b3. capability questions + bare calls ──
         { int cl0 = llmCalls;
           CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");

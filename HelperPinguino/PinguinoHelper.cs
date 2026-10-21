@@ -86,6 +86,24 @@ public class CPHInline
     static Func<string, string, string, string> _pgTestHttp;   // tests only: fake POST (url, auth header, body) -> response
 
     static string PgEnvDir() { return Environment.GetEnvironmentVariable("PINGUINO_DATA_DIR") ?? Environment.GetEnvironmentVariable("BVQ_DATA_DIR"); }  // BVQ_DATA_DIR = deprecated alias
+    // LOGS NEVER CARRY A SECRET: every log line a bot writes goes through PgScrub (API keys, bearer / oauth tokens, "key=..." pairs, the configured key itself).
+    static string PgLiteralSecret = "";
+    static string PgScrub(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        try
+        {
+            if (!string.IsNullOrEmpty(PgLiteralSecret) && PgLiteralSecret.Length >= 8) s = s.Replace(PgLiteralSecret, "[key]");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"sk-[A-Za-z0-9_\-]{8,}|AIza[0-9A-Za-z_\-]{20,}|gsk_[A-Za-z0-9]{16,}", "[key]");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"(?i)(bearer|oauth:)\s*[A-Za-z0-9._\-]{8,}", "$1 [token]");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"(?i)(api[-_ ]?key|access[-_ ]?token|user[-_ ]?token|secret|authorization|password)([""']?\s*[:=]\s*[""']?)[A-Za-z0-9._\-]{8,}", "$1$2[hidden]");
+        }
+        catch (Exception) { }
+        return s;
+    }
+    void PgLogW(string m) { try { CPH.LogWarn(PgScrub(m)); } catch (Exception) { } }
+    void PgLogI(string m) { try { CPH.LogInfo(PgScrub(m)); } catch (Exception) { } }
+    void PgLogE(string m) { try { CPH.LogError(PgScrub(m)); } catch (Exception) { } }
     static string PgDirPath() { return PgEnvDir() ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BVQ"); }
     static long PgNow() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
 
@@ -129,7 +147,7 @@ public class CPHInline
                 _pgReg = r; _pgStamp = stamp;
             }
         }
-        catch (Exception ex) { if (_pgReg == null) _pgReg = PgDefault(); CPH.LogWarn("[Bots] bots.json problem: " + ex.Message); }
+        catch (Exception ex) { if (_pgReg == null) _pgReg = PgDefault(); PgLogW("[Bots] bots.json problem: " + ex.Message); }
         return _pgReg;
     }
 
@@ -229,7 +247,7 @@ public class CPHInline
             string tag = b != null && !string.IsNullOrEmpty(b.Tag) ? b.Tag : "[" + PgTitle(role) + "]";
             msg = tag + " " + text;
         }
-        if (PgSaidRecently(msg)) { CPH.LogInfo("[Bots] not sent, the same line was already said a moment ago: " + (msg.Length > 60 ? msg.Substring(0, 60) : msg)); return; }
+        if (PgSaidRecently(msg)) { PgLogI("[Bots] not sent, the same line was already said a moment ago: " + (msg.Length > 60 ? msg.Substring(0, 60) : msg)); return; }
         // its own login first; if that fails, the main account (PinguinoB0t), then the rest of the chain
         var tryList = new List<string> { speaker };
         if (!tryList.Contains("core")) tryList.Add("core");
@@ -292,8 +310,8 @@ public class CPHInline
             using (var resp = (System.Net.HttpWebResponse)req.GetResponse()) return (int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300;
         }
         catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
-        { CPH.LogWarn("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
-        catch (Exception ex) { CPH.LogWarn("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message); return false; }
+        { PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
+        catch (Exception ex) { PgLogW("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message); return false; }
     }
 
     // ── what a module tells the router: "handled" (done, or deliberately silent) or "pass" (not mine / can't: next one please) ──

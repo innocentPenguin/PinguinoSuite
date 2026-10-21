@@ -77,6 +77,24 @@ public class CPHInline
     static Func<string, string, string, string> _pgTestHttp;   // tests only: fake POST (url, auth header, body) -> response
 
     static string PgEnvDir() { return Environment.GetEnvironmentVariable("PINGUINO_DATA_DIR") ?? Environment.GetEnvironmentVariable("BVQ_DATA_DIR"); }  // BVQ_DATA_DIR = deprecated alias
+    // LOGS NEVER CARRY A SECRET: every log line a bot writes goes through PgScrub (API keys, bearer / oauth tokens, "key=..." pairs, the configured key itself).
+    static string PgLiteralSecret = "";
+    static string PgScrub(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        try
+        {
+            if (!string.IsNullOrEmpty(PgLiteralSecret) && PgLiteralSecret.Length >= 8) s = s.Replace(PgLiteralSecret, "[key]");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"sk-[A-Za-z0-9_\-]{8,}|AIza[0-9A-Za-z_\-]{20,}|gsk_[A-Za-z0-9]{16,}", "[key]");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"(?i)(bearer|oauth:)\s*[A-Za-z0-9._\-]{8,}", "$1 [token]");
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"(?i)(api[-_ ]?key|access[-_ ]?token|user[-_ ]?token|secret|authorization|password)([""']?\s*[:=]\s*[""']?)[A-Za-z0-9._\-]{8,}", "$1$2[hidden]");
+        }
+        catch (Exception) { }
+        return s;
+    }
+    void PgLogW(string m) { try { CPH.LogWarn(PgScrub(m)); } catch (Exception) { } }
+    void PgLogI(string m) { try { CPH.LogInfo(PgScrub(m)); } catch (Exception) { } }
+    void PgLogE(string m) { try { CPH.LogError(PgScrub(m)); } catch (Exception) { } }
     static string PgDirPath() { return PgEnvDir() ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BVQ"); }
     static long PgNow() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
 
@@ -120,7 +138,7 @@ public class CPHInline
                 _pgReg = r; _pgStamp = stamp;
             }
         }
-        catch (Exception ex) { if (_pgReg == null) _pgReg = PgDefault(); CPH.LogWarn("[Bots] bots.json problem: " + ex.Message); }
+        catch (Exception ex) { if (_pgReg == null) _pgReg = PgDefault(); PgLogW("[Bots] bots.json problem: " + ex.Message); }
         return _pgReg;
     }
 
@@ -220,7 +238,7 @@ public class CPHInline
             string tag = b != null && !string.IsNullOrEmpty(b.Tag) ? b.Tag : "[" + PgTitle(role) + "]";
             msg = tag + " " + text;
         }
-        if (PgSaidRecently(msg)) { CPH.LogInfo("[Bots] not sent, the same line was already said a moment ago: " + (msg.Length > 60 ? msg.Substring(0, 60) : msg)); return; }
+        if (PgSaidRecently(msg)) { PgLogI("[Bots] not sent, the same line was already said a moment ago: " + (msg.Length > 60 ? msg.Substring(0, 60) : msg)); return; }
         // its own login first; if that fails, the main account (PinguinoB0t), then the rest of the chain
         var tryList = new List<string> { speaker };
         if (!tryList.Contains("core")) tryList.Add("core");
@@ -283,8 +301,8 @@ public class CPHInline
             using (var resp = (System.Net.HttpWebResponse)req.GetResponse()) return (int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300;
         }
         catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
-        { CPH.LogWarn("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
-        catch (Exception ex) { CPH.LogWarn("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message); return false; }
+        { PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
+        catch (Exception ex) { PgLogW("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message); return false; }
     }
 
     // ── what a module tells the router: "handled" (done, or deliberately silent) or "pass" (not mine / can't: next one please) ──
@@ -586,7 +604,7 @@ public class CPHInline
         }
         catch (Exception ex)
         {
-            CPH.LogError("[Chat] failed: " + ex);
+            PgLogE("[Chat] failed: " + ex);
         }
         // tells the router: handled, "pass" (switched off / not mine) or "defer" (a helper question: ask the helper first, come back if it does not take it)
         PgSetResult(_pgPass ? "pass" : _pgDefer ? "defer" : "handled");
@@ -610,7 +628,7 @@ public class CPHInline
                 string cfgPath = Path.Combine(_dir, "chat_settings.json");
                 if (!File.Exists(cfgPath)) SaveJson("chat_settings.json", new ChatSettings());   // first run: write a template to fill in
                 _init = true;
-                CPH.LogInfo("[Chat] Ready. Memory for " + _viewers.Count + " viewer(s). Config: " + cfgPath);
+                PgLogI("[Chat] Ready. Memory for " + _viewers.Count + " viewer(s). Config: " + cfgPath);
             }
             ReloadConfig();
             if (_dirty && (DateTime.UtcNow - _lastSave).TotalSeconds > 60) SaveMemory();
@@ -628,7 +646,7 @@ public class CPHInline
             DateTime stamp = File.GetLastWriteTimeUtc(p);
             if (stamp == _cfgStamp) return;
             var c = JsonConvert.DeserializeObject<ChatSettings>(File.ReadAllText(p));
-            if (c != null) { _cfg = c; _cfgStamp = stamp; }
+            if (c != null) { _cfg = c; _cfgStamp = stamp; PgLiteralSecret = c.ApiKey ?? ""; }
         }
         catch (Exception ex) { Warn("cfg", "chat_settings.json is not valid JSON: " + ex.Message); }
     }
@@ -785,7 +803,7 @@ public class CPHInline
         if (welcome) Say(cx, WelcomeLines[_rng.Next(WelcomeLines.Length)]);
         if (!accept) return;
         if (_inline) Respond(cx);
-        else { var t = new Thread(() => { try { Respond(cx); } catch (Exception ex) { CPH.LogError("[Chat] reply failed: " + ex); } }); t.IsBackground = true; t.Start(); }
+        else { var t = new Thread(() => { try { Respond(cx); } catch (Exception ex) { PgLogE("[Chat] reply failed: " + ex); } }); t.IsBackground = true; t.Start(); }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -821,7 +839,7 @@ public class CPHInline
             foreach (var m in root["vips"] as JArray ?? new JArray()) { string n = nameOf(m); if (n != "" && !roles.ContainsKey(n)) roles[n] = "vip"; }
             foreach (var m in root["bots"] as JArray ?? new JArray()) { string n = nameOf(m); if (n != "") bots.Add(n); }
             lock (_lock) { _remoteBots = bots; _roles = roles; }
-            CPH.LogInfo("[Chat] Roles loaded from the website: " + roles.Count + " mods/VIPs, " + bots.Count + " bots.");
+            PgLogI("[Chat] Roles loaded from the website: " + roles.Count + " mods/VIPs, " + bots.Count + " bots.");
         }
         catch (Exception ex) { Warn("roles", "Could not load the website roles list: " + ex.Message); }
         finally { _botFetching = false; }
@@ -1384,8 +1402,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         secs = Math.Max(1, Math.Min(secs, 1209600));
         string why = "Streamer's order: " + Short(Regex.Replace((string)ot["reason"] ?? "", @"[\r\n]+", " ").Trim(), 80);
         bool ok = false;
-        try { ok = CPH.TwitchTimeoutUser(target, secs, why, true); } catch (Exception ex) { CPH.LogWarn("[Chat] order timeout (bot account) failed: " + ex.Message); }
-        if (!ok) { try { ok = CPH.TwitchTimeoutUser(target, secs, why, false); } catch (Exception ex) { CPH.LogWarn("[Chat] order timeout (broadcaster account) failed: " + ex.Message); } }
+        try { ok = CPH.TwitchTimeoutUser(target, secs, why, true); } catch (Exception ex) { PgLogW("[Chat] order timeout (bot account) failed: " + ex.Message); }
+        if (!ok) { try { ok = CPH.TwitchTimeoutUser(target, secs, why, false); } catch (Exception ex) { PgLogW("[Chat] order timeout (broadcaster account) failed: " + ex.Message); } }
         return (ok ? "Timed out " : "Could not time out ") + target + " for " + secs + "s on the streamer's order";
     }
 
@@ -1433,8 +1451,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         secs = Math.Max(10, Math.Min(secs, Math.Max(10, _cfg.TimeoutMaxSec)));
         string why = "PinguinoBot: " + Short(Regex.Replace(reason ?? "chat rules", @"[\r\n]+", " ").Trim(), 90);
         bool ok = false;
-        try { ok = CPH.TwitchTimeoutUser(c.Login, secs, why, true); } catch (Exception ex) { CPH.LogWarn("[Chat] timeout (bot account) failed: " + ex.Message); }
-        if (!ok) { try { ok = CPH.TwitchTimeoutUser(c.Login, secs, why, false); } catch (Exception ex) { CPH.LogWarn("[Chat] timeout (broadcaster account) failed: " + ex.Message); } }
+        try { ok = CPH.TwitchTimeoutUser(c.Login, secs, why, true); } catch (Exception ex) { PgLogW("[Chat] timeout (bot account) failed: " + ex.Message); }
+        if (!ok) { try { ok = CPH.TwitchTimeoutUser(c.Login, secs, why, false); } catch (Exception ex) { PgLogW("[Chat] timeout (broadcaster account) failed: " + ex.Message); } }
         return (ok ? "Timed out " : "Could not time out ") + c.Login + " for " + secs + "s: " + why;
     }
 
@@ -1554,12 +1572,12 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         }
 
         // The STREAMER's orders (time someone out...): executed by code, only from his own account.
-        if (o != null && o["order_timeout"] != null) { string on = TryOrderTimeout(c, o["order_timeout"]); if (on != null) CPH.LogInfo("[Chat] " + on); }
+        if (o != null && o["order_timeout"] != null) { string on = TryOrderTimeout(c, o["order_timeout"]); if (on != null) PgLogI("[Chat] " + on); }
         // MODERATION: the AI may ask to time out the viewer it is answering. The code decides whether that is allowed.
         string timeoutNote = null;
         if (o != null && o["timeout"] != null && (o["timeout"].Type == JTokenType.Integer || o["timeout"].Type == JTokenType.Float))
             timeoutNote = TryTimeout(c, (int)o["timeout"], (string)o["reason"]);
-        if (timeoutNote != null) CPH.LogInfo("[Chat] " + timeoutNote);
+        if (timeoutNote != null) PgLogI("[Chat] " + timeoutNote);
 
         reply = PolishReply(reply, c);   // names capitalized; proper sentences when the tone is serious / helpful
 
@@ -3857,7 +3875,7 @@ OUTPUT ONLY JSON: {""opinions"":[{""login"":""..."",""opinion"":""...""}]}";
             }
             lock (_lock) { SaveJson("chat_study.json", _study); SaveMemory(); }
             if (outcome == "") outcome = written > 0 ? "updated " + written + " note" + (written == 1 ? "" : "s") + "." : "nothing to update.";
-            CPH.LogInfo("[Chat] Opinions: " + outcome);
+            PgLogI("[Chat] Opinions: " + outcome);
         }
         catch (Exception ex) { Warn("opinion", "opinion run failed: " + ex.Message); outcome = "it failed (see the log)."; }
         finally { _opinioning = false; }
@@ -3964,7 +3982,7 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
                               .ToDictionary(g => g.Key, g => g.OrderBy(x => x.T).ToList());
             }
             var top = byUser.OrderByDescending(kv => kv.Value.Count).Take(_cfg.MaxStudyViewers).ToList();
-            CPH.LogInfo("[Chat] Study: " + lines.Count + " new lines from " + byUser.Count + " chatters; studying " + top.Count + ".");
+            PgLogI("[Chat] Study: " + lines.Count + " new lines from " + byUser.Count + " chatters; studying " + top.Count + ".");
 
             var observations = new List<string>();
             var styleObs = new List<string>();
@@ -4042,9 +4060,9 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
                 SaveMemory();
             }
             PruneLogs();
-            CPH.LogInfo("[Chat] Study done: " + calls + " AI call(s), " + learned + " new fact(s).");
+            PgLogI("[Chat] Study done: " + calls + " AI call(s), " + learned + " new fact(s).");
         }
-        catch (Exception ex) { CPH.LogError("[Chat] Study failed: " + ex); }
+        catch (Exception ex) { PgLogE("[Chat] Study failed: " + ex); }
         finally { _studying = false; }
     }
 
@@ -4083,7 +4101,7 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
                     }
                     Directory.CreateDirectory(done);
                     File.Move(f, Path.Combine(done, DateTime.Now.ToString("yyyyMMddHHmmss") + "_" + Path.GetFileName(f)));
-                    CPH.LogInfo("[Chat] Imported " + n + " chat lines from " + Path.GetFileName(f));
+                    PgLogI("[Chat] Imported " + n + " chat lines from " + Path.GetFileName(f));
                 }
                 catch (Exception ex) { Warn("import", "Could not import " + Path.GetFileName(f) + ": " + ex.Message); }
             }
@@ -4120,7 +4138,7 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
                 return !(r is bool) || (bool)r;
             }
         }
-        catch (Exception ex) { CPH.LogWarn("[Chat] whisper failed: " + ex.Message); }
+        catch (Exception ex) { PgLogW("[Chat] whisper failed: " + ex.Message); }
         return false;
     }
 
@@ -4128,11 +4146,12 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
     static string _lastWarn = "";
     void Warn(string key, string msg)
     {
+        msg = PgScrub(msg);   // a log line or the "last problem" shown to mods never carries a key
         long now = Now(), last;
         _lastWarn = ToCentral(DateTime.UtcNow).ToString("HH:mm") + " CT " + key + ": " + Short(msg, 90);   // shown by !chatbot status
         if (_warned.TryGetValue(key, out last) && now - last < 300) return;
         _warned[key] = now;
-        CPH.LogWarn("[Chat] " + msg);
+        PgLogW("[Chat] " + msg);
     }
 
     JToken ReadJson(string file)
@@ -4146,7 +4165,7 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
     T LoadJson<T>(string file) where T : class
     {
         try { string p = Path.Combine(_dir, file); return File.Exists(p) ? JsonConvert.DeserializeObject<T>(File.ReadAllText(p)) : null; }
-        catch (Exception ex) { CPH.LogWarn("[Chat] could not load " + file + ": " + ex.Message); return null; }
+        catch (Exception ex) { PgLogW("[Chat] could not load " + file + ": " + ex.Message); return null; }
     }
 
     void SaveMemory()
@@ -4165,6 +4184,6 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
             try { if (File.Exists(path)) File.Replace(tmp, path, null); else File.Move(tmp, path); }
             catch (IOException) { File.WriteAllText(path, json); try { File.Delete(tmp); } catch (Exception) { } }
         }
-        catch (Exception ex) { CPH.LogWarn("[Chat] could not save " + file + ": " + ex.Message); }
+        catch (Exception ex) { PgLogW("[Chat] could not save " + file + ": " + ex.Message); }
     }
 }
