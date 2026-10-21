@@ -2,6 +2,7 @@
 // The core (Suite/suite/suite.py) owns modules, the event bus and the API; this shell only hosts it.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod mainwin;
 mod windows;
 
 use std::io::{Read, Write};
@@ -191,7 +192,12 @@ fn main() {
                 .menu(&menu)
                 .on_menu_event(|app, ev| match ev.id.as_ref() {
                     "open" => show_main(app),
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            mainwin::save(&w, true);
+                        }
+                        app.exit(0)
+                    }
                     _ => {}
                 })
                 // Left click reopens the window; the menu (Show / Quit) is on right click.
@@ -208,6 +214,11 @@ fn main() {
                     let _ = w.hide();
                 }
             } else {
+                if let Some(w) = app.get_webview_window("main") {
+                    mainwin::place(&w); // a normal window sized from the monitor, or where it was last time
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
                 windows::restore(app.handle());
             }
             Ok(())
@@ -215,9 +226,20 @@ fn main() {
         .on_window_event(|window, event| {
             // Close button on the main window hides to tray; Quit lives in the tray menu. Pop-outs really close.
             if window.label() == "main" {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
+                match event {
+                    WindowEvent::CloseRequested { api, .. } => {
+                        if let Some(w) = window.app_handle().get_webview_window("main") {
+                            mainwin::save(&w, true);
+                        }
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                    WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                        if let Some(w) = window.app_handle().get_webview_window("main") {
+                            mainwin::save(&w, false);
+                        }
+                    }
+                    _ => {}
                 }
             }
         })
