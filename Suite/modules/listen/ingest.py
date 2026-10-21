@@ -122,6 +122,38 @@ class Jobs:
         self._push(sid)
         return sid
 
+    ACTIVE = ("queued", "downloading", "converting", "transcribing")
+    RETRY_AT_ONCE = 5   # one click never queues more than this; the worker runs them one after another (concurrency 1)
+
+    def retry(self, session_id=None) -> dict:
+        """A person pressed Restart (one row) or Retry failed (all failed/interrupted rows). Safe against the duplicate-VOD bug:
+        skips anything that has lines already, is queued/running (also under another id, same source or url), or has no address."""
+        where, args = ("id=?", (session_id,)) if session_id else ("status IN ('interrupted','error')", ())
+        rows = db.rows(f"SELECT id,kind,title,source_id,url,status FROM sessions WHERE kind!='live' AND {where} ORDER BY created DESC", args)
+        busy = db.rows("SELECT source_id,url FROM sessions WHERE kind!='live' AND status IN ('queued','downloading','converting','transcribing')")
+        busy_src = {b["source_id"] for b in busy}
+        busy_url = {b["url"] for b in busy if b["url"]}
+        out = {"requeued": 0, "skipped": []}
+        for r in rows:
+            why = None
+            if r["status"] not in ("interrupted", "error"):
+                why = "not failed"
+            elif not r["url"]:
+                why = "no address to download again (add it with Add URL)"
+            elif r["source_id"] in busy_src or r["url"] in busy_url:
+                why = "already queued or running"
+            elif out["requeued"] >= self.RETRY_AT_ONCE:
+                why = "next batch (press again when the queue is empty)"
+            elif not self.submit(r["kind"], r["title"], r["source_id"], url=r["url"], force=True):
+                why = "already has lines"
+            if why:
+                out["skipped"].append({"id": r["id"], "title": r["title"], "why": why})
+            else:
+                out["requeued"] += 1
+                busy_src.add(r["source_id"])
+                busy_url.add(r["url"])
+        return out
+
     @staticmethod
     def attempts(source_id) -> int:
         r = db.one("SELECT n FROM attempts WHERE source_id=?", (source_id,))

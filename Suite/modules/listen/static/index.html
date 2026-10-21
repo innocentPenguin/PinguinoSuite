@@ -120,7 +120,7 @@ kbd{background:#232326;border:1px solid var(--line);border-radius:4px;padding:0 
       <input type="file" id="s-file" accept="audio/*,video/*">
     </div>
   </div>
-  <div class="panel"><b>Queue &amp; progress</b><div id="jobs" class="dim">—</div></div>
+  <div class="panel"><b>Queue &amp; progress</b> <span id="jobs-global" style="margin-left:12px"></span><div id="jobs" class="dim">—</div></div>
   <div class="panel"><b>On Twitch</b><div id="tw" class="dim">Press “Refresh list”.</div></div>
 </section>
 
@@ -244,8 +244,14 @@ document.addEventListener('keydown',e=>{if(!$('#tab-learn').classList.contains('
 
 // ---------- sources
 async function loadSources(){loadJobs()}
-async function loadJobs(){const js=await api('/api/jobs');$('#jobs').innerHTML=js.length?js.map(j=>`<div class="item"><span class="badge">${j.kind}</span><span class="ti" title="${esc(j.title)}">${esc(j.title)}</span>
-  ${j.status==='error'?`<span style="color:var(--bad)" title="${esc(j.error||'')}">error</span>`:j.status==='done'?'<span class="badge corrected">done</span>':`<span class="dim">${j.status}</span><progress max="1" value="${j.progress||0}"></progress>`}</div>`).join(''):'—'}
+async function loadJobs(){const js=await api('/api/jobs');const bad=js.filter(j=>j.status==='error'||j.status==='interrupted');
+  const gl=$('#jobs-global');if(gl)gl.innerHTML=bad.length?`<a href="#" id="retry-failed" style="text-decoration:underline;color:var(--acc)" title="Requeue only the ${bad.length} failed or interrupted row(s), a few at a time">Retry failed (${bad.length})</a> <button class="b" id="restart-all" title="Same as Retry failed">Restart all interrupted</button>`:'';
+  $('#jobs').innerHTML=js.length?js.map(j=>`<div class="item"><span class="badge">${j.kind}</span><span class="ti" title="${esc(j.title)}">${esc(j.title)}</span>
+  ${j.status==='error'?`<span style="color:var(--bad)" title="${esc(j.error||'')}">error</span>`:j.status==='interrupted'?`<span style="color:var(--bad)" title="${esc(j.error||'')}">interrupted</span>`:j.status==='done'?'<span class="badge corrected">done</span>':`<span class="dim">${j.status}</span><progress max="1" value="${j.progress||0}"></progress>`}
+  ${j.status==='error'||j.status==='interrupted'?`<button class="b" data-restart="${esc(j.id)}">Restart</button>`:''}</div>`).join(''):'—';
+  const run=async id=>{try{const r=await api('/api/jobs/retry',{body:id?{id}:{}});toast(`Requeued ${r.requeued}`+(r.skipped.length?`, skipped ${r.skipped.length}: ${r.skipped[0].why}`:''));loadJobs()}catch(e){toast(e.message,1)}};
+  $$('[data-restart]').forEach(b=>b.onclick=()=>run(b.dataset.restart));
+  const a=$('#retry-failed');if(a)a.onclick=e=>{e.preventDefault();run()};const ra=$('#restart-all');if(ra)ra.onclick=()=>run()}
 $('#s-refresh').onclick=async()=>{$('#tw').textContent='Loading…';try{await api('/api/settings',{body:{channel:$('#s-chan').value.trim()}});const items=await api('/api/twitch');
   window._tw=items;$('#tw').innerHTML=items.map((i,n)=>`<div class="item"><span class="badge">${i.kind}</span><span class="ti" title="${esc(i.title)}">${esc(i.title)}</span><span class="dim">${fmt(i.duration)} · ${i.created.slice(0,10)}</span>
    ${i.session?`<span class="badge ${i.session.status==='done'?'corrected':''}">${i.session.status}</span>`:`<button class="b" data-n="${n}">Learn from this</button>`}</div>`).join('')||'Nothing found.';

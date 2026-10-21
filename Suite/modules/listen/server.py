@@ -451,6 +451,15 @@ async def upload(file: UploadFile = File(...)):
     return {"session": jobs.submit("upload", file.filename, "upload:" + dst.name, path=str(dst))}
 
 
+class RetryIn(BaseModel):
+    id: str | None = None   # one row (Restart) or none = every failed/interrupted row (Retry failed)
+
+
+@app.post("/api/jobs/retry")
+def jobs_retry(b: RetryIn):
+    return jobs.retry(b.id)
+
+
 @app.get("/api/jobs")
 def list_jobs():
     return db.rows("SELECT id,kind,title,status,progress,error,duration FROM sessions WHERE kind!='live' ORDER BY created DESC LIMIT 60")

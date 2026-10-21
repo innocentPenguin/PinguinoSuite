@@ -93,6 +93,41 @@ class SourceLoop(unittest.TestCase):
         finally:
             self.ingest.MAX_SOURCES_BYTES = old
 
+    def add(self, sid, source_id, status, url="http://x", segs=0, kind="vod"):
+        self.db.run("INSERT INTO sessions(id,kind,title,source_id,url,status,created) VALUES(?,?,?,?,?,?,?)", (sid, kind, sid, source_id, url, status, 0))
+        for _ in range(segs):
+            self.db.run("INSERT INTO segments(session_id) VALUES(?)", (sid,))
+
+    def test_retry_failed_requeues_only_safe_rows(self):
+        self.add("a", "vod:a", "interrupted", url="http://a")
+        self.add("b", "vod:b", "error", url="http://b")
+        self.add("c", "vod:c", "done", segs=2)
+        self.add("d", "vod:d", "error", segs=3)                 # has lines: never thrown away
+        self.add("e", "vod:e", "error", url=None)               # nothing to download from
+        self.add("f", "vod:f", "downloading", url="http://same")
+        self.add("g", "vod:g", "error", url="http://same")      # same address as a running one (the duplicate-VOD case)
+        r = self.j.retry()
+        self.assertEqual(r["requeued"], 2)
+        why = {x["id"]: x["why"] for x in r["skipped"]}
+        self.assertIn("lines", why["d"])
+        self.assertIn("address", why["e"])
+        self.assertIn("running", why["g"])
+        self.assertEqual(self.j.q.qsize(), 2)
+
+    def test_retry_never_queues_more_than_the_batch_size(self):
+        for i in range(12):
+            self.add(f"x{i}", f"vod:x{i}", "interrupted", url=f"http://u{i}")
+        r = self.j.retry()
+        self.assertEqual(r["requeued"], self.ingest.Jobs.RETRY_AT_ONCE)
+        self.assertEqual(self.j.q.qsize(), self.ingest.Jobs.RETRY_AT_ONCE)
+        self.assertTrue(all("next batch" in x["why"] for x in r["skipped"]))
+
+    def test_restart_one_row_and_repeat_click_does_not_duplicate(self):
+        self.add("a", "vod:a", "interrupted", url="http://a")
+        self.assertEqual(self.j.retry("a")["requeued"], 1)
+        self.assertEqual(self.j.retry("a")["requeued"], 0)       # old row is gone, new one is queued: nothing to restart twice
+        self.assertEqual(self.j.q.qsize(), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
