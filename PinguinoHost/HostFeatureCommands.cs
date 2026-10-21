@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -211,7 +211,12 @@ namespace PinguinoHost
         {
             string f = Path.Combine(Program.SuiteDir ?? "", "PinguinoB0t", "commands.json");
             JObject src; try { src = SubsImport.ParseJ(File.ReadAllText(f)); } catch (Exception ex) { return new JObject { { "ok", false }, { "error", "commands.json: " + ex.Message } }; }
-            var all = (src["commands"] as JArray) ?? new JArray();
+            var all = new JArray();   // archived / disabled commands are not listed; an edited permission tier moves the entry between the viewer and mod lists
+            foreach (var c0 in ((src["commands"] as JArray) ?? new JArray()).OfType<JObject>())
+            {
+                string tier; if (!CmdProfiles.DocVisible((string)c0["command"], out tier)) continue;
+                var c1 = (JObject)c0.DeepClone(); if (tier != null) { c1["tier"] = tier; c1["who"] = tier == "mod" || tier == "broadcaster" ? "mods" : "everyone"; } all.Add(c1);
+            }
             Func<JToken, string> who = c => ((string)c["who"] ?? "").ToLowerInvariant();
             var viewer = new JArray(all.Where(c => who(c).Contains("everyone") || who(c) == "automatic").Select(Norm)); var chan = ChannelLore.DocRows(); foreach (var r in chan) { viewer.Add(r); } var mod = new JArray(all.Where(c => who(c).Contains("mod")).Select(c => { var o = (JObject)Norm(c); if (o["modSection"] != null) { o["section"] = o["modSection"]; o["importance"] = o["modImportance"]; } return o; }));
             return new JObject { { "ok", true }, { "version", src["version"] }, { "updated", src["updated"] }, { "viewer", viewer }, { "mod", mod }, { "all", new JArray(all.Concat(chan)) }, { "counts", new JObject { { "viewer", viewer.Count }, { "mod", mod.Count }, { "channel", chan.Count } } } };
