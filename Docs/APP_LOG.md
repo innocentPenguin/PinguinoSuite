@@ -77,6 +77,9 @@ Kept by session 00 (the only session that launches, restarts or rebuilds the app
 | 2026-10-19 | Verified | All four module pages load inside the real Tauri window (screenshots by 00, report by 01). |
 | 2026-10-19 | Fix | PinguinoApp.bat launches the Tauri exe (one window) instead of the legacy standalone core. |
 
+## 2026-10-21 02:05 - Full rebuild + launch (roles tags UI, Master View)
+- Build-All --no-launch OK (first two attempts failed on 02's half-done HostEvents.cs; fixed by 02), then launched via D:\PinguinoSuite\PinguinoApp\PinguinoApp.bat. Includes 1eb4a1b role tags UI, 6667fdd Master View nav hook + CSP frame-src 'self', b065ab7 Master View page, 3ecc4ff simulator, cf50a01 templates. /api/live, /api/commands/profiles, /api/obs/status, /api/sim/status all 200. UI not yet visually checked.
+
 ## 2026-10-21 01:52 - Host restart (roles tags backend)
 - Host restarted via D:\PinguinoSuite\App\Update-Module.ps1 host on 02's d4d309a: command permissions are role tags (roleOptions on /api/commands/profiles). /api/live 200. App not rebuilt; the Commands page tags UI (01) is still pending.
 
