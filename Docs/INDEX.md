@@ -112,6 +112,7 @@ Each big file below starts with its own INDEX block (routes/functions with line 
 - Ports: core 8760, Listen 8765, Multi 8766, Host 8770, Voice 8772.
 - Tests: `Suite/.venv/Scripts/python.exe -m unittest discover -s Suite/tests` (mic, listen_db, supervisor, vault, help, prestream, device, portable, prefs).
 - Safety nets: Listen `db.rows_nowait` + `/api/status` `stats_busy` (status never hangs behind a long DB job); core `Module.start` refuses to spawn when the module's port is already held by a hung copy and warns in Console (source `supervisor`).
+- Shell Wheel & Games page (`pages.wheel`, `bindWheel`; contract with 02: `GET|POST :8770/api/tune {area,values}`, `/api/wheel/spin|new|reset`, `/api/gamble/simulate`; economy via `/api/economy`; mock data until `/api/tune` exists).
 - Shell Approvals tab (`pages.approvals`, `bindApprovals`) reads the Host Teach inbox: `GET /api/teach?status=`, `POST /api/teach/decide`.
 
 ## Music (PinguinoMusic / Spotify module, port 8771)

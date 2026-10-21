@@ -235,6 +235,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
   <h6>System</h6>
   <div class="item" data-r="accounts"><span class="ic">👤</span>Accounts</div>
   <div class="item" data-r="approvals"><span class="ic">✅</span>Approvals<span class="cbadge" id="abadge"></span></div>
+  <div class="item" data-r="wheel"><span class="ic">🎡</span>Wheel &amp; Games</div>
   <div class="item" data-r="integrations"><span class="ic">🔌</span>Integrations</div>
   <div class="item" data-r="activity"><span class="ic">⚡</span>Activity</div>
   <div class="item" data-r="help"><span class="ic">?</span>Help</div>
@@ -464,7 +465,7 @@ setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
 setInterval(()=>{if(route!=='activity'&&anyActSound()&&!document.hidden)pollActivity()},5000);   // keeps follow / sub / raid sounds alive on any page
 /* ============ Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PW={mons:null,wins:[],err:null,sel:{page:'console',mon:'',place:'free',top:false}};
-const popRoutes=()=>[['dashboard','Dashboard'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['accounts','Accounts'],['approvals','Approvals'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
+const popRoutes=()=>[['dashboard','Dashboard'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['accounts','Accounts'],['approvals','Approvals'],['wheel','Wheel & Games'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
 function popTarget(route){   // module pages open directly (they are plain local pages); shell pages open the shell in chrome-less mode
   if(isMod(route)){const m=modOf(route);if(!m)return null;return {url:modSrc(m),title:m.ui?.nav||m.name}}
   return {url:'index.html?popout='+encodeURIComponent(route),title:titles[route]||route}}
@@ -559,7 +560,7 @@ document.addEventListener('keydown',e=>{if(e.ctrlKey&&!e.shiftKey&&!e.altKey&&e.
 const navIdx=id=>{const i=PF.layout.nav_order.indexOf(id);return i<0?1e6:i};
 const navHid=id=>PF.layout.nav_hidden.includes(id);
 const navSort=(list,idf)=>PF.layout.nav_order.length?list.map((x,i)=>[x,i]).sort((a,b)=>(navIdx(idf(a[0]))-navIdx(idf(b[0])))||(a[1]-b[1])).map(x=>x[0]):list;
-const STATIC_SYS=['activity','accounts','approvals','integrations','help','console','personalize','settings'];
+const STATIC_SYS=['activity','accounts','approvals','wheel','integrations','help','console','personalize','settings'];
 function navStatic(){const foot=$('#navfoot');if(!foot)return;
   const els=Object.fromEntries(STATIC_SYS.map(r=>[r,document.querySelector(`nav > .item[data-r="${r}"]`)]));
   const order=STATIC_SYS.map((r,i)=>[r,i]).sort((a,b)=>(navIdx(a[0])-navIdx(b[0]))||(a[1]-b[1])).map(x=>x[0]).filter(r=>r!=='settings').concat(['settings']);
@@ -568,7 +569,7 @@ const FIXED=['dashboard','settings','personalize'];
 function navCatalog(){const out=[{id:'dashboard',label:'Dashboard',fixed:true}];
   const mods=S?navSort(navEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100)),x=>x.rid):[];
   mods.forEach(m=>out.push({id:m.rid,label:m.ui.nav||m.name}));REAL.forEach(x=>out.push({id:x[0],label:x[2]}));
-  const sys={activity:'Activity',accounts:'Accounts',approvals:'Approvals',integrations:'Integrations',help:'Help',console:'Console',personalize:'Personalize',settings:'Settings'};
+  const sys={activity:'Activity',accounts:'Accounts',approvals:'Approvals',wheel:'Wheel & Games',integrations:'Integrations',help:'Help',console:'Console',personalize:'Personalize',settings:'Settings'};
   STATIC_SYS.map((r,i)=>[r,i]).sort((a,b)=>(navIdx(a[0])-navIdx(b[0]))||(a[1]-b[1])).forEach(([r])=>out.push({id:r,label:sys[r],fixed:FIXED.includes(r)}));
   return out}
 
@@ -931,6 +932,96 @@ function bindApprovals(){
       toast({approve:'Approved',edit:'Edited and approved',reject:'Rejected',undo:'Undone'}[a]||'Done');APR.edit=null}
     catch(e){toast('Could not '+a+': '+(e&&e.message?e.message:e));b.disabled=false;return}
     re();aprPoll()})}
+/* ============ Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy also via /api/economy) + live wheel preview + test-bet simulator ============ */
+const WG_PREVIEW='http://127.0.0.1:8770/overlays/wheel.html';   // 02 confirms the exact overlay path
+const WG={d:undefined,mock:false,tab:'wheel',edit:{},msg:'',sim:null,key:0};
+const WG_MOCK=[
+ {id:'wheel',title:'Wheel',help:'The tournament team wheel.',fields:[
+  {key:'spinSpeed',label:'Spin speed',type:'number',min:1,max:10,step:1,value:5,default:5,help:'1 slow, 10 fast.'},
+  {key:'steps',label:'Steps (ticks) per spin',type:'number',min:10,max:200,step:5,value:60,default:60},
+  {key:'mode',label:'Mode',type:'select',options:['random','balanced'],value:'random',default:'random',help:'Balanced is labelled RIGGED/BALANCED by MMR everywhere.'},
+  {key:'autoReopen',label:'Re-open entry after a spin',type:'bool',value:false,default:false},
+  {key:'holdTimeSec',label:'Hold the result on screen (s)',type:'number',min:0,max:120,step:1,value:15,default:15},
+  {key:'teamSize',label:'Team size',type:'number',min:1,max:8,step:1,value:2,default:2}]},
+ {id:'queue',title:'Queue',help:'The customs / lobby queue.',fields:[
+  {key:'open',label:'Queue is open',type:'bool',value:true,default:true},
+  {key:'strikes',label:'Strikes before blocked (half strikes count 0.5)',type:'number',min:0,max:10,step:0.5,value:3,default:3},
+  {key:'recycler',label:'Recycler (move skipped people to the back)',type:'bool',value:true,default:true},
+  {key:'inactivityMinutes',label:'Inactivity timeout (minutes)',type:'number',min:1,max:120,step:1,value:15,default:15},
+  {key:'incomplete',label:'Allow incomplete entries',type:'bool',value:false,default:false}]},
+ {id:'gambling',title:'Gambling',help:'Chat games that spend points.',fields:[
+  {key:'winChance',label:'Win chance (%)',type:'number',min:1,max:99,step:1,value:45,default:45,unit:'%'},
+  {key:'payout',label:'Payout multiplier',type:'number',min:1,max:10,step:0.1,value:2,default:2,unit:'x'},
+  {key:'min',label:'Minimum bet',type:'number',min:1,max:100000,step:1,value:10,default:10},
+  {key:'max',label:'Maximum bet (empty = none)',type:'number',min:1,max:1000000,step:1,value:null,default:null,optional:true},
+  {key:'cooldownSec',label:'Cooldown per viewer (s)',type:'number',min:0,max:3600,step:1,value:30,default:30},
+  {key:'slotsOn',label:'Slots enabled',type:'bool',value:true,default:true},
+  {key:'coinflipOn',label:'Coin flip enabled',type:'bool',value:true,default:true}]},
+ {id:'alias',title:'Aliases',help:'Name matching for the wheel / queue.',fields:[
+  {key:'nearMiss',label:'Accept near-miss names (typos)',type:'bool',value:true,default:true},
+  {key:'aliases',label:'Use saved aliases',type:'bool',value:true,default:true}]}];
+const wgKind=v=>typeof v==='boolean'?'bool':typeof v==='number'?'number':Array.isArray(v)?'list':'text';
+function wgEconomy(j){const st=j.settings||{};return {id:'economy',title:'Economy',help:'Points and watch time ('+(j.people||0)+' people). Saved straight to the Host.',real:true,fields:Object.keys(st).map(k=>({key:k,label:k.replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase()),type:wgKind(st[k]),value:st[k],default:st[k],step:wgKind(st[k])==='number'?(Number.isInteger(st[k])?1:0.1):undefined,min:0}))}}
+async function loadWheel(){
+  let areas=null,mock=false;
+  try{const j=await hostGet('/api/tune');if(j&&j.ok&&Array.isArray(j.areas))areas=j.areas}catch{}
+  if(!areas){mock=true;areas=JSON.parse(JSON.stringify(WG.keepMock||WG_MOCK))}
+  if(!areas.some(a=>a.id==='economy')){try{areas.push(wgEconomy(await hostGet('/api/economy')))}catch{}}
+  WG.d=areas;WG.mock=mock;WG.keepMock=mock?areas.filter(a=>a.id!=='economy'):null;
+  if(route==='wheel'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
+const wgVal=(f,aid)=>{const e=WG.edit[aid];return e&&f.key in e?e[f.key]:f.value};
+function wgField(a,f){const v=wgVal(f,a.id),k=`data-a="${a.id}" data-k="${esc(f.key)}"`,dirty=WG.edit[a.id]&&f.key in WG.edit[a.id];
+  let inp;
+  if(f.type==='bool')inp=`<input type="checkbox" ${k} ${v?'checked':''}>`;
+  else if(f.type==='select')inp=`<select ${k}>${(f.options||[]).map(o=>`<option${o===v?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
+  else if(f.type==='list')inp=`<input ${k} data-list="1" value="${esc((v||[]).join(', '))}" style="width:220px">`;
+  else if(f.type==='number'){const rng=f.min!=null&&f.max!=null&&f.max-f.min<=1000;
+    inp=`${rng?`<input type="range" ${k} data-num="1" min="${f.min}" max="${f.max}" step="${f.step||1}" value="${v??f.min}" style="width:150px">`:''}<input type="number" ${k} data-num="1" ${f.min!=null?`min="${f.min}"`:''} ${f.max!=null?`max="${f.max}"`:''} step="${f.step||'any'}" value="${v==null?'':v}" ${f.optional?'placeholder="none"':''} style="width:90px">${f.unit?` <span class="sm faint">${esc(f.unit)}</span>`:''}`}
+  else inp=`<input ${k} value="${esc(v??'')}" style="width:220px">`;
+  return `<div class="prow"><div class="grow"><b>${esc(f.label||f.key)}</b>${dirty?' <span class="pill">changed</span>':''}${f.help?`<div class="sm faint">${esc(f.help)}</div>`:''}</div><div class="row" style="gap:6px">${inp}</div></div>`}
+pages.wheel=()=>{
+  if(WG.d===undefined){loadWheel();return '<div class="dim">Loading…</div>'}
+  const areas=WG.d;if(!areas.some(a=>a.id===WG.tab))WG.tab=areas[0]?.id;
+  const a=areas.find(x=>x.id===WG.tab);if(!a)return '<div class="card dim">No settings available.</div>';
+  const nChanged=Object.keys(WG.edit[a.id]||{}).length;
+  const sims=(areas.find(x=>x.id==='gambling')?.fields||[]).filter(f=>/On$|Enabled$/.test(f.key)).map(f=>f.key.replace(/On$|Enabled$/,''));
+  return `<div class="grid g2" style="align-items:start;max-width:1200px">
+   <div><div class="row wrap" style="margin-bottom:8px">${areas.map(x=>`<span class="chip${x.id===WG.tab?' on':''}" data-wgt="${x.id}">${esc(x.title)}</span>`).join('')}</div>
+    ${WG.mock&&a.id!=='economy'?'<div class="pnote" style="color:var(--warn)">Preview data: the Host has no /api/tune yet, so these values are examples and are not saved.</div>':''}
+    <div class="card"><div class="row"><h3 style="margin:0">${esc(a.title)}</h3><span class="sp"></span><button class="sm" id="wg-save"${nChanged?'':' disabled'}>Save${nChanged?' ('+nChanged+')':''}</button><button class="sm" id="wg-def">Defaults</button></div>
+     ${a.help?`<div class="pnote">${esc(a.help)}</div>`:''}${a.fields.map(f=>wgField(a,f)).join('')}${WG.msg?`<div class="sm" style="margin-top:8px">${esc(WG.msg)}</div>`:''}</div></div>
+   <div><div class="card"><div class="row"><h3 style="margin:0">Live wheel preview</h3><span class="sp"></span><button class="sm" data-wgact="spin">SPIN</button><button class="sm" data-wgact="new">New round</button><button class="sm" data-wgact="reset">Reset</button></div>
+     <iframe id="wg-prev" src="${WG_PREVIEW}" style="width:100%;height:340px;border:1px solid var(--line2);border-radius:8px;margin-top:8px;background:#0b0b0e"></iframe>
+     <div class="sm faint" style="margin-top:6px">The same overlay OBS shows. <a href="#" data-aext="${WG_PREVIEW}">Open it in the browser</a>.</div></div>
+    <div class="card"><h3>Test-bet simulator</h3><div class="pnote">Plays the game with the current gambling settings. No real points move.</div>
+     <div class="row wrap"><select id="sm-game">${(sims.length?sims:['slots','coinflip']).map(g=>`<option>${esc(g)}</option>`).join('')}</select><input id="sm-bet" type="number" min="1" value="100" style="width:80px"><input id="sm-n" type="number" min="1" max="1000" value="100" style="width:80px"><span class="sm faint">bet × rounds</span><button class="sm" id="sm-run">Simulate</button></div>
+     ${WG.sim?`<div style="margin-top:8px" class="sm"><b>${WG.sim.wins}</b> wins · <b>${WG.sim.losses}</b> losses · net <b style="color:${WG.sim.net<0?'var(--warn)':'inherit'}">${WG.sim.net}</b> · avg payout ${WG.sim.avgPayout}${WG.sim.local?' <span class="faint">(estimated locally)</span>':''}</div>`:''}</div></div></div>`};
+function wgSimLocal(g,bet,n){const gm=WG.d.find(x=>x.id==='gambling'),v=k=>{const f=gm?.fields.find(x=>x.key===k);return f?wgVal(f,'gambling'):null};
+  const p=(v('winChance')??45)/100,mult=v('payout')??2;let w=0,net=0;for(let i=0;i<n;i++){if(Math.random()<p){w++;net+=bet*(mult-1)}else net-=bet}
+  return {wins:w,losses:n-w,net:Math.round(net),avgPayout:Math.round(w?bet*mult:0),local:true}}
+function bindWheel(){
+  const a=(WG.d||[]).find(x=>x.id===WG.tab);
+  $$('[data-wgt]').forEach(b=>b.onclick=()=>{WG.tab=b.dataset.wgt;WG.msg='';draw(true)});
+  $$('[data-aext]').forEach(b=>b.onclick=e=>{e.preventDefault();openExternal(b.dataset.aext)});
+  $$('#page [data-k]').forEach(el=>el.oninput=el.onchange=()=>{const f=a.fields.find(x=>x.key===el.dataset.k);let v;
+    if(f.type==='bool')v=el.checked;else if(f.type==='number'){v=el.value===''?null:Number(el.value);if(v==null&&!f.optional)return}else if(f.type==='list')v=el.value.split(',').map(x=>x.trim()).filter(Boolean);else v=el.value;
+    (WG.edit[a.id]=WG.edit[a.id]||{})[f.key]=v;
+    $$('#page [data-k="'+f.key+'"]').forEach(o=>{if(o!==el&&o.type!=='checkbox')o.value=v==null?'':v});
+    const sv=$('#wg-save');if(sv){sv.disabled=false;sv.textContent='Save ('+Object.keys(WG.edit[a.id]).length+')'}});
+  $('#wg-def')&&($('#wg-def').onclick=()=>{WG.edit[a.id]={};a.fields.forEach(f=>{if(f.default!==f.value)WG.edit[a.id][f.key]=f.default});draw(true)});
+  $('#wg-save')&&($('#wg-save').onclick=async()=>{const vals=WG.edit[a.id]||{};if(!Object.keys(vals).length)return;
+    try{let r;
+      if(a.id==='economy'&&a.real)r=await hostJ('/api/economy',{settings:vals});
+      else if(WG.mock){r={ok:true};}
+      else r=await hostJ('/api/tune',{area:a.id,values:vals});
+      if(r.ok===false||r._ok===false&&!WG.mock)throw new Error(r.error||(r.errors&&Object.values(r.errors)[0])||('HTTP '+(r._status||'?')));
+      a.fields.forEach(f=>{if(f.key in vals)f.value=vals[f.key]});WG.edit[a.id]={};WG.msg=WG.mock&&a.id!=='economy'?'Kept for this preview only (the Host has no /api/tune yet).':'Saved.';toast('Saved '+a.title)}
+    catch(e){WG.msg='Could not save: '+(e&&e.message?e.message:e);toast(WG.msg)}draw(true)});
+  $$('[data-wgact]').forEach(b=>b.onclick=async()=>{const act=b.dataset.wgact;if(act==='reset'&&!confirm('Reset the wheel? Entrants and the current round are cleared.'))return;
+    try{const r=await hostJ('/api/wheel/'+act,{});if(r.ok===false||(!r._ok&&!r.ok))throw new Error(r.error||('HTTP '+(r._status||'?')));toast({spin:'Spinning',new:'New round started',reset:'Wheel reset'}[act])}
+    catch(e){toast('Wheel '+act+' failed: '+(e&&e.message?e.message:e)+(WG.mock?' (the Host has no wheel endpoints yet)':''))}});
+  $('#sm-run')&&($('#sm-run').onclick=async()=>{const g=$('#sm-game').value,bet=+$('#sm-bet').value||1,n=Math.min(1000,Math.max(1,+$('#sm-n').value||1));
+    try{const r=await hostJ('/api/gamble/simulate',{game:g,bet,rounds:n});if(!r.ok)throw 0;WG.sim=r}catch{WG.sim=wgSimLocal(g,bet,n)}draw(true)})}
 pages.integrations=()=>{
   if(I.err)return `<div class="card" style="max-width:520px"><h3>Integrations</h3><div class="dim">${esc(I.err)}</div></div>`;
   if(!I.items)return '<div class="dim">Checking every connection…</div>';
@@ -1154,7 +1245,7 @@ function showWizard(){let role='streaming';const el=document.createElement('div'
       D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
 
 /* ============ shell ============ */
-const titles={approvals:'Approvals',accounts:'Accounts',quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={wheel:'Wheel & Games',approvals:'Approvals',accounts:'Accounts',quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const REAL=[['quick','⚡','Quick actions'],['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
@@ -1196,6 +1287,7 @@ function bind(){
   if(route==='quick')bindQuick();
   if(route==='accounts')bindAccounts();
   if(route==='approvals')bindApprovals();
+  if(route==='wheel')bindWheel();
   if(route==='integrations')bindIntegrations();
   if(route==='settings')bindPortable();
   $$('[data-go]').forEach(e=>e.onclick=()=>{if(e.dataset.commtab){COMM.tab=e.dataset.commtab;try{localStorage.setItem('commTab',COMM.tab)}catch{}}go(e.dataset.go)});
