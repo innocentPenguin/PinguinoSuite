@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -122,7 +122,7 @@ namespace PinguinoHost
         {
             var s = LoadV(); bool tok = !string.IsNullOrEmpty((string)s["UserToken"]);
             return new JObject {
-                { "ok", true }, { "name", "PinguinoHost" }, { "uptimeSec", (int)(DateTime.UtcNow - Started).TotalSeconds }, { "sim", SimMode },
+                { "ok", true }, { "name", "PinguinoHost" }, { "uptimeSec", (int)(DateTime.UtcNow - Started).TotalSeconds }, { "sim", SimMode }, { "simulation", Sim.On },
                 { "channel", (string)s["Channel"] ?? "" }, { "chatConnected", IrcConnected }, { "eventSubConnected", EventSubConnected },
                 { "obsConnected", ObsConnected() }, { "canSend", tok && !string.IsNullOrEmpty((string)s["ClientId"]) && !string.IsNullOrEmpty((string)s["SenderId"]) && !string.IsNullOrEmpty((string)s["BroadcasterId"]) },
                 { "messages", Messages }, { "lastMessageAgoSec", LastMessage == DateTime.MinValue ? (int?)null : (int)(DateTime.UtcNow - LastMessage).TotalSeconds },

@@ -54,7 +54,7 @@ namespace PinguinoHost
             return "The last stream ended " + s + " ago.";
         }
 
-        public static JObject Api() { return new JObject { { "ok", true }, { "live", _live }, { "source", _source }, { "checkedAgoSec", _at == DateTime.MinValue ? (int?)null : (int)(DateTime.UtcNow - _at).TotalSeconds } }; }
+        public static JObject Api() { return new JObject { { "ok", true }, { "live", _live }, { "source", _source }, { "simulation", Sim.On }, { "checkedAgoSec", _at == DateTime.MinValue ? (int?)null : (int)(DateTime.UtcNow - _at).TotalSeconds } }; }
 
         public static void Start(HostCPH cph, int periodSec = 20)
         {

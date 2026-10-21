@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -284,6 +284,7 @@ namespace PinguinoHost
         // ---- mods change balances ----
         public static string Adjust(string login, double delta, string by)
         {
+            if (Sim.IsSim(login)) { Sim.Credit(login, (long)delta); return "(sim)"; }
             login = Canon(Boards.AliasMap(), login); if (login == "") return "Which user?";
             lock (L)
             {
@@ -297,11 +298,12 @@ namespace PinguinoHost
         // ---- spending (the hidden shop): every change carries an id, so a retry or a restart never applies it twice ----
         /// <summary>whole points the user can spend right now</summary>
         public static bool Applied(string id) { lock (L) return Ledger()[id] != null; }
-        public static long Balance(string login) { return (long)Math.Floor(Me(login).Points); }
+        public static long Balance(string login) { if (Sim.IsSim(login)) return Sim.Balance(login); return (long)Math.Floor(Me(login).Points); }
         /// <summary>takes `amount` points for good. Returns null on success (also when this id was already applied: nothing is taken twice), otherwise the reason it was refused.</summary>
         public static string Spend(string id, string login, long amount, string reason)
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return "bad spend";
+            if (Sim.IsSim(login)) return Sim.Spend(login, amount);   // simulated players: separate in-memory ledger, the real one is never touched
             login = Canon(Boards.AliasMap(), login); if (login == "") return "no user";
             long bal = Balance(login);
             lock (L)
@@ -317,6 +319,7 @@ namespace PinguinoHost
         public static bool Credit(string id, string login, long amount, string reason)
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return false;
+            if (Sim.IsSim(login)) return Sim.Credit(login, amount);
             login = Canon(Boards.AliasMap(), login); if (login == "") return false;
             lock (L)
             {
@@ -341,6 +344,7 @@ namespace PinguinoHost
             if (mode == "add" && amt == 0) return new JObject { { "ok", false }, { "error", "amount must be a non-zero number" } };
             if (mode == "set" && amt < 0) return new JObject { { "ok", false }, { "error", "a balance cannot be negative" } };
             amt = Math.Round(amt);
+            if (target == "user" && Sim.IsSim((string)b["login"])) return Sim.Grant((string)b["login"], mode, amt);
             var al = Boards.AliasMap(); var snap = Snapshot(al); var targets = new List<string>();
             if (target == "user") { string one = Canon(al, (string)b["login"]); if (one == "") return new JObject { { "ok", false }, { "error", "login required" } }; targets.Add(one); }
             else targets = snap.Users.Keys.Where(k => !Boards.IsBot(k)).ToList();

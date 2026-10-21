@@ -217,6 +217,7 @@ namespace PinguinoHost
                 return true;
             }
             if (CmdRoutes(c, p, m)) return true;
+            if (SimRoutes(c, p, m)) return true;
             if (TuneRoutes(c, p, m)) return true;
             if (p == "/api/livelog" && m == "GET") { Write(c, LiveLog.Api().ToString(), "application/json"); return true; }
             if (p == "/api/teach" && m == "GET") { Write(c, Teach.Api(c.Request.QueryString["status"]).ToString(), "application/json"); return true; }

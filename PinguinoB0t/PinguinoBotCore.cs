@@ -711,6 +711,13 @@ public class CPHInline
         MigrateObsDefaults();
 
         _initialized = true;
+        // [SIM] a crash or restart while simulated/practice players were showing leaves them in the public files: write the real state over them
+        try
+        {
+            string stale = File.Exists(Path.Combine(_dataDir, "live_state.json")) ? File.ReadAllText(Path.Combine(_dataDir, "live_state.json")) : "";
+            if (stale.Contains("\"sim\":true") || stale.Contains("\"practice\":true")) { _stateDirty = true; _wheelDirty = true; PublishState("startup", "cleared leftover practice/simulation players"); }
+        }
+        catch (Exception) { }
         CPH.LogInfo("[BVQ] Initialized. Data dir: " + _dataDir);
     }
 
@@ -809,11 +816,93 @@ public class CPHInline
         SavePlayers(); SaveQueue(); SaveMatches();
     }
 
+    // ── SIMULATED PLAYERS  [NEW][SIM]  (driven by the Host's /api/sim/*: "!practice sim add|drop|clear|site ...", streamer/mod only, silent in chat) ──
+    // Same rules as practice mode (memory only, never saved, never counted), plus: they carry a real viewer's name for show (login "sim_<name>"), they join and leave the queue and
+    // the wheel sign-ups through the real structures (join/leave feed included), their wheel announcements never reach chat, and the website push can leave them out (sim site off).
+    static readonly Dictionary<string, string> _sim = new Dictionary<string, string>();   // sim login -> display name
+    static bool _simSite = true;                                                          // false: the website push is built without the sim players
+    [ThreadStatic] static bool _forSite;                                                  // true only while the web sync builds a payload for the website
+    bool IsSim(string login) { return _sim.Count > 0 && login != null && _sim.ContainsKey(login); }
+    bool HideSimFromSite { get { return _forSite && !_simSite && _sim.Count > 0; } }
+    static int SimHash(string s) { uint h = 2166136261; foreach (char c in s) { h ^= c; h *= 16777619; } return (int)(h % 1100); }
+
+    int SimJoin(IEnumerable<string> names)
+    {
+        int added = 0;
+        foreach (var raw in names)
+        {
+            string clean = System.Text.RegularExpressions.Regex.Replace(raw ?? "", @"[^A-Za-z0-9_]", "");
+            if (clean.Length < 2) continue;
+            if (clean.Length > 25) clean = clean.Substring(0, 25);
+            string login = "sim_" + clean.ToLower();
+            if (_sim.ContainsKey(login) || _players.ContainsKey(login) || _sim.Count >= 200) continue;
+            // never shadow a real person who is on the queue or the wheel right now
+            if (_queue.Any(e => string.Equals(e.Username, clean, StringComparison.OrdinalIgnoreCase)) ||
+                (_wheel != null && _wheel.Entrants.Any(e => string.Equals(e.Name, clean, StringComparison.OrdinalIgnoreCase) || e.Login == clean.ToLower()))) continue;
+            int mmr = 450 + SimHash(login);
+            _players[login] = new Player { Username = login, GameId = clean, MmrSource = "manual", PeakMmr = mmr, MmrLastUpdated = Now() };
+            _sim[login] = clean; _practice.Add(login); _practiceOn = true;
+            AddToQueue(login);
+            if (_wheel != null && _wheel.Status == "open" && !_wheel.Entrants.Any(e => e.Login == login))
+            {
+                _wheel.Entrants.Add(new WheelEntrant { Id = "sim-" + login, Login = login, Name = clean, Epic = clean, Mmr = mmr, Practice = true });
+                WheelNote(_wheel, clean, "join");
+            }
+            added++;
+        }
+        return added;
+    }
+
+    int SimDrop(IEnumerable<string> names)
+    {
+        int gone = 0;
+        foreach (var raw in names)
+        {
+            string login = "sim_" + System.Text.RegularExpressions.Regex.Replace(raw ?? "", @"[^A-Za-z0-9_]", "").ToLower();
+            if (!_sim.ContainsKey(login)) continue;
+            _queue.RemoveAll(e => e.Username == login);
+            var we = _wheel == null ? null : _wheel.Entrants.FirstOrDefault(e => e.Login == login);
+            if (we != null) WheelRemoveEntrant(_wheel, we);
+            if (_lastBalance == null || !IsPracticeLast()) _players.Remove(login);
+            _practice.Remove(login); _sim.Remove(login); gone++;
+        }
+        CompactPositions();
+        return gone;
+    }
+
+    void SimTouch()
+    {
+        SaveQueue(); SavePlayers();
+        if (_wheel != null) { _wheelDirty = true; WheelSave(); }
+        _stateDirty = true;
+        PublishState("queue_update", "simulation");
+    }
+
+    bool HandleSim(string input)
+    {
+        string[] parts = (input ?? "").Trim().Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+        string sub = parts.Length > 0 ? parts[0].ToLower() : "";
+        var names = (parts.Length > 1 ? (parts.Length > 2 ? parts[1] + " " + parts[2] : parts[1]) : "").Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        _silentTune = true;
+        try
+        {
+            if (sub == "add" || sub == "join") SimJoin(names);
+            else if (sub == "drop" || sub == "leave") SimDrop(names);
+            else if (sub == "clear" || sub == "stop") { _sim.Clear(); PracticeClear(); _wheelDirty = true; _stateDirty = true; PublishState("queue_update", "simulation off"); return true; }
+            else if (sub == "site") { _simSite = !(parts.Length > 1 && parts[1].ToLower() == "off"); _wheelDirty = true; _stateDirty = true; PublishState("queue_update", "simulation"); return true; }
+            else return true;
+            SimTouch();
+        }
+        finally { _silentTune = false; }
+        return true;
+    }
+
     bool HandlePractice(string user, string input, bool isPrivileged)
     {
         if (!isPrivileged) { Say("@" + user + " Only mods can use !practice."); return true; }
         string[] parts = (input ?? "").Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
         string sub = parts.Length > 0 ? parts[0].ToLower() : "status";
+        if (sub == "sim") return HandleSim(string.Join(" ", parts.Skip(1)));
         int n = 8;
         if (parts.Length > 1) { int v; if (int.TryParse(parts[1], out v)) n = Math.Max(1, Math.Min(40, v)); }
         switch (sub)
@@ -1539,7 +1628,7 @@ public class CPHInline
             {
                 if (m.Due > 0 && NowMs() < m.Due) continue;   // not before the overlay has landed
                 if (sentNow >= _wheelPerTick) return;   // the next tick carries on
-                try { PgSay("core", m.Text); }
+                try { if (!(_sim.Count > 0 && w.Entrants.Any(se => _sim.ContainsKey(se.Login) && m.Text.IndexOf(se.Name, StringComparison.OrdinalIgnoreCase) >= 0))) PgSay("core", m.Text); }   // [SIM] simulated players are never announced in chat
                 catch (Exception ex)
                 {
                     w.AnnState = "failed";
@@ -1567,18 +1656,20 @@ public class CPHInline
     object WheelSnapshot()
     {
         var w = _wheel;
+        if (w != null && HideSimFromSite && w.Entrants.Any(se => _sim.ContainsKey(se.Login))) w = null;   // [SIM] "send sim to site" is off: the site sees no wheel at all
         if (w == null)
             return new { id = "", status = "none", round = 0, mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all",
-                         queue = new string[0], finalTeams = new object[0], waitlist = new string[0], practice = false };
+                         queue = new string[0], finalTeams = new object[0], waitlist = new string[0], practice = false, sim = false };
         bool fin = w.Final;
         string status = w.Status == "drawn" ? "final" : (w.Status == "drawing" ? "spinning" : w.Status);
         return new
         {
             id = w.Id, status = status, round = w.Round, mode = w.Mode, teamSize = w.TeamSize, oddPolicy = w.OddPolicy, eligibility = w.Eligibility,
-            queue = w.Entrants.Where(e => !fin || !e.Placed).Select(e => new { name = e.Name, login = e.Login }).ToList(),
+            queue = w.Entrants.Where(e => !fin || !e.Placed).Select(e => new { name = e.Name, login = e.Login, sim = IsSim(e.Login) }).ToList(),
             finalTeams = fin ? w.Teams.Select(t => new { n = t.N, members = t.Members }).ToList<object>() : new List<object>(),
             waitlist = fin ? w.Waitlist : new List<string>(),
-            practice = w.Entrants.Any(e => e.Practice)
+            practice = w.Entrants.Any(e => e.Practice),
+            sim = w.Entrants.Any(e => IsSim(e.Login))   // [SIM] the site shows a small TEST badge and keeps these out of standings / history / SEO
         };
     }
 
@@ -1709,11 +1800,14 @@ public class CPHInline
     object BuildLiveState()
     {
         var waiting = GetWaitingQueue();
+        bool hideSim = HideSimFromSite;
+        if (hideSim) waiting = waiting.Where(e => !IsSim(e.Username)).ToList();   // [SIM] "send sim to site" is off
         // [NEW][KOTH] After !finish the PUBLIC state (website + OBS overlays) keeps showing the finished match for ResultHoldSeconds so the winner animation
         // can play, while liveMatch is what is really going on (the mod page uses that one).
         object live = BuildMatchObject();
         bool hold = _holdMatch != null && Now() < _holdUntil;
         if (!hold) _holdMatch = null;
+        if (hideSim && _lastBalance != null && _lastBalance.Result != null && _lastBalance.Result.Blue.Concat(_lastBalance.Result.Orange).Any(tp => IsSim(tp.Username))) { live = null; _holdMatch = null; hold = false; }
         object match = hold ? _holdMatch : live;
 
         return new
@@ -1728,7 +1822,7 @@ public class CPHInline
             mode = _settings.TeamMode,
             streamerPlaying = _settings.StreamerPlaying,   // [NEW][WEB] 5 gold (playing) vs 6 gold (sitting out) on the site
             spotsNeeded = Math.Max(0, GetTotalSlots(_settings.DefaultFormat) - waiting.Count),
-            queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username), practice = IsPractice(e.Username), recycle = e.Recycle }),
+            queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username), practice = IsPractice(e.Username), sim = IsSim(e.Username), recycle = e.Recycle }),
             timedOut = _settings.TimedOut && !_settings.QueueOpen, timedOutAt = (_settings.TimedOut && !_settings.QueueOpen) ? (long?)_settings.TimedOutAt : null,
             recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes,
             activity = _settings.Activity,            currentMatch = match,
@@ -1737,7 +1831,8 @@ public class CPHInline
             board = KothBoard(),   // [NEW][KOTH] who is winning in the King of the Hill activity right now (empty in other activities)
             koth = IsKothMode(),   // the KOTH setting OR the King of the Hill activity
             matchId = _lastBalance != null ? _lastBalance.MatchId : 0,
-            practice = _practiceOn || _practice.Count > 0,   // practice mode: the site must not treat anyone flagged practice as a member or keep them
+            sim = _sim.Count > 0 && !hideSim,   // [SIM] the site shows a TEST badge
+            practice = !hideSim && (_practiceOn || _practice.Count > 0),   // practice mode: the site must not treat anyone flagged practice as a member or keep them
             lastEvent = _lastEvent,
             recentEvents = _recentEvents
         };
@@ -2170,7 +2265,8 @@ public class CPHInline
             try { WheelPump(); } catch (Exception ex) { CPH.LogError("[BVQ] Wheel tick failed: " + ex); }
             if (_wheelDirty || (DateTime.UtcNow - _lastWheelPush).TotalSeconds >= 30)
             {
-                WebCall("POST", "/api/bot/wheel", JsonConvert.SerializeObject(WheelSnapshot()));
+                _forSite = true; string wheelJson; try { wheelJson = JsonConvert.SerializeObject(WheelSnapshot()); } finally { _forSite = false; }
+                WebCall("POST", "/api/bot/wheel", wheelJson);
                 _wheelDirty = false;
                 _lastWheelPush = DateTime.UtcNow;
             }
@@ -2178,7 +2274,8 @@ public class CPHInline
             // 2) Live snapshot: when something changed, and every 30 s as a heartbeat.
             if (_stateDirty || (DateTime.UtcNow - _lastStatePush).TotalSeconds >= 30)
             {
-                WebCall("POST", "/api/bot/state", JsonConvert.SerializeObject(BuildLiveState()));
+                _forSite = true; string stateJson; try { stateJson = JsonConvert.SerializeObject(BuildLiveState()); } finally { _forSite = false; }
+                WebCall("POST", "/api/bot/state", stateJson);
                 _stateDirty = false;
                 _lastStatePush = DateTime.UtcNow;
             }
