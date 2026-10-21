@@ -942,7 +942,9 @@ const WG_MOCK=[
   {key:'mode',label:'Mode',type:'select',options:['random','balanced'],value:'random',default:'random',help:'Balanced is labelled RIGGED/BALANCED by MMR everywhere.'},
   {key:'autoReopen',label:'Re-open entry after a spin',type:'bool',value:false,default:false},
   {key:'holdTimeSec',label:'Hold the result on screen (s)',type:'number',min:0,max:120,step:1,value:15,default:15},
-  {key:'teamSize',label:'Team size',type:'number',min:1,max:8,step:1,value:2,default:2}]},
+  {key:'teamSize',label:'Team size',type:'number',min:1,max:8,step:1,value:2,default:2},
+  {key:'joinFeedSec',label:'Join / leave feed duration (s)',type:'number',min:1,max:2,step:0.5,value:1.5,default:1.5,unit:'s',help:'How long each join or leave line shows on the overlay.'},
+  {key:'showSignedUp',label:'Show "N signed up"',type:'bool',value:true,default:true}]},
  {id:'queue',title:'Queue',help:'The customs / lobby queue.',fields:[
   {key:'open',label:'Queue is open',type:'bool',value:true,default:true},
   {key:'strikes',label:'Strikes before blocked (half strikes count 0.5)',type:'number',min:0,max:10,step:0.5,value:3,default:3},
@@ -989,7 +991,9 @@ pages.wheel=()=>{
    <div><div class="row wrap" style="margin-bottom:8px">${areas.map(x=>`<span class="chip${x.id===WG.tab?' on':''}" data-wgt="${x.id}">${esc(x.title)}</span>`).join('')}</div>
     ${WG.mock&&a.id!=='economy'?'<div class="pnote" style="color:var(--warn)">Preview data: the Host has no /api/tune yet, so these values are examples and are not saved.</div>':''}
     <div class="card"><div class="row"><h3 style="margin:0">${esc(a.title)}</h3><span class="sp"></span><button class="sm" id="wg-save"${nChanged?'':' disabled'}>Save${nChanged?' ('+nChanged+')':''}</button><button class="sm" id="wg-def">Defaults</button></div>
-     ${a.help?`<div class="pnote">${esc(a.help)}</div>`:''}${a.fields.map(f=>wgField(a,f)).join('')}${WG.msg?`<div class="sm" style="margin-top:8px">${esc(WG.msg)}</div>`:''}</div></div>
+     ${a.help?`<div class="pnote">${esc(a.help)}</div>`:''}${a.fields.map(f=>wgField(a,f)).join('')}${WG.msg?`<div class="sm" style="margin-top:8px">${esc(WG.msg)}</div>`:''}</div>
+    ${a.id==='economy'?`<div class="card"><h3>Give points silently</h3><div class="pnote">No chat message is sent. Use a negative amount to take points away.</div>
+     <div class="row wrap"><select id="gv-who"><option value="user">One viewer</option><option value="everyone">Everyone (in the database)</option></select><input id="gv-login" placeholder="login" style="width:140px"><input id="gv-amt" type="number" value="100" style="width:90px"><input id="gv-why" placeholder="reason" style="width:180px"><button class="sm" id="gv-go">Give</button></div>${WG.gmsg?`<div class="sm" style="margin-top:6px">${esc(WG.gmsg)}</div>`:''}</div>`:''}</div>
    <div><div class="card"><div class="row"><h3 style="margin:0">Live wheel preview</h3><span class="sp"></span><button class="sm" data-wgact="spin">SPIN</button><button class="sm" data-wgact="new">New round</button><button class="sm" data-wgact="reset">Reset</button></div>
      <iframe id="wg-prev" src="${WG_PREVIEW}" style="width:100%;height:340px;border:1px solid var(--line2);border-radius:8px;margin-top:8px;background:#0b0b0e"></iframe>
      <div class="sm faint" style="margin-top:6px">The same overlay OBS shows. <a href="#" data-aext="${WG_PREVIEW}">Open it in the browser</a>.</div></div>
@@ -1020,6 +1024,14 @@ function bindWheel(){
   $$('[data-wgact]').forEach(b=>b.onclick=async()=>{const act=b.dataset.wgact;if(act==='reset'&&!confirm('Reset the wheel? Entrants and the current round are cleared.'))return;
     try{const r=await hostJ('/api/wheel/'+act,{});if(r.ok===false||(!r._ok&&!r.ok))throw new Error(r.error||('HTTP '+(r._status||'?')));toast({spin:'Spinning',new:'New round started',reset:'Wheel reset'}[act])}
     catch(e){toast('Wheel '+act+' failed: '+(e&&e.message?e.message:e)+(WG.mock?' (the Host has no wheel endpoints yet)':''))}});
+  $('#gv-go')&&($('#gv-go').onclick=async()=>{const who=$('#gv-who').value,login=$('#gv-login').value.trim().toLowerCase().replace(/^@/,''),amt=Number($('#gv-amt').value),why=$('#gv-why').value.trim();
+    if(!amt||(who==='user'&&!login)){WG.gmsg='Enter a login and an amount.';draw(true);return}
+    if(who==='everyone'&&!confirm('Give '+amt+' points to EVERYONE? This cannot be taken back in one click.'))return;
+    try{let r=await hostJ('/api/economy/grant',{target:who,login,amount:amt,reason:why,silent:true});
+      if(!r.ok&&who==='user'&&(r._status===404||!r._ok&&!r.error))r=await hostJ('/api/economy',{adjust:login,delta:amt,by:why||'suite'});
+      if(!r.ok)throw new Error(r.error||(who==='everyone'?'the Host has no silent grant for everyone yet':'HTTP '+(r._status||'?')));
+      WG.gmsg=r.message||('Done: '+amt+' points '+(who==='everyone'?'to everyone':'to '+login)+'.');toast('Points given')}
+    catch(e){WG.gmsg='Could not give points: '+(e&&e.message?e.message:e)}draw(true)});
   $('#sm-run')&&($('#sm-run').onclick=async()=>{const g=$('#sm-game').value,bet=+$('#sm-bet').value||1,n=Math.min(1000,Math.max(1,+$('#sm-n').value||1));
     try{const r=await hostJ('/api/gamble/simulate',{game:g,bet,rounds:n});if(!r.ok)throw 0;WG.sim=r}catch{WG.sim=wgSimLocal(g,bet,n)}draw(true)})}
 pages.integrations=()=>{
