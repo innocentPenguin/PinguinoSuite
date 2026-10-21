@@ -37,6 +37,11 @@ public static class Harness
         new CPHInline().Execute();
     }
 
+    static void _bareAtReset()
+    {
+        ((System.Collections.IDictionary)typeof(CPHInline).GetField("_bareAt", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null)).Clear();
+        typeof(CPHInline).GetField("_bareAny", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, 0L);
+    }
     static void SetCfgB(string prop, bool v)
     {
         var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
@@ -785,6 +790,21 @@ public static class Harness
           Check("a bare ASK @CHATTYPINGUINO! gets one short playful line, no AI call", Last() != null && Last().Length < 80 && llmCalls == cl0, Last());
           int cb = CPHProxy.Sent.Count; Msg("Shouty", "ASK @CHATTYPINGUINO!", null, false);
           Check("the same bare call again stays quiet", CPHProxy.Sent.Count == cb); }
+
+        // ── 19b5. names: pinguino(s) / penguins (and typos) = the bots; penguin / peng / peg (and typos) = Ivan, never a call ──
+        { int cl0 = llmCalls; int k = 0;
+          foreach (string call in new[] { "pinguino", "PINGUINO!", "pinguinos", "penguins", "Penguinos?", "pinguin" })
+          { k++; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); _bareAtReset();
+            Msg("NameCall" + k, call, null, false);
+            Check("only \"" + call + "\" counts as calling the bot (one short line, no AI call)", Last() != null && Last().Length < 80 && llmCalls == cl0, Last()); }
+          k = 0;
+          foreach (string ivan in new[] { "peng is late", "peg", "penguin", "pengiun", "pegg", "peng", "is peng here", "penguin is late again" })
+          { k++; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); int cl1 = llmCalls;
+            Msg("IvanTalk" + k, ivan, null, false);
+            Check("\"" + ivan + "\" means Ivan, the bot stays out", CPHProxy.Sent.Count == 0 && llmCalls == cl1, Last()); }
+          CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); int cl3 = llmCalls; nextReply = "{\"reply\":\"my vote is yes\",\"remember\":[]}";
+          Msg("NameAsk", "pinguinos is pineapple on pizza ok?", null, false);
+          Check("\"pinguinos ...\" with a real question is answered like a mention", Last() != null && llmCalls == cl3 + 1, Last()); }
 
         // ── 19b4. Helper intents: Chatty stays out so nobody double-replies ──
         { string[] helperAsks = { "@ChattyPinguino take me out of the queue", "@ChattyPinguino how many points do i have", "@ChattyPinguino how does the recycler work", "@ChattyPinguino what is the 15 minute custom timeout", "@ChattyPinguino my game was incomplete did it count", "@ChattyPinguino how do i join", "@ChattyPinguino who is on the wheel" };

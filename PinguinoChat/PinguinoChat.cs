@@ -84,7 +84,7 @@ public class CPHInline
     {
         var r = new PgRegistry();
         r.Bots["core"] = new PgBot { Title = "PinguinoB0t", Account = "pinguinob0t", Action = "PinguinoBot", Aliases = new List<string> { "pinguinob0t", "pinguinb0t", "pinguinobot", "pinguinbot", "pinguino b0t", "pinguino bot", "pinguin b0t", "pinguin bot", "penguinob0t", "penguinb0t", "penguinobot", "penguinbot", "pinguino_bot", "pinguino_b0t" } };
-        r.Bots["chat"] = new PgBot { Title = "ChattyPinguino", Account = "chattypinguino", Sender = "none", Action = "PinguinoChat", Aliases = new List<string> { "chattypinguino", "pinguinochatty", "chattypinguin", "pinguinchatty", "chattypenguino", "chattypenguin", "penguinchatty", "chatty pinguino", "pinguino chatty", "chatty penguin", "chatty_pinguino", "pinguino_chatty", "pinguinochat", "pinguinchat", "penguinochat", "penguinchat", "chatpinguino", "chatpinguin", "pinguino chat", "chat pinguino", "pinguinochatbot", "pinguino" } };
+        r.Bots["chat"] = new PgBot { Title = "ChattyPinguino", Account = "chattypinguino", Sender = "none", Action = "PinguinoChat", Aliases = new List<string> { "chattypinguino", "pinguinochatty", "chattypinguin", "pinguinchatty", "chattypenguino", "chattypenguin", "penguinchatty", "chatty pinguino", "pinguino chatty", "chatty penguin", "chatty_pinguino", "pinguino_chatty", "pinguinochat", "pinguinchat", "penguinochat", "penguinchat", "chatpinguino", "chatpinguin", "pinguino chat", "chat pinguino", "pinguinochatbot", "pinguino", "pinguinos", "pinguin", "pinguinio", "pingino", "pinguinoo", "penguino", "penguinos", "penguins", "penguinoo" } };   // "pinguino(s)" / "penguins" (and typos) = the bots; plain "penguin" / "peng" / "peg" = Ivan, NOT a bot name
         r.Bots["helper"] = new PgBot { Title = "PinguinoHelper", Account = "pinguinohelper", Sender = "none", Action = "PinguinoHelper", Aliases = new List<string> { "pinguinohelper", "pinguinhelper", "penguinohelper", "penguinhelper", "helperpinguino", "helperpinguin", "helperpenguino", "helperpenguin", "pinguino helper", "helper pinguino", "pinguin helper", "penguin helper", "pinguino_helper", "helper_pinguino", "pinguinohelp" } };
         r.Fallback["helper"] = new List<string> { "chat", "core" };
         r.Fallback["chat"] = new List<string> { "helper", "core" };
@@ -2503,7 +2503,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     string BareCallAck(string login, string text)
     {
         string t = Regex.Replace(text.ToLowerInvariant(), @"[@!?.,:;~*_\-]", " ");
-        t = Regex.Replace(t, @"\b(ask|chatty|pinguino|penguino|pinguinob0t|pinguinobot|pinguinbot|chattypinguino|chatty pinguino|chatty penguino)\b", " ");
+        t = Regex.Replace(t, @"\b(ask|chatty|pinguinos?|penguinos?|penguins|pinguin|pinguinio|pingino|pinguinoo|penguinoo|pinguinob0t|pinguinobot|pinguinbot|chattypinguino|chatty pinguino|chatty penguino)\b", " ");
         if (Regex.Replace(t, @"\s+", "") != "") return null;
         long now = Now(), last; if ((_bareAt.TryGetValue(login, out last) && now - last < 300) || now - _bareAny < 20) return "";
         _bareAt[login] = now; _bareAny = now; return BareAcks[_rng.Next(BareAcks.Length)];
