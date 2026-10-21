@@ -696,6 +696,8 @@ public class CPHInline
         }
 
         _wheel = LoadJson<WheelSession>("wheel_session.json");   // [NEW][WHEEL]
+        if (_wheel != null && _wheel.Status == "drawing" && !_wheel.Final && _wheel.Picks.Count == 0) { _wheel.Status = "open"; _wheel.Draw = null; }
+        if (_wheel != null && _wheel.Status == "drawn") _wheel.Final = true;   // a round from the old committed-draw design: back to sign-ups
         if (Environment.GetEnvironmentVariable("BVQ_WHEEL_FAST") == "1") { _wheelStepMs = 1; _wheelLeadMs = 0; _wheelGapMs = 0; _wheelPerTick = 1000; }
         BackfillModes();   // [NEW][WEB] one-time: per-mode stats from saved matches
         MigrateObsDefaults();
@@ -848,7 +850,7 @@ public class CPHInline
     //  to POST /api/bot/wheel on every change, so the site keeps showing it when
     //  this PC is off. The seed is never sent to the website.
     //    !me                          join (while sign-ups are open)
-    //    !wheel new | open | close | draw | undo | announce | retry | reset | end
+    //    !wheel new | spin | close | announce | retry | auto on|off | hold <s> | speed <ms> | reset | end   (!spin = !wheel spin)
     //    !wheel mode random|balanced      !wheel size 1-4
     //    !wheel odd waitlist|trio|partial|hold|mod
     //    !wheel eligibility all|subs
@@ -864,7 +866,8 @@ public class CPHInline
         public int? Mmr;             // known MMR (mod override or the player's saved one); null = unknown
         public int? MmrOverride;     // set with !wheel mmr
         public bool Flagged;         // unknown MMR: the lobby median was used in Balanced mode
-        public bool Wait;            // left over after the draw
+        public bool Wait;            // left over after the round (waitlist)
+        public bool Placed;          // already picked in the current round
         public bool Practice;        // a practice (fake) player: memory only, never saved, flagged for the site
     }
     class WheelTeam
@@ -874,18 +877,18 @@ public class CPHInline
         public int? Avg;
         public bool Partial;
         public bool Announced;
+        public string LastLine;      // the last team line queued for chat (a changed roster queues a new one)
     }
-    class WheelStep { public int Team; public string Name; }
+    // One pick, made at the moment of the spin. Team 0 = not in a team yet (Balanced mode builds the teams at the last reveal).
+    class WheelPick { public string Name; public string Login; public int Team; }
     class WheelDraw
     {
         public string Id;
-        public long StartedAt;       // ms since 1970 (UTC): the overlay starts the reveal here
-        public int StepMs;
-        public List<WheelStep> Steps = new List<WheelStep>();
-        public int Revealed;         // manual spin: how many picks the mod has revealed so far (the site sends !wheel spin N)
-        public long SpunAt;          // ms since 1970: when Revealed last grew (the overlay spin takes ~8 s)
+        public int Revealed;         // picks made so far this round
+        public long SpunAt;          // ms since 1970: when the latest spin started
+        public List<string> Last = new List<string>();   // names the latest spin landed on (1, or 2 when the last entrant came along): hidden by the overlay until it has landed
     }
-    class WheelMsg { public string Text; public bool Sent; public int Team; public long Due; }   // Due (ms since 1970): do not send before this (manual spin: after the overlay landed)
+    class WheelMsg { public string Text; public bool Sent; public int Team; public long Due; }   // Due (ms since 1970): do not send before this (after the overlay landed)
     class WheelSession
     {
         public string Id;
@@ -896,8 +899,15 @@ public class CPHInline
         public string Eligibility = "all";     // all | subs
         public string Seed = "";               // private: never pushed
         public int DrawCount;
+        public int Round;
+        public bool Final;                     // the last pick has landed: the teams are final and may leave the PC
+        public bool AutoNew = true;            // after the final line and the hold, a new round opens by itself
+        public int HoldSec = 40;               // how long the finished teams stay on screen before the next round
+        public int SpinMs = 8500;              // how long one spin takes on the overlay
+        public long HoldUntil;
         public List<WheelEntrant> Entrants = new List<WheelEntrant>();
         public List<WheelTeam> Teams = new List<WheelTeam>();
+        public List<WheelPick> Picks = new List<WheelPick>();
         public WheelDraw Draw;
         public List<string> Waitlist = new List<string>();
         public List<WheelMsg> Msgs = new List<WheelMsg>();
@@ -981,9 +991,11 @@ public class CPHInline
                 foreach (var t in arr.OfType<JObject>().Where(t => (bool?)t["Practice"] == true).ToList()) t.Remove();
                 SaveJson("wheel_session.json", real);
             }
+            try { SaveJson("wheel_public.json", WheelPublic()); } catch (Exception) { }
             return;
         }
         SaveJson("wheel_session.json", _wheel);
+        try { SaveJson("wheel_public.json", WheelPublic()); } catch (Exception) { }   // the local overlay (Host /api/wheel/public) reads this
     }
 
     // A reply to a viewer, at most once per 30 s each, so a spammed !me can't flood chat.
@@ -1004,14 +1016,26 @@ public class CPHInline
         return !IsStreamer(login) && _players.TryGetValue(login, out sp) && StrikeTotal(sp) >= MaxStrikes;
     }
 
+    long WheelSpinMs(WheelSession w) { return _wheelStepMs == 1 ? 1 : Math.Max(1000, Math.Min(30000, w.SpinMs)); }
+
+    // How many picks this round needs with the people signed up RIGHT NOW (late joiners and leavers change it).
+    int WheelNeed(WheelSession w)
+    {
+        int n = w.Entrants.Count, size = Math.Max(1, w.TeamSize);
+        if (w.OddPolicy == "trio" || w.OddPolicy == "partial") return n;
+        return (n / size) * size;   // waitlist | mod | hold: the odd ones out are never picked
+    }
+    int WheelPlaced(WheelSession w) { return w.Entrants.Count(e => e.Placed); }
+    bool WheelPending(WheelSession w) { return w.Draw != null && w.Draw.SpunAt > 0 && NowMs() < w.Draw.SpunAt + WheelSpinMs(w); }
+
     bool HandleMe(string user, bool isPrivileged)
     {
         if (string.IsNullOrEmpty(user)) return true;
-        if (_wheel == null || _wheel.Status != "open") { WheelSayOnce(user, "@" + user + " sign-ups for the tournament are closed."); return true; }
+        if (_wheel == null || _wheel.Status == "closed") { WheelSayOnce(user, "@" + user + " sign-ups for the tournament are closed."); return true; }
         if (_wheel.Eligibility == "subs" && !_cmdSub && !isPrivileged) { WheelSayOnce(user, "@" + user + " tournament sign-ups are for subscribers right now."); return true; }
         if (WheelStruck(user)) { WheelSayOnce(user, "@" + user + " you have " + MaxStrikes + " strikes, so you can't join the tournament right now. A temporary strike wears off after a day; permanent ones stay."); return true; }
         string id = !string.IsNullOrEmpty(_cmdUserId) ? _cmdUserId : user;
-        if (_wheel.Entrants.Any(e => e.Id == id || e.Login == user)) { WheelSayOnce(user, "@" + user + " you are already in the tournament."); return true; }
+        if (_wheel.Entrants.Any(e => e.Id == id || e.Login == user)) { WheelSayOnce(user, "@" + user + " you are already on the wheel."); return true; }
         if (_wheel.Entrants.Count >= 500) { WheelSayOnce(user, "@" + user + " the tournament is full."); return true; }
         var en = new WheelEntrant { Id = id, Login = user, Name = WheelClean(_cmdDisplay, user) };
         Player p;
@@ -1023,10 +1047,58 @@ public class CPHInline
         en.Flagged = !en.Mmr.HasValue;
         _wheel.Entrants.Add(en);
         WheelSave();
-        string joined = "@" + user + " you're in the tournament! (" + _wheel.Entrants.Count + " joined)";
+        string joined = "@" + user + " you're on the wheel! (" + _wheel.Entrants.Count(e => !e.Placed) + " waiting)";
         if (_quiet) { if (_capture != null) _capture.Add(joined); } else Say(joined);
         return true;
     }
+
+    // Takes a player off the wheel at any time. Returns true when they were on it.
+    bool WheelLeave(string user)
+    {
+        var w = _wheel;
+        if (w == null) return false;
+        var e = w.Entrants.FirstOrDefault(x => x.Login == user || (!string.IsNullOrEmpty(_cmdUserId) && x.Id == _cmdUserId));
+        if (e == null) return false;
+        WheelRemoveEntrant(w, e);
+        return true;
+    }
+
+    void WheelRemoveEntrant(WheelSession w, WheelEntrant e)
+    {
+        w.Entrants.Remove(e);
+        if (e.Placed)
+        {
+            w.Picks.RemoveAll(p => p.Login == e.Login);
+            WheelTeam home = null;
+            foreach (var t in w.Teams) if (t.Members.Remove(e.Name)) home = t;
+            if (w.Final && home != null)
+            {
+                // the teams are already final: the first waitlisted player takes the slot
+                var sub = w.Entrants.FirstOrDefault(x => x.Wait && !x.Placed);
+                if (sub != null)
+                {
+                    sub.Wait = false; sub.Placed = true; home.Members.Add(sub.Name); w.Waitlist.Remove(sub.Name);
+                    w.Picks.Add(new WheelPick { Name = sub.Name, Login = sub.Login, Team = home.N });
+                    w.Msgs.Add(new WheelMsg { Team = home.N, Text = e.Name + " left. " + sub.Name + " takes the spot: Team " + home.N + " is " + string.Join(" & ", home.Members) + "!" });
+                }
+                else w.Msgs.Add(new WheelMsg { Team = home.N, Text = e.Name + " left Team " + home.N + "; it is a player short." });
+                w.AnnState = "sending"; w.HoldUntil = 0;
+            }
+            else if (w.Status == "drawing" && w.Mode == "random")
+            {
+                // the next pick fills the free slot; drop a team that has nobody left in it and sits at the end
+                while (w.Teams.Count > 0 && w.Teams[w.Teams.Count - 1].Members.Count == 0) w.Teams.RemoveAt(w.Teams.Count - 1);
+            }
+            if (w.Draw != null) w.Draw.Revealed = w.Picks.Count;
+        }
+        else
+        {
+            w.Waitlist.Remove(e.Name);
+        }
+        WheelSave();
+    }
+
+    bool WheelOwner(string user) { return IsStreamer(user); }
 
     bool HandleWheel(string user, string input, bool isPrivileged)
     {
@@ -1035,28 +1107,25 @@ public class CPHInline
         string sub = parts.Length > 0 ? parts[0].ToLower() : "";
         string arg = parts.Length > 1 ? parts[1].Trim().ToLower() : "";
         var w = _wheel;
-        if (w == null && sub != "new" && sub != "open" && sub != "tick")
+        if (sub == "" || sub == "spin" || sub == "draw")
         {
-            Say("There is no tournament wheel session. Type !wheel new.");
+            if (w == null) { Say("There is no wheel yet. Type !wheel new."); return true; }
+            WheelSpin(w);
             return true;
         }
-        bool locked = w != null && (w.Status == "drawing" || w.Status == "drawn");
+        if (sub == "new" || sub == "open")
+        {
+            if (w == null) { _wheel = w = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed() }; w.Status = "open"; WheelSave(); Say("The tournament wheel is open! Type !me to join."); return true; }
+            if (sub == "open" && w.Status == "open") { Say("Sign-ups are already open."); return true; }
+            if (sub == "open" && w.Status == "closed") { w.Status = "open"; WheelSave(); Say("Tournament sign-ups are OPEN! Type !me to join."); return true; }
+            if (sub == "open") { Say("A round is running; people can still join with !me."); return true; }
+            WheelNewRound(w, false);
+            return true;
+        }
+        if (w == null) { Say("There is no wheel yet. Type !wheel new."); return true; }
+        bool started = w.Picks.Count > 0 && w.Status == "drawing";
         switch (sub)
         {
-            case "new":
-                if (w != null) { Say("A wheel session already exists. Use !wheel end first, or !wheel reset to redo the teams."); return true; }
-                _wheel = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed() };
-                WheelSave();
-                Say("Tournament wheel ready. Type !wheel open to start sign-ups.");
-                return true;
-            case "open":
-                if (w == null) { _wheel = w = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed() }; }
-                if (w.Status == "open") { Say("Sign-ups are already open."); return true; }
-                if (locked) { Say("Teams are already drawn. Use !wheel reset to sign up again."); return true; }
-                w.Status = "open";
-                WheelSave();
-                Say("Tournament sign-ups are OPEN! Type !me to join.");
-                return true;
             case "close":
                 if (w.Status != "open") { Say("Sign-ups are not open."); return true; }
                 w.Status = "closed";
@@ -1065,20 +1134,20 @@ public class CPHInline
                 return true;
             case "mode":
                 if (arg != "random" && arg != "balanced") { Say("Usage: !wheel mode random|balanced"); return true; }
-                if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
+                if (started || w.Final) { Say("A round is running. Change it after the round with !wheel new."); return true; }
                 w.Mode = arg; WheelSave();
                 Say(arg == "balanced" ? "Wheel mode: Rigged / Balanced by MMR." : "Wheel mode: True random.");
                 return true;
             case "size":
                 int sz;
                 if (!int.TryParse(arg, out sz) || sz < 1 || sz > 4) { Say("Usage: !wheel size 1-4"); return true; }
-                if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
+                if (started || w.Final) { Say("A round is running. Change it after the round with !wheel new."); return true; }
                 w.TeamSize = sz; WheelSave();
                 Say("Team size: " + sz + ".");
                 return true;
             case "odd":
                 if (new[] { "waitlist", "trio", "partial", "hold", "mod" }.All(x => x != arg)) { Say("Usage: !wheel odd waitlist|trio|partial|hold|mod"); return true; }
-                if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
+                if (started || w.Final) { Say("A round is running. Change it after the round with !wheel new."); return true; }
                 w.OddPolicy = arg; WheelSave();
                 Say("Odd player out: " + arg + ".");
                 return true;
@@ -1087,19 +1156,38 @@ public class CPHInline
                 w.Eligibility = arg; WheelSave();
                 Say(arg == "subs" ? "Tournament sign-ups: subscribers only." : "Tournament sign-ups: everyone.");
                 return true;
+            case "auto":
+                if (arg != "on" && arg != "off") { Say("Usage: !wheel auto on|off (a new round opens by itself)"); return true; }
+                w.AutoNew = arg == "on"; WheelSave();
+                Say("Automatic new round: " + arg + ".");
+                return true;
+            case "hold":
+                {
+                    int s;
+                    if (!int.TryParse(arg, out s) || s < 0 || s > 600) { Say("Usage: !wheel hold <0-600 seconds before the next round>"); return true; }
+                    w.HoldSec = s; WheelSave();
+                    Say("The finished teams stay up for " + s + " s.");
+                    return true;
+                }
+            case "speed":
+                {
+                    int ms;
+                    if (!int.TryParse(arg, out ms) || ms < 1500 || ms > 30000) { Say("Usage: !wheel speed <1500-30000 ms per spin>"); return true; }
+                    w.SpinMs = ms; WheelSave();
+                    Say("One spin takes " + ms + " ms.");
+                    return true;
+                }
             case "remove":
                 {
-                    if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
                     string who = arg.TrimStart('@');
-                    int n = w.Entrants.RemoveAll(e => e.Login == who);
-                    if (n == 0) { Say(who + " is not signed up."); return true; }
-                    WheelSave();
-                    Say("Removed " + who + " from the tournament.");
+                    var en = w.Entrants.FirstOrDefault(e => e.Login == who);
+                    if (en == null) { Say(who + " is not signed up."); return true; }
+                    WheelRemoveEntrant(w, en);
+                    Say("Removed " + who + " from the wheel.");
                     return true;
                 }
             case "mmr":
                 {
-                    if (locked) { Say("Teams are already drawn. Use !wheel undo or !wheel reset first."); return true; }
                     string[] a = arg.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                     int v;
                     if (a.Length != 2 || !int.TryParse(a[1], out v) || v < 0 || v > 5000) { Say("Usage: !wheel mmr <login> <0-5000>"); return true; }
@@ -1111,18 +1199,11 @@ public class CPHInline
                     Say("Wheel MMR for " + who + " set to " + v + ".");
                     return true;
                 }
-            case "draw": WheelDoDraw(); return true;
-            case "spin": WheelSpin(w, arg); return true;
-            case "undo":
-                if (!locked) { Say("Nothing to undo."); return true; }
-                if (w.Msgs.Any(m => m.Sent)) { Say("The teams were already announced in chat. Use !wheel reset if you really want to redo them."); return true; }
-                WheelClearDraw(w);
-                Say("Draw undone. Sign-ups are still there.");
-                return true;
             case "reset":
-                if (!locked) { Say("Nothing to reset."); return true; }
-                WheelClearDraw(w);
-                Say("Teams reset. Sign-ups are still there.");
+                if (!WheelOwner(user)) { Say("@" + user + " only the streamer can reset the wheel. !wheel new starts a fresh round."); return true; }
+                _wheel = new WheelSession { Id = "w" + Now(), Seed = WheelNewSeed(), Status = "open", Mode = w.Mode, TeamSize = w.TeamSize, OddPolicy = w.OddPolicy, Eligibility = w.Eligibility, AutoNew = w.AutoNew, HoldSec = w.HoldSec, SpinMs = w.SpinMs };
+                WheelSave();
+                Say("The wheel was reset. Sign-ups are open: type !me.");
                 return true;
             case "end":
                 _wheel = null;
@@ -1130,7 +1211,7 @@ public class CPHInline
                 Say("Tournament wheel session ended.");
                 return true;
             case "announce":
-                if (w.Status != "drawn" || w.Teams.Count == 0) { Say(w.Status == "drawing" ? "Wait for the reveal to finish, then announce." : "No teams to announce yet."); return true; }
+                if (!w.Final || w.Teams.Count == 0) { Say(w.Status == "drawing" ? "Wait for the last pick, then announce." : "No teams to announce yet."); return true; }
                 WheelQueueAnnounce(w);
                 WheelPump();
                 return true;
@@ -1142,94 +1223,170 @@ public class CPHInline
                 return true;
             case "tick": WheelPump(); return true;
             default:
-                Say("Wheel: !wheel new|open|close|draw|spin [n]|undo|announce|retry|reset|end, mode, size, odd, eligibility, remove <login>, mmr <login> <n>");
+                Say("Wheel: !wheel new|spin|close|announce|retry|end, auto on|off, hold <s>, speed <ms>, mode, size, odd, eligibility, remove <login>, mmr <login> <n>, reset (streamer)");
                 return true;
         }
     }
 
-    void WheelClearDraw(WheelSession w)
+    // A fresh round: the people who were placed leave the wheel (they play now), the waitlist and anyone who signed up late stay for the next one.
+    void WheelNewRound(WheelSession w, bool auto)
     {
-        w.Teams.Clear(); w.Waitlist.Clear(); w.Msgs.Clear(); w.Draw = null; w.AnnState = "idle"; w.Status = "closed";
+        if (w.Final) w.Entrants.RemoveAll(e => e.Placed); else foreach (var e in w.Entrants) e.Placed = false;   // an unfinished round that is thrown away gives everyone their place back
         foreach (var e in w.Entrants) e.Wait = false;
+        w.Picks.Clear(); w.Teams.Clear(); w.Waitlist.Clear(); w.Msgs.Clear(); w.Draw = null;
+        w.Final = false; w.HoldUntil = 0; w.AnnState = "idle"; w.Round++; w.Status = "open";
         WheelSave();
+        Say("New round! Type !me to join the wheel." + (w.Entrants.Count > 0 ? " (" + w.Entrants.Count + " already waiting)" : ""));
     }
 
-    // The ONE draw. Everything random comes from a seed made right now (kept private).
-    void WheelDoDraw()
+    bool WheelStartRound(WheelSession w)
     {
-        var w = _wheel;
-        if (w.Status == "drawing" || w.Status == "drawn") { Say("The teams are already drawn. Use !wheel undo to draw again."); return; }
-        int size = w.TeamSize, total = w.Entrants.Count;
-        if (total < size) { Say("Need at least " + size + " player(s) to draw; " + total + " signed up."); return; }
-        int r = total % size, k = total / size;
-        if (r > 0 && w.OddPolicy == "hold")
-        {
-            Say("Odd number of players (" + total + "). Need " + (size - r) + " more (or " + r + " fewer), or change it with !wheel odd.");
-            return;
-        }
-
+        int size = w.TeamSize, n;
         var struck = w.Entrants.Where(e => WheelStruck(e.Login)).ToList();
         if (struck.Count > 0)
         {
             foreach (var e in struck) w.Entrants.Remove(e);
-            Say("Removed from the tournament (" + MaxStrikes + " strikes): " + string.Join(", ", struck.Select(e => e.Name)) + ". Run !wheel draw again.");
+            Say("Removed from the tournament (" + MaxStrikes + " strikes): " + string.Join(", ", struck.Select(e => e.Name)) + ". Spin again.");
             WheelSave();
-            return;
+            return false;
         }
+        n = w.Entrants.Count;
+        if (n < size) { Say("Need at least " + size + " player(s) to spin; " + n + " signed up."); return false; }
+        if (w.OddPolicy == "hold" && n % size != 0) { Say("Odd number of players (" + n + "). Need " + (size - n % size) + " more (or " + (n % size) + " fewer), or change it with !wheel odd."); return false; }
         w.Seed = WheelNewSeed();
-        var rng = new WheelRng(w.Seed);
         w.DrawCount++;
-        foreach (var e in w.Entrants) e.Wait = false;
+        w.Picks.Clear(); w.Teams.Clear(); w.Msgs.Clear(); w.Waitlist.Clear(); w.Final = false; w.HoldUntil = 0;
+        foreach (var e in w.Entrants) { e.Placed = false; e.Wait = false; }
+        w.Draw = new WheelDraw { Id = w.Id + "-" + w.DrawCount };
+        w.AnnState = "idle"; w.Status = "drawing";
+        WheelSave();
+        return true;
+    }
 
-        // 1) Seeded shuffle: it decides the order AND who is left over.
-        var order = w.Entrants.ToList();
-        WheelShuffle(order, rng);
-        var left = new List<WheelEntrant>();
-        var pool = order;
-        var sizes = new List<int>();
-        for (int i = 0; i < k; i++) sizes.Add(size);
-        if (r > 0)
+    // Where the next pick goes. Random mode fills the first team with a free slot; Balanced mode builds the teams at the very end (team 0 until then).
+    int WheelPlaceTeam(WheelSession w)
+    {
+        if (w.Mode == "balanced") return 0;
+        int size = w.TeamSize, n = w.Entrants.Count;
+        foreach (var t in w.Teams) if (t.Members.Count < size) return t.N;
+        int k = n / size, r = n % size;
+        if (w.OddPolicy == "trio" && r > 0 && r <= k && w.Picks.Count >= k * size)
         {
-            if (w.OddPolicy == "partial") sizes.Add(r);
-            else if (w.OddPolicy == "trio" && r <= k) { for (int i = 0; i < r; i++) sizes[i]++; }
-            else if (w.OddPolicy == "trio") sizes.Add(r);   // not enough teams to spread the extras
-            else { left = order.Skip(order.Count - r).ToList(); pool = order.Take(order.Count - r).ToList(); }   // waitlist | mod
+            var low = w.Teams.FirstOrDefault(t => t.Members.Count == size);
+            if (low != null) return low.N;
         }
+        int nn = w.Teams.Count == 0 ? 1 : w.Teams.Max(t => t.N) + 1;
+        w.Teams.Add(new WheelTeam { N = nn });
+        return nn;
+    }
 
-        // 2) Teams.
-        var groups = new List<List<WheelEntrant>>();
-        Dictionary<WheelEntrant, int> val = null;
+    // ONE pick, made right now from the people still on the wheel with fresh randomness. Nothing about who comes next exists before this call.
+    WheelPick WheelDrawOne(WheelSession w)
+    {
+        var pool = w.Entrants.Where(e => !e.Placed).ToList();
+        if (pool.Count == 0) return null;
+        var rng = new WheelRng(WheelNewSeed());
+        var en = pool[rng.Below(pool.Count)];
+        var pk = new WheelPick { Name = en.Name, Login = en.Login, Team = WheelPlaceTeam(w) };
+        en.Placed = true;
+        if (pk.Team > 0) w.Teams.First(t => t.N == pk.Team).Members.Add(en.Name);
+        w.Picks.Add(pk);
+        return pk;
+    }
+
+    // One spin = one pick. Safe to repeat: a spin that is still turning ignores the next press.
+    void WheelSpin(WheelSession w)
+    {
+        if (w.Final) { Say("This round is finished. The next one opens by itself, or type !wheel new."); return; }
+        if (w.Status != "drawing") { if (!WheelStartRound(w)) return; }
+        if (WheelPending(w)) return;
+        int need = WheelNeed(w);
+        if (WheelPlaced(w) >= need) { if (need == 0) { Say("Not enough players on the wheel yet."); return; } WheelFinalize(w); return; }
+        var pk = WheelDrawOne(w);
+        if (pk == null) { Say("Nobody is left on the wheel."); return; }
+        w.Draw.Revealed = w.Picks.Count; w.Draw.SpunAt = NowMs(); w.Draw.Last = new List<string> { pk.Name };
+        if (need - WheelPlaced(w) == 1)   // the last entrant needs no spin of their own: they land together with this pick
+        {
+            var pk2 = WheelDrawOne(w);
+            if (pk2 != null) { w.Draw.Revealed = w.Picks.Count; w.Draw.Last.Add(pk2.Name); }
+        }
+        WheelQueueTeamLines(w);
+        WheelSave();
+        WheelPump();
+    }
+
+    // A "Team N: A & B!" line for every team that has its members; it waits until the overlay has landed on the pick.
+    void WheelQueueTeamLines(WheelSession w)
+    {
+        long due = (w.Draw != null ? w.Draw.SpunAt : NowMs()) + WheelSpinMs(w);
+        foreach (var t in w.Teams)
+        {
+            if (t.Members.Count < w.TeamSize) continue;
+            string line = "Team " + t.N + ": " + string.Join(" & ", t.Members) + "!";
+            if (t.LastLine == line) continue;
+            bool changed = !string.IsNullOrEmpty(t.LastLine);
+            t.LastLine = line;
+            w.Msgs.Add(new WheelMsg { Team = t.N, Due = due, Text = changed ? "Team " + t.N + " is now: " + string.Join(" & ", t.Members) + "!" : line });
+        }
+        if (w.Msgs.Any(m => !m.Sent)) w.AnnState = "sending";
+    }
+
+    // The last pick has landed: Balanced mode forms its teams now, the odd ones go to the waitlist, the roster is queued and the teams become final.
+    void WheelFinalize(WheelSession w)
+    {
+        if (w.Final) return;
+        long due = (w.Draw != null ? w.Draw.SpunAt : NowMs()) + WheelSpinMs(w);
         if (w.Mode == "balanced")
         {
-            val = WheelMmrValues(pool, size);
-            groups = WheelBalance(pool, sizes.ToArray(), val, rng);
-            WheelShuffle(groups, rng);   // don't always list the strongest team first
+            var pool = w.Entrants.Where(e => e.Placed).ToList();
+            int size = w.TeamSize, total = pool.Count, r = total % size, k = total / size;
+            var sizes = new List<int>();
+            for (int i = 0; i < k; i++) sizes.Add(size);
+            if (r > 0)
+            {
+                if (w.OddPolicy == "trio" && r <= k) { for (int i = 0; i < r; i++) sizes[i]++; }
+                else sizes.Add(r);
+            }
+            var rng = new WheelRng(WheelNewSeed());
+            WheelShuffle(pool, rng);
+            var val = WheelMmrValues(pool, size);
+            var groups = WheelBalance(pool, sizes.ToArray(), val, rng);
+            WheelShuffle(groups, rng);
+            w.Teams = new List<WheelTeam>();
+            for (int i = 0; i < groups.Count; i++)
+            {
+                var t = new WheelTeam { N = i + 1, Partial = groups[i].Count < size };
+                foreach (var e in groups[i]) { t.Members.Add(e.Name); foreach (var pk in w.Picks.Where(x => x.Login == e.Login)) pk.Team = t.N; }
+                t.Avg = groups[i].Count == 0 ? (int?)null : (int)Math.Round(groups[i].Average(e => (double)val[e]));
+                w.Teams.Add(t);
+            }
+            WheelQueueTeamLines(w);
         }
-        else
-        {
-            int at = 0;
-            foreach (int s in sizes) { groups.Add(pool.Skip(at).Take(s).ToList()); at += s; }
-        }
-
-        w.Teams = new List<WheelTeam>();
-        var steps = new List<WheelStep>();
-        for (int i = 0; i < groups.Count; i++)
-        {
-            var t = new WheelTeam { N = i + 1, Partial = groups[i].Count < size };
-            foreach (var e in groups[i]) { t.Members.Add(e.Name); steps.Add(new WheelStep { Team = t.N, Name = e.Name }); }
-            if (val != null) t.Avg = (int)Math.Round(groups[i].Average(e => (double)val[e]));
-            w.Teams.Add(t);
-        }
-        // Reveal order: random mode shows the shuffle itself; balanced mode shuffles the reveal so the order gives nothing away.
-        if (w.Mode == "balanced") WheelShuffle(steps, rng);
-
-        w.Waitlist = left.Select(e => e.Name).ToList();
+        foreach (var t in w.Teams) t.Partial = t.Members.Count < w.TeamSize;
+        var left = w.Entrants.Where(e => !e.Placed).ToList();
         foreach (var e in left) e.Wait = true;
-        w.Draw = new WheelDraw { Id = w.Id + "-" + w.DrawCount, StartedAt = NowMs() + _wheelLeadMs, StepMs = _wheelStepMs, Steps = steps };
-        w.Msgs.Clear(); w.AnnState = "idle";
-        w.Status = "drawing";
+        w.Waitlist = left.Select(e => e.Name).ToList();
+        Action<IEnumerable<string>, string, string> paragraphs = (items, head, cont) =>
+        {
+            var sb = new System.Text.StringBuilder(head);
+            bool any = false;
+            foreach (string p in items)
+            {
+                if (any && sb.Length + 3 + p.Length > 450) { w.Msgs.Add(new WheelMsg { Due = due + (_wheelStepMs == 1 ? 0 : 500), Text = sb.ToString() }); sb = new System.Text.StringBuilder(cont); any = false; }
+                if (any) sb.Append(" | ");
+                sb.Append(p); any = true;
+            }
+            if (any) w.Msgs.Add(new WheelMsg { Due = due + (_wheelStepMs == 1 ? 0 : 500), Text = sb.ToString() });
+        };
+        paragraphs(w.Teams.Select(t => string.Join(" & ", t.Members) + (t.Partial ? " (partial team)" : "")), "TOURNAMENT TEAMS - ", "TOURNAMENT TEAMS (cont.) - ");
+        if (w.Waitlist.Count > 0)
+        {
+            string head = w.OddPolicy == "mod" ? "Waiting for a mod decision - " : "Waitlist - ";
+            paragraphs(w.Waitlist, head, head);
+        }
+        w.Final = true; w.Status = "drawn"; w.HoldUntil = 0;
+        w.AnnState = w.Msgs.Any(m => !m.Sent) ? "sending" : "done";
         WheelSave();
-        Say("Drawing the tournament teams! Watch the stream.");
     }
 
     // MMR per entrant for Balanced mode. Unknown MMR = the lobby median (and the entrant is flagged "?").
@@ -1306,145 +1463,109 @@ public class CPHInline
         return teams;
     }
 
-    // One "Team N: A + B!" line per team, then the whole roster in paragraphs under 450 characters (Twitch allows 500), split at team boundaries.
-    List<WheelMsg> WheelBuildMessages(WheelSession w)
-    {
-        var list = new List<WheelMsg>();
-        foreach (var t in w.Teams)
-            list.Add(new WheelMsg { Team = t.N, Text = "Team " + t.N + ": " + string.Join(" + ", t.Members) + "!" + (t.Partial ? " (partial team)" : "") });
-        Action<IEnumerable<string>, string, string> paragraphs = (items, head, cont) =>
-        {
-            var sb = new System.Text.StringBuilder(head);
-            bool any = false;
-            foreach (string p in items)
-            {
-                if (any && sb.Length + 3 + p.Length > 450) { list.Add(new WheelMsg { Text = sb.ToString() }); sb = new System.Text.StringBuilder(cont); any = false; }
-                if (any) sb.Append(" | ");
-                sb.Append(p); any = true;
-            }
-            if (any) list.Add(new WheelMsg { Text = sb.ToString() });
-        };
-        paragraphs(w.Teams.Select(t => "Team " + t.N + ": " + string.Join(" + ", t.Members)), "TOURNAMENT TEAMS - ", "TOURNAMENT TEAMS (cont.) - ");
-        if (w.Waitlist.Count > 0)
-        {
-            string head = w.OddPolicy == "mod" ? "Waiting for a mod decision - " : "Waitlist - ";
-            paragraphs(w.Waitlist, head, head);
-        }
-        return list;
-    }
-
-    // MANUAL SPIN: the draw is committed, the mod reveals one pick per Spin (site button -> "!wheel spin N", or a mod typing "!wheel spin"). Chat lines wait until the overlay has landed (~8.5 s)
-    // and never give a pick away early. Safe to repeat: Revealed only grows, each team and the final list are queued once.
-    const int WheelSpinLandMs = 8500;
-    void WheelSpin(WheelSession w, string arg)
-    {
-        if (w.Draw == null || w.Draw.Steps.Count == 0) { Say("There is no draw to spin. Type !wheel draw first."); return; }
-        int total = w.Draw.Steps.Count, n;
-        int target = int.TryParse((arg ?? "").Trim(), out n) ? Math.Min(Math.Max(n, 0), total) : Math.Min(w.Draw.Revealed + 1, total);
-        if (target > w.Draw.Revealed) { w.Draw.Revealed = target; w.Draw.SpunAt = NowMs(); }
-        if (w.Draw.Revealed == total - 1 && w.Draw.Revealed > 0) w.Draw.Revealed = total;   // the last entrant left needs no spin: it lands with the one before
-        long due = w.Draw.SpunAt + WheelSpinLandMs;
-        var shown = w.Draw.Steps.Take(w.Draw.Revealed).ToList();
-        foreach (var t in w.Teams)
-        {
-            if (w.Msgs.Any(m => m.Team == t.N)) continue;
-            if (shown.Count(x => x.Team == t.N) < t.Members.Count) continue;   // not every member revealed yet
-            w.Msgs.Add(new WheelMsg { Team = t.N, Due = due, Text = "Team " + t.N + ": " + string.Join(" & ", t.Members) + "!" + (t.Partial ? " (partial team)" : "") });
-        }
-        if (w.Draw.Revealed >= total && !w.Msgs.Any(m => m.Team == 0 && (m.Text ?? "").StartsWith("TOURNAMENT TEAMS")))
-        {
-            Action<IEnumerable<string>, string, string> paragraphs = (items, head, cont) =>
-            {
-                var sb = new System.Text.StringBuilder(head);
-                bool any = false;
-                foreach (string p in items)
-                {
-                    if (any && sb.Length + 3 + p.Length > 450) { w.Msgs.Add(new WheelMsg { Due = due + 500, Text = sb.ToString() }); sb = new System.Text.StringBuilder(cont); any = false; }
-                    if (any) sb.Append(" | ");
-                    sb.Append(p); any = true;
-                }
-                if (any) w.Msgs.Add(new WheelMsg { Due = due + 500, Text = sb.ToString() });
-            };
-            paragraphs(w.Teams.Select(t => string.Join(" & ", t.Members) + (t.Partial ? " (partial team)" : "")), "TOURNAMENT TEAMS - ", "TOURNAMENT TEAMS (cont.) - ");
-            if (w.Waitlist.Count > 0)
-            {
-                string head = w.OddPolicy == "mod" ? "Waiting for a mod decision - " : "Waitlist - ";
-                paragraphs(w.Waitlist, head, head);
-            }
-        }
-        if (w.Msgs.Any(m => !m.Sent)) w.AnnState = "sending";
-        WheelSave();
-        WheelPump();
-    }
 
     void WheelQueueAnnounce(WheelSession w)
     {
-        w.Msgs = WheelBuildMessages(w);
-        foreach (var t in w.Teams) t.Announced = false;
-        w.AnnState = "sending";
+        // a manual re-announce: every team line again, then the roster paragraphs again
+        w.Msgs = new List<WheelMsg>();
+        long due = NowMs();
+        foreach (var t in w.Teams) { w.Msgs.Add(new WheelMsg { Team = t.N, Due = due, Text = "Team " + t.N + ": " + string.Join(" & ", t.Members) + "!" + (t.Partial ? " (partial team)" : "") }); t.Announced = false; }
+        var sb = new System.Text.StringBuilder("TOURNAMENT TEAMS - ");
+        bool any = false;
+        foreach (var t in w.Teams)
+        {
+            string p = string.Join(" & ", t.Members) + (t.Partial ? " (partial team)" : "");
+            if (any && sb.Length + 3 + p.Length > 450) { w.Msgs.Add(new WheelMsg { Due = due, Text = sb.ToString() }); sb = new System.Text.StringBuilder("TOURNAMENT TEAMS (cont.) - "); any = false; }
+            if (any) sb.Append(" | ");
+            sb.Append(p); any = true;
+        }
+        if (any) w.Msgs.Add(new WheelMsg { Due = due, Text = sb.ToString() });
+        w.AnnState = "sending"; w.HoldUntil = 0;
         WheelSave();
     }
 
-    // Runs every web sync tick (and after !wheel announce): finishes the reveal, then sends chat messages a few at a time, ~1.2 s apart.
+    // Runs every web sync tick (and after a spin / !wheel announce): lands the round once the last pick is on screen, sends the chat lines
+    // that are due (a few at a time), then holds the finished teams and opens the next round by itself.
     // Each message has its own "sent" flag, so a retry never repeats one that already went out.
     void WheelPump()
     {
         var w = _wheel;
         if (w == null) return;
-        if (w.Status == "drawing" && w.Draw != null && NowMs() >= w.Draw.StartedAt + (long)w.Draw.Steps.Count * w.Draw.StepMs)
+        if (w.Status == "drawing" && !w.Final && !WheelPending(w) && w.Picks.Count > 0)
         {
-            w.Status = "drawn";
-            WheelSave();
+            int need = WheelNeed(w);
+            if (need > 0 && WheelPlaced(w) >= need) WheelFinalize(w);
         }
-        if (w.AnnState != "sending") return;
-        int sentNow = 0;
-        foreach (var m in w.Msgs.Where(x => !x.Sent).ToList())
+        if (w.AnnState == "sending")
         {
-            if (m.Due > 0 && NowMs() < m.Due) continue;   // manual spin: not before the overlay has landed
-            if (sentNow >= _wheelPerTick) return;   // the next tick carries on
-            try { PgSay("core", m.Text); }
-            catch (Exception ex)
+            int sentNow = 0;
+            foreach (var m in w.Msgs.Where(x => !x.Sent).ToList())
             {
-                w.AnnState = "failed";
-                ReportProblem("Wheel announcement failed: " + ex.Message);
+                if (m.Due > 0 && NowMs() < m.Due) continue;   // not before the overlay has landed
+                if (sentNow >= _wheelPerTick) return;   // the next tick carries on
+                try { PgSay("core", m.Text); }
+                catch (Exception ex)
+                {
+                    w.AnnState = "failed";
+                    ReportProblem("Wheel announcement failed: " + ex.Message);
+                    WheelSave();
+                    return;
+                }
+                m.Sent = true;
+                if (m.Team > 0) { var t = w.Teams.FirstOrDefault(x => x.N == m.Team); if (t != null) t.Announced = true; }
+                sentNow++;
                 WheelSave();
-                return;
+                if (_wheelGapMs > 0 && w.Msgs.Any(x => !x.Sent)) System.Threading.Thread.Sleep(_wheelGapMs);
             }
-            m.Sent = true;
-            if (m.Team > 0) { var t = w.Teams.FirstOrDefault(x => x.N == m.Team); if (t != null) t.Announced = true; }
-            sentNow++;
-            WheelSave();
-            if (_wheelGapMs > 0 && w.Msgs.Any(x => !x.Sent)) System.Threading.Thread.Sleep(_wheelGapMs);
+            if (w.Msgs.All(x => x.Sent)) { w.AnnState = "done"; WheelSave(); }
         }
-        bool spinning = w.Draw != null && w.Draw.Revealed > 0 && w.Draw.Revealed < w.Draw.Steps.Count;   // manual spin not finished: more lines will come
-        if (w.Msgs.All(x => x.Sent) && !spinning) { w.AnnState = "done"; WheelSave(); }
+        if (w.Final && w.AnnState != "sending" && w.AnnState != "failed")
+        {
+            if (w.HoldUntil == 0) { w.HoldUntil = NowMs() + (_wheelStepMs == 1 ? 0 : (long)w.HoldSec * 1000); WheelSave(); }
+            else if (w.AutoNew && NowMs() >= w.HoldUntil) WheelNewRound(w, true);
+        }
     }
 
-    // What the website mirrors. Mirrors site worker wheelClean(); the seed is deliberately left out.
+    // What the website mirrors: the sign-up list and the status, and the finished teams ONLY after the last pick has landed.
+    // No picks, steps, seed or waitlist order leave the PC while a round is running.
     object WheelSnapshot()
     {
         var w = _wheel;
         if (w == null)
-            return new { id = "", status = "none", mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all",
-                         entrants = new object[0], teams = new object[0], draw = (object)null, waitlist = new string[0],
-                         announce = new { state = "idle", sent = 0, total = 0 }, canUndo = false, drawCount = 0, caps = new { spin = true }, practice = false };
-        object draw = w.Draw == null ? null : (object)new
-        {
-            id = w.Draw.Id, startedAt = w.Draw.StartedAt, stepMs = w.Draw.StepMs,
-            steps = w.Draw.Steps.Select(s => new { team = s.Team, name = s.Name }).ToList(),
-            revealed = w.Draw.Revealed, spunAt = w.Draw.SpunAt
-        };
+            return new { id = "", status = "none", round = 0, mode = "random", teamSize = 2, oddPolicy = "waitlist", eligibility = "all",
+                         queue = new string[0], finalTeams = new object[0], waitlist = new string[0], practice = false };
+        bool fin = w.Final;
+        string status = w.Status == "drawn" ? "final" : w.Status;
         return new
         {
-            id = w.Id, status = w.Status, mode = w.Mode, teamSize = w.TeamSize, oddPolicy = w.OddPolicy, eligibility = w.Eligibility,
-            entrants = w.Entrants.Select(e => new { id = e.Id, login = e.Login, name = e.Name, epic = e.Epic ?? "", mmr = e.Mmr, flagged = e.Flagged, wait = e.Wait, practice = e.Practice }).ToList(),
-            teams = w.Teams.Select(t => new { n = t.N, members = t.Members, avg = t.Avg, partial = t.Partial, announced = t.Announced }).ToList(),
-            draw = draw, waitlist = w.Waitlist,
-            announce = new { state = w.AnnState, sent = w.Msgs.Count(m => m.Sent), total = w.Msgs.Count },
-            canUndo = (w.Status == "drawing" || w.Status == "drawn") && !w.Msgs.Any(m => m.Sent),
-            drawCount = w.DrawCount, caps = new { spin = true }, practice = w.Entrants.Any(e => e.Practice)
+            id = w.Id, status = status, round = w.Round, mode = w.Mode, teamSize = w.TeamSize, oddPolicy = w.OddPolicy, eligibility = w.Eligibility,
+            queue = w.Entrants.Where(e => !fin || !e.Placed).Select(e => e.Name).ToList(),
+            finalTeams = fin ? w.Teams.Select(t => new { n = t.N, members = t.Members, avg = t.Avg, partial = t.Partial }).ToList<object>() : new List<object>(),
+            waitlist = fin ? w.Waitlist : new List<string>(),
+            practice = w.Entrants.Any(e => e.Practice)
         };
     }
+
+    // What the local overlay reads (Host: /api/wheel/public). Only picks that were already made at spin time exist; the newest one is flagged "landing"
+    // until the animation has finished so the page can hold it back.
+    object WheelPublic()
+    {
+        var w = _wheel;
+        if (w == null) return new { status = "none", queue = new string[0], picks = new object[0], teams = new object[0], waitlist = new string[0] };
+        bool pending = WheelPending(w);
+        var last = w.Draw != null ? w.Draw.Last : new List<string>();
+        return new
+        {
+            id = w.Id, status = w.Status == "drawn" ? "final" : w.Status, round = w.Round, mode = w.Mode, teamSize = w.TeamSize, final = w.Final,
+            queue = w.Entrants.Where(e => !e.Placed || (pending && last.Contains(e.Name))).Select(e => e.Name).ToList(),
+            picks = w.Picks.Select(p => new { name = p.Name, team = p.Team }).ToList(),
+            teams = w.Teams.Select(t => new { n = t.N, members = t.Members, partial = t.Partial, avg = t.Avg }).ToList(),
+            waitlist = w.Final ? w.Waitlist : new List<string>(),
+            spin = w.Draw == null ? null : new { id = w.Draw.Id, at = w.Draw.SpunAt, ms = WheelSpinMs(w), landing = last, revealed = w.Draw.Revealed },
+            holdUntil = w.HoldUntil, now = NowMs(), practice = w.Entrants.Any(e => e.Practice)
+        };
+    }
+
 
     void SavePlayers() { SaveJson("players.json", _practice.Count == 0 ? _players : _players.Where(kv => !IsPractice(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value)); _standingsDirty = true; }   // [NEW][WEB] league table changed (practice players are never saved)
     void SaveQueue() { SaveJson("queue.json", _practice.Count == 0 ? _queue : _queue.Where(e => !IsPractice(e.Username)).ToList()); }
@@ -2694,12 +2815,14 @@ public class CPHInline
     {
         // [NEW][WEB] The streamer typing !leave = sitting out (otherwise the next !balance re-adds him).
         if (IsStreamer(user) && _settings.StreamerPlaying) { _settings.StreamerPlaying = false; SaveSettings(); }
+        bool leftWheel = WheelLeave(user);
+        if (leftWheel) Say("@" + user + " You left the tournament wheel.");
         if (RemoveFromQueue(user))
         {
             Say("@" + user + " You left the queue.");
             PublishState("queue_update", user + " left");
         }
-        else
+        else if (!leftWheel)
         {
             Say("@" + user + " You're not in the queue.");
         }

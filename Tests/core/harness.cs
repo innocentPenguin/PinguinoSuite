@@ -510,11 +510,15 @@ public static class Harness
         Run("mod1", "!activity", "end", true);
         Run("mod1", "!obs", "auto on", true);
 
-        // ===== [NEW][WHEEL] tournament wheel =====
+        // ===== [NEW][WHEEL] tournament wheel: picks are made live, one per spin =====
         Func<JObject> WS = () => JObject.Parse(File.ReadAllText(Path.Combine(dir, "wheel_session.json")));
+        Func<string, JObject> priv = name => JObject.FromObject(typeof(CPHInline).GetMethod(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(bot, null));
         Func<string, int, string[]> signUp = (prefix, n) => { var l = new System.Collections.Generic.List<string>(); for (int i = 1; i <= n; i++) { l.Add(prefix + i); Run(prefix + i, "!me"); } return l.ToArray(); };
-        Action<string, string> wheel = (sub, arg) => Run("mod1", "!wheel", (sub + " " + arg).Trim(), true);
-        Action<int> fresh = size => { wheel("end", ""); wheel("new", ""); wheel("size", size.ToString()); wheel("open", ""); };
+        var wlog = new System.Collections.Generic.List<string>();
+        Action<string, string> wheel = (sub, arg) => { Run("mod1", "!wheel", (sub + " " + arg).Trim(), true); wlog.AddRange(CPHProxy.Sent); };
+        Action<int> fresh = size => { wheel("end", ""); wheel("new", ""); wheel("size", size.ToString()); wheel("auto", "off"); };
+        Action spinAll = () => { for (int i = 0; i < 80 && !(bool)WS()["Final"]; i++) wheel("spin", ""); };
+        var stepField = typeof(CPHInline).GetField("_wheelStepMs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
 
         Run("p1", "!wheel", "new");
         Check(CPHProxy.Sent.Any(m => m.Contains("only mods")), "wheel: non-mods cannot run !wheel");
@@ -534,7 +538,7 @@ public static class Harness
         Check(WS()["Entrants"].Count() == 6 && CPHProxy.Sent.Any(m => m.Contains("subscribers")), "wheel: subs-only refuses non-subs");
         wheel("eligibility", "all");
 
-        // strikes from the site/bot: 3 strikes cannot join, and are dropped at draw time
+        // strikes: 3 strikes cannot join, and are dropped when the round starts
         int sNow = int.Parse(Players()["p3"]["Strikes"].ToString());
         for (int i = sNow; i < 3; i++) Run("mod1", "!strike", "@p3", true);
         Run("p3", "!me");
@@ -543,80 +547,118 @@ public static class Harness
         Run("p3", "!me");
         Check(WS()["Entrants"].Count() == 7, "wheel: after losing a strike they can join");
         Run("mod1", "!strike", "@p3", true);
-        wheel("draw", "");
-        Check((string)WS()["Status"] == "open" && WS()["Entrants"].Count() == 6 && CPHProxy.Sent.Any(m => m.Contains("Removed from the tournament")), "wheel: a 3-strike entrant is removed at draw time, no draw yet");
+        wheel("spin", "");
+        Check((string)WS()["Status"] == "open" && WS()["Entrants"].Count() == 6 && CPHProxy.Sent.Any(m => m.Contains("Removed from the tournament")), "wheel: a 3-strike entrant is removed at the first spin, no pick yet");
         Run("mod1", "!unstrike", "@p1", true);
 
-        wheel("draw", "");
+        wlog.Clear();
+        // live picks: ONE pick exists after ONE spin, nothing about later picks exists anywhere
+        wheel("spin", "");
         var ws = WS();
-        Check((string)ws["Status"] == "drawing" && ws["Teams"].Count() == 3, "wheel: 6 players, size 2 -> 3 teams, status drawing");
-        var all = ws["Teams"].SelectMany(t => t["Members"]).Select(x => (string)x).OrderBy(x => x).ToArray();
-        Check(all.Length == 6 && all.Distinct().Count() == 6, "wheel: every player is in exactly one team");
-        Check(ws["Draw"]["Steps"].Count() == 6, "wheel: the draw commits 6 reveal steps");
+        Check((string)ws["Status"] == "drawing" && ws["Picks"].Count() == 1, "wheel: one spin = exactly one pick");
+        Check(ws["Teams"].Sum(t => t["Members"].Count()) == 1 && ws["Msgs"].Count() == 0, "wheel: after the first pick there is one team member and nothing queued");
+        var snap = priv("WheelSnapshot");
+        Check((string)snap["status"] == "drawing" && snap["finalTeams"].Count() == 0 && snap["queue"].Count() == 6 && snap["waitlist"].Count() == 0 && snap["picks"] == null && snap["teams"] == null, "wheel: the site snapshot has only queue + status while drawing: " + snap.ToString(Newtonsoft.Json.Formatting.None));
         wheel("mode", "balanced");
-        Check(CPHProxy.Sent.Any(m => m.Contains("already drawn")), "wheel: mode can't change after the draw");
-        wheel("undo", "");
-        Check(WS()["Teams"].Count() == 0 && (string)WS()["Status"] == "closed", "wheel: undo clears teams and the draw");
-        wheel("draw", "");
-        System.Threading.Thread.Sleep(150); wheel("tick", "");
-        Check((string)WS()["Status"] == "drawn", "wheel: the pump finishes the reveal");
-        wheel("announce", "");
-        var said = CPHProxy.Sent.ToList();
-        Check(said.Count(m => m.StartsWith("Team ")) == 3 && said.Any(m => m.Contains("TOURNAMENT TEAMS")), "wheel: one line per team plus the roster paragraph");
-        Check(said.All(m => m.Length <= 450), "wheel: announcements fit one chat message");
-        System.Threading.Thread.Sleep(150); wheel("tick", "");
-        Check(CPHProxy.Sent.Count == 0, "wheel: announcements are sent once only");
-        wheel("undo", "");
-        Check(CPHProxy.Sent.Any(m => m.Contains("already announced")), "wheel: undo refused after the teams were announced");
+        Check(CPHProxy.Sent.Any(m => m.Contains("round is running")), "wheel: mode can't change mid-round");
+        wheel("spin", "");
+        wheel("spin", "");
+        wheel("spin", "");
+        ws = WS();
+        Check((string)ws["Status"] == "drawing" && ws["Picks"].Count() == 4 && !(bool)ws["Final"], "wheel: four spins = four picks, still drawing");
+        wheel("spin", "");   // the 5th spin places the last two (the last entrant needs no spin of their own)
+        ws = WS();
+        Check((bool)ws["Final"] && (string)ws["Status"] == "drawn" && ws["Picks"].Count() == 6 && ws["Teams"].Count() == 3, "wheel: the last spin lands 2 picks and finalizes: 3 teams");
+        var all = ws["Teams"].SelectMany(t => t["Members"]).Select(x => (string)x).ToArray();
+        Check(all.Length == 6 && all.Distinct().Count() == 6, "wheel: every player is in exactly one team");
+        snap = priv("WheelSnapshot");
+        Check((string)snap["status"] == "final" && snap["finalTeams"].Count() == 3, "wheel: the site gets final teams only after the last reveal");
+        var said = wlog.ToList();
+        Check(said.Count(m => m.StartsWith("Team ")) == 3 && said.Any(m => m.Contains("TOURNAMENT TEAMS")) && said.All(m => m.Length <= 450), "wheel: one line per team plus the roster paragraph, each under 450 chars");
+        Check((string)WS()["AnnState"] == "done", "wheel: announcements done");
+        wheel("tick", ""); wheel("tick", "");
+        Check(CPHProxy.Sent.Count == 0, "wheel: nothing is sent twice");
+        wheel("spin", "");
+        Check(CPHProxy.Sent.Any(m => m.Contains("finished")), "wheel: spinning a finished round is refused");
 
-        // seeded determinism (the private PRNG type, by reflection)
+        // seeded determinism of the PRNG (private type, by reflection)
         var rt = typeof(CPHInline).GetNestedType("WheelRng", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
         Func<string, string> seq = seed => { var r = Activator.CreateInstance(rt, new object[] { seed }); var m = rt.GetMethod("Below"); return string.Join(",", Enumerable.Range(0, 20).Select(i => m.Invoke(r, new object[] { 1000 }))); };
         Check(seq("abc") == seq("abc") && seq("abc") != seq("abd"), "wheel: same seed = same sequence, different seed differs");
 
-        // manual spin: the site reveals one pick per press; chat lines wait for the overlay and come once per finished team
-        fresh(2); signUp("o", 6); wheel("draw", "");
-        wheel("spin", "1");
-        Check((int)WS()["Draw"]["Revealed"] == 1 && WS()["Msgs"].Count() == 0, "wheel spin: one pick revealed, no team complete yet, nothing queued");
-        wheel("spin", "1");
-        Check((int)WS()["Draw"]["Revealed"] == 1, "wheel spin: repeating the same number is safe");
-        wheel("spin", "5");
-        Check((int)WS()["Draw"]["Revealed"] == 6, "wheel spin: when one entrant is left it is revealed with the one before (no extra spin)");
-        wheel("spin", "6");
-        var spinSnap = WS();
-        Check((int)spinSnap["Draw"]["Revealed"] == 6 && spinSnap["Msgs"].Count() == 4, "wheel spin: all 6 revealed -> 3 team lines + the final list queued");
-        Check(!CPHProxy.Sent.Any(m => m.StartsWith("Team ")), "wheel spin: nothing is said before the overlay has landed");
-        var wheelField = typeof(CPHInline).GetField("_wheel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        var wheelObj = wheelField.GetValue(null);
-        foreach (var wm in (System.Collections.IEnumerable)wheelObj.GetType().GetField("Msgs").GetValue(wheelObj)) wm.GetType().GetField("Due").SetValue(wm, 1L);
-        var spinSaid = new System.Collections.Generic.List<string>();
-        for (int tk = 0; tk < 3; tk++) { wheel("tick", ""); spinSaid.AddRange(CPHProxy.Sent); }
-        Check(spinSaid.Count(m => m.StartsWith("Team ") && m.Contains(" & ")) == 3, "wheel spin: one 'Team N: A & B!' line per finished team");
-        Check(spinSaid.Count(m => m.StartsWith("TOURNAMENT TEAMS - ") && m.Contains(" | ")) == 1, "wheel spin: the final list is sent once, teams separated by |");
-        wheel("spin", "6"); wheel("tick", "");
-        Check(CPHProxy.Sent.Count == 0 && (string)WS()["AnnState"] == "done", "wheel spin: a retry repeats nothing");
+        // a new round: the placed leave, late joiners stay, !me works during the hold
+        Run("latecomer", "!me");
+        wheel("new", "");
+        ws = WS();
+        Check((string)ws["Status"] == "open" && ws["Picks"].Count() == 0 && ws["Teams"].Count() == 0 && ws["Entrants"].Count() == 1 && (int)ws["Round"] == 1, "wheel: !wheel new opens the next round, the late joiner is waiting");
+
+        // overlay timing: with a real spin time the chat line waits until the pick has landed
+        stepField.SetValue(null, 1500);
+        fresh(2); signUp("o", 2);
+        wheel("spin", "");
+        Check(!(bool)WS()["Final"] && !CPHProxy.Sent.Any(m => m.StartsWith("Team ")), "wheel timing: nothing is announced while the wheel is still turning");
+        var pub = priv("WheelPublic");
+        Check((string)pub["status"] == "drawing" && pub["spin"]["landing"].Count() == 2, "wheel timing: the overlay file carries the landing pick(s)");
+        wheel("spin", "");
+        Check(WS()["Picks"].Count() == 2, "wheel timing: a spin pressed while turning is ignored");
+        stepField.SetValue(null, 1);
+
+        // join / leave at any time, including mid-round
+        fresh(2); signUp("x", 4);
+        wheel("spin", "");
+        string firstPick = (string)WS()["Picks"][0]["Login"];
+        Run(firstPick, "!leave");
+        ws = WS();
+        Check(ws["Picks"].Count() == 0 && ws["Entrants"].Count() == 3 && CPHProxy.Sent.Any(m => m.Contains("left the tournament wheel")), "wheel: leaving mid-round removes their pick; the wheel text is separate from the queue text");
+        Run("xjoin", "!me");
+        Check(WS()["Entrants"].Count() == 4, "wheel: joining mid-round works");
+        spinAll();
+        ws = WS();
+        Check((bool)ws["Final"] && ws["Teams"].Count() == 2 && ws["Teams"].All(t => t["Members"].Count() == 2), "wheel: join + leave mid-round still finishes with full teams");
+        // someone leaves after the teams are final: the first waiting player takes the slot
+        fresh(2); signUp("y", 5);
+        spinAll();
+        ws = WS();
+        Check((bool)ws["Final"] && ws["Waitlist"].Count() == 1, "wheel: 5 players -> 2 teams + 1 on the waitlist");
+        string leaver = (string)ws["Picks"][0]["Login"];
+        wlog.Clear();
+        Run(leaver, "!leave"); wheel("tick", "");
+        ws = WS();
+        Check(ws["Teams"].All(t => t["Members"].Count() == 2) && ws["Waitlist"].Count() == 0 && wlog.Any(m => m.Contains("takes the spot")), "wheel: a leaver after the draw is replaced from the waitlist");
+
+        // automatic new round after the hold
+        fresh(2); wheel("auto", "on"); wheel("hold", "0"); signUp("z", 2);
+        spinAll();
+        wheel("tick", ""); wheel("tick", "");
+        ws = WS();
+        Check((string)ws["Status"] == "open" && ws["Picks"].Count() == 0 && (int)ws["Round"] >= 1, "wheel: a new round opens by itself after the finished round");
+        wheel("auto", "off");
+
         // odd policies
-        fresh(2); signUp("o", 5); wheel("draw", "");
+        fresh(2); signUp("o", 5); spinAll();
         ws = WS();
         Check(ws["Teams"].Count() == 2 && ws["Waitlist"].Count() == 1, "wheel: odd=waitlist -> 2 teams + 1 waiting");
-        wheel("end", ""); wheel("new", ""); wheel("odd", "trio"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
+        fresh(2); wheel("odd", "trio"); signUp("o", 5); spinAll();
         ws = WS();
         Check(ws["Teams"].Count() == 2 && ws["Teams"].Select(t => t["Members"].Count()).OrderBy(x => x).SequenceEqual(new[] { 2, 3 }) && ws["Waitlist"].Count() == 0, "wheel: odd=trio -> a team of 3, nobody waits");
-        wheel("end", ""); wheel("new", ""); wheel("odd", "partial"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
+        fresh(2); wheel("odd", "partial"); signUp("o", 5); spinAll();
         ws = WS();
         Check(ws["Teams"].Count() == 3 && ws["Teams"].Count(t => (bool)t["Partial"]) == 1, "wheel: odd=partial -> an extra partial team");
-        wheel("end", ""); wheel("new", ""); wheel("odd", "hold"); wheel("open", ""); signUp("o", 5); wheel("draw", "");
-        Check((string)WS()["Status"] == "open" && CPHProxy.Sent.Any(m => m.Contains("more")), "wheel: odd=hold refuses to draw");
+        fresh(2); wheel("odd", "hold"); signUp("o", 5); wheel("spin", "");
+        Check((string)WS()["Status"] == "open" && CPHProxy.Sent.Any(m => m.Contains("more")), "wheel: odd=hold refuses to spin");
 
-        // balanced
+        // balanced: teams form at the last reveal
         fresh(2); wheel("mode", "balanced"); signUp("b", 4);
-        wheel("mmr", "b1 2000"); wheel("mmr", "b2 1000"); wheel("mmr", "b3 1900"); wheel("mmr", "b4 1100"); wheel("draw", "");
+        wheel("mmr", "b1 2000"); wheel("mmr", "b2 1000"); wheel("mmr", "b3 1900"); wheel("mmr", "b4 1100");
+        wheel("spin", "");
+        Check(WS()["Teams"].Count() == 0 && WS()["Picks"].Count() == 1, "wheel balanced: no teams exist until the last pick");
+        spinAll();
         ws = WS();
-        Check(ws["Teams"].Count() == 2 && (int)ws["Teams"][0]["Avg"] == (int)ws["Teams"][1]["Avg"], "wheel: balanced splits 2000/1000/1900/1100 into equal averages");
+        Check(ws["Teams"].Count() == 2 && (int)ws["Teams"][0]["Avg"] == (int)ws["Teams"][1]["Avg"], "wheel balanced: 2000/1000/1900/1100 split into equal averages");
 
         // roster paragraphs split under 450 characters
         fresh(1); for (int i = 1; i <= 60; i++) Run("averyveryverylongtwitchname" + i, "!me");
-        wheel("draw", ""); System.Threading.Thread.Sleep(150); wheel("tick", ""); wheel("announce", "");
+        spinAll(); wheel("announce", "");
         Check(CPHProxy.Sent.Count(m => m.StartsWith("TOURNAMENT TEAMS")) >= 3 && CPHProxy.Sent.All(m => m.Length <= 450), "wheel: a long roster splits into paragraphs under 450 characters");
         wheel("end", "");
 
@@ -633,8 +675,8 @@ public static class Harness
         Check(State()["queue"].Count(q => (bool)q["practice"]) == 6 && (bool)State()["practice"], "practice: 6 fake players fill the queue and the state flags them");
         Check(!onDisk("practice0"), "practice: no fake player reaches players/queue/wheel files");
         Check(WS()["Entrants"].Count() == 2, "practice: the saved wheel sign-ups hold only the real viewers");
-        wheel("draw", "");
-        Check(WS()["Status"].ToString() == "open", "practice: a practice draw is not written to the wheel file");
+        wheel("spin", "");
+        Check(WS()["Status"].ToString() == "open", "practice: a practice spin is not written to the wheel file");
         Run("mod1", "!next", "", true);
         Check(LiveM()["blue"].Concat(LiveM()["orange"]).All(p => (bool)p["Practice"] == ((string)p["Username"]).StartsWith("practice")) && LiveM()["blue"].Concat(LiveM()["orange"]).Any(p => (bool)p["Practice"]), "practice: matchmaking used fake players and flags exactly them");
         Check(!onDisk("practice0"), "practice: the practice lobby is not saved");
