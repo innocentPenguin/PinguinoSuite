@@ -165,6 +165,24 @@ namespace PinguinoHost
         }
         public static JObject ArchiveList() { lock (L) { Load(); var arr = new JArray(); foreach (var a in ((JArray)_arch["archived"]).OfType<JObject>()) { var o = (JObject)((JObject)a["profile"]).DeepClone(); o["archived"] = true; o["archivedBy"] = a["archivedBy"]; o["archivedAt"] = a["archivedAt"]; arr.Add(o); } return new JObject { { "ok", true }, { "commands", arr } }; } }
 
+        /// <summary>UNFILTERED: every command (enabled, disabled, mod-only, archived) with its raw usage counts, plus `top` = the same ids ranked by uses. Staff view; the Host API is loopback-only, nothing public reads this.</summary>
+        public static JObject All()
+        {
+            lock (L)
+            {
+                Load(); var arr = new JArray();
+                foreach (var p in Registry()) { bool arch = IsArchived(p.Id); if (!arch) Apply(p); var v = View(p); v["archived"] = arch; arr.Add(v); }
+                foreach (var a in ((JArray)_arch["archived"]).OfType<JObject>())
+                {
+                    var o = (JObject)((JObject)a["profile"]).DeepClone(); string id = (string)o["id"] ?? ""; if (arr.OfType<JObject>().Any(x => (string)x["id"] == id)) continue;
+                    var u = _use[id] as JObject; if (u != null) { o["uses"] = (long?)u["uses"] ?? 0; o["lastUsed"] = (long?)u["last"] ?? 0; }
+                    o["archived"] = true; o["archivedBy"] = a["archivedBy"]; o["archivedAt"] = a["archivedAt"]; arr.Add(o);
+                }
+                var top = new JArray(arr.OfType<JObject>().OrderByDescending(x => (long?)x["uses"] ?? 0).Select(x => new JObject { { "id", x["id"] }, { "uses", (long?)x["uses"] ?? 0 }, { "lastUsed", (long?)x["lastUsed"] ?? 0 }, { "archived", (bool?)x["archived"] == true }, { "permission", x["permission"] } }));
+                return new JObject { { "ok", true }, { "unfiltered", true }, { "count", arr.Count }, { "commands", arr }, { "top", top } };
+            }
+        }
+
         public static JObject Edit(JObject b)
         {
             string by = ((string)b["by"] ?? "api").Trim(); string id = Bang((string)b["id"]);
