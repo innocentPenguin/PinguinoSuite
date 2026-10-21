@@ -212,7 +212,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;margin:8px 0}.swatch{border:2px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;background:var(--panel2)}.swatch.on{border-color:var(--accent)}
 .swatch .sp1{height:34px;border-radius:8px;margin-bottom:6px;display:flex;overflow:hidden;border:1px solid var(--line)}.swatch .sp1 i{flex:1}
 .prow{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}.prow:last-child{border:0}.prow .grow{flex:1;min-width:0}.prow.off .grow{opacity:.45}
-.pnote{color:var(--faint);font-size:12.5px;margin:2px 0 8px}.simban{background:#c62828;color:#fff;font-weight:800;letter-spacing:1.2px;text-align:center;padding:9px 14px;border-radius:10px;margin-bottom:12px;box-shadow:0 0 0 2px #ff6b6b66}.simban small{font-weight:500;letter-spacing:0;margin-left:10px}.simlog{max-height:120px;overflow:auto;margin-top:6px}.simtag{font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;background:#c6282833;color:#ff8a80;margin-left:4px}.cm-wrap{display:flex;gap:12px;align-items:flex-start}.cm-list{flex:1;min-width:0}.cm-panel{width:330px;flex:none;position:sticky;top:8px}.cm-row{display:flex;align-items:center;gap:10px;padding:5px 2px;border-top:1px solid var(--line)}.cm-name{flex:1;min-width:0}.cm-open{cursor:pointer}.cm-open:hover{color:var(--accent)}.cm-uses{width:80px;text-align:right}.cm-gh{cursor:pointer;gap:8px;margin-bottom:4px}.cm-f{margin:8px 0}.cm-f label{display:block;font-size:12px;color:var(--faint);margin-bottom:3px}.cm-f input[type=text]{width:100%}@media(max-width:900px){.cm-wrap{flex-direction:column}.cm-panel{width:100%;position:static}}input[type=range]{accent-color:var(--accent);width:150px}input[type=color]{width:38px;height:28px;padding:0;border:1px solid var(--line2);border-radius:8px;background:transparent;cursor:pointer}
+.pnote{color:var(--faint);font-size:12.5px;margin:2px 0 8px}.rchips{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}.rchip{display:inline-flex;align-items:center;gap:3px;font-size:12px;padding:1px 4px 1px 9px;border-radius:999px;background:color-mix(in srgb,var(--accent) 20%,transparent);border:1px solid var(--accent);color:var(--fg)}.rchip.lock{padding-right:9px;opacity:.85}.rchip .rx{border:0;background:none;padding:0 5px;border-radius:999px;cursor:pointer;line-height:1.2;font-size:14px;color:var(--fg)}.rchip .rx:hover,.rchip .rx:focus-visible{background:#0004;outline:none}.rwrap{position:relative;display:inline-block}.rwrap .smenu{left:0;right:auto;width:230px}.cm-roles{flex:0 1 330px;min-width:150px}.simban{background:#c62828;color:#fff;font-weight:800;letter-spacing:1.2px;text-align:center;padding:9px 14px;border-radius:10px;margin-bottom:12px;box-shadow:0 0 0 2px #ff6b6b66}.simban small{font-weight:500;letter-spacing:0;margin-left:10px}.simlog{max-height:120px;overflow:auto;margin-top:6px}.simtag{font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;background:#c6282833;color:#ff8a80;margin-left:4px}.cm-wrap{display:flex;gap:12px;align-items:flex-start}.cm-list{flex:1;min-width:0}.cm-panel{width:330px;flex:none;position:sticky;top:8px}.cm-row{display:flex;align-items:center;gap:10px;padding:5px 2px;border-top:1px solid var(--line)}.cm-name{flex:1;min-width:0}.cm-open{cursor:pointer}.cm-open:hover{color:var(--accent)}.cm-uses{width:80px;text-align:right}.cm-gh{cursor:pointer;gap:8px;margin-bottom:4px}.cm-f{margin:8px 0}.cm-f label{display:block;font-size:12px;color:var(--faint);margin-bottom:3px}.cm-f input[type=text]{width:100%}@media(max-width:900px){.cm-wrap{flex-direction:column}.cm-panel{width:100%;position:static}}input[type=range]{accent-color:var(--accent);width:150px}input[type=color]{width:38px;height:28px;padding:0;border:1px solid var(--line2);border-radius:8px;background:transparent;cursor:pointer}
 .commgrid{display:grid;gap:12px;grid-template-columns:1fr}.commgrid.both{grid-template-columns:1fr 1fr}.commgrid section{display:flex;flex-direction:column;min-width:0;gap:8px}
 .cshead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}.cshead .grow{flex:1;min-width:140px}
 .csbody iframe{width:100%;height:calc(100vh - 250px);min-height:320px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}.commsum{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -909,23 +909,34 @@ const openExternal=u=>{
     return PGWin.open({label:'pop-ext-'+slug,url:u,title:'PinguinoSuite: '+u.replace(/^https?:\/\//,''),width:1100,height:700,remember:false}).catch(e=>toast('Could not open the page: '+(e&&e.message?e.message:e)))}
   location.href=u};   // other sites: the shell hands them to the system browser and stays where it is
 /* ============ Commands: per-command role permissions, profiles, archive (Host: GET /api/commands/profiles, POST /api/commands/profile|archive|restore, GET /api/commands/archive) ============ */
-const CMD_ROLES=[['everyone','Everyone'],['sub','Subs'],['vip','VIPs'],['mod','Mods'],['broadcaster','Broadcaster only']];
 const CMD_MOCK=(()=>{const n=Math.floor(Date.now()/1000);
   const L=[['wheel','Wheel & games','everyone',412,'Spin the wheel with your points.','Host'],['gamble','Wheel & games','everyone',968,'Gamble points on a coin flip.','Host'],['duel','Wheel & games','everyone',143,'Challenge another viewer.','Host'],['slots','Wheel & games','sub',87,'Spin the slots.','Host'],
     ['points','Points & economy','everyone',1520,'Show your point balance.','Host'],['leaderboard','Points & economy','everyone',233,'Top 5 viewers by points.','Host'],['give','Points & economy','vip',61,'Give points to a viewer.','Host'],['grant','Points & economy','broadcaster',9,'Silent point grant.','Host'],
     ['commands','Info','everyone',705,'List the chat commands.','Helper'],['socials','Info','everyone',388,'Links to the channel socials.','Helper'],['schedule','Info','everyone',274,'Show the stream schedule.','Helper'],['lurk','Info','everyone',96,'Let chat know you are lurking.','Chatty'],
     ['shoutout','Moderation','mod',212,'Shout out a streamer.','B0t'],['so','Moderation','mod',150,'Alias of shoutout.','B0t'],['timeout','Moderation','mod',44,'Timeout a viewer.','B0t'],['clip','Moderation','vip',178,'Make a clip.','B0t'],['teach','Moderation','mod',31,'Teach the bots a fact.','Helper'],
     ['song','Fun','everyone',330,'What is playing now.','Chatty'],['hug','Fun','everyone',521,'Hug a viewer.','Chatty'],['joke','Fun','sub',77,'Tell a joke.','Chatty']];
-  return L.map((x,i)=>({id:'mock-'+x[0],name:x[0],aliases:x[0]==='shoutout'?['so']:[],description:x[4],category:x[1],permission:x[2],cooldownGlobal:x[3]>400?10:5,cooldownUser:30,enabled:true,uses:x[3],lastUsed:n-i*5400,ownerBot:x[5],editedBy:'',editedAt:0,archived:false}))})();
-const CMD={d:undefined,arch:null,tab:'cmds',sort:'uses',q:'',sel:new Set(),open:null,mock:false,collapsed:(()=>{try{return JSON.parse(localStorage.getItem('cmdCollapsed')||'{}')}catch{return {}}})()};
+  const mr=p=>p==='everyone'?['everyone']:p==='broadcaster'?['broadcaster']:[p,'broadcaster'];
+  return L.map((x,i)=>({id:'mock-'+x[0],name:x[0],aliases:x[0]==='shoutout'?['so']:[],description:x[4],category:x[1],permission:x[2],cooldownGlobal:x[3]>400?10:5,cooldownUser:30,enabled:true,uses:x[3],lastUsed:n-i*5400,ownerBot:x[5],editedBy:'',editedAt:0,archived:false,roles:mr(x[2]),defaultRoles:mr(x[2])}))})();
+const CMD={menu:null,roleOpts:null,d:undefined,arch:null,tab:'cmds',sort:'uses',q:'',sel:new Set(),open:null,mock:false,collapsed:(()=>{try{return JSON.parse(localStorage.getItem('cmdCollapsed')||'{}')}catch{return {}}})()};
 const CMD_WHO='Ivan';
 const cmdN=n=>String(n||'').startsWith('!')?n:'!'+n;
 const cmdAgo=ts=>ts?aprAgo(ts):'never';
-const cmdRole=p=>(CMD_ROLES.find(r=>r[0]===p)||[0,p||'?'])[1];
-const cmdRoleSel=(cls,cur)=>`<select class="${cls} sm">${CMD_ROLES.map(r=>`<option value="${r[0]}"${r[0]===cur?' selected':''}>${r[1]}</option>`).join('')}</select>`;
+const CMD_OPTS=[['everyone','Everyone'],['sub','Subscriber (any tier)'],['sub1','Sub tier 1'],['sub2','Sub tier 2'],['sub3','Sub tier 3'],['vip','VIP'],['mod','Moderator'],['broadcaster','Broadcaster']];
+const CMD_SHORT={everyone:'Everyone',sub:'Subs',sub1:'Sub T1',sub2:'Sub T2',sub3:'Sub T3',vip:'VIPs',mod:'Mods',broadcaster:'Broadcaster'};
+const cmdOpts=()=>CMD.roleOpts&&CMD.roleOpts.length?CMD.roleOpts:CMD_OPTS.map(x=>({id:x[0],label:x[1]}));
+const cmdOptLabel=id=>(cmdOpts().find(o=>o.id===id)||{}).label||id;
+const cmdRolesOf=c=>Array.isArray(c.roles)?c.roles:(c.permission==='everyone'?['everyone']:c.permission==='broadcaster'?['broadcaster']:c.permission?[c.permission,'broadcaster']:['broadcaster']);
+const cmdDefRoles=c=>Array.isArray(c.defaultRoles)?c.defaultRoles:null;
+function cmdNorm(list){const set=new Set(list);if(set.has('everyone'))return ['everyone'];set.add('broadcaster');return cmdOpts().map(o=>o.id).filter(id=>set.has(id))}   // same rules as the Host: everyone is exclusive, broadcaster is always there
+const cmdRoleText=c=>cmdRolesOf(c).map(r=>CMD_SHORT[r]||r).join(', ');
+function cmdChips(c,ctx){const R=cmdRolesOf(c),def=cmdDefRoles(c),ch=def&&JSON.stringify(cmdNorm(R))!==JSON.stringify(cmdNorm(def)),m=CMD.menu&&CMD.menu.k===ctx&&CMD.menu.id===c.id;
+  const free=cmdOpts().filter(o=>!R.includes(o.id)&&o.id!=='broadcaster');
+  return `<span class="rchips">${R.map(r=>r==='broadcaster'&&R.length>1?`<span class="rchip lock" title="Always allowed">Broadcaster</span>`:`<span class="rchip" data-role="${esc(r)}">${esc(CMD_SHORT[r]||r)}${r==='broadcaster'?'':`<button class="rx" aria-label="Remove ${esc(CMD_SHORT[r]||r)}" title="Remove">×</button>`}</span>`).join('')}<span class="rwrap"><button class="sm cm-add" aria-haspopup="menu" aria-expanded="${m?'true':'false'}">+ add</button>${m?`<div class="smenu" role="menu">${free.map(o=>`<button class="mi" role="menuitem" data-addrole="${esc(o.id)}">${esc(o.label)}</button>`).join('')||'<div class="sm faint" style="padding:4px 8px">Nothing left to add.</div>'}</div>`:''}</span>${ch?`<span class="pill" title="Different from the default">changed</span><button class="sm cm-reset" title="Back to ${esc(def.map(r=>CMD_SHORT[r]||r).join(', '))}">reset</button>`:''}</span>`}
+function cmdBulkMenu(kind){const m=CMD.menu&&CMD.menu.k===kind,add=kind==='badd';
+  return `<span class="rwrap"><button class="sm" id="cm-${kind}" aria-haspopup="menu" aria-expanded="${m?'true':'false'}">${add?'Add role…':'Remove role…'}</button>${m?`<div class="smenu" role="menu">${cmdOpts().filter(o=>o.id!=='broadcaster').map(o=>`<button class="mi" role="menuitem" data-bulkrole="${esc(o.id)}">${esc(o.label)}</button>`).join('')}</div>`:''}</span>`}
 const cmdNow=()=>Math.floor(Date.now()/1000);
 async function loadCommands(){
-  try{const j=await hostGet('/api/commands/profiles');if(!j||j.ok===false||!Array.isArray(j.commands))throw new Error('shape');CMD.d=j.commands;CMD.mock=false}
+  try{const j=await hostGet('/api/commands/profiles');if(!j||j.ok===false||!Array.isArray(j.commands))throw new Error('shape');CMD.d=j.commands;CMD.roleOpts=Array.isArray(j.roleOptions)?j.roleOptions:null;CMD.mock=false}
   catch{CMD.d=CMD.d&&CMD.mock?CMD.d:CMD_MOCK.map(x=>({...x,aliases:[...x.aliases]}));CMD.mock=true}
   draw(true)}
 async function loadCmdArchive(){
@@ -933,7 +944,7 @@ async function loadCmdArchive(){
   draw(true)}
 async function cmdSave(id,patch){
   const c=(CMD.d||[]).find(x=>x.id===id);if(!c)return false;
-  if(CMD.mock){Object.assign(c,patch,{editedBy:CMD_WHO,editedAt:cmdNow()});return true}
+  if(CMD.mock){if(patch.roles)patch={...patch,roles:cmdNorm(patch.roles)};Object.assign(c,patch,{editedBy:CMD_WHO,editedAt:cmdNow()});return true}
   const r=await hostJ('/api/commands/profile',{id,...patch,by:CMD_WHO});
   if(!r._ok||r.ok===false){toast('Could not save '+cmdN(c.name)+': '+(r.error||('HTTP '+(r._status||'?'))));return false}
   Object.assign(c,patch,r.command||{});return true}
@@ -961,18 +972,18 @@ pages.commands=()=>{
   if(CMD.tab==='arch'){
     const A=CMD.arch||[];
     return `<div style="max-width:980px">${head}${note}<div class="pnote">Archived commands do not answer in chat. Nothing is ever deleted: Restore brings a command back with its settings.</div>
-      ${A.length?A.map(c=>`<div class="card" data-id="${esc(c.id)}"><div class="row wrap"><b>${esc(cmdN(c.name))}</b><span class="pill">${esc(c.category||'other')}</span><span class="pill">${esc(cmdRole(c.permission))}</span><span class="sp"></span><span class="sm faint">archived by ${esc(c.archivedBy||'?')} ${cmdAgo(c.archivedAt)}</span><button class="sm" data-restore="1">Restore</button></div>${c.description?`<div class="sm faint" style="margin-top:4px">${esc(c.description)}</div>`:''}</div>`).join(''):'<div class="card dim">Nothing archived.</div>'}</div>`}
+      ${A.length?A.map(c=>`<div class="card" data-id="${esc(c.id)}"><div class="row wrap"><b>${esc(cmdN(c.name))}</b><span class="pill">${esc(c.category||'other')}</span><span class="pill">${esc(cmdRoleText(c))}</span><span class="sp"></span><span class="sm faint">archived by ${esc(c.archivedBy||'?')} ${cmdAgo(c.archivedAt)}</span><button class="sm" data-restore="1">Restore</button></div>${c.description?`<div class="sm faint" style="margin-top:4px">${esc(c.description)}</div>`:''}</div>`).join(''):'<div class="card dim">Nothing archived.</div>'}</div>`}
   const list=cmdFiltered(),groups={};list.forEach(c=>(groups[c.category||'other']=groups[c.category||'other']||[]).push(c));
-  const row=c=>`<div class="cm-row" data-id="${esc(c.id)}"><input type="checkbox" class="cm-sel"${CMD.sel.has(c.id)?' checked':''}><span class="cm-name"><b class="cm-open" title="Open the profile">${esc(cmdN(c.name))}</b>${(c.aliases||[]).length?` <span class="sm faint">${c.aliases.map(a=>esc(cmdN(a))).join(' ')}</span>`:''}</span>${cmdRoleSel('cm-perm',c.permission)}<label class="sm faint"><input type="checkbox" class="cm-en"${c.enabled!==false?' checked':''}> on</label><span class="sm faint cm-uses">${(c.uses||0).toLocaleString()} uses</span></div>`;
+  const row=c=>`<div class="cm-row" data-id="${esc(c.id)}"><input type="checkbox" class="cm-sel"${CMD.sel.has(c.id)?' checked':''}><span class="cm-name"><b class="cm-open" title="Open the profile">${esc(cmdN(c.name))}</b>${(c.aliases||[]).length?` <span class="sm faint">${c.aliases.map(a=>esc(cmdN(a))).join(' ')}</span>`:''}</span><span class="cm-roles">${cmdChips(c,'row')}</span><label class="sm faint"><input type="checkbox" class="cm-en"${c.enabled!==false?' checked':''}> on</label><span class="sm faint cm-uses">${(c.uses||0).toLocaleString()} uses</span></div>`;
   const grp=Object.keys(groups).sort((a,b)=>a.localeCompare(b)).map(k=>{const L=groups[k].sort(cmdSorter),col=CMD.collapsed[k]&&!CMD.q.trim();
     return `<div class="card cm-grp"><div class="row cm-gh" data-g="${esc(k)}"><span>${col?'▸':'▾'}</span><b>${esc(k)}</b><span class="pill">${L.length}</span></div>${col?'':L.map(row).join('')}</div>`}).join('');
-  const bulk=CMD.sel.size?`<div class="card row wrap"><b>${CMD.sel.size} selected</b>${cmdRoleSel('cm-bulkrole',CMD_ROLES[0][0])}<button class="sm" id="cm-bulkgo">Set role</button><button class="sm" id="cm-bulkarch">Archive</button><button class="sm" id="cm-bulkclear">Clear</button></div>`:'';
+  const bulk=CMD.sel.size?`<div class="card row wrap"><b>${CMD.sel.size} selected</b>${cmdBulkMenu('badd')}${cmdBulkMenu('brm')}<button class="sm" id="cm-bulkarch">Archive</button><button class="sm" id="cm-bulkclear">Clear</button></div>`:'';
   const o=CMD.open&&CMD.d.find(x=>x.id===CMD.open);
   const panel=o?`<div class="card cm-panel" data-id="${esc(o.id)}"><div class="row"><h3 style="margin:0">${esc(cmdN(o.name))}</h3><span class="sp"></span><button class="sm" id="pf-close">Close</button></div>
     <div class="cm-f"><label>Aliases (comma separated)</label><input type="text" id="pf-aliases" value="${esc((o.aliases||[]).join(', '))}"${o.source==='builtin'?' disabled title="Built-in commands keep their names"':''}></div>
     <div class="cm-f"><label>Description</label><textarea id="pf-desc" rows="2" style="width:100%">${esc(o.description||'')}</textarea></div>
     <div class="cm-f"><label>Category</label><input type="text" id="pf-cat" value="${esc(o.category||'')}"></div>
-    <div class="cm-f"><label>Who can use it</label>${cmdRoleSel('',o.permission).replace('<select ','<select id="pf-perm" ')}${o.defaultPermission&&o.defaultPermission!==o.permission?`<div class="sm faint">Changed from the default (${esc(cmdRole(o.defaultPermission))}).</div>`:''}<div class="sm faint">Opening a command up cannot give more than the command's own check allows.</div></div>
+    <div class="cm-f"><label>Who can use it</label>${cmdChips(o,'panel')}<div class="sm faint">Role changes apply at once. Opening a command up cannot give more than the command's own check allows.</div></div>
     <div class="cm-f"><label>Cooldown, everyone (s)</label><input type="number" min="0" id="pf-cdg" value="${esc(o.cooldownGlobal??0)}" style="width:90px"></div>
     <div class="cm-f"><label>Cooldown, per viewer (s)</label><input type="number" min="0" id="pf-cdu" value="${esc(o.cooldownUser??0)}" style="width:90px"></div>
     <div class="cm-f"><label><input type="checkbox" id="pf-en"${o.enabled!==false?' checked':''}> Enabled</label></div>
@@ -982,6 +993,8 @@ pages.commands=()=>{
     <div class="row wrap" style="margin-bottom:8px"><input type="text" id="cm-q" placeholder="Search commands, aliases, categories" value="${esc(CMD.q)}" style="min-width:260px"><span class="sp"></span><span class="sm faint">Sort</span>${chip('uses','Most used',CMD.sort==='uses','data-cs')}${chip('az','A-Z',CMD.sort==='az','data-cs')}</div>
     <div class="pnote">Pick who may use each command. Click a command name to open its profile. Archiving keeps the command and lets you restore it.</div>${bulk}
     <div class="cm-wrap"><div class="cm-list">${grp||'<div class="card dim">No command matches.</div>'}</div>${panel}</div></div>`};
+document.addEventListener('click',e=>{if(CMD.menu&&!e.target.closest('.rwrap')){CMD.menu=null;if(route==='commands')draw(true)}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&CMD.menu&&route==='commands'){CMD.menu=null;draw(true)}});
 function bindCommands(){
   const re=()=>{CMD.d=undefined;CMD.arch=null;draw(true)};
   $('#cm-refresh')&&($('#cm-refresh').onclick=re);
@@ -992,16 +1005,29 @@ function bindCommands(){
   const idOf=el=>el.closest('[data-id]').dataset.id;
   $$('.cm-sel').forEach(b=>b.onchange=()=>{const id=idOf(b);b.checked?CMD.sel.add(id):CMD.sel.delete(id);draw(true)});
   $$('.cm-open').forEach(b=>b.onclick=()=>{CMD.open=idOf(b);draw(true)});
-  $$('.cm-perm').forEach(s=>s.onchange=async()=>{const id=idOf(s);if(await cmdSave(id,{permission:s.value}))toast('Now: '+cmdRole(s.value));draw(true)});
+  const setRoles=async(id,roles,msg)=>{const c=CMD.d.find(x=>x.id===id);if(!c)return;const next=cmdNorm(roles);if(JSON.stringify(next)===JSON.stringify(cmdNorm(cmdRolesOf(c))))return;
+    CMD.menu=null;if(await cmdSave(id,{roles:next}))toast(msg+' '+cmdRoleText(CMD.d.find(x=>x.id===id)));draw(true)};
+  const cmdOf=el=>CMD.d.find(x=>x.id===idOf(el));
+  $$('.rchip .rx').forEach(b=>b.onclick=e=>{e.stopPropagation();const c=cmdOf(b),r=b.closest('.rchip').dataset.role;setRoles(c.id,cmdRolesOf(c).filter(x=>x!==r),'Now:')});
+  $$('.cm-add').forEach(b=>b.onclick=e=>{e.stopPropagation();const c=cmdOf(b),k=b.closest('.cm-panel')?'panel':'row';CMD.menu=CMD.menu&&CMD.menu.k===k&&CMD.menu.id===c.id?null:{k,id:c.id};draw(true);const f=$('.rwrap .smenu .mi');if(f)f.focus()});
+  $$('[data-addrole]').forEach(b=>b.onclick=()=>{const c=cmdOf(b),r=b.dataset.addrole;setRoles(c.id,r==='everyone'?['everyone']:cmdRolesOf(c).filter(x=>x!=='everyone').concat(r),'Now:')});
+  $$('.cm-reset').forEach(b=>b.onclick=()=>{const c=cmdOf(b);setRoles(c.id,cmdDefRoles(c)||['everyone'],'Reset to')});
+  $$('#cm-badd,#cm-brm').forEach(b=>b.onclick=e=>{e.stopPropagation();const k=b.id.slice(3);CMD.menu=CMD.menu&&CMD.menu.k===k?null:{k};draw(true);const f=$('.rwrap .smenu .mi');if(f)f.focus()});
+  $$('[data-bulkrole]').forEach(b=>b.onclick=async()=>{const r=b.dataset.bulkrole,add=CMD.menu&&CMD.menu.k==='badd',ids=[...CMD.sel];CMD.menu=null;let ok=0,same=0;
+    for(const id of ids){const c=CMD.d.find(x=>x.id===id);if(!c)continue;const cur=cmdRolesOf(c);
+      const next=cmdNorm(add?(r==='everyone'?['everyone']:cur.filter(x=>x!=='everyone').concat(r)):cur.filter(x=>x!==r));
+      if(JSON.stringify(next)===JSON.stringify(cmdNorm(cur))){same++;continue}
+      if(await cmdSave(id,{roles:next}))ok++}
+    toast(`${cmdOptLabel(r)} ${add?'added to':'removed from'} ${ok} command(s)${same?', '+same+' already fine':''}`);draw(true)});
+  $$('.smenu').forEach(m=>m.onkeydown=e=>{const it=[...m.querySelectorAll('.mi')],i=it.indexOf(document.activeElement);
+    if(e.key==='ArrowDown'){e.preventDefault();(it[i+1]||it[0]).focus()}else if(e.key==='ArrowUp'){e.preventDefault();(it[i-1]||it[it.length-1]).focus()}});
   $$('.cm-en').forEach(b=>b.onchange=async()=>{await cmdSave(idOf(b),{enabled:b.checked});draw(true)});
   $('#cm-bulkclear')&&($('#cm-bulkclear').onclick=()=>{CMD.sel.clear();draw(true)});
-  $('#cm-bulkgo')&&($('#cm-bulkgo').onclick=async()=>{const role=$('.cm-bulkrole').value,ids=[...CMD.sel];let ok=0;for(const id of ids)if(await cmdSave(id,{permission:role}))ok++;
-    toast(`${ok} of ${ids.length} set to ${cmdRole(role)}`);CMD.sel.clear();draw(true)});
   $('#cm-bulkarch')&&($('#cm-bulkarch').onclick=async()=>{const ids=[...CMD.sel];if(!confirm(`Archive ${ids.length} command(s)? They stop answering in chat, and you can restore them from the Archive tab.`))return;
     let ok=0;for(const id of ids)if(await cmdArchive(id))ok++;toast(`${ok} archived`);CMD.sel.clear();CMD.open=null;draw(true)});
   $('#pf-close')&&($('#pf-close').onclick=()=>{CMD.open=null;draw(true)});
   $('#pf-save')&&($('#pf-save').onclick=async()=>{const id=idOf($('#pf-save'));
-    const o=CMD.d.find(x=>x.id===id)||{},cur={aliases:$('#pf-aliases').value.split(',').map(x=>x.trim().replace(/^!/,'')).filter(Boolean),description:$('#pf-desc').value.trim(),category:$('#pf-cat').value.trim()||'other',permission:$('#pf-perm').value,
+    const o=CMD.d.find(x=>x.id===id)||{},cur={aliases:$('#pf-aliases').value.split(',').map(x=>x.trim().replace(/^!/,'')).filter(Boolean),description:$('#pf-desc').value.trim(),category:$('#pf-cat').value.trim()||'other',
       cooldownGlobal:Math.max(0,Math.round(+$('#pf-cdg').value||0)),cooldownUser:Math.max(0,Math.round(+$('#pf-cdu').value||0)),enabled:$('#pf-en').checked};
     const patch={};for(const k in cur)if(JSON.stringify(cur[k])!==JSON.stringify(k==='aliases'?(o.aliases||[]):(o[k]??(k==='description'?'':undefined))))patch[k]=cur[k];
     if(o.source==='builtin')delete patch.aliases;
