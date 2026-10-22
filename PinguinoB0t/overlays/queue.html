@@ -10,6 +10,13 @@
   (players.html: the teams / in-game players) is on screen, so the two are never up at the same time: it stays away while a
   match is running and for AFTER_RESULT_SECONDS after a result (same number as players.html, HIDE_AFTER_RESULT_SECONDS).
 
+  IDLE MODE: when nobody is in the queue and no match is running for idleSeconds, the card turns into rotating LEADERBOARD cards (same
+  frame, orange glow running round the border) and switches back to the live queue the moment someone joins or a game starts.
+  The cards come from the Host (GET /api/queue-idle?js=1, built from the public boards: no bots, no !optmeout viewers). Settings live in
+  Data\runtime\queue_idle.json (enabled, idleSeconds, secondsPerCard, top, sequence: cards or chains of similar boards that flow into
+  each other; the overlay shuffles the items like a bag so the order changes every round). Preview in a browser: queue.html?preview=1
+  forces idle mode (add &mock for built-in sample boards when the Host is not running).
+
   TITLE: says what is being played (Competitive Customs, Casual Customs, Playing with Viewers, Fortnite Boxfights, Fortnite
   Zone Wars...) plus the team size and game mode. Ratings show as MMR (Rocket League) or SR (Fortnite) in grey.
 -->
@@ -52,6 +59,21 @@
   .more { padding:2px 4px 6px; color:var(--muted); font-size:14px; }
   .foot { margin-top:8px; font-size:13px; color:var(--muted); line-height:1.4; }
   .foot b { color:var(--text); }
+  /* ---- idle mode: leaderboard cards with an orange glow chasing round the frame (CEF-safe: one rotating gradient, no filters) ---- */
+  .glow { position:relative; width:386px; margin:20px; padding:3px; box-sizing:border-box; border-radius:21px; overflow:hidden; background:#36382f;
+          box-shadow:0 0 22px rgba(255,140,0,.38), 0 10px 30px rgba(0,0,0,.5); transition:opacity .45s, transform .45s; }
+  .glow.hidden { opacity:0; transform:translateY(-14px); pointer-events:none; }
+  .glow .spin { position:absolute; left:50%; top:50%; width:1500px; height:1500px; margin:-750px 0 0 -750px; animation:chase 5s linear infinite;
+                background:conic-gradient(from 0deg, rgba(255,153,0,0) 0%, rgba(255,153,0,0) 52%, #ff6a00 72%, #ffb347 86%, #ffd166 92%, rgba(255,153,0,0) 100%); }
+  @keyframes chase { to { transform:rotate(360deg); } }
+  .glow .card { position:relative; margin:0; width:auto; box-shadow:none; border-radius:16px; border-color:#2a2c24; min-height:320px; }
+  .ibody.out { opacity:0; transform:translateY(-8px); transition:opacity .3s, transform .3s; }
+  .ibody.out.lk { transform:translateX(-26px); }
+  .ibody.in { animation:fadeIn .45s ease-out; } .ibody.in.lk { animation:slideIn .45s ease-out; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } } @keyframes slideIn { from { opacity:0; transform:translateX(26px); } }
+  .glow li.first { border-color:rgba(255,209,102,.7); background:linear-gradient(90deg, rgba(255,209,102,.18), rgba(255,209,102,.05)); }
+  .glow .val { margin-left:auto; flex:none; color:var(--orange); font-weight:800; font-size:17px; }
+  .glow .act { font-size:21px; } .glow .sub b { letter-spacing:1.5px; }
 </style>
 </head>
 <body>
@@ -64,6 +86,17 @@
   <ol id="list"></ol>
   <div class="more" id="more"></div>
   <div class="foot" id="foot">Type <b>!register</b> then <b>!join</b> in chat</div>
+</div>
+
+<div class="glow hidden" id="idle">
+  <div class="spin"></div>
+  <div class="card">
+    <div class="ibody in" id="ibody">
+      <div class="head"><div><div class="act" id="itop">LEADERBOARD</div><div class="sub" id="isub"><b></b></div></div></div>
+      <ol id="ilist"></ol>
+      <div class="foot" id="ifoot">Leaderboards &middot; innocentpenguin.com</div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -139,12 +172,89 @@
     document.getElementById("foot").innerHTML = "Gold = next " + gold + " up" + (s.streamerPlaying !== false ? " + InnocentPenguin" : "") + " · Tan = 2 backups<br>Type <b>!register</b> then <b>!join</b> in chat";
   }
 
+  // ── Idle mode: rotating leaderboard cards ─────────────────
+  var PREVIEW = /[?&]preview/.test(location.search), MOCK = /[?&]mock/.test(location.search);
+  var HOST = /[?&]host=([^&]+)/.test(location.search) ? decodeURIComponent(RegExp.$1) : (location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770");
+  var idleCfg = null, idleSince = Date.now(), idleOn = false, bag = [], chain = null, chainPos = 0, lastChainId = "", cardTimer = 0, idleFetchedAt = 0, fetching = false;
+
+  function mockIdle() {
+    function rows(a) { var n = ["frostbyte","snowdrift","icecube","glacier","polarbear","rlwizard","tundra","slushy"]; return n.map(function (x, i) { return { rank:i + 1, name:x, value:Math.round(a / (i + 1)) }; }); }
+    function card(m, p, t, u, a) { return { id:m + "|" + p, metric:m, period:p, title:t, unit:u, rows:rows(a) }; }
+    return { ok:true, enabled:true, idleSeconds:20, secondsPerCard:5, items:[
+      [card("gifts","month","TOP GIFTERS \u00b7 THIS MONTH","subs",40), card("bits","month","TOP CHEERERS \u00b7 THIS MONTH","bits",9000)],
+      [card("gifts","month","TOP GIFTERS \u00b7 THIS MONTH","subs",40), card("gifts","all","TOP GIFTERS \u00b7 ALL TIME","subs",400)],
+      [card("watchtime","month","MOST WATCH TIME \u00b7 THIS MONTH","time",3000), card("watchtime","all","MOST WATCH TIME \u00b7 ALL TIME","time",90000)],
+      [card("points","all","TOP POINTS \u00b7 ALL TIME","pts",250000)] ] };
+  }
+  function loadIdle() {
+    if (MOCK) { idleCfg = mockIdle(); idleFetchedAt = Date.now(); return; }
+    if (fetching) return; fetching = true;
+    var sc = document.createElement("script");
+    sc.src = HOST + "/api/queue-idle?js=1&t=" + Date.now();
+    sc.onload = function () { fetching = false; idleFetchedAt = Date.now(); if (window.QUEUE_IDLE && window.QUEUE_IDLE.ok) idleCfg = window.QUEUE_IDLE; sc.remove(); };
+    sc.onerror = function () { fetching = false; idleFetchedAt = Date.now() - 45000; sc.remove(); };   // Host not reachable: try again in ~15 s
+    document.body.appendChild(sc);
+  }
+  function fmtTime(min) { min = Math.round(min); var h = Math.floor(min / 60); return h >= 1 ? h + "h " + (min % 60) + "m" : min + "m"; }
+  function fmtVal(r, u) {
+    var v = Number(r.value) || 0;
+    if (u === "time") return fmtTime(v);
+    if (u === "level") return "Lv " + v;
+    return v.toLocaleString("en-US") + (u ? " " + u : "");
+  }
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function nextCard() {
+    var items = (idleCfg && idleCfg.items) || [];
+    if (chain && chainPos < chain.length) return { card:chain[chainPos++], linked:true };
+    if (!items.length) return null;
+    if (!bag.length) {
+      bag = shuffle(items.slice());
+      if (bag.length > 1 && bag[bag.length - 1][0].id === lastChainId) { var t = bag[0]; bag[0] = bag[bag.length - 1]; bag[bag.length - 1] = t; }   // never open a new round with the chain that just played
+    }
+    chain = bag.pop(); chainPos = 1; lastChainId = chain[0].id;
+    return { card:chain[0], linked:false };
+  }
+  function paintCard(c, linked, instant) {
+    var body = document.getElementById("ibody");
+    function fill() {
+      var parts = String(c.title || "").split(" \u00b7 ");
+      document.getElementById("itop").textContent = parts[0] || "LEADERBOARD";
+      document.getElementById("isub").innerHTML = "<b>" + esc(parts[1] || "") + "</b>";
+      document.getElementById("ilist").innerHTML = (c.rows || []).slice(0, 10).map(function (r, i) {
+        return '<li class="' + (i === 0 ? "first" : "") + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc(fmtVal(r, c.unit)) + '</span></li>';
+      }).join("");
+      body.className = "ibody in" + (linked ? " lk" : "");
+    }
+    if (instant) { fill(); return; }
+    body.className = "ibody out" + (linked ? " lk" : "");
+    setTimeout(fill, 320);
+  }
+  function showNext(first) {
+    clearTimeout(cardTimer);
+    if (!idleOn) return;
+    var n = nextCard();
+    if (!n) { document.getElementById("idle").classList.add("hidden"); cardTimer = setTimeout(function () { loadIdle(); showNext(true); }, 15000); return; }
+    document.getElementById("idle").classList.remove("hidden");
+    paintCard(n.card, n.linked, first === true);
+    cardTimer = setTimeout(showNext, Math.max(3, (idleCfg && idleCfg.secondsPerCard) || 8) * 1000);
+  }
+  function setIdle(want) {
+    if (want && !idleOn) { idleOn = true; if (!idleCfg || Date.now() - idleFetchedAt > 60000) loadIdle(); bag = []; chain = null; showNext(true); }
+    else if (!want && idleOn) { idleOn = false; clearTimeout(cardTimer); document.getElementById("idle").classList.add("hidden"); }
+    if (idleOn && Date.now() - idleFetchedAt > 60000) loadIdle();   // keep the numbers fresh during a long quiet spell
+  }
+
   function update() {
     var s = lastState;
     if (!s) return;
     draw(s);
     var show = Date.now() < visibleUntil && !playersActive(s) && s.activity && s.activity !== "none";
     document.getElementById("card").classList.toggle("hidden", !show);
+    // idle = empty queue, no match, no join / !queue pop-up, for idleSeconds; any activity ends it at once
+    var quiet = !playersActive(s) && !(s.queue || []).length && Date.now() >= visibleUntil;
+    if (!quiet) idleSince = Date.now();
+    var secs = (idleCfg && idleCfg.idleSeconds) || 20;
+    setIdle(!show && (PREVIEW || (quiet && idleCfg && idleCfg.enabled !== false && Date.now() - idleSince >= secs * 1000)));
   }
 
   function render(s) { if (!s) return; lastState = s; watchEvents(s); update(); }
@@ -160,15 +270,17 @@
     document.body.appendChild(sc);
   }
 
+  loadIdle();
   if (DEMO) {
     render({ queueOpen:true, format:"3v3", activity:"competitive", gameMode:"standard", game:"rocket-league", streamerPlaying:true, spotsNeeded:0, recentEvents:[], queue:[
       {pos:1,user:"innocentpenguin_",epic:"InnocentPenguin",mmr:1500}, {pos:2,user:"rlwizard",epic:"rlwizard_RL",mmr:1320},
       {pos:3,user:"icecube",epic:"icecube_RL",mmr:1100}, {pos:4,user:"averyveryverylongname",epic:"averyveryverylong_RL",mmr:980},
       {pos:5,user:"snowdrift",epic:"snowdrift_RL",mmr:900}, {pos:6,user:"frostbyte",epic:"frostbyte_RL",mmr:880},
       {pos:7,user:"glacier",epic:"glacier_RL",mmr:800}, {pos:8,user:"polarbear",epic:"polarbear_RL",mmr:800} ] });
-    visibleUntil = Date.now() + 3600000;   // demo: stay visible
+    visibleUntil = PREVIEW ? 0 : Date.now() + 3600000;   // demo: stay visible (preview=1 shows the idle boards instead)
     update();
   } else {
+    if (PREVIEW) lastState = { queue:[], recentEvents:[] };   // preview without live_state.js
     poll();
     setInterval(poll, 1000);
     setInterval(update, 500);   // so the card hides on time between polls
