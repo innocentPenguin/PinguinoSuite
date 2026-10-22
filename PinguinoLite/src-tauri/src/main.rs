@@ -286,6 +286,26 @@ fn open_target(target: String) -> Result<(), String> {
     }
 }
 
+/// Normal quit: save the window, exit (the Exit event stops the Link Lite started).
+fn quit_now(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        mainwin::save(&w, true);
+    }
+    app.exit(0);
+}
+
+/// Called by the in-page "Quit" button after the user confirmed.
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    quit_now(&app);
+}
+
+/// Force quit: kill the Link Lite owns right now and end the process without waiting for anything.
+fn force_quit(app: &AppHandle) -> ! {
+    stop_link(app);
+    std::process::exit(0)
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -298,7 +318,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .manage(Link(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, replays::replay_scan, replays::replay_index, replays::replay_set_interval, updatecheck::check_update])
+        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, quit_app, replays::replay_scan, replays::replay_index, replays::replay_set_interval, updatecheck::check_update])
         .setup(|app| {
             replays::start();
             // Splash (the lightning bolt) first; the main window is placed and shown when it closes.
@@ -321,7 +341,8 @@ fn main() {
             // tray: left click shows the window, right click menu has Show / Quit (closing the window still quits Lite and stops Link)
             let open = MenuItem::with_id(app, "open", "Show PinguinoLite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let force = MenuItem::with_id(app, "force", "Force quit (kill Lite and Link now)", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit, &force])?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("PinguinoLite")
@@ -329,12 +350,8 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, ev| match ev.id.as_ref() {
                     "open" => show_main(app),
-                    "quit" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            mainwin::save(&w, true);
-                        }
-                        app.exit(0)
-                    }
+                    "quit" => quit_now(app),
+                    "force" => force_quit(app),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, ev| {
@@ -351,9 +368,12 @@ fn main() {
             use tauri::WindowEvent;
             if window.label() == "main" {
                 match event {
-                    WindowEvent::CloseRequested { .. } => {
-                        if let Some(w) = window.app_handle().get_webview_window("main") {
-                            mainwin::save(&w, true);
+                    WindowEvent::CloseRequested { api, .. } => {
+                        // Alt+F4 / the X button: ask first (in-page dialog; confirm() is blocked in the webview). If the page cannot be asked, quit as before.
+                        use tauri::Emitter;
+                        api.prevent_close();
+                        if window.emit("confirm-quit", ()).is_err() {
+                            quit_now(window.app_handle());
                         }
                     }
                     WindowEvent::Moved(_) | WindowEvent::Resized(_) => {

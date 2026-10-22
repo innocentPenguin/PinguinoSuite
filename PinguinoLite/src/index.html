@@ -51,6 +51,7 @@ td{padding:12px;border-bottom:1px solid var(--line);vertical-align:middle}
 td .d{color:var(--dim);font-size:13px}
 .empty{padding:36px;text-align:center;color:var(--dim)}
 .banner{border:1px solid var(--accent-line);background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;margin:0 0 16px;color:var(--fg)}
+.qm{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50}.qm.on{display:flex}.qm .box{background:var(--panel2);border:1px solid var(--accent-line);border-radius:14px;padding:22px 26px;max-width:360px}.qm h2{margin:0 0 6px;font-size:18px}.qm p{margin:0 0 16px;color:var(--faint)}.qm .row{margin:0;justify-content:flex-end}
 .toast{position:fixed;right:20px;bottom:20px;background:var(--panel2);border:1px solid var(--accent-line);border-radius:12px;padding:10px 16px;display:none}
 .mono{font-family:Consolas,monospace}
 </style>
@@ -60,6 +61,7 @@ td .d{color:var(--dim);font-size:13px}
   <nav id="nav"></nav>
   <main id="main"></main>
 </div>
+<div class="qm" id="qm"><div class="box"><h2>Quit PinguinoLite?</h2><p>This also stops the PinguinoLink that Lite started. Anything Lite did not start keeps running.</p><div class="row"><button class="btn" id="qm-cancel">Cancel</button><button class="btn pri" id="qm-ok">Quit</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script>
 // All native access goes through 5 Tauri commands (src-tauri/src/main.rs). Contract: Docs/LITE_APP.md.
@@ -204,6 +206,12 @@ function render() {
   $('#main').innerHTML = page === 'modules' ? modules() : page === 'replays' ? replaysPage() : dashboard();
 }
 
+// Alt+F4 / window close: the shell asks, we confirm in-page.
+const qm = () => $('#qm').classList.contains('on');
+$('#qm-cancel').onclick = () => $('#qm').classList.remove('on');
+$('#qm-ok').onclick = () => inv('quit_app').catch(() => {});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && qm()) $('#qm').classList.remove('on'); });
+try { window.__TAURI__.event.listen('confirm-quit', () => { $('#qm').classList.add('on'); $('#qm-ok').focus(); }); } catch {}
 document.addEventListener('input', e => { if (e.target.id === 'ivl') $('#ivl-v').textContent = e.target.value; });
 document.addEventListener('change', async e => {
   if (e.target.id !== 'ivl') return;
