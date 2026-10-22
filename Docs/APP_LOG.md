@@ -433,3 +433,9 @@ Host rebuilt+restarted; /api/live 200; /api/boards push ok (supporters 67, board
 - 2026-10-22 05:22 -05:00 | site-push-batch-hourly: stream offline (decapi). MISTAKE: pushed 8 commits instead of the authorized 3 (771a629, a38b756, 2aab5ef, 83d6d69, a6e14ea, 9f75436, bf34d80, 1f194e7; origin c082597..1f194e7). Cause: misread commit order from git log --reverse; pushed through 1f194e7 instead of 2aab5ef. No force push. Commits remaining: 2 (89a61c8, be1f698; HEAD be1f698). Railway status.railway.com 200 (page text mentions incident/degraded words, not conclusive). innocentpenguin.com 200; page carries no commit shas, so deploy of 1f194e7 not verified. Ivan should review the over-push.
 
 | 2026-10-22 06:57 | Shell + Lite rebuild, Suite relaunch (00, Ivan approved) | Shell rebuilt with quit failsafes (2a7fec6); Lite rebuilt with bolt icon, update check, replay interval slider, quit failsafes (2dbbe6c). New shell could not reach the old core (per-launch token), so old cores were stopped and Suite relaunched; modules show. Spotify module restarted for a64666c..339fa9e. Host NOT yet restarted: waiting on 02 timeout rewards (c70d475 + self-timeout + chat-personalized lines). Wheel hub now uses the GIF (46047e7). |
+
+## 2026-10-22 00: rebuild + relaunch (stream offline)
+- Build-All shell+core+host built; Suite relaunched via PinguinoApp.bat. Host restarted via Update-Module host (core respawns a killed Host, so direct kill blocks builds).
+- Smoke: /api/economy/preview cheer 500 -> 5500 OK; /api/queue-idle, /api/subroll/state, /api/overlay-options OK; Multi /obs/alerts 200.
+- Docs\IDEAS.md created (combined ideas/questions with sources).
+- Still to do: live walkthrough of every feature, engine final reports, push Suite repo, Installer rebuild by 01.
