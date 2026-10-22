@@ -253,6 +253,17 @@ class SongifyTests(unittest.TestCase):
         self.assertFalse(self.e.chat("mod", "!srremove nobody", mod)["ok"])
         self.assertFalse(self.e.chat("viewer1", "!srremove 1", ("viewer",))["ok"], "viewers cannot")
 
+    def test_lyrics_toggle_and_parse(self):
+        import lyrics
+        lyrics._cache.clear()
+        self.assertEqual(lyrics.parse_lrc("[00:01.50] hi\n[01:02.00]yo")[1], {"t": 62000, "text": "yo"})
+        self.e.lyrics_http = lambda url: {"syncedLyrics": "[00:01.00] a", "plainLyrics": "a"}
+        self.play(3)
+        r = self.e.lyrics()
+        self.assertTrue(r["enabled"] and r["found"] and r["synced"][0]["text"] == "a")
+        self.e.cfg.setdefault("settings", {})["lyrics_on"] = False
+        self.assertFalse(self.e.lyrics()["enabled"])
+
     def test_leaderboard(self):
         self.sr("ann", 3)
         self.play(3)

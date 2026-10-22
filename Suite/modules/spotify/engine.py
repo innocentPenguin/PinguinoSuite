@@ -1131,6 +1131,15 @@ class Engine:
                 "is_playing": bool(pb["is_playing"]), "progress_ms": min(prog, t["duration_ms"]), "duration_ms": t["duration_ms"],
                 "volume": dev.get("volume"), "device": dev.get("name", "")}
 
+    def lyrics(self):
+        import lyrics as _ly
+        if not self.settings.get("lyrics_on", True):
+            return {"enabled": False, "found": False, "synced": [], "plain": "", "progress_ms": 0}
+        n = self.now_info()
+        r = dict(_ly.lookup(n["artist"].split(", ")[0], n["title"], n["duration_ms"], getattr(self, "lyrics_http", None)))
+        r.update(enabled=True, title=n["title"], progress_ms=n["progress_ms"], is_playing=n["is_playing"])
+        return r
+
     def add_context(self, link, shuffle=False, limit=50, where="end"):
         import re as _re
         m = _re.search(r"(?:spotify:|open\.spotify\.com/(?:intl-[a-z]+/)?)(playlist|album)[:/]([A-Za-z0-9]{22})", link or "")

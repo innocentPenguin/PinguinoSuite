@@ -115,3 +115,11 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 - `!songclear` = `!srclear` (clear viewer requests). `!srban <user>` / `!srunban <user>`: permanent request ban.
 - `!srsuspend <user> <time>`: request ban that lifts itself (10m, 2h, 1d, bare number = minutes, max 30 days); `!srunban <user>` lifts a ban or a suspension early. Suspensions persist in state.json.
 - `POST /api/mod-action {action: like|skip|previous|ban_song|ban_artist}` for the Master view strip; the module answers CORS/OPTIONS for the Suite app origins and takes that one POST from the app origin without a token.
+
+## Cycle 8: mod queue commands, leaderboard, lyrics
+
+- Mod chat commands: `!srremove <n|user>`, `!srmove <from> <to>`, `!srtop <n>`, `!srpause`/`!srplay`, `!srmute`/`!srunmute`.
+- Fallback playlist (queue empty) already existed: settings `fallback_playlist`, `fallback_shuffle`, `fallback_after_s`, `fallback_only_open`.
+- Leaderboard: `GET /api/leaderboard` -> `{v:1, requesters, most_played, most_skipped}`. For song pages only, not the main site boards. Persisted in state.json (`board`).
+- Lyrics: setting `lyrics_on` (Spotify settings, "Playback" section). `GET /api/lyrics` (LRCLIB lookup by artist/title/duration only, cached, nothing else sent). OBS overlay: `/overlay/lyrics` (synced lines; blank when off or not found).
+- Site /queue page: proposed to 05 as optional fields on the push state (`leaderboard`, `lyrics`) in `Docs/SPOTIFY_CONTRACT.md`; not yet agreed.

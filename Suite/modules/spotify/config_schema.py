@@ -167,6 +167,7 @@ SCHEMA = [
         ("fallback_playlist", "str", "", "Background playlist", "A Spotify playlist/album link or URI played when nothing is queued (empty = off)."),
         ("fallback_shuffle", "bool", True, "Shuffle background playlist", ""),
         ("fallback_after_s", "int", 20, "Idle seconds before background music", ""),
+        ("lyrics_on", "bool", True, "Show lyrics", "Lyrics overlay (/overlay/lyrics) fetches lines for the playing song from LRCLIB. Off = the overlay stays blank."),
         ("fallback_only_open", "bool", True, "Only while requests are open", "Safety: no surprise music when you are not streaming."),
     ]},
     {"id": "player", "title": "Playback & text files", "items": [

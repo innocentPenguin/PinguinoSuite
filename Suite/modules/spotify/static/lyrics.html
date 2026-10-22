@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><title>Lyrics overlay</title>
+<style>html,body{margin:0;background:transparent;font-family:Segoe UI,Arial,sans-serif;color:#fff;text-shadow:0 2px 6px #000}
+#w{padding:16px;text-align:center}.l{font-size:26px;opacity:.55;margin:4px 0}.l.c{font-size:34px;opacity:1;font-weight:700}</style>
+<div id="w"></div>
+<script>
+var w=document.getElementById('w');
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+function draw(d){
+  if(!d.enabled||!d.found){w.innerHTML='';return}
+  if(d.synced&&d.synced.length){
+    var i=-1;for(var k=0;k<d.synced.length;k++){if(d.synced[k].t<=d.progress_ms)i=k;else break}
+    var h='';for(var j=Math.max(0,i-1);j<=Math.min(d.synced.length-1,i+2);j++)h+='<div class="l'+(j===i?' c':'')+'">'+esc(d.synced[j].text||'♪')+'</div>';
+    w.innerHTML=h;
+  }else w.innerHTML='<div class="l c">'+esc(d.title||'')+'</div><div class="l">(lyrics are not time-synced)</div>';
+}
+var last=null,at=0;
+function poll(){fetch('/api/lyrics').then(function(r){return r.json()}).then(function(d){last=d;at=Date.now();draw(d)}).catch(function(){})}
+setInterval(poll,4000);poll();
+setInterval(function(){if(last&&last.is_playing){var d=Object.assign({},last);d.progress_ms+=Date.now()-at;draw(d)}},300);
+</script>
