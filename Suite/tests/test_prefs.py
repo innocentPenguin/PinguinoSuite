@@ -47,6 +47,29 @@ class PrefsTests(unittest.TestCase):
             self.assertEqual(p.reset()["theme"]["preset"], "penguin")
 
 
+
+class SoundPrefTests(unittest.TestCase):
+    def test_per_event_choice_and_defaults(self):
+        d = prefs.clean({"sound": {"choice": {"golive": "bell", "error": "u:0123456789", "act_raid": "../x", "chat_sent": "nope"}, "vols": {"golive": 30, "error": "x", "act_sub": 999}}})
+        s = d["sound"]
+        self.assertEqual(s["choice"]["golive"], "bell")
+        self.assertEqual(s["choice"]["error"], "u:0123456789")
+        self.assertEqual(s["choice"]["act_raid"], prefs.SOUND_DEFAULT["act_raid"])   # hostile id -> default
+        self.assertEqual(s["choice"]["chat_sent"], prefs.SOUND_DEFAULT["chat_sent"])
+        self.assertEqual((s["vols"]["golive"], s["vols"]["error"], s["vols"]["act_sub"]), (30, 100, 100))
+        self.assertFalse(s["events"]["chat_sent"])   # new event is off until chosen
+        self.assertEqual(set(s["choice"]), set(prefs.SOUND_EVENTS))
+
+    def test_chat_filter_and_gap(self):
+        s = prefs.clean({"sound": {"chat_filter": "bot", "chat_gap": 0}})["sound"]
+        self.assertEqual((s["chat_filter"], s["chat_gap"]), ("bot", 1))
+        s = prefs.clean({"sound": {"chat_filter": "x", "chat_gap": "z"}})["sound"]
+        self.assertEqual((s["chat_filter"], s["chat_gap"]), ("all", 4))
+
+    def test_more_than_double_the_old_four_sounds(self):
+        self.assertGreaterEqual(len(prefs.SOUND_IDS), 12)
+        self.assertEqual(len(set(prefs.SOUND_IDS)), len(prefs.SOUND_IDS))
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -598,7 +598,7 @@ public static class Harness
         snap = priv("WheelSnapshot");
         Check((string)snap["status"] == "final" && snap["finalTeams"].Count() == 3, "wheel: the site gets final teams only after the last reveal");
         var said = wlog.ToList();
-        Check(said.Count(m => System.Text.RegularExpressions.Regex.IsMatch(m, @"Team \d: |^[^ -]+: [^:]+!$")) == 3 && said.Any(m => m.Contains("TOURNAMENT TEAMS")) && said.All(m => m.Length <= 450), "wheel: one line per team plus the roster paragraph, each under 450 chars");
+        Check(said.Count(m => System.Text.RegularExpressions.Regex.IsMatch(m, @"Team \d: |^[^\u0000-\u007F]+: [^:]+!$")) == 3 && said.Any(m => m.Contains("TOURNAMENT TEAMS")) && said.All(m => m.Length <= 450), "wheel: one line per team plus the roster paragraph, each under 450 chars");
         Check((string)WS()["AnnState"] == "done", "wheel: announcements done");
         wheel("tick", ""); wheel("tick", "");
         Check(CPHProxy.Sent.Count == 0, "wheel: nothing is sent twice");
@@ -924,7 +924,7 @@ public static class Harness
                 Run("mod1", "!wheeladd", "pineyapplie lvlmarshmello bluefox xx_zz_qq", true);
                 for (int i = 0; i < 40 && !(bool)WS()["Final"]; i++) { Run("mod1", "!wheel", "spin", true); emSaid.AddRange(CPHProxy.Sent); }
             }
-            var teamRx = new System.Text.RegularExpressions.Regex(@"^[^ -]+: [^:]+ & [^:]+!$");
+            var teamRx = new System.Text.RegularExpressions.Regex(@"^[^\u0000-\u007F]+: [^:]+ & [^:]+!$");
             var emojiRx = new System.Text.RegularExpressions.Regex("[\uD800-\uDBFF][\uDC00-\uDFFF]|[☀-➿]");
             var tl = emSaid.Where(m => teamRx.IsMatch(m)).ToList();
             Check(tl.Count() >= 12, "emoji: team lines were said (" + tl.Count() + ")");

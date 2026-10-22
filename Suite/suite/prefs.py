@@ -25,14 +25,19 @@ ENUMS = {
 DASH_ORDER = ["listen", "modules", "activity", "prestream", "chatrate"]
 DASH_FULL = ["hero", "devices", "tiles"]
 TILES = ["t_stream", "t_chat", "t_devices", "t_modules", "t_prestream", "t_errors"]
-SOUND_EVENTS = ["golive", "prestream_fail", "prestream_ok", "error", "module_down", "act_follow", "act_sub", "act_raid", "act_cheer", "act_redeem"]
+SOUND_EVENTS = ["golive", "prestream_fail", "prestream_ok", "error", "module_down", "act_follow", "act_sub", "act_raid", "act_cheer", "act_redeem", "chat_sent"]
+SOUND_IDS = ["chime", "ping", "soft", "pop", "bell", "blip", "coin", "drum", "harp", "alert", "droplet", "sparkle"]   # built-in synthesised sounds (the page draws them); "u:<10 hex>" = one of the user's own files (sounds.py)
+SOUND_DEFAULT = {"golive": "harp", "prestream_ok": "chime", "prestream_fail": "alert", "error": "drum", "module_down": "droplet", "act_follow": "ping", "act_sub": "sparkle", "act_raid": "coin", "act_cheer": "bell", "act_redeem": "pop", "chat_sent": "blip"}
+USER_SOUND = re.compile(r"^u:[0-9a-f]{10}$")
+CHAT_FILTERS = ["all", "mine", "bot"]   # which sent chat lines make the sound: any / only the streamer's own / only the bots' replies
 
 DEFAULTS = {
     "v": 1,
     "theme": {"preset": "penguin", "accent": "", "radius": "round", "density": "comfortable", "motion": "full", "zoom": 100, "vars": {}},
     "layout": {"sidebar": "full", "start": "dashboard", "nav_hidden": [], "nav_order": []},
     "dash": {"full": list(DASH_FULL), "cards": list(DASH_ORDER), "tiles": list(TILES), "hidden": []},
-    "sound": {"on": False, "volume": 50, "tone": "chime", "events": {"golive": True, "prestream_fail": True, "prestream_ok": False, "error": False, "module_down": False, "act_follow": False, "act_sub": False, "act_raid": False, "act_cheer": False, "act_redeem": False}},
+    "sound": {"on": False, "volume": 50, "tone": "chime", "events": {"golive": True, "prestream_fail": True, "prestream_ok": False, "error": False, "module_down": False, "act_follow": False, "act_sub": False, "act_raid": False, "act_cheer": False, "act_redeem": False, "chat_sent": False},
+              "choice": dict(SOUND_DEFAULT), "vols": {k: 100 for k in SOUND_EVENTS}, "chat_filter": "all", "chat_gap": 4},   # choice/vols: per event; chat_gap = minimum seconds between two chat sounds
     "notify": {"toasts": True, "desktop": True},
     "time": {"hours": "auto"},
     "text": {"app_name": "PinguinoSuite", "idle_title": "Ready when you are", "live_pill": "LIVE", "offline_pill": "Offline"},   # wording the user may change
@@ -96,6 +101,19 @@ def clean(p, _depth=0):
         for k in SOUND_EVENTS:
             if k in so["events"]:
                 sd["events"][k] = bool(so["events"][k])
+    ch, vs = so.get("choice") if isinstance(so.get("choice"), dict) else {}, so.get("vols") if isinstance(so.get("vols"), dict) else {}
+    for k in SOUND_EVENTS:
+        c = ch.get(k)
+        sd["choice"][k] = c if isinstance(c, str) and (c in SOUND_IDS or USER_SOUND.match(c)) else SOUND_DEFAULT[k]
+        try:
+            sd["vols"][k] = max(0, min(100, int(vs.get(k, 100))))
+        except (TypeError, ValueError):
+            pass
+    sd["chat_filter"] = so.get("chat_filter") if so.get("chat_filter") in CHAT_FILTERS else "all"
+    try:
+        sd["chat_gap"] = max(1, min(60, int(so.get("chat_gap", 4))))
+    except (TypeError, ValueError):
+        pass
     no = p.get("notify") if isinstance(p.get("notify"), dict) else {}
     d["notify"] = {"toasts": bool(no.get("toasts", True)), "desktop": bool(no.get("desktop", True))}
     d["time"]["hours"] = _enum((p.get("time") or {}).get("hours") if isinstance(p.get("time"), dict) else None, "hours", "auto")

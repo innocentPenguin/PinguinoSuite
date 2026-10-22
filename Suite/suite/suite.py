@@ -204,6 +204,7 @@ import integrations  # noqa: E402
 import vault as vaultlib  # noqa: E402
 import helpdb  # noqa: E402
 import prefs as prefslib  # noqa: E402
+import sounds as soundslib  # noqa: E402
 import templates as tplib  # noqa: E402
 import updates as updateslib  # noqa: E402
 
@@ -270,6 +271,7 @@ DATA_DIR = os.environ.get("PINGUINO_DATA_DIR") or str(ROOT.parent / "Data" / "ru
 console_log = consolelog.Console(Path(DATA_DIR) / "console", LOGS)  # live log stream for the Console page
 CONSOLE_DIR = Path(DATA_DIR) / "console"
 prefs_store = prefslib.Prefs(Path(DATA_DIR) / "prefs.json")
+sounds_store = soundslib.Sounds(Path(DATA_DIR) / "sounds")   # the user's own notification sounds
 templates_store = tplib.Templates(Path(DATA_DIR) / "templates.json")  # saved settings templates per settings area
 livedetect.ENV_FILES.append(ROOT.parent / "PinguinoSite" / ".env")  # frozen core: __file__ is inside the bundle, ROOT is the real Suite folder
 try:
@@ -1198,6 +1200,38 @@ def prefs_get():
 @app.post("/api/prefs")
 def prefs_set(b: dict):
     return prefs_store.save(b)
+
+
+@app.get("/api/sounds")
+def sounds_list():
+    """The user's own notification sounds (id, name, kind, bytes) plus the limits the page shows."""
+    return {"items": sounds_store.list(), "max_bytes": soundslib.MAX_BYTES, "max_files": soundslib.MAX_FILES}
+
+
+@app.post("/api/sounds")
+async def sounds_add(request: Request, name: str = "sound"):
+    """Add a sound: the raw mp3/wav/ogg bytes are the request body, name is only the label."""
+    body = await request.body()
+    ok, r = sounds_store.add(name, body)
+    if not ok:
+        raise HTTPException(400, r)
+    return r
+
+
+@app.get("/api/sounds/{sid}")
+def sounds_file(sid: str):
+    got = sounds_store.get(sid)
+    if not got:
+        raise HTTPException(404, "no such sound")
+    return Response(got[0], media_type=got[1], headers={"Cache-Control": "private, max-age=3600"})
+
+
+@app.post("/api/sounds/{sid}/remove")
+def sounds_remove(sid: str):
+    """Moves the file to Data/runtime/sounds/removed (never deleted). Only the Personalize page calls this."""
+    if not sounds_store.remove(sid):
+        raise HTTPException(404, "no such sound")
+    return {"ok": True}
 
 
 @app.post("/api/prefs/reset")

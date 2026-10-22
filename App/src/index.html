@@ -583,11 +583,11 @@ window.addEventListener('message',async e=>{
 /* ============ Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PF_DEFAULT={v:1,theme:{preset:'penguin',accent:'',radius:'round',density:'comfortable',motion:'full',zoom:100,vars:{}},layout:{sidebar:'full',start:'dashboard',nav_hidden:[],nav_order:[]},
   dash:{full:['hero','devices','tiles'],cards:['listen','modules','activity','prestream','chatrate'],tiles:['t_stream','t_chat','t_devices','t_modules','t_prestream','t_errors'],hidden:[]},
-  sound:{on:false,volume:50,tone:'chime',events:{golive:true,prestream_fail:true,prestream_ok:false,error:false,module_down:false,act_follow:false,act_sub:false,act_raid:false,act_cheer:false,act_redeem:false}},notify:{toasts:true,desktop:true},time:{hours:'auto'},
+  sound:{on:false,volume:50,tone:'chime',events:{golive:true,prestream_fail:true,prestream_ok:false,error:false,module_down:false,act_follow:false,act_sub:false,act_raid:false,act_cheer:false,act_redeem:false,chat_sent:false},choice:{golive:'harp',prestream_ok:'chime',prestream_fail:'alert',error:'drum',module_down:'droplet',act_follow:'ping',act_sub:'sparkle',act_raid:'coin',act_cheer:'bell',act_redeem:'pop',chat_sent:'blip'},vols:{},chat_filter:'all',chat_gap:4},notify:{toasts:true,desktop:true},time:{hours:'auto'},
   text:{app_name:'PinguinoSuite',idle_title:'Ready when you are',live_pill:'LIVE',offline_pill:'Offline'},thresholds:{errors_min:30,tile_errors_hide_zero:false},profiles:{},auto:{live:'',idle:''}};
 const clone=o=>JSON.parse(JSON.stringify(o));
 const merge=(d,p)=>{const o=clone(d);if(p&&typeof p==='object')for(const k of Object.keys(o)){if(!(k in p))continue;
-  if(o[k]&&typeof o[k]==='object'&&!Array.isArray(o[k])&&k!=='profiles'&&k!=='vars')o[k]=merge(o[k],p[k]);else if(typeof p[k]===typeof o[k]||Array.isArray(o[k])&&Array.isArray(p[k]))o[k]=p[k]}return o};
+  if(o[k]&&typeof o[k]==='object'&&!Array.isArray(o[k])&&k!=='profiles'&&k!=='vars'&&k!=='vols')o[k]=merge(o[k],p[k]);else if(typeof p[k]===typeof o[k]||Array.isArray(o[k])&&Array.isArray(p[k]))o[k]=p[k]}return o};
 let PF=(()=>{try{return merge(PF_DEFAULT,JSON.parse(localStorage.getItem('pgprefs')))}catch{return clone(PF_DEFAULT)}})();
 const hr=()=>PF.time.hours==='12'?{hour12:true}:PF.time.hours==='24'?{hour12:false}:{};
 const PRESETS={
@@ -655,15 +655,43 @@ function dashLayout(B){const D2=PF.dash,hid=new Set(D2.hidden);
   const cs=D2.cards.filter(x=>!hid.has(x)),L2=cs.filter((_,i)=>i%2===0).map(x=>B[x]||'').join(''),R2=cs.filter((_,i)=>i%2===1).map(x=>B[x]||'').join('');
   return full+(cs.length?`<div class="col2"><div class="grid">${L2}</div><div class="grid" style="align-content:start">${R2}</div></div>`:'')}
 
-/* sounds: synthesised (no files), volume + tone + per event */
+/* sounds: 12 built-in synthesised sounds + the user's own files (Data/runtime/sounds). Every event picks its own sound and volume. */
 let AC=null;document.addEventListener('pointerdown',()=>{try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();AC.state==='suspended'&&AC.resume()}catch{}},{once:false});
-const SEQ={act_follow:[660,880],act_sub:[523,659,784],act_raid:[392,523,659,784,1047],act_cheer:[880,1175],act_redeem:[700,700],golive:[523,659,784,1047],prestream_ok:[784,988],prestream_fail:[330,247,330,247],error:[247,196],module_down:[392,311,247]};
-const WAVE={chime:'sine',ping:'triangle',soft:'sine',pop:'square'};
-function sfx(kind,force){if(!force&&!(PF.sound.on&&PF.sound.events[kind]))return;if(!AC)return;
-  const seq=SEQ[kind]||[660],vol=PF.sound.volume/100*(PF.sound.tone==='soft'?.12:.25),t0=AC.currentTime+.02,step=PF.sound.tone==='pop'?.07:.13;
-  seq.forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.type=WAVE[PF.sound.tone]||'sine';o.frequency.value=f*(PF.sound.tone==='ping'?1.5:1);
-    g.gain.setValueAtTime(0,t0+i*step);g.gain.linearRampToValueAtTime(vol,t0+i*step+.01);g.gain.exponentialRampToValueAtTime(.0001,t0+i*step+(PF.sound.tone==='pop'?.1:.28));
-    o.connect(g).connect(AC.destination);o.start(t0+i*step);o.stop(t0+i*step+.32)})}
+/* a sound = notes [freq, start s, length s, glide-to freq, loudness x]; w = wave, g = base loudness */
+const SYN={
+  chime:{name:'Chime',w:'sine',g:.25,n:[[523,0,.3],[659,.13,.3],[784,.26,.4]]},
+  ping:{name:'Ping',w:'triangle',g:.25,n:[[1320,0,.25],[1760,.1,.3]]},
+  soft:{name:'Soft',w:'sine',g:.12,n:[[440,0,.4],[554,.16,.4],[659,.32,.5]]},
+  pop:{name:'Pop',w:'square',g:.12,n:[[600,0,.1],[900,.06,.12]]},
+  bell:{name:'Bell',w:'sine',g:.22,n:[[1047,0,1.1],[2093,0,.6,0,.4],[3136,0,.3,0,.2]]},
+  blip:{name:'Blip',w:'square',g:.08,n:[[880,0,.09]]},
+  coin:{name:'Coin',w:'square',g:.1,n:[[988,0,.1],[1319,.08,.4]]},
+  drum:{name:'Drum',w:'sine',g:.6,n:[[160,0,.4,45]]},
+  harp:{name:'Harp',w:'triangle',g:.22,n:[[392,0,.5],[494,.07,.5],[587,.14,.5],[784,.21,.5],[988,.28,.7]]},
+  alert:{name:'Alert',w:'sawtooth',g:.1,n:[[880,0,.14],[660,.15,.14],[880,.3,.14],[660,.45,.16]]},
+  droplet:{name:'Droplet',w:'sine',g:.3,n:[[1200,0,.2,500]]},
+  sparkle:{name:'Sparkle',w:'sine',g:.12,n:[[1568,0,.22],[2093,.06,.22],[1760,.12,.22],[2349,.18,.22],[2637,.24,.35]]}};
+const SND_DEFAULT=PF_DEFAULT.sound.choice;
+const USND={list:[],bufs:{}};
+function playSyn(id,vol){const d=SYN[id]||SYN.chime,t0=AC.currentTime+.02;
+  d.n.forEach(([f,t,len,f2,k])=>{const o=AC.createOscillator(),g=AC.createGain(),v=Math.max(.0002,vol*d.g*(k||1)),st=t0+t;o.type=d.w;o.frequency.setValueAtTime(f,st);if(f2)o.frequency.exponentialRampToValueAtTime(f2,st+len);
+    g.gain.setValueAtTime(0,st);g.gain.linearRampToValueAtTime(v,st+.01);g.gain.exponentialRampToValueAtTime(.0001,st+len);o.connect(g).connect(AC.destination);o.start(st);o.stop(st+len+.04)})}
+async function userBuf(id){if(!USND.bufs[id])USND.bufs[id]=fetch('/api/sounds/'+encodeURIComponent(id)).then(r=>{if(!r.ok)throw new Error(r.status);return r.arrayBuffer()}).then(b=>AC.decodeAudioData(b)).catch(e=>{delete USND.bufs[id];throw e});return USND.bufs[id]}
+async function playUser(id,vol,fallback){try{const buf=await userBuf(id),src=AC.createBufferSource(),g=AC.createGain();g.gain.value=Math.max(0,Math.min(1,vol*1.5));src.buffer=buf;src.connect(g).connect(AC.destination);src.start();src.stop(AC.currentTime+8)}catch{playSyn(fallback,vol)}}
+function playSound(id,vol,kind){if(!AC)return;const fb=SND_DEFAULT[kind]||'chime';if(String(id).startsWith('u:'))playUser(id,vol,fb);else playSyn(SYN[id]?id:fb,vol)}
+function sfx(kind,force){const so=PF.sound;if(!force&&!(so.on&&so.events[kind]))return;if(!AC)return;
+  const vol=so.volume/100*((so.vols&&so.vols[kind])??100)/100;playSound((so.choice&&so.choice[kind])||SND_DEFAULT[kind]||'chime',vol,kind)}
+async function loadSounds(){try{const r=await fetch('/api/sounds');if(r.ok){const j=await r.json();USND.list=j.items||[];USND.max=j.max_bytes;USND.maxFiles=j.max_files}}catch{}}
+const soundOpts=cur=>{const o=Object.entries(SYN).map(([k,v])=>[k,v.name]).concat(USND.list.map(u=>[u.id,'My: '+u.name]));if(cur&&!o.some(x=>x[0]===cur))o.push([cur,'(missing sound)']);return o};
+/* "a chat message is sent": the streamer's own lines and the bots' lines (never viewers) show up in the Host chat feed; one sound per poll, at most one per gap */
+const CH={seq:null,bots:new Set(),botsAt:0,last:0,busy:false};
+async function chatSentPoll(){const so=PF.sound;if(CH.busy||document.hidden||!so.on||!so.events.chat_sent||!S.live||!AC)return;CH.busy=true;
+  try{if(Date.now()-CH.botsAt>60000){CH.botsAt=Date.now();try{const b=await hostGet('/api/bots');CH.bots=new Set((b.bots||[]).map(x=>String(x.signedInAs||'').toLowerCase()).filter(Boolean))}catch{}}
+    const j=await hostGet('/api/chat/recent?since='+(CH.seq??0)+'&limit=50');if(!j||!j.ok)return;const first=CH.seq===null;CH.seq=j.seq;if(first)return;   // the history that was already there is never played
+    const f=so.chat_filter,hit=(j.messages||[]).some(m=>{const mine=(m.badges||[]).includes('broadcaster'),bot=CH.bots.has(String(m.user||'').toLowerCase());return f==='mine'?mine:f==='bot'?bot:(mine||bot)});
+    if(hit&&Date.now()-CH.last>=Math.max(1,so.chat_gap||4)*1000){CH.last=Date.now();sfx('chat_sent')}}
+  catch{}finally{CH.busy=false}}
+setInterval(chatSentPoll,3000);
 /* state watcher: go-live / module-down sounds + automatic profile switch */
 const SW={live:null,mods:{}};
 function watchState(){const live=!!S.live.live;
@@ -702,11 +730,15 @@ pages.personalize=()=>{const T=PF.theme,Ly=PF.layout,Dh=PF.dash,So=PF.sound,pr=O
   <div class="card"><h3>Menu order</h3><div class="pnote">Move items up or down, or hide the ones you never use. Dashboard, Settings and Personalize always stay.</div>${orderList('nav',cat,Ly.nav_hidden,FIXED)}</div>
   <div class="card"><h3>Dashboard</h3><div class="pnote">Choose what the dashboard shows and in what order.</div>
     <b class="sm">Top rows</b>${orderList('dash.full',dashItems('full'),Dh.hidden)}<b class="sm">Status tiles</b>${orderList('dash.tiles',dashItems('tiles'),Dh.hidden)}<b class="sm">Cards (fill two columns left to right)</b>${orderList('dash.cards',dashItems('cards'),Dh.hidden)}</div>
-  <div class="card"><h3>Sounds</h3><div class="pnote">Off by default. Synthesised tones, no files, only while the Suite is open.</div>
+  <div class="card"><h3>Sounds</h3><div class="pnote">Off by default. Each event has its own sound and volume. Only while the Suite is open.</div>
     ${prow('Sounds on','Master switch.',chk('sound.on',So.on))}
-    ${prow('Volume','',`<input type="range" min="0" max="100" step="5" value="${So.volume}" data-pin="sound.volume"><span class="sm faint" style="width:36px">${So.volume}%</span>`)}
-    ${prow('Tone','Chime, ping, soft or pop.',sel('sound.tone',So.tone,[['chime','Chime'],['ping','Ping'],['soft','Soft'],['pop','Pop']]))}
-    ${[['golive','You go live'],['prestream_ok','Pre-stream check passed'],['prestream_fail','Pre-stream check has warnings / failures'],['error','A new error appears in the Console'],['module_down','A module stops unexpectedly'],['act_follow','Someone follows'],['act_sub','A sub, resub or gift'],['act_raid','A raid arrives'],['act_cheer','Cheer / bits'],['act_redeem','A channel-point redeem']].map(e=>prow(e[1],'',`<button class="sm" data-ptest="${e[0]}">Test</button>${chk('sound.events.'+e[0],So.events[e[0]])}`)).join('')}</div>
+    ${prow('Volume','Overall level; each event can also be turned down.',`<input type="range" min="0" max="100" step="5" value="${So.volume}" data-pin="sound.volume"><span class="sm faint" style="width:36px">${So.volume}%</span>`)}
+    ${[['golive','You go live'],['prestream_ok','Pre-stream check passed'],['prestream_fail','Pre-stream check has warnings / failures'],['error','A new error appears in the Console'],['module_down','A module stops unexpectedly'],['act_follow','Someone follows'],['act_sub','A sub, resub or gift'],['act_raid','A raid arrives'],['act_cheer','Cheer / bits'],['act_redeem','A channel-point redeem'],['chat_sent','A chat message is sent (by you or a bot)']].map(e=>{const v=(So.vols&&So.vols[e[0]])??100;return prow(e[1],'',`${sel('sound.choice.'+e[0],So.choice[e[0]],soundOpts(So.choice[e[0]]))}<input type="range" min="0" max="100" step="5" value="${v}" data-pin="sound.vols.${e[0]}" title="Volume for this event" style="width:70px"><span class="sm faint" style="width:36px">${v}%</span><button class="sm" data-ptest="${e[0]}">Test</button>${chk('sound.events.'+e[0],So.events[e[0]])}`)}).join('')}
+    ${prow('Chat sound: which lines','Only lines YOU or a bot send count, never viewers. To avoid loops it plays at most once per gap, and a burst of bot lines is one sound.',sel('sound.chat_filter',So.chat_filter,[['all','My lines and bot replies'],['mine','Only my lines'],['bot','Only bot replies']]))}
+    ${prow('Chat sound: minimum gap','Seconds between two chat sounds.',`<input type="range" min="1" max="30" step="1" value="${So.chat_gap}" data-pin="sound.chat_gap"><span class="sm faint" style="width:36px">${So.chat_gap} s</span>`)}
+    <div class="pnote" style="margin-top:10px"><b>Your own sounds</b>: mp3, wav or ogg, up to ${Math.round((USND.max||2097152)/1048576)} MB each, ${USND.maxFiles||24} files. They appear in every list above as "My: ...".</div>
+    ${USND.list.map(u=>prow(esc(u.name),(u.kind||'').toUpperCase()+' · '+Math.max(1,Math.round(u.bytes/1024))+' KB',`<button class="sm" data-usplay="${esc(u.id)}">Play</button><button class="sm" data-usrm="${esc(u.id)}" title="Moves the file to the removed folder; nothing is deleted">Remove</button>`)).join('')}
+    <div class="row" style="margin-top:8px"><input type="file" id="us-file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg" style="max-width:240px"><button class="sm pri" id="us-add">Add your own sound</button><span class="sm faint" id="us-msg"></span></div></div>
   <div class="card"><h3>Wording &amp; thresholds</h3><div class="pnote">Change the words the Suite uses for you, and when it counts something as a problem.</div>
     ${prow('App name','Shown top left and in the window title.',`<input type="text" data-pin="text.app_name" value="${esc(PF.text.app_name)}" maxlength="24" style="width:170px">`)}
     ${prow('Banner when offline','The big line on the dashboard.',`<input type="text" data-pin="text.idle_title" value="${esc(PF.text.idle_title)}" maxlength="60" style="width:200px">`)}
@@ -724,10 +756,16 @@ pages.personalize=()=>{const T=PF.theme,Ly=PF.layout,Dh=PF.dash,So=PF.sound,pr=O
 function bindPersonalize(){
   $$('[data-pset]').forEach(b=>b.onclick=()=>setPref(b.dataset.pset,b.dataset.pval==='true'?true:b.dataset.pval==='false'?false:b.dataset.pval));
   $$('[data-pin]').forEach(i=>i.onchange=()=>{const p=i.dataset.pin;let v=i.type==='checkbox'?i.checked:i.type==='range'?+i.value:i.value;if(p.startsWith('text.')&&!String(v).trim())v=PF_DEFAULT.text[p.slice(5)];setPref(p,v)});
-  $$('input[type=range][data-pin]').forEach(i=>i.oninput=()=>{const l=i.nextElementSibling;if(l)l.textContent=i.value+(i.dataset.pin.startsWith('thresholds')?' min':'%')});
+  $$('input[type=range][data-pin]').forEach(i=>i.oninput=()=>{const l=i.nextElementSibling;if(l)l.textContent=i.value+(i.dataset.pin.startsWith('thresholds')?' min':i.dataset.pin==='sound.chat_gap'?' s':'%')});
   $$('[data-pmove]').forEach(b=>b.onclick=()=>{const[k,id,d]=b.dataset.pmove.split('|');moveItem(k,id,+d)});
   $$('[data-phide]').forEach(b=>b.onclick=()=>{const[k,id]=b.dataset.phide.split('|');const arr=k==='nav'?PF.layout.nav_hidden:PF.dash.hidden;pfHist.push(clone(PF));const i=arr.indexOf(id);i<0?arr.push(id):arr.splice(i,1);commit()});
   $$('[data-ptest]').forEach(b=>b.onclick=()=>{if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch{}}sfx(b.dataset.ptest,true)});
+  $$('[data-usplay]').forEach(b=>b.onclick=()=>{if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch{}}playSound(b.dataset.usplay,PF.sound.volume/100,'')});
+  $$('[data-usrm]').forEach(b=>b.onclick=async()=>{if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='Really remove?';setTimeout(()=>{if(b.isConnected){b.dataset.arm='';b.textContent='Remove'}},4000);return}
+    try{const r=await fetch('/api/sounds/'+encodeURIComponent(b.dataset.usrm)+'/remove',{method:'POST'});if(!r.ok)throw 0;const id=b.dataset.usrm;delete USND.bufs[id];let ch=false;for(const k of Object.keys(PF.sound.choice))if(PF.sound.choice[k]===id){PF.sound.choice[k]=SND_DEFAULT[k];ch=true}if(ch)commit(true);await loadSounds();toast('Sound removed (the file is kept in the removed folder)');go('personalize')}catch{toast('Could not remove that sound')}});
+  $('#us-add')&&($('#us-add').onclick=async()=>{const f=$('#us-file').files[0],m=$('#us-msg');if(!f){m.textContent='Pick a file first';return}
+    if(!/\.(mp3|wav|ogg)$/i.test(f.name)){m.textContent='Only mp3, wav or ogg';return}if(f.size>(USND.max||2097152)){m.textContent='That file is too big';return}
+    m.textContent='Adding…';try{const r=await fetch('/api/sounds?name='+encodeURIComponent(f.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||r.status);await loadSounds();toast('Added "'+j.name+'"');go('personalize')}catch(e){m.textContent='Could not add: '+String(e.message||e).slice(0,80)}});
   $('#pf-save')&&($('#pf-save').onclick=()=>{const n=$('#pf-name').value.trim();if(!n||n.length>40){toast('Give the look a name (up to 40 characters)');return}
     if(!(n in PF.profiles)&&Object.keys(PF.profiles).length>=12){toast('You can keep up to 12 looks');return}
     const snap=clone(PF);delete snap.profiles;delete snap.auto;PF.profiles[n]=snap;commit();toast(`Saved "${n}"`)});
@@ -1808,7 +1846,7 @@ async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status'
   L.lines=sid?(await (await fetch(`${LISTEN}/api/segments?session=${sid}&limit=500`)).json()).slice(-5):[]}catch{L.status=null;L.lines=[]}
   if(route==='dashboard')draw();if(route==='comm')updateComm()}
 (async()=>{for(let i=0;i<40&&!S;i++){await load();if(!S)await new Promise(r=>setTimeout(r,500))}   // wait for the core (the splash covers this)
-  go(POP||(PF.layout.start&&PF.layout.start!=='dashboard'&&routeOk(PF.layout.start)?PF.layout.start:'dashboard'));loadPrefs();loadListen();setInterval(load,4000);setInterval(loadListen,3000);if(!POP)loadSetup();loadDevice();loadMulti();setInterval(loadDevice,5000);setInterval(loadMulti,6000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(()=>{if(route==='integrations')loadIntegrations()},20000);setInterval(pollPrestream,10000);
+  go(POP||(PF.layout.start&&PF.layout.start!=='dashboard'&&routeOk(PF.layout.start)?PF.layout.start:'dashboard'));loadPrefs();loadSounds();loadListen();setInterval(load,4000);setInterval(loadListen,3000);if(!POP)loadSetup();loadDevice();loadMulti();setInterval(loadDevice,5000);setInterval(loadMulti,6000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(()=>{if(route==='integrations')loadIntegrations()},20000);setInterval(pollPrestream,10000);
   const ws=()=>{const w=PG.ws();w.onmessage=()=>{CONN.backoff=2000;load()};w.onclose=()=>{try{PG.reconfig().catch(()=>{})}catch{}setTimeout(ws,CONN.backoff);CONN.backoff=Math.min(15000,CONN.backoff*1.6)}};ws();
   $('#conn-retry').onclick=connRetry;setInterval(()=>{if(!document.hidden)modWatch(false)},30000);
   const wake=()=>{if(document.hidden){CONN.hiddenAt=Date.now();return}const idle=CONN.hiddenAt&&Date.now()-CONN.hiddenAt>60000;CONN.hiddenAt=0;load();if(idle){try{PG.reconfig().catch(()=>{})}catch{}}modWatch(!!idle)};
