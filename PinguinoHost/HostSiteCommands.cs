@@ -10,7 +10,7 @@ namespace PinguinoHost
     /// The site shows it staff-only; the public page only gets enabled everyone-commands. Checks every 10 s, pushes when anything but the usage counts changed, and every 60 s so the counts stay fresh.</summary>
     public static class SiteCommands
     {
-        static bool _started; static string _result = "not started", _key = ""; static DateTime _last = DateTime.MinValue; static int _fails, _lastCode;
+        static bool _started; static string _result = "not started", _key = ""; static DateTime _last = DateTime.MinValue; static int _fails, _lastCode; static DateTime _lastWarn = DateTime.MinValue;
         public static string Status() { return _result; }
         public static void Start()
         {
@@ -29,7 +29,7 @@ namespace PinguinoHost
             JObject r; int code = SiteHttp.Call("POST", "/api/bot/commands-all", new JObject { { "commands", shape } }, k, out r);
             _last = DateTime.UtcNow;
             if (code >= 200 && code < 300) { _fails = 0; _key = key; _result = "pushed " + shape.Count; }
-            else { _fails++; _result = "site answered " + code; if (_fails == 1 || code != _lastCode || _fails % 20 == 0) Clog.Warn("commands", "command list push failed (HTTP " + code + ")"); }
+            else { _fails++; _result = "site answered " + code; if (_fails == 1 || (DateTime.UtcNow - _lastWarn).TotalMinutes >= 30) { _lastWarn = DateTime.UtcNow; Clog.Warn("commands", "command list push failed (HTTP " + code + ", " + _fails + " tries in a row)"); } }
             _lastCode = code;
         }
     }

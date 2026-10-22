@@ -120,6 +120,61 @@ for name in ('host', 'core'):
     add('- %s: %d warn/error lines in %d kinds%s' % (name, sum(g.values()), len(g), '' if g else '.'))
     for (lvl, src, msg), n in g.most_common(8): add('  - %dx [%s] %s: %s' % (n, lvl, src, msg))
 add('')
+# ---- Phase 1b: helper review log, Chatty feedback / mistakes / experience, new in-jokes ----
+def day_bounds():
+    st = datetime.datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc).timestamp() - 12 * 3600
+    return st, st + 86400 + 24 * 3600   # chat logs are local-evening: take the UTC day plus a margin so the 19:00 to 01:37 session stays whole
+lo, hi = rows[0]['t'] / 1000.0 - 60, rows[-1]['t'] / 1000.0 + 60
+trig = [r for r in load_jsonl(os.path.join(suite, 'Data', 'helper', 'review.jsonl')) if r.get('type') == 'trigger' and lo <= r.get('at', 0) <= hi and str(r.get('user', '')).lower() not in skip]
+ans = [r for r in trig if r.get('kind') == 'answered']; miss = [r for r in trig if r.get('kind') != 'answered']
+add('## Helper unanswered')
+add('- Helper saw %d questions in this session: %d answered, %d probably missed (full chat window around each is in the private review browser, Data/helper/review.jsonl).' % (len(trig), len(ans), len(miss)))
+for r in miss[:25]: add('  - %s: "%s"%s' % (clock(r['at'] * 1000), str(r.get('text', ''))[:110], (' (' + str(r['reason'])[:60] + ')') if r.get('reason') else ''))
+if not miss: add('  - none')
+ints = collections.Counter(str(r.get('intent') or '?') for r in ans)
+add('- Answered by intent: ' + (', '.join('%s %d' % kv for kv in ints.most_common(8)) or 'none')); add('')
+
+chatty = [r for r in rows if r['u'].lower() == 'chattypinguino']
+cl = sorted(r['t'] for r in chatty)
+GOOD = re.compile(r'\b(lol|lmao|lmfao|haha+|kek|good bot|love (him|it)|funny|based|w bot|clean)\b', re.I)
+BAD = re.compile(r"\b(wrong|bad bot|stop|shut up|cringe|annoying|not funny|spam|huh|make sense|dumb|broken)\b", re.I)
+fb_good = fb_bad = 0; bad_ex = []; answered_mentions = 0; mentions = 0
+for i, r in enumerate(rows):
+    u = r['u'].lower(); m = (r.get('m') or '')
+    if u in BOTS: continue
+    if re.search(r'chatty', m, re.I): mentions += 1
+    prev = next((q for q in reversed(rows[max(0, i - 6):i]) if q['u'].lower() == 'chattypinguino'), None)
+    if prev is None or r['t'] - prev['t'] > 45000: continue
+    if BAD.search(m): fb_bad += 1; bad_ex.append((clock(r['t']), (prev.get('m') or '')[:70], m[:60]))
+    elif GOOD.search(m): fb_good += 1
+add('## Chatty feedback, mistakes, experience')
+add('- Chatty spoke %d times (first %s, last %s). Viewer reactions within 45 s of a Chatty line: %d positive-looking, %d negative-looking (heuristic word match, not sentiment).' % (len(chatty), clock(cl[0]) if cl else 'n/a', clock(cl[-1]) if cl else 'n/a', fb_good, fb_bad))
+for e in bad_ex[:6]: add('  - %s Chatty: "%s" -> viewer: "%s"' % e)
+cdup = [d for d in dups if d[1] == 'chattypinguino']
+add('- Mistakes: %d duplicate Chatty lines; %d negative reactions above to review.' % (len(cdup), len(bad_ex)))
+try:
+    mem = json.load(open(os.path.join(suite, 'Data', 'runtime', 'chat_memory.json'), encoding='utf-8'))
+    have = sum(1 for v in mem.values() if isinstance(v, dict) and str(v.get('Privacy', '')).lower() not in ('anon', 'forget'))
+    add('- Experience: Chatty keeps notes on %d people (opted-out left out); %d messages were addressed to it by name this session.' % (have, mentions))
+except (OSError, ValueError): add('- Experience: memory file not readable.')
+add('')
+# new in-jokes: a word or emote said >= 6 times by >= 3 different people this session, not an ordinary word
+common = set()
+try: common = set(w.strip().lower() for w in open(os.path.join(suite, 'Data', 'common-words.txt'), encoding='utf-8') if w.strip())
+except OSError: pass
+lore_txt = ''
+try: lore_txt = open(os.path.join(suite, 'Data', 'lore.json'), encoding='utf-8').read().lower()
+except OSError: pass
+cnt = collections.Counter(); who = collections.defaultdict(set)
+for r in human:
+    if r['u'].lower() in skip: continue
+    for w in set(re.findall(r"[a-z0-9_']{3,20}", (r.get('m') or '').lower())):
+        if w in common or w.startswith('!') or w.isdigit(): continue
+        cnt[w] += 1; who[w].add(r['u'].lower())
+cand = [(w, n, len(who[w])) for w, n in cnt.most_common(200) if n >= 6 and len(who[w]) >= 3 and w not in lore_txt]
+add('## New in-joke candidates')
+add('- Words/emotes used 6+ times by 3+ different people and not yet in the lore file (Ivan decides what is a real joke): ' + (', '.join('%s %dx/%d people' % c for c in cand[:15]) or 'none'))
+add('')
 os.makedirs(os.path.dirname(out), exist_ok=True)
 open(out, 'w', encoding='utf-8', newline='\n').write('\n'.join(L))
 print('wrote ' + out + ' (%d lines, %d dups, %d unknown commands)' % (len(rows), len(dups), len(unknown)))
