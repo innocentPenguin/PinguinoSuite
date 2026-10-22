@@ -378,3 +378,58 @@ Host rebuilt+restarted; /api/live 200; /api/boards push ok (supporters 67, board
 - Update-Module host: 02 ea99365 (Host stays up degraded when the core is unreachable). /api/live ok but state unknown (source unknown); host.log shows LIVE/offline flapping at start, OBS is running. Restart done without a confirmed-offline stream check: noted for next time (check Helix live before any restart).
 
 - 2026-10-21 18:16 (00): Build-All OK (host, core, shell). Stream offline (decapi). Relaunched app (suite+core), all 7 ports 200. Host restarted (killed stale pid 48244; Update-Module stop signal did not take) with ea99365, 69e67ab, 8c5b9ab, 2fd0628; rebuild-buckets ran (3952 events), /api/boards watchtime month OK. Lite relaunches at 16:46 not logged earlier. Site push held: Railway builds still paused (status 22:45 UTC).
+
+## 2026-10-21 18:21 CDT (23:21 UTC) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage). Latest update Oct 21 22:45 UTC: builds and deployments remain paused; no confirmation any build stage is re-enabled. Not resolved, so no push approval sent to 05 (no duplicate message).
+- Stream checked: /api/live live=false (offline). Push step not reached. Task left enabled.
+- Nothing else done this run; will re-check next hour.
+
+## 2026-10-21 19:21 CDT (00:21 UTC Oct 22) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage). Latest update Oct 21 22:45 UTC: storage bucket credentials being rotated (revocation expected); builds and deployments remain paused, "will post here as soon as they resume". Not resolved, so no push approval sent to 05 (no duplicate message).
+- Stream not checked as a push gate this run (no push step reached). Task left enabled; will re-check next hour.
+
+- 2026-10-21 (00): Host restarted (stream offline) with: activity ends automatically on live->offline (ApplyLive in PinguinoBotCore).
+
+## 2026-10-21 20:21 CDT (01:21 UTC Oct 22) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage). Latest update Oct 22 00:22 UTC: "We are continuing to work to make builds available again"; builds and deployments still paused in US West, EU West, Southeast Asia and US East; API and station.railway.com still affected. Railway says guidance on next steps related to a security notice will be published soon. Not resolved, so no push approval sent to 05 (no duplicate message).
+- Stream and push steps not reached. Task left enabled; will re-check next hour.
+
+## 2026-10-21 21:21 CDT (02:21 UTC Oct 22) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage). Latest update Oct 22 02:19 UTC: "still working to bring builds back online", no change since last update; next update due by 03:00 UTC. Builds not working. Not resolved, so no push approval sent to 05 (no duplicate message).
+- Stream checked: /api/live live=false (offline). Push step not reached. Task left enabled; will re-check next hour.
+
+## 2026-10-21 22:21 CDT (03:21 UTC Oct 22) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage, not Resolved). Latest update Oct 22 03:00 UTC: "Builds remain paused. We are continuing to work to bring them back online"; next update promised by 03:45 UTC. Builds and deploys not working. Stream offline (127.0.0.1:8770/api/live live=false), so no stream gate issue. Not resolved, so no push approval sent to 05 (no duplicate message).
+
+## 2026-10-21 23:21 CDT (04:21 UTC Oct 22) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage, not Resolved). Latest update Oct 22 04:17 UTC: Railway invalidated all API tokens under its security disclosure (users must create new tokens for the Public API); next update due by 05:00 UTC. Earlier 04:00 UTC update: Enterprise builds available, Pro/Hobby/Free in stages, Redeploy still unavailable. Builds not confirmed working for the site's plan. Not resolved, so no push approval sent to 05 (no duplicate message).
+- Stream checked: /api/live live=false (offline). Push step not reached. Task left enabled; will re-check next hour.
+
+## 2026-10-22 00:21 CDT (05:21 UTC) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage, not Resolved). Latest update Oct 22 05:20 UTC: deployments taking longer than usual to progress through each stage; next update promised by 06:00 UTC. Enterprise builds reported back earlier (03:32 UTC), Redeploy fixed for Enterprise (04:52 UTC); no update reports builds restored for Pro/Hobby/Free/Trial. Not resolved, so no push approval sent to 05 (no duplicate message).
+- Stream checked: /api/live live=false (offline). Push step not reached. Task left enabled; will re-check next hour.
+
+## 2026-10-22 01:21 CDT (06:21 UTC) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage, not Resolved). Latest update Oct 22 06:12 UTC: Enterprise deployments moving at normal speed; Pro/Hobby/Free/Trial builds not confirmed re-enabled (no later update). Next update due by 06:45 UTC. Not resolved, so no push approval sent to 05 (no duplicate message). Stream not checked (no push step reached).
+
+## 2026-10-22 02:21 CDT (07:21 UTC) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage, not Resolved). Latest update Oct 22 07:11 UTC: Pro and Enterprise builds available; Hobby, Free and Trial being enabled in stages; deployments slow and some may stay queued. Next update due by 08:00 UTC. Builds not confirmed working for all plans, so the incident is not resolved.
+- No push approval sent to 05 (no duplicate message). Stream and push steps not reached. Task left enabled; will re-check next hour.
+
+## 2026-10-22 03:21 CDT (08:21 UTC) - Railway hourly check (00, scheduled task railway-hourly-check-and-push)
+- status.railway.com: incident QH8L8B3E still "Identified" (Major Outage, not Resolved). Latest update Oct 22 08:01 UTC: deployments going live but many slow to start and may stay queued; builds available for Pro and Enterprise, Hobby then Free/Trial still being enabled. Builds not confirmed working for all plans.
+- Not resolved, so no push approval sent to 05 (no duplicate message). Stream and push steps not reached. Task left enabled; will re-check next hour.
+
+## 2026-10-22 04:15 CDT - Nightly rebuild + app restart (00)
+- Asked by: 00 nightly run (scheduled task pinguinosuite-nightly). Stream checked offline first (/api/live false, decapi "offline").
+- Build-All --no-launch: host and core built, shell built. Earlier failure was the running shell locking its binary; fixed by stopping the shell first.
+- Stopped: shell pinguino-suite (45640 before restart), core (352, 45620), live Host (39460), and two leftover test Hosts from the test run (19820, 24612, temp --data folders pgobs_*). pinguino-lite (012) left running untouched.
+- Started: shell via App\src-tauri\target\release\pinguino-suite.exe (PinguinoApp.bat hung on the updater step, so started directly). Core came up; the Host was started by the core at 04:16 from the new build.
+- Modules restarted with Update-Module -NoBuild: listen, voice, spotify, multi, link. Reason: they were still running with the per-launch core secret, which caused the on_start "unauthorized" warnings (fixed by 957b5ec).
+- Result: ports 8760/8765/8766/7777/8770/8771/8772 all answer 200. Host logs info lines normally. Stream offline throughout.
+- Still open after restart: voice "review failed: can't multiply sequence by non-int of type 'float'" (34x, owner 06, not reached this run). Voice "client dropped: ConnectionResetError" tracebacks (owner 06). Link still gets unauthorized POST /api/peer/broadcast (401), source unknown (owner 04). Shell and Host built from 02/01 commits fde8dc3, 3e0c1cf, 3e26618, 643795f, 957b5ec, dde8a9d, d1f0413.
+- Site: NOT pushed (Railway incident still open; no Ivan OK). 05 has 15 local commits.
+- 2026-10-22 04:22 -05:00 | site-push-batch-hourly: stream offline; pushed 3 commits to origin/main (c4f1a40, db668a9, c082597; origin 9222597..c082597). Commits remaining: 10 (oldest first: 771a629...be1f698 range, HEAD be1f698). Railway status.railway.com reachable (200), no incident check beyond that; innocentpenguin.com 200 but page does not carry commit shas, so live deploy of c082597 not verified.
+- 2026-10-22 05:22 -05:00 | site-push-batch-hourly: stream offline (decapi). MISTAKE: pushed 8 commits instead of the authorized 3 (771a629, a38b756, 2aab5ef, 83d6d69, a6e14ea, 9f75436, bf34d80, 1f194e7; origin c082597..1f194e7). Cause: misread commit order from git log --reverse; pushed through 1f194e7 instead of 2aab5ef. No force push. Commits remaining: 2 (89a61c8, be1f698; HEAD be1f698). Railway status.railway.com 200 (page text mentions incident/degraded words, not conclusive). innocentpenguin.com 200; page carries no commit shas, so deploy of 1f194e7 not verified. Ivan should review the over-push.
+
+| 2026-10-22 06:57 | Shell + Lite rebuild, Suite relaunch (00, Ivan approved) | Shell rebuilt with quit failsafes (2a7fec6); Lite rebuilt with bolt icon, update check, replay interval slider, quit failsafes (2dbbe6c). New shell could not reach the old core (per-launch token), so old cores were stopped and Suite relaunched; modules show. Spotify module restarted for a64666c..339fa9e. Host NOT yet restarted: waiting on 02 timeout rewards (c70d475 + self-timeout + chat-personalized lines). Wheel hub now uses the GIF (46047e7). |
