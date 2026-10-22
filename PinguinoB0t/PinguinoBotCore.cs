@@ -583,6 +583,7 @@ public class CPHInline
         // [NEW][KOTH] King of the hill. OFF (default): after "Orange wins / Blue wins" (!finish) everyone is out. ON: the winning team stays on.
         // ResultHoldSeconds: the website + OBS overlays keep showing the finished match (the winner animation) this long, the mod page moves on at once.
         public bool Koth { get; set; }
+        public string KothPrevFormat { get; set; } = "";   // [NEW][KOTH] format to restore when KOTH goes off (KOTH plays 1v1)
         public Dictionary<string, int> KothWins { get; set; } = new Dictionary<string, int>();   // [NEW][KOTH] the ACTIVITY leaderboard: wins in THIS King of the Hill session (reset when the activity starts)
         public bool KothStarted { get; set; }   // [NEW][KOTH] the King of the Hill ACTIVITY: true once its first game has been picked (that closes the queue)
         public int ResultHoldSeconds { get; set; } = 8;
@@ -2255,6 +2256,15 @@ public class CPHInline
 
             // [NEW][KOTH] The finished match has been on the website / overlays long enough: show the real state.
             if (_holdMatch != null && Now() >= _holdUntil) { _holdMatch = null; PublishState("hold_end", ""); }
+            // [NEW][AUTONEXT] queue open, nothing running, players waiting (the very first game, or after a clear): wait and start by itself
+            try
+            {
+                if (_settings.AutoNextMatch && !_autoNextPending && _settings.QueueOpen && GetWaitingCount() > 0
+                    && !_queue.Any(e => e.Status == "active" && !IsStreamer(e.Username))
+                    && (_lastBalance == null || _lastBalance.ResultRecorded))
+                { _autoNextPending = true; _autoNextTold = false; _autoNextSince = DateTime.UtcNow; }
+            }
+            catch (Exception) { }
             try { TryAutoNext(); } catch (Exception) { }   // [NEW][AUTONEXT] start the next game once the queue has enough players
 
             // 3) [NEW][WEB] Penguin League table: every registered player's
@@ -4068,8 +4078,12 @@ public class CPHInline
         else if (v == "off" || v == "false" || v == "no") on = false;
         else { Say("@" + user + " Usage: !koth <on|off>"); return true; }
         _settings.Koth = on;
+        // [NEW][KOTH] KOTH plays 1v1: remember the old size, restore it when KOTH goes off.
+        if (on && _settings.DefaultFormat != "1v1") { _settings.KothPrevFormat = _settings.DefaultFormat; _settings.DefaultFormat = "1v1"; }
+        else if (!on && !string.IsNullOrEmpty(_settings.KothPrevFormat)) { _settings.DefaultFormat = _settings.KothPrevFormat; _settings.KothPrevFormat = ""; }
         SaveSettings();
-        Say("KOTH is now " + (on ? "ON: the winning team stays on." : "OFF: everyone is out after a match."));
+        Say("KOTH is now " + (on ? "ON: 1v1, the winner stays on and challengers rotate in one at a time." : "OFF: everyone is out after a match (" + _settings.DefaultFormat + ")."));
+        if (on) { _autoNextPending = _settings.AutoNextMatch; _autoNextTold = false; _autoNextSince = DateTime.UtcNow; try { TryAutoNext(); } catch (Exception) { } }
         PublishState("koth", on ? "on" : "off");
         return true;
     }

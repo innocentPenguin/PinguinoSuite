@@ -806,6 +806,22 @@ public static class Harness
             Run("mod1", "!win", "blue", true);
             Check(MatchId() == "" || MatchId() == thirdId, "autonext: off = no automatic next game");
         }
+        // ===== [NEW][KOTH] KOTH on = 1v1 (old size restored on off), starts by itself once 2 are queued =====
+        {
+            var tick = typeof(CPHInline).GetMethod("TryAutoNext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Run("mod1", "!match", "clear", true); Run("mod1", "!queue", "clear", true); Run("mod1", "!queue", "open", true); Run("mod1", "!streamer", "out", true);
+            Run("mod1", "!autonext", "on", true); Run("mod1", "!format", "3v3", true);
+            CPHProxy.Sent.Clear(); Run("mod1", "!koth", "on", true);
+            Check(CPHProxy.Sent.Any(m => m.Contains("KOTH is now ON") && m.Contains("1v1")), "koth: on switches to 1v1: " + string.Join(" | ", CPHProxy.Sent));
+            Check(CPHProxy.Sent.Any(m => m.StartsWith("Waiting for players: need 2 for 1v1")), "koth: waits for 2 players");
+            Run("p2", "!join"); CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
+            Check(CPHProxy.Sent.Count == 0, "koth: 1 player is not enough, no repeat");
+            Run("p4", "!join"); CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
+            Check(CPHProxy.Sent.Any(m => m.Contains("Blue [avg")), "koth: starts by itself when the 2nd player joins: " + string.Join(" | ", CPHProxy.Sent));
+            CPHProxy.Sent.Clear(); Run("mod1", "!koth", "off", true);
+            Check(CPHProxy.Sent.Any(m => m.Contains("KOTH is now OFF") && m.Contains("3v3")), "koth: off restores 3v3: " + string.Join(" | ", CPHProxy.Sent));
+            Run("mod1", "!autonext", "off", true); Run("mod1", "!match", "clear", true);
+        }
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
         try { Directory.Delete(dir, true); } catch { }
         return failed == 0 ? 0 : 1;
