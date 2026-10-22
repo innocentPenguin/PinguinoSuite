@@ -32,10 +32,11 @@ namespace PinguinoHost
             // 2. !tip (mods), idempotent
             said.Clear(); long b0 = Economy.TBal("tipguy");
             FeatureCommands.Handle("viewer1", "!tip tipguy 5", 1, say); Check(Economy.TBal("tipguy") == b0 && said.Count == 0, "!tip is silent and pays nothing for non-mods");
-            FeatureCommands.Handle("modguy", "!tip tipguy 5", 3, say); FeatureCommands.Handle("modguy", "!tip tipguy 5", 3, say);
+            FeatureCommands.Handle("modguy", "!tipped tipguy 5", 3, say); FeatureCommands.Handle("modguy", "!tip tipguy 5", 3, say);
             Check(Economy.TBal("tipguy") - b0 == 7000 && said.Count >= 1 && said[0].Contains("7,000"), "!tip tipguy 5 pays 7000 once (repeat in the same minute is the same id): " + string.Join("|", said));
             FeatureCommands.Handle("modguy", "!tip tipguy 10 receipt-77", 3, say); FeatureCommands.Handle("modguy", "!tip tipguy 10 receipt-77", 3, say);
             Check(Economy.TBal("tipguy") - b0 == 27000, "explicit id: $10 = 20000, same id twice pays once");
+            var tv = Economy.TippedView("tipguy"); Check((double)tv["total"] == 15 && (int)tv["count"] == 2 && (long)tv["last"] > 0 && (double)Economy.Me2("tipguy")["tipped"]["total"] == 15, "tipped {total,count,last} counts each tip id once, shown in /api/economy/me: " + tv);
 
             // 3. enriched activity items
             long since = (long)Latest.Activity(0, 1, "")["seq"];

@@ -434,7 +434,7 @@ namespace PinguinoHost
             catch (Exception ex) { Clog.Warn("economy", "hidden command failed: " + ex.Message); }
         }
         public static bool IsViewerCommand(string c) { return c == "!top" || c == "!leaders" || c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch" || IsBankCommand(c); }
-        public static bool IsModCommand(string c) { return c == "!removepoints" || c == "!economy" || c == "!tip"; }
+        public static bool IsModCommand(string c) { return c == "!removepoints" || c == "!economy" || c == "!tip" || c == "!tipped"; }
 
         public static void Handle(string user, string cmd, string[] args, bool mod, Action<string> say, Func<string, string> parseMonth, Func<string, string> monthLabel)
         {
@@ -469,7 +469,7 @@ namespace PinguinoHost
                     return;
                 }
                 if (!mod) return;   // the rest is mods only, silent for everyone else
-                if (cmd == "!tip") { say(TipCommand(user, args)); return; }
+                if (cmd == "!tip" || cmd == "!tipped") { say(TipCommand(user, args)); return; }
                 if (cmd == "!removepoints")
                 {
                     double n; if (args.Length < 2 || !double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out n) || n <= 0) { say("Usage: " + cmd + " @user <amount>"); return; }

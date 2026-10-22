@@ -231,7 +231,7 @@ namespace PinguinoHost
             string type = ((string)b["type"] ?? "").ToLowerInvariant(), login = Norm((string)b["login"]); string id = (string)b["id"]; if (login == "") return new JObject { { "ok", false }, { "error", "login is required" } };
             if (string.IsNullOrEmpty(id)) return new JObject { { "ok", false }, { "error", "id is required (a unique id per event keeps a retry from paying twice)" } };
             var pv = Preview(b); if (pv["ok"] != null && !(bool)pv["ok"]) return pv; long pts = (long)pv["points"]; string sid = CurSid(); string err = null; double amt = D(b["amount"]);
-            if (type == "tip") err = PayEvent(sid, login, pts, "tip", "Tip $" + amt.ToString("0.##", CultureInfo.InvariantCulture), "tip:" + id);
+            if (type == "tip") { err = PayEvent(sid, login, pts, "tip", "Tip $" + amt.ToString("0.##", CultureInfo.InvariantCulture), "tip:" + id); if (err == null) RecordTip(login, amt, id); }
             else
             {
                 var a = new Dictionary<string, object> { { "userName", login }, { "eventId", id }, { "tier", (string)b["tier"] ?? "1" }, { "bits", (long)amt }, { "viewers", (long)amt }, { "total", (long)amt }, { "bitsType", (string)b["bitsType"] ?? "" } };
@@ -253,11 +253,33 @@ namespace PinguinoHost
         /// <summary>!tip &lt;user&gt; &lt;$&gt; [id] (mods): interim tip intake. The id (given, or user+amount+minute) keeps a repeated command from paying twice.</summary>
         static string TipCommand(string by, string[] args)
         {
-            double usd; if (args.Length < 2 || !double.TryParse(args[1].TrimStart('$'), NumberStyles.Float, CultureInfo.InvariantCulture, out usd) || usd <= 0) return "Usage: !tip @user <dollars> [id]";
+            double usd; if (args.Length < 2 || !double.TryParse(args[1].TrimStart('$'), NumberStyles.Float, CultureInfo.InvariantCulture, out usd) || usd <= 0) return "Usage: !tipped @user <dollars> [id]";
             string who = Norm(args[0]); string id = args.Length > 2 ? args[2] : who + ":" + usd.ToString("0.##", CultureInfo.InvariantCulture) + ":" + DateTime.UtcNow.ToString("yyyyMMddHHmm");
             var r = EventApi(new JObject { { "type", "tip" }, { "login", who }, { "amount", usd }, { "id", id } });
             if ((bool?)r["ok"] != true) return "Tip not paid: " + (string)r["error"];
-            return "Tip $" + usd.ToString("0.##", CultureInfo.InvariantCulture) + " from " + Boards.DisplayName(who) + ": " + Num((long)r["points"]) + " " + CurrencyName + ".";
+            return "Thank you for the $" + usd.ToString("0.##", CultureInfo.InvariantCulture) + " tip, " + Boards.DisplayName(who) + "! +" + Num((long)r["points"]) + " " + CurrencyName + ".";
+        }
+
+        /// <summary>lifetime tip totals per person (tipped = {total USD, count, last unix s}); the id list keeps a retry from counting twice. Mirrored into the profile file as `tipped`.</summary>
+        static void RecordTip(string login, double usd, string id)
+        {
+            login = Canon(Boards.AliasMap(), login); if (Sim.IsSim(login)) return; JObject t;
+            lock (L)
+            {
+                var tips = Doc()["tips"] as JObject; if (tips == null) Doc()["tips"] = tips = new JObject();
+                var u = tips[login] as JObject; if (u == null) tips[login] = u = new JObject { { "total", 0.0 }, { "count", 0 }, { "last", 0L }, { "ids", new JArray() } };
+                var ids = (JArray)u["ids"]; if (ids.Any(x => (string)x == id)) return;
+                ids.Add(id); while (ids.Count > 100) ids.RemoveAt(0);
+                u["total"] = Math.Round(D(u["total"]) + usd, 2); u["count"] = (int)D(u["count"]) + 1; u["last"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Save();
+                t = new JObject { { "total", u["total"] }, { "count", u["count"] }, { "last", u["last"] } };
+            }
+            try { string f = System.IO.Path.Combine(Root, "profiles", login + ".json"); if (File.Exists(f)) { var p = SubsImport.ParseJ(File.ReadAllText(f)); p["tipped"] = t; var tmp = f + ".tmp"; File.WriteAllText(tmp, p.ToString()); File.Copy(tmp, f, true); File.Delete(tmp); } } catch (Exception) { }
+        }
+        /// <summary>{total (USD), count, last (unix s)} - zeros when the person never tipped</summary>
+        public static JObject TippedView(string login)
+        {
+            login = Canon(Boards.AliasMap(), login);
+            lock (L) { var u = Doc()["tips"]?[login] as JObject; return u == null ? new JObject { { "total", 0.0 }, { "count", 0 }, { "last", 0L } } : new JObject { { "total", u["total"] }, { "count", u["count"] }, { "last", u["last"] } }; }
         }
 
         internal static long TBal(string l) { return Balance(l); }

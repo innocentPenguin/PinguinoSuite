@@ -423,7 +423,7 @@ namespace PinguinoHost
                 { "loans", LoanView(c, set, minutes) },
                 { "earnings", new JArray(groups.Values.OrderByDescending(g => (double)g["earned"] + (double)g["spent"])) },
                 { "ledger", new JArray(Enumerable.Reverse(rows).Take(Math.Max(1, Math.Min(500, ledgerLimit))).Select(x => { var y = (JObject)x.DeepClone(); y["label"] = Label((string)y["source"]); return y; })) },
-                { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) } };
+                { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) }, { "tipped", TippedView(c) } };
             var dp = (JObject)res["depreciation"]; dp["ratePct"] = dp["pct"]; dp["nextAmount"] = dp["amount"]; dp["nextAt"] = null; dp["nextAtKind"] = open ? "end_of_stream" : "next_stream_start";
             return res;
         }
