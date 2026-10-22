@@ -153,3 +153,7 @@ button:disabled{opacity:.4;cursor:default}button.cur:disabled{opacity:1}
 .feeditem .lg-join{color:#9be8b3}.feeditem .lg-leave,.feeditem .lg-removed{color:var(--dim)}
 .feeditem .lg-kick,.feeditem .lg-strike,.feeditem .lg-error{color:#ff8a87}
 .feeditem .lg-overlay{color:#ffc46b}.feeditem .lg-bot,.feeditem .lg-obs{color:var(--dim)}
+
+.cs[hidden]{display:none}
+button.cur,button.cur:hover{background:var(--accent);border-color:var(--accent);color:#140a00;font-weight:700;box-shadow:0 0 10px #ff990088;opacity:1;cursor:default}
+button.q-on,button.is-live{font-weight:700}

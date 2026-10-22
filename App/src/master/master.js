@@ -28,7 +28,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
-    view: null, query: '', tab: ls.get('tab', 'customs'), pane: 'scenes',
+    view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
@@ -53,7 +53,46 @@
 
   /* customs button -> POST /api/customs/mod {action,value} (answers with the new state); old Host (404) or gamemode -> /api/run chat command */
   const HOSTMOD = new Set(['queue', 'next', 'match', 'win', 'finish', 'balance', 'reroll', 'kick', 'mode', 'format', 'koth', 'casual']);
+  /* ---------- player simulator: a local fake customs state, nothing leaves the app ---------- */
+  const SIMNAMES = ['spywobbles', 'salman201223', 'SkyRLTN', 'LvLMarshmello', 'pineyapplie', 'gonkilluagg', 'yoohoo15', 'FrostByte', 'NovaKick', 'AeroLily', 'TurboToast', 'WaffleRL', 'DemoDan', 'BumpBoi', 'CeilingCat', 'FlipReset'];
+  const simFresh = () => ({ open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', _n: 0, _id: 0 });
+  function simAdd(st, n) { for (let i = 0; i < n; i++) { const k = st._n++, nm = SIMNAMES[k % SIMNAMES.length] + (k >= SIMNAMES.length ? Math.floor(k / SIMNAMES.length) : ''); st.queue.push({ username: nm.toLowerCase(), display: nm, mmr: 600 + Math.floor(Math.random() * 900) }); } }
+  const simSize = st => +String(st.format || '2v2')[0] || 2;
+  function simSplit(st, ps) {
+    const a = ps.slice(); if (st.mode === 'random') a.sort(() => Math.random() - .5); else a.sort((x, y) => y.mmr - x.mmr);
+    const o = [], bl = []; a.forEach((p, i) => (st.mode === 'random' ? i % 2 : [0, 1, 1, 0][i % 4]) ? bl.push(p) : o.push(p)); return [o, bl];
+  }
+  function simFill(st) {
+    const n = simSize(st) * 2; if (st.queue.length < 2) return 'Need at least 2 players in the queue';
+    const ps = st.queue.splice(0, n), [o, bl] = simSplit(st, ps);
+    st.match = { id: ++st._id, status: 'live', orange: o.map(p => p.display), blue: bl.map(p => p.display), _p: ps }; return '';
+  }
+  function simApply(action, value) {
+    const st = ui.simState, v = value || ''; let msg = '';
+    const nameOf = x => String(x).toLowerCase();
+    if (action === 'sim') { if (v === 'add') simAdd(st, 1); else if (v === 'add4') simAdd(st, 4); else if (v === 'add8') simAdd(st, 8); else if (v === 'rm') st.queue.pop(); else if (v === 'reset') ui.simState = simFresh(); }
+    else if (action === 'activity') { const a = v.split(' ').pop(); st.activity = a === 'end' ? 'none' : a; if (a === 'koth') st.koth = true; }
+    else if (action === 'queue-open') st.open = true; else if (action === 'queue-close') st.open = false; else if (action === 'queue-clear') st.queue = [];
+    else if (action === 'match') { if (v === 'fill') msg = simFill(st); else if (v === 'queue' || v === 'clear') { if (st.match && v === 'queue') st.queue.unshift(...st.match._p); st.match = null; } }
+    else if (action === 'finish') {
+      const m = st.match; if (!m) return 'No match is running';
+      const win = v === 'orange' ? 'orange' : 'blue', lose = win === 'orange' ? 'blue' : 'orange', ps = m._p;
+      if (st.koth) {   // winners stay, losers go to the back, challengers come in
+        const stay = ps.filter(p => m[win].includes(p.display)), out = ps.filter(p => m[lose].includes(p.display));
+        st.queue.push(...out); const ch = st.queue.splice(0, simSize(st));
+        const orange = win === 'orange' ? stay : ch, blue = win === 'orange' ? ch : stay;
+        st.match = { id: ++st._id, status: 'live', orange: orange.map(p => p.display), blue: blue.map(p => p.display), _p: stay.concat(ch) }; msg = win + ' stays';
+      } else { st.queue.push(...ps); st.match = null; msg = win + ' won, everyone back to the queue'; }
+    }
+    else if (action === 'reroll' || action === 'balance') { if (st.match) { const [o, bl] = simSplit(Object.assign({}, st, { mode: action === 'reroll' ? 'random' : 'balanced' }), st.match._p); st.match.orange = o.map(p => p.display); st.match.blue = bl.map(p => p.display); } }
+    else if (action === 'mode') st.mode = v; else if (action === 'format') st.format = v; else if (action === 'gamemode') st.gameMode = v;
+    else if (action === 'koth') st.koth = v === 'on';
+    else if (action === 'kick') { const k = nameOf(v); st.queue = st.queue.filter(p => nameOf(p.username) !== k && nameOf(p.display) !== k); if (st.match) { st.match._p = st.match._p.filter(p => nameOf(p.display) !== k); st.match.orange = st.match.orange.filter(n => nameOf(n) !== k); st.match.blue = st.match.blue.filter(n => nameOf(n) !== k); } }
+    else msg = '(not simulated: ' + action + ')';
+    schedule('customs'); return msg;
+  }
   async function sendCustom(action, value, btn) {
+    if (ui.sim) { flash(btn); const m = simApply(action, value); if (m) toast(m); return; }
     const text = C.customsText(action, value); if (!text) { toast('Not allowed: ' + action, true); return; }
     const now = Date.now(), last = ui.sent.get(text) || 0;
     if (now - last < 1200) { toast('Already sent ' + text); return; }
@@ -168,28 +207,29 @@
     const sec = (cls, title, body, sub) => `<section class="cs ${cls}"><h4>${title}${sub || ''}</h4>${body}</section>`;
     const seg = (key, items) => `<div class="seg">${items.map(([l, v]) => b(l, key, v, '', key + ':' + v)).join('')}</div>`;
     $('#tab-customs').innerHTML = `
-      <div class="ctl free" id="cu-ctl"><span id="cu-who">In control: …</span><span class="sp"></span><span class="faint" id="cu-badge"></span></div>
+      <div class="ctl free" id="cu-ctl"><span id="cu-who">In control: …</span><span class="sp"></span><span class="faint" id="cu-badge"></span><button class="sm" id="cu-sim" title="Play with fake players: nothing is sent to the Host">🧪 Simulator</button></div>
       <div id="cu-note" class="note" hidden></div>
       <div class="cgrid">
         ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div>`, ' <span class="faint" id="cu-act"></span>')}
         ${sec('c-q', 'Queue', `<div class="btns">${b('Open', 'queue-open', null, 'g', 'queue:open')}${b('Close', 'queue-close', null, 'rd', 'queue:close')}${b('Clear', 'queue-clear', null, 'og warn', 'queue:clear')}</div><ul class="qlist" id="cu-queue"></ul>`, ' <span class="faint" id="cu-qn"></span>')}
         ${sec('c-m', 'Match', `<div class="btns">${b('Fill', 'match', 'fill', 'g')}${b('Move all → Queue', 'match', 'queue')}${b('Clear match', 'match', 'clear', 'rd warn')}${b('Orange wins', 'finish', 'orange', 'or', 'win:orange')}${b('Blue wins', 'finish', 'blue', 'bl', 'win:blue')}</div><div class="teams" id="cu-teams"></div>`, ' <span class="faint" id="cu-match"></span>')}
-        ${sec('c-n', 'Next match', `<div class="btns">${b('▶ Everyone out', 'next', '', 'pri')}${b('Orange stays', 'next', 'orange', 'or')}${b('Blue stays', 'next', 'blue', 'bl')}</div>`)}
         ${sec('c-t', 'Teams', `${seg('mode', [['Balanced', 'balanced'], ['Random', 'random'], ['Manual', 'picks']])}<div class="btns" style="margin-top:6px">${b('Reroll', 'reroll')}${b('Balance', 'balance')}</div><div class="row" id="cu-manual" style="margin-top:6px" hidden><input type="text" id="cu-pick" placeholder="who goes Blue" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="sm bl" id="cu-pickgo">Set Blue</button>${b('Auto', 'pick', 'auto')}</div>`)}
         ${sec('c-s', 'Settings', `<div class="lbl">Team size</div>${seg('format', ['1v1', '2v2', '3v3', '4v4'].map(x => [x, x]))}<div class="lbl">Game mode</div>${seg('gamemode', [['Standard', 'standard'], ['Dropshot', 'dropshot'], ['Rumble', 'rumble']])}`)}
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
         ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div><div class="btns" style="margin-top:6px"><span class="faint sm" style="align-self:center">Streamer</span>${b('In', 'streamer', 'in', 'g')}${b('Out', 'streamer', 'out')}</div>`)}
+        ${sec('c-sim', 'Player simulator', `<div class="btns">${b('+ Player', 'sim', 'add')}${b('+ 4', 'sim', 'add4')}${b('+ 8', 'sim', 'add8')}${b('Remove one', 'sim', 'rm')}${b('Reset sim', 'sim', 'reset', 'rd')}</div><div class="faint sm" style="margin-top:4px">Fake players only. Nothing is sent to the Host or chat.</div>`)}
         ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
       </div>`;
   }
   const holderName = c => { const x = c && c.controlHolder; return !x ? '' : typeof x === 'string' ? x : (x.name || x.display || x.user || x.id || ''); };
   function renderCustoms() {
-    const c = S.get('customs'), ok = S.get('customsOk'), note = $('#cu-note');
+    const c = ui.sim ? ui.simState : S.get('customs'), ok = ui.sim ? true : S.get('customsOk'), note = $('#cu-note');
+    $('#cu-sim').classList.toggle('cur', !!ui.sim); $('.c-sim').hidden = !ui.sim;
     const msg = ok === false ? (c ? 'Customs state is stale (the Host stopped answering it).' : 'The Host has no /api/customs/state yet. Buttons still work (they run the same chat commands the website sends); the live queue appears once the Host has it.') : '';
     note.hidden = !msg; note.textContent = msg;
-    const holder = holderName(c), mine = ui.tookControl && !holder;
-    $('#cu-ctl').className = 'ctl ' + (holder ? 'other' : mine ? 'mine' : 'free');
-    $('#cu-who').textContent = holder ? '🎮 In control: ' + holder : mine ? '🎮 In control: you (app)' : '🎮 In control: nobody · any click takes it';
+    const holder = ui.sim ? '' : holderName(c), mine = ui.tookControl && !holder;
+    $('#cu-ctl').className = 'ctl ' + (ui.sim ? 'mine' : holder ? 'other' : mine ? 'mine' : 'free');
+    $('#cu-who').textContent = ui.sim ? '🧪 Simulator: fake players, nothing is sent' : holder ? '🎮 In control: ' + holder : mine ? '🎮 In control: you (app)' : '🎮 In control: nobody · any click takes it';
     const q = (c && Array.isArray(c.queue)) ? c.queue : [];
     $('#cu-badge').textContent = c ? (c.open === true ? 'queue open' : c.open === false ? 'queue closed' : '') + (c.format ? ' · ' + c.format : '') + (c.gameMode && c.gameMode !== 'standard' ? ' · ' + c.gameMode : '') : '';
     $('#cu-act').textContent = c && c.activity && c.activity !== 'none' ? '· ' + c.activity : '';
@@ -201,6 +241,7 @@
     const tv = JSON.stringify([m && m.orange, m && m.blue]), tb = $('#cu-teams');
     if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.append(h('b', '', lbl)); const names = (m && m[k]) || []; names.forEach(n => col.append(h('span', 'ell', n))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
     const cur = { mode: c && c.mode, format: c && c.format, gamemode: c && (c.gameMode || c.gamemode), koth: c ? (c.koth ? 'on' : 'off') : null, activity: c && c.activity, queue: c ? (c.open ? 'open' : 'close') : null };
+    for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];   // Host offline: show what was last clicked
     for (const bt of $$('#tab-customs [data-st]')) {
       const [k, v] = bt.dataset.st.split(':'), on = cur[k] === v;
       if (k === 'win') bt.disabled = !live;
@@ -385,7 +426,8 @@
   $('#tab-customs').addEventListener('click', e => {
     const b = e.target.closest('button'), li = e.target.closest('.qlist li');
     if (li && b && b.classList.contains('x')) { sendCustom('kick', li.dataset.u, b); return; }
-    if (b && b.dataset.cu) { if (b.disabled) return; if (b.classList.contains('warn') && !armed(b)) return; sendCustom(b.dataset.cu, b.dataset.v, b); }
+    if (b && b.id === 'cu-sim') { ui.sim = !ui.sim; if (ui.sim && !ui.simState) { ui.simState = simFresh(); simAdd(ui.simState, 6); } schedule('customs'); return; }
+    if (b && b.dataset.cu) { if (b.disabled) return; if (b.dataset.st && !ui.sim) { const [k, v] = b.dataset.st.split(':'); if (k !== 'win') { ui.sel[k] = v; schedule('customs'); } } if (b.classList.contains('warn') && !armed(b)) return; sendCustom(b.dataset.cu, b.dataset.v, b); }
     else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); ui.tookControl = true; tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
     else if (b && b.id === 'cu-pickgo') { const v = $('#cu-pick').value.trim().replace(/\s+/g, ' '); C.customsText('pick', v) ? (sendCustom('pick', v, b), $('#cu-pick').value = '') : toast('Type 1 to 4 Twitch names first', true); }
     else if (b && b.id === 'cu-kickgo') { C.customsText('kick', $('#cu-kick').value) ? (sendCustom('kick', $('#cu-kick').value, b), $('#cu-kick').value = '') : toast('Type a Twitch name first', true); }
