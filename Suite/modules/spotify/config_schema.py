@@ -5,7 +5,7 @@ The Settings tab is generated from SCHEMA, rules.DEFAULTS is derived from it."""
 VARS = {"user": "Ann", "song": "Song 1 - Artist", "title": "Song 1", "artist": "Artist", "pos": 3, "eta": ", plays in ~8 min", "by": " (requested by Ann)", "limit": 2,
         "max_min": 10, "min_s": 30, "votes": 1, "need": 3, "link": "https://open.spotify.com/track/abc", "requester": "Ann",
         "count": 5, "next": "1. Song 2 - Artist | 2. Song 3 - Artist", "cooldown": 60, "cmds": "!sr !song !queue !skip !oops",
-        "last": "Song 0 - Artist", "genre": "death metal", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120, "mins": 8, "target": "troll42", "prefix": "!"}
+        "last": "Song 0 - Artist", "genre": "death metal", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120, "mins": 8, "target": "troll42", "prefix": "!", "for": "10m"}
 
 MSGS = {
     "added": ("Song added", "@{user} added '{song}' (#{pos} in queue{eta}).", "Viewer request accepted."),
@@ -51,6 +51,11 @@ MSGS = {
     "ban_ok": ("!srban", "@{user} {target} can no longer request songs.", "A mod banned a viewer from requests."),
     "unban_ok": ("!srunban", "@{user} {target} can request songs again.", "A mod lifted a request ban."),
     "ban_usage": ("!srban usage", "@{user} use {prefix}srban <name> or {prefix}srunban <name>.", "Missing name."),
+    "artist_blocked": ("Artist banned + skipped", "Banned {artist} and skipped '{title}'.", "!banartist."),
+    "unblock_ok": ("Unbanned", "Unbanned {target}.", "!unbansong / !unbanartist / !pardon."),
+    "unblock_none": ("Nothing to unban", "@{user} nothing found to unban. Use {prefix}unbansong <link or name> or {prefix}unbanartist <name>.", "Nothing matched."),
+    "suspend_ok": ("Suspended", "@{user} {target} can't request songs for {for}.", "!srsuspend."),
+    "suspend_usage": ("Suspend usage", "@{user} use {prefix}srsuspend <name> <time, eg 10m, 2h, 1d>.", "Missing name or time."),
     "blocked_song": ("Blocked + skipped", "Blocked '{title}' and skipped it.", "!blocksong."),
     "genre": ("Genre blocked", "@{user} that genre ({genre}) isn't allowed right now.", "Song by an artist in a blocked genre."),
     "safe_on": ("Stream-safe on", "Stream-safe mode is ON: no explicit songs, requests need approval.", "A mod turned stream-safe on."),
@@ -74,13 +79,13 @@ MSGS = {
 }
 
 COMMANDS = {"sr": ["sr", "request", "songrequest"], "skip": ["skip", "voteskip"], "queue": ["queue", "q", "songqueue", "srqueue"],
-            "song": ["song", "currentsong", "nowplaying", "np"], "oops": ["oops", "wrongsong"], "blocksong": ["blocksong", "songban"], "srban": ["srban"], "srunban": ["srunban"],
-            "clear": ["srclear"], "last": ["lastsong", "previoussong"], "mine": ["mysongs", "myrequests"], "help": ["songhelp", "songcommands"],
+            "song": ["song", "currentsong", "nowplaying", "np"], "oops": ["oops", "wrongsong"], "blocksong": ["blocksong", "bansong", "songban"], "unbansong": ["unbansong"], "banartist": ["banartist"], "unbanartist": ["unbanartist"], "pardon": ["pardon"], "srsuspend": ["srsuspend"], "srban": ["srban"], "srunban": ["srunban"],
+            "clear": ["srclear", "songclear"], "last": ["lastsong", "previoussong"], "mine": ["mysongs", "myrequests"], "help": ["songhelp", "songcommands"],
             "volume": ["volume", "vol"], "playnext": ["playnext"],
             "pos": ["songpos", "pos"], "next": ["songnext", "next"], "like": ["songlike", "like"], "toggle": ["togglesr"]}
 COMMAND_HELP = {"sr": "request a song (and mods: open/close/clear)", "skip": "vote to skip (mods: instant)", "queue": "show the next songs",
                 "song": "what is playing", "oops": "remove your last request", "blocksong": "mods: block + skip the current song",
-                "clear": "mods: clear viewer requests", "srban": "mods: ban a viewer from requesting", "srunban": "mods: lift a request ban", "volume": "mods: show or set the volume", "playnext": "mods: put a song first in line", "last": "the previous song", "pos": "where your request is in line", "next": "the song after this one", "like": "mods: like the current song on Spotify", "toggle": "mods: open/close requests", "mine": "your pending requests", "help": "list commands"}
+                "clear": "mods: clear viewer requests", "srban": "mods: ban a viewer from requesting", "srsuspend": "mods: suspend a viewer for a time", "banartist": "mods: ban the current artist", "unbansong": "mods: unban a song", "unbanartist": "mods: unban an artist", "pardon": "mods: pardon song|artist", "srunban": "mods: lift a request ban", "volume": "mods: show or set the volume", "playnext": "mods: put a song first in line", "last": "the previous song", "pos": "where your request is in line", "next": "the song after this one", "like": "mods: like the current song on Spotify", "toggle": "mods: open/close requests", "mine": "your pending requests", "help": "list commands"}
 
 # kinds: bool int str list choice color msgs cmds
 SCHEMA = [

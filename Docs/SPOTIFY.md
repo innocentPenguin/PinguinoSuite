@@ -107,3 +107,11 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 
 ## Cycle 6: tier order
 `sub_tier_priority` (default on): within a round Tier 3 subs rank ahead of Tier 2, ahead of Tier 1 (item `tier` 1.2 / 1.1 / 1; redeems 2 still go first). Needs `sub_priority`. The Host's `subTier`/`isVip` fields are covered by e2e (viewer / T1 / T2 limits, !srban, /api/song-log).
+
+## Cycle 7: mod ban commands, Master view actions
+- `!bansong` (alias `!blocksong`, `!songban`): ban + skip the current song. `!unbansong [link|id]`: lift it (no argument = the last banned song).
+- `!banartist`: ban the current artist (name added to the blocklist) + skip. `!unbanartist [name]`: lift it.
+- `!pardon song|artist [name]`: same as the two unban commands.
+- `!songclear` = `!srclear` (clear viewer requests). `!srban <user>` / `!srunban <user>`: permanent request ban.
+- `!srsuspend <user> <time>`: request ban that lifts itself (10m, 2h, 1d, bare number = minutes, max 30 days); `!srunban <user>` clears a ban, suspensions end on their own. Suspensions persist in state.json.
+- `POST /api/mod-action {action: like|skip|previous|ban_song|ban_artist}` for the Master view strip; the module answers CORS/OPTIONS for the Suite app origins and takes that one POST from the app origin without a token.

@@ -202,6 +202,29 @@ class SongifyTests(unittest.TestCase):
         with self.assertRaises(Exception):
             self.e.mod_action("nope")
 
+    def test_ban_unban_pardon_and_suspend(self):
+        mod = ("mod",)
+        self.play(5)
+        r = self.e.chat("mod", "!bansong", mod)
+        self.assertEqual(r["code"], "blocked")
+        self.assertTrue(self.e.settings["blocklist"])
+        self.assertEqual(self.e.chat("mod", "!unbansong", mod)["code"], "unbansong")
+        self.assertFalse(self.e.settings["blocklist"])
+        self.play(6)
+        self.assertEqual(self.e.chat("mod", "!banartist", mod)["code"], "artist_blocked")
+        self.assertTrue(self.e.settings["blocklist"])
+        self.assertEqual(self.e.chat("mod", "!pardon artist", mod)["code"], "unbanartist")
+        self.assertFalse(self.e.settings["blocklist"])
+        self.assertFalse(self.e.chat("mod", "!unbanartist", mod)["ok"], "nothing to unban")
+        self.assertFalse(self.e.chat("viewer1", "!bansong", ("viewer",))["ok"], "viewers cannot")
+        # suspend: blocked until the time is up, then back
+        self.assertFalse(self.e.chat("mod", "!srsuspend bob", mod)["ok"], "needs a time")
+        self.assertEqual(self.e.chat("mod", "!srsuspend bob 10m", mod)["code"], "srsuspend")
+        self.assertEqual(self.sr("bob", 2)["code"], "user_blocked")
+        self.clock.t += 11 * 60
+        self.assertTrue(self.sr("bob", 2)["ok"])
+        self.assertEqual(self.e.chat("mod", "!songclear", mod)["code"], "clear")
+
     def test_pos_next_and_like(self):
         self.sr("ann", 3)
         self.sr("bob", 2)

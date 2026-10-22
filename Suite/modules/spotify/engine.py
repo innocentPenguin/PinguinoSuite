@@ -33,6 +33,22 @@ PLAYER_CHECK_S = 6
 MANUAL_HOLD_S = 600                # after the streamer picks another device by hand, don't pull playback back for this long
 
 
+def _parse_duration(text):
+    """'10m', '2h', '1d', '90s' or bare minutes -> seconds (0 when unreadable; capped at 30 days)."""
+    import re
+    m = re.fullmatch(r"(\d+)\s*([smhd]?)", str(text).strip().lower())
+    if not m:
+        return 0
+    return min(int(m.group(1)) * {"s": 1, "": 60, "m": 60, "h": 3600, "d": 86400}[m.group(2)], 30 * 86400)
+
+
+def _fmt_duration(secs):
+    for n, u in ((86400, "d"), (3600, "h"), (60, "m")):
+        if secs >= n and secs % n == 0:
+            return f"{secs // n}{u}"
+    return f"{max(1, round(secs / 60))}m" if secs >= 60 else f"{secs}s"
+
+
 class Engine:
     def __init__(self, api, auth, clock=time.time):
         self.api, self.auth, self.clock = api, auth, clock
@@ -43,6 +59,7 @@ class Engine:
         self.queue = Queue(st.get("items", []), st.get("history", []))
         self.refunds, self._ref_seq = [], 0
         self.rejects = list(st.get("rejects", []))   # songs withdrawn before playing: !oops (wrong song), blocked, denied
+        self.suspended = {k: float(v) for k, v in (st.get("suspended") or {}).items()}   # viewer -> epoch when the suspension ends
         self._skip_mark = None                         # {uri, by, at}: set by skip(), read when the track changes
         self._prev_pb = None
         self.inbox = st.get("inbox", [])
@@ -149,7 +166,7 @@ class Engine:
         self._write_queue_file()
         with self.lock:
             store.save("state.json", {"items": self.queue.items, "history": self.queue.history[:200],
-                                      "inbox": self.inbox[-100:], "log": self.log[-LOG_MAX:], "rejects": self.rejects[-100:]})
+                                      "inbox": self.inbox[-100:], "log": self.log[-LOG_MAX:], "rejects": self.rejects[-100:], "suspended": self.suspended})
 
     def _bump(self):
         self.version += 1
@@ -484,9 +501,13 @@ class Engine:
         now_uri = self.pb["track"]["uri"] if self.pb and self.pb["track"] else None
         first_fail = None
         with self.lock:
+            now_t = self.clock()
+            for u in [u for u, ts in self.suspended.items() if ts <= now_t]:
+                del self.suspended[u]
+            s2 = dict(s, blocked_users=list(s["blocked_users"]) + list(self.suspended)) if self.suspended else s
             for t in cands:
                 t = self._genre_tag(t, s, roles)
-                ok, code, ctx = rules.evaluate(s, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()), self.session_counts.get(user.lower(), 0), self.last_global)
+                ok, code, ctx = rules.evaluate(s2, t, user, roles, self.queue, now_uri, self.clock(), self.last_req.get(user.lower()), self.session_counts.get(user.lower(), 0), self.last_global)
                 if ok:
                     return self._accept(t, user, roles, redeem, from_site=track is not None)
                 first_fail = first_fail or (code, ctx, t)
@@ -726,6 +747,50 @@ class Engine:
                 self.save_settings({"blocked_users": keep})
             self._bump()
             return self._r(True, cmd, "ban_ok" if cmd == "srban" else "unban_ok", user=user, target=target)
+        if cmd == "srsuspend" and staff:
+            parts = arg.split()
+            secs = _parse_duration(parts[1]) if len(parts) > 1 else 0
+            if not parts or not secs:
+                return self._r(False, "usage", "suspend_usage", user=user, prefix=s["prefix"])
+            target = parts[0].lstrip("@").lower()
+            with self.lock:
+                self.suspended[target] = self.clock() + secs
+            self.persist()
+            self._bump()
+            return self._r(True, "srsuspend", "suspend_ok", user=user, target=target, **{"for": _fmt_duration(secs)})
+        if cmd == "banartist" and staff:
+            t = self.pb["track"] if self.pb and self.pb["track"] else None
+            if not t or not t["artists"]:
+                return self._r(False, "none", "skip_none", user=user)
+            artist = t["artists"][0]
+            cur = self._own_settings()["blocklist"]
+            if artist.lower() not in [str(x).lower() for x in cur]:
+                self.save_settings({"blocklist": cur + [artist]})
+            self._reject(t, user, "blocked")
+            self.skip(force=True, by=user)
+            return self._r(True, "artist_blocked", user=user, title=t["name"], artist=artist)
+        if cmd == "pardon" and staff:
+            kind, _, rest = arg.partition(" ")
+            if kind.lower() not in ("song", "artist"):
+                return self._r(False, "usage", "unblock_none", user=user, prefix=s["prefix"])
+            return self._chat_cmd("unbansong" if kind.lower() == "song" else "unbanartist", rest.strip(), user, roles, staff, redeem)
+        if cmd in ("unbansong", "unbanartist") and staff:
+            last = next((r for r in reversed(self.rejects) if r["reason"] == "blocked"), None)
+            what = arg.strip()
+            if cmd == "unbansong":
+                keys = {rules._norm(rules.track_id_from(what) or what), rules._norm(what)} if what else                        ({rules._norm(last["uri"]), rules._norm(last["uri"].rsplit(":", 1)[-1])} if last else set())
+                label = what or (last["name"] if last else "")
+            else:
+                a = what or (last["artists"][0] if last and last["artists"] else "")
+                keys, label = ({rules._norm(a)} if a else set()), a
+            keys.discard("")
+            cur = self._own_settings()["blocklist"]
+            keep = [b for b in cur if rules._norm(b) not in keys and rules._norm(rules.track_id_from(b) or "") not in keys]
+            if not keys or len(keep) == len(cur):
+                return self._r(False, "none", "unblock_none", user=user, prefix=s["prefix"])
+            self.save_settings({"blocklist": keep})
+            self._bump()
+            return self._r(True, cmd, "unblock_ok", user=user, target=label)
         if cmd == "blocksong" and staff:
             t = self.pb["track"] if self.pb and self.pb["track"] else None
             if not t:
