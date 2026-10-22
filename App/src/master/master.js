@@ -94,7 +94,7 @@
     }
     else if (action === 'reroll' || action === 'balance') { if (st.match) { const [o, bl] = simSplit(Object.assign({}, st, { mode: action === 'reroll' ? 'random' : 'balanced' }), st.match._p); st.match.orange = o.map(p => p.display); st.match.blue = bl.map(p => p.display); } }
     else if (action === 'mode') st.mode = v; else if (action === 'format') st.format = v; else if (action === 'gamemode') st.gameMode = v;
-    else if (action === 'koth') st.koth = v === 'on';
+    else if (action === 'koth') { st.koth = v === 'on'; if (st.koth) { st.format = '1v1'; if (!st.match) { if (st.queue.length >= 2) simFill(st); else st.waiting = true; } msg = 'KOTH on: 1v1, winners stay'; } }
     else if (action === 'kick') { const k = nameOf(v); st.queue = st.queue.filter(p => nameOf(p.username) !== k && nameOf(p.display) !== k); if (st.match) { st.match._p = st.match._p.filter(p => nameOf(p.display) !== k); st.match.orange = st.match.orange.filter(n => nameOf(n) !== k); st.match.blue = st.match.blue.filter(n => nameOf(n) !== k); } }
     else msg = '(not simulated: ' + action + ')';
     schedule('customs'); return msg;
