@@ -19,7 +19,7 @@ DEFAULTS = {
     "tiktok_user": "",
     "kick_enabled": False,            # Kick: UNOFFICIAL read-only chat feed (public Pusher socket); official events come by webhook (POST /hook/kick)
     "kick_channel": "",               # channel slug
-    "link_url": "",                   # e.g. http://127.0.0.1:<Link port>: follow the OBS scene for alert profiles (scene_follow.py)
+    "link_url": "",                   # blank = http://127.0.0.1:7777 (Link): follow the OBS scene for alert profiles (scene_follow.py)
     "kick_chatroom_id": "",           # numeric chatroom id (kick.com/api/v2/channels/<slug> -> chatroom.id; pasted once)
     "ding_platforms": [],            # new-chatter ding: platforms it is ON for (twitch, youtube); empty = off
     "ding_first_ever": False,        # Twitch "first message ever" gets its own (optional) sound

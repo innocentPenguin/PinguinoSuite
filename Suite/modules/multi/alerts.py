@@ -513,7 +513,7 @@ def test_event(t, user="penguin", amount=None, variants=(), **kw):
     return ev
 
 
-def host_token(data_dir):
+def host_token(data_dir, mid="host"):
     """The Host's module token, derived read-only from the key the Suite keeps in <data_dir>/module_secret (same formula as suite.module_token).
     '' when the key file is missing or unreadable."""
     import hashlib
@@ -528,7 +528,7 @@ def host_token(data_dir):
         return ""
     if len(key) < 32:
         return ""
-    return _hmac.new(key.encode(), b"module:host", hashlib.sha256).hexdigest()[:40]
+    return _hmac.new(key.encode(), f"module:{mid}".encode(), hashlib.sha256).hexdigest()[:40]
 
 
 HOST_TOKEN_PATHS = ("/api/alerts/", "/api/events")
