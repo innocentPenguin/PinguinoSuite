@@ -56,6 +56,7 @@ import viewers as viewers_mod
 import prestream
 import voice
 import scene_follow
+import stream_info
 import secrets_store
 import windows as win
 from connectors.discord import Discord
@@ -387,6 +388,36 @@ async def alerts_fire(request: Request):
     ev["type"] = t
     ok, why = alert_engine.submit(ev)
     return {"ok": ok, "queued": ok, "text": why}
+
+
+@app.get("/api/stream/info")
+async def stream_info_get():
+    yt, kk_ = await asyncio.gather(asyncio.to_thread(stream_info.youtube_get), asyncio.to_thread(stream_info.kick_get))
+    return {"ok": True, "platforms": {"youtube": yt, "kick": kk_, "tiktok": {"manual": True}}}
+
+
+@app.post("/api/stream/info")
+async def stream_info_set(request: Request):
+    """{title?, description?, tags?, platforms:[youtube,kick]}: edits the current/upcoming broadcast only; never starts or transitions anything."""
+    b = await request.json()
+    if not isinstance(b, dict):
+        return JSONResponse({"ok": False, "error": "body must be an object"}, status_code=400)
+    plats = [p for p in (b.get("platforms") or []) if p in ("youtube", "kick")]
+    res = {}
+    if "youtube" in plats:
+        res["youtube"] = await asyncio.to_thread(stream_info.youtube_update, b.get("title"), b.get("description"), b.get("tags"))
+    if "kick" in plats:
+        res["kick"] = await asyncio.to_thread(stream_info.kick_update, b.get("title"))
+    return {"ok": bool(res) and all(v.get("ok") for v in res.values()), "results": res}
+
+
+@app.post("/api/stream/schedule")
+async def stream_schedule(request: Request):
+    """YouTube only: create an upcoming broadcast (never live). Called only when Ivan clicks Schedule."""
+    b = await request.json()
+    if not isinstance(b, dict) or b.get("platform", "youtube") != "youtube":
+        return JSONResponse({"ok": False, "error": "only platform youtube can be scheduled"}, status_code=400)
+    return await asyncio.to_thread(stream_info.youtube_schedule, b.get("title"), b.get("description", ""), b.get("tags"), b.get("startsAt", ""), b.get("privacy", "private"))
 
 
 @app.post("/api/alerts/scene")

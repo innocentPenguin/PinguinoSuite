@@ -1518,3 +1518,54 @@ def test_alert_scene_profiles(tmp_path):
     assert e.on_scene("BRB") == "Minimal" and e.cfg["active"] == "Minimal"
     assert e.on_scene("BRB") == "" and e.on_scene("Unmapped") == "" and e.cfg["active"] == "Minimal"
     assert e.on_scene("Gaming") == "Light"
+
+
+def test_stream_info(monkeypatch):
+    import stream_info as si
+    calls = []
+
+    class R:
+        def __init__(self, d, ok=True, code=200):
+            self.d, self.ok, self.status_code = d, ok, code
+
+        def json(self):
+            return self.d
+
+        def raise_for_status(self):
+            pass
+
+    def get(url, params=None, headers=None, timeout=0):
+        if url.endswith("/liveBroadcasts"):
+            return R({"items": [{"id": "B1"}] if params["broadcastStatus"] == "upcoming" else []})
+        if url.endswith("/videos"):
+            return R({"items": [{"snippet": {"title": "old", "description": "d", "tags": ["a"], "categoryId": "20"}}]})
+        return R({"items": [{"id": "S1"}]})
+
+    def put(url, params=None, json=None, headers=None, timeout=0):
+        calls.append(("PUT", json))
+        return R({})
+
+    def post(url, params=None, json=None, headers=None, timeout=0):
+        calls.append(("POST", url.rsplit("/", 1)[-1], json))
+        return R({"id": "NEW"})
+
+    monkeypatch.setattr(si.secrets_store, "get", lambda k: "tok")
+    monkeypatch.setattr(si.requests, "get", get)
+    monkeypatch.setattr(si.requests, "put", put)
+    monkeypatch.setattr(si.requests, "post", post)
+    g = si.youtube_get()
+    assert g["connected"] and g["title"] == "old" and g["state"] == "upcoming"
+    assert si.youtube_update(title="new", tags=["#x", "x", " y "])["ok"]
+    sn = calls[-1][1]["snippet"]
+    assert sn["title"] == "new" and sn["description"] == "d" and sn["tags"] == ["x", "y"] and sn["categoryId"] == "20"
+    s = si.youtube_schedule("T", "", ["z"], "2026-10-25T20:00:00-05:00", "weird")
+    assert s["ok"] and s["bound"] and s["url"].endswith("NEW")
+    body = [c for c in calls if c[0] == "POST" and c[1] == "liveBroadcasts"][0][2]
+    assert body["status"]["privacyStatus"] == "private" and body["contentDetails"]["enableAutoStart"] is False
+    assert body["snippet"]["scheduledStartTime"] == "2026-10-26T01:00:00Z"
+    assert not any("transition" in str(c) for c in calls)
+    assert not si.youtube_schedule("", "", [], "2026-10-25T20:00:00Z")["ok"]
+    assert not si.youtube_schedule("T", "", [], "garbage")["ok"]
+    monkeypatch.setattr(si.secrets_store, "get", lambda k: "")
+    assert si.youtube_get()["connected"] is False and si.kick_get()["connected"] is False
+    assert si.kick_update(title=None)["ok"] is False
