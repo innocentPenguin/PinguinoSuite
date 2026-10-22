@@ -8,6 +8,7 @@ import { cmpVersion } from './manifest.mjs';
 import { readZip } from './zip.mjs';
 import { safeRel, within } from './paths.mjs';
 import { COMPONENTS, COMPONENT_IDS, componentOf } from './components.mjs';
+import { partsOf, wants } from './profiles.mjs';
 
 export const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
 const iso = () => new Date().toISOString();
@@ -40,39 +41,46 @@ function takeLock(file, staleMs = 30 * 60 * 1000) {
 }
 
 /** Parts of the release that differ from what is installed. Without per-part records (an older install) every part counts as changed when the version is newer. */
-export function diffComponents(m, inst, current) {
-  const newer = cmpVersion(m.version, current) > 0, have = inst && inst.components;
+export function diffComponents(m, inst, current, also = []) {
+  const newer = cmpVersion(m.version, current) > 0, have = inst && inst.components, parts = partsOf(inst);
   if (!m.components) return [];
-  return COMPONENTS.filter(c => m.components[c.id]).map(c => {
+  return COMPONENTS.filter(c => m.components[c.id] && (wants(parts, c.id) || also.includes(c.id))).map(c => {
     const mine = have && have[c.id] && have[c.id].hash, theirs = m.components[c.id];
     const changed = have ? mine !== theirs.hash : newer;
     return { id: c.id, name: c.name, restart: c.restart, module: c.module || null, changed, files: theirs.files, bytes: theirs.bytes };
   });
 }
 
-export async function checkUpdate({ source, current, channel = 'stable', pubkey = null, installDir = null }) {
+/** Parts the release has that this install does not keep (a minimal profile): offered as on-demand installs. */
+export function optionalParts(m, inst) {
+  const parts = partsOf(inst);
+  if (!m.components || !parts) return [];
+  return COMPONENTS.filter(c => m.components[c.id] && !parts.includes(c.id)).map(c => ({ id: c.id, name: c.name, restart: c.restart, module: c.module || null, files: m.components[c.id].files, bytes: m.components[c.id].bytes }));
+}
+
+export async function checkUpdate({ source, current, channel = 'stable', pubkey = null, installDir = null, also = [] }) {
   const src = await openSource(source, { pubkey });
   const m = src.manifest;
   if (m.channel !== channel && !(channel === 'beta' && m.channel === 'stable')) return { available: false, why: `release is on the ${m.channel} channel`, manifest: m };
   const inst = installDir ? readJson(dirs(installDir).install) : null;
-  const parts = diffComponents(m, inst, current);
+  const parts = diffComponents(m, inst, current, also);
   const available = parts.length ? parts.some(c => c.changed) : cmpVersion(m.version, current) > 0;
-  return { available, manifest: m, src, components: parts };
+  return { available, manifest: m, src, components: parts, optional: optionalParts(m, inst) };
 }
 
-export async function applyUpdate({ installDir, source, current, channel = 'stable', pubkey = null, liveCheck = hostLiveCheck, keepBackups = 3, postCheck = null, force = false, only = null, stageOnly = false }) {
+export async function applyUpdate({ installDir, source, current, channel = 'stable', pubkey = null, liveCheck = hostLiveCheck, keepBackups = 3, postCheck = null, force = false, only = null, stageOnly = false, repair = false }) {
   const D = dirs(installDir), res = (ok, message, extra = {}) => { const r = { schema: 1, at: iso(), ok, message, from: current, ...extra }; writeJson(D.result, r); return r; };
   const unlock = takeLock(D.lock);
   if (!unlock) return { schema: 1, ok: true, message: 'another update is already running', skipped: true };
   let backupDir = null, started = false;
   try {
-    const chk = await checkUpdate({ source, current, channel, pubkey, installDir });
+    const chk = await checkUpdate({ source, current, channel, pubkey, installDir, also: only || [] });   // a part named in --only is installed even if the profile did not keep it yet
     if (only) {
       if (!chk.manifest.components) return res(false, 'this release has no per-part information; update everything instead', { to: chk.manifest.version });
       const bad = only.filter(id => !COMPONENT_IDS.has(id) || !chk.manifest.components[id]);
       if (bad.length) return res(false, `unknown part: ${bad.join(', ')}`, { to: chk.manifest.version });
     }
-    if (!chk.available) { try { fs.unlinkSync(D.deferred); } catch {} return res(true, chk.why || 'already up to date', { upToDate: true, to: chk.manifest.version }); }
+    if (!chk.available && !(repair && only)) { try { fs.unlinkSync(D.deferred); } catch {} return res(true, chk.why || 'already up to date', { upToDate: true, to: chk.manifest.version }); }
     const m = chk.manifest, to = m.version;
     // never while live (or when we cannot tell)
     if (!force && !stageOnly) {
@@ -99,7 +107,8 @@ export async function applyUpdate({ installDir, source, current, channel = 'stab
     }
     if (!plan.length) return res(false, 'the release package is empty; nothing was changed', { to });
     // a partial update keeps only the chosen parts' files
-    const keep = only ? plan.filter(p => only.includes(componentOf(p.rel))) : plan;
+    const keptParts = partsOf(readJson(D.install));
+    const keep = only ? plan.filter(p => only.includes(componentOf(p.rel))) : plan.filter(p => wants(keptParts, componentOf(p.rel)));   // a full update skips parts this install does not keep
     if (!keep.length) return res(false, 'nothing in the release belongs to the chosen parts; nothing was changed', { to });
     if (stageOnly) {   // files of the running app: verified and parked now, swapped by the next launch (updater launch) when nothing is running
       writeJson(D.pending, { schema: 1, at: iso(), to, only: only || null, channel, source: source.type === 'github' ? { type: 'github', repo: source.repo, tag: source.tag || null } : source });
@@ -124,12 +133,13 @@ export async function applyUpdate({ installDir, source, current, channel = 'stab
     }
     // per-part record: what is installed now, so the next check shows only real differences
     const comps = { ...((prevInstall && prevInstall.components) || {}) };
+    const nowParts = keptParts && only ? [...new Set([...keptParts, ...only])] : keptParts;   // adding a part to a minimal install
     if (m.components) {
       if (only) for (const id of only) comps[id] = { hash: m.components[id].hash };
-      else for (const id of Object.keys(m.components)) comps[id] = { hash: m.components[id].hash };
+      else for (const id of Object.keys(m.components)) if (wants(nowParts, id)) comps[id] = { hash: m.components[id].hash };
     }
-    const allCurrent = !m.components || Object.keys(m.components).every(id => comps[id] && comps[id].hash === m.components[id].hash);
-    writeJson(D.install, { ...(prevInstall || {}), schema: 1, version: allCurrent ? to : (prevInstall && prevInstall.version) || current, channel, updated_at: iso(), ...(m.components ? { components: comps } : {}) });
+    const allCurrent = !m.components || Object.keys(m.components).filter(id => wants(nowParts, id)).every(id => comps[id] && comps[id].hash === m.components[id].hash);
+    writeJson(D.install, { ...(prevInstall || {}), schema: 1, version: allCurrent ? to : (prevInstall && prevInstall.version) || current, channel, updated_at: iso(), ...(nowParts ? { parts: nowParts } : {}), ...(m.components ? { components: comps } : {}) });
     if (postCheck && !(await postCheck({ installDir, version: to }))) throw new Error('the new version failed its post-check');
     try { fs.unlinkSync(D.deferred); } catch {}
     try { fs.unlinkSync(D.pending); } catch {}

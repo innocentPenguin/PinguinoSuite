@@ -14,6 +14,9 @@ export const COMPONENTS = [
   { id: 'lite', name: 'PinguinoLite', restart: 'app', match: ['PinguinoLite/'] },   // Lite's exe + Start-Lite.bat; Lite stages and swaps it itself (its Link is the 'link' part)
   { id: 'tools', name: 'Scripts and docs', restart: 'none', match: [] },   // everything else (updater, installer scripts, docs)
 ];
+// what never ships in a release (and so is never part of a part): shared by Build-Release and the part tools
+export const SKIP_DIR = /(^|\/)(__pycache__|node_modules|\.venv|\.git|data|logs|Archive|tests|test|bin\/Debug|obj|\.pytest_cache)(\/|$)/i;
+export const SKIP_FILE = /\.(log|pdb|pyc|db|bak|env|pgb|dpapi|zip|lnk)$|(^|\/)(vault\.bin|module_secret|suite_settings\.json|device\.json|\.env.*)$|secrets?(\.|_).*\.json$|\.bak-/i;
 export const COMPONENT_IDS = new Set(COMPONENTS.map(c => c.id));
 
 /** Component id for a clean forward-slash relative path. Unknown paths fall into 'tools'. */

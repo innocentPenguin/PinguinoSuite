@@ -16,7 +16,7 @@ const args = process.argv.slice(2);
 const opt = n => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; };
 const has = n => args.includes('--' + n);
 const out = o => console.log(JSON.stringify(o));
-const target = opt('target'), channel = opt('channel') || 'stable';
+const target = opt('target'), channel = opt('channel') || 'stable', profile = opt('profile') || 'full';   // full | lite-minimal (see Suite/updater/lib/profiles.mjs)
 if (!target) { out({ ok: false, message: 'usage: install.mjs --target <folder> [--repo <git url>] [--url <https manifest>] [--local <folder|zip>] [--shortcuts]' }); process.exit(2); }
 
 const sh = (cmd, a, cwd) => new Promise((res, rej) => execFile(cmd, a, { cwd, windowsHide: true, timeout: 600000 }, (e, o, er) => e ? rej(new Error((er || e.message).trim().slice(0, 300))) : res(o.trim())));
@@ -55,10 +55,11 @@ async function main() {
   const ghRepo = opt('github') || opt('update-from');
   if (ghRepo) recordSource = { type: 'github', repo: ghRepo };
   else if (opt('local')) recordSource = false;   // a bundled/USB release is not an update source: record none (the temp folder it came from is gone afterwards)
-  if (opt('github')) attempts.push(['private repo', () => installRelease({ target, channel, source: { type: 'github', repo: opt('github'), tag: opt('tag') }, pubkey: opt('pubkey') || null, token })]);
+  if (opt('github')) attempts.push(['private repo', () => installRelease({ target, channel, source: { type: 'github', repo: opt('github'), tag: opt('tag') }, pubkey: opt('pubkey') || null, token, profile })]);
+  if (opt('repo') && profile !== 'full') return out({ ok: false, message: 'a minimal install needs a release (--github, --url or --local), not a git clone' });
   if (opt('repo')) attempts.push(['git', () => viaGit(opt('repo'), opt('tag'))]);
-  if (opt('url')) attempts.push(['network', () => installRelease({ target, channel, source: { type: 'https', url: opt('url') }, pubkey: opt('pubkey') || null })]);
-  if (opt('local')) attempts.push(['local', () => installRelease({ target, channel, source: { type: 'local', path: opt('local') }, pubkey: opt('pubkey') || null, recordSource })]);
+  if (opt('url')) attempts.push(['network', () => installRelease({ target, channel, source: { type: 'https', url: opt('url') }, pubkey: opt('pubkey') || null, profile })]);
+  if (opt('local')) attempts.push(['local', () => installRelease({ target, channel, source: { type: 'local', path: opt('local') }, pubkey: opt('pubkey') || null, recordSource, profile })]);
   if (!attempts.length) return out({ ok: false, message: 'give at least one source: --repo, --url or --local' });
   for (const [name, run] of attempts) {
     if (has('progress')) out({ progress: `trying ${name}` });

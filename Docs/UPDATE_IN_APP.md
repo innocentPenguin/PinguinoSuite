@@ -36,3 +36,14 @@ Open: the release builder must emit the `components` map (Build-Release.mjs chan
 - Shell: Settings > Updates card (check, per-part Update, Update all, roll back last update), quiet check once a day.
 - A development tree (no `install.json`) never updates itself.
 - Not wired yet: `updater.mjs launch` is still not called by the launcher (00 adds the line to PinguinoApp.bat / the exe). Until then staged app parts wait for it. Lite: not done, needs 012.
+
+## Install profiles (minimal PinguinoLite PC)
+`install.json` gains `profile` and `parts`. `full` (this PC) has no `parts` and keeps everything. `lite-minimal` keeps `["lite","link","tools"]`: Lite's exe + Start-Lite.bat, Link, and the updater/scripts/docs. Defined in `Suite/updater/lib/profiles.mjs`.
+
+- Install: `node Installer/install.mjs --target <dir> --profile lite-minimal --github|--url|--local ...` (not with `--repo`; the release must carry per-part info, i.e. built by the current `Build-Release`). Records the per-part hashes of what it laid down.
+- A part the profile does not keep is never updated, never listed as a change and never blocks "current". `updater.mjs check` lists them under `optional: [{id,name,module,files,bytes}]`; `status` shows `profile` and `parts`.
+- **Install on demand:** `updater.mjs apply --only spotify [--core-port N]` (naming a part adds it to `parts` and downloads it; sha256, backup and the live guard apply as for any update). Result: `ok`, `message`, install.json `parts` now includes it.
+- **Eject:** `updater.mjs eject --part spotify`. Only module parts. The caller stops the module first. The files are MOVED to `Data/updates/ejected/<part>-<time>/files/...` (nothing deleted; a module's own `data/` folder and `Data\` stay), and the part leaves `parts`/`components`. Refused while live. Output `{ok, message, moved, kept_in}`.
+- **Verify:** `updater.mjs verify [--only a,b]`. Read-only; compares each installed part with the release package: `{ok, version, parts:[{id, state: ok|damaged|missing|not-in-release, missing[], changed[], *_count}], all_ok}`. Parts not installed are skipped.
+- **Repair:** `updater.mjs apply --only <part> --repair` rewrites the part's files from the release even though its hash matches (use after verify says damaged/missing).
+- Rollback works for an on-demand install too (it removes the files the install created and restores `parts`).

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ejectPart, verifyParts } from './lib/parts.mjs';
 import { applyUpdate, checkUpdate, rollbackLatest, rollbackPlan, dirs, hostLiveCheck } from './lib/apply.mjs';
 import { COMPONENTS, COMPONENT_IDS } from './lib/components.mjs';
 import { gitStatus, gitUpdate, setToken } from './lib/sources.mjs';
@@ -41,7 +42,16 @@ async function main() {
   }
   const cmd2 = (cmd === 'launch' || (cmd === 'check' && args.includes('--apply-if-safe'))) ? 'apply' : cmd;
   if (cmd === 'status') {
-    return out({ version: current, channel, result: rd(D.result), deferred: rd(D.deferred), pending: rd(D.pending), components: inst.components || null });
+    return out({ version: current, channel, profile: inst.profile || 'full', parts: inst.parts || null, result: rd(D.result), deferred: rd(D.deferred), pending: rd(D.pending), components: inst.components || null });
+  }
+  if (cmd === 'eject') {   // eject --part <id>: move an on-demand part (a module) out of the install; the caller stops it first, Data\ is never touched
+    const part = opt('part'); if (!part) return out({ ok: false, message: 'give --part <id>' });
+    if (await hostLiveCheck().then(l => l.live !== false)) return out({ ok: false, message: 'not while live (or when it cannot be told)' });
+    return out(ejectPart(installDir, part));
+  }
+  if (cmd === 'verify') {   // verify [--only a,b]: read-only comparison of installed parts with the release
+    if (!source) return out({ ok: false, message: 'no update source is set; cannot compare' });
+    return out(await verifyParts({ installDir, source, channel, pubkey, only }));
   }
   if (cmd === 'rollback') {
     const plan = rollbackPlan(installDir);
@@ -67,7 +77,7 @@ async function main() {
   }
   if (cmd2 === 'check') {
     const c = await checkUpdate({ source, current, channel, pubkey, installDir }), lv = await hostLiveCheck();
-    return out({ ok: true, current, available: c.available, version: c.manifest.version, notes: c.manifest.notes, released: c.manifest.released, why: c.why || null, components: c.components, live: lv.live, pending: rd(D.pending) });
+    return out({ ok: true, current, available: c.available, version: c.manifest.version, notes: c.manifest.notes, released: c.manifest.released, why: c.why || null, components: c.components, optional: c.optional, profile: inst.profile || 'full', live: lv.live, pending: rd(D.pending) });
   }
   if (cmd2 === 'apply') {
     if (only) {
@@ -77,7 +87,7 @@ async function main() {
       const appPart = only.some(id => COMPONENTS.find(c => c.id === id).restart === 'app');
       if (appPart && !args.includes('--stage') && await appRunning(Number(opt('core-port')) || 8760)) return out({ ok: false, message: 'shell, core and Host files belong to the running app; they are staged and applied at the next start' });
     }
-    return out(await applyUpdate({ installDir, source, current, channel, pubkey, only, stageOnly: args.includes('--stage') }));
+    return out(await applyUpdate({ installDir, source, current, channel, pubkey, only, stageOnly: args.includes('--stage'), repair: args.includes('--repair') }));
   }
   out({ ok: false, message: `unknown command ${cmd}` });
 }

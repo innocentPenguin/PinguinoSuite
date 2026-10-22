@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeZip } from '../Suite/updater/lib/zip.mjs';
 import { sha256 } from '../Suite/updater/lib/apply.mjs';
-import { hashComponents } from '../Suite/updater/lib/components.mjs';
+import { hashComponents, SKIP_DIR, SKIP_FILE } from '../Suite/updater/lib/components.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2), opt = n => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; };
@@ -15,8 +15,6 @@ const version = opt('version') || `1.${d.getFullYear()}${p2(d.getMonth() + 1)}${
 const outDir = path.resolve(opt('out') || path.join(ROOT, 'Installer', 'dist', 'release'));
 
 // what ships: [relative root, filter]. Everything else (Data, vault, Archive, .venv, node_modules, listen models, logs, tests, other repos) never does.
-const SKIP_DIR = /(^|\/)(__pycache__|node_modules|\.venv|\.git|data|logs|Archive|tests|test|bin\/Debug|obj|\.pytest_cache)(\/|$)/i;
-const SKIP_FILE = /\.(log|pdb|pyc|db|bak|env|pgb|dpapi|zip|lnk)$|(^|\/)(vault\.bin|module_secret|suite_settings\.json|device\.json|\.env.*)$|secrets?(\.|_).*\.json$|\.bak-/i;
 const PLAN = [
   ['Suite/suite', null], ['Suite/modules', null], ['Suite/updater', null], ['Suite/modules.json', null], ['Suite/requirements.txt', null], ['Suite/README.md', null],
   ['PinguinoHost/bin/Release/net8.0', null],

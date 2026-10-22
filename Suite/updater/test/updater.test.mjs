@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { writeZip, readZip } from '../lib/zip.mjs';
 import { applyUpdate, sha256, dirs, rollbackLatest } from '../lib/apply.mjs';
 import { safeRel } from '../lib/paths.mjs';
+import { ejectPart, verifyParts } from '../lib/parts.mjs';
 import { cmpVersion, parseManifest } from '../lib/manifest.mjs';
 import { gitStatus, gitUpdate, openSource, setToken } from '../lib/sources.mjs';
 import { seal, unseal, storeToken, loadToken } from '../lib/secret.mjs';
@@ -341,4 +342,63 @@ test('an update keeps the source recorded in install.json (the next check needs 
   withSource(inst, r2);
   await applyUpdate({ installDir: inst, source: { type: 'local', path: r2 }, current: '1.0.0', liveCheck: notLive, only: ['listen'] });
   assert.deepEqual(JSON.parse(read(inst, 'install.json')).source, { type: 'local', path: r2 });
+});
+
+// ---- install profiles: the PinguinoLite PC keeps only lite + link + scripts; other modules are added, taken out and verified on demand
+const LITE = [['PinguinoLite/Start-Lite.bat', 'lite 1'], ['PinguinoLite/src-tauri/target/release/pinguino-lite.exe', 'litebin 1'], ['Suite/modules/link/l.mjs', 'link 1'], ['Suite/modules/spotify/s.py', 'spotify 1'],
+  ['Suite/modules/listen/a.py', 'listen 1'], ['Suite/suite/suite.py', 'core 1'], ['Suite/updater/updater.mjs', 'upd 1'], ['Docs/x.md', 'doc 1']];
+const LITE2 = LITE.map(([k, v]) => [k, v.replace(/ 1$/, ' 2')]);
+async function minimalInstall() {
+  const rel = makeCompRelease('1.0.1', LITE), dst = path.join(tmp('lite-'), 'inst');
+  const r = await installRelease({ target: dst, source: { type: 'local', path: rel }, profile: 'lite-minimal' });
+  assert.equal(r.ok, true, r.message); return { dst, rel };
+}
+
+test('lite-minimal installs only Lite, Link and the scripts; install.json records the profile and per-part hashes', async () => {
+  const { dst } = await minimalInstall();
+  for (const f of ['PinguinoLite/Start-Lite.bat', 'Suite/modules/link/l.mjs', 'Suite/updater/updater.mjs', 'Docs/x.md']) assert.ok(fs.existsSync(path.join(dst, f)), f);
+  for (const f of ['Suite/modules/spotify/s.py', 'Suite/modules/listen/a.py', 'Suite/suite/suite.py']) assert.ok(!fs.existsSync(path.join(dst, f)), f);
+  const j = JSON.parse(read(dst, 'install.json')); assert.equal(j.profile, 'lite-minimal'); assert.deepEqual(j.parts, ['lite', 'link', 'tools']);
+  assert.deepEqual(Object.keys(j.components).sort(), ['link', 'lite', 'tools']);
+  assert.equal((await installRelease({ target: path.join(tmp('x-'), 'i'), source: { type: 'local', path: makeCompRelease('1.0.1', LITE) }, profile: 'nope' })).ok, false);
+  assert.equal((await installRelease({ target: path.join(tmp('x-'), 'i'), source: { type: 'local', path: makeRelease('1.0.1', [['a.txt', 'x']]) }, profile: 'lite-minimal' })).ok, false);   // no part info -> refuse
+});
+
+test('a minimal install is not offered, and does not take, the parts it does not keep; they show as optional', async () => {
+  const { dst } = await minimalInstall(), r2 = makeCompRelease('1.0.2', LITE2);
+  const c = await checkUpdate({ source: { type: 'local', path: r2 }, current: '1.0.1', installDir: dst });
+  assert.deepEqual(c.components.map(x => x.id).sort(), ['link', 'lite', 'tools']); assert.deepEqual(c.optional.map(x => x.id).sort(), ['core', 'listen', 'spotify']);
+  const r = await applyUpdate({ installDir: dst, source: { type: 'local', path: r2 }, current: '1.0.1', liveCheck: notLive });   // a full update of a minimal install
+  assert.equal(r.ok, true, r.message); assert.equal(read(dst, 'Suite/modules/link/l.mjs'), 'link 2'); assert.ok(!fs.existsSync(path.join(dst, 'Suite/modules/spotify/s.py')));
+  assert.equal(JSON.parse(read(dst, 'install.json')).version, '1.0.2');   // current as far as it is concerned
+  assert.equal((await checkUpdate({ source: { type: 'local', path: r2 }, current: '1.0.2', installDir: dst })).available, false);
+});
+
+test('install on demand, verify, repair, eject (files are moved, not deleted), and the minimal profile stays valid', async () => {
+  const { dst, rel } = await minimalInstall(), src = { type: 'local', path: rel };
+  let r = await applyUpdate({ installDir: dst, source: src, current: '1.0.1', liveCheck: notLive, only: ['spotify'] });
+  assert.equal(r.ok, true, r.message); assert.equal(read(dst, 'Suite/modules/spotify/s.py'), 'spotify 1');
+  let j = JSON.parse(read(dst, 'install.json')); assert.deepEqual([...j.parts].sort(), ['link', 'lite', 'spotify', 'tools']); assert.ok(j.components.spotify);
+  assert.ok(!fs.existsSync(path.join(dst, 'Suite/modules/listen/a.py')));
+  let v = await verifyParts({ installDir: dst, source: src }); assert.equal(v.ok, true); assert.equal(v.all_ok, true); assert.deepEqual(v.parts.map(p => p.id).sort(), ['link', 'lite', 'spotify']);
+  fs.writeFileSync(path.join(dst, 'Suite/modules/spotify/s.py'), 'hacked'); fs.rmSync(path.join(dst, 'Suite/modules/link/l.mjs'));
+  v = await verifyParts({ installDir: dst, source: src, only: ['spotify', 'link'] });
+  assert.equal(v.all_ok, false); assert.equal(v.parts.find(p => p.id === 'spotify').state, 'damaged'); assert.equal(v.parts.find(p => p.id === 'link').state, 'missing');
+  assert.equal((await verifyParts({ installDir: dst, source: src, only: ['listen'] })).parts.length, 0);   // not installed -> not checked
+  r = await applyUpdate({ installDir: dst, source: src, current: '1.0.1', liveCheck: notLive, only: ['spotify', 'link'] }); assert.match(r.message, /up to date/);   // hashes match, so a plain apply does nothing
+  r = await applyUpdate({ installDir: dst, source: src, current: '1.0.1', liveCheck: notLive, only: ['spotify', 'link'], repair: true });
+  assert.equal(r.ok, true, r.message); assert.equal(read(dst, 'Suite/modules/spotify/s.py'), 'spotify 1'); assert.equal(read(dst, 'Suite/modules/link/l.mjs'), 'link 1');
+  fs.mkdirSync(path.join(dst, 'Suite/modules/spotify/data'), { recursive: true }); fs.writeFileSync(path.join(dst, 'Suite/modules/spotify/data/tokens.json'), 'mine');
+  const e = ejectPart(dst, 'spotify'); assert.equal(e.ok, true, e.message); assert.equal(e.moved, 1);
+  assert.ok(!fs.existsSync(path.join(dst, 'Suite/modules/spotify/s.py'))); assert.equal(read(dst, 'Suite/modules/spotify/data/tokens.json'), 'mine');   // module data stays
+  assert.equal(fs.readFileSync(path.join(e.kept_in, 'files/Suite/modules/spotify/s.py'), 'utf8'), 'spotify 1');
+  j = JSON.parse(read(dst, 'install.json')); assert.deepEqual([...j.parts].sort(), ['link', 'lite', 'tools']); assert.ok(!j.components.spotify);
+  assert.equal(ejectPart(dst, 'link').ok, true);   // link is a module part too: allowed
+  assert.equal(ejectPart(dst, 'lite').ok, false); assert.equal(ejectPart(dst, 'tools').ok, false); assert.equal(ejectPart(dst, 'zzz').ok, false);
+});
+
+test('a full install records its profile and keeps every part', async () => {
+  const dst = path.join(tmp('full-'), 'inst'), rel = makeCompRelease('1.0.1', LITE);
+  assert.equal((await installRelease({ target: dst, source: { type: 'local', path: rel } })).ok, true);
+  const j = JSON.parse(read(dst, 'install.json')); assert.equal(j.profile, 'full'); assert.equal(j.parts, undefined); assert.ok(fs.existsSync(path.join(dst, 'Suite/modules/spotify/s.py')));
 });

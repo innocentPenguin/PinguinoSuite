@@ -7,9 +7,13 @@ import { openSource } from './sources.mjs';
 import { readZip } from './zip.mjs';
 import { safeRel, within } from './paths.mjs';
 import { sha256, dirs } from './apply.mjs';
+import { componentOf } from './components.mjs';
+import { PROFILES, wants } from './profiles.mjs';
 
 /** Install from one source spec. Returns {ok, message, version}. Never overwrites an existing install (that is the Updater's job). */
-export async function installRelease({ target, source, channel = 'stable', repairOver = false, pubkey = null, token = null, recordSource = null }) {
+export async function installRelease({ target, source, channel = 'stable', repairOver = false, pubkey = null, token = null, recordSource = null, profile = 'full' }) {
+  if (!PROFILES[profile]) return { ok: false, message: `unknown install profile: ${profile}` };
+  const keepParts = PROFILES[profile].parts;   // null = everything
   const dst = path.resolve(target), D = dirs(dst);
   if (fs.existsSync(D.install) && !repairOver) return { ok: false, message: 'Suite is already installed here; use the Updater (or pick another folder)' };
   if (fs.existsSync(dst) && fs.readdirSync(dst).length && !fs.existsSync(D.install)) return { ok: false, message: 'that folder is not empty; pick an empty folder' };
@@ -22,18 +26,20 @@ export async function installRelease({ target, source, channel = 'stable', repai
     if (!f.name.endsWith('.zip')) continue;
     for (const e of readZip(buf)) { if (e.dir) { safeRel(e.name); continue; } if (e.link) throw new Error(`release contains a link: ${e.name}`); plan.push({ rel: safeRel(e.name), data: e.data() }); }
   }
-  if (!plan.length) return { ok: false, message: 'the release has no files; nothing was installed' };
+  if (keepParts && !m.components) return { ok: false, message: 'this release has no per-part information, so a minimal install is not possible; build the release with the current Build-Release' };
+  const kept = keepParts ? plan.filter(p => wants(keepParts, componentOf(p.rel))) : plan;
+  if (!kept.length) return { ok: false, message: 'the release has no files; nothing was installed' };
   const made = [];
   try {
     fs.mkdirSync(dst, { recursive: true });
-    for (const p of plan) { const f = within(dst, p.rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, p.data); made.push(f); }
+    for (const p of kept) { const f = within(dst, p.rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, p.data); made.push(f); }
     fs.mkdirSync(path.join(dst, 'Data', 'runtime'), { recursive: true });
-    fs.writeFileSync(D.install, JSON.stringify({ schema: 1, version: m.version, channel, installed_at: new Date().toISOString(), ...(recordSource === false ? {} : { source: recordSource || source }), ...(pubkey ? { pubkey } : {}) }, null, 2));
+    fs.writeFileSync(D.install, JSON.stringify({ schema: 1, version: m.version, channel, installed_at: new Date().toISOString(), ...(recordSource === false ? {} : { source: recordSource || source }), ...(pubkey ? { pubkey } : {}), profile, ...(keepParts ? { parts: keepParts } : {}), ...(m.components ? { components: Object.fromEntries(Object.entries(m.components).filter(([id]) => wants(keepParts, id)).map(([id, c]) => [id, { hash: c.hash }])) } : {}) }, null, 2));
   } catch (e) {
     for (const f of made) { try { fs.unlinkSync(f); } catch {} }   // a half install is removed, only files we wrote
     return { ok: false, message: `install stopped: ${String(e.message).slice(0, 160)}; the files it wrote were removed` };
   }
-  return { ok: true, message: `PinguinoSuite ${m.version} installed in ${dst}`, version: m.version, files: plan.length };
+  return { ok: true, message: `PinguinoSuite ${m.version} installed in ${dst}`, version: m.version, files: kept.length, profile };
 }
 
 /** Start-menu + desktop shortcuts to the app exe via PowerShell/WScript. Opt-in; returns the paths made. */
