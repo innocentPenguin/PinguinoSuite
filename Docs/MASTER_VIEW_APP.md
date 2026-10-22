@@ -107,6 +107,11 @@ Fixed bottom-right card (`#player`, shrinkable with the – button, remembered).
 ## Wheel panel: Queue / Undo, Cancel, Tourney
 
 - **Queue** copies everyone in the customs queue (minus people already on the wheel) onto the wheel: `POST /api/wheel/queue-add {users:[login...]}`. The label then becomes **Undo** (remembered in the browser). **Undo** takes back only what Queue added and who is still on the wheel (`/api/wheel/remove {users}`), and puts those who are no longer in the customs queue back into it in their original order (`POST /api/customs/queue-add {users}`). People who left the wheel meanwhile are not touched.
-- **Cancel** (two clicks) = `POST /api/wheel/cancel`: drops the current draw round, teams are not made, sign-ups stay.
 - **Tourney** = `!wheel open` via the existing command path (opens tournament sign-ups); filled orange while the wheel is open.
 - The Host routes above do not exist yet (asked 02); on a 404 the app shows one toast naming the missing route. The simulator has its own local wheel (entrants list) so all four buttons work there. Nothing here spins the wheel or posts chat.
+
+## Changing the activity with people waiting / playing
+
+- Wheel has no Cancel (it was meant as cancelling the GAME). Instead, picking a different **activity** (real or simulator), or the simulator's **Streamer In/Out**, while anyone is queued or in a running game shows an inline panel (no `confirm()`): "What about the N players?" with **Remove them** (`!match clear` + `!queue clear`), **Put back in queue** (`!match queue`: game players go to the FRONT of the queue in their old order, ahead of anyone who joined later), **Leave as is** (just change it) and **✕** (change nothing; Esc too). Cancelling the game is part of both first choices. All commands already exist in the bot, nothing new needed from the Host.
+- Simulator streamer: In = he joins the back of the queue as a player, Out = he leaves queue and game. Identical toasts no longer stack.
+- Queue panel uses the website's queue look: orange `#pos`, muted MMR, NEXT rows (next game: seats minus the streamer) with an orange gradient, 2 BACKUP rows, STREAMER row with an orange outline.

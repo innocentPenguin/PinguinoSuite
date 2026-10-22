@@ -39,7 +39,11 @@
   const saveCache = () => ls.set('cache', { tree: S.get('tree'), customs: S.get('customs') });
 
   /* ---------- toasts, arming, command sending ---------- */
-  function toast(msg, bad) { const t = h('div', 'toast' + (bad ? ' bad' : ''), msg); $('#toasts').append(t); setTimeout(() => t.remove(), bad ? 5000 : 2200); }
+  function toast(msg, bad) {
+    const old = [...$('#toasts').children].find(x => x.dataset.m === msg);
+    if (old) { clearTimeout(old._t); old._t = setTimeout(() => old.remove(), bad ? 5000 : 2200); return; }
+    const t = h('div', 'toast' + (bad ? ' bad' : ''), msg); t.dataset.m = msg; $('#toasts').append(t); t._t = setTimeout(() => t.remove(), bad ? 5000 : 2200);
+  }
   function flash(btn) { if (!btn) return; btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 220); }
   function armed(btn) {   // second click within 2.5 s confirms; returns true when this click is the confirming one
     if (btn._armT) { clearTimeout(btn._armT); btn._armT = null; btn.classList.remove('arm'); btn.textContent = btn._lbl; return true; }
@@ -102,7 +106,11 @@
       if (d.koth != null) { if (d.koth && !st.koth) st._prevFmt = st.format; if (!d.koth && st.koth && !d.format && st._prevFmt) { st.format = st._prevFmt; st._prevFmt = ''; } st.koth = d.koth; }
       if (d.format) st.format = d.format; if (d.mode) st.mode = d.mode;
     }
-    else if (action === 'streamer') st.streamer = v;
+    else if (action === 'streamer') {   // the streamer is a player: he waits at the back like anyone, and leaves queue and match when he sits out
+      const isS = p => p.streamer; st.streamer = v;
+      if (v === 'in') { if (!st.queue.some(isS) && !(st.match && st.match._p.some(isS))) { st.queue.push({ username: 'streamer', display: 'Streamer', mmr: 1500, streamer: true }); simEv(st, 'join', { player: 'Streamer', pos: st.queue.length }); msg = 'Streamer is in the queue'; } }
+      else { const had = st.queue.some(isS) || (st.match && st.match._p.some(isS)); st.queue = st.queue.filter(p => !isS(p)); if (st.match) { st.match._p = st.match._p.filter(p => !isS(p)); st.match.orange = st.match.orange.filter(n => n !== 'Streamer'); st.match.blue = st.match.blue.filter(n => n !== 'Streamer'); } if (had) { simEv(st, 'leave', { player: 'Streamer' }); msg = 'Streamer sits out'; } }
+    }
     else if (action === 'wheel') { st.wheel.status = 'open'; msg = 'Wheel sign-ups open'; }
     else if (action === 'queue-open') { st.open = true; simEv(st, 'queue_open'); } else if (action === 'queue-close') { st.open = false; simEv(st, 'queue_close'); } else if (action === 'queue-clear') { st.queue = []; simEv(st, 'queue_clear'); }
     else if (action === 'match') { if (v === 'fill') msg = simFill(st); else if (v === 'queue' || v === 'clear') { if (st.match && v === 'queue') st.queue.unshift(...st.match._p); st.match = null; } }
@@ -325,6 +333,7 @@
       <div id="cu-note" class="note" hidden></div>
       <div class="cgrid">
         ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div>`, ' <span class="faint" id="cu-act"></span>')}
+        <section class="cs c-ask" id="cu-ask" hidden><b id="cu-ask-t"></b><div class="faint sm" id="cu-ask-s"></div><div class="btns" style="margin-top:6px"><button class="sm rd" data-ask="remove" title="Cancel the game and take everyone out of the queue">Remove them</button><button class="sm pri" data-ask="back" title="Cancel the game; players go back to the front of the queue in their old order, ahead of anyone who joined later">Put back in queue</button><button class="sm" data-ask="keep" title="Change it and leave everyone as they are">Leave as is</button><button class="sm ghost" data-ask="cancel" title="Do not change anything">✕</button></div></section>
         <section class="cs c-st"><div class="row"><span class="faint sm">Streamer</span><div class="seg" style="flex:1">${b('In', 'streamer', 'in', '', 'streamer:in')}${b('Out', 'streamer', 'out', '', 'streamer:out')}</div></div></section>
         ${sec('c-q', 'Queue', `<div class="btns">${b('Open', 'queue-open', null, 'g', 'queue:open')}${b('Close', 'queue-close', null, 'rd', 'queue:close')}${b('Clear', 'queue-clear', null, 'og warn', 'queue:clear')}</div><ul class="qlist" id="cu-queue"></ul>`, ' <span class="faint" id="cu-qn"></span>')}
         ${sec('c-m', 'Match', `<div class="btns">${b('Fill', 'match', 'fill', 'g')}${b('Move all → Queue', 'match', 'queue')}${b('Clear match', 'match', 'clear', 'rd warn')}${b('Orange wins', 'finish', 'orange', 'or', 'win:orange')}${b('Blue wins', 'finish', 'blue', 'bl', 'win:blue')}</div><div class="teams" id="cu-teams"></div>`, ' <span class="faint" id="cu-match"></span>')}
@@ -333,7 +342,7 @@
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
         ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div>`)}
         ${sec('c-sim', 'Player simulator', `<div class="btns">${b('+ Player', 'sim', 'add')}${b('+ 4', 'sim', 'add4')}${b('+ 8', 'sim', 'add8')}${b('Remove one', 'sim', 'rm')}${b('Reset sim', 'sim', 'reset', 'rd')}</div><div class="row" style="margin-top:6px"><button class="sm" id="cu-simchat" title="Speak the simulator's events in the real Twitch chat (Chatty), so you can judge the wording">Chat: ON</button><span class="faint sm" id="cu-simnote"></span></div>`)}
-        ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="btns" style="margin-top:6px"><button class="sm" id="wh-q" data-wq="queue">Queue</button><button class="sm rd warn" data-wq="cancel" title="Cancel this draw round without finishing: teams are not made, sign-ups stay">Cancel</button><button class="sm" id="wh-t" data-wq="tourney" title="Open the wheel for tournament sign-ups (!wheel open)">Tourney</button></div><div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
+        ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="btns" style="margin-top:6px"><button class="sm" id="wh-q" data-wq="queue">Queue</button><button class="sm" id="wh-t" data-wq="tourney" title="Open the wheel for tournament sign-ups (!wheel open)">Tourney</button></div><div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
       </div>`;
   }
   const curCustoms = () => (ui.sim ? ui.simState : S.get('customs'));
@@ -409,10 +418,29 @@
     if (back.length) { const r = await api.post('/api/customs/queue-add', { users: back }); if (!r.ok || (r.json && r.json.ok === false)) { wheelErr(r, 'Undo (back to the queue)', '/api/customs/queue-add'); return; } }
     setWq(null); toast('Undone: ' + stay.length + ' off the wheel, ' + back.length + ' back in the queue'); pollers.wheel.kick(); pollers.customs.kick();
   }
-  async function wheelCancel() {
-    if (ui.sim) { const W = simWheel(); W.teams = []; W.status = W.entrants.length ? 'open' : 'none'; schedule('customs'); toast('Round cancelled (entrants kept)'); return; }
-    await tokenReady; ui.tookControl = true; const r = await api.post('/api/wheel/cancel');
-    if (r.ok && !(r.json && r.json.ok === false)) { toast('Wheel round cancelled'); pollers.wheel.kick(); } else wheelErr(r, 'Cancel', '/api/wheel/cancel');
+  /* ---------- changing the activity (or the sim streamer) while people wait or play: ask what happens to them ---------- */
+  const playersNow = () => {
+    const c = curCustoms() || {}, m = c.match, live = !!(m && m.status !== 'finished');
+    return { q: (c.queue || []).length, g: live ? (ui.sim ? (m._p || []).length : (m.orange || []).length + (m.blue || []).length) : 0, live };
+  };
+  function wantsAsk(action, value) {
+    if (action === 'activity') { const sub = String(value || '').split(' ').pop(), c = curCustoms() || {}; if ((sub === 'end' ? 'none' : sub) === c.activity) return false; }
+    else if (!(ui.sim && action === 'streamer')) return false;
+    const n = playersNow(); return n.q + n.g > 0;
+  }
+  function renderAsk() {
+    const box = $('#cu-ask'), a = ui.ask; box.hidden = !a; if (!a) return;
+    const n = playersNow(), tot = n.q + n.g, what = a.action === 'activity' ? 'Switching to ' + (a.value.split(' ').pop()) : 'Streamer ' + a.value;
+    $('#cu-ask-t').textContent = what + '. What about the ' + tot + ' player' + (tot === 1 ? '' : 's') + '?';
+    $('#cu-ask-s').textContent = (n.g ? n.g + ' in the running game (it is cancelled)' : '') + (n.g && n.q ? ' · ' : '') + (n.q ? n.q + ' waiting' : '');
+  }
+  async function askDo(choice) {
+    const a = ui.ask; if (!a) return; ui.ask = null; renderAsk();
+    if (choice === 'cancel') return;
+    const n = playersNow();
+    if (choice === 'remove') { if (n.live) await sendCustom('match', 'clear', null, true); if (playersNow().q) await sendCustom('queue-clear', null, null, true); }
+    else if (choice === 'back') { if (n.live) await sendCustom('match', 'queue', null, true); }   // game players return ahead of everyone who joined later (the bot's !match queue / the sim do exactly that)
+    await sendCustom(a.action, a.value, null);
   }
   const holderName = c => { const x = c && c.controlHolder; return !x ? '' : typeof x === 'string' ? x : (x.name || x.display || x.user || x.id || ''); };
   function renderCustoms() {
@@ -428,13 +456,16 @@
     $('#cu-badge').textContent = c ? (c.open === true ? 'queue open' : c.open === false ? 'queue closed' : '') + (c.format ? ' · ' + c.format : '') + (c.gameMode && c.gameMode !== 'standard' ? ' · ' + c.gameMode : '') : '';
     $('#cu-act').textContent = c && c.activity && c.activity !== 'none' ? '· ' + c.activity : '';
     $('#cu-qn').textContent = c ? '· ' + q.length + ' waiting' : '';
-    C.reconcile($('#cu-queue'), q.map((p, i) => ({ u: String(p.username || p.user || p.name || '?').toLowerCase(), d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr, sk: JSON.stringify([strikesFor(String(p.username || p.user || p.name || '?')), strikesKnown(String(p.username || p.user || p.name || '?')), c.strikeLimit]) })), r => r.u, () => { const li = h('li'); li.draggable = true; li.dataset.from = 'queue'; li.append(h('span', 'num'), h('span', 't'), strikeBtn(), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
-      (li, r) => { li.dataset.u = r.u; li.children[0].textContent = r.n; li.children[1].textContent = r.d + (r.m ? ' · ' + r.m : ''); fillStrike(li.children[2], r.u); });
+    const seats = (+String((c && c.format) || '2v2')[0] || 2) * 2, isStr = p => !!(p.streamer || p.isStreamer || String(p.username || p.user || '').toLowerCase() === 'innocentpenguin');
+    const strIn = q.some(isStr) || !!(c && c.match && c.match.status !== 'finished' && (ui.sim ? (c.match._p || []).some(isStr) : (c.streamer === 'in'))), gold = Math.max(1, seats - (strIn ? 1 : 0));
+    let ng = 0; const kinds = q.map(p => { if (isStr(p)) return 's'; ng++; return ng <= gold ? 'n' : ng <= gold + 2 ? 'b' : ''; });
+    C.reconcile($('#cu-queue'), q.map((p, i) => ({ k: kinds[i], u: String(p.username || p.user || p.name || '?').toLowerCase(), d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr, sk: JSON.stringify([strikesFor(String(p.username || p.user || p.name || '?')), strikesKnown(String(p.username || p.user || p.name || '?')), c.strikeLimit]) })), r => r.u, () => { const li = h('li'); li.draggable = true; li.dataset.from = 'queue'; li.append(h('span', 'num'), h('span', 't'), h('span', 'mmr'), h('span', 'qtag'), strikeBtn(), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
+      (li, r) => { li.dataset.u = r.u; li.className = r.k === 'n' ? 'next-up' : r.k === 'b' ? 'backup' : r.k === 's' ? 'is-streamer' : ''; li.children[0].textContent = '#' + r.n; li.children[1].textContent = r.d; li.children[2].textContent = r.m || ''; li.children[3].textContent = r.k === 'n' ? 'NEXT' : r.k === 'b' ? 'BACKUP' : r.k === 's' ? 'STREAMER' : ''; fillStrike(li.children[4], r.u); });
     const m = c && c.match, live = !!(m && m.status !== 'finished');
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
     const tv = JSON.stringify([m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(n), strikesKnown(n)]), c && c.strikeLimit]), tb = $('#cu-teams');
     if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.append(h('b', '', lbl)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(String(n).toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
-    renderPop();
+    renderPop(); renderAsk();
     const cur = { mode: c && c.mode, format: c && c.format, gamemode: c && (c.gameMode || c.gamemode), koth: c ? (c.koth ? 'on' : 'off') : null, activity: c && c.activity, queue: c ? (c.open ? 'open' : 'close') : null };
     cur.streamer = (ui.sim ? c && c.streamer : null) || (c && c.streamer);
     for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];
@@ -630,14 +661,15 @@
   $('#tab-customs').addEventListener('click', e => {
     const b = e.target.closest('button'), li = e.target.closest('.qlist li');
     if (li && b && b.classList.contains('x')) { sendCustom('kick', li.dataset.u, b); return; }
+    if (b && b.dataset.ask) { askDo(b.dataset.ask); return; }
     if (b && b.dataset.wq) {
-      if (b.disabled) return; if (b.classList.contains('warn') && !armed(b)) return; flash(b);
-      if (b.dataset.wq === 'queue') ui.wq ? wheelUndo() : wheelQueue(); else if (b.dataset.wq === 'cancel') wheelCancel(); else sendCustom('wheel', 'open', b);
+      if (b.disabled) return; flash(b);
+      if (b.dataset.wq === 'queue') ui.wq ? wheelUndo() : wheelQueue(); else sendCustom('wheel', 'open', b);
       return;
     }
     if (b && b.id === 'cu-simchat') { ui.simChat = !ui.simChat; ls.set('simchat', ui.simChat ? '1' : '0'); schedule('customs'); return; }
-    if (b && b.id === 'cu-sim') { ui.sim = !ui.sim; if (ui.sim && !ui.simState) { ui.simState = simFresh(); simAdd(ui.simState, 6); } schedule('customs'); return; }
-    if (b && b.dataset.cu) { if (b.disabled) return; if (b.dataset.st && !ui.sim) { const [k, v] = b.dataset.st.split(':'); if (k !== 'win') { ui.sel[k] = v; schedule('customs'); } } if (b.classList.contains('warn') && !armed(b)) return; sendCustom(b.dataset.cu, b.dataset.v, b); }
+    if (b && b.id === 'cu-sim') { ui.sim = !ui.sim; if (ui.sim && !ui.simState) { ui.simState = simFresh(); simAdd(ui.simState, 6); ui.simState.queue.push({ username: 'streamer', display: 'Streamer', mmr: 1500, streamer: true }); } schedule('customs'); return; }
+    if (b && b.dataset.cu) { if (b.disabled) return; if (b.dataset.st && !ui.sim) { const [k, v] = b.dataset.st.split(':'); if (k !== 'win') { ui.sel[k] = v; schedule('customs'); } } if (b.classList.contains('warn') && !armed(b)) return; if (wantsAsk(b.dataset.cu, b.dataset.v)) { ui.ask = { action: b.dataset.cu, value: b.dataset.v }; renderAsk(); return; } sendCustom(b.dataset.cu, b.dataset.v, b); }
     else if (b && b.dataset.wh && ui.sim) { if (b.classList.contains('warn') && !armed(b)) return; const W = simWheel(), k = b.dataset.wh; if (k === 'reset') { W.entrants = []; W.teams = []; W.status = 'open'; setWq(null); } else if (k === 'new') { W.round++; W.teams = []; W.status = 'open'; } else if (W.entrants.length >= W.teamSize * 2) { W.status = 'drawing'; toast('Sim wheel: spin (draw not simulated)'); } else toast('Not enough entrants', true); schedule('customs'); }
     else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); ui.tookControl = true; tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
     else if (b && b.id === 'cu-pickgo') { const v = $('#cu-pick').value.trim().replace(/\s+/g, ' '); C.customsText('pick', v) ? (sendCustom('pick', v, b), $('#cu-pick').value = '') : toast('Type 1 to 4 Twitch names first', true); }
@@ -652,7 +684,7 @@
   });
   $('#strikepop').addEventListener('click', e => { const b = e.target.closest('[data-sa]'); if (!b || b.disabled) return; const u = $('#strikepop').dataset.u; if (b.dataset.sa === 'cancel') { ui.pop = null; renderPop(); return; } doStrike(u, b.dataset.sa); });
   document.addEventListener('click', e => { if (ui.pop && !e.target.closest('#strikepop, .sbtn')) { ui.pop = null; renderPop(); } });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && ui.pop) { ui.pop = null; renderPop(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && ui.ask) { ui.ask = null; renderAsk(); } if (e.key === 'Escape' && ui.pop) { ui.pop = null; renderPop(); } });
   const dropAt = e => {
     const li = e.target.closest('#cu-queue li'), tm = e.target.closest('.tm[data-team]'), ql = e.target.closest('#cu-queue');
     if (li) { const idx = [...li.parentNode.children].indexOf(li), r = li.getBoundingClientRect(); return { kind: 'queue', idx, after: e.clientY > r.top + r.height / 2, el: li }; }
