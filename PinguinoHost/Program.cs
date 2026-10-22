@@ -24,6 +24,8 @@ namespace PinguinoHost
     public static class Program
     {
         static HostCPH cph;
+        public static string GetGlobal(string n) { return cph?.GetGlobalVar<string>(n, true); }
+        public static void SetGlobal(string n, string v) { cph?.SetGlobalVar(n, v, true); }
         public static bool HasAction(string n) { return cph != null && cph.ActionExists(n); }
         public static bool SayShared(string m) { try { return cph != null && cph.Say != null && cph.Say(m); } catch (Exception) { return false; } }
         static string suite, dataDir;
@@ -279,6 +281,7 @@ namespace PinguinoHost
                 if (line.StartsWith("eventsub ")) { var q = line.Split(new[] { ' ' }, 3); try { EventSub.Simulate(q[1], q[2], x => DispatchEvent(x)); } catch (Exception ex) { Console.WriteLine("ERROR eventsub: " + ex.Message); } continue; }
                 if (line.StartsWith("timeoutredeem ")) { var q = line.Split(new[] { ' ' }, 3); DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRedeem" }, { "userName", q[1] }, { "title", "Timeout" }, { "input", q.Length > 2 ? q[2] : "" }, { "redemptionId", "red-t" }, { "rewardId", "rw-t" } }); continue; }   // sim: timeoutredeem alice marsh
                 if (line == "periods-size") { try { Console.WriteLine("[periods] bytes " + Periods.ForSite().ToString(Newtonsoft.Json.Formatting.None).Length); } catch (Exception ex) { Console.WriteLine("[periods] error " + ex); } continue; }
+                if (line == "firsts-dry" || line == "firsts-apply") { try { Console.WriteLine("[firsts] " + Firsts.Rebuild(line == "firsts-apply").ToString(Newtonsoft.Json.Formatting.None)); Console.WriteLine("[firstsboard] " + Firsts.Board(10).ToString(Newtonsoft.Json.Formatting.None)); } catch (Exception ex) { Console.WriteLine("[firsts] error " + ex); } continue; }
                 if (line == "recap-test") { try { Recap.TestClip = (f, t) => new Newtonsoft.Json.Linq.JObject { { "title", "T" }, { "url", "https://clips.twitch.tv/x" }, { "views", 9 } }; Console.WriteLine("[recap] " + Recap.Build(true).ToString(Newtonsoft.Json.Formatting.None)); Recap.TestClip = null; Console.WriteLine("[recap2] " + Recap.Build(true).ToString(Newtonsoft.Json.Formatting.None)); } catch (Exception ex) { Console.WriteLine("[recap] error " + ex); } continue; }
                 if (line == "backpay-dry" || line == "backpay-apply") { try { Console.WriteLine("[backpay] " + Economy.BackPay(line == "backpay-apply").ToString(Newtonsoft.Json.Formatting.None)); } catch (Exception ex) { Console.WriteLine("[backpay] error " + ex); } continue; }
                 if (line == "pointstest") { try { PointsTest.Run(); } catch (Exception ex) { Console.WriteLine("[pointstest] error " + ex); } continue; }

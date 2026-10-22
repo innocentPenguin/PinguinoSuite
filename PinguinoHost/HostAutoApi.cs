@@ -96,6 +96,8 @@ namespace PinguinoHost
                 if (post) { string via; bool ok = SendAs("core", (string)r["text"], out via); r["posted"] = ok && !via.StartsWith("duplicate"); r["duplicate"] = via.StartsWith("duplicate"); r["via"] = via; if (!ok) r["ok"] = false; }
                 Write(c, r.ToString(), "application/json"); return true;
             }
+            if (p == "/api/firsts" && m == "GET") { Write(c, Firsts.Board(int.TryParse(c.Request.QueryString["limit"], out int fl) ? Math.Max(1, Math.Min(500, fl)) : 100).ToString(), "application/json"); return true; }   // the First 5 board: rows {login,display,firsts,top3,top5,score,places[5]}
+            if (p == "/api/firsts/rebuild" && m == "POST") { var b = Body(c); bool ap = (bool?)b["apply"] == true; var r = Firsts.Rebuild(ap); ChannelControl.Audit("app", "firsts/rebuild", "apply=" + ap); Write(c, r.ToString(), "application/json"); return true; }   // dry run unless {apply:true}; apply backs the five vars up first
             if (p == "/api/raid/prep" && m == "POST")   // Master View "Raid prep": says the "prepare your emotes" line early for a raid started on twitch.tv (once per raid, 3 min window; the later channel.raid event does not repeat it)
             {
                 var b = Body(c); string tg = ((string)b["target"] ?? "").Trim().TrimStart('@').ToLowerInvariant(); bool fired = Auto.OnRaidScheduled(tg);

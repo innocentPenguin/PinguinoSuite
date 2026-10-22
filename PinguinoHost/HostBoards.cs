@@ -430,7 +430,7 @@ namespace PinguinoHost
             {
                 using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
                 {
-                    var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(new JObject { { "updatedAt", r["updatedAt"] }, { "users", users }, { "months", r["months"] }, { "pointsName", Economy.CurrencyName }, { "periods", periods }, { "drop", DropList() }, { "aliases", JObject.FromObject(AliasMap()) } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
+                    var rq = new HttpRequestMessage(HttpMethod.Post, (string)s["SiteBoardsUrl"] ?? "https://innocentpenguin.com/api/bot/boards") { Content = new StringContent(new JObject { { "updatedAt", r["updatedAt"] }, { "users", users }, { "months", r["months"] }, { "pointsName", Economy.CurrencyName }, { "firsts", Firsts.Board(100) }, { "periods", periods }, { "drop", DropList() }, { "aliases", JObject.FromObject(AliasMap()) } }.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json") };
                     rq.Headers.Add("Authorization", "Bearer " + key); rq.Headers.UserAgent.ParseAdd("PinguinoHost/1.0");   // the site is behind Cloudflare, which refuses requests with no User-Agent (error 1010)
                     var resp = h.SendAsync(rq).Result;
                     if (!resp.IsSuccessStatusCode) { _pushNote += "; boards HTTP " + (int)resp.StatusCode; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the board (HTTP " + (int)resp.StatusCode + ")"); return; }
