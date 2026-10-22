@@ -181,7 +181,16 @@ $$('nav button').forEach(b=>b.onclick=()=>{$$('nav button').forEach(x=>x.classLi
 // ---------- audio
 const player=new Audio();let stopAt=0;
 player.addEventListener('timeupdate',()=>{if(stopAt&&player.currentTime>=stopAt){player.pause();stopAt=0}});
-let playReq=0;
+let playReq=0,curKey='';
+const clipKey=(u,a,b)=>u+'|'+a+'|'+b;
+// one button per clip: play, pause, resume (same clip), or start over once it finished
+function toggle(u,a,b){if(!u)return;const k=clipKey(u,a,b);
+  if(k===curKey&&!player.paused){player.pause();return}
+  if(k===curKey&&player.paused&&stopAt&&player.currentTime<stopAt&&!player.ended){player.play().catch(()=>{});return}
+  curKey=k;play(u,a,b)}
+function syncPlayBtns(){const on=!player.paused;document.querySelectorAll('[data-k]').forEach(b=>{const p=on&&b.dataset.k===curKey;b.textContent=(b.id==='l-play'?(p?'⏸ Pause':'▶ Replay'):(p?'⏸':'▶'));b.title=p?'pause':'play'})}
+['play','pause','ended'].forEach(ev=>player.addEventListener(ev,syncPlayBtns));
+
 // Only the LATEST request may play: a stale loadedmetadata handler from a clip you already skipped used to fire later and seek to the old clip's time.
 function play(url,start,end){if(!url)return;const me=++playReq;stopAt=0;player.pause();
   const go=()=>{if(me!==playReq)return;player.onloadedmetadata=null;const t=Math.max(0,start-.15);
@@ -196,8 +205,8 @@ function wordsHtml(words){return words.map(w=>{const c=w.l==='warn'?'w-warn':w.l
   return `<span class="${c}" title="${tip}">${esc(w.w)}</span>`}).join(' ')}
 function segEl(seg){
   const d=document.createElement('div');d.className='seg';d.dataset.id=seg.id;
-  const render=()=>{d.innerHTML=`<span class="t">${fmt(seg.t)}</span><button class="play" title="play">▶</button><div class="txt">${seg.status==='corrected'?esc(seg.text):wordsHtml(seg.words)}</div><span class="badge ${seg.status}">${seg.status==='new'?'':seg.status}</span>`;
-    d.querySelector('.play').onclick=()=>play(seg.audio,seg.start,seg.end);
+  const render=()=>{d.innerHTML=`<span class="t">${fmt(seg.t)}</span><button class="play" title="play" data-k="${esc(clipKey(seg.audio,seg.start,seg.end))}">▶</button><div class="txt">${seg.status==='corrected'?esc(seg.text):wordsHtml(seg.words)}</div><span class="badge ${seg.status}">${seg.status==='new'?'':seg.status}</span>`;
+    d.querySelector('.play').onclick=()=>toggle(seg.audio,seg.start,seg.end);syncPlayBtns();
     d.querySelector('.txt').onclick=edit};
   const edit=()=>{if(d.querySelector('textarea'))return;const ta=document.createElement('textarea');ta.value=seg.text;
     const box=d.querySelector('.txt');box.replaceChildren(ta);ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);
@@ -243,9 +252,9 @@ async function next(){const q=new URLSearchParams({exclude:skipped.join(','),con
   if(!cur){c.innerHTML='<div class="dim" style="padding:30px;text-align:center">Nothing left to review here 🎉<br>Listen live, or add a VOD/clip, to get more.</div>';return}
   c.innerHTML=`<div class="dim">${fmt(cur.t)} · confidence worst-first</div><div class="card"><div id="l-edit" contenteditable="true" spellcheck="false" title="Click any word and type to fix it. Enter saves.">${wordsHtml(cur.words)}</div></div>
    <textarea id="l-ta" hidden></textarea>
-   <div class="row" style="margin-top:10px"><button class="b" id="l-play">▶ Replay</button><button class="b pri" id="l-ok">Save ↵</button><button class="b" id="l-skip">Skip</button></div>`;
-  const ta=$('#l-ta');ta.value=cur.text;setupInlineEdit();play(cur.audio,cur.start,cur.end);
-  $('#l-play').onclick=()=>play(cur.audio,cur.start,cur.end);$('#l-skip').onclick=skip;$('#l-ok').onclick=save}
+   <div class="row" style="margin-top:10px"><button class="b" id="l-play" data-k="${esc(clipKey(cur.audio,cur.start,cur.end))}">▶ Replay</button><button class="b pri" id="l-ok">Save ↵</button><button class="b" id="l-skip">Skip</button></div>`;
+  const ta=$('#l-ta');ta.value=cur.text;setupInlineEdit();curKey=clipKey(cur.audio,cur.start,cur.end);play(cur.audio,cur.start,cur.end);
+  $('#l-play').onclick=()=>toggle(cur.audio,cur.start,cur.end);$('#l-skip').onclick=skip;$('#l-ok').onclick=save}
 // the highlighted paragraph itself is the editor: click a word and type; changed words turn green (hover shows the original)
 function setupInlineEdit(){const ed=$('#l-edit'),ta=$('#l-ta');if(!ed)return;
   ed.querySelectorAll('span').forEach((sp,i)=>{sp.dataset.orig=sp.textContent;sp.dataset.tip=sp.title||''});
@@ -260,7 +269,7 @@ function setupInlineEdit(){const ed=$('#l-edit'),ta=$('#l-ta');if(!ed)return;
 async function save(){if(!cur)return;try{const r=await api(`/api/segments/${cur.id}/correct`,{body:{text:$('#l-ta').value}});showLearned(r.learned);next()}catch(e){toast(e.message,1)}}
 function skip(){if(cur){skipped.push(cur.id);next()}}
 document.addEventListener('keydown',e=>{if(!$('#tab-learn').classList.contains('on')||!cur)return;
-  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}else if(e.key==='Escape')skip();else if(e.ctrlKey&&e.code==='Space'){e.preventDefault();play(cur.audio,cur.start,cur.end)}});
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}else if(e.key==='Escape')skip();else if(e.ctrlKey&&e.code==='Space'){e.preventDefault();toggle(cur.audio,cur.start,cur.end)}});
 
 // ---------- sources
 async function loadSources(){loadJobs()}
