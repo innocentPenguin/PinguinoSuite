@@ -257,6 +257,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
   <div class="item" data-r="wheel"><span class="ic">🎡</span>Wheel &amp; Games</div>
   <div class="item" data-r="economy"><span class="ic">💰</span>Economy</div>
   <div class="item" data-r="timers"><span class="ic">⏱</span>Timers</div>
+  <div class="item" data-r="canned"><span class="ic">💬</span>Canned commands</div>
   <div class="item" data-r="overlays"><span class="ic">🖼</span>Overlay fit</div>
   <div class="item" data-r="integrations"><span class="ic">🔌</span>Integrations</div>
   <div class="item" data-r="activity"><span class="ic">⚡</span>Activity</div>
@@ -538,7 +539,7 @@ setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
 setInterval(()=>{if(route!=='activity'&&anyActSound()&&!document.hidden)pollActivity()},5000);   // keeps follow / sub / raid sounds alive on any page
 /* ============ Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PW={mons:null,wins:[],err:null,sel:{page:'console',mon:'',place:'free',top:false}};
-const popRoutes=()=>[['dashboard','Dashboard'],['master','Master View'],['sources','Sources'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['accounts','Accounts'],['commands','Commands'],['approvals','Approvals'],['wheel','Wheel & Games'],['economy','Economy'],['timers','Timers'],['overlays','Overlay fit'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
+const popRoutes=()=>[['dashboard','Dashboard'],['master','Master View'],['sources','Sources'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['accounts','Accounts'],['commands','Commands'],['approvals','Approvals'],['wheel','Wheel & Games'],['economy','Economy'],['timers','Timers'],['canned','Canned commands'],['overlays','Overlay fit'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
 function popTarget(route){   // module pages open directly (they are plain local pages); shell pages open the shell in chrome-less mode
   if(route==='master')return {url:'master/master.html?popout=1',title:'Master View'};   // 013's self-contained page
   if(isMod(route)){const m=modOf(route);if(!m)return null;return {url:modSrc(m),title:m.ui?.nav||m.name}}
@@ -638,7 +639,7 @@ document.addEventListener('keydown',e=>{if(e.ctrlKey&&!e.shiftKey&&!e.altKey&&e.
 const navIdx=id=>{const i=PF.layout.nav_order.indexOf(id);return i<0?1e6:i};
 const navHid=id=>PF.layout.nav_hidden.includes(id);
 const navSort=(list,idf)=>PF.layout.nav_order.length?list.map((x,i)=>[x,i]).sort((a,b)=>(navIdx(idf(a[0]))-navIdx(idf(b[0])))||(a[1]-b[1])).map(x=>x[0]):list;
-const STATIC_SYS=['activity','accounts','commands','approvals','wheel','economy','timers','overlays','integrations','help','console','personalize','settings'];
+const STATIC_SYS=['activity','accounts','commands','approvals','wheel','economy','timers','canned','overlays','integrations','help','console','personalize','settings'];
 function navStatic(){const foot=$('#navfoot');if(!foot)return;
   const els=Object.fromEntries(STATIC_SYS.map(r=>[r,document.querySelector(`nav > .item[data-r="${r}"]`)]));
   const order=STATIC_SYS.map((r,i)=>[r,i]).sort((a,b)=>(navIdx(a[0])-navIdx(b[0]))||(a[1]-b[1])).map(x=>x[0]).filter(r=>r!=='settings').concat(['settings']);
@@ -647,7 +648,7 @@ const FIXED=['dashboard','settings','personalize'];
 function navCatalog(){const out=[{id:'dashboard',label:'Dashboard',fixed:true},{id:'master',label:'Master View'},{id:'sources',label:'Sources'}];
   const mods=S?navSort(navEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100)),x=>x.rid):[];
   mods.forEach(m=>out.push({id:m.rid,label:m.ui.nav||m.name}));REAL.forEach(x=>out.push({id:x[0],label:x[2]}));
-  const sys={activity:'Activity',accounts:'Accounts',commands:'Commands',approvals:'Approvals',wheel:'Wheel & Games',economy:'Economy',timers:'Timers',overlays:'Overlay fit',integrations:'Integrations',help:'Help',console:'Console',personalize:'Personalize',settings:'Settings'};
+  const sys={activity:'Activity',accounts:'Accounts',commands:'Commands',approvals:'Approvals',wheel:'Wheel & Games',economy:'Economy',timers:'Timers',canned:'Canned commands',overlays:'Overlay fit',integrations:'Integrations',help:'Help',console:'Console',personalize:'Personalize',settings:'Settings'};
   STATIC_SYS.map((r,i)=>[r,i]).sort((a,b)=>(navIdx(a[0])-navIdx(b[0]))||(a[1]-b[1])).forEach(([r])=>out.push({id:r,label:sys[r],fixed:FIXED.includes(r)}));
   return out}
 
@@ -1369,6 +1370,54 @@ function bindOverlays(){
   $$('[data-ovx]').forEach(b=>b.onclick=()=>send({[b.dataset.ovx]:null},()=>draw(true)));
   $('#ov-clear')&&($('#ov-clear').onclick=()=>{if(!confirm('Reset every option for '+(OV.name==='*'?'all overlays':OV.name)+' to the defaults?'))return;send(null,()=>draw(true))});
   $('#ov-rl')&&($('#ov-rl').onclick=()=>{const f=$('#ov-frame');if(f)f.src=f.src})}
+/* ============ Canned commands (Host: GET|POST /api/canned; set / add / test / cooldown; no delete: turn off instead) ============ */
+const CAN={d:undefined,err:'',out:{},user:'viewer',touser:'friend',msg:''};
+async function loadCanned(){try{const r=await hostGet('/api/canned');if(r.ok===false)throw new Error(r.error||'not ok');CAN.d=r;CAN.err=''}catch(e){CAN.d=null;CAN.err=String(e&&e.message||e)}
+  if(route==='canned'&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))draw(true)}
+const canBadText=(t,vars)=>{t=String(t||'');if(!t.trim())return 'write the line first';if(t.length>400)return 'too long (max 400 characters)';if(/^[\/.!]/.test(t.trim()))return 'cannot start with / . or !';
+  const bad=(t.match(/\$\([^)]*\)/g)||[]).filter(v=>!(vars||[]).includes(v));return bad.length?'unknown variable: '+bad.join(' '):''};
+pages.canned=()=>{
+  if(CAN.d===undefined){loadCanned();return '<div class="dim">Loading canned commands…</div>'}
+  const d=CAN.d;
+  if(!d)return `<div class="card"><h3>Canned commands</h3><div class="dim">The Host did not answer${CAN.err?' ('+esc(CAN.err)+')':''}, or it is an older build without canned commands (it needs a restart after the update).</div><div class="row" style="margin-top:10px"><button class="sm" id="cn-retry">Retry</button></div></div>`;
+  const vars=d.variables||[],row=c=>{const ch=(c.choices||[]).length;
+    return `<div class="card" data-cn="${esc(c.name)}"><div class="row wrap"><label class="row" style="gap:6px"><input type="checkbox" data-cf="enabled"${c.enabled?' checked':''}><b>!${esc(c.name)}</b></label>${c.streamerOnlyHost?'<span class="pill">streamer only</span>':''}${ch?'<span class="pill">random pick</span>':''}<span class="sp"></span>
+      <label class="sm">Aliases <input data-cf="aliases" style="width:200px" value="${esc((c.aliases||[]).join(', '))}" placeholder="comma separated"></label></div>
+      ${ch?`<textarea data-cf="choices" rows="${Math.min(8,c.choices.length+1)}" maxlength="3000" style="width:100%;margin-top:8px" title="One line per choice; the bot picks one at random">${esc(c.choices.join('\n'))}</textarea>`:`<input data-cf="text" maxlength="400" style="width:100%;margin-top:8px" value="${esc(c.text||'')}">`}
+      <div class="row wrap" style="margin-top:6px"><button class="sm" data-cact="save" disabled>Save</button><button class="sm" data-cact="test">Test line</button><span class="sm faint" data-cmsg></span><span class="sp"></span><span class="sm faint">${ch?'':'<span data-clen>'+(c.text||'').length+'</span>/400'}</span></div>
+      <div class="sm" data-cout style="margin-top:4px">${esc(CAN.out[c.name]||'')}</div></div>`};
+  return `<div style="max-width:900px"><div class="pnote">One-line replies the bots say in chat. Variables you can use: ${vars.map(v=>`<code>${esc(v)}</code>`).join(' ')}. A line cannot start with / . or !, and is at most 400 characters. There is no delete: turn a command off to keep it. Every save keeps a .bak copy; changes reach the bots within about 4 seconds.</div>
+   <div class="row wrap" style="margin:8px 0;gap:12px"><label class="sm">Test as <input id="cn-user" style="width:110px" value="${esc(CAN.user)}"></label><label class="sm">touser <input id="cn-touser" style="width:110px" value="${esc(CAN.touser)}"></label><span class="sp"></span>
+     <label class="sm">Shared cooldown <input id="cn-cd" type="number" min="5" max="600" style="width:70px" value="${d.cooldownSec|0}"> s</label><button class="sm" id="cn-cdsave">Save</button><button class="sm" id="cn-reload">Refresh</button></div>
+   ${(d.commands||[]).length?d.commands.map(row).join(''):'<div class="card dim">No canned commands yet.</div>'}
+   <div class="card"><h3>Add command</h3><div class="row wrap" style="gap:8px"><input id="cn-new" placeholder="name (a-z, 0-9, _)" maxlength="24" style="width:180px"><input id="cn-newa" placeholder="aliases (optional)" style="width:180px"></div>
+     <input id="cn-newt" maxlength="400" style="width:100%;margin-top:8px" placeholder="What the bot says, e.g. Hello $(user)!"><div class="row wrap" style="margin-top:6px"><button class="sm" id="cn-add">Add (switched on)</button><button class="sm" id="cn-addtest">Test line</button><span class="sm faint" id="cn-newmsg"></span></div></div></div>`};
+function bindCanned(){
+  const re=()=>{CAN.d=undefined;draw(true)},names=s=>String(s).split(',').map(x=>x.trim().replace(/^!/,'')).filter(Boolean);
+  const who=()=>({user:$('#cn-user').value.trim()||'viewer',touser:$('#cn-touser').value.trim()||'friend'});
+  const keepWho=()=>{if($('#cn-user')){CAN.user=$('#cn-user').value;CAN.touser=$('#cn-touser').value}};
+  $('#cn-user')&&($('#cn-user').oninput=keepWho);$('#cn-touser')&&($('#cn-touser').oninput=keepWho);
+  $('#cn-retry')&&($('#cn-retry').onclick=re);$('#cn-reload')&&($('#cn-reload').onclick=re);
+  const cpost=async b=>{const r=await hostJ('/api/canned',b);if(r.ok===false)throw new Error(r.error||('HTTP '+(r._status||'?')));return r};
+  $('#cn-cdsave')&&($('#cn-cdsave').onclick=async()=>{const s=Math.round(+$('#cn-cd').value);if(!(s>=5&&s<=600)){toast('Cooldown must be 5 to 600 seconds');return}
+    try{await cpost({action:'cooldown',seconds:s});toast('Cooldown saved');re()}catch(e){toast('Not saved: '+(e.message||e))}});
+  const vars=(CAN.d&&CAN.d.variables)||[];
+  $$('[data-cn]').forEach(card=>{const name=card.dataset.cn,cmd=CAN.d.commands.find(c=>c.name===name),f=n=>card.querySelector(`[data-cf=${n}]`),save=card.querySelector('[data-cact=save]'),msg=card.querySelector('[data-cmsg]');
+    const cur=()=>{const o={};if(f('text'))o.text=f('text').value;if(f('choices'))o.choices=f('choices').value.split('\n').map(x=>x.trim()).filter(Boolean);o.aliases=names(f('aliases').value);return o};
+    const changes=()=>{const c=cur(),o={};if('text'in c&&c.text!==(cmd.text||''))o.text=c.text;if('choices'in c&&JSON.stringify(c.choices)!==JSON.stringify(cmd.choices||[]))o.choices=c.choices;if(JSON.stringify(c.aliases)!==JSON.stringify(cmd.aliases||[]))o.aliases=c.aliases;return o};
+    const check=()=>{const c=cur(),ch=changes();let bad='';if('text'in c&&'text'in ch)bad=canBadText(c.text,vars);if('choices'in ch)bad=bad||(c.choices.length?c.choices.map(t=>canBadText(t,vars)).find(Boolean)||'':'add at least one choice');
+      msg.textContent=bad;save.disabled=!!bad||!Object.keys(ch).length;const l=card.querySelector('[data-clen]');if(l&&f('text'))l.textContent=f('text').value.length};
+    card.querySelectorAll('[data-cf]').forEach(i=>{if(i.dataset.cf!=='enabled')i.oninput=check});
+    f('enabled').onchange=async()=>{try{await cpost({action:'set',name,enabled:f('enabled').checked});toast('!'+name+(f('enabled').checked?' on':' off'));cmd.enabled=f('enabled').checked}catch(e){toast('Not saved: '+(e.message||e));f('enabled').checked=!f('enabled').checked}};
+    save.onclick=async()=>{save.disabled=true;try{await cpost({action:'set',name,...changes()});toast('!'+name+' saved');re()}catch(e){msg.textContent=String(e.message||e);save.disabled=false}};
+    card.querySelector('[data-cact=test]').onclick=async()=>{const c=cur(),o=card.querySelector('[data-cout]'),b={action:'test',...who()};if('choices'in c)b.choices=c.choices;else b.text=c.text;
+      try{const r=await cpost(b);CAN.out[name]=o.textContent='Preview: '+r.line}catch(e){CAN.out[name]=o.textContent='Could not preview: '+(e.message||e)}}});
+  $('#cn-addtest')&&($('#cn-addtest').onclick=async()=>{const m=$('#cn-newmsg');try{const r=await cpost({action:'test',text:$('#cn-newt').value,...who()});m.textContent='Preview: '+r.line}catch(e){m.textContent=String(e.message||e)}});
+  $('#cn-add')&&($('#cn-add').onclick=async()=>{const m=$('#cn-newmsg'),n=$('#cn-new').value.trim().toLowerCase().replace(/^!/,''),t=$('#cn-newt').value;
+    if(!/^[a-z0-9_]{1,24}$/.test(n)){m.textContent='Name: a-z, 0-9 and _, up to 24 characters';return}
+    const bad=canBadText(t,vars);if(bad){m.textContent=bad;return}
+    const b={action:'add',name:n,text:t};const al=names($('#cn-newa').value);if(al.length)b.aliases=al;
+    try{await cpost(b);toast('!'+n+' added');re()}catch(e){m.textContent=String(e.message||e)}})}
 /* ============ Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy also via /api/economy) + live wheel preview + test-bet simulator ============ */
 const WG_OBS='http://127.0.0.1:8770/wheel.html';
 /* Copy OBS URL: one reusable row for any overlay that is meant to be a Browser Source */
@@ -1865,7 +1914,7 @@ function showWizard(){let role='streaming';const el=document.createElement('div'
       D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
 
 /* ============ shell ============ */
-const titles={master:'Master View',sources:'Sources',commands:'Commands',wheel:'Wheel & Games',economy:'Economy',timers:'Timers',overlays:'Overlay fit',approvals:'Approvals',accounts:'Accounts',quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={master:'Master View',sources:'Sources',commands:'Commands',wheel:'Wheel & Games',economy:'Economy',timers:'Timers',canned:'Canned commands',overlays:'Overlay fit',approvals:'Approvals',accounts:'Accounts',quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const REAL=[['quick','⚡','Quick actions'],['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
@@ -1916,6 +1965,7 @@ function bind(){
   if(route==='wheel')bindWheel();
   if(route==='economy')bindEconomy();
   if(route==='timers')bindTimers();
+  if(route==='canned')bindCanned();
   if(route==='overlays')bindOverlays();
   if(route==='sources')bindSources();
   if(route==='integrations')bindIntegrations();
