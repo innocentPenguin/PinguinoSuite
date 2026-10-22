@@ -53,7 +53,9 @@ try {
   check('tampered installer is refused, nothing changed', !fs.existsSync(path.join(r.dir, 'lite_apply_result.json')) && fs.readFileSync(path.join(r.inst, 'version.txt'), 'utf8') === 'old' && /no verified installer/.test(rd(r.dir, 'update_status.json').error || ''));
   // 4. Lite still running -> waits, then gives up without changing anything
   r = rig('running'); res = await run(r, 'good', path.basename(process.execPath));
+  await sleep(800);
   check('Lite still open: gives up after the wait, nothing changed', res?.ok === false && /did not close/.test(res.message) && fs.readFileSync(path.join(r.inst, 'version.txt'), 'utf8') === 'old', JSON.stringify(res));
+  check('busy.lite is cleared again after a refused update (can retry)', Object.keys(rd(r.dir, 'status.json').busy).length === 0);
   // 5. no update staged
   r = rig('none'); fs.rmSync(path.join(r.dir, 'staging'), { recursive: true });
   process.env.PINGUINO_LITE_EXE = r.exe;

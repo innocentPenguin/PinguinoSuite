@@ -52,6 +52,7 @@ export function scanModules(root = MODULES) {
 export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(), modulesRoot = MODULES } = {}) {
   const busy = {};
   let timer = null, polling = false, lastError = null, mstate = {};
+  const since = {};                                            // id@version -> when Link first saw it installed
   const errors = {};                                           // last failure per module id (shown in installed.json)
   const fail = (msg, keepStatus) => {
     lastError = msg; log('warn', 'lite', msg);
@@ -67,7 +68,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
   async function writeInstalled() {
     const mods = {};
     mstate = {};
-    for (const m of scanModules(modulesRoot)) { const state = await moduleState(m); mods[m.id] = { version: m.version, installed_at: iso(), path: m.path, state, ...(errors[m.id] ? { error: errors[m.id] } : {}) }; mstate[m.id] = { state, detail: state === 'running' ? 'answers on its health check' : 'not answering', ...(state === 'stopped' ? { fix_hint: 'Start it from the full Suite' } : {}) }; }
+    for (const m of scanModules(modulesRoot)) { const state = await moduleState(m); mods[m.id] = { version: m.version, installed_at: (since[m.id + '@' + m.version] ??= iso()), path: m.path, state, ...(errors[m.id] ? { error: errors[m.id] } : {}) }; mstate[m.id] = { state, detail: state === 'running' ? 'answers on its health check' : 'not answering', ...(state === 'stopped' ? { fix_hint: 'Start it from the full Suite' } : {}) }; }
     writeJson(dir, 'installed.json', { updated_at: iso(), modules: mods });
     return mods;
   }
@@ -191,6 +192,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
   }
   /** The user clicked Update in Lite. Re-verify the staged installer, then hand over to the detached helper (Lite is exiting and takes Link with it). */
   async function applyLiteUpdate() {
+    if (busy.lite === 'updating') { log('warn', 'lite', 'Lite update already in progress; extra request ignored'); return; }
     if (!checkLiteUpdate()) { fail('Lite update: no verified installer is staged (needs PinguinoLite-<version>-setup.exe with a matching .sha256)'); return; }
     const man = readJson(path.join(dir, 'update_manifest.json'));
     const installer = path.join(dir, ...String(man.staged_file || '').split(/[\\/]/));
@@ -201,7 +203,10 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
     const jf = path.join(dir, 'lite_apply_job.json');
     fs.writeFileSync(jf, JSON.stringify(job, null, 2));
     busy.lite = 'updating'; writeStatus();
-    spawn(process.execPath, [fileURLToPath(new URL('./applyupdate.mjs', import.meta.url)), jf], { detached: true, stdio: 'ignore', windowsHide: true, env: process.env }).unref();
+    const helper = spawn(process.execPath, [fileURLToPath(new URL('./applyupdate.mjs', import.meta.url)), jf], { detached: true, stdio: 'ignore', windowsHide: true, env: process.env });
+    helper.on('error', e => { delete busy.lite; fail(`Lite update: could not start the helper (${e.code || e.message})`); writeStatus(); });
+    helper.on('exit', () => { delete busy.lite; reportApply(); writeStatus(); });   // only reached when Link survives (update refused/failed)
+    helper.unref();
     log('warn', 'lite', `Lite update ${job.from} -> ${job.to} handed to the helper (Lite must close; it relaunches itself)`);
   }
   /** After a restart: report what the helper did. */
