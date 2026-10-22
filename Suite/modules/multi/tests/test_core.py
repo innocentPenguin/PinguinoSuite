@@ -1275,3 +1275,33 @@ def test_alert_milestones(tmp_path):
     assert t["amount"] == 5 and eng.submit(t)[0] is True
     c = alerts.sanitize_config({"profiles": {"Penguin": {"types": {"streak": {"milestones": [{"at": 4}, {"at": 4}, {"at": -2}, {"at": 9, "accent": "x"}]}}}}})
     assert [m["at"] for m in c["profiles"]["Penguin"]["types"]["streak"]["milestones"]] == [4, 9]
+
+
+def test_alert_media_library_and_host_import(tmp_path, monkeypatch):
+    import alert_media
+    import alerts
+    monkeypatch.setattr(alert_media, "DIR", tmp_path / "lib")
+    assert alert_media.safe_name("../../evil.exe") == "" and alert_media.safe_name("My Sound!.WAV") == "My_Sound_.WAV"
+    n = alert_media.save("ding.wav", b"RIFFxxxx")
+    assert alert_media.save("ding.wav", b"RIFFyyyy") != n                               # never overwrites
+    assert [f["kind"] for f in alert_media.listing()] == ["sound", "sound"]
+    try:
+        alert_media.save("x.exe", b"1")
+        raise AssertionError("exe accepted")
+    except ValueError:
+        pass
+    assert alert_media.delete(n) and len(alert_media.listing()) == 1
+    rt = tmp_path / "runtime"
+    (rt / "sounds").mkdir(parents=True)
+    (rt / "sounds" / "follow.wav").write_bytes(b"RIFFabcd")
+    (tmp_path / "outside.wav").write_bytes(b"RIFF")
+    import json
+    (rt / "alerts_settings.json").write_text(json.dumps({"MuteSounds": False, "Sounds": {"follow": {"File": str(rt / "sounds" / "follow.wav"), "Volume": 0.5},
+                                                          "sub": {"File": str(tmp_path / "outside.wav"), "Volume": 1}}}), "utf-8")
+    monkeypatch.setattr(alert_media, "host_runtime", lambda: rt)
+    types = alerts.default_config()["profiles"]["Penguin"]["types"]
+    rows = alert_media.import_host(types, apply=False)
+    assert [r["status"] for r in rows if r["type"] == "follow"] == ["would import"] and types["follow"]["sound"]["url"] == ""
+    rows = alert_media.import_host(types)
+    assert types["follow"]["sound"]["url"].startswith("/alert-media/host_follow") and types["follow"]["sound"]["volume"] == 50
+    assert "outside" in [r for r in rows if r["type"] == "sub"][0]["status"]

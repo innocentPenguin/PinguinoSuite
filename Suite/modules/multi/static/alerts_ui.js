@@ -22,6 +22,7 @@ async function renderAlertsEditor() {
   $('#hdr').style.display = 'none';
   $('#body').innerHTML = '<div class="empty">Loading...</div>';
   AL.d = await fetch('/api/alerts').then(r => r.json());
+  AL.media = (await fetch('/api/alerts/media').then(r => r.json())).files;
   alDraw();
   clearInterval(AL.logT); AL.logT = setInterval(alLog, 2000);
 }
@@ -34,6 +35,11 @@ function alDraw() {
     if (kind === 'num') return `<label class="cf">${lab} <input type="range" data-al="${p}" data-k="n" min="${extra.lo}" max="${extra.hi}" step="${extra.st || 1}" value="${v}"><b>${v}${extra.unit || ''}</b></label>`;
     if (kind === 'col') return `<label class="cf">${lab} <input type="color" data-al="${p}" data-k="s" value="${esc(v || '#000000')}"></label>`;
     if (kind === 'sel') return `<label class="cf">${lab} <select data-al="${p}" data-k="s">${extra.opts.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+    if (/^(sound\.url|sound\.tier_urls\.\d|media\.url)$/.test(p)) {
+      const want = p.startsWith('media') ? ['image', 'video'] : ['sound'], lib = (AL.media || []).filter(m => want.includes(m.kind));
+      return `<label class="cf">${lab} <input type="text" data-al="${p}" data-k="s" value="${esc(v || '')}" style="width:100%"></label>
+        <div class="act"><button type="button" data-alup="${p}">Upload file...</button><select data-alpick="${p}"><option value="">Pick from library</option>${lib.map(m => `<option value="${esc(m.url)}">${esc(m.name)}</option>`).join('')}</select>${v ? `<button type="button" data-alplay="${p}">Play</button>` : ''}</div>`;
+    }
     return `<label class="cf">${lab} <input type="text" data-al="${p}" data-k="s" value="${esc(v || '')}" style="width:100%" ${extra.ph ? `placeholder="${esc(extra.ph)}"` : ''}></label>`;
   };
   const types = d.types.map(t => `<button type="button" class="${t === AL.sel ? 'p' : ''}" data-alsel="${t}">${esc(d.labels[t])}${c.profiles[c.active].types[t].enabled ? '' : ' (off)'}</button>`).join(' ');
@@ -52,7 +58,7 @@ function alDraw() {
   const variants = d.variants.map(v => `<label class="cf"><input type="checkbox" data-alvar="${v}"> ${v}</label>`).join(' ');
   $('#body').innerHTML = `<div style="padding:10px;overflow:auto;height:100%;box-sizing:border-box">
     <div class="act"><b>Alerts</b> <label class="cf">Profile <select id="al-prof">${profs}</select></label>
-      <button data-alact="dup">Duplicate profile</button> <button data-alact="del">Delete profile</button> <a href="/?type=dash"><button type="button">Back to dashboard</button></a> <span id="al-state" class="mut"></span></div>
+      <button data-alact="imphost">Import Host sounds</button> <input id="al-file" type="file" accept=".mp3,.wav,.ogg,.m4a,.png,.jpg,.jpeg,.gif,.webp,.webm,.mp4" hidden> <button data-alact="dup">Duplicate profile</button> <button data-alact="del">Delete profile</button> <a href="/?type=dash"><button type="button">Back to dashboard</button></a> <span id="al-state" class="mut"></span></div>
     <div class="box"><b>OBS browser source</b> (800 x 600) <input readonly value="${esc(alUrl())}" style="width:100%" onclick="this.select()">
       <div class="act"><button data-alact="copy">Copy address</button> <a href="${esc(alUrl())}?bg=1" target="_blank" rel="noopener"><button type="button">Open (preview works offline)</button></a>
       <small class="mut">Real events only arrive while live; tests and this preview always work.</small></div></div>
@@ -134,8 +140,21 @@ document.addEventListener('input', e => {
 });
 let alLastText = null;
 document.addEventListener('focusin', e => { if (W.type === 'alerts' && e.target.dataset && e.target.dataset.al && e.target.type === 'text') alLastText = e.target; });
+document.addEventListener('change', async e => {
+  if (W.type !== 'alerts') return; const t = e.target;
+  if (t.dataset.alpick && t.value) { alSet(alTarget(), t.dataset.alpick, t.value); alSave(); setTimeout(alDraw, 450); return; }
+  if (t.id === 'al-file' && t.files[0] && AL.upPath) {
+    const f = t.files[0], path = AL.upPath; AL.upPath = null; alState('Uploading...');
+    const r = await fetch('/api/alerts/media?name=' + encodeURIComponent(f.name), {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: f});
+    const j = await r.json(); t.value = '';
+    if (!r.ok) { alState(j.detail || 'Upload failed'); return; }
+    AL.media = (await fetch('/api/alerts/media').then(x => x.json())).files; alSet(alTarget(), path, j.url); alSave(); alState('Uploaded ' + j.name); setTimeout(alDraw, 450);
+  }
+});
 document.addEventListener('click', async e => {
   if (W.type !== 'alerts') return;
+  const up = e.target.closest('[data-alup]'); if (up) { AL.upPath = up.dataset.alup; $('#al-file').click(); return; }
+  const pl = e.target.closest('[data-alplay]'); if (pl) { const u = alGet(alEff(), pl.dataset.alplay); if (u) new Audio(u).play().catch(() => alState('Not a sound file')); return; }
   const sel = e.target.closest('[data-alsel]'); if (sel) { AL.sel = sel.dataset.alsel; alDraw(); return; }
   const vi = e.target.closest('[data-alvarins]');
   if (vi) { const t = alLastText && document.contains(alLastText) ? alLastText : document.querySelector('[data-al="text"]'); const p = t.selectionStart == null ? t.value.length : t.selectionStart; t.value = t.value.slice(0, p) + vi.dataset.alvarins + t.value.slice(p); t.dispatchEvent(new Event('input', {bubbles: true})); return; }
@@ -144,6 +163,10 @@ document.addEventListener('click', async e => {
   if (a === 'copy') { navigator.clipboard && navigator.clipboard.writeText(alUrl()); alState('Address copied'); }
   else if (a === 'msadd') { const ms = JSON.parse(JSON.stringify(alGet(alEff(), 'milestones') || [])); const top = ms.length ? ms[ms.length - 1].at : 0; ms.push({at: top + Math.max(1, Math.round(top / 2)), text: '', subtext: '', priority: 8, duration: 8, accent: '', confetti: true}); alSet(alTarget(), 'milestones', ms); alSave(); setTimeout(alDraw, 450); }
   else if (a === 'msdel') { const ms = JSON.parse(JSON.stringify(alGet(alEff(), 'milestones') || [])); ms.splice(+b.dataset.i, 1); alSet(alTarget(), 'milestones', ms); alSave(); setTimeout(alDraw, 450); }
+  else if (a === 'imphost') {
+    const pre = await alPost('/api/alerts/import-host', {apply: false}), lines = pre.rows.map(r => (r.type || '') + ': ' + r.status).join(String.fromCharCode(10));
+    if (confirm('Import the Host alert sounds into profile ' + c.active + '?' + String.fromCharCode(10, 10) + lines)) { const r = await alPost('/api/alerts/import-host', {}); AL.d = await fetch('/api/alerts').then(x => x.json()); AL.media = (await fetch('/api/alerts/media').then(x => x.json())).files; alDraw(); alState('Imported ' + r.rows.filter(x => x.status.startsWith('imported')).length + ' sounds'); }
+  }
   else if (a === 'pv') alPreview();
   else if (a === 'test') { const r = await alPost('/api/alerts/test', {type: AL.sel, user, amount: amt === '' ? null : +amt, variant: vars}); alState(r.text); alLog(); }
   else if (a === 'testall') { const r = await alPost('/api/alerts/testall'); alState(r.text); alLog(); }

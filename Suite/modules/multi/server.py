@@ -42,6 +42,7 @@ import checks
 import config
 import learning
 import chatstyle
+import alert_media
 import alerts as alerts_mod
 import obs as obs_mod
 import panes as panes_mod
@@ -192,6 +193,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:8760", "http
                    allow_methods=["*"], allow_headers=["*"])
 STATIC = config.ROOT / "static"
 app.mount("/assets", StaticFiles(directory=STATIC), name="assets")
+alert_media.DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/alert-media", StaticFiles(directory=alert_media.DIR), name="alert-media")
 
 
 def origin_ok(origin):
@@ -304,6 +307,38 @@ async def alerts_test(request: Request):
                                tier=b.get("tier"), months=b.get("months"), message=str(b.get("message") or "")[:200], level=b.get("level"))
     ok, why = alert_engine.submit(ev)
     return {"ok": ok, "queued": ok, "text": f"test {t} {why}" if ok else f"test {t} not shown: {why}", "id": ev["id"]}
+
+
+@app.get("/api/alerts/media")
+def alerts_media_list():
+    return {"files": alert_media.listing()}
+
+
+@app.post("/api/alerts/media")
+async def alerts_media_upload(request: Request, name: str = ""):
+    """Raw file body (Content-Type: application/octet-stream) + ?name=file.ext -> stored in the alert media library."""
+    data = await request.body()
+    try:
+        saved = alert_media.save(name, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"name": saved, "url": "/alert-media/" + saved}
+
+
+@app.post("/api/alerts/media/delete")
+async def alerts_media_delete(request: Request):
+    return {"ok": alert_media.delete(str((await request.json()).get("name") or ""))}
+
+
+@app.post("/api/alerts/import-host")
+async def alerts_import_host(request: Request):
+    """Copy the Host's alert sounds into the active profile ({apply:false} = preview only, {overwrite:true} replaces existing sounds)."""
+    b = await request.json()
+    prof = alert_engine.cfg["profiles"][alert_engine.cfg["active"]]["types"]
+    rows = alert_media.import_host(prof, apply=b.get("apply", True) is not False, overwrite=bool(b.get("overwrite")))
+    if b.get("apply", True) is not False:
+        alert_engine.save(alert_engine.cfg)
+    return {"rows": rows}
 
 
 @app.post("/api/alerts/fire")
