@@ -15,8 +15,8 @@ from pathlib import Path
 
 IS_WIN = sys.platform == "win32"
 MODULE_PARTS = {"listen", "multi", "link", "spotify", "voice"}
-KNOWN_PARTS = MODULE_PARTS | {"shell", "core", "host", "tools"}
-APP_PARTS = {"shell", "core", "host"}
+KNOWN_PARTS = MODULE_PARTS | {"shell", "core", "host", "lite", "tools"}
+APP_PARTS = {"shell", "core", "host", "lite"}
 
 
 class Updates:

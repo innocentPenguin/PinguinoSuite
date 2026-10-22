@@ -11,6 +11,7 @@ export const COMPONENTS = [
   { id: 'link', name: 'Link', restart: 'module', module: 'link', match: ['Suite/modules/link/'] },
   { id: 'spotify', name: 'Spotify', restart: 'module', module: 'spotify', match: ['Suite/modules/spotify/'] },
   { id: 'voice', name: 'Voice', restart: 'module', module: 'voice', match: ['Suite/modules/voice/'] },
+  { id: 'lite', name: 'PinguinoLite', restart: 'app', match: ['PinguinoLite/'] },   // Lite's exe + Start-Lite.bat; Lite stages and swaps it itself (its Link is the 'link' part)
   { id: 'tools', name: 'Scripts and docs', restart: 'none', match: [] },   // everything else (updater, installer scripts, docs)
 ];
 export const COMPONENT_IDS = new Set(COMPONENTS.map(c => c.id));

@@ -21,6 +21,7 @@ const PLAN = [
   ['Suite/suite', null], ['Suite/modules', null], ['Suite/updater', null], ['Suite/modules.json', null], ['Suite/requirements.txt', null], ['Suite/README.md', null],
   ['PinguinoHost/bin/Release/net8.0', null],
   ['App/src-tauri/target/release/binaries/pinguino-core.exe', null], ['App/src-tauri/target/release/pinguino-suite.exe', null],
+  ['PinguinoLite/src-tauri/target/release/pinguino-lite.exe', null], ['PinguinoLite/Start-Lite.bat', null],
   ['App/Setup-Suite.ps1', null], ['App/Update-Module.ps1', null], ['PinguinoApp/PinguinoApp.bat', null],
   ['Installer/install.mjs', null], ['Installer/prereqs.mjs', null],
   ['Docs/INSTALL.md', null], ['README.md', null],
