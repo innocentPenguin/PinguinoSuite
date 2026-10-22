@@ -390,6 +390,22 @@ async def alerts_fire(request: Request):
     return {"ok": ok, "queued": ok, "text": why}
 
 
+@app.get("/api/sounds")
+def sounds_get():
+    return {"config": store.kv_get("sounds:cfg", None)}
+
+
+@app.post("/api/sounds")
+async def sounds_set(request: Request):
+    """Local-listening sound settings of the chat page (the page validates and merges with its defaults)."""
+    b = await request.json()
+    c = b.get("config") if isinstance(b, dict) else None
+    if not isinstance(c, dict) or len(json.dumps(c)) > 8000:
+        raise HTTPException(400, "config must be an object under 8 KB")
+    store.kv_set("sounds:cfg", c)
+    return {"ok": True}
+
+
 @app.get("/api/stream/info")
 async def stream_info_get():
     yt, kk_ = await asyncio.gather(asyncio.to_thread(stream_info.youtube_get), asyncio.to_thread(stream_info.kick_get))

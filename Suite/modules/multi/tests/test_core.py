@@ -1569,3 +1569,17 @@ def test_stream_info(monkeypatch):
     monkeypatch.setattr(si.secrets_store, "get", lambda k: "")
     assert si.youtube_get()["connected"] is False and si.kick_get()["connected"] is False
     assert si.kick_update(title=None)["ok"] is False
+
+
+def test_sounds_config_endpoint(monkeypatch):
+    from fastapi.testclient import TestClient
+    import server
+    mem = {}
+    monkeypatch.setattr(server.store, "kv_get", lambda k, d=None: mem.get(k, d))
+    monkeypatch.setattr(server.store, "kv_set", lambda k, v: mem.__setitem__(k, v))
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    assert c.get("/api/sounds").json() == {"config": None}
+    assert c.post("/api/sounds", json={"config": {"master": 40}}, headers={"origin": "http://127.0.0.1:8766"}).json()["ok"]
+    assert c.get("/api/sounds").json()["config"]["master"] == 40
+    assert c.post("/api/sounds", json={"config": "x"}, headers={"origin": "http://127.0.0.1:8766"}).status_code == 400
