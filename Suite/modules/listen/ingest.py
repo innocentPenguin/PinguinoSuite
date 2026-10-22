@@ -57,10 +57,12 @@ def to_ogg(src: Path, dst: Path) -> float:
     for frame in inp.decode(ain):
         for f in rs.resample(frame):
             total += f.samples
+            f.pts = None   # keep the output timeline continuous from 0: the source's own timestamps (a VOD starts at ~62 s) must not leak into the file
             for p in ast.encode(f):
                 out.mux(p)
     for f in rs.resample(None) or []:
         total += f.samples
+        f.pts = None
         for p in ast.encode(f):
             out.mux(p)
     for p in ast.encode(None):

@@ -103,6 +103,7 @@ import db
 import ingest
 import learn
 import live as live_mod
+import oggfix
 import twitch
 import voice
 
@@ -210,6 +211,7 @@ async def lifespan(app):
     hub.loop = asyncio.get_running_loop()
     threading.Thread(target=asr.load, daemon=True).start()
     threading.Thread(target=autolearn_loop, daemon=True).start()
+    threading.Thread(target=lambda: oggfix.repair_all(cfg.DATA / "audio", log=lambda m: print(m, flush=True)), daemon=True).start()   # VOD audio made before the 62 s timeline fix
     yield
     mic.stop()
 
