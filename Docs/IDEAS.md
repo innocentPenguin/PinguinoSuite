@@ -38,3 +38,23 @@ Status: open / building / done / asked-Ivan.
 | 23 | Automatic fallback playlist when queue is empty | Music | open |
 | 24 | OBS per-source monitoring guide for the 2nd Spotify output | Music | open |
 | 25 | Tippers leaderboard card (needs tip totals) | 023, 00 | open |
+
+## Added 2026-10-22 (check-in round)
+| # | Idea | From | Status |
+|---|------|------|--------|
+| 26 | Alert profile export/import to file (back up/share looks) | 03 | open |
+| 27 | Lite: real Install/Verify/Eject/Install-again of a small module on a scratch copy | 012 | open |
+| 28 | Typo-tolerant commands ("Did you mean !join?") checked against commands.json | 021 | open (also Plan 7 C) |
+| 29 | Helper "unanswered" list feeds the pack builder as drafts for a mod to approve | 021 | open |
+| 30 | More natural-language intents (points, strike rules, opt-out); follow-up context beyond Minecraft | 021 | open |
+| 31 | Spanish/Portuguese pass for common joins/questions (if chat uses them) | 021 | asked-Ivan |
+| 32 | Mod command to show/reload the Helper pack | 021 | open |
+| 33 | Host: !pm still prints a stored password (HostBots.cs 68-70): fix; push lobby name to site | 021 -> 02 | open, needs 02 |
+| 34 | Chatty event reactions (wheel winners, customs finish, raids, hype train) with cooldown | 022 | open |
+| 35 | Friendly refusal/failure lines for mod actions and timeouts | 022 | open |
+| 36 | Lore-based "welcome back" lines (private, respects opt-outs) | 022 | open |
+| 37 | !chatbot status line says why it is quiet | 022 | open |
+| 38 | End-of-stream recap line (mod-approved wording) | 022 | open |
+| 39 | Canned-command editor page in the Suite for canned_commands.json | 022 | open |
+| 40 | First-time-today greeting variety; birthday/follow anniversary lines | 022 | open |
+| 41 | 05: confirm `tipped:{total,count,last}` field names with 02 | 05 -> 02 | asked 02 |
