@@ -687,7 +687,8 @@ const soundOpts=cur=>{const o=Object.entries(SYN).map(([k,v])=>[k,v.name]).conca
 const CH={seq:null,bots:new Set(),botsAt:0,last:0,busy:false};
 async function chatSentPoll(){const so=PF.sound;if(CH.busy||document.hidden||!so.on||!so.events.chat_sent||!S.live||!AC)return;CH.busy=true;
   try{if(Date.now()-CH.botsAt>60000){CH.botsAt=Date.now();try{const b=await hostGet('/api/bots');CH.bots=new Set((b.bots||[]).map(x=>String(x.signedInAs||'').toLowerCase()).filter(Boolean))}catch{}}
-    const j=await hostGet('/api/chat/recent?since='+(CH.seq??0)+'&limit=50');if(!j||!j.ok)return;const first=CH.seq===null;CH.seq=j.seq;if(first)return;   // the history that was already there is never played
+    const j=await hostGet('/api/chat/recent?since='+(CH.seq??0)+'&limit=50');if(!j||!j.ok)return;if(CH.seq!==null&&j.seq<CH.seq){CH.seq=j.seq;return}   // the Host restarted: its counter began again
+    const first=CH.seq===null;CH.seq=j.seq;if(first)return;   // the history that was already there is never played
     const f=so.chat_filter,hit=(j.messages||[]).some(m=>{const mine=(m.badges||[]).includes('broadcaster'),bot=CH.bots.has(String(m.user||'').toLowerCase());return f==='mine'?mine:f==='bot'?bot:(mine||bot)});
     if(hit&&Date.now()-CH.last>=Math.max(1,so.chat_gap||4)*1000){CH.last=Date.now();sfx('chat_sent')}}
   catch{}finally{CH.busy=false}}

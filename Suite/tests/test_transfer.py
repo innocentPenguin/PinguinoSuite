@@ -7,6 +7,7 @@ import unittest
 import zipfile
 
 os.environ.setdefault("PINGUINO_DATA_DIR", tempfile.mkdtemp())
+os.environ.setdefault("PINGUINO_LOG_DIR", tempfile.mkdtemp())
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "suite"))
 import suite  # noqa: E402
 import vault as vaultlib  # noqa: E402

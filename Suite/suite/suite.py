@@ -211,8 +211,8 @@ import updates as updateslib  # noqa: E402
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
 ROOT = Path(os.environ["PINGUINO_SUITE_DIR"]) if FROZEN and os.environ.get("PINGUINO_SUITE_DIR") else Path(__file__).resolve().parents[1]
-LOGS = ROOT / "logs"
-LOGS.mkdir(exist_ok=True)
+LOGS = Path(os.environ["PINGUINO_LOG_DIR"]) if os.environ.get("PINGUINO_LOG_DIR") else ROOT / "logs"   # tests point this at a temp dir so they never write the real event log
+LOGS.mkdir(parents=True, exist_ok=True)
 LOG_MAX = 10 * 1024 * 1024   # a module log bigger than this is moved to logs/Archive/ the next time its module starts (never deleted)
 
 
@@ -1211,6 +1211,12 @@ def sounds_list():
 @app.post("/api/sounds")
 async def sounds_add(request: Request, name: str = "sound"):
     """Add a sound: the raw mp3/wav/ogg bytes are the request body, name is only the label."""
+    try:
+        declared = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        declared = 0
+    if declared > soundslib.MAX_BYTES + 1024:   # refuse before reading it all
+        raise HTTPException(413, "the file is too big")
     body = await request.body()
     ok, r = sounds_store.add(name, body)
     if not ok:
