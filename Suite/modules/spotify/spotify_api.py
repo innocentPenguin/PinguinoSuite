@@ -49,7 +49,11 @@ def default_http(method, url, headers, body):
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             raw = r.read()
-            return r.status, dict(r.headers), (json.loads(raw) if raw else None)
+            try:
+                parsed = json.loads(raw) if raw else None
+            except ValueError:
+                parsed = None                  # a 2xx with a text/empty body (some player commands answer that way) is still a success
+            return r.status, dict(r.headers), parsed
     except urllib.error.HTTPError as e:
         raw = e.read()
         try:

@@ -229,3 +229,19 @@ class SongifyTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class NonJsonSuccessTest(unittest.TestCase):
+    def test_2xx_text_body_is_not_a_crash(self):
+        import io, urllib.request
+        from unittest import mock
+        import spotify_api
+
+        class R(io.BytesIO):
+            status = 200
+            headers = {}
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        with mock.patch.object(urllib.request, "urlopen", return_value=R(b"Player command ok")):
+            st, hd, js = spotify_api.default_http("PUT", "https://x", {}, None)
+        self.assertEqual((st, js), (200, None))

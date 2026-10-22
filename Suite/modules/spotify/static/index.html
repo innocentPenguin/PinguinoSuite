@@ -349,6 +349,16 @@ async function refresh(){
 }
 function loop(){clearTimeout(pollT);if(!document.hidden&&!dragId)refresh();pollT=setTimeout(loop,1500)}
 drawTabs();loop();loadSetup();
+// Built-in player: while this page is open and Spotify is connected, host the /player page in a hidden frame so "PinguinoSuite" shows up as a device.
+// Skipped when a player page is already live (OBS source / own window), so two pages never fight over the device.
+let plHosted=false;
+async function hostPlayer(){
+  if(plHosted||!S||!S.connected)return;
+  try{const p=await api('/api/player');if(!p.native||p.live||p.needs_reauth){return}
+    plHosted=true;const f=document.createElement('iframe');f.id='plframe';f.src='/player';f.allow='autoplay; encrypted-media';
+    f.style.cssText='position:fixed;left:-9999px;width:320px;height:200px;border:0';document.body.appendChild(f)}catch(e){}
+}
+setInterval(hostPlayer,4000);
 document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.code==='Space'){e.preventDefault();$('bplay').click()}else if(e.key==='n'){$('bnext').click()}else if(e.key==='p'){$('bprev').click()}});
 document.addEventListener('click',async e=>{
