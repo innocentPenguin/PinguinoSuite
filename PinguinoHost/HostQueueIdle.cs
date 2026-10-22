@@ -24,7 +24,7 @@ namespace PinguinoHost
             Func<string, string, JObject> c = (m, p) => new JObject { { "metric", m }, { "period", p } };
             return new JObject
             {
-                { "version", 2 }, { "enabled", true }, { "idleSeconds", 20 }, { "secondsPerCard", 8 }, { "top", 8 },
+                { "version", 3 }, { "enabled", true }, { "idleSeconds", 20 }, { "secondsPerCard", 8 }, { "top", 8 },
                 { "visibleRows", 8 }, { "scrollSpeed", 45 }, { "scrollPauseSeconds", 2.5 },   // a long list scrolls (px per second, pause at the top and bottom) and the card stays until everybody was shown
                 { "sequence", new JArray {
                     new JObject { { "metric", "subs" }, { "period", "all" }, { "first", true }, { "giftedT1", false }, { "giftedT23", true }, { "layout", "separated" }, { "top", 200 } },   // "Subs!": ONE list, T1 (not gifted) then T2 then T3; "first" = always opens a round
@@ -34,6 +34,7 @@ namespace PinguinoHost
                     new JArray { c("bits", "month"), c("bits", "lastmonth") },
                     new JArray { c("watchtime", "month"), c("watchtime", "all") },
                     new JArray { c("level", "month"), c("level", "all") },
+                    new JObject { { "metric", "newsubs" }, { "period", "all" }, { "days", 30 }, { "top", 8 } },   // fresh faces: who subscribed in the last 30 days
                     c("points", "all"), c("messages", "month") } }
             };
         }
@@ -48,6 +49,13 @@ namespace PinguinoHost
                 {
                     try { File.Copy(Path_, Path_ + ".bak-v1", true); } catch (Exception) { }
                     j["sequence"] = def["sequence"]; j["version"] = 2; try { File.WriteAllText(Path_, j.ToString()); } catch (Exception) { }
+                }
+                if (((int?)j["version"] ?? 2) < 3)   // v2 -> v3: add the new-subs card to the person's own sequence (nothing else touched)
+                {
+                    try { File.Copy(Path_, Path_ + ".bak-v2", true); } catch (Exception) { }
+                    var seq = j["sequence"] as JArray ?? new JArray();
+                    if (!seq.Any(x => ((string)x["metric"] ?? "") == "newsubs")) seq.Add(new JObject { { "metric", "newsubs" }, { "period", "all" }, { "days", 30 }, { "top", 8 } });
+                    j["sequence"] = seq; j["version"] = 3; try { File.WriteAllText(Path_, j.ToString()); } catch (Exception) { }
                 }
                 foreach (var p in def.Properties()) if (j[p.Name] == null) j[p.Name] = p.Value;
                 return j;
@@ -66,6 +74,7 @@ namespace PinguinoHost
         {
             string raw = ((string)t["metric"] ?? "").ToLowerInvariant();
             if (raw == "subs") return SubRoll.SubsCard(Math.Max(1, Math.Min(300, (int?)t["top"] ?? 200)), (bool?)t["giftedT1"] ?? false, (bool?)t["giftedT23"] ?? true, (string)t["layout"] ?? "separated");   // ONE list: T1 (not gifted), T2, T3
+            if (raw == "newsubs") return SubRoll.NewSubsCard(Math.Max(1, Math.Min(50, (int?)t["top"] ?? 8)), Math.Max(1, Math.Min(365, (int?)t["days"] ?? 30)));
             string metric = Periods.Metric((string)t["metric"] ?? ""); string per = ((string)t["period"] ?? "month").ToLowerInvariant();
             if (metric == "" || !Per.ContainsKey(per)) return null;
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); string period = per, key = "";

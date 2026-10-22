@@ -139,6 +139,20 @@ namespace PinguinoHost
             }
             return 0;
         }
+        /// <summary>"NEW SUBS" idle card: current subscribers (gifted ones too, they are new faces) who subscribed within the last `days` days, newest first; value = days ago. null when nobody.</summary>
+        public static JObject NewSubsCard(int top, int days)
+        {
+            var now = DateTime.UtcNow; var rows = new JArray(); int rank = 0;
+            var list = Active().Select(o => new { o, d = ParseDate((string)o["subscribed"]) }).Where(x => x.d.HasValue && (now - x.d.Value).TotalDays <= days && (now - x.d.Value).TotalDays > -1)
+                .OrderByDescending(x => x.d.Value).ThenBy(x => Name(x.o), StringComparer.Ordinal).Take(top);
+            foreach (var x in list) rows.Add(new JObject { { "rank", ++rank }, { "name", x.o["name"] }, { "value", Math.Max(0, (int)Math.Floor((now - x.d.Value).TotalDays)) } });
+            if (rows.Count == 0) return null;
+            return new JObject { { "id", "newsubs|all" }, { "metric", "newsubs" }, { "period", "all" }, { "title", "NEW SUBS · LAST " + days + " DAYS" }, { "unit", "d ago" }, { "rows", rows } };
+        }
+        static DateTime? ParseDate(string s)
+        {
+            DateTime d; if (string.IsNullOrEmpty(s) || !DateTime.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out d)) return null; return d;
+        }
         public static JObject SubsCard(int top, bool giftedT1, bool giftedT23, string layout = "separated")
         {
             layout = layout == "sprinkled" ? "sprinkled" : "separated";

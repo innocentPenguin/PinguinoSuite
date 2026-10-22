@@ -55,7 +55,7 @@ namespace PinguinoHost
         }
         // Terms ChattyPinguino answers itself (PinguinoChat\canned_commands.json, enabled ones incl. aliases): the Host stays silent on them so nothing is answered twice. Reloads when the file changes.
         static HashSet<string> _owned = new HashSet<string>(); static long _ownedStamp = -1;
-        static string CannedPath()
+        internal static string CannedPath()
         {
             try { var cs = JObject.Parse(File.ReadAllText(Path.Combine(HostApi.DataDir, "chat_settings.json")).TrimStart((char)0xFEFF)); string p = (string)cs["CannedFile"]; if (!string.IsNullOrWhiteSpace(p)) return p; } catch (Exception) { }
             return Path.Combine(Program.SuiteDir ?? "", "PinguinoChat", "canned_commands.json");

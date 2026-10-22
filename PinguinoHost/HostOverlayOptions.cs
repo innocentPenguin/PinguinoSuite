@@ -87,6 +87,22 @@ namespace PinguinoHost
                 { "api", new JObject { { "get", "GET /api/overlay-options[?name=queue]" }, { "set", "POST /api/overlay-options {name, options:{key:value|null}}" }, { "clearOverlay", "POST /api/overlay-options {name, options:null}" } } },
                 { "preview", "Open <overlay>.html?preview=1&guides=1 to see the red source box, green safe area, blue overlay box" } };
         }
+        /// <summary>Pre-stream check: every overlay page in the overlay folder carries the overlay-options.js tag (backups and *_backup pages are left out). GET /api/overlay-options/health</summary>
+        public static JObject Health()
+        {
+            string root = OverlayFiles.Root; var pages = new JArray(); var missing = new JArray(); bool js = false;
+            if (!string.IsNullOrEmpty(root) && Directory.Exists(root))
+            {
+                js = File.Exists(Path.Combine(root, "overlay-options.js"));
+                foreach (var f in Directory.GetFiles(root, "*.html", SearchOption.TopDirectoryOnly).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    string n = Path.GetFileNameWithoutExtension(f); if (n.ToLowerInvariant().Contains("backup") || n.ToLowerInvariant().Contains("bak")) continue;
+                    bool has; try { has = File.ReadAllText(f).Contains("overlay-options.js"); } catch (Exception) { has = false; }
+                    pages.Add(new JObject { { "page", n }, { "hasOptions", has } }); if (!has) missing.Add(n);
+                }
+            }
+            return new JObject { { "ok", js && missing.Count == 0 }, { "scriptPresent", js }, { "folder", root ?? "" }, { "pages", pages }, { "missing", missing } };
+        }
         static JObject Bad(string what) { return new JObject { { "ok", false }, { "error", "bad value for " + what } }; }
     }
 }

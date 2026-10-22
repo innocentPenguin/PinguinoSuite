@@ -233,9 +233,22 @@ namespace PinguinoHost
             catch (Exception ex) { Clog.Warn("automation", "raid start migration failed: " + ex.Message); }
         }
 
+        /// <summary>one-time: the raid_out action no longer waits 20 s before StopStream (the Host now fires it when the raid lands)</summary>
+        internal static void MigrateRaidOutNoWait()
+        {
+            try
+            {
+                var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray(); if (seeded.Any(v => (string)v == "raidout2")) return;
+                var old = ((JArray)doc["actions"]).OfType<JObject>().FirstOrDefault(o => (string)o["id"] == "sb-raidout");
+                if (old != null && old["steps"] is JArray st) foreach (var d in st.OfType<JObject>().Where(s => (string)s["type"] == "delay" && (long?)s["ms"] == 20000).ToList()) st.Remove(d);
+                seeded.Add("raidout2"); doc["seeded"] = seeded; Save(doc);
+            }
+            catch (Exception ex) { Clog.Warn("automation", "raid out migration failed: " + ex.Message); }
+        }
+
         public static void SeedStreamerBotPresets()
         {
-            MigrateRaidStart();
+            MigrateRaidStart(); MigrateRaidOutNoWait();
             try { AddAlertSoundSteps(); } catch (Exception ex) { Clog.Warn("automation", "alert sound migration failed: " + ex.Message); }
             try
             {
@@ -282,8 +295,8 @@ namespace PinguinoHost
                     Act("sb-raidstart", "Raid scheduled", "fires when the raid is SCHEDULED (!confirm raid started the Twitch countdown), not when it lands: emotes line, then the Discord invite.", false, new JArray { Tr("raid_start") },
                         SayStep("Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Danceydance innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Hype innoce108Hello innoce108W"),
                         Step("delay", "ms", 3000), SayStep("Don't forget to join the community Discord! Hang out, chat, share media, receive updates → " + disc)),
-                    Act("sb-raidout", "Raid out", "from 'Raid Out Start/End': the raid has landed. WARNING: the last step stops the stream 20 s later, like Streamer.bot did.", false, new JArray { Tr("raid_out") },
-                        Step("delay", "ms", 20000), Step("obs_request", "request", "StopStream")),
+                    Act("sb-raidout", "Raid out", "from 'Raid Out Start/End': the raid has landed (the Host waits for it). WARNING: the step stops the stream right then.", false, new JArray { Tr("raid_out") },
+                        Step("obs_request", "request", "StopStream")),
                     Act("sb-endstream", "Reward: Instantly End Stream", "from the 'Instantly End Stream' reward (2,500,000 points). Needs channel:read:redemptions.", false, new JArray { Tr("redeem", "title", "Instantly End Stream") },
                         SayStep("{user} ended the stream. Goodbye! 🐧"), Step("delay", "ms", 5000), Step("obs_request", "request", "StopStream")),
                     Act("sb-suggest", "Reward: Suggestion Box", "from the 'Suggestion' reward: saves each suggestion to Data\\runtime\\files\\suggestions.txt.", false, new JArray { Tr("redeem", "title", "Suggestion") },

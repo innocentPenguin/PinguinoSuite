@@ -219,12 +219,12 @@ namespace PinguinoHost
         }
         static int RaidDelaySec() { return RaidDelayOverrideSec >= 0 ? RaidDelayOverrideSec : (int)Math.Max(0, Math.Min(88, (int?)Latest.Settings()["RaidStartDelaySec"] ?? 80)); }
         static System.Threading.Timer _raidOutTimer; static DateTime _raidOutAt = DateTime.MinValue; internal static int RaidOutFires;
-        /// <summary>raid_out automations (raid landed: thanks, then the 20 s StopStream) run RaidStartDelaySec after Twitch's signal, once per raid; !unraid / stream_offline cancels them</summary>
+        /// <summary>raid_out automations (raid landed: StopStream) run RaidStartDelaySec + 10 s after Twitch's signal, once per raid; !unraid / stream_offline cancels them</summary>
         static void ScheduleRaidOut(Dictionary<string, string> ctx)
         {
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidOutAt).TotalMinutes < 3) return; _raidOutAt = DateTime.UtcNow; }
             Action go = () => { lock (typeof(Auto)) _raidOutTimer = null; RaidOutFires++; Fire("raid_out", ctx); };
-            int delay = RaidDelaySec(); if (delay == 0) { go(); return; }
+            int delay = RaidDelaySec() + (RaidDelayOverrideSec >= 0 ? 0 : 10); if (delay == 0) { go(); return; }   // +10 s: the raid lands ~90 s after the signal, the stream stops right then
             lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => go(), null, delay * 1000, System.Threading.Timeout.Infinite); }
         }
 
