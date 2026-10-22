@@ -7,6 +7,9 @@ from obs_probe import Obs
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
 dll = args[0] if args else os.path.join(os.path.dirname(__file__), '..', 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 live = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Data', 'runtime', 'host_secrets.json'), encoding='utf-8-sig'))
+import socket
+try: socket.create_connection((live.get('ObsHost') or '127.0.0.1', int(live.get('ObsPort') or 4455)), timeout=2).close()
+except Exception: print('SKIP host-obs: the OBS websocket is not reachable (OBS is not running); nothing was tested'); sys.exit(0)
 PORT = 8881; fails = []; notes = []
 d = tempfile.mkdtemp(prefix='pgobs_')
 json.dump({'OverlayPort': PORT, **{k: live[k] for k in ('ObsHost', 'ObsPort', 'ObsPassword') if k in live}}, open(os.path.join(d, 'host_secrets.json'), 'w'))

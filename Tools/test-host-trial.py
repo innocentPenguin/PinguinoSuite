@@ -152,11 +152,11 @@ try:
         except Exception: time.sleep(1)
     case('websocket', 'Streamer.bot-compatible WebSocket (GetCredits, GetActions, DoAction)', ws_compat)
     def newsteps():
-        doc = api('/api/automations')['doc']; doc['actions'].append({'id': 'ft', 'name': 'FirstToday', 'enabled': True, 'triggers': [{'type': 'first_today'}], 'steps': [{'type': 'log', 'text': 'first today {user}'}, {'type': 'alert_sound', 'kind': 'follow'}, {'type': 'press_key', 'key': 'Bogus'}]}); api('/api/automations', {'doc': doc})
+        doc = api('/api/automations')['doc']; doc['actions'].append({'id': 'ft', 'name': 'FirstToday', 'enabled': True, 'triggers': [{'type': 'first_today'}], 'steps': [{'type': 'log', 'text': 'first today {user}'}, {'type': 'alert_sound', 'kind': 'follow'}, {'type': 'alert_sound', 'kind': 'nokind'}, {'type': 'press_key', 'key': 'Bogus'}]}); api('/api/automations', {'doc': doc})
         say('newperson: hello', 2.0); r = [x for x in runs() if x['action'] == 'FirstToday' and not x['test']]
         say('newperson: again', 1.5); r2 = [x for x in runs() if x['action'] == 'FirstToday' and not x['test']]
         o = ' | '.join(r[0]['output']) if r else ''
-        return len(r) == 1 and len(r2) == 1 and 'no sound set' in o and 'unknown key' in o, o[:90]
+        return len(r) == 1 and len(r2) == 1 and 'playing follow.wav' in o and 'no sound set for nokind' in o and 'unknown key' in o, o[:90]
     case('steps', 'first_today fires once per day; alert_sound and press_key behave', newsteps)
     # --- APIs and pages ---
     def mgmt():
