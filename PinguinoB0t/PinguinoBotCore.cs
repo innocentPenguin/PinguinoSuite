@@ -4690,6 +4690,14 @@ public class CPHInline
         {
             _settings.WasLive = false;
             _settings.LastLiveSeen = Now();
+            // the stream just ended: the activity ends with it (queue closed and cleared, no chat line)
+            if (!string.IsNullOrEmpty(_settings.Activity) && _settings.Activity != "none")
+            {
+                ClearQueue();
+                _settings.Activity = "none";
+                CPH.LogInfo("[BVQ] Stream went offline: the activity was ended.");
+                PublishState("activity", "none");
+            }
             SaveSettings();
         }
     }
