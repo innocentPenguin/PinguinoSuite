@@ -16,7 +16,7 @@ namespace PinguinoHost
     /// ChattyPinguino says one short, freshly generated fail line. Valid flow: wait 1-5 s, timeout with "Sorry! (redeemer) redeemed your timeout! D:", 1-2 s later
     /// Chatty says "(target) has been timed out by (redeemer)". The timeout itself is done by PinguinoHelper, then PinguinoBot, then the streamer account (first that works);
     /// every chat line comes from Chatty and goes through HostApi.SendAs, so the 30 s duplicate guard applies. Settings: Data\runtime\timeout_reward.json (created on first use).</summary>
-    public static class TimeoutReward
+    public static partial class TimeoutReward
     {
         static readonly object L = new object();
         static readonly Dictionary<string, DateTime> _cool = new Dictionary<string, DateTime>();
@@ -27,7 +27,7 @@ namespace PinguinoHost
 
         public static JObject Config()
         {
-            var d = new JObject { { "enabled", true }, { "title", "Timeout" }, { "seconds", 60 }, { "cooldownSec", 0 }, { "userCooldownSec", 0 }, { "recentHours", 6 }, { "minScore", 0.7 },
+            var d = new JObject { { "enabled", true }, { "title", "Timeout" }, { "selfTitle", "Self Timeout" }, { "selfMaxSec", 300 }, { "selfDefaultSec", 60 }, { "autoComplete", true }, { "aiWaitSec", 6 }, { "seconds", 60 }, { "cooldownSec", 0 }, { "userCooldownSec", 0 }, { "recentHours", 6 }, { "minScore", 0.7 },
                 { "protectVip", false }, { "refund", true }, { "ai", true }, { "actors", new JArray { "helper", "core", "streamer" } } };
             try
             {
@@ -118,21 +118,11 @@ namespace PinguinoHost
             string via; HostApi.SendAs("chat", text, out via);
         }
 
-        public static void OnRedeem(Dictionary<string, object> args)
-        {
-            object t; if (!args.TryGetValue("title", out t)) return;
-            var cfg = Config(); if ((bool?)cfg["enabled"] == false) return;
-            if (!string.Equals((string)t, (string)cfg["title"] ?? "Timeout", StringComparison.OrdinalIgnoreCase)) return;
-            string who = Convert.ToString(args.ContainsKey("userName") ? args["userName"] : ""), typed = Convert.ToString(args.ContainsKey("input") ? args["input"] : "");
-            string rid = Convert.ToString(args.ContainsKey("redemptionId") ? args["redemptionId"] : ""), rw = Convert.ToString(args.ContainsKey("rewardId") ? args["rewardId"] : "");
-            Task.Run(() => { try { Handle(cfg, who, typed, rid, rw); } catch (Exception ex) { Clog.Warn("timeout-reward", "failed: " + ex.Message); } });
-        }
-
         public static string Handle(JObject cfg, string redeemer, string typed, string redemptionId, string rewardId)
         {
             string rlogin = Norm(redeemer); var roster = Roster.Recent((double?)cfg["recentHours"] ?? 6);
             string rname = roster.Where(r => r.Item1 == rlogin).Select(r => r.Item2).FirstOrDefault() ?? redeemer;
-            Action refund = () => { if ((bool?)cfg["refund"] != false && !Sim && redemptionId != "") Redeems.Cancel(redemptionId, rewardId); };
+            Action refund = () => Refund(cfg, redemptionId, rewardId);
             // cooldowns of the reward (global + per user), seconds; a redeem inside one is refunded without a word
             int g = (int?)cfg["cooldownSec"] ?? 0, u = (int?)cfg["userCooldownSec"] ?? 0;
             lock (L)
@@ -151,21 +141,27 @@ namespace PinguinoHost
             }
             string tname = hit.Name ?? hit.Login;
             int secs = Math.Max(1, Math.Min(1209600, (int?)cfg["seconds"] ?? 60));
-            var actors = (cfg["actors"] as JArray ?? new JArray()).Select(a => (string)a).ToList(); if (actors.Count == 0) actors = new List<string> { "helper", "core", "streamer" };
+            var actors = Actors(cfg);
             bool protect = hit.Role >= 3 || Boards.IsBot(hit.Login) || Boards.AllBots().Contains(hit.Login) || ((bool?)cfg["protectVip"] == true && hit.Role >= 2) || IsLiveMod(hit.Login);
             if (protect)
             {
                 Out(tname + " cannot be timed out by the reward: timing out " + rname + " instead");
+                var aiB = Task.Run(() => AiLine(cfg, "blunder", rname, tname, secs, typed));
                 Thread.Sleep(Sim ? 10 : 1000);
                 string by = Ban(actors, rlogin, secs, "You can't do that!");
-                ChattySay(FailLine(cfg, rname, tname));
+                if (by != null) { LogEvent("blunder", rlogin, hit.Login, secs, (string)cfg["title"], by); Complete(cfg, redemptionId, rewardId); }
+                else refund();
+                ChattySay(Pick(aiB, cfg, PlainFail(rname), rname, rname));
                 return Done("protected target " + hit.Login + "; redeemer " + rlogin + " timed out by " + (by ?? "nobody (could not)"));
             }
+            var aiV = Task.Run(() => AiLine(cfg, "valid", rname, tname, secs, typed));
             Wait(1000, 5000);
             string who2 = Ban(actors, hit.Login, secs, "Sorry! " + redeemer + " redeemed your timeout! D:");
             if (who2 == null) { refund(); ChattySay("@" + rname + " I couldn't time out " + tname + " (no mod rights?), points back."); return Done("could not time out " + hit.Login + ", refunded"); }
+            LogEvent("timeout", rlogin, hit.Login, secs, (string)cfg["title"], who2);
+            Complete(cfg, redemptionId, rewardId);
             Wait(1000, 2000);
-            ChattySay(tname + " has been timed out by " + rname);
+            ChattySay(Pick(aiV, cfg, tname + " has been timed out by " + rname, tname, rname));
             return Done("timed out " + hit.Login + " " + secs + " s via " + who2 + " (score " + hit.Score.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + ")");
         }
         static string Done(string s) { LastResult = s; Out(s); return s; }
@@ -220,34 +216,10 @@ namespace PinguinoHost
             "Mods are protected, {u}. Enjoy the nap!", "{u} aimed high and hit themself.", "{u} blundered hard. The mods wave goodbye.", "Nice try {u}, enjoy the timeout!",
             "{u} challenged a mod and lost.", "{u} blundered into a mod-shaped wall.", "That backfired fast, {u}.", "{u} should have checked the badge first." };
 
-        public static string FailLine(JObject cfg, string redeemer, string target)
+        static string PlainFail(string redeemer)
         {
-            string line = null;
-            if ((bool?)cfg["ai"] != false && !Sim) { try { line = AiLine(redeemer, target); } catch (Exception ex) { Clog.Warn("timeout-reward", "AI line failed: " + ex.Message); } }
-            if (line == null)
-            {
-                var fresh = Templates.Where(t => !Seen(t.Replace("{u}", redeemer))).ToList(); if (fresh.Count == 0) fresh = Templates.ToList();
-                line = fresh[Rnd.Next(fresh.Count)].Replace("{u}", redeemer);
-            }
-            lock (_lines) { _lines.Add(line); while (_lines.Count > 12) _lines.RemoveAt(0); }
-            return line;
-        }
-        static bool Seen(string l) { string n = Norm(l); lock (_lines) return _lines.Any(x => Norm(x) == n); }
-        static int Words(string s) { return Regex.Matches(s ?? "", @"\S+").Count; }
-        static string AiLine(string redeemer, string target)
-        {
-            List<string> recent; lock (_lines) recent = _lines.ToList();
-            string sys = "You are ChattyPinguino, a cheeky penguin in a Twitch chat. Write ONE short fail-style line (under 15 words, no quotes, no hashtags, at most one emoji) about a viewer who just blundered. Never reuse wording of these earlier lines: "
-                + (recent.Count == 0 ? "(none)" : string.Join(" | ", recent)) + ". Output only the line.";
-            string usr = redeemer + " spent channel points to time out " + target + ", but " + target + " is a moderator, so " + redeemer + " got timed out instead. Mention " + redeemer + " by name.";
-            for (int i = 0; i < 2; i++)
-            {
-                string l = Gpt.Ask(sys, usr + (i > 0 ? " (Be different and shorter.)" : "")); if (l == null) return null;
-                l = Regex.Replace(l.Trim().Trim('"'), @"\s+", " ");
-                if (l == "" || l.Length > 120 || Words(l) >= 15 || !l.ToLowerInvariant().Contains(Norm(redeemer).Length > 0 ? redeemer.ToLowerInvariant() : "") || Seen(l)) continue;
-                return l;
-            }
-            return null;
+            var fresh = Templates.Where(t => !Seen(t.Replace("{u}", redeemer))).ToList(); if (fresh.Count == 0) fresh = Templates.ToList();
+            return fresh[Rnd.Next(fresh.Count)].Replace("{u}", redeemer);
         }
     }
 

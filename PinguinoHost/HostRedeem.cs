@@ -24,12 +24,15 @@ namespace PinguinoHost
             if (string.IsNullOrEmpty(redemptionId) || string.IsNullOrEmpty(user)) return;
             lock (L) { _recent.Add(new Rec { User = user.ToLowerInvariant(), Id = redemptionId, Reward = rewardId ?? "", Song = title ?? "", At = DateTime.UtcNow }); if (_recent.Count > 200) _recent.RemoveAt(0); }
         }
-        public static string Cancel(string redemptionId, string rewardId)
+        public static string Cancel(string redemptionId, string rewardId) { return SetStatus(redemptionId, rewardId, "CANCELED"); }
+        /// <summary>marks the redemption fulfilled in Twitch's queue (auto-complete)</summary>
+        public static string Fulfill(string redemptionId, string rewardId) { return SetStatus(redemptionId, rewardId, "FULFILLED"); }
+        static string SetStatus(string redemptionId, string rewardId, string status)
         {
             if (string.IsNullOrEmpty(redemptionId) || string.IsNullOrEmpty(rewardId)) return "no redemption id";
             JToken d; string err;
-            string code = TwitchApi.Call(new HttpMethod("PATCH"), "/channel_points/custom_rewards/redemptions?id=" + Uri.EscapeDataString(redemptionId) + "&broadcaster_id={bid}&reward_id=" + Uri.EscapeDataString(rewardId), new JObject { { "status", "CANCELED" } }, out d, out err);
-            if (code.StartsWith("2")) { Clog.Info("refund", "refunded redemption " + redemptionId); try { EventLog.Backend("refund", "refunded a channel-point redemption", new JObject { { "redemption", redemptionId } }); } catch (Exception) { } return "refunded"; }
+            string code = TwitchApi.Call(new HttpMethod("PATCH"), "/channel_points/custom_rewards/redemptions?id=" + Uri.EscapeDataString(redemptionId) + "&broadcaster_id={bid}&reward_id=" + Uri.EscapeDataString(rewardId), new JObject { { "status", status } }, out d, out err);
+            if (code.StartsWith("2")) { Clog.Info("refund", (status == "CANCELED" ? "refunded" : "completed") + " redemption " + redemptionId); try { EventLog.Backend("refund", "refunded a channel-point redemption", new JObject { { "redemption", redemptionId } }); } catch (Exception) { } return status == "CANCELED" ? "refunded" : "completed"; }
             string why = code == "401" || code == "403" ? " (the streamer account needs channel:manage:redemptions: sign in again on the Host setup page; Twitch also only lets the app that created a reward refund it)" : code == "404" ? " (already fulfilled, cancelled or older than Twitch keeps it)" : "";
             Clog.Warn("refund", "could not refund redemption (HTTP " + code + "): " + err + why);
             try { EventLog.Backend("refund", "could not refund a redemption: HTTP " + code + why, new JObject { { "redemption", redemptionId } }, "warn"); } catch (Exception) { }

@@ -95,4 +95,61 @@ check(len(dos(out)) == 1 and 'actor=core' in dos(out)[0] and 'user=r1' in dos(ou
 out = run(ROSTER, [('r1', 'alice'), ('r1', 'zed')], None, {'userCooldownSec': 60})
 check(len(dos(out)) == 1 and any('cooldown' in l for l in out), 'user cooldown: %s' % dos(out))
 
+
+# 7) self timeout: duration parser matrix, the "1" coin flip, mods refused, auto-complete, fallback line, event log
+def run_self(items, extra=None, keep=False):
+    d = tempfile.mkdtemp(prefix='pgto_')
+    json.dump({'Channel': 'streamer1'}, open(os.path.join(d, 'host_secrets.json'), 'w'))
+    env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
+    env.update({'PINGUINO_COMPAT_WS_PORT': str(socket_free()), 'PINGUINO_TIMEOUT_FAST': '1'}); env.update(extra or {})
+    p = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
+    q = queue.Queue(); out = []
+    threading.Thread(target=lambda: [q.put(l.rstrip('\n')) for l in p.stdout], daemon=True).start()
+    def pump(t):
+        end = time.time() + t
+        while time.time() < end:
+            try: out.append(q.get(timeout=0.05))
+            except queue.Empty: pass
+    pump(4)
+    for c in ['*modguy: hi', '#streamer1: boss', 'pinguinob0t: beep']: p.stdin.write(c + '\n'); p.stdin.flush(); pump(0.15)
+    for who, typed in items: p.stdin.write('selfredeem %s %s\n' % (who, typed)); p.stdin.flush()
+    end = time.time() + 25
+    while time.time() < end and sum(1 for l in out if re.match(r'^\[timeout-reward\] (self timed out|could not|self timeout refused)', l)) < len(items): pump(0.2)
+    pump(1.0)
+    log = open(os.path.join(d, 'timeout_events.jsonl'), encoding='utf-8').read() if os.path.exists(os.path.join(d, 'timeout_events.jsonl')) else ''
+    p.kill(); time.sleep(0.3); shutil.rmtree(d, True)
+    return out, log
+matrix = [('5', 5), ('30', 30), ('30s', 30), ('30 sec', 30), ('2m', 120), ('5 min', 300), ('10 min', 300), ('999', 300), ('1h', 300), ('junk', 60), ('1 minute', 60), ('please 45 seconds ok', 45), ('2', 2)]
+items = [('s%d' % i, t) for i, (t, _) in enumerate(matrix)]
+out, log = run_self(items)
+secs = {}
+for l in dos(out):
+    m = re.search(r'user=(\S+) secs=(\d+) reason=(.*)', l)
+    if m: secs[m.group(1)] = (int(m.group(2)), m.group(3))
+for i, (t, want) in enumerate(matrix):
+    got = secs.get('s%d' % i, (None,))[0]
+    check(got == want, 'self-timeout %r -> expected %s s, got %s' % (t, want, got))
+check(all(r.startswith('You timed yourself out!') for _, r in secs.values()), 'self reason text')
+check(sum(1 for l in dos(out) if 'actor=helper' in l) == len(matrix), 'self-timeout goes through the helper first')
+check(len([l for l in out if l == '[timeout-reward] redemption fulfilled']) == len(matrix), 'each handled redemption is auto-completed')
+check(all(any(s.startswith('s%d needs a break from us' % i) or ('s%d' % i) in s for s in says(out)) for i in range(len(matrix))), 'a Chatty line for each self-timeout: %s' % says(out)[:3])
+check(len(log.strip().splitlines()) == len(matrix) and '"kind":"self"' in log, 'timeout events are logged (one jsonl line each)')
+# "1": coin flip 1 s / 60 s with the explanation in the reason
+out, log = run_self([('c%d' % i, '1') for i in range(14)])
+vals = set(); notes = True
+for l in dos(out):
+    m = re.search(r'secs=(\d+) reason=(.*)', l)
+    vals.add(int(m.group(1))); notes = notes and ("You didn't say secs or mins so I chose " + ('1 second' if m.group(1) == '1' else '60 seconds')) in m.group(2)
+check(vals == {1, 60}, 'bare "1" must flip between 1 s and 60 s (saw %s)' % sorted(vals))
+check(notes, 'the coin-flip reason says which was chosen')
+# mods / broadcaster / bots: nothing, redemption canceled
+out, log = run_self([('modguy', '30'), ('streamer1', '30'), ('pinguinob0t', '30')])
+check(len(dos(out)) == 0 and len([l for l in out if 'redemption canceled' in l]) == 3, 'mods/broadcaster/bots cannot self-time-out (refunded, no timeout): %s' % dos(out))
+# helper cannot -> core
+out, log = run_self([('x1', '30')], {'PINGUINO_TIMEOUT_FAIL': 'helper'})
+check(len(dos(out)) == 1 and 'actor=core' in dos(out)[0], 'self-timeout falls back helper -> core')
+# all actors fail: canceled, nothing said
+out, log = run_self([('x1', '30')], {'PINGUINO_TIMEOUT_FAIL': 'helper,core,streamer'})
+check(len(dos(out)) == 0 and any('redemption canceled' in l for l in out) and not any('needs a break' in s for s in says(out)), 'all failing: refunded and quiet')
+
 print('FAIL ' + '; '.join(fails) if fails else 'PASS timeoutreward'); sys.exit(1 if fails else 0)
