@@ -1864,6 +1864,7 @@ public class CPHInline
             queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username), practice = IsPractice(e.Username), sim = IsSim(e.Username), recycle = e.Recycle }),
             timedOut = _settings.TimedOut && !_settings.QueueOpen, timedOutAt = (_settings.TimedOut && !_settings.QueueOpen) ? (long?)_settings.TimedOutAt : null,
             recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes, strikeLimit = MaxStrikes,
+            strikes = StrikeMap(waiting.Select(e => e.Username)),   // [NEW] strike chips in the Master View: {login:{temp,half,perma}} for the queue and the live match
             overlay = new { altSeconds = _settings.OverlayAltSeconds, fadeMs = _settings.OverlayFadeMs },   // read by players.html / players_vertical.html
             activity = _settings.Activity,            currentMatch = match,
             liveMatch = hold ? live : null,   // [NEW][KOTH] only while the public view is being held
@@ -3743,6 +3744,7 @@ public class CPHInline
         {
             ClearQueue();
             _settings.Activity = "none";
+            SetKothFlag(false);
             SaveSettings();
             Say("Customs are over. The queue is closed and cleared.");
             PublishState("activity", "none");
@@ -3759,8 +3761,10 @@ public class CPHInline
         _settings.KothStarted = false;     // King of the Hill: the queue stays open until its first game is picked
         _settings.KothWins = new Dictionary<string, int>();   // a new activity starts a fresh leaderboard
         _settings.QueueOpen = true;        // the new activity's queue opens right away
+        ApplyActivityDefaults(sub);        // [NEW] format / koth / mode of the new activity
         SaveSettings();
         EnsureStreamerQueued();            // the streamer plays every match unless he's sitting out
+        if (sub == "koth" && _settings.AutoNextMatch) { _autoNextPending = true; _autoNextTold = false; _autoNextSince = DateTime.UtcNow; }
         if (sub == "koth")
             Say("👑 NOW PLAYING: KING OF THE HILL! The queue is OPEN to everyone: type !join. It CLOSES as soon as the first game is picked. Winners stay on, losers are out, and the leaderboard counts WINS.");
         else
@@ -4063,6 +4067,25 @@ public class CPHInline
         return true;
     }
 
+    // [NEW][KOTH] KOTH plays 1v1: remember the old size, restore it when KOTH goes off.
+    void SetKothFlag(bool on)
+    {
+        _settings.Koth = on;
+        if (on && _settings.DefaultFormat != "1v1") { _settings.KothPrevFormat = _settings.DefaultFormat; _settings.DefaultFormat = "1v1"; }
+        else if (!on && !string.IsNullOrEmpty(_settings.KothPrevFormat)) { _settings.DefaultFormat = _settings.KothPrevFormat; _settings.KothPrevFormat = ""; }
+    }
+
+    // [NEW] Switching activity applies that activity's defaults (server side). KOTH = 1v1 + koth on; every other activity = koth off.
+    // Competitive / casual / viewers: 2v2, balanced teams. Fortnite activities keep the current size (koth off, balanced).
+    void ApplyActivityDefaults(string sub)
+    {
+        bool koth = sub == "koth";
+        if (!koth) { _settings.Koth = false; if (!string.IsNullOrEmpty(_settings.KothPrevFormat)) _settings.KothPrevFormat = ""; }
+        if (koth) { _settings.KothPrevFormat = ""; _settings.Koth = true; _settings.DefaultFormat = "1v1"; _settings.TeamMode = "balanced"; }
+        else if (sub == "competitive" || sub == "casual" || sub == "viewers") { _settings.DefaultFormat = "2v2"; _settings.TeamMode = "balanced"; }
+        else { _settings.TeamMode = "balanced"; }
+    }
+
     // !koth [on|off|true|false]: king of the hill. Anyone can ask; mods change it.
     bool HandleKoth(string user, string input, bool isPrivileged)
     {
@@ -4077,10 +4100,7 @@ public class CPHInline
         if (v == "on" || v == "true" || v == "yes") on = true;
         else if (v == "off" || v == "false" || v == "no") on = false;
         else { Say("@" + user + " Usage: !koth <on|off>"); return true; }
-        _settings.Koth = on;
-        // [NEW][KOTH] KOTH plays 1v1: remember the old size, restore it when KOTH goes off.
-        if (on && _settings.DefaultFormat != "1v1") { _settings.KothPrevFormat = _settings.DefaultFormat; _settings.DefaultFormat = "1v1"; }
-        else if (!on && !string.IsNullOrEmpty(_settings.KothPrevFormat)) { _settings.DefaultFormat = _settings.KothPrevFormat; _settings.KothPrevFormat = ""; }
+        SetKothFlag(on);
         SaveSettings();
         Say("KOTH is now " + (on ? "ON: 1v1, the winner stays on and challengers rotate in one at a time." : "OFF: everyone is out after a match (" + _settings.DefaultFormat + ")."));
         if (on) { _autoNextPending = _settings.AutoNextMatch; _autoNextTold = false; _autoNextSince = DateTime.UtcNow; try { TryAutoNext(); } catch (Exception) { } }
@@ -4650,6 +4670,19 @@ public class CPHInline
     //  Every time the stream goes live everybody loses one. Shown on the website profile (standings column 9).
     // ══════════════════════════════════════════════════════════════
     int MaxStrikes { get { int n = _settings != null ? _settings.StrikeLimit : 3; return n < 1 ? 3 : n > 10 ? 10 : n; } }   // 3 by default; tunable from the Suite (!tune strikes <1-10>)
+    object StrikeMap(IEnumerable<string> queueNames)
+    {
+        var names = new HashSet<string>(queueNames.Select(n => (n ?? "").ToLower()));
+        if (_lastBalance != null && _lastBalance.Players != null) foreach (var tp in _lastBalance.Players) names.Add((tp.Username ?? "").ToLower());
+        var d = new Dictionary<string, object>();
+        foreach (var n in names)
+        {
+            Player p; if (n == "" || !_players.TryGetValue(n, out p)) continue;
+            d[n] = new { temp = p.Strikes, half = p.HalfStrike > 0 ? 1 : 0, perma = p.PermaStrikes };
+        }
+        return d;
+    }
+
     static int StrikeTotal(Player p) { return p.Strikes + p.PermaStrikes; }
     static readonly System.Text.RegularExpressions.Regex PermaWords = new System.Text.RegularExpressions.Regex(@"\b(perma|permanent|toxic|toxicity|slur|slurs|racism|racist|hate)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 

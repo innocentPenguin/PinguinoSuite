@@ -30,6 +30,11 @@ public static class Harness
         Console.WriteLine((ok ? "PASS " : "FAIL ") + what);
         if (!ok) { failed++; Console.WriteLine("   chat: " + string.Join(" || ", CPHProxy.Sent)); }
     }
+    static void ForceFormat(string f)
+    {
+        var fs = typeof(CPHInline).GetField("_settings", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var st = fs.GetValue(null); st.GetType().GetProperty("DefaultFormat").SetValue(st, f);
+    }
     static string MatchId() { var m = State()["currentMatch"]; return m == null || m.Type == Newtonsoft.Json.Linq.JTokenType.Null ? "" : m["id"].ToString(); }
     static string[] Q() { return State()["queue"].Select(x => (string)x["user"]).ToArray(); }
     static string[] Team(string side) { return State()["currentMatch"][side].Select(x => (string)x["Username"]).ToArray(); }
@@ -49,6 +54,7 @@ public static class Harness
 
         // ---- competitive ----
         Run("mod1", "!activity", "competitive", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         Check(State()["activity"].ToString() == "competitive" && (bool)State()["queueOpen"], "activity competitive opens the queue");
         Check(Q().SequenceEqual(new[] { "innocentpenguin_" }), "streamer is auto-added at #1");
         foreach (var n in new[] { "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8" }) Run(n, "!join");
@@ -100,6 +106,7 @@ public static class Harness
         // ---- casual: no stats ----
         var waitingBefore = Q().Where(x => x != "innocentpenguin_").ToArray();
         Run("mod1", "!activity", "casual", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         Check(State()["activity"].ToString() == "casual", "casual is now the activity");
         Check(State()["currentMatch"] == null || State()["currentMatch"].Type == Newtonsoft.Json.Linq.JTokenType.Null, "switching activity ends the current match");
         Check(!nextMatch.Except(new[] { "innocentpenguin_" }).Any(x => Q().Contains(x)), "players who were in the match are removed on switch");
@@ -123,6 +130,7 @@ public static class Harness
 
         // ---- MMR sources ----
         Run("mod1", "!activity", "viewers", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         Run("mod1", "!setmmr", "@p2 1500 self", true);
         Check(Players()["p2"]["MmrSource"].ToString() == "self" && Players()["p2"]["PeakMmr"].ToString() == "1500", "self-set MMR keeps its source");
         Run("p2", "!join");
@@ -131,6 +139,7 @@ public static class Harness
         // ---- "Blue stays" (next-match mode): that team stays, everyone else who played is kicked ----
         Run("mod1", "!activity", "end", true);
         Run("mod1", "!activity", "casual", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         foreach (var n in new[] { "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10" }) Run(n, "!join");
         Run("mod1", "!balance", "", true);
         var firstBlue = Team("blue").Where(x => x != "innocentpenguin_").ToArray();
@@ -149,6 +158,7 @@ public static class Harness
         // ---- MATCH HISTORY FIXES: change the winner / remove a match; stats are reversed and re-applied ----
         Run("mod1", "!activity", "end", true);
         Run("mod1", "!activity", "competitive", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         foreach (var n in new[] { "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10", "p11" }) Run(n, "!join");
         Run("mod1", "!balance", "", true);
         var histBlue = Team("blue").Where(x => x != "innocentpenguin_").ToArray();
@@ -217,6 +227,7 @@ public static class Harness
 
         // ---- STREAMER SWITCH: turning "playing" back ON puts him straight back into the queue ----
         Run("mod1", "!activity", "competitive", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         Check(Q().Contains("innocentpenguin_"), "streamer is in the queue when an activity starts");
         Run("mod1", "!streamer", "out", true);
         Check(!Q().Contains("innocentpenguin_"), "sitting out takes him out of the queue");
@@ -240,6 +251,7 @@ public static class Harness
 
         // streamer sits out, a match starts without him and has an empty seat: switching back ON puts him in that seat
         Run("mod1", "!activity", "competitive", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         Run("mod1", "!streamer", "out", true);
         foreach (var n in new[] { "p1", "p2", "p3", "p4", "p5", "p6" }) Run(n, "!join");
         Run("mod1", "!balance", "", true);
@@ -278,6 +290,7 @@ public static class Harness
         Run("mod1", "!activity", "zonewars", true);
         Check(!CPHProxy.Obs.Any(x => x.StartsWith("scene:")), "already on the Fortnite scene: no second switch");
         Run("mod1", "!activity", "competitive", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         Check(CPHProxy.Obs.Contains("scene:Rocket League"), "starting a Rocket League activity switches back");
         Run("p3", "!obs", "auto off", false);
         Check((bool)State()["obs"]["auto"], "non-mods cannot turn the auto switch off");
@@ -292,6 +305,7 @@ public static class Harness
 
         // ---- CASUAL STYLE: group (default) or random teams ----
         Run("mod1", "!activity", "casual", true);
+        ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
         Check((string)State()["casualStyle"] == "teams", "casual always uses teams");
         foreach (var n in new[] { "p1", "p2", "p3", "p4", "p5", "p6" }) Run(n, "!join");
         CPHProxy.Sent.Clear();
@@ -445,7 +459,7 @@ public static class Harness
 
         // ---- KING OF THE HILL (the activity) ----
         holdUntil.SetValue(null, 0L);   // the previous test left a finished match on hold
-        Run("mod1", "!activity", "koth", true);
+        Run("mod1", "!activity", "koth", true); ForceFormat("3v3");   // KOTH defaults to 1v1; this legacy check plays 3v3
         Check((string)State()["activity"] == "koth" && (bool)State()["queueOpen"], "King of the Hill opens the queue for everyone");
         Check((bool)State()["koth"], "the King of the Hill activity is KOTH mode");
         foreach (var n in new[] { "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10" }) Run(n, "!join");
@@ -821,6 +835,20 @@ public static class Harness
             CPHProxy.Sent.Clear(); Run("mod1", "!koth", "off", true);
             Check(CPHProxy.Sent.Any(m => m.Contains("KOTH is now OFF") && m.Contains("3v3")), "koth: off restores 3v3: " + string.Join(" | ", CPHProxy.Sent));
             Run("mod1", "!autonext", "off", true); Run("mod1", "!match", "clear", true);
+        }
+        // ===== [NEW] activity switch applies the activity defaults =====
+        {
+            Run("mod1", "!match", "clear", true); Run("mod1", "!queue", "clear", true); Run("mod1", "!format", "3v3", true);
+            Run("mod1", "!activity", "rl koth", true);
+            Check((string)State()["format"] == "1v1" && (bool)State()["koth"], "activity koth: 1v1 and koth on: " + (string)State()["format"]);
+            Run("mod1", "!activity", "rl competitive", true);
+            Check((string)State()["format"] == "2v2" && !(bool)State()["koth"] && (string)State()["mode"] == "balanced", "activity competitive: 2v2, koth off, balanced: " + (string)State()["format"] + " koth=" + State()["koth"]);
+            Run("mod1", "!activity", "rl koth", true); Run("mod1", "!activity", "rl casual", true);
+            Check((string)State()["format"] == "2v2" && !(bool)State()["koth"], "leaving koth for casual: 2v2, koth off");
+            Run("mod1", "!activity", "rl koth", true); Run("mod1", "!activity", "end", true);
+            Check(!(bool)State()["koth"], "activity end: koth off");
+            Check(State()["strikes"] != null && State()["strikeLimit"] != null, "state has strikes + strikeLimit");
+            Run("mod1", "!queue", "clear", true);
         }
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
         try { Directory.Delete(dir, true); } catch { }

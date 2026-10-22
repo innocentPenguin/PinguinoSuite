@@ -49,7 +49,7 @@ namespace PinguinoHost
                 match = new JObject { { "id", cm["id"] }, { "players", pl }, { "orange", orange }, { "blue", blue }, { "status", cm["status"] } };
             }
             return new JObject { { "ok", true }, { "open", (bool?)s["queueOpen"] ?? false }, { "activity", s["activity"] }, { "mode", s["mode"] }, { "gameMode", s["gameMode"] }, { "format", s["format"] }, { "koth", (bool?)s["koth"] ?? false }, { "casualStyle", s["casualStyle"] },
-                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
+ { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
         }
         /// <summary>{action, value}: queue open|close|clear, next [blue|orange], match clear|fill|queue, win blue|orange, finish, balance, reroll, kick &lt;name&gt;, mode/format/koth/casual &lt;value&gt;.</summary>
         public static JObject Mod(JObject b)
