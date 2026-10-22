@@ -59,7 +59,7 @@
   const HOSTMOD = new Set(['queue', 'next', 'match', 'win', 'finish', 'balance', 'reroll', 'kick', 'mode', 'format', 'koth', 'casual']);
   /* ---------- player simulator: a local fake customs state, nothing leaves the app ---------- */
   const SIMNAMES = ['spywobbles', 'salman201223', 'SkyRLTN', 'LvLMarshmello', 'pineyapplie', 'gonkilluagg', 'yoohoo15', 'FrostByte', 'NovaKick', 'AeroLily', 'TurboToast', 'WaffleRL', 'DemoDan', 'BumpBoi', 'CeilingCat', 'FlipReset'];
-  const simFresh = () => ({ open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', _n: 0, _id: 0 });
+  const simFresh = () => ({ waiting: true, open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', _n: 0, _id: 0 });
   function simAdd(st, n) { for (let i = 0; i < n; i++) { const k = st._n++, nm = SIMNAMES[k % SIMNAMES.length] + (k >= SIMNAMES.length ? Math.floor(k / SIMNAMES.length) : ''); st.queue.push({ username: nm.toLowerCase(), display: nm, mmr: 600 + Math.floor(Math.random() * 900) }); } }
   const simSize = st => +String(st.format || '2v2')[0] || 2;
   function simSplit(st, ps) {
@@ -73,6 +73,10 @@
   }
   function simApply(action, value) {
     const st = ui.simState, v = value || ''; let msg = '';
+    const r0 = simApply0(st, action, v); if (action === 'sim' && !ui.simState.match && ui.simState.waiting && ui.simState.queue.length >= simSize(ui.simState) * 2) { simFill(ui.simState); ui.simState.waiting = false; return (r0 ? r0 + '; ' : '') + 'enough players, game started'; } return r0;
+  }
+  function simApply0(st, action, v) {
+    let msg = '';
     const nameOf = x => String(x).toLowerCase();
     if (action === 'sim') { if (v === 'add') simAdd(st, 1); else if (v === 'add4') simAdd(st, 4); else if (v === 'add8') simAdd(st, 8); else if (v === 'rm') st.queue.pop(); else if (v === 'reset') ui.simState = simFresh(); }
     else if (action === 'activity') { const a = v.split(' ').pop(); st.activity = a === 'end' ? 'none' : a; if (a === 'koth') st.koth = true; }
@@ -86,7 +90,7 @@
         st.queue.push(...out); const ch = st.queue.splice(0, simSize(st));
         const orange = win === 'orange' ? stay : ch, blue = win === 'orange' ? ch : stay;
         st.match = { id: ++st._id, status: 'live', orange: orange.map(p => p.display), blue: blue.map(p => p.display), _p: stay.concat(ch) }; msg = win + ' stays';
-      } else { st.queue.push(...ps); st.match = null; msg = win + ' won'; if (st.queue.length >= simSize(st) * 2) { simFill(st); msg += ', next game started'; } else msg += ', waiting for ' + (simSize(st) * 2 - st.queue.length) + ' more player(s)'; }
+      } else { st.queue.push(...ps); st.match = null; msg = win + ' won'; if (st.queue.length >= simSize(st) * 2) { simFill(st); msg += ', next game started'; } else { st.waiting = true; msg += ', waiting for ' + (simSize(st) * 2 - st.queue.length) + ' more player(s)'; } }
     }
     else if (action === 'reroll' || action === 'balance') { if (st.match) { const [o, bl] = simSplit(Object.assign({}, st, { mode: action === 'reroll' ? 'random' : 'balanced' }), st.match._p); st.match.orange = o.map(p => p.display); st.match.blue = bl.map(p => p.display); } }
     else if (action === 'mode') st.mode = v; else if (action === 'format') st.format = v; else if (action === 'gamemode') st.gameMode = v;
