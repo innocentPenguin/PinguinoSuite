@@ -126,6 +126,94 @@ fn quit_app(app: AppHandle, stop_modules: bool) {
     quit_now(&app, stop_modules);
 }
 
+/// Full-screen state. While set, mainwin::save ignores the window (the full-screen rectangle must never become the remembered window).
+pub static FULLSCREEN: AtomicBool = AtomicBool::new(false);
+/// Window rectangle and maximized flag from just before full screen, so leaving it restores exactly that.
+static FS_PREV: Mutex<Option<(tauri::PhysicalPosition<i32>, tauri::PhysicalSize<u32>, bool)>> = Mutex::new(None);
+
+fn set_fs(app: &AppHandle, on: bool) {
+    let Some(w) = app.get_webview_window("main") else { return };
+    if on == FULLSCREEN.load(Ordering::SeqCst) {
+        return;
+    }
+    if on {
+        mainwin::save(&w, true);
+        if let (Ok(p), Ok(s), Ok(m)) = (w.outer_position(), w.outer_size(), w.is_maximized()) {
+            *FS_PREV.lock().unwrap() = Some((p, s, m));
+        }
+        FULLSCREEN.store(true, Ordering::SeqCst);
+        let _ = w.show();
+        let _ = w.set_fullscreen(true);
+        let _ = w.set_focus();
+    } else {
+        let _ = w.set_fullscreen(false);
+        FULLSCREEN.store(false, Ordering::SeqCst);
+        if let Some((p, s, m)) = FS_PREV.lock().unwrap().take() {
+            if m {
+                let _ = w.maximize();
+            } else {
+                let _ = w.unmaximize();
+                let _ = w.set_size(s);
+                let _ = w.set_position(p);
+            }
+        }
+        let _ = w.eval("window.pgFsBar&&window.pgFsBar(false)");
+    }
+    let _ = w.eval(&format!("window.pgFsState&&window.pgFsState({})", on));
+}
+
+#[tauri::command]
+fn set_fullscreen(app: AppHandle, on: bool) {
+    set_fs(&app, on);
+}
+
+#[tauri::command]
+fn toggle_fullscreen(app: AppHandle) {
+    set_fs(&app, !FULLSCREEN.load(Ordering::SeqCst));
+}
+
+#[cfg(windows)]
+fn f11_down() -> bool {
+    extern "system" {
+        fn GetAsyncKeyState(vk: i32) -> i16;
+    }
+    unsafe { (GetAsyncKeyState(0x7A) as u16) & 0x8000 != 0 }
+}
+#[cfg(not(windows))]
+fn f11_down() -> bool {
+    false
+}
+
+/// Rust-side watcher (iframes swallow mouse and key events, so the page cannot see them): F11 toggles full screen while the window is focused;
+/// in full screen the cursor touching the bottom screen edge shows the exit bar (drawn by the page, above the iframes) and leaving it hides the bar.
+fn start_fs_watcher(app: AppHandle) {
+    std::thread::spawn(move || {
+        let (mut f11_prev, mut bar) = (false, false);
+        loop {
+            std::thread::sleep(Duration::from_millis(40));
+            let Some(w) = app.get_webview_window("main") else { continue };
+            let down = f11_down() && w.is_focused().unwrap_or(false);
+            if down && !f11_prev {
+                set_fs(&app, !FULLSCREEN.load(Ordering::SeqCst));
+            }
+            f11_prev = down;
+            if !FULLSCREEN.load(Ordering::SeqCst) {
+                bar = false;
+                continue;
+            }
+            let (Ok(c), Ok(Some(m))) = (w.cursor_position(), w.current_monitor()) else { continue };
+            let (mp, ms) = (m.position(), m.size());
+            let inside_x = c.x >= mp.x as f64 && c.x < (mp.x + ms.width as i32) as f64;
+            let bottom = (mp.y + ms.height as i32) as f64;
+            let want = inside_x && if bar { c.y >= bottom - 56.0 } else { c.y >= bottom - 2.0 };
+            if want != bar {
+                bar = want;
+                let _ = w.eval(&format!("window.pgFsBar&&window.pgFsBar({})", bar));
+            }
+        }
+    });
+}
+
 fn port() -> u16 {
     std::env::var("PINGUINO_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8760)
 }
@@ -298,19 +386,24 @@ fn main() {
         .plugin(nav_guard())
         .manage(Core { child: Mutex::new(child), token })
         .manage(windows::Layouts::load(data_dir().join("windows.json")))
-        .invoke_handler(tauri::generate_handler![core_config, quit_app, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows, windows::open_site_window, windows::clear_site_data, splash::app_ready])
+        .invoke_handler(tauri::generate_handler![core_config, quit_app, set_fullscreen, toggle_fullscreen, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows, windows::open_site_window, windows::clear_site_data, splash::app_ready])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Show PinguinoSuite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit (modules keep running)", true, None::<&str>)?;
             let quit_all = MenuItem::with_id(app, "quit_all", "Quit and stop all modules", true, None::<&str>)?;
             let force = MenuItem::with_id(app, "force_quit", "Force quit (kills everything)", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &quit, &quit_all, &force])?;
+            let fs_item = MenuItem::with_id(app, "fullscreen", "Full screen (F11)", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &fs_item, &quit, &quit_all, &force])?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("PinguinoSuite")
                 .menu(&menu)
                 .on_menu_event(|app, ev| match ev.id.as_ref() {
                     "open" => show_main(app),
+                    "fullscreen" => {
+                        show_main(app);
+                        set_fs(app, !FULLSCREEN.load(Ordering::SeqCst));
+                    }
                     "quit" | "quit_all" => quit_now(app, ev.id.as_ref() == "quit_all"),
                     "force_quit" => {
                         force_kill_all();
@@ -326,6 +419,7 @@ fn main() {
                     _ => {}
                 })
                 .build(app)?;
+            start_fs_watcher(app.handle().clone());
             // Started by autostart: stay in the tray.
             if std::env::args().any(|a| a == "--background") {
                 if let Some(w) = app.get_webview_window("main") {

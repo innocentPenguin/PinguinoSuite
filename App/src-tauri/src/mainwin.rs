@@ -91,6 +91,9 @@ fn now_ms() -> u64 {
 /// Remember the window. `force` skips the throttle (close / quit). Minimized or hidden windows are ignored (their reported position is bogus);
 /// while maximized only the flag changes, so un-maximizing returns to the previous normal size.
 pub fn save(w: &WebviewWindow, force: bool) {
+    if crate::FULLSCREEN.load(Ordering::Relaxed) {
+        return; // full screen is not the window's remembered size
+    }
     if !force {
         let t = now_ms();
         if t.saturating_sub(LAST.load(Ordering::Relaxed)) < 400 {
