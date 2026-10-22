@@ -25,6 +25,7 @@ namespace PinguinoHost
             var stable = (JArray)shape.DeepClone(); foreach (JObject c in stable) { c.Remove("uses"); c.Remove("lastUsed"); }
             string key = Convert.ToBase64String(SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(stable.ToString(Newtonsoft.Json.Formatting.None))));
             if (key == _key && (DateTime.UtcNow - _last).TotalSeconds < 60) return;
+            if (_fails > 0 && (DateTime.UtcNow - _last).TotalSeconds < Math.Min(600, 10 * Math.Pow(2, Math.Min(_fails, 6)))) return;   // the site said no: back off (10 s, 20 s ... 10 min) instead of asking every tick
             JObject r; int code = SiteHttp.Call("POST", "/api/bot/commands-all", new JObject { { "commands", shape } }, k, out r);
             _last = DateTime.UtcNow;
             if (code >= 200 && code < 300) { _fails = 0; _key = key; _result = "pushed " + shape.Count; }

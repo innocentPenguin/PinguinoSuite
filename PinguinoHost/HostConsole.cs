@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Newtonsoft.Json.Linq;
@@ -10,6 +11,7 @@ namespace PinguinoHost
     public static class Clog
     {
         static string _file; static readonly object _lock = new object();
+        static readonly Dictionary<string, KeyValuePair<DateTime, int[]>> _seen = new Dictionary<string, KeyValuePair<DateTime, int[]>>(); public static int RepeatWindowMin = 30;
         static string _lastKey = ""; static DateTime _lastAt = DateTime.MinValue;
         public static string LastErrorText = ""; public static DateTime LastErrorAt = DateTime.MinValue;
 
@@ -32,6 +34,15 @@ namespace PinguinoHost
                     string key = level + "|" + source + "|" + msg;                       // the same line again within 30 s is a reconnect loop, not news
                     if (key == _lastKey && (DateTime.UtcNow - _lastAt).TotalSeconds < 30) return;
                     _lastKey = key; _lastAt = DateTime.UtcNow;
+                    if (level != "info")
+                    {
+                        // the same warning/error (counters in the text ignored, HTTP codes kept) is written once per window with a count of the repeats, not once per attempt
+                        string rk = level + "|" + source + "|" + System.Text.RegularExpressions.Regex.Replace(msg ?? "", @"(?<!HTTP )\b\d+\b", "#");
+                        if (_seen.Count > 500) _seen.Clear();
+                        if (_seen.TryGetValue(rk, out var st) && (DateTime.UtcNow - st.Key).TotalMinutes < RepeatWindowMin) { st.Value[0]++; return; }
+                        int more = _seen.TryGetValue(rk, out st) ? st.Value[0] : 0; _seen[rk] = new KeyValuePair<DateTime, int[]>(DateTime.UtcNow, new int[1]);
+                        if (more > 0) msg = msg + " (" + more + " more since the last time it was logged)";
+                    }
                     try { if (File.Exists(_file) && new FileInfo(_file).Length > 2 * 1024 * 1024) File.Move(_file, _file + ".old"); } catch (Exception) { }
                     var o = new JObject { { "ts", DateTime.UtcNow.ToString("o") }, { "module", "host" }, { "level", level }, { "source", source }, { "msg", Cut(msg) } };
                     File.AppendAllText(_file, o.ToString(Newtonsoft.Json.Formatting.None) + Environment.NewLine, new UTF8Encoding(false));
