@@ -55,6 +55,12 @@
   .team h2 span { font-size:22px; font-weight:500; color:var(--muted); letter-spacing:1px; }
   .player { display:flex; align-items:center; gap:14px; padding:14px 18px; margin-top:12px; border-radius:12px;
             background:rgba(0,0,0,.22); font-size:50px; font-weight:800; line-height:1.15; opacity:0; animation:pop .45s forwards; }
+  /* Live edits (!in/!out/!kick/!move/fill/reroll): rows are keyed per player and diffed, never rebuilt. */
+  .player.live { animation:none; opacity:1; }
+  .player.enter { animation:slideIn .5s cubic-bezier(.2,.9,.3,1) forwards; }
+  .player.leaving { animation:slideOut .4s ease-in forwards; pointer-events:none; }
+  @keyframes slideIn { from { opacity:0; transform:translateX(-60px) scale(.94); } to { opacity:1; transform:none; } }
+  @keyframes slideOut { from { opacity:1; transform:none; max-height:120px; } to { opacity:0; transform:translateX(70px) scale(.94); max-height:0; margin-top:0; padding-top:0; padding-bottom:0; } }
   @keyframes pop { from { opacity:0; transform:translateY(16px) scale(.96); } to { opacity:1; transform:none; } }
 
   .vs { align-self:center; width:90px; text-align:center; transition:opacity .3s, width .8s; font-size:64px; font-weight:800; text-shadow:0 4px 14px rgba(0,0,0,.6); }
@@ -117,7 +123,7 @@
               koth:"KING OF THE HILL", boxfights:"FORTNITE BOXFIGHTS", zonewars:"FORTNITE ZONE WARS", fnviewers:"FORTNITE: PLAYING WITH VIEWERS" };
   var MODE = { dropshot:"DROPSHOT", rumble:"RUMBLE" };
   var DEMO = location.search.indexOf("demo") >= 0;
-  var lastTeamsKey = "", lastStatus = "", shrinkTimer = null, hideTimer = null;
+  var lastTeamsKey = "", lastRosterKey = "", lastStatus = "", shrinkTimer = null, hideTimer = null;
   var stage = document.getElementById("stage");
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
@@ -127,6 +133,51 @@
   function playersHtml(list) {
     return (list || []).map(function (p, i) {
       return '<div class="player" style="animation-delay:' + (0.15 + i * 0.12) + 's">' + nameHtml(p) + '</div>';
+    }).join("");
+  }
+
+
+  // ── Keyed diff: same match, teams edited -> animate only what changed (no reveal, no flicker) ──
+  function pkey(p) { return norm(f(p, "Username") || f(p, "Epic")); }
+  function nameSig(p) { return (f(p, "Username") || "") + "|" + (f(p, "Epic") || ""); }
+  function stageScale() { var w = stage.offsetWidth; return w ? stage.getBoundingClientRect().width / w : 1; }
+  function syncRows(containers, lists) {
+    var old = {}, firstRect = {}, k, i, c;
+    containers.forEach(function (cn) { Array.prototype.forEach.call(cn.children, function (el) { if (el.dataset.key && !el.classList.contains("leaving")) { old[el.dataset.key] = el; firstRect[el.dataset.key] = el.getBoundingClientRect(); } }); });
+    var want = {};
+    lists.forEach(function (l) { (l || []).forEach(function (p) { want[pkey(p)] = true; }); });
+    Object.keys(old).forEach(function (key) {            // leavers: slide/fade out, then remove
+      if (want[key]) return;
+      var el = old[key]; delete old[key]; el.classList.remove("enter", "live"); el.classList.add("leaving");
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 450);
+    });
+    var moved = [];
+    lists.forEach(function (l, ci) {
+      var cn = containers[ci], prev = null;
+      (l || []).forEach(function (p) {
+        var key = pkey(p), el = old[key], fresh = !el;
+        if (fresh) { el = document.createElement("div"); el.className = "player enter"; el.dataset.key = key; el.dataset.sig = nameSig(p); el.innerHTML = nameHtml(p); old[key] = el; }
+        else if (el.dataset.sig !== nameSig(p)) { el.dataset.sig = nameSig(p); el.innerHTML = nameHtml(p); }
+        if (!fresh && !el.classList.contains("enter")) el.classList.add("live");
+        var anchor = prev ? prev.nextSibling : cn.firstChild;
+        while (anchor && anchor.classList && anchor.classList.contains("leaving") && anchor !== el) anchor = anchor.nextSibling;
+        if (el.parentNode !== cn || el.previousElementSibling !== prev) cn.insertBefore(el, prev ? prev.nextSibling : cn.firstChild);
+        if (!fresh) moved.push(key);
+        prev = el;
+      });
+    });
+    var sc = stageScale();                                // FLIP: slide survivors from where they were to where they are (swaps cross columns)
+    moved.forEach(function (key) {
+      var el = old[key], a = firstRect[key], b = el.getBoundingClientRect();
+      if (!a) return;
+      var dx = (a.left - b.left) / sc, dy = (a.top - b.top) / sc;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }], { duration: 500, easing: "cubic-bezier(.2,.8,.2,1)" });
+    });
+  }
+  function seatRows(list) {            // initial reveal rows carry a key too, so the first edit can diff against them
+    return (list || []).map(function (p, i) {
+      return '<div class="player" data-key="' + esc(pkey(p)) + '" data-sig="' + esc(nameSig(p)) + '" style="animation-delay:' + (0.15 + i * 0.12) + 's">' + nameHtml(p) + '</div>';
     }).join("");
   }
 
@@ -140,10 +191,22 @@
   function render(s) {
     applyAlt(s);
     var m = s && s.currentMatch;
-    if (!m) { stage.classList.remove("show"); lastTeamsKey = ""; return; }
+    if (!m) { stage.classList.remove("show"); lastTeamsKey = ""; lastRosterKey = ""; return; }
 
-    var teamsKey = JSON.stringify([m.id, m.blue, m.orange, m.group, s.activity]);
+    var teamsKey = JSON.stringify([m.id, m.group, s.activity]), rosterKey = JSON.stringify([m.blue, m.orange, m.format]);
+    if (teamsKey === lastTeamsKey && rosterKey !== lastRosterKey) {
+      // Same match, roster edited (in/out/kick/move/fill/swap/reroll/balance): diff in place.
+      lastRosterKey = rosterKey;
+      var fnl = s.game === "fortnite", mb = !fnl && MODE[s.gameMode] ? " • " + MODE[s.gameMode] : "";
+      document.getElementById("title").textContent = (m.finished || m.status === "finished" ? document.getElementById("title").textContent : (m.format || "") + mb + " • MATCH #" + m.id);
+      if (m.group) syncRows([document.getElementById("groupList")], [(m.blue || []).concat(m.orange || [])]);
+      else syncRows([document.getElementById("blue"), document.getElementById("orange")], [m.blue, m.orange]);
+      if (stage.classList.contains("mini")) setMini();
+      lastStatus = m.status;
+      return;
+    }
     if (teamsKey !== lastTeamsKey) {
+      lastRosterKey = rosterKey;
       // New match or reroll: big reveal
       lastTeamsKey = teamsKey;
       lastStatus = "";
@@ -159,11 +222,11 @@
         var all = (m.blue || []).concat(m.orange || []);
         var size = { "1v1":1, "2v2":2, "3v3":3, "4v4":4 }[m.format] || 3;
         document.getElementById("groupList").style.setProperty("--cols", size);
-        document.getElementById("groupList").innerHTML = playersHtml(all);
+        document.getElementById("groupList").innerHTML = seatRows(all);
         document.getElementById("groupFmt").textContent = m.format || "";
       }
-      document.getElementById("blue").innerHTML = playersHtml(m.blue);
-      document.getElementById("orange").innerHTML = playersHtml(m.orange);
+      document.getElementById("blue").innerHTML = seatRows(m.blue);
+      document.getElementById("orange").innerHTML = seatRows(m.orange);
       setWinner(null);
       stage.classList.remove("mini");
       stage.classList.add("show");
@@ -216,7 +279,7 @@
     else setTimeout(function () { demo.currentMatch.status = "finished"; demo.lastEvent = { Type:"match_result", Detail:"orange" }; render(demo); }, 6000);   // winner after 6s
   } else {
     poll();
-    setInterval(poll, 1000);
+    setInterval(poll, 400);
   }
 </script>
 </body>

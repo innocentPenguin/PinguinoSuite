@@ -40,6 +40,11 @@
   html.alt .nm:not(.one) .n1 { opacity:0; transform:translateY(-40%); }
   html.alt .nm .n2 { opacity:1; transform:none; }
   .p.empty { background:transparent; border:1px dashed rgba(255,255,255,.3); color:rgba(255,255,255,.55); font-weight:500; }
+  /* Live edits: rows are keyed per player and diffed (enter / leave / cross-column slide), never rebuilt. */
+  .p.enter { animation:slideIn .5s cubic-bezier(.2,.9,.3,1) both; }
+  .p.leaving { animation:slideOut .4s ease-in forwards; pointer-events:none; }
+  @keyframes slideIn { from { opacity:0; transform:translateX(calc(var(--u)*-30)) scale(.94); } to { opacity:1; transform:none; } }
+  @keyframes slideOut { from { opacity:1; transform:none; } to { opacity:0; transform:translateX(calc(var(--u)*34)) scale(.94); } }
   .vs { align-self:center; font-size:calc(var(--u)*30); font-weight:800; text-shadow:0 3px 10px rgba(0,0,0,.6); }
   /* Winner: gold glow + WINNER tag; the other team dims. */
   .team.winner { box-shadow:inset 0 0 0 calc(var(--u)*5) #ffe169, 0 0 calc(var(--u)*24) calc(var(--u)*2) rgba(255,225,105,.7); z-index:1; }
@@ -62,7 +67,7 @@
   var params = new URLSearchParams(location.search);
   var DEMO = params.has("demo");
   var stage = document.getElementById("stage");
-  var lastKey = "";
+  var lastKey = "", lastId = "";
 
   // Alternating names: one name per seat at full size, crossfading between the stream name and the Epic name.
   var ALT_SECONDS = 4;      // how long each name stays (0 = never alternate, stream name only)
@@ -98,7 +103,53 @@
     return out.slice(0, 6).join("");
   }
 
-  window.addEventListener("resize", function () { lastKey = ""; });
+
+  // Keyed diff. Seats keep their slot; empty seats are dashed placeholders refreshed after leavers finish animating.
+  function pkey(p) { return norm(f(p, "Username") || f(p, "Epic")); }
+  function nameSig(p) { return (f(p, "Username") || "") + "|" + (f(p, "Epic") || ""); }
+  function fillEmpty(cn, size) {
+    Array.prototype.slice.call(cn.querySelectorAll(".p.empty")).forEach(function (e) { e.parentNode.removeChild(e); });
+    var n = cn.querySelectorAll(".p:not(.leaving)").length;
+    for (var i = n; i < Math.min(size, 6); i++) { var e = document.createElement("div"); e.className = "p empty"; e.textContent = "Empty slot"; cn.appendChild(e); }
+  }
+  function syncRows(containers, lists, size) {
+    var old = {}, first = {};
+    containers.forEach(function (cn) { Array.prototype.forEach.call(cn.querySelectorAll(".p[data-key]:not(.leaving)"), function (el) { old[el.dataset.key] = el; first[el.dataset.key] = el.getBoundingClientRect(); }); });
+    var want = {};
+    lists.forEach(function (l) { (l || []).forEach(function (p) { want[pkey(p)] = true; }); });
+    Object.keys(old).forEach(function (k) {
+      if (want[k]) return;
+      var el = old[k]; delete old[k]; el.classList.remove("enter"); el.classList.add("leaving");
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); containers.forEach(function (cn) { fillEmpty(cn, size); }); }, 450);
+    });
+    var moved = [];
+    containers.forEach(function (cn, ci) {
+      Array.prototype.slice.call(cn.querySelectorAll(".p.empty")).forEach(function (e) { e.parentNode.removeChild(e); });
+      var prev = null;
+      (lists[ci] || []).forEach(function (p) {
+        var k = pkey(p), el = old[k], fresh = !el;
+        if (fresh) { el = document.createElement("div"); el.className = "p enter"; el.dataset.key = k; el.dataset.sig = nameSig(p); el.innerHTML = nameHtml(p); old[k] = el; }
+        else { if (el.dataset.sig !== nameSig(p)) { el.dataset.sig = nameSig(p); el.innerHTML = nameHtml(p); } moved.push(k); }
+        if (el.parentNode !== cn || el.previousElementSibling !== prev) cn.insertBefore(el, prev ? prev.nextSibling : cn.firstChild);
+        prev = el;
+      });
+      fillEmpty(cn, size);
+    });
+    moved.forEach(function (k) {
+      var el = old[k], a = first[k], b = el.getBoundingClientRect();
+      if (!a) return;
+      var dx = a.left - b.left, dy = a.top - b.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }], { duration: 500, easing: "cubic-bezier(.2,.8,.2,1)" });
+    });
+  }
+  function seatRows(list, size) {
+    var out = (list || []).map(function (p) { return '<div class="p" data-key="' + esc(pkey(p)) + '" data-sig="' + esc(nameSig(p)) + '">' + nameHtml(p) + '</div>'; });
+    while (out.length < size) out.push('<div class="p empty">Empty slot</div>');
+    return out.slice(0, 6).join("");
+  }
+
+  window.addEventListener("resize", function () { lastKey = ""; lastId = ""; });
 
   function winnerOf(s) {
     if (DEMO) return params.get("win");
@@ -111,13 +162,16 @@
   function render(s) {
     applyAlt(s);
     var m = s && s.currentMatch;
-    if (!m) { stage.classList.remove("show"); lastKey = ""; return; }
-    var key = JSON.stringify([m.id, m.blue, m.orange, s.game]);
-    if (key !== lastKey) {
+    if (!m) { stage.classList.remove("show"); lastKey = ""; lastId = ""; return; }
+    var idKey = JSON.stringify([m.id, m.format, s.game]), key = JSON.stringify([m.blue, m.orange]);
+    var size = { "1v1":1, "2v2":2, "3v3":3, "4v4":4 }[m.format] || Math.max((m.blue || []).length, (m.orange || []).length, 1);
+    if (idKey === lastId && key !== lastKey) {                 // same match, roster edited: diff + animate
       lastKey = key;
-      var size = { "1v1":1, "2v2":2, "3v3":3, "4v4":4 }[m.format] || Math.max((m.blue || []).length, (m.orange || []).length, 1);
-      document.getElementById("blue").innerHTML = rows(m.blue, size);
-      document.getElementById("orange").innerHTML = rows(m.orange, size);
+      syncRows([document.getElementById("blue"), document.getElementById("orange")], [m.blue, m.orange], size);
+    } else if (idKey !== lastId || key !== lastKey) {
+      lastKey = key; lastId = idKey;
+      document.getElementById("blue").innerHTML = seatRows(m.blue, size);
+      document.getElementById("orange").innerHTML = seatRows(m.orange, size);
       stage.className = (stage.className.replace(/n\d/g, '') + ' n' + Math.min(size, 6)).trim();
 
 
@@ -147,7 +201,7 @@
     render({ game:"rocket-league", currentMatch:{ id:7, format:n + "v" + n, status: params.get("win") ? "finished" : "live", blueAvg:1120, orangeAvg:1105, blue:bl.slice(0, n), orange:og.slice(0, n) } });
   } else {
     poll();
-    setInterval(poll, 1000);
+    setInterval(poll, 400);
   }
 </script>
 </body>
