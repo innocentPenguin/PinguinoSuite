@@ -32,7 +32,7 @@ body.bg{background:repeating-conic-gradient(#1b1b1b 0 25%,#262626 0 50%) 0 0/24p
 @keyframes flip-in{from{opacity:0;transform:translate(-50%,-50%) rotateX(90deg)}to{opacity:1;transform:translate(-50%,-50%) rotateX(0)}}
 @keyframes flip-out{from{opacity:1;transform:translate(-50%,-50%) rotateX(0)}to{opacity:0;transform:translate(-50%,-50%) rotateX(-90deg)}}
 </style></head>
-<body><div id="stage"></div>
+<body><div id="stage"></div><canvas id="cf" width="800" height="600" style="position:absolute;left:0;top:0;pointer-events:none"></canvas>
 <script>
 const Q = new URLSearchParams(location.search), stage = document.getElementById('stage');
 if (Q.get('bg')) document.body.classList.add('bg');
@@ -64,12 +64,24 @@ function build(a) {
   el.innerHTML = `${a.test ? '<span class="tag">TEST</span>' : ''}${m && m.position !== 'bg' ? media : m ? media : av}<div class="tx"><div class="t1">${segs(a.text, acc)}</div>${a.subtext && a.subtext.length ? `<div class="t2">${segs(a.subtext, acc)}</div>` : ''}</div>`;
   return el;
 }
+let cfT = 0;
+function confetti(n) {
+  const cv = document.getElementById('cf'), g = cv.getContext('2d'), cols = ['#ff8a1f', '#ffd23f', '#ffe9cc', '#ff5d2e', '#ffffff'];
+  const ps = Array.from({length: n}, () => ({x: 400 + (Math.random() - .5) * 200, y: 300, vx: (Math.random() - .5) * 14, vy: -Math.random() * 14 - 4, s: 4 + Math.random() * 6, c: cols[Math.floor(Math.random() * cols.length)], r: Math.random() * 6, vr: (Math.random() - .5) * .4}));
+  clearInterval(cfT); let f = 0;
+  cfT = setInterval(() => {
+    g.clearRect(0, 0, 800, 600); f++;
+    ps.forEach(p => { p.vy += .35; p.x += p.vx; p.y += p.vy; p.r += p.vr; g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c; g.globalAlpha = Math.max(0, 1 - f / 170); g.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); g.restore(); });
+    if (f > 170) { clearInterval(cfT); g.clearRect(0, 0, 800, 600); }
+  }, 16);
+}
 function show(a) {
   if (cur) { clearTimeout(cur._t); cur.remove(); }
   const el = build(a), banner = el.classList.contains('layout-banner'); cur = el; el.dataset.id = a.id; stage.appendChild(el);
   if (banner) { el.style.left = '30px'; el.style.transform = 'none'; }
   el.style.animationName = (banner ? 'fade' : a.style.anim_in) + '-in';
   sound(a.sound);
+  if (a.style.confetti) confetti(140);
   el._t = setTimeout(() => { el.style.animationName = (banner ? 'fade' : a.style.anim_out) + '-out'; }, Math.max(0.2, a.duration - 0.5) * 1000);
 }
 function hide(id) {

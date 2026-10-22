@@ -19,3 +19,7 @@ Host feed / `POST /api/events` -> pipeline (stored, shown in chat) -> engine (`a
 
 ## Host fields wanted (02)
 `/api/activity` items: stable id, tier, months, message, amount, recipient, avatar, level, rank_colour, first_time, refollow, anonymous, sim, test. Until then Multi falls back to what the feed has.
+
+## Watch celebrations
+Types: **streak** (watch streak), **watchtime** (hours milestones), **anniversary** (years watching), **comeback** (first stream back). Variables `{streak}` `{hours}` `{years}` (each falls back to `amount`). Streak / watchtime / anniversary have editable **celebration tiers** (default streak 3/5/10/25/50/100, hours 10/50/100/250/500/1000, years 1-5): each tier can override text, second line, priority, duration, accent colour and confetti (confetti canvas in the overlay, penguin palette). The biggest tier reached is used; "exact" types (streak, anniversary) only fire when the number IS a tier, hours fires when at or above the first tier. Test with variants `small mid big huge` (e.g. `!alert test streak penguin big`). Per-viewer overrides work as for every type.
+Feeds: Host posts real ones to `POST /api/alerts/fire {type: streak|watchtime|anniversary|comeback, user, streak|hours|years, rank_colour?, avatar?, id}`; EventSub `viewer_milestone` streaks arrive the same way (or as a `streak` activity item).

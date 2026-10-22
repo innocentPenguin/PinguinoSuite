@@ -11,23 +11,31 @@ from collections import deque
 
 from obs import FONTS, _color, _num
 
-TYPES = ["follow", "refollow", "sub", "resub", "gift", "cheer", "raid", "hype", "goal", "redeem", "streak", "intro"]
+TYPES = ["follow", "refollow", "sub", "resub", "gift", "cheer", "raid", "hype", "goal", "redeem", "streak", "watchtime", "anniversary", "comeback", "intro"]
 LABEL = {"follow": "Follow", "refollow": "Refollow", "sub": "Subscription", "resub": "Resub", "gift": "Gift subs", "cheer": "Bits", "raid": "Raid",
-         "hype": "Hype train", "goal": "Goal reached", "redeem": "Redemption", "streak": "Watch streak", "intro": "Intro"}
+         "hype": "Hype train", "goal": "Goal reached", "redeem": "Redemption", "streak": "Watch streak", "watchtime": "Watch-time milestone", "anniversary": "Anniversary", "comeback": "First stream back", "intro": "Intro"}
 ANIMS = ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "zoom", "bounce", "flip"]
 LAYOUTS = ["card", "banner", "center", "stack"]
-VARS = ["{user}", "{amount}", "{tier}", "{months}", "{message}", "{level}", "{recipient}"]
+VARS = ["{user}", "{amount}", "{tier}", "{months}", "{message}", "{level}", "{recipient}", "{streak}", "{hours}", "{years}"]
 ORANGE, DARK, CREAM = "#ff8a1f", "#1a1208", "#ffe9cc"
 
 _STYLE = {"bg": DARK, "fg": CREAM, "accent": ORANGE, "font": "nunito", "size": 30, "layout": "card", "anim_in": "slide-up", "anim_out": "fade",
-          "radius": 14, "border": 2, "opacity": 94}
+          "radius": 14, "border": 2, "opacity": 94, "confetti": False}
 _SOUND = {"enabled": True, "url": "", "volume": 70, "tier_urls": {"1": "", "2": "", "3": ""}}
 _MEDIA = {"url": "", "kind": "image", "position": "above", "size": 160}
 
 
+def _ms(points, what):
+    """default celebration tiers: bigger milestone = higher priority, longer, confetti from the 3rd tier on"""
+    out = []
+    for i, at in enumerate(points):
+        out.append({"at": at, "text": "", "subtext": "", "priority": min(9, 5 + i), "duration": min(14, 6 + i), "accent": ["", "", "", "#ffd23f", "#ffd23f", "#ff4d4d"][min(i, 5)], "confetti": i >= 2})
+    return out
+
+
 def _t(text, sub="", prio=5, dur=6, **kw):
     d = {"enabled": True, "priority": prio, "duration": dur, "text": text, "subtext": sub, "min_amount": 0, "silent": False, "cooldown_s": 0, "max_per_min": 0,
-         "conditions": {"first_time_only": False, "tiers": []}, "style": dict(_STYLE), "sound": copy.deepcopy(_SOUND), "media": dict(_MEDIA)}
+         "conditions": {"first_time_only": False, "tiers": []}, "milestones": [], "exact": False, "style": dict(_STYLE), "sound": copy.deepcopy(_SOUND), "media": dict(_MEDIA)}
     d.update(kw)
     return d
 
@@ -44,8 +52,12 @@ DEFAULT_TYPES = {
     "goal": _t("Goal reached!", "{message}", 6, 7),
     "redeem": _t("{user} redeemed {message}", "", 4, 5),
     "streak": _t("{user} hit a {amount}-stream watch streak!", "", 4, 6),
+    "watchtime": _t("{user} reached {hours} hours!", "thank you for hanging out", 6, 7, exact=False, milestones=_ms([10, 50, 100, 250, 500, 1000], "hours")),
+    "anniversary": _t("{user}: {years} year(s) watching!", "happy colony-versary", 7, 8, exact=True, milestones=_ms([1, 2, 3, 4, 5], "years")),
+    "comeback": _t("{user} is back for the first stream in a while!", "welcome back", 4, 5),
     "intro": _t("{user} has arrived", "{message}", 5, 6),
 }
+DEFAULT_TYPES["streak"].update(text="{user} is on a {streak}-stream watch streak!", subtext="", exact=True, milestones=_ms([3, 5, 10, 25, 50, 100], "streak"))
 GLOBAL = {"gap_ms": 600, "max_queue": 50, "dedupe_s": 10}
 THEMES = {"Penguin": {}, "Light": {"*": {"style": {"bg": "#fff7ec", "fg": "#2b1a05", "accent": "#e56f00"}}},
           "Minimal": {"*": {"style": {"layout": "center", "bg": "#000000", "opacity": 0, "border": 0}}}}
@@ -89,6 +101,10 @@ def sanitize_type(c, base):
     for k in ("text", "subtext"):
         if k in c:
             out[k] = str(c[k] or "")[:200]
+    if isinstance(c.get("milestones"), list):
+        out["milestones"] = _clean_ms(c["milestones"])
+    if "exact" in c:
+        out["exact"] = bool(c["exact"])
     cd = c.get("conditions")
     if isinstance(cd, dict):
         if "first_time_only" in cd:
@@ -108,6 +124,8 @@ def sanitize_type(c, base):
                 o[k] = int(_num(s[k], lo, hi, o[k]))
         if s.get("layout") in LAYOUTS:
             o["layout"] = s["layout"]
+        if "confetti" in s:
+            o["confetti"] = bool(s["confetti"])
         for k in ("anim_in", "anim_out"):
             if s.get(k) in ANIMS:
                 o[k] = s[k]
@@ -134,6 +152,19 @@ def sanitize_type(c, base):
         if "size" in me:
             out["media"]["size"] = int(_num(me["size"], 40, 600, 160))
     return out
+
+
+def _clean_ms(lst):
+    out = []
+    for m in lst[:12]:
+        if not isinstance(m, dict):
+            continue
+        at = int(_num(m.get("at"), -1, 1000000, 0))
+        if at < 1 or any(x["at"] == at for x in out):
+            continue
+        out.append({"at": at, "text": str(m.get("text") or "")[:200], "subtext": str(m.get("subtext") or "")[:200], "priority": int(_num(m.get("priority"), 1, 9, 7)),
+                    "duration": int(_num(m.get("duration"), 1, 30, 8)), "accent": _color(str(m.get("accent") or ""), ""), "confetti": bool(m.get("confetti"))})
+    return sorted(out, key=lambda x: x["at"])
 
 
 def sanitize_config(src):
@@ -171,7 +202,7 @@ def _clean_partial(c):
     """A per-user override keeps only the keys that were set (so the profile still supplies everything else)."""
     full = sanitize_type(c, DEFAULT_TYPES["follow"])
     out = {}
-    for k in ("enabled", "silent", "priority", "duration", "text", "subtext", "min_amount", "cooldown_s", "max_per_min"):
+    for k in ("enabled", "silent", "priority", "duration", "text", "subtext", "min_amount", "cooldown_s", "max_per_min", "milestones", "exact"):
         if isinstance(c, dict) and k in c:
             out[k] = full[k]
     for grp in ("style", "sound", "media", "conditions"):
@@ -181,13 +212,25 @@ def _clean_partial(c):
 
 
 # variables -------------------------------------------------------------------------------------
-_VAR = re.compile(r"\{(user|amount|tier|months|message|level|recipient)\}")
+_VAR = re.compile(r"\{(user|amount|tier|months|message|level|recipient|streak|hours|years)\}")
+
+
+VALUE_OF = {"streak": "streak", "watchtime": "hours", "anniversary": "years"}
+
+
+def value(ev, key):
+    """the milestone number of an event: its own field (streak/hours/years) or, failing that, amount"""
+    try:
+        return int(float(ev.get(key) if ev.get(key) not in (None, "") else (ev.get("amount") or 0)))
+    except (TypeError, ValueError):
+        return 0
 
 
 def render(text, ev):
     """text with variables -> list of [segment, kind]; kind 'user' marks the viewer's name (drawn in their rank colour)."""
     vals = {"amount": str(ev.get("amount") or 0), "tier": str(ev.get("tier") or "1"), "months": str(ev.get("months") or 1),
-            "message": str(ev.get("message") or ""), "level": str(ev.get("level") or ""), "recipient": str(ev.get("recipient") or "")}
+            "message": str(ev.get("message") or ""), "level": str(ev.get("level") or ""), "recipient": str(ev.get("recipient") or ""),
+            "streak": str(value(ev, "streak")), "hours": str(value(ev, "hours")), "years": str(value(ev, "years"))}
     out, pos = [], 0
     for m in _VAR.finditer(text or ""):
         if m.start() > pos:
@@ -248,16 +291,19 @@ class Engine:
         if not test:
             if eid in self.seen:
                 return self._note(ev, "duplicate", "already fired (replay)")
-            key = (t, ev["user"].lower(), int(ev.get("amount") or 0))
+            key = (t, ev["user"].lower(), value(ev, VALUE_OF[t]) if t in VALUE_OF else int(ev.get("amount") or 0))
             if now - self.recent.get(key, 0) < self.cfg["global"]["dedupe_s"]:
                 return self._note(ev, "duplicate", "same event just fired")
-            self.recent[key] = now
             self.seen.append(eid)
             self.store.kv_set("alerts:seen", list(self.seen))
         c = self.type_cfg(t, ev["user"])
-        why = self._blocked(c, t, ev, now, test)
+        why = self._milestone(c, t, ev)
+        if not why:
+            why = self._blocked(c, t, ev, now, test)
         if why:
             return self._note(ev, "skipped", why)
+        if not test:
+            self.recent[key] = now                      # only an event that is really shown counts as "just fired"
         if len(self.heap) >= self.cfg["global"]["max_queue"]:
             return self._note(ev, "dropped", "queue full")
         payload = self._payload(c, ev, test)
@@ -266,6 +312,28 @@ class Engine:
         self._note(ev, "queued", f"priority {c['priority']}")
         self._poke()
         return True, "queued"
+
+    def _milestone(self, c, t, ev):
+        """celebration tiers: pick the biggest milestone reached and apply its look; exact types only fire ON a milestone. Returns a skip reason or ''."""
+        ms = c.get("milestones") or []
+        if t not in VALUE_OF or not ms:
+            return ""
+        v = value(ev, VALUE_OF[t])
+        hit = [m for m in ms if m["at"] <= v]
+        if not hit:
+            return f"below the first milestone ({ms[0]['at']})"
+        m = hit[-1]
+        if c.get("exact") and m["at"] != v:
+            return f"{v} is not a milestone"
+        for k in ("text", "subtext"):
+            if m[k]:
+                c[k] = m[k]
+        c["priority"], c["duration"] = m["priority"], m["duration"]
+        if m["accent"]:
+            c["style"]["accent"] = m["accent"]
+        if m["confetti"]:
+            c["style"]["confetti"] = True
+        return ""
 
     def _blocked(self, c, t, ev, now, test):
         if not c["enabled"]:
@@ -362,19 +430,25 @@ class Engine:
 
 
 # test tools ------------------------------------------------------------------------------------
+MILESTONE_TEST = {"streak": [3, 10, 25, 100], "watchtime": [10, 100, 500, 1000], "anniversary": [1, 2, 3, 5]}
 VARIANTS = {"tier1": {"tier": "1"}, "tier2": {"tier": "2"}, "tier3": {"tier": "3"}, "prime": {"tier": "prime"}, "first": {"first_time": True},
             "refollow": {"refollow": True}, "noavatar": {"avatar": ""}, "long": {"display": "TheMostIncrediblyLongViewerNameEver_1234"},
-            "unicode": {"display": "Pinguïno_ペンギン"}, "msg": {"message": "This is a long resub message that wraps over several lines to check the layout holds up nicely."}}
+            "unicode": {"display": "Pinguïno_ペンギン"}, "small": {}, "mid": {}, "big": {}, "huge": {}, "msg": {"message": "This is a long resub message that wraps over several lines to check the layout holds up nicely."}}
 
 
 def test_event(t, user="penguin", amount=None, variants=(), **kw):
     ev = {"type": t, "user": user or "penguin", "display": user or "Penguin", "amount": 0, "tier": "1", "months": 6, "message": "hello colony", "level": 3,
           "test": True, "source": kw.get("source", "ui"), "avatar": "", "rank_colour": kw.get("rank_colour", "")}
     ev["id"] = f"test:{time.time_ns()}"
-    if t in ("gift", "raid", "cheer", "streak"):
+    if t in ("gift", "raid", "cheer"):
         ev["amount"] = 5 if t != "cheer" else 100
+    if t in MILESTONE_TEST:
+        ev["amount"] = MILESTONE_TEST[t][1]
     for v in variants or ():
-        ev.update(VARIANTS.get(str(v).lower(), {}))
+        v = str(v).lower()
+        if t in MILESTONE_TEST and v in ("small", "mid", "big", "huge"):
+            ev["amount"] = MILESTONE_TEST[t][("small", "mid", "big", "huge").index(v)]
+        ev.update(VARIANTS.get(v, {}))
     if amount is not None:
         ev["amount"] = int(amount)
     for k in ("tier", "months", "message", "level", "recipient"):

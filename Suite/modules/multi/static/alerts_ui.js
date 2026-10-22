@@ -41,6 +41,14 @@ function alDraw() {
   const users = Object.keys(c.overrides).sort().map(u => `<option value="${esc(u)}" ${u === AL.who ? 'selected' : ''}>${esc(u)}</option>`).join('');
   const hasOv = AL.who && c.overrides[AL.who] && c.overrides[AL.who][AL.sel];
   const tiers = ['1', '2', '3', 'prime'].map(t => `<label class="cf"><input type="checkbox" data-altier="${t}" ${e.conditions.tiers.includes(t) ? 'checked' : ''}> T${t}</label>`).join('');
+  const unit = {streak: 'streams in a row', watchtime: 'hours watched', anniversary: 'years'}[AL.sel];
+  const msRow = (m, i) => `<tr><td><input data-alms="${i}|at" type="number" min="1" value="${m.at}" style="width:64px"></td><td><input data-alms="${i}|text" value="${esc(m.text)}" placeholder="(type's text)" style="width:130px"></td>
+    <td><input data-alms="${i}|subtext" value="${esc(m.subtext)}" placeholder="(second line)" style="width:110px"></td><td><input data-alms="${i}|priority" type="number" min="1" max="9" value="${m.priority}" style="width:40px"></td>
+    <td><input data-alms="${i}|duration" type="number" min="1" max="30" value="${m.duration}" style="width:44px"></td><td><input data-alms="${i}|accent" type="color" value="${m.accent || '#ff8a1f'}"></td>
+    <td><input data-alms="${i}|confetti" type="checkbox" ${m.confetti ? 'checked' : ''}></td><td><button type="button" data-alact="msdel" data-i="${i}">x</button></td></tr>`;
+  const msBox = unit ? `<b>Celebration tiers (${unit})</b>${f('exact', 'Only fire exactly ON a tier (off = fire whenever the number is at or above the first tier)', 'chk')}
+    <table style="font-size:12px"><tr><th>At</th><th>Text</th><th>Second line</th><th>Prio</th><th>Sec</th><th>Colour</th><th>Confetti</th><th></th></tr>${(e.milestones || []).map(msRow).join('')}</table>
+    <button type="button" data-alact="msadd">Add tier</button> <small class="mut">The biggest tier reached is used. Empty text = the type's text. Test with the small / mid / big / huge boxes below.</small>` : '';
   const variants = d.variants.map(v => `<label class="cf"><input type="checkbox" data-alvar="${v}"> ${v}</label>`).join(' ');
   $('#body').innerHTML = `<div style="padding:10px;overflow:auto;height:100%;box-sizing:border-box">
     <div class="act"><b>Alerts</b> <label class="cf">Profile <select id="al-prof">${profs}</select></label>
@@ -71,6 +79,7 @@ function alDraw() {
         ${f('style.font', 'Font', 'sel', {opts: d.fonts})}${f('style.size', 'Text size', 'num', {lo: 14, hi: 80, unit: ' px'})}
         ${f('style.bg', 'Background', 'col')}${f('style.fg', 'Text colour', 'col')}${f('style.accent', 'Accent / border', 'col')}
         ${f('style.opacity', 'Box opacity', 'num', {lo: 0, hi: 100, unit: '%'})}${f('style.radius', 'Corner radius', 'num', {lo: 0, hi: 60})}${f('style.border', 'Border', 'num', {lo: 0, hi: 12})}
+        ${f('style.confetti', 'Confetti', 'chk')}${msBox}
         <b>Sound</b>${f('sound.enabled', 'Play a sound', 'chk')}${f('sound.url', 'Sound file address (empty = built-in chime). http(s):// or /', 'txt')}${f('sound.volume', 'Volume', 'num', {lo: 0, hi: 100, unit: '%'})}
         ${['1', '2', '3'].map(t => f('sound.tier_urls.' + t, 'Tier ' + t + ' sound (optional)', 'txt')).join('')}
         <b>Image / GIF / video</b>${f('media.url', 'Media address (png, gif, webm, mp4). http(s):// or /', 'txt')}${f('media.kind', 'Type', 'sel', {opts: ['image', 'video']})}
@@ -111,6 +120,11 @@ document.addEventListener('change', e => {
     alSet(alTarget(), t.dataset.al, v); alSave(); if (t.type === 'range') { const b = t.parentElement.querySelector('b'); if (b) b.textContent = t.value + (b.textContent.replace(/[-\d.]+/, '')); }
   }
 });
+document.addEventListener('change', e => {
+  if (W.type !== 'alerts' || !e.target.dataset.alms) return; const t = e.target, [i, k] = t.dataset.alms.split('|');
+  const ms = JSON.parse(JSON.stringify(alGet(alEff(), 'milestones') || []));
+  ms[+i][k] = t.type === 'checkbox' ? t.checked : t.type === 'number' ? +t.value : t.value; alSet(alTarget(), 'milestones', ms); alSave(); if (k === 'at') setTimeout(alDraw, 600);
+});
 document.addEventListener('input', e => {
   if (W.type !== 'alerts') return; const t = e.target;
   if (t.dataset.al && (t.type === 'range' || t.type === 'text' || t.type === 'color')) {
@@ -128,6 +142,8 @@ document.addEventListener('click', async e => {
   const b = e.target.closest('[data-alact]'); if (!b) return; const a = b.dataset.alact, c = AL.d.config;
   const user = ($('#al-tuser').value || 'penguin').trim().toLowerCase(), amt = $('#al-tamt').value, vars = [...document.querySelectorAll('[data-alvar]:checked')].map(x => x.dataset.alvar);
   if (a === 'copy') { navigator.clipboard && navigator.clipboard.writeText(alUrl()); alState('Address copied'); }
+  else if (a === 'msadd') { const ms = JSON.parse(JSON.stringify(alGet(alEff(), 'milestones') || [])); const top = ms.length ? ms[ms.length - 1].at : 0; ms.push({at: top + Math.max(1, Math.round(top / 2)), text: '', subtext: '', priority: 8, duration: 8, accent: '', confetti: true}); alSet(alTarget(), 'milestones', ms); alSave(); setTimeout(alDraw, 450); }
+  else if (a === 'msdel') { const ms = JSON.parse(JSON.stringify(alGet(alEff(), 'milestones') || [])); ms.splice(+b.dataset.i, 1); alSet(alTarget(), 'milestones', ms); alSave(); setTimeout(alDraw, 450); }
   else if (a === 'pv') alPreview();
   else if (a === 'test') { const r = await alPost('/api/alerts/test', {type: AL.sel, user, amount: amt === '' ? null : +amt, variant: vars}); alState(r.text); alLog(); }
   else if (a === 'testall') { const r = await alPost('/api/alerts/testall'); alState(r.text); alLog(); }

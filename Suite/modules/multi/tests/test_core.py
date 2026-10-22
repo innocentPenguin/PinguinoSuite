@@ -1259,3 +1259,19 @@ def test_alert_sanitize_blocks_bad_input():
     c = alerts.sanitize_config({"profiles": {"Penguin": {"types": {"follow": {"duration": 9999, "sound": {"url": "file:///c:/x.wav"}, "style": {"bg": "red", "anim_in": "evil"}}}}}})
     f = c["profiles"]["Penguin"]["types"]["follow"]
     assert f["duration"] == 30 and f["sound"]["url"] == "" and f["style"]["bg"] == "#1a1208" and f["style"]["anim_in"] == "slide-up"
+
+
+def test_alert_milestones(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    assert eng.submit({"id": "w1", "type": "streak", "user": "a", "amount": 7})[0] is False      # 7 is not a milestone (exact)
+    assert eng.submit({"id": "w2", "type": "streak", "user": "a", "streak": 10})[0] is True
+    p = [x for x in eng.heap if x[2]["id"] == "w2"][0][2]
+    assert p["style"]["confetti"] is True and "".join(s for s, _ in p["text"]) == "a is on a 10-stream watch streak!"
+    assert eng.submit({"id": "h1", "type": "watchtime", "user": "b", "hours": 5})[0] is False    # below the first tier
+    assert eng.submit({"id": "h2", "type": "watchtime", "user": "b", "hours": 120})[0] is True    # not exact: the 100 h tier look applies
+    big = [x for x in eng.heap if x[2]["id"] == "h2"][0][2]
+    assert big["priority"] >= 7
+    t = alerts.test_event("anniversary", "pen", variants=["huge"])
+    assert t["amount"] == 5 and eng.submit(t)[0] is True
+    c = alerts.sanitize_config({"profiles": {"Penguin": {"types": {"streak": {"milestones": [{"at": 4}, {"at": 4}, {"at": -2}, {"at": 9, "accent": "x"}]}}}}})
+    assert [m["at"] for m in c["profiles"]["Penguin"]["types"]["streak"]["milestones"]] == [4, 9]

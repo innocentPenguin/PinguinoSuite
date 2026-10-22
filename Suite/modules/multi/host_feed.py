@@ -69,7 +69,7 @@ def to_message(item, channel):
     if t == "redeem" and item.get("message"):
         text += ": " + str(item["message"])[:200]
     flags = ["refollow"] if t == "follow" and str(item.get("refollow", "")).lower() in ("true", "1") else []
-    meta = {k: item[k] for k in ("tier", "months", "avatar", "level", "rank_colour", "recipient", "first_time", "anonymous", "sim", "test") if item.get(k) not in (None, "")}
+    meta = {k: item[k] for k in ("tier", "months", "avatar", "level", "rank_colour", "recipient", "first_time", "anonymous", "sim", "test", "streak", "hours", "years") if item.get(k) not in (None, "")}
     meta["message"] = str(item.get("message") or (detail if t == "redeem" else ""))[:200]
     return ChatMessage(id=f"host:{item['seq']}", platform="twitch", channel=channel, user_id=user.lower(), user=user.lower(), display=user,
                        text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or item.get("count") or 0), flags=flags, meta=meta)
