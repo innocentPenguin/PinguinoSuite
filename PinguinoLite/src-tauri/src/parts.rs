@@ -208,7 +208,8 @@ fn start_job(kind: &str, parts: &[String], f: impl FnOnce() -> Value + Send + 's
 }
 
 #[tauri::command]
-pub fn parts_apply(app: AppHandle, ids: Vec<String>) -> Value {
+pub fn parts_apply(app: AppHandle, ids: Vec<String>, repair: Option<bool>) -> Value {
+    let repair = repair.unwrap_or(false);
     let parts = allowed_parts(&ids);
     if parts.is_empty() {
         return json!({"ok": false, "message": "pick at least one part to update"});
@@ -229,6 +230,9 @@ pub fn parts_apply(app: AppHandle, ids: Vec<String>) -> Value {
             let mut args = vec!["apply", "--only", id.as_str()];
             if stage {
                 args.push("--stage");
+            }
+            if repair {
+                args.push("--repair");
             }
             let r = run_updater(&args);
             resume_link(&app, had); // always start Link again, whether the swap worked or was rolled back
@@ -307,7 +311,7 @@ pub fn parts_eject(app: AppHandle, id: String) -> Value {
     start_job("eject", &[id.clone()], move || {
         crate::request_module(app, "stop", &id); // best effort: Link stops the module before its files move
         std::thread::sleep(Duration::from_secs(3));
-        run_updater(&["eject", "--only", &id])
+        run_updater(&["eject", "--part", &id])
     })
 }
 
@@ -323,7 +327,7 @@ pub fn parts_install(id: String) -> Value {
     if let Err(m) = may_update(host_is_live()) {
         return json!({"ok": false, "message": m});
     }
-    start_job("install", &[id.clone()], move || run_updater(&["install", "--only", &id]))
+    start_job("install", &[id.clone()], move || run_updater(&["apply", "--only", &id]))
 }
 
 #[cfg(test)]

@@ -127,7 +127,7 @@ function modCard() {
     return `<tr><td><b>${esc(m.name)}</b></td>
      <td>${m.installed ? '<span class="pill ok">Installed</span>' : '<span class="pill">Not installed</span>'}${m.installed ? vpill(m.id) : ''}</td>
      <td style="text-align:right">${m.installed
-        ? `<button class="btn" data-mod-verify="${esc(m.id)}"${run ? ' disabled' : ''}>Verify</button> ${bad ? `<button class="btn pri" data-part="${esc(m.id)}"${blocked ? ' disabled' : ''}>Repair</button> ` : ''}<button class="btn" data-mod-eject="${esc(m.id)}"${blocked ? ' disabled' : ''} title="Stops it and moves its files aside (nothing is deleted). Install brings it back.">Eject</button>`
+        ? `<button class="btn" data-mod-verify="${esc(m.id)}"${run ? ' disabled' : ''}>Verify</button> ${bad ? `<button class="btn pri" data-part="${esc(m.id)}" data-repair="1"${blocked ? ' disabled' : ''}>Repair</button> ` : ''}<button class="btn" data-mod-eject="${esc(m.id)}"${blocked ? ' disabled' : ''} title="Stops it and moves its files aside (nothing is deleted). Install brings it back.">Eject</button>`
         : `<button class="btn pri" data-mod-install="${esc(m.id)}"${blocked ? ' disabled' : ''} title="Downloads this module now. Nothing is downloaded until you click.">Install</button>`}</td></tr>`;
   }).join('');
   return `<div class="card" style="margin-top:12px"><h3>Module files${mods.profile === 'lite-minimal' ? ' <span class="pill">minimal install</span>' : ''}</h3>
@@ -281,7 +281,7 @@ document.addEventListener('click', async e => {
   if (e.target.closest('[data-gh]')) { checkParts(); return checkLite(true); }
   if (e.target.closest('[data-parts-check]')) return checkParts();
   const pb = e.target.closest('[data-part]');
-  if (pb) { const r = await inv('parts_apply', { ids: [pb.dataset.part] }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
+  if (pb) { const r = await inv('parts_apply', { ids: [pb.dataset.part], repair: pb.dataset.repair === '1' }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
   const mv = e.target.closest('[data-mod-verify]');
   if (mv) { const ids = mv.dataset.modVerify === 'all' ? ['link', 'lite'].concat((mods && mods.modules || []).filter(m => m.installed).map(m => m.id)) : [mv.dataset.modVerify]; const r = await inv('parts_verify', { ids }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
   const me = e.target.closest('[data-mod-eject]');
