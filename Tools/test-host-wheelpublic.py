@@ -26,8 +26,8 @@ try:
     chk('no mmr leaks', 'avg' not in json.dumps(w) and 'seed' not in json.dumps(w))
     time.sleep(10); w = get('/api/wheel/public'); chk('pick leaves the pool after the spin', st[0]['name'] not in w['pool'] and len(w['pool']) == 3, w['pool'])
     page = urllib.request.urlopen(B + '/wheel.html', timeout=10).read().decode('utf-8')
-    chk('original overlay page', 'Tournament Wheel Overlay' in page and '/api/wheel/public' in page and 'penguin-anim.webp' in page and '%%PENGUIN%%' not in page)
-    r = urllib.request.urlopen(B + '/penguin-anim.webp', timeout=10); chk('hub asset served as webp', r.headers['Content-Type'] == 'image/webp' and len(r.read()) > 100000)
+    chk('original overlay page', 'Tournament Wheel Overlay' in page and '/api/wheel/public' in page and 'penguin-anim.gif' in page and '%%PENGUIN%%' not in page)
+    r = urllib.request.urlopen(B + '/penguin-anim.gif', timeout=10); chk('hub asset served as gif', r.headers['Content-Type'] == 'image/gif' and len(r.read()) > 100000)
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS wheelpublic'); sys.exit(1 if fails else 0)
