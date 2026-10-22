@@ -745,6 +745,7 @@ class Engine:
                 self.save_settings({"blocked_users": keep + [target]})
             else:
                 self.save_settings({"blocked_users": keep})
+                self.suspended.pop(target, None)         # also lifts a timed !srsuspend
             self._bump()
             return self._r(True, cmd, "ban_ok" if cmd == "srban" else "unban_ok", user=user, target=target)
         if cmd == "srsuspend" and staff:

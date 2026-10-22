@@ -113,5 +113,5 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 - `!banartist`: ban the current artist (name added to the blocklist) + skip. `!unbanartist [name]`: lift it.
 - `!pardon song|artist [name]`: same as the two unban commands.
 - `!songclear` = `!srclear` (clear viewer requests). `!srban <user>` / `!srunban <user>`: permanent request ban.
-- `!srsuspend <user> <time>`: request ban that lifts itself (10m, 2h, 1d, bare number = minutes, max 30 days); `!srunban <user>` clears a ban, suspensions end on their own. Suspensions persist in state.json.
+- `!srsuspend <user> <time>`: request ban that lifts itself (10m, 2h, 1d, bare number = minutes, max 30 days); `!srunban <user>` lifts a ban or a suspension early. Suspensions persist in state.json.
 - `POST /api/mod-action {action: like|skip|previous|ban_song|ban_artist}` for the Master view strip; the module answers CORS/OPTIONS for the Suite app origins and takes that one POST from the app origin without a token.
