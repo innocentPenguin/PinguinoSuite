@@ -28,3 +28,11 @@ Same card inside Lite for its own pieces and the modules it hosts. Lite already 
 4. Shell/core/Host staged update + restart-swap, and Lite hookup, after a go from 00/012.
 
 Open: the release builder must emit the `components` map (Build-Release.mjs change, mine), and Ivan's one-time sealed-key step is still needed for the private-repo read.
+
+## Built (this commit)
+- Release manifest carries `components` (per-part sha256, from `Build-Release.mjs`); `Suite/updater/lib/components.mjs` defines the parts: shell, core, host, listen, multi, link, spotify, voice, tools (scripts/docs). Site assets are not shipped in the release, so there is no site part.
+- Updater CLI: `check` (per-part diff + live flag), `apply --only a,b [--stage]`, `rollback [--plan]`, `launch` (swaps staged app parts or a staged rollback while nothing is running; full auto-update now only when `auto_update: true` in install.json).
+- Core: `GET /api/update/check`, `POST /api/update/apply {parts}`, `GET /api/update/job`, `POST /api/update/rollback` (`suite/updates.py`): module parts = stop that module, swap its files, start it again; shell/core/Host = verified and staged, applied at the next start. Refused while live (core live state, plus the updater's Host check).
+- Shell: Settings > Updates card (check, per-part Update, Update all, roll back last update), quiet check once a day.
+- A development tree (no `install.json`) never updates itself.
+- Not wired yet: `updater.mjs launch` is still not called by the launcher (00 adds the line to PinguinoApp.bat / the exe). Until then staged app parts wait for it. Lite: not done, needs 012.

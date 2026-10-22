@@ -1498,6 +1498,41 @@ function bindConsole(){
   $('#c-save').onclick=()=>saveBlob(new Blob([txt()],{type:'text/plain'}),'pinguino-console.txt');
   $('#pr-run').onclick=async()=>{$('#pr-run').disabled=true;$('#pr-run').textContent='Running…';try{C.pr=await post('/api/prestream/run');renderPrestream();pollConsole()}catch{toast('Check failed to run')}$('#pr-run').disabled=false;$('#pr-run').textContent='Run now'};
   C.seen=C.seq;store.set('consoleSeen',C.seen);updateBadge();renderLog();renderPrestream()}
+/* ============ Updates card (Settings): check the release source, update one part at a time (core: suite/updates.py, updater: Suite/updater) ============ */
+const UPD={c:null,job:null,busy:false,err:'',timer:null};
+const updFetch=async(p,body)=>{const r=await fetch(p,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||('Error '+r.status));return j};
+const updKb=n=>n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+async function updCheck(quiet){UPD.busy=true;UPD.err='';if(!quiet&&route==='settings')draw(true);
+  try{UPD.c=await updFetch('/api/update/check');const ch=(UPD.c.components||[]).filter(x=>x.changed);if(quiet&&UPD.c.available&&ch.length)toast('Update available: '+ch.map(x=>x.name).join(', ')+' (Settings > Updates)')}catch(e){UPD.err=e.message;if(!quiet)toast('Could not check for updates')}
+  UPD.busy=false;try{store.set('updCheckedAt',Date.now())}catch{}if(route==='settings'&&!document.activeElement?.matches?.('#page input,#page select'))draw(true)}
+async function updPoll(){clearTimeout(UPD.timer);try{const r=await updFetch('/api/update/job');const was=UPD.job&&UPD.job.state;UPD.job=r.job;
+  if(r.job.state==='running'){UPD.timer=setTimeout(updPoll,1500)}else if(was==='running'){toast(r.job.message||'Update finished');await updCheck(true)}}catch{}
+  if(route==='settings')draw(true)}
+async function updRun(parts){try{const r=await updFetch('/api/update/apply',{parts});UPD.job=r.job;updPoll()}catch(e){toast(e.message)}}
+function updCard(){const c=UPD.c,j=UPD.job,run=j&&j.state==='running';
+  if(!c&&!UPD.busy&&!UPD.err){updCheck(true);return '<div class="sm faint">Loading…</div>'}
+  let h='';
+  if(UPD.busy)h+='<div class="sm faint">Checking…</div>';
+  if(UPD.err)h+=`<div class="sm" style="color:var(--bad,#ff6a5a)">${esc(UPD.err)}</div>`;
+  if(c&&c.supported===false)h+=`<div class="sm dim">${esc(c.message||'This copy does not update itself.')}</div>`;
+  else if(c&&c.ok===false)h+=`<div class="sm" style="color:var(--bad,#ff6a5a)">${esc(c.message||'Could not check.')}</div>`;
+  else if(c){const ch=(c.components||[]).filter(x=>x.changed);
+    h+=`<div class="sm dim">Installed ${esc(c.current||'?')} · newest ${esc(c.version||'?')} · checked ${esc((c.checked_at||'').replace('T',' ').slice(0,16))}</div>`;
+    if(c.live)h+='<div class="sm" style="margin-top:6px;color:var(--warn,#ffb347)">You are live (or the Suite cannot tell). Updates wait until the stream is over.</div>';
+    if(c.why)h+=`<div class="sm faint">${esc(c.why)}</div>`;
+    if(!ch.length)h+='<div class="sm" style="margin-top:8px"><span class="pill ok">Up to date</span></div>';
+    else{h+=ch.map(x=>`<div class="setrow"><div class="grow"><b>${esc(x.name)}</b><div class="sm faint">${x.files} file${x.files===1?'':'s'}, ${updKb(x.bytes)} · ${x.restart==='module'?'restarts only this module':x.restart==='app'?'needs a Suite restart (applied when it next starts)':'no restart'}</div></div><button class="sm" data-upd="${x.id}" ${run||c.live?'disabled':''}>Update</button></div>`).join('');
+      h+=`<div class="row wrap" style="margin-top:8px"><button class="sm pri" data-upd="${ch.map(x=>x.id).join(',')}" ${run||c.live?'disabled':''}>Update all (${ch.length})</button></div>`}
+    if(c.notes)h+=`<div class="sm faint" style="margin-top:8px">${esc(c.notes)}</div>`;
+    if(c.pending)h+=`<div class="sm" style="margin-top:8px"><span class="pill">Ready</span> ${esc(c.pending.to)} is staged and applies the next time the Suite starts.</div>`}
+  if(j&&j.state&&j.state!=='idle')h+=`<div class="sm" style="margin-top:8px">${run?'<span class="pill">Working…</span> ':j.ok?'<span class="pill ok">Done</span> ':'<span class="pill bad">Not done</span> '}${esc(j.message||'')}${j.restart_needed?' <b>Restart the Suite to finish.</b>':''}</div>`;
+  h+=`<div class="row wrap" style="margin-top:12px"><button class="sm" id="upd-check" ${UPD.busy||run?'disabled':''}>Check for updates</button><button class="sm" id="upd-back" ${run||(c&&c.live)?'disabled':''} title="Put the previous version back">Roll back last update</button></div>`;
+  return h}
+function bindUpd(){if(!$('#upd-check'))return;
+  $('#upd-check').onclick=()=>updCheck(false);
+  $('#upd-back').onclick=async()=>{const bt=$('#upd-back');if(!bt.dataset.arm){bt.dataset.arm='1';bt.textContent='Click again to roll back';setTimeout(()=>{bt.dataset.arm='';bt.textContent='Roll back last update'},4000);return}try{const r=await updFetch('/api/update/rollback',{});UPD.job=r.job;updPoll()}catch(e){toast(e.message)}};
+  $$('[data-upd]').forEach(b=>b.onclick=()=>updRun(b.dataset.upd.split(',')))}
+setTimeout(()=>{try{if(Date.now()-(store.get('updCheckedAt')||0)>86400000)updCheck(true)}catch{}},20000);   // quiet daily check
 pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max-width:1000px">
   <div class="card"><h3>Stream</h3>
     <div class="setrow"><div class="grow">Twitch channel<div class="sm faint">Watched for go-live</div></div><input type="text" id="s-chan" value="${esc(S.channel)}" style="width:190px"></div>
@@ -1505,6 +1540,7 @@ pages.settings=()=>{const lm=listenMod();return `<div class="grid g2" style="max
   <div class="card"><div class="row"><h3 style="margin:0">Modules</h3>${hq('module_switch')}</div>${S.modules.map(m=>`<div style="padding:6px 0"><div class="row"><b>${esc(dispName(m))}</b><span class="sm faint">${m.options.enabled?'on':'off'}</span><span class="sp"></span>${modSwitch(m)}</div>
     <div class="setrow"><div class="grow">Start with the Suite</div>${sw('o-'+m.id+'-start_with_suite',m.options.start_with_suite,`data-mod="${m.id}" data-opt="start_with_suite"`)}</div>
     <div class="setrow"><div class="grow">React to going live<div class="sm faint">Auto-start mic on go-live, stop when offline</div></div>${sw('o-'+m.id+'-react_to_live',m.options.react_to_live,`data-mod="${m.id}" data-opt="react_to_live"`)}</div></div>`).join('')}</div>
+  <div class="card"><div class="row"><h3 style="margin:0">Updates</h3></div>${updCard()}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Automatic config backup</h3>${hq('autobackup')}</div>${backupCard()}</div>
   <div class="card"><div class="row"><h3 style="margin:0">Pre-stream check schedule</h3>${hq('prestream')}</div>${schedCard()}</div>
   <div class="card" style="grid-column:1/-1"><div class="row"><h3 style="margin:0">Sounds &amp; replays</h3></div>${sndCard()}</div>
@@ -1710,7 +1746,7 @@ function bind(){
   $('#d-listen')&&($('#d-listen').onclick=async()=>{try{await fetch(LISTEN+'/api/live/auto',{method:'POST'});toast('Listening started');loadListen()}catch{toast('Listen is not running')}});
   $('#s-chan')&&($('#s-chan').onchange=async e=>{await post('/api/channel',{channel:e.target.value});toast('Channel saved')});
   $('#s-wa')&&($('#s-wa').onchange=async e=>{await post('/api/windows-autostart',{on:e.target.checked});toast(e.target.checked?'Will start with Windows':'Autostart off')});
-  bindPopout();bindSched();bindBackup();bindSnd();
+  bindPopout();bindSched();bindBackup();bindUpd();bindSnd();
   bindSwitches();
   $$('[data-mlog]').forEach(b=>b.onclick=()=>showLogs(b.dataset.mlog));
   $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));

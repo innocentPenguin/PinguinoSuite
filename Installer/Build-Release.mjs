@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeZip } from '../Suite/updater/lib/zip.mjs';
 import { sha256 } from '../Suite/updater/lib/apply.mjs';
+import { hashComponents } from '../Suite/updater/lib/components.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2), opt = n => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; };
@@ -44,11 +45,13 @@ const hits = files.filter(f => DENY.test(f.name));
 if (hits.length) { console.error('refusing to build: secret-looking files in the release:\n' + hits.map(h => '  ' + h.name).join('\n')); process.exit(1); }
 if (!files.some(f => f.name.endsWith('PinguinoHost.dll')) || !files.some(f => f.name.endsWith('suite.py'))) { console.error('the release is missing PinguinoHost.dll or suite.py; build first'); process.exit(1); }
 
-const zip = writeZip(files.map(f => ({ name: f.name, data: fs.readFileSync(f.abs) })));
+const entries = files.map(f => ({ name: f.name, data: fs.readFileSync(f.abs) }));
+const zip = writeZip(entries);
+const components = hashComponents(entries.map(e => ({ rel: e.name, data: e.data })));   // per-part hashes: the in-app updater shows and applies one part at a time
 fs.mkdirSync(outDir, { recursive: true });
 const zname = `suite-${version}.zip`;
 fs.writeFileSync(path.join(outDir, zname), zip);
-const manifestObj = { schema: 1, channel: 'stable', version, released: d.toISOString(), notes: `${files.length} files`, files: [{ name: zname, size: zip.length, sha256: sha256(zip), url: zname }] };
+const manifestObj = { schema: 1, channel: 'stable', version, released: d.toISOString(), notes: `${files.length} files`, components, files: [{ name: zname, size: zip.length, sha256: sha256(zip), url: zname }] };
 const manifest = JSON.stringify(manifestObj, null, 2);
 fs.writeFileSync(path.join(outDir, 'manifest.json'), manifest);
 if (opt('sign-key')) {

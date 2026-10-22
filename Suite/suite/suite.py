@@ -205,6 +205,7 @@ import vault as vaultlib  # noqa: E402
 import helpdb  # noqa: E402
 import prefs as prefslib  # noqa: E402
 import templates as tplib  # noqa: E402
+import updates as updateslib  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -1003,6 +1004,45 @@ def read_update_status(folder=None):
 @app.get("/api/update/status")
 def update_status():
     return read_update_status()
+
+
+_updates = None
+
+
+def updater():
+    """The in-app updater (suite/updates.py), created on first use once the module registry exists."""
+    global _updates
+    if _updates is None:
+        _updates = updateslib.Updates(ROOT.parent, ROOT / "updater" / "updater.mjs", PORT, modules,
+                                      lambda: bool(live_state.get("live")), console_log.log)
+    return _updates
+
+
+@app.get("/api/update/check")
+def update_check():
+    """Ask the release source what changed, per part. Read-only; the first call per hour hits the network."""
+    return updater().check()
+
+
+@app.get("/api/update/job")
+def update_job():
+    return updater().status()
+
+
+@app.post("/api/update/apply")
+def update_apply(b: dict):
+    r = updater().apply(b.get("parts"))
+    if not r.get("ok"):
+        raise HTTPException(r.get("status", 400), r["message"])
+    return r
+
+
+@app.post("/api/update/rollback")
+def update_rollback():
+    r = updater().rollback()
+    if not r.get("ok"):
+        raise HTTPException(r.get("status", 400), r["message"])
+    return r
 
 
 @app.get("/api/capabilities")

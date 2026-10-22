@@ -212,7 +212,7 @@ const launch = (inst, extra = []) => JSON.parse(execFileSync('node', [UPD, 'laun
 function withSource(inst, rel, more = {}) { const j = JSON.parse(read(inst, 'install.json')); fs.writeFileSync(path.join(inst, 'install.json'), JSON.stringify({ ...j, source: { type: 'local', path: rel }, ...more })); }
 
 test('launch hook: applies from the configured source when the app is not running and the setting allows it', () => {
-  const inst = makeInstall(), rel = makeRelease('1.2.0', [['App/app.txt', 'launched']]); withSource(inst, rel);
+  const inst = makeInstall(), rel = makeRelease('1.2.0', [['App/app.txt', 'launched']]); withSource(inst, rel, { auto_update: true });
   const o = launch(inst); assert.equal(o.ok, true, JSON.stringify(o)); assert.equal(read(inst, 'App/app.txt'), 'launched'); assert.equal(read(inst, 'Data/keep.txt'), 'my data');
 });
 
@@ -220,14 +220,14 @@ test('launch hook: setting off, no source, or app already running changes nothin
   const rel = makeRelease('1.2.0', [['App/app.txt', 'launched']]);
   let inst = makeInstall(); withSource(inst, rel, { auto_update: false }); assert.match(launch(inst).message, /off/); assert.equal(read(inst, 'App/app.txt'), 'old app');
   inst = makeInstall(); assert.match(launch(inst).message, /no update source/);
-  inst = makeInstall(); withSource(inst, rel);
+  inst = makeInstall(); withSource(inst, rel, { auto_update: true });
   const srv = net.createServer().listen(0, '127.0.0.1'); await new Promise(r => srv.on('listening', r));
   const o = JSON.parse(execFileSync('node', [UPD, 'launch', '--install', inst, '--core-port', String(srv.address().port)], { stdio: 'pipe' }).toString()); srv.close();
   assert.match(o.message, /already running/); assert.equal(read(inst, 'App/app.txt'), 'old app');
 });
 
 test('launch hook: a corrupt release leaves the old version and reports it', () => {
-  const inst = makeInstall(), rel = makeRelease('1.2.0', [['App/app.txt', 'x']], { badHash: true }); withSource(inst, rel);
+  const inst = makeInstall(), rel = makeRelease('1.2.0', [['App/app.txt', 'x']], { badHash: true }); withSource(inst, rel, { auto_update: true });
   const o = launch(inst); assert.equal(o.ok, false); assert.equal(read(inst, 'App/app.txt'), 'old app');
 });
 
@@ -284,4 +284,61 @@ test('a --local install records no update source when asked', async () => {
   const r = await installRelease({ target, source: { type: 'local', path: rel }, recordSource: false });
   assert.equal(r.ok, true);
   assert.equal(JSON.parse(fs.readFileSync(path.join(target, 'install.json'), 'utf8')).source, undefined);
+});
+
+// ---- per-part updates (components) ----
+import { hashComponents, componentOf } from '../lib/components.mjs';
+import { checkUpdate } from '../lib/apply.mjs';
+function makeCompRelease(version, entries) {
+  const d = tmp('rel-'), zip = writeZip(entries.map(([name, data]) => ({ name, data: B(data) }))), name = `suite-${version}.zip`;
+  fs.writeFileSync(path.join(d, name), zip);
+  const components = hashComponents(entries.map(([rel, data]) => ({ rel, data: B(data) })));
+  fs.writeFileSync(path.join(d, 'manifest.json'), JSON.stringify({ schema: 1, channel: 'stable', version, components, files: [{ name, size: zip.length, sha256: sha256(zip), url: name }] }));
+  return d;
+}
+const FILES1 = [['Suite/modules/listen/a.py', 'listen 1'], ['Suite/modules/multi/b.py', 'multi 1'], ['Suite/suite/suite.py', 'core 1'], ['Docs/x.md', 'doc 1']];
+const FILES2 = [['Suite/modules/listen/a.py', 'listen 2'], ['Suite/modules/multi/b.py', 'multi 2'], ['Suite/suite/suite.py', 'core 2'], ['Docs/x.md', 'doc 1']];
+
+test('componentOf groups files; unknown paths are scripts and docs', () => {
+  assert.equal(componentOf('Suite/modules/listen/server.py'), 'listen'); assert.equal(componentOf('Suite/suite/suite.py'), 'core');
+  assert.equal(componentOf('PinguinoHost/bin/Release/net8.0/PinguinoHost.dll'), 'host'); assert.equal(componentOf('Docs/INSTALL.md'), 'tools');
+  assert.equal(componentOf('App/src-tauri/target/release/pinguino-suite.exe'), 'shell');
+});
+
+test('a part updates alone: other parts stay, record kept, check lists only what differs, rollback restores', async () => {
+  const inst = makeInstall('1.0.0', {}), r1 = makeCompRelease('1.0.1', FILES1), r2 = makeCompRelease('1.0.2', FILES2);
+  let r = await applyUpdate({ installDir: inst, source: { type: 'local', path: r1 }, current: '1.0.0', liveCheck: notLive }); assert.equal(r.ok, true, r.message);
+  r = await applyUpdate({ installDir: inst, source: { type: 'local', path: r2 }, current: '1.0.1', liveCheck: notLive, only: ['listen'] }); assert.equal(r.ok, true, r.message);
+  assert.equal(read(inst, 'Suite/modules/listen/a.py'), 'listen 2'); assert.equal(read(inst, 'Suite/modules/multi/b.py'), 'multi 1'); assert.equal(read(inst, 'Suite/suite/suite.py'), 'core 1');
+  const j = JSON.parse(read(inst, 'install.json')); assert.equal(j.version, '1.0.1');   // not everything is current, so the version does not move
+  const c = await checkUpdate({ source: { type: 'local', path: r2 }, current: '1.0.1', installDir: inst });
+  assert.deepEqual(c.components.filter(x => x.changed).map(x => x.id).sort(), ['core', 'multi']); assert.equal(c.available, true);
+  rollbackLatest(inst); assert.equal(read(inst, 'Suite/modules/listen/a.py'), 'listen 1');
+  r = await applyUpdate({ installDir: inst, source: { type: 'local', path: r2 }, current: '1.0.1', liveCheck: notLive, only: ['listen', 'multi', 'core'] });
+  assert.equal(JSON.parse(read(inst, 'install.json')).version, '1.0.2');
+  assert.equal((await checkUpdate({ source: { type: 'local', path: r2 }, current: '1.0.2', installDir: inst })).available, false);
+});
+
+test('a part update waits while live and refuses unknown parts or releases without part info', async () => {
+  const inst = makeInstall('1.0.0', {}), r2 = makeCompRelease('1.0.2', FILES2);
+  let r = await applyUpdate({ installDir: inst, source: { type: 'local', path: r2 }, current: '1.0.0', liveCheck: async () => ({ live: true }), only: ['listen'] });
+  assert.equal(r.deferred, true); assert.ok(!fs.existsSync(path.join(inst, 'Suite/modules/listen/a.py')));
+  r = await applyUpdate({ installDir: inst, source: { type: 'local', path: r2 }, current: '1.0.0', liveCheck: notLive, only: ['nope'] }); assert.equal(r.ok, false);
+  r = await applyUpdate({ installDir: inst, source: { type: 'local', path: makeRelease('1.0.3', [['a.txt', 'x']]) }, current: '1.0.0', liveCheck: notLive, only: ['listen'] }); assert.equal(r.ok, false);
+});
+
+test('app parts are staged, then swapped by the launch hook', async () => {
+  const inst = makeInstall('1.0.0', {}), r2 = makeCompRelease('1.0.2', FILES2);
+  const r = await applyUpdate({ installDir: inst, source: { type: 'local', path: r2 }, current: '1.0.0', liveCheck: async () => ({ live: true }), only: ['core'], stageOnly: true });
+  assert.equal(r.staged, true, r.message); assert.ok(!fs.existsSync(path.join(inst, 'Suite/suite/suite.py')));
+  const pend = JSON.parse(fs.readFileSync(dirs(inst).pending, 'utf8')); assert.deepEqual(pend.only, ['core']);
+  const o = launch(inst); assert.equal(o.ok, true, JSON.stringify(o));
+  assert.equal(read(inst, 'Suite/suite/suite.py'), 'core 2'); assert.ok(!fs.existsSync(path.join(inst, 'Suite/modules/listen/a.py')));   // only the staged part moved
+});
+
+test('an update keeps the source recorded in install.json (the next check needs it)', async () => {
+  const inst = makeInstall('1.0.0', {}), r2 = makeCompRelease('1.0.2', FILES2);
+  withSource(inst, r2);
+  await applyUpdate({ installDir: inst, source: { type: 'local', path: r2 }, current: '1.0.0', liveCheck: notLive, only: ['listen'] });
+  assert.deepEqual(JSON.parse(read(inst, 'install.json')).source, { type: 'local', path: r2 });
 });

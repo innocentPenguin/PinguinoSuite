@@ -20,5 +20,14 @@ export function parseManifest(text, base = '') {
     if (!Number.isInteger(f.size) || f.size < 0) throw new Error(`update manifest has no size for ${f.name}`);
     return { name: f.name, size: f.size, sha256: f.sha256.toLowerCase(), url: f.url ? String(f.url) : f.name };
   });
-  return { schema: 1, channel: m.channel || 'stable', version: String(m.version), released: m.released || '', notes: String(m.notes || '').slice(0, 2000), files, base };
+  let components = null;   // optional per-part hashes so one part can be updated alone: {id: {hash, files, bytes}}
+  if (m.components != null) {
+    if (typeof m.components !== 'object' || Array.isArray(m.components)) throw new Error('update manifest has a bad components list');
+    components = {};
+    for (const [id, c] of Object.entries(m.components)) {
+      if (!/^[a-z0-9_-]{1,30}$/.test(id) || !c || !/^[0-9a-f]{64}$/i.test(c.hash || '')) throw new Error('update manifest has a bad component');
+      components[id] = { hash: c.hash.toLowerCase(), files: Number(c.files) || 0, bytes: Number(c.bytes) || 0 };
+    }
+  }
+  return { schema: 1, channel: m.channel || 'stable', version: String(m.version), released: m.released || '', notes: String(m.notes || '').slice(0, 2000), files, components, base };
 }
