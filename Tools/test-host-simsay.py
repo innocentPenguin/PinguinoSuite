@@ -10,6 +10,7 @@ cases = [
  {"event":"queue_open","speak":True},{"event":"queue_close","speak":True},{"event":"queue_clear","speak":True},
  {"event":"join","speak":True,"player":"zed","pos":3},{"event":"leave","speak":True,"player":"zed"},{"event":"kick","speak":True,"player":"zed"},
  {"event":"koth_stays","speak":True,"winner":"blue"},{"event":"koth_wait","speak":True,"winner":"orange","need":4,"have":2},
+ {"event":"waiting","speak":True,"need":4,"have":1,"format":"2v2"},
  {"event":"queue_open"},{"event":"bogus","speak":True},
 ]
 inp = "".join("simsay " + json.dumps(c, ensure_ascii=False) + "\n" for c in cases) + "quit\n"
@@ -29,5 +30,6 @@ has('[say] @zed You left the queue.')
 has('[say] zed has been removed from the queue.')
 has('[say] 🔷 Blue stays on! Rotating in new challengers...')
 has("[say] KOTH: 🔶 Orange stays on, but there aren't enough challengers (need 4, have 2). The winners wait at the front of the queue.")
+has('[say] Waiting for players: need 4 for 2v2, have 1. The next game starts by itself when the queue is full.')
 assert out.count('"spoke":false') == 1 and 'unknown event' in out, out[-1500:]
 print('PASS simsay')

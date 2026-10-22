@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -81,6 +81,8 @@ namespace PinguinoHost
                 case "koth_wait":
                     if (winner != "blue" && winner != "orange") return new JObject { { "ok", false }, { "error", "winner must be blue or orange" } };
                     lines.Add("KOTH: " + Label(winner) + " stays on, but there aren't enough challengers (need " + Int(b["need"], 0) + ", have " + Int(b["have"], queue.Count) + "). The winners wait at the front of the queue."); break;
+                case "waiting":
+                    lines.Add("Waiting for players: need " + Int(b["need"], 0) + " for " + (Str(b["format"]) == "" ? "2v2" : Str(b["format"])) + ", have " + Int(b["have"], queue.Count) + ". The next game starts by itself when the queue is full."); break;
                 case "text":
                     if (Str(b["text"]) == "") return new JObject { { "ok", false }, { "error", "text needed" } };
                     lines.Add(Str(b["text"])); break;
