@@ -77,3 +77,11 @@ Status: open / building / done / asked-Ivan.
 - Canned-command editor: explained to Ivan (fixed prewritten replies), pending his OK.
 - Music: lyrics widget (toggle in Spotify master section), mod queue commands, request leaderboard ONLY on song pages, fallback playlist, site queue page: all yes.
 - 01/012/023 list: all yes (release dry run, signed releases, Economy+Timers tabs, shorter Listen clips, real Lite Install/Eject test, overlay-options sliders page, resub-anniversary spotlight pending explanation).
+
+## Ivan's answers 2026-10-22 10:04
+- match_start emoji lines were for TOURNEYS only; customs keep our set colours. Master View: change customs team name + colour, with colour presets.
+- Fortnite: playing-with-viewers sizes 1/2/3 + free text box for more; customs keep 2v2/3v3/4v4; bring KOTH to Fortnite. Master View needs a game/activity selector.
+- Stream title + description + tags editable from Master View across platforms (Twitch, YouTube incl. scheduling live broadcasts; TikTok stays manual).
+- Canned-command editor: YES (022 + 01).
+- Resub anniversary spotlight: keep built, but sub streak + months subscribed must show on the viewer profile (05 + 02).
+- BACK-PAY: everyone who ever cheered/gave bits since the start of the logs gets 40% of what the current system would have paid (02).
