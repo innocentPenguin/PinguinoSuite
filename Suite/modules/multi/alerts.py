@@ -16,7 +16,7 @@ LABEL = {"follow": "Follow", "refollow": "Refollow", "sub": "Subscription", "res
          "hype": "Hype train", "goal": "Goal reached", "redeem": "Redemption", "streak": "Watch streak", "watchtime": "Watch-time milestone", "anniversary": "Anniversary", "comeback": "First stream back", "intro": "Intro"}
 ANIMS = ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "zoom", "bounce", "flip"]
 LAYOUTS = ["card", "banner", "center", "stack"]
-VARS = ["{user}", "{amount}", "{tier}", "{months}", "{message}", "{level}", "{recipient}", "{streak}", "{hours}", "{years}"]
+VARS = ["{user}", "{amount}", "{tier}", "{months}", "{message}", "{level}", "{recipient}", "{streak}", "{hours}", "{years}", "{platform}", "{currency}"]
 ORANGE, DARK, CREAM = "#ff8a1f", "#1a1208", "#ffe9cc"
 
 _STYLE = {"bg": DARK, "fg": CREAM, "accent": ORANGE, "font": "nunito", "size": 30, "layout": "card", "anim_in": "slide-up", "anim_out": "fade",
@@ -220,7 +220,7 @@ def _clean_partial(c):
 
 
 # variables -------------------------------------------------------------------------------------
-_VAR = re.compile(r"\{(user|amount|tier|months|message|level|recipient|streak|hours|years)\}")
+_VAR = re.compile(r"\{(user|amount|tier|months|message|level|recipient|streak|hours|years|platform|currency)\}")
 
 
 VALUE_OF = {"streak": "streak", "watchtime": "hours", "anniversary": "years"}
@@ -235,7 +235,7 @@ def render(text, ev):
     """text with variables -> list of [segment, kind]; kind 'user' marks the viewer's name (drawn in their rank colour)."""
     vals = {"amount": str(ev.get("amount") or 0), "tier": str(ev.get("tier") or "1"), "months": str(ev.get("months") or 1),
             "message": str(ev.get("message") or ""), "level": str(ev.get("level") or ""), "recipient": str(ev.get("recipient") or ""),
-            "streak": str(value(ev, "streak")), "hours": str(value(ev, "hours")), "years": str(value(ev, "years"))}
+            "platform": str(ev.get("platform") or "twitch").capitalize(), "currency": str(ev.get("currency") or ""), "streak": str(value(ev, "streak")), "hours": str(value(ev, "hours")), "years": str(value(ev, "years"))}
     out, pos = [], 0
     for m in _VAR.finditer(text or ""):
         if m.start() > pos:
@@ -325,7 +325,7 @@ class Engine:
         if not test:
             if eid in self.seen:
                 return self._note(ev, "duplicate", "already fired (replay)")
-            key = (t, ev["user"].lower(), value(ev, VALUE_OF[t]) if t in VALUE_OF else int(ev.get("amount") or 0))
+            key = (t, str(ev.get("platform") or "") + ":" + ev["user"].lower(), value(ev, VALUE_OF[t]) if t in VALUE_OF else int(ev.get("amount") or 0))
             if now - self.recent.get(key, 0) < self.cfg["global"]["dedupe_s"]:
                 return self._note(ev, "duplicate", "same event just fired")
             self.seen.append(eid)
@@ -398,7 +398,7 @@ class Engine:
         return {"id": ev["id"], "type": ev["type"], "label": LABEL[ev["type"]], "priority": c["priority"], "duration": c["duration"], "test": test,
                 "text": render(c["text"], ev), "subtext": render(c["subtext"], ev), "style": c["style"], "media": c["media"] if c["media"]["url"] else None,
                 "sound": {"on": bool(so["enabled"] and not c["silent"]), "url": url, "volume": so["volume"]},
-                "rank_colour": _color(str(ev.get("rank_colour") or ""), ""), "avatar": _url(ev.get("avatar")), "user": ev["user"]}
+                "platform": str(ev.get("platform") or ""), "rank_colour": _color(str(ev.get("rank_colour") or ""), ""), "avatar": _url(ev.get("avatar")), "user": ev["user"]}
 
     def preview(self, t, ev=None):
         """Resolved payload without queueing (editor preview)."""

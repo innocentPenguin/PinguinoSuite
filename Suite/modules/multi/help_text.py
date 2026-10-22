@@ -61,6 +61,16 @@ HELP = {
         "link": {"label": "YouTube Live Streaming API", "url": "https://developers.google.com/youtube/v3/live/getting-started"},
         "fix": SETUP,
     },
+    "conn-kick": {
+        "title": "Kick connection (read-only)",
+        "summary": "Optional and OFF by default. Kick only sends official events by webhook to a public address; the quick way is the unofficial read-only chat feed (can break when Kick changes its site).",
+        "steps": [
+            "Unofficial chat feed: in Multi settings turn on kick_enabled and paste your numeric Kick chatroom id (kick_chatroom_id).",
+            "Official events (follows, subs, gifts, KICKs): create a Kick app, then point its webhook at your public address ending /hook/kick (see Docs/MULTISTREAM_PLAN.md).",
+            "Ivan does the Kick login and consent himself; Multi never asks for your password.",
+        ],
+        "link": {"label": "Kick developer docs", "url": "https://docs.kick.com/"},
+    },
     "conn-tiktok": {
         "title": "TikTok connection (unofficial, read-only)",
         "summary": "Optional and OFF by default. TikTok has no official chat API; this uses a third-party package that can break or conflict with TikTok's rules. You can read TikTok chat but not reply.",
@@ -187,6 +197,7 @@ INTEGRATIONS = [  # (id, name, platform, connect label)
     ("twitch", "Twitch (chat)", "twitch", "Connect Twitch"),
     ("discord", "Discord (chat)", "discord", None),
     ("youtube", "YouTube (chat)", "youtube", None),
+    ("kick", "Kick (chat, unofficial / webhook)", "kick", None),
     ("tiktok", "TikTok (chat, unofficial)", "tiktok", None),
 ]
 

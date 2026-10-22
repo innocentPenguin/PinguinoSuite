@@ -2,7 +2,7 @@
 // chat costs nothing extra per message. Also the style editor page (/?type=style) with a live preview.
 // Globals from index.html: $, esc, api, W, hhmm. From chat.js: chatMsg, isBot, mentionsMe, MYNAMES, PINS.
 let CS = null, DEFAULT_CS = null;
-const CS_PLATFORMS = ['twitch', 'youtube', 'discord', 'tiktok'];
+const CS_PLATFORMS = ['twitch', 'youtube', 'kick', 'discord', 'tiktok'];
 const CS_ROLES = {streamer: 'Streamer (you)', mod: 'Moderator', vip: 'VIP', sub: 'Subscriber', new: 'New chatter (first time ever)', returning: 'Returning chatter (back after a long break)', bot: 'Bots'};
 const CS_EVENTS = {first: 'First message (Twitch flag)', mention: 'Mentions me', sub: 'New subscriber', resub: 'Resub', gift: 'Gifted subs', cheer: 'Cheer / bits',
   raid: 'Raid', follow: 'Follow', redeem: 'Channel point redeem', highlighted: 'Highlighted message', announcement: 'Announcement', pinned: 'Pinned message', modaction: 'Mod action (timeout / ban / delete)'};
@@ -43,7 +43,7 @@ function compileStyle(s, scope = '') {
   if (!b.timestamps) R('.msg .t', 'display:none');
   if (!b.badges) R('.msg .bd,.pm .bd', 'display:none');
   if (!b.platformTag) R('.msg .pf,.msg .pl', 'display:none');
-  CS_PLATFORMS.forEach(p => { const mk = (s.marker || {})[p] || {size: 14, color: ''}; R(`.pl.pl-${p}`, `width:${mk.size}px;height:${mk.size}px;vertical-align:middle;margin-right:5px;color:${mk.color || {twitch: '#9146ff', youtube: '#ff4d4d', discord: '#5865f2', tiktok: '#25f4ee'}[p]}`); });
+  CS_PLATFORMS.forEach(p => { const mk = (s.marker || {})[p] || {size: 14, color: ''}; R(`.pl.pl-${p}`, `width:${mk.size}px;height:${mk.size}px;vertical-align:middle;margin-right:5px;color:${mk.color || {twitch: '#9146ff', youtube: '#ff4d4d', kick: '#53fc18', discord: '#5865f2', tiktok: '#25f4ee'}[p]}`); });
   const add = (cls, r) => {
     const css = ruleCss(r, k);
     if (css) R(`.msg.${cls},.pm.${cls}`, css);
@@ -74,6 +74,7 @@ function withStyle(s, fn) { const keep = EFF; EFF = s; try { return fn(); } fina
 const LOGOS = {
   twitch: '<path fill="currentColor" d="M3 2h18v12l-5 5h-4l-3 3H6v-3H3z"/><rect x="9" y="6" width="2.2" height="6" fill="#fff"/><rect x="14" y="6" width="2.2" height="6" fill="#fff"/>',
   youtube: '<rect x="1.5" y="5" width="21" height="14" rx="4.5" fill="currentColor"/><path fill="#fff" d="M10 8.8v6.4l5.6-3.2z"/>',
+  kick: '<rect x="2" y="2" width="20" height="20" rx="4" fill="currentColor"/><path fill="#0b0b0b" d="M7 6h3v4l3-4h3.4l-3.6 4.6L17 18h-3.4l-2.1-3.7L10 16v2H7z"/>',
   discord: '<path fill="currentColor" d="M6 3h12a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4H11l-5 3v-3a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z"/><circle cx="9" cy="11" r="1.8" fill="#fff"/><circle cx="15" cy="11" r="1.8" fill="#fff"/>',
   tiktok: '<path fill="currentColor" d="M14 2h3.200c.3 2.300 1.700 3.800 4 4v3.300c-1.500 0-2.900-.5-4-1.300v6.300a6 6 0 1 1-6-6c.4 0 .700 0 1 .1v3.400a2.700 2.700 0 1 0 1.800 2.500z"/>',
 };

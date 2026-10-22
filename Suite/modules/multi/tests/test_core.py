@@ -679,7 +679,7 @@ def test_every_prestream_item_has_help_and_integrations():
             assert h["link"]["url"].startswith("https://")
     assert {s["name"] for s in help_text.SECRETS} == {"MULTI_TWITCH_TOKENS", "MULTI_DISCORD_TOKEN", "MULTI_YOUTUBE_TOKEN", "MULTI_AI_KEY"}
     ints = c.get("/api/integrations").json()["items"]
-    assert {i["id"] for i in ints} == {"twitch", "discord", "youtube", "tiktok"} and all(i["help"] for i in ints)
+    assert {i["id"] for i in ints} == {"twitch", "discord", "youtube", "kick", "tiktok"} and all(i["help"] for i in ints)
     assert c.post("/api/test/nope", headers={"origin": "http://127.0.0.1:8766"}).status_code == 404
     assert "_module" in c.get("/api/help/all").json()["items"]
 
@@ -1386,3 +1386,95 @@ def test_alert_config_bad_body_does_not_reset(monkeypatch):
     assert c.post("/api/alerts/config", json={"config": "x"}, headers={"origin": "http://127.0.0.1:8766"}).status_code == 400
     r = c.post("/api/alerts/fire", json={"type": "cheer", "user": "q", "amount": "lots"}, headers={"origin": "http://127.0.0.1:8766"})
     assert r.status_code == 200
+
+
+def test_xplat_kick_webhook_and_pusher():
+    import xplat
+    p = {"message_id": "m1", "broadcaster": {"channel_slug": "pingu", "username": "Pingu"}, "created_at": "2026-10-22T10:00:00Z",
+         "sender": {"user_id": 7, "username": "Kicker", "identity": {"username_color": "#53fc18", "badges": [{"type": "moderator", "text": "Mod"}]}},
+         "content": "hi [emote:37226:KEKW] there", "replies_to": {"message_id": "m0", "sender": {"username": "Old"}}}
+    m = xplat.kick_webhook("chat.message.sent", p, "01ULID")
+    assert m.platform == "kick" and m.text == "hi KEKW there" and m.emotes == [{"id": "37226", "text": "KEKW"}] and m.badges == ["moderator"]
+    assert m.id == "kick:pingu:m1" and m.reply_to == "kick:pingu:m0" and m.color == "#53fc18" and m.user_id == "7"
+    f = xplat.kick_webhook("channel.followed", {"broadcaster": {"channel_slug": "pingu"}, "follower": {"user_id": 9, "username": "Fan"}}, "01F")
+    assert f.event == "follow" and f.meta["platform"] == "kick" and f.meta["notice"] and f.id == "kick:pingu:follow:01F"
+    g = xplat.kick_webhook("channel.subscription.gifts", {"broadcaster": {"channel_slug": "pingu"}, "gifter": {"is_anonymous": True}, "giftees": [{}, {}, {}]}, "01G")
+    assert g.event == "gift" and g.amount == 3 and g.display == "Anonymous"
+    k = xplat.kick_webhook("kicks.gifted", {"broadcaster": {"channel_slug": "pingu"}, "sender": {"user_id": 1, "username": "Rich"}, "gift": {"amount": "500", "name": "Rocket"}}, "01K")
+    assert k.event == "cheer" and k.amount == 500 and k.meta["currency"] == "KICKs"
+    assert xplat.kick_webhook("moderation.banned", {}, "x") is None and xplat.kick_webhook("chat.message.sent", "junk") is None
+    ps = xplat.kick_pusher("App\Events\ChatMessageEvent", {"id": "abc", "content": "yo", "created_at": "2026-10-22T10:00:00+00:00",
+                           "sender": {"id": 5, "username": "Px", "slug": "px", "identity": {"color": "#fff000", "badges": [{"type": "broadcaster"}]}}}, "pingu")
+    assert ps.id == "kick:pingu:abc" and ps.badges == ["owner"] and xplat.kick_pusher("other", {}) is None
+
+
+def test_xplat_youtube_and_tiktok_events():
+    import xplat
+    from types import SimpleNamespace as NS
+    sc = {"id": "yt1", "snippet": {"type": "superChatEvent", "publishedAt": "2026-10-22T10:00:00Z",
+                                   "superChatDetails": {"amountMicros": "5000000", "currency": "USD", "amountDisplayString": "$5.00", "userComment": "great"}},
+          "authorDetails": {"channelId": "UC1", "displayName": "Tuber"}}
+    e = xplat.youtube_event(sc, "chat1")
+    assert e.event == "cheer" and e.amount == 5 and e.meta["currency"] == "USD" and e.meta["platform"] == "youtube" and e.id == "youtube:chat1:yt1"
+    assert xplat.youtube_event({"id": "z", "snippet": {"type": "textMessageEvent"}, "authorDetails": {}}, "c") is None
+    mem = {"id": "y2", "snippet": {"type": "memberMilestoneChatEvent", "memberMilestoneChatDetails": {"memberMonth": 12}}, "authorDetails": {"channelId": "U", "displayName": "M"}}
+    assert xplat.youtube_event(mem, "c").event == "resub" and xplat.youtube_event(mem, "c").amount == 12
+    u = NS(user_id=11, unique_id="tokker", nickname="Tok Ker")
+    assert xplat.tiktok_event("follow", NS(user=u), "host").event == "follow"
+    gift = NS(user=u, gift=NS(name="Rose", diamond_count=1, streakable=True), streaking=True, repeat_count=3, group_id="g1")
+    assert xplat.tiktok_event("gift", gift, "host") is None                      # mid-streak frame
+    gift.streaking = False
+    t = xplat.tiktok_event("gift", gift, "host")
+    assert t.event == "cheer" and t.amount == 3 and t.meta["gift_name"] == "Rose" and t.id == "tiktok:host:gift:g1"
+    assert xplat.tiktok_event("follow", NS(user=NS(user_id="", unique_id="")), "host") is None
+
+
+def test_cross_platform_events_reach_alerts_and_not_the_chat_rank(tmp_path):
+    import alerts
+    import xplat
+    from types import SimpleNamespace as NS
+    st = Store(str(tmp_path / "x.db"))
+    pl = Pipeline(st, CardManager(st, lambda e: None), lambda e: None)
+    got = []
+    pl.on_event = got.append
+    k = xplat.kick_webhook("kicks.gifted", {"broadcaster": {"channel_slug": "p"}, "sender": {"user_id": 1, "username": "Rich"}, "gift": {"amount": 50, "name": "R"}}, "01K")
+    out = pl.ingest(k)
+    assert out["tier"] == "none" and got and got[0].event == "cheer"      # stored as a stream event, never ranked as chat
+    eng = alerts.Engine(st, lambda e: None)
+    ev = {"platform": "kick", "id": "k1", "type": "cheer", "user": "rich", "amount": 50, "currency": "KICKs"}
+    assert eng.submit(ev)[0]
+    p = eng.heap[0][2]
+    assert p["platform"] == "kick"
+    assert alerts.render("{user} {amount} {currency} on {platform}", ev)[-1][0].endswith("Kick")
+    assert eng.submit(dict(ev, id="k2", platform="tiktok"))[0]             # same name on another platform is not a duplicate
+
+
+def test_kick_webhook_signature_and_route(monkeypatch):
+    import asyncio as aio
+    import base64
+    import json as js
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding, rsa
+    from fastapi.testclient import TestClient
+    import server
+    from connectors.kick import Kick
+    priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    k = Kick(server.inbox, lambda e: None)
+    pub = priv.public_key()
+    k._key, k._key_ts = pub, time.time()
+    monkeypatch.setattr(k, "_public_key", lambda force=False: pub)           # no network: the forced refetch on a bad signature must not run in tests
+    body = js.dumps({"broadcaster": {"channel_slug": "p"}, "follower": {"user_id": 3, "username": "NewFan"}}).encode()
+    sig = base64.b64encode(priv.sign(b"01ID.2026-10-22T10:00:00Z." + body, padding.PKCS1v15(), hashes.SHA256())).decode()
+    h = {"kick-event-message-id": "01ID", "kick-event-message-timestamp": "2026-10-22T10:00:00Z", "kick-event-type": "channel.followed", "kick-event-signature": sig}
+    seen = []
+    k.inbox = type("I", (), {"put": staticmethod(seen.append)})()
+    assert aio.run(k.ingest_webhook(h, body))[0] == 200 and seen and seen[0].event == "follow"
+    assert aio.run(k.ingest_webhook(dict(h, **{"kick-event-signature": "AAAA"}), body))[0] == 401
+    assert aio.run(k.ingest_webhook(h, body + b" "))[0] == 401              # body tampered
+    server.connectors["kick"] = k
+    monkeypatch.setenv("PINGUINO_API_TOKEN", "t")
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    r = c.post("/hook/kick", content=body, headers=h)                     # no Origin, no token: only the signature counts
+    assert r.status_code == 200, r.text
+    assert c.post("/hook/kick", content=body, headers=dict(h, **{"kick-event-signature": "AAAA"})).status_code == 401
+    server.connectors.pop("kick", None)

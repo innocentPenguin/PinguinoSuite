@@ -7,7 +7,7 @@ import copy
 import re
 
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
-PLATFORMS = ("twitch", "youtube", "discord", "tiktok")
+PLATFORMS = ("twitch", "youtube", "kick", "discord", "tiktok")
 ROLES = ("streamer", "mod", "vip", "sub", "new", "returning", "bot")
 EVENTS = ("first", "mention", "sub", "resub", "gift", "cheer", "raid", "follow", "redeem", "highlighted",
           "announcement", "pinned", "modaction")
@@ -28,6 +28,7 @@ DEFAULT_STYLE = {
     "platform": {
         "twitch": rule(border="#9146ff", borderW=0),
         "youtube": rule(border="#ff4d4d", borderW=0),
+        "kick": rule(border="#53fc18", borderW=0),
         "discord": rule(border="#5865f2", borderW=0),
         "tiktok": rule(border="#25f4ee", borderW=0),
     },

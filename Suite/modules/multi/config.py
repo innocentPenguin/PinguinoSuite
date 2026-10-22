@@ -17,6 +17,9 @@ DEFAULTS = {
     "twitch_client_id": "",
     "tiktok_enabled": False,         # UNOFFICIAL, read-only; needs optional TikTokLive package
     "tiktok_user": "",
+    "kick_enabled": False,            # Kick: UNOFFICIAL read-only chat feed (public Pusher socket); official events come by webhook (POST /hook/kick)
+    "kick_channel": "",               # channel slug
+    "kick_chatroom_id": "",           # numeric chatroom id (kick.com/api/v2/channels/<slug> -> chatroom.id; pasted once)
     "ding_platforms": [],            # new-chatter ding: platforms it is ON for (twitch, youtube); empty = off
     "ding_first_ever": False,        # Twitch "first message ever" gets its own (optional) sound
     "ding_sound": r"D:\PinguinoSuite\Data\sounds\new-chatter-bell.wav",   # = Streamer.bot "First TIme System (Bell)" sound

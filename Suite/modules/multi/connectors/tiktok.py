@@ -7,6 +7,7 @@ import asyncio
 import time
 
 import config
+import xplat
 from connectors.base import Connector
 from models import ChatMessage
 
@@ -52,6 +53,20 @@ class TikTok(Connector):
                     self.state["last_message"] = time.time()
                     self.inbox.put(normalize_comment(ev, user))
                 client.add_listener(CommentEvent, on_comment)
+                try:                                   # follows, gifts, subscriptions -> events (names differ a little between library versions)
+                    import TikTokLive.events as tev
+                    for kind, cls in (("follow", "FollowEvent"), ("gift", "GiftEvent"), ("subscribe", "SubscribeEvent")):
+                        if hasattr(tev, cls):
+                            def mk(kind):
+                                async def on_x(ev):
+                                    m = xplat.tiktok_event(kind, ev, user)
+                                    if m:
+                                        self.state["last_message"] = time.time()
+                                        self.inbox.put(m)
+                                return on_x
+                            client.add_listener(getattr(tev, cls), mk(kind))
+                except Exception:
+                    pass
                 try:                                   # room viewer count (field names differ between library versions)
                     from TikTokLive.events import RoomUserSeqEvent
 

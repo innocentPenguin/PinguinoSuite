@@ -15,6 +15,7 @@ body.bg{background:repeating-conic-gradient(#1b1b1b 0 25%,#262626 0 50%) 0 0/24p
 .al .u{color:var(--acc)}
 .al img.m,.al video.m{border-radius:10px;object-fit:contain;max-width:100%}
 .al.pos-bg{overflow:hidden}.al.pos-bg .m{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35;border-radius:0;z-index:0}.al.pos-bg .tx{position:relative;z-index:1}
+.al .pt{position:absolute;top:-10px;left:10px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:#0d0d0d;color:var(--acc);border:1px solid var(--acc);padding:2px 8px;border-radius:99px}
 .al .tag{position:absolute;top:-10px;right:10px;font-size:11px;font-weight:800;letter-spacing:.1em;background:var(--acc);color:#1a1208;padding:2px 8px;border-radius:99px}
 @keyframes fade-in{from{opacity:0}to{opacity:1}}@keyframes fade-out{from{opacity:1}to{opacity:0}}
 @keyframes slide-up-in{from{opacity:0;transform:translate(-50%,calc(-50% + 80px))}to{opacity:1;transform:translate(-50%,-50%)}}
@@ -61,7 +62,7 @@ function build(a) {
   const m = a.media;
   const media = m ? (m.kind === 'video' ? `<video class="m" src="${esc(m.url)}" autoplay muted loop playsinline style="height:${m.size}px"></video>` : `<img class="m" src="${esc(m.url)}" style="height:${m.size}px" alt="">`) : '';
   const av = !m && a.avatar && st.layout !== 'center' ? `<img class="m" src="${esc(a.avatar)}" style="height:${Math.round(st.size * 2.2)}px;border-radius:50%" alt="">` : '';
-  el.innerHTML = `${a.test ? '<span class="tag">TEST</span>' : ''}${m && m.position !== 'bg' ? media : m ? media : av}<div class="tx"><div class="t1">${segs(a.text, acc)}</div>${a.subtext && a.subtext.length ? `<div class="t2">${segs(a.subtext, acc)}</div>` : ''}</div>`;
+  el.innerHTML = `${a.test ? '<span class="tag">TEST</span>' : ''}${a.platform && a.platform !== 'twitch' ? `<span class="pt">${esc(a.platform)}</span>` : ''}${m && m.position !== 'bg' ? media : m ? media : av}<div class="tx"><div class="t1">${segs(a.text, acc)}</div>${a.subtext && a.subtext.length ? `<div class="t2">${segs(a.subtext, acc)}</div>` : ''}</div>`;
   return el;
 }
 let cfT = 0;

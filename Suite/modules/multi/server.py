@@ -57,6 +57,7 @@ import voice
 import secrets_store
 import windows as win
 from connectors.discord import Discord
+from connectors.kick import Kick
 from connectors.tiktok import TikTok
 from connectors.twitch import Twitch
 from connectors.youtube import YouTube
@@ -101,7 +102,7 @@ def _alert_from_message(m):
     meta = m.meta or {}
     if meta.get("sim") or meta.get("test"):
         return
-    ev = dict(meta, id=m.id, type=m.event, user=m.user, display=m.display, amount=m.amount, first_time=bool(meta.get("first_time") or m.first_time),
+    ev = dict(meta, platform=m.platform, id=m.id, type=m.event, user=m.user, display=m.display, amount=m.amount, first_time=bool(meta.get("first_time") or m.first_time),
               refollow="refollow" in m.flags, rank_colour=meta.get("rank_colour") or m.color)
     if hub.loop:
         hub.loop.call_soon_threadsafe(alert_engine.submit, ev)
@@ -156,13 +157,15 @@ async def lifespan(app):
     connectors["youtube"] = yt
     tt = TikTok(inbox, hub.emit)
     connectors["tiktok"] = tt
+    kk = Kick(inbox, hub.emit)
+    connectors["kick"] = kk
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
-             asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()),
+             asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()), asyncio.create_task(kk.run()),
              asyncio.create_task(listen_bridge.run(cards, hub.emit)),
              asyncio.create_task(host_feed.run(inbox, lambda: connectors['twitch'].describe()['status'] == 'connected')), asyncio.create_task(prestream_file_loop()), asyncio.create_task(viewers_mod.run(connectors, hub.emit))]
     yield
     console_log.info("server", "Multi stopping")
-    tw.stop = dc.stop = yt.stop = tt.stop = True
+    tw.stop = dc.stop = yt.stop = tt.stop = kk.stop = True
     for t in tasks:
         t.cancel()
     for wid in list(shell.procs):
@@ -232,6 +235,8 @@ def token_ok(request):
 async def local_only_writes(request: Request, call_next):
     """Anti DNS-rebinding (Host) + anti drive-by (Origin). Writes from our own page (Origin == Host, e.g. the
     embedded iframe) pass; any other writer (no Origin, or a Tauri origin) must present the module token."""
+    if request.url.path == "/hook/kick":          # Kick's servers (via the site relay or a tunnel): authenticated by the RSA signature, not Origin / token / Host
+        return await call_next(request)
     if not host_ok(request.headers.get("host")):
         return HTMLResponse("forbidden host", status_code=403)
     if request.method not in ("GET", "HEAD", "OPTIONS"):
@@ -275,6 +280,19 @@ def _obs_get(kind):
 
 def _live_page():
     return FileResponse(STATIC / "live.html", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/hook/kick")
+async def kick_hook(request: Request):
+    """Kick webhook receiver (signature checked inside the connector). Kick must reach this over public HTTPS: see Docs/MULTISTREAM_PLAN.md."""
+    kk = connectors.get("kick")
+    if kk is None:
+        raise HTTPException(503, "Kick connector not running")
+    body = await request.body()
+    if len(body) > 256 * 1024:
+        raise HTTPException(413, "too large")
+    code, text = await kk.ingest_webhook({k.lower(): v for k, v in request.headers.items()}, body)
+    return JSONResponse({"ok": code == 200, "detail": text}, status_code=code)
 
 
 @app.get("/obs/alerts")
@@ -554,7 +572,7 @@ def setup_info():
     """Non-secret setup state for the launcher: which secrets exist (booleans only) + plain settings."""
     s = config.settings()
     keys = ("priority_mode", "ai_provider", "ai_model", "ai_daily_cap_usd", "voice_enabled", "discord_channels",
-            "tiktok_enabled", "tiktok_user", "channel", "bot_accounts", "my_names")
+            "tiktok_enabled", "tiktok_user", "kick_enabled", "kick_channel", "kick_chatroom_id", "channel", "bot_accounts", "my_names")
     return {"settings": {k: s[k] for k in keys},
             "has": {"discord": bool(secrets_store.get("discord_token")), "youtube": bool(secrets_store.get("youtube_token")),
                     "ai": bool(secrets_store.get("ai_key")), "twitch": bool(secrets_store.get("twitch_tokens"))},

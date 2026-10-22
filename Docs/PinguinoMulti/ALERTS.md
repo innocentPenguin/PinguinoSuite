@@ -27,3 +27,6 @@ Feeds: Host posts real ones to `POST /api/alerts/fire {type: streak|watchtime|an
 ## Media library + Host import
 Sound / image / gif / video fields in the editor have **Upload file...**, **Pick from library** and **Play**. Files (mp3 wav ogg m4a png jpg gif webp webm mp4, max 25 MB, never overwritten) live in `Data\multi\alert_media` and are served at `/alert-media/<name>`. API: `GET/POST /api/alerts/media?name=` (raw body), `POST /api/alerts/media/delete`.
 **Import Host sounds** (editor header): reads `Data\runtime\alerts_settings.json` (read-only), shows what it would do, then copies follow/sub/resub/gift/cheer/raid sounds + volumes into the active profile (existing sounds are kept unless `overwrite`). Files must sit inside the Host runtime folder. Host popup scene/source settings are not imported (OBS-scene popups are the old system).
+
+## Other platforms (Kick, YouTube, TikTok)
+Events from the other platforms enter the same queue (see Docs/MULTISTREAM_PLAN.md): Super Chat / KICKs / TikTok gifts arrive as `cheer` (amount = whole currency units / KICKs / coins), memberships as `sub`/`resub`/`gift`, follows as `follow`. Extra variables `{platform}` (Kick, Youtube, Tiktok...) and `{currency}` (USD, KICKs, coins). Cards from a non-Twitch platform get a small platform tag; the dedupe key includes the platform so the same name on two platforms is not merged.

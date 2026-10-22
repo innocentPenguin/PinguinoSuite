@@ -50,7 +50,7 @@ class Pipeline:
             self.stats["dupes"] += 1
             return None
         st = config.settings()
-        if m.event in NOTICES:                       # stream events (sub, raid, follow...) are shown, never ranked or dinged
+        if m.event in NOTICES or (m.meta or {}).get("notice"):                       # stream events (sub, raid, follow...) are shown, never ranked or dinged
             if not self.store.add_message(m, prio.Decision(0, "none", [])):
                 self.stats["dupes"] += 1
                 return None

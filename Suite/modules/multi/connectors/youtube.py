@@ -10,6 +10,7 @@ import time
 import requests
 
 import secrets_store
+import xplat
 from connectors.base import Connector
 from models import ChatMessage
 
@@ -82,7 +83,7 @@ class YouTube(Connector):
                     self.set_status("connected", "live chat found")
                 items, wait = await asyncio.to_thread(self._poll)
                 for it in items:
-                    m = normalize_item(it, self.chat_id, self.me)
+                    m = normalize_item(it, self.chat_id, self.me) or xplat.youtube_event(it, self.chat_id)
                     if m:
                         self.state["last_message"] = time.time()
                         self.inbox.put(m)
