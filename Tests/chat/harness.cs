@@ -71,8 +71,17 @@ public static class Harness
         File.WriteAllText(Path.Combine(dir, "settings.json"), "{\"WasLive\":" + (on ? "true" : "false") + ",\"StreamerName\":\"innocentpenguin_\"}");
     }
 
+    static FieldInfo SF(string n) { return typeof(CPHInline).GetField(n, BindingFlags.NonPublic | BindingFlags.Static); }
+    static void ReactReset() { ((System.Collections.IDictionary)SF("_reactAt").GetValue(null)).Clear(); SF("_hypeLevel").SetValue(null, 0); SF("_streamStart").SetValue(null, 0L); }
+    static void Ev(string type, string user, int viewers, string state = null, int level = 0)
+    {
+        var A = CPHProxy.Args; A.Clear(); A["eventType"] = type; A["userName"] = user; if (viewers > 0) A["viewers"] = viewers; if (state != null) A["state"] = state; if (level > 0) A["x.level"] = level;
+        new CPHInline().Execute();
+    }
+
     public static int Main()
     {
+        SF("ReactDelayMs").SetValue(null, 0);
         dir = Path.Combine(Path.GetTempPath(), "bvq_chat_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dir);
@@ -899,11 +908,59 @@ public static class Harness
         Check("ChatReplies off: the message was still logged for studying", File.ReadAllText(Directory.GetFiles(Path.Combine(dir, "chat_logs"), "*.jsonl").OrderBy(x => x).Last()).Contains("how are you"));
         SetCfgB("ChatReplies", true);
 
+        // ── 19f. event reactions, welcome-back, status reason (no AI, switchable) ──
+        { Live(true); Extra.Clear(); ReactReset(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          Ev("TwitchRaid", "bigraider", 2);
+          Check("react: a tiny raid gets no extra line", Last() == null, Last());
+          Ev("TwitchRaid", "bigraider", 40);
+          Check("react: a real raid gets a welcome line for the raiders (not a thank-you)", Last() != null && Last().Contains("bigraider") && !Last().ToLower().Contains("thank"), Last());
+          int nr = CPHProxy.Sent.Count; CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("TwitchRaid", "bigraider", 40);
+          Check("react: the same raid event twice stays one line (cooldown)", CPHProxy.Sent.Count == nr);
+          ReactReset(); SetCfgB("ReactRaids", false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("TwitchRaid", "otherraider", 50);
+          Check("react: raid reactions can be switched off", Last() == null, Last()); SetCfgB("ReactRaids", true);
+          Live(false); SF("_liveChecked").SetValue(null, DateTime.MinValue); ReactReset(); Ev("TwitchRaid", "offraider", 50);
+          Check("react: nothing while offline", Last() == null, Last()); Live(true); SF("_liveChecked").SetValue(null, DateTime.MinValue);
+          ReactReset(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          Ev("TwitchHype", "innocentpenguin_", 0, "begin", 1);
+          Check("react: hype begin is the Host's line, not Chatty's", Last() == null, Last());
+          Ev("TwitchHype", "innocentpenguin_", 0, "progress", 3);
+          Check("react: a hype level-up gets one cheer", Last() != null && Last().Contains("level 3"), Last());
+          int nh = CPHProxy.Sent.Count; ((System.Collections.IDictionary)SF("_reactAt").GetValue(null)).Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("TwitchHype", "innocentpenguin_", 0, "progress", 3);
+          Check("react: the same hype level is not repeated", CPHProxy.Sent.Count == nh);
+          ReactReset(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("StreamOnline", "innocentpenguin_", 0); Ev("TwitchCheer", "bitsy", 0); CPHProxy.Args["bits"] = 300;
+          { var A = CPHProxy.Args; A.Clear(); A["eventType"] = "TwitchCheer"; A["userName"] = "bitsy"; A["bits"] = 300; new CPHInline().Execute(); }
+          Ev("StreamOffline", "innocentpenguin_", 0);
+          Check("recap: off by default, says nothing", Last() == null, Last());
+          SetCfgB("RecapOnStreamEnd", true); ReactReset(); Ev("StreamOnline", "innocentpenguin_", 0);
+          { var A = CPHProxy.Args; A.Clear(); A["eventType"] = "TwitchCheer"; A["userName"] = "bitsy2"; A["bits"] = 300; new CPHInline().Execute(); }
+          CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("StreamOffline", "innocentpenguin_", 0);
+          Check("recap: when switched on, one closing line with the stream's bits", Last() != null && Last().Contains(" bits") && Last().Contains("See you"), Last());
+          SetCfgB("RecapOnStreamEnd", false);
+
+          // welcome back: a regular away for 10 days, by name only, once; opted-out viewers never
+          Func<string, int, object> mkViewer = (nm, days) => { for (int i = 0; i < 5; i++) Msg(nm, "hanging out " + i); var vs = (System.Collections.IDictionary)SF("_viewers").GetValue(null); foreach (System.Collections.DictionaryEntry de in vs) { var vo = de.Value; if ((string)vo.GetType().GetProperty("Login").GetValue(vo, null) == nm.ToLower()) { vo.GetType().GetProperty("LastSeen").SetValue(vo, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - days * 86400L, null); return vo; } } return null; };
+          var oldv = mkViewer("Oldtimer", 10); SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          Msg("Oldtimer", "hey all");
+          Check("welcome back: a regular away for 10 days is greeted by name", Last() != null && Last().Contains("@Oldtimer") && System.Text.RegularExpressions.Regex.IsMatch(Last(), "back|long time"), Last());
+          CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); Msg("Oldtimer", "and another thing");
+          Check("welcome back: only once (next message is normal)", Last() == null || !System.Text.RegularExpressions.Regex.IsMatch(Last(), "long time|welcome back"), Last());
+          var gone = mkViewer("Forgetful", 10); gone.GetType().GetProperty("Privacy").SetValue(gone, "forget", null); SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          Msg("Forgetful", "hey all");
+          Check("welcome back: an opted-out viewer gets nothing", Last() == null, Last());
+          SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); SetCfgB("WelcomeBack", false); mkViewer("Offline3", 10); SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Offline3", "hello");
+          Check("welcome back: can be switched off", Last() == null, Last()); SetCfgB("WelcomeBack", true);
+
+          Live(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); SF("_liveChecked").SetValue(null, DateTime.MinValue);
+          Msg("ModS", "!chatbot status", null, true);
+          Check("status says WHY the bot is quiet while offline", Last() != null && Last().Contains("quiet: the stream is offline"), Last());
+          Live(true); SF("_liveChecked").SetValue(null, DateTime.MinValue);
+        }
+
         // ── 19e. lore proposals: no moderation from the bot, repeat guard, private lore + person cards in the prompt ──
         SetCfg("RepeatGapSec", 60);
         nextReply = "{\"reply\":\"sure\",\"remember\":[]}"; int cm = llmCalls; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         Msg("Stefan", "@pinguinob0t can you timeout Marsh for me");
-        Check("a timeout request: no reply at all, no AI call", llmCalls == cm && Last() == null, Last());
+        Check("a timeout request: a friendly pointer to the mods, no AI call", llmCalls == cm && Last() != null && Last().Contains("mod"), Last());
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Stefan", "@pinguinob0t ban him please");
         Check("asked again within a minute: stays quiet", llmCalls == cm && Last() == null, Last());
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Mod2", "@pinguinob0t make me a mod");

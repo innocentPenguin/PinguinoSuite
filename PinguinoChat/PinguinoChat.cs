@@ -476,6 +476,12 @@ public class CPHInline
         public string LoreFile { get; set; } = @"D:\PinguinoSuite\Data\lore.json";   // running jokes / catchphrases / emotes with where they came from (Pipeline\build-lore.mjs)
         public bool ChannelLoreOn { get; set; } = true;            // PRIVATE channel lore (Data\lore, built from the logs): the bot understands the running jokes and the regulars. Never quoted or sent anywhere.
         public bool CannedOn { get; set; } = true;                 // the ported Nightbot canned-reply commands (CannedFile; the Host stays silent on these terms): works online and offline, ChatReplies off or on
+        public bool ReactRaids { get; set; } = true;               // a short "make yourself at home" line for the raiders a few seconds after the Host's own thank-you (never the same words)
+        public int RaidMinViewers { get; set; } = 5;               // smaller raids get no extra line
+        public bool ReactHype { get; set; } = true;                // one cheer per hype-train level-up (level 2 and up; the Host already announces the start and the end)
+        public bool WelcomeBack { get; set; } = true;              // a light "good to see you again" for a regular who has been away for WelcomeBackDays (private: only the name, never a remembered fact)
+        public int WelcomeBackDays { get; set; } = 7;
+        public bool RecapOnStreamEnd { get; set; } = false;        // one closing line with the stream's follows / subs / bits / raids when the stream ends (off by default; needs the Host to pass StreamOffline)
         public string CannedFile { get; set; } = @"D:\PinguinoSuite\PinguinoChat\canned_commands.json";   // {cooldownSec, commands:[{name, aliases, text | choices, enabled}]}; reloads when saved
         public string ChannelLoreFile { get; set; } = @"D:\PinguinoSuite\Data\lore\channel_lore.json";   // {items:[{term, meaning, howBotsUse}]}
         public string PersonCardsDir { get; set; } = @"D:\PinguinoSuite\Data\lore\person_cards";        // one <login>.json per regular; only the busiest PersonCardsTop are loaded
@@ -674,17 +680,77 @@ public class CPHInline
         if (string.IsNullOrEmpty(type) || (type.IndexOf("Chat", StringComparison.OrdinalIgnoreCase) >= 0 && type.IndexOf("Message", StringComparison.OrdinalIgnoreCase) >= 0)) return false;
         string t = type.ToLower();
         string user = (ArgS("userName") != "" ? ArgS("userName") : ArgS("user") != "" ? ArgS("user") : ArgS("login")).ToLower();
+        string react = null;
         lock (_lock)
         {
+            if (t == "streamonline") { _streamStart = Now(); _hypeLevel = 0; return true; }
+            if (t == "streamoffline") { react = RecapLine(); _streamStart = 0; _hypeLevel = 0; goto done; }
+            if (t.Contains("hype")) { react = HypeReaction(ArgS("state").ToLower(), ArgI("x.level", "level")); goto done; }
             if (t.Contains("giftbomb")) return true;   // the individual TwitchGiftSub events carry the recipients: no double counting
             if (t.Contains("giftsub")) { AddEvent("gift", user, 1, ArgS("recipientUserName") != "" ? ArgS("recipientUserName") : ArgS("recipientUser") != "" ? ArgS("recipientUser") : ArgS("recipient")); return true; }
             if (t.Contains("resub")) { AddEvent("resub", user, Math.Max(1, TierOf(ArgS("tier"))), ""); return true; }
             if (t.Contains("sub")) { AddEvent("sub", user, Math.Max(1, TierOf(ArgS("tier"))), ""); return true; }
             if (t.Contains("cheer")) { int bits = ArgI("bits", "amount"); if (bits > 0) AddEvent("cheer", user, bits, ""); return true; }
-            if (t.Contains("raid")) { AddEvent("raidin", user, ArgI("viewers", "fromViewerCount", "raidViewers"), ""); return true; }
+            if (t.Contains("raid")) { int rv = ArgI("viewers", "fromViewerCount", "raidViewers"); AddEvent("raidin", user, rv, ""); react = RaidReaction(user, rv); goto done; }
             if (t.Contains("follow")) { AddEvent("follow", user, 0, ""); return true; }
         }
         return true;   // some other event type: nothing to do, and never treated as chat
+        done:
+        if (react != null) ReactSay(t.Contains("raid") ? "raid" : t.Contains("hype") ? "hype" : "recap", react);
+        return true;
+    }
+    // ── REACTIONS to stream events: short canned lines (no AI), only while live, switchable, each kind with its own cooldown, delayed so the Host's own thank-you goes first ──
+    static long _streamStart; static int _hypeLevel; static readonly Dictionary<string, long> _reactAt = new Dictionary<string, long>();
+    internal static int ReactDelayMs = 7000;
+    string RaidReaction(string raider, int viewers)
+    {
+        if (!_cfg.ReactRaids || viewers < Math.Max(1, _cfg.RaidMinViewers) || !Regex.IsMatch(raider ?? "", @"^[a-z0-9_]{3,25}$")) return null;
+        string[] v = { "{r} raiders, grab a seat 🐧 I'm Chatty: ask me anything, or ask HelperPinguino how to join the games. !commands lists the rest.",
+                       "welcome in, raiders from {r}! 🐧 Pull up a chair, say hi, and tell us what you were just watching.",
+                       "raid crew from {r}, you made it! 🐧 Chat moves fast here, so jump in whenever you like, and ask me if you get lost." };
+        return v[_rng.Next(v.Length)].Replace("{r}", raider);
+    }
+    string HypeReaction(string state, int level)
+    {
+        if (state == "begin" || state == "end") { _hypeLevel = state == "begin" ? Math.Max(1, level) : 0; return null; }   // the Host announces the start and the end
+        if (!_cfg.ReactHype || state != "progress" || level < 2 || level <= _hypeLevel) return null;
+        _hypeLevel = level;
+        string[] v = { "hype train level " + level + "! 🚂🐧 Keep it rolling!", "level " + level + " already?! 🚂 You all are unstoppable 🐧", "choo choo, level " + level + "! 🚂 Penguins love a hype train 🐧" };
+        return v[_rng.Next(v.Length)];
+    }
+    string RecapLine()
+    {
+        if (!_cfg.RecapOnStreamEnd) return null;
+        long since = _streamStart > 0 ? _streamStart : Now() - 8 * 3600;
+        var ev = Events().Where(e => e.At >= since).ToList();
+        int follows = ev.Count(e => e.Type == "follow"), subs = ev.Count(e => e.Type == "sub" || e.Type == "resub"), gifts = ev.Where(e => e.Type == "gift").Sum(e => Math.Max(1, e.Amount)), raids = ev.Count(e => e.Type == "raidin");
+        long bits = ev.Where(e => e.Type == "cheer").Sum(e => (long)e.Amount);
+        var parts = new List<string>();
+        if (follows > 0) parts.Add(follows + " new follow" + (follows == 1 ? "" : "s"));
+        if (subs + gifts > 0) parts.Add((subs + gifts) + " sub" + (subs + gifts == 1 ? "" : "s"));
+        if (bits > 0) parts.Add(bits + " bits");
+        if (raids > 0) parts.Add(raids + " raid" + (raids == 1 ? "" : "s"));
+        return parts.Count == 0 ? "thanks for hanging out tonight, everyone! 🐧 See you next stream." : "thanks for hanging out tonight, everyone! 🐧 Tonight: " + string.Join(", ", parts) + ". See you next stream.";
+    }
+    void ReactSay(string kind, string line)
+    {
+        if (string.IsNullOrWhiteSpace(line) || !_cfg.Enabled || !_cfg.ChatReplies || !IsLive()) return;
+        long now = Now(), last; int cool = kind == "raid" ? 120 : kind == "hype" ? 60 : 600;
+        lock (_reactAt) { if (_reactAt.TryGetValue(kind, out last) && now - last < cool) return; _reactAt[kind] = now; }
+        if (ReactDelayMs <= 0) { PgSay("chat", line); return; }
+        var t = new Thread(() => { try { Thread.Sleep(ReactDelayMs); PgSay("chat", line); } catch (Exception) { } }); t.IsBackground = true; t.Start();
+    }
+    // ── WELCOME BACK: a regular (4+ earlier messages) who has been away for WelcomeBackDays. Private by design: a fixed pool, only their name, never a remembered fact; a recent
+    //    sub / gift / bits event of theirs just changes the thanks to a generic one. Opted-out viewers never get it (the caller checks). ──
+    static long _lastBack;
+    string WelcomeBackLine(string login, long prevSeen)
+    {
+        long now = Now(); if (now - prevSeen < Math.Max(1, _cfg.WelcomeBackDays) * 86400L || now - _lastBack < 60) return null;
+        bool supporter; lock (_lock) { supporter = Events().Any(e => e.User == login && e.Type != "follow" && e.Type != "raidin" && e.At >= prevSeen - 3 * 86400L && e.At <= prevSeen + 3600); }
+        string[] v = supporter
+            ? new[] { "welcome back! 🐧 Thank you again for the support, it really means a lot here.", "look who's back! 🐧 Your support last time was awesome, glad you're here." }
+            : new[] { "welcome back, it's been a while! 🐧 Good to see you again.", "hey, long time no see! 🐧 Glad you stopped by again.", "you're back! 🐧 We missed you, pull up a chair." };
+        _lastBack = now; return v[_rng.Next(v.Length)];
     }
     static int TierOf(string s) { s = (s ?? "").ToLower(); return s.Contains("prime") || s.Contains("1") ? 1 : s.Contains("2") ? 2 : s.Contains("3") ? 3 : 1; }
 
@@ -737,7 +803,7 @@ public class CPHInline
             Mod = isMod || role >= 3, Broadcaster = isCaster || role >= 4, Sub = isSub, Vip = isVip, FirstMessage = first
         };
 
-        bool accept = false, welcome = false;     // welcome: Twitch says this is their very first message in the channel
+        string back = null; bool accept = false, welcome = false;     // welcome: Twitch says this is their very first message in the channel
         lock (_lock)
         {
             string cmd = text.StartsWith("!") ? text.Split(' ')[0].ToLower() : "";
@@ -759,6 +825,7 @@ public class CPHInline
             if (!IsLive()) { SleepingReply(cx, cmd, replyTo); return; }   // offline: no recording, no AI; only a short "come back when live" when pinged
 
             bool second = PgNoDefer();                               // the router gives the message back after the helper passed on it: it was recorded the first time
+            long prevSeen = 0; { Viewer pv = FindViewer(login, cx.UserId); if (pv != null && !NoMem(pv) && pv.Msgs >= 4) prevSeen = pv.LastSeen; }   // when we last saw them, before this line counts
             Viewer v = (second || cmd != "") ? FindViewer(login, cx.UserId) : Touch(cx);   // counts the message (unless opted out)
             bool optedOut = NoMem(v);
             bool anon = v != null && v.Privacy == "anon";
@@ -787,6 +854,8 @@ public class CPHInline
             if (mention && PgHelperTopic(text) && !text.Contains("!") && !ToneJoke.IsMatch(text)) { _pgPass = true; return; }   // "how do I join" and other things the helper / the website already answer: never the chatter (a failing !command is still fair game)
             if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { welcome = true; _lastWelcome = Now(); }
+            if (!welcome && !mention && !second && !optedOut && !cx.Broadcaster && _cfg.WelcomeBack && prevSeen > 0 && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
+            { back = WelcomeBackLine(login, prevSeen); if (back != null) _lastWelcome = Now(); }
             if (mention)
             {
                 if (!cx.Broadcaster && ModActionAsk(text)) { string mr = ModRefusal(login, text); if (mr != "") Say(cx, mr); return; }
@@ -798,11 +867,12 @@ public class CPHInline
                 accept = !quiet && TakeCooldown(login, false);
                 if (!quiet && !accept) Miss(login);                                // pinged but the cooldown / hourly cap dropped it: they are still waiting
             }
-            else if (!welcome && !optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
+            else if (!welcome && back == null && !optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
                      && GateAllowsChime() && Now() - _lastRandom >= _cfg.RandomMinGapSec && TakeCooldown(login, true))
             { cx.Random = true; _lastRandom = Now(); accept = true; }
         }
         if (welcome) Say(cx, WelcomeLines[_rng.Next(WelcomeLines.Length)]);
+        else if (back != null) Say(cx, back);
         if (!accept) return;
         if (_inline) Respond(cx);
         else { var t = new Thread(() => { try { Respond(cx); } catch (Exception ex) { PgLogE("[Chat] reply failed: " + ex); } }); t.IsBackground = true; t.Start(); }
@@ -1574,7 +1644,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         }
 
         // The STREAMER's orders (time someone out...): executed by code, only from his own account.
-        if (o != null && o["order_timeout"] != null) { string on = TryOrderTimeout(c, o["order_timeout"]); if (on != null) PgLogI("[Chat] " + on); }
+        string orderFail = null;
+        if (o != null && o["order_timeout"] != null) { string on = TryOrderTimeout(c, o["order_timeout"]); if (on != null) { PgLogI("[Chat] " + on); if (on.StartsWith("Could not")) orderFail = " (I couldn't time " + Regex.Match(on, @"time out (\S+) for").Groups[1].Value + " out: they may be a mod, or I'm missing the permission.)"; } }
         // MODERATION: the AI may ask to time out the viewer it is answering. The code decides whether that is allowed.
         string timeoutNote = null;
         if (o != null && o["timeout"] != null && (o["timeout"].Type == JTokenType.Integer || o["timeout"].Type == JTokenType.Float))
@@ -1582,6 +1653,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         if (timeoutNote != null) PgLogI("[Chat] " + timeoutNote);
 
         reply = PolishReply(reply, c);   // names capitalized; proper sentences when the tone is serious / helpful
+        if (orderFail != null) reply += orderFail;
 
         // STUCK-ON-A-BIT GUARD: if the reply repeats a distinctive word the bot already used in 2 of its last 3 messages (and the viewer did not
         // bring it up), try once more with that word banned; if it happens again, say nothing rather than repeat the bit.
@@ -2502,9 +2574,9 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             if (_modAsked.TryGetValue(login, out last) && now - last < 60) return "";
             _modAsked[login] = now;
         }
-        if (RxTimeoutAsk.IsMatch(text ?? "")) return "";
+        if (RxTimeoutAsk.IsMatch(text ?? "")) { string[] tv = { "I can't time people out on request, but a mod can. Give them a nudge \U0001F427", "timeouts are a mod thing, so I'll leave that to them \U0001F427", "that's up to the mods, I just keep the chat cozy \U0001F427" }; return tv[_rng.Next(tv.Length)]; }
         if (RxModRankAsk.IsMatch(text ?? "")) { string u = (_cfg.ModApplyUrl ?? "").Trim(); return u == "" ? "Mod spots are not handed out in chat. Ask a mod." : "Want to be a mod? Apply here: " + u; }
-        string[] v = { "Timeouts, bans and ranks are for the mods. Ask one of them.", "That one is for a mod, not me. Ask a mod.", "I don't do mod stuff. Ask a mod." };
+        string[] v = { "Timeouts, bans and ranks are for the mods, so ask one of them \U0001F427", "That one is for a mod, not me. Any mod can help you out \U0001F427", "I don't do mod stuff, sorry! A mod can sort that one out \U0001F427" };
         return v[_rng.Next(v.Length)];
     }
     // ── the same prompt over and over from one viewer: after RepeatMuteAfter identical repeats the bot goes quiet on it; never twice inside RepeatGapSec ──
@@ -2930,6 +3002,14 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         Say(c, string.IsNullOrEmpty(_cfg.CountdownOverrideAt) ? "Go-live override cleared." : "Countdown set for " + _cfg.CountdownOverrideAt + ".");
     }
 
+    // why the bot is not chatting right now, in a few words ("" = it is talking normally)
+    string QuietReason()
+    {
+        if (!_cfg.Enabled) return " (quiet: switched off, !chatbot on turns it back on)";
+        if (!_cfg.ChatReplies) return " (quiet: replies are off in the settings, commands and logging still run)";
+        if (!IsLive()) return " (quiet: the stream is offline, I only answer canned commands; !offlinemode on makes me act live)";
+        return "";
+    }
     string StatusText()
     {
         long now = Now();
@@ -2937,7 +3017,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         var act = ActivePartners();
         int hushed = _hush.Count(kv => kv.Value > now);
         var last = Updates().LastOrDefault();
-        return "Chat bot " + (_cfg.Enabled ? "ON" : "OFF") + (_live ? ", live" : ", offline") + ". AI calls this hour: " + _callLog.Count + "/" + _cfg.MaxCallsPerHour + ". Chat " + GateRate() + "/min, limits " + GateLimitText() + " (" + (_cfg.GateEnabled ? GateState() : "gate off") + ", " + _gateSkipped + " skipped)" +
+        return "Chat bot " + (_cfg.Enabled ? "ON" : "OFF") + (IsLive() ? ", live" : ", offline") + QuietReason() + ". AI calls this hour: " + _callLog.Count + "/" + _cfg.MaxCallsPerHour + ". Chat " + GateRate() + "/min, limits " + GateLimitText() + " (" + (_cfg.GateEnabled ? GateState() : "gate off") + ", " + _gateSkipped + " skipped)" +
             ". Talking with " + act.Count + ", hushed: " + hushed + ", studying: " + (_studying ? "yes" : "no") + ", viewers known: " + _viewers.Count +
             ". Last problem: " + (string.IsNullOrEmpty(_lastWarn) ? "none" : _lastWarn) +
             ". Last update: " + (last == null ? "none logged" : UpdateLine(last, false)) + ".";
