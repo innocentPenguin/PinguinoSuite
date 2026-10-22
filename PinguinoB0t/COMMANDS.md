@@ -190,6 +190,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
+| `!helperpack` | `!helperpack \| !helperpack reload` | Show how many entries the helper knows (public and mod), or reload its knowledge packs right now. |
 | `!lobbyname` | `!lobbyname <name> \| off` | Set (or clear) the private match name PinguinoHelper tells viewers to search. |
 | `!lobbypass` | `!lobbypass <password> \| off` | Set (or clear) the private match password PinguinoHelper shares. |
 

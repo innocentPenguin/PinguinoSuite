@@ -403,6 +403,48 @@ public static class Harness
         Check("double join setup: first join ran", djRun != null && (string)djRun["command"] == "!join", djRun == null ? "no run" : "x");
         Msg("Dj", "add me to the queue"); Check("a second 'add me' right after is answered without asking or calling the core", CoreRun() == null && Last() != null && Last().Contains("already added"), Last());
 
+        // ── Mexican Spanish, typo commands, !helperpack, follow-ups ──
+        {
+            Settings();
+            Msg("Eva", "¿Cómo me uno a la cola?");
+            Check("Spanish: how to join answered in Spanish", Last() != null && Last().StartsWith("@Eva ") && Last().Contains("!register TuNombreEpic") && Last().Contains("!join") && !Forwarded(), Last());
+            Msg("Eva", "¿cuál es el nombre de la partida privada?");
+            Check("Spanish: lobby name only, in Spanish", Last() != null && Last().Contains("Nombre: peng3") && !Last().ToLower().Contains("contrase"), Last());
+            Msg("Eva", "¿me pasas la contraseña de la partida privada?");
+            Check("Spanish: a password ask gets the name, never a password", Last() != null && Last().Contains("peng3") && !Last().ToLower().Contains("contrase"), Last());
+            Msg("Eva", "quiero salir de la cola"); Check("Spanish: leave explains !leave, nothing is run", Last() != null && Last().Contains("!leave") && CoreRun() == null, Last());
+            Msg("Eva", "¿a qué hora transmite Ivan?"); Check("Spanish: schedule", Last() != null && Last().Contains("5:00 PM") && Last().Contains("todos los días"), Last());
+            Msg("Eva", "¿en qué lugar voy en la fila?"); Check("Spanish: position", Last() != null && Last().Contains("!pos"), Last());
+            Msg("Eva", "hola amigos qué buen stream hoy"); Check("Spanish chatter is left alone", Last() == null && Forwarded(), Last());
+            Msg("Eva", "¿qué comandos hay?"); Check("Spanish: commands link", Last() != null && Last().Contains("/help#commands"), Last());
+            Msg("Eva", "@Otro ¿cómo me uno a la cola?"); Check("Spanish: a message to another viewer is not answered", Last() == null, Last());
+            Msg("Ana", "how do i join"); Check("English still answered in English", Last() != null && Last().Contains("registered as AnaEpic") && !Last().Contains("Con gusto"), Last());
+
+            // typo commands (the command list is injected: the test folder has no commands.json)
+            var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int ki = 0; ki < 60; ki++) known.Add("!fake" + ki);
+            foreach (string kc in new[] { "!join", "!leave", "!register", "!pos", "!queue", "!mmr", "!stats", "!myrank", "!topwins", "!strikes", "!points", "!rank", "!leaderboards", "!commands", "!notme", "!helper", "!ask", "!pinguino" }) known.Add(kc);
+            Action setKnown = () => { typeof(CPHInline).GetField("_knownCmds", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, known); typeof(CPHInline).GetField("_knownAt", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, DateTime.UtcNow.AddHours(1)); ((Dictionary<string, long>)typeof(CPHInline).GetField("_typoCd", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null)).Clear(); };
+            setKnown();
+            Msg("Ana", "!jion"); Check("typo !jion: asks first, nothing is run", Last() != null && Last().Contains("Did you mean !join?") && CoreRun() == null && !Forwarded(), Last());
+            Msg("Ana", "yes"); run = CoreRun(); Check("typo !jion + yes runs !join", run != null && (string)run["command"] == "!join", run == null ? "no run" : (string)run["command"]);
+            setKnown(); Msg("Ana", "!leve"); Msg("Ana", "no"); Check("typo !leev + no cancels", CoreRun() == null && Last() != null && Last().Contains("nothing changed"), Last());
+            setKnown(); Msg("Ana", "!jion"); Msg("Ana", "when"); Check("a word that merely ends in n is not a 'no'", Last() == null, Last()); Msg("Ana", "no");
+            setKnown(); Msg("Ana", "!posx"); run = CoreRun(); Check("typo of an info command just runs it (!pos)", run != null && (string)run["command"] == "!pos", run == null ? "no run" : (string)run["command"]);
+            setKnown(); Msg("Ana", "!qeue"); run = CoreRun(); Check("typo !qeue runs !queue", run != null && (string)run["command"] == "!queue", run == null ? "no run" : (string)run["command"]);
+            setKnown(); Msg("Ana", "!pints"); Check("typo of another bot's command only suggests it", Last() != null && Last().Contains("Did you mean !points?") && CoreRun() == null, Last());
+            setKnown(); Msg("Ana", "!zzzzzz"); Check("an unknown word near nothing is left alone", Last() == null && Forwarded(), Last());
+            setKnown(); Msg("Ana", "!fake3"); Check("a real command is never 'corrected'", Last() == null && Forwarded(), Last());
+            setKnown(); Msg("Ana", "!ban"); Check("short words are never guessed", Last() == null && Forwarded(), Last());
+            setKnown(); Msg("Ana", "!jion"); Msg("Ana", "!jion"); Check("typo nudges are rate-limited per viewer", Last() == null, Last());
+            setKnown(); Msg("Eva", "!jion"); Check("a Spanish viewer gets the typo question in Spanish", Last() != null && Last().Contains("¿Quisiste decir !join?"), Last());
+            Msg("Eva", "sí"); run = CoreRun(); Check("Spanish 'sí' confirms", run != null && (string)run["command"] == "!join", run == null ? "no run" : (string)run["command"]);
+
+            // !helperpack
+            Msg("Viewer1", "!helperpack"); Check("!helperpack is for mods", Last() != null && Last().Contains("Only mods"), Last());
+            Msg("Mod1", "!helperpack", true); Check("!helperpack shows the counts", Last() != null && Last().Contains("public entries") && Last().Contains("mod entries"), Last());
+            Msg("Mod1", "!helperpack reload", true); Check("!helperpack reload", Last() != null && Last().Contains("reloaded"), Last());
+        }
         // ── !helper / !ask / !pinguino: knowledge pack, tiers, cooldowns, opt-outs, unanswered log ──
         {
             string hd = Path.Combine(dir, "helper"); Directory.CreateDirectory(hd);
@@ -524,6 +566,20 @@ public static class Harness
             Settings(",\"FactsUrl\":\"\",\"AskOn\":false"); resetAsk();
             Msg("Off1", "!helper how do I join the queue?"); Check("AskOn=false: the command does nothing", Last() == null, Last());
             Settings(",\"FactsUrl\":\"\",\"MaxAiCallsPerHour\":1000,\"AskUserCooldownSec\":0,\"AskGlobalCooldownSec\":0"); resetAsk();
+
+            // Spanish and follow-ups in !helper
+            aiReply = "¡Con gusto! Regístrate con !register TuNombreEpic y luego !join. Gracias por preguntar!";
+            Msg("Es1", "!helper ¿cómo me uno a la cola?"); sayLog.Add(Last() ?? "");
+            Check("!helper in Spanish: the AI is told to answer in Mexican Spanish and gets the English pack entry", Last() != null && Last().StartsWith("@Es1 ") && lastSystem.Contains("Mexican Spanish") && lastSystem.Contains("How to join the viewer games"), lastSystem);
+            aiReply = "Register with !register YourEpicName. Thanks for asking!";
+            Msg("Es2", "!helper how do I join the queue?"); Check("!helper in English: told to answer in English", lastSystem.Contains("Reply in English") && !lastSystem.Contains("Mexican Spanish"), lastSystem);
+            aiReply = "NO_ANSWER";
+            Msg("Es3", "!helper ¿cuál es el apellido del perro del vecino?"); Check("!helper Spanish with no answer: the pointer is in Spanish", Last() != null && Last().Contains("Todavía no tengo respuesta") && Last().Contains("/commands"), Last());
+            Msg("Es1", "!helper"); Check("!helper empty from a Spanish viewer: Spanish usage", Last() != null && Last().Contains("Pregúntame"), Last());
+            aiReply = "Register with !register YourEpicName. Thanks for asking!";
+            Msg("Fu1", "!helper how do I join the queue?"); Msg("Fu1", "!helper and for xbox?");
+            Check("a follow-up ('and for xbox?') continues the last question", lastSystem.Contains("How to join the viewer games"), lastSystem);
+            Msg("Fu2", "!helper and for xbox?"); Check("a follow-up with nothing before it is just a question", Last() != null, Last());
 
             // no secrets: nothing the helper said or the AI saw looks like a key / token / e-mail, and the real pack (when built) is clean too
             var secret = new System.Text.RegularExpressions.Regex(@"(api[_ -]?key|client[_ -]?secret|\bsecret\b|oauth:|\bbearer\b|\bse_jwt\b|eyJ[A-Za-z0-9_\-]{10,}|[A-Za-z0-9_\-]{32,}|[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[a-z]{2,})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);

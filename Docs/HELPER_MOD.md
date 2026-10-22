@@ -34,3 +34,6 @@ The tournament wheel is mod only. Viewers who ask about it should be pointed to 
 
 ## Mark a game incomplete
 Mods can mark a game as incomplete when it did not finish normally.
+
+## Show or reload the helper pack
+!helperpack shows how many entries the helper knows (public and mod). !helperpack reload loads the newest knowledge files right away instead of waiting for the next refresh.

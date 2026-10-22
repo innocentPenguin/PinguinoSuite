@@ -49,3 +49,9 @@ A custom game times out after 15 minutes of inactivity.
 
 ## Leaving the tournament wheel
 Type !notme to take yourself off the wheel. !leave is only for the custom queue and does not touch the wheel.
+
+## Languages
+The helper answers in English and in Mexican Spanish. Ask it in either language and it answers in kind, for example "¿Cómo me uno a la cola?" or !helper ¿a qué hora transmite Ivan?
+
+## Mistyped commands
+If you mistype a command by one letter, the helper figures out what you meant. Info commands like !pos or !queue just run. For !join and !leave it asks "Did you mean !join?" and waits for your yes (sí in Spanish).

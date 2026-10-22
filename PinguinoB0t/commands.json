@@ -945,6 +945,18 @@
       "importance": 3
     },
     {
+      "command": "!helperpack",
+      "aliases": [],
+      "action": "PinguinoHelper",
+      "category": "Helper",
+      "who": "mods",
+      "usage": "!helperpack | !helperpack reload",
+      "description": "Show how many entries the helper knows (public and mod), or reload its knowledge packs right now.",
+      "examples": [],
+      "section": "Chat commands",
+      "importance": 3
+    },
+    {
       "command": "!lobbyname",
       "aliases": [],
       "action": "PinguinoHelper",
