@@ -14,8 +14,7 @@ body.clear{background:transparent}
 #stage{position:fixed;top:var(--down);bottom:0;left:calc(var(--l) + 1vw);right:calc(var(--r) + 1vw);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1.2vmin;padding:1.2vmin 2vmin 0}
 #head{flex:none;display:flex;flex-direction:column;align-items:center;gap:.4vmin;text-align:center;width:100%}
 #body{flex:1;min-height:0;width:100%;position:relative;container-type:size;display:flex;align-items:center;justify-content:center}
-#side{position:absolute;bottom:0;left:0;width:30vmin;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:1.6vmin;text-align:center}
-#wheelbox.off ~ #side{top:0;right:0;width:auto;justify-content:center}
+#side{position:fixed;right:2.2vw;bottom:3.5vh;z-index:5;width:max-content;max-width:38vw;display:flex;flex-direction:column;align-items:stretch;gap:1.4vmin}
 #title{font-size:7.25vmin;font-weight:900;letter-spacing:.03em;color:var(--accent);-webkit-text-stroke:.9vmin #0a0a0a;paint-order:stroke fill;text-shadow:0 2px 10px #000b}
 #label{font-size:4.25vmin;font-weight:900;letter-spacing:.03em;color:#fff;-webkit-text-stroke:.7vmin #0a0a0a;paint-order:stroke fill;text-shadow:0 2px 8px #000}
 #label:empty{display:none}
@@ -24,28 +23,31 @@ body.clear{background:transparent}
 #cv{width:100%;height:100%;display:block}
 #wheelbox.landed #cv{animation:glow .9s ease-out}
 #hub{position:absolute;left:50%;top:50%;width:min(calc(var(--wd) * .216),220px);height:min(calc(var(--wd) * .216),220px);transform:translate(-50%,-50%);border-radius:50%;object-fit:cover;border:calc(var(--wd) * .008) solid #ff9900;background:#22252b;pointer-events:none;image-rendering:auto;will-change:transform;backface-visibility:hidden}
-#pick{z-index:2;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;text-align:center;font-weight:900;color:#fff;background:#141414e6;border:.5vmin solid var(--accent);border-radius:50vmin;padding:1vmin 2.6vmin;font-size:calc(var(--wd) * .07);-webkit-text-stroke:.5vmin #000;paint-order:stroke fill;box-shadow:0 0 4vmin #000c;overflow-wrap:anywhere;animation:slam .5s cubic-bezier(.2,1.6,.4,1)}
+#pick{z-index:2;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;text-align:center;font-weight:900;color:#fff;background:#141414e6;border:.9vmin solid var(--accent);border-radius:50vmin;padding:1.6vmin 4vmin;font-size:calc(var(--wd) * .1);-webkit-text-stroke:.6vmin #000;paint-order:stroke fill;box-shadow:0 0 0 .6vmin #000,0 0 6vmin #000e,0 0 5vmin #ff9900aa;overflow-wrap:anywhere;animation:slam .6s cubic-bezier(.2,1.7,.4,1)}
 #pick[hidden]{display:none}
 #teams{width:100%}
 #teams:empty{display:none}
-.team{background:var(--card);border:.4vmin solid #ff990088;border-radius:2vmin;padding:1.6vmin 2vmin;animation:pop .4s ease-out}
-.team h3{margin:0 0 .8vmin;font-size:3.2vmin;color:var(--accent)}
-.team div{font-size:4vmin;font-weight:800;overflow-wrap:anywhere}
+.team{min-width:26vmin;background:linear-gradient(#18120b,#0a0807);border:.7vmin solid var(--accent);border-radius:2.4vmin;padding:1.8vmin 3vmin 2.2vmin;box-shadow:0 0 0 .5vmin #000,0 1.4vmin 5vmin #000d,0 0 4vmin #ff990066;animation:teampop .6s cubic-bezier(.2,1.5,.4,1)}
+.team h3{margin:0 0 1.2vmin;font-size:3.6vmin;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);border-bottom:.3vmin solid #ff990066;padding-bottom:.9vmin}
+.team div{font-size:5.2vmin;font-weight:900;line-height:1.2;overflow-wrap:anywhere;text-shadow:0 2px 6px #000}
+.team div.new{color:#ffd27a;animation:memberpop .7s cubic-bezier(.2,1.8,.4,1)}
+.team.sm{padding:1.2vmin 2vmin 1.4vmin}.team.sm h3{font-size:2.4vmin;margin-bottom:.6vmin;padding-bottom:.5vmin}.team.sm div{font-size:3.4vmin;font-weight:800}
 .team div.empty{opacity:.35;font-weight:400}
 .team.wip{border-style:dashed;opacity:.9}
-#wheelbox:not(.off) ~ #side .team div{font-size:3vmin}#wheelbox:not(.off) ~ #side .team h3{font-size:2.4vmin}#wheelbox:not(.off) ~ #side .team{padding:1.2vmin 1.4vmin;background:#141414ee}
 .team.part h3::after{content:" (partial)";opacity:.7;font-size:1.8vmin}
 .team.fresh{border-color:var(--accent);box-shadow:0 0 3vmin #ff990088}
 #big{font-size:5.5vmin;font-weight:900;color:var(--accent);text-shadow:0 2px 14px #000c;text-align:center}
 #big:empty{display:none}
-#final{font-size:2.6vmin;font-weight:700;text-align:center;max-width:100%;overflow-wrap:anywhere;line-height:1.35;background:var(--card);border:.3vmin solid #ff990066;border-radius:1.8vmin;padding:1.2vmin 2vmin}
+#final{display:none!important;font-size:2.6vmin;font-weight:700;text-align:center;max-width:100%;overflow-wrap:anywhere;line-height:1.35;background:var(--card);border:.3vmin solid #ff990066;border-radius:1.8vmin;padding:1.2vmin 2vmin}
 #final:empty{display:none}
 #wait{font-size:2.1vmin;opacity:.8;text-align:center}
+@keyframes teampop{0%{transform:scale(.5) translateY(4vh);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:none}}
+@keyframes memberpop{0%{transform:scale(.4);opacity:0}100%{transform:none;opacity:1}}
 @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
-@keyframes slam{from{transform:translate(-50%,-50%) scale(.3);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes slam{0%{transform:translate(-50%,-50%) scale(.2);opacity:0}65%{transform:translate(-50%,-50%) scale(1.15);opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
 @keyframes glow{0%{filter:drop-shadow(0 0 5vmin #ffcc66)}100%{filter:none}}
 </style></head><body>
-<div id="stage"><div id="head"><div id="title"></div><div id="label"></div></div><div id="body"><div id="wheelbox"><canvas id="cv"></canvas><img id="hub" src="penguin-anim.webp" alt=""><div id="pick" hidden></div></div><div id="side"><div id="big"></div><div id="teams"></div><div id="final"></div><div id="wait"></div></div></div></div>
+<div id="stage"><div id="head"><div id="title"></div><div id="label"></div></div><div id="body"><div id="wheelbox"><canvas id="cv"></canvas><img id="hub" src="penguin-anim.webp" alt=""><div id="pick" hidden></div></div></div></div><div id="side"><div id="big"></div><div id="teams"></div><div id="final"></div><div id="wait"></div></div>
 <script>(()=>{
 const q=new URLSearchParams(location.search),R=document.documentElement.style;
 const ok=v=>/^#?[0-9a-fA-F]{3,8}$/.test(v||''),hex=v=>v.startsWith('#')?v:'#'+v;
@@ -57,10 +59,10 @@ const f=q.get('font');if(f&&/^[\w ,-]{1,60}$/.test(f))R.setProperty('--font',f+'
  R.setProperty('--l',cam==='left'?w+'vw':'0vw');R.setProperty('--r',cam==='right'?w+'vw':'0vw')}
 if(q.get('down')!=null&&q.get('down')!==''&&isFinite(+q.get('down')))R.setProperty('--down',Math.max(-20,Math.min(40,+q.get('down')))+'vh');   // how far the whole overlay sits lower on screen (default 6)
 const dur=+q.get('duration')>0?Math.max(300,Math.min(30000,+q.get('duration'))):0;
-const sound=q.get('sound')==='1';
+const sound=q.get('sound')!=='0';
 let actx=null;
-const beep=(f1,len,vol)=>{if(!sound)return;try{actx=actx||new AudioContext();const o=actx.createOscillator(),g=actx.createGain();o.type='triangle';o.frequency.value=f1;g.gain.setValueAtTime(vol,actx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+len);o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+len)}catch{}};
-const tick=()=>beep(900,.04,.05),chime=()=>{beep(660,.35,.08);setTimeout(()=>beep(990,.5,.08),120)};
+const beep=(f1,len,vol,type)=>{if(!sound)return;try{actx=actx||new AudioContext();if(actx.state==='suspended')actx.resume();const o=actx.createOscillator(),g=actx.createGain();o.type=type||'triangle';o.frequency.value=f1;g.gain.setValueAtTime(vol,actx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+len);o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+len)}catch{}};
+const tick=()=>beep(1500,.03,.16,'square'),chime=()=>{beep(660,.35,.08);setTimeout(()=>beep(990,.5,.08),120)};
 if(sound)addEventListener('click',()=>{try{(actx=actx||new AudioContext()).resume()}catch{}});
 const $=id=>document.getElementById(id);
 // What the pick pill says: the name just picked, or the WHOLE team ('A + B') when this pick completes it.
@@ -132,6 +134,8 @@ function planFor(order,name,key){
  const n=order.length,a=TAU/n,k=Math.max(0,order.indexOf(name)),r=rng(hashStr(key)),jit=(r()-.5)*.6,turns=5+Math.floor(r()*3);
  return {n,a,k,total:turns*TAU-(k+.5+jit)*a};
 }
+const IDLE_DELAY=1800,IDLE_V=.045,IDLE_RAMP=2;let idleSince=0;
+const idleRot=ms=>{const t=ms/1000;return t<IDLE_RAMP?IDLE_V*t*t/(2*IDLE_RAMP):IDLE_V*(t-IDLE_RAMP/2)};   // starts from standstill, eases up to a slow turn
 let off=0,w=null,lastKey='',lastCount=-1,lastSlice='',landedFor='',lastDraw='';
 async function poll(){
  try{const t0=Date.now();const r=await fetch('/api/wheel/public',{cache:'no-store'});const j=await r.json();const t1=Date.now();off=j.serverNow-(t0+t1)/2;w=j}catch{}
@@ -140,13 +144,18 @@ async function poll(){
 // team cards. `steps` = picks shown so far, `sizes` = {team: members}; unfinished teams show "?" for the missing slots (dashed card).
 function renderTeams(steps,sizes,fresh,done,partial){
  const teams=$('teams');teams.textContent='';
- if(done||!steps.length)return;   // ONE card only: the team being built (the finished team is replaced when the next one starts); the end shows just the final line
- const tm=steps[steps.length-1].team,mem=steps.filter(s=>s.team===tm).map(s=>s.name),sz=sizes&&sizes[tm]||mem.length,wip=mem.length<sz;
- const c=document.createElement('div');c.className='team'+(wip?' wip':'')+(fresh&&!wip?' fresh':'');
- const h=document.createElement('h3');h.textContent='Team '+tm;c.append(h);
- for(const m of mem){const x=document.createElement('div');x.textContent=m;c.append(x)}
- for(let k=mem.length;k<sz;k++){const x=document.createElement('div');x.className='empty';x.textContent='?';c.append(x)}
- teams.append(c);
+ if(!steps.length)return;
+ const card=(tm,mem,sz,wip,small,newest)=>{const c=document.createElement('div');c.className='team'+(small?' sm':'')+(wip?' wip':'')+(fresh&&!wip&&!small?' fresh':'');
+  const h=document.createElement('h3');h.textContent='Team '+tm;c.append(h);
+  mem.forEach((m,i)=>{const x=document.createElement('div');x.textContent=m;if(newest&&i===mem.length-1)x.className='new';c.append(x)});
+  for(let k=mem.length;k<sz;k++){const x=document.createElement('div');x.className='empty';x.textContent='?';c.append(x)}
+  return c};
+ if(done){   // the end: every team, small cards stacked in the corner
+  const order=[];for(const s of steps)if(!order.includes(s.team))order.push(s.team);
+  for(const tm of order)teams.append(card(tm,steps.filter(s=>s.team===tm).map(s=>s.name),0,false,true,false));return}
+ // while picking: ONE big card, the team of the latest pick; the newest name pops in
+ const tm=steps[steps.length-1].team,mem=steps.filter(s=>s.team===tm).map(s=>s.name),sz=sizes&&sizes[tm]||mem.length;
+ teams.append(card(tm,mem,sz,mem.length<sz,false,true));
 }
 function setTop(){
  $('title').textContent=w.status==='none'?'':((w.teamSize||2)+"'s Tournament");
@@ -159,11 +168,12 @@ function paintManual(now){
  const m=w.manual,d=w.draw,pool=w.pool||[],wb=$('wheelbox'),pick=$('pick'),big=$('big'),fin=$('final'),wait=$('wait');
  if(d.id!==lastDraw){lastDraw=d.id;lastKey='';lastCount=-1;landedFor='';$('teams').textContent=''}
  const Rv=m.revealed,total=m.total,t=Math.max(0,now-m.spunAt),spinning=Rv>0&&t<m.spinMs,moving=Rv>0&&t<m.spinMs*SPINF,landed=Rv>0&&t>=m.spinMs*SPINF;
+ const holding=Rv>0&&t>=m.spinMs&&t<m.spinMs+IDLE_DELAY;   // the wheel stays on the landed name for a moment before it starts to idle
  const cur=Rv>0?d.steps[Rv-1]:null,finished=(Rv>=total&&Rv>0&&!spinning)||(!!m.last&&!spinning);   // only one name left = it is assigned by itself, no extra spin
  const salt=d.id;
  let shown=pool;
  // the pool contains the pick being spun; once the spin is over the name leaves the wheel
- if(cur&&!spinning){const i=pool.indexOf(cur.name);shown=pool.filter((x,j)=>j!==i)}
+ if(cur&&!spinning&&!holding){const i=pool.indexOf(cur.name);shown=pool.filter((x,j)=>j!==i)}
  if(finished){wb.classList.add('off')}else wb.classList.remove('off');
  big.textContent='';fin.textContent='';wait.textContent='';
  if(!finished){
@@ -172,13 +182,15 @@ function paintManual(now){
    const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv),ph=t/(m.spinMs*SPINF),rot=p.total*ease(Math.min(1,ph));
    const under=Math.floor((((-rot)%TAU)+TAU)%TAU/p.a),sk=Rv+':'+under;
    if(sk!==lastSlice){tick();kick=Math.min(1,kick+.7)}lastSlice=sk;
-   drawWheel(full,rot);pick.hidden=true;
+   idleSince=0;drawWheel(full,rot);pick.hidden=true;
   }else if(landed&&spinning){
-   const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv);drawWheel(full,p.total);
+   idleSince=0;const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv);drawWheel(full,p.total);
    if(landedFor!==d.id+':'+Rv){landedFor=d.id+':'+Rv;chime();pick.hidden=false;pick.textContent=pickText(d.steps,Rv,w.teamSizes);pick.style.animation='none';void pick.offsetWidth;pick.style.animation='';wb.classList.remove('landed');void wb.offsetWidth;wb.classList.add('landed')}
+  }else if(holding){
+   idleSince=0;pick.hidden=true;const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv);drawWheel(full,p.total);
   }else{
    pick.hidden=true;landedFor=d.id+':'+Rv;
-   drawWheel(order,performance.now()/1000*.07);   // idle: the wheel turns slowly while it waits for the next spin
+   if(!idleSince)idleSince=performance.now();drawWheel(order,idleRot(performance.now()-idleSince));   // idle: the wheel turns slowly while it waits for the next spin
    big.textContent='';
   }
  }else{

@@ -34,7 +34,7 @@ def src(x, y):
 def cov(d):  # 1px anti-aliased edge: d<0 inside
     return min(1.0, max(0.0, 0.5 - d))
 # lightning bolt, coordinates in badge space (centre 0,0), y down
-BOLT = [(16, -74), (-44, 8), (-7, 8), (-21, 76), (44, -12), (7, -12)]
+BOLT = [(round(a*.78),round(b*.78)) for a,b in [(16, -74), (-44, 8), (-7, 8), (-21, 76), (44, -12), (7, -12)]]
 def in_poly(px, py, poly):
     c = False; j = len(poly) - 1
     for i in range(len(poly)):
