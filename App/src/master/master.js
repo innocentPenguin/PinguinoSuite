@@ -86,7 +86,7 @@
         st.queue.push(...out); const ch = st.queue.splice(0, simSize(st));
         const orange = win === 'orange' ? stay : ch, blue = win === 'orange' ? ch : stay;
         st.match = { id: ++st._id, status: 'live', orange: orange.map(p => p.display), blue: blue.map(p => p.display), _p: stay.concat(ch) }; msg = win + ' stays';
-      } else { st.queue.push(...ps); st.match = null; msg = win + ' won, everyone back to the queue'; }
+      } else { st.queue.push(...ps); st.match = null; msg = win + ' won'; if (st.queue.length >= simSize(st) * 2) { simFill(st); msg += ', next game started'; } else msg += ', waiting for ' + (simSize(st) * 2 - st.queue.length) + ' more player(s)'; }
     }
     else if (action === 'reroll' || action === 'balance') { if (st.match) { const [o, bl] = simSplit(Object.assign({}, st, { mode: action === 'reroll' ? 'random' : 'balanced' }), st.match._p); st.match.orange = o.map(p => p.display); st.match.blue = bl.map(p => p.display); } }
     else if (action === 'mode') st.mode = v; else if (action === 'format') st.format = v; else if (action === 'gamemode') st.gameMode = v;
@@ -266,6 +266,7 @@
       else if (k === 'queue') bt.classList.toggle('q-on', on);
       else { bt.classList.toggle('cur', on); bt.disabled = on; }
     }
+    const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) fb.textContent = (!m || m.status === 'finished') ? '▶ Start' : 'Fill';   // first game: Start; Fill is the rare manual top-up
     $('#cu-manual').hidden = !(c && c.mode === 'picks');
     const w = S.get('wheel');
     $('#wh-badge').textContent = w ? '· ' + (w.status || '?') : '';
