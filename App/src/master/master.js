@@ -87,6 +87,12 @@
     const o = [], bl = []; a.forEach((p, i) => (st.mode === 'random' ? i % 2 : [0, 1, 1, 0][i % 4]) ? bl.push(p) : o.push(p)); return [o, bl];
   }
   function simFill(st) {
+    const m0 = st.match;
+    if (m0 && m0.status !== 'finished') {   // running game: top up only the empty slots, from the front of the queue (the bot's !match fill)
+      const empty = simSize(st) * 2 - m0.orange.length - m0.blue.length; if (empty <= 0) return 'The match is already full';
+      const add = st.queue.splice(0, empty); if (!add.length) return 'Nobody is waiting in the queue';
+      add.forEach(p => { const toBlue = m0.blue.length < m0.orange.length; (toBlue ? m0.blue : m0.orange).push(p.display); m0._p.push(p); }); simEv(st, 'match_start'); return 'Filled ' + add.length + ' empty slot' + (add.length === 1 ? '' : 's');
+    }
     const n = simSize(st) * 2; if (st.queue.length < 2) return 'Need at least 2 players in the queue';
     const ps = st.queue.splice(0, n), [o, bl] = simSplit(st, ps);
     st.match = { id: ++st._id, status: 'live', orange: o.map(p => p.display), blue: bl.map(p => p.display), _p: ps }; simEv(st, 'match_start'); return '';
@@ -477,7 +483,11 @@
       else if (k === 'queue') bt.classList.toggle('q-on', on);
       else { bt.classList.toggle('cur', on); bt.disabled = on; }
     }
-    const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) fb.textContent = (!m || m.status === 'finished') ? '▶ Start' : 'Fill';   // first game: Start; Fill is the rare manual top-up
+    const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
+      const empty = live ? (+String((c && c.format) || '2v2')[0] || 2) * 2 - (m.orange || []).length - (m.blue || []).length : 0;
+      fb.textContent = !live ? '▶ Start' : 'Fill empty slots' + (empty > 0 ? ' (' + empty + ')' : ''); fb.disabled = live && (empty <= 0 || !q.length);
+      fb.title = live ? 'Bring the next players from the queue into every empty slot of this game' : 'Start a game from the queue';
+    }
     $('#cu-manual').hidden = !(c && c.mode === 'picks');
     const W0 = ui.sim && ui.simState.wheel, w = ui.sim ? { status: W0.status, entrantCount: W0.entrants.length, names: W0.entrants, mode: 'random', teamSize: W0.teamSize, teams: W0.teams, waitlist: [] } : S.get('wheel');
     { const wq = $('#wh-q'); wq.textContent = ui.wq ? 'Undo' : 'Queue'; wq.classList.toggle('cur', !!ui.wq); wq.disabled = !ui.wq && !queueNames().length; wq.title = ui.wq ? 'Take back what Queue added: they leave the wheel and, if they are still on it, return to the queue in their old order' : 'Copy everyone in the customs queue onto the wheel'; $('#wh-t').classList.toggle('cur', !!w && w.status === 'open'); }

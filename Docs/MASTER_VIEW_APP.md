@@ -115,3 +115,7 @@ Fixed bottom-right card (`#player`, shrinkable with the – button, remembered).
 - Wheel has no Cancel (it was meant as cancelling the GAME). Instead, picking a different **activity** (real or simulator), or the simulator's **Streamer In/Out**, while anyone is queued or in a running game shows an inline panel (no `confirm()`): "What about the N players?" with **Remove them** (`!match clear` + `!queue clear`), **Put back in queue** (`!match queue`: game players go to the FRONT of the queue in their old order, ahead of anyone who joined later), **Leave as is** (just change it) and **✕** (change nothing; Esc too). Cancelling the game is part of both first choices. All commands already exist in the bot, nothing new needed from the Host.
 - Simulator streamer: In = he joins the back of the queue as a player, Out = he leaves queue and game. Identical toasts no longer stack.
 - Queue panel uses the website's queue look: orange `#pos`, muted MMR, NEXT rows (next game: seats minus the streamer) with an orange gradient, 2 BACKUP rows, STREAMER row with an orange outline.
+
+## Fill empty slots
+
+The Match **Fill** button stays visible during a running game: "▶ Start" when there is no game, "Fill empty slots (N)" when a game runs (greyed when it is full or nobody waits). It sends `!match fill`, which brings the next queue players into every empty slot of the running game (the simulator does the same and never starts a second game). Autofill is the Host's job and only happens once, when enough players first join.
