@@ -435,7 +435,7 @@ namespace PinguinoHost
                     var resp = h.SendAsync(rq).Result;
                     if (!resp.IsSuccessStatusCode) { _pushNote += "; boards HTTP " + (int)resp.StatusCode; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "site did not accept the board (HTTP " + (int)resp.StatusCode + ")"); return; }
                 }
-                _lastBoardsHash = hash; _lastBoards = DateTime.UtcNow; _pushNote += "; board ok (" + users.Count + " people)"; Clog.Info("boards", "board pushed to the site: HTTP 200, " + users.Count + " people");
+                _lastBoardsHash = hash; _lastBoards = DateTime.UtcNow; _pushNote += "; board ok (" + users.Count + " people, " + (periods.ToString(Newtonsoft.Json.Formatting.None).Length / 1024) + " KB of periods)"; Clog.Info("boards", "board pushed to the site: HTTP 200, " + users.Count + " people, periods " + (periods.ToString(Newtonsoft.Json.Formatting.None).Length / 1024) + " KB");
             }
             catch (Exception ex) { _pushNote += "; boards error: " + ex.Message; _lastBoards = DateTime.UtcNow.AddMinutes(-25); Clog.Warn("boards", "board push failed: " + ex.Message); }
         }
