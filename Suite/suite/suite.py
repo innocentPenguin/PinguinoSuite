@@ -1229,7 +1229,7 @@ def sounds_file(sid: str):
     got = sounds_store.get(sid)
     if not got:
         raise HTTPException(404, "no such sound")
-    return Response(got[0], media_type=got[1], headers={"Cache-Control": "private, max-age=3600"})
+    return Response(got[0], media_type=got[1], headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
 
 
 @app.post("/api/sounds/{sid}/remove")
