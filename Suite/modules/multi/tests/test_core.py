@@ -1305,3 +1305,16 @@ def test_alert_media_library_and_host_import(tmp_path, monkeypatch):
     rows = alert_media.import_host(types)
     assert types["follow"]["sound"]["url"].startswith("/alert-media/host_follow") and types["follow"]["sound"]["volume"] == 50
     assert "outside" in [r for r in rows if r["type"] == "sub"][0]["status"]
+
+
+def test_alert_bridge_token_sync(tmp_path):
+    import alerts
+    import json
+    assert alerts.sync_bridge_token(str(tmp_path), "tok1") is True
+    assert alerts.sync_bridge_token(str(tmp_path), "tok1") is False
+    p = tmp_path / "alert_bridge.json"
+    p.write_text(json.dumps({"Enabled": False, "ComebackDays": 45, "Token": "old"}), "utf-8")
+    assert alerts.sync_bridge_token(str(tmp_path), "tok2") is True
+    d = json.loads(p.read_text("utf-8"))
+    assert d == {"Enabled": False, "ComebackDays": 45, "Token": "tok2"}
+    assert alerts.sync_bridge_token("", "x") is False and alerts.sync_bridge_token(str(tmp_path), "") is False

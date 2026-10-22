@@ -242,6 +242,31 @@ def render(text, ev):
     return [s for s in out if s[0] != ""]
 
 
+def sync_bridge_token(data_dir, token):
+    """The Host posts alerts/tests to Multi with the token in its alert_bridge.json (HostAlertBridge). Multi only knows its own module token,
+    so it writes it into that file's Token key (other keys untouched; a missing file gets just the Token, the Host fills defaults). True if changed."""
+    import json
+    import os
+    if not data_dir or not token:
+        return False
+    p = os.path.join(data_dir, "alert_bridge.json")
+    try:
+        doc = {}
+        if os.path.isfile(p):
+            with open(p, encoding="utf-8-sig") as f:
+                doc = json.load(f)
+        if doc.get("Token") == token:
+            return False
+        doc["Token"] = token
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(doc, f, indent=2)
+        os.replace(tmp, p)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 # engine ----------------------------------------------------------------------------------------
 class Engine:
     def __init__(self, store, emit):

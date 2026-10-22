@@ -144,6 +144,8 @@ async def lifespan(app):
     hub.loop.set_exception_handler(_loop_exception)
     console_log.info("server", f"Multi started on port {config.PORT}")
     alert_engine.start()
+    if alerts_mod.sync_bridge_token(os.environ.get("PINGUINO_DATA_DIR"), os.environ.get("PINGUINO_API_TOKEN")):
+        console_log.info("server", "alert bridge token written for the Host (alert_bridge.json)")
     store.prune(config.settings()["retention_days"])
     _seed_defaults()
     tw = Twitch(inbox, hub.emit)
