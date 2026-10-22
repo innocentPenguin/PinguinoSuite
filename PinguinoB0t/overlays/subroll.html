@@ -4,9 +4,12 @@
   OBS: Browser source -> tick "Local file" -> pick this file (or http://127.0.0.1:8770/... if you serve it). Size 480 x 1000 (any size works, it fills the source).
   Idle by default (nothing on screen). A mod (or the Suite) starts it:
       !subs roll [mode] [style]      !subs roll stop        (mods only; the bot answers with one short line, it never posts the list)
-      POST /api/subroll/start {"mode":"alpha","style":"roll"}   /api/subroll/stop
+      POST /api/subroll/start {"mode":"alpha","style":"roll","layout":"separated"}   /api/subroll/stop
   MODES  alpha | watch (watch time) | length (months subscribed) | tier (T3 > T2 > T1) | tiergroups (headed T3 / T2 / T1 blocks) |
          gifted (most gifted subs) | newest | oldest | random
+  LAYOUT (separate from the sort mode, they combine: ?mode=alpha&layout=sprinkled; chat: !subs roll alpha pages sprinkled)
+         flat (default: one list, the way the mode sorts it) | separated (Tier 1 together, then Tier 2 and Tier 3 each in their own block with a GOLD / DIAMOND header; the mode sorts inside each block)
+         | sprinkled (Tier 2 and 3 members spread evenly through the Tier 1 list, with their gold / diamond styling)
   STYLES roll (credits-style scroll) | pages (paged cards) | spotlight (one by one: "Thank you <name> - 14 months")
   SETTINGS Data\runtime\subroll.json (mode, style, speed px/s, perPage, secondsPerPage, secondsPerItem, size, title, thankYou, showMonths, loop, tierColors),
            and every one of them can be overridden in the URL: ?mode=alpha&style=pages&speed=90&size=1.2&perPage=8&spp=6&spi=3&title=OUR%20SUBS
@@ -46,6 +49,14 @@
   .t3 .nm { color:var(--t3); } .t2 .nm { color:var(--t2); } .t1 .nm { color:var(--t1); }
   .tag.t3 { background:var(--t3); } .tag.t2 { background:var(--t2); } .tag.t1 { background:var(--t1); }
   .group { margin:1.1em 0 .3em; padding:.2em .2em; font-size:.8em; font-weight:800; letter-spacing:2px; color:var(--orange); border-bottom:1px solid var(--line); }
+  /* layouts separated / sprinkled: Tier 2 = GOLD, Tier 3 = DIAMOND */
+  .lay .row.t2 { border-color:rgba(255,205,70,.85); background:linear-gradient(100deg, rgba(255,196,0,.24), rgba(255,150,0,.07)); } .lay .t2 .nm { color:#ffd34d; } .lay .tag.t2 { background:#ffd34d; }
+  .lay .row.t3 { border-color:rgba(175,235,255,.95); background:linear-gradient(100deg, rgba(190,240,255,.22), rgba(120,170,255,.10) 55%, rgba(255,255,255,.18)); } .lay .t3 .nm { color:#effcff; text-shadow:0 0 8px rgba(160,225,255,.7); } .lay .tag.t3 { background:#9fe3ff; }
+  .lay .row.t2, .lay .row.t3 { position:relative; overflow:hidden; }
+  .lay .row.t2::after, .lay .row.t3::after { content:""; position:absolute; top:0; bottom:0; left:-60%; width:45%; pointer-events:none; transform:skewX(-20deg); animation:shine 3.2s linear infinite; background:linear-gradient(90deg, rgba(255,255,255,0), rgba(255,244,190,.34), rgba(255,255,255,0)); }
+  .lay .row.t3::after { background:linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.5), rgba(190,235,255,0)); animation-duration:2.4s; }
+  @keyframes shine { to { left:130%; } }
+  .group.g2 { color:#ffd34d; border-bottom-color:rgba(255,205,70,.6); } .group.g3 { color:#bff0ff; border-bottom-color:rgba(175,235,255,.8); text-shadow:0 0 8px rgba(160,225,255,.6); }
   .end { text-align:center; color:var(--muted); margin:1.6em 0; font-size:.8em; letter-spacing:1px; }
   /* pages */
   #pages { position:absolute; left:0; right:0; top:0; bottom:0; padding:6px 14px; transition:opacity .35s, transform .35s; }
@@ -76,7 +87,7 @@
   var Q = {}; location.search.replace(/[?&]([^=&]+)=?([^&]*)/g, function (m, k, v) { Q[k] = decodeURIComponent(v); });
   var PREVIEW = "preview" in Q, MOCK = "mock" in Q;
   var HOST = Q.host || (location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770");
-  var TIER = { 3:"T3", 2:"T2", 1:"T1" }, playing = 0, lastNonce = null, timers = [], raf = 0;
+  var layoutOverride = "", LAYOUTS = ["flat", "separated", "sprinkled"], TIER = { 3:"T3", 2:"T2", 1:"T1" }, playing = 0, lastNonce = null, timers = [], raf = 0;
   var MODE_LABEL = { alpha:"A to Z", watch:"by watch time", length:"by months subscribed", tier:"by tier", tiergroups:"by tier", gifted:"by gifted subs", newest:"newest first", oldest:"oldest first", random:"shuffled" };
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
@@ -107,7 +118,7 @@
     var c = (d && d.config) || {};
     function n(k, q, def) { var v = Q[q || k] != null ? Number(Q[q || k]) : Number(c[k]); return isFinite(v) && v > 0 ? v : def; }
     var tc = c.tierColors || {};
-    return { speed:n("speed", "speed", 70), perPage:Math.round(n("perPage", "perPage", 10)), spp:n("secondsPerPage", "spp", 8), spi:n("secondsPerItem", "spi", 3), size:n("size", "size", 1),
+    return { speed:n("speed", "speed", 70), perPage:Math.round(n("perPage", "perPage", 10)), spp:n("secondsPerPage", "spp", 8), spi:n("secondsPerItem", "spi", 3), size:n("size", "size", 1), layout:(LAYOUTS.indexOf(Q.layout) >= 0 ? Q.layout : LAYOUTS.indexOf(layoutOverride) >= 0 ? layoutOverride : (LAYOUTS.indexOf(c.layout) >= 0 ? c.layout : "flat")),
              title:Q.title || c.title || "OUR SUBSCRIBERS", thanks:Q.thanks || c.thankYou || "Thank you {name}", showMonths:Q.months != null ? Q.months !== "0" : c.showMonths !== false,
              loop:PREVIEW || (Q.loop != null ? Q.loop === "1" : !!c.loop), colors:{ t1:tc.t1 || "#f5f2eb", t2:tc.t2 || "#ffb347", t3:tc.t3 || "#ff6a00" } };
   }
@@ -125,16 +136,33 @@
     var t = Math.max(1, Math.min(3, s.tier || 1)), m = metaOf(s, mode, cfg);
     return '<div class="row t' + t + '">' + (numbered ? '<span class="pos">#' + (i + 1) + '</span>' : '') + '<span class="nm">' + esc(s.name) + '</span>' + (t > 1 ? '<span class="tag t' + t + '">' + TIER[t] + '</span>' : '') + (m ? '<span class="meta">' + esc(m) + '</span>' : '') + '</div>';
   }
+  // how the members are arranged (separate from the sort mode: the server already sorted them by the mode, that order is kept inside every section)
+  function arrange(d, cfg, mode) {
+    var subs = d.subs.slice(), L = cfg.layout, out = [];
+    function tierOf(s) { return Math.max(1, Math.min(3, s.tier || 1)); }
+    if (mode === "tiergroups" && d.groups && L === "flat") { d.groups.forEach(function (g) { g.subs.forEach(function (s) { out.push({ s:s, g:g.label, gt:g.tier }); }); }); return { items:out, grouped:true }; }
+    if (L === "separated") {
+      [1, 2, 3].forEach(function (t) { var part = subs.filter(function (s) { return tierOf(s) === t; }); part.forEach(function (s) { out.push({ s:s, g:t === 1 ? (part.length && subs.some(function (x) { return tierOf(x) > 1; }) ? "TIER 1" : null) : "TIER " + t, gt:t }); }); });
+      return { items:out, grouped:true };
+    }
+    if (L === "sprinkled") {
+      var base = subs.filter(function (s) { return tierOf(s) === 1; }), sp = subs.filter(function (s) { return tierOf(s) > 1; }).sort(function (a, b) { return tierOf(b) - tierOf(a); }), n = base.length + sp.length, slots = new Array(n), bi = 0, i;
+      sp.forEach(function (s, j) { slots[Math.min(n - 1, Math.floor((j + 0.5) * n / sp.length))] = s; });
+      for (i = 0; i < n; i++) if (!slots[i]) slots[i] = base[bi++];
+      return { items:slots.map(function (s) { return { s:s }; }), grouped:false };
+    }
+    return { items:subs.map(function (s) { return { s:s }; }), grouped:false };
+  }
+  function groupHtml(it) { return '<div class="group g' + (it.gt || 1) + '">' + esc(it.g) + '</div>'; }
   function show(on) { $("wrap").classList.toggle("hidden", !on); }
-  function setHead(cfg, mode, total) { $("title").textContent = cfg.title; $("sub").innerHTML = "<b>" + esc(MODE_LABEL[mode] || mode) + "</b> · " + total + " subs"; document.documentElement.style.setProperty("--size", cfg.size); ["1", "2", "3"].forEach(function (t) { document.documentElement.style.setProperty("--t" + t, cfg.colors["t" + t]); }); }
+  function setHead(cfg, mode, total) { $("wrap").classList.toggle("lay", cfg.layout !== "flat"); $("title").textContent = cfg.title; $("sub").innerHTML = "<b>" + esc(MODE_LABEL[mode] || mode) + "</b> · " + total + " subs"; document.documentElement.style.setProperty("--size", cfg.size); ["1", "2", "3"].forEach(function (t) { document.documentElement.style.setProperty("--t" + t, cfg.colors["t" + t]); }); }
   function done(cfg, again) { if (cfg.loop) { later(again, 1500); } else { later(function () { show(false); }, 500); } }
 
   // ---- styles ----
   function playRoll(d, cfg, mode, gen) {
     $("pages").style.display = "none"; $("spot").style.display = "none"; $("pageno").textContent = ""; var r = $("roll"); r.style.display = "block";
-    var html = "", n = 0;
-    if (mode === "tiergroups" && d.groups) d.groups.forEach(function (g) { html += '<div class="group">' + esc(g.label) + ' · ' + g.subs.length + '</div>'; g.subs.forEach(function (s) { html += row(s, n++, mode, cfg, false); }); });
-    else d.subs.forEach(function (s, i) { html += row(s, i, mode, cfg, mode !== "alpha"); });
+    var html = "", ar = arrange(d, cfg, mode), lastG = null;
+    ar.items.forEach(function (it, i) { if (it.g && it.g !== lastG) { html += groupHtml(it); lastG = it.g; } html += row(it.s, i, mode, cfg, mode !== "alpha" && mode !== "tiergroups"); });
     r.innerHTML = html + '<div class="end">thank you all ♥</div>';
     show(true);
     var vh = r.parentNode.clientHeight, h = r.scrollHeight, y = vh, last = 0;
@@ -143,22 +171,21 @@
       if (gen !== playing) return;
       if (!last) last = ts; var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
       y -= cfg.speed * cfg.size * dt; r.style.transform = "translateY(" + Math.round(y) + "px)";
-      if (y < -h - 20) { done(cfg, function () { if (gen === playing) start(mode, "roll"); }); return; }
+      if (y < -h - 20) { done(cfg, function () { if (gen === playing) start(mode, "roll", layoutOverride); }); return; }
       raf = requestAnimationFrame(step);
     }
     raf = requestAnimationFrame(step);
   }
   function playPages(d, cfg, mode, gen) {
     $("roll").style.display = "none"; $("spot").style.display = "none"; var p = $("pages"); p.style.display = "block";
-    var items = [];
-    if (mode === "tiergroups" && d.groups) d.groups.forEach(function (g) { g.subs.forEach(function (s) { items.push({ s:s, g:g.label }); }); }); else d.subs.forEach(function (s) { items.push({ s:s }); });
+    var items = arrange(d, cfg, mode).items;
     var pages = Math.max(1, Math.ceil(items.length / cfg.perPage)), i = 0;
     show(true);
     function next() {
       if (gen !== playing) return;
-      if (i >= pages) { $("pageno").textContent = ""; done(cfg, function () { if (gen === playing) start(mode, "pages"); }); return; }
+      if (i >= pages) { $("pageno").textContent = ""; done(cfg, function () { if (gen === playing) start(mode, "pages", layoutOverride); }); return; }
       var chunk = items.slice(i * cfg.perPage, (i + 1) * cfg.perPage), html = "", lastG = null;
-      chunk.forEach(function (it, k) { if (it.g && it.g !== lastG) { html += '<div class="group">' + esc(it.g) + '</div>'; lastG = it.g; } html += row(it.s, i * cfg.perPage + k, mode, cfg, mode !== "alpha" && mode !== "tiergroups"); });
+      chunk.forEach(function (it, k) { if (it.g && it.g !== lastG) { html += groupHtml(it); lastG = it.g; } html += row(it.s, i * cfg.perPage + k, mode, cfg, mode !== "alpha" && mode !== "tiergroups"); });
       p.className = "out";
       later(function () { if (gen !== playing) return; p.innerHTML = html; p.className = "in"; $("pageno").textContent = (i + 1) + " / " + pages; i++; later(next, cfg.spp * 1000); }, i === 0 ? 0 : 350);
     }
@@ -166,10 +193,10 @@
   }
   function playSpot(d, cfg, mode, gen) {
     $("roll").style.display = "none"; $("pages").style.display = "none"; $("pageno").textContent = ""; var sp = $("spot"); sp.style.display = "flex";
-    var subs = d.subs.slice(), i = 0; show(true);
+    var subs = arrange(d, cfg, mode).items.map(function (it) { return it.s; }), i = 0; show(true);
     function next() {
       if (gen !== playing) return;
-      if (i >= subs.length) { done(cfg, function () { if (gen === playing) start(mode, "spotlight"); }); return; }
+      if (i >= subs.length) { done(cfg, function () { if (gen === playing) start(mode, "spotlight", layoutOverride); }); return; }
       var s = subs[i++], t = Math.max(1, Math.min(3, s.tier || 1)), parts = String(cfg.thanks).split("{name}");
       sp.className = "out";
       later(function () {
@@ -181,11 +208,11 @@
     }
     next();
   }
-  function start(mode, style) {
-    clearAll(); var gen = playing;
+  function start(mode, style, layout) {
+    clearAll(); layoutOverride = layout || layoutOverride; var gen = playing;
     loadSubs(mode, function (d) {
       if (gen !== playing) return;
-      if (!d || !d.subs || !d.subs.length) { show(false); if (PREVIEW) later(function () { start(mode, style); }, 5000); return; }
+      if (!d || !d.subs || !d.subs.length) { show(false); if (PREVIEW) later(function () { start(mode, style, layout); }, 5000); return; }
       var cfg = cfgOf(d); setHead(cfg, d.mode || mode, d.total);
       (style === "pages" ? playPages : style === "spotlight" ? playSpot : playRoll)(d, cfg, d.mode || mode, gen);
     });
@@ -201,7 +228,7 @@
       if (lastNonce === null) { lastNonce = st.nonce; return; }   // first load: never replay an old start
       if (st.nonce === lastNonce) return;
       lastNonce = st.nonce;
-      if (st.running) start(Q.mode || st.mode, Q.style || st.style); else stop();
+      if (st.running) start(Q.mode || st.mode, Q.style || st.style, st.layout); else stop();
     };
     sc.onerror = function () { sc.remove(); };
     document.body.appendChild(sc);
@@ -210,5 +237,6 @@
   else if (!MOCK) { pollState(); setInterval(pollState, 2000); }
   else if (Q.mode) start(Q.mode, Q.style || "roll");
 </script>
+<script src="overlay-options.js"></script>
 </body>
 </html>

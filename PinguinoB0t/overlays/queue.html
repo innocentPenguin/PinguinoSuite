@@ -91,6 +91,8 @@
   .glow.t3 { box-shadow:0 0 28px rgba(140,220,255,.55), 0 10px 30px rgba(0,0,0,.5); }
   .glow.t2 .sub b { color:#ffd34d; } .glow.t3 .sub b { color:#bff0ff; }
   .glow li.t1 .val { color:var(--orange); }
+  .glow li.hd { padding:3px 11px; font-size:12px; letter-spacing:2.5px; font-weight:800; background:none; animation:none; border-width:0 0 1px 0; border-radius:0; margin:10px 0 4px; }
+  .glow li.hd.t2 { color:#ffd34d; border-color:rgba(255,205,70,.6); } .glow li.hd.t3 { color:#bff0ff; border-color:rgba(175,235,255,.8); text-shadow:0 0 8px rgba(160,225,255,.6); }
   .glow li.t2, .glow li.t3 { position:relative; overflow:hidden; }
   .glow li.t2 { border-color:rgba(255,205,70,.85); background:linear-gradient(100deg, rgba(255,196,0,.24), rgba(255,150,0,.07)); }
   .glow li.t2 .pos, .glow li.t2 .name, .glow li.t2 .val { color:#ffd34d; }
@@ -209,7 +211,7 @@
     function rows(a) { var n = ["frostbyte","snowdrift","icecube","glacier","polarbear","rlwizard","tundra","slushy"]; return n.map(function (x, i) { return { rank:i + 1, name:x, value:Math.round(a / (i + 1)) }; }); }
     function card(m, p, t, u, a) { return { id:m + "|" + p, metric:m, period:p, title:t, unit:u, rows:rows(a) }; }
     var kind = /[?&]mock=(\w+)/.test(location.search) ? RegExp.$1 : "";
-    var subs = { id:"subs|all", metric:"subs", period:"all", title:"Subs! \u00b7 by months", unit:"months", kind:"subs", first:true, tiers:[], rows:[] };
+    var subs = { id:"subs|all", metric:"subs", period:"all", title:"Subs! \u00b7 by months", unit:"months", kind:"subs", first:true, tiers:[], rows:[], layout:(/[?&]layout=sprinkled/.test(location.search) ? "sprinkled" : "separated") };
     var t1 = kind === "few" ? 3 : 44, t2 = kind === "few" ? 1 : 6, t3 = kind === "few" ? 1 : 4, k = 0;
     if (kind !== "empty") [[1, t1], [2, t2], [3, t3]].forEach(function (q) {
       for (var i = 0; i < q[1]; i++) { k++; subs.rows.push({ rank:k, tier:q[0], name:(q[0] === 3 ? "DiamondDiva" : q[0] === 2 ? "GoldGoose" : "SnowViewer") + k, value:Math.max(1, 60 - k), extra:Math.max(30, 9000 - k * 150) }); }
@@ -268,6 +270,7 @@
     var base = Math.max(3, cfg.secondsPerCard || 8) * 1000;
     vp.style.height = ""; vp.classList.remove("scrolling"); ol.style.transform = "";
     if (c.kind !== "subs" || !rows.length) { setTier(0); return base; }
+    var follow = c.layout !== "sprinkled";   // sprinkled: T2/T3 names sit between T1 names, the frame stays orange and only the rows carry gold / diamond
     var vis = Math.max(3, cfg.visibleRows || 8), speed = Math.max(10, cfg.scrollSpeed || 45), pause = Math.max(0.5, cfg.scrollPauseSeconds || 2.5) * 1000;
     var n = rows.length, last = rows[n - 1], vpH = n > vis ? rows[vis].offsetTop - 6 : last.offsetTop + last.offsetHeight + 6;
     var D = last.offsetTop + last.offsetHeight + 6 - vpH, scrolling = D > 2, tiers = (c.tiers && c.tiers.length) ? c.tiers : [Number(rows[0].getAttribute("data-t")) || 1];
@@ -284,7 +287,7 @@
       var e = now - t0, y = 0, p = 0, t;
       if (scrolling) { p = Math.min(1, Math.max(0, (e - pause) / moveMs)); y = p * D; ol.style.transform = "translate3d(0," + (-y).toFixed(2) + "px,0)"; t = tierAt(y, p); }
       else { t = tiers[Math.min(tiers.length - 1, Math.floor(e / dur * tiers.length))]; }
-      setTier(t);
+      setTier(follow ? t : 0);
       if (e < dur) rafId = setTimeout(function () { tick(performance.now()); }, 33); else rafId = 0;   // ~30 fps timer: also keeps running when the page is throttled
     }
     rafId = setTimeout(function () { tick(performance.now()); }, 33);
@@ -297,8 +300,12 @@
       var parts = String(c.title || "").split(" \u00b7 "), subs = c.kind === "subs";
       document.getElementById("itop").textContent = parts[0] || "LEADERBOARD";
       document.getElementById("isub").innerHTML = "<b>" + esc(parts[1] || "") + "</b>";
+      var prevT = 0, sep = subs && c.layout !== "sprinkled";
       document.getElementById("ilist").innerHTML = (c.rows || []).slice(0, subs ? 300 : 10).map(function (r, i) {
-        if (subs) return '<li class="t' + esc(r.tier) + '" data-t="' + esc(r.tier) + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc((Number(r.value) || 0) + " mo") + '</span>' + (r.extra ? '<span class="rating">' + esc(fmtTime(r.extra)) + '</span>' : '') + '</li>';
+        var hd = "";
+        if (sep && r.tier > 1 && r.tier !== prevT) hd = '<li class="hd t' + esc(r.tier) + '" data-t="' + esc(r.tier) + '">TIER ' + esc(r.tier) + '</li>';
+        prevT = r.tier;
+        if (subs) return hd +  '<li class="t' + esc(r.tier) + '" data-t="' + esc(r.tier) + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc((Number(r.value) || 0) + " mo") + '</span>' + (r.extra ? '<span class="rating">' + esc(fmtTime(r.extra)) + '</span>' : '') + '</li>';
         return '<li class="' + (i === 0 ? "first" : "") + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc(fmtVal(r, c.unit)) + '</span></li>';
       }).join("");
       body.className = "ibody in" + (linked ? " lk" : "");
@@ -365,5 +372,6 @@
     setInterval(update, 500);   // so the card hides on time between polls
   }
 </script>
+<script src="overlay-options.js"></script>
 </body>
 </html>

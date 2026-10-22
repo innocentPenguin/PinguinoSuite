@@ -257,4 +257,5 @@ async function tick(){try{const j=await (await fetch('/api/wheel/public',{cache:
  box.textContent='';if(j.showSignedUp!==false&&j.signedUp){const s=document.createElement('div');s.textContent=j.signedUp+' signed up';box.append(s)}
  for(const f of (j.feed||[])){if(now-f.at>ms)continue;const d=document.createElement('div');d.style.cssText='margin-top:3px;font-size:12px;opacity:.9';d.textContent=(f.kind==='leave'?'- ':'+ ')+f.name;box.append(d)}}catch(e){}
  setTimeout(tick,500)}tick()})();</script>
+<script src="overlay-options.js"></script>
 </body></html>

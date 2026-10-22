@@ -199,7 +199,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 |---|---|---|
 | `!alias` | `!alias add <old login> <main login> \| !alias remove <old login> \| !alias list` | One person with several accounts: their gifts, bits, messages and streaks are combined under the main login on the boards. Edits Data\boards\aliases.json. |
 | `!boards` | `!boards refresh \| !boards status` | refresh = recompute every leaderboard now and push it to the website. status = people, months and the last push result. |
-| `!subs` | `!subs import \| !subs status \| !subs roll [alpha\|watch\|length\|tier\|tiergroups\|gifted\|newest\|oldest\|random] [roll\|pages\|spotlight] \| !subs roll stop` | import = read any new subscriber-list*.csv (Downloads or Data\subs\incoming) into the subscriber list. status = counts by tier, lapsed, founders. |
+| `!subs` | `!subs import \| !subs status \| !subs roll [alpha\|watch\|length\|tier\|tiergroups\|gifted\|newest\|oldest\|random] [roll\|pages\|spotlight] [flat\|separated\|sprinkled] \| !subs roll stop` | import = read any new subscriber-list*.csv (Downloads or Data\subs\incoming) into the subscriber list. status = counts by tier, lapsed, founders. |
 | `!streaks` | `!streaks backfill \| !streaks status` | backfill = read old chat logs for watch streaks people shared (safe to repeat). status = how many people shared one. |
 | `!names` | `!names refresh` | Ask Twitch again for everyone's real display name (capital letters) and update the boards. |
 | `!lookup` | `!lookup <user>` | Shows everything on record for a person: aliases, subscription, gifts, bits, messages and watch streak. |

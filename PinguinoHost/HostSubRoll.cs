@@ -8,7 +8,7 @@ namespace PinguinoHost
 {
     /// <summary>The subscriber roll-call overlay (PinguinoB0t\overlays\subroll.html, an OBS browser source) and the "our T3 / T2 subs" cards of the queue overlay.
     /// GET /api/subroll[?mode=&amp;js=1]  every current subscriber, sorted by mode: alpha, watch, length, tier, gifted, newest, oldest, random, tiergroups (T3 / T2 / T1 groups).
-    /// GET /api/subroll/state[?js=1]  {running, mode, style, nonce}: the overlay plays a roll whenever the nonce changes. POST /api/subroll/start {mode?, style?} and /stop (token like the other POSTs); chat: mods type "!subs roll [mode] [style]" / "!subs roll stop".
+    /// GET /api/subroll/state[?js=1]  {running, mode, style, nonce}: the overlay plays a roll whenever the nonce changes. POST /api/subroll/start {mode?, style?} and /stop (token like the other POSTs); chat: mods type "!subs roll [mode] [style] [layout]" / "!subs roll stop".
     /// Config Data\runtime\subroll.json (written with these defaults when missing): mode, style (roll | pages | spotlight), speed (px per second), perPage, secondsPerPage, secondsPerItem, size, title, thankYou, showMonths, loop, tierColors.
     /// Source: the subscriber master list (Data\subs\subscribers_master.json, not lapsed) plus anyone Twitch's live list (live_subs.json) knows that the master does not yet. Bots and !optmeout viewers are left out, nothing private is read.
     /// Nothing is ever said in chat by this module except the one short confirmation of the mod command.</summary>
@@ -16,15 +16,16 @@ namespace PinguinoHost
     {
         static readonly object L = new object();
         static List<JObject> _list; static DateTime _at = DateTime.MinValue;
-        static JObject _state = new JObject { { "running", false }, { "mode", "tier" }, { "style", "roll" }, { "nonce", 0 } };
+        static JObject _state = new JObject { { "running", false }, { "mode", "tier" }, { "style", "roll" }, { "layout", "flat" }, { "nonce", 0 } };
         static string CfgP { get { return Path.Combine(HostApi.DataDir, "subroll.json"); } }
         static string Root { get { return Boards.RootDir; } }
         public static readonly string[] Modes = { "alpha", "watch", "length", "tier", "gifted", "newest", "oldest", "random", "tiergroups" };
         public static readonly string[] Styles = { "roll", "pages", "spotlight" };
+        public static readonly string[] Layouts = { "flat", "separated", "sprinkled" };   // how T2/T3 sit in the list: flat = one sort, separated = T1 block then T2 block then T3 block, sprinkled = T2+T3 spread evenly through the T1 list
 
         public static JObject DefaultConfig()
         {
-            return new JObject { { "mode", "tier" }, { "style", "roll" }, { "speed", 70 }, { "perPage", 10 }, { "secondsPerPage", 8 }, { "secondsPerItem", 3 }, { "size", 1.0 }, { "title", "OUR SUBSCRIBERS" },
+            return new JObject { { "mode", "tier" }, { "style", "roll" }, { "layout", "flat" }, { "speed", 70 }, { "perPage", 10 }, { "secondsPerPage", 8 }, { "secondsPerItem", 3 }, { "size", 1.0 }, { "title", "OUR SUBSCRIBERS" },
                 { "thankYou", "Thank you {name}" }, { "showMonths", true }, { "loop", false },
                 { "tierColors", new JObject { { "t1", "#f5f2eb" }, { "t2", "#ffb347" }, { "t3", "#ff6a00" } } } };
         }
@@ -101,28 +102,42 @@ namespace PinguinoHost
         /// <summary>The "Subs!" card of the queue overlay: ONE list, Tier 1 first (paid or Prime, NOT gifted subs), then Tier 2, then Tier 3; inside a tier by months subscribed, watch time as the tiebreak (and the second column).
         /// Gifted subs: left out of Tier 1 (almost everybody there is a gift, that list would be the whole community); kept in Tier 2 and 3 (someone on a higher tier is rare and worth a thank-you however they got it).
         /// Both are options of the card in queue_idle.json: giftedT1 (default false), giftedT23 (default true). null when there is nobody.</summary>
-        public static JObject SubsCard(int top, bool giftedT1, bool giftedT23)
+        /// <summary>T2/T3 members spread evenly through the T1 list (the base order is kept).</summary>
+        public static List<JObject> Sprinkle(List<JObject> baseList, List<JObject> specials)
         {
-            var rows = new JArray(); int rank = 0, count = 0; var tiers = new List<int>();
+            int n = baseList.Count + specials.Count, k = specials.Count; var slots = new JObject[n];
+            for (int j = 0; j < k; j++) slots[(int)Math.Min(n - 1, Math.Floor((j + 0.5) * n / k))] = specials[j];
+            int bi = 0; for (int i = 0; i < n; i++) if (slots[i] == null) slots[i] = baseList[bi++];
+            return slots.ToList();
+        }
+        public static JObject SubsCard(int top, bool giftedT1, bool giftedT23, string layout = "separated")
+        {
+            layout = layout == "sprinkled" ? "sprinkled" : "separated";
+            var secs = new Dictionary<int, List<JObject>>(); var tiers = new List<int>();
             foreach (int t in new[] { 1, 2, 3 })
             {
                 var sec = Active().Where(o => I(o, "tier") == t && ((string)o["type"] != "gift" || (t == 1 ? giftedT1 : giftedT23)))
                     .OrderByDescending(o => I(o, "tenure")).ThenByDescending(o => Lg(o, "watch")).ThenBy(Name, StringComparer.Ordinal).ToList();
-                if (sec.Count == 0) continue; tiers.Add(t);
-                foreach (var o in sec) { if (count++ >= top) break; rows.Add(new JObject { { "rank", ++rank }, { "tier", t }, { "name", o["name"] }, { "value", o["tenure"] }, { "extra", o["watch"] } }); }
+                secs[t] = sec; if (sec.Count > 0) tiers.Add(t);
             }
+            List<JObject> all;
+            if (layout == "sprinkled") all = Sprinkle(secs[1], secs[3].Concat(secs[2]).ToList());
+            else all = secs[1].Concat(secs[2]).Concat(secs[3]).ToList();
+            var rows = new JArray(); int rank = 0;
+            foreach (var o in all) { if (rank >= top) break; rows.Add(new JObject { { "rank", ++rank }, { "tier", o["tier"] }, { "name", o["name"] }, { "value", o["tenure"] }, { "extra", o["watch"] } }); }
             if (rows.Count == 0) return null;
-            return new JObject { { "id", "subs|all" }, { "metric", "subs" }, { "period", "all" }, { "title", "Subs! · by months" }, { "unit", "months" }, { "kind", "subs" }, { "tiers", new JArray(tiers) }, { "rows", rows } };
+            return new JObject { { "id", "subs|all" }, { "metric", "subs" }, { "period", "all" }, { "title", "Subs! · by months" }, { "unit", "months" }, { "kind", "subs" }, { "layout", layout }, { "tiers", new JArray(tiers) }, { "rows", rows } };
         }
 
         public static JObject State() { lock (L) return (JObject)_state.DeepClone(); }
         public static JObject Start(JObject b)
         {
-            var cfg = Config(); string mode = ((string)b?["mode"] ?? "").ToLowerInvariant(), style = ((string)b?["style"] ?? "").ToLowerInvariant();
-            if (mode == "") mode = (string)cfg["mode"]; if (style == "") style = (string)cfg["style"];
+            var cfg = Config(); string mode = ((string)b?["mode"] ?? "").ToLowerInvariant(), style = ((string)b?["style"] ?? "").ToLowerInvariant(), layout = ((string)b?["layout"] ?? "").ToLowerInvariant();
+            if (mode == "") mode = (string)cfg["mode"]; if (style == "") style = (string)cfg["style"]; if (layout == "") layout = (string)cfg["layout"] ?? "flat";
+            if (!Layouts.Contains(layout)) return new JObject { { "ok", false }, { "error", "layout must be one of " + string.Join(", ", Layouts) } };
             if (!Modes.Contains(mode)) return new JObject { { "ok", false }, { "error", "mode must be one of " + string.Join(", ", Modes) } };
             if (!Styles.Contains(style)) return new JObject { { "ok", false }, { "error", "style must be one of " + string.Join(", ", Styles) } };
-            lock (L) { _state = new JObject { { "ok", true }, { "running", true }, { "mode", mode }, { "style", style }, { "nonce", ((int?)_state["nonce"] ?? 0) + 1 } }; return (JObject)_state.DeepClone(); }
+            lock (L) { _state = new JObject { { "ok", true }, { "running", true }, { "mode", mode }, { "style", style }, { "layout", layout }, { "nonce", ((int?)_state["nonce"] ?? 0) + 1 } }; return (JObject)_state.DeepClone(); }
         }
         public static JObject Stop() { lock (L) { _state["running"] = false; _state["nonce"] = ((int?)_state["nonce"] ?? 0) + 1; return (JObject)_state.DeepClone(); } }
         /// <summary>mods: "!subs roll [mode] [style]" or "!subs roll stop"; returns the one short line to say (a confirmation, never the list)</summary>
@@ -130,9 +145,9 @@ namespace PinguinoHost
         {
             if (a.Length > 0 && a[0].ToLowerInvariant() == "stop") { Stop(); return "Sub roll stopped."; }
             var b = new JObject();
-            foreach (var w in a.Select(x => x.ToLowerInvariant())) { if (Modes.Contains(w)) b["mode"] = w; else if (Styles.Contains(w)) b["style"] = w; }
+            foreach (var w in a.Select(x => x.ToLowerInvariant())) { if (Modes.Contains(w)) b["mode"] = w; else if (Styles.Contains(w)) b["style"] = w; else if (Layouts.Contains(w)) b["layout"] = w; }
             var r = Start(b); if (r["ok"] != null && !(bool)r["ok"]) return (string)r["error"];
-            return "Sub roll started: " + (string)r["mode"] + ", " + (string)r["style"] + ". (modes: " + string.Join("/", Modes) + "; styles: " + string.Join("/", Styles) + ")";
+            return "Sub roll started: " + (string)r["mode"] + ", " + (string)r["style"] + ", " + (string)r["layout"] + ". (modes: " + string.Join("/", Modes) + "; styles: " + string.Join("/", Styles) + "; layouts: " + string.Join("/", Layouts) + ")";
         }
     }
 }

@@ -62,6 +62,9 @@ try:
     r = ask('*mod: !subs roll watch spotlight'); st = json.loads(get('/api/subroll/state'))
     chk('a mod starts it', st['running'] and st['mode'] == 'watch' and st['style'] == 'spotlight', st)
     chk('and the bot answers with ONE short line, never the list', len(r) == 1 and len(r[0]) < 200 and 'amy' not in r[0].lower(), r)
+    r = ask('*mod: !subs roll alpha pages sprinkled'); st = json.loads(get('/api/subroll/state'))
+    chk('layout is its own word next to mode and style', st['running'] and st['mode'] == 'alpha' and st['style'] == 'pages' and st['layout'] == 'sprinkled', st)
+    chk('start by POST takes a layout, a bad one is refused, default is flat', post('/api/subroll/start', {'mode': 'alpha'})['layout'] == 'flat' and post('/api/subroll/start', {'layout': 'zzz'}).get('ok') is False)
     r = ask('*mod: !subs roll stop'); chk('stop by chat', len(r) == 1 and json.loads(get('/api/subroll/state'))['running'] is False, r)
     # queue overlay: ONE "Subs!" card, first in the sequence: T1 (not gifted) then T2 then T3, months then watch time
     qj = json.loads(get('/api/queue-idle')); qi = qj['items']
@@ -79,6 +82,10 @@ try:
     json.dump(cj, open(cfgp, 'w')); time.sleep(61)   # the answer is cached for 60 s
     sc2 = json.loads(get('/api/queue-idle'))['items'][0][0]
     chk('giftedT1 / giftedT23 options are honoured (no gifted subs in T2/T3 in this roster, dan joins T1)', [r['name'].lower() for r in sc2['rows']] == ['eve', 'dan', 'cat', 'bob', 'amy', 'zed'], sc2['rows'])
+    cj['sequence'][0]['giftedT1'] = False; cj['sequence'][0]['giftedT23'] = True; cj['sequence'][0]['layout'] = 'sprinkled'
+    json.dump(cj, open(cfgp, 'w')); time.sleep(61)
+    sc3 = json.loads(get('/api/queue-idle'))['items'][0][0]
+    chk('layout sprinkled: T2/T3 spread through T1 (eve alone in T1 here, so they surround it), layout reported', sc3['layout'] == 'sprinkled' and sorted(r['name'].lower() for r in sc3['rows']) == ['amy', 'bob', 'cat', 'eve', 'zed'], sc3)
     # an old (version-less) config is migrated and backed up
     json.dump({'enabled': True, 'idleSeconds': 33, 'sequence': [{'metric': 'points', 'period': 'all'}]}, open(cfgp, 'w')); time.sleep(61)
     qj3 = json.loads(get('/api/queue-idle')); cj3 = json.load(open(cfgp))

@@ -27,7 +27,7 @@ namespace PinguinoHost
                 { "version", 2 }, { "enabled", true }, { "idleSeconds", 20 }, { "secondsPerCard", 8 }, { "top", 8 },
                 { "visibleRows", 8 }, { "scrollSpeed", 45 }, { "scrollPauseSeconds", 2.5 },   // a long list scrolls (px per second, pause at the top and bottom) and the card stays until everybody was shown
                 { "sequence", new JArray {
-                    new JObject { { "metric", "subs" }, { "period", "all" }, { "first", true }, { "giftedT1", false }, { "giftedT23", true }, { "top", 200 } },   // "Subs!": ONE list, T1 (not gifted) then T2 then T3; "first" = always opens a round
+                    new JObject { { "metric", "subs" }, { "period", "all" }, { "first", true }, { "giftedT1", false }, { "giftedT23", true }, { "layout", "separated" }, { "top", 200 } },   // "Subs!": ONE list, T1 (not gifted) then T2 then T3; "first" = always opens a round
                     new JArray { c("gifts", "month"), c("bits", "month") },
                     new JArray { c("gifts", "month"), c("gifts", "all") },
                     new JArray { c("gifts", "month"), c("gifts", "lastmonth") },
@@ -65,7 +65,7 @@ namespace PinguinoHost
         static JObject Card(JToken t, int top)
         {
             string raw = ((string)t["metric"] ?? "").ToLowerInvariant();
-            if (raw == "subs") return SubRoll.SubsCard(Math.Max(1, Math.Min(300, (int?)t["top"] ?? 200)), (bool?)t["giftedT1"] ?? false, (bool?)t["giftedT23"] ?? true);   // ONE list: T1 (not gifted), T2, T3
+            if (raw == "subs") return SubRoll.SubsCard(Math.Max(1, Math.Min(300, (int?)t["top"] ?? 200)), (bool?)t["giftedT1"] ?? false, (bool?)t["giftedT23"] ?? true, (string)t["layout"] ?? "separated");   // ONE list: T1 (not gifted), T2, T3
             string metric = Periods.Metric((string)t["metric"] ?? ""); string per = ((string)t["period"] ?? "month").ToLowerInvariant();
             if (metric == "" || !Per.ContainsKey(per)) return null;
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); string period = per, key = "";
