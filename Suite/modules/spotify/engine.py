@@ -57,7 +57,7 @@ class Engine:
         self.cfg = cfg
         st = store.load("state.json", {})
         self.queue = Queue(st.get("items", []), st.get("history", []))
-        self.refunds, self._ref_seq = [], 0
+        self.refunds, self._ref_seq = [], int(clock())       # seq is seeded from the clock so a restart never reuses numbers the Host already saw
         self.rejects = list(st.get("rejects", []))   # songs withdrawn before playing: !oops (wrong song), blocked, denied
         self.suspended = {k: float(v) for k, v in (st.get("suspended") or {}).items()}   # viewer -> epoch when the suspension ends
         self._skip_mark = None                         # {uri, by, at}: set by skip(), read when the track changes
@@ -74,7 +74,7 @@ class Engine:
         self.last_verify = 0.0
         self.idle_since = None
         self._ann = []                 # announcements for the Host to post: {seq, ts, text}
-        self._ann_seq = 0
+        self._ann_seq = int(clock())      # same: monotonic across restarts, so a Host polling with since=N still sees new lines
         self._search_cache = {}
         self.artist_genres = {}
         self.alert = None
@@ -1033,12 +1033,12 @@ class Engine:
                                 for h in self.queue.history[:50]]}
 
     def now_info(self):
-        t = self.pb["track"] if self.pb and self.pb["track"] else None
-        if not t:
-            return {"title": "", "artist": "", "url": "", "requestedBy": "", "album": "", "art": "", "is_playing": False, "progress_ms": 0,
-                    "duration_ms": 0, "volume": None, "device": ""}
         with self.lock:
             pb = self.pb
+            t = pb["track"] if pb and pb["track"] else None
+            if not t:
+                return {"title": "", "artist": "", "url": "", "requestedBy": "", "album": "", "art": "", "is_playing": False, "progress_ms": 0,
+                        "duration_ms": 0, "volume": None, "device": ""}
             prog = pb["progress_ms"] + (int((self.clock() - self.pb_at) * 1000) if pb["is_playing"] else 0)
             dev = pb.get("device") or {}
         return {"title": t["name"], "artist": ", ".join(t["artists"]), "url": f"https://open.spotify.com/track/{t['id']}",

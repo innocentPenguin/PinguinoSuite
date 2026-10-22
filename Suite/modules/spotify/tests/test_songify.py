@@ -225,6 +225,16 @@ class SongifyTests(unittest.TestCase):
         self.assertTrue(self.sr("bob", 2)["ok"])
         self.assertEqual(self.e.chat("mod", "!songclear", mod)["code"], "clear")
 
+    def test_seq_survives_restart_and_now_info_idle(self):
+        self.assertGreaterEqual(self.e._ann_seq, int(self.clock()))
+        self.assertGreaterEqual(self.e._ref_seq, int(self.clock()))
+        self.e.pb = None
+        n = self.e.now_info()
+        self.assertEqual((n["title"], n["is_playing"], n["volume"]), ("", False, None))
+        self.play(5)
+        n = self.e.now_info()
+        self.assertTrue(n["title"] and n["duration_ms"] >= n["progress_ms"] >= 0)
+
     def test_pos_next_and_like(self):
         self.sr("ann", 3)
         self.sr("bob", 2)
