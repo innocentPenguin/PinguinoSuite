@@ -157,3 +157,12 @@ cargo check                      # type-check (use CARGO_TARGET_DIR=<scratch> to
 npm i && npx tauri build --no-bundle   # from PinguinoLite\ ; run only after asking 00
 ```
 Regenerate icons: `python Tools\lite-make-icon.py` from `PinguinoLite\`.
+
+## Per-part updates (shared updater)
+Lite drives the same Node updater as the Suite core (`Suite/updater/updater.mjs check | apply --only <id> [--stage] | rollback [--plan]`), so release `manifest.components` hashes, sha256 on every file, `safeRel` path rules (no `..`, drives, `Data\` or secrets), backup before each swap and rollback are shared, not re-implemented. Code: `PinguinoLite/src-tauri/src/parts.rs`; UI: the **Parts** card on the Dashboard.
+- **Which install:** a folder with `install.json` (env `PINGUINO_LITE_INSTALL`, else the suite root, else the exe folder). Without one (development tree) the card says so and nothing is touched.
+- **Parts Lite may touch:** `link`, `lite`, `tools` only. Shell, core, Host and the other modules belong to the Suite and are never shown or applied from Lite.
+- **link** (module): Lite stops the Link it owns, the updater swaps the files, Lite starts Link again (also after a failed swap, which the updater rolls back). If Link is run by the Suite, Lite refuses (it never stops what it did not start).
+- **lite** (app files): `apply --stage` only verifies and stages; `Start-Lite.bat` runs `updater.mjs launch` before starting the exe (release install only), which swaps staged files while Lite is not running. NOTE for 01: `components.mjs` has no `lite` part yet (match `PinguinoLite/src-tauri/target/release/pinguino-lite.exe`, restart `app`); until it exists Lite shows no `lite` part.
+- **Rollback:** "Roll back last update" runs `rollback --plan` then `rollback`; the updater's backup is `Data\updates\backup\...`.
+- **Safety:** refused unless the Host says `live:false` (Host not running counts as not live; an unreadable answer holds the update); one job at a time; no OBS contact.

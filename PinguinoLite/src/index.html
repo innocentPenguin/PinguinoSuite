@@ -81,6 +81,30 @@ let page = 'dashboard';
 let gh = null;   // last GitHub update check result {ok, update, latest, url, error, at}
 try { gh = JSON.parse(localStorage.getItem('gh') || 'null'); } catch {}
 let ghBusy = false;
+let parts = null, job = null;   // per-part updates (shared Node updater): last check {supported, parts[], live, ...} and the running/finished job
+async function checkParts() { parts = await inv('parts_check').catch(e => ({ ok: false, supported: false, message: String(e) })); render(); }
+async function pollJob() {
+  for (;;) {
+    job = await inv('parts_job').catch(() => null); render();
+    if (!job || job.state !== 'running') break;
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  if (job && job.state === 'done') { toast(job.message || (job.ok ? 'Done' : 'Failed')); checkParts(); refresh(); }
+}
+function partsCard() {
+  if (!parts) return '';
+  const run = job && job.state === 'running';
+  if (!parts.supported) return `<div class="card" style="margin-top:12px"><h3>Parts</h3><div class="note">${esc(parts.message || 'This copy does not update itself (development build).')}</div></div>`;
+  const blocked = run || parts.live !== false;
+  const list = (parts.parts || []).map(p => `<tr><td><b>${esc(p.name || p.id)}</b>${p.staged ? ' <span class="d">(applied at next start)</span>' : ''}</td>
+     <td>${p.changed ? '<span class="pill warn">Update available</span>' : '<span class="pill ok">Up to date</span>'}</td>
+     <td style="text-align:right">${p.changed ? `<button class="btn pri" data-part="${esc(p.id)}"${blocked ? ' disabled' : ''}>Update</button>` : ''}</td></tr>`).join('');
+  return `<div class="card" style="margin-top:12px"><h3>Parts${parts.version ? ` - release ${esc(parts.version)}` : ''}</h3>
+   ${parts.ok ? (list ? `<table><tbody>${list}</tbody></table>` : '<div class="note">This release has no parts for Lite.</div>') : `<div class="note">${esc(parts.message || 'Could not check parts.')}</div>`}
+   ${parts.live === true ? '<div class="note" style="color:var(--warn)">You are live: updates wait until the stream is over.</div>' : parts.live == null ? '<div class="note">Could not tell whether you are live; updates are held.</div>' : ''}
+   ${run ? `<div class="note">Updating ${esc((job.parts || []).join(', ') || '...')}: ${esc(job.message)}...</div>` : job && job.state === 'done' ? `<div class="note" style="color:var(${job.ok ? '--ok' : '--bad'})">${esc(job.message)}</div>` : ''}
+   <div class="row"><button class="btn" data-parts-check="1">Check parts</button><button class="btn" data-parts-rollback="1"${blocked ? ' disabled' : ''} title="Put back the version kept before the last update">Roll back last update</button></div></div>`;
+}
 // Lite's own update check (GitHub releases, via the shell). Quiet at startup at most once per 24 h; manual button any time.
 async function checkLite(manual) {
   if (ghBusy || !info) return;
@@ -155,6 +179,7 @@ function dashboard() {
    <div class="card"><h3>PinguinoLink</h3><div class="big" style="font-size:20px">${writer ? esc(writer.name + ' ' + (writer.version || '')) : '<span style="color:var(--faint)">not connected</span>'}</div>
      <div class="note">${conn ? 'connector: ' + esc(conn.state) + (conn.detail ? ' - ' + esc(conn.detail) : '') : 'no status.json yet'}</div></div>
   </div>
+  ${partsCard()}
   <div class="row"><button class="btn" data-open="host">Open Host dashboard</button><button class="btn" data-open="folder">Open Lite data folder</button><button class="btn" data-act="check">Check modules for updates</button><button class="btn pri" data-gh="1"${ghBusy ? ' disabled' : ''}>Check Lite for updates</button></div>
   <p class="note">Contract folder: <span class="mono">${esc(info && info.lite_dir)}</span></p>`;
 }
@@ -221,7 +246,11 @@ document.addEventListener('change', async e => {
 document.addEventListener('click', async e => {
   const nav = e.target.closest('nav [data-page]');
   if (nav) { page = nav.dataset.page; try { localStorage.setItem('page', page); } catch {} return render(); }
-  if (e.target.closest('[data-gh]')) return checkLite(true);
+  if (e.target.closest('[data-gh]')) { checkParts(); return checkLite(true); }
+  if (e.target.closest('[data-parts-check]')) return checkParts();
+  const pb = e.target.closest('[data-part]');
+  if (pb) { const r = await inv('parts_apply', { ids: [pb.dataset.part] }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
+  if (e.target.closest('[data-parts-rollback]')) { const r = await inv('parts_rollback').catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
   if (e.target.closest('[data-scan]')) { toast('Scanning...'); const s = await inv('replay_scan').catch(err => ({ error: String(err) })); toast(s.error ? 'Scan failed: ' + s.error : `Scan done: ${s.new} new, ${s.errors} unreadable`); return refresh(); }
   const o = e.target.closest('[data-open]');
   if (o) return inv('open_target', { target: o.dataset.open }).catch(err => toast(String(err)));
@@ -237,7 +266,7 @@ document.addEventListener('click', async e => {
   try { page = localStorage.getItem('page') || 'dashboard'; } catch {}
   info = await inv('lite_info').catch(() => null);
   await refresh();
-  if (!gh || !gh.at || Date.now() - gh.at > 864e5) checkLite(false);   // quiet daily check
+  if (!gh || !gh.at || Date.now() - gh.at > 864e5) { checkLite(false); checkParts(); }   // quiet daily check
   setInterval(refresh, 5000);   // cheap: 1 loopback probe + up to 5 tiny local files
 })();
 </script>

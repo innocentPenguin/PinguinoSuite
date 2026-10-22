@@ -5,6 +5,7 @@
 
 mod mainwin;
 mod replays;
+mod parts;
 mod updatecheck;
 
 use std::io::{Read, Write};
@@ -22,7 +23,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// PinguinoLink (session 04) is the one bundled component: Lite starts it at launch and stops it on exit.
-struct Link(Mutex<Option<Child>>);
+pub(crate) struct Link(pub(crate) Mutex<Option<Child>>);
 
 /// Folder holding Link's code + link.json ({"cmd": ["node","src/cli.mjs","lite"], "cwd": "."} relative to that folder).
 /// env PINGUINO_LITE_LINK_DIR, else <exe dir>\link (installed), else <suite root>\Suite\modules\link (dev).
@@ -40,7 +41,7 @@ fn link_dir() -> Option<PathBuf> {
     c.into_iter().find(|d| d.join("link.json").exists())
 }
 
-fn spawn_link(version: &str) -> Option<Child> {
+pub(crate) fn spawn_link(version: &str) -> Option<Child> {
     let dir = link_dir()?;
     let cfg: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("link.json")).ok()?).ok()?;
     let argv: Vec<String> = cfg.get("cmd")?.as_array()?.iter().filter_map(|v| v.as_str().map(String::from)).collect();
@@ -71,7 +72,7 @@ fn spawn_link(version: &str) -> Option<Child> {
     cmd.spawn().ok()
 }
 
-fn stop_link(app: &AppHandle) {
+pub(crate) fn stop_link(app: &AppHandle) {
     if let Some(mut c) = app.state::<Link>().0.lock().unwrap().take() {
         let _ = c.kill();
         let _ = c.wait();
@@ -318,7 +319,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .manage(Link(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, quit_app, replays::replay_scan, replays::replay_index, replays::replay_set_interval, updatecheck::check_update])
+        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, quit_app, replays::replay_scan, replays::replay_index, replays::replay_set_interval, updatecheck::check_update, parts::parts_check, parts::parts_apply, parts::parts_rollback, parts::parts_job])
         .setup(|app| {
             replays::start();
             // Splash (the lightning bolt) first; the main window is placed and shown when it closes.
