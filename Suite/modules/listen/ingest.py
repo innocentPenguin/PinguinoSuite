@@ -15,7 +15,7 @@ from audioio import iter16k
 
 CHUNK_S = 900  # transcribe long audio in 15-minute slices (bounded memory, steady progress)
 MAX_ATTEMPTS = 3                    # automatic tries per VOD/clip before it is left alone (Learn again by hand resets it)
-MAX_SOURCES_BYTES = 6 * 1024 ** 3   # downloaded originals waiting in data\sources; no new download above this
+MAX_SOURCES_BYTES = 40 * 1024 ** 3  # downloaded originals waiting in data\sources; no new download above this
 
 
 class _YtLog:
