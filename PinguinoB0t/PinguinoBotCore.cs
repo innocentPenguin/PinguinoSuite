@@ -1286,10 +1286,9 @@ public class CPHInline
                 string key = string.Join("|", t.Members) + "=" + string.Join("", em);
                 if (attempt < 3 && _emojiPairs.Contains(key)) continue;
                 _emojiPairs.Add(key); while (_emojiPairs.Count > 40) _emojiPairs.RemoveAt(0);
-                int style = _emojiRng.Next(3); var parts = new List<string>();
-                for (int i = 0; i < t.Members.Count; i++) parts.Add(style == 0 ? em[i] + " " + t.Members[i] : style == 1 ? t.Members[i] + " " + em[i] : t.Members[i]);
-                string body = string.Join(" & ", parts) + "!";
-                string line = style == 2 ? string.Join("", em) + " " + head + body : head + body;
+                // one fixed style: the emojis REPLACE "Team N:" -> "🍍🍡: name & name!" (one emoji per player, at most 4)
+                string tag = string.Concat(em.Take(4));
+                string line = tag + (head.Contains(" is now") ? " now: " : ": ") + string.Join(" & ", t.Members) + "!";
                 return line.Length <= 190 ? line : plain;
             }
         }
