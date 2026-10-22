@@ -32,7 +32,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
-    view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
+    strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
@@ -96,14 +96,27 @@
     else if (action === 'mode') st.mode = v; else if (action === 'format') st.format = v; else if (action === 'gamemode') st.gameMode = v;
     else if (action === 'koth') { st.koth = v === 'on'; if (st.koth) { st.format = '1v1'; if (!st.match) { if (st.queue.length >= 2) simFill(st); else st.waiting = true; } msg = 'KOTH on: 1v1, winners stay'; } }
     else if (action === 'kick') { const k = nameOf(v); st.queue = st.queue.filter(p => nameOf(p.username) !== k && nameOf(p.display) !== k); if (st.match) { st.match._p = st.match._p.filter(p => nameOf(p.display) !== k); st.match.orange = st.match.orange.filter(n => nameOf(n) !== k); st.match.blue = st.match.blue.filter(n => nameOf(n) !== k); } }
+    else if (action === 'strike' || action === 'unstrike') {
+      const [u, f] = v.split(' '), k = nameOf(u); st.strikes = st.strikes || {}; const s = st.strikes[k] = st.strikes[k] || { temp: 0, half: 0, perma: 0 }, key = f === 'perma' ? 'perma' : 'temp';
+      s[key] = Math.max(0, s[key] + (action === 'strike' ? 1 : -1)); msg = k + (action === 'strike' ? ' got a ' : ' lost a ') + (key === 'perma' ? 'permanent ' : '') + 'strike';
+    }
+    else if (action === 'move') { const [u, p] = v.split(' '), k = nameOf(u), i = st.queue.findIndex(x => nameOf(x.username) === k); if (i < 0) msg = k + ' is not waiting'; else { const [x] = st.queue.splice(i, 1); st.queue.splice(Math.max(0, Math.min(+p - 1, st.queue.length)), 0, x); } }
+    else if (action === 'in') {
+      const [u, team] = v.split(' '), k = nameOf(u), m = st.match, other = team === 'orange' ? 'blue' : 'orange';
+      if (!m) msg = 'No game is running'; else if (m[team].length >= simSize(st)) msg = team + ' has no empty slot. Drag someone out first';
+      else { const oi = m[other].findIndex(n => nameOf(n) === k); if (oi >= 0) m[team].push(m[other].splice(oi, 1)[0]); else { const qi = st.queue.findIndex(x => nameOf(x.username) === k); if (qi < 0) msg = k + ' is not waiting'; else { const x = st.queue.splice(qi, 1)[0]; m._p.push(x); m[team].push(x.display); } } }
+    }
+    else if (action === 'out') {
+      const k = nameOf(v), m = st.match; if (m) { const pi = m._p.findIndex(x => nameOf(x.display) === k); if (pi >= 0) { st.queue.unshift(m._p.splice(pi, 1)[0]); m.orange = m.orange.filter(n => nameOf(n) !== k); m.blue = m.blue.filter(n => nameOf(n) !== k); } }
+    }
     else msg = '(not simulated: ' + action + ')';
     schedule('customs'); return msg;
   }
   async function sendCustom(action, value, btn) {
-    if (ui.sim) { flash(btn); const m = simApply(action, value); if (m) toast(m); return; }
-    const text = C.customsText(action, value); if (!text) { toast('Not allowed: ' + action, true); return; }
+    if (ui.sim) { flash(btn); const m = simApply(action, value); if (m) toast(m); return !/no empty slot|not waiting|No game/.test(m || ''); }
+    const text = C.customsText(action, value); if (!text) { toast('Not allowed: ' + action, true); return false; }
     const now = Date.now(), last = ui.sent.get(text) || 0;
-    if (now - last < 1200) { toast('Already sent ' + text); return; }
+    if (now - last < 1200) { toast('Already sent ' + text); return false; }
     ui.sent.set(text, now); flash(btn); if (!ui.tookControl) { ui.tookControl = true; schedule('customs'); } await tokenReady;
     let r = null;
     if (HOSTMOD.has(action.startsWith('queue-') ? 'queue' : action) && S.get('customsMod') !== false) {
@@ -113,6 +126,7 @@
     if (!r) r = await api.post('/api/run', { text, user: 'broadcaster' });
     if (r.ok) { toast('Sent ' + text); if (r.json && r.json.customs) S.set({ customs: r.json.customs, customsOk: true }); else pollers.customs.kick(); }
     else { ui.sent.delete(text); toast(text + ': ' + r.error, true); }
+    return r.ok;
   }
 
   // Docked player (bottom right). Data: /api/state (+ /api/now fallback); Stream volume/device = the Spotify Connect device.
@@ -288,6 +302,49 @@
         ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
       </div>`;
   }
+  const curCustoms = () => (ui.sim ? ui.simState : S.get('customs'));
+  const strikesFor = u => { const c = curCustoms(), k = String(u).toLowerCase(), x = c && c.strikes && c.strikes[k]; return C.normStrike(x || ui.strikeOv[k]); };
+  const strikesKnown = u => { const c = curCustoms(); return !!(c && c.strikes && c.strikes[String(u).toLowerCase()]); };
+  function strikeBtn() { const b = h('button', 'sbtn'); return b; }
+  function fillStrike(b, u) {
+    const s = strikesFor(u), c = curCustoms(), sig = JSON.stringify([s, u, strikesKnown(u), c && c.strikeLimit]); if (b._s === sig) return; b._s = sig;
+    b.dataset.su = u; b.textContent = ''; C.strikeMarks(s, c && c.strikeLimit).forEach(k => b.append(h('i', 'k-' + k, k === 'half' ? '½' : 'I')));
+    b.title = (s.perma ? s.perma + ' permanent, ' : '') + (s.temp ? s.temp + ' temporary' : '') + (s.half ? ' + a half' : '') || 'No strikes';
+    if (!s.perma && !s.temp && !s.half) b.title = strikesKnown(u) ? 'No strikes. Click to add or remove' : 'Click to add or remove a strike';
+    else b.title += '. Click to add or remove';
+  }
+  function playerRow(u, label, from) {
+    const d = h('div', 'pr'); d.draggable = true; d.dataset.u = u; d.dataset.from = from;
+    const sb = strikeBtn(), x = h('button', 'x ghost sm', '✕'); x.title = 'Remove from the game (back out, then off the queue)';
+    d.append(h('span', 't ell', label), sb, x); fillStrike(sb, u); return d;
+  }
+  function renderPop() {
+    const pop = $('#strikepop'), u = ui.pop, btn = u && $$('#tab-customs .sbtn').find(b => b.dataset.su === u);
+    if (!btn) { ui.pop = null; pop.hidden = true; return; }
+    const s = strikesFor(u); pop.hidden = false; pop.dataset.u = u; pop.querySelector('.pu').textContent = u;
+    pop.querySelector('[data-sa="rm"]').disabled = strikesKnown(u) && !s.temp && !s.half && !s.perma;
+    const r = btn.getBoundingClientRect(); pop.style.left = Math.max(4, Math.min(innerWidth - pop.offsetWidth - 4, r.left - 20)) + 'px'; pop.style.top = Math.max(4, Math.min(innerHeight - pop.offsetHeight - 4, r.bottom + 4)) + 'px';
+  }
+  async function doStrike(u, kind) {
+    const s = strikesFor(u), perma = kind === 'perma' || (kind === 'rm' && !s.temp && !s.half && s.perma > 0), suffix = perma ? ' perma' : '';
+    const ok = await sendCustom(kind === 'rm' ? 'unstrike' : 'strike', u + suffix);
+    if (ok && !ui.sim && !strikesKnown(u)) {   // the Host does not send strike counts yet: keep a local tally so the chip still moves
+      const k = u.toLowerCase(), o = ui.strikeOv[k] = C.normStrike(ui.strikeOv[k]), key = perma ? 'perma' : 'temp'; o[key] = Math.max(0, o[key] + (kind === 'rm' ? -1 : 1));
+    }
+    schedule('customs');
+  }
+  async function dropTo(t) {
+    const d = ui.drag; if (!d) return; const c = curCustoms() || {}, q = (c.queue || []).map(p => String(p.username || p.user || p.name || '').toLowerCase());
+    if (t.kind === 'queue') {
+      if (d.from === 'queue') { const fi = q.indexOf(d.u), pos = C.dropPos(fi, t.idx, t.after); if (fi >= 0 && pos - 1 !== fi) sendCustom('move', d.u + ' ' + pos); }
+      else { const pos = C.dropPos(-1, t.idx, t.after); if (await sendCustom('out', d.u) && pos > 1) sendCustom('move', d.u + ' ' + pos); }
+    } else {
+      if (d.from === t.team) return; const m = c.match, size = +String(c.format || '2v2')[0] || 2;
+      if (!m || m.status === 'finished') { toast('No game is running', true); return; }
+      if ((m[t.team] || []).length >= size) { toast(t.team + ' is full: drag someone out first', true); return; }
+      sendCustom('in', d.u + ' ' + t.team);
+    }
+  }
   const holderName = c => { const x = c && c.controlHolder; return !x ? '' : typeof x === 'string' ? x : (x.name || x.display || x.user || x.id || ''); };
   function renderCustoms() {
     const c = ui.sim ? ui.simState : S.get('customs'), ok = ui.sim ? true : S.get('customsOk'), note = $('#cu-note');
@@ -301,12 +358,13 @@
     $('#cu-badge').textContent = c ? (c.open === true ? 'queue open' : c.open === false ? 'queue closed' : '') + (c.format ? ' · ' + c.format : '') + (c.gameMode && c.gameMode !== 'standard' ? ' · ' + c.gameMode : '') : '';
     $('#cu-act').textContent = c && c.activity && c.activity !== 'none' ? '· ' + c.activity : '';
     $('#cu-qn').textContent = c ? '· ' + q.length + ' waiting' : '';
-    C.reconcile($('#cu-queue'), q.map((p, i) => ({ u: p.username || p.user || p.name || '?', d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr })), r => r.u, () => { const li = h('li'); li.append(h('span', 'num'), h('span', 't'), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
-      (li, r) => { li.dataset.u = r.u; li.children[0].textContent = r.n; li.children[1].textContent = r.d + (r.m ? ' · ' + r.m : ''); });
+    C.reconcile($('#cu-queue'), q.map((p, i) => ({ u: String(p.username || p.user || p.name || '?').toLowerCase(), d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr, sk: JSON.stringify([strikesFor(String(p.username || p.user || p.name || '?')), strikesKnown(String(p.username || p.user || p.name || '?')), c.strikeLimit]) })), r => r.u, () => { const li = h('li'); li.draggable = true; li.dataset.from = 'queue'; li.append(h('span', 'num'), h('span', 't'), strikeBtn(), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
+      (li, r) => { li.dataset.u = r.u; li.children[0].textContent = r.n; li.children[1].textContent = r.d + (r.m ? ' · ' + r.m : ''); fillStrike(li.children[2], r.u); });
     const m = c && c.match, live = !!(m && m.status !== 'finished');
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
-    const tv = JSON.stringify([m && m.orange, m && m.blue]), tb = $('#cu-teams');
-    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.append(h('b', '', lbl)); const names = (m && m[k]) || []; names.forEach(n => col.append(h('span', 'ell', n))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
+    const tv = JSON.stringify([m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(n), strikesKnown(n)]), c && c.strikeLimit]), tb = $('#cu-teams');
+    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.append(h('b', '', lbl)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(String(n).toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
+    renderPop();
     const cur = { mode: c && c.mode, format: c && c.format, gamemode: c && (c.gameMode || c.gamemode), koth: c ? (c.koth ? 'on' : 'off') : null, activity: c && c.activity, queue: c ? (c.open ? 'open' : 'close') : null };
     for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];   // Host offline: show what was last clicked
     for (const bt of $$('#tab-customs [data-st]')) {
@@ -507,6 +565,26 @@
   });
   $('#tab-customs').addEventListener('change', e => { const k = e.target.dataset.cuset; if (!k || !e.target.value) return; sendCustom(k, e.target.value, e.target); });
   $('#tab-customs').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'cu-kick' || e.target.id === 'cu-pick')) $(e.target.id === 'cu-kick' ? '#cu-kickgo' : '#cu-pickgo').click(); });
+  document.body.append(Object.assign(h('div', 'strikepop'), { id: 'strikepop', hidden: true, innerHTML: '<b class="pu"></b><div class="pb"><button class="sm" data-sa="cancel" title="Cancel">✕</button><button class="sm plus" data-sa="temp" title="Add a temporary strike (wears off after a day)">+ I</button><button class="sm plus" data-sa="perma" title="Add a permanent strike (never expires)">+ I perma</button><button class="sm minus" data-sa="rm" title="Remove a strike (temporary first, then permanent)">−</button></div>' }));
+  $('#tab-customs').addEventListener('click', e => {
+    const sb = e.target.closest('.sbtn'); if (sb) { e.stopPropagation(); ui.pop = ui.pop === sb.dataset.su ? null : sb.dataset.su; renderPop(); return; }
+    const x = e.target.closest('.pr .x'); if (x) { const u = x.closest('.pr').dataset.u; sendCustom('out', u).then(ok => ok && sendCustom('kick', u)); }
+  });
+  $('#strikepop').addEventListener('click', e => { const b = e.target.closest('[data-sa]'); if (!b || b.disabled) return; const u = $('#strikepop').dataset.u; if (b.dataset.sa === 'cancel') { ui.pop = null; renderPop(); return; } doStrike(u, b.dataset.sa); });
+  document.addEventListener('click', e => { if (ui.pop && !e.target.closest('#strikepop, .sbtn')) { ui.pop = null; renderPop(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && ui.pop) { ui.pop = null; renderPop(); } });
+  const dropAt = e => {
+    const li = e.target.closest('#cu-queue li'), tm = e.target.closest('.tm[data-team]'), ql = e.target.closest('#cu-queue');
+    if (li) { const idx = [...li.parentNode.children].indexOf(li), r = li.getBoundingClientRect(); return { kind: 'queue', idx, after: e.clientY > r.top + r.height / 2, el: li }; }
+    if (ql) return { kind: 'queue', idx: ql.children.length - 1, after: true, el: ql };
+    if (tm) return { kind: 'team', team: tm.dataset.team, el: tm };
+    return null;
+  };
+  const clearDrop = () => $$('.dropb, .dropa, .dropt, .dragging').forEach(n => n.classList.remove('dropb', 'dropa', 'dropt', 'dragging'));
+  $('#tab-customs').addEventListener('dragstart', e => { const r = e.target.closest && e.target.closest('#cu-queue li, .pr'); if (!r) return; ui.drag = { u: r.dataset.u, from: r.dataset.from }; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', r.dataset.u); } catch (_) { } r.classList.add('dragging'); });
+  $('#tab-customs').addEventListener('dragend', () => { ui.drag = null; clearDrop(); });
+  $('#tab-customs').addEventListener('dragover', e => { if (!ui.drag) return; const t = dropAt(e); clearDrop(); if (!t) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; t.el.classList.add(t.kind === 'team' ? 'dropt' : t.el.tagName === 'LI' ? (t.after ? 'dropa' : 'dropb') : 'dropt'); });
+  $('#tab-customs').addEventListener('drop', e => { if (!ui.drag) return; const t = dropAt(e); if (!t) return; e.preventDefault(); const go = () => dropTo(t); clearDrop(); go().finally(() => { ui.drag = null; }); });
   $('#player').addEventListener('click', e => {
     const m = e.target.closest('[data-mu]'); if (m) { if (m.disabled) return; if (m.classList.contains('warn') && !armed(m)) return; musicAction(m.dataset.mu, m); return; }
     const t = e.target.closest('[data-pl]'); if (t && !t.disabled) { plToggle(t); return; }

@@ -91,3 +91,9 @@ Fixed bottom-right card (`#player`, shrinkable with the – button, remembered).
 - Play/pause, volume, device switch: `POST /api/control {action: resume|pause|volume|transfer}`. Needs the same tauri-origin exemption as `/api/mod-action` in the Spotify module; otherwise the click toasts an error.
 - Volume menu (🔊): **Stream** = the Spotify Connect device (slider = device volume, Device button lists `/api/devices` and transfers). **Me** is shown disabled with a note: a second independent output needs OBS per-source monitoring, not built.
 - Cover art loads from `i.scdn.co`; the Tauri CSP has `img-src 'self' data:`, so art shows only after `https://i.scdn.co` is added to `img-src` (falls back to a ♪ tile until then).
+
+## Customs: drag and drop + strikes
+
+- **Drag and drop** (queue rows and in-game rows are draggable): queue → queue = `!move <user> <pos>`; queue → Orange/Blue = `!in <user> <team>` (refused client-side if the team is full or no game runs); team → other team = `!in`; team → queue = `!out <user>` (+ `!move` to the drop position). In-game ✕ = `!out` then `!kick`. All go through `/api/run` as broadcaster (these chat commands exist in the bot); the simulator does the same moves locally.
+- **Strike chip** on every row: three marks, perma = red, temporary = yellow, half = dim yellow ½, unused slot = gray. Click opens a popover: ✕ cancel, `+ I` temp (`!strike @u`), `+ I perma` (`!strike @u perma`), `−` (`!unstrike @u`, temp first, then `!unstrike @u perma`). `+` buttons are grey with an orange hover outline, `−` is red outlined with a red glow.
+- **Data**: the chip reads `customs.strikes[<lowercase user>] = {temp, half, perma}` (+ optional `strikeLimit`, default 3). The Host does not send this yet (asked 02); until then the app keeps a local tally per player so the chip still moves, and the title says counts are unknown.

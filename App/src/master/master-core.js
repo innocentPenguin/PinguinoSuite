@@ -112,8 +112,27 @@
     activity: v => (/^(?:(?:rl|fn) )?(?:competitive|casual|koth|viewers|boxfights|zonewars|fnviewers|end)$/.test(v) ? '!activity ' + v : null),
     pick: v => (v === 'auto' || /^[A-Za-z0-9_]{1,25}( [A-Za-z0-9_]{1,25}){0,3}$/.test(v) ? '!pick ' + v : null),
     streamer: v => (['in', 'out'].includes(v) ? '!streamer ' + v : null),
+    strike: v => { const m = /^@?([A-Za-z0-9_]{2,25})( perma)?$/.exec(String(v || '').trim()); return m ? '!strike @' + m[1] + (m[2] ? ' perma' : '') : null; },
+    unstrike: v => { const m = /^@?([A-Za-z0-9_]{2,25})( perma)?$/.exec(String(v || '').trim()); return m ? '!unstrike @' + m[1] + (m[2] ? ' perma' : '') : null; },
+    move: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (\d{1,3})$/.exec(String(v || '').trim()); return m && +m[2] >= 1 ? '!move ' + m[1] + ' ' + m[2] : null; },
+    in: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (blue|orange)$/.exec(String(v || '').trim()); return m ? '!in ' + m[1] + ' ' + m[2] : null; },
+    out: v => { const m = /^@?([A-Za-z0-9_]{2,25})$/.exec(String(v || '').trim()); return m ? '!out ' + m[1] : null; },
     kick: v => { v = String(v || '').trim().replace(/^@/, ''); return /^[A-Za-z0-9_]{2,25}$/.test(v) ? '!kick ' + v : null; },
   };
+  // Strike model (bot): temp strikes (wear off after a day), HALF strike (two halves = one temp), PERMA strikes (never expire); limit = !tune strikes (3).
+  function normStrike(x) {
+    if (typeof x === 'number') return { temp: x, half: 0, perma: 0 };
+    x = x || {}; const n = v => Math.max(0, +v || 0);
+    return { temp: n(x.temp != null ? x.temp : x.strikes), half: n(x.half != null ? x.half : x.halfStrike), perma: n(x.perma != null ? x.perma : x.permaStrikes) };
+  }
+  // marks in order: perma (red), temp (yellow), half (yellow, dim), then unused slots (gray) up to the limit
+  function strikeMarks(s, limit) {
+    s = normStrike(s); const out = [];
+    for (let i = 0; i < s.perma; i++) out.push('perma'); for (let i = 0; i < s.temp; i++) out.push('temp'); if (s.half) out.push('half');
+    while (out.length < (limit || 3)) out.push('none'); return out;
+  }
+  // final 1-based queue position when a row is dropped before/after row `target` (fromIdx = -1 when the player is not in the queue yet)
+  function dropPos(fromIdx, target, after) { let j = target + (after ? 1 : 0); if (fromIdx >= 0 && fromIdx < j) j--; return Math.max(0, j) + 1; }
   function customsText(action, value) { const f = CUSTOMS[action]; return f ? f(value == null ? '' : String(value)) : null; }
 
   /* ---------- SSE parsing (fetch stream or EventSource text): feed chunks, get {id,event,data} messages ---------- */
@@ -310,5 +329,5 @@
     }
   }
 
-  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });

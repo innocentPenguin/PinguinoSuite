@@ -193,6 +193,15 @@ await t('player: state, devices and control round trip', async () => {
   assert.deepEqual(st.ctl.map(c => c.action), ['volume', 'transfer']); assert.equal((await api.get('/api/state')).json.playback.device.volume, 25);
 });
 
+await t('customs: strike, move, in, out commands and drop maths', async () => {
+  assert.equal(C.customsText('strike', 'bob perma'), '!strike @bob perma'); assert.equal(C.customsText('unstrike', '@bob'), '!unstrike @bob');
+  assert.equal(C.customsText('move', 'bob 3'), '!move bob 3'); assert.equal(C.customsText('move', 'bob 0'), null);
+  assert.equal(C.customsText('in', 'bob orange'), '!in bob orange'); assert.equal(C.customsText('in', 'bob green'), null); assert.equal(C.customsText('out', 'bob'), '!out bob');
+  assert.equal(C.customsText('strike', 'bob; !queue clear'), null);
+  assert.deepEqual(C.strikeMarks({ temp: 1, perma: 1 }, 3), ['perma', 'temp', 'none']); assert.deepEqual(C.strikeMarks({ strikes: 2, halfStrike: 1, permaStrikes: 1 }, 3), ['perma', 'temp', 'temp', 'half']);
+  assert.equal(C.dropPos(0, 2, true), 3); assert.equal(C.dropPos(2, 0, false), 1); assert.equal(C.dropPos(0, 1, false), 1); assert.equal(C.dropPos(-1, 1, true), 3);
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);
