@@ -58,3 +58,8 @@ Status: open / building / done / asked-Ivan.
 | 39 | Canned-command editor page in the Suite for canned_commands.json | 022 | open |
 | 40 | First-time-today greeting variety; birthday/follow anniversary lines | 022 | open |
 | 41 | 05: confirm `tipped:{total,count,last}` field names with 02 | 05 -> 02 | asked 02 |
+| 42 | Suite UI page for overlay options (sliders + guides preview) | 023 | open |
+| 43 | Subs! card spotlight for resub anniversaries this week | 023 | open |
+| 44 | Per-overlay safe-area presets (1080p/1440p/vertical) | 023 | open |
+| 45 | Pre-stream health check that overlay-options.js loads | 023 | open |
+| 46 | Q for Ivan: show gifted subs in T2/T3 on the Subs! card (default yes)? | 023 | asked-Ivan |
