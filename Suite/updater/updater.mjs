@@ -6,7 +6,8 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyUpdate, checkUpdate, rollbackLatest, dirs } from './lib/apply.mjs';
-import { gitStatus, gitUpdate } from './lib/sources.mjs';
+import { gitStatus, gitUpdate, setToken } from './lib/sources.mjs';
+import { loadToken } from './lib/secret.mjs';
 
 const args = process.argv.slice(2), cmd = args[0] || 'status';
 const opt = n => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; };
@@ -17,6 +18,7 @@ const current = inst.version || '0.0.0', channel = opt('channel') || inst.channe
 const srcArg = opt('source'), pubkey = opt('pubkey') || inst.pubkey || null;
 const source = srcArg ? (/^https?:/i.test(srcArg) ? { type: 'https', url: srcArg } : { type: 'local', path: srcArg }) : inst.source;
 const out = o => { console.log(JSON.stringify(o)); };
+if (source && source.type === 'github') setToken(loadToken(installDir));   // DPAPI file written by the installer; null = the update says it needs the key
 
 const appRunning = port => new Promise(res => { const s = net.connect({ port, host: '127.0.0.1' }); const done = v => { s.destroy(); res(v); }; s.setTimeout(800, () => done(true)); s.on('connect', () => done(true)); s.on('error', e => done(e.code !== 'ECONNREFUSED')); });
 

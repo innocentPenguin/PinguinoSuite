@@ -9,7 +9,8 @@ import { writeZip, readZip } from '../lib/zip.mjs';
 import { applyUpdate, sha256, dirs, rollbackLatest } from '../lib/apply.mjs';
 import { safeRel } from '../lib/paths.mjs';
 import { cmpVersion, parseManifest } from '../lib/manifest.mjs';
-import { gitStatus, gitUpdate } from '../lib/sources.mjs';
+import { gitStatus, gitUpdate, openSource, setToken } from '../lib/sources.mjs';
+import { seal, unseal, storeToken, loadToken } from '../lib/secret.mjs';
 
 const tmp = p => fs.mkdtempSync(path.join(os.tmpdir(), p));
 const B = s => Buffer.from(s);
@@ -228,4 +229,59 @@ test('launch hook: setting off, no source, or app already running changes nothin
 test('launch hook: a corrupt release leaves the old version and reports it', () => {
   const inst = makeInstall(), rel = makeRelease('1.2.0', [['App/app.txt', 'x']], { badHash: true }); withSource(inst, rel);
   const o = launch(inst); assert.equal(o.ok, false); assert.equal(read(inst, 'App/app.txt'), 'old app');
+});
+
+
+// ---- private repo key + github source
+test('sealed key: right passphrase opens it, wrong or short one does not, token is not visible in the blob', () => {
+  const blob = seal('github_pat_ABCDEFGHIJKLMNOP1234', 'correct horse');
+  assert.equal(unseal(blob, 'correct horse'), 'github_pat_ABCDEFGHIJKLMNOP1234');
+  assert.ok(!blob.toString('latin1').includes('ABCDEFGHIJKLMNOP'));
+  assert.throws(() => unseal(blob, 'wrong passphrase'), /wrong install passphrase/);
+  assert.throws(() => seal('x', 'short'), /at least 8/);
+  const bad = Buffer.from(blob); bad[bad.length - 1] ^= 1;
+  assert.throws(() => unseal(bad, 'correct horse'), /damaged/);
+});
+
+test('token on the installed PC is DPAPI-encrypted, not plaintext, and reads back', { skip: process.platform !== 'win32' }, () => {
+  const d = tmp('tok-'); storeToken(d, 'github_pat_ROUNDTRIP1234567890');
+  const raw = fs.readFileSync(path.join(d, 'Data', 'runtime', 'update_token.dpapi'), 'utf8');
+  assert.ok(!raw.includes('ROUNDTRIP'));
+  assert.equal(loadToken(d), 'github_pat_ROUNDTRIP1234567890');
+  assert.equal(loadToken(tmp('none-')), null);
+});
+
+test('github source: token only goes to api.github.com, assets are fetched by id, sha256 still checked at install', async () => {
+  const zip = writeZip([{ name: 'App/app.txt', data: B('hello') }]);
+  const manifest = JSON.stringify({ schema: 1, channel: 'stable', version: '2.0.0', files: [{ name: 'suite-2.0.0.zip', size: zip.length, sha256: sha256(zip), url: 'suite-2.0.0.zip' }] });
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), auth: (init.headers || {}).Authorization, accept: (init.headers || {}).Accept });
+    const u = String(url), mk = b => new Response(b, { status: 200 });
+    if (u.endsWith('/releases/latest')) return mk(JSON.stringify({ assets: [{ name: 'manifest.json', id: 11 }, { name: 'suite-2.0.0.zip', id: 22 }] }));
+    if (u.endsWith('/assets/11')) return mk(manifest);
+    if (u.endsWith('/assets/22')) return mk(zip);
+    return new Response('nope', { status: 404 });
+  };
+  try {
+    await assert.rejects(openSource({ type: 'github', repo: 'o/r' }), /read-only key/);
+    setToken('github_pat_TESTTOKEN123456789');
+    const target = path.join(tmp('gh-'), 'inst');
+    const r = await installRelease({ target, source: { type: 'github', repo: 'o/r' }, recordSource: { type: 'github', repo: 'o/r' } });
+    assert.equal(r.ok, true, r.message);
+    assert.equal(fs.readFileSync(path.join(target, 'App', 'app.txt'), 'utf8'), 'hello');
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target, 'install.json'), 'utf8')).source, { type: 'github', repo: 'o/r' });
+    assert.ok(calls.every(c => c.url.startsWith('https://api.github.com/repos/o/r/')));
+    assert.ok(calls.every(c => c.auth === 'Bearer github_pat_TESTTOKEN123456789'));
+    assert.ok(calls.some(c => c.accept === 'application/octet-stream'));
+    await assert.rejects(openSource({ type: 'github', repo: '../evil' }), /owner\/name/);
+  } finally { globalThis.fetch = realFetch; setToken(null); }
+});
+
+test('a --local install records no update source when asked', async () => {
+  const rel = makeRelease('1.0.0', [['App/a.txt', 'x']]), target = path.join(tmp('nosrc-'), 'i');
+  const r = await installRelease({ target, source: { type: 'local', path: rel }, recordSource: false });
+  assert.equal(r.ok, true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(target, 'install.json'), 'utf8')).source, undefined);
 });

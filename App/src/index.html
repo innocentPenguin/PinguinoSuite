@@ -1625,6 +1625,7 @@ async function previewImport(file,apply){const pass=$('#im-pass').value,out=$('#
   out.innerHTML=(j.needs_passphrase?'<div style="color:var(--warn)">This bundle has secrets: enter its passphrase and choose the file again to include them.</div>':'')
     +`<div class="dim">${j.from?'From '+esc(j.from)+'. ':''}${apply?'Applied (previous files saved under Data/backups). Restart the modules to use them.':'Preview, nothing changed yet:'}</div>`
     +j.files.map(f=>`<div>${esc(f.arc)} <span class="faint">${names[f.status]||f.status}${f.why?' · '+esc(f.why):''}</span></div>`).join('')
+    +(j.vault?`<div>Key vault <span class="faint">${j.vault.error?esc(j.vault.error):j.vault.restored!=null?'restored '+j.vault.restored+' key(s)':'included; enter the passphrase and apply to restore it'}</span></div>`:'')
     +(apply||!j.files.some(f=>f.status==='new'||f.status==='changed')?'':'<button class="pri sm" id="im-apply" style="margin-top:8px">Apply import</button>');
   if($('#im-apply'))$('#im-apply').onclick=()=>previewImport(file,true)}
 function bindPortable(){

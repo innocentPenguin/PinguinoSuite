@@ -36,3 +36,14 @@ Suite/updater/exe/*.exe
 Suite/updater/exe/*.pdb
 Installer/*.exe
 Installer/*.pdb
+
+# installer: sealed repo key, built release/payload, vault backups, DPAPI blobs (never in git)
+Installer/install.key.enc
+Installer/dist/
+*.pgb
+*.dpapi
+**/vault.bin
+**/module_secret
+**/*.secrets.zip
+**/host_secrets.json
+**/bots_secrets.json

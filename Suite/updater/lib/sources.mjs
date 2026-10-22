@@ -9,11 +9,18 @@ import { verifyManifestSignature } from './sign.mjs';
 
 const MAX_MANIFEST = 256 * 1024, MAX_FILE = 2 * 1024 * 1024 * 1024;
 
-async function httpGet(url, { timeoutMs = 10000, maxBytes = MAX_FILE, allowHttpLocal = false } = {}) {
+let defaultToken = null;
+/** Read-only repo token for private GitHub sources (set by the Updater/Installer from the DPAPI file). Only ever sent to api.github.com. */
+export const setToken = t => { defaultToken = t || null; };
+
+async function httpGet(url, { timeoutMs = 10000, maxBytes = MAX_FILE, allowHttpLocal = false, token = null, accept = null } = {}) {
   const u = new URL(url);
   const local = ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
   if (u.protocol !== 'https:' && !(allowHttpLocal && local && u.protocol === 'http:')) throw new Error('updates must come from an https address');
-  const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
+  const headers = { 'User-Agent': 'PinguinoUpdater' };
+  if (accept) headers.Accept = accept;
+  if (token && u.hostname === 'api.github.com') headers.Authorization = `Bearer ${token}`;   // fetch drops it on a cross-origin redirect (the asset CDN)
+  const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(timeoutMs), headers });
   if (r.url && new URL(r.url).protocol !== u.protocol) throw new Error('refusing a redirect to another protocol');
   if (!r.ok) throw new Error(`update server answered ${r.status}`);
   const len = Number(r.headers.get('content-length') || 0);
@@ -50,6 +57,20 @@ export async function openSource(spec, opts = {}) {
     if (opts.pubkey) { let sig = ''; try { sig = (await httpGet(new URL('manifest.sig', spec.url).toString(), { maxBytes: 4096, ...opts })).toString('utf8'); } catch {} guard(body, sig); }
     const manifest = parseManifest(body.toString('utf8'), spec.url);
     return { type: 'https', manifest, fetchFile: f => httpGet(new URL(f.url, spec.url).toString(), opts) };
+  }
+  if (spec.type === 'github') {
+    // private repo release: {type:'github', repo:'owner/name', tag?:'v1.2.3' (default: latest)}; assets named manifest.json, manifest.sig, suite-<ver>.zip
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(spec.repo || '') || spec.repo.split('/').some(x => /^\.+$/.test(x))) throw new Error('the repo must look like owner/name');
+    if (spec.tag && !/^v?\d+(\.\d+){0,3}(-beta\d*)?$/.test(spec.tag)) throw new Error('bad release tag');
+    const token = opts.token || defaultToken;
+    if (!token) throw new Error('the private repo needs its read-only key (none is stored on this PC)');
+    const api = `https://api.github.com/repos/${spec.repo}/releases/${spec.tag ? 'tags/' + spec.tag : 'latest'}`;
+    const rel = JSON.parse((await httpGet(api, { ...opts, token, maxBytes: 4 * 1024 * 1024, accept: 'application/vnd.github+json' })).toString('utf8'));
+    const asset = n => (rel.assets || []).find(a => a.name === n);
+    const getAsset = (n, maxBytes) => { const a = asset(n); if (!a) throw new Error(`the release has no ${n}`); return httpGet(`https://api.github.com/repos/${spec.repo}/releases/assets/${a.id}`, { ...opts, token, maxBytes, accept: 'application/octet-stream', timeoutMs: 600000 }); };
+    const body = await getAsset('manifest.json', MAX_MANIFEST);
+    if (opts.pubkey) { let sig = ''; try { sig = (await getAsset('manifest.sig', 4096)).toString('utf8'); } catch {} guard(body, sig); }
+    return { type: 'github', manifest: parseManifest(body.toString('utf8'), api), fetchFile: f => getAsset(f.url, MAX_FILE) };
   }
   throw new Error(`unknown update source: ${spec.type}`);
 }

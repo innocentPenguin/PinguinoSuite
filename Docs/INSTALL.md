@@ -2,6 +2,26 @@
 
 Nothing in the Suite assumes a drive letter or folder. Everything is found relative to the Suite folder; user data lives in `Data\runtime` next to it (or wherever `PINGUINO_DATA_DIR` points).
 
+## One-file installer for another PC (PinguinoSuiteSetup.exe)
+Built on the main PC with `Installer\Build-Installer.bat` (run `App\Build-All.bat --no-launch` first so it packs fresh builds). Output: `Installer\dist\PinguinoSuiteSetup.exe` (about 90 MB, one file, no dev tools needed on the target).
+
+**What the target PC needs:** Windows 10 1803+ or 11, internet (for the missing prerequisites and the Python packages), and permission to install software (Windows asks). Setup installs what is missing with winget: .NET 8 runtime (bot Host), Python 3.12 (core modules), Node.js LTS (PinguinoLink), WebView2 (app window, already on Windows 11), then builds `Suite\.venv` and installs the Python packages (NVIDIA CUDA libraries only if an NVIDIA card is found). The Suite itself is the bundled release: app, core, Host build, modules. Lite is separate (its own installer, owned by the Lite unit).
+
+**One-time setup on the main PC (private repo updates):**
+1. GitHub > Settings > Developer settings > Fine-grained tokens > Generate new token. Repository access: *Only select repositories* > `innocentPenguin/PinguinoSuite`. Permissions: *Contents: Read-only* (nothing else). Expiry: 1 year. Copy the token.
+2. Run `Installer\Seal-InstallKey.bat`. Paste the token (hidden) and choose an install passphrase (8+ characters, remember it). It writes `Installer\install.key.enc`, which is gitignored. The token is encrypted with your passphrase; the file alone is useless.
+3. Rebuild the installer (`Installer\Build-Installer.bat`) so the sealed key is inside it.
+4. To publish an update: build, run `node Installer\Build-Release.mjs --version 1.2.3`, then create a GitHub release in the private repo with the files from `Installer\distelease` (`manifest.json` and `suite-1.2.3.zip`) attached. The other PC's Updater checks the latest release at each Suite launch (never while live) and verifies the sha256 before installing.
+
+**On the other PC:**
+1. Copy `PinguinoSuiteSetup.exe` over (USB, cloud drive) and double-click it.
+2. Choose the folder (default `%LOCALAPPDATA%\PinguinoSuite`), type the install passphrase, keep both boxes ticked, press Install. Wait for it to finish (the first Python package download is large).
+3. Open PinguinoSuite from the Desktop or Start menu.
+4. Move your settings and keys: on the main PC open Settings > Backup & move > **Export encrypted** (choose a passphrase). It saves one zip with your settings, bot files and the key vault (the vault is encrypted with that passphrase because it cannot be copied between Windows users). Copy the zip to the other PC, then Settings > Backup & move > Import, pick it, review the preview, enter the passphrase, Apply. The keys land in that PC's own vault.
+5. Pair the PCs in Link; exactly one device is master and runs the bots.
+
+Not covered yet: macOS, code signing of the exe (Windows SmartScreen may warn on first run: More info > Run anyway), Lite.
+
 ## What you get
 - **Portable folder (works today, Windows):** copy or `git clone` the Suite folder anywhere, run `App\Setup-Suite.ps1`, start `App\src-tauri\target\release\pinguino-suite.exe`.
 - **Windows installer:** `App\Build-All.bat --installer` builds `PinguinoSuite_<version>_x64-setup.exe` (NSIS). The installer ships the app and the core sidecar. The module folders (`Suite\modules`, Python venv, Node, Host build) are NOT inside it yet, so on a clean PC use the portable folder route; bundling the module runtimes into the installer is the next packaging step (tracked in the roadmap).

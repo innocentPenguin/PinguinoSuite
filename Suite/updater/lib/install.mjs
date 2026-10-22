@@ -9,11 +9,11 @@ import { safeRel, within } from './paths.mjs';
 import { sha256, dirs } from './apply.mjs';
 
 /** Install from one source spec. Returns {ok, message, version}. Never overwrites an existing install (that is the Updater's job). */
-export async function installRelease({ target, source, channel = 'stable', repairOver = false, pubkey = null }) {
+export async function installRelease({ target, source, channel = 'stable', repairOver = false, pubkey = null, token = null, recordSource = null }) {
   const dst = path.resolve(target), D = dirs(dst);
   if (fs.existsSync(D.install) && !repairOver) return { ok: false, message: 'Suite is already installed here; use the Updater (or pick another folder)' };
   if (fs.existsSync(dst) && fs.readdirSync(dst).length && !fs.existsSync(D.install)) return { ok: false, message: 'that folder is not empty; pick an empty folder' };
-  const src = await openSource(source, { pubkey }), m = src.manifest;
+  const src = await openSource(source, { pubkey, token }), m = src.manifest;
   if (m.channel !== channel && !(channel === 'beta' && m.channel === 'stable')) return { ok: false, message: `that release is on the ${m.channel} channel` };
   const plan = [];
   for (const f of m.files) {
@@ -28,7 +28,7 @@ export async function installRelease({ target, source, channel = 'stable', repai
     fs.mkdirSync(dst, { recursive: true });
     for (const p of plan) { const f = within(dst, p.rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, p.data); made.push(f); }
     fs.mkdirSync(path.join(dst, 'Data', 'runtime'), { recursive: true });
-    fs.writeFileSync(D.install, JSON.stringify({ schema: 1, version: m.version, channel, installed_at: new Date().toISOString(), source, ...(pubkey ? { pubkey } : {}) }, null, 2));
+    fs.writeFileSync(D.install, JSON.stringify({ schema: 1, version: m.version, channel, installed_at: new Date().toISOString(), ...(recordSource === false ? {} : { source: recordSource || source }), ...(pubkey ? { pubkey } : {}) }, null, 2));
   } catch (e) {
     for (const f of made) { try { fs.unlinkSync(f); } catch {} }   // a half install is removed, only files we wrote
     return { ok: false, message: `install stopped: ${String(e.message).slice(0, 160)}; the files it wrote were removed` };

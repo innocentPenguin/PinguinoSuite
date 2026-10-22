@@ -171,6 +171,7 @@ tells modules about it, and serves the dashboard. Run via PinguinoSuite.bat (or 
 #  1806  def already_running
 # INDEX-END
 import asyncio
+import io
 import json
 import hmac
 import os
@@ -1488,6 +1489,32 @@ class ExportReq(BaseModel):
     passphrase: str = ""
 
 
+def _add_vault_to_bundle(data, passphrase):
+    """The key vault is DPAPI-tied to this Windows user and cannot be copied. A bundle exported with secrets also carries
+    the vault as vault.pgb (same passphrase), so another PC can restore it. Never plaintext."""
+    try:
+        v = vaultlib_instance()
+        if not v or not v.names():
+            return data
+        blob = v.export_backup(passphrase)
+    except Exception as e:  # noqa: BLE001
+        console_log.log("warn", "setup", f"vault not added to the export: {e}")
+        return data
+    import zipfile as _zf
+    buf = io.BytesIO(data)
+    with _zf.ZipFile(buf, "a", _zf.ZIP_STORED) as z:
+        z.writestr("vault.pgb", blob)
+    console_log.log("info", "vault", "vault included in the export (passphrase-encrypted)")
+    return buf.getvalue()
+
+
+def vaultlib_instance():
+    try:
+        return _vault_or_503()
+    except HTTPException:
+        return None
+
+
 @app.post("/api/export")
 def export_config(b: ExportReq):
     """Download a config bundle (zip). Secrets are left out unless asked for, and then encrypted with the passphrase."""
@@ -1496,6 +1523,8 @@ def export_config(b: ExportReq):
                                            {"name": devices.me["name"], "id": devices.me["id"], "platform": sys.platform})
     except portable.ExportError as e:
         raise HTTPException(400, str(e))
+    if b.include_secrets:
+        data = _add_vault_to_bundle(data, b.passphrase)
     name = time.strftime("pinguino-config-%Y%m%d-%H%M%S") + (".secrets" if b.include_secrets else "") + ".zip"
     try:
         out = Path(DATA_DIR) / "exports"
@@ -1583,6 +1612,26 @@ async def import_config(request: Request, apply: bool = False):
         rep = portable.import_bundle(_roots(), [m.spec for m in modules.values()], body, request.headers.get("x-passphrase", ""), apply)
     except portable.ExportError as e:
         raise HTTPException(400, str(e))
+    try:
+        import zipfile as _zf
+        with _zf.ZipFile(io.BytesIO(body)) as z:
+            blob = z.read("vault.pgb") if "vault.pgb" in z.namelist() else b""
+    except Exception:  # noqa: BLE001
+        blob = b""
+    if blob:
+        rep["vault"] = {"present": True, "restored": None}
+        if apply:
+            v = vaultlib_instance()
+            if v is None:
+                rep["vault"]["error"] = "the key vault is not available on this PC"
+            elif not request.headers.get("x-passphrase", ""):
+                rep["vault"]["error"] = "enter the passphrase to restore the keys"
+            else:
+                try:
+                    rep["vault"]["restored"] = v.restore_backup(blob, request.headers.get("x-passphrase", ""), True)
+                    console_log.log("info", "vault", f"vault restored from the bundle ({rep['vault']['restored']} key(s) added)")
+                except vaultlib.VaultError as e:
+                    rep["vault"]["error"] = str(e)
     if apply:
         console_log.log("info", "setup", f"config imported from {rep.get('from') or 'a bundle'}: " + ", ".join(f"{f['arc']} {f['status']}" for f in rep["files"] if f["status"] != "same"))
     return rep
