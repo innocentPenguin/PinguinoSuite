@@ -602,6 +602,7 @@ public class CPHInline
         // [NEW][KOTH] King of the hill. OFF (default): after "Orange wins / Blue wins" (!finish) everyone is out. ON: the winning team stays on.
         // ResultHoldSeconds: the website + OBS overlays keep showing the finished match (the winner animation) this long, the mod page moves on at once.
         public bool Koth { get; set; }
+        public bool WheelEmoji { get; set; } = true;       // [NEW][EMOJI] team lines get a name/interest based emoji per player
         public string KothPrevFormat { get; set; } = "";   // [NEW][KOTH] format to restore when KOTH goes off (KOTH plays 1v1)
         public Dictionary<string, int> KothWins { get; set; } = new Dictionary<string, int>();   // [NEW][KOTH] the ACTIVITY leaderboard: wins in THIS King of the Hill session (reset when the activity starts)
         public bool KothStarted { get; set; }   // [NEW][KOTH] the King of the Hill ACTIVITY: true once its first game has been picked (that closes the queue)
@@ -1223,6 +1224,79 @@ public class CPHInline
         return true;
     }
 
+    // ===== [NEW][EMOJI] team lines get an emoji per player, picked from the NAME, then known interests, then a GPT guess, then a random pool. Plain Unicode only. =====
+    // The cache (wheel_emoji.json {login:{i:[emoji],g:"emoji"}}) is filled by the Host: interests come from private lore as EMOJI ONLY, nothing readable.
+    static readonly string[][] EmojiWords = new string[][] {
+        new[]{"pineapple","🍍"}, new[]{"pine","🍍"}, new[]{"apple","🍎"}, new[]{"yapple","🍍"}, new[]{"marsh","🍡"}, new[]{"mello","🍡"}, new[]{"penguin","🐧"}, new[]{"pengu","🐧"}, new[]{"pingu","🐧"},
+        new[]{"sky","☁️"}, new[]{"cloud","☁️"}, new[]{"salman","🐟"}, new[]{"salmon","🐟"}, new[]{"fish","🐟"}, new[]{"wolf","🐺"}, new[]{"fire","🔥"}, new[]{"flame","🔥"}, new[]{"blaze","🔥"},
+        new[]{"frost","❄️"}, new[]{"snow","❄️"}, new[]{"ice","🧊"}, new[]{"rocket","🚀"}, new[]{"king","👑"}, new[]{"queen","👑"}, new[]{"crown","👑"}, new[]{"dragon","🐉"}, new[]{"cat","🐱"},
+        new[]{"kitty","🐱"}, new[]{"neko","🐱"}, new[]{"dog","🐶"}, new[]{"pup","🐶"}, new[]{"fox","🦊"}, new[]{"bear","🐻"}, new[]{"panda","🐼"}, new[]{"shark","🦈"}, new[]{"ninja","🥷"},
+        new[]{"ghost","👻"}, new[]{"wizard","🧙"}, new[]{"mage","🧙"}, new[]{"robot","🤖"}, new[]{"star","🌟"}, new[]{"moon","🌙"}, new[]{"sun","☀️"}, new[]{"thunder","⚡"}, new[]{"storm","⚡"},
+        new[]{"bolt","⚡"}, new[]{"wave","🌊"}, new[]{"ocean","🌊"}, new[]{"water","💧"}, new[]{"forest","🌲"}, new[]{"flower","🌸"}, new[]{"rose","🌹"}, new[]{"coffee","☕"}, new[]{"pizza","🍕"},
+        new[]{"taco","🌮"}, new[]{"burger","🍔"}, new[]{"sushi","🍣"}, new[]{"cookie","🍪"}, new[]{"donut","🍩"}, new[]{"cake","🎂"}, new[]{"banana","🍌"}, new[]{"cherry","🍒"}, new[]{"lemon","🍋"},
+        new[]{"berry","🍓"}, new[]{"bunny","🐰"}, new[]{"rabbit","🐰"}, new[]{"frog","🐸"}, new[]{"duck","🦆"}, new[]{"bee","🐝"}, new[]{"snake","🐍"}, new[]{"tiger","🐯"}, new[]{"lion","🦁"},
+        new[]{"monkey","🐵"}, new[]{"owl","🦉"}, new[]{"eagle","🦅"}, new[]{"hawk","🦅"}, new[]{"crab","🦀"}, new[]{"octo","🐙"}, new[]{"squid","🐙"}, new[]{"skull","💀"}, new[]{"gamer","🎮"},
+        new[]{"music","🎧"}, new[]{"beat","🎧"}, new[]{"unicorn","🦄"}, new[]{"turtle","🐢"}, new[]{"cow","🐮"}, new[]{"pig","🐷"}, new[]{"mouse","🐭"}, new[]{"night","🌙"}, new[]{"lucky","🍀"}
+    };
+    static readonly string[] EmojiPool = { "🎲", "🎯", "🔥", "⚡", "🚀", "🎉", "🌈", "🍀", "🎮", "🧊", "🦄", "🎸", "🛸", "🏆", "💫", "🪩", "🥳", "😎", "🤠", "🦖", "🍿", "🧃", "🪁", "🎈" };
+    static readonly Random _emojiRng = new Random();
+    static readonly Dictionary<string, string> _emojiLast = new Dictionary<string, string>();   // login -> the emoji they had last time
+    static readonly List<string> _emojiPairs = new List<string>();                               // the last announced "members+emojis" combinations
+    JObject _emojiCache; DateTime _emojiCacheAt = DateTime.MinValue;
+    JObject EmojiCache()
+    {
+        if (_emojiCache == null || (DateTime.UtcNow - _emojiCacheAt).TotalSeconds > 30)
+        {
+            _emojiCacheAt = DateTime.UtcNow;
+            try { string f = Path.Combine(_dataDir, "wheel_emoji.json"); _emojiCache = File.Exists(f) ? JObject.Parse(File.ReadAllText(f).TrimStart((char)0xFEFF)) : new JObject(); } catch (Exception) { _emojiCache = new JObject(); }
+        }
+        return _emojiCache;
+    }
+    string PickEmoji(string name, string login, HashSet<string> used)
+    {
+        string n = (name ?? "").ToLower(); string last; _emojiLast.TryGetValue(login ?? name, out last);
+        var pool = new List<string>();
+        foreach (var kw in EmojiWords) if (n.Contains(kw[0]) && !pool.Contains(kw[1])) { pool.Add(kw[1]); pool.Add(kw[1]); }   // the name wins: counted twice
+        var c = EmojiCache()[(login ?? name ?? "").ToLower()] as JObject;
+        if (c != null)
+        {
+            var ints = c["i"] as JArray; if (ints != null) foreach (var x in ints) pool.Add((string)x);
+            string g = (string)c["g"]; if (!string.IsNullOrEmpty(g)) pool.Add(g);
+        }
+        var ok = pool.Where(e => !string.IsNullOrEmpty(e) && !used.Contains(e) && e != last).ToList();
+        if (ok.Count == 0) ok = EmojiPool.Where(e => !used.Contains(e) && e != last).ToList();
+        string pick = ok[_emojiRng.Next(ok.Count)];
+        used.Add(pick); _emojiLast[login ?? name] = pick;
+        return pick;
+    }
+    string WheelTeamLine(WheelSession w, WheelTeam t, string head)
+    {
+        string plain = head + string.Join(" & ", t.Members) + "!";
+        if (!_settings.WheelEmoji) return plain;
+        try
+        {
+            for (int attempt = 0; attempt < 4; attempt++)
+            {
+                var used = new HashSet<string>(); var em = new List<string>();
+                foreach (var m in t.Members)
+                {
+                    var en = w.Entrants.FirstOrDefault(x => x.Name == m);
+                    em.Add(PickEmoji(m, en != null ? en.Login : m, used));
+                }
+                string key = string.Join("|", t.Members) + "=" + string.Join("", em);
+                if (attempt < 3 && _emojiPairs.Contains(key)) continue;
+                _emojiPairs.Add(key); while (_emojiPairs.Count > 40) _emojiPairs.RemoveAt(0);
+                int style = _emojiRng.Next(3); var parts = new List<string>();
+                for (int i = 0; i < t.Members.Count; i++) parts.Add(style == 0 ? em[i] + " " + t.Members[i] : style == 1 ? t.Members[i] + " " + em[i] : t.Members[i]);
+                string body = string.Join(" & ", parts) + "!";
+                string line = style == 2 ? string.Join("", em) + " " + head + body : head + body;
+                return line.Length <= 190 ? line : plain;
+            }
+        }
+        catch (Exception) { }
+        return plain;
+    }
+
     void WheelNote(WheelSession w, string name, string kind)
     {
         w.Feed.Add(new WheelFeed { Name = name, Kind = kind, At = NowMs() });
@@ -1509,7 +1583,7 @@ public class CPHInline
             if (t.LastLine == line) continue;
             bool changed = !string.IsNullOrEmpty(t.LastLine);
             t.LastLine = line;
-            w.Msgs.Add(new WheelMsg { Team = t.N, Due = due, Text = changed ? "Team " + t.N + " is now: " + string.Join(" & ", t.Members) + "!" : line });
+            w.Msgs.Add(new WheelMsg { Team = t.N, Due = due, Text = changed ? WheelTeamLine(w, t, "Team " + t.N + " is now: ") : WheelTeamLine(w, t, "Team " + t.N + ": ") });
         }
         if (w.Msgs.Any(m => !m.Sent)) w.AnnState = "sending";
     }
@@ -1652,7 +1726,7 @@ public class CPHInline
         // a manual re-announce: every team line again, then the roster paragraphs again
         w.Msgs = new List<WheelMsg>();
         long due = NowMs();
-        foreach (var t in w.Teams) { w.Msgs.Add(new WheelMsg { Team = t.N, Due = due, Text = "Team " + t.N + ": " + string.Join(" & ", t.Members) + "!" + (t.Partial ? " (partial team)" : "") }); t.Announced = false; }
+        foreach (var t in w.Teams) { w.Msgs.Add(new WheelMsg { Team = t.N, Due = due, Text = WheelTeamLine(w, t, "Team " + t.N + ": ") + (t.Partial ? " (partial team)" : "") }); t.Announced = false; }
         var sb = new System.Text.StringBuilder("TOURNAMENT TEAMS - ");
         bool any = false;
         foreach (var t in w.Teams)

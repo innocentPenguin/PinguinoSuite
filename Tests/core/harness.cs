@@ -598,7 +598,7 @@ public static class Harness
         snap = priv("WheelSnapshot");
         Check((string)snap["status"] == "final" && snap["finalTeams"].Count() == 3, "wheel: the site gets final teams only after the last reveal");
         var said = wlog.ToList();
-        Check(said.Count(m => m.StartsWith("Team ")) == 3 && said.Any(m => m.Contains("TOURNAMENT TEAMS")) && said.All(m => m.Length <= 450), "wheel: one line per team plus the roster paragraph, each under 450 chars");
+        Check(said.Count(m => System.Text.RegularExpressions.Regex.IsMatch(m, @"Team \d: ")) == 3 && said.Any(m => m.Contains("TOURNAMENT TEAMS")) && said.All(m => m.Length <= 450), "wheel: one line per team plus the roster paragraph, each under 450 chars");
         Check((string)WS()["AnnState"] == "done", "wheel: announcements done");
         wheel("tick", ""); wheel("tick", "");
         Check(CPHProxy.Sent.Count == 0, "wheel: nothing is sent twice");
@@ -894,6 +894,26 @@ public static class Harness
             Run("mod1", "!activity", "fn boxfights", true); Run("p2", "!join");
             Check(Temp("p2") == 2, "strikes: the Fortnite tally survived (2)");
             Run("mod1", "!unstrike", "p2", true); Run("mod1", "!unstrike", "p2", true); Run("mod1", "!activity", "end", true);
+        }
+        // ===== [NEW][EMOJI] wheel team lines get emojis =====
+        {
+            var emSaid = new System.Collections.Generic.List<string>();
+            for (int r = 0; r < 12; r++)
+            {
+                Run("mod1", "!wheel", "end", true); Run("mod1", "!wheel", "new", true); Run("mod1", "!wheel", "size 2", true); Run("mod1", "!wheel", "auto off", true);
+                Run("mod1", "!wheeladd", "pineyapplie lvlmarshmello bluefox xx_zz_qq", true);
+                for (int i = 0; i < 40 && !(bool)WS()["Final"]; i++) { Run("mod1", "!wheel", "spin", true); emSaid.AddRange(CPHProxy.Sent); }
+            }
+            var teamRx = new System.Text.RegularExpressions.Regex(@"Team \d: ");
+            var emojiRx = new System.Text.RegularExpressions.Regex("[\uD800-\uDBFF][\uDC00-\uDFFF]|[☀-➿]");
+            var tl = emSaid.Where(m => teamRx.IsMatch(m)).ToList();
+            Check(tl.Count() >= 12, "emoji: team lines were said (" + tl.Count() + ")");
+            Check(tl.All(m => emojiRx.IsMatch(m)), "emoji: every team line has emojis: " + string.Join(" | ", tl.Take(4)));
+            Check(tl.All(m => m.Length < 200), "emoji: lines are short");
+            Check(tl.Any(m => m.Contains("\U0001F34D")) && tl.Any(m => m.Contains("\U0001F361")) && tl.Any(m => m.Contains("\U0001F98A")), "emoji: names map to emojis (pine, marsh, fox): " + string.Join(" | ", tl.Take(6)));
+            Check(tl.Distinct().Count() >= 6, "emoji: lines vary round to round: " + tl.Distinct().Count());
+            Check(tl.All(m => { var es = emojiRx.Matches(m).Cast<System.Text.RegularExpressions.Match>().Select(x => x.Value).ToList(); return es.Count == es.Distinct().Count(); }), "emoji: no repeated emoji inside a line");
+            Run("mod1", "!wheel", "end", true);
         }
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
         try { Directory.Delete(dir, true); } catch { }
