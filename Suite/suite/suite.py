@@ -233,9 +233,32 @@ IS_WIN = os.name == "nt"
 TOKEN = os.environ.get("PINGUINO_API_TOKEN") or secrets.token_urlsafe(32)
 
 
+_MODULE_KEY = None
+
+
+def _module_key():
+    """Module secrets must survive a core restart: modules keep running (and are adopted) while the per-launch core TOKEN changes, which used to make every
+    hook answer 'unauthorized'. So derive them from a key kept in Data/runtime/module_secret (created once, never committed); fall back to the core token."""
+    global _MODULE_KEY
+    if _MODULE_KEY is None:
+        f = Path(DATA_DIR) / "module_secret"
+        try:
+            _MODULE_KEY = f.read_text("utf8").strip()
+            if len(_MODULE_KEY) < 32:
+                raise ValueError("short")
+        except (OSError, ValueError):
+            _MODULE_KEY = secrets.token_hex(32)
+            try:
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text(_MODULE_KEY, "utf8")
+            except OSError:
+                _MODULE_KEY = TOKEN   # cannot persist: behave as before (modules then need a restart with the core)
+    return _MODULE_KEY
+
+
 def module_token(mid):
-    """Per-module secret derived from the core token: a module never receives (or can forge) the core API token."""
-    return hmac.new(TOKEN.encode(), f"module:{mid}".encode(), "sha256").hexdigest()[:40]
+    """Per-module secret derived from a persistent key: a module never receives (or can forge) the core API token."""
+    return hmac.new(_module_key().encode(), f"module:{mid}".encode(), "sha256").hexdigest()[:40]
 # Who may call: the core's own origin plus the Tauri webview origins (Windows/macOS/Linux).
 ALLOWED_ORIGINS = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", "tauri://localhost",
                    "http://tauri.localhost", "https://tauri.localhost"}

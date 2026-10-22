@@ -105,5 +105,18 @@ class Quit(unittest.TestCase):
             suite.Module.stop, os._exit = real_stop, real_exit
 
 
+
+class ModuleToken(unittest.TestCase):
+    def test_token_survives_a_new_core_token(self):
+        a = suite.module_token("listen")
+        old = suite.TOKEN
+        try:
+            suite.TOKEN = "a different per-launch core token"
+            self.assertEqual(a, suite.module_token("listen"))
+            self.assertNotEqual(a, suite.module_token("voice"))
+        finally:
+            suite.TOKEN = old
+
+
 if __name__ == "__main__":
     unittest.main()
