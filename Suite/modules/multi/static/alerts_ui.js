@@ -95,10 +95,17 @@ function alDraw() {
 }
 function alState(t) { const el = $('#al-state'); if (el) { el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 2500); } }
 function alSave() {
-  clearTimeout(AL.timer);
+  clearTimeout(AL.timer); AL.timerPending = true;
   AL.timer = setTimeout(async () => {
-    const r = await fetch('/api/alerts/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({config: AL.d.config})}).then(r => r.json());
-    AL.d.config = r.config; alState('Saved'); alPreview();
+    AL.timerPending = false;
+    const seq = AL.saveSeq = (AL.saveSeq || 0) + 1;
+    try {
+      const resp = await fetch('/api/alerts/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({config: AL.d.config})});
+      const r = await resp.json();
+      if (!resp.ok || !r.config) { alState('Not saved: ' + (r.detail || resp.status)); return; }
+      if (seq === AL.saveSeq && !AL.timerPending) AL.d.config = r.config;      // a newer edit made while saving must not be overwritten by this reply
+      alState('Saved'); alPreview();
+    } catch (err) { alState('Not saved (Multi unreachable)'); }
   }, 350);
 }
 async function alPreview() {

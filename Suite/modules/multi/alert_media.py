@@ -76,7 +76,11 @@ def import_host(profile_types, apply=True, overwrite=False):
     for t in HOST_SOUND_TYPES:
         s = (doc.get("Sounds") or {}).get(t) or {}
         src = str(s.get("File") or "")
-        row = {"type": t, "from": src, "volume": int(round(float(s.get("Volume", 0.7)) * 100)), "url": "", "status": ""}
+        try:
+            vol = max(0, min(100, int(round(float(s.get("Volume", 0.7)) * 100))))
+        except (TypeError, ValueError, OverflowError):
+            vol = 70
+        row = {"type": t, "from": src, "volume": vol, "url": "", "status": ""}
         out.append(row)
         if not src:
             row["status"] = "no sound set on Host"
@@ -97,7 +101,11 @@ def import_host(profile_types, apply=True, overwrite=False):
             row["status"] = "would import"
             continue
         DIR.mkdir(parents=True, exist_ok=True)
-        dst = DIR / safe_name("host_" + p.name)
+        sn = safe_name("host_" + p.name)
+        if not sn:
+            row["status"] = "skipped (bad file name)"
+            continue
+        dst = DIR / sn
         if not dst.exists():
             shutil.copyfile(p, dst)
         row["url"] = "/alert-media/" + dst.name

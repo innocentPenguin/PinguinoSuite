@@ -79,7 +79,15 @@ def _merge(base, over):
 
 def _url(v):
     v = str(v or "").strip()[:400]
-    return v if v.startswith(("http://", "https://", "/")) else ""
+    return v if v.startswith(("http://", "https://", "/")) and not v.startswith("//") else ""
+
+
+def _int(v, d=0):
+    """int from anything a webhook might send (None, '', 'abc', nan, inf, 1e30 -> d / clamped)"""
+    try:
+        return max(-10**9, min(10**9, int(float(v if v not in (None, "") else d))))
+    except (TypeError, ValueError, OverflowError):
+        return d
 
 
 def _font(v):
@@ -220,10 +228,7 @@ VALUE_OF = {"streak": "streak", "watchtime": "hours", "anniversary": "years"}
 
 def value(ev, key):
     """the milestone number of an event: its own field (streak/hours/years) or, failing that, amount"""
-    try:
-        return int(float(ev.get(key) if ev.get(key) not in (None, "") else (ev.get("amount") or 0)))
-    except (TypeError, ValueError):
-        return 0
+    return _int(ev.get(key) if ev.get(key) not in (None, "") else ev.get("amount"), 0)
 
 
 def render(text, ev):
@@ -309,7 +314,11 @@ class Engine:
         if not t:
             return self._note(ev, "ignored", "not an alert type")
         ev = dict(ev, type=t, user=str(ev.get("user") or "someone")[:60])
-        ev.setdefault("display", ev["user"])
+        ev["amount"] = _int(ev.get("amount"))
+        for k, n in (("message", 300), ("display", 60), ("recipient", 60), ("level", 20), ("tier", 10)):
+            if k in ev:
+                ev[k] = str(ev[k] if ev[k] is not None else "")[:n]
+        ev["display"] = ev.get("display") or ev["user"]
         eid = str(ev.get("id") or f"a:{time.time_ns()}")
         ev["id"] = eid
         now = time.time()
@@ -329,6 +338,8 @@ class Engine:
             return self._note(ev, "skipped", why)
         if not test:
             self.recent[key] = now                      # only an event that is really shown counts as "just fired"
+            if len(self.recent) > 500:
+                self.recent = {k: v for k, v in self.recent.items() if now - v < 120}
         if len(self.heap) >= self.cfg["global"]["max_queue"]:
             return self._note(ev, "dropped", "queue full")
         payload = self._payload(c, ev, test)
@@ -363,7 +374,7 @@ class Engine:
     def _blocked(self, c, t, ev, now, test):
         if not c["enabled"]:
             return "type disabled"
-        if int(ev.get("amount") or 0) < c["min_amount"]:
+        if _int(ev.get("amount")) < c["min_amount"]:
             return f"below minimum {c['min_amount']}"
         cd = c["conditions"]
         if cd["first_time_only"] and not ev.get("first_time"):
@@ -414,16 +425,21 @@ class Engine:
                 continue
             _, _, p = heapq.heappop(self.heap)
             self.current = p
-            self.emit({"type": "alert.show", "alert": p})
-            self._note(p, "fired", "test" if p["test"] else "live")
-            self._state()
             self.skip_ev = asyncio.Event()
             try:
+                self.emit({"type": "alert.show", "alert": p})
+                self._note(p, "fired", "test" if p["test"] else "live")
+                self._state()
                 await asyncio.wait_for(self.skip_ev.wait(), p["duration"] + 0.6)
             except asyncio.TimeoutError:
                 pass
+            except Exception as e:                       # one bad emit must never kill the queue runner for the rest of the stream
+                self._note(p, "error", f"{type(e).__name__}: {e}"[:120])
             self.current = None
-            self.emit({"type": "alert.end", "id": p["id"]})
+            try:
+                self.emit({"type": "alert.end", "id": p["id"]})
+            except Exception:
+                pass
             await asyncio.sleep(self.cfg["global"]["gap_ms"] / 1000)
 
     def _state(self):

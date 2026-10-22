@@ -1341,3 +1341,48 @@ def test_host_module_token_accepted_only_on_alert_paths(tmp_path, monkeypatch):
     # missing key file -> no Host token
     monkeypatch.setenv("PINGUINO_DATA_DIR", str(tmp_path / "nope"))
     assert c.post("/api/alerts/test", json={"type": "follow"}, headers={"x-pinguino-token": host}).status_code == 401
+
+
+def test_alert_audit_hardening(tmp_path, monkeypatch):
+    import alerts
+    store = Store(str(tmp_path / "a.db")) if True else None
+    out = []
+    eng = alerts.Engine(store, out.append)
+    # garbage numbers from a webhook never raise
+    for amt in ("abc", float("inf"), float("nan"), None, "", "1e400", [1], {"a": 1}):
+        eng.submit({"id": f"x{id(amt)}{len(out)}", "type": "cheer", "user": "u", "amount": amt})
+        eng.submit({"id": f"y{id(amt)}{len(out)}", "type": "streak", "user": "u2", "amount": amt, "streak": amt})
+    assert alerts._int("9" * 40) == 10**9 and alerts._int("x", 7) == 7
+    # long fields are capped, protocol-relative urls refused
+    ok, _ = eng.submit({"id": "long1", "type": "follow", "user": "z" * 500, "message": "m" * 5000})
+    assert ok
+    assert alerts._url("//evil.example/x.mp3") == "" and alerts._url("/alert-media/a.mp3") == "/alert-media/a.mp3"
+    # the runner survives an emit that raises
+    async def go():
+        calls = []
+
+        def bad(ev):
+            calls.append(ev["type"])
+            if ev["type"] == "alert.show":
+                raise RuntimeError("boom")
+        e2 = alerts.Engine(store, bad)
+        e2.cfg["global"]["gap_ms"] = 0
+        e2.start()
+        e2.submit(alerts.test_event("follow"))
+        e2.submit(alerts.test_event("follow", user="b"))
+        await asyncio.sleep(0.4)
+        assert calls.count("alert.show") == 2 and calls.count("alert.end") == 2
+        e2.task.cancel()
+    asyncio.run(go())
+
+
+def test_alert_config_bad_body_does_not_reset(monkeypatch):
+    from fastapi.testclient import TestClient
+    import server
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    monkeypatch.setattr(server.alert_engine.store, "kv_set", lambda *a, **k: None)     # keep the real db clean
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    assert c.post("/api/alerts/config", json=[1], headers={"origin": "http://127.0.0.1:8766"}).status_code == 400
+    assert c.post("/api/alerts/config", json={"config": "x"}, headers={"origin": "http://127.0.0.1:8766"}).status_code == 400
+    r = c.post("/api/alerts/fire", json={"type": "cheer", "user": "q", "amount": "lots"}, headers={"origin": "http://127.0.0.1:8766"})
+    assert r.status_code == 200

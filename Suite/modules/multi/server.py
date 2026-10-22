@@ -291,7 +291,10 @@ def alerts_get():
 
 @app.post("/api/alerts/config")
 async def alerts_save(request: Request):
-    return {"config": alert_engine.save((await request.json()).get("config"))}
+    b = await request.json()
+    if not isinstance(b, dict) or not isinstance(b.get("config"), dict):
+        raise HTTPException(400, "config object required")       # never let a malformed body reset the saved alerts to defaults
+    return {"config": alert_engine.save(b["config"])}
 
 
 @app.post("/api/alerts/preview")
@@ -324,6 +327,8 @@ def alerts_media_list():
 @app.post("/api/alerts/media")
 async def alerts_media_upload(request: Request, name: str = ""):
     """Raw file body (Content-Type: application/octet-stream) + ?name=file.ext -> stored in the alert media library."""
+    if int(request.headers.get("content-length") or 0) > alert_media.MAX_BYTES + 1024:
+        raise HTTPException(413, "file too large (max 25 MB)")
     data = await request.body()
     try:
         saved = alert_media.save(name, data)
@@ -372,7 +377,7 @@ async def alerts_testall():
 
 @app.post("/api/alerts/stress")
 async def alerts_stress(request: Request):
-    n = int(min(200, max(1, int((await request.json()).get("n") or 30))))
+    n = int(min(200, max(1, alerts_mod._int((await request.json()).get("n"), 30))))
     import random
     ok = 0
     for i in range(n):
