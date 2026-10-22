@@ -63,3 +63,17 @@ Status: open / building / done / asked-Ivan.
 | 44 | Per-overlay safe-area presets (1080p/1440p/vertical) | 023 | open |
 | 45 | Pre-stream health check that overlay-options.js loads | 023 | open |
 | 46 | Q for Ivan: show gifted subs in T2/T3 on the Subs! card (default yes)? | 023 | asked-Ivan |
+
+## Ivan's decisions 2026-10-22 09:56
+- ActivityBonus: KEEP ON but minor; gifts + watch time must stay ahead (02 to check the numbers).
+- Gifted subs in T2/T3 on Subs! card: YES. Languages: English + Mexican Spanish only.
+- Alert profile export/import: yes. Profile follows OBS scene: do it. Goal + hype-train bar: yes. Dashboard default window: yes.
+- Multistream again: Kick, YouTube, TikTok; import TikTok Live data (chat/gifts/follows) into Multi. (03, research first)
+- Tip source: not important. Points settings page with preview: yes.
+- Match awards: play in a match = 7 min of viewer watch rate x2; win = 7 min viewer rate x3 (02 to confirm exact numbers back).
+- Typo commands: !join-type (affects others) asks "did you mean?" and waits for confirmation; info commands just run.
+- Chatty reactions to raids + hype trains yes; wheel reactions later (when giveaway exists). Welcome-back lines from lore (e.g. had an event yesterday / big bits day).
+- End-of-stream recap: yes, toggleable. BUG: raid "prepare your emotes" line fires when raid is pressed; must fire when raid is SCHEDULED.
+- Canned-command editor: explained to Ivan (fixed prewritten replies), pending his OK.
+- Music: lyrics widget (toggle in Spotify master section), mod queue commands, request leaderboard ONLY on song pages, fallback playlist, site queue page: all yes.
+- 01/012/023 list: all yes (release dry run, signed releases, Economy+Timers tabs, shorter Listen clips, real Lite Install/Eject test, overlay-options sliders page, resub-anniversary spotlight pending explanation).
