@@ -69,7 +69,7 @@ def safe_file(name):
 
 def default_config():
     prof = {name: {"types": {t: _merge(copy.deepcopy(DEFAULT_TYPES[t]), (over.get("*") or {})) for t in TYPES}} for name, over in THEMES.items()}
-    return {"active": "Penguin", "profiles": prof, "overrides": {}, "global": dict(GLOBAL)}
+    return {"active": "Penguin", "profiles": prof, "overrides": {}, "scenes": {}, "global": dict(GLOBAL)}
 
 
 def _merge(base, over):
@@ -207,6 +207,9 @@ def sanitize_config(src):
                 d["overrides"][login] = {t: _clean_partial(c) for t, c in per.items() if t in TYPES or t == "*"}
     a = str(src.get("active") or "")
     d["active"] = a if a in d["profiles"] else "Penguin"
+    sc = src.get("scenes")
+    if isinstance(sc, dict):                         # OBS scene name -> alert profile that should be active while that scene is on air
+        d["scenes"] = {str(k).strip()[:80]: v for k, v in list(sc.items())[:50] if str(k).strip() and v in d["profiles"]}
     return d
 
 
@@ -294,6 +297,14 @@ class Engine:
         self.store.kv_set("alerts:cfg", self.cfg)
         self.emit({"type": "alert.config"})
         return self.cfg
+
+    def on_scene(self, scene):
+        """OBS scene changed (called by Link / Host via /api/alerts/scene): switch to the profile mapped to it. Returns the profile now active or ''."""
+        want = self.cfg.get("scenes", {}).get(str(scene or "").strip())
+        if not want or want == self.cfg["active"]:
+            return ""
+        self.save(dict(self.cfg, active=want))
+        return want
 
     def type_cfg(self, t, login=""):
         prof = self.cfg["profiles"].get(self.cfg["active"]) or next(iter(self.cfg["profiles"].values()))

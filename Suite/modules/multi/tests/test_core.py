@@ -1505,3 +1505,16 @@ def test_alert_profile_export_import(monkeypatch):
         assert c.post("/api/alerts/import", json={"doc": {"x": 1}}, headers=o).status_code == 400
     finally:
         server.alert_engine.cfg = saved
+
+
+def test_alert_scene_profiles(tmp_path):
+    import alerts
+    st = Store(str(tmp_path / "s.db"))
+    e = alerts.Engine(st, lambda x: None)
+    cfg = e.cfg
+    cfg["scenes"] = {"BRB": "Minimal", "Gaming": "Light", "Bad": "Nope"}
+    e.save(cfg)
+    assert e.cfg["scenes"] == {"BRB": "Minimal", "Gaming": "Light"}          # unknown profile dropped
+    assert e.on_scene("BRB") == "Minimal" and e.cfg["active"] == "Minimal"
+    assert e.on_scene("BRB") == "" and e.on_scene("Unmapped") == "" and e.cfg["active"] == "Minimal"
+    assert e.on_scene("Gaming") == "Light"

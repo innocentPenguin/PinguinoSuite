@@ -55,6 +55,7 @@ import host_feed
 import viewers as viewers_mod
 import prestream
 import voice
+import scene_follow
 import secrets_store
 import windows as win
 from connectors.discord import Discord
@@ -161,7 +162,7 @@ async def lifespan(app):
     kk = Kick(inbox, hub.emit)
     connectors["kick"] = kk
     tasks = [asyncio.create_task(inbox.run()), asyncio.create_task(tick_loop()), asyncio.create_task(tw.run()),
-             asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()), asyncio.create_task(kk.run()),
+             asyncio.create_task(dc.run()), asyncio.create_task(yt.run()), asyncio.create_task(tt.run()), asyncio.create_task(kk.run()), asyncio.create_task(scene_follow.run(alert_engine)),
              asyncio.create_task(listen_bridge.run(cards, hub.emit)),
              asyncio.create_task(host_feed.run(inbox, lambda: connectors['twitch'].describe()['status'] == 'connected')), asyncio.create_task(prestream_file_loop()), asyncio.create_task(viewers_mod.run(connectors, hub.emit))]
     yield
@@ -386,6 +387,15 @@ async def alerts_fire(request: Request):
     ev["type"] = t
     ok, why = alert_engine.submit(ev)
     return {"ok": ok, "queued": ok, "text": why}
+
+
+@app.post("/api/alerts/scene")
+async def alerts_scene(request: Request):
+    """{scene}: tell Multi which OBS scene is on air (Link / Host call this); switches to the profile mapped to it in the alerts editor. Never touches OBS."""
+    b = await request.json()
+    scene = str(b.get("scene") or "") if isinstance(b, dict) else ""
+    now = alert_engine.on_scene(scene)
+    return {"ok": True, "switched": bool(now), "active": alert_engine.cfg["active"], "scene": scene}
 
 
 @app.get("/api/alerts/export")

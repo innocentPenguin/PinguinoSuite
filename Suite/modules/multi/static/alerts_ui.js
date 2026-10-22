@@ -62,6 +62,9 @@ function alDraw() {
     <div class="box"><b>OBS browser source</b> (800 x 600) <input readonly value="${esc(alUrl())}" style="width:100%" onclick="this.select()">
       <div class="act"><button data-alact="copy">Copy address</button> <a href="${esc(alUrl())}?bg=1" target="_blank" rel="noopener"><button type="button">Open (preview works offline)</button></a>
       <small class="mut">Real events only arrive while live; tests and this preview always work.</small></div></div>
+    <details class="box"><summary><b>Scene profiles</b> <small class="mut">(switch profile when the OBS scene changes)</small></summary>
+      <textarea id="al-scenes" rows="3" style="width:100%" placeholder="one per line:  Scene name = Profile name">${esc(Object.entries(c.scenes || {}).map(([k, v]) => k + ' = ' + v).join(String.fromCharCode(10)))}</textarea>
+      <small class="mut">Link or the Host tells Multi the scene on air (POST /api/alerts/scene). Profiles: ${esc(Object.keys(c.profiles).join(', '))}</small></details>
     <div class="act" style="margin-top:8px">${types}</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
       <div style="flex:0 0 480px"><div class="box"><b>Preview</b>
@@ -122,6 +125,10 @@ async function alLog() {
 async function alPost(u, b) { return fetch(u, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b || {})}).then(r => r.json()); }
 document.addEventListener('change', e => {
   if (W.type !== 'alerts') return; const t = e.target;
+  if (t.id === 'al-scenes') {
+    const m = {}; t.value.split(String.fromCharCode(10)).forEach(l => { const i = l.indexOf('='); if (i > 0) { const k = l.slice(0, i).trim(), v = l.slice(i + 1).trim(); if (k && AL.d.config.profiles[v]) m[k] = v; } });
+    AL.d.config.scenes = m; alSave(); alState('Scene profiles saved'); return;
+  }
   if (t.id === 'al-prof') { AL.d.config.active = t.value; alSave(); alDraw(); return; }
   if (t.id === 'al-who') { AL.who = t.value; alDraw(); return; }
   if (t.dataset.altier) {
