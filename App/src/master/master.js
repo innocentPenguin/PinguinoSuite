@@ -22,6 +22,8 @@
   /* ---------- Spotify strip (the Spotify module, 127.0.0.1:8771) ---------- */
   const MUSIC = (new URLSearchParams(location.search).get('music')) || 'http://127.0.0.1:8771';
   const mapi = C.createApi({ base: MUSIC, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000 });
+  const MULTI = (new URLSearchParams(location.search).get('multi')) || 'http://127.0.0.1:8766';   // PinguinoMulti: YouTube / Kick stream info
+  const xapi = C.createApi({ base: MULTI, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 15000 });
 
   /* ---------- state ---------- */
   const cached = ls.get('cache', {});
@@ -32,7 +34,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
-    wq: ls.get('wq') || null, ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
+    wq: ls.get('wq') || null, teamsOv: {}, si: Object.assign({ title: '', description: '', tags: '', game: '', plat: { twitch: true, youtube: true, kick: false }, at: '', privacy: 'public' }, ls.get('si') || {}), ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
@@ -63,7 +65,7 @@
   const HOSTMOD = new Set(['queue', 'next', 'match', 'win', 'finish', 'balance', 'reroll', 'kick', 'mode', 'format', 'koth', 'casual']);
   /* ---------- player simulator: a local fake customs state, nothing leaves the app ---------- */
   const SIMNAMES = ['spywobbles', 'salman201223', 'SkyRLTN', 'LvLMarshmello', 'pineyapplie', 'gonkilluagg', 'yoohoo15', 'FrostByte', 'NovaKick', 'AeroLily', 'TurboToast', 'WaffleRL', 'DemoDan', 'BumpBoi', 'CeilingCat', 'FlipReset'];
-  const simFresh = () => ({ waiting: true, open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', streamer: 'in', wheel: { status: 'none', entrants: [], round: 0, teamSize: 2, teams: [] }, _n: 0, _id: 0 });
+  const simFresh = () => ({ waiting: true, open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', streamer: 'in', teams: JSON.parse(JSON.stringify(C.TEAM_DEFAULTS)), wheel: { status: 'none', entrants: [], round: 0, teamSize: 2, teams: [] }, _n: 0, _id: 0 });
   function simAdd(st, n) { for (let i = 0; i < n; i++) { const k = st._n++, nm = SIMNAMES[k % SIMNAMES.length] + (k >= SIMNAMES.length ? Math.floor(k / SIMNAMES.length) : ''); st.queue.push({ username: nm.toLowerCase(), display: nm, mmr: 600 + Math.floor(Math.random() * 900) }); } }
   // Chat events for POST /api/customs/sim-say (02): collected while the sim runs, spoken in order afterwards
   function simEv(st, event, extra) {
@@ -81,7 +83,7 @@
       else if (r.json.spoke === false) toast('Chat is switched off on the Host (sim_say.json)');
     }
   }
-  const simSize = st => +String(st.format || '2v2')[0] || 2;
+  const simSize = st => C.fmtSize(st.format);
   function simSplit(st, ps) {
     const a = ps.slice(); if (st.mode === 'random') a.sort(() => Math.random() - .5); else a.sort((x, y) => y.mmr - x.mmr);
     const o = [], bl = []; a.forEach((p, i) => (st.mode === 'random' ? i % 2 : [0, 1, 1, 0][i % 4]) ? bl.push(p) : o.push(p)); return [o, bl];
@@ -338,13 +340,14 @@
       <div class="ctl free" id="cu-ctl"><span id="cu-who">In control: …</span><span class="sp"></span><span class="faint" id="cu-badge"></span><button class="sm" id="cu-sim" title="Play with fake players: nothing is sent to the Host">🧪 Simulator</button></div>
       <div id="cu-note" class="note" hidden></div>
       <div class="cgrid">
-        ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div>`, ' <span class="faint" id="cu-act"></span>')}
+        ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div><div class="btns" style="margin-top:6px"><span class="faint sm" title="Fortnite activities">Fortnite</span>${[['Box fights', 'boxfights'], ['Zone wars', 'zonewars'], ['Viewers', 'fnviewers']].map(([l, v]) => b(l, 'activity', 'fn ' + v, 'rd warn', 'activity:' + v)).join('')}</div>`, ' <span class="faint" id="cu-act"></span>')}
         <section class="cs c-ask" id="cu-ask" hidden><b id="cu-ask-t"></b><div class="faint sm" id="cu-ask-s"></div><div class="btns" style="margin-top:6px"><button class="sm rd" data-ask="remove" title="Cancel the game and take everyone out of the queue">Remove them</button><button class="sm pri" data-ask="back" title="Cancel the game; players go back to the front of the queue in their old order, ahead of anyone who joined later">Put back in queue</button><button class="sm" data-ask="keep" title="Change it and leave everyone as they are">Leave as is</button><button class="sm ghost" data-ask="cancel" title="Do not change anything">✕</button></div></section>
         <section class="cs c-st"><div class="row"><span class="faint sm">Streamer</span><div class="seg" style="flex:1">${b('In', 'streamer', 'in', '', 'streamer:in')}${b('Out', 'streamer', 'out', '', 'streamer:out')}</div></div></section>
         ${sec('c-q', 'Queue', `<div class="btns">${b('Open', 'queue-open', null, 'g', 'queue:open')}${b('Close', 'queue-close', null, 'rd', 'queue:close')}${b('Clear', 'queue-clear', null, 'og warn', 'queue:clear')}</div><ul class="qlist" id="cu-queue"></ul>`, ' <span class="faint" id="cu-qn"></span>')}
         ${sec('c-m', 'Match', `<div class="btns">${b('Fill', 'match', 'fill', 'g')}${b('Move all → Queue', 'match', 'queue')}${b('Clear match', 'match', 'clear', 'rd warn')}${b('Orange wins', 'finish', 'orange', 'or', 'win:orange')}${b('Blue wins', 'finish', 'blue', 'bl', 'win:blue')}</div><div class="teams" id="cu-teams"></div>`, ' <span class="faint" id="cu-match"></span>')}
         ${sec('c-t', 'Teams', `${seg('mode', [['Balanced', 'balanced'], ['Random', 'random'], ['Manual', 'picks']])}<div class="btns" style="margin-top:6px">${b('Reroll', 'reroll')}${b('Balance', 'balance')}</div><div class="row" id="cu-manual" style="margin-top:6px" hidden><input type="text" id="cu-pick" placeholder="who goes Blue" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="sm bl" id="cu-pickgo">Set Blue</button>${b('Auto', 'pick', 'auto')}</div>`)}
-        ${sec('c-s', 'Settings', `<div class="lbl">Team size</div>${seg('format', ['1v1', '2v2', '3v3', '4v4'].map(x => [x, x]))}<div class="lbl">Game mode</div>${seg('gamemode', [['Standard', 'standard'], ['Dropshot', 'dropshot'], ['Rumble', 'rumble']])}`)}
+        ${sec('c-tn', 'Team names & colours', ['orange', 'blue'].map(k => `<div class="tn" data-side="${k}"><div class="row"><span class="tn-dot"></span><input type="text" class="tn-name" maxlength="20" autocomplete="off" spellcheck="false" aria-label="${k} team name"><input type="color" class="tn-pick" title="Custom colour"><button class="sm ghost tn-reset" title="Back to the default name and colour">Reset</button></div><div class="tn-sw">${C.TEAM_PRESETS.map(([n, hx]) => `<button class="swc" data-c="${hx}" style="background:${hx}" title="${n}" aria-label="${n}"></button>`).join('')}</div></div>`).join('') + '<div class="faint sm">Used in the match lines, overlays and the site. Customs chat stays plain text (emoji lines are for tourneys).</div>')}
+        ${sec('c-s', 'Settings', `<div class="lbl">Team size <span class="faint" id="cu-fmt"></span></div><div id="cu-rlsz">${seg('format', ['2v2', '3v3', '4v4'].map(x => [x, x]))}</div><div id="cu-fnsz" hidden><div class="seg">${['1', '2', '3'].map(n => b(n, 'format', n + 'v' + n, '', 'format:' + n + 'v' + n, 'Fortnite viewers: ' + n + ' per team')).join('')}</div><div class="row" style="margin-top:6px"><input type="number" id="cu-fnn" min="1" max="16" placeholder="other size" style="width:96px"><button class="sm" id="cu-fnset" title="Any other team size, 1 to 16">Set</button></div></div><div class="lbl">Game mode</div>${seg('gamemode', [['Standard', 'standard'], ['Dropshot', 'dropshot'], ['Rumble', 'rumble']])}`)}
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
         ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div>`)}
         ${sec('c-sim', 'Player simulator', `<div class="btns">${b('+ Player', 'sim', 'add')}${b('+ 4', 'sim', 'add4')}${b('+ 8', 'sim', 'add8')}${b('Remove one', 'sim', 'rm')}${b('Reset sim', 'sim', 'reset', 'rd')}</div><div class="row" style="margin-top:6px"><button class="sm" id="cu-simchat" title="Speak the simulator's events in the real Twitch chat (Chatty), so you can judge the wording">Chat: ON</button><span class="faint sm" id="cu-simnote"></span></div>`)}
@@ -389,7 +392,7 @@
       if (d.from === 'queue') { const fi = q.indexOf(d.u), pos = C.dropPos(fi, t.idx, t.after); if (fi >= 0 && pos - 1 !== fi) sendCustom('move', d.u + ' ' + pos); }
       else { const pos = C.dropPos(-1, t.idx, t.after); if (await sendCustom('out', d.u) && pos > 1) sendCustom('move', d.u + ' ' + pos); }
     } else {
-      if (d.from === t.team) return; const m = c.match, size = +String(c.format || '2v2')[0] || 2;
+      if (d.from === t.team) return; const m = c.match, size = C.fmtSize(c.format);
       if (!m || m.status === 'finished') { toast('No game is running', true); return; }
       if ((m[t.team] || []).length >= size) { toast(t.team + ' is full: drag someone out first', true); return; }
       sendCustom('in', d.u + ' ' + t.team);
@@ -450,6 +453,33 @@
     await sendCustom(a.action, a.value, null);
   }
   const holderName = c => { const x = c && c.controlHolder; return !x ? '' : typeof x === 'string' ? x : (x.name || x.display || x.user || x.id || ''); };
+  /* ---------- team names + colours ---------- */
+  const teamsNow = () => {
+    const c = curCustoms() || {}, loc = ls.get('teams') || {}, out = {};
+    for (const k of ['orange', 'blue']) {
+      const d = C.TEAM_DEFAULTS[k], hs = (c.teams && c.teams[k]) || (ui.sim ? null : loc[k]) || {}, ov = ui.teamsOv[k], live = ov && ov.until > Date.now() ? ov : {};
+      out[k] = { name: live.name || C.teamName(hs.name) || d.name, color: live.color || C.teamColor(hs.color) || d.color };
+    }
+    return out;
+  };
+  async function setTeam(side, patch) {
+    const p = {}; if (patch.name != null) { const n = C.teamName(patch.name); if (!n) { toast('Team name: 1 to 20 characters, not starting with ! / .', true); schedule('customs'); return; } p.name = n; }
+    if (patch.color != null) { const k = C.teamColor(patch.color); if (!k) { toast('Colour must look like #ff7a00', true); return; } p.color = k; }
+    ui.teamsOv[side] = Object.assign({}, ui.teamsOv[side], p, { until: Date.now() + 5000 }); schedule('customs'); setTimeout(() => schedule('customs'), 5100);
+    if (ui.sim) { Object.assign(ui.simState.teams[side], p); schedule('customs'); return; }
+    const all = ls.get('teams') || {}; all[side] = Object.assign({}, all[side], p); ls.set('teams', all);
+    await tokenReady; ui.tookControl = true; const r = await api.post('/api/customs/teams', { [side]: p });
+    if (r.ok && !(r.json && r.json.ok === false)) toast(side + ' team: ' + ((p.name || '') + ' ' + (p.color || '')).trim()); else if (r.status === 404) toast('Team names/colours need the Host /api/customs/teams (asked 02, not there yet)', true); else toast('Team: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
+  }
+  function renderTeamsEditor() {
+    const t = teamsNow();
+    for (const k of ['orange', 'blue']) {
+      const row = $('.tn[data-side=' + k + ']'); if (!row) continue; const inp = row.querySelector('.tn-name'), pk = row.querySelector('.tn-pick');
+      if (document.activeElement !== inp && inp.value !== t[k].name) inp.value = t[k].name;
+      if (pk.value !== t[k].color) pk.value = t[k].color; row.querySelector('.tn-dot').style.background = t[k].color;
+      row.querySelectorAll('.swc').forEach(s => s.classList.toggle('cur', s.dataset.c === t[k].color));
+    }
+  }
   function renderCustoms() {
     const c = ui.sim ? ui.simState : S.get('customs'), ok = ui.sim ? true : S.get('customsOk'), note = $('#cu-note');
     { const sc = $('#cu-simchat'); sc.textContent = 'Chat: ' + (ui.simChat ? 'ON' : 'OFF'); sc.classList.toggle('g', ui.simChat); $('#cu-simnote').textContent = ui.simChat ? 'Fake players, but the lines go to REAL chat' : 'Nothing is sent to the Host or chat'; }
@@ -463,29 +493,30 @@
     $('#cu-badge').textContent = c ? (c.open === true ? 'queue open' : c.open === false ? 'queue closed' : '') + (c.format ? ' · ' + c.format : '') + (c.gameMode && c.gameMode !== 'standard' ? ' · ' + c.gameMode : '') : '';
     $('#cu-act').textContent = c && c.activity && c.activity !== 'none' ? '· ' + c.activity : '';
     $('#cu-qn').textContent = c ? '· ' + q.length + ' waiting' + (c.strikeGame ? ' · ' + (c.strikeGame === 'fn' ? 'Fortnite' : 'Rocket') + ' strikes' : '') : '';
-    const seats = (+String((c && c.format) || '2v2')[0] || 2) * 2, isStr = p => !!(p.streamer || p.isStreamer || String(p.username || p.user || '').toLowerCase() === 'innocentpenguin');
+    const seats = C.fmtSize(c && c.format) * 2, isStr = p => !!(p.streamer || p.isStreamer || String(p.username || p.user || '').toLowerCase() === 'innocentpenguin');
     const strIn = q.some(isStr) || !!(c && c.match && c.match.status !== 'finished' && (ui.sim ? (c.match._p || []).some(isStr) : (c.streamer === 'in'))), gold = Math.max(1, seats - (strIn ? 1 : 0));
     let ng = 0; const kinds = q.map(p => { if (isStr(p)) return 's'; ng++; return ng <= gold ? 'n' : ng <= gold + 2 ? 'b' : ''; });
     C.reconcile($('#cu-queue'), q.map((p, i) => ({ k: kinds[i], u: String(p.username || p.user || p.name || '?').toLowerCase(), d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr, sk: JSON.stringify([strikesFor(String(p.username || p.user || p.name || '?')), strikesKnown(String(p.username || p.user || p.name || '?')), c.strikeLimit, c.strikeGame]) })), r => r.u, () => { const li = h('li'); li.draggable = true; li.dataset.from = 'queue'; li.append(h('span', 'num'), h('span', 't'), h('span', 'mmr'), h('span', 'qtag'), strikeBtn(), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
       (li, r) => { li.dataset.u = r.u; li.className = r.k === 'n' ? 'next-up' : r.k === 'b' ? 'backup' : r.k === 's' ? 'is-streamer' : ''; li.children[0].textContent = '#' + r.n; li.children[1].textContent = r.d; li.children[2].textContent = r.m || ''; li.children[3].textContent = r.k === 'n' ? 'NEXT' : r.k === 'b' ? 'BACKUP' : r.k === 's' ? 'STREAMER' : ''; fillStrike(li.children[4], r.u); });
     const m = c && c.match, live = !!(m && m.status !== 'finished');
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
-    const tv = JSON.stringify([m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(n), strikesKnown(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
-    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.append(h('b', '', lbl)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(String(n).toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
-    renderPop(); renderAsk();
+    const TN = teamsNow(), tv = JSON.stringify([TN, m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(n), strikesKnown(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
+    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(String(n).toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
+    renderPop(); renderAsk(); renderTeamsEditor();
+    const isFn = !!c && /^(boxfights|zonewars|fnviewers)$/.test(c.activity || ''); $('#cu-rlsz').hidden = isFn; $('#cu-fnsz').hidden = !isFn; $('#cu-fmt').textContent = c && c.format ? '· ' + c.format : '';
     const cur = { mode: c && c.mode, format: c && c.format, gamemode: c && (c.gameMode || c.gamemode), koth: c ? (c.koth ? 'on' : 'off') : null, activity: c && c.activity, queue: c ? (c.open ? 'open' : 'close') : null };
     cur.streamer = (ui.sim ? c && c.streamer : null) || (c && c.streamer);
     for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];
     for (const k in ui.ov) if (ui.ov[k].until > Date.now()) cur[k] = ui.ov[k].v;   // just-clicked values win until the Host state catches up   // Host offline: show what was last clicked
     for (const bt of $$('#tab-customs [data-st]')) {
       const [k, v] = bt.dataset.st.split(':'), on = cur[k] === v;
-      if (k === 'win') bt.disabled = !live;
+      if (k === 'win') { bt.disabled = !live; const tk = TN[v]; bt.textContent = tk.name + ' wins'; bt.style.setProperty('--tc', tk.color); }
       else if (k === 'activity') bt.classList.toggle('is-live', on);
       else if (k === 'queue') bt.classList.toggle('q-on', on);
       else { bt.classList.toggle('cur', on); bt.disabled = on; }
     }
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
-      const empty = live ? (+String((c && c.format) || '2v2')[0] || 2) * 2 - (m.orange || []).length - (m.blue || []).length : 0;
+      const empty = live ? C.fmtSize(c && c.format) * 2 - (m.orange || []).length - (m.blue || []).length : 0;
       fb.textContent = !live ? '▶ Start' : 'Fill empty slots' + (empty > 0 ? ' (' + empty + ')' : ''); fb.disabled = live && (empty <= 0 || !q.length);
       fb.title = live ? 'Bring the next players from the queue into every empty slot of this game' : 'Start a game from the queue';
     }
@@ -498,6 +529,84 @@
   }
 
   const normWheel = w => (w && w.public && typeof w.public === 'object' ? Object.assign({}, w.public, { status: w.status || w.public.status, round: w.round, teamSize: w.teamSize || w.public.teamSize }) : w);
+
+  /* ---------- stream info: title / description / tags to every platform. Never goes live: it edits text and can schedule a YouTube entry on a click. ---------- */
+  const PLAT = [['twitch', 'Twitch', 'Host'], ['youtube', 'YouTube', 'Multi'], ['kick', 'Kick', 'Multi']];
+  function mkStream() {
+    $('#tab-stream').innerHTML = `<div class="si">
+      <div class="note sm">Edit once, push to the platforms you tick. This only changes text (and can schedule a YouTube broadcast). It never starts a stream.</div>
+      <label class="lbl" for="si-title">Title</label><input type="text" id="si-title" maxlength="140" autocomplete="off" placeholder="Stream title">
+      <label class="lbl" for="si-game">Game / category <span class="faint">(Twitch)</span></label><input type="text" id="si-game" maxlength="60" autocomplete="off" placeholder="Rocket League">
+      <label class="lbl" for="si-desc">Description <span class="faint">(YouTube, Kick, TikTok; Twitch has none)</span></label><textarea id="si-desc" rows="5" placeholder="What is this stream about?"></textarea>
+      <label class="lbl" for="si-tags">Tags <span class="faint" id="si-tn"></span></label><input type="text" id="si-tags" autocomplete="off" placeholder="comma separated: rocket league, customs, viewers">
+      <div class="lbl">Push to</div><div class="btns" id="si-plats"></div>
+      <div class="btns" style="margin-top:8px"><button class="sm pri" id="si-push">Push to selected</button><button class="sm" id="si-load" title="Read the current title, game, tags and description from the platforms">Load current</button><span class="faint sm" id="si-note"></span></div>
+      <div id="si-res" class="si-res"></div>
+      <h4 class="si-h">YouTube: schedule a broadcast</h4>
+      <div class="row"><input type="datetime-local" id="si-at"><select id="si-priv"><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select><button class="sm rd warn" id="si-sched" title="Creates a scheduled YouTube broadcast with the title, description and tags above. It does not go live.">Schedule</button></div>
+      <div class="faint sm">Creates a scheduled entry only; you start the stream yourself. Two clicks to confirm.</div>
+      <div id="si-sres" class="si-res"></div>
+      <h4 class="si-h">TikTok (manual)</h4>
+      <textarea id="si-tt" rows="5" readonly></textarea><div class="btns" style="margin-top:6px"><button class="sm" id="si-copy">Copy for TikTok</button></div>
+    </div>`;
+    $('#si-plats').append(...PLAT.map(([k, l, via]) => { const b = h('button', 'sm plat', l); b.dataset.plat = k; b.title = 'Sent through ' + via; return b; }));
+    renderStream();
+  }
+  function renderStream() {
+    const si = ui.si, tw = C.parseTags(si.tags), box = $('#tab-stream');
+    for (const [id, key] of [['si-title', 'title'], ['si-game', 'game'], ['si-desc', 'description'], ['si-tags', 'tags'], ['si-at', 'at']]) { const e = $('#' + id); if (document.activeElement !== e && e.value !== (si[key] || '')) e.value = si[key] || ''; }
+    $('#si-priv').value = si.privacy || 'public';
+    $('#si-tn').textContent = tw.length ? '· ' + tw.length + (tw.length > 10 ? ' (Twitch takes 10)' : '') : '';
+    box.querySelectorAll('.plat').forEach(b => b.classList.toggle('cur', !!si.plat[b.dataset.plat]));
+    $('#si-tt').value = C.copyBlock(si);
+  }
+  const siSave = () => { ls.set('si', ui.si); renderStream(); };
+  function siShow(el, rows) { el.replaceChildren(...rows.map(([ok, text]) => h('div', 'sir ' + (ok ? 'ok' : 'bad'), text))); }
+  async function siLoad() {
+    const note = $('#si-note'); note.textContent = 'Loading…'; const got = [], si = ui.si;
+    const [a, b] = await Promise.all([api.get('/api/channel/info'), xapi.get('/api/stream/info')]);
+    if (a.ok && a.json && a.json.ok !== false) { si.title = a.json.title != null ? a.json.title : si.title; si.game = a.json.game != null ? a.json.game : si.game; if (Array.isArray(a.json.tags)) si.tags = a.json.tags.join(', '); got.push('Twitch'); }
+    const yt = b.ok && b.json && b.json.platforms && b.json.platforms.youtube;
+    if (yt && yt.connected) { if (yt.description != null) si.description = yt.description; if (!a.ok && yt.title) si.title = yt.title; if (!a.ok && Array.isArray(yt.tags)) si.tags = yt.tags.join(', '); got.push('YouTube'); }
+    ui.siPlat = b.ok && b.json && b.json.platforms || null; siSave();
+    note.textContent = got.length ? 'Loaded from ' + got.join(' + ') : 'Nothing to load yet (Host /api/channel/info and Multi /api/stream/info are not there yet): type it in.';
+  }
+  async function siPush(btn) {
+    const si = ui.si, want = PLAT.filter(([k]) => si.plat[k]).map(([k]) => k), rows = [];
+    if (!want.length) { toast('Tick at least one platform', true); return; }
+    if (!si.title.trim() && !si.description.trim() && !si.tags.trim() && !si.game.trim()) { toast('Nothing to push: type a title first', true); return; }
+    flash(btn); btn.disabled = true; await tokenReady; ui.tookControl = true;
+    const tags = C.parseTags(si.tags), jobs = [];
+    if (want.includes('twitch')) jobs.push(api.post('/api/channel/update', { title: si.title.trim() || undefined, game: si.game.trim() || undefined, tags: tags.length ? C.twitchTags(tags) : undefined }).then(r => ['Twitch', r]));
+    const other = want.filter(k => k !== 'twitch');
+    if (other.length) jobs.push(xapi.post('/api/stream/info', { title: si.title.trim() || undefined, description: si.description.trim() || undefined, tags: tags.length ? tags : undefined, platforms: other }).then(r => ['multi', r]));
+    for (const [who, r] of await Promise.all(jobs)) {
+      if (who === 'Twitch') rows.push([r.ok && !(r.json && r.json.ok === false), 'Twitch: ' + (r.ok && !(r.json && r.json.ok === false) ? 'updated' + (r.json && r.json.game ? ' (' + r.json.game + ')' : '') : r.status === 404 ? 'the Host has no /api/channel/update for the app yet (asked 02)' : (r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status)]);
+      else if (r.status === 404 || r.status === 0) rows.push([false, other.map(k => PLAT.find(p => p[0] === k)[1]).join(' + ') + ': Multi has no /api/stream/info yet (asked 03)' + (r.status === 0 ? ' or is not running' : '')]);
+      else for (const k of other) { const x = r.json && r.json.results && r.json.results[k]; rows.push([!!(x && x.ok), PLAT.find(p => p[0] === k)[1] + ': ' + (x ? (x.ok ? 'updated' : x.error || 'failed') : (r.json && r.json.error) || 'no answer')]); }
+    }
+    siShow($('#si-res'), rows); btn.disabled = false; toast(rows.every(r => r[0]) ? 'Stream info pushed' : 'Some platforms failed', !rows.every(r => r[0]));
+  }
+  async function siSchedule(btn) {
+    const si = ui.si; if (!si.title.trim()) { toast('A scheduled broadcast needs a title', true); return; }
+    const when = si.at ? new Date(si.at) : null; if (!when || isNaN(+when) || +when < Date.now() + 60000) { toast('Pick a start time in the future', true); return; }
+    flash(btn); await tokenReady; ui.tookControl = true;
+    const r = await xapi.post('/api/stream/schedule', { platform: 'youtube', title: si.title.trim(), description: si.description.trim(), tags: C.parseTags(si.tags), startsAt: when.toISOString(), privacy: si.privacy || 'public' });
+    const ok = r.ok && r.json && r.json.ok !== false;
+    siShow($('#si-sres'), [[ok, ok ? 'Scheduled for ' + when.toLocaleString() + (r.json.url ? ' · ' + r.json.url : '') : r.status === 404 || r.status === 0 ? 'Multi has no /api/stream/schedule yet (asked 03)' : (r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status]]);
+    if (ok && r.json.url) { const a = h('a', 'sir ok', 'Open the broadcast'); a.href = r.json.url; a.target = '_blank'; a.rel = 'noopener'; $('#si-sres').append(a); }
+  }
+  $('#tab-stream').addEventListener('input', e => {
+    const map = { 'si-title': 'title', 'si-game': 'game', 'si-desc': 'description', 'si-tags': 'tags', 'si-at': 'at', 'si-priv': 'privacy' }, k = map[e.target.id]; if (!k) return;
+    ui.si[k] = e.target.value; siSave();
+  });
+  $('#tab-stream').addEventListener('click', async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.plat) { ui.si.plat[b.dataset.plat] = !ui.si.plat[b.dataset.plat]; siSave(); return; }
+    if (b.id === 'si-push') siPush(b); else if (b.id === 'si-load') siLoad();
+    else if (b.id === 'si-sched') { if (!armed(b)) return; siSchedule(b); }
+    else if (b.id === 'si-copy') { const t = $('#si-tt').value; try { await navigator.clipboard.writeText(t); toast('Copied for TikTok'); } catch (err) { $('#si-tt').select(); toast('Select and copy it (Ctrl+C)'); } }
+  });
 
   /* ---------- feed ---------- */
   function mkFeed() {
@@ -672,6 +781,9 @@
   $('#tab-customs').addEventListener('click', e => {
     const b = e.target.closest('button'), li = e.target.closest('.qlist li');
     if (li && b && b.classList.contains('x')) { sendCustom('kick', li.dataset.u, b); return; }
+    if (b && b.id === 'cu-fnset') { const n = Math.round(+$('#cu-fnn').value); if (!(n >= 1 && n <= 16)) { toast('Team size: a number from 1 to 16', true); return; } sendCustom('format', n + 'v' + n, b); $('#cu-fnn').value = ''; return; }
+    if (b && b.classList.contains('swc')) { setTeam(b.closest('.tn').dataset.side, { color: b.dataset.c }); return; }
+    if (b && b.classList.contains('tn-reset')) { const k = b.closest('.tn').dataset.side; setTeam(k, { name: C.TEAM_DEFAULTS[k].name }).then(() => setTeam(k, { color: C.TEAM_DEFAULTS[k].color })); return; }
     if (b && b.dataset.ask) { askDo(b.dataset.ask); return; }
     if (b && b.dataset.wq) {
       if (b.disabled) return; flash(b);
@@ -686,8 +798,13 @@
     else if (b && b.id === 'cu-pickgo') { const v = $('#cu-pick').value.trim().replace(/\s+/g, ' '); C.customsText('pick', v) ? (sendCustom('pick', v, b), $('#cu-pick').value = '') : toast('Type 1 to 4 Twitch names first', true); }
     else if (b && b.id === 'cu-kickgo') { C.customsText('kick', $('#cu-kick').value) ? (sendCustom('kick', $('#cu-kick').value, b), $('#cu-kick').value = '') : toast('Type a Twitch name first', true); }
   });
-  $('#tab-customs').addEventListener('change', e => { const k = e.target.dataset.cuset; if (!k || !e.target.value) return; sendCustom(k, e.target.value, e.target); });
-  $('#tab-customs').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'cu-kick' || e.target.id === 'cu-pick')) $(e.target.id === 'cu-kick' ? '#cu-kickgo' : '#cu-pickgo').click(); });
+  $('#tab-customs').addEventListener('change', e => {
+    const tn = e.target.closest && e.target.closest('.tn');
+    if (tn && e.target.classList.contains('tn-name')) { setTeam(tn.dataset.side, { name: e.target.value }); return; }
+    if (tn && e.target.classList.contains('tn-pick')) { setTeam(tn.dataset.side, { color: e.target.value }); return; }
+    if (e.target.id === 'cu-fnn') return;
+    const k = e.target.dataset.cuset; if (!k || !e.target.value) return; sendCustom(k, e.target.value, e.target); });
+  $('#tab-customs').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'cu-kick' || e.target.id === 'cu-pick')) $(e.target.id === 'cu-kick' ? '#cu-kickgo' : '#cu-pickgo').click(); if (e.key === 'Enter' && e.target.id === 'cu-fnn') $('#cu-fnset').click(); if (e.key === 'Enter' && e.target.classList.contains('tn-name')) e.target.blur(); });
   document.body.append(Object.assign(h('div', 'strikepop'), { id: 'strikepop', hidden: true, innerHTML: '<b class="pu"></b><div class="pb"><button class="sm" data-sa="cancel" title="Cancel">✕</button><button class="sm plus" data-sa="temp" title="Add a temporary strike (wears off after a day)">+ I</button><button class="sm plus" data-sa="perma" title="Add a permanent strike (never expires)">+ I perma</button><button class="sm minus" data-sa="rm" title="Remove a strike (temporary first, then permanent)">−</button></div>' }));
   $('#tab-customs').addEventListener('click', e => {
     const sb = e.target.closest('.sbtn'); if (sb) { e.stopPropagation(); ui.pop = ui.pop === sb.dataset.su ? null : sb.dataset.su; renderPop(); return; }
@@ -736,6 +853,7 @@
   document.addEventListener('keydown', e => { if (e.target.id === 'oc-text' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); askOverlay(); } });
   function setTab(t) {
     ui.tab = t; ls.set('tab', t); $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabbody').forEach(d => d.hidden = d.id !== 'tab-' + t);
+    if (t === 'stream') siLoad();
     if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') renderFeed();
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
@@ -770,7 +888,7 @@
   window.addEventListener('focus', () => Object.values(pollers).forEach(p => p.kick()));
 
   /* ---------- start ---------- */
-  mkCustomsSkeleton(); mkFeed(); mkCmds(); mkOverlays();
+  mkCustomsSkeleton(); mkFeed(); mkCmds(); mkOverlays(); mkStream();
   $('#feed-chips').addEventListener('click', e => { const b = e.target.closest('[data-lc]'); if (b) { ui.logCat = b.dataset.lc; ls.set('logcat', ui.logCat); renderFeed(); } });
   $('#feedlist').addEventListener('click', e => { const g = e.target.closest('a.grp'); if (g) { const k = g.dataset.g; ui.openGroups.has(k) ? ui.openGroups.delete(k) : ui.openGroups.add(k); renderFeed(); } });
   setTab(ui.tab);

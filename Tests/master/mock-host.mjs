@@ -44,6 +44,10 @@ export function startMock(port = 8798, opts = {}) {
         else ran = '!' + a;
         st.modCalls.push({ a, v }); push('customs', st.customs); return send(res, 200, { ok: true, ran, customs: st.customs });
       }
+      if (p === '/api/customs/teams') { st.customs.teams = st.customs.teams || { orange: { name: 'Orange', color: '#ff7a00' }, blue: { name: 'Blue', color: '#1e8fff' } }; for (const k of ['orange', 'blue']) if (b[k]) Object.assign(st.customs.teams[k], b[k]); push('customs', st.customs); return send(res, 200, { ok: true, teams: st.customs.teams }); }
+      if (p === '/api/channel/update') { st.chan = Object.assign(st.chan || {}, b); return send(res, 200, { ok: true, game: b.game, title: b.title }); }
+      if (p === '/api/stream/info') { st.sinfo = b; return send(res, 200, { ok: true, results: Object.fromEntries((b.platforms || []).map(k => [k, { ok: k !== 'kick', error: k === 'kick' ? 'Kick API not available' : undefined }])) }); }
+      if (p === '/api/stream/schedule') { st.sched = b; return send(res, 200, { ok: true, broadcastId: 'bc1', url: 'https://youtube.com/watch?v=bc1' }); }
       if (p === '/api/wheel/queue-add') { st.we = st.we || []; const add = (b.users || []).filter(x => !st.we.includes(x)); st.we.push(...add); (st.wcalls = st.wcalls || []).push({ p, b }); return send(res, 200, { ok: true, added: add, skipped: [] }); }
       if (p === '/api/wheel/remove') { st.we = (st.we || []).filter(x => !(b.users || []).includes(x)); (st.wcalls = st.wcalls || []).push({ p, b }); return send(res, 200, { ok: true, removed: b.users || [] }); }
       if (p === '/api/wheel/cancel') { (st.wcalls = st.wcalls || []).push({ p, b }); return send(res, 200, { ok: true }); }
@@ -70,6 +74,8 @@ export function startMock(port = 8798, opts = {}) {
     if (p === '/api/status') return send(res, 200, { ok: true, chatConnected: true, eventSubConnected: true, obsConnected: true });
     if (p === '/api/live') return send(res, 200, st.live);
     if (p === '/api/activity') { const since = +u.searchParams.get('since') || 0; return send(res, 200, { ok: true, seq: st.act.seq, items: st.act.items.filter(i => i.seq > since) }); }
+    if (p === '/api/channel/info') return send(res, 200, { ok: true, title: 'Customs with viewers', game: 'Rocket League', tags: ['English', 'Customs'] });
+    if (p === '/api/stream/info') return send(res, 200, { ok: true, platforms: { youtube: { connected: true, canSchedule: true, title: 'Customs with viewers', description: 'Join the queue!', tags: ['rl'] }, kick: { connected: false }, tiktok: { manual: true } } });
     if (p === '/api/wheel/public') return send(res, 200, st.wheel);
     if (p === '/api/customs/state') return opts.noCustoms ? send(res, 404, {}) : send(res, 200, st.customs);
     if (p === '/api/chat/recent') { if (opts.noChat) return send(res, 404, {}); const since = +u.searchParams.get('since') || 0; return send(res, 200, { ok: true, seq: st.seq, messages: st.chat.filter(c => c.seq > since) }); }

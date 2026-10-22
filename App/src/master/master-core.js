@@ -106,7 +106,7 @@
     finish: v => (['blue', 'orange'].includes(v) ? '!finish ' + v : null),
     koth: v => (['on', 'off'].includes(v) ? '!koth ' + v : null),
     mode: v => (['balanced', 'random', 'picks'].includes(v) ? '!mode ' + v : null),
-    format: v => (['1v1', '2v2', '3v3', '4v4'].includes(v) ? '!format ' + v : null),
+    format: v => (/^([1-9]|1[0-6])v\1$/.test(v) ? '!format ' + v : null),   // customs 2v2-4v4, Fortnite viewers any size 1-16 (Host must accept NvN)
     gamemode: v => (['standard', 'dropshot', 'rumble'].includes(v) ? '!gamemode ' + v : null),
     casual: v => (['group', 'teams'].includes(v) ? '!casual ' + v : null),
     activity: v => (/^(?:(?:rl|fn) )?(?:competitive|casual|koth|viewers|boxfights|zonewars|fnviewers|end)$/.test(v) ? '!activity ' + v : null),
@@ -134,6 +134,18 @@
     if (d.mode && d.mode !== cur.mode) steps.push(['mode', d.mode]);
     return steps;
   }
+  // Team size from a format like "3v3" (2 when unknown). Works for 10v10 too.
+  const fmtSize = f => { const m = /^(\d{1,2})v\d{1,2}$/.exec(String(f || '')); return m ? +m[1] || 2 : 2; };
+  // Team name + colour (customs only; the emoji team lines are for tourneys). Colour = #rrggbb.
+  const TEAM_DEFAULTS = { orange: { name: 'Orange', color: '#ff7a00' }, blue: { name: 'Blue', color: '#1e8fff' } };
+  const TEAM_PRESETS = [['Penguin orange', '#ff7a00'], ['Amber', '#ffb347'], ['Ember', '#ff4d00'], ['Gold', '#ffc833'], ['Cream', '#f3e3c3'], ['Red', '#e74c3c'], ['Pink', '#ff5fa2'], ['Purple', '#9b59b6'],
+    ['Blue', '#1e8fff'], ['Sky', '#5aaeff'], ['Teal', '#1abc9c'], ['Green', '#2ecc71'], ['Lime', '#a4e000'], ['White', '#ffffff'], ['Grey', '#9aa0a6']];
+  function teamName(v) { const s = String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, '').trim(); return s && s.length <= 20 && !/^[!\/.]/.test(s) ? s : null; }
+  function teamColor(v) { const s = String(v == null ? '' : v).trim().toLowerCase(); return /^#[0-9a-f]{6}$/.test(s) ? s : null; }
+  // Stream info: Twitch tags (max 10, 25 chars, letters/digits/spaces only) and a hashtag line for TikTok
+  function parseTags(v) { const seen = new Set(), out = []; for (const t of String(v || '').split(/[,\n]+/)) { const s = t.replace(/^#+/, '').trim(); if (s && !seen.has(s.toLowerCase())) { seen.add(s.toLowerCase()); out.push(s); } } return out; }
+  const twitchTags = tags => tags.map(t => t.replace(/[^A-Za-z0-9 ]/g, '').replace(/\s+/g, '')).filter(Boolean).map(t => t.slice(0, 25)).slice(0, 10);
+  function copyBlock(si) { const tags = parseTags(si.tags).map(t => '#' + t.replace(/\s+/g, '')); return [si.title, si.description, tags.join(' ')].filter(x => x && String(x).trim()).join('\n\n'); }
   // Strike model (bot): temp strikes (wear off after a day), HALF strike (two halves = one temp), PERMA strikes (never expire); limit = !tune strikes (3).
   function normStrike(x) {
     if (typeof x === 'number') return { temp: x, half: 0, perma: 0 };
@@ -344,5 +356,5 @@
     }
   }
 
-  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, ACTIVITY_DEFAULTS, activityPlan, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });

@@ -66,7 +66,7 @@ await t('customs actions map to the same chat commands as the website', () => {
   assert.equal(e('match', 'fill'), '!match fill'); assert.equal(e('finish', 'blue'), '!finish blue'); assert.equal(e('format', '3v3'), '!format 3v3'); assert.equal(e('koth', 'on'), '!koth on'); assert.equal(e('kick', '@Spy_Wobbles'), '!kick Spy_Wobbles');
 });
 await t('customs actions reject anything off the allow-list (no chat injection)', () => {
-  const e = C.customsText; assert.equal(e('match', 'explode'), null); assert.equal(e('win', 'red'), null); assert.equal(e('kick', 'a b'), null); assert.equal(e('kick', 'x\n!ban all'), null); assert.equal(e('kick', ''), null); assert.equal(e('format', '9v9'), null); assert.equal(e('rm -rf', ''), null);
+  const e = C.customsText; assert.equal(e('match', 'explode'), null); assert.equal(e('win', 'red'), null); assert.equal(e('kick', 'a b'), null); assert.equal(e('kick', 'x\n!ban all'), null); assert.equal(e('kick', ''), null); assert.equal(e('format', '17v17'), null); assert.equal(e('rm -rf', ''), null);
 });
 
 console.log('core: SSE parser');
@@ -215,6 +215,22 @@ await t('wheel: Tourney maps to !wheel open only; queue-add / remove / cancel / 
   assert.deepEqual((await api.get('/api/wheel/state')).json.entrants.map(e => e.login), ['ann', 'bob']);
   await api.post('/api/wheel/remove', { users: ['ann'] }); assert.deepEqual((await api.get('/api/wheel/state')).json.entrants.map(e => e.login), ['bob']);
   assert.equal((await api.post('/api/wheel/cancel')).json.ok, true); assert.equal((await api.post('/api/customs/queue-add', { users: ['ann'] })).json.ok, true);
+});
+
+await t('teams: name/colour validation, sizes up to 16, tags and the TikTok block', () => {
+  assert.equal(C.teamName('  Pingus '), 'Pingus'); assert.equal(C.teamName('!kick'), null); assert.equal(C.teamName('x'.repeat(21)), null); assert.equal(C.teamName(''), null);
+  assert.equal(C.teamColor('#FF7A00'), '#ff7a00'); assert.equal(C.teamColor('orange'), null); assert.equal(C.teamColor('#ff7a0'), null);
+  assert.equal(C.customsText('format', '5v5'), '!format 5v5'); assert.equal(C.customsText('format', '16v16'), '!format 16v16'); assert.equal(C.customsText('format', '2v3'), null); assert.equal(C.customsText('format', '17v17'), null); assert.equal(C.customsText('format', '3v3; !x'), null);
+  assert.equal(C.fmtSize('10v10'), 10); assert.equal(C.fmtSize('3v3'), 3); assert.equal(C.fmtSize(null), 2);
+  assert.deepEqual(C.parseTags('#rl, customs ,RL,, fun'), ['rl', 'customs', 'fun']); assert.deepEqual(C.twitchTags(['rocket league', 'a-b!']), ['rocketleague', 'ab']);
+  assert.equal(C.copyBlock({ title: 'T', description: 'D', tags: 'rocket league, fun' }), ['T', 'D', '#rocketleague #fun'].join('|').replace(/\|/g, String.fromCharCode(10, 10)));
+});
+
+await t('teams + stream info round trips on the mock', async () => {
+  const r = await api.post('/api/customs/teams', { orange: { name: 'Pingus', color: '#ffb347' } }); assert.equal(r.json.teams.orange.name, 'Pingus'); assert.equal((await api.get('/api/customs/state')).json.teams.blue.name, 'Blue');
+  assert.equal((await api.get('/api/channel/info')).json.game, 'Rocket League');
+  const u = await api.post('/api/stream/info', { title: 'x', platforms: ['youtube', 'kick'] }); assert.equal(u.json.results.youtube.ok, true); assert.equal(u.json.results.kick.ok, false);
+  assert.equal((await api.post('/api/stream/schedule', { platform: 'youtube', title: 'x', startsAt: '2030-01-01T00:00:00Z' })).json.broadcastId, 'bc1');
 });
 
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
