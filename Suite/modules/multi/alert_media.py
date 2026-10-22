@@ -53,7 +53,7 @@ def delete(name):
 
 
 def host_runtime():
-    """the Host's data folder: the Suite hands every module PINGUINO_DATA_DIR (= Data\runtime) and Multi lives in <that>\multi; standalone it is Data\runtime next to the repo"""
+    r"""the Host's data folder: the Suite hands every module PINGUINO_DATA_DIR (= Data\runtime) and Multi lives in <that>\multi; standalone it is Data\runtime next to the repo"""
     for c in (config.DATA.parent, config.DATA.parent / "runtime", config.ROOT.parent.parent.parent / "Data" / "runtime"):
         if (c / "alerts_settings.json").is_file() or (c / "alert_bridge.json").is_file():
             return c
