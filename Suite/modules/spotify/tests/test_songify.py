@@ -187,6 +187,21 @@ class SongifyTests(unittest.TestCase):
         self.api.playlist_add = lambda *a: (_ for _ in ()).throw(RuntimeError("403"))
         self.assertTrue(self.sr("bob", 2)["ok"])
 
+    def test_master_view_mod_actions(self):
+        self.assertFalse(self.e.mod_action("like")["ok"], "nothing playing")
+        self.play(5)
+        self.assertTrue(self.e.mod_action("like")["ok"])
+        self.assertEqual(self.api.liked, ["id5xxxxxxxxxxxxxxxxxxx"])
+        r = self.e.mod_action("ban_artist")
+        self.assertTrue(r["ok"] and r["artist"])
+        self.assertIn(r["artist"].lower(), [b.lower() for b in self.e.settings["blocklist"]])
+        self.play(6)
+        self.assertTrue(self.e.mod_action("ban_song")["ok"])
+        self.api.previous = lambda: None
+        self.assertTrue(self.e.mod_action("previous")["ok"])
+        with self.assertRaises(Exception):
+            self.e.mod_action("nope")
+
     def test_pos_next_and_like(self):
         self.sr("ann", 3)
         self.sr("bob", 2)
@@ -245,3 +260,4 @@ class NonJsonSuccessTest(unittest.TestCase):
         with mock.patch.object(urllib.request, "urlopen", return_value=R(b"Player command ok")):
             st, hd, js = spotify_api.default_http("PUT", "https://x", {}, None)
         self.assertEqual((st, js), (200, None))
+

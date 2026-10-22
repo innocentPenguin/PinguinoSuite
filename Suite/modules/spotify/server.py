@@ -491,6 +491,11 @@ def p_block(h, b):
     return {"ok": True}
 
 
+def p_mod_action(h, b):
+    """Master view buttons: {action: like|skip|previous|ban_song|ban_artist}."""
+    return engine.mod_action(str(b.get("action", "")), str(b.get("user") or "streamer"))
+
+
 def p_blocklist_import(h, b):
     text = str(b.get("text", ""))
     if not text.strip():
@@ -498,7 +503,7 @@ def p_blocklist_import(h, b):
     return {"ok": True, **engine.import_blocklist(text[:200000])}
 
 
-POST = {"/api/player/status": p_player_status, "/api/blocklist/import": p_blocklist_import, "/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
+POST = {"/api/player/status": p_player_status, "/api/blocklist/import": p_blocklist_import, "/api/mod-action": p_mod_action, "/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
         "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/shuffle": p_shuffle, "/api/queue/add_context": p_add_context, "/api/presets/save": p_user_preset, "/api/presets/delete": p_user_preset_del, "/api/queue/remove_user": p_remove_user, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
         "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/preset": p_preset, "/api/settings/reset": p_reset, "/api/msgs/preview": p_msg_preview, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}

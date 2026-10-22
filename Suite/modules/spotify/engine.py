@@ -736,6 +736,35 @@ class Engine:
             return self._r(True, "blocked", "blocked_song", user=user, title=t["name"], artist=t["artists"][0] if t["artists"] else "")
         return {"ok": False, "code": "denied", "reply": ""}
 
+    def mod_action(self, action, user="streamer"):
+        """One-click actions for the Master view: like | skip | previous | ban_song | ban_artist -> {ok, code, title, artist}. Acts on the current song."""
+        t = self.pb["track"] if self.pb and self.pb["track"] else None
+        if action == "previous":
+            self.control("previous")
+            return {"ok": True, "code": "previous"}
+        if not t:
+            return {"ok": False, "code": "none", "error": "nothing is playing"}
+        artist = t["artists"][0] if t["artists"] else ""
+        if action == "like":
+            r = self._chat_cmd("like", "", user, ["broadcaster"], True, False)
+        elif action == "skip":
+            self.skip(force=True, by=user)
+            r = {"ok": True, "code": "skipped"}
+        elif action == "ban_song":
+            r = self._chat_cmd("blocksong", "", user, ["broadcaster"], True, False)
+        elif action == "ban_artist":
+            if not artist:
+                return {"ok": False, "code": "none", "error": "no artist on this song"}
+            cur = self._own_settings()["blocklist"]
+            if artist.lower() not in [str(x).lower() for x in cur]:
+                self.save_settings({"blocklist": cur + [artist]})
+            self._reject(t, user, "blocked")
+            self.skip(force=True, by=user)
+            r = {"ok": True, "code": "artist_banned"}
+        else:
+            raise QueueError("unknown action")
+        return {"ok": bool(r.get("ok")), "code": r.get("code", ""), "title": t["name"], "artist": artist}
+
     def song_reply(self, user=""):
         t = self.pb["track"] if self.pb and self.pb["track"] else None
         if not t:
