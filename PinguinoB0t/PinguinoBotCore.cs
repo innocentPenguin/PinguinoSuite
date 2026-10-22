@@ -508,6 +508,10 @@ public class CPHInline
         // (true KOTH) instead of re-mixing everyone (old behaviour = false).
         public bool KothKeepWinnersTogether { get; set; } = false;
 
+        // [NEW][AUTONEXT] After a mod picks the winner (!win, Orange wins / Blue wins) the next game starts by itself as soon as the queue has enough players
+        // (team size x 2). Not enough: it says so once and starts when the queue fills up. KOTH keeps its winners-stay refill. Off = mods start the next game (!next / !balance).
+        public bool AutoNextMatch { get; set; } = true;
+
         // [NEW] !reroll picks randomly among splits within this many avg MMR
         // of the best split, so rerolls actually produce different teams.
         public int RerollToleranceMmr { get; set; } = 50;
@@ -2024,6 +2028,7 @@ public class CPHInline
             case "!check":    return HandleCheck(userLower, isPrivileged);                 // [NEW][CHECK] self-test; problems go to the website log in red
             case "!finish":   return HandleFinish(userLower, input, isPrivileged);       // [NEW][KOTH] Orange / Blue wins, then everyone out (or winners stay)
             case "!koth":     return HandleKoth(userLower, input, isPrivileged);
+            case "!autonext": return HandleAutoNext(userLower, input, isPrivileged);   // [NEW][AUTONEXT]
             case "!strike":   return HandleStrike(userLower, input, isPrivileged, 1);    // [NEW][STRIKES]
             case "!unstrike": return HandleStrike(userLower, input, isPrivileged, -1);
             case "!strikes":  return HandleStrikes(userLower, input);
@@ -2250,6 +2255,7 @@ public class CPHInline
 
             // [NEW][KOTH] The finished match has been on the website / overlays long enough: show the real state.
             if (_holdMatch != null && Now() >= _holdUntil) { _holdMatch = null; PublishState("hold_end", ""); }
+            try { TryAutoNext(); } catch (Exception) { }   // [NEW][AUTONEXT] start the next game once the queue has enough players
 
             // 3) [NEW][WEB] Penguin League table: every registered player's
             //    [username, Epic name, wins, losses, points]. Sent when it changed,
@@ -2725,6 +2731,7 @@ public class CPHInline
     // [CIRCUIT] One synchronized "teams selected" result: state, history, chat, overlay.
     void StartMatch(List<TeamPlayer> players, BalanceResult result, string format)
     {
+        _autoNextPending = false;   // [NEW][AUTONEXT] a game is starting (by hand or by itself)
         int id = _settings.NextMatchId++;
         SaveSettings();
 
@@ -4008,6 +4015,7 @@ public class CPHInline
                         _queue.Add(new QueueEntry { Username = w, Position = front++, Status = "waiting", JoinedAt = Now() });
                 CompactPositions();
                 EnsureStreamerQueued();
+                _autoNextPending = _settings.AutoNextMatch; _autoNextTold = true; _autoNextSince = DateTime.UtcNow;   // [NEW][AUTONEXT] starts by itself when enough challengers have joined
                 Say("KOTH: " + (team == "blue" ? "🔷 Blue" : "🔶 Orange") + " stays on, but there aren't enough challengers (need " + need + ", have " + avail + "). The winners wait at the front of the queue.");
             }
             else
@@ -4022,8 +4030,26 @@ public class CPHInline
         {
             ClearPlaying();         // "remove all": nobody stays
             EnsureStreamerQueued();
+            AutoNextAfterResult(true);   // [NEW][AUTONEXT]
         }
         PublishState("match_finished", team);
+        return true;
+    }
+
+    // [NEW][AUTONEXT] !autonext [on|off]: start the next game by itself after a result once enough players are queued. Mods change it.
+    bool HandleAutoNext(string user, string input, bool isPrivileged)
+    {
+        string v = string.IsNullOrEmpty(input) ? "" : input.Split(' ')[0].ToLower();
+        if (v == "") { Say("@" + user + " Auto-start of the next game is " + (_settings.AutoNextMatch ? "ON" : "OFF") + "."); return true; }
+        if (!isPrivileged) { Say("@" + user + " Only mods can change auto-start."); return true; }
+        bool on;
+        if (v == "on" || v == "true" || v == "yes") on = true;
+        else if (v == "off" || v == "false" || v == "no") on = false;
+        else { Say("@" + user + " Usage: !autonext <on|off>"); return true; }
+        _settings.AutoNextMatch = on; if (!on) _autoNextPending = false;
+        SaveSettings();
+        Say("Auto-start of the next game is now " + (on ? "ON: it starts when the queue has enough players." : "OFF: mods start the next game."));
+        PublishState("autonext", on ? "on" : "off");
         return true;
     }
 
@@ -4174,6 +4200,7 @@ public class CPHInline
             return true;
         }
         RecordResult(team);
+        if (!IsKothMode()) AutoNextAfterResult(true);   // [NEW][AUTONEXT]
         return true;
     }
 
@@ -4235,6 +4262,36 @@ public class CPHInline
             ? " (+" + _settings.PointsWin + " pts winners, +" + _settings.PointsLoss + " pts losers)"
             : " (casual: no points)"));
         PublishState("match_result", winnerTeam);
+    }
+
+    // [NEW][AUTONEXT] the next game after a result. pending = waiting for enough players; told = the "not enough" line was already said once.
+    bool _autoNextPending, _autoNextTold; DateTime _autoNextSince = DateTime.MinValue;
+    void AutoNextAfterResult(bool announce)
+    {
+        if (!_settings.AutoNextMatch) { _autoNextPending = false; return; }
+        _autoNextPending = true; _autoNextTold = !announce; _autoNextSince = DateTime.UtcNow;
+        TryAutoNext();
+    }
+    void TryAutoNext()
+    {
+        if (!_autoNextPending) return;
+        if (!_settings.AutoNextMatch || (DateTime.UtcNow - _autoNextSince).TotalHours > 3) { _autoNextPending = false; return; }
+        if (_lastBalance != null && _lastBalance.Result != null && !_lastBalance.ResultRecorded) { _autoNextPending = false; return; }   // a game is already running
+        if (_queue.Any(e => e.Status == "active") && !(_lastBalance != null && _lastBalance.ResultRecorded)) { _autoNextPending = false; return; }
+        string format = _settings.DefaultFormat; int slots = GetTotalSlots(format);
+        EnsureStreamerQueued();
+        int have = GetWaitingCount() + (_queue.Any(e => e.Status == "active" && IsStreamer(e.Username)) ? 1 : 0);
+        if (have >= slots)
+        {
+            _autoNextPending = false;
+            DoRotateAndBalance();   // the same announcement as a manual !next
+            return;
+        }
+        if (!_autoNextTold)
+        {
+            _autoNextTold = true;
+            Say("Waiting for players: need " + slots + " for " + format + ", have " + have + ". The next game starts by itself when the queue is full.");
+        }
     }
 
     bool DoRotateAndBalance()

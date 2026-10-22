@@ -30,6 +30,7 @@ public static class Harness
         Console.WriteLine((ok ? "PASS " : "FAIL ") + what);
         if (!ok) { failed++; Console.WriteLine("   chat: " + string.Join(" || ", CPHProxy.Sent)); }
     }
+    static string MatchId() { var m = State()["currentMatch"]; return m == null || m.Type == Newtonsoft.Json.Linq.JTokenType.Null ? "" : m["id"].ToString(); }
     static string[] Q() { return State()["queue"].Select(x => (string)x["user"]).ToArray(); }
     static string[] Team(string side) { return State()["currentMatch"][side].Select(x => (string)x["Username"]).ToArray(); }
 
@@ -37,6 +38,7 @@ public static class Harness
     {
         dir = Path.Combine(Path.GetTempPath(), "bvqtest_" + Guid.NewGuid().ToString("N").Substring(0, 8));
         Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "settings.json"), "{\"AutoNextMatch\": false}");   // the older checks below expect the manual !next flow
         Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dir);
         Environment.SetEnvironmentVariable("BVQ_WHEEL_FAST", "1");
         // 12 registered players with a set MMR (so no Tracker/network lookups happen).
@@ -774,6 +776,36 @@ public static class Harness
         Run("mod1", "!streamer", "in", true);
         { var qBefore = Q(); Run("curious", "!next");
           Check(CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].StartsWith("@curious ") && !CPHProxy.Sent[0].Contains("Only mods") && (CPHProxy.Sent[0].Contains("Next up") || CPHProxy.Sent[0].Contains("queue is empty")) && Q().SequenceEqual(qBefore), "a viewer's !next is a short read-only 'who is next' line and never advances the queue: " + string.Join("|", CPHProxy.Sent)); }
+        // ===== [NEW][AUTONEXT] the next game starts by itself after a mod picks the winner =====
+        {
+            var tick = typeof(CPHInline).GetMethod("TryAutoNext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Run("mod1", "!match", "clear", true); Run("mod1", "!queue", "clear", true); Run("mod1", "!queue", "open", true); Run("mod1", "!streamer", "out", true);
+            Run("mod1", "!autonext", "", true); Check(CPHProxy.Sent.Any(m => m.Contains("OFF")), "autonext: off in this harness");
+            Run("mod1", "!autonext", "on", true); Check(CPHProxy.Sent.Any(m => m.Contains("now ON")), "autonext: mods can turn it on");
+            Run("p1", "!autonext", "off"); Check(CPHProxy.Sent.Any(m => m.Contains("Only mods")), "autonext: viewers cannot change it");
+            foreach (var n in new[] { "p2", "p4", "p5", "p6" }) Run(n, "!join");
+            Run("mod1", "!balance", "", true);
+            Check(MatchId() != "", "autonext: first game started by hand");
+            string firstId = MatchId();
+            foreach (var n in new[] { "p7", "p8", "p9", "p10" }) Run(n, "!join");
+            Run("mod1", "!win", "blue", true);
+            Check(MatchId() != "" && MatchId() != firstId && CPHProxy.Sent.Any(m => m.Contains("Blue wins")) && CPHProxy.Sent.Any(m => m.Contains("Blue [avg")), "autonext: after the win the next game starts at once when 4 can play: " + string.Join(" | ", CPHProxy.Sent));
+            string secondId = MatchId();
+            // not enough waiting: announce once, then start by itself when the queue fills
+            Run("mod1", "!win", "orange", true);
+            int wait1 = CPHProxy.Sent.Count(m => m.StartsWith("Waiting for players"));
+            Check(wait1 == 1, "autonext: not enough players: announced once (" + wait1 + "): " + string.Join(" | ", CPHProxy.Sent));
+            CPHProxy.Sent.Clear(); tick.Invoke(bot, null); tick.Invoke(bot, null);
+            Check(CPHProxy.Sent.Count == 0, "autonext: waiting is announced only once");
+            foreach (var n in new[] { "p11", "p2", "p4", "p5" }) Run(n, "!join");
+            CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
+            Check(MatchId() != "" && MatchId() != secondId && CPHProxy.Sent.Any(m => m.Contains("Blue [avg")), "autonext: starts by itself once the queue is full: " + string.Join(" | ", CPHProxy.Sent));
+            // off: manual flow
+            Run("mod1", "!autonext", "off", true);
+            string thirdId = MatchId();
+            Run("mod1", "!win", "blue", true);
+            Check(MatchId() == "" || MatchId() == thirdId, "autonext: off = no automatic next game");
+        }
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
         try { Directory.Delete(dir, true); } catch { }
         return failed == 0 ? 0 : 1;
