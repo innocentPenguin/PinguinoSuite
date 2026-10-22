@@ -90,6 +90,11 @@ namespace PinguinoHost
             System.Threading.Thread.Sleep(3000); Check(Auto.RaidStartFires == f0 + 1, "raid line: said once when the delay is over");
             Auto.ResetRaidStart(); Auto.OnRaidScheduled("cancelled"); Auto.CancelRaidStart(); System.Threading.Thread.Sleep(3000); Check(Auto.RaidStartFires == f0 + 1, "raid line: !unraid / stream offline cancels it");
             Auto.ResetRaidStart(); Check(Auto.OnRaidScheduled("now", true) && Auto.RaidStartFires == f0 + 2, "raid line: Raid prep with now:true says it at once");
+            // raid_out (the 20 s StopStream) must run after the raid landed, once per raid, and be cancellable
+            Auto.ResetRaidStart(); int o0 = Auto.RaidOutFires; var ro = new Dictionary<string, object> { { "eventType", "TwitchRaidOut" }, { "userName", "streamer" }, { "viewers", 5 } };
+            Auto.OnEvent(ro); Auto.OnEvent(ro); Check(Auto.RaidOutFires == o0, "raid_out: not run when the countdown starts");
+            System.Threading.Thread.Sleep(3000); Check(Auto.RaidOutFires == o0 + 1, "raid_out: run once after the delay (the second signal of the same raid is ignored)");
+            Auto.ResetRaidStart(); Auto.OnEvent(ro); Auto.CancelRaidStart(); System.Threading.Thread.Sleep(3000); Check(Auto.RaidOutFires == o0 + 1, "raid_out: !unraid / stream offline cancels it");
             Auto.RaidDelayOverrideSec = -1;
             AlertBridge.TestPost = null;
             Console.WriteLine(fails == 0 ? "[alerttest] ALL PASS" : "[alerttest] " + fails + " FAILED");

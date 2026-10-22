@@ -214,7 +214,18 @@ namespace PinguinoHost
             if (kind == "stream_online") { try { Program.ResetFirsts(); Session.Begin(); Roster.Reset(); } catch (Exception) { } }
             try { Latest.Record(kind, ctx); } catch (Exception ex) { Clog.Warn("latest", "could not record the event: " + ex.Message); }
             try { Economy.PointsEvent(args, kind == "follow" && Latest.LastRefollow); } catch (Exception) { }
+            if (kind == "raid_out") { ScheduleRaidOut(ctx); return; }   // Twitch sends this when the countdown starts: the 20 s stop-stream step must run after the raid has landed
             Fire(kind, ctx);
+        }
+        static int RaidDelaySec() { return RaidDelayOverrideSec >= 0 ? RaidDelayOverrideSec : (int)Math.Max(0, Math.Min(88, (int?)Latest.Settings()["RaidStartDelaySec"] ?? 80)); }
+        static System.Threading.Timer _raidOutTimer; static DateTime _raidOutAt = DateTime.MinValue; internal static int RaidOutFires;
+        /// <summary>raid_out automations (raid landed: thanks, then the 20 s StopStream) run RaidStartDelaySec after Twitch's signal, once per raid; !unraid / stream_offline cancels them</summary>
+        static void ScheduleRaidOut(Dictionary<string, string> ctx)
+        {
+            lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidOutAt).TotalMinutes < 3) return; _raidOutAt = DateTime.UtcNow; }
+            Action go = () => { lock (typeof(Auto)) _raidOutTimer = null; RaidOutFires++; Fire("raid_out", ctx); };
+            int delay = RaidDelaySec(); if (delay == 0) { go(); return; }
+            lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => go(), null, delay * 1000, System.Threading.Timeout.Infinite); }
         }
 
         static void Fire(string kind, Dictionary<string, string> ctx)
@@ -240,15 +251,15 @@ namespace PinguinoHost
         {
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidStartAt).TotalMinutes < 3) return false; _raidStartAt = DateTime.UtcNow; }
             // Twitch announces the raid when its countdown STARTS (up to 90 s before it goes), so the line waits until just before the raid lands (RaidStartDelaySec, default 80); "now" fires at once
-            int delay = now ? 0 : RaidDelayOverrideSec >= 0 ? RaidDelayOverrideSec : (int)Math.Max(0, Math.Min(88, (int?)Latest.Settings()["RaidStartDelaySec"] ?? 80));
+            int delay = now ? 0 : RaidDelaySec();
             if (delay == 0) { FireRaidStart(target); return true; }
             lock (typeof(Auto)) { if (_raidTimer != null) _raidTimer.Dispose(); _raidTimer = new System.Threading.Timer(_ => { lock (typeof(Auto)) { _raidTimer = null; } FireRaidStart(target); }, null, delay * 1000, System.Threading.Timeout.Infinite); }
             return true;
         }
         static System.Threading.Timer _raidTimer; internal static int RaidDelayOverrideSec = -1; internal static int RaidStartFires;
         /// <summary>!unraid or the stream going offline before the line was due: nothing is said and a new raid can start the line again</summary>
-        public static void CancelRaidStart() { lock (typeof(Auto)) { if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; _raidStartAt = DateTime.MinValue; } } }
-        internal static void ResetRaidStart() { lock (typeof(Auto)) { _raidStartAt = DateTime.MinValue; if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; } } }
+        public static void CancelRaidStart() { lock (typeof(Auto)) { if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; _raidStartAt = DateTime.MinValue; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; _raidOutAt = DateTime.MinValue; } } }
+        internal static void ResetRaidStart() { lock (typeof(Auto)) { _raidStartAt = DateTime.MinValue; _raidOutAt = DateTime.MinValue; if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; } } }
         static void FireRaidStart(string target) { RaidStartFires++; Fire("raid_start", new Dictionary<string, string> { { "channel", Channel() }, { "target", target ?? "" }, { "event", "raid_start" } }); }
         public static void OnStream(bool online) { if (!online) CancelRaidStart(); if (online) Program.ResetFirsts(); Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }
 
