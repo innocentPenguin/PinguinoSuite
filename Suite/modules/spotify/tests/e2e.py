@@ -139,6 +139,9 @@ def main():
     T("foreign Origin rejected on POST", post("/api/settings", {}, headers={"Origin": "http://evil.com"})[0] == 403)
     T("OPTIONS preflight from the app origin answers", call("OPTIONS", "/api/mod-action", headers={"Origin": "http://tauri.localhost"})[0] == 204)
     T("OPTIONS from a foreign origin refused", call("OPTIONS", "/api/mod-action", headers={"Origin": "http://evil.com"})[0] == 403)
+    T("control from the app origin is accepted (no token needed)", post("/api/control", {"action": "pause"}, headers={"Origin": "http://tauri.localhost"})[0] in (200, 409, 502))
+    n = get("/api/now")[1]
+    T("now-playing has player fields", all(k in n for k in ("album", "art", "is_playing", "progress_ms", "duration_ms", "volume")))
     T("mod-action from the app origin is accepted (no token needed)", post("/api/mod-action", {"action": "like"}, headers={"Origin": "http://tauri.localhost"})[0] in (200, 409))
     T("malformed JSON body tolerated", call("POST", "/api/settings", b"{not json", raw=True)[0] == 200)
     T("overlay with nothing playing", get("/api/overlay.json")[1]["has_track"] is False)

@@ -1035,9 +1035,16 @@ class Engine:
     def now_info(self):
         t = self.pb["track"] if self.pb and self.pb["track"] else None
         if not t:
-            return {"title": "", "artist": "", "url": "", "requestedBy": ""}
+            return {"title": "", "artist": "", "url": "", "requestedBy": "", "album": "", "art": "", "is_playing": False, "progress_ms": 0,
+                    "duration_ms": 0, "volume": None, "device": ""}
+        with self.lock:
+            pb = self.pb
+            prog = pb["progress_ms"] + (int((self.clock() - self.pb_at) * 1000) if pb["is_playing"] else 0)
+            dev = pb.get("device") or {}
         return {"title": t["name"], "artist": ", ".join(t["artists"]), "url": f"https://open.spotify.com/track/{t['id']}",
-                "requestedBy": (self.now_item or {}).get("requester", "")}
+                "requestedBy": (self.now_item or {}).get("requester", ""), "album": t.get("album", ""), "art": t.get("art", ""),
+                "is_playing": bool(pb["is_playing"]), "progress_ms": min(prog, t["duration_ms"]), "duration_ms": t["duration_ms"],
+                "volume": dev.get("volume"), "device": dev.get("name", "")}
 
     def add_context(self, link, shuffle=False, limit=50, where="end"):
         import re as _re

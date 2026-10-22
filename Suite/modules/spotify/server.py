@@ -126,7 +126,7 @@ class H(BaseHTTPRequestHandler):
             # process with no Origin header (not a web page) may call it without the module token.
             local_bot = path in ("/api/chat", "/api/chat-command") and not origin
             # the Master view button strip lives in the Suite app (tauri origin) and has no module token
-            app_ui = path == "/api/mod-action" and origin in TAURI_ORIGINS
+            app_ui = path in ("/api/mod-action", "/api/control") and origin in TAURI_ORIGINS
             if not (same or local_bot or app_ui or token_ok(self.headers)):
                 self._send(401, "token required", "text/plain")
                 return False
