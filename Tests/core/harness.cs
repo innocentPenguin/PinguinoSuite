@@ -820,6 +820,26 @@ public static class Harness
             Run("mod1", "!win", "blue", true);
             Check(MatchId() == "" || MatchId() == thirdId, "autonext: off = no automatic next game");
         }
+        // ===== [NEW] auto-start never refills a running match; manual Fill grabs ALL empty slots =====
+        {
+            var tick = typeof(CPHInline).GetMethod("TryAutoNext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Run("mod1", "!activity", "rl competitive", true); ForceFormat("2v2"); Run("mod1", "!queue", "clear", true); Run("mod1", "!queue", "open", true); Run("mod1", "!streamer", "out", true);
+            Run("mod1", "!autonext", "on", true);
+            foreach (var n in new[] { "p2", "p4", "p5", "p6", "p7", "p8", "p9", "p10" }) Run(n, "!join");
+            Run("mod1", "!balance", "", true);
+            Func<int> inMatch = () => State()["currentMatch"]["blue"].Count() + State()["currentMatch"]["orange"].Count();
+            Check(inMatch() == 4, "once: a 2v2 match started with 4 players");
+            string who = (string)State()["currentMatch"]["blue"][0]["Username"];
+            Run("mod1", "!out", who, true); Run("mod1", "!kick", who, true);
+            CPHProxy.Sent.Clear(); tick.Invoke(bot, null); tick.Invoke(bot, null);
+            Check(inMatch() == 3 && !CPHProxy.Sent.Any(), "once: after a removal nothing refills by itself (" + inMatch() + "): " + string.Join(" | ", CPHProxy.Sent));
+            string who2 = (string)State()["currentMatch"]["orange"][0]["Username"];
+            Run("mod1", "!out", who2, true);
+            Check(inMatch() == 2, "once: two empty slots now");
+            Run("mod1", "!match", "fill", true);
+            Check(inMatch() == 4, "once: manual Fill grabs the next players for ALL empty slots (" + inMatch() + ")");
+            Run("mod1", "!autonext", "off", true); Run("mod1", "!match", "clear", true); Run("mod1", "!queue", "clear", true);
+        }
         // ===== [NEW][KOTH] KOTH on = 1v1 (old size restored on off), starts by itself once 2 are queued =====
         {
             var tick = typeof(CPHInline).GetMethod("TryAutoNext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);

@@ -2357,7 +2357,7 @@ public class CPHInline
             // [NEW][AUTONEXT] queue open, nothing running, players waiting (the very first game, or after a clear): wait and start by itself
             try
             {
-                if (_settings.AutoNextMatch && !_autoNextPending && _settings.QueueOpen && GetWaitingCount() > 0
+                if (_settings.AutoNextMatch && !_autoNextPending && !_autoFirstDone && _settings.QueueOpen && GetWaitingCount() > 0
                     && !_queue.Any(e => e.Status == "active" && !IsStreamer(e.Username))
                     && (_lastBalance == null || _lastBalance.ResultRecorded))
                 { _autoNextPending = true; _autoNextTold = false; _autoNextSince = DateTime.UtcNow; }
@@ -2686,6 +2686,7 @@ public class CPHInline
     {
         _queue.Clear();
         _settings.QueueOpen = false;
+        _autoFirstDone = false;
         _lastBalance = null;            // [FIX] clearing the queue also ends the stale lobby
         SaveQueue();
         SaveSettings();
@@ -2840,6 +2841,7 @@ public class CPHInline
     void StartMatch(List<TeamPlayer> players, BalanceResult result, string format)
     {
         _autoNextPending = false;   // [NEW][AUTONEXT] a game is starting (by hand or by itself)
+        _autoFirstDone = true;      // the tick never starts a game again by itself (only the post-result start does); edits to a running match are the mod's call
         int id = _settings.NextMatchId++;
         SaveSettings();
 
@@ -3352,7 +3354,7 @@ public class CPHInline
         switch (sub)
         {
             case "open":
-                _settings.QueueOpen = true; _settings.TimedOut = false; _lastCustomsActivity = NowMs();
+                _settings.QueueOpen = true; _settings.TimedOut = false; _lastCustomsActivity = NowMs(); _autoFirstDone = false;
                 SaveSettings();
                 Say("The queue is now OPEN! Type !join to enter.");
                 PublishState("queue_open", null);
@@ -3858,6 +3860,7 @@ public class CPHInline
         _settings.KothStarted = false;     // King of the Hill: the queue stays open until its first game is picked
         _settings.KothWins = new Dictionary<string, int>();   // a new activity starts a fresh leaderboard
         _settings.QueueOpen = true;        // the new activity's queue opens right away
+        _autoFirstDone = false;
         ApplyActivityDefaults(sub);        // [NEW] format / koth / mode of the new activity
         SaveSettings();
         EnsureStreamerQueued();            // the streamer plays every match unless he's sitting out
@@ -4456,6 +4459,7 @@ public class CPHInline
     }
 
     // [NEW][AUTONEXT] the next game after a result. pending = waiting for enough players; told = the "not enough" line was already said once.
+    bool _autoFirstDone;   // the first game of this queue session has started: no more tick-armed auto starts (a mod clearing or editing a match decides for himself)
     bool _autoNextPending, _autoNextTold; DateTime _autoNextSince = DateTime.MinValue;
     void AutoNextAfterResult(bool announce)
     {
