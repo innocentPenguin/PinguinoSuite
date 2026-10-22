@@ -137,6 +137,9 @@ def main():
     T("unknown route 404", get("/nope")[0] == 404)
     T("bad Host rejected", call("GET", "/api/state", headers={"Host": "evil.com"})[0] == 403)
     T("foreign Origin rejected on POST", post("/api/settings", {}, headers={"Origin": "http://evil.com"})[0] == 403)
+    T("OPTIONS preflight from the app origin answers", call("OPTIONS", "/api/mod-action", headers={"Origin": "http://tauri.localhost"})[0] == 204)
+    T("OPTIONS from a foreign origin refused", call("OPTIONS", "/api/mod-action", headers={"Origin": "http://evil.com"})[0] == 403)
+    T("mod-action from the app origin is accepted (no token needed)", post("/api/mod-action", {"action": "like"}, headers={"Origin": "http://tauri.localhost"})[0] in (200, 409))
     T("malformed JSON body tolerated", call("POST", "/api/settings", b"{not json", raw=True)[0] == 200)
     T("overlay with nothing playing", get("/api/overlay.json")[1]["has_track"] is False)
 

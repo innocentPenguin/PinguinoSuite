@@ -89,8 +89,22 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         for k, v in (extra or {}).items():
             self.send_header(k, v)
+        self._cors()
         self.end_headers()
         self.wfile.write(body)
+
+    def _cors(self):
+        """Let the Suite app's pages (tauri origins) and local pages read the API; never a cross-site origin."""
+        o = self.headers.get("origin")
+        if o and origin_ok(o):
+            self.send_header("Access-Control-Allow-Origin", o)
+            self.send_header("Vary", "Origin")
+
+    def do_OPTIONS(self):
+        if not host_ok(self.headers.get("host")) or not origin_ok(self.headers.get("origin")):
+            return self._send(403, "forbidden", "text/plain")
+        self._send(204, b"", "text/plain", {"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                                            "Access-Control-Allow-Headers": "Authorization, X-Pinguino-Token, Content-Type", "Access-Control-Max-Age": "600"})
 
     def _body(self):
         try:
@@ -111,7 +125,9 @@ class H(BaseHTTPRequestHandler):
             # /api/chat is a low-privilege viewer-command endpoint for local bots (Host/Streamer.bot): a local
             # process with no Origin header (not a web page) may call it without the module token.
             local_bot = path in ("/api/chat", "/api/chat-command") and not origin
-            if not (same or local_bot or token_ok(self.headers)):
+            # the Master view button strip lives in the Suite app (tauri origin) and has no module token
+            app_ui = path == "/api/mod-action" and origin in TAURI_ORIGINS
+            if not (same or local_bot or app_ui or token_ok(self.headers)):
                 self._send(401, "token required", "text/plain")
                 return False
         return True
