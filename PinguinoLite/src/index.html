@@ -76,6 +76,19 @@ const HIDDEN = ['voice'];
 let ports = {};
 let info = null, state = { host: null, catalog: null, installed: null, upd: null, status: null, manifest: null };
 let page = 'dashboard';
+let gh = null;   // last GitHub update check result {ok, update, latest, url, error, at}
+try { gh = JSON.parse(localStorage.getItem('gh') || 'null'); } catch {}
+let ghBusy = false;
+// Lite's own update check (GitHub releases, via the shell). Quiet at startup at most once per 24 h; manual button any time.
+async function checkLite(manual) {
+  if (ghBusy || !info) return;
+  ghBusy = true; if (manual) { render(); }
+  const r = await inv('check_update', { current: info.version }).catch(e => ({ ok: false, error: String(e) }));
+  gh = { ...r, at: Date.now() }; ghBusy = false;
+  try { localStorage.setItem('gh', JSON.stringify(gh)); } catch {}
+  render();
+  if (manual) toast(!r.ok ? r.error : r.update ? `Version ${r.latest} is available` : 'PinguinoLite is up to date');
+}
 
 function toast(t) { const e = $('#toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', 3500); }
 
@@ -124,18 +137,20 @@ function dashboard() {
   const lm = state.manifest && state.manifest.data && (state.manifest.data.lite || { latest: state.manifest.data.latest_version });
   const selfUpd = lm && lm.latest && info && cmpVer(lm.latest, info.version) > 0;
   return `<h1>Dashboard</h1><p class="sub">PinguinoLite is a light shell: no modules are loaded by default.</p>
+  ${gh && gh.ok && gh.update ? `<div class="banner">PinguinoLite <b>${esc(gh.latest)}</b> is available (you have ${esc(info && info.version)}). <button class="btn pri" data-open="release">Open release page</button></div>` : ''}
   ${selfUpd ? `<div class="banner">PinguinoLite ${esc(lm.latest)} is ready. <button class="btn pri" data-act="selfupdate-apply">Restart &amp; update</button> <span class="d">Lite closes, updates and reopens.</span></div>` : ''}
   <div class="grid">
    <div class="card"><h3>Host (127.0.0.1:8770)</h3><div class="big">${h.reachable ? '<span style="color:var(--ok)">Reachable</span>' : '<span style="color:var(--bad)">Not reachable</span>'}</div>
      <div class="note">${h.reachable ? `/api/live answered HTTP ${esc(h.status)} in ${esc(h.ms)} ms` : 'Host is not running (or not on this PC). Lite works without it.'}</div></div>
-   <div class="card"><h3>App version</h3><div class="big">${esc(info && info.version)}</div><div class="note">PinguinoLite</div></div>
+   <div class="card"><h3>App version</h3><div class="big">${esc(info && info.version)}</div>
+     <div class="note">${ghBusy ? 'Checking GitHub...' : !gh ? 'Not checked yet' : !gh.ok ? esc(gh.error) : gh.update ? `<span style="color:var(--warn)">Version ${esc(gh.latest)} available</span>` : `<span style="color:var(--ok)">Up to date</span>`}${gh && gh.at ? ` <span class="d">(${esc(ago(gh.at))})</span>` : ''}</div></div>
    <div class="card"><h3>Modules installed</h3><div class="big">${n}</div><div class="note">${r.length ? `${r.length} available${u ? `, <span style="color:var(--warn)">${u} update${u > 1 ? 's' : ''}</span>` : ''}` : 'no catalog yet'}</div></div>
    <div class="card"><h3>Last update check</h3><div class="big" style="font-size:20px">${us.last_check_at ? ago(iso(us.last_check_at)) : 'never'}</div>
      <div class="note">${us.last_check_at ? esc(us.result || '') + (us.error ? ' - ' + esc(us.error) : '') : 'PinguinoLink has not written update_status.json'}</div></div>
    <div class="card"><h3>PinguinoLink</h3><div class="big" style="font-size:20px">${writer ? esc(writer.name + ' ' + (writer.version || '')) : '<span style="color:var(--faint)">not connected</span>'}</div>
      <div class="note">${conn ? 'connector: ' + esc(conn.state) + (conn.detail ? ' - ' + esc(conn.detail) : '') : 'no status.json yet'}</div></div>
   </div>
-  <div class="row"><button class="btn" data-open="host">Open Host dashboard</button><button class="btn" data-open="folder">Open Lite data folder</button><button class="btn" data-act="check">Check for updates</button></div>
+  <div class="row"><button class="btn" data-open="host">Open Host dashboard</button><button class="btn" data-open="folder">Open Lite data folder</button><button class="btn" data-act="check">Check modules for updates</button><button class="btn pri" data-gh="1"${ghBusy ? ' disabled' : ''}>Check Lite for updates</button></div>
   <p class="note">Contract folder: <span class="mono">${esc(info && info.lite_dir)}</span></p>`;
 }
 
@@ -171,7 +186,7 @@ function renderNav() {
   const inst = r.filter(x => x.installed);
   // Only things that exist in Lite: its two pages, the two services it talks to, and what is installed. Availability = probes at launch + every 5 s.
   $('#nav').innerHTML = `<div class="brand"><img src="logo.png" alt=""><div><b>Pinguino<span class="accent">Lite</span></b><small>${info ? 'v' + esc(info.version) : ''}</small></div></div>
-   <div class="item${page === 'dashboard' ? ' on' : ''}" data-page="dashboard"><span class="ic">🏠</span>Dashboard</div>
+   <div class="item${page === 'dashboard' ? ' on' : ''}" data-page="dashboard"><span class="ic">🏠</span>Dashboard${gh && gh.ok && gh.update ? `<span class="tag">update</span>` : ''}</div>
    <div class="item${page === 'modules' ? ' on' : ''}" data-page="modules"><span class="ic">🧩</span>Modules${u ? `<span class="tag">${u} update${u > 1 ? 's' : ''}</span>` : ''}</div>
    <div class="item${page === 'replays' ? ' on' : ''}" data-page="replays"><span class="ic">🎮</span>Replays${(state.replays && state.replays.items.length) ? `<span class="tag">${state.replays.items.length}</span>` : ''}</div>
    <h6>Services</h6>
@@ -188,6 +203,7 @@ function render() {
 document.addEventListener('click', async e => {
   const nav = e.target.closest('nav [data-page]');
   if (nav) { page = nav.dataset.page; try { localStorage.setItem('page', page); } catch {} return render(); }
+  if (e.target.closest('[data-gh]')) return checkLite(true);
   if (e.target.closest('[data-scan]')) { toast('Scanning...'); const s = await inv('replay_scan').catch(err => ({ error: String(err) })); toast(s.error ? 'Scan failed: ' + s.error : `Scan done: ${s.new} new, ${s.errors} unreadable`); return refresh(); }
   const o = e.target.closest('[data-open]');
   if (o) return inv('open_target', { target: o.dataset.open }).catch(err => toast(String(err)));
@@ -203,6 +219,7 @@ document.addEventListener('click', async e => {
   try { page = localStorage.getItem('page') || 'dashboard'; } catch {}
   info = await inv('lite_info').catch(() => null);
   await refresh();
+  if (!gh || !gh.at || Date.now() - gh.at > 864e5) checkLite(false);   // quiet daily check
   setInterval(refresh, 5000);   // cheap: 1 loopback probe + up to 5 tiny local files
 })();
 </script>

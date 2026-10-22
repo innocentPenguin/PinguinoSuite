@@ -5,6 +5,7 @@
 
 mod mainwin;
 mod replays;
+mod updatecheck;
 
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -262,6 +263,11 @@ fn open_target(target: String) -> Result<(), String> {
                 c.args(["url.dll,FileProtocolHandler", &format!("http://{HOST}/")]);
                 c
             }
+            "release" => {
+                let mut c = std::process::Command::new("rundll32");
+                c.args(["url.dll,FileProtocolHandler", updatecheck::RELEASES_URL]);
+                c
+            }
             "folder" => {
                 let d = lite_dir();
                 let _ = std::fs::create_dir_all(&d);
@@ -292,7 +298,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .manage(Link(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, replays::replay_scan, replays::replay_index])
+        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, replays::replay_scan, replays::replay_index, updatecheck::check_update])
         .setup(|app| {
             replays::start();
             // Splash (the lightning bolt) first; the main window is placed and shown when it closes.
