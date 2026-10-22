@@ -1115,7 +1115,8 @@ class Engine:
                     "history": [{"id": h["uri"].split(":")[-1], "title": h["name"], "artists": h["artists"], "art": h.get("art", ""),
                                  "playedAt": int(h["played_at"] * 1000), "requestedBy": h.get("requester") or None,
                                  "outcome": h.get("outcome", "played")}
-                                for h in self.queue.history[:50]]}
+                                for h in self.queue.history[:50]],
+                    "leaderboard": self.leaderboard(25)}
 
     def now_info(self):
         with self.lock:
