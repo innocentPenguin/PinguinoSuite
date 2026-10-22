@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>PinguinoMulti alerts</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- OBS browser source: 800x600. ?bg=1 dark checker for viewing in a normal browser; ?demo=1 plays sample alerts; the editor drives it by postMessage. -->
+<style>
+html,body{margin:0;width:800px;height:600px;overflow:hidden;background:transparent;font-family:Nunito,'Segoe UI',sans-serif}
+body.bg{background:repeating-conic-gradient(#1b1b1b 0 25%,#262626 0 50%) 0 0/24px 24px}
+#stage{position:relative;width:800px;height:600px}
+.al{position:absolute;left:50%;top:50%;width:max-content;max-width:740px;text-align:center;display:flex;gap:14px;align-items:center;justify-content:center;box-sizing:border-box;padding:18px 28px;line-height:1.2;
+  --d:.5s;animation-duration:var(--d);animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.9,.3,1.1)}
+.al.layout-card{flex-direction:column}.al.layout-stack{flex-direction:row;text-align:left}
+.al.layout-banner{top:auto;bottom:40px;width:740px;flex-direction:row;justify-content:flex-start;text-align:left}
+.al.layout-center{background:none!important;border:none!important;flex-direction:column}
+.al .t1{font-weight:800}.al .t2{opacity:.85;font-size:.62em;margin-top:4px}
+.al .u{color:var(--acc)}
+.al img.m,.al video.m{border-radius:10px;object-fit:contain;max-width:100%}
+.al.pos-bg{overflow:hidden}.al.pos-bg .m{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35;border-radius:0;z-index:0}.al.pos-bg .tx{position:relative;z-index:1}
+.al .tag{position:absolute;top:-10px;right:10px;font-size:11px;font-weight:800;letter-spacing:.1em;background:var(--acc);color:#1a1208;padding:2px 8px;border-radius:99px}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}@keyframes fade-out{from{opacity:1}to{opacity:0}}
+@keyframes slide-up-in{from{opacity:0;transform:translate(-50%,calc(-50% + 80px))}to{opacity:1;transform:translate(-50%,-50%)}}
+@keyframes slide-up-out{from{opacity:1;transform:translate(-50%,-50%)}to{opacity:0;transform:translate(-50%,calc(-50% - 80px))}}
+@keyframes slide-down-in{from{opacity:0;transform:translate(-50%,calc(-50% - 80px))}to{opacity:1;transform:translate(-50%,-50%)}}
+@keyframes slide-down-out{from{opacity:1;transform:translate(-50%,-50%)}to{opacity:0;transform:translate(-50%,calc(-50% + 80px))}}
+@keyframes slide-left-in{from{opacity:0;transform:translate(calc(-50% + 200px),-50%)}to{opacity:1;transform:translate(-50%,-50%)}}
+@keyframes slide-left-out{from{opacity:1;transform:translate(-50%,-50%)}to{opacity:0;transform:translate(calc(-50% - 200px),-50%)}}
+@keyframes slide-right-in{from{opacity:0;transform:translate(calc(-50% - 200px),-50%)}to{opacity:1;transform:translate(-50%,-50%)}}
+@keyframes slide-right-out{from{opacity:1;transform:translate(-50%,-50%)}to{opacity:0;transform:translate(calc(-50% + 200px),-50%)}}
+@keyframes zoom-in{from{opacity:0;transform:translate(-50%,-50%) scale(.3)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes zoom-out{from{opacity:1;transform:translate(-50%,-50%) scale(1)}to{opacity:0;transform:translate(-50%,-50%) scale(.3)}}
+@keyframes bounce-in{0%{opacity:0;transform:translate(-50%,-150%)}60%{opacity:1;transform:translate(-50%,-40%)}80%{transform:translate(-50%,-56%)}100%{transform:translate(-50%,-50%)}}
+@keyframes bounce-out{from{opacity:1;transform:translate(-50%,-50%) scale(1)}to{opacity:0;transform:translate(-50%,-50%) scale(1.3)}}
+@keyframes flip-in{from{opacity:0;transform:translate(-50%,-50%) rotateX(90deg)}to{opacity:1;transform:translate(-50%,-50%) rotateX(0)}}
+@keyframes flip-out{from{opacity:1;transform:translate(-50%,-50%) rotateX(0)}to{opacity:0;transform:translate(-50%,-50%) rotateX(-90deg)}}
+</style></head>
+<body><div id="stage"></div>
+<script>
+const Q = new URLSearchParams(location.search), stage = document.getElementById('stage');
+if (Q.get('bg')) document.body.classList.add('bg');
+const FONTS = {nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: 'Roboto,Arial,sans-serif'};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+let cur = null, ctx = null;
+function chime(vol) {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    const g = ctx.createGain(); g.gain.value = (vol || 70) / 100 * 0.4; g.connect(ctx.destination);
+    [660, 880, 1320].forEach((f, i) => { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(g); o.start(ctx.currentTime + i * 0.12); o.stop(ctx.currentTime + i * 0.12 + 0.25); });
+  } catch (e) { /* no audio */ }
+}
+function sound(s) {
+  if (!s || !s.on) return;
+  if (s.url) { try { const a = new Audio(s.url); a.volume = s.volume / 100; a.play().catch(() => chime(s.volume)); return; } catch (e) { /* fall back */ } }
+  chime(s.volume);
+}
+function segs(list, acc) { return (list || []).map(([t, k]) => k === 'user' ? `<span class="u" style="--acc:${acc}">${esc(t)}</span>` : esc(t)).join(''); }
+function build(a) {
+  const st = a.style, acc = a.rank_colour || st.accent, el = document.createElement('div');
+  const hasBox = st.layout !== 'center' && st.opacity > 0;
+  el.className = `al layout-${st.layout}` + (a.media && a.media.position === 'bg' ? ' pos-bg' : '');
+  el.style.cssText = `--acc:${acc};font-family:${FONTS[st.font] || esc(st.font)};font-size:${st.size}px;color:${st.fg};` +
+    (hasBox ? `background:${st.bg}${Math.round(st.opacity * 2.55).toString(16).padStart(2, '0')};border:${st.border}px solid ${st.accent};border-radius:${st.radius}px;box-shadow:0 8px 30px #0008;` : '');
+  const m = a.media;
+  const media = m ? (m.kind === 'video' ? `<video class="m" src="${esc(m.url)}" autoplay muted loop playsinline style="height:${m.size}px"></video>` : `<img class="m" src="${esc(m.url)}" style="height:${m.size}px" alt="">`) : '';
+  const av = !m && a.avatar && st.layout !== 'center' ? `<img class="m" src="${esc(a.avatar)}" style="height:${Math.round(st.size * 2.2)}px;border-radius:50%" alt="">` : '';
+  el.innerHTML = `${a.test ? '<span class="tag">TEST</span>' : ''}${m && m.position !== 'bg' ? media : m ? media : av}<div class="tx"><div class="t1">${segs(a.text, acc)}</div>${a.subtext && a.subtext.length ? `<div class="t2">${segs(a.subtext, acc)}</div>` : ''}</div>`;
+  return el;
+}
+function show(a) {
+  if (cur) { clearTimeout(cur._t); cur.remove(); }
+  const el = build(a), banner = el.classList.contains('layout-banner'); cur = el; el.dataset.id = a.id; stage.appendChild(el);
+  if (banner) { el.style.left = '30px'; el.style.transform = 'none'; }
+  el.style.animationName = (banner ? 'fade' : a.style.anim_in) + '-in';
+  sound(a.sound);
+  el._t = setTimeout(() => { el.style.animationName = (banner ? 'fade' : a.style.anim_out) + '-out'; }, Math.max(0.2, a.duration - 0.5) * 1000);
+}
+function hide(id) {
+  if (!cur || (id && cur.dataset.id !== id)) return;
+  const el = cur; cur = null; clearTimeout(el._t); setTimeout(() => el.remove(), 600);
+}
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onmessage = e => { const ev = JSON.parse(e.data); if (ev.type === 'alert.show') show(ev.alert); else if (ev.type === 'alert.end') hide(ev.id); };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+window.addEventListener('message', e => { const d = e.data || {}; if (d.type === 'alert-preview') { show(d.alert); } else if (d.type === 'alert-hide') hide(); });
+if (Q.get('demo')) {
+  const T = ['follow', 'sub', 'gift', 'raid', 'cheer', 'refollow'];
+  let i = 0;
+  const run = async () => { const r = await fetch('/api/alerts/preview', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({type: T[i++ % T.length]})}); const j = await r.json(); show(j.alert); setTimeout(run, (j.alert.duration + 1) * 1000); };
+  run();
+} else connect();
+</script></body></html>

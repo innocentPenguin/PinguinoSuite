@@ -42,6 +42,7 @@ import checks
 import config
 import learning
 import chatstyle
+import alerts as alerts_mod
 import obs as obs_mod
 import panes as panes_mod
 import presets as presets_mod
@@ -85,8 +86,27 @@ class Hub:
 
 hub = Hub()
 store = Store()
+alert_engine = alerts_mod.Engine(store, hub.emit)
 cards = cards_mod.CardManager(store, hub.emit)
 pipeline = Pipeline(store, cards, hub.emit)
+
+
+def _alert_from_message(m):
+    """stored stream event (Host feed or /api/events) -> alert engine event; test/sim items never get here as real alerts"""
+    if m.event not in alerts_mod.TYPES and m.event not in ("follow",):
+        return
+    if m.event == "hype" and "started" not in m.text:
+        return
+    meta = m.meta or {}
+    if meta.get("sim") or meta.get("test"):
+        return
+    ev = dict(meta, id=m.id, type=m.event, user=m.user, display=m.display, amount=m.amount, first_time=bool(meta.get("first_time") or m.first_time),
+              refollow="refollow" in m.flags, rank_colour=meta.get("rank_colour") or m.color)
+    if hub.loop:
+        hub.loop.call_soon_threadsafe(alert_engine.submit, ev)
+
+
+pipeline.on_event = _alert_from_message
 inbox = Inbox(pipeline)
 connectors = {}
 shell = win.EdgeShell(f"http://127.0.0.1:{config.PORT}")
@@ -122,6 +142,7 @@ async def lifespan(app):
     hub.loop = asyncio.get_running_loop()
     hub.loop.set_exception_handler(_loop_exception)
     console_log.info("server", f"Multi started on port {config.PORT}")
+    alert_engine.start()
     store.prune(config.settings()["retention_days"])
     _seed_defaults()
     tw = Twitch(inbox, hub.emit)
@@ -244,6 +265,78 @@ def _obs_get(kind):
 
 def _live_page():
     return FileResponse(STATIC / "live.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/obs/alerts")
+def obs_alerts():
+    return FileResponse(STATIC / "alerts.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/alerts")
+def alerts_get():
+    return {"config": alert_engine.cfg, "types": alerts_mod.TYPES, "labels": alerts_mod.LABEL, "anims": alerts_mod.ANIMS, "layouts": alerts_mod.LAYOUTS,
+            "vars": alerts_mod.VARS, "fonts": list(obs_mod.FONTS), "variants": list(alerts_mod.VARIANTS), "defaults": alerts_mod.DEFAULT_TYPES,
+            "status": alert_engine.status(), "log": list(alert_engine.log)[:100]}
+
+
+@app.post("/api/alerts/config")
+async def alerts_save(request: Request):
+    return {"config": alert_engine.save((await request.json()).get("config"))}
+
+
+@app.post("/api/alerts/preview")
+async def alerts_preview(request: Request):
+    b = await request.json()
+    t = str(b.get("type") or "follow")
+    if t not in alerts_mod.TYPES:
+        raise HTTPException(400, "unknown alert type")
+    return {"alert": alert_engine.preview(t, b.get("event"))}
+
+
+@app.post("/api/alerts/test")
+async def alerts_test(request: Request):
+    """Queue a TEST alert (flagged; never reaches the inbox, stats, points, credits or chat). Used by the Suite UI and the Host !alert command."""
+    b = await request.json()
+    t = str(b.get("type") or "follow").lower()
+    if t not in alerts_mod.TYPES:
+        raise HTTPException(400, "unknown alert type: " + ", ".join(alerts_mod.TYPES))
+    ev = alerts_mod.test_event(t, str(b.get("user") or "penguin")[:40], b.get("amount"), b.get("variant") or [], source=str(b.get("source") or "ui")[:10],
+                               tier=b.get("tier"), months=b.get("months"), message=str(b.get("message") or "")[:200], level=b.get("level"))
+    ok, why = alert_engine.submit(ev)
+    return {"ok": ok, "queued": ok, "text": f"test {t} {why}" if ok else f"test {t} not shown: {why}", "id": ev["id"]}
+
+
+@app.post("/api/alerts/testall")
+async def alerts_testall():
+    ids = [alert_engine.submit(alerts_mod.test_event(t, "penguin", source="ui"))[0] for t in alerts_mod.TYPES]
+    return {"ok": True, "queued": sum(1 for x in ids if x), "text": f"test-all queued {sum(1 for x in ids if x)} of {len(ids)}"}
+
+
+@app.post("/api/alerts/stress")
+async def alerts_stress(request: Request):
+    n = int(min(200, max(1, int((await request.json()).get("n") or 30))))
+    import random
+    ok = 0
+    for i in range(n):
+        t = random.choice(alerts_mod.TYPES)
+        ok += 1 if alert_engine.submit(alerts_mod.test_event(t, f"viewer{i}", random.randint(1, 50), source="ui"))[0] else 0
+    return {"ok": True, "queued": ok, "text": f"stress: {ok} of {n} queued"}
+
+
+@app.post("/api/alerts/control")
+async def alerts_control(request: Request):
+    a = str((await request.json()).get("action") or "")
+    if a == "skip":
+        alert_engine.skip()
+    elif a == "clear":
+        return {"ok": True, "cleared": alert_engine.clear(), "text": "queue cleared"}
+    elif a in ("pause", "resume"):
+        alert_engine.pause(a == "pause")
+    elif a.startswith("profile:") and a[8:] in alert_engine.cfg["profiles"]:
+        alert_engine.save(dict(alert_engine.cfg, active=a[8:]))
+    else:
+        raise HTTPException(400, "unknown action")
+    return {"ok": True, "text": a + " done", "status": alert_engine.status()}
 
 
 @app.get("/obs/poll")

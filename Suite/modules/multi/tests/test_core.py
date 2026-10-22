@@ -1203,3 +1203,59 @@ def test_chat_ux_wiring():
     assert '/assets/chatux.js' in idx and "window.cardFollow" in idx and "window.AUTO !== false" in idx
     assert "window.AUTO !== false" in (st / "chat.js").read_text(encoding="utf-8")
     assert (st / "dash.js").read_text(encoding="utf-8").count("window.AUTO !== false") >= 2
+
+
+def _engine(tmp_path):
+    import alerts
+    out = []
+    eng = alerts.Engine(Store(str(tmp_path / "a.db")) if True else None, out.append)
+    return alerts, eng, out
+
+
+def test_alert_queue_priority_and_dedupe(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    eng.submit({"id": "1", "type": "follow", "user": "a"})
+    eng.submit({"id": "2", "type": "raid", "user": "b", "amount": 30})
+    eng.submit({"id": "3", "type": "sub", "user": "c", "tier": "3"})
+    assert eng.submit({"id": "1", "type": "follow", "user": "a"})[0] is False            # replay of the same id
+    assert eng.submit({"id": "9", "type": "follow", "user": "a"})[0] is False            # same thing again within 10 s
+    import heapq
+    order = [heapq.heappop(eng.heap)[2]["type"] for _ in range(len(eng.heap))]
+    assert order == ["raid", "sub", "follow"]                                           # highest priority first, one queue
+    assert any(r["status"] == "duplicate" for r in eng.log)
+
+
+def test_alert_replay_safe_across_restart(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    eng.submit({"id": "x1", "type": "follow", "user": "zed"})
+    eng2 = alerts.Engine(eng.store, out.append)
+    assert eng2.submit({"id": "x1", "type": "follow", "user": "zed"})[0] is False
+
+
+def test_alert_conditions_overrides_and_tests(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    cfg = eng.cfg
+    cfg["profiles"]["Penguin"]["types"]["cheer"]["min_amount"] = 100
+    cfg["profiles"]["Penguin"]["types"]["sub"]["conditions"]["tiers"] = ["3"]
+    cfg["overrides"]["vip"] = {"follow": {"text": "The legend {user} followed", "style": {"accent": "#00ff00"}}}
+    eng.save(cfg)
+    assert eng.submit({"id": "c1", "type": "cheer", "user": "u", "amount": 50})[0] is False
+    assert eng.submit({"id": "s1", "type": "sub", "user": "u", "tier": "1"})[0] is False
+    assert eng.submit({"id": "s2", "type": "sub", "user": "u2", "tier": "3"})[0] is True
+    eng.submit({"id": "f1", "type": "follow", "user": "vip", "display": "VIP"})
+    p = [x for x in eng.heap if x[2]["type"] == "follow"][0][2]
+    assert p["text"][0][0] == "The legend " and p["style"]["accent"] == "#00ff00"
+    assert eng.submit({"id": "f2", "type": "follow", "user": "n", "refollow": True})[0] is True
+    assert [x for x in eng.heap if x[2]["id"] == "f2"][0][2]["type"] == "refollow"
+    assert [x for x in eng.heap if x[2]["id"] == "f2"][0][2]["sound"]["on"] is False      # refollow is silent
+    t = alerts.test_event("sub", "pen", variants=["tier3", "long"])
+    assert t["test"] and t["tier"] == "3" and len(t["display"]) > 30
+    assert eng.submit(t)[0] is True and eng.submit(dict(t, id=t["id"]))[0] is True        # tests are never deduped, never persisted as seen
+    assert t["id"] not in eng.seen
+
+
+def test_alert_sanitize_blocks_bad_input():
+    import alerts
+    c = alerts.sanitize_config({"profiles": {"Penguin": {"types": {"follow": {"duration": 9999, "sound": {"url": "file:///c:/x.wav"}, "style": {"bg": "red", "anim_in": "evil"}}}}}})
+    f = c["profiles"]["Penguin"]["types"]["follow"]
+    assert f["duration"] == 30 and f["sound"]["url"] == "" and f["style"]["bg"] == "#1a1208" and f["style"]["anim_in"] == "slide-up"

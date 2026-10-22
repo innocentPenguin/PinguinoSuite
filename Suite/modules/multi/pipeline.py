@@ -30,6 +30,7 @@ class Pipeline:
         self.pop = pop_mod.Pop()
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
         self.stats = {"in": 0, "dupes": 0, "dropped": 0}
+        self.on_event = None         # set by the server: called once for every stored stream event (alert engine)
 
     def reload_rules(self):
         self.rules = prio.load_rules()
@@ -55,6 +56,8 @@ class Pipeline:
                 return None
             out = dict(m.to_dict(), score=0, tier="none", reasons=[])
             self.emit({"type": "message", "message": out})
+            if self.on_event:
+                self.on_event(m)
             return out
         if m.is_self:
             self.pop.observe(m)
