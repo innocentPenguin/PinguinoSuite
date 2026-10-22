@@ -110,6 +110,19 @@ namespace PinguinoHost
             int bi = 0; for (int i = 0; i < n; i++) if (slots[i] == null) slots[i] = baseList[bi++];
             return slots.ToList();
         }
+        /// <summary>Sub anniversary this week: the subscribe date (month/day) comes round within the next 6 days or was yesterday/today, and at least one year has passed. Returns the years, or 0.</summary>
+        public static int Anniversary(string subscribed, DateTime today)
+        {
+            DateTime d; if (string.IsNullOrEmpty(subscribed) || !DateTime.TryParse(subscribed, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out d)) return 0;
+            int years = today.Year - d.Year; if (years < 1) return 0;
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                int m = d.Month, day = d.Day; int y = today.Year + dy; if (m == 2 && day == 29 && !DateTime.IsLeapYear(y)) day = 28;
+                var ann = new DateTime(y, m, day); double diff = (ann.Date - today.Date).TotalDays;
+                if (diff >= -1 && diff <= 6) { int yrs = y - d.Year; return yrs >= 1 ? yrs : 0; }
+            }
+            return 0;
+        }
         public static JObject SubsCard(int top, bool giftedT1, bool giftedT23, string layout = "separated")
         {
             layout = layout == "sprinkled" ? "sprinkled" : "separated";
@@ -123,8 +136,13 @@ namespace PinguinoHost
             List<JObject> all;
             if (layout == "sprinkled") all = Sprinkle(secs[1], secs[3].Concat(secs[2]).ToList());
             else all = secs[1].Concat(secs[2]).Concat(secs[3]).ToList();
-            var rows = new JArray(); int rank = 0;
-            foreach (var o in all) { if (rank >= top) break; rows.Add(new JObject { { "rank", ++rank }, { "tier", o["tier"] }, { "name", o["name"] }, { "value", o["tenure"] }, { "extra", o["watch"] } }); }
+            var rows = new JArray(); int rank = 0; var today = DateTime.UtcNow;
+            foreach (var o in all)
+            {
+                if (rank >= top) break; var row = new JObject { { "rank", ++rank }, { "tier", o["tier"] }, { "name", o["name"] }, { "value", o["tenure"] }, { "extra", o["watch"] } };
+                int yrs = Anniversary((string)o["subscribed"], today); if (yrs > 0) row["anniv"] = yrs;   // "sub anniversary this week": the overlay highlights the row
+                rows.Add(row);
+            }
             if (rows.Count == 0) return null;
             return new JObject { { "id", "subs|all" }, { "metric", "subs" }, { "period", "all" }, { "title", "Subs! · by months" }, { "unit", "months" }, { "kind", "subs" }, { "layout", layout }, { "tiers", new JArray(tiers) }, { "rows", rows } };
         }

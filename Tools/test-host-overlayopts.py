@@ -28,6 +28,10 @@ try:
     chk('bad anchor refused', post('/api/overlay-options', {'name': 'queue', 'options': {'anchor': 'zz'}}).get('ok') is False)
     chk('name is required', post('/api/overlay-options', {'options': {'scale': 1}}).get('ok') is False)
     r = post('/api/overlay-options', {'name': 'queue', 'options': {'scale': None, 'fit': None}}); chk('null removes an option', r['options'] == {'pad': 20, 'anchor': 'tr'}, r)
+    r = post('/api/overlay-options', {'name': 'players', 'options': {'preset': 'tv'}}); chk('preset saved', r.get('ok') and r['options']['preset'] == 'tv', r)
+    chk('bad preset refused', post('/api/overlay-options', {'name': 'players', 'options': {'preset': 'huge'}}).get('ok') is False)
+    sc = json.loads(get('/api/overlay-options/schema')); keys = [o['key'] for o in sc['options']]
+    chk('schema lists every option for the sliders page', sc['ok'] and {'scale', 'anchor', 'pad', 'x', 'y', 'maxw', 'maxh', 'fit', 'overflow', 'preset'} <= set(keys) and 'queue' in sc['overlays'], keys)
     js = get('/api/overlay-options?name=queue&js=1'); chk('?js=1 is a script', js.startswith('window.OVERLAY_OPTIONS={') and js.endswith(';'), js[:50])
     fj = json.load(open(os.path.join(d, 'overlay_options.json'))); chk('saved to Data/runtime/overlay_options.json', fj['queue'] == {'anchor': 'tr'} and fj['*'] == {'pad': 20}, fj)
     r = post('/api/overlay-options', {'name': 'queue', 'options': None}); chk('options:null clears the overlay', 'anchor' not in r['options'], r)

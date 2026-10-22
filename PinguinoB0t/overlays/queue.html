@@ -91,6 +91,9 @@
   .glow.t3 { box-shadow:0 0 28px rgba(140,220,255,.55), 0 10px 30px rgba(0,0,0,.5); }
   .glow.t2 .sub b { color:#ffd34d; } .glow.t3 .sub b { color:#bff0ff; }
   .glow li.t1 .val { color:var(--orange); }
+  .glow li.ann { box-shadow:0 0 0 2px rgba(255,255,255,.55), 0 0 14px rgba(255,255,255,.45); animation:annpulse 1.6s ease-in-out infinite; }
+  .glow li .yr { flex:none; font-size:11px; font-weight:800; letter-spacing:1px; padding:2px 7px; border-radius:6px; background:#fff; color:#3a2a00; }
+  @keyframes annpulse { 50% { box-shadow:0 0 0 2px rgba(255,255,255,.15), 0 0 4px rgba(255,255,255,.1); } }
   .glow li.hd { padding:3px 11px; font-size:12px; letter-spacing:2.5px; font-weight:800; background:none; animation:none; border-width:0 0 1px 0; border-radius:0; margin:10px 0 4px; }
   .glow li.hd.t2 { color:#ffd34d; border-color:rgba(255,205,70,.6); } .glow li.hd.t3 { color:#bff0ff; border-color:rgba(175,235,255,.8); text-shadow:0 0 8px rgba(160,225,255,.6); }
   .glow li.t2, .glow li.t3 { position:relative; overflow:hidden; }
@@ -214,7 +217,7 @@
     var subs = { id:"subs|all", metric:"subs", period:"all", title:"Subs! \u00b7 by months", unit:"months", kind:"subs", first:true, tiers:[], rows:[], layout:(/[?&]layout=sprinkled/.test(location.search) ? "sprinkled" : "separated") };
     var t1 = kind === "few" ? 3 : 44, t2 = kind === "few" ? 1 : 6, t3 = kind === "few" ? 1 : 4, k = 0;
     if (kind !== "empty") [[1, t1], [2, t2], [3, t3]].forEach(function (q) {
-      for (var i = 0; i < q[1]; i++) { k++; subs.rows.push({ rank:k, tier:q[0], name:(q[0] === 3 ? "DiamondDiva" : q[0] === 2 ? "GoldGoose" : "SnowViewer") + k, value:Math.max(1, 60 - k), extra:Math.max(30, 9000 - k * 150) }); }
+      for (var i = 0; i < q[1]; i++) { k++; subs.rows.push({ rank:k, tier:q[0], name:(q[0] === 3 ? "DiamondDiva" : q[0] === 2 ? "GoldGoose" : "SnowViewer") + k, value:Math.max(1, 60 - k), anniv:(k === 2 ? 2 : 0), extra:Math.max(30, 9000 - k * 150) }); }
       if (q[1]) subs.tiers.push(q[0]);
     });
     return { ok:true, enabled:true, idleSeconds:20, secondsPerCard:5, visibleRows:8, scrollSpeed:45, scrollPauseSeconds:2.5, items:[
@@ -305,7 +308,7 @@
         var hd = "";
         if (sep && r.tier > 1 && r.tier !== prevT) hd = '<li class="hd t' + esc(r.tier) + '" data-t="' + esc(r.tier) + '">TIER ' + esc(r.tier) + '</li>';
         prevT = r.tier;
-        if (subs) return hd +  '<li class="t' + esc(r.tier) + '" data-t="' + esc(r.tier) + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc((Number(r.value) || 0) + " mo") + '</span>' + (r.extra ? '<span class="rating">' + esc(fmtTime(r.extra)) + '</span>' : '') + '</li>';
+        if (subs) return hd + '<li class="t' + esc(r.tier) + (r.anniv ? ' ann' : '') + '" data-t="' + esc(r.tier) + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc((Number(r.value) || 0) + " mo") + '</span>' + (r.anniv ? '<span class="yr">' + esc(r.anniv) + ' YR</span>' : '') + (r.extra ? '<span class="rating">' + esc(fmtTime(r.extra)) + '</span>' : '') + '</li>';
         return '<li class="' + (i === 0 ? "first" : "") + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc(fmtVal(r, c.unit)) + '</span></li>';
       }).join("");
       body.className = "ibody in" + (linked ? " lk" : "");

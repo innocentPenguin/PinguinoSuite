@@ -10,7 +10,8 @@ d = tempfile.mkdtemp(prefix='pgsr_'); outf = os.path.join(d, 'out.txt'); os.make
 json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 def u(t, ten, sub, lapsed=False, typ='recurring'): return {'tier': t, 'tenure': ten, 'streak': 1, 'subscribed': sub, 'founder': False, 'subType': typ, 'lapsed': lapsed}
 users = {'zed': u(3, 20, '2025-01-01T00:00:00Z'), 'amy': u(3, 30, '2024-06-01T00:00:00Z'), 'bob': u(2, 5, '2026-03-01T00:00:00Z'), 'cat': u(2, 12, '2026-01-01T00:00:00Z'),
-         'dan': u(1, 3, '2026-09-01T00:00:00Z', typ='gift'), 'eve': u(1, 40, '2023-01-01T00:00:00Z', typ='prime'), 'old': u(1, 9, '2025-05-05T00:00:00Z', lapsed=True),
+         'dan': u(1, 3, '2026-09-01T00:00:00Z', typ='gift'), 'eve': u(1, 40, (__import__('datetime').datetime.utcnow() + __import__('datetime').timedelta(days=2)).replace(year=__import__('datetime').datetime.utcnow().year - 3).strftime('%Y-%m-%dT00:00:00Z'), typ='prime'),   # eve: anniversary in 2 days, 3 years
+         'old': u(1, 9, '2025-05-05T00:00:00Z', lapsed=True),
          'nightbot': u(1, 1, '2026-01-01T00:00:00Z'), 'secretsam': u(1, 8, '2026-02-02T00:00:00Z'), 'innocentpenguin_': u(1, 1, '2026-02-02T00:00:00Z')}
 json.dump({'users': users, 'processed': {}}, open(os.path.join(d, 'subs', 'subscribers_master.json'), 'w'))
 json.dump({'secretsam': {'Login': 'secretsam', 'Name': 'SecretSam', 'Privacy': 'anon'}}, open(os.path.join(d, 'chat_memory.json'), 'w'))
@@ -74,6 +75,7 @@ try:
     chk('title Subs!, kind subs, unit months', sc['title'].startswith('Subs!') and sc['kind'] == 'subs' and sc['unit'] == 'months', sc)
     chk('one list T1 > T2 > T3, months inside a tier; the gifted T1 sub (dan) left out, gifted T2/T3 kept', [r['name'].lower() for r in sc['rows']] == ['eve', 'cat', 'bob', 'amy', 'zed'] and [r['tier'] for r in sc['rows']] == [1, 2, 2, 3, 3], sc['rows'])
     chk('tiers listed, watch time as second column, ranks run on', sc['tiers'] == [1, 2, 3] and [r['rank'] for r in sc['rows']] == [1, 2, 3, 4, 5] and [r['extra'] for r in sc['rows']][2] == 5000, sc)
+    chk('sub anniversary this week is flagged on the row (eve: 3 years, in 2 days); nobody else', [r.get('anniv') for r in sc['rows']] == [3, None, None, None, None], [r.get('anniv') for r in sc['rows']])
     chk('scroll settings are served', qj['visibleRows'] >= 3 and qj['scrollSpeed'] >= 10 and qj['scrollPauseSeconds'] >= 0.5, qj)
     cfgp = os.path.join(d, 'queue_idle.json'); cj = json.load(open(cfgp))
     chk('config written: version 2, Subs! first, editable options', cj.get('version') == 2 and cj['sequence'][0]['metric'] == 'subs' and cj['sequence'][0]['giftedT1'] is False and cj['sequence'][0]['giftedT23'] is True and 'scrollSpeed' in cj, cj)

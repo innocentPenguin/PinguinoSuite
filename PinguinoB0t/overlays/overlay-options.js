@@ -11,6 +11,7 @@
      maxw maxh px          never wider / taller than this on screen: scaled down until it fits
      fit       1           scale down until the whole overlay fits inside the safe area (viewport minus pad)
      overflow  hidden|visible    what happens to anything outside the source (hidden crops it)
+     preset    safe | tv | fit-safe   ready-made safe areas: safe = 5% margin (title-safe), tv = 10% margin (action-safe), fit-safe = 5% margin + scaled down to fit. pad / fit given next to it win.
      guides    1           draw the guides (viewport, safe area, overlay box, size label). Use with ?preview=1 in a normal browser tab.
      overlay   name        use another overlay name for the saved options (default: the file name)
    Works by moving/scaling the page body (transform), so it never edits an overlay's own layout code. */
@@ -32,11 +33,20 @@
     if ((d = num(src.maxh, 50, 8000)) !== null) o.maxh = d;
     if (src.fit !== undefined && src.fit !== null && src.fit !== "") o.fit = (String(src.fit) === "1" || String(src.fit).toLowerCase() === "true") ? 1 : 0;
     var a = String(src.anchor || "").toLowerCase(); if (ANCHORS.indexOf(a) >= 0) o.anchor = a;
+    var pr = String(src.preset || "").toLowerCase(); if (pr === "safe" || pr === "tv" || pr === "fit-safe") o.preset = pr;
     var ov = String(src.overflow || "").toLowerCase(); if (ov === "hidden" || ov === "visible") o.overflow = ov;
     return o;
   }
-  function fromUrl() { var s = {}; ["scale", "anchor", "pad", "x", "y", "maxw", "maxh", "fit", "overflow"].forEach(function (k) { if (Q.has(k)) s[k] = Q.get(k); }); return clean(s); }
-  function effective() { var o = clean(saved || {}), u = fromUrl(); for (var k in u) o[k] = u[k]; return o; }
+  function fromUrl() { var s = {}; ["scale", "anchor", "pad", "x", "y", "maxw", "maxh", "fit", "overflow", "preset"].forEach(function (k) { if (Q.has(k)) s[k] = Q.get(k); }); return clean(s); }
+  function effective() {
+    var o = clean(saved || {}), u = fromUrl(); for (var k in u) o[k] = u[k];
+    if (o.preset) {   // presets only fill what is not set explicitly
+      var m = Math.min(window.innerWidth, window.innerHeight);
+      if (o.pad === undefined) o.pad = Math.round(m * (o.preset === "tv" ? 0.10 : 0.05));
+      if (o.fit === undefined && o.preset === "fit-safe") o.fit = 1;
+    }
+    return o;
+  }
 
   function box(el, css) { el.style.cssText = "position:fixed;pointer-events:none;box-sizing:border-box;" + css; return el; }
   function guides(o, rect) {

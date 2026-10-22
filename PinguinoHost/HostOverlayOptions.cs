@@ -58,6 +58,7 @@ namespace PinguinoHost
                             case "maxw": case "maxh": { var d = Num(v, 50, 8000); if (d == null) return Bad(k); cur[k] = d; break; }
                             case "fit": cur[k] = (v.ToString() == "1" || v.ToString().ToLowerInvariant() == "true") ? 1 : 0; break;
                             case "anchor": { string a = v.ToString().ToLowerInvariant(); if (!Anchors.Contains(a)) return Bad(k + " (one of " + string.Join(", ", Anchors) + ")"); cur[k] = a; break; }
+                            case "preset": { string a = v.ToString().ToLowerInvariant(); if (a != "safe" && a != "tv" && a != "fit-safe") return Bad(k + " (safe, tv or fit-safe)"); cur[k] = a; break; }
                             case "overflow": { string a = v.ToString().ToLowerInvariant(); if (a != "hidden" && a != "visible") return Bad(k + " (hidden or visible)"); cur[k] = a; break; }
                             default: return Bad(k + " (unknown option)");
                         }
@@ -67,6 +68,24 @@ namespace PinguinoHost
                 try { File.WriteAllText(P, all.ToString()); } catch (Exception e) { return new JObject { { "ok", false }, { "error", "could not save: " + e.Message } }; }
                 return Get(name);
             }
+        }
+        /// <summary>What the Suite needs to draw the sliders page: every option with type, range, step, default and a one-line help. GET /api/overlay-options/schema</summary>
+        public static JObject Schema()
+        {
+            Func<string, string, double, double, double, double, string, JObject> num = (k, label, lo, hi, step, def, help) => new JObject { { "key", k }, { "label", label }, { "type", "number" }, { "min", lo }, { "max", hi }, { "step", step }, { "default", def }, { "help", help } };
+            Func<string, string, string[], string, string, JObject> en = (k, label, vals, def, help) => new JObject { { "key", k }, { "label", label }, { "type", "enum" }, { "values", new JArray(vals) }, { "default", def }, { "help", help } };
+            return new JObject { { "ok", true }, { "overlays", new JArray("queue", "players", "players_vertical", "wheel", "subroll") }, { "global", "*" },
+                { "options", new JArray {
+                    num("scale", "Size", 0.2, 4, 0.05, 1, "Size of the whole overlay (1 = as designed)"),
+                    en("anchor", "Anchor", Anchors, "tl", "The point of the source the overlay grows/shrinks from"),
+                    num("pad", "Safe margin (px)", 0, 600, 5, 0, "Moves the picture away from the anchored edge(s)"),
+                    num("x", "Nudge right (px)", -4000, 4000, 5, 0, "Negative = left"), num("y", "Nudge down (px)", -4000, 4000, 5, 0, "Negative = up"),
+                    num("maxw", "Max width (px)", 50, 8000, 10, 0, "0/empty = no limit; scaled down until it fits"), num("maxh", "Max height (px)", 50, 8000, 10, 0, "0/empty = no limit"),
+                    new JObject { { "key", "fit" }, { "label", "Fit inside safe area" }, { "type", "bool" }, { "default", 0 }, { "help", "Scale down until everything fits inside the source minus the margin" } },
+                    en("overflow", "Overflow", new[] { "hidden", "visible" }, "hidden", "Crop or show anything outside the source"),
+                    en("preset", "Safe-area preset", new[] { "safe", "tv", "fit-safe" }, "", "safe = 5% margin, tv = 10% margin, fit-safe = 5% + fit (explicit margin/fit win)") } },
+                { "api", new JObject { { "get", "GET /api/overlay-options[?name=queue]" }, { "set", "POST /api/overlay-options {name, options:{key:value|null}}" }, { "clearOverlay", "POST /api/overlay-options {name, options:null}" } } },
+                { "preview", "Open <overlay>.html?preview=1&guides=1 to see the red source box, green safe area, blue overlay box" } };
         }
         static JObject Bad(string what) { return new JObject { { "ok", false }, { "error", "bad value for " + what } }; }
     }
