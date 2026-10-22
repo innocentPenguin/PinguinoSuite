@@ -25,6 +25,107 @@ use tauri_plugin_autostart::MacosLauncher;
 /// Set by the tray's "Quit and stop all modules". A plain quit leaves the modules running (they are separate programs; the next core adopts them).
 static STOP_MODULES: AtomicBool = AtomicBool::new(false);
 
+/// True once a quit has begun, so the close handler lets windows close instead of hiding them to the tray.
+static QUITTING: AtomicBool = AtomicBool::new(false);
+
+/// Ports of everything the Suite starts: core, Listen, Multi, Link, Host, Spotify, Voice. Force quit stops whatever listens here.
+fn suite_ports() -> Vec<u16> {
+    vec![port(), 8765, 8766, 7777, 8770, 8771, 8772]
+}
+
+/// Pids LISTENING on a local port (netstat; no token, no core needed).
+fn listening_pids(p: u16) -> Vec<u32> {
+    let mut out = Vec::new();
+    let mut c = Command::new("netstat");
+    c.args(["-ano", "-p", "TCP"]).stdin(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000);
+    }
+    if let Ok(o) = c.output() {
+        for ln in String::from_utf8_lossy(&o.stdout).lines() {
+            let parts: Vec<&str> = ln.split_whitespace().collect();
+            if parts.len() >= 5 && parts[3].eq_ignore_ascii_case("LISTENING") && parts[1].rsplit(':').next() == Some(&p.to_string()) {
+                if let Ok(pid) = parts[4].parse::<u32>() {
+                    if pid != 0 && pid != std::process::id() {
+                        out.push(pid);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Last resort: kill the core and every module by port, plus the pids the core recorded when it spawned them. Needs nothing from the core.
+fn force_kill_all() {
+    let mut pids: Vec<u32> = suite_ports().into_iter().flat_map(listening_pids).collect();
+    if let Ok(rd) = std::fs::read_dir(data_dir().join("pids")) {
+        for e in rd.flatten() {
+            if let Ok(txt) = std::fs::read_to_string(e.path()) {
+                if let Some(i) = txt.find("\"pid\":") {
+                    let n: String = txt[i + 6..].chars().skip_while(|c| !c.is_ascii_digit()).take_while(|c| c.is_ascii_digit()).collect();
+                    if let Ok(pid) = n.parse::<u32>() {
+                        if pid != std::process::id() {
+                            pids.push(pid);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    pids.sort();
+    pids.dedup();
+    for pid in pids {
+        let mut c = Command::new("taskkill");
+        c.args(["/F", "/T", "/PID", &pid.to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            c.creation_flags(0x0800_0000);
+        }
+        let _ = c.status();
+    }
+}
+
+#[cfg(windows)]
+fn alt_down() -> bool {
+    extern "system" {
+        fn GetAsyncKeyState(vk: i32) -> i16;
+    }
+    unsafe { (GetAsyncKeyState(0x12) as u16) & 0x8000 != 0 }
+}
+#[cfg(not(windows))]
+fn alt_down() -> bool {
+    false
+}
+
+/// Quit for real. A watchdog guarantees the process ends even if the graceful path hangs (a hung core used to leave Quit doing nothing).
+fn quit_now(app: &AppHandle, stop_modules: bool) {
+    QUITTING.store(true, Ordering::SeqCst);
+    if stop_modules {
+        STOP_MODULES.store(true, Ordering::SeqCst);
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        mainwin::save(&w, true);
+    }
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(6));
+        if stop_modules {
+            force_kill_all();
+        }
+        std::process::exit(0);
+    });
+    app.exit(0);
+}
+
+/// Called by the in-page "Are you sure you want to quit?" dialog.
+#[tauri::command]
+fn quit_app(app: AppHandle, stop_modules: bool) {
+    quit_now(&app, stop_modules);
+}
+
 fn port() -> u16 {
     std::env::var("PINGUINO_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8760)
 }
@@ -197,26 +298,23 @@ fn main() {
         .plugin(nav_guard())
         .manage(Core { child: Mutex::new(child), token })
         .manage(windows::Layouts::load(data_dir().join("windows.json")))
-        .invoke_handler(tauri::generate_handler![core_config, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows, windows::open_site_window, windows::clear_site_data, splash::app_ready])
+        .invoke_handler(tauri::generate_handler![core_config, quit_app, windows::list_monitors, windows::open_window, windows::close_window, windows::set_window_on_top, windows::list_windows, windows::open_site_window, windows::clear_site_data, splash::app_ready])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Show PinguinoSuite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit (modules keep running)", true, None::<&str>)?;
             let quit_all = MenuItem::with_id(app, "quit_all", "Quit and stop all modules", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &quit, &quit_all])?;
+            let force = MenuItem::with_id(app, "force_quit", "Force quit (kills everything)", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit, &quit_all, &force])?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("PinguinoSuite")
                 .menu(&menu)
                 .on_menu_event(|app, ev| match ev.id.as_ref() {
                     "open" => show_main(app),
-                    "quit" | "quit_all" => {
-                        if ev.id.as_ref() == "quit_all" {
-                            STOP_MODULES.store(true, Ordering::SeqCst);
-                        }
-                        if let Some(w) = app.get_webview_window("main") {
-                            mainwin::save(&w, true);
-                        }
-                        app.exit(0)
+                    "quit" | "quit_all" => quit_now(app, ev.id.as_ref() == "quit_all"),
+                    "force_quit" => {
+                        force_kill_all();
+                        std::process::exit(0);
                     }
                     _ => {}
                 })
@@ -244,11 +342,23 @@ fn main() {
             if window.label() == "main" {
                 match event {
                     WindowEvent::CloseRequested { api, .. } => {
+                        if QUITTING.load(Ordering::SeqCst) {
+                            return;
+                        }
                         if let Some(w) = window.app_handle().get_webview_window("main") {
                             mainwin::save(&w, true);
                         }
                         api.prevent_close();
-                        let _ = window.hide();
+                        if alt_down() {
+                            // Alt+F4: ask first (confirm() is blocked in the webview, so the page shows its own dialog)
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            if let Some(w) = window.app_handle().get_webview_window("main") {
+                                let _ = w.eval("window.pgQuitPrompt&&window.pgQuitPrompt()");
+                            }
+                        } else {
+                            let _ = window.hide(); // the X button keeps hiding to the tray
+                        }
                     }
                     WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
                         if let Some(w) = window.app_handle().get_webview_window("main") {

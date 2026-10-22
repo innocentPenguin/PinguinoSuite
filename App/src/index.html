@@ -1719,6 +1719,15 @@ $('#popout-btn').onclick=()=>popOut(route);
 $('#nav-toggle').onclick=toggleNav;
 $('#hq-page').onclick=()=>openHelp({hk:isMod(route)?'module:'+route.slice(2).split('@')[0]:route,hm:isMod(route)?route.slice(2).split('@')[0]:''});
 function toast(m){if(!PF.notify.toasts&&!/fail|could not|error|not /i.test(m))return;const d=document.createElement('div');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3500)}
+/* Alt+F4 / close request: the shell calls this (confirm() is blocked in the webview, so the dialog is ours) */
+window.pgQuitPrompt=function(){if(document.getElementById('pg-quit'))return;
+  const d=document.createElement('div');d.id='pg-quit';d.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+  d.innerHTML='<div class="card" style="max-width:420px;padding:20px;background:var(--panel,#1b1b1b);border:1px solid var(--accent,#f60);border-radius:10px"><h3 style="margin:0 0 8px">Are you sure you want to quit?</h3><div class="sm faint" style="margin-bottom:14px">Quit closes the app; modules keep running on their own. Or stop them too.</div><div class="row" style="gap:8px;flex-wrap:wrap"><button class="pri" id="pq-q">Quit</button><button id="pq-a">Quit and stop modules</button><button id="pq-c">Cancel</button></div></div>';
+  document.body.append(d);
+  const go=m=>{try{window.__TAURI__.core.invoke('quit_app',{stopModules:m})}catch{toast('Could not quit: use the tray menu')}};
+  d.querySelector('#pq-q').onclick=()=>go(false);d.querySelector('#pq-a').onclick=()=>go(true);
+  const close=()=>{d.remove();document.removeEventListener('keydown',esc)};d.querySelector('#pq-c').onclick=close;
+  const esc=e=>{if(e.key==='Escape')close()};document.addEventListener('keydown',esc);d.querySelector('#pq-c').focus()};
 $('#simon').onclick=()=>{post('/api/simulate',{live:true});toast('Simulating go-live…')};
 $('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/simulate',{live:null}));
 
