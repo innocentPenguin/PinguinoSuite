@@ -172,7 +172,7 @@ function drawTabs(){
   $('tabs').innerHTML=TABS.map(([k,l])=>`<button data-t="${k}" class="${k===tab?'on':''}">${l}${k==='req'&&pend?`<span class="badge">${pend}</span>`:''}</button>`).join('');
   for(const [k] of TABS)$('t-'+k).hidden=k!==tab;
 }
-$('tabs').onclick=e=>{const t=e.target.closest('button');if(!t)return;tab=t.dataset.t;drawTabs();if(tab==='setup'||tab==='set')loadSetup();if(tab==='set')editing=dirty.size>0;render()};
+$('tabs').onclick=e=>{const t=e.target.closest('button');if(!t)return;tab=t.dataset.t;try{sessionStorage.setItem('sp_tab',tab)}catch(_){}drawTabs();if(tab==='setup'||tab==='set')loadSetup();if(tab==='set')editing=dirty.size>0;render()};
 
 function trackRow(t,btns){
   return `<div class="row"><img src="${esc(t.art)}" onerror="this.style.visibility='hidden'"><div class="m"><div class="n">${esc(t.name)}${t.explicit?'<span class="tag e">E</span>':''}</div><div class="n small dim">${esc((t.artists||[]).join(', '))} · ${fmt(t.duration_ms)}</div></div>${btns}</div>`;
@@ -352,9 +352,11 @@ drawTabs();loop();loadSetup();
 document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.code==='Space'){e.preventDefault();$('bplay').click()}else if(e.key==='n'){$('bnext').click()}else if(e.key==='p'){$('bprev').click()}});
 document.addEventListener('click',async e=>{
-  if(e.target.closest('[data-gosetup]')){e.preventDefault();tab='setup';drawTabs();loadSetup()}
+  if(e.target.closest('[data-gosetup]')){e.preventDefault();tab='setup';try{sessionStorage.setItem('sp_tab',tab)}catch(_){}drawTabs();loadSetup()}
   if(e.target.id==='qconnect'){try{await api('/api/setup',{client_id:$('qcid').value});await api('/api/auth/start',{});toast('Opened Spotify in your browser: approve there, then come back.');refresh()}catch(x){toast(x.message,true)}}
   if(e.target.id==='qconnect2'){try{await api('/api/auth/start',{});toast('Opened Spotify in your browser: approve there, then come back.')}catch(x){toast(x.message,true)}}
 });
 if(new URLSearchParams(location.search).has('setup')){tab='setup'}
+// the Suite shell can reload this page: remember the open tab so it does not jump back to Queue
+else{try{const t=sessionStorage.getItem('sp_tab');if(['queue','search','req','set','setup'].includes(t)){tab=t;drawTabs()}}catch(_){}}
 </script></body></html>
