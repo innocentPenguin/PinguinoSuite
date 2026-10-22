@@ -12,6 +12,34 @@ use tauri::{AppHandle, Manager};
 /// Parts Lite hosts: the bundled Link, Lite's own app files, and scripts/docs. Anything else in a release (shell, core, Host, listen, ...) belongs to the Suite.
 pub const LITE_PARTS: &[&str] = &["link", "lite", "tools"];
 /// App parts are staged and swapped by the updater's `launch` step before the next start (never under a running exe).
+/// On-demand modules: present on a full install, absent on a "lite-minimal" one until the user clicks Install. (voice is hidden in Lite.)
+pub const MODULE_PARTS: &[&str] = &["listen", "multi", "spotify"];
+/// Install profiles, same table as Suite/updater/lib/profiles.mjs. None = every part.
+pub fn profile_parts(profile: &str) -> Option<Vec<String>> {
+    match profile {
+        "lite-minimal" => Some(["lite", "link", "tools"].iter().map(|s| s.to_string()).collect()),
+        _ => None,
+    }
+}
+/// Parts an install keeps: explicit `parts` in install.json, else its profile, else None (= all).
+pub fn installed_parts(inst: &Value) -> Option<Vec<String>> {
+    if let Some(a) = inst["parts"].as_array() {
+        return Some(a.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+    }
+    inst["profile"].as_str().and_then(profile_parts)
+}
+pub fn is_installed(parts: &Option<Vec<String>>, id: &str) -> bool {
+    parts.as_ref().map(|p| p.iter().any(|x| x == id)).unwrap_or(true)
+}
+fn module_name(id: &str) -> &'static str {
+    match id {
+        "listen" => "Listen",
+        "multi" => "Multi",
+        "spotify" => "Spotify",
+        _ => "",
+    }
+}
+
 pub const STAGED_PARTS: &[&str] = &["lite"];
 
 static JOB: Mutex<Option<Value>> = Mutex::new(None);
@@ -21,7 +49,7 @@ static JOB: Mutex<Option<Value>> = Mutex::new(None);
 pub fn allowed_parts(ids: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for i in ids {
-        if LITE_PARTS.contains(&i.as_str()) && !out.contains(i) {
+        if (LITE_PARTS.contains(&i.as_str()) || MODULE_PARTS.contains(&i.as_str())) && !out.contains(i) {
             out.push(i.clone());
         }
     }
@@ -39,7 +67,8 @@ pub fn lite_view(check: &Value) -> Value {
         .as_array()
         .map(|a| {
             a.iter()
-                .filter(|c| c["id"].as_str().map(|i| LITE_PARTS.contains(&i)).unwrap_or(false))
+                .filter(|c| c["optional"] != true && c["installed"] != false)
+                .filter(|c| c["id"].as_str().map(|i| LITE_PARTS.contains(&i) || MODULE_PARTS.contains(&i)).unwrap_or(false))
                 .map(|c| {
                     json!({"id": c["id"], "name": c["name"], "changed": c["changed"].as_bool().unwrap_or(false), "files": c["files"], "bytes": c["bytes"],
                            "staged": c["id"].as_str().map(|i| STAGED_PARTS.contains(&i)).unwrap_or(false)})
@@ -234,6 +263,69 @@ pub fn parts_rollback(app: AppHandle) -> Value {
     })
 }
 
+fn read_install() -> Value {
+    install_dir()
+        .and_then(|d| std::fs::read(d.join("install.json")).ok())
+        .map(|b| String::from_utf8_lossy(&b).trim_start_matches('\u{feff}').to_string())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or(Value::Null)
+}
+
+/// The on-demand modules and whether this install has them. Nothing here downloads anything.
+#[tauri::command]
+pub fn parts_modules() -> Value {
+    let inst = read_install();
+    let parts = installed_parts(&inst);
+    let mods: Vec<Value> = MODULE_PARTS.iter().map(|id| json!({"id": id, "name": module_name(id), "installed": is_installed(&parts, id)})).collect();
+    json!({"supported": install_dir().is_some(), "profile": inst["profile"].as_str().unwrap_or("full"), "modules": mods, "link": is_installed(&parts, "link"), "live": host_is_live()})
+}
+
+/// Read-only integrity check of installed parts against the release (hashes from the shared updater). Not blocked by live: it changes nothing.
+#[tauri::command]
+pub fn parts_verify(ids: Vec<String>) -> Value {
+    let parts = installed_parts(&read_install());
+    let ids: Vec<String> = allowed_parts(&ids).into_iter().filter(|i| is_installed(&parts, i)).collect();
+    if ids.is_empty() {
+        return json!({"ok": false, "message": "nothing installed to verify"});
+    }
+    let list = ids.join(",");
+    start_job("verify", &ids, move || run_updater(&["verify", "--only", &list]))
+}
+
+/// Take an on-demand module out: stop it (via Link), then the updater MOVES its files aside (never deletes). Reversible with Install.
+#[tauri::command]
+pub fn parts_eject(app: AppHandle, id: String) -> Value {
+    if !MODULE_PARTS.contains(&id.as_str()) {
+        return json!({"ok": false, "message": "only on-demand modules can be taken out"});
+    }
+    if !is_installed(&installed_parts(&read_install()), &id) {
+        return json!({"ok": false, "message": format!("{} is not installed", module_name(&id))});
+    }
+    if let Err(m) = may_update(host_is_live()) {
+        return json!({"ok": false, "message": m});
+    }
+    start_job("eject", &[id.clone()], move || {
+        crate::request_module(app, "stop", &id); // best effort: Link stops the module before its files move
+        std::thread::sleep(Duration::from_secs(3));
+        run_updater(&["eject", "--only", &id])
+    })
+}
+
+/// Fetch an on-demand module on request (only ever called from the Install button). The module is not started; start it from Modules.
+#[tauri::command]
+pub fn parts_install(id: String) -> Value {
+    if !MODULE_PARTS.contains(&id.as_str()) {
+        return json!({"ok": false, "message": "unknown module"});
+    }
+    if is_installed(&installed_parts(&read_install()), &id) {
+        return json!({"ok": false, "message": format!("{} is already installed", module_name(&id))});
+    }
+    if let Err(m) = may_update(host_is_live()) {
+        return json!({"ok": false, "message": m});
+    }
+    start_job("install", &[id.clone()], move || run_updater(&["install", "--only", &id]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,7 +333,7 @@ mod tests {
     #[test]
     fn only_lite_parts_pass() {
         let ids: Vec<String> = ["link", "shell", "listen", "lite", "link", "../x", "tools"].iter().map(|s| s.to_string()).collect();
-        assert_eq!(allowed_parts(&ids), vec!["link", "lite", "tools"]);
+        assert_eq!(allowed_parts(&ids), vec!["link", "listen", "lite", "tools"]);
         assert!(allowed_parts(&["voice".to_string()]).is_empty());
     }
 
@@ -263,6 +355,20 @@ mod tests {
         assert_eq!(v["parts"][1]["staged"], true);
         assert_eq!(v["parts"][0]["staged"], false);
         assert_eq!(lite_view(&json!({"ok": false, "message": "no source"}))["any_changed"], false);
+    }
+
+    #[test]
+    fn profiles_decide_what_is_installed() {
+        let full = installed_parts(&json!({"version": "1"}));
+        assert!(full.is_none() && is_installed(&full, "spotify"));
+        let min = installed_parts(&json!({"profile": "lite-minimal"}));
+        assert!(is_installed(&min, "link") && is_installed(&min, "lite") && !is_installed(&min, "spotify") && !is_installed(&min, "multi"));
+        // explicit parts win over the profile (after an Install or Eject)
+        let p = installed_parts(&json!({"profile": "lite-minimal", "parts": ["lite", "link", "tools", "spotify"]}));
+        assert!(is_installed(&p, "spotify") && !is_installed(&p, "listen"));
+        // not-installed modules never show up as updates
+        let c = json!({"ok": true, "components": [{"id": "spotify", "optional": true, "installed": false, "changed": true}, {"id": "link", "changed": true}]});
+        assert_eq!(lite_view(&c)["parts"].as_array().unwrap().len(), 1);
     }
 
     #[test]

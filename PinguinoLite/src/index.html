@@ -81,7 +81,9 @@ let page = 'dashboard';
 let gh = null;   // last GitHub update check result {ok, update, latest, url, error, at}
 try { gh = JSON.parse(localStorage.getItem('gh') || 'null'); } catch {}
 let ghBusy = false;
+let mods = null, vres = null;   // on-demand module files (install profile) and the last Verify result
 let parts = null, job = null;   // per-part updates (shared Node updater): last check {supported, parts[], live, ...} and the running/finished job
+async function loadMods() { mods = await inv('parts_modules').catch(() => null); render(); }
 async function checkParts() { parts = await inv('parts_check').catch(e => ({ ok: false, supported: false, message: String(e) })); render(); }
 async function pollJob() {
   for (;;) {
@@ -89,7 +91,10 @@ async function pollJob() {
     if (!job || job.state !== 'running') break;
     await new Promise(r => setTimeout(r, 1500));
   }
-  if (job && job.state === 'done') { toast(job.message || (job.ok ? 'Done' : 'Failed')); checkParts(); refresh(); }
+  if (job && job.state === 'done') {
+    if (job.kind === 'verify') vres = job.result && job.result.parts ? job.result : { ok: false, message: job.message };
+    toast(job.message || (job.ok ? 'Done' : 'Failed')); checkParts(); loadMods(); refresh();
+  }
 }
 function partsCard() {
   if (!parts) return '';
@@ -104,6 +109,33 @@ function partsCard() {
    ${parts.live === true ? '<div class="note" style="color:var(--warn)">You are live: updates wait until the stream is over.</div>' : parts.live == null ? '<div class="note">Could not tell whether you are live; updates are held.</div>' : ''}
    ${run ? `<div class="note">Updating ${esc((job.parts || []).join(', ') || '...')}: ${esc(job.message)}...</div>` : job && job.state === 'done' ? `<div class="note" style="color:var(${job.ok ? '--ok' : '--bad'})">${esc(job.message)}</div>` : ''}
    <div class="row"><button class="btn" data-parts-check="1">Check parts</button><button class="btn" data-parts-rollback="1"${blocked ? ' disabled' : ''} title="Put back the version kept before the last update">Roll back last update</button></div></div>`;
+}
+// Module files: which on-demand modules this install has (profile), Verify (hash check), Eject (files moved aside, reversible), Install (fetched only on click).
+function modCard() {
+  if (!mods || !mods.supported) return '';
+  const run = job && job.state === 'running';
+  const blocked = run || mods.live !== false;
+  const vr = id => vres && vres.parts ? vres.parts.find(p => p.id === id) : null;
+  const vpill = id => {
+    const v = vr(id); if (!v) return '';
+    return v.state === 'ok' ? ' <span class="pill ok">files verified</span>'
+      : v.state === 'not-in-release' ? ' <span class="pill">not in this release</span>'
+      : ` <span class="pill bad" title="${esc((v.missing || []).concat(v.changed || []).slice(0, 8).join(', '))}">${v.state === 'missing' ? 'files missing' : v.changed_count + ' changed / ' + v.missing_count + ' missing'}</span>`;
+  };
+  const rowsM = (mods.modules || []).map(m => {
+    const v = vr(m.id), bad = v && (v.state === 'damaged' || v.state === 'missing');
+    return `<tr><td><b>${esc(m.name)}</b></td>
+     <td>${m.installed ? '<span class="pill ok">Installed</span>' : '<span class="pill">Not installed</span>'}${m.installed ? vpill(m.id) : ''}</td>
+     <td style="text-align:right">${m.installed
+        ? `<button class="btn" data-mod-verify="${esc(m.id)}"${run ? ' disabled' : ''}>Verify</button> ${bad ? `<button class="btn pri" data-part="${esc(m.id)}"${blocked ? ' disabled' : ''}>Repair</button> ` : ''}<button class="btn" data-mod-eject="${esc(m.id)}"${blocked ? ' disabled' : ''} title="Stops it and moves its files aside (nothing is deleted). Install brings it back.">Eject</button>`
+        : `<button class="btn pri" data-mod-install="${esc(m.id)}"${blocked ? ' disabled' : ''} title="Downloads this module now. Nothing is downloaded until you click.">Install</button>`}</td></tr>`;
+  }).join('');
+  return `<div class="card" style="margin-top:12px"><h3>Module files${mods.profile === 'lite-minimal' ? ' <span class="pill">minimal install</span>' : ''}</h3>
+   <table><tbody>${rowsM}</tbody></table>
+   ${mods.live === true ? '<div class="note" style="color:var(--warn)">You are live: install, eject and repair wait until the stream is over.</div>' : mods.live == null ? '<div class="note">Could not tell whether you are live; changes are held.</div>' : ''}
+   ${vres && !vres.ok ? `<div class="note" style="color:var(--bad)">${esc(vres.message || 'Verify failed')}</div>` : vres && vres.all_ok ? '<div class="note" style="color:var(--ok)">Everything checked matches the release.</div>' : ''}
+   ${run ? `<div class="note">${esc(job.kind)} ${esc((job.parts || []).join(', '))}: ${esc(job.message)}...</div>` : ''}
+   <div class="row"><button class="btn" data-mod-verify="all"${run ? ' disabled' : ''}>Verify all files</button></div></div>`;
 }
 // Lite's own update check (GitHub releases, via the shell). Quiet at startup at most once per 24 h; manual button any time.
 async function checkLite(manual) {
@@ -204,7 +236,7 @@ function modules() {
   const gen = c && c.data && (c.data.generated || c.data.generated_at);
   return `<h1>Modules</h1><p class="sub">Modules available from PinguinoLink${gen ? ` - catalog from ${esc(ago(iso(gen)))}` : ''}.
    <span class="pill">Local packages only for now</span></p>
-   ${errBanner()}<div class="card" style="padding:4px 8px">${body}</div>
+   ${errBanner()}<div class="card" style="padding:4px 8px">${body}</div>${modCard()}
    <div class="row"><button class="btn" data-act="check">Check for updates</button><button class="btn" data-open="folder">Open Lite data folder</button></div>`;
 }
 
@@ -250,6 +282,12 @@ document.addEventListener('click', async e => {
   if (e.target.closest('[data-parts-check]')) return checkParts();
   const pb = e.target.closest('[data-part]');
   if (pb) { const r = await inv('parts_apply', { ids: [pb.dataset.part] }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
+  const mv = e.target.closest('[data-mod-verify]');
+  if (mv) { const ids = mv.dataset.modVerify === 'all' ? ['link', 'lite'].concat((mods && mods.modules || []).filter(m => m.installed).map(m => m.id)) : [mv.dataset.modVerify]; const r = await inv('parts_verify', { ids }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
+  const me = e.target.closest('[data-mod-eject]');
+  if (me) { const r = await inv('parts_eject', { id: me.dataset.modEject }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
+  const mi = e.target.closest('[data-mod-install]');
+  if (mi) { const r = await inv('parts_install', { id: mi.dataset.modInstall }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
   if (e.target.closest('[data-parts-rollback]')) { const r = await inv('parts_rollback').catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
   if (e.target.closest('[data-scan]')) { toast('Scanning...'); const s = await inv('replay_scan').catch(err => ({ error: String(err) })); toast(s.error ? 'Scan failed: ' + s.error : `Scan done: ${s.new} new, ${s.errors} unreadable`); return refresh(); }
   const o = e.target.closest('[data-open]');
@@ -262,10 +300,13 @@ document.addEventListener('click', async e => {
   }
 });
 
+window.pgFsState = () => {};
+document.addEventListener('keydown', e => { if (e.key === 'F11') { e.preventDefault(); inv('toggle_fullscreen').catch(() => {}); } });
 (async () => {
   try { page = localStorage.getItem('page') || 'dashboard'; } catch {}
   info = await inv('lite_info').catch(() => null);
   await refresh();
+  loadMods();
   if (!gh || !gh.at || Date.now() - gh.at > 864e5) { checkLite(false); checkParts(); }   // quiet daily check
   setInterval(refresh, 5000);   // cheap: 1 loopback probe + up to 5 tiny local files
 })();

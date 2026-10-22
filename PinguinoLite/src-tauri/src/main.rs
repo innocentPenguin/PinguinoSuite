@@ -16,6 +16,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use tauri::menu::{Menu, MenuItem};
@@ -252,6 +253,11 @@ fn send_request(app: AppHandle, action: String, id: Option<String>) -> Result<Va
     Ok(json!({"file": name}))
 }
 
+/// For parts.rs: ask Link to do something to a module (same request file as the UI).
+pub(crate) fn request_module(app: AppHandle, action: &str, id: &str) {
+    let _ = send_request(app, action.to_string(), Some(id.to_string()));
+}
+
 /// Open the Host dashboard or the contract folder. Only those two targets exist; no arbitrary paths or URLs from the UI.
 #[tauri::command]
 fn open_target(target: String) -> Result<(), String> {
@@ -287,11 +293,62 @@ fn open_target(target: String) -> Result<(), String> {
     }
 }
 
-/// Normal quit: save the window, exit (the Exit event stops the Link Lite started).
+/// True once a quit has begun, so the close handler stops asking and lets the window close.
+static QUITTING: AtomicBool = AtomicBool::new(false);
+
+/// Full-screen state. While set, mainwin::save ignores the window (the full-screen rectangle must never become the remembered window).
+pub static FULLSCREEN: AtomicBool = AtomicBool::new(false);
+/// Window rectangle and maximized flag from just before full screen, so leaving it restores exactly that.
+static FS_PREV: Mutex<Option<(tauri::PhysicalPosition<i32>, tauri::PhysicalSize<u32>, bool)>> = Mutex::new(None);
+
+fn set_fs(app: &AppHandle, on: bool) {
+    let Some(w) = app.get_webview_window("main") else { return };
+    if on == FULLSCREEN.load(Ordering::SeqCst) {
+        return;
+    }
+    if on {
+        mainwin::save(&w, true);
+        if let (Ok(p), Ok(s), Ok(m)) = (w.outer_position(), w.outer_size(), w.is_maximized()) {
+            *FS_PREV.lock().unwrap() = Some((p, s, m));
+        }
+        FULLSCREEN.store(true, Ordering::SeqCst);
+        let _ = w.show();
+        let _ = w.set_fullscreen(true);
+        let _ = w.set_focus();
+    } else {
+        let _ = w.set_fullscreen(false);
+        FULLSCREEN.store(false, Ordering::SeqCst);
+        if let Some((p, s, m)) = FS_PREV.lock().unwrap().take() {
+            if m {
+                let _ = w.maximize();
+            } else {
+                let _ = w.unmaximize();
+                let _ = w.set_size(s);
+                let _ = w.set_position(p);
+            }
+        }
+    }
+    let _ = w.eval(&format!("window.pgFsState&&window.pgFsState({})", on));
+}
+
+#[tauri::command]
+fn toggle_fullscreen(app: AppHandle) {
+    set_fs(&app, !FULLSCREEN.load(Ordering::SeqCst));
+}
+
+/// Normal quit: save the window, exit (the Exit event stops the Link Lite started). A watchdog guarantees the process ends
+/// even if the graceful path hangs, so Quit can never do nothing.
 fn quit_now(app: &AppHandle) {
+    QUITTING.store(true, Ordering::SeqCst);
     if let Some(w) = app.get_webview_window("main") {
         mainwin::save(&w, true);
     }
+    let a = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(6));
+        kill_owned_link(&a);
+        std::process::exit(0);
+    });
     app.exit(0);
 }
 
@@ -301,8 +358,24 @@ fn quit_app(app: AppHandle) {
     quit_now(&app);
 }
 
+/// taskkill the Link Lite owns, whole process tree, no waiting on it.
+fn kill_owned_link(app: &AppHandle) {
+    let pid = app.state::<Link>().0.lock().ok().and_then(|g| g.as_ref().map(|c| c.id()));
+    if let Some(pid) = pid {
+        let mut c = Command::new("taskkill");
+        c.args(["/F", "/T", "/PID", &pid.to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            c.creation_flags(0x0800_0000);
+        }
+        let _ = c.status();
+    }
+}
+
 /// Force quit: kill the Link Lite owns right now and end the process without waiting for anything.
 fn force_quit(app: &AppHandle) -> ! {
+    kill_owned_link(app);
     stop_link(app);
     std::process::exit(0)
 }
@@ -319,7 +392,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .manage(Link(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, quit_app, replays::replay_scan, replays::replay_index, replays::replay_set_interval, updatecheck::check_update, parts::parts_check, parts::parts_apply, parts::parts_rollback, parts::parts_job])
+        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, quit_app, toggle_fullscreen, replays::replay_scan, replays::replay_index, replays::replay_set_interval, updatecheck::check_update, parts::parts_check, parts::parts_apply, parts::parts_rollback, parts::parts_job, parts::parts_modules, parts::parts_verify, parts::parts_eject, parts::parts_install])
         .setup(|app| {
             replays::start();
             // Splash (the lightning bolt) first; the main window is placed and shown when it closes.
@@ -343,7 +416,8 @@ fn main() {
             let open = MenuItem::with_id(app, "open", "Show PinguinoLite", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let force = MenuItem::with_id(app, "force", "Force quit (kill Lite and Link now)", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &quit, &force])?;
+            let fs_item = MenuItem::with_id(app, "fullscreen", "Full screen (F11)", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &fs_item, &quit, &force])?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("PinguinoLite")
@@ -351,6 +425,10 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, ev| match ev.id.as_ref() {
                     "open" => show_main(app),
+                    "fullscreen" => {
+                        show_main(app);
+                        set_fs(app, !FULLSCREEN.load(Ordering::SeqCst));
+                    }
                     "quit" => quit_now(app),
                     "force" => force_quit(app),
                     _ => {}
@@ -372,6 +450,9 @@ fn main() {
                     WindowEvent::CloseRequested { api, .. } => {
                         // Alt+F4 / the X button: ask first (in-page dialog; confirm() is blocked in the webview). If the page cannot be asked, quit as before.
                         use tauri::Emitter;
+                        if QUITTING.load(Ordering::SeqCst) {
+                            return;
+                        }
                         api.prevent_close();
                         if window.emit("confirm-quit", ()).is_err() {
                             quit_now(window.app_handle());
