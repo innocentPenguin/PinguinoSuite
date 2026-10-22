@@ -24,15 +24,16 @@ namespace PinguinoHost
             Func<string, string, JObject> c = (m, p) => new JObject { { "metric", m }, { "period", p } };
             return new JObject
             {
-                { "enabled", true }, { "idleSeconds", 20 }, { "secondsPerCard", 8 }, { "top", 8 },
+                { "version", 2 }, { "enabled", true }, { "idleSeconds", 20 }, { "secondsPerCard", 8 }, { "top", 8 },
+                { "visibleRows", 8 }, { "scrollSpeed", 45 }, { "scrollPauseSeconds", 2.5 },   // a long list scrolls (px per second, pause at the top and bottom) and the card stays until everybody was shown
                 { "sequence", new JArray {
+                    new JObject { { "metric", "subs" }, { "period", "all" }, { "first", true }, { "giftedT1", false }, { "giftedT23", true }, { "top", 200 } },   // "Subs!": ONE list, T1 (not gifted) then T2 then T3; "first" = always opens a round
                     new JArray { c("gifts", "month"), c("bits", "month") },
                     new JArray { c("gifts", "month"), c("gifts", "all") },
                     new JArray { c("gifts", "month"), c("gifts", "lastmonth") },
                     new JArray { c("bits", "month"), c("bits", "lastmonth") },
                     new JArray { c("watchtime", "month"), c("watchtime", "all") },
                     new JArray { c("level", "month"), c("level", "all") },
-                    new JArray { c("tier3", "all"), c("tier2", "all") },
                     c("points", "all"), c("messages", "month") } }
             };
         }
@@ -43,6 +44,11 @@ namespace PinguinoHost
             {
                 if (!File.Exists(Path_)) { File.WriteAllText(Path_, def.ToString()); return def; }
                 var j = JObject.Parse(File.ReadAllText(Path_).TrimStart((char)0xFEFF));
+                if (((int?)j["version"] ?? 1) < 2)   // v1 had no "Subs!" card: keep the old file next to it, take the new default sequence, keep the person's own timings
+                {
+                    try { File.Copy(Path_, Path_ + ".bak-v1", true); } catch (Exception) { }
+                    j["sequence"] = def["sequence"]; j["version"] = 2; try { File.WriteAllText(Path_, j.ToString()); } catch (Exception) { }
+                }
                 foreach (var p in def.Properties()) if (j[p.Name] == null) j[p.Name] = p.Value;
                 return j;
             }
@@ -59,7 +65,7 @@ namespace PinguinoHost
         static JObject Card(JToken t, int top)
         {
             string raw = ((string)t["metric"] ?? "").ToLowerInvariant();
-            if (raw == "tier3" || raw == "tier2" || raw == "tier1") return SubRoll.TierCard(raw[4] - '0', top);   // "our tier N subs": ranked by months, watch time second
+            if (raw == "subs") return SubRoll.SubsCard(Math.Max(1, Math.Min(300, (int?)t["top"] ?? 200)), (bool?)t["giftedT1"] ?? false, (bool?)t["giftedT23"] ?? true);   // ONE list: T1 (not gifted), T2, T3
             string metric = Periods.Metric((string)t["metric"] ?? ""); string per = ((string)t["period"] ?? "month").ToLowerInvariant();
             if (metric == "" || !Per.ContainsKey(per)) return null;
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); string period = per, key = "";
@@ -85,11 +91,12 @@ namespace PinguinoHost
                     {
                         string id = ((string)t["metric"] ?? "") + "|" + ((string)t["period"] ?? ""); JObject card;
                         if (!seen.TryGetValue(id, out card)) { card = Card(t, top); seen[id] = card; }
-                        if (card != null) chain.Add(card);
+                        if (card != null) { if ((bool?)t["first"] == true) { card = (JObject)card.DeepClone(); card["first"] = true; } chain.Add(card); }
                     }
                     if (chain.Count > 0) items.Add(chain);
                 }
-                _cache = new JObject { { "ok", true }, { "enabled", (bool?)cfg["enabled"] ?? true }, { "idleSeconds", Math.Max(3, (int?)cfg["idleSeconds"] ?? 20) }, { "secondsPerCard", Math.Max(3, (int?)cfg["secondsPerCard"] ?? 8) }, { "items", items } };
+                _cache = new JObject { { "ok", true }, { "enabled", (bool?)cfg["enabled"] ?? true }, { "idleSeconds", Math.Max(3, (int?)cfg["idleSeconds"] ?? 20) }, { "secondsPerCard", Math.Max(3, (int?)cfg["secondsPerCard"] ?? 8) },
+                    { "visibleRows", Math.Max(3, Math.Min(12, (int?)cfg["visibleRows"] ?? 8)) }, { "scrollSpeed", Math.Max(10, Math.Min(200, (double?)cfg["scrollSpeed"] ?? 45)) }, { "scrollPauseSeconds", Math.Max(0.5, Math.Min(10, (double?)cfg["scrollPauseSeconds"] ?? 2.5)) }, { "items", items } };
                 _at = DateTime.UtcNow; return _cache;
             }
         }

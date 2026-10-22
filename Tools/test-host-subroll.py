@@ -1,6 +1,6 @@
-"""Sub roll-call overlay + queue-overlay tier cards (sim Host, temp data, mock roster): every current subscriber is served in each sort mode, lapsed subs, bots, the streamer and
+"""Sub roll-call overlay + queue-overlay Subs! card (sim Host, temp data, mock roster): every current subscriber is served in each sort mode, lapsed subs, bots, the streamer and
 !optmeout viewers never appear, tier groups are T3/T2/T1, the roll starts/stops through the state (nonce changes), the mod command starts it (viewers get nothing) and answers with ONE short line,
-the ?js=1 forms load from a file:// overlay, and the queue overlay gets "OUR TIER 3 / 2 SUBS" cards ranked by months.
+the ?js=1 forms load from a file:// overlay, and the queue overlay gets ONE "Subs!" card (T1 not gifted, T2, T3; months then watch time) as the first idle item, with options and config migration.
 Usage: python Tools/test-host-subroll.py [dll]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
@@ -63,13 +63,26 @@ try:
     chk('a mod starts it', st['running'] and st['mode'] == 'watch' and st['style'] == 'spotlight', st)
     chk('and the bot answers with ONE short line, never the list', len(r) == 1 and len(r[0]) < 200 and 'amy' not in r[0].lower(), r)
     r = ask('*mod: !subs roll stop'); chk('stop by chat', len(r) == 1 and json.loads(get('/api/subroll/state'))['running'] is False, r)
-    # queue overlay: our T3 / T2 subs, by months (watch time second)
-    qi = json.loads(get('/api/queue-idle'))['items']
-    cards = {c['id']: c for ch in qi for c in ch}
-    chk('queue idle has the T3 and T2 cards in a chain', any([c['id'] for c in ch] == ['tier3|all', 'tier2|all'] for ch in qi), [[c['id'] for c in ch] for ch in qi])
-    t3 = cards.get('tier3|all', {}); t2 = cards.get('tier2|all', {})
-    chk('T3 card: ranked by months, title like OUR TIER 3 SUBS', [r['name'].lower() for r in t3.get('rows', [])] == ['amy', 'zed'] and t3.get('title', '').startswith('OUR TIER 3 SUBS'), t3)
-    chk('T2 card has watch time as second column', [r['name'].lower() for r in t2.get('rows', [])] == ['cat', 'bob'] and t2['rows'][1].get('extra') == 5000, t2)
+    # queue overlay: ONE "Subs!" card, first in the sequence: T1 (not gifted) then T2 then T3, months then watch time
+    qj = json.loads(get('/api/queue-idle')); qi = qj['items']
+    chk('Subs! card is the first item of the sequence', qi and qi[0][0]['id'] == 'subs|all' and len(qi[0]) == 1, [[c['id'] for c in ch] for ch in qi][:3])
+    chk('no separate tier cards any more', not any(c['id'] in ('tier3|all', 'tier2|all') for ch in qi for c in ch))
+    sc = qi[0][0]
+    chk('title Subs!, kind subs, unit months', sc['title'].startswith('Subs!') and sc['kind'] == 'subs' and sc['unit'] == 'months', sc)
+    chk('one list T1 > T2 > T3, months inside a tier; the gifted T1 sub (dan) left out, gifted T2/T3 kept', [r['name'].lower() for r in sc['rows']] == ['eve', 'cat', 'bob', 'amy', 'zed'] and [r['tier'] for r in sc['rows']] == [1, 2, 2, 3, 3], sc['rows'])
+    chk('tiers listed, watch time as second column, ranks run on', sc['tiers'] == [1, 2, 3] and [r['rank'] for r in sc['rows']] == [1, 2, 3, 4, 5] and [r['extra'] for r in sc['rows']][2] == 5000, sc)
+    chk('scroll settings are served', qj['visibleRows'] >= 3 and qj['scrollSpeed'] >= 10 and qj['scrollPauseSeconds'] >= 0.5, qj)
+    cfgp = os.path.join(d, 'queue_idle.json'); cj = json.load(open(cfgp))
+    chk('config written: version 2, Subs! first, editable options', cj.get('version') == 2 and cj['sequence'][0]['metric'] == 'subs' and cj['sequence'][0]['giftedT1'] is False and cj['sequence'][0]['giftedT23'] is True and 'scrollSpeed' in cj, cj)
+    # edit the config: gifted T1 allowed, gifted T2/T3 not -> the list changes
+    cj['sequence'][0]['giftedT1'] = True; cj['sequence'][0]['giftedT23'] = False
+    json.dump(cj, open(cfgp, 'w')); time.sleep(61)   # the answer is cached for 60 s
+    sc2 = json.loads(get('/api/queue-idle'))['items'][0][0]
+    chk('giftedT1 / giftedT23 options are honoured (no gifted subs in T2/T3 in this roster, dan joins T1)', [r['name'].lower() for r in sc2['rows']] == ['eve', 'dan', 'cat', 'bob', 'amy', 'zed'], sc2['rows'])
+    # an old (version-less) config is migrated and backed up
+    json.dump({'enabled': True, 'idleSeconds': 33, 'sequence': [{'metric': 'points', 'period': 'all'}]}, open(cfgp, 'w')); time.sleep(61)
+    qj3 = json.loads(get('/api/queue-idle')); cj3 = json.load(open(cfgp))
+    chk('old config migrated: backup kept, Subs! first, own idleSeconds kept', os.path.exists(cfgp + '.bak-v1') and cj3['version'] == 2 and cj3['sequence'][0]['metric'] == 'subs' and cj3['idleSeconds'] == 33 and qj3['idleSeconds'] == 33, cj3)
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS sub roll'); sys.exit(1 if fails else 0)

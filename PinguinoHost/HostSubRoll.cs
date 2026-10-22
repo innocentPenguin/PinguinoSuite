@@ -98,14 +98,21 @@ namespace PinguinoHost
             if (mode == "tiergroups") res["groups"] = new JArray(new[] { 3, 2, 1 }.Select(t => new JObject { { "tier", t }, { "label", "TIER " + t }, { "subs", new JArray(list.Where(o => I(o, "tier") == t)) } }).Where(g => ((JArray)g["subs"]).Count > 0));
             return res;
         }
-        /// <summary>ranked card for the queue overlay: our tier-N subs by months (watch time is the tiebreak and the second column); null when nobody is on that tier</summary>
-        public static JObject TierCard(int tier, int top)
+        /// <summary>The "Subs!" card of the queue overlay: ONE list, Tier 1 first (paid or Prime, NOT gifted subs), then Tier 2, then Tier 3; inside a tier by months subscribed, watch time as the tiebreak (and the second column).
+        /// Gifted subs: left out of Tier 1 (almost everybody there is a gift, that list would be the whole community); kept in Tier 2 and 3 (someone on a higher tier is rare and worth a thank-you however they got it).
+        /// Both are options of the card in queue_idle.json: giftedT1 (default false), giftedT23 (default true). null when there is nobody.</summary>
+        public static JObject SubsCard(int top, bool giftedT1, bool giftedT23)
         {
-            var rows = Active().Where(o => I(o, "tier") == tier).OrderByDescending(o => I(o, "tenure")).ThenByDescending(o => Lg(o, "watch")).ThenBy(Name, StringComparer.Ordinal).Take(top).ToList();
+            var rows = new JArray(); int rank = 0, count = 0; var tiers = new List<int>();
+            foreach (int t in new[] { 1, 2, 3 })
+            {
+                var sec = Active().Where(o => I(o, "tier") == t && ((string)o["type"] != "gift" || (t == 1 ? giftedT1 : giftedT23)))
+                    .OrderByDescending(o => I(o, "tenure")).ThenByDescending(o => Lg(o, "watch")).ThenBy(Name, StringComparer.Ordinal).ToList();
+                if (sec.Count == 0) continue; tiers.Add(t);
+                foreach (var o in sec) { if (count++ >= top) break; rows.Add(new JObject { { "rank", ++rank }, { "tier", t }, { "name", o["name"] }, { "value", o["tenure"] }, { "extra", o["watch"] } }); }
+            }
             if (rows.Count == 0) return null;
-            int rank = 0;
-            return new JObject { { "id", "tier" + tier + "|all" }, { "metric", "tier" + tier }, { "period", "all" }, { "title", "OUR TIER " + tier + " SUBS · BY MONTHS" }, { "unit", "months" },
-                { "rows", new JArray(rows.Select(o => new JObject { { "rank", ++rank }, { "name", o["name"] }, { "value", o["tenure"] }, { "extra", o["watch"] } })) } };
+            return new JObject { { "id", "subs|all" }, { "metric", "subs" }, { "period", "all" }, { "title", "Subs! · by months" }, { "unit", "months" }, { "kind", "subs" }, { "tiers", new JArray(tiers) }, { "rows", rows } };
         }
 
         public static JObject State() { lock (L) return (JObject)_state.DeepClone(); }
