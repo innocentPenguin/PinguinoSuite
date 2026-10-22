@@ -48,9 +48,11 @@
         catch (Exception) { }
         return s;
     }
-    void PgLogW(string m) { try { CPH.LogWarn(PgScrub(m)); } catch (Exception) { } }
+    static readonly System.Collections.Generic.Dictionary<string, long> _pgLogAt = new System.Collections.Generic.Dictionary<string, long>();
+    bool PgLogRepeat(string m) { lock (_pgLogAt) { string k = m.Length > 120 ? m.Substring(0, 120) : m; long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), last; if (_pgLogAt.TryGetValue(k, out last) && now - last < 1800) return true; if (_pgLogAt.Count > 200) _pgLogAt.Clear(); _pgLogAt[k] = now; return false; } }   // the same warning or error is logged once per 30 minutes, not once per attempt
+    void PgLogW(string m) { try { m = PgScrub(m); if (!PgLogRepeat(m)) CPH.LogWarn(m); } catch (Exception) { } }
     void PgLogI(string m) { try { CPH.LogInfo(PgScrub(m)); } catch (Exception) { } }
-    void PgLogE(string m) { try { CPH.LogError(PgScrub(m)); } catch (Exception) { } }
+    void PgLogE(string m) { try { m = PgScrub(m); if (!PgLogRepeat(m)) CPH.LogError(m); } catch (Exception) { } }
     static string PgDirPath() { return PgEnvDir() ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BVQ"); }
     static long PgNow() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
 
