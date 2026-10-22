@@ -60,6 +60,7 @@ class Engine:
         self.refunds, self._ref_seq = [], int(clock())       # seq is seeded from the clock so a restart never reuses numbers the Host already saw
         self.rejects = list(st.get("rejects", []))   # songs withdrawn before playing: !oops (wrong song), blocked, denied
         self.suspended = {k: float(v) for k, v in (st.get("suspended") or {}).items()}   # viewer -> epoch when the suspension ends
+        self._pre_mute = 0
         self._skip_mark = None                         # {uri, by, at}: set by skip(), read when the track changes
         self._prev_pb = None
         self.inbox = st.get("inbox", [])
@@ -748,6 +749,22 @@ class Engine:
                 self.suspended.pop(target, None)         # also lifts a timed !srsuspend
             self._bump()
             return self._r(True, cmd, "ban_ok" if cmd == "srban" else "unban_ok", user=user, target=target)
+        if cmd in ("srremove", "srmove", "srtop") and staff:
+            return self._queue_cmd(cmd, arg, user)
+        if cmd in ("srpause", "srplay") and staff:
+            (self.api.pause if cmd == "srpause" else self.api.resume)()
+            self._schedule_refresh()
+            return self._r(True, cmd, "paused" if cmd == "srpause" else "resumed", user=user)
+        if cmd == "srmute" and staff:
+            cur = ((self.pb or {}).get("device") or {}).get("volume")
+            if cur:
+                self._pre_mute = cur
+            self._set_volume(0)
+            return self._r(True, cmd, "muted", user=user)
+        if cmd == "srunmute" and staff:
+            v = self.clamp_volume(self._pre_mute or self._own_settings()["player_volume"] or 50)
+            self._set_volume(v)
+            return self._r(True, cmd, "unmuted", user=user, vol=v)
         if cmd == "srsuspend" and staff:
             parts = arg.split()
             secs = _parse_duration(parts[1]) if len(parts) > 1 else 0
@@ -801,6 +818,53 @@ class Engine:
             self.skip(force=True, by=user)
             return self._r(True, "blocked", "blocked_song", user=user, title=t["name"], artist=t["artists"][0] if t["artists"] else "")
         return {"ok": False, "code": "denied", "reply": ""}
+
+    def _queue_cmd(self, cmd, arg, user):
+        """!srremove <#|viewer> | !srmove <#from> <#to> | !srtop <#>. Positions are 1-based as shown by !queue."""
+        parts = arg.split()
+
+        def bad(msg):
+            return self._r(False, "usage", "queue_usage", user=user, err=msg)
+
+        def at(tok):
+            if not tok.lstrip("#").isdigit() or not (1 <= int(tok.lstrip("#")) <= len(self.queue.items)):
+                return None
+            return self.queue.items[int(tok.lstrip("#")) - 1]
+        with self.lock:
+            try:
+                if cmd == "srremove":
+                    if not parts:
+                        return bad("use !srremove <#> or !srremove <viewer>.")
+                    if parts[0].lstrip("#").isdigit():
+                        it = at(parts[0])
+                        if not it:
+                            return bad(f"there is no song #{parts[0].lstrip('#')} in the queue.")
+                        r = self.queue.remove(it["id"])
+                        if r == "removed":
+                            self.refund_item(it, None, "removed")
+                        label = f"'{it['name']}'"
+                    else:
+                        who = parts[0].lstrip("@").lower()
+                        mine = [i for i in self.queue.items if i["requester"].lower() == who]
+                        if not mine:
+                            return bad(f"{who} has nothing in the queue.")
+                        for it in mine:
+                            if self.queue.remove(it["id"]) == "removed":
+                                self.refund_item(it, None, "removed")
+                        label = f"{len(mine)} song(s) from {who}"
+                    self.persist()
+                    self._bump()
+                    return self._r(True, cmd, "srremove_ok", user=user, target=label)
+                src, dst = (parts[0], parts[1]) if cmd == "srmove" and len(parts) > 1 else (parts[0] if parts else "", "1")
+                it = at(src)
+                if not it or not at(dst):
+                    return bad("use !srmove <#from> <#to> or !srtop <#> (numbers from !queue).")
+                i = self.queue.move(it["id"], int(dst.lstrip("#")) - 1)
+                self.persist()
+                self._bump()
+                return self._r(True, cmd, "srmove_ok", user=user, title=it["name"], pos=i + 1)
+            except QueueError as e:
+                return bad(str(e))
 
     def mod_action(self, action, user="streamer"):
         """One-click actions for the Master view: like | skip | previous | ban_song | ban_artist -> {ok, code, title, artist}. Acts on the current song."""

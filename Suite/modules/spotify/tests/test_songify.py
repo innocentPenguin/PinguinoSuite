@@ -235,6 +235,24 @@ class SongifyTests(unittest.TestCase):
         n = self.e.now_info()
         self.assertTrue(n["title"] and n["duration_ms"] >= n["progress_ms"] >= 0)
 
+    def test_mod_queue_commands(self):
+        mod = ("mod",)
+        for u, n in (("ann", 3), ("bob", 4), ("cy", 5)):
+            self.assertTrue(self.sr(u, n)["ok"])
+        names = lambda: [i["requester"] for i in self.e.queue.items]
+        self.assertEqual(self.e.chat("mod", "!srtop 3", mod)["code"], "srtop")
+        self.assertEqual(names()[0], "cy")
+        self.assertEqual(self.e.chat("mod", "!srmove 1 3", mod)["code"], "srmove")
+        self.assertEqual(names()[2], "cy")
+        self.assertFalse(self.e.chat("mod", "!srmove 9 1", mod)["ok"])
+        self.assertFalse(self.e.chat("mod", "!srremove", mod)["ok"])
+        self.assertEqual(self.e.chat("mod", "!srremove 1", mod)["code"], "srremove")
+        self.assertEqual(len(names()), 2)
+        self.assertEqual(self.e.chat("mod", "!srremove bob", mod)["code"], "srremove")
+        self.assertNotIn("bob", names())
+        self.assertFalse(self.e.chat("mod", "!srremove nobody", mod)["ok"])
+        self.assertFalse(self.e.chat("viewer1", "!srremove 1", ("viewer",))["ok"], "viewers cannot")
+
     def test_pos_next_and_like(self):
         self.sr("ann", 3)
         self.sr("bob", 2)

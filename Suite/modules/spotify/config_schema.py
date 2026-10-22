@@ -56,6 +56,13 @@ MSGS = {
     "unblock_none": ("Nothing to unban", "@{user} nothing found to unban. Use {prefix}unbansong <link or name> or {prefix}unbanartist <name>.", "Nothing matched."),
     "suspend_ok": ("Suspended", "@{user} {target} can't request songs for {for}.", "!srsuspend."),
     "suspend_usage": ("Suspend usage", "@{user} use {prefix}srsuspend <name> <time, eg 10m, 2h, 1d>.", "Missing name or time."),
+    "srremove_ok": ("Queue: removed", "Removed {target} from the queue.", "!srremove."),
+    "srmove_ok": ("Queue: moved", "Moved '{title}' to position {pos}.", "!srmove / !srtop."),
+    "queue_usage": ("Queue command usage", "@{user} {err}", "Bad !srremove / !srmove / !srtop use."),
+    "paused": ("Paused", "Music paused.", "!srpause."),
+    "resumed": ("Resumed", "Music resumed.", "!srplay."),
+    "muted": ("Muted", "Music muted.", "!srmute."),
+    "unmuted": ("Unmuted", "Music volume back to {vol}%.", "!srunmute."),
     "blocked_song": ("Blocked + skipped", "Blocked '{title}' and skipped it.", "!blocksong."),
     "genre": ("Genre blocked", "@{user} that genre ({genre}) isn't allowed right now.", "Song by an artist in a blocked genre."),
     "safe_on": ("Stream-safe on", "Stream-safe mode is ON: no explicit songs, requests need approval.", "A mod turned stream-safe on."),
@@ -79,13 +86,13 @@ MSGS = {
 }
 
 COMMANDS = {"sr": ["sr", "request", "songrequest"], "skip": ["skip", "voteskip"], "queue": ["queue", "q", "songqueue", "srqueue"],
-            "song": ["song", "currentsong", "nowplaying", "np"], "oops": ["oops", "wrongsong"], "blocksong": ["blocksong", "bansong", "songban"], "unbansong": ["unbansong"], "banartist": ["banartist"], "unbanartist": ["unbanartist"], "pardon": ["pardon"], "srsuspend": ["srsuspend"], "srban": ["srban"], "srunban": ["srunban"],
+            "song": ["song", "currentsong", "nowplaying", "np"], "oops": ["oops", "wrongsong"], "blocksong": ["blocksong", "bansong", "songban"], "unbansong": ["unbansong"], "banartist": ["banartist"], "unbanartist": ["unbanartist"], "pardon": ["pardon"], "srsuspend": ["srsuspend"], "srremove": ["srremove"], "srmove": ["srmove"], "srtop": ["srtop"], "srpause": ["srpause"], "srplay": ["srplay"], "srmute": ["srmute"], "srunmute": ["srunmute"], "srban": ["srban"], "srunban": ["srunban"],
             "clear": ["srclear", "songclear"], "last": ["lastsong", "previoussong"], "mine": ["mysongs", "myrequests"], "help": ["songhelp", "songcommands"],
             "volume": ["volume", "vol"], "playnext": ["playnext"],
             "pos": ["songpos", "pos"], "next": ["songnext", "next"], "like": ["songlike", "like"], "toggle": ["togglesr"]}
 COMMAND_HELP = {"sr": "request a song (and mods: open/close/clear)", "skip": "vote to skip (mods: instant)", "queue": "show the next songs",
                 "song": "what is playing", "oops": "remove your last request", "blocksong": "mods: block + skip the current song",
-                "clear": "mods: clear viewer requests", "srban": "mods: ban a viewer from requesting", "srsuspend": "mods: suspend a viewer for a time", "banartist": "mods: ban the current artist", "unbansong": "mods: unban a song", "unbanartist": "mods: unban an artist", "pardon": "mods: pardon song|artist", "srunban": "mods: lift a request ban", "volume": "mods: show or set the volume", "playnext": "mods: put a song first in line", "last": "the previous song", "pos": "where your request is in line", "next": "the song after this one", "like": "mods: like the current song on Spotify", "toggle": "mods: open/close requests", "mine": "your pending requests", "help": "list commands"}
+                "clear": "mods: clear viewer requests", "srban": "mods: ban a viewer from requesting", "srremove": "mods: remove a queued song (#) or all of a viewer's", "srmove": "mods: move a queued song (#from #to)", "srtop": "mods: put a queued song first", "srpause": "mods: pause", "srplay": "mods: resume", "srmute": "mods: mute", "srunmute": "mods: unmute", "srsuspend": "mods: suspend a viewer for a time", "banartist": "mods: ban the current artist", "unbansong": "mods: unban a song", "unbanartist": "mods: unban an artist", "pardon": "mods: pardon song|artist", "srunban": "mods: lift a request ban", "volume": "mods: show or set the volume", "playnext": "mods: put a song first in line", "last": "the previous song", "pos": "where your request is in line", "next": "the song after this one", "like": "mods: like the current song on Spotify", "toggle": "mods: open/close requests", "mine": "your pending requests", "help": "list commands"}
 
 # kinds: bool int str list choice color msgs cmds
 SCHEMA = [
