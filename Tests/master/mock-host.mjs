@@ -45,6 +45,7 @@ export function startMock(port = 8798, opts = {}) {
         st.modCalls.push({ a, v }); push('customs', st.customs); return send(res, 200, { ok: true, ran, customs: st.customs });
       }
       if (p.startsWith('/api/wheel/')) return send(res, 200, { ok: true, wheel: { status: 'open', round: 3, teamSize: 3, entrants: [], signedUp: 0, public: st.wheel } });
+      if (p === '/api/control') { st.ctl = st.ctl || []; st.ctl.push(b); if (b.action === 'volume') st.mvol = b.value; return send(res, 200, { ok: true }); }
       if (p === '/api/mod-action') { st.music.push(b.action); return send(res, 200, { ok: true, code: 'ok', title: 'Birds & the Bees', artist: 'Baby Keem' }); }
       if (p === '/api/overlays/delete') { st.overlays.files = st.overlays.files.filter(f => f.path !== b.path); return send(res, 200, { ok: true }); }
       if (p === '/api/overlays/rename') { const f = st.overlays.files.find(x => x.path === b.from); if (f) f.path = b.to; return send(res, 200, { ok: !!f }); }
@@ -70,6 +71,8 @@ export function startMock(port = 8798, opts = {}) {
     if (p === '/api/wheel/state') return send(res, 200, { ok: true, status: 'open', round: 3, teamSize: 3, entrants: [], signedUp: 0, public: st.wheel });
     if (p === '/api/commands/profiles') return send(res, 200, st.cmds);
     if (p === '/api/eventlog') { if (opts.noLogs) return send(res, 404, {}); const k = u.searchParams.get('kind'), since = +u.searchParams.get('since') || 0; const ev = st.logs.filter(l => l.kind === k && l.ts > since); return send(res, 200, { ok: true, kind: k, count: ev.length, more: false, latest: ev.length ? ev[ev.length - 1].ts : since, events: ev }); }
+    if (p === '/api/state') return send(res, 200, { playback: { is_playing: true, progress_ms: 60000, track: { id: 't1', name: 'Birds & the Bees', artists: ['Baby Keem'], album: 'The Melodic Blue', art: 'https://i.scdn.co/image/x', duration_ms: 180000 }, device: { id: 'd1', name: 'PC', volume: st.mvol != null ? st.mvol : 40 } }, now_item: { requester: 'spywobbles' } });
+    if (p === '/api/devices') return send(res, 200, { devices: [{ id: 'd1', name: 'PC', is_active: true, supports_volume: true, type: 'Computer', volume_percent: 40 }, { id: 'd2', name: 'Phone', is_active: false, supports_volume: true, type: 'Smartphone', volume_percent: 70 }] });
     if (p === '/api/now') return send(res, 200, { title: 'Birds & the Bees', artist: 'Baby Keem', requestedBy: 'spywobbles' });
     if (p === '/api/overlays') return send(res, 200, st.overlays);
     if (p === '/api/overlaychat/status') return send(res, 200, { enabled: true, hasKey: true, callsToday: 1, dailyCalls: 40, pendingProposals: 0, bridge: 'off' });

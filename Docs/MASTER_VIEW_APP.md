@@ -82,3 +82,12 @@ Update: 02 delivered the real feed (Host commit `75349e9`): `GET /api/eventlog?k
 ## Spotify strip
 
 A bar under the header: now playing (`GET :8771/api/now`, polled every 3 s) and Like / Back / Skip / Ban song 🚫💿 / Ban artist 🚫👤 (`POST :8771/api/mod-action {action}`; the two bans need a second click). It needs the Spotify module to send CORS headers for the app's origin and to accept the app (no module token reachable from the page); until then the strip reads "Spotify module not reachable" and button errors show the HTTP text. `?music=<url>` overrides the module address (tests).
+
+## Docked Spotify player (replaces the strip)
+
+Fixed bottom-right card (`#player`, shrinkable with the – button, remembered). Shows cover, title, artist, album, progress, requester; buttons: like, previous, play/pause, next, ban song, ban artist (ban buttons are two-click armed, no confirm/prompt). Data: `GET /api/state` (+ `/api/now` fallback) on 127.0.0.1:8771, every 2.5 s.
+
+- Like/prev/skip/bans: `POST /api/mod-action` (tokenless from tauri origins).
+- Play/pause, volume, device switch: `POST /api/control {action: resume|pause|volume|transfer}`. Needs the same tauri-origin exemption as `/api/mod-action` in the Spotify module; otherwise the click toasts an error.
+- Volume menu (🔊): **Stream** = the Spotify Connect device (slider = device volume, Device button lists `/api/devices` and transfers). **Me** is shown disabled with a note: a second independent output needs OBS per-source monitoring, not built.
+- Cover art loads from `i.scdn.co`; the Tauri CSP has `img-src 'self' data:`, so art shows only after `https://i.scdn.co` is added to `img-src` (falls back to a ♪ tile until then).

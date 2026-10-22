@@ -115,17 +115,63 @@
     else { ui.sent.delete(text); toast(text + ': ' + r.error, true); }
   }
 
+  // Docked player (bottom right). Data: /api/state (+ /api/now fallback); Stream volume/device = the Spotify Connect device.
+  const pl = { volAt: 0, devs: null, mini: ls.get('plmini') === '1', flip: null };
+  function plView() {
+    const st = S.get('mstate'), n = S.get('now') || {}, p = (st && st.playback) || null, t = (p && p.track) || null;
+    const req = (st && st.now_item && st.now_item.requester) || n.requestedBy || '';
+    return { title: t ? t.name : n.title, artist: t ? (t.artists || []).join(', ') : n.artist, album: t ? t.album : '', art: t ? t.art : '',
+      playing: p ? !!p.is_playing : null, prog: p ? p.progress_ms : 0, dur: t ? t.duration_ms : 0, vol: p && p.device ? p.device.volume : null, dev: p && p.device ? p.device.name : '', req };
+  }
   function renderMusic() {
-    const n = S.get('now'), ok = S.get('nowOk'), bar = $('#music');
-    bar.hidden = ok === null;   // hidden until the first answer or failure
-    $('#mu-np').textContent = ok === false ? 'Spotify module not reachable (needs CORS from the module)' : n && n.title ? n.title + ' · ' + (n.artist || '') + (n.requestedBy ? ' · req ' + n.requestedBy : '') : 'Nothing playing';
-    $$('#music button').forEach(b => { b.disabled = ok === false; });
+    const ok = S.get('nowOk'), box = $('#player'), v = plView();
+    box.hidden = ok === null; box.classList.toggle('mini', pl.mini); box.classList.toggle('off', ok === false);
+    $('#pl-title').textContent = ok === false ? 'Spotify module not reachable' : v.title || 'Nothing playing';
+    $('#pl-artist').textContent = v.artist || ''; $('#pl-album').textContent = v.album || '';
+    $('#pl-req').textContent = v.req ? 'req ' + v.req : '';
+    const art = $('#pl-art'), cur = art.querySelector('img');
+    if (v.art && (!cur || cur.dataset.u !== v.art)) { const im = h('img'); im.dataset.u = v.art; im.alt = ''; im.onerror = () => im.remove(); im.src = v.art; art.prepend(im); if (cur) cur.remove(); }
+    else if (!v.art && cur) cur.remove();
+    const playing = pl.flip && Date.now() < pl.flip.until ? pl.flip.v : v.playing;
+    $('#pl-play').textContent = playing ? '⏸' : '▶';
+    $('#pl-prog').style.width = v.dur ? Math.min(100, v.prog / v.dur * 100) + '%' : '0';
+    const vs = $('#pl-vst');
+    if (v.vol != null && document.activeElement !== vs && Date.now() - pl.volAt > 2000) { vs.value = v.vol; $('#pl-vn').textContent = v.vol + '%'; }
+    $('#pl-dst').title = v.dev ? 'Playing on ' + v.dev : 'Pick the Spotify device that plays';
+    $$('#player button[data-mu], #player [data-pl], #pl-vol').forEach(b => { b.disabled = ok === false; });
+    vs.disabled = ok === false;
   }
   async function musicAction(action, btn) {
-    flash(btn); const n = S.get('now'); await tokenReady;
+    flash(btn); const n = plView(); await tokenReady;
     const r = await mapi.post('/api/mod-action', { action });
-    if (r.ok && r.json && r.json.ok !== false) { toast(({ like: 'Liked', skip: 'Skipped', previous: 'Back', ban_song: 'Song banned', ban_artist: 'Artist banned' })[action] + ((r.json.title || (n && n.title)) ? ': ' + (r.json.title || n.title) : '')); pollers.music.kick(); }
+    if (r.ok && r.json && r.json.ok !== false) { toast(({ like: 'Liked', skip: 'Skipped', previous: 'Back', ban_song: 'Song banned', ban_artist: 'Artist banned' })[action] + ((r.json.title || n.title) ? ': ' + (r.json.title || n.title) : '')); pollers.music.kick(); }
     else toast(action + ': ' + ((r.json && (r.json.error || r.json.code)) || r.error), true);
+  }
+  async function playerCtl(action, value, btn) {
+    if (btn) flash(btn); await tokenReady;
+    const r = await mapi.post('/api/control', value === undefined ? { action } : { action, value });
+    if (r.ok && !(r.json && r.json.ok === false)) pollers.music.kick();
+    else toast(action + ': ' + ((r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status), true);
+    return r;
+  }
+  function plToggle(btn) {
+    const v = plView(), want = !(pl.flip && Date.now() < pl.flip.until ? pl.flip.v : v.playing);
+    pl.flip = { v: want, until: Date.now() + 1500 }; renderMusic();
+    playerCtl(want ? 'resume' : 'pause', undefined, btn).then(r => { if (!r.ok) { pl.flip = null; renderMusic(); } });
+  }
+  let volTimer = 0;
+  function plVolume() {
+    const val = +$('#pl-vst').value; pl.volAt = Date.now(); $('#pl-vn').textContent = val + '%';
+    clearTimeout(volTimer); volTimer = setTimeout(() => playerCtl('volume', val), 150);
+  }
+  async function plDevices() {
+    const box = $('#pl-devs'); if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false; box.replaceChildren(h('span', 'faint sm', 'Loading devices…'));
+    const r = await mapi.get('/api/devices'), cur = (plView().dev);
+    if (!r.ok) { box.replaceChildren(h('span', 'faint sm', 'Could not load devices: ' + (r.error || 'HTTP ' + r.status))); return; }
+    const list = (r.json && r.json.devices) || [];
+    if (!list.length) { box.replaceChildren(h('span', 'faint sm', 'No Spotify devices found. Open Spotify on this PC.')); return; }
+    box.replaceChildren(...list.map(d => { const b = h('button', 'sm' + (d.is_active || d.name === cur ? ' g' : ''), (d.is_active ? '● ' : '') + d.name); b.dataset.dev = d.id; b.title = d.type + (d.volume_percent != null ? ' · ' + d.volume_percent + '%' : ''); return b; }));
   }
 
   /* ---------- status bar ---------- */
@@ -411,7 +457,10 @@
       if (got.every(r => r.status === 404)) { if (ui.logsOk !== false) { ui.logsOk = false; schedule('feed'); } return; }
       if (got.some(r => r.ok)) { if (ui.logsOk !== true) { ui.logsOk = true; schedule('feed'); } got.forEach(r => r.ok && addLogs(r.json.events)); }
     }),
-    music: P(3000, async () => { const r = await mapi.get('/api/now'); if (r.ok) S.set({ now: r.json, nowOk: true }); else S.set({ nowOk: false }); }),
+    music: P(() => (document.hidden ? 8000 : 2500), async () => {
+      const [a, b] = await Promise.all([mapi.get('/api/now'), mapi.get('/api/state')]);
+      if (a.ok || b.ok) S.set({ now: a.ok ? a.json : S.get('now'), mstate: b.ok ? b.json : null, nowOk: true }); else S.set({ nowOk: false });
+    }),
     cmds: P(5000, async () => { const r = await api.get('/api/commands/profiles'); if (r.ok) S.set({ cmds: r.json.commands || [] }); }, () => visible() && ui.tab === 'cmds'),
     overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = { ovErr: a.ok ? null : (a.error || 'HTTP ' + a.status) }; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
   };
@@ -458,7 +507,16 @@
   });
   $('#tab-customs').addEventListener('change', e => { const k = e.target.dataset.cuset; if (!k || !e.target.value) return; sendCustom(k, e.target.value, e.target); });
   $('#tab-customs').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'cu-kick' || e.target.id === 'cu-pick')) $(e.target.id === 'cu-kick' ? '#cu-kickgo' : '#cu-pickgo').click(); });
-  $('#music').addEventListener('click', e => { const b = e.target.closest('[data-mu]'); if (!b || b.disabled) return; if (b.classList.contains('warn') && !armed(b)) return; musicAction(b.dataset.mu, b); });
+  $('#player').addEventListener('click', e => {
+    const m = e.target.closest('[data-mu]'); if (m) { if (m.disabled) return; if (m.classList.contains('warn') && !armed(m)) return; musicAction(m.dataset.mu, m); return; }
+    const t = e.target.closest('[data-pl]'); if (t && !t.disabled) { plToggle(t); return; }
+    const d = e.target.closest('[data-dev]'); if (d) { playerCtl('transfer', d.dataset.dev, d).then(r => { if (r.ok) { toast('Playing on ' + d.textContent.replace('● ', '')); $('#pl-devs').hidden = true; } }); return; }
+    if (e.target.closest('#pl-vol')) { $('#pl-menu').hidden = !$('#pl-menu').hidden; return; }
+    if (e.target.closest('#pl-dst')) { plDevices(); return; }
+    if (e.target.closest('#pl-min')) { pl.mini = !pl.mini; ls.set('plmini', pl.mini ? '1' : '0'); renderMusic(); }
+  });
+  $('#pl-vst').addEventListener('input', plVolume);
+  document.addEventListener('click', e => { if (!e.target.closest('#player')) $('#pl-menu').hidden = true; });
   $('#tab-cmds').addEventListener('click', e => { const row = e.target.closest('.cmd'); if (row && e.target.closest('.sw, .t')) toggleCmd(row.dataset.id); });
   $('#tab-overlays').addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;

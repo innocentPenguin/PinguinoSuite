@@ -186,6 +186,13 @@ await t('customs: a !next goes out exactly once through /api/run', async () => {
   st.posts.length = 0; const text = C.customsText('next', ''); await api.post('/api/run', { text, user: 'broadcaster' }); assert.deepEqual(st.posts.map(p => p.b.text), ['!next']); assert.equal(st.runs.at(-1), '!next');
 });
 
+await t('player: state, devices and control round trip', async () => {
+  const s = await api.get('/api/state'); assert.equal(s.json.playback.track.album, 'The Melodic Blue');
+  const d = await api.get('/api/devices'); assert.equal(d.json.devices.length, 2);
+  await api.post('/api/control', { action: 'volume', value: 25 }); await api.post('/api/control', { action: 'transfer', value: 'd2' });
+  assert.deepEqual(st.ctl.map(c => c.action), ['volume', 'transfer']); assert.equal((await api.get('/api/state')).json.playback.device.volume, 25);
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);
