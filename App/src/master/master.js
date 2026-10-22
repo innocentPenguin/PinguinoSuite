@@ -356,11 +356,12 @@
   const strikesKnown = u => { const c = curCustoms(); return !!(c && c.strikes && c.strikes[String(u).toLowerCase()]); };
   function strikeBtn() { const b = h('button', 'sbtn'); return b; }
   function fillStrike(b, u) {
-    const s = strikesFor(u), c = curCustoms(), sig = JSON.stringify([s, u, strikesKnown(u), c && c.strikeLimit]); if (b._s === sig) return; b._s = sig;
+    const s = strikesFor(u), c = curCustoms(), sig = JSON.stringify([s, u, strikesKnown(u), c && c.strikeLimit, c && c.strikeGame]); if (b._s === sig) return; b._s = sig;
     b.dataset.su = u; b.textContent = ''; C.strikeMarks(s, c && c.strikeLimit).forEach(k => b.append(h('i', 'k-' + k, k === 'half' ? '½' : 'I')));
     b.title = (s.perma ? s.perma + ' permanent, ' : '') + (s.temp ? s.temp + ' temporary' : '') + (s.half ? ' + a half' : '') || 'No strikes';
     if (!s.perma && !s.temp && !s.half) b.title = strikesKnown(u) ? 'No strikes. Click to add or remove' : 'Click to add or remove a strike';
     else b.title += '. Click to add or remove';
+    if (c && c.strikeGame) b.title = (c.strikeGame === 'fn' ? 'Fortnite' : 'Rocket League') + ' strikes: ' + b.title;   // the Host keeps one tally per game
   }
   function playerRow(u, label, from) {
     const d = h('div', 'pr'); d.draggable = true; d.dataset.u = u; d.dataset.from = from;
@@ -461,15 +462,15 @@
     const q = (c && Array.isArray(c.queue)) ? c.queue : [];
     $('#cu-badge').textContent = c ? (c.open === true ? 'queue open' : c.open === false ? 'queue closed' : '') + (c.format ? ' · ' + c.format : '') + (c.gameMode && c.gameMode !== 'standard' ? ' · ' + c.gameMode : '') : '';
     $('#cu-act').textContent = c && c.activity && c.activity !== 'none' ? '· ' + c.activity : '';
-    $('#cu-qn').textContent = c ? '· ' + q.length + ' waiting' : '';
+    $('#cu-qn').textContent = c ? '· ' + q.length + ' waiting' + (c.strikeGame ? ' · ' + (c.strikeGame === 'fn' ? 'Fortnite' : 'Rocket') + ' strikes' : '') : '';
     const seats = (+String((c && c.format) || '2v2')[0] || 2) * 2, isStr = p => !!(p.streamer || p.isStreamer || String(p.username || p.user || '').toLowerCase() === 'innocentpenguin');
     const strIn = q.some(isStr) || !!(c && c.match && c.match.status !== 'finished' && (ui.sim ? (c.match._p || []).some(isStr) : (c.streamer === 'in'))), gold = Math.max(1, seats - (strIn ? 1 : 0));
     let ng = 0; const kinds = q.map(p => { if (isStr(p)) return 's'; ng++; return ng <= gold ? 'n' : ng <= gold + 2 ? 'b' : ''; });
-    C.reconcile($('#cu-queue'), q.map((p, i) => ({ k: kinds[i], u: String(p.username || p.user || p.name || '?').toLowerCase(), d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr, sk: JSON.stringify([strikesFor(String(p.username || p.user || p.name || '?')), strikesKnown(String(p.username || p.user || p.name || '?')), c.strikeLimit]) })), r => r.u, () => { const li = h('li'); li.draggable = true; li.dataset.from = 'queue'; li.append(h('span', 'num'), h('span', 't'), h('span', 'mmr'), h('span', 'qtag'), strikeBtn(), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
+    C.reconcile($('#cu-queue'), q.map((p, i) => ({ k: kinds[i], u: String(p.username || p.user || p.name || '?').toLowerCase(), d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr, sk: JSON.stringify([strikesFor(String(p.username || p.user || p.name || '?')), strikesKnown(String(p.username || p.user || p.name || '?')), c.strikeLimit, c.strikeGame]) })), r => r.u, () => { const li = h('li'); li.draggable = true; li.dataset.from = 'queue'; li.append(h('span', 'num'), h('span', 't'), h('span', 'mmr'), h('span', 'qtag'), strikeBtn(), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
       (li, r) => { li.dataset.u = r.u; li.className = r.k === 'n' ? 'next-up' : r.k === 'b' ? 'backup' : r.k === 's' ? 'is-streamer' : ''; li.children[0].textContent = '#' + r.n; li.children[1].textContent = r.d; li.children[2].textContent = r.m || ''; li.children[3].textContent = r.k === 'n' ? 'NEXT' : r.k === 'b' ? 'BACKUP' : r.k === 's' ? 'STREAMER' : ''; fillStrike(li.children[4], r.u); });
     const m = c && c.match, live = !!(m && m.status !== 'finished');
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
-    const tv = JSON.stringify([m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(n), strikesKnown(n)]), c && c.strikeLimit]), tb = $('#cu-teams');
+    const tv = JSON.stringify([m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(n), strikesKnown(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
     if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.append(h('b', '', lbl)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(String(n).toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
     renderPop(); renderAsk();
     const cur = { mode: c && c.mode, format: c && c.format, gamemode: c && (c.gameMode || c.gamemode), koth: c ? (c.koth ? 'on' : 'off') : null, activity: c && c.activity, queue: c ? (c.open ? 'open' : 'close') : null };
