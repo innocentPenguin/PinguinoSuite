@@ -92,6 +92,7 @@ namespace PinguinoHost
             if (msgId == "viewermilestone" && T("msg-param-category") == "watch-streak")
             {
                 int v; if (!int.TryParse(T("msg-param-value"), out v)) return;
+                try { AlertBridge.OnStreak(login, T("msg-param-id") != "" ? T("msg-param-id") : T("id"), v); } catch (Exception) { }   // EVERY streak notification goes to Multi (it dedupes by id)
                 if (Record(login, T("display-name"), v, at, T("msg-param-id"), "live", msg))
                 {
                     Clog.Info("streaks", login + " shared a watch streak of " + v);

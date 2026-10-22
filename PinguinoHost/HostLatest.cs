@@ -81,7 +81,19 @@ namespace PinguinoHost
                 foreach (var kv in ctx) if (kv.Key.StartsWith("x.")) { string v = kv.Value ?? ""; JToken jt = null; if (v.StartsWith("[") || v.StartsWith("{")) { try { jt = JToken.Parse(v); } catch (Exception) { } } data[kv.Key.Substring(2)] = jt ?? (JToken)v; }
                 e["data"] = data;
             }
-            if (amount > 0) e["amount"] = amount; if (tier > 0 && (kind == "sub" || kind == "resub" || kind == "gift")) e["tier"] = tier; if (message != "") e["message"] = message;
+            if (message == "" && g("message") != "") message = g("message");
+            { // fields for the alert engine (Multi): stable id, tier, months, recipient, avatar, first_time ...
+                string eid = g("eventId"); e["id"] = kind + ":" + (eid != "" ? eid : (who ?? "").ToLowerInvariant() + ":" + amount + ":" + what + ":" + (DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 60));
+                int mo; if (int.TryParse(g("months"), out mo) && mo > 0) e["months"] = mo; else if (kind == "sub") e["months"] = 1;
+                int sm; if (int.TryParse(g("streakMonths"), out sm) && sm > 0) e["streak_months"] = sm;
+                if (g("recipient") != "") e["recipient"] = g("recipient");
+                if ((kind == "sub" || kind == "resub" || kind == "gift") && tier > 0) e["tier"] = tier.ToString();
+                if (kind == "sub") e["first_time"] = true; else if (kind == "follow") e["first_time"] = !(bool)e["refollow"];
+                if (g("anonymous") == "true" || (who ?? "").ToLowerInvariant() == "anonymous") e["anonymous"] = true;
+                if (g("sim") == "true") e["sim"] = true; if (g("test") == "true") e["test"] = true;
+                string av = ""; try { av = AlertBridge.AvatarOf((who ?? "").ToLowerInvariant()); } catch (Exception) { } if (av != "") e["avatar"] = av;
+            }
+            if (amount > 0) e["amount"] = amount; if (message != "") e["message"] = message;
             if (g("moderator") != "" && (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod")) e["moderator"] = g("moderator");
             lock (L)
             {

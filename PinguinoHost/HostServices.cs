@@ -196,13 +196,15 @@ namespace PinguinoHost
         /// <summary>sim mode: "eventsub channel.poll.end {json event}" runs the same mapping as a real EventSub notification</summary>
         public static void Simulate(string type, string json, Action<Dictionary<string, object>> raise)
         {
-            var m = new JObject { { "metadata", new JObject { { "subscription_type", type } } }, { "payload", new JObject { { "event", JObject.Parse(json) } } } }; Handle(m, raise);
+            var m = new JObject { { "metadata", new JObject { { "subscription_type", type }, { "sim", true } } }, { "payload", new JObject { { "event", JObject.Parse(json) } } } }; Handle(m, raise);
         }
         static void Handle(JObject m, Action<Dictionary<string, object>> raise)
         {
             string t = (string)m["metadata"]["subscription_type"]; var e = m["payload"]["event"] as JObject; if (e == null) return;
             var a = new Dictionary<string, object>(); Func<string, string> U = k => (string)e[k] ?? "";
             a["eventId"] = (string)m["metadata"]["message_id"] ?? U("id");
+            a["months"] = U("cumulative_months"); a["streakMonths"] = U("streak_months"); a["message"] = e["message"] is JObject ? (string)e["message"]["text"] ?? "" : U("message");
+            if ((bool?)m["metadata"]["sim"] == true) a["sim"] = "true";   // simulated EventSub: shown as sim, never paid, never alerted
             string tier = U("tier") == "3000" ? "3" : U("tier") == "2000" ? "2" : "1";
             switch (t)
             {

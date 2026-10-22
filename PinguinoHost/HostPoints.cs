@@ -196,6 +196,7 @@ namespace PinguinoHost
         public static void PointsEvent(Dictionary<string, object> a, bool refollow = false)
         {
             if (!Lease.MayRun) return;
+            if (a.ContainsKey("sim") && Convert.ToString(a["sim"]) == "true") return;   // simulated events never pay
             Func<string, string> g = k => { object v; return a.TryGetValue(k, out v) ? Convert.ToString(v, CultureInfo.InvariantCulture) ?? "" : ""; };
             string et = g("eventType"), user = Norm(g("userName")), eid = g("eventId"), sid = CurSid(); int tier = TierArg(g("tier")); long n; long.TryParse(g("bits"), out n);
             if (user == "" || user == "anonymous") { if (et != "TwitchRaid") return; }
@@ -241,9 +242,31 @@ namespace PinguinoHost
             return new JObject { { "ok", err == null }, { "type", type }, { "login", login }, { "points", pts }, { "id", id }, { "error", err } };
         }
 
+        // ---- helpers for the alert bridge ----
+        public static string RootDir { get { return Root; } }
+        public static double MinutesOf(string login) { login = Canon(Boards.AliasMap(), login); lock (L) { var d = Doc(); return D(d["earned"]?[login]?["minutes"]) + D(d["baseline"]?["users"]?[login]?["minutes"]); } }
+        static long ParseUnix(string s) { DateTimeOffset t; return DateTimeOffset.TryParse(s ?? "", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out t) ? t.ToUnixTimeSeconds() : 0; }
+        static JObject ProfileSeen(string login) { try { string f = System.IO.Path.Combine(Root, "profiles", Norm(login) + ".json"); if (File.Exists(f)) return SubsImport.ParseJ(File.ReadAllText(f))["seen"] as JObject; } catch (Exception) { } return null; }
+        public static long ProfileLastSeen(string login) { var s = ProfileSeen(login); return s == null ? 0 : ParseUnix((string)s["lastSeen"]); }
+        public static long ProfileFirstSeen(string login) { var s = ProfileSeen(login); return s == null ? 0 : ParseUnix((string)s["firstSeen"]); }
+
+        /// <summary>!tip &lt;user&gt; &lt;$&gt; [id] (mods): interim tip intake. The id (given, or user+amount+minute) keeps a repeated command from paying twice.</summary>
+        static string TipCommand(string by, string[] args)
+        {
+            double usd; if (args.Length < 2 || !double.TryParse(args[1].TrimStart('$'), NumberStyles.Float, CultureInfo.InvariantCulture, out usd) || usd <= 0) return "Usage: !tip @user <dollars> [id]";
+            string who = Norm(args[0]); string id = args.Length > 2 ? args[2] : who + ":" + usd.ToString("0.##", CultureInfo.InvariantCulture) + ":" + DateTime.UtcNow.ToString("yyyyMMddHHmm");
+            var r = EventApi(new JObject { { "type", "tip" }, { "login", who }, { "amount", usd }, { "id", id } });
+            if ((bool?)r["ok"] != true) return "Tip not paid: " + (string)r["error"];
+            return "Tip $" + usd.ToString("0.##", CultureInfo.InvariantCulture) + " from " + Boards.DisplayName(who) + ": " + Num((long)r["points"]) + " " + CurrencyName + ".";
+        }
+
         internal static long TBal(string l) { return Balance(l); }
         internal static void TReset() { lock (L) { Doc()["watch"] = null; Doc()["raid"] = null; } }
         static void StreamOpened(string sid, long start) { lock (L) { PStream(sid, start); } }
         static void StreamClosed(string sid) { lock (L) { var s = PStreams()[sid] as JObject; if (s != null) s["end"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Doc()["watch"] = null; } }
     }
+}
+namespace PinguinoHost
+{
+    public static partial class Economy { internal static void TSetMinutes(string login, double min) { lock (L) { var e = (JObject)Doc()["earned"]; e[login] = new JObject { { "points", 0.0 }, { "minutes", min } }; } } }
 }
