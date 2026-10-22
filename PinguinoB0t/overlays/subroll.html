@@ -1,0 +1,214 @@
+<!doctype html>
+<!--
+  PinguinoB0t — SUB ROLL-CALL overlay (OBS Browser Source on the Host)
+  OBS: Browser source -> tick "Local file" -> pick this file (or http://127.0.0.1:8770/... if you serve it). Size 480 x 1000 (any size works, it fills the source).
+  Idle by default (nothing on screen). A mod (or the Suite) starts it:
+      !subs roll [mode] [style]      !subs roll stop        (mods only; the bot answers with one short line, it never posts the list)
+      POST /api/subroll/start {"mode":"alpha","style":"roll"}   /api/subroll/stop
+  MODES  alpha | watch (watch time) | length (months subscribed) | tier (T3 > T2 > T1) | tiergroups (headed T3 / T2 / T1 blocks) |
+         gifted (most gifted subs) | newest | oldest | random
+  STYLES roll (credits-style scroll) | pages (paged cards) | spotlight (one by one: "Thank you <name> - 14 months")
+  SETTINGS Data\runtime\subroll.json (mode, style, speed px/s, perPage, secondsPerPage, secondsPerItem, size, title, thankYou, showMonths, loop, tierColors),
+           and every one of them can be overridden in the URL: ?mode=alpha&style=pages&speed=90&size=1.2&perPage=8&spp=6&spi=3&title=OUR%20SUBS
+  PREVIEW  subroll.html?preview=1 plays it right away and loops (add &mock for built-in sample subs when the Host is not running).
+  Data: Host GET /api/subroll?js=1 (current subscribers, bots and !optmeout viewers left out). Nothing is ever posted to chat by this page.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sub Roll Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --orange:#ff9900; --panel:rgba(20,22,17,.94); --line:#36382f; --gold:#ffd166; --text:#f5f2eb; --muted:#a9aaa1; --t1:#f5f2eb; --t2:#ffb347; --t3:#ff6a00; --size:1; }
+  html, body { margin:0; height:100%; overflow:hidden; background:transparent; font-family:Rubik, Segoe UI, sans-serif; color:var(--text); }
+  #wrap { position:absolute; left:0; top:0; right:0; bottom:0; display:flex; justify-content:center; padding:20px; box-sizing:border-box; transition:opacity .6s, transform .6s; }
+  #wrap.hidden { opacity:0; transform:translateY(-14px); pointer-events:none; }
+  .frame { position:relative; width:100%; max-width:calc(440px * var(--size)); height:100%; border-radius:21px; padding:3px; box-sizing:border-box; overflow:hidden; background:#36382f;
+           box-shadow:0 0 22px rgba(255,140,0,.38), 0 10px 30px rgba(0,0,0,.5); }
+  .spin { position:absolute; left:50%; top:50%; width:2400px; height:2400px; margin:-1200px 0 0 -1200px; animation:chase 6s linear infinite;
+          background:conic-gradient(from 0deg, rgba(255,153,0,0) 0%, rgba(255,153,0,0) 52%, #ff6a00 72%, #ffb347 86%, #ffd166 92%, rgba(255,153,0,0) 100%); }
+  @keyframes chase { to { transform:rotate(360deg); } }
+  .inner { position:relative; height:100%; background:var(--panel); border-radius:18px; overflow:hidden; display:flex; flex-direction:column; font-size:calc(19px * var(--size)); }
+  .head { flex:none; padding:16px 18px 10px; border-bottom:1px solid var(--line); background:var(--panel); position:relative; z-index:2; }
+  .title { font-size:1.15em; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#fff; }
+  .sub { margin-top:3px; font-size:.72em; color:var(--muted); font-weight:500; letter-spacing:1px; text-transform:uppercase; } .sub b { color:var(--orange); }
+  .body { position:relative; flex:1; overflow:hidden; }
+  /* roll */
+  #roll { position:absolute; left:0; right:0; top:0; padding:0 14px; will-change:transform; }
+  /* rows */
+  .row { display:flex; align-items:center; gap:10px; padding:.45em .7em; margin:.3em 0; border-radius:12px; border:1px solid var(--line); background:#1c1e18; font-weight:700; }
+  .row .pos { color:var(--orange); font-weight:800; font-size:.85em; min-width:2.2em; }
+  .row .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .row .meta { margin-left:auto; flex:none; color:var(--muted); font-size:.74em; font-weight:600; }
+  .row .tag { flex:none; font-size:.55em; font-weight:800; letter-spacing:1px; padding:.25em .6em; border-radius:6px; color:#241400; }
+  .row.t3 { border-color:rgba(255,106,0,.7); background:linear-gradient(90deg, rgba(255,106,0,.2), rgba(255,106,0,.04)); }
+  .row.t2 { border-color:rgba(255,179,71,.6); background:linear-gradient(90deg, rgba(255,179,71,.14), rgba(255,179,71,.03)); }
+  .t3 .nm { color:var(--t3); } .t2 .nm { color:var(--t2); } .t1 .nm { color:var(--t1); }
+  .tag.t3 { background:var(--t3); } .tag.t2 { background:var(--t2); } .tag.t1 { background:var(--t1); }
+  .group { margin:1.1em 0 .3em; padding:.2em .2em; font-size:.8em; font-weight:800; letter-spacing:2px; color:var(--orange); border-bottom:1px solid var(--line); }
+  .end { text-align:center; color:var(--muted); margin:1.6em 0; font-size:.8em; letter-spacing:1px; }
+  /* pages */
+  #pages { position:absolute; left:0; right:0; top:0; bottom:0; padding:6px 14px; transition:opacity .35s, transform .35s; }
+  #pages.out { opacity:0; transform:translateX(-24px); } #pages.in { animation:pgIn .45s ease-out; }
+  @keyframes pgIn { from { opacity:0; transform:translateX(24px); } }
+  .pageno { position:absolute; right:16px; bottom:8px; font-size:.7em; color:var(--muted); }
+  /* spotlight */
+  #spot { position:absolute; left:0; right:0; top:0; bottom:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 18px; }
+  #spot.in { animation:spIn .6s ease-out; } #spot.out { opacity:0; transition:opacity .35s; }
+  @keyframes spIn { from { opacity:0; transform:scale(.92); } }
+  #spot .ty { font-size:.85em; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  #spot .big { margin:.25em 0; font-size:2.1em; font-weight:800; line-height:1.1; word-break:break-word; }
+  #spot .small { font-size:.9em; color:var(--muted); font-weight:600; }
+  #spot .small b { color:var(--orange); }
+</style>
+</head>
+<body>
+<div id="wrap" class="hidden">
+  <div class="frame"><div class="spin"></div>
+    <div class="inner">
+      <div class="head"><div class="title" id="title">OUR SUBSCRIBERS</div><div class="sub" id="sub"></div></div>
+      <div class="body"><div id="roll"></div><div id="pages" style="display:none"></div><div id="spot" style="display:none"></div><div class="pageno" id="pageno"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var Q = {}; location.search.replace(/[?&]([^=&]+)=?([^&]*)/g, function (m, k, v) { Q[k] = decodeURIComponent(v); });
+  var PREVIEW = "preview" in Q, MOCK = "mock" in Q;
+  var HOST = Q.host || (location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770");
+  var TIER = { 3:"T3", 2:"T2", 1:"T1" }, playing = 0, lastNonce = null, timers = [], raf = 0;
+  var MODE_LABEL = { alpha:"A to Z", watch:"by watch time", length:"by months subscribed", tier:"by tier", tiergroups:"by tier", gifted:"by gifted subs", newest:"newest first", oldest:"oldest first", random:"shuffled" };
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
+  function $(id) { return document.getElementById(id); }
+  function later(fn, ms) { var t = setTimeout(fn, ms); timers.push(t); return t; }
+  function clearAll() { timers.forEach(clearTimeout); timers = []; cancelAnimationFrame(raf); playing++; }
+
+  // ---- data ----
+  function mock(mode) {
+    var names = ["frostbyte","snowdrift","icecube","glacier","polarbear","rlwizard","tundra","slushy","aurora","blizzard","coldfront","drift","evergreen","flurry","hailstone","iglu","jackfrost","kayak","lumi","mukluk","northstar","orca","permafrost","quill","rime","sled","tobogan","umiak","vortex","whiteout"];
+    var subs = names.map(function (n, i) { return { login:n, name:n.charAt(0).toUpperCase() + n.slice(1), tier:i < 2 ? 3 : i < 7 ? 2 : 1, tenure:(names.length - i) % 17 + 1, streak:3, type:"recurring", founder:false, subscribed:"2026-0" + (1 + i % 9) + "-1" + (i % 9) + "T10:00:00Z", watch:90000 / (i + 1), gifts:i % 5 ? 0 : 10 - i % 7 }; });
+    var key = { alpha:function (a, b) { return a.name < b.name ? -1 : 1; }, watch:function (a, b) { return b.watch - a.watch; }, length:function (a, b) { return b.tenure - a.tenure; }, gifted:function (a, b) { return b.gifts - a.gifts; },
+                newest:function (a, b) { return a.subscribed < b.subscribed ? 1 : -1; }, oldest:function (a, b) { return a.subscribed < b.subscribed ? -1 : 1; }, random:function () { return Math.random() - .5; } }[mode] || function (a, b) { return b.tier - a.tier || b.tenure - a.tenure; };
+    subs.sort(key);
+    var res = { ok:true, mode:mode, total:subs.length, subs:subs, config:{} };
+    if (mode === "tiergroups") res.groups = [3, 2, 1].map(function (t) { return { tier:t, label:"TIER " + t, subs:subs.filter(function (s) { return s.tier === t; }) }; });
+    return res;
+  }
+  function loadSubs(mode, cb) {
+    if (MOCK) { cb(mock(mode)); return; }
+    var sc = document.createElement("script");
+    sc.src = HOST + "/api/subroll?js=1&mode=" + encodeURIComponent(mode) + "&t=" + Date.now();
+    sc.onload = function () { sc.remove(); cb(window.SUBROLL && window.SUBROLL.ok ? window.SUBROLL : null); };
+    sc.onerror = function () { sc.remove(); cb(null); };
+    document.body.appendChild(sc);
+  }
+  function cfgOf(d) {
+    var c = (d && d.config) || {};
+    function n(k, q, def) { var v = Q[q || k] != null ? Number(Q[q || k]) : Number(c[k]); return isFinite(v) && v > 0 ? v : def; }
+    var tc = c.tierColors || {};
+    return { speed:n("speed", "speed", 70), perPage:Math.round(n("perPage", "perPage", 10)), spp:n("secondsPerPage", "spp", 8), spi:n("secondsPerItem", "spi", 3), size:n("size", "size", 1),
+             title:Q.title || c.title || "OUR SUBSCRIBERS", thanks:Q.thanks || c.thankYou || "Thank you {name}", showMonths:Q.months != null ? Q.months !== "0" : c.showMonths !== false,
+             loop:PREVIEW || (Q.loop != null ? Q.loop === "1" : !!c.loop), colors:{ t1:tc.t1 || "#f5f2eb", t2:tc.t2 || "#ffb347", t3:tc.t3 || "#ff6a00" } };
+  }
+
+  // ---- text bits ----
+  function hours(min) { min = Math.round(min); var h = Math.floor(min / 60); return h >= 1 ? h.toLocaleString("en-US") + "h" : min + "m"; }
+  function months(n) { return n + (n === 1 ? " month" : " months"); }
+  function metaOf(s, mode, cfg) {
+    if (mode === "watch") return hours(s.watch);
+    if (mode === "gifted") return s.gifts > 0 ? s.gifts.toLocaleString("en-US") + " gifted" : "";
+    if (mode === "newest" || mode === "oldest") return s.subscribed ? s.subscribed.slice(0, 10) : "";
+    return cfg.showMonths && s.tenure > 0 ? s.tenure + " mo" : "";
+  }
+  function row(s, i, mode, cfg, numbered) {
+    var t = Math.max(1, Math.min(3, s.tier || 1)), m = metaOf(s, mode, cfg);
+    return '<div class="row t' + t + '">' + (numbered ? '<span class="pos">#' + (i + 1) + '</span>' : '') + '<span class="nm">' + esc(s.name) + '</span>' + (t > 1 ? '<span class="tag t' + t + '">' + TIER[t] + '</span>' : '') + (m ? '<span class="meta">' + esc(m) + '</span>' : '') + '</div>';
+  }
+  function show(on) { $("wrap").classList.toggle("hidden", !on); }
+  function setHead(cfg, mode, total) { $("title").textContent = cfg.title; $("sub").innerHTML = "<b>" + esc(MODE_LABEL[mode] || mode) + "</b> · " + total + " subs"; document.documentElement.style.setProperty("--size", cfg.size); ["1", "2", "3"].forEach(function (t) { document.documentElement.style.setProperty("--t" + t, cfg.colors["t" + t]); }); }
+  function done(cfg, again) { if (cfg.loop) { later(again, 1500); } else { later(function () { show(false); }, 500); } }
+
+  // ---- styles ----
+  function playRoll(d, cfg, mode, gen) {
+    $("pages").style.display = "none"; $("spot").style.display = "none"; $("pageno").textContent = ""; var r = $("roll"); r.style.display = "block";
+    var html = "", n = 0;
+    if (mode === "tiergroups" && d.groups) d.groups.forEach(function (g) { html += '<div class="group">' + esc(g.label) + ' · ' + g.subs.length + '</div>'; g.subs.forEach(function (s) { html += row(s, n++, mode, cfg, false); }); });
+    else d.subs.forEach(function (s, i) { html += row(s, i, mode, cfg, mode !== "alpha"); });
+    r.innerHTML = html + '<div class="end">thank you all ♥</div>';
+    show(true);
+    var vh = r.parentNode.clientHeight, h = r.scrollHeight, y = vh, last = 0;
+    r.style.transform = "translateY(" + y + "px)";
+    function step(ts) {
+      if (gen !== playing) return;
+      if (!last) last = ts; var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
+      y -= cfg.speed * cfg.size * dt; r.style.transform = "translateY(" + Math.round(y) + "px)";
+      if (y < -h - 20) { done(cfg, function () { if (gen === playing) start(mode, "roll"); }); return; }
+      raf = requestAnimationFrame(step);
+    }
+    raf = requestAnimationFrame(step);
+  }
+  function playPages(d, cfg, mode, gen) {
+    $("roll").style.display = "none"; $("spot").style.display = "none"; var p = $("pages"); p.style.display = "block";
+    var items = [];
+    if (mode === "tiergroups" && d.groups) d.groups.forEach(function (g) { g.subs.forEach(function (s) { items.push({ s:s, g:g.label }); }); }); else d.subs.forEach(function (s) { items.push({ s:s }); });
+    var pages = Math.max(1, Math.ceil(items.length / cfg.perPage)), i = 0;
+    show(true);
+    function next() {
+      if (gen !== playing) return;
+      if (i >= pages) { $("pageno").textContent = ""; done(cfg, function () { if (gen === playing) start(mode, "pages"); }); return; }
+      var chunk = items.slice(i * cfg.perPage, (i + 1) * cfg.perPage), html = "", lastG = null;
+      chunk.forEach(function (it, k) { if (it.g && it.g !== lastG) { html += '<div class="group">' + esc(it.g) + '</div>'; lastG = it.g; } html += row(it.s, i * cfg.perPage + k, mode, cfg, mode !== "alpha" && mode !== "tiergroups"); });
+      p.className = "out";
+      later(function () { if (gen !== playing) return; p.innerHTML = html; p.className = "in"; $("pageno").textContent = (i + 1) + " / " + pages; i++; later(next, cfg.spp * 1000); }, i === 0 ? 0 : 350);
+    }
+    next();
+  }
+  function playSpot(d, cfg, mode, gen) {
+    $("roll").style.display = "none"; $("pages").style.display = "none"; $("pageno").textContent = ""; var sp = $("spot"); sp.style.display = "flex";
+    var subs = d.subs.slice(), i = 0; show(true);
+    function next() {
+      if (gen !== playing) return;
+      if (i >= subs.length) { done(cfg, function () { if (gen === playing) start(mode, "spotlight"); }); return; }
+      var s = subs[i++], t = Math.max(1, Math.min(3, s.tier || 1)), parts = String(cfg.thanks).split("{name}");
+      sp.className = "out";
+      later(function () {
+        if (gen !== playing) return;
+        var m = metaOf(s, mode, cfg), line = mode === "watch" || mode === "gifted" || mode === "newest" || mode === "oldest" ? m : (s.tenure > 0 ? months(s.tenure) : "");
+        sp.innerHTML = '<div class="ty">' + esc(parts[0].trim() || "Thank you") + '</div><div class="big" style="color:' + cfg.colors["t" + t] + '">' + esc(s.name) + '</div><div class="small">' + (t > 1 ? '<b>Tier ' + t + '</b>' + (line ? " · " : "") : "") + esc(line) + '</div>' + (parts[1] ? '<div class="ty">' + esc(parts[1].trim()) + '</div>' : "");
+        sp.className = "in"; later(next, cfg.spi * 1000);
+      }, 350);
+    }
+    next();
+  }
+  function start(mode, style) {
+    clearAll(); var gen = playing;
+    loadSubs(mode, function (d) {
+      if (gen !== playing) return;
+      if (!d || !d.subs || !d.subs.length) { show(false); if (PREVIEW) later(function () { start(mode, style); }, 5000); return; }
+      var cfg = cfgOf(d); setHead(cfg, d.mode || mode, d.total);
+      (style === "pages" ? playPages : style === "spotlight" ? playSpot : playRoll)(d, cfg, d.mode || mode, gen);
+    });
+  }
+  function stop() { clearAll(); show(false); }
+
+  // ---- trigger: the Host state (!subs roll ..., the Suite button) or ?preview=1 ----
+  function pollState() {
+    var sc = document.createElement("script");
+    sc.src = HOST + "/api/subroll/state?js=1&t=" + Date.now();
+    sc.onload = function () {
+      sc.remove(); var st = window.SUBROLL_STATE; if (!st) return;
+      if (lastNonce === null) { lastNonce = st.nonce; return; }   // first load: never replay an old start
+      if (st.nonce === lastNonce) return;
+      lastNonce = st.nonce;
+      if (st.running) start(Q.mode || st.mode, Q.style || st.style); else stop();
+    };
+    sc.onerror = function () { sc.remove(); };
+    document.body.appendChild(sc);
+  }
+  if (PREVIEW) start(Q.mode || "tier", Q.style || "roll");
+  else if (!MOCK) { pollState(); setInterval(pollState, 2000); }
+  else if (Q.mode) start(Q.mode, Q.style || "roll");
+</script>
+</body>
+</html>

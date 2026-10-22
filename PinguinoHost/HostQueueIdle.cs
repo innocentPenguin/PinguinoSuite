@@ -32,6 +32,7 @@ namespace PinguinoHost
                     new JArray { c("bits", "month"), c("bits", "lastmonth") },
                     new JArray { c("watchtime", "month"), c("watchtime", "all") },
                     new JArray { c("level", "month"), c("level", "all") },
+                    new JArray { c("tier3", "all"), c("tier2", "all") },
                     c("points", "all"), c("messages", "month") } }
             };
         }
@@ -57,6 +58,8 @@ namespace PinguinoHost
 
         static JObject Card(JToken t, int top)
         {
+            string raw = ((string)t["metric"] ?? "").ToLowerInvariant();
+            if (raw == "tier3" || raw == "tier2" || raw == "tier1") return SubRoll.TierCard(raw[4] - '0', top);   // "our tier N subs": ranked by months, watch time second
             string metric = Periods.Metric((string)t["metric"] ?? ""); string per = ((string)t["period"] ?? "month").ToLowerInvariant();
             if (metric == "" || !Per.ContainsKey(per)) return null;
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); string period = per, key = "";

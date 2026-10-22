@@ -570,7 +570,7 @@
       "action": "PinguinoHost",
       "category": "Leaderboards (mods)",
       "who": "mods",
-      "usage": "!subs import | !subs status",
+      "usage": "!subs import | !subs status | !subs roll [alpha|watch|length|tier|tiergroups|gifted|newest|oldest|random] [roll|pages|spotlight] | !subs roll stop",
       "description": "import = read any new subscriber-list*.csv (Downloads or Data\\subs\\incoming) into the subscriber list. status = counts by tier, lapsed, founders.",
       "examples": [],
       "section": "Viewers",

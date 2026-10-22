@@ -274,7 +274,7 @@ namespace PinguinoHost
             foreach (var a in al) { var e = nm[a.Key] as JObject; write(a.Key, e == null ? "" : (string)e["name"] ?? "", Canon(al, a.Key)); }
         }
 
-        static string Channel()
+        internal static string Channel()
         {
             try { return ((string)SubsImport.ParseJ(File.ReadAllText(Path.Combine(HostApi.DataDir, "host_secrets.json")))["Channel"] ?? "").ToLowerInvariant(); } catch (Exception) { return ""; }
         }

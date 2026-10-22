@@ -175,6 +175,7 @@ namespace PinguinoHost
         static void SubsCmd(string[] a, Action<string> say)
         {
             string sub = a.Length > 0 ? a[0].ToLowerInvariant() : "status";
+            if (sub == "roll") { say(SubRoll.Chat(a.Skip(1).ToArray())); return; }
             if (sub == "import")
             {
                 var r = SubsImport.ScanAndImport(); var imp = (JArray)r["imported"];

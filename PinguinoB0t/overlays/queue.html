@@ -200,6 +200,7 @@
     var v = Number(r.value) || 0;
     if (u === "time") return fmtTime(v);
     if (u === "level") return "Lv " + v;
+    if (u === "months") return v + " mo";
     return v.toLocaleString("en-US") + (u ? " " + u : "");
   }
   function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
@@ -221,7 +222,7 @@
       document.getElementById("itop").textContent = parts[0] || "LEADERBOARD";
       document.getElementById("isub").innerHTML = "<b>" + esc(parts[1] || "") + "</b>";
       document.getElementById("ilist").innerHTML = (c.rows || []).slice(0, 10).map(function (r, i) {
-        return '<li class="' + (i === 0 ? "first" : "") + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc(fmtVal(r, c.unit)) + '</span></li>';
+        return '<li class="' + (i === 0 ? "first" : "") + '"><span class="pos">#' + esc(r.rank) + '</span><span class="name">' + esc(r.name) + '</span><span class="val">' + esc(fmtVal(r, c.unit)) + '</span>' + (r.extra != null ? '<span class="rating" title="watch time">' + esc(fmtTime(r.extra)) + '</span>' : '') + '</li>';
       }).join("");
       body.className = "ibody in" + (linked ? " lk" : "");
     }
