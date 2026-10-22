@@ -26,6 +26,7 @@ import asyncio
 import hmac
 import json
 import os
+import copy
 import time
 import webbrowser
 from contextlib import asynccontextmanager
@@ -385,6 +386,38 @@ async def alerts_fire(request: Request):
     ev["type"] = t
     ok, why = alert_engine.submit(ev)
     return {"ok": ok, "queued": ok, "text": why}
+
+
+@app.get("/api/alerts/export")
+def alerts_export(profile: str = ""):
+    """The active (or named) alert profile + all per-viewer overrides as a file you can keep or move to another PC. Media files are referenced by address, not included."""
+    cfg = alert_engine.cfg
+    name = profile if profile in cfg["profiles"] else cfg["active"]
+    doc = {"pinguino_alerts": 1, "name": name, "profile": cfg["profiles"][name], "overrides": cfg["overrides"], "exported": time.time()}
+    return JSONResponse(doc, headers={"Content-Disposition": f'attachment; filename="alerts-{alerts_mod.safe_file(name)}.json"'})
+
+
+@app.post("/api/alerts/import")
+async def alerts_import(request: Request):
+    """{doc, name?, overrides?:bool, activate?:bool}: adds the profile under a new name (never overwrites an existing profile), sanitised like any saved config."""
+    b = await request.json()
+    doc = b.get("doc") if isinstance(b, dict) else None
+    if not isinstance(doc, dict) or doc.get("pinguino_alerts") != 1 or not isinstance(doc.get("profile"), dict):
+        raise HTTPException(400, "not a Pinguino alerts export")
+    cfg = copy.deepcopy(alert_engine.cfg)
+    base = str(b.get("name") or doc.get("name") or "Imported").strip()[:30] or "Imported"
+    name, i = base, 2
+    while name in cfg["profiles"]:
+        name = f"{base[:26]} {i}"
+        i += 1
+    cfg["profiles"][name] = doc["profile"]
+    if b.get("overrides") and isinstance(doc.get("overrides"), dict):
+        for u, per in doc["overrides"].items():
+            cfg["overrides"].setdefault(str(u).lower(), per)       # existing viewer overrides win
+    if b.get("activate"):
+        cfg["active"] = name
+    saved = alert_engine.save(cfg)
+    return {"ok": True, "name": name, "profiles": list(saved["profiles"])}
 
 
 @app.post("/api/alerts/testall")

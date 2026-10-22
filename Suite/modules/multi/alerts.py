@@ -63,6 +63,10 @@ THEMES = {"Penguin": {}, "Light": {"*": {"style": {"bg": "#fff7ec", "fg": "#2b1a
           "Minimal": {"*": {"style": {"layout": "center", "bg": "#000000", "opacity": 0, "border": 0}}}}
 
 
+def safe_file(name):
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", str(name or "profile"))[:40].strip("._") or "profile"
+
+
 def default_config():
     prof = {name: {"types": {t: _merge(copy.deepcopy(DEFAULT_TYPES[t]), (over.get("*") or {})) for t in TYPES}} for name, over in THEMES.items()}
     return {"active": "Penguin", "profiles": prof, "overrides": {}, "global": dict(GLOBAL)}

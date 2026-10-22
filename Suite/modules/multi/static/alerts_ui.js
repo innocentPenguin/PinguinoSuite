@@ -58,7 +58,7 @@ function alDraw() {
   const variants = d.variants.map(v => `<label class="cf"><input type="checkbox" data-alvar="${v}"> ${v}</label>`).join(' ');
   $('#body').innerHTML = `<div style="padding:10px;overflow:auto;height:100%;box-sizing:border-box">
     <div class="act"><b>Alerts</b> <label class="cf">Profile <select id="al-prof">${profs}</select></label>
-      <button data-alact="imphost">Import Host sounds</button> <input id="al-file" type="file" accept=".mp3,.wav,.ogg,.m4a,.png,.jpg,.jpeg,.gif,.webp,.webm,.mp4" hidden> <button data-alact="dup">Duplicate profile</button> <button data-alact="del">Delete profile</button> <a href="/?type=dash"><button type="button">Back to dashboard</button></a> <span id="al-state" class="mut"></span></div>
+      <button data-alact="imphost">Import Host sounds</button> <a href="/api/alerts/export?profile=${encodeURIComponent(c.active)}" download><button type="button">Export profile</button></a> <button data-alact="impfile">Import profile file</button> <input id="al-pfile" type="file" accept=".json,application/json" hidden> <input id="al-file" type="file" accept=".mp3,.wav,.ogg,.m4a,.png,.jpg,.jpeg,.gif,.webp,.webm,.mp4" hidden> <button data-alact="dup">Duplicate profile</button> <button data-alact="del">Delete profile</button> <a href="/?type=dash"><button type="button">Back to dashboard</button></a> <span id="al-state" class="mut"></span></div>
     <div class="box"><b>OBS browser source</b> (800 x 600) <input readonly value="${esc(alUrl())}" style="width:100%" onclick="this.select()">
       <div class="act"><button data-alact="copy">Copy address</button> <a href="${esc(alUrl())}?bg=1" target="_blank" rel="noopener"><button type="button">Open (preview works offline)</button></a>
       <small class="mut">Real events only arrive while live; tests and this preview always work.</small></div></div>
@@ -150,6 +150,13 @@ document.addEventListener('focusin', e => { if (W.type === 'alerts' && e.target.
 document.addEventListener('change', async e => {
   if (W.type !== 'alerts') return; const t = e.target;
   if (t.dataset.alpick && t.value) { alSet(alTarget(), t.dataset.alpick, t.value); alSave(); setTimeout(alDraw, 450); return; }
+  if (t.id === 'al-pfile' && t.files[0]) {
+    let doc; try { doc = JSON.parse(await t.files[0].text()); } catch (x) { alState('Not a JSON file'); t.value = ''; return; }
+    t.value = '';
+    const r = await fetch('/api/alerts/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({doc, overrides: confirm('Also import its per-viewer overrides? (yours are kept when both exist)'), activate: true})});
+    const j = await r.json(); if (!r.ok) { alState(j.detail || 'Import failed'); return; }
+    AL.d = await fetch('/api/alerts').then(x => x.json()); alDraw(); alState('Imported as ' + j.name); return;
+  }
   if (t.id === 'al-file' && t.files[0] && AL.upPath) {
     const f = t.files[0], path = AL.upPath; AL.upPath = null; alState('Uploading...');
     const r = await fetch('/api/alerts/media?name=' + encodeURIComponent(f.name), {method: 'POST', headers: {'Content-Type': 'application/octet-stream'}, body: f});
@@ -174,6 +181,7 @@ document.addEventListener('click', async e => {
     const pre = await alPost('/api/alerts/import-host', {apply: false}), lines = pre.rows.map(r => (r.type || '') + ': ' + r.status).join(String.fromCharCode(10));
     if (confirm('Import the Host alert sounds into profile ' + c.active + '?' + String.fromCharCode(10, 10) + lines)) { const r = await alPost('/api/alerts/import-host', {}); AL.d = await fetch('/api/alerts').then(x => x.json()); AL.media = (await fetch('/api/alerts/media').then(x => x.json())).files; alDraw(); alState('Imported ' + r.rows.filter(x => x.status.startsWith('imported')).length + ' sounds'); }
   }
+  else if (a === 'impfile') $('#al-pfile').click();
   else if (a === 'pv') alPreview();
   else if (a === 'test') { const r = await alPost('/api/alerts/test', {type: AL.sel, user, amount: amt === '' ? null : +amt, variant: vars}); alState(r.text); alLog(); }
   else if (a === 'testall') { const r = await alPost('/api/alerts/testall'); alState(r.text); alLog(); }

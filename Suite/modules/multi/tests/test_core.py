@@ -1478,3 +1478,30 @@ def test_kick_webhook_signature_and_route(monkeypatch):
     assert r.status_code == 200, r.text
     assert c.post("/hook/kick", content=body, headers=dict(h, **{"kick-event-signature": "AAAA"})).status_code == 401
     server.connectors.pop("kick", None)
+
+
+def test_alert_profile_export_import(monkeypatch):
+    from fastapi.testclient import TestClient
+    import server
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    monkeypatch.setattr(server.alert_engine.store, "kv_set", lambda *a, **k: None)
+    saved = server.alert_engine.cfg
+    try:
+        c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+        o = {"origin": "http://127.0.0.1:8766"}
+        r = c.get("/api/alerts/export")
+        assert r.status_code == 200 and "attachment" in r.headers["content-disposition"] and r.json()["pinguino_alerts"] == 1
+        doc = r.json()
+        doc["profile"]["types"]["follow"]["text"] = "{user} joined!"
+        doc["profile"]["types"]["follow"]["priority"] = 99                      # sanitised on import
+        doc["overrides"] = {"vip": {"follow": {"text": "VIP {user}"}}}
+        j = c.post("/api/alerts/import", json={"doc": doc, "overrides": True, "activate": True}, headers=o).json()
+        assert j["ok"] and j["name"] not in ("", None)
+        cfg = server.alert_engine.cfg
+        assert cfg["active"] == j["name"] and cfg["profiles"][j["name"]]["types"]["follow"]["text"] == "{user} joined!"
+        assert cfg["profiles"][j["name"]]["types"]["follow"]["priority"] == 9 and cfg["overrides"]["vip"]["follow"]["text"] == "VIP {user}"
+        j2 = c.post("/api/alerts/import", json={"doc": doc}, headers=o).json()
+        assert j2["name"] != j["name"] and j["name"] in server.alert_engine.cfg["profiles"]          # never overwrites
+        assert c.post("/api/alerts/import", json={"doc": {"x": 1}}, headers=o).status_code == 400
+    finally:
+        server.alert_engine.cfg = saved
