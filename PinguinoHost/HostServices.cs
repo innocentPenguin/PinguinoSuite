@@ -175,7 +175,7 @@ namespace PinguinoHost
             var subs = new[] {
                 new[] { "channel.subscribe", "1", "broadcaster_user_id" }, new[] { "channel.subscription.message", "1", "broadcaster_user_id" },
                 new[] { "channel.subscription.gift", "1", "broadcaster_user_id" }, new[] { "channel.cheer", "1", "broadcaster_user_id" },
-                new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.follow", "2", "broadcaster_user_id" },
+                new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" }, new[] { "channel.follow", "2", "broadcaster_user_id" },
                 new[] { "stream.online", "1", "broadcaster_user_id", "opt" }, new[] { "stream.offline", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.channel_points_custom_reward_redemption.add", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.ban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.unban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.add", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.remove", "1", "broadcaster_user_id", "opt" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" },
@@ -213,7 +213,7 @@ namespace PinguinoHost
                 case "channel.subscription.gift": a["eventType"] = "TwitchGiftBomb"; a["userName"] = (bool?)e["is_anonymous"] == true ? "Anonymous" : U("user_login"); a["tier"] = tier; a["total"] = (int?)e["total"] ?? 1; a["cumulative"] = (int?)e["cumulative_total"] ?? 0; a["anonymous"] = ((bool?)e["is_anonymous"] ?? false).ToString().ToLowerInvariant(); break;
                 case "channel.cheer": a["eventType"] = "TwitchCheer"; a["userName"] = U("user_login"); a["bits"] = (int?)e["bits"] ?? 0; a["bitsType"] = U("type"); break;
                 case "channel.raid":
-                    if (U("from_broadcaster_user_id") == _bid && _bid != "") { a["eventType"] = "TwitchRaidOut"; a["userName"] = U("to_broadcaster_user_login"); a["target"] = U("to_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }
+                    if (U("from_broadcaster_user_id") == _bid && _bid != "") { try { Auto.OnRaidScheduled(U("to_broadcaster_user_login")); } catch (Exception) { }   /* raid started on twitch.tv: this is the first signal we get */ a["eventType"] = "TwitchRaidOut"; a["userName"] = U("to_broadcaster_user_login"); a["target"] = U("to_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }
                     else { a["eventType"] = "TwitchRaid"; a["userName"] = U("from_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }
                     break;
                 case "channel.ban": a["eventType"] = "TwitchBan"; a["userName"] = U("user_login"); a["moderator"] = U("moderator_user_login"); a["reason"] = U("reason"); a["permanent"] = ((bool?)e["is_permanent"] ?? false).ToString().ToLowerInvariant(); break;

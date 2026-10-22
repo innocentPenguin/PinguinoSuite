@@ -234,7 +234,11 @@ namespace PinguinoHost
                 }
         }
         /// <summary>the raid was scheduled (the Twitch countdown began): fires the raid_start automations; the raid landing is raid_out</summary>
-        public static void OnRaidScheduled(string target) { Fire("raid_start", new Dictionary<string, string> { { "channel", Channel() }, { "target", target ?? "" }, { "event", "raid_start" } }); }
+        static DateTime _raidStartAt = DateTime.MinValue;
+        /// <summary>Fires raid_start ("prepare your emotes") once per raid: !confirm raid (the countdown began), the Master View Raid prep button, or the outgoing channel.raid event when the raid was started on twitch.tv (Twitch only tells us when it goes). Returns false when it already fired in the last 3 minutes.</summary>
+        public static bool OnRaidScheduled(string target) { lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidStartAt).TotalMinutes < 3) return false; _raidStartAt = DateTime.UtcNow; } FireRaidStart(target); return true; }
+        internal static void ResetRaidStart() { lock (typeof(Auto)) _raidStartAt = DateTime.MinValue; }
+        static void FireRaidStart(string target) { Fire("raid_start", new Dictionary<string, string> { { "channel", Channel() }, { "target", target ?? "" }, { "event", "raid_start" } }); }
         public static void OnStream(bool online) { if (online) Program.ResetFirsts(); Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }
 
         public static JObject Hotkey(string key)

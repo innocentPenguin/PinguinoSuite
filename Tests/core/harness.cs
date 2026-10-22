@@ -225,6 +225,27 @@ public static class Harness
         Run("mod1", "!gamemode", "standard", true);
         Run("mod1", "!format", "3v3", true);
 
+        // ---- any NvN (1..16) for Fortnite sizes, team names + colours, KOTH in a Fortnite activity ----
+        Run("mod1", "!format", "5v5", true);
+        Check((string)State()["format"] == "5v5", "5v5 is accepted (any NvN up to 16)");
+        Run("mod1", "!format", "16v16", true);
+        Check((string)State()["format"] == "16v16", "16v16 is the largest size");
+        Run("mod1", "!format", "17v17", true);
+        Check((string)State()["format"] == "16v16", "17v17 is refused");
+        Run("mod1", "!format", "3v2", true);
+        Check((string)State()["format"] == "16v16", "uneven sizes are refused");
+        Run("mod1", "!format", "3v3", true);
+        Run("mod1", "!teamname", "orange #ff4400 Lava", true);
+        Check((string)State()["teams"]["orange"]["name"] == "Lava" && (string)State()["teams"]["orange"]["color"] == "#ff4400", "team name and colour are in the state");
+        Run("mod1", "!teamname", "blue nothex Ice", true);
+        Check((string)State()["teams"]["blue"]["name"] == "Blue" && (string)State()["teams"]["blue"]["color"] == "#1e8fff", "a bad colour changes nothing");
+        Run("mod1", "!teamname", "blue - /Ice", true);
+        Check((string)State()["teams"]["blue"]["name"] == "Blue", "a name starting with / is refused");
+        Run("p3", "!teamname", "blue - Sneaky", false);
+        Check((string)State()["teams"]["blue"]["name"] == "Blue", "non-mods cannot rename a team");
+        Run("mod1", "!teamname", "orange reset", true);
+        Check((string)State()["teams"]["orange"]["name"] == "Orange" && (string)State()["teams"]["orange"]["color"] == "#ff7a00", "reset restores the defaults");
+
         // ---- STREAMER SWITCH: turning "playing" back ON puts him straight back into the queue ----
         Run("mod1", "!activity", "competitive", true);
         ForceFormat("3v3");   // activity switch resets the size to its default; the legacy checks below expect 3v3
@@ -513,6 +534,9 @@ public static class Harness
         Check((string)State()["activity"] == "boxfights" && (string)State()["game"] == "fortnite", "!activity fn boxfights starts Fortnite Boxfights");
         Check(CPHProxy.Obs.Contains("scene:Fortnite"), "the prefix switches the OBS scene even with the auto switch OFF");
         Check(CPHProxy.Games.Contains("Fortnite"), "...and sets the Twitch category to Fortnite");
+        Run("mod1", "!koth", "on", true);
+        Check((bool)State()["koth"] && (string)State()["format"] == "1v1", "KOTH works in a Fortnite activity (1v1, winners stay)");
+        Run("mod1", "!koth", "off", true);
         CPHProxy.Games.Clear();
         Run("mod1", "!activity", "fn viewers", true);
         Check((string)State()["activity"] == "fnviewers", "!activity fn viewers = Fortnite playing with viewers");

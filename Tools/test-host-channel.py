@@ -18,7 +18,7 @@ try:
     for _ in range(80):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
-    c, _ = post('/api/channel/update', {'title': 'x'}); chk('no token -> 401 even same-origin', c == 401, c)
+    c, _ = post('/api/mod/timeout', {'user': 'troll', 'seconds': 10}); chk('timeout: no token -> 401 even same-origin', c == 401, c)
     c, _ = post('/api/mod/timeout', {'user': 'troll', 'seconds': 10}, 'wrong'); chk('wrong token -> 401', c == 401, c)
     c, j = post('/api/channel/update', {}, 'test-module-token'); chk('empty update refused', c == 200 and j['ok'] is False, j)
     c, j = post('/api/channel/update', {'title': 'hi'}, 'test-module-token'); chk('not signed in -> ok false + error', j['ok'] is False and 'signed in' in j.get('error', ''), j)

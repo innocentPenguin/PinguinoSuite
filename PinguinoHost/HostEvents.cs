@@ -49,7 +49,36 @@ namespace PinguinoHost
                 match = new JObject { { "id", cm["id"] }, { "players", pl }, { "orange", orange }, { "blue", blue }, { "status", cm["status"] } };
             }
             return new JObject { { "ok", true }, { "open", (bool?)s["queueOpen"] ?? false }, { "activity", s["activity"] }, { "mode", s["mode"] }, { "gameMode", s["gameMode"] }, { "format", s["format"] }, { "koth", (bool?)s["koth"] ?? false }, { "casualStyle", s["casualStyle"] },
- { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 }, { "strikeGame", s["strikeGame"] ?? "rl" },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
+ { "teams", Teams(s) }, { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 }, { "strikeGame", s["strikeGame"] ?? "rl" },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
+        }
+        static readonly System.Text.RegularExpressions.Regex Hex = new System.Text.RegularExpressions.Regex("^#[0-9a-fA-F]{6}$");
+        public static JObject Teams(JObject s)
+        {
+            Func<string, string, string, JObject> one = (k, dn, dc) => { var t = s == null ? null : s["teams"]?[k] as JObject; return new JObject { { "name", (string)t?["name"] ?? dn }, { "color", (string)t?["color"] ?? dc } }; };
+            return new JObject { { "orange", one("orange", "Orange", "#ff7a00") }, { "blue", one("blue", "Blue", "#1e8fff") } };
+        }
+        public static string TeamName(string team)
+        {
+            try { var f = StateFile(); if (f != null) return (string)Teams(JObject.Parse(File.ReadAllText(f).TrimStart((char)0xFEFF)))[team]["name"]; } catch (Exception) { }
+            return team == "blue" ? "Blue" : "Orange";
+        }
+        /// <summary>POST /api/customs/teams {orange:{name?,color?}, blue:{name?,color?}} -> {ok, teams}. Validated here (name 1-20 chars, no leading ! or /, color #rrggbb), applied through !teamname.</summary>
+        public static JObject SetTeams(JObject b)
+        {
+            var plan = new List<string>();
+            foreach (var k in new[] { "orange", "blue" })
+            {
+                var t = b[k] as JObject; if (t == null) continue;
+                string name = ((string)t["name"] ?? "").Trim(), color = ((string)t["color"] ?? "").Trim();
+                if (color != "" && !Hex.IsMatch(color)) return new JObject { { "ok", false }, { "error", k + ".color must be #rrggbb" } };
+                if (name != "" && (name.Length > 20 || name.StartsWith("!") || name.StartsWith("/") || name.Any(char.IsControl))) return new JObject { { "ok", false }, { "error", k + ".name must be 1-20 characters and cannot start with ! or /" } };
+                if (name == "" && color == "") continue;
+                plan.Add("!teamname " + k + " " + (color == "" ? "-" : color) + (name != "" ? " " + name : ""));
+            }
+            string who = "innocentpenguin_"; try { var ch = (string)HostApi.StreamerCreds()["Channel"]; if (!string.IsNullOrEmpty(ch)) who = ch; } catch (Exception) { }
+            foreach (var text in plan) { try { Control.Synthetic = true; Program.Dispatch(who, text, null, 4, "deck", false, null); } finally { Control.Synthetic = false; } }
+            Thread.Sleep(350); Events.Kick(); var st = State();
+            return new JObject { { "ok", true }, { "ran", new JArray(plan) }, { "teams", st["teams"] } };
         }
         /// <summary>{action, value}: queue open|close|clear, next [blue|orange], match clear|fill|queue, win blue|orange, finish, balance, reroll, kick &lt;name&gt;, mode/format/koth/casual &lt;value&gt;.</summary>
         public static JObject Mod(JObject b)

@@ -78,6 +78,8 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("boards", "event: " + ex.Message); }
         }
+        /// <summary>every logged chat cheer {at,user,amount} (back-pay source; extension bits are never in this ledger)</summary>
+        public static List<JObject> CheerEvents() { lock (L) return Ledger().Where(x => (string)x["type"] == "cheer").Select(x => (JObject)x.DeepClone()).ToList(); }
         static void SaveLedger() { Directory.CreateDirectory(Path.GetDirectoryName(LedgerP)); File.WriteAllText(LedgerP, new JArray(Ledger().OrderBy(x => (long)x["at"])).ToString(Newtonsoft.Json.Formatting.None)); }
 
         static void ImportChatEvents()

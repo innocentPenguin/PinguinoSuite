@@ -71,6 +71,16 @@ namespace PinguinoHost
         static bool? _forceLive; static DateTime _offlineSince = DateTime.MinValue;
         static bool TestHook { get { return Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_TESTHOOK") == "1"; } }
         static int GraceSec { get { int v; if (int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_GRACE_SEC"), out v)) return Math.Max(0, v); return (int)(Math.Max(0, D(Settings()["StreamEndGraceMin"])) * 60); } }
+        /// <summary>start/end (unix s) of the most recent real stream in the economy's records; end = 0 while it is still open</summary>
+        public static bool LastStreamWindow(out long start, out long end)
+        {
+            start = 0; end = 0;
+            lock (L)
+            {
+                var s = PStreams().Properties().Select(p => (JObject)p.Value).Where(x => (string)x["id"] != "off" && (string)x["id"] != "backpay" && D(x["start"]) > 1).OrderByDescending(x => D(x["start"])).FirstOrDefault();
+                if (s == null) return false; start = (long)D(s["start"]); end = s["end"] == null || s["end"].Type == JTokenType.Null ? 0 : (long)D(s["end"]); return true;
+            }
+        }
         static JObject StreamDoc() { var d = Doc(); var s = d["stream"] as JObject; if (s == null) d["stream"] = s = new JObject { { "id", "" }, { "open", false } }; return s; }
         static string Streamer() { try { return Norm((string)HostApi.StreamerCreds()["Channel"]); } catch (Exception) { return ""; } }
         static void Back(string text, JObject detail = null, string level = "info") { try { EventLog.Backend("economy", text, detail, level); } catch (Exception) { } }
@@ -149,15 +159,15 @@ namespace PinguinoHost
             {
                 long mid = (long)m["Id"]; string kind = KindOf((string)m["Activity"]); string winner = ((string)m["Winner"]).ToLowerInvariant();
                 long play = (long?)set[kind + "Play"] ?? 0, win = (long?)set[kind + "Win"] ?? 0; bool mv2 = WatchV2;
-                string label = (kind == "Comp" ? "Competitive" : kind == "Cas" ? "Casual" : "Customs") + " match #" + mid;
+                string kn = kind == "Comp" ? "competitive" : kind == "Cas" ? "casual" : "customs"; string label = kn + " match #" + mid;
                 foreach (var side in new[] { "blue", "orange" })
                     foreach (var p in (m[char.ToUpperInvariant(side[0]) + side.Substring(1)] as JArray ?? new JArray()).OfType<JObject>())
                     {
                         string login = Norm((string)p["Username"]); if (login == "" || login == streamer || ex.Contains(login) || Boards.IsBot(login)) continue;
                         if (mv2) { play = MatchPoints(TierOf(login), false); win = MatchPoints(TierOf(login), true); }   // v2: scaled to the person's own watch rate
-                        if (play > 0) { string id = "match:" + mid + ":play:" + login; if (!Applied(id) && Award(login, play, KindSource(kind, false), label + ", played", id) == null) { paid++; MatchRow(login, "game", label + ", played", play, id); } }
+                        if (play > 0) { string id = "match:" + mid + ":play:" + login; if (!Applied(id) && Award(login, play, KindSource(kind, false), "Played a " + label, id) == null) { paid++; MatchRow(login, "game", "Played a " + label, play, id); } }
                         if (side == winner) Periods.Add(login, "wins", 1, 0, "win:" + mid + ":" + login);
-                        if (win > 0 && side == winner) { string id = "match:" + mid + ":win:" + login; if (!Applied(id) && Award(login, win, KindSource(kind, true), label + ", won", id) == null) { paid++; MatchRow(login, "game", label + ", won", win, id); } }
+                        if (win > 0 && side == winner) { string id = "match:" + mid + ":win:" + login; if (!Applied(id) && Award(login, win, KindSource(kind, true), "Won a " + label, id) == null) { paid++; MatchRow(login, "game", "Won a " + label, win, id); } }
                     }
             }
             if (paid > 0) { Clog.Info("economy", "match awards: " + paid + " payments"); Back("match awards: " + paid + " payments", new JObject { { "payments", paid } }); }
@@ -403,6 +413,51 @@ namespace PinguinoHost
             return o;
         }
 
+        /// <summary>where a ledger source belongs on the site summary</summary>
+        static string CategoryOf(string source, double delta)
+        {
+            if (delta < 0) return "spent";
+            switch (source)
+            {
+                case "watching": case "watch": case "entry": return "watching";
+                case "chat": case "activity": return "chat";
+                case "customs_play": case "customs_win": case "comp_play": case "comp_win": case "cas_play": case "cas_win": case "game": return "matches";
+                case "cheer": return "cheers";
+                case "sub": case "resub": case "gift": case "gift_recipient": case "tip": return "subs";
+                case "follow": case "raid_in": case "raid_out": case "raid_leader": return "follows";
+                case "backpay": return "backpay";
+                default: return "other";
+            }
+        }
+        static readonly string[][] CatDefs = { new[] { "watching", "Watching" }, new[] { "chat", "Chat activity" }, new[] { "matches", "Matches" }, new[] { "cheers", "Cheers/Bits" }, new[] { "subs", "Subs/Gifts" }, new[] { "follows", "Follows/Raids" }, new[] { "backpay", "Back-pay" }, new[] { "spent", "Spent" }, new[] { "other", "Other" } };
+        /// <summary>the pushed summary: points grouped by category, each with the exact all-time net total, the event count and the newest 50 rows. Internal logs stay per event.</summary>
+        static JArray Categories(List<JObject> rows, double watched, double imported, JArray streams)
+        {
+            var tot = new Dictionary<string, double>(); var cnt = new Dictionary<string, int>(); var rws = new Dictionary<string, List<JObject>>();
+            foreach (var d in CatDefs) { tot[d[0]] = 0; cnt[d[0]] = 0; rws[d[0]] = new List<JObject>(); }
+            foreach (var x in rows)   // oldest first, so reverse at the end
+            {
+                double dl = D(x["delta"]); string src = (string)x["source"] ?? "other"; string k = CategoryOf(src, dl);
+                string lab = (string)x["note"]; if (string.IsNullOrEmpty(lab)) lab = (string)x["reason"]; if (string.IsNullOrEmpty(lab)) lab = Label(src);
+                tot[k] += dl; cnt[k]++; rws[k].Add(new JObject { { "at", x["at"] }, { "label", lab }, { "delta", dl } });
+            }
+            if (watched >= 1) { tot["watching"] += Math.Floor(watched); }
+            if (imported >= 1) { tot["other"] += Math.Floor(imported); cnt["other"]++; rws["other"].Insert(0, new JObject { { "at", 0 }, { "label", "Imported balance" }, { "delta", Math.Floor(imported) } }); }
+            if (streams != null)   // watching rows: one per stream (the per-minute accrual is not kept as events)
+                foreach (var s in streams.OfType<JObject>().Reverse())
+                {
+                    double w = 0; int n = 0; long at = 0; foreach (var r in ((JArray)s["rows"]).OfType<JObject>()) if ((string)r["type"] == "watch") { w += D(r["delta"]); n++; at = Math.Max(at, (long)D(r["at"])); }
+                    if (n > 0) { cnt["watching"] += n; rws["watching"].Add(new JObject { { "at", at }, { "label", "Watched " + n + "x during " + (string)s["label"] }, { "delta", w } }); }
+                }
+            var o = new JArray();
+            foreach (var d in CatDefs)
+            {
+                if (cnt[d[0]] == 0 && tot[d[0]] == 0) continue;
+                o.Add(new JObject { { "key", d[0] }, { "label", d[1] }, { "total", Math.Floor(tot[d[0]]) }, { "count", cnt[d[0]] }, { "rows", new JArray(rws[d[0]].OrderByDescending(r => D(r["at"])).Take(50)) } });
+            }
+            return o;
+        }
+
         public static JObject Me2(string login, int ledgerLimit = 50, Ctx cx = null)
         {
             if (cx == null) cx = BuildCtx();
@@ -424,7 +479,8 @@ namespace PinguinoHost
                 { "loans", LoanView(c, set, minutes) },
                 { "earnings", new JArray(groups.Values.OrderByDescending(g => (double)g["earned"] + (double)g["spent"])) },
                 { "ledger", new JArray(Enumerable.Reverse(rows).Take(Math.Max(1, Math.Min(500, ledgerLimit))).Select(x => { var y = (JObject)x.DeepClone(); y["label"] = Label((string)y["source"]); return y; })) },
-                { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) }, { "tipped", TippedView(c) } };
+                { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) }, { "tipped", TippedView(c) }, { "sub", SubRoll.ViewOf(c) } };
+            res["categories"] = Categories(rows, watched, imported, (JArray)res["streams"]);
             var dp = (JObject)res["depreciation"]; dp["ratePct"] = dp["pct"]; dp["nextAmount"] = dp["amount"]; dp["nextAt"] = null; dp["nextAtKind"] = open ? "end_of_stream" : "next_stream_start";
             return res;
         }
@@ -449,6 +505,7 @@ namespace PinguinoHost
                 if ((path == "/api/economy/me" || path == "/api/points") && method == "GET") return Me2(login);
                 if (path == "/api/points/loan" && method == "POST") { var q = new JObject { { "action", body["action"] }, { "login", body["login"] ?? login }, { "amount", body["amount"] }, { "id", body["id"] } }; return Phase2Api("/api/economy/loan", "POST", login, q); }
                 if (path == "/api/economy/preview") return Preview(body);
+                if (path == "/api/economy/backpay" && method == "POST") return BackPay(body["apply"] != null && (bool)body["apply"]);
                 if (path == "/api/economy/points-settings") return PointsSettingsApi(body, method == "POST");
                 if (path == "/api/economy/event" && method == "POST") return EventApi(body);
                 if (path == "/api/economy/streams" && method == "GET") return new JObject { { "ok", true }, { "login", Canon(Boards.AliasMap(), login) }, { "streams", StreamsView(login) } };

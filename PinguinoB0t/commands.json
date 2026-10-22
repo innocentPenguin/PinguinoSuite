@@ -777,6 +777,18 @@
       "importance": 13
     },
     {
+      "command": "!teamname",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!teamname <orange|blue> <#rrggbb|-> [name]",
+      "description": "Rename a customs team and set its colour.",
+      "examples": [],
+      "section": "Stream",
+      "importance": 12
+    },
+    {
       "command": "!matchdel",
       "aliases": [],
       "action": "PinguinoBotCore",

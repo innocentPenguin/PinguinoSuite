@@ -611,6 +611,11 @@ public class CPHInline
         public bool ChatColors { get; set; } = true;
         public string BlueColor { get; set; } = "blue";
         public string OrangeColor { get; set; } = "orange";
+        // [NEW][TEAMS] customs team names + colours (Master View: !teamname). Chat lines, results, live_state.teams and the overlays follow them.
+        public string BlueName { get; set; } = "Blue";
+        public string OrangeName { get; set; } = "Orange";
+        public string BlueHex { get; set; } = "#1e8fff";
+        public string OrangeHex { get; set; } = "#ff7a00";
 
         public int NextMatchId { get; set; } = 1;
         public long NextEventSeq { get; set; }
@@ -698,6 +703,13 @@ public class CPHInline
         {"gc1", 1500}, {"gc2", 1600}, {"gc3", 1700},
     };
 
+    // any NvN with the same N on both sides, N = 1..16 (Fortnite playing-with-viewers uses 1/2/3 and a free number)
+    static bool TryFormatSize(string fmt, out int n)
+    {
+        n = 0; var m = System.Text.RegularExpressions.Regex.Match((fmt ?? "").Trim().ToLowerInvariant(), @"^(\d{1,2})v(\d{1,2})$");
+        if (!m.Success || int.Parse(m.Groups[1].Value) != int.Parse(m.Groups[2].Value)) return false;
+        n = int.Parse(m.Groups[1].Value); return n >= 1 && n <= 16;
+    }
     static readonly Dictionary<string, int> FormatTeamSize = new Dictionary<string, int>
     {
         {"1v1", 1}, {"2v2", 2}, {"3v3", 3}, {"4v4", 4}
@@ -1957,6 +1969,7 @@ public class CPHInline
             timedOut = _settings.TimedOut && !_settings.QueueOpen, timedOutAt = (_settings.TimedOut && !_settings.QueueOpen) ? (long?)_settings.TimedOutAt : null,
             recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes, strikeLimit = MaxStrikes, strikeGame = StrikeGame(),
             strikes = StrikeMap(waiting.Select(e => e.Username)),   // [NEW] strike chips in the Master View: {login:{temp,half,perma}} for the queue and the live match
+            teams = new { orange = new { name = TeamName("orange"), color = _settings.OrangeHex }, blue = new { name = TeamName("blue"), color = _settings.BlueHex } },   // [NEW][TEAMS] read by the Master View, the overlays and the site
             overlay = new { altSeconds = _settings.OverlayAltSeconds, fadeMs = _settings.OverlayFadeMs },   // read by players.html / players_vertical.html
             activity = _settings.Activity,            currentMatch = match,
             liveMatch = hold ? live : null,   // [NEW][KOTH] only while the public view is being held
@@ -2114,6 +2127,7 @@ public class CPHInline
             case "!move":     return HandleMove(userLower, input, isPrivileged);     // [NEW][WEB] drag to reorder the queue
             case "!out":      return HandleOut(userLower, input, isPrivileged);      // [NEW][WEB] drag a player out of the match
             case "!in":       return HandleIn(userLower, input, isPrivileged);       // [NEW][WEB] drag a player into a team slot
+            case "!teamname": return HandleTeamName(userLower, input, isPrivileged);
             case "!match":    return HandleMatch(userLower, input, isPrivileged);    // [NEW][WEB] clear | fill | queue (buttons under the teams)
             case "!mmr":      return HandleMmrLookup(userLower, input, isPrivileged);
             case "!setmmr":   return HandleSetMmr(userLower, input, isPrivileged);
@@ -2698,7 +2712,8 @@ public class CPHInline
 
     int GetTeamSize(string format)
     {
-        return FormatTeamSize.ContainsKey(format) ? FormatTeamSize[format] : 3;
+        if (FormatTeamSize.ContainsKey(format ?? "")) return FormatTeamSize[format];
+        int n; return TryFormatSize(format, out n) ? n : 3;
     }
 
     int GetTotalSlots(string format)
@@ -3785,7 +3800,7 @@ public class CPHInline
         {
             _lastBalance.ResultRecorded = true; _lastBalance.Winner = team; SaveCurrentMatch();
         }
-        Say("Match #" + id + " fixed: " + (team == "blue" ? "🔷 Blue" : "🔶 Orange") + " won." + (counted ? " Wins and points were corrected." : " (no points in this activity)"));
+        Say("Match #" + id + " fixed: " + TeamLabel(team) + " won." + (counted ? " Wins and points were corrected." : " (no points in this activity)"));
         PublishState("match_result", "fix " + id);
         return true;
     }
@@ -4129,7 +4144,7 @@ public class CPHInline
                 CompactPositions();
                 EnsureStreamerQueued();
                 _autoNextPending = _settings.AutoNextMatch; _autoNextTold = true; _autoNextSince = DateTime.UtcNow;   // [NEW][AUTONEXT] starts by itself when enough challengers have joined
-                Say("KOTH: " + (team == "blue" ? "🔷 Blue" : "🔶 Orange") + " stays on, but there aren't enough challengers (need " + need + ", have " + avail + "). The winners wait at the front of the queue.");
+                Say("KOTH: " + TeamLabel(team) + " stays on, but there aren't enough challengers (need " + need + ", have " + avail + "). The winners wait at the front of the queue.");
             }
             else
             {
@@ -4448,7 +4463,7 @@ public class CPHInline
         // The match is over: everyone who played leaves the queue now (the streamer goes back to the front).
         SendToBack(_queue.Where(e => e.Status == "active").Select(e => e.Username).ToList());
 
-        string label = winnerTeam == "blue" ? "🔷 Blue" : "🔶 Orange";
+        string label = TeamLabel(winnerTeam);
         Say(label + " wins match #" + _lastBalance.MatchId + "!" + (kothAct
             ? " (+1 win on the King of the Hill leaderboard)"
             : counts
@@ -4584,7 +4599,7 @@ public class CPHInline
         var challengers = PullNextBatch(slotsNeeded).Select(e => e.Username).ToList();
 
         if (staying.Count > 0)
-            Say((winnerTeam == "blue" ? "🔷 Blue" : "🔶 Orange") + " stays on! Rotating in new challengers...");
+            Say(TeamLabel(winnerTeam) + " stays on! Rotating in new challengers...");
 
         if (_settings.KothKeepWinnersTogether && staying.Count == teamSize)
         {
@@ -4761,9 +4776,10 @@ public class CPHInline
         }
 
         string fmt = string.IsNullOrEmpty(input) ? "" : input.Split(' ')[0].ToLower();
-        if (!ValidFormats.Contains(fmt))
+        int fmtN; if (!ValidFormats.Contains(fmt) && TryFormatSize(fmt, out fmtN)) fmt = fmtN + "v" + fmtN;
+        if (!ValidFormats.Contains(fmt) && !TryFormatSize(fmt, out fmtN))
         {
-            Say("@" + user + " Usage: !format <1v1|2v2|3v3|4v4> — Current: " + _settings.DefaultFormat);
+            Say("@" + user + " Usage: !format <1v1|2v2|3v3|4v4|NvN up to 16v16> — Current: " + _settings.DefaultFormat);
             return true;
         }
 
@@ -5073,8 +5089,37 @@ public class CPHInline
             return;
         }
         // Two plain messages: Blue, then Orange.
-        SayColored(_settings.BlueColor, id + "🔷 Blue [avg " + result.BlueAvgMmr + "]: " + string.Join(", ", blueNames));
-        SayColored(_settings.OrangeColor, "🔶 Orange [avg " + result.OrangeAvgMmr + "]: " + string.Join(", ", orangeNames) + " | Diff: " + result.MmrDiff);
+        SayColored(_settings.BlueColor, id + TeamLabel("blue") + " [avg " + result.BlueAvgMmr + "]: " + string.Join(", ", blueNames));
+        SayColored(_settings.OrangeColor, TeamLabel("orange") + " [avg " + result.OrangeAvgMmr + "]: " + string.Join(", ", orangeNames) + " | Diff: " + result.MmrDiff);
+    }
+
+    string TeamName(string team) { return team == "blue" ? (string.IsNullOrWhiteSpace(_settings.BlueName) ? "Blue" : _settings.BlueName) : (string.IsNullOrWhiteSpace(_settings.OrangeName) ? "Orange" : _settings.OrangeName); }
+    string TeamLabel(string team) { return (team == "blue" ? "🔷 " : "🔶 ") + TeamName(team); }
+    static readonly System.Text.RegularExpressions.Regex HexRx = new System.Text.RegularExpressions.Regex("^#[0-9a-fA-F]{6}$");
+    // !teamname <orange|blue> <#rrggbb|-> [name...]   (mods) name 1-20 chars, no leading ! or /; "-" keeps the colour; "reset" restores Orange/#ff7a00 or Blue/#1e8fff
+    bool HandleTeamName(string user, string input, bool isPrivileged)
+    {
+        if (!isPrivileged) { Say("@" + user + " Only mods can rename the teams."); return true; }
+        var parts = (input ?? "").Trim().Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+        string team = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        if (team != "orange" && team != "blue") { Say("@" + user + " Usage: !teamname <orange|blue> <#rrggbb|-> [name]  (or: !teamname <orange|blue> reset). Now: " + TeamName("orange") + " " + _settings.OrangeHex + " / " + TeamName("blue") + " " + _settings.BlueHex); return true; }
+        string hex = team == "blue" ? _settings.BlueHex : _settings.OrangeHex, name = team == "blue" ? _settings.BlueName : _settings.OrangeName;
+        if (parts.Length > 1 && parts[1].ToLowerInvariant() == "reset") { name = team == "blue" ? "Blue" : "Orange"; hex = team == "blue" ? "#1e8fff" : "#ff7a00"; }
+        else
+        {
+            if (parts.Length > 1 && parts[1] != "-") { if (!HexRx.IsMatch(parts[1])) { Say("@" + user + " The colour must look like #ff7a00."); return true; } hex = parts[1].ToLowerInvariant(); }
+            if (parts.Length > 2)
+            {
+                string n = parts[2].Trim();
+                if (n.Length < 1 || n.Length > 20 || n.StartsWith("!") || n.StartsWith("/") || n.Any(ch => char.IsControl(ch))) { Say("@" + user + " The team name must be 1-20 characters and cannot start with ! or /."); return true; }
+                name = n;
+            }
+        }
+        if (team == "blue") { _settings.BlueName = name; _settings.BlueHex = hex; } else { _settings.OrangeName = name; _settings.OrangeHex = hex; }
+        SaveSettings();
+        Say("Team " + team + " is now " + name + " (" + hex + ").");
+        PublishState("teams", team);
+        return true;
     }
 
     void SayColored(string color, string text)

@@ -139,7 +139,7 @@ namespace PinguinoHost
                     var so = al["Sounds"]?[x("kind")]; string file = (string)so?["File"] ?? ""; if (file == "") return "no sound set for " + x("kind");
                     return Sounds.Play(x("kind"), file, (double?)so["Volume"] ?? 0.6, test);
                 }
-                case "session_say": ctx["session.line"] = Session.Line(); return "session: " + ctx["session.line"];
+                case "session_say": ctx["session.line"] = Session.Line(); try { var rc = Recap.Build(true); ctx["session.line"] = (string)rc["line"]; var cp = rc["clip"] as JObject; ctx["session.clip"] = cp == null ? "" : " Best clip: " + (string)cp["url"]; } catch (Exception) { ctx["session.clip"] = ""; } return "session: " + ctx["session.line"];
                 case "goal_say": ctx["goal.line"] = Session.GoalLine(x("id")); return "goal: " + ctx["goal.line"];
                 case "press_key": return test ? "(dry run) would press " + x("key") : PressKey(x("key"));
                 case "latest_say":   // sets {latest.line}: the newest follower / sub / cheer / raid
@@ -249,7 +249,7 @@ namespace PinguinoHost
                         Step("alert_settings"), Step("obs_source", "scene", "{popup.scene}", "source", "{popup.source}", "visible", "true"), Step("delay", "ms", "{popup.ms}"), Step("obs_source", "scene", "{popup.scene}", "source", "{popup.source}", "visible", "false")),
                     Act("sb-session-cmd", "Command: !session", "new: this stream's numbers (follows, subs, bits, raids). Wording in session_settings.json.", true, new JArray { Tr("command", "names", new JArray("!session", "!streamstats"), "cooldownSec", 20) }, Step("session_say"), SayStep("{session.line}")),
                     Act("sb-goal-cmd", "Command: !goal", "new: progress of the goals in session_settings.json (the OBS bar is /overlay/goal?id=followers).", true, new JArray { Tr("command", "names", new JArray("!goal", "!goals"), "cooldownSec", 20) }, Step("goal_say", "id", "{arg1}"), SayStep("{goal.line}")),
-                    Act("sb-recap", "Stream recap", "new: the stream's numbers when you go offline (use instead of or after 'Stream offline').", false, new JArray { Tr("stream_offline") }, Step("session_say"), SayStep("Thanks for tuning in! {session.line}")),
+                    Act("sb-recap", "Stream recap", "new: the stream's numbers when you go offline (use instead of or after 'Stream offline').", false, new JArray { Tr("stream_offline") }, Step("session_say"), SayStep("Thanks for tuning in! {session.line}{session.clip}")),
                     Act("sb-follow", "Alert: follow", "from Streamer.bot 'Followed'", true, new JArray { Tr("follow") }, SayStep("innoce108Cool Hello {user} just followed! Welcome to the community! innoce108Hello"), Step("alert_sound", "kind", "follow"), Popup()),
                     Act("sb-sub", "Alert: sub", "from Streamer.bot 'Normal' + 'Super' (Prime looks like tier 1 in Twitch's event)", true, new JArray { Tr("sub") },
                         Step("if", "left", "{tier}", "op", "==", "right", "1", "then", new JArray { SayStep("🐧 Thank you for the sub, {user}! Enjoy the stream!") }, "else", new JArray { SayStep("🐧 Thank you for the super sub, {user}! Enjoy the stream!") }), Step("alert_sound", "kind", "sub"), Popup()),

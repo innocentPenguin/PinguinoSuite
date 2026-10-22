@@ -188,8 +188,19 @@
     stage.style.setProperty("--mini-top", Math.max(62, 6 + box.offsetHeight * 0.21) + "px");
   }
 
+  // team colours from the Master View (!teamname): live_state.teams {orange:{name,color}, blue:{name,color}}; the dark end of each gradient is the same colour at 45% brightness
+  function applyTeams(s) {
+    var t = s && s.teams; if (!t) return;
+    [["blue", t.blue], ["orange", t.orange]].forEach(function (p) {
+      var c = p[1] && p[1].color; if (!/^#[0-9a-f]{6}$/i.test(c || "")) return;
+      var r = parseInt(c.substr(1, 2), 16), g = parseInt(c.substr(3, 2), 16), b = parseInt(c.substr(5, 2), 16);
+      var dark = "#" + [r, g, b].map(function (v) { return ("0" + Math.round(v * 0.45).toString(16)).slice(-2); }).join("");
+      document.documentElement.style.setProperty("--" + p[0], c); document.documentElement.style.setProperty("--" + p[0] + "2", dark);
+    });
+  }
   function render(s) {
     applyAlt(s);
+    applyTeams(s);
     var m = s && s.currentMatch;
     if (!m) { stage.classList.remove("show"); lastTeamsKey = ""; lastRosterKey = ""; return; }
 

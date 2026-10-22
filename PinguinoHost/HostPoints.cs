@@ -291,6 +291,29 @@ namespace PinguinoHost
         }
 
         static void MatchRow(string login, string type, string label, long delta, string id) { try { if (Sim.IsSim(login)) return; lock (L) { PRow(CurSid(), login, type, label, delta, id); Save(); } } catch (Exception) { } }
+        /// <summary>One-time back-pay: 40% of what the current cheer curve pays, for every chat cheer in the logs. Dry run by default; apply backs up points.json first. Idempotent per cheer (backfill:bits:...).</summary>
+        public static JObject BackPay(bool apply, double pct = 0.4)
+        {
+            var ev = Boards.CheerEvents(); var per = new SortedDictionary<string, long[]>(); long bits = 0, pts = 0, skipped = 0, already = 0; string backup = null;
+            if (apply) lock (L) { try { backup = PointsP + ".before-backpay-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".bak"; if (File.Exists(PointsP)) File.Copy(PointsP, backup, true); } catch (Exception ex) { return new JObject { { "ok", false }, { "error", "backup failed: " + ex.Message } }; } }
+            foreach (var e in ev)
+            {
+                string login = Canon(Boards.AliasMap(), (string)e["user"]); long n = (long)e["amount"], at = (long)e["at"];
+                if (login == "" || Boards.IsBot(login) || login == Streamer() || Sim.IsSim(login)) { skipped++; continue; }
+                long amt = (long)Math.Round(CheerPoints(n) * pct); if (amt <= 0) { skipped++; continue; }
+                string id = "backfill:bits:cheer:" + (string)e["user"] + "::" + at;
+                bool done; lock (L) done = Ledger()[id] != null;
+                if (done) { already++; continue; }
+                if (apply)
+                {
+                    string err = Award(login, amt, "backpay", "Back-pay: past cheers (40%)", id); if (err != null) { skipped++; continue; }
+                    lock (L) { var s = PStream("backpay", 1); s["label"] = "Back-pay"; s["end"] = 1; PRow("backpay", login, "other", "Back-pay: past cheers (40%)", amt, id); Save(); }
+                }
+                long[] t; if (!per.TryGetValue(login, out t)) per[login] = t = new long[2]; t[0] += n; t[1] += amt; bits += n; pts += amt;
+            }
+            var top = new JArray(per.OrderByDescending(k => k.Value[1]).Take(10).Select(k => new JObject { { "login", k.Key }, { "bits", k.Value[0] }, { "points", k.Value[1] } }));
+            return new JObject { { "ok", true }, { "applied", apply }, { "people", per.Count }, { "bits", bits }, { "points", pts }, { "already_paid_events", already }, { "skipped", skipped }, { "backup", backup == null ? null : Path.GetFileName(backup) }, { "top", top } };
+        }
         /// <summary>sample amounts for the settings page: what each rule pays right now (or with `over` applied, nothing saved)</summary>
         static JObject ExamplesNow()
         {

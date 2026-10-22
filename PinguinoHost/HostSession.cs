@@ -34,6 +34,20 @@ namespace PinguinoHost
             return d;
         }
 
+        static IEnumerable<JObject> ItemsBetween(long from, long to)
+        {
+            var all = (JArray)Latest.Activity(0, 100000, null)["items"];
+            return all.OfType<JObject>().Where(i => (long)i["ts"] >= from && (long)i["ts"] <= to);
+        }
+        static JObject CountsOf(List<JObject> it)
+        {
+            Func<string, int> n = t => it.Count(i => (string)i["type"] == t);
+            Func<string, long> sum = t => it.Where(i => (string)i["type"] == t).Sum(i => (long?)i["amount"] ?? 0);
+            return new JObject { { "follows", n("follow") }, { "subs", n("sub") + n("resub") }, { "gifts", sum("gift") }, { "bits", sum("cheer") }, { "raids", n("raid") }, { "raiders", sum("raid") }, { "redeems", n("redeem") }, { "bans", n("ban") }, { "clips", n("clip") + n("replay") }, { "shoutouts", n("shoutout") } };
+        }
+        /// <summary>the SessionLine for any time window (the recap uses the last stream's)</summary>
+        public static string LineFor(long from, long to) { return Fill((string)Settings()["SessionLine"], CountsOf(ItemsBetween(from, to).ToList())); }
+
         static IEnumerable<JObject> Items(bool sessionOnly)
         {
             long s = Start; var all = (JArray)Latest.Activity(0, 100000, null)["items"];

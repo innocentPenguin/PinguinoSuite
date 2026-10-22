@@ -80,6 +80,10 @@ namespace PinguinoHost
             Check(rs0 != null && ((JArray)rs0["steps"]).Count == 3 && ((JArray)ro0["steps"]).Count == 2 && !((JArray)ro0["steps"]).ToString().Contains("emotes"), "old install: the emotes + discord lines moved to raid_start, the 20 s stop stayed on raid_out");
             Auto.MigrateRaidStart(); Check(((JArray)Auto.Doc()["actions"]).OfType<JObject>().Count(a => (string)a["id"] == "sb-raidstart") == 1, "migration runs once");
 
+            // raid prep fires once per raid, however it was started (!confirm raid, the Master View button, or the outgoing channel.raid event)
+            Auto.ResetRaidStart(); Check(Auto.OnRaidScheduled("somebody"), "raid prep: first signal fires");
+            Check(!Auto.OnRaidScheduled("somebody"), "raid prep: the later signal for the same raid does not repeat it");
+            Auto.ResetRaidStart(); Check(Auto.OnRaidScheduled("other"), "raid prep: a new raid fires again");
             AlertBridge.TestPost = null;
             Console.WriteLine(fails == 0 ? "[alerttest] ALL PASS" : "[alerttest] " + fails + " FAILED");
         }

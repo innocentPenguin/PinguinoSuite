@@ -35,9 +35,34 @@ namespace PinguinoHost
             gameName = (string)pick["name"]; return (string)pick["id"];
         }
 
-        public static JObject Update(string title, string game)
+        /// <summary>GET /api/channel/info: the live title, category and tags (so the editor can load them)</summary>
+        public static JObject Info()
+        {
+            JToken d; string err; string code = TwitchApi.Call(HttpMethod.Get, "/channels?broadcaster_id={bid}", null, out d, out err);
+            var c = (d as JArray)?.FirstOrDefault() as JObject;
+            if (c == null) return new JObject { { "ok", false }, { "error", err != "" ? err : "Twitch answered HTTP " + code } };
+            return new JObject { { "ok", true }, { "title", (string)c["title"] }, { "game", (string)c["game_name"] }, { "tags", c["tags"] as JArray ?? new JArray() } };
+        }
+
+        /// <summary>tags: max 10, each 1-25 letters/digits (Twitch allows no spaces or symbols); returns null and an error for bad input</summary>
+        public static JArray CleanTags(JToken tags, out string error)
+        {
+            error = ""; var o = new JArray(); var arr = tags as JArray; if (arr == null) { error = "tags must be a list"; return null; }
+            foreach (var t in arr)
+            {
+                string s = ((string)t ?? "").Trim().Replace(" ", ""); if (s == "") continue;
+                if (s.Length > 25) { error = "tag '" + s + "' is longer than 25 characters"; return null; }
+                if (!System.Text.RegularExpressions.Regex.IsMatch(s, @"^[\p{L}\p{N}]+$")) { error = "tag '" + s + "' may only use letters and numbers"; return null; }
+                if (!o.Any(x => string.Equals((string)x, s, StringComparison.OrdinalIgnoreCase))) o.Add(s);
+            }
+            if (o.Count > 10) { error = "at most 10 tags"; return null; }
+            return o;
+        }
+
+        public static JObject Update(string title, string game, JToken tags = null)
         {
             var body = new JObject(); string gname = null;
+            if (tags != null && tags.Type != JTokenType.Null) { string terr; var ct = CleanTags(tags, out terr); if (ct == null) return new JObject { { "ok", false }, { "error", terr } }; body["tags"] = ct; }
             if (!string.IsNullOrWhiteSpace(title)) { title = title.Trim(); if (title.Length > 140) title = title.Substring(0, 140); body["title"] = title; }
             if (!string.IsNullOrWhiteSpace(game))
             {
@@ -45,10 +70,10 @@ namespace PinguinoHost
                 if (id == "") return new JObject { { "ok", false }, { "error", err } };
                 body["game_id"] = id;
             }
-            if (body.Count == 0) return new JObject { { "ok", false }, { "error", "give a title and/or a game" } };
+            if (body.Count == 0) return new JObject { { "ok", false }, { "error", "give a title, a game and/or tags" } };
             JToken d; string e2; string code = TwitchApi.Call(new HttpMethod("PATCH"), "/channels?broadcaster_id={bid}", body, out d, out e2);
             if (code != "204" && code != "200") return new JObject { { "ok", false }, { "error", e2 != "" ? e2 : "Twitch answered HTTP " + code } };
-            return new JObject { { "ok", true }, { "game", gname }, { "title", (string)body["title"] } };
+            return new JObject { { "ok", true }, { "game", gname }, { "title", (string)body["title"] }, { "tags", body["tags"] } };
         }
 
         static readonly string[] ProtectedLogins = { "nightbot", "streamelements", "pinguinob0t", "chattypinguino", "pinguinohelper" };

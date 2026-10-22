@@ -89,6 +89,14 @@ namespace PinguinoHost
             var bad = Economy.PointsSettingsApi(JObject.FromObject(new { values = new { Exclude = 1 } }), true); Check((bool)bad["ok"] == false, "keys outside the points settings are refused");
             var neg = Economy.PointsSettingsApi(JObject.FromObject(new { values = new { EntryBonus = -5 } }), true); Check((bool)neg["ok"] == false, "negative values are refused");
             var g = Economy.PointsSettingsApi(new JObject(), false); Check((bool)g["ok"] && g["values"]["MatchMinutes"] != null && g["examples"]["watch"]["viewer"]["per_hour"] != null, "GET lists values + examples (watch per hour = " + g["examples"]["watch"]["viewer"]["per_hour"] + ")");
+            // 9. the pushed summary groups points by category with exact totals
+            Economy.EventApi(new JObject { { "type", "cheer" }, { "login", "catuser" }, { "amount", 100 }, { "id", "cat-c1" } });
+            Economy.EventApi(new JObject { { "type", "follow" }, { "login", "catuser" }, { "id", "cat-f1" } });
+            Economy.EventApi(new JObject { { "type", "tip" }, { "login", "catuser" }, { "amount", 5 }, { "id", "cat-t1" } });
+            var cats = (JArray)Economy.Me2("catuser")["categories"]; Func<string, JObject> cat = k => cats.OfType<JObject>().FirstOrDefault(x => (string)x["key"] == k);
+            Check(cat("cheers") != null && (long)cat("cheers")["total"] == 1000 && (int)cat("cheers")["count"] == 1 && ((JArray)cat("cheers")["rows"]).Count == 1, "categories: cheers total 1000 with its row: " + cats);
+            Check(cat("follows") != null && (long)cat("follows")["total"] == 150 && cat("subs") != null && (long)cat("subs")["total"] > 0, "categories: follow 150 under Follows/Raids, tip under Subs/Gifts");
+            Check(cats.Count > 0 && (string)cats[0]["label"] != null && ((JArray)cat("cheers")["rows"])[0]["label"] != null, "categories carry labels and rows with labels");
             Economy.TestTier = null;
             Console.WriteLine(fails == 0 ? "[pointstest] ALL PASS" : "[pointstest] " + fails + " FAILED");
         }

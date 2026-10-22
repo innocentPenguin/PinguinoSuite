@@ -10,7 +10,7 @@ namespace PinguinoHost
     /// Speaks only when the payload has speak:true and Data\sim_say.json is not {"enabled":false}. Otherwise it returns the lines (dry run).</summary>
     public static class SimSay
     {
-        static string Label(string team) { return team == "blue" ? "🔷 Blue" : "🔶 Orange"; }
+        static string Label(string team) { return (team == "blue" ? "🔷 " : "🔶 ") + CustomsView.TeamName(team); }
         static string Str(JToken t) { return t == null || t.Type == JTokenType.Null ? "" : t.ToString().Trim(); }
         static int Int(JToken t, int d) { int v; return t != null && int.TryParse(t.ToString(), out v) ? v : d; }
 
@@ -49,8 +49,8 @@ namespace PinguinoHost
                     string id = match != null && match["id"] != null ? "#" + Str(match["id"]) + " " : "";
                     int ba = Avg(match, blue, "blueAvg"), oa = Avg(match, orange, "orangeAvg");
                     int diff = match != null && match["diff"] != null ? Int(match["diff"], 0) : Math.Abs(ba - oa);
-                    lines.Add(id + "🔷 Blue [avg " + ba + "]: " + string.Join(", ", blue.Select(n => n + "(" + Mmr(match, n) + ")")));
-                    lines.Add("🔶 Orange [avg " + oa + "]: " + string.Join(", ", orange.Select(n => n + "(" + Mmr(match, n) + ")")) + " | Diff: " + diff);
+                    lines.Add(id + Label("blue") + " [avg " + ba + "]: " + string.Join(", ", blue.Select(n => n + "(" + Mmr(match, n) + ")")));
+                    lines.Add(Label("orange") + " [avg " + oa + "]: " + string.Join(", ", orange.Select(n => n + "(" + Mmr(match, n) + ")")) + " | Diff: " + diff);
                     break;
                 }
                 case "result":

@@ -89,11 +89,24 @@ namespace PinguinoHost
                 if (f == null) { c.Response.StatusCode = 404; return true; }
                 Write(c, File.ReadAllText(f, Encoding.UTF8), "text/html; charset=utf-8"); return true;
             }
-            if ((p == "/api/channel/update" || p == "/api/mod/timeout") && m == "POST")   // Speak module: module token always required, every call audit-logged
+            if (p == "/api/recap/preview" && m == "GET") { Write(c, Recap.Build(true).ToString(), "application/json"); return true; }   // the recap of the LAST stream, text only, nothing is said (works offline)
+            if (p == "/api/recap/test" && m == "POST")   // {post:true} says it in chat once (30 s duplicate guard); without post it only returns the text
             {
-                if (!HostApi.StrictTokenOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
+                var b = Body(c); var r = Recap.Build(true); bool post = (bool?)b["post"] == true; r["posted"] = false; r["duplicate"] = false;
+                if (post) { string via; bool ok = SendAs("core", (string)r["text"], out via); r["posted"] = ok && !via.StartsWith("duplicate"); r["duplicate"] = via.StartsWith("duplicate"); r["via"] = via; if (!ok) r["ok"] = false; }
+                Write(c, r.ToString(), "application/json"); return true;
+            }
+            if (p == "/api/raid/prep" && m == "POST")   // Master View "Raid prep": says the "prepare your emotes" line early for a raid started on twitch.tv (once per raid, 3 min window; the later channel.raid event does not repeat it)
+            {
+                var b = Body(c); string tg = ((string)b["target"] ?? "").Trim().TrimStart('@').ToLowerInvariant(); bool fired = Auto.OnRaidScheduled(tg);
+                ChannelControl.Audit("app", "raid/prep", "target=" + tg + " fired=" + fired); Write(c, new JObject { { "ok", true }, { "fired", fired }, { "duplicate", !fired } }.ToString(), "application/json"); return true;
+            }
+            if (p == "/api/channel/info" && m == "GET") { Write(c, ChannelControl.Info().ToString(), "application/json"); return true; }
+            if ((p == "/api/channel/update" || p == "/api/mod/timeout") && m == "POST")   // Speak module: module token required for timeouts; the channel editor in the Suite app passes the same write gate as /api/customs/mod (own origin or the app token). Every call is audit-logged
+            {
+                if (!(p == "/api/channel/update") && !HostApi.StrictTokenOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
                 var b = Body(c); JObject res; string who = "module:speak";
-                if (p == "/api/channel/update") { res = ChannelControl.Update((string)b["title"], (string)b["game"]); ChannelControl.Audit(who, "channel/update", "title=" + (string)b["title"] + " game=" + (string)b["game"] + " -> " + (bool?)res["ok"] + " " + (string)res["error"]); }
+                if (p == "/api/channel/update") { res = ChannelControl.Update((string)b["title"], (string)b["game"], b["tags"]); ChannelControl.Audit(who, "channel/update", "title=" + (string)b["title"] + " game=" + (string)b["game"] + " tags=" + (b["tags"] == null ? "" : b["tags"].ToString(Newtonsoft.Json.Formatting.None)) + " -> " + (bool?)res["ok"] + " " + (string)res["error"]); }
                 else { res = ChannelControl.Timeout((string)b["user"], (int?)b["seconds"] ?? 0, (string)b["reason"]); ChannelControl.Audit(who, "mod/timeout", "user=" + (string)b["user"] + " seconds=" + (int?)b["seconds"] + " reason=" + (string)b["reason"] + " -> " + (bool?)res["ok"] + " " + (string)res["error"]); }
                 Write(c, res.ToString(), "application/json"); return true;
             }
@@ -237,7 +250,7 @@ namespace PinguinoHost
             if (p == "/api/lore" && m == "POST") { Write(c, ChannelLore.Post(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/profile-sync" && m == "GET") { Write(c, ProfileSync.Api().ToString(), "application/json"); return true; }
             if (p == "/api/profile-sync" && m == "POST") { Write(c, ProfileSync.Post(Body(c)).ToString(), "application/json"); return true; }
-            if ((p == "/api/points" || p == "/api/points/loan" || p.StartsWith("/api/economy/")) && (p == "/api/points" || p == "/api/points/loan" || p == "/api/economy/me" || p == "/api/economy/depreciation" || p == "/api/economy/loan" || p == "/api/economy/stream" || p == "/api/economy/preview" || p == "/api/economy/event" || p == "/api/economy/streams" || p == "/api/economy/points-settings")) { var qj = new Newtonsoft.Json.Linq.JObject(); foreach (string qk in c.Request.QueryString.AllKeys) if (qk != null) qj[qk] = c.Request.QueryString[qk]; var r2 = Economy.Phase2Api(p, m, c.Request.QueryString["login"] ?? "", m == "POST" ? Body(c) : qj); if (r2 != null) { Write(c, r2.ToString(), "application/json"); return true; } }
+            if ((p == "/api/points" || p == "/api/points/loan" || p.StartsWith("/api/economy/")) && (p == "/api/points" || p == "/api/points/loan" || p == "/api/economy/me" || p == "/api/economy/depreciation" || p == "/api/economy/loan" || p == "/api/economy/stream" || p == "/api/economy/preview" || p == "/api/economy/event" || p == "/api/economy/streams" || p == "/api/economy/points-settings" || p == "/api/economy/backpay")) { var qj = new Newtonsoft.Json.Linq.JObject(); foreach (string qk in c.Request.QueryString.AllKeys) if (qk != null) qj[qk] = c.Request.QueryString[qk]; var r2 = Economy.Phase2Api(p, m, c.Request.QueryString["login"] ?? "", m == "POST" ? Body(c) : qj); if (r2 != null) { Write(c, r2.ToString(), "application/json"); return true; } }
             if (p == "/api/economy" && m == "GET") { Write(c, Economy.Api().ToString(), "application/json"); return true; }
             if (p == "/api/economy/user" && m == "GET") { Write(c, Economy.User(c.Request.QueryString["login"] ?? "").ToString(), "application/json"); return true; }
             if (p == "/api/economy/import" && m == "POST") { Write(c, Economy.Post(Body(c)).ToString(), "application/json"); return true; }
