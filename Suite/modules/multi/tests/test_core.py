@@ -1318,3 +1318,26 @@ def test_alert_bridge_token_sync(tmp_path):
     d = json.loads(p.read_text("utf-8"))
     assert d == {"Enabled": False, "ComebackDays": 45, "Token": "tok2"}
     assert alerts.sync_bridge_token("", "x") is False and alerts.sync_bridge_token(str(tmp_path), "") is False
+
+
+def test_host_module_token_accepted_only_on_alert_paths(tmp_path, monkeypatch):
+    import hashlib
+    import hmac as hm
+    from fastapi.testclient import TestClient
+    import server
+    key = "k" * 40
+    (tmp_path / "module_secret").write_text(key, "utf-8")
+    host = hm.new(key.encode(), b"module:host", hashlib.sha256).hexdigest()[:40]
+    monkeypatch.setenv("PINGUINO_API_TOKEN", "multitok")
+    monkeypatch.setenv("PINGUINO_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(server.secrets_store, "delete", lambda n: None)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    assert c.post("/api/alerts/test", json={"type": "follow"}).status_code == 401
+    assert c.post("/api/alerts/test", json={"type": "follow"}, headers={"x-pinguino-token": "wrong"}).status_code == 401
+    assert c.post("/api/alerts/test", json={"type": "follow"}, headers={"authorization": "Bearer " + host}).status_code == 200
+    assert c.post("/api/alerts/test", json={"type": "follow"}, headers={"x-pinguino-token": "multitok"}).status_code == 200
+    # not a blanket pass: other write routes still refuse the Host token
+    assert c.post("/auth/disconnect", headers={"x-pinguino-token": host}).status_code == 401
+    # missing key file -> no Host token
+    monkeypatch.setenv("PINGUINO_DATA_DIR", str(tmp_path / "nope"))
+    assert c.post("/api/alerts/test", json={"type": "follow"}, headers={"x-pinguino-token": host}).status_code == 401

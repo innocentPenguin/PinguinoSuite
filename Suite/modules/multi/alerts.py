@@ -480,3 +480,24 @@ def test_event(t, user="penguin", amount=None, variants=(), **kw):
         if kw.get(k) not in (None, ""):
             ev[k] = kw[k]
     return ev
+
+
+def host_token(data_dir):
+    """The Host's module token, derived read-only from the key the Suite keeps in <data_dir>/module_secret (same formula as suite.module_token).
+    '' when the key file is missing or unreadable."""
+    import hashlib
+    import os
+    import hmac as _hmac
+    if not data_dir:
+        return ""
+    try:
+        with open(os.path.join(data_dir, "module_secret"), encoding="utf-8") as fh:
+            key = fh.read().strip()
+    except OSError:
+        return ""
+    if len(key) < 32:
+        return ""
+    return _hmac.new(key.encode(), b"module:host", hashlib.sha256).hexdigest()[:40]
+
+
+HOST_TOKEN_PATHS = ("/api/alerts/", "/api/events")

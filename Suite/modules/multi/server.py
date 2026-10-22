@@ -220,7 +220,12 @@ def token_ok(request):
     if not want:
         return True
     got = request.headers.get("x-pinguino-token") or request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-    return hmac.compare_digest(got.encode(), want.encode())
+    if hmac.compare_digest(got.encode(), want.encode()):
+        return True
+    if request.url.path.startswith(alerts_mod.HOST_TOKEN_PATHS):    # the Host (alert bridge / activity feed) has its own module token
+        ht = alerts_mod.host_token(os.environ.get("PINGUINO_DATA_DIR"))
+        return bool(ht) and hmac.compare_digest(got.encode(), ht.encode())
+    return False
 
 
 @app.middleware("http")
