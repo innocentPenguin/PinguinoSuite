@@ -202,13 +202,14 @@ namespace PinguinoHost
         {
             string t = (string)m["metadata"]["subscription_type"]; var e = m["payload"]["event"] as JObject; if (e == null) return;
             var a = new Dictionary<string, object>(); Func<string, string> U = k => (string)e[k] ?? "";
+            a["eventId"] = (string)m["metadata"]["message_id"] ?? U("id");
             string tier = U("tier") == "3000" ? "3" : U("tier") == "2000" ? "2" : "1";
             switch (t)
             {
-                case "channel.subscribe": if ((bool?)e["is_gift"] == true) return; a["eventType"] = "TwitchSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
+                case "channel.subscribe": if ((bool?)e["is_gift"] == true) { try { Economy.PointsEvent(new Dictionary<string, object> { { "eventType", "TwitchGiftRecipient" }, { "userName", U("user_login") }, { "eventId", (string)a["eventId"] }, { "tier", tier } }); } catch (Exception) { } return; } a["eventType"] = "TwitchSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
                 case "channel.subscription.message": a["eventType"] = "TwitchReSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
                 case "channel.subscription.gift": a["eventType"] = "TwitchGiftBomb"; a["userName"] = (bool?)e["is_anonymous"] == true ? "Anonymous" : U("user_login"); a["tier"] = tier; a["total"] = (int?)e["total"] ?? 1; a["cumulative"] = (int?)e["cumulative_total"] ?? 0; a["anonymous"] = ((bool?)e["is_anonymous"] ?? false).ToString().ToLowerInvariant(); break;
-                case "channel.cheer": a["eventType"] = "TwitchCheer"; a["userName"] = U("user_login"); a["bits"] = (int?)e["bits"] ?? 0; break;
+                case "channel.cheer": a["eventType"] = "TwitchCheer"; a["userName"] = U("user_login"); a["bits"] = (int?)e["bits"] ?? 0; a["bitsType"] = U("type"); break;
                 case "channel.raid":
                     if (U("from_broadcaster_user_id") == _bid && _bid != "") { a["eventType"] = "TwitchRaidOut"; a["userName"] = U("to_broadcaster_user_login"); a["target"] = U("to_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }
                     else { a["eventType"] = "TwitchRaid"; a["userName"] = U("from_broadcaster_user_login"); a["viewers"] = (int?)e["viewers"] ?? 0; }

@@ -278,6 +278,7 @@ namespace PinguinoHost
                 if (line.StartsWith("@") && line.Contains(" USERNOTICE #")) { Streaks.OnUserNotice(line); continue; }   // sim: a raw IRC USERNOTICE line
                 if (line.StartsWith("eventsub ")) { var q = line.Split(new[] { ' ' }, 3); try { EventSub.Simulate(q[1], q[2], x => DispatchEvent(x)); } catch (Exception ex) { Console.WriteLine("ERROR eventsub: " + ex.Message); } continue; }
                 if (line.StartsWith("timeoutredeem ")) { var q = line.Split(new[] { ' ' }, 3); DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRedeem" }, { "userName", q[1] }, { "title", "Timeout" }, { "input", q.Length > 2 ? q[2] : "" }, { "redemptionId", "red-t" }, { "rewardId", "rw-t" } }); continue; }   // sim: timeoutredeem alice marsh
+                if (line == "pointstest") { try { PointsTest.Run(); } catch (Exception ex) { Console.WriteLine("[pointstest] error " + ex); } continue; }
                 if (line == "ranktest") { try { RankTest.Run(); } catch (Exception ex) { Console.WriteLine("[ranktest] error " + ex); } continue; }
                 if (line.StartsWith("emojitest ")) { Console.WriteLine("[emojitest] " + string.Join(" ", WheelEmoji.Interests(line.Substring(10).Trim().ToLowerInvariant()))); continue; }
                 if (line.StartsWith("simsay ")) { try { Console.WriteLine("[simsay] " + SimSay.Say(JObject.Parse(line.Substring(7))).ToString(Newtonsoft.Json.Formatting.None)); } catch (Exception ex) { Console.WriteLine("[simsay] error " + ex.Message); } continue; }

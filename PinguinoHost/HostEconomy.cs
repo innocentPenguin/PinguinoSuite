@@ -35,14 +35,30 @@ namespace PinguinoHost
         public static string CurrencyName { get { lock (L) { string n = (string)Settings()["CurrencyName"] ?? "points"; return n == "pengs" ? "points" : n; } } }   // "pengs" was the old name: always points now
 
         // ---- settings + store ----
+        static DateTime _setChk = DateTime.MinValue, _setStamp = DateTime.MinValue;
         static JObject Settings()
         {
-            if (_set != null) return _set;
+            if (_set != null)
+            {
+                if ((DateTime.UtcNow - _setChk).TotalSeconds < 2) return _set;   // hot reload: look at the file's stamp every 2 s
+                _setChk = DateTime.UtcNow; try { if (File.GetLastWriteTimeUtc(SetP) == _setStamp) return _set; } catch (Exception) { return _set; }
+                _set = null;
+            }
             var d = new JObject { { "CurrencyName", "points" }, { "PointsPerMinute", 1.0 }, { "SubMultiplier", 2.0 }, { "VipMultiplier", 1.5 }, { "ModMultiplier", 1.0 }, { "OnlyWhileLive", true }, { "Earning", true },
                 { "WelcomeBonus", 100 }, { "FallbackActiveMinutes", 30 }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
-            Phase2Defaults(d);
-            try { if (File.Exists(SetP)) foreach (var p in JObject.Parse(File.ReadAllText(SetP, Encoding.UTF8))) d[p.Key] = p.Value; else File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
-            _set = d; return d;
+            Phase2Defaults(d); PointsDefaults(d);
+            try
+            {
+                if (File.Exists(SetP))
+                {
+                    var fj = JObject.Parse(File.ReadAllText(SetP, Encoding.UTF8)); foreach (var p in fj) d[p.Key] = p.Value;
+                    if (PointsKeys.Any(k => fj[k] == null)) File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false));   // new knobs show up in the file, ready to edit
+                }
+                else File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false));
+                _setStamp = File.GetLastWriteTimeUtc(SetP);
+            }
+            catch (Exception) { }
+            _setChk = DateTime.UtcNow; _set = d; return d;
         }
         static JObject Doc()
         {
@@ -234,7 +250,7 @@ namespace PinguinoHost
             var ex = new HashSet<string>(((JArray)set["Exclude"]).Select(x => Norm((string)x))); if (streamer != "") ex.Add(streamer);
             var al = Boards.AliasMap();
             double rate = D(set["PointsPerMinute"]), subM = D(set["SubMultiplier"]), vipM = D(set["VipMultiplier"]), modM = D(set["ModMultiplier"]);
-            var paid = new Dictionary<string, double>();
+            var paid = new Dictionary<string, double>(); bool v2 = WatchV2 && IsLive();
             foreach (var l in people)
             {
                 if (ex.Contains(l) || Boards.IsBot(l)) continue;
@@ -242,7 +258,7 @@ namespace PinguinoHost
                 double mult = 1;
                 var su = SubsImport.UserInfo(c); if (su != null && (int?)su["tier"] > 0 && (bool?)su["lapsed"] != true) mult = Math.Max(mult, subM);
                 var role = ProfileRole(c); if (role == "vip") mult = Math.Max(mult, vipM); else if (role == "mod") mult = Math.Max(mult, modM);
-                double p; paid.TryGetValue(c, out p); paid[c] = Math.Max(p, rate * mult * minutes);
+                double p; paid.TryGetValue(c, out p); paid[c] = Math.Max(p, v2 ? 0 : rate * mult * minutes);   // v2: points come per full interval (WatchStep), not per minute
             }
             if ((bool?)set["ActivityBonus"] != false)
             {
@@ -256,6 +272,7 @@ namespace PinguinoHost
                     double p; paid.TryGetValue(c, out p); paid[c] = p + give;
                 }
             }
+            if (v2) { try { string sid = CurSid(); if (sid == "off") { StartStream(); sid = CurSid(); } WatchStep(DateTimeOffset.UtcNow.ToUnixTimeSeconds(), paid.Keys.ToList(), sid); } catch (Exception wx) { Clog.Warn("economy", "watch step failed: " + wx.Message); } }
             string month = DateTime.UtcNow.ToString("yyyy-MM"); bool announce = false;
             lock (L)
             {

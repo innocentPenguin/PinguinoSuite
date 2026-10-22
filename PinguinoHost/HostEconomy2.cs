@@ -95,6 +95,7 @@ namespace PinguinoHost
         {
             string sid = "s" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             lock (L) { var s = StreamDoc(); s["id"] = sid; s["open"] = true; s["startedAt"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); s["endedAt"] = null; s["reminded"] = new JArray(); Save(); }
+            StreamOpened(sid, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             Clog.Info("economy", "stream started: " + sid); Back("stream " + sid + " started", new JObject { { "stream", sid } });
             try { RefreshHolders(); } catch (Exception) { }
         }
@@ -104,6 +105,7 @@ namespace PinguinoHost
             string sid; lock (L) sid = (string)StreamDoc()["id"] ?? "";
             try { Depreciate(sid); } catch (Exception ex) { Clog.Warn("economy", "depreciation failed: " + ex.Message); Back("depreciation failed: " + ex.Message, null, "error"); }
             try { LoanInterest(sid); } catch (Exception ex) { Clog.Warn("economy", "loan interest failed: " + ex.Message); }
+            StreamClosed(sid);
             lock (L) { var s = StreamDoc(); s["open"] = false; s["endedAt"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Save(); }
             lock (_holders) _holders.Clear();
             Clog.Info("economy", "stream ended: " + sid); Back("stream " + sid + " ended", new JObject { { "stream", sid } });
@@ -361,7 +363,7 @@ namespace PinguinoHost
         static readonly Dictionary<string, string> Labels = new Dictionary<string, string> {
             { "watching", "Watching the stream" }, { "imported", "Imported balance" }, { "customs_play", "Playing customs" }, { "customs_win", "Winning customs" }, { "comp_play", "Playing competitive" }, { "comp_win", "Winning competitive" },
             { "cas_play", "Playing casual" }, { "cas_win", "Winning casual" }, { "welcome", "Welcome bonus" }, { "gamble", "Gambling" }, { "slots", "Slots" }, { "duel", "Duels" }, { "gifts", "Gifts between viewers" }, { "shop", "Shop" },
-            { "loan", "Loans taken" }, { "loan_repay", "Loan repayments" }, { "depreciation", "Depreciation" }, { "grant", "Given by the streamer" }, { "other", "Other" } };
+            { "loan", "Loans taken" }, { "loan_repay", "Loan repayments" }, { "depreciation", "Depreciation" }, { "grant", "Given by the streamer" }, { "other", "Other" }, { "cheer", "Cheers" }, { "sub", "Subs" }, { "gift", "Gift subs" }, { "tip", "Tips" }, { "follow", "Follow" }, { "raid_in", "Raid arrivals" }, { "raid_out", "Raids led" } };
         static string Label(string s) { string l; return Labels.TryGetValue(s, out l) ? l : s; }
 
         /// <summary>everything the Points page needs for one person: GET /api/economy/me?login=</summary>
@@ -421,7 +423,7 @@ namespace PinguinoHost
                 { "loans", LoanView(c, set, minutes) },
                 { "earnings", new JArray(groups.Values.OrderByDescending(g => (double)g["earned"] + (double)g["spent"])) },
                 { "ledger", new JArray(Enumerable.Reverse(rows).Take(Math.Max(1, Math.Min(500, ledgerLimit))).Select(x => { var y = (JObject)x.DeepClone(); y["label"] = Label((string)y["source"]); return y; })) },
-                { "players", cx.Of }, { "earned", PageEarned(groups, rows) } };
+                { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) } };
             var dp = (JObject)res["depreciation"]; dp["ratePct"] = dp["pct"]; dp["nextAmount"] = dp["amount"]; dp["nextAt"] = null; dp["nextAtKind"] = open ? "end_of_stream" : "next_stream_start";
             return res;
         }
@@ -433,7 +435,7 @@ namespace PinguinoHost
         public static JObject PublicSettings()
         {
             JObject s; lock (L) s = Settings(); var o = new JObject();
-            foreach (var k in new[] { "CurrencyName", "ActivityAwards", "CustomsPlay", "CustomsWin", "CompPlay", "CompWin", "CasPlay", "CasWin", "DepreciationOn", "DepreciationDryRun", "DepreciationPct", "DepreciationThreshold", "DepreciationBasis", "LoansOn", "LoanPerHour", "LoanCap", "LoanMinWatchHours", "LoanInterestPct", "LoanDefaultStreams" }) o[k] = s[k];
+            foreach (var k in new[] { "CurrencyName", "ActivityAwards", "CustomsPlay", "CustomsWin", "CompPlay", "CompWin", "CasPlay", "CasWin", "DepreciationOn", "DepreciationDryRun", "DepreciationPct", "DepreciationThreshold", "DepreciationBasis", "LoansOn", "LoanPerHour", "LoanCap", "LoanMinWatchHours", "LoanInterestPct", "LoanDefaultStreams" }.Concat(PointsKeys)) o[k] = s[k];
             return o;
         }
 
@@ -445,6 +447,9 @@ namespace PinguinoHost
             {
                 if ((path == "/api/economy/me" || path == "/api/points") && method == "GET") return Me2(login);
                 if (path == "/api/points/loan" && method == "POST") { var q = new JObject { { "action", body["action"] }, { "login", body["login"] ?? login }, { "amount", body["amount"] }, { "id", body["id"] } }; return Phase2Api("/api/economy/loan", "POST", login, q); }
+                if (path == "/api/economy/preview") return Preview(body);
+                if (path == "/api/economy/event" && method == "POST") return EventApi(body);
+                if (path == "/api/economy/streams" && method == "GET") return new JObject { { "ok", true }, { "login", Canon(Boards.AliasMap(), login) }, { "streams", StreamsView(login) } };
                 if (path == "/api/economy/depreciation" && method == "GET") return DepreciationPreview();
                 if (path == "/api/economy/loan" && method == "POST")
                 {

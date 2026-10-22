@@ -40,7 +40,7 @@ os.makedirs(os.path.join(d, 'subs')); json.dump({'version': 1, 'users': {'ana': 
 def start(extra=None):
     env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
     env.update({'PINGUINO_HELIX_BASE': 'http://127.0.0.1:%d' % HX, 'PINGUINO_SE_BASE': 'http://127.0.0.1:%d/kappa/v2' % SE, 'PINGUINO_SE_JWT': JWT, 'PINGUINO_SE_DELAY_MS': '0', 'PINGUINO_COMPAT_WS_PORT': '8964',
-                'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0', 'PINGUINO_SUBS_DOWNLOADS': '', 'PINGUINO_ECONOMY_LIVE': '0', 'PINGUINO_ECONOMY_MINUTE_SEC': '1'})
+                'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0', 'PINGUINO_SUBS_DOWNLOADS': '', 'PINGUINO_ECONOMY_LIVE': '0', 'PINGUINO_ECONOMY_MINUTE_SEC': '1', 'PINGUINO_ECONOMY_V2': '0'})
     if extra: env.update(extra)
     h = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(outf, 'ab'), stderr=subprocess.STDOUT)
     for _ in range(80):

@@ -72,7 +72,7 @@ namespace PinguinoHost
             }
             if (kind == "cheer") Credits.Add("bits", who, amount); else if (kind == "redeem") Credits.Add("points", who, amount);
             var e = new JObject { { "ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "kind", kind }, { "type", kind }, { "user", who }, { "what", what }, { "detail", what } };
-            if (kind == "follow") e["refollow"] = RefollowCheck(who);
+            if (kind == "follow") { e["refollow"] = RefollowCheck(who); LastRefollow = (bool)e["refollow"]; }
             if (kind == "gift") { int cum; if (int.TryParse(g("cumulative"), out cum) && cum > 0) e["cumulative"] = cum; if (g("anonymous") == "true") e["anonymous"] = true; }
             if (kind == "raid_out") e["target"] = g("target");
             if (kind == "poll" || kind == "prediction" || kind == "hype")
@@ -94,6 +94,7 @@ namespace PinguinoHost
             catch (Exception ex) { Clog.Warn("latest", "could not update the OBS text source: " + ex.Message); }
         }
         // refollow: this login followed before (our own follow log, or the profile has a followingSince date). Persisted in followed.json next to the activity file.
+        public static bool LastRefollow;
         static bool RefollowCheck(string login)
         {
             login = (login ?? "").ToLowerInvariant(); if (login == "") return false;
