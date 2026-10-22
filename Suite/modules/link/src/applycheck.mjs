@@ -30,9 +30,10 @@ async function run(r, mode, procName = 'NoSuchLiteApp.exe') {
   await lite.start();
   fs.writeFileSync(path.join(r.dir, 'requests', '1-selfupdate-apply.json'), JSON.stringify({ schema: 1, action: 'selfupdate-apply', id: null }));
   await lite.poll();
-  const done = await until(() => fs.existsSync(path.join(r.dir, 'lite_apply_result.json')));
+  const rf = () => ['lite_apply_result.json', 'lite_apply_result.seen.json'].find(n => fs.existsSync(path.join(r.dir, n)));   // Link renames it to .seen when the helper ends
+  const done = await until(() => rf());
   lite.stop();
-  return done ? rd(r.dir, 'lite_apply_result.json') : null;
+  return done ? rd(r.dir, rf()) : null;
 }
 try {
   // 1. happy path
