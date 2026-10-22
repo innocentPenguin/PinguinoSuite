@@ -21,7 +21,7 @@ function obsDraw() {
   const chk = (key, lab) => `<label class="cf"><input type="checkbox" data-ob="${key}" data-b="1" ${S[key] ? 'checked' : ''}> ${lab}</label>`;
   const nobg = `<label class="cf"><input type="checkbox" data-obnobg="1" ${S.background_color ? '' : 'checked'}> No background box</label>`;
   const head = `<div class="act"><a href="/?type=obs&widget=chat"><button class="${k === 'chat' ? 'p' : ''}" type="button">Chat widget</button></a> <a href="/?type=obs&widget=activity"><button class="${k === 'activity' ? 'p' : ''}" type="button">Activity widget</button></a> <a href="/?type=obs&widget=follow"><button class="${k === 'follow' ? 'p' : ''}" type="button">Follow alert</button></a>
-      <a href="/?type=dash"><button type="button">Back to dashboard</button></a> <span id="ob-state" class="mut"></span></div>
+      <a href="/?type=alerts"><button type="button">Alerts (central)</button></a> <a href="/?type=dash"><button type="button">Back to dashboard</button></a> <span id="ob-state" class="mut"></span></div>
     <div class="box"><b>Widget URL</b> <input id="ob-url" readonly value="${esc(obsUrl())}" style="width:100%" onclick="this.select()">
       <div class="act"><button data-ob-act="copy">Copy address</button> <a href="${esc(obsUrl())}" target="_blank" rel="noopener"><button type="button">Open</button></a>
       <button data-ob-act="export">Export</button> <button data-ob-act="import-file">Import</button><input id="ob-file" type="file" accept=".json,application/json" hidden></div>

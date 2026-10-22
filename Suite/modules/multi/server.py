@@ -306,6 +306,22 @@ async def alerts_test(request: Request):
     return {"ok": ok, "queued": ok, "text": f"test {t} {why}" if ok else f"test {t} not shown: {why}", "id": ev["id"]}
 
 
+@app.post("/api/alerts/fire")
+async def alerts_fire(request: Request):
+    """A REAL alert straight into the queue without a chat row (Host: intro clips, goal reached, anything not in the activity feed).
+    Body: {type,user,id?,amount?,tier?,months?,message?,level?,rank_colour?,avatar?,first_time?}. Test/sim flagged items are refused here."""
+    b = await request.json()
+    t = str(b.get("type") or "")
+    if t not in alerts_mod.TYPES:
+        raise HTTPException(400, "unknown alert type")
+    if b.get("test") or b.get("sim"):
+        raise HTTPException(400, "test events go through /api/alerts/test")
+    ev = {k: b[k] for k in ("id", "user", "display", "amount", "tier", "months", "message", "level", "rank_colour", "avatar", "first_time", "recipient", "refollow") if k in b}
+    ev["type"] = t
+    ok, why = alert_engine.submit(ev)
+    return {"ok": ok, "queued": ok, "text": why}
+
+
 @app.post("/api/alerts/testall")
 async def alerts_testall():
     ids = [alert_engine.submit(alerts_mod.test_event(t, "penguin", source="ui"))[0] for t in alerts_mod.TYPES]
