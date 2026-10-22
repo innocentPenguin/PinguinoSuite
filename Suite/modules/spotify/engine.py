@@ -61,6 +61,7 @@ class Engine:
         self.rejects = list(st.get("rejects", []))   # songs withdrawn before playing: !oops (wrong song), blocked, denied
         self.suspended = {k: float(v) for k, v in (st.get("suspended") or {}).items()}   # viewer -> epoch when the suspension ends
         self._pre_mute = 0
+        self.board = st.get("board") or {"requesters": {}, "songs": {}}   # all-time counters for the song pages: who requested most, most played/skipped songs
         self._skip_mark = None                         # {uri, by, at}: set by skip(), read when the track changes
         self._prev_pb = None
         self.inbox = st.get("inbox", [])
@@ -167,7 +168,7 @@ class Engine:
         self._write_queue_file()
         with self.lock:
             store.save("state.json", {"items": self.queue.items, "history": self.queue.history[:200],
-                                      "inbox": self.inbox[-100:], "log": self.log[-LOG_MAX:], "rejects": self.rejects[-100:], "suspended": self.suspended})
+                                      "inbox": self.inbox[-100:], "log": self.log[-LOG_MAX:], "rejects": self.rejects[-100:], "suspended": self.suspended, "board": self.board})
 
     def _bump(self):
         self.version += 1
@@ -258,6 +259,25 @@ class Engine:
         with self.lock:
             return {"seq": self._ref_seq, "refunds": [r for r in self.refunds if r["seq"] > since and self.clock() - r["ts"] < 3600]}
 
+    def _board_add(self, t, outcome, requester):
+        b = self.board
+        row = b["songs"].setdefault(t["id"] or t["uri"], {"title": t["name"], "artists": t["artists"][:3], "plays": 0, "skips": 0})
+        row["plays" if outcome == "played" else "skips"] += 1
+        if requester:
+            b["requesters"][requester] = b["requesters"].get(requester, 0) + 1
+        if len(b["songs"]) > 3000:                      # keep the file small: drop the least interesting songs
+            for k in sorted(b["songs"], key=lambda k: b["songs"][k]["plays"] + b["songs"][k]["skips"])[:500]:
+                del b["songs"][k]
+
+    def leaderboard(self, limit=10):
+        """Public, names only: for the song pages (not the site's main boards)."""
+        limit = max(1, min(int(limit), 50))
+        with self.lock:
+            songs = list(self.board["songs"].values())
+            top = lambda key, flt: [{"title": r["title"], "artists": r["artists"], "count": r[key]} for r in sorted(songs, key=lambda r: -r[key])[:limit] if flt(r)]
+            return {"v": 1, "requesters": [{"name": n, "count": c} for n, c in sorted(self.board["requesters"].items(), key=lambda x: -x[1])[:limit]],
+                    "most_played": top("plays", lambda r: r["plays"] > 0), "most_skipped": top("skips", lambda r: r["skips"] > 0)}
+
     def _reject(self, track, user, reason):
         self.rejects.append({"uri": track.get("uri", ""), "name": track.get("name", ""), "artists": track.get("artists", []), "user": user,
                              "reason": reason, "at": self.clock()})
@@ -271,6 +291,7 @@ class Engine:
             outcome, by = self._outcome(prev_track)
             if outcome == "skipped":
                 self.refund_item(self.now_item, prev_track, "skipped")
+            self._board_add(prev_track, outcome, self.now_item["requester"] if self.now_item else "")
             self.queue.add_history({"outcome": outcome, "skipped_by": by, "uri": prev_track["uri"], "id": prev_track["id"], "name": prev_track["name"], "artists": prev_track["artists"],
                                     "album": prev_track["album"], "duration_ms": prev_track["duration_ms"], "explicit": prev_track["explicit"],
                                     "art": prev_track["art"], "requester": self.now_item["requester"] if self.now_item else "",

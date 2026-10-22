@@ -253,6 +253,19 @@ class SongifyTests(unittest.TestCase):
         self.assertFalse(self.e.chat("mod", "!srremove nobody", mod)["ok"])
         self.assertFalse(self.e.chat("viewer1", "!srremove 1", ("viewer",))["ok"], "viewers cannot")
 
+    def test_leaderboard(self):
+        self.sr("ann", 3)
+        self.play(3)
+        self.play(3, progress=199000)
+        self.play(9)
+        self.e.skip(force=True, by="mod")
+        self.play(10)
+        lb = self.e.leaderboard()
+        self.assertEqual(lb["requesters"][0], {"name": "ann", "count": 1})
+        self.assertTrue(lb["most_played"] and lb["most_played"][0]["count"] >= 1)
+        self.assertTrue(lb["most_skipped"])
+        self.assertNotIn("token", str(lb).lower())
+
     def test_pos_next_and_like(self):
         self.sr("ann", 3)
         self.sr("bob", 2)
