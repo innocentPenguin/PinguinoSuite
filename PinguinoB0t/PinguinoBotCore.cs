@@ -2030,6 +2030,10 @@ public class CPHInline
             case "!check":    return HandleCheck(userLower, isPrivileged);                 // [NEW][CHECK] self-test; problems go to the website log in red
             case "!finish":   return HandleFinish(userLower, input, isPrivileged);       // [NEW][KOTH] Orange / Blue wins, then everyone out (or winners stay)
             case "!koth":     return HandleKoth(userLower, input, isPrivileged);
+            case "!wheeladd":    return HandleBulk("wheeladd", userLower, input, isPrivileged);      // [NEW][BULK] Master View
+            case "!wheelremove": return HandleBulk("wheelremove", userLower, input, isPrivileged);
+            case "!wheelcancel": return HandleBulk("wheelcancel", userLower, input, isPrivileged);
+            case "!queueadd":    return HandleBulk("queueadd", userLower, input, isPrivileged);
             case "!autonext": return HandleAutoNext(userLower, input, isPrivileged);   // [NEW][AUTONEXT]
             case "!strike":   return HandleStrike(userLower, input, isPrivileged, 1);    // [NEW][STRIKES]
             case "!unstrike": return HandleStrike(userLower, input, isPrivileged, -1);
@@ -4047,6 +4051,66 @@ public class CPHInline
             AutoNextAfterResult(true);   // [NEW][AUTONEXT]
         }
         PublishState("match_finished", team);
+        return true;
+    }
+
+    // [NEW][BULK] Master View bulk actions (mods only, silent per person). The result goes to bulk_result.json for the Host route.
+    //   !wheeladd a b c | !wheelremove a b c | !wheelcancel | !queueadd a b c
+    bool HandleBulk(string kind, string user, string input, bool isPrivileged)
+    {
+        if (!isPrivileged) return true;
+        var names = (input ?? "").Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim().TrimStart('@').ToLower()).Where(x => x.Length > 0 && x.Length <= 40).Distinct().Take(200).ToList();
+        var added = new List<string>(); var skipped = new List<object>(); var removed = new List<string>();
+        Action<string, string> skip = (n, r) => skipped.Add(new { login = n, reason = r });
+        string line = null;
+        if (kind == "wheeladd")
+        {
+            if (_wheel == null || _wheel.Status == "closed") { foreach (var n in names) skip(n, "wheel is closed"); }
+            else foreach (var n in names)
+            {
+                if (_wheel.Entrants.Any(e => e.Login == n || e.Id == n)) { skip(n, "already on the wheel"); continue; }
+                if (WheelStruck(n)) { skip(n, "strike limit"); continue; }
+                if (_wheel.Entrants.Count >= 500) { skip(n, "wheel is full"); continue; }
+                var en = new WheelEntrant { Id = n, Login = n, Name = n };
+                Player p;
+                if (_players.TryGetValue(n, out p)) { en.Epic = p.GameId ?? ""; if (p.PeakMmr.HasValue) en.Mmr = p.PeakMmr.Value; }
+                en.Flagged = !en.Mmr.HasValue;
+                _wheel.Entrants.Add(en); WheelNote(_wheel, en.Name, "join"); added.Add(n);
+            }
+            if (added.Count > 0) { WheelSave(); line = added.Count + " player" + (added.Count == 1 ? "" : "s") + " added to the wheel: " + string.Join(", ", added) + "."; }
+        }
+        else if (kind == "wheelremove")
+        {
+            if (_wheel != null) foreach (var n in names)
+            {
+                var e = _wheel.Entrants.FirstOrDefault(x => x.Login == n);
+                if (e == null) continue;
+                WheelRemoveEntrant(_wheel, e); removed.Add(n);
+            }
+            if (removed.Count > 0) line = removed.Count + " player" + (removed.Count == 1 ? "" : "s") + " taken off the wheel: " + string.Join(", ", removed) + ".";
+        }
+        else if (kind == "wheelcancel")
+        {
+            var w = _wheel;
+            if (w == null) { SaveJson("bulk_result.json", new { ok = false, error = "no wheel" }); return true; }
+            w.Picks.Clear(); w.Teams.Clear(); w.Waitlist.Clear(); w.Msgs.Clear(); w.Draw = null; w.Final = false; w.AnnState = "idle"; w.HoldUntil = 0;
+            foreach (var e in w.Entrants) { e.Placed = false; e.Wait = false; }
+            w.Status = "open";
+            WheelSave();
+            line = "The draw was cancelled. Sign-ups are open again: type !me.";
+        }
+        else if (kind == "queueadd")
+        {
+            foreach (var n in names)
+            {
+                if (GetEntry(n) != null) { skip(n, "already queued or in a match"); continue; }
+                if (!IsStreamer(n) && _players.ContainsKey(n) && StrikeTotal(_players[n]) >= MaxStrikes) { skip(n, "strike limit"); continue; }
+                if (AddToQueue(n)) added.Add(n); else skip(n, "already queued");
+            }
+            if (added.Count > 0) PublishState("queue_update", string.Join(",", added) + " added");
+        }
+        SaveJson("bulk_result.json", new { ok = true, kind = kind, added = added, removed = removed, skipped = skipped, at = Now() });
+        if (line != null) Say(line);
         return true;
     }
 

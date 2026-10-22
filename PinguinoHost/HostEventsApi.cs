@@ -24,6 +24,8 @@ namespace PinguinoHost
             if (p == "/api/customs/state" && m == "GET") { Write(c, CustomsView.State().ToString(), "application/json"); return true; }
             if (p == "/api/customs/mod" && m == "POST") { Write(c, CustomsView.Mod(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/customs/sim-say" && m == "POST") { Write(c, SimSay.Say(Body(c)).ToString(), "application/json"); return true; }
+            if (m == "POST" && (p == "/api/wheel/queue-add" || p == "/api/wheel/remove" || p == "/api/wheel/cancel" || p == "/api/customs/queue-add"))
+            { string kind = p == "/api/wheel/queue-add" ? "wheeladd" : p == "/api/wheel/remove" ? "wheelremove" : p == "/api/wheel/cancel" ? "wheelcancel" : "queueadd"; Write(c, Bulk.Run(kind, Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/wheel/state" && m == "GET") { Write(c, Events.WheelState().ToString(), "application/json"); return true; }
             return false;
         }

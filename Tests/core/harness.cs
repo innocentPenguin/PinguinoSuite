@@ -850,6 +850,32 @@ public static class Harness
             Check(State()["strikes"] != null && State()["strikeLimit"] != null, "state has strikes + strikeLimit");
             Run("mod1", "!queue", "clear", true);
         }
+        // ===== [NEW][BULK] Master View bulk actions =====
+        {
+            Func<JObject> BR = () => JObject.Parse(File.ReadAllText(Path.Combine(dir, "bulk_result.json")));
+            Run("mod1", "!wheel", "end", true); Run("mod1", "!wheeladd", "p2 p4", true);
+            Check(BR()["skipped"].Count() == 2, "bulk: wheeladd with no wheel skips everyone");
+            Run("mod1", "!wheel", "new", true);
+            CPHProxy.Sent.Clear(); Run("mod1", "!wheeladd", "p2 p4 p5 p2 p1", true);
+            Check(BR()["added"].Count() == 4 && BR()["skipped"].Count() == 0 && WS()["Entrants"].Count() == 4, "bulk: wheeladd adds 4 (duplicates in the list count once): " + BR());
+            Check(CPHProxy.Sent.Count == 1, "bulk: wheeladd says at most one line: " + string.Join(" | ", CPHProxy.Sent));
+            Run("mod1", "!wheeladd", "p2", true);
+            Check(BR()["added"].Count() == 0 && (string)BR()["skipped"][0]["reason"] == "already on the wheel", "bulk: already on the wheel is skipped");
+            Run("p6", "!wheeladd", "p6 p7");
+            Check(WS()["Entrants"].Count() == 4, "bulk: viewers cannot use it");
+            CPHProxy.Sent.Clear(); Run("mod1", "!wheelremove", "p2 p5 nobody", true);
+            Check(BR()["removed"].Count() == 2 && WS()["Entrants"].Count() == 2 && CPHProxy.Sent.Count == 1, "bulk: wheelremove removes 2 with one line");
+            Run("mod1", "!wheeladd", "p2 p5", true); Run("mod1", "!wheel", "size 1", true);
+            Run("mod1", "!wheelcancel", "", true);
+            Check((string)WS()["Status"] == "open" && WS()["Entrants"].Count() == 4 && WS()["Picks"].Count() == 0, "bulk: wheelcancel keeps entrants, status open");
+            Run("mod1", "!wheel", "end", true);
+            Run("mod1", "!queue", "clear", true); Run("mod1", "!queue", "open", true); Run("mod1", "!streamer", "out", true);
+            Run("p6", "!join"); CPHProxy.Sent.Clear();
+            Run("mod1", "!queueadd", "p7 p6 p8 p1", true);
+            Check(BR()["added"].Count() == 3 && BR()["skipped"].Count() == 1 && CPHProxy.Sent.Count == 0, "bulk: queueadd appends silently, skips the queued one: " + BR());
+            Check(Q().SequenceEqual(new[] { "p6", "p7", "p8", "p1" }), "bulk: queueadd keeps the given order: " + string.Join(",", Q()));
+            Run("mod1", "!queue", "clear", true);
+        }
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
         try { Directory.Delete(dir, true); } catch { }
         return failed == 0 ? 0 : 1;
