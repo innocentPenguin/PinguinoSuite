@@ -130,13 +130,13 @@ window.dashAdd = m => {
   if (m.event === 'gift') dGifts();
   const ca = $('#d-l-chat-a'), cb = $('#d-l-chat-b');
   if (ca && cb) {
-    const k = DASH.split.kind, add = (el, ok) => { if (!ok) return; const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; el.insertAdjacentHTML('beforeend', dRowChat(m)); while (el.children.length > 250) el.children[0].remove(); if (end) el.scrollTop = el.scrollHeight; };
+    const k = DASH.split.kind, add = (el, ok) => { if (!ok) return; const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; el.insertAdjacentHTML('beforeend', dRowChat(m)); while (el.children.length > 250) el.children[0].remove(); if (end && window.AUTO !== false) el.scrollTop = el.scrollHeight; };
     if (k === 'flow') { cb.insertAdjacentHTML('beforeend', dRowChat(m)); dFlow(); }
     else if (k === 'events') add(m.event ? cb : ca, true);
     else { add(ca, DASH.split.a === 'all' || m.platform === DASH.split.a); add(cb, DASH.split.b === 'all' || m.platform === DASH.split.b); }
   }
   const c = $('#d-l-chat'), a = $('#d-l-activity');
-  if (c) { const end = c.scrollTop + c.clientHeight >= c.scrollHeight - 40; c.insertAdjacentHTML('beforeend', dRowChat(m)); while (c.children.length > 300) c.children[1].remove(); if (end) c.scrollTop = c.scrollHeight; }
+  if (c) { const end = c.scrollTop + c.clientHeight >= c.scrollHeight - 40; c.insertAdjacentHTML('beforeend', dRowChat(m)); while (c.children.length > 300) c.children[1].remove(); if (end && window.AUTO !== false) c.scrollTop = c.scrollHeight; }
   if (a && m.event) { if (DASH.paused) { DASH.queue.push(m); dFill(); } else { const e = a.querySelector('.empty'); if (e) e.remove(); a.insertAdjacentHTML('afterbegin', dRowActivity(m)); } }
 };
 window.dashConn = () => { if (W.type === 'dash') { dTabs(); const s = $('#d-plat'); if (s) { const v = s.value; dPanels(); dFill(); } } };

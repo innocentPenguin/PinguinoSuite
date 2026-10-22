@@ -99,6 +99,7 @@ body.side-open #sidebtn{display:none}
 <script src="/assets/side.js"></script>
 <script src="/assets/obs_ui.js"></script>
 <script src="/assets/dash.js"></script>
+<script src="/assets/chatux.js"></script>
 <script>
 const q = new URLSearchParams(location.search), WID = q.get('win');
 const HALF = q.get('half'), PID = q.get('pane'), POPLABEL = q.get('pop');
@@ -160,6 +161,7 @@ function on(ev) {
   else if (ev.type === 'conn.status') { conns = conns.filter(c => c.platform !== ev.platform).concat(ev); renderHeader(); if (window.dashConn) window.dashConn(); if (W.type === 'status') renderStatus(); if (W.type === 'chat') { chatBar(); chatCompose(); } }
   else if (ev.type === 'message') {
     msgs.push(ev.message); if (msgs.length > 500) msgs.shift(); addMsg(ev.message);
+    if (ev.message.event === 'follow' && window.cardFollow && ['chat', 'dash'].includes(W.type)) window.cardFollow(ev.message);
     if (W.type === 'popout' && window.popAdd) window.popAdd(ev.message);
     if (W.type === 'dash' && window.dashAdd) window.dashAdd(ev.message);
   } else if (ev.type === 'pins.changed') { PINS = ev.pins || []; if (W.type === 'chat') { chatPins(); chatFeed(); } }
@@ -198,7 +200,7 @@ function addMsg(m) {
   const atEnd = f.scrollTop + f.clientHeight >= f.scrollHeight - 30;
   f.insertAdjacentHTML('beforeend', msgHtml(m));
   while (f.children.length > 500) f.firstChild.remove();
-  if (W.scroll !== 'manual' && atEnd) f.scrollTop = f.scrollHeight;
+  if (W.scroll !== 'manual' && window.AUTO !== false && atEnd) f.scrollTop = f.scrollHeight;
 }
 function renderHeader() {
   const dots = conns.map(c => `<span title="${esc(c.label)}: ${esc(c.status)} ${esc(c.detail || '')}${c.official ? '' : ' (UNOFFICIAL)'}"><span class="dot ${c.status}"></span> ${esc(c.label)}${c.capabilities && !c.capabilities.send ? ' (read-only)' : ''}</span>`).join(' ');

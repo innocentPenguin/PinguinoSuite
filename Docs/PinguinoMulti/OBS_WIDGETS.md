@@ -63,3 +63,8 @@ One alert at a time (queued), Synchra-style options: size, canvas scale, font, c
 
 ## Watch streak celebrations
 - Host item `{"type":"streak","user":"...","amount":<count>}` (02 to emit; `count` also accepted). Shows as a "Streak" row in the activity feed and dashboard, and as a celebration in the follow alert widget (/obs/follow): text "{user} is on a {amount}-stream watch streak!", its own sound slot (built-in chime or a file address), enable + volume + text in the editor, "Test streak" button. Test event: POST /api/events {"type":"streak","user":"x","amount":10}.
+
+## Chat comfort (chatux.js)
+- **AUTO pill** (bottom-right of every chat feed, classic + dashboard): orange = autoscroll on, dim = paused. Click it or press **Alt+S** (works while typing). Right-click the pill to pick a different hotkey. Scrolling up by hand still pauses; scrolling back to the bottom resumes. State is remembered per browser (`multi-auto`, `multi-autokey`).
+- **▲ ▼ buttons**: tap = one step, hold = continuous scroll (~600 px/s), tap-tap-hold = sprint (eases up to 3.5x). Release stops. Mouse and touch.
+- **Follow / welcome-back card**: a short top-centre card (name in their colour, "followed" or "welcome back", last seen + message count from `/api/chatter`). Shown ~5 s, queued (max 6), 1.2 s gap between cards, never plays a sound. Turn off with `localStorage['multi-followcard']='0'`.

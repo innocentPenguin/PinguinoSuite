@@ -1192,3 +1192,14 @@ def test_watch_streak_event_and_alert_settings():
     assert obs.hidden("follow", s, {"event": "streak"}) is False
     assert obs.hidden("follow", obs.sanitize("follow", {"show_streaks": False}), {"event": "streak"}) is True
     assert "streak" in obs.ACT_TYPES
+
+
+def test_chat_ux_wiring():
+    from pathlib import Path
+    st = Path(__file__).resolve().parent.parent / "static"
+    ux = (st / "chatux.js").read_text(encoding="utf-8")
+    assert "window.AUTO" in ux and "cardFollow" in ux and "Alt+S" in ux
+    idx = (st / "index.html").read_text(encoding="utf-8")
+    assert '/assets/chatux.js' in idx and "window.cardFollow" in idx and "window.AUTO !== false" in idx
+    assert "window.AUTO !== false" in (st / "chat.js").read_text(encoding="utf-8")
+    assert (st / "dash.js").read_text(encoding="utf-8").count("window.AUTO !== false") >= 2

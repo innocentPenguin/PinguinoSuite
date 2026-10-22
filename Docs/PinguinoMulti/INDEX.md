@@ -25,5 +25,6 @@
 - Suite/modules/multi/tests/test_core.py (84 pytest), tests/e2e_live.py (throwaway server on 8799).
 
 ## Changes log (night run)
+- Chat comfort: AUTO pill + hotkey, hold/sprint scroll buttons, follow/welcome-back card (static/chatux.js).
 - 1e25f66 dashboard viewer counts, text size, resize, split halves. e4a8edc / ece3825 send duplicate guard + Twitch via Host say. 046b726 raid_out/poll/prediction/hype rows, gift counter. 58c1565 gift sub alerts (follow widget). Failed sends can be retried (guard entry removed on refusal), timeouts are never retried.
 - 3rd night commit: live overlays /obs/poll, /obs/predict, /obs/hype (static/live.html, /api/live-state, host_feed.live_state).

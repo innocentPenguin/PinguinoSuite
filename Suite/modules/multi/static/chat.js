@@ -67,7 +67,7 @@ function chatAdd(m) {
   const atEnd = f.scrollTop + f.clientHeight >= f.scrollHeight - 40;
   f.insertAdjacentHTML('beforeend', chatMsg(m));
   while (f.children.length > 500) f.firstChild.remove();
-  if (W.scroll !== 'manual' && atEnd) f.scrollTop = f.scrollHeight;
+  if (W.scroll !== 'manual' && window.AUTO !== false && atEnd) f.scrollTop = f.scrollHeight;
 }
 function chatFeed() {
   const f = $('#cfeed'); if (!f) return;
