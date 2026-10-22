@@ -23,6 +23,30 @@ def _add_cuda_dlls():
 _add_cuda_dlls()
 
 
+SEG_MAX_S = 12.0   # a subtitle line never spans more than this many seconds
+SEG_GAP_S = 0.8    # a pause this long between two words also ends a line
+_END = (".", "?", "!", "…")
+
+
+def split_sentences(words, max_dur=SEG_MAX_S, gap=SEG_GAP_S):
+    """Cut one Whisper segment's words into sentence-sized lines: after . ? ! ..., at a pause >= gap, and (so a run-on never goes past
+    max_dur) at the last comma or biggest pause before the limit. Returns a list of word lists; nothing is dropped or reordered."""
+    out, cur = [], []
+    for i, w in enumerate(words):
+        cur.append(w)
+        nxt = words[i + 1] if i + 1 < len(words) else None
+        if nxt is None:
+            break
+        if w["w"].endswith(_END) or nxt["s"] - w["e"] >= gap:
+            out.append(cur); cur = []
+        elif nxt["e"] - cur[0]["s"] > max_dur:   # too long: break at the best spot already seen
+            cut = max(range(len(cur)), key=lambda k: ((cur[k]["w"].endswith(",")), (words[i + 1]["s"] if k == len(cur) - 1 else cur[k + 1]["s"]) - cur[k]["e"], k))
+            out.append(cur[:cut + 1]); cur = cur[cut + 1:]
+    if cur:
+        out.append(cur)
+    return out
+
+
 class ASR:
     def __init__(self, on_state=lambda s, d="": None):
         self.model = None
@@ -66,5 +90,5 @@ class ASR:
                 return
             words = [{"w": w.word.strip(), "s": w.start + offset, "e": w.end + offset, "p": float(w.probability)}
                      for w in (s.words or []) if w.word.strip()]
-            if words:
-                yield {"start": s.start + offset, "end": s.end + offset, "words": words, "avg_logprob": float(s.avg_logprob)}
+            for part in split_sentences(words):
+                yield {"start": part[0]["s"], "end": part[-1]["e"], "words": part, "avg_logprob": float(s.avg_logprob)}

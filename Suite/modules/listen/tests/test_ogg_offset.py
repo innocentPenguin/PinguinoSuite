@@ -1,4 +1,4 @@
-"""Regression: a VOD's ogg started at the source's timestamp (~62 s) while the transcript counts from 0, so clips played ~62 s away from their text.
+r"""Regression: a VOD's ogg started at the source's timestamp (~62 s) while the transcript counts from 0, so clips played ~62 s away from their text.
 Run: cd Suite\modules\listen ; ..\..\.venv\Scripts\python.exe -m unittest discover -s tests
 """
 import os

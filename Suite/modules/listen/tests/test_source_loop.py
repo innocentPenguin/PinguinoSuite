@@ -1,4 +1,4 @@
-"""Regression: a failing VOD must not be re-downloaded forever (24 x 876 MB copies piled up in data\sources).
+r"""Regression: a failing VOD must not be re-downloaded forever (24 x 876 MB copies piled up in data\sources).
 Run: cd Suite\modules\listen ; ..\..\.venv\Scripts\python.exe -m unittest discover -s tests
 """
 import os
