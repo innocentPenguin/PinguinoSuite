@@ -119,6 +119,20 @@
     out: v => { const m = /^@?([A-Za-z0-9_]{2,25})$/.exec(String(v || '').trim()); return m ? '!out ' + m[1] : null; },
     kick: v => { v = String(v || '').trim().replace(/^@/, ''); return /^[A-Za-z0-9_]{2,25}$/.test(v) ? '!kick ' + v : null; },
   };
+  // What choosing an activity sets (one table, used by the buttons, the simulator and the Host sequence). koth/format/mode: undefined = leave alone.
+  // The bot's !activity does not touch these; !koth on makes 1v1 (remembers the old size) and !koth off restores it.
+  const ACTIVITY_DEFAULTS = {
+    competitive: { koth: false, format: '2v2', mode: 'balanced' }, koth: { koth: true, format: '1v1' }, casual: { koth: false }, viewers: { koth: false },
+    boxfights: { koth: false }, zonewars: { koth: false }, fnviewers: { koth: false }, end: { koth: false },
+  };
+  // Extra Host commands to send AFTER `!activity <sub>` so the Host ends up in the activity's defaults. cur = {koth:bool, format, mode}.
+  function activityPlan(sub, cur) {
+    const d = ACTIVITY_DEFAULTS[sub]; if (!d) return []; cur = cur || {}; const steps = []; let fmt = cur.format;
+    if (d.koth != null && d.koth !== !!cur.koth) { steps.push(['koth', d.koth ? 'on' : 'off']); fmt = d.koth ? '1v1' : null; }   // null: the Host restores the old size, so ask for ours
+    if (d.format && d.format !== fmt) steps.push(['format', d.format]);
+    if (d.mode && d.mode !== cur.mode) steps.push(['mode', d.mode]);
+    return steps;
+  }
   // Strike model (bot): temp strikes (wear off after a day), HALF strike (two halves = one temp), PERMA strikes (never expire); limit = !tune strikes (3).
   function normStrike(x) {
     if (typeof x === 'number') return { temp: x, half: 0, perma: 0 };
@@ -329,5 +343,5 @@
     }
   }
 
-  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, ACTIVITY_DEFAULTS, activityPlan, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });

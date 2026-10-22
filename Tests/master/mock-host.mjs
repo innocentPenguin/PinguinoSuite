@@ -45,6 +45,7 @@ export function startMock(port = 8798, opts = {}) {
         st.modCalls.push({ a, v }); push('customs', st.customs); return send(res, 200, { ok: true, ran, customs: st.customs });
       }
       if (p.startsWith('/api/wheel/')) return send(res, 200, { ok: true, wheel: { status: 'open', round: 3, teamSize: 3, entrants: [], signedUp: 0, public: st.wheel } });
+      if (p === '/api/customs/sim-say') { st.say = st.say || []; st.say.push(b); return send(res, 200, { ok: true, spoke: !!b.speak, sent: 1, blocked: 0, lines: ['x'] }); }
       if (p === '/api/control') { st.ctl = st.ctl || []; st.ctl.push(b); if (b.action === 'volume') st.mvol = b.value; return send(res, 200, { ok: true }); }
       if (p === '/api/mod-action') { st.music.push(b.action); return send(res, 200, { ok: true, code: 'ok', title: 'Birds & the Bees', artist: 'Baby Keem' }); }
       if (p === '/api/overlays/delete') { st.overlays.files = st.overlays.files.filter(f => f.path !== b.path); return send(res, 200, { ok: true }); }

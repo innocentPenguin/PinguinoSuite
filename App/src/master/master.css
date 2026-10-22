@@ -190,3 +190,5 @@ button.q-on,button.is-live{font-weight:700}
 .strikepop .minus{background:transparent;border:1px solid #ff5a4d;color:#ff5a4d}
 .strikepop .minus:hover:not(:disabled){box-shadow:0 0 9px #ff5a4d99;background:#ff5a4d18}
 .strikepop .minus:disabled{opacity:.35}
+
+.c-st{border-left-color:#ff7a00;padding:4px 9px}.c-st .row{display:flex;align-items:center;gap:8px}

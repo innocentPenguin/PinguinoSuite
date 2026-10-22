@@ -202,6 +202,13 @@ await t('customs: strike, move, in, out commands and drop maths', async () => {
   assert.equal(C.dropPos(0, 2, true), 3); assert.equal(C.dropPos(2, 0, false), 1); assert.equal(C.dropPos(0, 1, false), 1); assert.equal(C.dropPos(-1, 1, true), 3);
 });
 
+await t('activity defaults: one table, ordered Host steps', () => {
+  assert.deepEqual(C.activityPlan('koth', { koth: false, format: '2v2', mode: 'balanced' }), [['koth', 'on']]);
+  assert.deepEqual(C.activityPlan('competitive', { koth: true, format: '1v1', mode: 'random' }), [['koth', 'off'], ['format', '2v2'], ['mode', 'balanced']]);
+  assert.deepEqual(C.activityPlan('competitive', { koth: false, format: '2v2', mode: 'balanced' }), []);
+  assert.deepEqual(C.activityPlan('casual', { koth: true, format: '1v1' }), [['koth', 'off']]); assert.deepEqual(C.activityPlan('nope', {}), []);
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);

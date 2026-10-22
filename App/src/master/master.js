@@ -32,7 +32,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
-    strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
+    ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
@@ -59,8 +59,24 @@
   const HOSTMOD = new Set(['queue', 'next', 'match', 'win', 'finish', 'balance', 'reroll', 'kick', 'mode', 'format', 'koth', 'casual']);
   /* ---------- player simulator: a local fake customs state, nothing leaves the app ---------- */
   const SIMNAMES = ['spywobbles', 'salman201223', 'SkyRLTN', 'LvLMarshmello', 'pineyapplie', 'gonkilluagg', 'yoohoo15', 'FrostByte', 'NovaKick', 'AeroLily', 'TurboToast', 'WaffleRL', 'DemoDan', 'BumpBoi', 'CeilingCat', 'FlipReset'];
-  const simFresh = () => ({ waiting: true, open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', _n: 0, _id: 0 });
+  const simFresh = () => ({ waiting: true, open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', streamer: 'in', _n: 0, _id: 0 });
   function simAdd(st, n) { for (let i = 0; i < n; i++) { const k = st._n++, nm = SIMNAMES[k % SIMNAMES.length] + (k >= SIMNAMES.length ? Math.floor(k / SIMNAMES.length) : ''); st.queue.push({ username: nm.toLowerCase(), display: nm, mmr: 600 + Math.floor(Math.random() * 900) }); } }
+  // Chat events for POST /api/customs/sim-say (02): collected while the sim runs, spoken in order afterwards
+  function simEv(st, event, extra) {
+    const body = Object.assign({ event, queue: st.queue.map(p => p.display) }, extra || {}), m = st.match;
+    if (m && /^(match_start|result|koth)/.test(event)) { const mmr = {}; (m._p || []).forEach(p => { mmr[p.display] = p.mmr; }); body.match = { id: m.id, orange: m.orange.slice(), blue: m.blue.slice(), mmr }; }
+    (st._ev = st._ev || []).push(body);
+  }
+  async function simSay(evs) {
+    if (!ui.simChat || !evs.length) return; await tokenReady;
+    for (const e of evs) {
+      const r = await api.post('/api/customs/sim-say', Object.assign({ speak: true }, e));
+      if (r.status === 404) { if (!ui.saySeen) { ui.saySeen = 1; toast('Simulator chat needs the Host /api/customs/sim-say (not there yet)', true); } return; }
+      if (!r.ok || !r.json || r.json.ok === false) toast('Chat: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
+      else if (r.json.blocked) toast('Chat blocked by the 30 s duplicate guard: ' + e.event, true);
+      else if (r.json.spoke === false) toast('Chat is switched off on the Host (sim_say.json)');
+    }
+  }
   const simSize = st => +String(st.format || '2v2')[0] || 2;
   function simSplit(st, ps) {
     const a = ps.slice(); if (st.mode === 'random') a.sort(() => Math.random() - .5); else a.sort((x, y) => y.mmr - x.mmr);
@@ -69,33 +85,42 @@
   function simFill(st) {
     const n = simSize(st) * 2; if (st.queue.length < 2) return 'Need at least 2 players in the queue';
     const ps = st.queue.splice(0, n), [o, bl] = simSplit(st, ps);
-    st.match = { id: ++st._id, status: 'live', orange: o.map(p => p.display), blue: bl.map(p => p.display), _p: ps }; return '';
+    st.match = { id: ++st._id, status: 'live', orange: o.map(p => p.display), blue: bl.map(p => p.display), _p: ps }; simEv(st, 'match_start'); return '';
   }
   function simApply(action, value) {
     const st = ui.simState, v = value || ''; let msg = '';
-    const r0 = simApply0(st, action, v); if (action === 'sim' && !ui.simState.match && ui.simState.waiting && ui.simState.queue.length >= simSize(ui.simState) * 2) { simFill(ui.simState); ui.simState.waiting = false; return (r0 ? r0 + '; ' : '') + 'enough players, game started'; } return r0;
+    const r0 = simApply0(st, action, v); let out = r0;
+    if (action === 'sim' && !ui.simState.match && ui.simState.waiting && ui.simState.queue.length >= simSize(ui.simState) * 2) { simFill(ui.simState); ui.simState.waiting = false; out = (r0 ? r0 + '; ' : '') + 'enough players, game started'; }
+    simSay((ui.simState._ev || []).splice(0)); return out;
   }
   function simApply0(st, action, v) {
     let msg = '';
     const nameOf = x => String(x).toLowerCase();
-    if (action === 'sim') { if (v === 'add') simAdd(st, 1); else if (v === 'add4') simAdd(st, 4); else if (v === 'add8') simAdd(st, 8); else if (v === 'rm') st.queue.pop(); else if (v === 'reset') ui.simState = simFresh(); }
-    else if (action === 'activity') { const a = v.split(' ').pop(); st.activity = a === 'end' ? 'none' : a; if (a === 'koth') st.koth = true; }
-    else if (action === 'queue-open') st.open = true; else if (action === 'queue-close') st.open = false; else if (action === 'queue-clear') st.queue = [];
+    if (action === 'sim') { if (v === 'add' || v === 'add4' || v === 'add8') { const n0 = st.queue.length; simAdd(st, v === 'add' ? 1 : v === 'add4' ? 4 : 8); st.queue.slice(n0).forEach((p, i) => simEv(st, 'join', { player: p.display, pos: n0 + i + 1 })); } else if (v === 'rm') { const p = st.queue.pop(); if (p) simEv(st, 'leave', { player: p.display }); } else if (v === 'reset') ui.simState = simFresh(); else if (v === 'streamer') { } }
+    else if (action === 'activity') {   // choosing an activity sets its defaults (table in master-core); leaving KOTH restores the old team size
+      const a = v.split(' ').pop(), d = C.ACTIVITY_DEFAULTS[a] || {}; st.activity = a === 'end' ? 'none' : a;
+      if (d.koth != null) { if (d.koth && !st.koth) st._prevFmt = st.format; if (!d.koth && st.koth && !d.format && st._prevFmt) { st.format = st._prevFmt; st._prevFmt = ''; } st.koth = d.koth; }
+      if (d.format) st.format = d.format; if (d.mode) st.mode = d.mode;
+    }
+    else if (action === 'streamer') st.streamer = v;
+    else if (action === 'queue-open') { st.open = true; simEv(st, 'queue_open'); } else if (action === 'queue-close') { st.open = false; simEv(st, 'queue_close'); } else if (action === 'queue-clear') { st.queue = []; simEv(st, 'queue_clear'); }
     else if (action === 'match') { if (v === 'fill') msg = simFill(st); else if (v === 'queue' || v === 'clear') { if (st.match && v === 'queue') st.queue.unshift(...st.match._p); st.match = null; } }
     else if (action === 'finish') {
       const m = st.match; if (!m) return 'No match is running';
       const win = v === 'orange' ? 'orange' : 'blue', lose = win === 'orange' ? 'blue' : 'orange', ps = m._p;
+      simEv(st, 'result', { winner: win, mode: st.koth ? 'koth' : st.activity === 'competitive' ? 'points' : 'casual', pointsWin: 3, pointsLoss: 1 });
       if (st.koth) {   // winners stay, losers go to the back, challengers come in
         const stay = ps.filter(p => m[win].includes(p.display)), out = ps.filter(p => m[lose].includes(p.display));
         st.queue.push(...out); const ch = st.queue.splice(0, simSize(st));
         const orange = win === 'orange' ? stay : ch, blue = win === 'orange' ? ch : stay;
-        st.match = { id: ++st._id, status: 'live', orange: orange.map(p => p.display), blue: blue.map(p => p.display), _p: stay.concat(ch) }; msg = win + ' stays';
+        if (ch.length < simSize(st)) simEv(st, 'koth_wait', { winner: win, need: simSize(st), have: ch.length }); else simEv(st, 'koth_stays', { winner: win });
+        st.match = { id: ++st._id, status: 'live', orange: orange.map(p => p.display), blue: blue.map(p => p.display), _p: stay.concat(ch) }; simEv(st, 'match_start'); msg = win + ' stays';
       } else { st.queue.push(...ps); st.match = null; msg = win + ' won'; if (st.queue.length >= simSize(st) * 2) { simFill(st); msg += ', next game started'; } else { st.waiting = true; msg += ', waiting for ' + (simSize(st) * 2 - st.queue.length) + ' more player(s)'; } }
     }
     else if (action === 'reroll' || action === 'balance') { if (st.match) { const [o, bl] = simSplit(Object.assign({}, st, { mode: action === 'reroll' ? 'random' : 'balanced' }), st.match._p); st.match.orange = o.map(p => p.display); st.match.blue = bl.map(p => p.display); } }
     else if (action === 'mode') st.mode = v; else if (action === 'format') st.format = v; else if (action === 'gamemode') st.gameMode = v;
     else if (action === 'koth') { st.koth = v === 'on'; if (st.koth) { st.format = '1v1'; if (!st.match) { if (st.queue.length >= 2) simFill(st); else st.waiting = true; } msg = 'KOTH on: 1v1, winners stay'; } }
-    else if (action === 'kick') { const k = nameOf(v); st.queue = st.queue.filter(p => nameOf(p.username) !== k && nameOf(p.display) !== k); if (st.match) { st.match._p = st.match._p.filter(p => nameOf(p.display) !== k); st.match.orange = st.match.orange.filter(n => nameOf(n) !== k); st.match.blue = st.match.blue.filter(n => nameOf(n) !== k); } }
+    else if (action === 'kick') { const k = nameOf(v); const who = st.queue.find(p => nameOf(p.username) === k || nameOf(p.display) === k); if (who) simEv(st, 'kick', { player: who.display, inLobby: !!(st.match && st.match._p.some(p => p === who)) }); st.queue = st.queue.filter(p => nameOf(p.username) !== k && nameOf(p.display) !== k); if (st.match) { st.match._p = st.match._p.filter(p => nameOf(p.display) !== k); st.match.orange = st.match.orange.filter(n => nameOf(n) !== k); st.match.blue = st.match.blue.filter(n => nameOf(n) !== k); } }
     else if (action === 'strike' || action === 'unstrike') {
       const [u, f] = v.split(' '), k = nameOf(u); st.strikes = st.strikes || {}; const s = st.strikes[k] = st.strikes[k] || { temp: 0, half: 0, perma: 0 }, key = f === 'perma' ? 'perma' : 'temp';
       s[key] = Math.max(0, s[key] + (action === 'strike' ? 1 : -1)); msg = k + (action === 'strike' ? ' got a ' : ' lost a ') + (key === 'perma' ? 'permanent ' : '') + 'strike';
@@ -112,7 +137,14 @@
     else msg = '(not simulated: ' + action + ')';
     schedule('customs'); return msg;
   }
-  async function sendCustom(action, value, btn) {
+  function setOv(o) { const until = Date.now() + 5000; for (const k in o) if (o[k] != null) ui.ov[k] = { v: o[k], until }; schedule('customs'); setTimeout(() => schedule('customs'), 5100); }
+  async function sendCustom(action, value, btn, raw) {
+    if (action === 'activity' && !ui.sim && !raw) {   // the Host's !activity does not set KOTH/team size/mode: send those too (defaults in master-core)
+      const sub = String(value || '').split(' ').pop(), c = S.get('customs') || {}, d = C.ACTIVITY_DEFAULTS[sub] || {};
+      const steps = C.activityPlan(sub, { koth: !!c.koth, format: c.format, mode: c.mode });
+      setOv({ activity: sub === 'end' ? 'none' : sub, koth: d.koth == null ? null : d.koth ? 'on' : 'off', format: d.format, mode: d.mode });
+      const ok = await sendCustom(action, value, btn, true); if (ok) for (const [a, v2] of steps) await sendCustom(a, v2, null, true); return ok;
+    }
     if (ui.sim) { flash(btn); const m = simApply(action, value); if (m) toast(m); return !/no empty slot|not waiting|No game/.test(m || ''); }
     const text = C.customsText(action, value); if (!text) { toast('Not allowed: ' + action, true); return false; }
     const now = Date.now(), last = ui.sent.get(text) || 0;
@@ -292,13 +324,14 @@
       <div id="cu-note" class="note" hidden></div>
       <div class="cgrid">
         ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div>`, ' <span class="faint" id="cu-act"></span>')}
+        <section class="cs c-st"><div class="row"><span class="faint sm">Streamer</span><div class="seg" style="flex:1">${b('In', 'streamer', 'in', '', 'streamer:in')}${b('Out', 'streamer', 'out', '', 'streamer:out')}</div></div></section>
         ${sec('c-q', 'Queue', `<div class="btns">${b('Open', 'queue-open', null, 'g', 'queue:open')}${b('Close', 'queue-close', null, 'rd', 'queue:close')}${b('Clear', 'queue-clear', null, 'og warn', 'queue:clear')}</div><ul class="qlist" id="cu-queue"></ul>`, ' <span class="faint" id="cu-qn"></span>')}
         ${sec('c-m', 'Match', `<div class="btns">${b('Fill', 'match', 'fill', 'g')}${b('Move all → Queue', 'match', 'queue')}${b('Clear match', 'match', 'clear', 'rd warn')}${b('Orange wins', 'finish', 'orange', 'or', 'win:orange')}${b('Blue wins', 'finish', 'blue', 'bl', 'win:blue')}</div><div class="teams" id="cu-teams"></div>`, ' <span class="faint" id="cu-match"></span>')}
         ${sec('c-t', 'Teams', `${seg('mode', [['Balanced', 'balanced'], ['Random', 'random'], ['Manual', 'picks']])}<div class="btns" style="margin-top:6px">${b('Reroll', 'reroll')}${b('Balance', 'balance')}</div><div class="row" id="cu-manual" style="margin-top:6px" hidden><input type="text" id="cu-pick" placeholder="who goes Blue" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="sm bl" id="cu-pickgo">Set Blue</button>${b('Auto', 'pick', 'auto')}</div>`)}
         ${sec('c-s', 'Settings', `<div class="lbl">Team size</div>${seg('format', ['1v1', '2v2', '3v3', '4v4'].map(x => [x, x]))}<div class="lbl">Game mode</div>${seg('gamemode', [['Standard', 'standard'], ['Dropshot', 'dropshot'], ['Rumble', 'rumble']])}`)}
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
-        ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div><div class="btns" style="margin-top:6px"><span class="faint sm" style="align-self:center">Streamer</span>${b('In', 'streamer', 'in', 'g')}${b('Out', 'streamer', 'out')}</div>`)}
-        ${sec('c-sim', 'Player simulator', `<div class="btns">${b('+ Player', 'sim', 'add')}${b('+ 4', 'sim', 'add4')}${b('+ 8', 'sim', 'add8')}${b('Remove one', 'sim', 'rm')}${b('Reset sim', 'sim', 'reset', 'rd')}</div><div class="faint sm" style="margin-top:4px">Fake players only. Nothing is sent to the Host or chat.</div>`)}
+        ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div>`)}
+        ${sec('c-sim', 'Player simulator', `<div class="btns">${b('+ Player', 'sim', 'add')}${b('+ 4', 'sim', 'add4')}${b('+ 8', 'sim', 'add8')}${b('Remove one', 'sim', 'rm')}${b('Reset sim', 'sim', 'reset', 'rd')}</div><div class="row" style="margin-top:6px"><button class="sm" id="cu-simchat" title="Speak the simulator's events in the real Twitch chat (Chatty), so you can judge the wording">Chat: ON</button><span class="faint sm" id="cu-simnote"></span></div>`)}
         ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
       </div>`;
   }
@@ -348,6 +381,7 @@
   const holderName = c => { const x = c && c.controlHolder; return !x ? '' : typeof x === 'string' ? x : (x.name || x.display || x.user || x.id || ''); };
   function renderCustoms() {
     const c = ui.sim ? ui.simState : S.get('customs'), ok = ui.sim ? true : S.get('customsOk'), note = $('#cu-note');
+    { const sc = $('#cu-simchat'); sc.textContent = 'Chat: ' + (ui.simChat ? 'ON' : 'OFF'); sc.classList.toggle('g', ui.simChat); $('#cu-simnote').textContent = ui.simChat ? 'Fake players, but the lines go to REAL chat' : 'Nothing is sent to the Host or chat'; }
     $('#cu-sim').classList.toggle('cur', !!ui.sim); $('.c-sim').hidden = !ui.sim;
     const msg = ok === false ? (c ? 'Customs state is stale (the Host stopped answering it).' : 'The Host has no /api/customs/state yet. Buttons still work (they run the same chat commands the website sends); the live queue appears once the Host has it.') : '';
     note.hidden = !msg; note.textContent = msg;
@@ -366,7 +400,9 @@
     if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.append(h('b', '', lbl)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(String(n).toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
     renderPop();
     const cur = { mode: c && c.mode, format: c && c.format, gamemode: c && (c.gameMode || c.gamemode), koth: c ? (c.koth ? 'on' : 'off') : null, activity: c && c.activity, queue: c ? (c.open ? 'open' : 'close') : null };
-    for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];   // Host offline: show what was last clicked
+    cur.streamer = (ui.sim ? c && c.streamer : null) || (c && c.streamer);
+    for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];
+    for (const k in ui.ov) if (ui.ov[k].until > Date.now()) cur[k] = ui.ov[k].v;   // just-clicked values win until the Host state catches up   // Host offline: show what was last clicked
     for (const bt of $$('#tab-customs [data-st]')) {
       const [k, v] = bt.dataset.st.split(':'), on = cur[k] === v;
       if (k === 'win') bt.disabled = !live;
@@ -557,6 +593,7 @@
   $('#tab-customs').addEventListener('click', e => {
     const b = e.target.closest('button'), li = e.target.closest('.qlist li');
     if (li && b && b.classList.contains('x')) { sendCustom('kick', li.dataset.u, b); return; }
+    if (b && b.id === 'cu-simchat') { ui.simChat = !ui.simChat; ls.set('simchat', ui.simChat ? '1' : '0'); schedule('customs'); return; }
     if (b && b.id === 'cu-sim') { ui.sim = !ui.sim; if (ui.sim && !ui.simState) { ui.simState = simFresh(); simAdd(ui.simState, 6); } schedule('customs'); return; }
     if (b && b.dataset.cu) { if (b.disabled) return; if (b.dataset.st && !ui.sim) { const [k, v] = b.dataset.st.split(':'); if (k !== 'win') { ui.sel[k] = v; schedule('customs'); } } if (b.classList.contains('warn') && !armed(b)) return; sendCustom(b.dataset.cu, b.dataset.v, b); }
     else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); ui.tookControl = true; tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
