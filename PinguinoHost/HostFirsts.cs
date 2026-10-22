@@ -10,11 +10,11 @@ namespace PinguinoHost
 {
     /// <summary>The First 5 leaderboard. The live game (PinguinoBotFirsts) keeps five global vars firstPlaceStats .. fifthPlaceStats ({login: count}); this class rebuilds them from the stored chat
     /// (Data\chat_logs day files + the Host's own recording) and serves the board.
-    /// Score: 1st = 5, 2nd = 3, 3rd..5th = 1 each. top3 and top5 are cumulative (a 1st also counts in top3 and top5).</summary>
+    /// Score: 1st = 5, 2nd and 3rd = 3 each, 4th and 5th = 1 each. top3 and top5 are cumulative (a 1st also counts in top3 and top5).</summary>
     public static class Firsts
     {
         static readonly string[] Vars = { "firstPlaceStats", "secondPlaceStats", "thirdPlaceStats", "fourthPlaceStats", "fifthPlaceStats" };
-        static readonly int[] Pts = { 5, 3, 1, 1, 1 };
+        static readonly int[] Pts = { 5, 3, 3, 1, 1 };
         internal static Func<string, string> GetVar = n => Program.GetGlobal(n);
         internal static Action<string, string> SetVar = (n, v) => Program.SetGlobal(n, v);
         static string Root { get { return Boards.RootDir; } }
@@ -129,11 +129,46 @@ namespace PinguinoHost
             var rows = d.Where(kv => !Boards.IsBot(kv.Key) && !bots.Contains(kv.Key)).Select(kv => new { login = kv.Key, p = kv.Value, score = Enumerable.Range(0, 5).Sum(i => kv.Value[i] * Pts[i]) })
                 .OrderByDescending(r => r.score).ThenByDescending(r => r.p[0]).ThenByDescending(r => r.p[0] + r.p[1] + r.p[2]).ThenBy(r => r.login, StringComparer.Ordinal).ToList();
             var arr = new JArray(rows.Take(limit).Select(r => new JObject { { "login", r.login }, { "display", Boards.DisplayName(r.login) }, { "firsts", r.p[0] }, { "top3", r.p[0] + r.p[1] + r.p[2] }, { "top5", r.p.Sum() }, { "score", r.score }, { "places", new JArray(r.p.Select(x => (object)x)) } }));
-            return new JObject { { "metric", "firsts" }, { "scoring", "1st = 5, 2nd = 3, 3rd-5th = 1" }, { "updatedAt", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }, { "people", rows.Count }, { "rows", arr } };
+            return new JObject { { "metric", "firsts" }, { "scoring", "1st = 5, 2nd and 3rd = 3 each, 4th and 5th = 1 each" }, { "updatedAt", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }, { "people", rows.Count }, { "rows", arr } };
         }
 
-        /// <summary>the board for the site push and the apps (top 100)</summary>
-        public static JObject Board(int limit = 100) { try { return Rows(Current(), limit); } catch (Exception ex) { Clog.Warn("firsts", "board: " + ex.Message); return new JObject { { "metric", "firsts" }, { "rows", new JArray() } }; } }
+        static List<JObject> _streams; static DateTime _streamsAt = DateTime.MinValue;
+        /// <summary>every stream with its first 5 (rebuilt from the chat logs at most every 10 minutes)</summary>
+        internal static List<JObject> CachedStreams()
+        {
+            lock (typeof(Firsts)) { if (_streams == null || (DateTime.UtcNow - _streamsAt).TotalMinutes > 10) { _streams = ((JArray)Build()["streams"]).OfType<JObject>().ToList(); _streamsAt = DateTime.UtcNow; } return _streams; }
+        }
+        static Dictionary<string, int[]> Count(IEnumerable<JObject> streams)
+        {
+            var d = new Dictionary<string, int[]>();
+            foreach (var st in streams) { var pl = (JArray)st["places"]; for (int i = 0; i < pl.Count; i++) { string u = (string)pl[i]; int[] a; if (!d.TryGetValue(u, out a)) d[u] = a = new int[5]; a[i]++; } }
+            return d;
+        }
+        /// <summary>periods.firsts for POST /api/bot/boards: {day|week|month|year|all: {current, keys, boards: {key: {total, rows[value=score, firsts, top3, top5]}}}}</summary>
+        public static JObject ForSite()
+        {
+            var streams = CachedStreams(); long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); var o = new JObject();
+            var keep = new Dictionary<string, int> { { "day", 14 }, { "week", 12 }, { "month", 1000 }, { "year", 1000 }, { "all", 1 } };
+            foreach (string per in new[] { "day", "week", "month", "year", "all" })
+            {
+                string cur = per == "all" ? "all" : Periods.KeyFor(per, now); var byKey = new Dictionary<string, List<JObject>>();
+                foreach (var st in streams) { string k = per == "all" ? "all" : Periods.KeyFor(per, (long)st["start"]); List<JObject> l; if (!byKey.TryGetValue(k, out l)) byKey[k] = l = new List<JObject>(); l.Add(st); }
+                var keys = byKey.Keys.OrderByDescending(k => k, StringComparer.Ordinal).ToList(); if (!keys.Contains(cur)) keys.Insert(0, cur);
+                var boards = new JObject();
+                foreach (string k in keys.Take(keep[per]))
+                {
+                    List<JObject> l; if (!byKey.TryGetValue(k, out l)) continue; var board = Rows(Count(l), 100);
+                    var rows = new JArray(); int rank = 0;
+                    foreach (JObject r in (JArray)board["rows"]) { rank++; rows.Add(new JObject { { "rank", rank }, { "login", r["login"] }, { "name", r["display"] }, { "value", r["score"] }, { "firsts", r["firsts"] }, { "top3", r["top3"] }, { "top5", r["top5"] } }); }
+                    boards[k] = new JObject { { "total", board["people"] }, { "rows", rows } };
+                }
+                o[per] = new JObject { { "current", cur }, { "keys", new JArray(keys) }, { "boards", boards } };
+            }
+            return o;
+        }
+
+        /// <summary>the board for the apps (top 100), from the chat logs</summary>
+        public static JObject Board(int limit = 100) { try { return Rows(Count(CachedStreams()), limit); } catch (Exception ex) { Clog.Warn("firsts", "board: " + ex.Message); return new JObject { { "metric", "firsts" }, { "rows", new JArray() } }; } }
 
         /// <summary>dry run (apply=false) returns what the rebuild would write; apply backs up the five vars to Data\firsts and then replaces them</summary>
         public static JObject Rebuild(bool apply, string chatDirOverride = null)

@@ -236,10 +236,21 @@ namespace PinguinoHost
         /// <summary>the raid was scheduled (the Twitch countdown began): fires the raid_start automations; the raid landing is raid_out</summary>
         static DateTime _raidStartAt = DateTime.MinValue;
         /// <summary>Fires raid_start ("prepare your emotes") once per raid: !confirm raid (the countdown began), the Master View Raid prep button, or the outgoing channel.raid event when the raid was started on twitch.tv (Twitch only tells us when it goes). Returns false when it already fired in the last 3 minutes.</summary>
-        public static bool OnRaidScheduled(string target) { lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidStartAt).TotalMinutes < 3) return false; _raidStartAt = DateTime.UtcNow; } FireRaidStart(target); return true; }
-        internal static void ResetRaidStart() { lock (typeof(Auto)) _raidStartAt = DateTime.MinValue; }
-        static void FireRaidStart(string target) { Fire("raid_start", new Dictionary<string, string> { { "channel", Channel() }, { "target", target ?? "" }, { "event", "raid_start" } }); }
-        public static void OnStream(bool online) { if (online) Program.ResetFirsts(); Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }
+        public static bool OnRaidScheduled(string target, bool now = false)
+        {
+            lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidStartAt).TotalMinutes < 3) return false; _raidStartAt = DateTime.UtcNow; }
+            // Twitch announces the raid when its countdown STARTS (up to 90 s before it goes), so the line waits until just before the raid lands (RaidStartDelaySec, default 80); "now" fires at once
+            int delay = now ? 0 : RaidDelayOverrideSec >= 0 ? RaidDelayOverrideSec : (int)Math.Max(0, Math.Min(88, (int?)Latest.Settings()["RaidStartDelaySec"] ?? 80));
+            if (delay == 0) { FireRaidStart(target); return true; }
+            lock (typeof(Auto)) { if (_raidTimer != null) _raidTimer.Dispose(); _raidTimer = new System.Threading.Timer(_ => { lock (typeof(Auto)) { _raidTimer = null; } FireRaidStart(target); }, null, delay * 1000, System.Threading.Timeout.Infinite); }
+            return true;
+        }
+        static System.Threading.Timer _raidTimer; internal static int RaidDelayOverrideSec = -1; internal static int RaidStartFires;
+        /// <summary>!unraid or the stream going offline before the line was due: nothing is said and a new raid can start the line again</summary>
+        public static void CancelRaidStart() { lock (typeof(Auto)) { if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; _raidStartAt = DateTime.MinValue; } } }
+        internal static void ResetRaidStart() { lock (typeof(Auto)) { _raidStartAt = DateTime.MinValue; if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; } } }
+        static void FireRaidStart(string target) { RaidStartFires++; Fire("raid_start", new Dictionary<string, string> { { "channel", Channel() }, { "target", target ?? "" }, { "event", "raid_start" } }); }
+        public static void OnStream(bool online) { if (!online) CancelRaidStart(); if (online) Program.ResetFirsts(); Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }
 
         public static JObject Hotkey(string key)
         {

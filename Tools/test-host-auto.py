@@ -37,7 +37,7 @@ def said(text): return any(text in o for r in runs() for o in r.get('output', []
 def ran(name): return sum(1 for r in runs() if r['action'] == name and not r['test'])
 
 try:
-    until(lambda: api('/api/status')['name'] == 'PinguinoHost', 30, 'host up')
+    until(lambda: api('/api/status')['name'] == 'PinguinoHost', 30, 'host up'); time.sleep(25)   # the bot modules finish loading a little after the API is up (slower when the PC is busy)
     seeded = api('/api/automations')['doc']
     if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 8: fails.append('spotify presets missing or enabled')
     acts = [

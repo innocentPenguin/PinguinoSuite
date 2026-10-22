@@ -240,6 +240,7 @@ namespace PinguinoHost
             {
                 bool had = _raidName != "" || (DateTime.UtcNow - _raidStarted).TotalSeconds < 90; _raidName = "";
                 if ((DateTime.UtcNow - _raidStarted).TotalSeconds < 90) { JToken d; Call(HttpMethod.Delete, "/raids?broadcaster_id={bid}", null, out d); _raidStarted = DateTime.MinValue; }
+                try { Auto.CancelRaidStart(); } catch (Exception) { }
                 say(had ? "Raid cancelled." : "No raid to cancel."); return had ? "cancelled" : "none";
             }
             // !confirm raid

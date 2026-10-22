@@ -26,8 +26,12 @@ assert r['streams'] == 2, r
 top = {x['login']: x for x in r['top10']}
 assert top['ann']['firsts'] == 1 and top['ann']['score'] == 5 + 3, top['ann']
 assert top['bob']['firsts'] == 1 and top['bob']['top3'] == 2 and top['bob']['score'] == 3 + 5, top['bob']
-assert top['zed']['top3'] == 1 and top['zed']['top5'] == 1 and top['zed']['score'] == 1, top['zed']
+assert top['zed']['top3'] == 1 and top['zed']['top5'] == 1 and top['zed']['score'] == 3, top['zed']
 print(list(top), r['streams'], r['people'])
 assert top['eve']['top5'] == 1 and 'early' not in top and 'late' not in top and 'sery_bot' not in top and 'fay' not in top, list(top)
 assert r['found_by'] == {'marker': 2}, r['found_by']
+site = [json.loads(l.split('] ', 1)[1]) for l in p.stdout.splitlines() if l.startswith('[firstssite] {')][0]
+al = site['all']; assert al['current'] == 'all' and al['keys'] == ['all'], al
+rows = al['boards']['all']['rows']; assert rows[0]['value'] == 8 and {'login', 'name', 'value', 'firsts', 'top3', 'top5'} <= set(rows[0]) and al['boards']['all']['total'] == 6, rows
+assert '2026-03-01' in site['day']['keys'] and site['day']['boards']['2026-03-01']['rows'][0]['login'] == 'bob' and site['month']['boards']['2026-03']['total'] == 3, site['day']['keys']
 print('PASS firsts')

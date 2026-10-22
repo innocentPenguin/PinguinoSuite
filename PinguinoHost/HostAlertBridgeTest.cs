@@ -84,6 +84,13 @@ namespace PinguinoHost
             Auto.ResetRaidStart(); Check(Auto.OnRaidScheduled("somebody"), "raid prep: first signal fires");
             Check(!Auto.OnRaidScheduled("somebody"), "raid prep: the later signal for the same raid does not repeat it");
             Auto.ResetRaidStart(); Check(Auto.OnRaidScheduled("other"), "raid prep: a new raid fires again");
+            // the "Prepare your emotes" line must wait for the raid to go (Twitch signals the START of its countdown), not post at once
+            Auto.ResetRaidStart(); Auto.RaidDelayOverrideSec = 2; int f0 = Auto.RaidStartFires;
+            Check(Auto.OnRaidScheduled("late") && Auto.RaidStartFires == f0, "raid line: not said when the countdown starts");
+            System.Threading.Thread.Sleep(3000); Check(Auto.RaidStartFires == f0 + 1, "raid line: said once when the delay is over");
+            Auto.ResetRaidStart(); Auto.OnRaidScheduled("cancelled"); Auto.CancelRaidStart(); System.Threading.Thread.Sleep(3000); Check(Auto.RaidStartFires == f0 + 1, "raid line: !unraid / stream offline cancels it");
+            Auto.ResetRaidStart(); Check(Auto.OnRaidScheduled("now", true) && Auto.RaidStartFires == f0 + 2, "raid line: Raid prep with now:true says it at once");
+            Auto.RaidDelayOverrideSec = -1;
             AlertBridge.TestPost = null;
             Console.WriteLine(fails == 0 ? "[alerttest] ALL PASS" : "[alerttest] " + fails + " FAILED");
         }

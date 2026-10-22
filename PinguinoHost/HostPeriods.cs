@@ -293,6 +293,7 @@ namespace PinguinoHost
                 }
                 o[met] = pm;
             }
+            try { o["firsts"] = Firsts.ForSite(); } catch (Exception ex) { Clog.Warn("boards", "firsts for the site: " + ex.Message); }
             return o;
         }
         /// <summary>live Twitch events (called from Program.DispatchEvent). Gifts and bits come through Boards.Add (one door, same ledger).</summary>
