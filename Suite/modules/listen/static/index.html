@@ -181,8 +181,14 @@ $$('nav button').forEach(b=>b.onclick=()=>{$$('nav button').forEach(x=>x.classLi
 // ---------- audio
 const player=new Audio();let stopAt=0;
 player.addEventListener('timeupdate',()=>{if(stopAt&&player.currentTime>=stopAt){player.pause();stopAt=0}});
-function play(url,start,end){if(!url)return;stopAt=0;const go=()=>{player.currentTime=Math.max(0,start-.15);stopAt=end+.15;player.play()};
-  if(player.dataset.src!==url){player.dataset.src=url;player.src=url;player.addEventListener('loadedmetadata',go,{once:true});player.load()}else go()}
+let playReq=0;
+// Only the LATEST request may play: a stale loadedmetadata handler from a clip you already skipped used to fire later and seek to the old clip's time.
+function play(url,start,end){if(!url)return;const me=++playReq;stopAt=0;player.pause();
+  const go=()=>{if(me!==playReq)return;player.onloadedmetadata=null;const t=Math.max(0,start-.15);
+    const run=()=>{if(me!==playReq)return;stopAt=end+.15;player.play().catch(()=>{})};
+    if(Math.abs(player.currentTime-t)<.02)run();else{player.addEventListener('seeked',run,{once:true});player.currentTime=t}};
+  if(player.dataset.src!==url){player.dataset.src=url;player.src=url;player.onloadedmetadata=go;player.load()}
+  else if(player.readyState>=1)go();else player.onloadedmetadata=go}
 
 // ---------- segment rendering
 function wordsHtml(words){return words.map(w=>{const c=w.l==='warn'?'w-warn':w.l==='bad'?'w-bad':w.l==='fix'?'w-fix':'';
