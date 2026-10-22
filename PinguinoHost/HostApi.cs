@@ -127,7 +127,7 @@ namespace PinguinoHost
                 { "channel", (string)s["Channel"] ?? "" }, { "chatConnected", IrcConnected }, { "eventSubConnected", EventSubConnected },
                 { "obsConnected", ObsConnected() }, { "canSend", tok && !string.IsNullOrEmpty((string)s["ClientId"]) && !string.IsNullOrEmpty((string)s["SenderId"]) && !string.IsNullOrEmpty((string)s["BroadcasterId"]) },
                 { "messages", Messages }, { "lastMessageAgoSec", LastMessage == DateTime.MinValue ? (int?)null : (int)(DateTime.UtcNow - LastMessage).TotalSeconds },
-                { "overlayPort", Port }, { "dataDir", DataDir }, { "lease", Lease.State() } };
+                { "overlayPort", Port }, { "dataDir", DataDir }, { "lease", Lease.State() }, { "rank", Rank.HealthJson() } };
         }
 
         static JObject Config()
