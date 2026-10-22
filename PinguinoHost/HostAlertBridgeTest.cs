@@ -68,6 +68,18 @@ namespace PinguinoHost
             calls.Clear(); AlertBridge.OnPresent(new[] { "ptwatch", "sim_p1" }, now + 120); Thread.Sleep(300);
             Check(calls.Count == 0, "no repeats and no sim players");
 
+
+            // 5. raid emote line: fires when the raid is SCHEDULED (raid_start), not when it lands (raid_out)
+            var adoc = Auto.Doc(); var acts = (JArray)adoc["actions"];
+            var rs0 = acts.OfType<JObject>().FirstOrDefault(a => (string)a["id"] == "sb-raidstart"); var ro0 = acts.OfType<JObject>().FirstOrDefault(a => (string)a["id"] == "sb-raidout");
+            Check(rs0 != null && (string)rs0["triggers"][0]["type"] == "raid_start" && ((JArray)rs0["steps"]).ToString().Contains("Prepare your emotes") && ro0 != null && !((JArray)ro0["steps"]).ToString().Contains("Prepare your emotes"), "fresh install: emotes line on raid_start, raid_out only stops the stream");
+            acts.Remove(rs0); ro0["steps"] = new JArray { new JObject { { "type", "say" }, { "as", "core" }, { "text", "Raid started! Prepare your emotes! x" } }, new JObject { { "type", "delay" }, { "ms", 3000 } }, new JObject { { "type", "say" }, { "as", "core" }, { "text", "discord" } }, new JObject { { "type", "delay" }, { "ms", 20000 } }, new JObject { { "type", "obs_request" }, { "request", "StopStream" } } };
+            var sd = (JArray)adoc["seeded"]; foreach (var t in sd.Where(x => (string)x == "raidstart1").ToList()) sd.Remove(t); Auto.Save(adoc);
+            Auto.MigrateRaidStart(); adoc = Auto.Doc(); acts = (JArray)adoc["actions"];
+            rs0 = acts.OfType<JObject>().FirstOrDefault(a => (string)a["id"] == "sb-raidstart"); ro0 = acts.OfType<JObject>().FirstOrDefault(a => (string)a["id"] == "sb-raidout");
+            Check(rs0 != null && ((JArray)rs0["steps"]).Count == 3 && ((JArray)ro0["steps"]).Count == 2 && !((JArray)ro0["steps"]).ToString().Contains("emotes"), "old install: the emotes + discord lines moved to raid_start, the 20 s stop stayed on raid_out");
+            Auto.MigrateRaidStart(); Check(((JArray)Auto.Doc()["actions"]).OfType<JObject>().Count(a => (string)a["id"] == "sb-raidstart") == 1, "migration runs once");
+
             AlertBridge.TestPost = null;
             Console.WriteLine(fails == 0 ? "[alerttest] ALL PASS" : "[alerttest] " + fails + " FAILED");
         }

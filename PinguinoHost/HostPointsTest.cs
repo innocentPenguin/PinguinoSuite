@@ -80,6 +80,15 @@ namespace PinguinoHost
                 File.WriteAllText(sp, orig); System.Threading.Thread.Sleep(2300); Check(Economy.CheerPoints(100) == 1000, "and back");
             }
             else Check(false, "settings.json exists at " + sp);
+            // 8. match awards = minutes of watching x multiplier at the player's own rate; settings page API with live preview
+            Check(Economy.MatchPoints(0, false) == 28 && Economy.MatchPoints(0, true) == 42, "viewer: played 7 min x2 = 28, won x3 = 42: " + Economy.MatchPoints(0, false) + "/" + Economy.MatchPoints(0, true));
+            Check(Economy.MatchPoints(1, false) == 42 && Economy.MatchPoints(1, true) == 63 && Economy.MatchPoints(3, true) == 126, "sub T1 42/63, T3 win 126");
+            var pv = Economy.Preview(new JObject { { "type", "match_win" }, { "tier", "2" } }); Check((long)pv["points"] == 84, "preview match_win T2 = 84: " + pv);
+            var dry = Economy.PointsSettingsApi(JObject.FromObject(new { values = new { MatchPlayMult = 4, MatchMinutes = 10 }, dry = true }), true);
+            Check((bool)dry["ok"] && (long)dry["examples"]["match"]["viewer"]["play"] == 80 && Economy.MatchPoints(0, false) == 28, "dry run shows 80 for 10 min x4 but saves nothing");
+            var bad = Economy.PointsSettingsApi(JObject.FromObject(new { values = new { Exclude = 1 } }), true); Check((bool)bad["ok"] == false, "keys outside the points settings are refused");
+            var neg = Economy.PointsSettingsApi(JObject.FromObject(new { values = new { EntryBonus = -5 } }), true); Check((bool)neg["ok"] == false, "negative values are refused");
+            var g = Economy.PointsSettingsApi(new JObject(), false); Check((bool)g["ok"] && g["values"]["MatchMinutes"] != null && g["examples"]["watch"]["viewer"]["per_hour"] != null, "GET lists values + examples (watch per hour = " + g["examples"]["watch"]["viewer"]["per_hour"] + ")");
             Economy.TestTier = null;
             Console.WriteLine(fails == 0 ? "[pointstest] ALL PASS" : "[pointstest] " + fails + " FAILED");
         }

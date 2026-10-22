@@ -17,7 +17,7 @@ namespace PinguinoHost
     public static partial class Economy
     {
         static readonly string[] PointsKeys = { "WatchV2", "WatchIntervalMin", "WatchViewer", "WatchSubT1", "WatchSubT2", "WatchSubT3", "EntryBonus", "CheerLow", "CheerMid", "CheerHigh", "CheerMidFrom", "CheerHighFrom",
-            "SubT1", "SubT2", "SubT3", "GiftRecipient", "TipCurve", "TipFloorPerUsd", "FollowBonus", "RaidArrival", "RaidLeader", "RaidLeaderMin", "RaidWindowMin" };
+            "SubT1", "SubT2", "SubT3", "GiftRecipient", "TipCurve", "TipFloorPerUsd", "FollowBonus", "RaidArrival", "RaidLeader", "RaidLeaderMin", "RaidWindowMin", "MatchMinutes", "MatchPlayMult", "MatchWinMult" };
 
         static void PointsDefaults(JObject d)
         {
@@ -26,6 +26,7 @@ namespace PinguinoHost
             d["SubT1"] = 6000; d["SubT2"] = 12000; d["SubT3"] = 30000; d["GiftRecipient"] = 1500;
             d["TipCurve"] = new JArray { new JArray { 1, 1250 }, new JArray { 5, 7000 }, new JArray { 10, 20000 } }; d["TipFloorPerUsd"] = 1250;
             d["FollowBonus"] = 150; d["RaidArrival"] = 150; d["RaidLeader"] = 1000; d["RaidLeaderMin"] = 4; d["RaidWindowMin"] = 10;
+            d["MatchMinutes"] = 7; d["MatchPlayMult"] = 2; d["MatchWinMult"] = 3;   // playing = 7 minutes of watching x2, winning = 7 minutes x3 (at the player's own viewer / sub rate)
         }
 
         static double PS(string k) { lock (L) return D(Settings()[k]); }
@@ -40,6 +41,12 @@ namespace PinguinoHost
         }
         public static long SubPoints(int tier) { return (long)Math.Round(PS(tier >= 3 ? "SubT3" : tier == 2 ? "SubT2" : "SubT1")); }
         public static long WatchRate(int tier) { return (long)Math.Round(PS(tier >= 3 ? "WatchSubT3" : tier == 2 ? "WatchSubT2" : tier == 1 ? "WatchSubT1" : "WatchViewer")); }
+        /// <summary>points for a match: the player's own watch rate per minute x MatchMinutes x multiplier (played = MatchPlayMult, won = MatchWinMult)</summary>
+        public static long MatchPoints(int tier, bool win)
+        {
+            double perMin = WatchRate(tier) / Math.Max(1.0, PS("WatchIntervalMin"));
+            return (long)Math.Round(perMin * PS("MatchMinutes") * PS(win ? "MatchWinMult" : "MatchPlayMult"));
+        }
         public static long TipPoints(double usd)
         {
             if (usd <= 0) return 0;
@@ -68,6 +75,7 @@ namespace PinguinoHost
             switch (type)
             {
                 case "watch": pts = WatchRate(tier); how = "per " + PS("WatchIntervalMin") + " min, " + (tier > 0 ? "sub T" + tier : "viewer") + " rate"; break;
+                case "match_play": case "match_win": pts = MatchPoints(tier, type == "match_win"); how = PS("MatchMinutes") + " min of watching x" + PS(type == "match_win" ? "MatchWinMult" : "MatchPlayMult") + ", " + (tier > 0 ? "sub T" + tier : "viewer") + " rate"; break;
                 case "entry": pts = (long)PS("EntryBonus"); how = "once per stream"; break;
                 case "cheer": pts = CheerPoints((long)amt); how = amt + " bits"; break;
                 case "sub": case "resub": pts = SubPoints(tier); how = "tier " + Math.Max(1, tier); break;
@@ -280,6 +288,43 @@ namespace PinguinoHost
         {
             login = Canon(Boards.AliasMap(), login);
             lock (L) { var u = Doc()["tips"]?[login] as JObject; return u == null ? new JObject { { "total", 0.0 }, { "count", 0 }, { "last", 0L } } : new JObject { { "total", u["total"] }, { "count", u["count"] }, { "last", u["last"] } }; }
+        }
+
+        static void MatchRow(string login, string type, string label, long delta, string id) { try { if (Sim.IsSim(login)) return; lock (L) { PRow(CurSid(), login, type, label, delta, id); Save(); } } catch (Exception) { } }
+        /// <summary>sample amounts for the settings page: what each rule pays right now (or with `over` applied, nothing saved)</summary>
+        static JObject ExamplesNow()
+        {
+            var o = new JObject(); var w = new JObject(); var m = new JObject(); var s = new JObject();
+            foreach (var t in new[] { 0, 1, 2, 3 }) { string k = t == 0 ? "viewer" : "T" + t; w[k] = new JObject { { "per_interval", WatchRate(t) }, { "per_hour", WatchRate(t) * Math.Round(60 / Math.Max(1.0, PS("WatchIntervalMin"))) } }; m[k] = new JObject { { "play", MatchPoints(t, false) }, { "win", MatchPoints(t, true) } }; s[k] = SubPoints(t == 0 ? 1 : t); }
+            o["watch"] = w; o["match"] = m; o["sub"] = s; o["entry"] = PS("EntryBonus");
+            o["cheer"] = new JObject { { "100", CheerPoints(100) }, { "500", CheerPoints(500) }, { "1000", CheerPoints(1000) } };
+            o["tip"] = new JObject { { "1", TipPoints(1) }, { "5", TipPoints(5) }, { "10", TipPoints(10) }, { "25", TipPoints(25) } };
+            o["gift_recipient"] = PS("GiftRecipient"); o["follow"] = PS("FollowBonus");
+            return o;
+        }
+        /// <summary>GET /api/economy/points-settings: every knob, its value, and the examples. POST {values:{key:v}, dry:true} previews without saving; without dry it saves (hot reload, no restart).</summary>
+        public static JObject PointsSettingsApi(JObject body, bool post)
+        {
+            JObject set; lock (L) set = Settings();
+            if (post && body["values"] is JObject vals)
+            {
+                var bad = vals.Properties().Where(p => !PointsKeys.Contains(p.Name) && p.Name != "ActivityBonus" && p.Name != "ActivityLinesPerPoint" && p.Name != "ActivityCapPer10Min").Select(p => p.Name).ToList();
+                if (bad.Count > 0) return new JObject { { "ok", false }, { "error", "not a points setting: " + string.Join(", ", bad) } };
+                foreach (var p in vals.Properties()) if (p.Name != "TipCurve" && p.Name != "ActivityBonus" && p.Name != "WatchV2" && D(p.Value) < 0) return new JObject { { "ok", false }, { "error", p.Name + " cannot be negative" } };
+                bool dry = (bool?)body["dry"] == true; JObject before;
+                lock (L)
+                {
+                    var s = Settings(); before = (JObject)s.DeepClone();
+                    foreach (var p in vals.Properties()) s[p.Name] = p.Value;
+                    var ex = ExamplesNow();
+                    if (dry) { foreach (var p in before.Properties()) s[p.Name] = p.Value; return new JObject { { "ok", true }, { "dry", true }, { "examples", ex } }; }
+                    File.WriteAllText(SetP, s.ToString(), new UTF8Encoding(false));
+                }
+                Clog.Info("economy", "points settings changed: " + string.Join(", ", vals.Properties().Select(p => p.Name)));
+            }
+            JObject outv = new JObject(); lock (L) { var s = Settings(); foreach (var k in PointsKeys.Concat(new[] { "ActivityBonus", "ActivityLinesPerPoint", "ActivityCapPer10Min" })) outv[k] = s[k]; }
+            JObject ex2; lock (L) ex2 = ExamplesNow();
+            return new JObject { { "ok", true }, { "currency", CurrencyName }, { "values", outv }, { "examples", ex2 } };
         }
 
         internal static long TBal(string l) { return Balance(l); }

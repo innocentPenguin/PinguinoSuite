@@ -19,7 +19,7 @@ json.dump([
     {'Id': 5, 'Format': '2v2', 'Activity': 'competitive', 'Blue': P('pat', 'quin'), 'Orange': P('rex', 'sue'), 'Winner': 'Blue', 'FinishedAt': now - 60, 'Incomplete': True}],
     open(os.path.join(d, 'runtime', 'matches.json'), 'w'))
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
-env.update({'PINGUINO_COMPAT_WS_PORT': '8972', 'PINGUINO_ECONOMY_TESTHOOK': '1', 'PINGUINO_ECONOMY_MINUTE_SEC': '1', 'PINGUINO_ECONOMY_AWARD_FROM': '0', 'PINGUINO_ECONOMY_GRACE_SEC': '0', 'PINGUINO_ECONOMY_NO_ANNOUNCE': '1'})
+env.update({'PINGUINO_COMPAT_WS_PORT': '8972', 'PINGUINO_ECONOMY_TESTHOOK': '1', 'PINGUINO_ECONOMY_MINUTE_SEC': '1', 'PINGUINO_ECONOMY_AWARD_FROM': '0', 'PINGUINO_ECONOMY_GRACE_SEC': '0', 'PINGUINO_ECONOMY_NO_ANNOUNCE': '1', 'PINGUINO_ECONOMY_V2': '0'})
 fails = []
 def chk(n, ok, x=''):
     if not ok: fails.append('%s %s' % (n, x))

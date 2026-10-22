@@ -1,4 +1,4 @@
-"""Typo router: "! queue", !q, !list -> !queue; !jon/!joi/!jpin/!joinm/!rejoin/"! join" -> !join; !unjoin/!quit -> !leave; near misses answer once per user; known commands untouched; no !peng alias.
+"""Typo router: "! queue", !q, !list -> !queue; !jon/!joi/!jpin/!joinm/!rejoin/"! join" -> !join; !unjoin/!quit -> !leave; join-type typos ask first and wait for yes (info commands just run); known commands untouched; no !peng alias.
 Usage: python Tools/test-host-cmdfix.py [dll]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
@@ -20,11 +20,19 @@ try:
     for _ in range(120):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
-    for w, want in (('! queue', '! queue -> !queue'), ('!q', '!q -> !queue'), ('!list', '!list -> !queue'), ('!queue.', 'punctuation after !queue'), ('! join', '! join -> !join'), ('!jon', '!jon -> !join'), ('!joi', '!joi -> !join'), ('!jpin', '!jpin -> !join'), ('!joinm', '!joinm -> !join'), ('!joinn', '!joinn -> !join'), ('!rejoin', '!rejoin -> !join'), ("!join'", 'punctuation after !join'), ('!unjoin', '!unjoin -> !leave'), ('!quit', '!quit -> !leave')):
+    for w, want in (('! queue', '! queue -> !queue'), ('!q', '!q -> !queue'), ('!list', '!list -> !queue'), ('!queue.', 'punctuation after !queue'), ('! join', '! join -> !join'), ("!join'", 'punctuation after !join')):
         r = ask('b1: ' + w, 0.5); chk(w + ' rewritten', want in clog() and not any('did you mean' in x for x in r), (want, r))
-    r = ask('c1: !queu'); chk('near miss answers', len(r) == 1 and 'did you mean !queue?' in r[0] and r[0].startswith('@c1 '), r)
-    r = ask('c1: !queu'); chk('only once per user', r == [], r)
-    r = ask('c2: !poinst'); chk('another user gets it too', len(r) == 1 and '!points' in r[0], r)
+    # join-type typos are a question until the person says yes
+    for i, (w, to) in enumerate((('!jon', '!join'), ('!joi', '!join'), ('!jpin', '!join'), ('!joinm', '!join'), ('!rejoin', '!join'), ('!unjoin', '!leave'), ('!quit', '!leave'))):
+        u = 'q%d' % i
+        r = ask(u + ': ' + w, 0.4); chk(w + ' asks', len(r) == 1 and ('did you mean %s?' % to) in r[0] and r[0].startswith('@' + u + ' ') and 'yes' in r[0], r)
+        r = ask(u + ': yes', 0.4); chk(w + ' runs only after the yes', len(r) == 1 and ('Register first' in r[0] or "not in the queue" in r[0]), (to, r))
+    r = ask('n1: !jon', 0.4); r2 = ask('n1: no', 0.4); r3 = ask('n1: yes', 0.4); chk('no cancels, a later yes does nothing', len(r) == 1 and r2 == [] and r3 == [], (r, r2, r3))
+    r = ask('n2: !jon', 0.4); r2 = ask('n2: !jon', 0.4); chk('asks once while waiting', len(r) == 1 and r2 == [], (r, r2))
+    r = ask('n3: yes', 0.4); chk('a yes with nothing pending is ignored', r == [], r)
+    r = ask('c1: !queu'); chk('info near miss just runs, no question', r == [] and '!queu -> !queue' in clog(), r)
+    r = ask('c2: !poinst'); chk('info near miss !points just runs', '!poinst -> !points' in clog() and not any('did you mean' in x for x in r), r)
+    r = ask('c6: !joni'); chk('unlisted join near miss asks', len(r) == 1 and 'did you mean !join?' in r[0], r)
     r = ask('c3: !joke'); chk('known lore words are not near misses', not any('did you mean' in x for x in r), r)
     r = ask('c4: !peng'); chk('no !peng alias, no did-you-mean', not any('did you mean' in x for x in r), r)
     r = ask('c5: ! hello there'); chk('"! hello" is not rewritten or answered', r == [], r)

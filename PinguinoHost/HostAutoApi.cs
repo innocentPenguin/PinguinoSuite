@@ -189,6 +189,12 @@ namespace PinguinoHost
                 if (p == "/api/helper/review" && m == "GET") { int lim; int.TryParse(c.Request.QueryString["limit"], out lim); Write(c, HelperReview.List(c.Request.QueryString["kind"], c.Request.QueryString["q"], lim).ToString(), "application/json"); return true; }
                 if (p == "/api/helper/review" && m == "POST") { var hb = Body(c); Write(c, HelperReview.SetNote((string)hb["id"], (string)hb["note"]).ToString(), "application/json"); return true; }
             }
+            if (p == "/api/canned")
+            {   // Chatty's canned commands: list / edit / add / test (this computer only)
+                if (!System.Net.IPAddress.IsLoopback(c.Request.RemoteEndPoint.Address)) { c.Response.StatusCode = 403; return true; }
+                if (m == "GET") { Write(c, CannedEditor.List().ToString(), "application/json"); return true; }
+                if (m == "POST") { Write(c, CannedEditor.Handle(Body(c)).ToString(), "application/json"); return true; }
+            }
             if (p == "/api/clips-dump" && m == "GET") { Write(c, ClipsDump.Run().ToString(), "application/json"); return true; }
             if (p == "/api/helix-ids" && m == "GET")
             {   // reads Data\namehistory\lookups.json {ids:[...]}, asks Helix /users by id (batches of 100) with the Host's own streamer credentials, saves Data\namehistory\helix_ids.json {data:[{id,login}]}; credentials never leave the Host

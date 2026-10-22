@@ -148,15 +148,16 @@ namespace PinguinoHost
             foreach (var m in ms.Where(m => ((long?)m["Id"] ?? 0) > from && Done(m)).OrderBy(m => (long)m["Id"]))
             {
                 long mid = (long)m["Id"]; string kind = KindOf((string)m["Activity"]); string winner = ((string)m["Winner"]).ToLowerInvariant();
-                long play = (long?)set[kind + "Play"] ?? 0, win = (long?)set[kind + "Win"] ?? 0;
+                long play = (long?)set[kind + "Play"] ?? 0, win = (long?)set[kind + "Win"] ?? 0; bool mv2 = WatchV2;
                 string label = (kind == "Comp" ? "Competitive" : kind == "Cas" ? "Casual" : "Customs") + " match #" + mid;
                 foreach (var side in new[] { "blue", "orange" })
                     foreach (var p in (m[char.ToUpperInvariant(side[0]) + side.Substring(1)] as JArray ?? new JArray()).OfType<JObject>())
                     {
                         string login = Norm((string)p["Username"]); if (login == "" || login == streamer || ex.Contains(login) || Boards.IsBot(login)) continue;
-                        if (play > 0) { string id = "match:" + mid + ":play:" + login; if (!Applied(id) && Award(login, play, KindSource(kind, false), label + ", played", id) == null) paid++; }
+                        if (mv2) { play = MatchPoints(TierOf(login), false); win = MatchPoints(TierOf(login), true); }   // v2: scaled to the person's own watch rate
+                        if (play > 0) { string id = "match:" + mid + ":play:" + login; if (!Applied(id) && Award(login, play, KindSource(kind, false), label + ", played", id) == null) { paid++; MatchRow(login, "game", label + ", played", play, id); } }
                         if (side == winner) Periods.Add(login, "wins", 1, 0, "win:" + mid + ":" + login);
-                        if (win > 0 && side == winner) { string id = "match:" + mid + ":win:" + login; if (!Applied(id) && Award(login, win, KindSource(kind, true), label + ", won", id) == null) paid++; }
+                        if (win > 0 && side == winner) { string id = "match:" + mid + ":win:" + login; if (!Applied(id) && Award(login, win, KindSource(kind, true), label + ", won", id) == null) { paid++; MatchRow(login, "game", label + ", won", win, id); } }
                     }
             }
             if (paid > 0) { Clog.Info("economy", "match awards: " + paid + " payments"); Back("match awards: " + paid + " payments", new JObject { { "payments", paid } }); }
@@ -448,6 +449,7 @@ namespace PinguinoHost
                 if ((path == "/api/economy/me" || path == "/api/points") && method == "GET") return Me2(login);
                 if (path == "/api/points/loan" && method == "POST") { var q = new JObject { { "action", body["action"] }, { "login", body["login"] ?? login }, { "amount", body["amount"] }, { "id", body["id"] } }; return Phase2Api("/api/economy/loan", "POST", login, q); }
                 if (path == "/api/economy/preview") return Preview(body);
+                if (path == "/api/economy/points-settings") return PointsSettingsApi(body, method == "POST");
                 if (path == "/api/economy/event" && method == "POST") return EventApi(body);
                 if (path == "/api/economy/streams" && method == "GET") return new JObject { { "ok", true }, { "login", Canon(Boards.AliasMap(), login) }, { "streams", StreamsView(login) } };
                 if (path == "/api/economy/depreciation" && method == "GET") return DepreciationPreview();

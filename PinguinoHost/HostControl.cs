@@ -251,7 +251,8 @@ namespace PinguinoHost
             string err; string uid = TwitchApi.UserId(target, out err); if (uid == "") { say("I could not find " + target + "."); return err; }
             JToken d2; var r = Call(HttpMethod.Post, "/raids?from_broadcaster_id={bid}&to_broadcaster_id=" + uid, null, out d2);
             if (!Ok(r)) { say("The raid did not start: " + Why(r)); return Why(r); }
-            _raidStarted = DateTime.UtcNow; say("Raiding " + target + " now. !unraid cancels it before it goes."); return "started";
+            _raidStarted = DateTime.UtcNow; try { Auto.OnRaidScheduled(target); } catch (Exception) { }
+            say("Raiding " + target + " now. !unraid cancels it before it goes."); return "started";
         }
 
         // ---- live state for the overlays: GET /api/live-state -> {poll, prediction, hype}, each the latest stored data block plus state (an ended item stays 20 s, then null) ----
