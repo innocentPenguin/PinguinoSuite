@@ -23,6 +23,7 @@ namespace PinguinoHost
             if (p == "/api/eventlog" && m == "GET") { Write(c, EventLog.Query(c.Request.QueryString).ToString(), "application/json"); return true; }
             if (p == "/api/customs/state" && m == "GET") { Write(c, CustomsView.State().ToString(), "application/json"); return true; }
             if (p == "/api/customs/mod" && m == "POST") { Write(c, CustomsView.Mod(Body(c)).ToString(), "application/json"); return true; }
+            if (p == "/api/customs/sim-say" && m == "POST") { Write(c, SimSay.Say(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/wheel/state" && m == "GET") { Write(c, Events.WheelState().ToString(), "application/json"); return true; }
             return false;
         }
