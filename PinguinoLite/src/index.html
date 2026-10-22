@@ -114,6 +114,9 @@ function replaysPage() {
   return `<h1>Replays</h1><p class="sub">Who won and per-player stats, read locally from your saved Rocket League replays. Nothing leaves this PC.</p>
    <div class="row" style="margin:0 0 10px">Watching: ${dirs || '<span class="d">nothing</span>'}</div>
    <div class="card" style="padding:4px 8px">${body}</div>
+   <div class="card" style="padding:12px 16px;margin-top:12px"><h3 style="margin:0 0 6px">Check for new replays every <b id="ivl-v">${esc(r.interval || 3)}</b> s</h3>
+     <input type="range" id="ivl" min="1" max="10" step="1" value="${esc(r.interval || 3)}" style="width:100%;accent-color:var(--accent)">
+     <div class="note">1 = most responsive, 10 = lightest. Applied immediately and remembered.</div></div>
    <div class="row"><button class="btn pri" data-scan="1">Scan now</button><button class="btn" data-open="folder">Open Lite data folder</button></div>`;
 }
 
@@ -197,9 +200,16 @@ function renderNav() {
 
 function render() {
   renderNav();
+  if (document.activeElement && document.activeElement.id === 'ivl') return;   // don't rebuild the page under the slider while it is being dragged
   $('#main').innerHTML = page === 'modules' ? modules() : page === 'replays' ? replaysPage() : dashboard();
 }
 
+document.addEventListener('input', e => { if (e.target.id === 'ivl') $('#ivl-v').textContent = e.target.value; });
+document.addEventListener('change', async e => {
+  if (e.target.id !== 'ivl') return;
+  const n = await inv('replay_set_interval', { secs: +e.target.value }).catch(() => null);
+  if (n) { state.replays = { ...(state.replays || {}), interval: n }; toast(`Checking for replays every ${n} s`); }
+});
 document.addEventListener('click', async e => {
   const nav = e.target.closest('nav [data-page]');
   if (nav) { page = nav.dataset.page; try { localStorage.setItem('page', page); } catch {} return render(); }

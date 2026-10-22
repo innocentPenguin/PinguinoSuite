@@ -10,6 +10,14 @@ use serde_json::{json, Map, Value};
 
 /// Latest activity-gate verdict (RocketLeague.exe running AND a gated Suite activity active). Decides attribution only, never whether we scan.
 static GATE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Scan interval in seconds (user setting 1..=10, default 3), applied live and saved in the state dir (replay_interval.txt).
+static INTERVAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(SCAN_EVERY_SECS);
+pub fn clamp_interval(n: i64) -> u64 { n.clamp(1, 10) as u64 }
+fn load_interval() {
+    if let Some(n) = std::fs::read_to_string(crate::state_dir().join("replay_interval.txt")).ok().and_then(|t| t.trim().parse::<i64>().ok()) {
+        INTERVAL.store(clamp_interval(n), std::sync::atomic::Ordering::Relaxed);
+    }
+}
 static SCAN_LOCK: Mutex<()> = Mutex::new(());
 // Seen-state kept in memory so a tick is stat-only; the file on disk is written only when something changes.
 static STATE: Mutex<Option<Map<String, Value>>> = Mutex::new(None);
@@ -326,6 +334,7 @@ Connection: close
 /// Background loop: ALWAYS a stat-only scan every 3 s (cheap: directory listing + size/mtime, parse only new stable files).
 /// The activity gate (refreshed every 5 s; unreadable Host state = false) only decides whether new results get the winner attributed.
 pub fn start() {
+    load_interval();
     std::thread::spawn(|| {
         let mut chk_at = std::time::Instant::now() - Duration::from_secs(60);
         loop {
@@ -335,12 +344,22 @@ pub fn start() {
                 chk_at = std::time::Instant::now();
             }
             let _ = scan();
-            std::thread::sleep(Duration::from_secs(SCAN_EVERY_SECS));
+            std::thread::sleep(Duration::from_secs(INTERVAL.load(std::sync::atomic::Ordering::Relaxed)));
         }
     });
 }
 
 pub const SCAN_EVERY_SECS: u64 = 3;
+
+/// Set how often Lite looks for new replays (clamped to 1..=10 s); live, and remembered between runs.
+#[tauri::command]
+pub fn replay_set_interval(secs: i64) -> u64 {
+    let n = clamp_interval(secs);
+    INTERVAL.store(n, std::sync::atomic::Ordering::Relaxed);
+    let _ = std::fs::create_dir_all(crate::state_dir());
+    let _ = std::fs::write(crate::state_dir().join("replay_interval.txt"), n.to_string());
+    n
+}
 
 #[tauri::command]
 pub async fn replay_scan() -> Value {
@@ -353,7 +372,7 @@ pub fn replay_index() -> Value {
     let idx: Value = std::fs::read_to_string(root().join("index.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
     let items: Vec<Value> = idx["items"].as_array().map(|a| a.iter().take(50).cloned().collect()).unwrap_or_default();
     let dirs: Vec<Value> = scan_dirs().iter().map(|d| json!({"name": d.file_name().and_then(|n| n.to_str()), "exists": d.is_dir()})).collect();
-    json!({"items": items, "dirs": dirs})
+    json!({"items": items, "dirs": dirs, "interval": INTERVAL.load(std::sync::atomic::Ordering::Relaxed)})
 }
 
 #[cfg(test)]
@@ -423,6 +442,12 @@ mod tests {
         assert_eq!(off["attributed"], false);
         assert_eq!(off["blue"]["score"], 4);
         assert_eq!(SCAN_EVERY_SECS, 3);
+    }
+
+    #[test]
+    fn interval_is_clamped() {
+        assert_eq!((clamp_interval(-5), clamp_interval(0), clamp_interval(1), clamp_interval(7), clamp_interval(10), clamp_interval(99)), (1, 1, 1, 7, 10, 10));
+        assert_eq!(SCAN_EVERY_SECS, 3); // default
     }
 
     #[test]

@@ -298,7 +298,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .manage(Link(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, replays::replay_scan, replays::replay_index, updatecheck::check_update])
+        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, replays::replay_scan, replays::replay_index, replays::replay_set_interval, updatecheck::check_update])
         .setup(|app| {
             replays::start();
             // Splash (the lightning bolt) first; the main window is placed and shown when it closes.
