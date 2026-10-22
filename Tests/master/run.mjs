@@ -209,6 +209,14 @@ await t('activity defaults: one table, ordered Host steps', () => {
   assert.deepEqual(C.activityPlan('casual', { koth: true, format: '1v1' }), [['koth', 'off']]); assert.deepEqual(C.activityPlan('nope', {}), []);
 });
 
+await t('wheel: Tourney maps to !wheel open only; queue-add / remove / cancel / queue-add round trip', async () => {
+  assert.equal(C.customsText('wheel', 'open'), '!wheel open'); assert.equal(C.customsText('wheel', 'x; !queue clear'), null);
+  const a = await api.post('/api/wheel/queue-add', { users: ['ann', 'bob'] }); assert.deepEqual(a.json.added, ['ann', 'bob']);
+  assert.deepEqual((await api.get('/api/wheel/state')).json.entrants.map(e => e.login), ['ann', 'bob']);
+  await api.post('/api/wheel/remove', { users: ['ann'] }); assert.deepEqual((await api.get('/api/wheel/state')).json.entrants.map(e => e.login), ['bob']);
+  assert.equal((await api.post('/api/wheel/cancel')).json.ok, true); assert.equal((await api.post('/api/customs/queue-add', { users: ['ann'] })).json.ok, true);
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);

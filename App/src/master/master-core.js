@@ -117,6 +117,7 @@
     move: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (\d{1,3})$/.exec(String(v || '').trim()); return m && +m[2] >= 1 ? '!move ' + m[1] + ' ' + m[2] : null; },
     in: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (blue|orange)$/.exec(String(v || '').trim()); return m ? '!in ' + m[1] + ' ' + m[2] : null; },
     out: v => { const m = /^@?([A-Za-z0-9_]{2,25})$/.exec(String(v || '').trim()); return m ? '!out ' + m[1] : null; },
+    wheel: v => (v === 'open' ? '!wheel open' : null),
     kick: v => { v = String(v || '').trim().replace(/^@/, ''); return /^[A-Za-z0-9_]{2,25}$/.test(v) ? '!kick ' + v : null; },
   };
   // What choosing an activity sets (one table, used by the buttons, the simulator and the Host sequence). koth/format/mode: undefined = leave alone.

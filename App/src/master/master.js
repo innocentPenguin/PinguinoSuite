@@ -32,7 +32,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
-    ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
+    wq: ls.get('wq') || null, ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
@@ -59,7 +59,7 @@
   const HOSTMOD = new Set(['queue', 'next', 'match', 'win', 'finish', 'balance', 'reroll', 'kick', 'mode', 'format', 'koth', 'casual']);
   /* ---------- player simulator: a local fake customs state, nothing leaves the app ---------- */
   const SIMNAMES = ['spywobbles', 'salman201223', 'SkyRLTN', 'LvLMarshmello', 'pineyapplie', 'gonkilluagg', 'yoohoo15', 'FrostByte', 'NovaKick', 'AeroLily', 'TurboToast', 'WaffleRL', 'DemoDan', 'BumpBoi', 'CeilingCat', 'FlipReset'];
-  const simFresh = () => ({ waiting: true, open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', streamer: 'in', _n: 0, _id: 0 });
+  const simFresh = () => ({ waiting: true, open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', streamer: 'in', wheel: { status: 'none', entrants: [], round: 0, teamSize: 2, teams: [] }, _n: 0, _id: 0 });
   function simAdd(st, n) { for (let i = 0; i < n; i++) { const k = st._n++, nm = SIMNAMES[k % SIMNAMES.length] + (k >= SIMNAMES.length ? Math.floor(k / SIMNAMES.length) : ''); st.queue.push({ username: nm.toLowerCase(), display: nm, mmr: 600 + Math.floor(Math.random() * 900) }); } }
   // Chat events for POST /api/customs/sim-say (02): collected while the sim runs, spoken in order afterwards
   function simEv(st, event, extra) {
@@ -103,6 +103,7 @@
       if (d.format) st.format = d.format; if (d.mode) st.mode = d.mode;
     }
     else if (action === 'streamer') st.streamer = v;
+    else if (action === 'wheel') { st.wheel.status = 'open'; msg = 'Wheel sign-ups open'; }
     else if (action === 'queue-open') { st.open = true; simEv(st, 'queue_open'); } else if (action === 'queue-close') { st.open = false; simEv(st, 'queue_close'); } else if (action === 'queue-clear') { st.queue = []; simEv(st, 'queue_clear'); }
     else if (action === 'match') { if (v === 'fill') msg = simFill(st); else if (v === 'queue' || v === 'clear') { if (st.match && v === 'queue') st.queue.unshift(...st.match._p); st.match = null; } }
     else if (action === 'finish') {
@@ -332,7 +333,7 @@
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
         ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div>`)}
         ${sec('c-sim', 'Player simulator', `<div class="btns">${b('+ Player', 'sim', 'add')}${b('+ 4', 'sim', 'add4')}${b('+ 8', 'sim', 'add8')}${b('Remove one', 'sim', 'rm')}${b('Reset sim', 'sim', 'reset', 'rd')}</div><div class="row" style="margin-top:6px"><button class="sm" id="cu-simchat" title="Speak the simulator's events in the real Twitch chat (Chatty), so you can judge the wording">Chat: ON</button><span class="faint sm" id="cu-simnote"></span></div>`)}
-        ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
+        ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="btns" style="margin-top:6px"><button class="sm" id="wh-q" data-wq="queue">Queue</button><button class="sm rd warn" data-wq="cancel" title="Cancel this draw round without finishing: teams are not made, sign-ups stay">Cancel</button><button class="sm" id="wh-t" data-wq="tourney" title="Open the wheel for tournament sign-ups (!wheel open)">Tourney</button></div><div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
       </div>`;
   }
   const curCustoms = () => (ui.sim ? ui.simState : S.get('customs'));
@@ -378,6 +379,41 @@
       sendCustom('in', d.u + ' ' + t.team);
     }
   }
+  /* ---------- wheel: Queue / Undo, Cancel, Tourney ---------- */
+  const queueNames = () => ((curCustoms() && curCustoms().queue) || []).map(p => String(p.username || p.user || p.name || '').toLowerCase()).filter(Boolean);
+  const simWheel = () => ui.simState.wheel;
+  async function wheelEntrants() {
+    if (ui.sim) return simWheel().entrants.slice();
+    const r = await api.get('/api/wheel/state'); return r.ok ? (r.json.entrants || []).map(x => String(x && x.login || x && x.name || x).toLowerCase()) : null;
+  }
+  function wheelErr(r, what, need) { if (r.status === 404) toast(what + ' needs the Host ' + need + ' (asked 02, not there yet)', true); else toast(what + ': ' + ((r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status), true); }
+  function setWq(v) { ui.wq = v; ls.set('wq', v); schedule('customs'); }
+  async function wheelQueue() {
+    const q = queueNames(); if (!q.length) { toast('The queue is empty', true); return; }
+    const cur = await wheelEntrants(); if (cur === null) { toast('Could not read the wheel', true); return; }
+    const add = q.filter(u => !cur.includes(u)); if (!add.length) { toast('Everyone in the queue is already on the wheel'); return; }
+    if (ui.sim) { simWheel().entrants.push(...add); if (simWheel().status === 'none') simWheel().status = 'open'; setWq({ added: add, at: Date.now() }); toast(add.length + ' added to the wheel'); return; }
+    await tokenReady; ui.tookControl = true;
+    const r = await api.post('/api/wheel/queue-add', { users: add });
+    if (!r.ok || (r.json && r.json.ok === false)) { wheelErr(r, 'Queue → wheel', '/api/wheel/queue-add'); return; }
+    const added = ((r.json && r.json.added) || add).map(x => String(x).toLowerCase()); setWq({ added, at: Date.now() });
+    toast(added.length + ' added to the wheel' + (r.json && r.json.skipped && r.json.skipped.length ? ', ' + r.json.skipped.length + ' skipped' : '')); pollers.wheel.kick();
+  }
+  async function wheelUndo() {   // take back what Queue added, but only people still on the wheel; they return to the queue in their old order
+    const wq = ui.wq; if (!wq) return;
+    const cur = await wheelEntrants(); if (cur === null) { toast('Could not read the wheel', true); return; }
+    const stay = wq.added.filter(u => cur.includes(u)), inQ = new Set(queueNames()), back = stay.filter(u => !inQ.has(u));
+    if (ui.sim) { const W = simWheel(); W.entrants = W.entrants.filter(u => !stay.includes(u)); back.forEach(u => { const p = (ui.simState.match && ui.simState.match._p || []).find(x => x.username === u) || { username: u, display: u, mmr: 1000 }; ui.simState.queue.push(p); }); setWq(null); toast('Undone: ' + stay.length + ' off the wheel, ' + back.length + ' back in the queue'); return; }
+    await tokenReady; ui.tookControl = true;
+    if (stay.length) { const r = await api.post('/api/wheel/remove', { users: stay }); if (!r.ok || (r.json && r.json.ok === false)) { wheelErr(r, 'Undo', '/api/wheel/remove'); return; } }
+    if (back.length) { const r = await api.post('/api/customs/queue-add', { users: back }); if (!r.ok || (r.json && r.json.ok === false)) { wheelErr(r, 'Undo (back to the queue)', '/api/customs/queue-add'); return; } }
+    setWq(null); toast('Undone: ' + stay.length + ' off the wheel, ' + back.length + ' back in the queue'); pollers.wheel.kick(); pollers.customs.kick();
+  }
+  async function wheelCancel() {
+    if (ui.sim) { const W = simWheel(); W.teams = []; W.status = W.entrants.length ? 'open' : 'none'; schedule('customs'); toast('Round cancelled (entrants kept)'); return; }
+    await tokenReady; ui.tookControl = true; const r = await api.post('/api/wheel/cancel');
+    if (r.ok && !(r.json && r.json.ok === false)) { toast('Wheel round cancelled'); pollers.wheel.kick(); } else wheelErr(r, 'Cancel', '/api/wheel/cancel');
+  }
   const holderName = c => { const x = c && c.controlHolder; return !x ? '' : typeof x === 'string' ? x : (x.name || x.display || x.user || x.id || ''); };
   function renderCustoms() {
     const c = ui.sim ? ui.simState : S.get('customs'), ok = ui.sim ? true : S.get('customsOk'), note = $('#cu-note');
@@ -412,7 +448,8 @@
     }
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) fb.textContent = (!m || m.status === 'finished') ? '▶ Start' : 'Fill';   // first game: Start; Fill is the rare manual top-up
     $('#cu-manual').hidden = !(c && c.mode === 'picks');
-    const w = S.get('wheel');
+    const W0 = ui.sim && ui.simState.wheel, w = ui.sim ? { status: W0.status, entrantCount: W0.entrants.length, names: W0.entrants, mode: 'random', teamSize: W0.teamSize, teams: W0.teams, waitlist: [] } : S.get('wheel');
+    { const wq = $('#wh-q'); wq.textContent = ui.wq ? 'Undo' : 'Queue'; wq.classList.toggle('cur', !!ui.wq); wq.disabled = !ui.wq && !queueNames().length; wq.title = ui.wq ? 'Take back what Queue added: they leave the wheel and, if they are still on it, return to the queue in their old order' : 'Copy everyone in the customs queue onto the wheel'; $('#wh-t').classList.toggle('cur', !!w && w.status === 'open'); }
     $('#wh-badge').textContent = w ? '· ' + (w.status || '?') : '';
     const kv = [['Entrants', w ? (w.entrantCount ?? (w.names || []).length) : '–'], ['Mode', w ? [w.label || w.mode, w.teamSize ? w.teamSize + 'v' + w.teamSize : ''].filter(Boolean).join(' · ') : '–'], ['Teams', w ? (w.teams || []).length : '–'], ['Waitlist', w ? (w.waitlist || []).length : '–']];
     const box = $('#wh-kv'), sigv = C.sig(kv); if (box._s !== sigv) { box._s = sigv; box.textContent = ''; kv.forEach(([a, b2]) => box.append(h('b', '', a), h('span', '', String(b2)))); }
@@ -593,9 +630,15 @@
   $('#tab-customs').addEventListener('click', e => {
     const b = e.target.closest('button'), li = e.target.closest('.qlist li');
     if (li && b && b.classList.contains('x')) { sendCustom('kick', li.dataset.u, b); return; }
+    if (b && b.dataset.wq) {
+      if (b.disabled) return; if (b.classList.contains('warn') && !armed(b)) return; flash(b);
+      if (b.dataset.wq === 'queue') ui.wq ? wheelUndo() : wheelQueue(); else if (b.dataset.wq === 'cancel') wheelCancel(); else sendCustom('wheel', 'open', b);
+      return;
+    }
     if (b && b.id === 'cu-simchat') { ui.simChat = !ui.simChat; ls.set('simchat', ui.simChat ? '1' : '0'); schedule('customs'); return; }
     if (b && b.id === 'cu-sim') { ui.sim = !ui.sim; if (ui.sim && !ui.simState) { ui.simState = simFresh(); simAdd(ui.simState, 6); } schedule('customs'); return; }
     if (b && b.dataset.cu) { if (b.disabled) return; if (b.dataset.st && !ui.sim) { const [k, v] = b.dataset.st.split(':'); if (k !== 'win') { ui.sel[k] = v; schedule('customs'); } } if (b.classList.contains('warn') && !armed(b)) return; sendCustom(b.dataset.cu, b.dataset.v, b); }
+    else if (b && b.dataset.wh && ui.sim) { if (b.classList.contains('warn') && !armed(b)) return; const W = simWheel(), k = b.dataset.wh; if (k === 'reset') { W.entrants = []; W.teams = []; W.status = 'open'; setWq(null); } else if (k === 'new') { W.round++; W.teams = []; W.status = 'open'; } else if (W.entrants.length >= W.teamSize * 2) { W.status = 'drawing'; toast('Sim wheel: spin (draw not simulated)'); } else toast('Not enough entrants', true); schedule('customs'); }
     else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); ui.tookControl = true; tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
     else if (b && b.id === 'cu-pickgo') { const v = $('#cu-pick').value.trim().replace(/\s+/g, ' '); C.customsText('pick', v) ? (sendCustom('pick', v, b), $('#cu-pick').value = '') : toast('Type 1 to 4 Twitch names first', true); }
     else if (b && b.id === 'cu-kickgo') { C.customsText('kick', $('#cu-kick').value) ? (sendCustom('kick', $('#cu-kick').value, b), $('#cu-kick').value = '') : toast('Type a Twitch name first', true); }
