@@ -20,6 +20,14 @@
     <span class="pill" id="p-link" title="Link to the Host: live push (SSE) or polling, and round trip time"><i></i><span>Host …</span></span>
     <button id="b-help" class="sm" title="Keyboard shortcuts (?)">?</button>
   </header>
+  <div id="music" class="musicbar" hidden>
+    <span class="mi">♪</span><span class="np ell" id="mu-np">Spotify…</span><span class="sp"></span>
+    <button class="sm g" data-mu="like" title="Like this song on Spotify">👍 Like</button>
+    <button class="sm" data-mu="previous" title="Back to the previous song">⏮ Back</button>
+    <button class="sm" data-mu="skip" title="Skip this song">⏭ Skip</button>
+    <button class="sm rd warn" data-mu="ban_song" title="Ban this song (it will never be requested again) and skip">🚫💿 Ban song</button>
+    <button class="sm rd warn" data-mu="ban_artist" title="Ban this artist (all their songs) and skip">🚫👤 Ban artist</button>
+  </div>
   <div id="offline" class="banner" hidden></div>
   <main id="grid">
     <div id="col-obs">

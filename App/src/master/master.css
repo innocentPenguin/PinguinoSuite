@@ -157,3 +157,6 @@ button:disabled{opacity:.4;cursor:default}button.cur:disabled{opacity:1}
 .cs[hidden]{display:none}
 button.cur,button.cur:hover{background:var(--accent);border-color:var(--accent);color:#140a00;font-weight:700;box-shadow:0 0 10px #ff990088;opacity:1;cursor:default}
 button.q-on,button.is-live{font-weight:700}
+
+.musicbar{display:flex;align-items:center;gap:6px;padding:5px 12px;border-bottom:1px solid var(--line);background:var(--bg2);flex:none;flex-wrap:wrap}
+.musicbar .mi{color:var(--accent)}.musicbar .np{min-width:80px;max-width:46vw;color:var(--dim)}

@@ -19,12 +19,16 @@
   })();
   const api = C.createApi({ base: HOST, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000 });
 
+  /* ---------- Spotify strip (the Spotify module, 127.0.0.1:8771) ---------- */
+  const MUSIC = (new URLSearchParams(location.search).get('music')) || 'http://127.0.0.1:8771';
+  const mapi = C.createApi({ base: MUSIC, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000 });
+
   /* ---------- state ---------- */
   const cached = ls.get('cache', {});
   const S = C.createStore({
     tree: cached.tree || { connected: false, current: '', scene: '', scenes: [], folders: [], items: [] }, treeStale: !!cached.tree,
     obsStatus: null, live: null, host: null, hostUp: null, customs: cached.customs || null, customsOk: null, wheel: null,
-    customsMod: null, cmds: [], overlays: null, ovErr: null, ochat: null, link: { sse: false, ms: null }, tick: 0,
+    now: null, nowOk: null, customsMod: null, cmds: [], overlays: null, ovErr: null, ochat: null, link: { sse: false, ms: null }, tick: 0,
   });
   const opt = C.createOptimistic(2500);
   const ui = {
@@ -105,6 +109,19 @@
     if (!r) r = await api.post('/api/run', { text, user: 'broadcaster' });
     if (r.ok) { toast('Sent ' + text); if (r.json && r.json.customs) S.set({ customs: r.json.customs, customsOk: true }); else pollers.customs.kick(); }
     else { ui.sent.delete(text); toast(text + ': ' + r.error, true); }
+  }
+
+  function renderMusic() {
+    const n = S.get('now'), ok = S.get('nowOk'), bar = $('#music');
+    bar.hidden = ok === null;   // hidden until the first answer or failure
+    $('#mu-np').textContent = ok === false ? 'Spotify module not reachable (needs CORS from the module)' : n && n.title ? n.title + ' · ' + (n.artist || '') + (n.requestedBy ? ' · req ' + n.requestedBy : '') : 'Nothing playing';
+    $$('#music button').forEach(b => { b.disabled = ok === false; });
+  }
+  async function musicAction(action, btn) {
+    flash(btn); const n = S.get('now'); await tokenReady;
+    const r = await mapi.post('/api/mod-action', { action });
+    if (r.ok && r.json && r.json.ok !== false) { toast(({ like: 'Liked', skip: 'Skipped', previous: 'Back', ban_song: 'Song banned', ban_artist: 'Artist banned' })[action] + ((r.json.title || (n && n.title)) ? ': ' + (r.json.title || n.title) : '')); pollers.music.kick(); }
+    else toast(action + ': ' + ((r.json && (r.json.error || r.json.code)) || r.error), true);
   }
 
   /* ---------- status bar ---------- */
@@ -350,12 +367,13 @@
   /* ---------- rendering scheduler (poll-driven renders coalesce to one per tick; clicks render synchronously) ---------- */
   const dirty = new Set(); let raf = 0;
   function schedule(...names) { names.forEach(n => dirty.add(n)); if (!raf) raf = setTimeout(() => { raf = 0; const d = [...dirty]; dirty.clear(); d.forEach(n => R[n] && R[n]()); }, 0); }
-  const R = { scenes: renderScenes, sources: renderSources, bar: renderBar, customs: renderCustoms, feed: renderFeed, cmds: renderCmds, overlays: renderOverlays };
+  const R = { scenes: renderScenes, sources: renderSources, bar: renderBar, music: renderMusic, customs: renderCustoms, feed: renderFeed, cmds: renderCmds, overlays: renderOverlays };
   S.subscribe(ch => {
     if (ch.includes('tree')) schedule('scenes', 'sources', 'bar');
     if (ch.some(k => ['obsStatus', 'live', 'host', 'hostUp', 'link'].includes(k))) schedule('bar');
     if (ch.includes('customs') || ch.includes('wheel') || ch.includes('customsOk')) schedule('customs');
     if (ch.includes('customs')) { const nx = S.get('customs'); if (ui.logsOk !== true) { const add = C.diffCustoms(ui.prevCustoms, nx); if (add.length && C.mergeFeed(ui.feed, add, x => x.k, 800)) { ui.feed.sort((a, b2) => a.ts - b2.ts); schedule('feed'); } } ui.prevCustoms = nx; }
+    if (ch.includes('now') || ch.includes('nowOk')) schedule('music');
     if (ch.includes('cmds')) schedule('cmds');
     if (ch.includes('overlays') || ch.includes('ochat') || ch.includes('ovErr')) schedule('overlays');
   });
@@ -388,6 +406,7 @@
       if (got.every(r => r.status === 404)) { if (ui.logsOk !== false) { ui.logsOk = false; schedule('feed'); } return; }
       if (got.some(r => r.ok)) { if (ui.logsOk !== true) { ui.logsOk = true; schedule('feed'); } got.forEach(r => r.ok && addLogs(r.json.events)); }
     }),
+    music: P(3000, async () => { const r = await mapi.get('/api/now'); if (r.ok) S.set({ now: r.json, nowOk: true }); else S.set({ nowOk: false }); }),
     cmds: P(5000, async () => { const r = await api.get('/api/commands/profiles'); if (r.ok) S.set({ cmds: r.json.commands || [] }); }, () => visible() && ui.tab === 'cmds'),
     overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = { ovErr: a.ok ? null : (a.error || 'HTTP ' + a.status) }; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
   };
@@ -434,6 +453,7 @@
   });
   $('#tab-customs').addEventListener('change', e => { const k = e.target.dataset.cuset; if (!k || !e.target.value) return; sendCustom(k, e.target.value, e.target); });
   $('#tab-customs').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'cu-kick' || e.target.id === 'cu-pick')) $(e.target.id === 'cu-kick' ? '#cu-kickgo' : '#cu-pickgo').click(); });
+  $('#music').addEventListener('click', e => { const b = e.target.closest('[data-mu]'); if (!b || b.disabled) return; if (b.classList.contains('warn') && !armed(b)) return; musicAction(b.dataset.mu, b); });
   $('#tab-cmds').addEventListener('click', e => { const row = e.target.closest('.cmd'); if (row && e.target.closest('.sw, .t')) toggleCmd(row.dataset.id); });
   $('#tab-overlays').addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;

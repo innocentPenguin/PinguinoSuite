@@ -78,3 +78,7 @@ Host contract asked of 02: `X`, the same items pushed as SSE `log`, and a `logs`
 Overlays tab: shows a clear "not connected yet: <reason>" note when `/api/overlays` fails, "Loading…" before the first answer, and "No overlay files" when the folder is empty.
 
 Update: 02 delivered the real feed (Host commit `75349e9`): `GET /api/eventlog?kind=players|backend&since=<ms>&limit=` (events `{id, ts ms, kind, type, user, text, group, detail}`, oldest first) plus SSE `playerlog`. The page polls both kinds with `since`, normalises with `normLog`, folds `match_clear` / `removed` / `leave` runs sharing a `group` into "N players", shows `teams` from `detail.blue/orange`, and reds `detail.level == error`. The older `/api/logs` wording above is superseded; the client-side fallback still applies while the endpoint is 404.
+
+## Spotify strip
+
+A bar under the header: now playing (`GET :8771/api/now`, polled every 3 s) and Like / Back / Skip / Ban song 🚫💿 / Ban artist 🚫👤 (`POST :8771/api/mod-action {action}`; the two bans need a second click). It needs the Spotify module to send CORS headers for the app's origin and to accept the app (no module token reachable from the page); until then the strip reads "Spotify module not reachable" and button errors show the HTTP text. `?music=<url>` overrides the module address (tests).
