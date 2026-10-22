@@ -876,6 +876,25 @@ public static class Harness
             Check(Q().SequenceEqual(new[] { "p6", "p7", "p8", "p1" }), "bulk: queueadd keeps the given order: " + string.Join(",", Q()));
             Run("mod1", "!queue", "clear", true);
         }
+        // ===== [NEW] strikes are counted per game (Rocket League vs Fortnite) =====
+        {
+            Func<string, int> Temp = n => { var t = State()["strikes"][n]; return t == null ? -1 : (int)t["temp"]; };
+            Run("mod1", "!activity", "rl competitive", true); Run("mod1", "!queue", "clear", true); Run("mod1", "!streamer", "out", true);
+            Run("mod1", "!queue", "open", true); Run("p2", "!join"); Run("mod1", "!unstrike", "p2", true);
+            Run("mod1", "!strike", "p2", true);
+            Check((string)State()["strikeGame"] == "rl" && Temp("p2") == 1, "strikes: a Rocket strike shows in the Rocket tally: " + State()["strikes"]);
+            Run("mod1", "!activity", "fn boxfights", true); Run("p2", "!join");
+            Check((string)State()["strikeGame"] == "fn" && Temp("p2") == 0, "strikes: the Fortnite tally starts at 0: " + State()["strikes"]);
+            Run("mod1", "!strike", "p2", true); Run("mod1", "!strike", "p2", true);
+            Check(Temp("p2") == 2, "strikes: Fortnite strikes counted on their own");
+            Run("mod1", "!activity", "rl competitive", true); Run("p2", "!join");
+            Check((string)State()["strikeGame"] == "rl" && Temp("p2") == 1, "strikes: back in Rocket the old tally is untouched (1)");
+            Run("mod1", "!unstrike", "p2", true);
+            Check(Temp("p2") == 0, "strikes: !unstrike acts on the current game");
+            Run("mod1", "!activity", "fn boxfights", true); Run("p2", "!join");
+            Check(Temp("p2") == 2, "strikes: the Fortnite tally survived (2)");
+            Run("mod1", "!unstrike", "p2", true); Run("mod1", "!unstrike", "p2", true); Run("mod1", "!activity", "end", true);
+        }
         Console.WriteLine(failed == 0 ? "ALL BOT CHECKS PASSED" : failed + " BOT CHECK(S) FAILED");
         try { Directory.Delete(dir, true); } catch { }
         return failed == 0 ? 0 : 1;

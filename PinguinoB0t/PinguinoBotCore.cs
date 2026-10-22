@@ -405,7 +405,26 @@ public class CPHInline
         public int HalfStrike { get; set; }                // 0/1: one HALF strike waiting (two halves = one temporary strike); wears off after a day
         public long HalfStrikeAt { get; set; }             // unix s when the half strike was given
         public long StrikeDecayAt { get; set; }            // unix s: when the oldest temporary strike was given / last wore off (a day after it, one goes)
+        public StrikeSet Fn { get; set; }                  // [NEW][STRIKES] the Fortnite tally; the flat fields above are the Rocket League tally (existing strikes stayed Rocket)
     }
+
+    // [NEW][STRIKES] Strikes are counted per game. Rocket League = the flat Player fields (old data migrates for free); Fortnite = Player.Fn.
+    class StrikeSet { public int Strikes, PermaStrikes, HalfStrike; public long HalfStrikeAt, StrikeDecayAt; public string PermaReason; }
+    class StrikeView
+    {
+        public Player P; public bool Fn;
+        StrikeSet S { get { if (P.Fn == null) P.Fn = new StrikeSet(); return P.Fn; } }
+        public int Strikes { get { return Fn ? (P.Fn == null ? 0 : P.Fn.Strikes) : P.Strikes; } set { if (Fn) S.Strikes = value; else P.Strikes = value; } }
+        public int PermaStrikes { get { return Fn ? (P.Fn == null ? 0 : P.Fn.PermaStrikes) : P.PermaStrikes; } set { if (Fn) S.PermaStrikes = value; else P.PermaStrikes = value; } }
+        public int HalfStrike { get { return Fn ? (P.Fn == null ? 0 : P.Fn.HalfStrike) : P.HalfStrike; } set { if (Fn) S.HalfStrike = value; else P.HalfStrike = value; } }
+        public long HalfStrikeAt { get { return Fn ? (P.Fn == null ? 0 : P.Fn.HalfStrikeAt) : P.HalfStrikeAt; } set { if (Fn) S.HalfStrikeAt = value; else P.HalfStrikeAt = value; } }
+        public long StrikeDecayAt { get { return Fn ? (P.Fn == null ? 0 : P.Fn.StrikeDecayAt) : P.StrikeDecayAt; } set { if (Fn) S.StrikeDecayAt = value; else P.StrikeDecayAt = value; } }
+        public string PermaReason { get { return Fn ? (P.Fn == null ? null : P.Fn.PermaReason) : P.PermaReason; } set { if (Fn) S.PermaReason = value; else P.PermaReason = value; } }
+    }
+    static bool CurFn() { var a = _settings == null ? null : _settings.Activity; return a == "boxfights" || a == "zonewars" || a == "fnviewers"; }
+    static StrikeView K(Player p) { return new StrikeView { P = p, Fn = CurFn() }; }
+    static StrikeView K(Player p, bool fn) { return new StrikeView { P = p, Fn = fn }; }
+    static string StrikeGame() { return CurFn() ? "fn" : "rl"; }
 
     class ObsSourceCfg
     {
@@ -1863,7 +1882,7 @@ public class CPHInline
             spotsNeeded = Math.Max(0, GetTotalSlots(_settings.DefaultFormat) - waiting.Count),
             queue = waiting.Select((e, i) => new { pos = i + 1, user = e.Username, epic = EpicOf(e.Username), mmr = StoredMmr(e.Username), mmrSource = MmrSrc(e.Username), practice = IsPractice(e.Username), sim = IsSim(e.Username), recycle = e.Recycle }),
             timedOut = _settings.TimedOut && !_settings.QueueOpen, timedOutAt = (_settings.TimedOut && !_settings.QueueOpen) ? (long?)_settings.TimedOutAt : null,
-            recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes, strikeLimit = MaxStrikes,
+            recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes, strikeLimit = MaxStrikes, strikeGame = StrikeGame(),
             strikes = StrikeMap(waiting.Select(e => e.Username)),   // [NEW] strike chips in the Master View: {login:{temp,half,perma}} for the queue and the live match
             overlay = new { altSeconds = _settings.OverlayAltSeconds, fadeMs = _settings.OverlayFadeMs },   // read by players.html / players_vertical.html
             activity = _settings.Activity,            currentMatch = match,
@@ -2278,7 +2297,7 @@ public class CPHInline
             //    makes a member profile for each Twitch player automatically.
             if (_standingsDirty || (DateTime.UtcNow - _lastStandingsPush).TotalMinutes >= 5)
             {
-                var rows = _players.Values.Where(p => !IsPractice(p.Username)).Select(p => new object[] { p.Username, p.GameId ?? "", p.Wins, p.Losses, p.Points, p.TwitchId ?? "", p.PeakMmr.HasValue ? (object)p.PeakMmr.Value : null, MmrSrc(p.Username), StrikeTotal(p), p.Sr.HasValue ? (object)p.Sr.Value : null, p.PermaStrikes, p.HalfStrike }).ToList();
+                var rows = _players.Values.Where(p => !IsPractice(p.Username)).Select(p => new object[] { p.Username, p.GameId ?? "", p.Wins, p.Losses, p.Points, p.TwitchId ?? "", p.PeakMmr.HasValue ? (object)p.PeakMmr.Value : null, MmrSrc(p.Username), StrikeTotal(p), p.Sr.HasValue ? (object)p.Sr.Value : null, K(p).PermaStrikes, K(p).HalfStrike }).ToList();
                 // [NEW][WEB] per game mode tables: category -> [username, wins, losses, points]
                 var modes = new Dictionary<string, List<object[]>>();
                 foreach (var p in _players.Values)
@@ -2505,7 +2524,7 @@ public class CPHInline
     bool CanRecycle(string login)
     {
         Player p;
-        return _settings.RecyclerEnabled && _players.TryGetValue(login, out p) && p.Recycler && StrikeTotal(p) == 0 && p.HalfStrike == 0 && !IsPractice(login);
+        return _settings.RecyclerEnabled && _players.TryGetValue(login, out p) && p.Recycler && StrikeTotal(p) == 0 && K(p).HalfStrike == 0 && !IsPractice(login);
     }
 
     // !recycle on|off  (yourself)     !recycle on|off <user>  (mods)     !recycle  (shows yours)
@@ -2539,7 +2558,7 @@ public class CPHInline
             Say("@" + user + " Recycle is " + (p.Recycler ? "ON" : "OFF") + (who == user ? "" : " for " + who) + (_settings.RecyclerEnabled ? "" : " (the recycler is switched off right now)") + ". Type !recycle on or !recycle off.");
             return true;
         }
-        if (a[0] == "on" && (StrikeTotal(p) > 0 || p.HalfStrike > 0)) { Say("@" + user + " " + (who == user ? "You have" : who + " has") + " a strike, so the recycler is not available."); return true; }
+        if (a[0] == "on" && (StrikeTotal(p) > 0 || K(p).HalfStrike > 0)) { Say("@" + user + " " + (who == user ? "You have" : who + " has") + " a strike, so the recycler is not available."); return true; }
         p.Recycler = a[0] == "on";
         SavePlayers();
         if (!p.Recycler) { var qe = GetEntry(who); if (qe != null && qe.Recycle) { qe.Recycle = false; SaveQueue(); } }
@@ -4742,26 +4761,28 @@ public class CPHInline
         foreach (var n in names)
         {
             Player p; if (n == "" || !_players.TryGetValue(n, out p)) continue;
-            d[n] = new { temp = p.Strikes, half = p.HalfStrike > 0 ? 1 : 0, perma = p.PermaStrikes };
+            var kk = K(p); d[n] = new { temp = kk.Strikes, half = kk.HalfStrike > 0 ? 1 : 0, perma = kk.PermaStrikes };
         }
         return d;
     }
 
-    static int StrikeTotal(Player p) { return p.Strikes + p.PermaStrikes; }
+    static int StrikeTotal(Player p) { var k = K(p); return k.Strikes + k.PermaStrikes; }
     static readonly System.Text.RegularExpressions.Regex PermaWords = new System.Text.RegularExpressions.Regex(@"\b(perma|permanent|toxic|toxicity|slur|slurs|racism|racist|hate)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     // temporary strikes wear off: one per full day since the last one went (or since the oldest was given)
     void DecayStrikes(long now)
     {
         int n = 0;
-        foreach (var p in _players.Values)
+        foreach (var pl in _players.Values)
+        foreach (var fnGame in new[] { false, true })
         {
-            if (p.HalfStrike > 0 && p.HalfStrikeAt > 0 && now - p.HalfStrikeAt >= 86400) { p.HalfStrike = 0; p.HalfStrikeAt = 0; n++; }
-            if (p.Strikes <= 0) { p.StrikeDecayAt = 0; continue; }
-            if (p.StrikeDecayAt <= 0) { p.StrikeDecayAt = now; n++; continue; }     // strikes from before this rule: the day starts now
-            long days = (now - p.StrikeDecayAt) / 86400;
+            var p = pl; var kk = K(pl, fnGame);
+            if (kk.HalfStrike > 0 && kk.HalfStrikeAt > 0 && now - kk.HalfStrikeAt >= 86400) { kk.HalfStrike = 0; kk.HalfStrikeAt = 0; n++; }
+            if (kk.Strikes <= 0) { kk.StrikeDecayAt = 0; continue; }
+            if (kk.StrikeDecayAt <= 0) { kk.StrikeDecayAt = now; n++; continue; }     // strikes from before this rule: the day starts now
+            long days = (now - kk.StrikeDecayAt) / 86400;
             if (days <= 0) continue;
-            p.Strikes = (int)Math.Max(0, p.Strikes - days); p.StrikeDecayAt = p.Strikes > 0 ? p.StrikeDecayAt + days * 86400 : 0; n++;
+            kk.Strikes = (int)Math.Max(0, kk.Strikes - days); kk.StrikeDecayAt = kk.Strikes > 0 ? kk.StrikeDecayAt + days * 86400 : 0; n++;
         }
         if (n > 0) { SavePlayers(); _standingsDirty = true; _stateDirty = true; CPH.LogInfo("[BVQ] Strike check: temporary strikes updated for " + n + " player(s)."); }
     }
@@ -4783,26 +4804,26 @@ public class CPHInline
             if (before >= MaxStrikes) { Say("@" + user + " " + target + " already has the maximum of " + MaxStrikes + " strikes."); return true; }
             if (half)
             {
-                if (p.HalfStrike == 0) { p.HalfStrike = 1; p.HalfStrikeAt = Now(); what = "Half strike given to "; }
-                else { p.HalfStrike = 0; p.HalfStrikeAt = 0; if (p.Strikes == 0) p.StrikeDecayAt = Now(); p.Strikes++; what = "Second half strike, a full strike given to "; }
+                if (K(p).HalfStrike == 0) { K(p).HalfStrike = 1; K(p).HalfStrikeAt = Now(); what = "Half strike given to "; }
+                else { K(p).HalfStrike = 0; K(p).HalfStrikeAt = 0; if (K(p).Strikes == 0) K(p).StrikeDecayAt = Now(); K(p).Strikes++; what = "Second half strike, a full strike given to "; }
             }
-            else if (perma) { p.PermaStrikes++; p.PermaReason = rest.Length > 60 ? rest.Substring(0, 60) : rest; what = "Permanent strike given to "; }
-            else { if (p.Strikes == 0) p.StrikeDecayAt = Now(); p.Strikes++; what = "Strike given to "; }
+            else if (perma) { K(p).PermaStrikes++; K(p).PermaReason = rest.Length > 60 ? rest.Substring(0, 60) : rest; what = "Permanent strike given to "; }
+            else { if (K(p).Strikes == 0) K(p).StrikeDecayAt = Now(); K(p).Strikes++; what = "Strike given to "; }
         }
         else
         {
-            if (half) { if (p.HalfStrike == 0) { Say("@" + user + " " + target + " has no half strike."); return true; } p.HalfStrike = 0; p.HalfStrikeAt = 0; what = "Half strike removed from "; }
-            else if (before == 0 && p.HalfStrike == 0) { Say("@" + user + " " + target + " already has no strikes."); return true; }
-            else if (before == 0) { p.HalfStrike = 0; p.HalfStrikeAt = 0; what = "Half strike removed from "; }
+            if (half) { if (K(p).HalfStrike == 0) { Say("@" + user + " " + target + " has no half strike."); return true; } K(p).HalfStrike = 0; K(p).HalfStrikeAt = 0; what = "Half strike removed from "; }
+            else if (before == 0 && K(p).HalfStrike == 0) { Say("@" + user + " " + target + " already has no strikes."); return true; }
+            else if (before == 0) { K(p).HalfStrike = 0; K(p).HalfStrikeAt = 0; what = "Half strike removed from "; }
             else
-            if (perma) { if (p.PermaStrikes == 0) { Say("@" + user + " " + target + " has no permanent strikes."); return true; } p.PermaStrikes--; what = "Permanent strike removed from "; }
-            else if (p.Strikes > 0) { p.Strikes--; what = "Strike removed from "; }
+            if (perma) { if (K(p).PermaStrikes == 0) { Say("@" + user + " " + target + " has no permanent strikes."); return true; } K(p).PermaStrikes--; what = "Permanent strike removed from "; }
+            else if (K(p).Strikes > 0) { K(p).Strikes--; what = "Strike removed from "; }
             else { Say("@" + user + " " + target + " only has permanent strikes. Use !unstrike @" + target + " perma to remove one."); return true; }
         }
         SavePlayers();
         _standingsDirty = true;
         string extra = "";
-        if (StrikeTotal(p) > 0 || p.HalfStrike > 0)   // any strike (even half) ends recycling
+        if (StrikeTotal(p) > 0 || K(p).HalfStrike > 0)   // any strike (even half) ends recycling
         {
             p.Recycler = false; SavePlayers();
             QueueEntry re = GetEntry(target);
@@ -4814,7 +4835,7 @@ public class CPHInline
             if (qe != null && qe.Status == "waiting") { RemoveFromQueue(target); extra = " They were taken out of the queue."; }
             extra = " " + target + " can't play customs until they lose a strike." + extra;
         }
-        Say("@" + user + " " + what + target + ": " + StrikeTotal(p) + (p.HalfStrike > 0 ? " and a half" : "") + "/" + MaxStrikes + (p.PermaStrikes > 0 ? " (" + p.PermaStrikes + " permanent)" : "") + "." + extra);
+        Say("@" + user + " " + what + target + ": " + StrikeTotal(p) + (K(p).HalfStrike > 0 ? " and a half" : "") + "/" + MaxStrikes + (K(p).PermaStrikes > 0 ? " (" + K(p).PermaStrikes + " permanent)" : "") + "." + extra);
         PublishState("queue_update", target + " strikes");
         return true;
     }
@@ -4826,7 +4847,7 @@ public class CPHInline
         Player p;
         if (!_players.TryGetValue(target, out p)) { Say("@" + user + " " + (target == user ? "You aren't" : target + " isn't") + " registered."); return true; }
         int t = StrikeTotal(p);
-        Say("@" + user + " " + (target == user ? "You have " : target + " has ") + t + (p.HalfStrike > 0 ? " and a half" : "") + "/" + MaxStrikes + " strikes" + (p.PermaStrikes > 0 ? " (" + p.PermaStrikes + " permanent, " + p.Strikes + " temporary)" : "") + "." + (t >= MaxStrikes ? " (not allowed to play customs)" : ""));
+        Say("@" + user + " " + (target == user ? "You have " : target + " has ") + t + (K(p).HalfStrike > 0 ? " and a half" : "") + "/" + MaxStrikes + " strikes" + (K(p).PermaStrikes > 0 ? " (" + K(p).PermaStrikes + " permanent, " + K(p).Strikes + " temporary)" : "") + "." + (t >= MaxStrikes ? " (not allowed to play customs)" : ""));
         return true;
     }
 
