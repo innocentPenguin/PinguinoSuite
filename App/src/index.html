@@ -255,6 +255,9 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
   <div class="item" data-r="commands"><span class="ic">⌨️</span>Commands</div>
   <div class="item" data-r="approvals"><span class="ic">✅</span>Approvals<span class="cbadge" id="abadge"></span></div>
   <div class="item" data-r="wheel"><span class="ic">🎡</span>Wheel &amp; Games</div>
+  <div class="item" data-r="economy"><span class="ic">💰</span>Economy</div>
+  <div class="item" data-r="timers"><span class="ic">⏱</span>Timers</div>
+  <div class="item" data-r="overlays"><span class="ic">🖼</span>Overlay fit</div>
   <div class="item" data-r="integrations"><span class="ic">🔌</span>Integrations</div>
   <div class="item" data-r="activity"><span class="ic">⚡</span>Activity</div>
   <div class="item" data-r="help"><span class="ic">?</span>Help</div>
@@ -535,7 +538,7 @@ setInterval(()=>{if(route==='activity'&&!document.hidden)pollActivity()},3000);
 setInterval(()=>{if(route!=='activity'&&anyActSound()&&!document.hidden)pollActivity()},5000);   // keeps follow / sub / raid sounds alive on any page
 /* ============ Pop-out windows (Tauri: src-tauri/src/windows.rs via window.PGWin; contract in Docs/MODULE_CONTRACT.md) ============ */
 const PW={mons:null,wins:[],err:null,sel:{page:'console',mon:'',place:'free',top:false}};
-const popRoutes=()=>[['dashboard','Dashboard'],['master','Master View'],['sources','Sources'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['accounts','Accounts'],['commands','Commands'],['approvals','Approvals'],['wheel','Wheel & Games'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
+const popRoutes=()=>[['dashboard','Dashboard'],['master','Master View'],['sources','Sources'],['console','Console'],['activity','Activity'],['voice','Voice Studio'],['quick','Quick actions'],['comm','PenguinComm'],['accounts','Accounts'],['commands','Commands'],['approvals','Approvals'],['wheel','Wheel & Games'],['economy','Economy'],['timers','Timers'],['overlays','Overlay fit'],['integrations','Integrations'],['help','Help']].concat((S?navEntries():[]).map(e=>[e.rid,e.ui?.nav||e.name]));
 function popTarget(route){   // module pages open directly (they are plain local pages); shell pages open the shell in chrome-less mode
   if(route==='master')return {url:'master/master.html?popout=1',title:'Master View'};   // 013's self-contained page
   if(isMod(route)){const m=modOf(route);if(!m)return null;return {url:modSrc(m),title:m.ui?.nav||m.name}}
@@ -635,7 +638,7 @@ document.addEventListener('keydown',e=>{if(e.ctrlKey&&!e.shiftKey&&!e.altKey&&e.
 const navIdx=id=>{const i=PF.layout.nav_order.indexOf(id);return i<0?1e6:i};
 const navHid=id=>PF.layout.nav_hidden.includes(id);
 const navSort=(list,idf)=>PF.layout.nav_order.length?list.map((x,i)=>[x,i]).sort((a,b)=>(navIdx(idf(a[0]))-navIdx(idf(b[0])))||(a[1]-b[1])).map(x=>x[0]):list;
-const STATIC_SYS=['activity','accounts','commands','approvals','wheel','integrations','help','console','personalize','settings'];
+const STATIC_SYS=['activity','accounts','commands','approvals','wheel','economy','timers','overlays','integrations','help','console','personalize','settings'];
 function navStatic(){const foot=$('#navfoot');if(!foot)return;
   const els=Object.fromEntries(STATIC_SYS.map(r=>[r,document.querySelector(`nav > .item[data-r="${r}"]`)]));
   const order=STATIC_SYS.map((r,i)=>[r,i]).sort((a,b)=>(navIdx(a[0])-navIdx(b[0]))||(a[1]-b[1])).map(x=>x[0]).filter(r=>r!=='settings').concat(['settings']);
@@ -644,7 +647,7 @@ const FIXED=['dashboard','settings','personalize'];
 function navCatalog(){const out=[{id:'dashboard',label:'Dashboard',fixed:true},{id:'master',label:'Master View'},{id:'sources',label:'Sources'}];
   const mods=S?navSort(navEntries().sort((a,b)=>(a.ui.order??100)-(b.ui.order??100)),x=>x.rid):[];
   mods.forEach(m=>out.push({id:m.rid,label:m.ui.nav||m.name}));REAL.forEach(x=>out.push({id:x[0],label:x[2]}));
-  const sys={activity:'Activity',accounts:'Accounts',commands:'Commands',approvals:'Approvals',wheel:'Wheel & Games',integrations:'Integrations',help:'Help',console:'Console',personalize:'Personalize',settings:'Settings'};
+  const sys={activity:'Activity',accounts:'Accounts',commands:'Commands',approvals:'Approvals',wheel:'Wheel & Games',economy:'Economy',timers:'Timers',overlays:'Overlay fit',integrations:'Integrations',help:'Help',console:'Console',personalize:'Personalize',settings:'Settings'};
   STATIC_SYS.map((r,i)=>[r,i]).sort((a,b)=>(navIdx(a[0])-navIdx(b[0]))||(a[1]-b[1])).forEach(([r])=>out.push({id:r,label:sys[r],fixed:FIXED.includes(r)}));
   return out}
 
@@ -1230,6 +1233,142 @@ function bindApprovals(){
       toast({approve:'Approved',edit:'Edited and approved',reject:'Rejected',undo:'Undone'}[a]||'Done');APR.edit=null}
     catch(e){toast('Could not '+a+': '+(e&&e.message?e.message:e));b.disabled=false;return}
     re();aprPoll()})}
+/* ============ Economy / Timers / Overlays (Host: /api/economy/points-settings + /api/economy/preview, /api/timers, /api/overlay-options[/schema]) ============ */
+const debounce=(f,ms)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>f(...a),ms)}};
+const hostErr=(r,d)=>(r&&r.error)||('HTTP '+((r&&r._status)||'?'))||d;
+const humanKey=k=>({WatchV2:'Pay for watching',WatchIntervalMin:'Pay every (minutes)',WatchViewer:'Viewer rate',WatchSubT1:'Sub tier 1 rate',WatchSubT2:'Sub tier 2 rate',WatchSubT3:'Sub tier 3 rate',EntryBonus:'Entry bonus (once per stream)',
+  CheerLow:'Per bit, under the middle band',CheerMid:'Per bit, middle band',CheerHigh:'Per bit, top band',CheerMidFrom:'Middle band starts at (bits)',CheerHighFrom:'Top band starts at (bits)',
+  SubT1:'Sub tier 1',SubT2:'Sub tier 2',SubT3:'Sub tier 3',GiftRecipient:'Gift sub received',TipCurve:'Tip curve (usd:points, …)',TipFloorPerUsd:'Tip minimum per dollar',FollowBonus:'Follow bonus (once ever)',
+  RaidArrival:'Raid arrival bonus',RaidLeader:'Raid leader bonus',RaidLeaderMin:'Raid leader needs (viewers)',RaidWindowMin:'Raid window (minutes)',MatchMinutes:'Match = minutes of watching',MatchPlayMult:'Playing multiplier',MatchWinMult:'Winning multiplier',
+  ActivityBonus:'Chat activity bonus',ActivityLinesPerPoint:'Chat lines per point',ActivityCapPer10Min:'Activity cap per 10 min'}[k]||k.replace(/([a-z])([A-Z])/g,'$1 $2'));
+const ECO_GROUPS=[['Watching',['WatchV2','WatchIntervalMin','WatchViewer','WatchSubT1','WatchSubT2','WatchSubT3'],'Paid only while live, once per full interval; the rate is picked at the moment of payment.'],
+  ['Entry & raids',['EntryBonus','RaidArrival','RaidLeader','RaidLeaderMin','RaidWindowMin'],'Entry once per stream. Raid arrival is on top of it for people who arrive inside the raid window.'],
+  ['Cheers',['CheerLow','CheerMid','CheerHigh','CheerMidFrom','CheerHighFrom'],'Points per bit, by how big the cheer is.'],
+  ['Subs & gifts',['SubT1','SubT2','SubT3','GiftRecipient'],''],
+  ['Tips & follows',['TipFloorPerUsd','TipCurve','FollowBonus'],'The curve is a list of dollars:points pairs; in between is interpolated, and nobody gets less than the minimum per dollar.'],
+  ['Matches',['MatchMinutes','MatchPlayMult','MatchWinMult'],'Playing = that many minutes of watching x the multiplier, winning = x the other multiplier (at the player’s own viewer or sub rate).'],
+  ['Chat activity',['ActivityBonus','ActivityLinesPerPoint','ActivityCapPer10Min'],'']];
+const ECO={d:undefined,vals:{},base:{},ex:null,err:'',saving:false,calc:{type:'cheer',amount:500,tier:1,out:''},sum:null};
+const ecoStr=v=>Array.isArray(v)?v.map(p=>p.join(':')).join(', '):v;
+const ecoParse=(k,s)=>{if(k==='TipCurve'){const out=[];for(const part of String(s).split(',').map(x=>x.trim()).filter(Boolean)){const m=part.match(/^([\d.]+)\s*[:=]\s*([\d.]+)$/);if(!m)return null;out.push([+m[1],+m[2]])}return out.length?out:null}
+  const n=Number(s);return s===''||!isFinite(n)?null:n};
+const ecoChanged=()=>{const o={};Object.keys(ECO.vals).forEach(k=>{if(JSON.stringify(ECO.vals[k])!==JSON.stringify(ECO.base[k]))o[k]=ECO.vals[k]});return o};
+async function loadEconomy(){
+  try{const r=await hostGet('/api/economy/points-settings');if(!r.ok)throw new Error(r.error||'not ok');ECO.d=r;ECO.base=JSON.parse(JSON.stringify(r.values||{}));ECO.vals=JSON.parse(JSON.stringify(ECO.base));ECO.ex=r.examples||null;ECO.err=''}
+  catch(e){ECO.d=null;ECO.err=String(e&&e.message||e)}
+  try{ECO.sum=await hostGet('/api/economy')}catch{ECO.sum=null}
+  if(route==='economy')draw(true)}
+const exLines=(o,pre)=>Object.entries(o||{}).map(([k,v])=>v&&typeof v==='object'?`<div class="sm"><b>${esc(pre+k)}</b> ${Object.entries(v).map(([a,b])=>`${esc(a)}: ${esc(b&&typeof b==='object'?Object.entries(b).map(([x,y])=>x+' '+y).join(', '):b)}`).join(' · ')}</div>`:`<div class="sm"><b>${esc(pre+k)}</b> ${esc(v)}</div>`).join('');
+const ecoExamples=()=>ECO.ex?exLines(ECO.ex,''):'<div class="dim sm">No examples yet.</div>';
+const ecoField=k=>{const v=ECO.vals[k],ch=JSON.stringify(v)!==JSON.stringify(ECO.base[k]);
+  const inp=typeof v==='boolean'?`<input type="checkbox" data-ek="${k}"${v?' checked':''}>`:`<input data-ek="${k}" value="${esc(ecoStr(v))}" style="width:${k==='TipCurve'?'230':'110'}px">`;
+  return `<label class="row" style="gap:8px;margin:4px 0"><span style="flex:1;min-width:190px">${esc(humanKey(k))}${ch?' <span class="pill">changed</span>':''}</span>${inp}</label>`};
+pages.economy=()=>{
+  if(ECO.d===undefined){loadEconomy();return '<div class="dim">Loading the points settings…</div>'}
+  if(!ECO.d)return `<div class="card"><h3>Economy</h3><div class="dim">The Host did not answer${ECO.err?' ('+esc(ECO.err)+')':''}, or it is an older build without the points settings.</div><div class="row" style="margin-top:10px"><button class="sm" id="eco-retry">Retry</button></div></div>`;
+  const cur=ECO.d.currency||'points',n=Object.keys(ecoChanged()).length,s=ECO.sum||{};
+  const types=['watch','entry','cheer','sub','gift','gift_recipient','tip','follow','raid_in','raid_out','match_play','match_win'];
+  return `<div style="max-width:1100px"><div class="pnote">Every number below is a Host setting that reloads without a restart. Type a new value and the right-hand panel shows what it would pay; nothing changes until you press Save.</div>
+  <div class="row wrap" style="margin:8px 0">${s.people!=null?`<span class="pill">${esc(s.people)} people</span><span class="pill">${esc(s.totalPoints)} ${esc(cur)} in circulation</span>`:''}<span class="sp"></span><button class="sm" id="eco-reload">Reload</button></div>
+  <div class="grid g2" style="align-items:start"><div>${ECO_GROUPS.filter(g=>g[1].some(k=>k in ECO.vals)).map(g=>`<div class="card"><h3>${esc(g[0])}</h3>${g[2]?`<div class="sm faint" style="margin-bottom:6px">${esc(g[2])}</div>`:''}${g[1].filter(k=>k in ECO.vals).map(ecoField).join('')}</div>`).join('')}
+    <div class="row wrap"><button id="eco-save"${n&&!ECO.saving?'':' disabled'}>Save${n?' ('+n+' changed)':''}</button><button class="sm" id="eco-revert"${n?'':' disabled'}>Revert</button><span class="sm faint" id="eco-msg"></span></div></div>
+   <div style="position:sticky;top:0"><div class="card"><h3>Live preview <span class="sm faint">with your unsaved numbers</span></h3><div id="eco-ex">${ecoExamples()}</div></div>
+    <div class="card"><h3>Calculator <span class="sm faint">uses the saved numbers</span></h3><div class="row wrap"><select id="ec-type">${types.map(t=>`<option${t===ECO.calc.type?' selected':''}>${t}</option>`).join('')}</select>
+      <input id="ec-amt" type="number" min="0" style="width:90px" value="${esc(ECO.calc.amount)}" title="bits, dollars, viewers or number of gifts"><select id="ec-tier" title="sub tier (0 = viewer)">${[0,1,2,3].map(t=>`<option value="${t}"${t==ECO.calc.tier?' selected':''}>${t?'tier '+t:'viewer'}</option>`).join('')}</select><button class="sm" id="ec-go">Work it out</button></div>
+      <div id="ec-out" style="margin-top:8px">${esc(ECO.calc.out)}</div></div></div></div></div>`};
+function bindEconomy(){
+  const re=()=>{ECO.d=undefined;draw(true)};
+  $('#eco-retry')&&($('#eco-retry').onclick=re);$('#eco-reload')&&($('#eco-reload').onclick=re);
+  const preview=debounce(async()=>{const ch=ecoChanged();if(!Object.keys(ch).length){ECO.ex=ECO.d.examples||null;const e=$('#eco-ex');if(e)e.innerHTML=ecoExamples();return}
+    try{const r=await hostJ('/api/economy/points-settings',{values:ch,dry:true});if(!r.ok)throw new Error(hostErr(r));ECO.ex=r.examples;const m=$('#eco-msg');if(m)m.textContent=''}catch(e){const m=$('#eco-msg');if(m)m.textContent='Preview: '+(e.message||e)}
+    const e=$('#eco-ex');if(e)e.innerHTML=ecoExamples()},350);
+  $$('[data-ek]').forEach(i=>{i.oninput=i.onchange=()=>{const k=i.dataset.ek;let v;
+    if(i.type==='checkbox')v=i.checked;else{v=ecoParse(k,i.value);if(v==null||(typeof v==='number'&&v<0)){i.style.outline='2px solid var(--bad,#d44)';return}}
+    i.style.outline='';ECO.vals[k]=v;
+    const n=Object.keys(ecoChanged()).length,sv=$('#eco-save'),rv=$('#eco-revert');if(sv){sv.disabled=!n;sv.textContent='Save'+(n?' ('+n+' changed)':'')}if(rv)rv.disabled=!n;
+    preview()}});
+  $('#eco-revert')&&($('#eco-revert').onclick=()=>{ECO.vals=JSON.parse(JSON.stringify(ECO.base));ECO.ex=ECO.d.examples||null;draw(true)});
+  $('#eco-save')&&($('#eco-save').onclick=async()=>{const ch=ecoChanged();if(!Object.keys(ch).length)return;ECO.saving=true;$('#eco-save').disabled=true;
+    try{const r=await hostJ('/api/economy/points-settings',{values:ch});if(!r.ok)throw new Error(hostErr(r));toast('Points settings saved');ECO.d=r;ECO.base=JSON.parse(JSON.stringify(r.values||{}));ECO.vals=JSON.parse(JSON.stringify(ECO.base));ECO.ex=r.examples||null}
+    catch(e){toast('Not saved: '+(e.message||e))}ECO.saving=false;draw(true)});
+  $('#ec-go')&&($('#ec-go').onclick=async()=>{ECO.calc.type=$('#ec-type').value;ECO.calc.amount=+$('#ec-amt').value||0;ECO.calc.tier=+$('#ec-tier').value||0;
+    try{const r=await hostJ('/api/economy/preview',{type:ECO.calc.type,amount:ECO.calc.amount,tier:ECO.calc.tier});ECO.calc.out=r.ok?`${r.points} ${ECO.d.currency||'points'} · ${r.detail||''}`:('Could not: '+hostErr(r))}catch(e){ECO.calc.out='Could not reach the Host'}
+    const o=$('#ec-out');if(o)o.textContent=ECO.calc.out})}
+
+/* ---- Timers (GET|POST /api/timers) ---- */
+const TM={d:undefined,err:'',open:{}};
+async function loadTimers(){try{const r=await hostGet('/api/timers');if(r.ok===false||!r.timers)throw new Error(r.error||'no timers list');TM.d=r;TM.err=''}catch(e){TM.d=null;TM.err=String(e&&e.message||e)}if(route==='timers'&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))draw(true)}
+const tmWhen=s=>s<=0?'due now':s<90?s+' s':s<5400?Math.round(s/60)+' min':(s/3600).toFixed(1)+' h';
+pages.timers=()=>{
+  if(TM.d===undefined){loadTimers();return '<div class="dim">Loading timers…</div>'}
+  const d=TM.d;
+  if(!d)return `<div class="card"><h3>Timers</h3><div class="dim">The Host did not answer${TM.err?' ('+esc(TM.err)+')':''}, or it is an older build without timers.</div><div class="row" style="margin-top:10px"><button class="sm" id="tm-retry">Retry</button></div></div>`;
+  const min=d.minEverySec||60,card=t=>`<div class="card" data-tid="${esc(t.id)}"><div class="row wrap"><label class="row" style="gap:6px"><input type="checkbox" data-tf="enabled"${t.enabled?' checked':''}><b>${esc(t.name||t.id)}</b></label><span class="pill">${t.enabled?'on':'off'}</span><span class="sm faint">next in <span data-nxt="${esc(t.id)}" data-s="${t.nextInSec|0}">${t.enabled?tmWhen(t.nextInSec|0):'paused'}</span></span><span class="sp"></span><button class="sm" data-tact="now" title="Say the next message now">Send now</button><button class="sm" data-tact="del">Delete</button></div>
+    <div class="row wrap" style="margin-top:8px;gap:12px"><label class="sm">Every <input data-tf="everyMin" type="number" min="${Math.ceil(min/60)}" step="1" style="width:70px" value="${Math.round((t.everySec||900)/60)}"> min</label>
+      <label class="sm">After <input data-tf="minChatMessages" type="number" min="0" style="width:70px" value="${t.minChatMessages|0}"> chat lines</label>
+      <label class="sm"><input type="checkbox" data-tf="onlineOnly"${t.onlineOnly?' checked':''}> only while live</label>
+      <label class="sm">Order <select data-tf="mode">${['rotate','random','all'].map(m=>`<option${m===(t.mode||'rotate')?' selected':''}>${m}</option>`).join('')}</select></label></div>
+    <textarea data-tf="messages" rows="${Math.max(2,Math.min(8,(t.messages||[]).length+1))}" style="width:100%;margin-top:8px" placeholder="One message per line">${esc((t.messages||[]).join('\n'))}</textarea>
+    <div class="row wrap" style="margin-top:6px"><label class="sm" style="flex:1">Also run action <input data-tf="automation" style="width:70%" value="${esc(t.automation||'')}" placeholder="optional action name"></label><button class="sm" data-tact="save">Save this timer</button></div></div>`;
+  return `<div style="max-width:900px"><div class="pnote">Timers say their messages in chat on a schedule. Two timers never speak closer together than the global gap, and a timer waits for chat to move before it repeats. A new timer starts switched off.</div>
+   <div class="row wrap" style="margin:8px 0"><span class="pill">${d.live?'live now':'offline'}</span><label class="sm">Global gap <input id="tm-gap" type="number" min="0" max="3600" style="width:70px" value="${d.globalGapSec|0}"> s</label><button class="sm" id="tm-gapsave">Save gap</button><span class="sp"></span><button class="sm" id="tm-reload">Refresh</button></div>
+   ${(d.timers||[]).length?d.timers.map(card).join(''):'<div class="card dim">No timers yet.</div>'}
+   <div class="card"><h3>New timer</h3><div class="row wrap"><input id="tm-new" placeholder="name, e.g. socials" style="width:240px"><button class="sm" id="tm-add">Add (switched off)</button></div></div></div>`};
+setInterval(()=>{if(route==='timers'&&TM.d&&!document.hidden)$$('[data-nxt]').forEach(e=>{const s=Math.max(0,(+e.dataset.s||0)-1);e.dataset.s=s;if(e.parentNode&&e.closest('.card')&&e.closest('.card').querySelector('[data-tf=enabled]').checked)e.textContent=tmWhen(s)})},1000);
+setInterval(()=>{if(route==='timers'&&!document.hidden&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))loadTimers()},30000);
+function bindTimers(){
+  const re=()=>{TM.d=undefined;draw(true)},tpost=async(b,ok)=>{try{const r=await hostJ('/api/timers',b);if(r.ok===false)throw new Error(hostErr(r));if(ok)toast(ok);if(r.timers){TM.d=r;draw(true)}else re()}catch(e){toast('Timers: '+(e.message||e))}};
+  $('#tm-retry')&&($('#tm-retry').onclick=re);$('#tm-reload')&&($('#tm-reload').onclick=re);
+  $('#tm-gapsave')&&($('#tm-gapsave').onclick=()=>tpost({globalGapSec:Math.max(0,Math.min(3600,+$('#tm-gap').value||0))},'Gap saved'));
+  $('#tm-add')&&($('#tm-add').onclick=()=>{const n=$('#tm-new').value.trim();if(!n){toast('Give the timer a name');return}tpost({timer:{name:n}},'Timer added (off)')});
+  $$('[data-tid] [data-tf=enabled]').forEach(c=>c.onchange=()=>tpost({id:c.closest('[data-tid]').dataset.tid,enabled:c.checked},c.checked?'Timer on':'Timer off'));
+  $$('[data-tid] [data-tact]').forEach(b=>b.onclick=()=>{const card=b.closest('[data-tid]'),id=card.dataset.tid,a=b.dataset.tact,f=n=>card.querySelector(`[data-tf=${n}]`);
+    if(a==='now')return tpost({now:id},'Sent');
+    if(a==='del'){if(!confirm('Delete the timer "'+id+'"? Its messages go with it.'))return;return tpost({delete:id},'Timer deleted')}
+    const msgs=f('messages').value.split('\n').map(x=>x.trim()).filter(Boolean);
+    if(!msgs.length&&!confirm('This timer has no messages and will say nothing. Save anyway?'))return;
+    tpost({timer:{id,enabled:f('enabled').checked,everySec:Math.max(TM.d.minEverySec||60,Math.round((+f('everyMin').value||15)*60)),minChatMessages:+f('minChatMessages').value||0,onlineOnly:f('onlineOnly').checked,mode:f('mode').value,messages:msgs,automation:f('automation').value.trim()}},'Timer saved')})}
+
+/* ---- Overlay fit options (GET /api/overlay-options/schema, GET|POST /api/overlay-options) ---- */
+const OV={sch:undefined,raw:{},name:'*',err:''};
+async function loadOverlays(){
+  try{const s=await hostGet('/api/overlay-options/schema');if(!s.ok||!s.options)throw new Error(s.error||'no schema');OV.sch=s;const r=await hostGet('/api/overlay-options');OV.raw=(r&&typeof r==='object')?r:{};OV.err=''}
+  catch(e){OV.sch=null;OV.err=String(e&&e.message||e)}
+  if(route==='overlays')draw(true)}
+const ovOwn=()=>{const o=OV.raw[OV.name];return o&&typeof o==='object'?o:{}};
+const ovPrev=()=>OV.name==='*'?(OV.sch.overlays[0]||'queue'):OV.name;
+pages.overlays=()=>{
+  if(OV.sch===undefined){loadOverlays();return '<div class="dim">Loading overlay options…</div>'}
+  if(!OV.sch)return `<div class="card"><h3>Overlay options</h3><div class="dim">The Host did not answer${OV.err?' ('+esc(OV.err)+')':''}, or it is an older build without overlay options.</div><div class="row" style="margin-top:10px"><button class="sm" id="ov-retry">Retry</button></div></div>`;
+  const own=ovOwn(),names=['*'].concat(OV.sch.overlays||[]);
+  const ctl=o=>{const set=o.key in own,v=set?own[o.key]:o.default,dim=set?'':' faint';
+    let c='';
+    if(o.type==='number')c=`<input type="range" data-ov="${o.key}" min="${o.min}" max="${o.max}" step="${o.step}" value="${esc(v)}" style="flex:1;min-width:140px"><input type="number" data-ovn="${o.key}" min="${o.min}" max="${o.max}" step="${o.step}" value="${esc(v)}" style="width:84px">`;
+    else if(o.type==='enum')c=`<select data-ov="${o.key}">${set?'':`<option value=""${v===''?' selected':''}>(default${o.default?': '+esc(o.default):''})</option>`}${(o.values||[]).map(x=>`<option${set&&String(v)===String(x)?' selected':''}>${esc(x)}</option>`).join('')}</select>`;
+    else c=`<input type="checkbox" data-ov="${o.key}"${v&&v!=='0'?' checked':''}>`;
+    return `<div class="row${dim}" style="gap:10px;margin:6px 0" title="${esc(o.help||'')}"><span style="width:170px">${esc(o.label)}</span>${c}<button class="sm" data-ovx="${o.key}"${set?'':' disabled'} title="Back to the default">${set?'Reset':'default'}</button></div>`};
+  return `<div style="max-width:1100px"><div class="pnote">Fix an overlay that does not fit its OBS source without editing it: size, corner, safe margin, nudge. <b>All overlays</b> applies to every overlay; a single overlay's own numbers win. OBS picks the change up within 5 seconds, no reload.</div>
+   <div class="row wrap" style="margin:8px 0">${names.map(n=>`<span class="chip${OV.name===n?' on':''}" data-ovname="${esc(n)}">${n==='*'?'All overlays':esc(n)}</span>`).join('')}</div>
+   <div class="grid g2" style="align-items:start"><div class="card"><h3>${OV.name==='*'?'All overlays':esc(OV.name)}</h3>${(OV.sch.options||[]).map(ctl).join('')}
+     <div class="row wrap" style="margin-top:10px"><button class="sm" id="ov-clear"${Object.keys(own).length?'':' disabled'}>Reset all of these</button><span class="sm faint" id="ov-msg"></span></div></div>
+    <div class="card"><h3>Preview <span class="sm faint">red = source, green = safe area, blue = overlay</span></h3><div style="position:relative;width:100%;aspect-ratio:16/9;background:#111;border-radius:6px;overflow:hidden"><iframe id="ov-frame" src="http://127.0.0.1:8770/${esc(ovPrev())}.html?preview=1&guides=1&mock" style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe></div>
+      <div class="row sm faint" style="margin-top:6px"><span>Showing ${esc(ovPrev())}${OV.name==='*'?' (the first overlay, as an example)':''}.</span><span class="sp"></span><button class="sm" id="ov-rl">Reload preview</button></div></div></div></div>`};
+function bindOverlays(){
+  const re=()=>{OV.sch=undefined;draw(true)};
+  $('#ov-retry')&&($('#ov-retry').onclick=re);
+  $$('[data-ovname]').forEach(b=>b.onclick=()=>{OV.name=b.dataset.ovname;draw(true)});
+  const msg=t=>{const m=$('#ov-msg');if(m)m.textContent=t};
+  const send=async(opts,after)=>{try{const r=await hostJ('/api/overlay-options',{name:OV.name,options:opts});if(r.ok===false)throw new Error(hostErr(r));
+      const all=await hostGet('/api/overlay-options');OV.raw=all&&typeof all==='object'?all:OV.raw;msg('Saved');if(after)after()}catch(e){msg('');toast('Overlay options: '+(e.message||e))}};
+  const sendSoon=debounce((k,v)=>send({[k]:v}),250);
+  const opt=k=>(OV.sch.options||[]).find(o=>o.key===k);
+  $$('[data-ov]').forEach(i=>{const k=i.dataset.ov,o=opt(k);i.oninput=i.onchange=()=>{let v;
+    if(o.type==='number'){v=+i.value;const n=$(`[data-ovn="${k}"]`);if(n&&n!==i)n.value=v}else if(o.type==='bool')v=i.checked?1:0;else v=i.value===''?null:i.value;
+    const row=i.closest('.row');if(row)row.classList.remove('faint');sendSoon(k,v)}});
+  $$('[data-ovn]').forEach(i=>{const k=i.dataset.ovn;i.onchange=()=>{const v=Math.max(+i.min,Math.min(+i.max,+i.value||0));i.value=v;const r=$(`[data-ov="${k}"]`);if(r)r.value=v;sendSoon(k,v)}});
+  $$('[data-ovx]').forEach(b=>b.onclick=()=>send({[b.dataset.ovx]:null},()=>draw(true)));
+  $('#ov-clear')&&($('#ov-clear').onclick=()=>{if(!confirm('Reset every option for '+(OV.name==='*'?'all overlays':OV.name)+' to the defaults?'))return;send(null,()=>draw(true))});
+  $('#ov-rl')&&($('#ov-rl').onclick=()=>{const f=$('#ov-frame');if(f)f.src=f.src})}
 /* ============ Wheel & Games: every wheel / queue / gambling / economy knob (Host: GET|POST /api/tune {area, values}; economy also via /api/economy) + live wheel preview + test-bet simulator ============ */
 const WG_OBS='http://127.0.0.1:8770/wheel.html';
 /* Copy OBS URL: one reusable row for any overlay that is meant to be a Browser Source */
@@ -1726,7 +1865,7 @@ function showWizard(){let role='streaming';const el=document.createElement('div'
       D=await post('/api/setup',{name:el.querySelector('#w-name').value,role});el.remove();SETUP.first_run=false;toast('Setup done');load();draw(true)}catch{el.querySelector('#w-note').textContent='Could not save. Is the core running?'}}}
 
 /* ============ shell ============ */
-const titles={master:'Master View',sources:'Sources',commands:'Commands',wheel:'Wheel & Games',approvals:'Approvals',accounts:'Accounts',quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
+const titles={master:'Master View',sources:'Sources',commands:'Commands',wheel:'Wheel & Games',economy:'Economy',timers:'Timers',overlays:'Overlay fit',approvals:'Approvals',accounts:'Accounts',quick:'Quick actions',comm:'PenguinComm',personalize:'Personalize',activity:'Activity',help:'Help',integrations:'Integrations',console:'Console',dashboard:'Dashboard',voice:'Voice Studio',chat:'Chat',bots:'Bot Control',actions:'Actions & Events',settings:'Settings'};
 const REAL=[['quick','⚡','Quick actions'],['voice','🗣','Voice Studio']];
 const PREVIEWS=[['chat','💬','Chat'],['bots','🤖','Bot Control'],['actions','⚡','Actions & Events']];
 let navSig='';
@@ -1775,6 +1914,9 @@ function bind(){
   if(route==='approvals')bindApprovals();
   if(route==='commands')bindCommands();
   if(route==='wheel')bindWheel();
+  if(route==='economy')bindEconomy();
+  if(route==='timers')bindTimers();
+  if(route==='overlays')bindOverlays();
   if(route==='sources')bindSources();
   if(route==='integrations')bindIntegrations();
   if(route==='settings')bindPortable();
