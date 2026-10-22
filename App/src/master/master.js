@@ -468,8 +468,8 @@
     ui.teamsOv[side] = Object.assign({}, ui.teamsOv[side], p, { until: Date.now() + 5000 }); schedule('customs'); setTimeout(() => schedule('customs'), 5100);
     if (ui.sim) { Object.assign(ui.simState.teams[side], p); schedule('customs'); return; }
     const all = ls.get('teams') || {}; all[side] = Object.assign({}, all[side], p); ls.set('teams', all);
-    await tokenReady; ui.tookControl = true; const r = await api.post('/api/customs/teams', { [side]: p });
-    if (r.ok && !(r.json && r.json.ok === false)) toast(side + ' team: ' + ((p.name || '') + ' ' + (p.color || '')).trim()); else if (r.status === 404) toast('Team names/colours need the Host /api/customs/teams (asked 02, not there yet)', true); else toast('Team: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
+    await tokenReady; ui.tookControl = true; const r = await api.post('/api/customs/teams', { [side]: { name: p.name, hex: p.color } });
+    if (r.ok && !(r.json && r.json.ok === false)) toast(side + ' team: ' + ((p.name || '') + ' ' + (p.color || '')).trim()); else if (r.status === 404) toast('Team names/colours need the Host /api/customs/teams (Host restart needed)', true); else toast('Team: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
   }
   function renderTeamsEditor() {
     const t = teamsNow();
@@ -546,6 +546,14 @@
       <div class="row"><input type="datetime-local" id="si-at"><select id="si-priv"><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select><button class="sm rd warn" id="si-sched" title="Creates a scheduled YouTube broadcast with the title, description and tags above. It does not go live.">Schedule</button></div>
       <div class="faint sm">Creates a scheduled entry only; you start the stream yourself. Two clicks to confirm.</div>
       <div id="si-sres" class="si-res"></div>
+      <h4 class="si-h">Stream recap</h4>
+      <div class="faint sm">Recap of the LAST stream, ending with the best clip. Preview says nothing in chat.</div>
+      <div class="btns" style="margin-top:6px"><button class="sm" id="rc-prev">Preview recap</button><button class="sm rd warn" id="rc-say" title="Posts the recap in Twitch chat (30 s duplicate guard). Two clicks.">Post in chat</button></div>
+      <pre id="rc-out" class="si-res" style="white-space:pre-wrap"></pre>
+      <h4 class="si-h">Raid prep</h4>
+      <div class="faint sm">Runs the raid_start automation once (for raids started on the Twitch site). Does not start a raid.</div>
+      <div class="row" style="margin-top:6px"><input type="text" id="rd-target" maxlength="25" autocomplete="off" placeholder="target channel (optional)" style="width:190px"><button class="sm rd warn" id="rd-go">Raid prep</button></div>
+      <div id="rd-res" class="si-res"></div>
       <h4 class="si-h">TikTok (manual)</h4>
       <textarea id="si-tt" rows="5" readonly></textarea><div class="btns" style="margin-top:6px"><button class="sm" id="si-copy">Copy for TikTok</button></div>
     </div>`;
@@ -596,6 +604,21 @@
     siShow($('#si-sres'), [[ok, ok ? 'Scheduled for ' + when.toLocaleString() + (r.json.url ? ' · ' + r.json.url : '') : r.status === 404 || r.status === 0 ? 'Multi has no /api/stream/schedule yet (asked 03)' : (r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status]]);
     if (ok && r.json.url) { const a = h('a', 'sir ok', 'Open the broadcast'); a.href = r.json.url; a.target = '_blank'; a.rel = 'noopener'; $('#si-sres').append(a); }
   }
+  function hostRes(r, what, need) { return r.status === 404 ? what + ': the Host has no ' + need + ' yet (restart needed)' : what + ': ' + ((r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status); }
+  async function recapDo(post, btn) {
+    flash(btn); await tokenReady; ui.tookControl = true; const out = $('#rc-out');
+    const r = post ? await api.post('/api/recap/test', { post: true }) : await api.get('/api/recap/preview');
+    if (!(r.ok && r.json && r.json.ok !== false)) { out.textContent = hostRes(r, 'Recap', '/api/recap/preview'); out.classList.add('bad'); return; }
+    out.classList.remove('bad'); const j = r.json, clip = j.clip;
+    out.textContent = (j.text || j.line || '(empty recap)') + (clip && clip.url ? '\n\nBest clip: ' + (clip.title || '') + ' ' + clip.url + (clip.views != null ? ' (' + clip.views + ' views)' : '') : '\n\n(no clip found)') + (post ? (j.duplicate ? '\n\nNot posted: same recap was posted in the last 30 s' : j.posted ? '\n\nPosted in chat' : '\n\nNot posted') : '');
+    if (post) toast(j.posted ? 'Recap posted' : 'Recap not posted', !j.posted);
+  }
+  async function raidPrep(btn) {
+    flash(btn); await tokenReady; ui.tookControl = true; const t = $('#rd-target').value.trim().replace(/^@/, '');
+    const r = await api.post('/api/raid/prep', t ? { target: t } : {}), ok = r.ok && r.json && r.json.ok !== false, j = r.json || {};
+    siShow($('#rd-res'), [[ok, ok ? (j.duplicate ? 'Already fired for this raid (3 min guard)' : j.fired ? 'Raid prep fired' : 'Nothing fired') : hostRes(r, 'Raid prep', '/api/raid/prep')]]);
+    if (ok) toast(j.fired ? 'Raid prep fired' : 'Raid prep: ' + (j.duplicate ? 'duplicate' : 'nothing fired'), !j.fired && !j.duplicate);
+  }
   $('#tab-stream').addEventListener('input', e => {
     const map = { 'si-title': 'title', 'si-game': 'game', 'si-desc': 'description', 'si-tags': 'tags', 'si-at': 'at', 'si-priv': 'privacy' }, k = map[e.target.id]; if (!k) return;
     ui.si[k] = e.target.value; siSave();
@@ -604,6 +627,7 @@
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.plat) { ui.si.plat[b.dataset.plat] = !ui.si.plat[b.dataset.plat]; siSave(); return; }
     if (b.id === 'si-push') siPush(b); else if (b.id === 'si-load') siLoad();
+    else if (b.id === 'rc-prev') recapDo(false, b); else if (b.id === 'rc-say') { if (armed(b)) recapDo(true, b); } else if (b.id === 'rd-go') { if (armed(b)) raidPrep(b); }
     else if (b.id === 'si-sched') { if (!armed(b)) return; siSchedule(b); }
     else if (b.id === 'si-copy') { const t = $('#si-tt').value; try { await navigator.clipboard.writeText(t); toast('Copied for TikTok'); } catch (err) { $('#si-tt').select(); toast('Select and copy it (Ctrl+C)'); } }
   });

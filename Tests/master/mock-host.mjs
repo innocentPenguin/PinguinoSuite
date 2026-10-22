@@ -44,7 +44,9 @@ export function startMock(port = 8798, opts = {}) {
         else ran = '!' + a;
         st.modCalls.push({ a, v }); push('customs', st.customs); return send(res, 200, { ok: true, ran, customs: st.customs });
       }
-      if (p === '/api/customs/teams') { st.customs.teams = st.customs.teams || { orange: { name: 'Orange', color: '#ff7a00' }, blue: { name: 'Blue', color: '#1e8fff' } }; for (const k of ['orange', 'blue']) if (b[k]) Object.assign(st.customs.teams[k], b[k]); push('customs', st.customs); return send(res, 200, { ok: true, teams: st.customs.teams }); }
+      if (p === '/api/customs/teams') { st.customs.teams = st.customs.teams || { orange: { name: 'Orange', color: '#ff7a00' }, blue: { name: 'Blue', color: '#1e8fff' } }; for (const k of ['orange', 'blue']) if (b[k]) Object.assign(st.customs.teams[k], { name: b[k].name || st.customs.teams[k].name, color: b[k].hex || st.customs.teams[k].color }); push('customs', st.customs); return send(res, 200, { ok: true, teams: st.customs.teams }); }
+      if (p === '/api/recap/test') { (st.rcalls = st.rcalls || []).push(b); return send(res, 200, { ok: true, text: 'Recap text', clip: { title: 'Clutch', url: 'https://clips.twitch.tv/x', views: 12 }, posted: !!b.post, duplicate: false }); }
+      if (p === '/api/raid/prep') { (st.rcalls = st.rcalls || []).push(b); return send(res, 200, { ok: true, fired: true, duplicate: false }); }
       if (p === '/api/channel/update') { st.chan = Object.assign(st.chan || {}, b); return send(res, 200, { ok: true, game: b.game, title: b.title }); }
       if (p === '/api/stream/info') { st.sinfo = b; return send(res, 200, { ok: true, results: Object.fromEntries((b.platforms || []).map(k => [k, { ok: k !== 'kick', error: k === 'kick' ? 'Kick API not available' : undefined }])) }); }
       if (p === '/api/stream/schedule') { st.sched = b; return send(res, 200, { ok: true, broadcastId: 'bc1', url: 'https://youtube.com/watch?v=bc1' }); }
@@ -74,6 +76,7 @@ export function startMock(port = 8798, opts = {}) {
     if (p === '/api/status') return send(res, 200, { ok: true, chatConnected: true, eventSubConnected: true, obsConnected: true });
     if (p === '/api/live') return send(res, 200, st.live);
     if (p === '/api/activity') { const since = +u.searchParams.get('since') || 0; return send(res, 200, { ok: true, seq: st.act.seq, items: st.act.items.filter(i => i.seq > since) }); }
+    if (p === '/api/recap/preview') return send(res, 200, { ok: true, text: 'Recap text', line: 'Recap', clip: { title: 'Clutch', url: 'https://clips.twitch.tv/x', views: 12 }, window: { start: 1, end: 2 } });
     if (p === '/api/channel/info') return send(res, 200, { ok: true, title: 'Customs with viewers', game: 'Rocket League', tags: ['English', 'Customs'] });
     if (p === '/api/stream/info') return send(res, 200, { ok: true, platforms: { youtube: { connected: true, canSchedule: true, title: 'Customs with viewers', description: 'Join the queue!', tags: ['rl'] }, kick: { connected: false }, tiktok: { manual: true } } });
     if (p === '/api/wheel/public') return send(res, 200, st.wheel);
