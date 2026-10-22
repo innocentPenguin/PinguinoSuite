@@ -245,6 +245,7 @@ namespace PinguinoHost
             try { StreamTimers.OnEvent(args); } catch (Exception) { }
             try { Announce.OnEvent(args); } catch (Exception) { }
             try { ProfileSync.OnEvent(args); } catch (Exception) { }
+            try { if (Convert.ToString(args.ContainsKey("eventType") ? args["eventType"] : "") == "TwitchRedeem") TimeoutReward.OnRedeem(args); } catch (Exception ex) { Clog.Warn("timeout-reward", "redeem failed: " + ex.Message); }
             try { Auto.OnEvent(args); } catch (Exception ex) { Clog.Warn("automation", "event trigger failed: " + ex.Message); }
             object et0; if (args.TryGetValue("eventType", out et0) && !new[] { "TwitchSub", "TwitchReSub", "TwitchGiftBomb", "TwitchCheer", "TwitchRaid", "TwitchFollow" }.Contains(Convert.ToString(et0))) return;   // automation-only events
             lock (dispatchLock)
@@ -276,6 +277,7 @@ namespace PinguinoHost
             {
                 if (line.StartsWith("@") && line.Contains(" USERNOTICE #")) { Streaks.OnUserNotice(line); continue; }   // sim: a raw IRC USERNOTICE line
                 if (line.StartsWith("eventsub ")) { var q = line.Split(new[] { ' ' }, 3); try { EventSub.Simulate(q[1], q[2], x => DispatchEvent(x)); } catch (Exception ex) { Console.WriteLine("ERROR eventsub: " + ex.Message); } continue; }
+                if (line.StartsWith("timeoutredeem ")) { var q = line.Split(new[] { ' ' }, 3); DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRedeem" }, { "userName", q[1] }, { "title", "Timeout" }, { "input", q.Length > 2 ? q[2] : "" }, { "redemptionId", "red-t" }, { "rewardId", "rw-t" } }); continue; }   // sim: timeoutredeem alice marsh
                 if (line.StartsWith("event "))   // sim: event TwitchSub alice 2   (3rd word = tier / bits / viewers)
                 { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v }, { "moderator", p.Length > 4 ? p[4] : "" }, { "title", "Song Request" }, { "input", v }, { "redemptionId", "red-" + v }, { "rewardId", "rw1" } }); continue; }   // TwitchRedeem: 3rd word = the song text
                 int c = line.IndexOf(':'); if (c < 1) continue;

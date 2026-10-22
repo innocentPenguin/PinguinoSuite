@@ -14,15 +14,15 @@ namespace PinguinoHost
     /// <summary>Who chatted this stream (name, mod/vip/sub flags). Reset when the stream goes online. Feeds the credits roll. File: session_chatters.json.</summary>
     public static class Roster
     {
-        class E { public string Name; public int Role; public bool Sub; public int Msgs; public long First; }
+        class E { public string Name; public int Role; public bool Sub; public int Msgs; public long First, Last; }
         static readonly Dictionary<string, E> D = new Dictionary<string, E>(); static readonly object L = new object(); static bool _loaded; static DateTime _saved = DateTime.MinValue;
         static string P { get { return Path.Combine(HostApi.DataDir, "session_chatters.json"); } }
         static void Load()
         {
             if (_loaded) return; _loaded = true;
-            try { if (File.Exists(P)) foreach (var o in JArray.Parse(File.ReadAllText(P)).OfType<JObject>()) D[(string)o["login"]] = new E { Name = (string)o["name"], Role = (int)o["role"], Sub = (bool)o["sub"], Msgs = (int)o["msgs"], First = (long)o["first"] }; } catch (Exception) { }
+            try { if (File.Exists(P)) foreach (var o in JArray.Parse(File.ReadAllText(P)).OfType<JObject>()) D[(string)o["login"]] = new E { Name = (string)o["name"], Role = (int)o["role"], Sub = (bool)o["sub"], Msgs = (int)o["msgs"], First = (long)o["first"], Last = (long?)o["last"] ?? (long)o["first"] }; } catch (Exception) { }
         }
-        static void Save() { try { File.WriteAllText(P, new JArray(D.Select(k => new JObject { { "login", k.Key }, { "name", k.Value.Name }, { "role", k.Value.Role }, { "sub", k.Value.Sub }, { "msgs", k.Value.Msgs }, { "first", k.Value.First } })).ToString()); _saved = DateTime.UtcNow; } catch (Exception) { } }
+        static void Save() { try { File.WriteAllText(P, new JArray(D.Select(k => new JObject { { "login", k.Key }, { "name", k.Value.Name }, { "role", k.Value.Role }, { "sub", k.Value.Sub }, { "msgs", k.Value.Msgs }, { "first", k.Value.First }, { "last", k.Value.Last } })).ToString()); _saved = DateTime.UtcNow; } catch (Exception) { } }
         public static void Reset() { lock (L) { Load(); D.Clear(); Save(); } }
         public static void Note(string display, int role, bool sub)
         {
@@ -31,10 +31,12 @@ namespace PinguinoHost
             {
                 Load(); E e; bool isNew = !D.TryGetValue(login, out e);
                 if (isNew) D[login] = e = new E { Name = display, First = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
-                e.Msgs++; e.Role = Math.Max(e.Role, role); e.Sub = e.Sub || sub;
+                e.Last = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); e.Msgs++; e.Role = Math.Max(e.Role, role); e.Sub = e.Sub || sub;
                 if (isNew || (DateTime.UtcNow - _saved).TotalSeconds > 120) Save();
             }
         }
+        /// <summary>everyone who chatted in the last <paramref name="hours"/> hours (login, display name, role, sub, last message unix time), newest first.</summary>
+        public static List<Tuple<string, string, int, bool, long>> Recent(double hours) { long min = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (long)(hours * 3600); lock (L) { Load(); return D.Where(k => k.Value.Last >= min).OrderByDescending(k => k.Value.Last).Select(k => Tuple.Create(k.Key, k.Value.Name, k.Value.Role, k.Value.Sub, k.Value.Last)).ToList(); } }
         public static int RoleOf(string login) { login = (login ?? "").ToLowerInvariant(); lock (L) { Load(); E e; return D.TryGetValue(login, out e) ? e.Role : 0; } }
         public static List<string> Names(Func<int, bool, bool> keep) { lock (L) { Load(); return D.Values.Where(e => keep(e.Role, e.Sub)).OrderBy(e => e.First).Select(e => e.Name).ToList(); } }
         /// <summary>true the first time this login chats today (local date), for the first_today trigger.</summary>
