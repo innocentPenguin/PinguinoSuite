@@ -61,6 +61,17 @@ class Flow(unittest.TestCase):
         self.sent.append((path, body))
         return {"ok": True}
 
+    def test_bot_itself_is_never_a_timeout_target(self):
+        self.ctl.chatters = lambda: ["pinguinobot", "snowyroses_"]
+        r = self.ctl.hear("pinguinobot timeout pinguinobot for 5 minutes")
+        self.assertEqual(r["outcome"], "refused")
+        self.assertEqual(self.sent, [])
+
+    def test_suggestion_tolerates_missing_section(self):
+        import review as rv
+        new = rv.apply_suggestion({"output.volume": 45}, {})
+        self.assertEqual(new["output"]["volume"], 45)
+
     def test_off_by_default_and_nothing_without_wake(self):
         self.cfg["control"]["enabled"] = False
         self.assertIsNone(self.ctl.hear("pinguinobot change the game to x"))

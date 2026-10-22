@@ -288,7 +288,7 @@ def apply_suggestion(sset, cur):
             raise ValueError(f"not allowed to change {p}")
         lo, hi = SAFE_SETS[p]
         a, b = p.split(".")
-        new[a][b] = max(lo, min(hi, int(v)))
+        new.setdefault(a, {})[b] = max(lo, min(hi, int(v)))
     return new
 
 

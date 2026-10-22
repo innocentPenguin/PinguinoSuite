@@ -236,7 +236,8 @@ class Control:
         user = resolve_user(i["user"], self.chatters())
         if not user:
             return False, f"I could not find {i['user']} in chat today", i
-        if user in [p.lower() for p in c.get("protected", [])]:
+        own = {w.replace(" ", "") for w in c.get("wake_words", [])}   # the bot itself is never a target
+        if user in [p.lower() for p in c.get("protected", [])] or user.replace("_", "") in own:
             return False, f"{user} is protected", i
         mx = c.get("max_timeout_s", 600)
         secs = i["seconds"]
