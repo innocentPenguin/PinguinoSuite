@@ -27,8 +27,8 @@ try:
     by = lambda k: [i for i in items if i['type'] == k]
     g = by('gift'); chk('two gifts', len(g) == 2, g)
     if len(g) == 2:
-        chk('gift grouped: gifter, amount, tier, cumulative', g[0]['user'] == 'gifty' and g[0]['amount'] == 5 and g[0]['tier'] == 1 and g[0].get('cumulative') == 42, g[0])
-        chk('anonymous flagged', g[1].get('anonymous') is True and g[1]['tier'] == 2, g[1])
+        chk('gift grouped: gifter, amount, tier, cumulative', g[0]['user'] == 'gifty' and g[0]['amount'] == 5 and str(g[0]['tier']) == '1' and g[0].get('cumulative') == 42, g[0])
+        chk('anonymous flagged', g[1].get('anonymous') is True and str(g[1]['tier']) == '2', g[1])
     r = by('raid'); chk('raid in', len(r) == 1 and r[0]['user'] == 'raider' and r[0]['amount'] == 30, r)
     p = by('poll'); chk('poll begin + end, no progress', [i['state'] for i in p] == ['begin', 'end'], p)
     if len(p) == 2: chk('poll data carries choices + status', p[1]['data']['status'] == 'completed' and p[1]['data']['choices'][0]['votes'] == 7, p[1])

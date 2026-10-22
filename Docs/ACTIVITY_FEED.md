@@ -8,7 +8,7 @@ Stored in `Data\runtime\latest.json` (last 500, survives restarts, `seq` never g
 ```json
 { "ok": true, "seq": 42, "items": [
   { "seq": 41, "ts": 1792425040, "type": "cheer", "user": "eve", "amount": 300, "detail": "300 bits" },
-  { "seq": 42, "ts": 1792425061, "type": "sub", "user": "bob", "tier": 2, "detail": "tier 2" } ] }
+  { "seq": 42, "ts": 1792425061, "type": "sub", "user": "bob", "tier": "2", "detail": "tier 2" } ] }
 ```
 Oldest first; only items with `seq > since`; `type` is an optional comma list. **Live:** poll every 2-3 s with the last `seq` (the Host answers in milliseconds). There is no SSE yet (the Host handles one request at a time).
 Types and fields:
@@ -38,3 +38,11 @@ Events come over Twitch EventSub (a live connection, not polling). `GET /api/sum
 
 ## Management endpoints (for the shell)
 `GET/POST /api/vars`, `POST /api/vars/delete {name}` · `GET /api/queues`, `POST /api/queues/pause|resume|clear` · `GET /api/automations/triggers` (type, display, fires, lastFiredAgoSec, cooldowns) · `GET /api/automations/hotkeys` · `GET /api/automations/export` · `POST /api/automations/enable {id|group, on}` · `GET /api/endpoints`. Trigger display fields: command = names, redeem = title, hotkey = key, timer = everySec, chat = pattern, sub = tier, cheer/raid/gift = min; `raid_out` and `ban` have none.
+
+`tier` is a string ("1", "2", "3", or "prime" for alerts), the same field the alert engine reads. Compare with `str()`/`String()`.
+
+## Raid prep for raids started on the Twitch website
+Twitch only tells the Host about an outgoing raid when it actually goes (EventSub `channel.raid`, then the 20 s delay in `sb-raidout`); the website's "Raid now" click sends no signal. So the Master View **Raid prep** button (`POST /api/raid/prep`, body `{target?}`) is the way to run the raid-start automation early: Ivan presses it when he starts the raid. It runs once per raid (3 min dedupe), so the later automatic detection won't repeat it. Raids started from the Suite app fire it by themselves.
+
+## Recap test
+`GET /api/recap/preview` returns the text, `POST /api/recap/test {post:true}` says it in chat once (duplicate-guarded). Both use the last stream's window and end with its best clip.
