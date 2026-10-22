@@ -40,12 +40,13 @@ async function main() {
     if (!source) return out({ ok: true, skipped: true, message: 'no update source is set' });
     if (inst.auto_update !== true) return out({ ok: true, skipped: true, message: 'automatic updates are off; use Settings > Updates' });
   }
-  const cmd2 = (cmd === 'launch' || (cmd === 'check' && args.includes('--apply-if-safe'))) ? 'apply' : cmd;
+  if (cmd === 'install') { if (!only || !only.length) { out({ ok: false, message: 'give --only <part>' }); return; } }   // install --only <part> = add the part and apply it
+  const cmd2 = (cmd === 'launch' || (cmd === 'check' && args.includes('--apply-if-safe'))) ? 'apply' : cmd === 'install' ? 'apply' : cmd;
   if (cmd === 'status') {
     return out({ version: current, channel, profile: inst.profile || 'full', parts: inst.parts || null, result: rd(D.result), deferred: rd(D.deferred), pending: rd(D.pending), components: inst.components || null });
   }
   if (cmd === 'eject') {   // eject --part <id>: move an on-demand part (a module) out of the install; the caller stops it first, Data\ is never touched
-    const part = opt('part'); if (!part) return out({ ok: false, message: 'give --part <id>' });
+    const part = opt('part') || (only && only[0]); if (!part) return out({ ok: false, message: 'give --part <id>' });
     if (await hostLiveCheck().then(l => l.live !== false)) return out({ ok: false, message: 'not while live (or when it cannot be told)' });
     return out(ejectPart(installDir, part));
   }

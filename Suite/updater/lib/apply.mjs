@@ -55,7 +55,7 @@ export function diffComponents(m, inst, current, also = []) {
 export function optionalParts(m, inst) {
   const parts = partsOf(inst);
   if (!m.components || !parts) return [];
-  return COMPONENTS.filter(c => m.components[c.id] && !parts.includes(c.id)).map(c => ({ id: c.id, name: c.name, restart: c.restart, module: c.module || null, files: m.components[c.id].files, bytes: m.components[c.id].bytes }));
+  return COMPONENTS.filter(c => m.components[c.id] && !parts.includes(c.id)).map(c => ({ optional: true, installed: false, id: c.id, name: c.name, restart: c.restart, module: c.module || null, files: m.components[c.id].files, bytes: m.components[c.id].bytes }));
 }
 
 export async function checkUpdate({ source, current, channel = 'stable', pubkey = null, installDir = null, also = [] }) {
