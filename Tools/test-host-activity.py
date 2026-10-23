@@ -1,4 +1,4 @@
-"""Mod activity feed: channel events become feed items pushed (whole window, newest first) to POST /api/bot/activity.  (Player-to-player loans through the site queue (request / offer / accept / decline / cancel / repay / default), limits, ledger rows for both sides, the checkbook activity view and the market push.
+"""Activity feed: channel events are pushed once each (oldest first) to the site POST /api/bot/events.  (Player-to-player loans through the site queue (request / offer / accept / decline / cancel / repay / default), limits, ledger rows for both sides, the checkbook activity view and the market push.
 A fake innocentpenguin.com runs locally.  Usage: python Tools/test-host-activity.py [dll]"""
 import json, os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -21,7 +21,8 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.headers.get('Authorization') != 'Bearer ' + KEY: return self.send(401, {})
         b = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))) or b'{}')
-        if self.path == '/api/bot/activity': S['pushes'].append(b)
+        if self.path == '/api/bot/events': S['pushes'].append(b)
+        if self.path == '/api/bot/activity': S['old'] = True
         self.send(200, {'ok': True})
 srv = HTTPServer(('127.0.0.1', SITE), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
@@ -44,18 +45,25 @@ try:
     ev('channel.cheer', {'user_login': 'cheerer', 'bits': 500}); time.sleep(1.2)
     ev('channel.raid', {'from_broadcaster_user_login': 'bigstreamer', 'to_broadcaster_user_id': '1', 'viewers': 42}); time.sleep(1.2)
     ev('channel.channel_points_custom_reward_redemption.add', {'user_login': 'redeemer', 'id': 'rd1', 'reward': {'title': 'Hydrate', 'cost': 100, 'id': 'r1'}}); time.sleep(1.2)
-    ev('channel.hype_train.end', {'level': 3, 'id': 'h1', 'total': 900}); time.sleep(6)
-    p = S['pushes']; chk('feed pushed', len(p) >= 1, p)
-    items = p[-1]['items']
-    types = [x['type'] for x in items]
-    chk('newest first, all types', types[:7] == ['hype', 'redemption', 'raid_in', 'bits', 'gift', 'resub', 'follow'], types)
-    by = {x['type']: x for x in items}
-    chk('resub label + tier + months', by['resub']['label'] == 'bob resubbed (14 months)' and by['resub']['tier'] == '2000' and by['resub']['amount'] == 14, by['resub'])
-    chk('gift count', by['gift']['amount'] == 5 and 'gifted 5 subs' in by['gift']['label'], by['gift'])
-    chk('bits, raid, redemption, hype', by['bits']['amount'] == 500 and by['raid_in']['amount'] == 42 and by['redemption']['extra'] == 'Hydrate' and by['hype']['amount'] == 3, [by['bits'], by['raid_in'], by['redemption'], by['hype']])
-    chk('ids unique and stable', len({x['id'] for x in items}) == len(items) and all(x['id'] for x in items))
-    chk('no personal data fields', all(set(x) <= {'id', 'at', 'type', 'user', 'label', 'amount', 'tier', 'extra'} for x in items), items[0])
-    n = len(p); time.sleep(4); chk('nothing new, nothing pushed (until the 2 minute refresh)', len(S['pushes']) == n, (n, len(S['pushes'])))
+    ev('channel.hype_train.end', {'level': 3, 'id': 'h1', 'total': 900}); time.sleep(1.2)
+    ev('channel.follow', {'user_login': 'newfollower'}); time.sleep(6)
+    p = S['pushes']; chk('events pushed', len(p) >= 1, p)
+    chk('old activity endpoint is not used', not S.get('old'))
+    evs = [e for b in p for e in b['events']]
+    types = [e['type'] for e in evs]
+    chk('oldest first, site type names', types[:7] == ['follow', 'resub', 'giftsub', 'cheer', 'raid', 'redemption', 'hype'], types)
+    by = {}
+    for e in evs: by.setdefault(e['type'], e)
+    chk('resub months + tier', by['resub']['months'] == 14 and by['resub']['tier'] == '2000' and by['resub']['user'] == 'bob', by['resub'])
+    chk('giftsub amount', by['giftsub']['amount'] == 5 and by['giftsub']['user'] == 'gifty', by['giftsub'])
+    chk('cheer and raid amounts', by['cheer']['amount'] == 500 and by['raid']['amount'] == 42, [by['cheer'], by['raid']])
+    chk('redemption: viewer + reward name', by['redemption']['user'] == 'redeemer' and by['redemption']['msg'] == 'Hydrate', by['redemption'])
+    chk('hype: level + message', by['hype']['amount'] == 3 and by['hype']['msg'] == 'Hype train level 3', by['hype'])
+    chk('first follow is not a refollow', 'refollow' not in evs[0], evs[0])
+    chk('the same account following again is a refollow', evs[-1]['type'] == 'follow' and evs[-1].get('refollow') is True, evs[-1])
+    chk('ids unique, at set', len({e['id'] for e in evs}) == len(evs) and all(e['id'] and e['at'] for e in evs))
+    chk('no personal data fields', all(set(e) <= {'id', 'type', 'user', 'amount', 'tier', 'months', 'msg', 'at', 'refollow'} for e in evs), evs[0])
+    n = sum(len(b['events']) for b in S['pushes']); time.sleep(4); chk('every event sent once, nothing re-sent', sum(len(b['events']) for b in S['pushes']) == n == 8, n)
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS activity'); sys.exit(1 if fails else 0)

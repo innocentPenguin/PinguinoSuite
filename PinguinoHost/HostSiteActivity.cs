@@ -10,13 +10,14 @@ using Newtonsoft.Json.Linq;
 
 namespace PinguinoHost
 {
-    /// <summary>The mods' activity feed on the site. Every channel event that goes through Program.DispatchEvent (follow, sub, resub, gift subs, bits, raids in/out, hype train end, redemptions) becomes one item;
-    /// the Host PUSHES the last ~100, newest first, the whole window each time, to POST /api/bot/activity (bot key) whenever it changed (checked every 5 s) and at least once every 2 minutes.
-    /// Item: {id (stable, unique), at (unix s), type: follow|sub|resub|gift|bits|raid_in|raid_out|hype|redemption, user (display name), label ("bob resubbed (14 months)"), amount?, tier? ("1000"|"2000"|"3000"|"prime"), extra?}.
-    /// No ids, e-mails or IPs. Simulated events never appear. The window survives a restart (Data\runtime\site_activity.json).</summary>
+    /// <summary>The site's activity feed. Every channel event that goes through Program.DispatchEvent (follow, sub, resub, gift subs, bits, raids in/out, hype train end, redemptions) becomes one item in a local window (last 100, Data\runtime\site_activity.json);
+    /// the Host PUSHES each new item ONCE to the site's existing POST /api/bot/events (bot key), oldest first, in batches: {events:[{id, type, user, amount?, tier?, months?, msg?, at?, refollow?}]}. The site de-duplicates by id, so a retry is harmless.
+    /// Types: follow (refollow:true when that account followed before), sub, resub (months), giftsub (amount), cheer (amount), raid (amount = viewers, raid in), raid_out (staff only; amount = viewers, user = target channel),
+    /// hype (amount = level, msg "Hype train level N"), redemption (user = viewer, msg = reward name). (tip and boost are not Twitch events and are not sent from here.)
+    /// Ids of what was already accepted are kept in Data\runtime\site_activity_sent.json, so a restart never re-sends. No e-mails or IPs. Simulated events never appear.</summary>
     public static class SiteActivity
     {
-        static readonly object L = new object(); static bool _started; static string _result = "not started"; static string _sentHash = ""; static DateTime _lastPush = DateTime.MinValue; static List<JObject> _items;
+        static readonly object L = new object(); static bool _started; static string _result = "not started"; static DateTime _lastPush = DateTime.MinValue; static List<JObject> _items; static HashSet<string> _sent; static HashSet<string> _followers;
         static string P { get { return Path.Combine(HostApi.DataDir, "runtime", "site_activity.json"); } }
         static int Window { get { return 100; } }
         static int EveryMs { get { int v; return int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_ACTIVITY_PUSH_SEC"), out v) && v > 0 ? v * 1000 : 5000; } }
@@ -28,7 +29,25 @@ namespace PinguinoHost
             try { if (File.Exists(P)) foreach (var t in JArray.Parse(File.ReadAllText(P, Encoding.UTF8)).OfType<JObject>()) _items.Add(t); } catch (Exception) { }
             return _items;
         }
-        public static JObject Status() { lock (L) return new JObject { { "result", _result }, { "items", Items().Count } }; }
+        static string SentP { get { return Path.Combine(HostApi.DataDir, "runtime", "site_activity_sent.json"); } }
+        static string FolP { get { return Path.Combine(HostApi.DataDir, "runtime", "site_activity_followers.json"); } }
+        static HashSet<string> Sent()
+        {
+            if (_sent != null) return _sent; _sent = new HashSet<string>();
+            try { if (File.Exists(SentP)) foreach (var t in JArray.Parse(File.ReadAllText(SentP, Encoding.UTF8))) _sent.Add((string)t); } catch (Exception) { }
+            return _sent;
+        }
+        static void SaveSent() { try { var a = Sent().ToList(); if (a.Count > 400) { a = a.Skip(a.Count - 400).ToList(); _sent = new HashSet<string>(a); } Directory.CreateDirectory(Path.GetDirectoryName(SentP)); File.WriteAllText(SentP, new JArray(a).ToString(Newtonsoft.Json.Formatting.None), new UTF8Encoding(false)); } catch (Exception) { } }
+        /// <summary>true when this account followed before (and remembers it)</summary>
+        static bool Refollow(string user)
+        {
+            string k = (user ?? "").ToLowerInvariant();
+            if (_followers == null) { _followers = new HashSet<string>(); try { if (File.Exists(FolP)) foreach (var t in JArray.Parse(File.ReadAllText(FolP, Encoding.UTF8))) _followers.Add((string)t); } catch (Exception) { } }
+            if (_followers.Contains(k)) return true;
+            _followers.Add(k); try { Directory.CreateDirectory(Path.GetDirectoryName(FolP)); File.WriteAllText(FolP, new JArray(_followers).ToString(Newtonsoft.Json.Formatting.None), new UTF8Encoding(false)); } catch (Exception) { }
+            return false;
+        }
+        public static JObject Status() { lock (L) return new JObject { { "result", _result }, { "items", Items().Count }, { "pending", Items().Count(x => !Sent().Contains((string)x["id"])) } }; }
         public static JArray Window100() { lock (L) return new JArray(Items().Take(Window).Select(x => x.DeepClone())); }
 
         public static void Start()
@@ -66,6 +85,7 @@ namespace PinguinoHost
                 string id = S(a, "eventId"); if (id == "") id = type + ":" + user + ":" + at;
                 id = type + ":" + id;
                 var it = new JObject { { "id", id }, { "at", at }, { "type", type }, { "user", user }, { "label", label } };
+                if (type == "follow") it["refollow"] = Refollow(user);
                 if (amount >= 0) it["amount"] = amount; if (tier != null) it["tier"] = tier; if (!string.IsNullOrEmpty(extra)) it["extra"] = extra;
                 lock (L)
                 {
@@ -77,20 +97,39 @@ namespace PinguinoHost
             catch (Exception) { }
         }
 
-        static string Hash(string s) { using (var h = SHA1.Create()) return Convert.ToBase64String(h.ComputeHash(Encoding.UTF8.GetBytes(s))); }
+        /// <summary>one window item as the site's event: {id, type, user, amount?, tier?, months?, msg?, at, refollow?}</summary>
+        internal static JObject ToEvent(JObject x)
+        {
+            string t = (string)x["type"]; long? amt = (long?)x["amount"];
+            var e = new JObject { { "id", (string)x["id"] }, { "user", (string)x["user"] }, { "at", (long?)x["at"] ?? 0 } };
+            switch (t)
+            {
+                case "follow": e["type"] = "follow"; if ((bool?)x["refollow"] == true) e["refollow"] = true; break;
+                case "sub": e["type"] = "sub"; e["tier"] = x["tier"]; break;
+                case "resub": e["type"] = "resub"; e["tier"] = x["tier"]; if (amt.HasValue) e["months"] = amt; break;
+                case "gift": e["type"] = "giftsub"; e["tier"] = x["tier"]; if (amt.HasValue) e["amount"] = amt; break;
+                case "bits": e["type"] = "cheer"; if (amt.HasValue) e["amount"] = amt; break;
+                case "raid_in": e["type"] = "raid"; if (amt.HasValue) e["amount"] = amt; break;
+                case "raid_out": e["type"] = "raid_out"; if (amt.HasValue) e["amount"] = amt; break;
+                case "hype": e["type"] = "hype"; e["amount"] = amt ?? 0; e["msg"] = "Hype train level " + (amt ?? 0); break;
+                case "redemption": e["type"] = "redemption"; e["msg"] = (string)x["extra"] ?? ""; break;
+                default: return null;
+            }
+            return e;
+        }
 
         public static void Tick()
         {
             if (!SiteHttp.Enabled("SiteActivity")) { _result = "off"; return; }
             string key = SiteHttp.Key(); if (key == "") { _result = "no key (vault name BOT_API_KEY)"; return; }
             if (!Lease.MayRun) return;
-            var win = Window100(); string h = Hash(win.ToString(Newtonsoft.Json.Formatting.None));
-            if (h == _sentHash && (DateTime.UtcNow - _lastPush).TotalSeconds < 120) return;
-            if (win.Count == 0 && _sentHash == "") { _result = "nothing to send yet"; return; }
-            JObject r; int code = SiteHttp.Call("POST", "/api/bot/activity", new JObject { { "items", win } }, key, out r);
-            if (code == 200) { _sentHash = h; _lastPush = DateTime.UtcNow; _result = "ok (" + win.Count + " items)"; }
+            List<JObject> fresh;
+            lock (L) fresh = Items().Where(x => !Sent().Contains((string)x["id"])).Reverse().Take(50).Select(x => ToEvent(x)).Where(x => x != null).ToList();   // oldest first
+            if (fresh.Count == 0) { if (_result == "not started") _result = "nothing to send yet"; return; }
+            JObject r; int code = SiteHttp.Call("POST", "/api/bot/events", new JObject { { "events", new JArray(fresh) } }, key, out r);
+            if (code == 200) { lock (L) { foreach (var e in fresh) Sent().Add((string)e["id"]); SaveSent(); } _lastPush = DateTime.UtcNow; _result = "ok (" + fresh.Count + " events sent)"; }
             else if (code == 401) _result = "site refused the key (HTTP 401)";
-            else _result = code == 0 ? "site not reachable" : code == 404 ? "site has no activity endpoint yet" : "site answered HTTP " + code;
+            else _result = code == 0 ? "site not reachable" : code == 404 ? "site has no events endpoint yet" : "site answered HTTP " + code;
         }
     }
 }
