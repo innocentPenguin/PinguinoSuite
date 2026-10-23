@@ -514,6 +514,10 @@ def p_live_stop(h, b):
     return {"ok": True}
 
 
+def p_songify(h, b):
+    return {"ok": True, "songify": engine.songify(bool(b.get("on"))), "settings": engine._own_settings()}
+
+
 def p_preset(h, b):
     return {"ok": True, "settings": engine.apply_preset(str(b.get("name", "")))}
 
@@ -536,7 +540,7 @@ def g_schema(h, q):
         {"key": k, "kind": kind, "default": d, "label": label, "help": hlp} for k, kind, d, label, hlp in g["items"]]} for g in cs.SCHEMA]
     return {"groups": groups, "vars": cs.VARS, "msgs": {k: {"label": v[0], "default": v[1], "help": v[2]} for k, v in cs.MSGS.items()},
             "commands": {k: {"default": v, "help": cs.COMMAND_HELP[k]} for k, v in cs.COMMANDS.items()},
-            "presets": {k: {"label": v[0], "help": v[1]} for k, v in cs.PRESETS.items()},
+            "presets": {k: {"label": v[0], "help": v[1]} for k, v in cs.PRESETS.items() if k not in cs.HIDDEN_PRESETS},
             "user_presets": sorted(engine.cfg.get("user_presets") or {})}
 
 
@@ -569,7 +573,7 @@ POST = {"/api/connect/start": lambda h, b: p_connect(h, b, "start"), "/api/conne
         "/api/connect/restart": lambda h, b: p_connect(h, b, "restart"), "/api/connect/output": lambda h, b: p_connect(h, b, "output"),
         "/api/player/status": p_player_status, "/api/blocklist/import": p_blocklist_import, "/api/mod-action": p_mod_action, "/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
-        "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/shuffle": p_shuffle, "/api/queue/add_context": p_add_context, "/api/presets/save": p_user_preset, "/api/presets/delete": p_user_preset_del, "/api/queue/remove_user": p_remove_user, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
+        "/api/songify": p_songify, "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/shuffle": p_shuffle, "/api/queue/add_context": p_add_context, "/api/presets/save": p_user_preset, "/api/presets/delete": p_user_preset_del, "/api/queue/remove_user": p_remove_user, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
         "/api/channel-playlist": lambda h, b: engine.set_channel_playlist(b.get("id"), b.get("name")) or {"ok": True}, "/api/channel-playlist/add": lambda h, b: engine.playlist_add(str(b.get("user") or "streamer"), b.get("track") or None), "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/preset": p_preset, "/api/settings/reset": p_reset, "/api/msgs/preview": p_msg_preview, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
 
 

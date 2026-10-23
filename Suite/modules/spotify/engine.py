@@ -149,6 +149,37 @@ class Engine:
             return self.apply_user_preset(name)
         return self.save_settings(dict(cs.PRESETS[name][2]))
 
+    def songify_active(self):
+        import config_schema as cs
+        cur = self._own_settings()
+        return all(cur.get(k) == v for k, v in cs.PRESETS["songify"][2].items())
+
+    def songify(self, on):
+        """Hand the music over to Songify (everything off) and back. The values from before are kept and restored; none saved = the take-back preset."""
+        import config_schema as cs
+        with self.lock:
+            cur = self._own_settings()
+            keys = list(cs.PRESETS["songify"][2])
+            if on:
+                if self.songify_active():
+                    return True
+                self.cfg["songify_prev"] = {k: cur[k] for k in keys}
+                patch = dict(cs.PRESETS["songify"][2])
+            else:
+                if not self.songify_active():
+                    self.cfg.pop("songify_prev", None)
+                    return False
+                prev = self.cfg.pop("songify_prev", None)
+                patch = {k: prev[k] for k in keys if k in prev} if isinstance(prev, dict) else dict(cs.PRESETS["takeback"][2])
+            self.save_settings(patch)
+            disk = store.load("config.json", {})
+            if on:
+                disk["songify_prev"] = self.cfg["songify_prev"]
+            else:
+                disk.pop("songify_prev", None)
+            store.save("config.json", disk)
+            return self.songify_active()
+
     def reset_settings(self, keys=None):
         """Back to defaults: given keys, or everything (requests stay closed)."""
         with self.lock:
@@ -514,7 +545,7 @@ class Engine:
                 pb["progress_ms"] += int((now - self.pb_at) * 1000)
             return {"connected": self.auth.connected(), "client_id_set": bool(self.auth.client_id), "playback": pb,
                     "now_item": copy.deepcopy(self.now_item), "queue": self.queue.view(), "etas": [self.eta_ms(i) for i in range(len(self.queue.items))], "inbox": [i for i in self.inbox if i["status"] == "pending"],
-                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "skip_votes": len(self.skip_votes),
+                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "songify": self.songify_active(), "skip_votes": len(self.skip_votes),
                     "error": self.last_error or self.auth.last_error, "me": self.me, "version": self.version}
 
     def public_queue(self):

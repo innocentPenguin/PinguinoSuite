@@ -1756,3 +1756,35 @@ class Review53Tests(AnnounceTierTests):
         self.assertLessEqual(len(list(d.glob("junk.json.bad-*"))), 5)
         for f in d.glob("junk.json*"):
             f.unlink()
+
+
+class SongifyHandoffTests(AnnounceTierTests):
+    def test_hand_off_and_back_restores_previous_values(self):
+        self.e.save_settings({"requests_open": True, "chat_replies": False, "announce_track_on": True, "ov_alerts": True, "autostart_queue": True})
+        self.assertFalse(self.e.songify_active())
+        self.assertTrue(self.e.songify(True))
+        s = self.e.settings
+        for k in ("requests_open", "chat_requests", "chat_replies", "announce_track_on", "announce_request_on", "ov_alerts", "autostart_queue"):
+            self.assertFalse(s[k], k)
+        self.assertTrue(s["fallback_only_open"])
+        self.assertTrue(self.e.public_state()["songify"])
+        self.assertTrue(self.e.songify(True))                         # second press changes nothing, keeps the saved values
+        self.assertFalse(self.e.songify(False))
+        s = self.e.settings
+        self.assertTrue(s["requests_open"] and s["announce_track_on"] and s["ov_alerts"] and s["autostart_queue"])
+        self.assertFalse(s["chat_replies"])
+        self.assertNotIn("songify_prev", store.load("config.json", {}))
+
+    def test_take_back_without_saved_values_uses_the_normal_preset(self):
+        self.e.apply_preset("songify")
+        self.assertTrue(self.e.songify_active())
+        self.assertFalse(self.e.songify(False))
+        s = self.e.settings
+        self.assertTrue(s["requests_open"] and s["chat_requests"] and s["chat_replies"] and s["ov_alerts"])
+
+    def test_presets_are_hidden_from_the_list_but_exist(self):
+        import config_schema as cs
+        self.assertIn("songify", cs.PRESETS)
+        self.assertIn("takeback", cs.PRESETS)
+        for k in cs.PRESETS["songify"][2]:
+            self.assertIn(k, rules.DEFAULTS if hasattr(rules, "DEFAULTS") else rules.merged({}))

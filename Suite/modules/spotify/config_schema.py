@@ -237,4 +237,12 @@ PRESETS = {
     "mods": ("Mods only", "Only mods can request.", {"mod_only": True, "sub_only": False}),
     "safe": ("Stream-safe", "No explicit songs and every request needs your approval.", {"stream_safe": True, "block_explicit": True, "require_approval": True}),
     "closed": ("Closed", "Stop taking requests.", {"requests_open": False}),
+    # hand-off to Songify (one button on the Spotify page, not shown in the preset list)
+    "songify": ("Hand off to Songify", "Everything off so another app can run the music.",
+                {"requests_open": False, "chat_requests": False, "chat_replies": False, "announce_track_on": False, "announce_request_on": False,
+                 "ov_alerts": False, "autostart_queue": False, "fallback_only_open": True}),
+    "takeback": ("Take back from Songify", "Normal values again (used when no earlier values were saved).",
+                 {"requests_open": True, "chat_requests": True, "chat_replies": True, "announce_track_on": False, "announce_request_on": False,
+                  "ov_alerts": True, "autostart_queue": False, "fallback_only_open": True}),
 }
+HIDDEN_PRESETS = ("songify", "takeback")

@@ -73,6 +73,8 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
   </div>
 </div>
 
+<div id="songify" class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button id="bsongify" class="pri" style="padding:8px 14px" title="Turns requests, chat replies, announcements, alerts and auto-start off so Songify can run the music. Press again to get your settings back.">Hand off to Songify</button><span id="songifynote" class="small dim"></span></div>
+
 <nav id="tabs"></nav>
 
 <section id="t-queue">
@@ -202,8 +204,11 @@ $('tabs').onclick=e=>{const t=e.target.closest('button');if(!t)return;tab=t.data
 function trackRow(t,btns){
   return `<div class="row"><img src="${esc(t.art)}" onerror="this.style.visibility='hidden'"><div class="m"><div class="n">${esc(t.name)}${t.explicit?'<span class="tag e">E</span>':''}</div><div class="n small dim">${esc((t.artists||[]).join(', '))} · ${fmt(t.duration_ms)}</div></div>${btns}</div>`;
 }
+function drawSongify(){const on=!!S.songify,b=$('bsongify');b.textContent=on?'Take back from Songify':'Hand off to Songify';b.className=on?'':'pri';$('songifynote').textContent=on?'Songify has the music: requests, chat replies, announcements, alerts and auto-start are OFF here.':'Spotify requests are in charge here.';$('songify').style.borderColor=on?'var(--warn)':''}
+$('bsongify').onclick=()=>act('/api/songify',{on:!S.songify},S.songify?'Taken back: your settings are restored':'Handed off to Songify: everything is off here').then(()=>{DRAFT=null;dirty.clear();drawnSig=''});
 function render(){
   if(!S)return;
+  drawSongify();
   drawTabs();
   const bn=$('banner');
   if(!S.client_id_set){bn.style.display='block';if(!bn.dataset.k||bn.dataset.k!=='id')bn.innerHTML='<b>Not connected: paste your Client ID.</b> Paste your Spotify app\'s Client ID below, then press Save &amp; connect (2 minutes, once). <span class="small">No Client ID yet? Open the <a href="#" data-gosetup style="color:var(--accent)">Setup tab</a> for the exact steps.</span><div class="ctl" style="margin-top:6px"><input type="text" id="qcid" placeholder="Client ID" style="max-width:320px"><button class="pri" id="qconnect">Save &amp; connect</button></div>';bn.dataset.k='id'}
@@ -220,6 +225,7 @@ function render(){
   $('qopen').checked=!!S.settings.requests_open;$('qsafe').checked=!!S.settings.stream_safe;
 }
 function drawNow(){
+  if(S)drawSongify();
   const pb=S.playback,t=pb&&pb.track;
   $('nptitle').textContent=t?t.name:'Nothing playing';$('nptitle').className=t?'':'dim';
   $('npartist').textContent=t?t.artists.join(', '):(S.connected?'Open Spotify and press play, or use Start queue':'');
