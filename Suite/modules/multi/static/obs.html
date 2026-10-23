@@ -73,8 +73,8 @@ function apply() {
   items.filter(i => hidden(i.m)).forEach(drop);
 }
 function emoBody(m) {
-  const map = {}; (m.emotes || []).forEach(e => { map[e.text] = e.id; });
-  return String(m.text || '').split(/(\s+)/).map(t => map[t] ? `<img class="emo" alt="${esc(t)}" src="https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(map[t])}/default/dark/2.0" onerror="this.replaceWith(document.createTextNode(this.alt))">` : esc(t)).join('');
+  const map = new Map(); (m.emotes || []).forEach(e => { if (e && typeof e.text === 'string' && /^[\w-]{1,64}$/.test(String(e.id))) map.set(e.text, String(e.id)); });
+  return String(m.text || '').split(/(\s+)/).map(t => map.has(t) ? `<img class="emo" alt="${esc(t)}" src="https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(map.get(t))}/default/dark/2.0" onerror="this.replaceWith(document.createTextNode(this.alt))">` : esc(t)).join('');
 }
 function badges(m) {
   if (!S.badges) return '';
@@ -95,7 +95,7 @@ function actHtml(m) {
   let rest = (m.text || '').replace(new RegExp('^' + (m.display || m.user).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^(followed|redeemed|subscribed|resubscribed|gifted subs|cheered|is raiding)\s*/i, '');
   if (rest) chips.push(rest.slice(0, 80));
   if ((m.flags || []).includes('refollow')) chips.push('refollow');
-  return `<div class="activity-row">${S.show_age ? `<span class="act-age" data-ts="${m.ts}">${age(m.ts)}</span>` : ''}${logo(m)}<span class="act-pill t-${esc(m.event)}">${esc(LABEL[m.event] || m.event)}</span><span class="act-user">${esc(m.display || m.user)}</span>${chips.map(c => `<span class="act-chip${c === 'refollow' ? ' refollow-tag' : ''}">${esc(c)}</span>`).join('')}</div>`;
+  return `<div class="activity-row">${S.show_age ? `<span class="act-age" data-ts="${Number(m.ts)}">${age(m.ts)}</span>` : ''}${logo(m)}<span class="act-pill t-${esc(m.event)}">${esc(LABEL[m.event] || m.event)}</span><span class="act-user">${esc(m.display || m.user)}</span>${chips.map(c => `<span class="act-chip${c === 'refollow' ? ' refollow-tag' : ''}">${esc(c)}</span>`).join('')}</div>`;
 }
 function drop(i) { items = items.filter(x => x !== i); i.el.classList.add('out'); setTimeout(() => i.el.remove(), 850); }
 function add(m, immediate) {

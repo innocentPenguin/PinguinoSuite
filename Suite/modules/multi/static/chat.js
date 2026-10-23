@@ -21,7 +21,7 @@ let chatTarget = null, searchTerm = '', searchSeq = 0;
 // --- rendering helpers ---------------------------------------------------------------
 const BADGES = {broadcaster: ['HOST', '#e0455b'], moderator: ['MOD', '#2fa84f'], vip: ['VIP', '#d94fa0'], subscriber: ['SUB', '#b36b00'],
   founder: ['SUB', '#b36b00'], partner: ['✓', '#b36b00'], staff: ['STAFF', '#999'], 'sub-gifter': ['GIFT', '#b36b00'], 'bits': ['BITS', '#b58900']};
-const badgeHtml = m => (m.badges || []).filter(b => BADGES[b]).slice(0, 4).map(b => `<span class="bd" style="background:${BADGES[b][1]}" title="${esc(b)}">${BADGES[b][0]}</span>`).join('');
+const badgeHtml = m => (m.badges || []).filter(b => Object.hasOwn(BADGES, b)).slice(0, 4).map(b => `<span class="bd" style="background:${BADGES[b][1]}" title="${esc(b)}">${BADGES[b][0]}</span>`).join('');
 const emoteUrl = id => `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(id)}/default/dark/2.0`;
 // Message text -> safe HTML. Emotes come only from the structured m.emotes list (id must look like an id); `link` (optional) turns URLs in
 // the plain-text pieces into links, and never sees the emote <img> markup.
@@ -61,7 +61,7 @@ function chatMsg(m, opts = {}) {
     <button data-pin="${esc(m.id)}" title="Pin to the top">&#128204;</button>
     ${caps.mod_timeout ? `<button data-mod="timeout" data-id="${esc(m.id)}" title="Timeout 10 min">&#9201;</button><button data-mod="ban" data-id="${esc(m.id)}" title="Ban">&#9940;</button>` : ''}
     ${caps.mod_delete ? `<button data-mod="delete" data-id="${esc(m.id)}" title="Delete this message">&#128465;</button>` : ''}</span>`;
-  return `<div class="msg tier-${m.tier} ${styleClasses(m)}${bot ? ' bot' : ''}${CF.bots === 'dim' ? '' : ' nodim'}${mine ? ' self' : ''}${mod ? ' modmsg' : ''}" data-mid="${esc(m.id)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
+  return `<div class="msg tier-${esc(m.tier)} ${styleClasses(m)}${bot ? ' bot' : ''}${CF.bots === 'dim' ? '' : ' nodim'}${mine ? ' self' : ''}${mod ? ' modmsg' : ''}" data-mid="${esc(m.id)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
     <span class="t">${hhmm(m.ts)}</span>${markerHtml(m.platform)}${badgeHtml(m)}<span class="u" ${col ? `style="color:${col}"` : ''} ${opts.plain || !m.user_id ? '' : `data-chatter="${esc(m.platform)}|${esc(m.user_id)}|${esc(m.id)}" title="Who is this?"`}>${esc(m.display || m.user)}</span>${flag}${eventLabel(m)}${rep}${bodyHtml(m)}${tools}</div>`;
 }
 function chatAdd(m) {
@@ -79,7 +79,7 @@ function chatFeed() {
 }
 function chatPins() {
   const s = $('#cpins'); if (!s) return;
-  s.innerHTML = PINS.map(p => `<div class="pin">&#128204; <span class="pf">${esc(p.platform)}</span><b ${/^#/.test(p.color || '') ? `style="color:${esc(p.color)}"` : ''}>${esc(p.display)}</b> ${esc(p.text)}
+  s.innerHTML = PINS.map(p => `<div class="pin">&#128204; <span class="pf">${esc(p.platform)}</span><b ${/^#[0-9a-fA-F]{6}$/.test(p.color || '') ? `style="color:${p.color}"` : ''}>${esc(p.display)}</b> ${esc(p.text)}
     <button class="lnk" data-unpin="${esc(p.id)}">unpin</button></div>`).join('');
 }
 function chatStrip() {
@@ -240,10 +240,10 @@ async function assistChatter(platform, uid, mid) {
     const c = await (await fetch(`/api/chatter/${encodeURIComponent(platform)}/${encodeURIComponent(uid)}`)).json();
     if (c.detail) throw new Error(c.detail);
     const caps = (conns.find(x => x.platform === 'twitch') || {capabilities: {}}).capabilities;
-    assistOpen(`<div class="chcard"><div><b ${/^#/.test(c.color) ? `style="color:${esc(c.color)}"` : ''}>${esc(c.display)}</b> <span class="pf pf-${esc(platform)}">${esc(platform)}</span>
-      ${c.badges.map(b => `<span class="bt">${esc(b)}</span>`).join('')}${c.muted ? '<span class="bt">muted</span>' : ''}</div>
+    assistOpen(`<div class="chcard"><div><b ${/^#[0-9a-fA-F]{6}$/.test(c.color || '') ? `style="color:${c.color}"` : ''}>${esc(c.display)}</b> <span class="pf pf-${esc(platform)}">${esc(platform)}</span>
+      ${(c.badges || []).map(b => `<span class="bt">${esc(b)}</span>`).join('')}${c.muted ? '<span class="bt">muted</span>' : ''}</div>
       <div class="mut">First seen ${rel(c.first_seen)} &middot; last ${rel(c.last_seen)} &middot; ${c.messages} message(s) &middot; you answered ${c.cards.answered}, missed ${c.cards.missed}</div>
-      <div class="chrec">${c.recent.map(r => `<div>${esc(r.text)}</div>`).join('')}</div>
+      <div class="chrec">${(c.recent || []).map(r => `<div>${esc(r.text)}</div>`).join('')}</div>
       <label>Private note <textarea id="cnote" maxlength="500" rows="2" placeholder="e.g. likes Elden Ring, birthday in May">${esc(c.note)}</textarea></label>
       <div class="act"><button class="p" data-assist="savenote" data-user="${esc(c.user)}">Save note</button>
         ${mid ? `<button data-suggest="${esc(mid)}">Suggest replies</button>` : ''}

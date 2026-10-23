@@ -192,7 +192,7 @@ function pass(m) {
 }
 function msgHtml(m) {
   const reasons = (m.reasons || []).map(r => `${r.rule} ${r.points > 0 ? '+' : ''}${r.points}`).join(', ');
-  return `<div class="msg tier-${m.tier}${m.is_self ? ' self' : ''}${isBot(m) ? ' bot' : ''} ${styleClasses(m)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
+  return `<div class="msg tier-${esc(m.tier)}${m.is_self ? ' self' : ''}${isBot(m) ? ' bot' : ''} ${styleClasses(m)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
   <span class="t">${hhmm(m.ts)}</span>${markerHtml(m.platform)}<span class="u">${esc(m.display || m.user)}</span>${esc(m.text)}</div>`;
 }
 function addMsg(m) {

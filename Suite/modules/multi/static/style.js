@@ -97,7 +97,7 @@ function applyStyle() {
 
 // Classes for one message: platform, roles, events, keywords. Cheap string work only; the look lives in the stylesheet.
 function styleClasses(m) {
-  const c = ['p-' + m.platform], bd = m.badges || [];
+  const c = ['p-' + String(m.platform).replace(/[^\w-]/g, '')], bd = m.badges || [];
   const mine = bd.includes('broadcaster') || (typeof MYNAMES !== 'undefined' && MYNAMES.has((m.user || '').toLowerCase()));
   if (mine) c.push('r-streamer');
   if (bd.includes('moderator')) c.push('r-mod');
@@ -108,7 +108,7 @@ function styleClasses(m) {
   if (fl.includes('returning')) c.push('r-returning');
   if (typeof isBot === 'function' && isBot(m)) c.push('r-bot');
   if (m.first_time) c.push('e-first');
-  if (m.event) c.push('e-' + m.event);
+  if (m.event) c.push('e-' + String(m.event).replace(/[^\w-]/g, ''));
   if (typeof mentionsMe === 'function' && mentionsMe(m)) c.push('e-mention');
   if (typeof PINS !== 'undefined' && PINS.some(p => p.id === m.id)) c.push('e-pinned');
   if (CS && CS.keywords && CS.keywords.length) {
