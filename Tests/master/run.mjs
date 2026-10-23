@@ -316,6 +316,13 @@ await t('writes: 401/403/429/503 come back as ok:false with plain words, never s
   const soft = await C.createApi({ base: 'http://x', fetch: async () => ({ ok: true, status: 200, json: async () => ({ ok: false, error: 'no such scene' }) }) }).post('/x', {}); assert.equal(soft.ok, false); assert.equal(soft.error, 'no such scene');
 });
 
+await t('malformed 200 replies are failures, not data (junk flag); empty body is still fine', async () => {
+  const mk = tx => C.createApi({ base: 'http://x', fetch: async () => ({ ok: true, status: 200, text: async () => tx }) });
+  const bad = await mk('{not json <html>').get('/x'); assert.equal(bad.ok, false); assert.equal(bad.junk, true); assert.match(bad.error, /unreadable/);
+  const empty = await mk('').get('/x'); assert.equal(empty.ok, true); assert.equal(empty.json, null);
+  const good = await mk('{"a":1}').get('/x'); assert.equal(good.ok, true); assert.equal(good.json.a, 1);
+});
+
 await t('writes: slow Host times out, unreachable Host reports it; identical in-flight POSTs are sent once (double-click)', async () => {
   const slow = C.createApi({ base: 'http://x', fetch: (u, o) => new Promise((res, rej) => o.signal.addEventListener('abort', () => rej(Object.assign(new Error('a'), { name: 'AbortError' })))), timeoutMs: 60 });
   assert.equal((await slow.post('/api/wheel/spin')).error, 'timeout');

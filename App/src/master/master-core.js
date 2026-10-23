@@ -204,8 +204,8 @@
       const t0 = Date.now();
       try {
         const r = await f(base + path, { method, headers, body: body == null ? undefined : JSON.stringify(body), cache: 'no-store', signal: ctl && ctl.signal });
-        let j = null; try { j = await r.json(); } catch (e) { /* empty body */ }
-        return { ok: r.ok && !(j && j.ok === false), status: r.status, json: j, ms: Date.now() - t0, error: !r.ok ? why(r.status, j) : (j && j.ok === false ? (j.error || 'refused') : '') };
+        let j = null, junk = false; try { const tx = typeof r.text === 'function' ? await r.text() : JSON.stringify(await r.json()); if (tx.trim()) { try { j = JSON.parse(tx); } catch (e) { junk = r.ok; } } } catch (e) { /* empty body */ }   // a 200 that is not JSON (proxy page, half a reply) is a failure, not data
+        return { ok: r.ok && !junk && !(j && j.ok === false), status: r.status, json: j, ms: Date.now() - t0, junk, error: !r.ok ? why(r.status, j) : junk ? 'unreadable reply' : (j && j.ok === false ? (j.error || 'refused') : '') };
       } catch (e) {
         return { ok: false, status: 0, json: null, ms: Date.now() - t0, error: e && e.name === 'AbortError' ? 'timeout' : 'Host not reachable' };
       } finally { if (timer) clearTimeout(timer); }

@@ -51,3 +51,10 @@ Later the same day (52 tests, commits 1cf246c, a71c690, a8e1cf3, 5ee24bf): heade
 
 ## Status 2026-10-23 05:35
 Role changed by 00: Q&A pool only (no coding, no restarts). Questions come via old 00; new supervisor is 100 - Coordinator (Docs/SESSIONS_STRUCTURE.md). Also found: Listen review card first line (52:24) has a 0.4 s clip for a 14-word sentence (reported to 01).
+
+### 6d. Batch U-X (names, soak, outage matrix, shell review)
+
+- **U hostile names** (`Tests/master/names.mjs`, headless Chrome): queue/team/wheel/chat text of 80+ chars, emoji, RTL, empty, spaces, `<b id=zz>`, `<img onerror>`, quotes, `<script>`. Nothing renders as markup or runs; one real bug fixed (long team names widened the Customs grid: `.tn` now `minmax(0,1fr)`).
+- **V soak** (`Tests/master/soak.mjs 600`): 10 min, Host flapping every other loop plus 30 chat lines/5 events per loop. After warm-up: setInterval handles flat at 2, setTimeout handles flat at 15, in-flight fetches 0, DOM nodes 1842 constant, heap +0.7 MB max-min. Result: FLAT.
+- **W outage matrix** (`Tests/master/outage.mjs`, one mock per source): Host / Spotify / Multi down, all three, 500s, malformed JSON, 3 s slow. Gaps found and fixed: (1) Host answering 502-504 never showed offline (any HTTP status counted as up); now 2 in a row = offline. (2) Host 500s or junk 200s kept refreshing the "fresh" clock; now only real answers do, so the `data N s old` badge appears. (3) A 200 that is not JSON was treated as ok data; `createApi` now returns ok:false, junk:true, error 'unreadable reply'. (4) Multi was only checked when the Stream tab loaded; it is now pinged every 10 s while that tab is open, so the banner appears/clears without reload. (5) Stream info Load says plainly when Multi did not answer. All 11 cases: state shown, last data kept, page never blank, recovers with no reload.
+- **X** Suite shell review (index.html, 23's file): 13 findings sent to 20, nothing edited.

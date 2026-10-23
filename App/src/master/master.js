@@ -20,7 +20,9 @@
   const F = (u, o) => fetch(u, o);   // the one fetch the Host / Spotify / Multi clients and the live-event stream share
   const H = C.createHealth();   // per source (host / music / multi): consecutive failures -> poll back-off + the offline banner
   const lastOk = {};   // when each source last answered (the stale badge)
-  const track = src => r => { if (r.status === 0 || r.status >= 502) H.fail(src); else { H.ok(src); lastOk[src] = Date.now(); } };
+  const track = src => r => {   // host: 500/501 or junk is that endpoint's own bug (no offline banner) but it is not fresh data either; music/multi have few endpoints, so any 5xx or junk counts against them
+    const gone = r.status === 0 || r.status >= (src === 'host' ? 502 : 500) || (src !== 'host' && r.junk);
+    if (gone) H.fail(src); else if (r.status >= 500 || r.junk) { /* soft: neither up nor down, lastOk not refreshed */ } else { H.ok(src); lastOk[src] = Date.now(); } };
   const api = C.createApi({ base: HOST, fetch: F, getToken: () => token, timeoutMs: 4000, onResult: track('host') });
 
   /* ---------- Spotify strip (the Spotify module, 127.0.0.1:8771) ---------- */
@@ -595,7 +597,8 @@
     if (yt && yt.connected) { if (yt.description != null) si.description = yt.description; if (!a.ok && yt.title) si.title = yt.title; if (!a.ok && Array.isArray(yt.tags)) si.tags = yt.tags.join(', '); got.push('YouTube'); }
     ui.siPlat = b.ok && b.json && b.json.platforms || null; siSave();
     const ytErr = b.ok && b.json && b.json.platforms && b.json.platforms.youtube && b.json.platforms.youtube.error;
-    note.textContent = got.length ? 'Loaded from ' + got.join(' + ') + (ytErr ? ' · YouTube: ' + ytErr : '') : ytErr ? 'YouTube: ' + ytErr : 'Nothing to load yet (Host /api/channel/info and Multi /api/stream/info are not there yet): type it in.';
+    const mDown = !b.ok ? ' · Multi did not answer (' + (b.error || 'error') + '): YouTube/Kick not loaded' : '';
+    note.textContent = got.length ? 'Loaded from ' + got.join(' + ') + mDown + (ytErr ? ' · YouTube: ' + ytErr : '') : !b.ok ? 'Multi did not answer (' + (b.error || 'error') + '). Twitch ' + (a.ok ? 'loaded' : 'did not load either') + '.' : ytErr ? 'YouTube: ' + ytErr : 'Nothing to load yet (Host /api/channel/info and Multi /api/stream/info are not there yet): type it in.';
   }
   async function siPush(btn) {
     const si = ui.si, want = PLAT.filter(([k]) => si.plat[k]).map(([k]) => k), rows = [];
@@ -818,7 +821,8 @@
   const visible = () => !document.hidden;
   let linkMs = []; const noteMs = ms => { linkMs.push(ms); if (linkMs.length > 8) linkMs.shift(); S.set({ link: { sse: S.get('link').sse, ms: Math.round(linkMs.reduce((a, b) => a + b, 0) / linkMs.length) } }); };
   const sse = () => S.get('link').sse;
-  function seen(r) { if (r.status > 0) { if (S.get('hostUp') !== true) S.set({ hostUp: true }); noteMs(r.ms); } else if (S.get('hostUp') !== false) S.set({ hostUp: false }); }
+  function seen(r) { if (r.status > 0 && !(r.status >= 502 && H.down('host'))) {   // 502-504 twice in a row (proxy up, Host dead) counts as offline, like no answer at all
+    if (S.get('hostUp') !== true) S.set({ hostUp: true }); noteMs(r.ms); } else if (S.get('hostUp') !== false) S.set({ hostUp: false }); }
   const polled = [];   // [poller, source]: a source coming back kicks all of its pollers at once
   const P = (interval, run, shouldRun, src) => { src = src || 'host'; const p = C.createPoller({ interval: () => H.delay(src, typeof interval === 'function' ? interval() : interval), run, shouldRun: shouldRun || visible }); polled.push([p, src]); return p; };
   const pollers = {
@@ -850,7 +854,7 @@
     }, () => visible() && ui.tab === 'feed'),
     pre: P(30000, async () => { const r = await api.get('/api/prestream'); if (r.ok) { ui.pre = r.json; renderPre(); } }),
     streaks: P(60000, async () => { const r = await api.get('/api/streaks'); if (r.ok) { ui.heads.streaks = r.json; renderHeads(); } }, () => visible() && ui.tab === 'feed'),
-    multi: P(10000, async () => { await xapi.get('/api/stream/info'); }, () => visible() && H.down('multi'), 'multi'),   // only while Multi is down: a read-only ping so the banner clears when it is back
+    multi: P(10000, async () => { await xapi.get('/api/stream/info'); }, () => visible() && (ui.tab === 'stream' || H.fails('multi') > 0), 'multi'),   // read-only ping while the Stream tab is open or Multi is failing: the banner appears and clears without a reload
     music: P(() => (document.hidden ? 8000 : 2500), async () => {
       const [a, b] = await Promise.all([mapi.get('/api/now'), mapi.get('/api/state')]);
       if (a.ok || b.ok) S.set({ now: a.ok ? a.json : S.get('now'), mstate: b.ok ? b.json : null, nowOk: true }); else S.set({ nowOk: false });

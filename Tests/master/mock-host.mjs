@@ -30,6 +30,11 @@ export function startMock(port = 8798, opts = {}) {
     // load-test hooks (Q): /__load?chat=N&events=M injects lines at once, /__down?ms=T answers 503 and drops the event stream for T ms
     if (p === '/__load') { for (let i = 0; i < (+u.searchParams.get('chat') || 0); i++) server.addChat('Load' + (i % 40), 'load line ' + i + ' ' + 'x'.repeat(i % 50)); for (let i = 0; i < (+u.searchParams.get('events') || 0); i++) { const e = { ts: Math.floor(Date.now() / 1000), kind: 'redeem', type: 'redeem', user: 'ev' + (i % 30), what: 'Load ' + i, detail: 'Load ' + i, amount: 1, message: '', seq: ++st.act.seq }; st.act.items.push(e); } return send(res, 200, { ok: true, chat: st.chat.length, act: st.act.items.length }); }
     if (p === '/__down') { st.downUntil = Date.now() + (+u.searchParams.get('ms') || 3000); st.sse.forEach(r => r.end()); st.sse.clear && st.sse.clear(); return send(res, 200, { ok: true }); }
+    if (p === '/__mode') { st.mode = u.searchParams.get('m') || 'ok'; return send(res, 200, { ok: true, mode: st.mode }); }
+    if (st.mode === 'down') { st.sse.forEach(r => r.end()); res.writeHead(503, { 'Access-Control-Allow-Origin': '*' }); return res.end('down'); }
+    if (st.mode === '500') { res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); return res.end('{"ok":false,"error":"boom"}'); }
+    if (st.mode === 'bad') { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); return res.end('{not json <html>'); }
+    if (st.mode === 'slow') await new Promise(r => setTimeout(r, 3000));
     if (st.downUntil && Date.now() < st.downUntil) { res.writeHead(503, { 'Access-Control-Allow-Origin': '*' }); return res.end('down'); }
     if (st.delayMs) await new Promise(r => setTimeout(r, st.delayMs));
     if (m === 'POST') {
