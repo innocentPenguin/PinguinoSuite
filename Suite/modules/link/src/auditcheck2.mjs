@@ -80,7 +80,7 @@ f.close();
 // ---- zip handling ----
 const d1 = path.join(tmp, 'z1'); fs.mkdirSync(d1);
 const zf = path.join(tmp, 'a.zip');
-for (const name of ['a:b.txt', 'x/../../y.txt', '/abs.txt', 'C:\w.txt']) {
+for (const name of ['a:b.txt', 'x/../../y.txt', '/abs.txt', 'C:' + String.fromCharCode(92) + 'w.txt']) {
   fs.writeFileSync(zf, writeZip([{ name, data: Buffer.from('hi') }]));
   let threw = false; try { extractZip(zf, d1); } catch { threw = true; }
   check(`zip entry "${name}" rejected`, threw);

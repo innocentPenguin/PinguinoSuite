@@ -12,7 +12,7 @@ export function run(cmd, args = [], { timeout = 30000 } = {}) {
 
 /** Find the Tailscale CLI: PATH first, then the standard app-install locations (macOS app and Windows installer don't always add it to PATH). */
 const CANDIDATES = {
-  win32: ['C:\Program Files\Tailscale\tailscale.exe', 'C:\Program Files (x86)\Tailscale\tailscale.exe'],
+  win32: ['C:\\Program Files\\Tailscale\\tailscale.exe', 'C:\\Program Files (x86)\\Tailscale\\tailscale.exe'],
   darwin: ['/Applications/Tailscale.app/Contents/MacOS/Tailscale', '/opt/homebrew/bin/tailscale', '/usr/local/bin/tailscale'],
   linux: ['/usr/bin/tailscale', '/usr/local/bin/tailscale'],
 };
