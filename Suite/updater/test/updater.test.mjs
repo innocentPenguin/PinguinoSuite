@@ -408,3 +408,25 @@ test('runtime files (spotify spike config + lockfile) never ship in a release', 
   assert.ok(SKIP_FILE.test('Suite/modules/spotify/bin/spike-cfg/lockfile') && SKIP_FILE.test('lockfile'));
   assert.ok(!SKIP_FILE.test('Suite/modules/spotify/bin/librespot.exe'));
 });
+
+// ---- Lite Parts card: the exact command lines PinguinoLite issues (PinguinoLite/src-tauri/src/parts.rs apply_args) ----
+test('Lite command lines: lite is staged then swapped by launch; link applies; repair restores; rollback --plan answers', () => {
+  const run = (...a) => JSON.parse(execFileSync('node', [UPD, ...a, '--core-port', '1'], { stdio: 'pipe' }).toString());
+  const inst = makeInstall('1.0.0', { 'PinguinoLite/lite.txt': 'old lite', 'Suite/modules/link/link.txt': 'old link' });
+  const rel = makeCompRelease('1.1.0', [['PinguinoLite/lite.txt', 'new lite'], ['Suite/modules/link/link.txt', 'new link']]);
+  withSource(inst, rel, { profile: 'lite-minimal', parts: ['lite', 'link', 'tools'] });
+  // apply --only lite --stage --install <dir>: verified and parked, nothing swapped under the running exe
+  let o = run('apply', '--only', 'lite', '--stage', '--install', inst);
+  assert.equal(o.ok, true, JSON.stringify(o)); assert.equal(o.staged, true); assert.equal(read(inst, 'PinguinoLite/lite.txt'), 'old lite');
+  // Start-Lite.bat: updater.mjs launch --install <dir> swaps the staged part
+  o = run('launch', '--install', inst); assert.equal(o.ok, true, JSON.stringify(o)); assert.equal(read(inst, 'PinguinoLite/lite.txt'), 'new lite');
+  // apply --only link --install <dir>
+  o = run('apply', '--only', 'link', '--install', inst); assert.equal(o.ok, true, JSON.stringify(o)); assert.equal(read(inst, 'Suite/modules/link/link.txt'), 'new link');
+  // apply --only link --repair: a damaged file is restored
+  fs.writeFileSync(path.join(inst, 'Suite/modules/link/link.txt'), 'broken');
+  o = run('apply', '--only', 'link', '--repair', '--install', inst); assert.equal(o.ok, true, JSON.stringify(o)); assert.equal(read(inst, 'Suite/modules/link/link.txt'), 'new link');
+  // rollback --plan --install <dir>
+  o = run('rollback', '--plan', '--install', inst); assert.equal(o.ok, true, JSON.stringify(o)); assert.ok(Array.isArray(o.components));
+  // a part Lite never offers is refused by the updater too when unknown
+  o = run('apply', '--only', 'nonsense', '--install', inst); assert.equal(o.ok, false);
+});

@@ -126,6 +126,18 @@ pub fn lite_view(check: &Value) -> Value {
            "any_changed": parts.iter().any(|p| p["changed"] == true)})
 }
 
+/// Updater arguments for applying one part: staged parts (Lite's own exe) are only verified and parked for the next start, never swapped under the running app.
+pub fn apply_args(id: &str, repair: bool) -> Vec<String> {
+    let mut a: Vec<String> = ["apply", "--only", id].iter().map(|s| s.to_string()).collect();
+    if STAGED_PARTS.contains(&id) {
+        a.push("--stage".into());
+    }
+    if repair {
+        a.push("--repair".into());
+    }
+    a
+}
+
 /// Fail safe: only an explicit "not live" lets an update through (Host not running counts as not live; an unreadable answer does not).
 pub fn may_update(live: Option<bool>) -> Result<(), &'static str> {
     match live {
@@ -172,7 +184,7 @@ fn run_updater(args: &[&str]) -> Value {
     let Some(install) = install_dir() else { return json!({"ok": false, "message": "This copy has no install.json (development build), so it does not update itself."}) };
     let Some(js) = updater_js(&install) else { return json!({"ok": false, "message": "The updater (updater.mjs) was not found next to this install."}) };
     let mut cmd = Command::new(node_exe(&install));
-    cmd.arg(&js).args(args).arg("--install").arg(&install).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.args(updater_argv(&js.to_string_lossy(), args, &install.to_string_lossy())).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -183,6 +195,15 @@ fn run_updater(args: &[&str]) -> Value {
             .unwrap_or_else(|| json!({"ok": false, "message": String::from_utf8_lossy(&o.stderr).trim().chars().take(200).collect::<String>()})),
         Err(_) => json!({"ok": false, "message": "Node.js was not found; updates are unavailable."}),
     }
+}
+
+/// Full argv after the node executable: updater.mjs, the subcommand arguments, then --install <dir>.
+pub fn updater_argv(js: &str, args: &[&str], install: &str) -> Vec<String> {
+    let mut v = vec![js.to_string()];
+    v.extend(args.iter().map(|s| s.to_string()));
+    v.push("--install".into());
+    v.push(install.into());
+    v
 }
 
 /// GET /api/live on the Host: Some(live), or None when it cannot be told. Connection refused = Host not running = not live.
@@ -273,14 +294,8 @@ pub fn parts_apply(app: AppHandle, ids: Vec<String>, repair: Option<bool>) -> Va
         for id in &ps {
             let stage = STAGED_PARTS.contains(&id.as_str());
             let had = if id == "link" { pause_link(&app) } else { false };
-            let mut args = vec!["apply", "--only", id.as_str()];
-            if stage {
-                args.push("--stage");
-            }
-            if repair {
-                args.push("--repair");
-            }
-            let r = run_updater(&args);
+            let args = apply_args(id, repair);
+            let r = run_updater(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
             resume_link(&app, had); // always start Link again, whether the swap worked or was rolled back
             let ok = r["ok"].as_bool().unwrap_or(false);
             last = if stage && ok { json!({"ok": true, "message": format!("{id} is verified and staged; it is applied the next time Lite starts"), "staged": true}) } else { r };
@@ -452,6 +467,17 @@ mod tests {
         assert_eq!(link_error(&json!({"result": "error", "error": "multi has no port"})).as_deref(), Some("multi has no port"));
         assert_eq!(link_error(&json!({"result": "ok"})), None);
         assert_eq!(link_error(&json!({"error": ""})), None);
+    }
+
+    #[test]
+    fn exact_updater_command_lines() {
+        assert_eq!(apply_args("lite", false), ["apply", "--only", "lite", "--stage"]);
+        assert_eq!(apply_args("link", false), ["apply", "--only", "link"]);
+        assert_eq!(apply_args("link", true), ["apply", "--only", "link", "--repair"]);
+        assert_eq!(apply_args("lite", true), ["apply", "--only", "lite", "--stage", "--repair"]);
+        assert_eq!(updater_argv("u.mjs", &["rollback", "--plan"], "/inst"), ["u.mjs", "rollback", "--plan", "--install", "/inst"]);
+        // only Lite's own parts can ever reach the updater from the Parts card
+        assert!(allowed_parts(&["shell".to_string(), "host".to_string(), "core".to_string()]).is_empty());
     }
 
     #[test]
