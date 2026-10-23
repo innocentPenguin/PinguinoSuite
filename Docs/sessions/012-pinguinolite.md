@@ -1,6 +1,16 @@
 # Session 012 - PinguinoLite (notes, plain language)
 
-Updated 2026-10-23 (final, coding stopped on 01's order). Latest Lite commit 141a126; rebuild needed for everything since c2dada3. Repo: D:\PinguinoSuite (all work is local commits, nothing pushed). App code: PinguinoLite\ (Tauri 2). Coordinator = 00, installer/updater = 01, Link = 04.
+Updated 2026-10-23 by 21-Lite (hand-over). Repo: D:\PinguinoSuite (all work is local commits, nothing pushed). App code: PinguinoLite\ (Tauri 2). Coordinator = 100/120, installer/updater = 01, Link = 04. Only the coordinator launches or rebuilds the app.
+
+### Status at hand-over (read this first)
+Latest Lite commits, newest first: 23c64d5 page polish (focus rings, keyboard nav, dialog Esc and Tab trap, wrap-anywhere, buttons disabled while a command runs, results persist), d711c83 log hygiene (Link rotates link.jsonl 2 MB x 3, replay seen-state bounded, support bundles keep the newest 5, Windows account name masked in bundles), ac8a011 compile-by-eye fixes (updater live probe uses HTTP/1.0), 1771286 / 7033471 / 73c653f / 3e919b9 docs consistency, release notes, mid-swap failure tests, Selftest, 85ee4de support bundle. Rebuild needed for everything since c2dada3.
+
+Done and tested on this PC (scratch crate `cargo test` with the real source files copied in, plus node tests):
+- Rust: replays.rs, parts.rs, updatecheck.rs, support.rs compile and their 27 unit tests pass (parts.rs against a stub of tauri's AppHandle/Manager/State). Warnings: none. replays.rs parses the real 2v2 fixture and survives garbage, empty, huge and truncated files with an 8 s cap.
+- Node: updater tests (52), rows/hints tests (8), Installer\Selftest.mjs (17/17), Link log rotation (Suite\modules\link\src\logcheck.mjs).
+- Page: checked in the browser pane against a stub of window.__TAURI__ (keyboard nav, focus kept across the 5 s redraw, quit dialog Esc / Tab trap / focus return, no horizontal overflow with 130-character module names and 200-character paths, double-click on Install / Support bundle / Scan runs the command once, failure text stays on the page).
+
+NOT verified (needs a real build or the gaming PC): main.rs itself (tauri calls: window.emit, set_fullscreen, eval, tray menu, on_window_event, generate_handler list; read by eye against tauri 2.12.4 in Cargo.lock, never compiled here); the real `cargo test` of the whole crate; any click in the real window; tar.exe zip creation and PowerShell system info inside the support bundle; curl.exe update check; Host /api/live answer shape (live guard fails safe: unreadable = updates held); OneDrive-redirected Documents on the gaming PC; Rocket League replays there; first install with the real manifest and key (no release is published yet, see Docs\LITE_RELEASE.md and Docs\LITE_GAMING_PC.md for the day-one steps).
 
 ## 1. What I built and why
 PinguinoLite = a light app (Dashboard, Modules, Replays pages) that bundles PinguinoLink, for a second/lighter PC.
