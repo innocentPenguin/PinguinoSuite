@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawn, execFile } from 'node:child_process';
 import { log } from './log.mjs';
+import { testHook } from './testhook.mjs';
 import { readCapped, jsonCapped } from './httpcap.mjs';
 import { installPackage, uninstallModule, rollbackModule } from './pkg.mjs';
 
@@ -233,7 +234,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
     const exe = await findLiteExe();
     if (!exe) { fail(`Lite update: cannot find the installed ${litePlatform() === 'win32' ? 'PinguinoLite.exe' : 'PinguinoLite'} to update`); return; }
     const job = { liteDir: dir, installer, sha256: man.sha256, exe, platform: litePlatform(), from: process.env.PINGUINO_LITE_VERSION || '0.0.0', to: man.latest_version };
-    if (process.env.PINGUINO_LITE_TEST === '1' && process.env.PINGUINO_LITE_TEST_JOB) Object.assign(job, JSON.parse(process.env.PINGUINO_LITE_TEST_JOB));
+    if (testHook('PINGUINO_LITE_TEST') && process.env.PINGUINO_LITE_TEST_JOB) Object.assign(job, JSON.parse(process.env.PINGUINO_LITE_TEST_JOB));
     const jf = path.join(dir, 'lite_apply_job.json');
     fs.writeFileSync(jf, JSON.stringify(job, null, 2));
     busy.lite = 'updating'; writeStatus();
@@ -283,7 +284,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
 
 // ---- platform: Windows installs PinguinoLite-<v>-setup.exe (/S); macOS/Linux install PinguinoLite-<v>-setup.sh (run with /bin/sh)
 /** The OS the apply path targets. Tests may fake it with PINGUINO_LITE_PLATFORM (only when PINGUINO_LITE_TEST=1). */
-export const litePlatform = () => (process.env.PINGUINO_LITE_TEST === '1' && process.env.PINGUINO_LITE_PLATFORM) || process.platform;
+export const litePlatform = () => (testHook('PINGUINO_LITE_TEST') && process.env.PINGUINO_LITE_PLATFORM) || process.platform;
 export const installerExt = () => litePlatform() === 'win32' ? 'exe' : 'sh';
 export const installerRe = () => new RegExp('^PinguinoLite-(' + '\\d+(?:\\.\\d+)*' + ')-setup\\.' + installerExt() + '$');
 /** Where an installed PinguinoLite lives on macOS/Linux when nothing says otherwise ('' = not found). */

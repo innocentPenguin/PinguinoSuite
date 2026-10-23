@@ -93,7 +93,7 @@ try {
   const mac = ps2.find(i => i.id === 'macros');
   check('prestream: missing scene is reported by name', mac?.status === 'fail' && mac.detail.includes('BRB'), JSON.stringify(mac));
   const miss = await good.call('POST', '/api/macro/brb');
-  check('macro with a missing scene fails with OBS comment', miss.status === 500 && /scene/i.test(miss.json.error || ''), JSON.stringify(miss));
+  check('macro with a missing scene fails with OBS comment', miss.status === 502 && /scene/i.test(miss.json.error || ''), JSON.stringify(miss));
 
   const dn = await diagnoseObs({ host: '127.0.0.1', port: 1, password: '', src: 'none' });
   check('diagnose: OBS not running says so and what to do', !dn.ok && dn.code === 'not-running' && /Start OBS/.test(dn.detail), dn.detail);

@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { GUESSES } from './names.mjs';
+import { writeJsonAtomic, readJsonSafe } from './safefile.mjs';
 
 const LEGACY = path.join(os.homedir(), '.pinguinolink');
 // The Suite core sets PINGUINO_DATA_DIR; standalone runs keep using ~/.pinguinolink.
@@ -39,7 +40,7 @@ export function load() {
     try { fs.copyFileSync(path.join(LEGACY, 'config.json'), FILE); } catch {}
   }
   let cfg = {};
-  try { cfg = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
+  cfg = readJsonSafe(FILE, {}, m => console.error(`[link] ${m}`));   // damaged file: .bak, or stop (never a silent reset)
   const merged = { ...DEFAULTS, ...cfg, obs: { ...DEFAULTS.obs, ...cfg.obs }, obsNames: { ...DEFAULTS.obsNames, ...(cfg.obsNames && typeof cfg.obsNames === 'object' ? cfg.obsNames : {}) }, claude: { ...DEFAULTS.claude, ...cfg.claude } };
   if (!merged.token) { merged.token = crypto.randomBytes(24).toString('hex'); save(merged); }
   return merged;
@@ -47,5 +48,5 @@ export function load() {
 
 export function save(cfg) {
   fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+  writeJsonAtomic(FILE, cfg);
 }

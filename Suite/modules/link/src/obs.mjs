@@ -2,13 +2,18 @@
 import crypto from 'node:crypto';
 import net from 'node:net';
 
+/** An OBS problem the user can act on: 502 with the plain message (other server errors are shown generically). */
+const obsErr = m => Object.assign(new Error(m), { status: 502 });
 const sha = s => crypto.createHash('sha256').update(s).digest('base64');
 
 /** Test safety: with PINGUINO_NEVER_REAL_OBS=1 (set by every *check.mjs) the real OBS port 4455 is never contacted, so no test can go live. */
-function noRealObs(port) { if (process.env.PINGUINO_NEVER_REAL_OBS && Number(port) === 4455) throw new Error('blocked: tests never talk to the real OBS (port 4455)'); }
+function noRealObs(port) { if (process.env.PINGUINO_NEVER_REAL_OBS && Number(port) === 4455) throw obsErr('blocked: tests never talk to the real OBS (port 4455)'); }
 
 /** Going live is OFF unless the owner turned on "Allow Start Stream" (Settings > Buttons and safety). Every OBS request passes through here. */
-const GO_LIVE = new Set(['StartStream', 'ToggleStream']);
+const GO_LIVE = new Set(['StartStream', 'ToggleStream', 'StartOutput', 'ToggleOutput', 'TriggerHotkeyByName', 'TriggerHotkeyBySequence', 'SetStreamServiceSettings', 'SendStreamCaption']);
+/** Request types a button can be built from (macros.mjs KINDS) plus the ones Link itself sends. Anything else (except read-only Get*) needs safety.allowCustomSteps. */
+const ALLOWED = new Set(['SetCurrentProgramScene', 'StartStream', 'StopStream', 'StartRecord', 'StopRecord', 'ToggleRecord', 'SaveReplayBuffer', 'ToggleInputMute', 'SetInputMute']);
+export const customSteps = requests => requests.filter(r => !ALLOWED.has(r?.type) && !/^Get[A-Z]/.test(String(r?.type))).map(r => String(r?.type));
 export const goesLive = requests => requests.some(r => GO_LIVE.has(r.type));
 
 /** OBS says "No scene was found by that name." without the name; say which scene/input it was. */
@@ -18,21 +23,24 @@ function explain(req, type, comment) {
   return `${type}: ${comment}`;
 }
 
-export function runRequests({ host, port, password }, requests, timeoutMs = 5000, { allowStartStream = false } = {}) {
-  if (goesLive(requests) && !allowStartStream) return Promise.reject(Object.assign(new Error('Start Stream is turned off. Turn on "Allow Start Stream" in Link settings (Buttons and safety) to use it.'), { status: 403 }));
+export function runRequests({ host, port, password }, requests, timeoutMs = 5000, { allowStartStream = false, allowCustomSteps = false } = {}) {
+  const odd = allowCustomSteps ? [] : customSteps(requests);
+  if (odd.length) return Promise.reject(Object.assign(obsErr(`Link only sends the buttons it can build; "${odd[0]}" is not one of them. Turn on safety.allowCustomSteps in config.json if you really want it.`), { status: 403 }));
+  if (goesLive(requests) && !allowStartStream) return Promise.reject(Object.assign(obsErr('Start Stream is turned off. Turn on "Allow Start Stream" in Link settings (Buttons and safety) to use it.'), { status: 403 }));
   noRealObs(port);
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://${host}:${port}`);
     const results = [];
     let next = 0;
-    const timer = setTimeout(() => { ws.close(); reject(new Error('OBS timed out (is OBS running with WebSocket enabled?)')); }, timeoutMs);
-    const fail = e => { clearTimeout(timer); reject(e); };
+    const timer = setTimeout(() => { ws.close(); reject(obsErr('OBS timed out (is OBS running with WebSocket enabled?)')); }, timeoutMs);
+    const fail = e => { clearTimeout(timer); try { ws.close(); } catch {} reject(e); };
+    let done = false;
     const sendNext = () => {
-      if (next >= requests.length) { clearTimeout(timer); ws.close(); return resolve(results); }
+      if (next >= requests.length) { done = true; clearTimeout(timer); ws.close(); return resolve(results); }
       const r = requests[next];
       ws.send(JSON.stringify({ op: 6, d: { requestType: r.type, requestId: String(next), requestData: r.data } }));
     };
-    ws.onerror = () => fail(new Error(`cannot reach OBS at ${host}:${port}`));
+    ws.onerror = () => fail(obsErr(`cannot reach OBS at ${host}:${port}`));
     ws.onmessage = ev => { try {
       const m = JSON.parse(ev.data);
       if (m.op === 0) {                                    // Hello
@@ -45,11 +53,11 @@ export function runRequests({ host, port, password }, requests, timeoutMs = 5000
       } else if (m.op === 2) sendNext();                   // Identified
       else if (m.op === 7) {                               // RequestResponse
         results.push(m.d.requestStatus);
-        if (!m.d.requestStatus?.result) return fail(new Error(explain(requests[Number(m.d.requestId)], m.d.requestType, m.d.requestStatus?.comment)));
+        if (!m.d.requestStatus?.result) return fail(obsErr(explain(requests[Number(m.d.requestId)], m.d.requestType, m.d.requestStatus?.comment)));
         next++; sendNext();
       }
-    } catch (e) { fail(new Error('OBS sent an unreadable message')); } };   // a rogue listener on the port must not crash Link
-    ws.onclose = e => { if (e.code === 4009) fail(new Error('OBS WebSocket password is wrong')); };
+    } catch (e) { fail(obsErr('OBS sent an unreadable message')); } };   // a rogue listener on the port must not crash Link
+    ws.onclose = e => { if (e.code === 4009) fail(obsErr('OBS WebSocket password is wrong')); else if (!done) fail(obsErr('OBS closed the connection before answering')); };
   });
 }
 
@@ -59,10 +67,10 @@ export function getData({ host, port, password }, types, timeoutMs = 4000) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://${host}:${port}`);
     const res = [];
-    const timer = setTimeout(() => { ws.close(); reject(new Error('OBS timed out')); }, timeoutMs);
+    const timer = setTimeout(() => { ws.close(); reject(obsErr('OBS timed out')); }, timeoutMs);
     const fail = e => { clearTimeout(timer); try { ws.close(); } catch {} reject(e); };
-    ws.onerror = () => fail(new Error(`cannot reach OBS at ${host}:${port}`));
-    ws.onclose = e => { if (e.code === 4009) fail(new Error('OBS WebSocket password is wrong')); };
+    ws.onerror = () => fail(obsErr(`cannot reach OBS at ${host}:${port}`));
+    ws.onclose = e => { if (e.code === 4009) fail(obsErr('OBS WebSocket password is wrong')); };
     ws.onmessage = ev => { try {
       const m = JSON.parse(ev.data);
       if (m.op === 0) {
@@ -71,13 +79,13 @@ export function getData({ host, port, password }, types, timeoutMs = 4000) {
         ws.send(JSON.stringify({ op: 1, d: id }));
       } else if (m.op === 2) types.forEach((t, i) => ws.send(JSON.stringify({ op: 6, d: { requestType: t, requestId: String(i) } })));
       else if (m.op === 7) {
-        if (!m.d.requestStatus?.result) return fail(new Error(`${m.d.requestType || 'request'} failed${m.d.requestStatus?.comment ? ': ' + m.d.requestStatus.comment : ''}`));
+        if (!m.d.requestStatus?.result) return fail(obsErr(`${m.d.requestType || 'request'} failed${m.d.requestStatus?.comment ? ': ' + m.d.requestStatus.comment : ''}`));
         const i = Number(m.d.requestId);
         if (!Number.isInteger(i) || i < 0 || i >= types.length) return;
         res[i] = m.d.responseData || {};
         if (res.filter(Boolean).length === types.length) { clearTimeout(timer); ws.close(); resolve(res); }
       }
-    } catch (e) { fail(new Error('OBS sent an unreadable message')); } };
+    } catch (e) { fail(obsErr('OBS sent an unreadable message')); } };
   });
 }
 

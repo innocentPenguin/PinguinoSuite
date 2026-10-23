@@ -12,9 +12,11 @@ import crypto from 'node:crypto';
 import { DIR } from './config.mjs';
 import { log } from './log.mjs';
 import { jsonCapped } from './httpcap.mjs';
+import { testHook } from './testhook.mjs';
+import { writeJsonAtomic, readJsonSafe } from './safefile.mjs';
 import * as ts from './tailscale.mjs';
 
-const TEST = process.env.PINGUINO_MESH_TEST === '1';   // test hook only: allows loopback peers
+const TEST = testHook('PINGUINO_MESH_TEST');   // test hook only: allows loopback peers
 const BEAT_MS = 3000, APPROVE_MS = 90000;
 const CORE = process.env.PINGUINO_CORE_URL || 'http://127.0.0.1:8760';
 const FILE = path.join(DIR, 'mesh.json');
@@ -53,7 +55,7 @@ function cleanDevice(d) {
 export function createMesh(cfg, { port }) {
   const OFFLINE_MS = () => (cfg.mesh?.offlineSec ?? 12) * 1000, CODE_MS = () => (cfg.mesh?.codeMinutes ?? 5) * 60000;
   let state = {};
-  try { state = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
+  state = readJsonSafe(FILE, {}, m => log('warn', 'mesh', m));   // damaged file: .bak, or stop (never a new device id and zero peers)
   state.self ||= { id: crypto.randomUUID(), name: os.hostname() };
   state.self.os = os.platform();
   state.peers = Object.assign(Object.create(null), state.peers);   // no prototype: a peer id like "constructor" must never resolve to an inherited member
@@ -64,7 +66,7 @@ export function createMesh(cfg, { port }) {
   let busy = false, coreErr = '';
 
   const save = () => {
-    try { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(state, null, 2), { mode: 0o600 }); }
+    try { fs.mkdirSync(DIR, { recursive: true }); writeJsonAtomic(FILE, state); }
     catch (e) { log('error', 'mesh', `cannot save mesh.json: ${e.code || e.message}`); }
   };
   save();
@@ -132,7 +134,7 @@ export function createMesh(cfg, { port }) {
     const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
     if (!p) return [{ id: 'hub-obs', label: 'OBS on the hub', status: 'warn', detail: `no hub is paired. If this PC runs OBS and is the only streaming PC: Link page > Settings > Role > hub > confirm. Otherwise pair with "${name}" (needs Tailscale).` }];
     try {
-      const res = await fetch(url(p, '/api/prestream'), { redirect: 'error', signal: AbortSignal.timeout(5000) });
+      const res = await fetch(url(p, '/api/prestream'), { headers: headersFor(p), redirect: 'error', signal: AbortSignal.timeout(5000) });
       if (!res.ok) throw new Error(`hub answered ${res.status}`);
       seen(p);
       return ((await jsonCapped(res)).items || []).filter(i => ['obs', 'macros'].includes(i.id)).map(i => ({ id: `hub-${i.id}`, label: `${p.name}: ${i.label}`, status: i.status, detail: i.detail, help: i.help }));

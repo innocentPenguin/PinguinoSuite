@@ -5,13 +5,14 @@
 // Usage: node applyupdate.mjs <job.json>. Writes <lite dir>\lite_apply_result.json. Never touches the network.
 import fs from 'node:fs';
 import path from 'node:path';
+import { testHook } from './testhook.mjs';
 import crypto from 'node:crypto';
 import { spawn, execFile } from 'node:child_process';
 
 const jobFile = process.argv[2];
 const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
 const { liteDir, installer, sha256, exe, from, to, waitMs = 90000, installMs = 300000 } = job;
-const TEST = process.env.PINGUINO_LITE_TEST === '1';          // tests may swap the process name and the installer command
+const TEST = testHook('PINGUINO_LITE_TEST');          // tests may swap the process name and the installer command
 const plat = (TEST && (job.platform || process.env.PINGUINO_LITE_PLATFORM)) || process.platform, WIN = plat === 'win32';
 const procName = TEST && job.procName ? job.procName : (WIN ? 'PinguinoLite.exe' : 'PinguinoLite');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -52,6 +53,7 @@ async function main() {
   catch (e) { return result(false, `could not back up the current version (${e.code || e.message}); nothing was changed`); }
   say(`backup at ${backup}`);
   // 4. silent install
+  if (hashOf(inst) !== want) return result(false, 'installer changed on disk after the check; nothing was installed');   // re-check right before running it
   const cmd = TEST && job.installCmd ? job.installCmd : (WIN ? [inst, '/S'] : ['/bin/sh', inst]);
   const code = await new Promise(res => {
     let done = false; const fin = c => { if (!done) { done = true; res(c); } };

@@ -17,7 +17,7 @@ export const KINDS = {
   mute:           { label: 'Mute input',              param: 'input', build: p => ({ type: 'SetInputMute', data: { inputName: p, inputMuted: true } }) },
   unmute:         { label: 'Unmute input',            param: 'input', build: p => ({ type: 'SetInputMute', data: { inputName: p, inputMuted: false } }) },
 };
-const RISKY_TYPES = new Set(['StartStream', 'StopStream', 'StopRecord']);
+const RISKY_TYPES = new Set(['StartStream', 'ToggleStream', 'StopStream', 'StopRecord']);
 
 /** OBS request -> editor step (or a read-only custom step). */
 function toStep(r) {

@@ -8,6 +8,7 @@ import { createLite, listShared, sharedPath, liteDir } from './lite.mjs';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import * as ts from './tailscale.mjs';
+import { testHook } from './testhook.mjs';
 import { runRequests, goesLive, obsState, forgetState, diagnoseObs } from './obs.mjs';
 import { log, setLevel } from './log.mjs';
 import { prestream } from './prestream.mjs';
@@ -34,7 +35,7 @@ export async function runMacro(cfg, name) {
       if (wants('StartStream') && st.streaming) throw Object.assign(new Error('already live; start ignored'), { status: 409 });
       if (wants('StopStream') && !st.streaming) throw Object.assign(new Error('not streaming; stop ignored'), { status: 409 });
     }
-    try { return await runRequests(conn, steps, 5000, { allowStartStream }); }
+    try { return await runRequests(conn, steps, 5000, { allowStartStream, allowCustomSteps: cfg.safety?.allowCustomSteps === true }); }
     catch (e) {                                                      // say how to fix a wrong scene/input name
       const m = /^OBS has no (?:scene|input) named "(.*)" \(/.exec(e.message || '');
       const guess = m && raw.map(r => r?.data?.sceneName ?? r?.data?.inputName).find(t => t && resolveName(cfg, t) === m[1]);
@@ -46,6 +47,7 @@ export async function runMacro(cfg, name) {
   const hub = st.peers?.find(p => p.name === cfg.hub);
   if (!hub) throw new Error(`hub "${cfg.hub}" not found on the tailnet`);
   if (!hub.online) { log('warn', 'relay', `hub ${cfg.hub} is offline`); throw new Error(`hub "${cfg.hub}" is offline`); }
+  if (cfg.mesh?.legacyRelay !== true) throw new Error(`this PC is not paired with the hub "${cfg.hub}". Pair it (Settings > Devices) instead of sharing the module token; the old token relay is off unless mesh.legacyRelay is true.`);
   const r = await fetch(`http://${hub.ip}:${cfg.port}/api/macro/${name}`, {
     method: 'POST', headers: { 'x-link-token': cfg.token }, redirect: 'error', signal: AbortSignal.timeout(8000),
   });
@@ -57,7 +59,9 @@ const PAGE = fs.readFileSync(new URL('./page.html', import.meta.url), 'utf8');
 
 // Suite desktop shell (Tauri webview) origins; the token is still required for anything but the page.
 const TAURI = new Set(['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost']);
-const FRAME = "frame-ancestors 'self' tauri://localhost http://tauri.localhost https://tauri.localhost http://127.0.0.1:* http://localhost:*";
+const HARDEN = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' };
+const coreOrigins = () => { try { const u = new URL(CORE_URL); return `http://127.0.0.1:${u.port || 80} http://localhost:${u.port || 80}`; } catch { return ''; } };
+const FRAME = () => `frame-ancestors 'self' tauri://localhost http://tauri.localhost https://tauri.localhost ${coreOrigins()}`;   // only the Suite shell and the Suite core page may frame the dashboard
 /** Read a small JSON body; mesh routes require application/json. */
 async function readJson(req) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw Object.assign(new Error('content-type must be application/json'), { status: 415 });
@@ -119,10 +123,11 @@ export async function serve(cfg) {
     return r.json.results;
   }
   const sctx = { getName: mesh.getName, setName: mesh.setName };
+  let streams = 0;                       // update downloads running right now (limit 2)
   setLevel(cfg.log?.level);
   const handler = async (req, res) => {
     const local = LOOP.has(req.socket.remoteAddress || '');
-    const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+    const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json', ...HARDEN }); res.end(JSON.stringify(body)); };
     try {
       if (!hostOk(req.headers.host, selfName)) { log('warn', 'http', 'rejected request: bad Host header (421)'); return json(421, { error: 'bad host' }); }
       // Liveness probe for the Suite core: no secrets, no Tailscale call.
@@ -154,18 +159,26 @@ export async function serve(cfg) {
         if (req.url.endsWith('/list')) { await readJson(req); return json(200, { files: listShared() }); }
         const f = sharedPath(liteDir(), (await readJson(req)).name);
         if (!f) throw Object.assign(new Error('no such update file'), { status: 404 });
+        if (streams >= 2) throw Object.assign(new Error('too many downloads at once; try again in a moment'), { status: 429 });
+        streams++; let freed = false; const free = () => { if (!freed) { freed = true; streams--; } }; res.on('close', free);
         res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': fs.statSync(f).size, 'cache-control': 'no-store' });
         const rs = fs.createReadStream(f);
         rs.on('error', e => { log('warn', 'http', `update file read failed: ${e.code || e.message}`); res.destroy(); });   // file vanished or locked mid-send: drop the connection, never crash
         return rs.pipe(res);
       }
       // The dashboard page on loopback gets the token injected (same-origin only; Host/Origin checks stop other sites).
-      if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html') && local) {
-        res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store', 'content-security-policy': FRAME });
+      const proxied = ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'forwarded', 'via', 'x-real-ip', 'tailscale-user-login'].some(h => req.headers[h] !== undefined) || !/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(String(req.headers.host || ''));   // a proxy on this PC (tailscale serve, nginx, a tunnel) also connects from loopback
+      if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html') && local && !proxied) {
+        res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store', 'content-security-policy': FRAME(), ...HARDEN });
         return res.end(PAGE.replace('__TOKEN__', cfg.token).replace('__CORE__', CORE_URL));
       }
       // Pre-stream readiness for the Suite console: no token, no secrets in the output.
-      if (req.method === 'GET' && req.url === '/api/prestream') return json(200, { items: await allItems() });
+      if (req.method === 'GET' && req.url === '/api/prestream') {
+        let ok = (local && !proxied) || tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization);
+        if (!ok) { try { mesh.peerAuth(...peer); ok = true; } catch {} }                 // the hub-readiness check of a paired client
+        if (!ok) { log('warn', 'http', 'unauthorized GET /api/prestream (401)'); return json(401, { error: 'bad token' }); }
+        return json(200, { items: await allItems() });
+      }
       // Everything else needs the token, loopback included.
       if (!tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization)) { log('warn', 'http', `unauthorized ${req.method} ${req.url.split('?')[0]} (401)`); return json(401, { error: 'bad token' }); }
       if (req.method === 'GET' && req.url === '/api/morning') return json(200, morning(cfg, { items: await allItems(), mesh: mesh.status(), probe: cfg.role === 'hub' ? await probeObsPort(cfg.obs?.port || 4455) : null }));   // read-only, plain language
@@ -254,7 +267,7 @@ export async function serve(cfg) {
       json(404, { error: 'not found' });
     } catch (e) {
       if (e.status && e.status < 500) { if (e.status !== 404) log('warn', 'http', `${req.method} ${String(req.url).split('?')[0]}: ${e.message} (${e.status})`); return json(e.status, { error: e.message, ...(e.extra || {}) }); }
-      log('error', 'http', `${req.method} ${String(req.url).split('?')[0]}: ${e.message}`); json(e.status || 500, { error: e.message });
+      log('error', 'http', `${req.method} ${String(req.url).split('?')[0]}: ${e.message}`); json(e.status || 500, { error: e.status ? e.message : 'internal error (see the Link log)' });   // raw Node errors carry file paths
     }
   };
 
@@ -286,7 +299,7 @@ export async function serve(cfg) {
     catch (e) { log('warn', 'server', `could not listen on ${ip}:${port} (${e.code})`); }
   };
   // PinguinoLite contract folder (Docs/LITE_APP.md): local listing/checking only for now.
-  const inTest = process.env.PINGUINO_MESH_TEST || (process.env.PINGUINO_DATA_DIR || '').toLowerCase().startsWith(os.tmpdir().toLowerCase());
+  const inTest = testHook('PINGUINO_MESH_TEST') || (process.env.PINGUINO_DATA_DIR || '').toLowerCase().startsWith(os.tmpdir().toLowerCase());
   if (!inTest || process.env.PINGUINO_LITE_DIR) {
     const probe = async m => { try { return (await fetch(`http://127.0.0.1:${m.port}${m.health || '/'}`, { signal: AbortSignal.timeout(800) })).status < 500; } catch { return false; } };
     const lite = createLite({ getHealth: probe, peers: { names: () => mesh.peerNames(), enabled: () => cfg.mesh?.fetchUpdates === true, post: (n, route, body, t) => mesh.rawByName(n, route, body, t) } });
