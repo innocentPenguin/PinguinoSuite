@@ -15,13 +15,13 @@ GRAPH = {'built': 'test', 'nodes': [], 'groups': [{'group': 1, 'size': 3, 'membe
 def free():
     s = socket.socket(); s.bind(('127.0.0.1', 0)); n = s.getsockname()[1]; s.close(); return n
 
-def run(chat, redeems):
+def run(chat, redeems, extra=None):
     d = tempfile.mkdtemp(prefix='pgtg_')
     json.dump({'Channel': 'streamer1'}, open(os.path.join(d, 'host_secrets.json'), 'w'))
     json.dump({'optout1': {'Privacy': 'anon'}}, open(os.path.join(d, 'chat_memory.json'), 'w'))
     g = os.path.join(d, 'graph.json'); json.dump(GRAPH, open(g, 'w'))
     env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
-    env.update({'PINGUINO_COMPAT_WS_PORT': str(free()), 'PINGUINO_TIMEOUT_FAST': '1', 'PINGUINO_PEOPLE_GRAPH': g})
+    env.update({'PINGUINO_COMPAT_WS_PORT': str(free()), 'PINGUINO_TIMEOUT_FAST': '1', 'PINGUINO_PEOPLE_GRAPH': g}); env.update(extra or {})
     p = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
     q = queue.Queue(); out = []
     threading.Thread(target=lambda: [q.put(l.rstrip('\n')) for l in p.stdout], daemon=True).start()
@@ -57,6 +57,13 @@ check(not any(SECRET in l for l in out), 'private example text leaked into the o
 out = run(ROSTER, [('zed', 'pinguinob0t')])
 check(lvl(out) == [] , 'bots are protected targets, no graph lookup: %s' % lvl(out))
 # no graph file -> normal behaviour
+# IDEAS #35: friendly failure lines (refund wording kept, varied, no immediate repeat)
+out = run(ROSTER, [('zed', 'qqqqzzzz'), ('zed2', 'wwwwxxxx'), ('zed3', 'eeeerrrr')])
+nm = [x for x in says(out) if 'nobody in chat matched' in x]
+check(len(nm) == 3 and len(set(nm)) == 3 and all('points' in x.lower() and ('back' in x or 'refund' in x) for x in nm), 'no-match lines: %s' % nm)
+out = run(ROSTER, [('zed', 'plain')], {'PINGUINO_TIMEOUT_FAIL': 'helper,core,streamer'})
+cl = [x for x in says(out) if 'points' in x.lower() and 'back' in x]
+check(len(cl) == 1 and 'plain' in cl[0], 'could-not-time-out line: %s' % says(out))
 if os.environ.get("TG_DEBUG"): print(chr(10).join(LAST[-40:]))
 if fails: print('FAIL'); [print(' -', f) for f in fails]; sys.exit(1)
 print('PASS timeout people-graph')

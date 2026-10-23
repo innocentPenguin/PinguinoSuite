@@ -136,7 +136,7 @@ namespace PinguinoHost
             string why; var hit = Match(typed, pool, (double?)cfg["minScore"] ?? 0.7, rlogin, out why);
             if (hit == null)
             {
-                refund(); ChattySay("@" + rname + " nobody in chat matched \"" + Clip(typed, 24) + "\", so no timeout (points back).");
+                refund(); ChattySay(Friendly(NoMatchLines, rname, Clip(typed, 24)));
                 return Done("no match (" + why + ") for '" + typed + "', refunded");
             }
             string tname = hit.Name ?? hit.Login;
@@ -157,7 +157,7 @@ namespace PinguinoHost
             var aiV = Task.Run(() => AiLine(cfg, "valid", rname, tname, secs, typed));
             Wait(1000, 5000);
             string who2 = Ban(actors, hit.Login, secs, "Sorry! " + redeemer + " redeemed your timeout! D:");
-            if (who2 == null) { refund(); ChattySay("@" + rname + " I couldn't time out " + tname + " (no mod rights?), points back."); return Done("could not time out " + hit.Login + ", refunded"); }
+            if (who2 == null) { refund(); ChattySay(Friendly(CantLines, rname, tname)); return Done("could not time out " + hit.Login + ", refunded"); }
             LogEvent("timeout", rlogin, hit.Login, secs, (string)cfg["title"], who2);
             Complete(cfg, redemptionId, rewardId);
             Wait(1000, 2000);
@@ -223,6 +223,22 @@ namespace PinguinoHost
             if (c != "duo" && c != "buddies") return null;
             var fresh = FriendTemplates.Select(t => t.Replace("{t}", tname).Replace("{r}", rname)).Where(t => !Seen(t)).ToList(); if (fresh.Count == 0) fresh = FriendTemplates.Select(t => t.Replace("{t}", tname).Replace("{r}", rname)).ToList();
             return fresh[Rnd.Next(fresh.Count)];
+        }
+
+        // IDEAS #35: friendly failure lines. Every no-match variant keeps the words "nobody in chat matched"; the points always come back; no variant repeats while a fresh one is left.
+        static readonly string[] NoMatchLines = {
+            "@{u} nobody in chat matched \"{x}\", so no timeout (points back).", "@{u} nobody in chat matched \"{x}\". Try the name again, points are back.",
+            "@{u} the penguins looked, but nobody in chat matched \"{x}\". Points refunded!", "@{u} nobody in chat matched \"{x}\", so everyone is safe today. Points back." };
+        static readonly string[] CantLines = {
+            "@{u} I couldn't time out {x} (no mod rights?), points back.", "@{u} {x} slipped away, I couldn't time them out. Points are back!",
+            "@{u} the timeout on {x} didn't go through, so your points are back." };
+        static string Friendly(string[] set, string u, string x)
+        {
+            var all = set.Select(t => t.Replace("{u}", u).Replace("{x}", x)).ToList();
+            var fresh = all.Where(t => !Seen(t)).ToList(); if (fresh.Count == 0) fresh = all;
+            string pick = fresh[Rnd.Next(fresh.Count)];
+            lock (_lines) { _lines.Add(pick); while (_lines.Count > 12) _lines.RemoveAt(0); }
+            return pick;
         }
         static string Done(string s) { LastResult = s; Out(s); return s; }
         static string Clip(string s, int n) { s = Regex.Replace(s ?? "", @"\s+", " ").Trim(); return s.Length > n ? s.Substring(0, n) : s; }
