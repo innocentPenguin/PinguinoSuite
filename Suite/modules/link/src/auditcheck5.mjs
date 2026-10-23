@@ -70,6 +70,13 @@ try {
   const page = await req('/');
   check('plain loopback visit gets the page with the token', page.status === 200 && page.body.includes(TOKEN));
   check('page carries nosniff, no-referrer and a narrow frame-ancestors', page.headers['x-content-type-options'] === 'nosniff' && page.headers['referrer-policy'] === 'no-referrer' && /frame-ancestors/.test(page.headers['content-security-policy']) && !/127\.0\.0\.1:\*/.test(page.headers['content-security-policy']), JSON.stringify(page.headers));
+  const script = /<script>([\s\S]*)<\/script>/.exec(page.body)?.[1] || '';
+  let syntaxOk = true; try { new Function(script); } catch { syntaxOk = false; }
+  check('page has the Morning check button and its script parses', page.body.includes('id=morningbtn') && syntaxOk);
+  const mo = await req('/api/morning', { 'x-link-token': TOKEN });
+  const mj = JSON.parse(mo.body || '{}');
+  check('/api/morning returns plain lines for the button', mo.status === 200 && typeof mj.headline === 'string' && Array.isArray(mj.lines) && mj.lines.length > 0 && mj.lines.every(l => l.label && l.text && ['good', 'note', 'bad'].includes(l.status)));
+  check('/api/morning needs the token', (await req('/api/morning')).status === 401);
   const viaProxy = await req('/', { 'x-forwarded-for': '203.0.113.9' });
   check('same request through a proxy (X-Forwarded-For) does NOT get the token', !viaProxy.body.includes(TOKEN) && viaProxy.status !== 200 || (viaProxy.status === 200 && !viaProxy.body.includes(TOKEN)), String(viaProxy.status));
   const viaTs = await req('/', { host: 'ivansserver.tail1234.ts.net' });

@@ -26,6 +26,7 @@ input[type=checkbox]{width:18px;height:18px;margin:4px 8px 4px 0;accent-color:va
 <link rel=stylesheet href="__CORE__/theme.css">
 <body><main>
 <h1>🐧 PinguinoLink</h1>
+<div class=card id=mcard><h3>Morning check</h3><button id=morningbtn class=sm>Run the morning check</button> <span class=dim>read-only: looks, changes nothing</span><div id=mc class=dim></div></div>
 <div class=card id=rdcard><h3>Readiness</h3><div id=rd class=dim>checking…</div></div>
 <div class=card><h3>Network</h3><div id=s>loading…</div></div>
 <div class=card><h3>Devices</h3><div id=d class=dim>loading…</div><div id=dmsg class=dim></div></div>
@@ -102,6 +103,7 @@ function readForm(f){const g=n=>f.querySelector('[data-f='+n+']');const steps=[.
 return {name:g('name').value.trim(),label:g('label').value,icon:g('icon').value,hidden:g('hidden').checked,steps};}
 
 document.addEventListener('click',async e=>{const t=e.target;if(!t.dataset&&!t.id)return;
+if(t.id==='morningbtn'){t.disabled=true;$('mc').textContent='checking…';try{const r=await api('/api/morning');const col={good:'ok',bad:'bad',note:'dim',problem:'bad',attention:'dim'},mark={good:'✔',bad:'✘',note:'•'};$('mc').innerHTML='<div class="'+(col[r.verdict]||'dim')+'"><b>'+esc(r.headline||'')+'</b></div>'+(r.lines||[]).map(l=>'<div class="'+(col[l.status]||'dim')+'">'+(mark[l.status]||'•')+' <b>'+esc(l.label)+'</b>: '+esc(l.text)+'</div>').join('');}catch(x){$('mc').innerHTML='<span class=bad>'+esc(x.message||x)+'</span>';}t.disabled=false;return;}
 const k=t.dataset&&t.dataset.twice;
 if(k){if(!isArmed(k)){armed=k;armedAt=Date.now();load();if(MC&&k.startsWith('md:'))renderMacros();return;}armed=null;}
 try{
