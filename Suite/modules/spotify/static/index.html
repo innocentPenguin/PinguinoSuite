@@ -369,4 +369,16 @@ document.addEventListener('click',async e=>{
 if(new URLSearchParams(location.search).has('setup')){tab='setup'}
 // the Suite shell can reload this page: remember the open tab so it does not jump back to Queue
 else{try{const t=sessionStorage.getItem('sp_tab');if(['queue','search','req','set','setup'].includes(t)){tab=t;drawTabs()}}catch(_){}}
+// Keep the Settings view steady across redraws and shell reloads: remember which groups are open and where it was scrolled.
+{const _ds=drawSettings,se=()=>document.scrollingElement||document.documentElement;
+ drawSettings=function(){
+  const g=$('groups'),open=g&&g.children.length?[...g.querySelectorAll('details')].map(d=>d.open):null,y=se().scrollTop,ae=document.activeElement,aid=ae&&ae.id&&g&&g.contains(ae)?ae.id:'';
+  _ds.apply(this,arguments);
+  if(open)[...g.querySelectorAll('details')].forEach((d,i)=>{if(open[i]!==undefined)d.open=open[i]});
+  if(aid){const n=$(aid);if(n&&n!==document.activeElement)try{n.focus({preventScroll:true})}catch(_){}}
+  if(open)se().scrollTop=y;
+ };
+ let st=0;addEventListener('scroll',()=>{clearTimeout(st);st=setTimeout(()=>{try{sessionStorage.setItem('sp_y_'+tab,String(se().scrollTop))}catch(_){}},150)},{passive:true});
+ try{const y=+sessionStorage.getItem('sp_y_'+tab);if(y>0)setTimeout(()=>{se().scrollTop=y},400)}catch(_){}
+}
 </script></body></html>
