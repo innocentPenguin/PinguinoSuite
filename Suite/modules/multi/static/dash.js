@@ -58,7 +58,7 @@ async function renderDash() {
 function dTop() {
   $('#d-top').innerHTML = `<button class="d-btn" data-d="profile" title="Switch the saved window layout">Profile &#9662;</button><button class="d-btn ${DASH.edit ? 'on' : ''}" data-d="edit" ${DASH.lock ? 'disabled style="opacity:.5"' : ''} title="${DASH.lock ? 'Unlock first' : 'Move or remove panels'}">Edit layout</button>
     <button class="d-btn" data-d="add">+ Add</button><button class="d-btn" data-d="lock" title="${DASH.lock ? 'Layout locked' : 'Layout unlocked'}">${DASH.lock ? '&#128274;' : '&#128275;'}</button><span class="grow"></span><span class="d-viewers" id="d-gifts" title="Gift subs this session and the top gifter"></span><span class="d-viewers" id="d-vtot" title="People watching live right now"></span>
-    <button class="d-btn d-search" data-d="search">&#128269; Search <kbd>Ctrl + K</kbd></button><button class="d-btn" data-d="settings" title="Text, highlights, sounds, split chat">&#9881;</button><a class="d-btn" href="/?type=obs&widget=chat" title="OBS widgets">OBS</a><a class="d-btn" href="/" title="Setup and connections">?</a>`;
+    <button class="d-btn d-search" data-d="search">&#128269; Search <kbd>Ctrl + K</kbd></button><button class="d-btn" data-d="settings" title="Text, highlights, sounds, split chat">&#9881;</button><a class="d-btn" href="/?type=obs&widget=chat" title="OBS widgets">OBS</a><a class="d-btn" href="/?type=launcher" title="Setup and connections">?</a>`;
 }
 const dViewTxt = p => { const n = DASH.viewers[p]; return n == null ? '' : '&#128065; ' + Number(n).toLocaleString(); };
 function dGifts() {
