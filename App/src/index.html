@@ -898,7 +898,7 @@ const pagesQuickActions=()=>{
   const acts=(Q.doc.actions||[]),groups=[...new Set(acts.map(a=>a.group||'Other'))].sort();
   const f=acts.filter(a=>(!Q.group||(a.group||'Other')===Q.group)&&(!Q.q||(a.name+' '+(a.group||'')+' '+(a.triggers||[]).map(trigText).join(' ')).toLowerCase().includes(Q.q.toLowerCase())))
     .sort((a,b)=>(Q.pins.includes(b.id)-Q.pins.includes(a.id))||String(a.name).localeCompare(b.name));
-  return cutoverCard()+`<div class="ctool"><input type="text" id="q-q" placeholder="Search actions…" value="${esc(Q.q)}"><div class="chips"><span class="chip ${Q.group?'':'on'}" data-qg="">All</span>${groups.map(g=>`<span class="chip ${Q.group===g?'on':''}" data-qg="${esc(g)}">${esc(g)}</span>`).join('')}</div>${Q.group?`<button class="sm" data-qgrp="1">Enable group</button><button class="sm" data-qgrp="0">Disable group</button>`:''}<button class="sm" id="q-export" title="Download every action and variable as one JSON file">Export</button><span class="sm faint sp">${f.length} of ${acts.length}${Q.master===false?' · this device is not the master: actions will not run here':''}</span>${hq('quick')}</div>
+  return `<div class="ctool"><input type="text" id="q-q" placeholder="Search actions…" value="${esc(Q.q)}"><div class="chips"><span class="chip ${Q.group?'':'on'}" data-qg="">All</span>${groups.map(g=>`<span class="chip ${Q.group===g?'on':''}" data-qg="${esc(g)}">${esc(g)}</span>`).join('')}</div>${Q.group?`<button class="sm" data-qgrp="1">Enable group</button><button class="sm" data-qgrp="0">Disable group</button>`:''}<button class="sm" id="q-export" title="Download every action and variable as one JSON file">Export</button><span class="sm faint sp">${f.length} of ${acts.length}${Q.master===false?' · this device is not the master: actions will not run here':''}</span>${hq('quick')}</div>
   <div class="qgrid">${f.map(a=>`<div class="qcard ${a.enabled===false?'off':''}"><div class="row"><h4 style="flex:1">${esc(a.name)}</h4><label class="sw" title="Turn this action on / off"><input type="checkbox" data-qen="${esc(a.id)}" ${a.enabled===false?'':'checked'}><span></span></label><button class="qstar ${Q.pins.includes(a.id)?'on':''}" data-qpin="${esc(a.id)}" title="Pin to the top">★</button></div>
     <div class="qt">${a.group?`<span class="qtag">${esc(a.group)}</span>`:''}${(a.triggers||[]).map(x=>`<span class="qtag">${esc(trigText(x))}</span>`).join('')}${a.enabled===false?'<span class="qtag">off</span>':''}</div>
     <div class="row"><button class="pri sm" data-qrun="${esc(a.id)}|0" ${Q.busy[a.id]?'disabled':''}>${Q.busy[a.id]?'Running…':'Run now'}</button><button class="sm" data-qrun="${esc(a.id)}|1" title="Show what it would do without doing it">Dry run</button></div>
@@ -913,13 +913,8 @@ function bindQuick(){
   $$('[data-qen]').forEach(i=>i.onchange=async()=>{await hostJ('/api/automations/enable',{id:i.dataset.qen,on:i.checked});await loadQuick()});
   $$('[data-qgrp]').forEach(b=>b.onclick=async()=>{if(!confirm((b.dataset.qgrp==='1'?'Enable':'Disable')+' every action in "'+Q.group+'"?'))return;await hostJ('/api/automations/enable',{group:Q.group,on:b.dataset.qgrp==='1'});await loadQuick()});
   $('#q-export')&&($('#q-export').onclick=async()=>{try{saveBlob(new Blob([JSON.stringify(await hostGet('/api/automations/export'),null,1)],{type:'application/json'}),'pinguino-actions.json')}catch{toast('Export failed')}});
-  $('#q-cut')&&($('#q-cut').onchange=async e=>{const on=e.target.checked;if(on&&!confirm('Retire Streamer.bot? The Suite will run every action itself. Close Streamer.bot first or actions will run twice.')){e.target.checked=false;return}
-    await hostJ('/api/cutover',{on});Q.cut=await hostGet('/api/cutover').catch(()=>null);draw(true)});
   qBind()}
 const hostJ=async(p,b)=>{const r=await hostPost(p,b);let j={};if(r&&r.json&&typeof r.json==='object')j=r.json;else try{j=JSON.parse(r.detail)}catch{}return {...j,_ok:r.ok,_status:r.status,_detail:r.detail}};
-function cutoverCard(){if(Q.cut===undefined){hostGet('/api/cutover').then(c=>{Q.cut=c;if(route==='quick'&&Q.tab==='actions')draw(true)}).catch(()=>{Q.cut=null});return ''}
-  const c=Q.cut;if(!c)return '';
-  return `<div class="card" style="margin-bottom:10px"><div class="row wrap"><div class="grow"><b>Streamer.bot retired</b><div class="sm faint">${c.on?'The Suite runs every action itself.':'Streamer.bot is still the one running chat commands and alerts.'}${c.streamerBotRunning&&c.on?' <span style="color:var(--warn)">Streamer.bot is still running: close it or actions run twice.</span>':''}</div></div><label class="sw"><input type="checkbox" id="q-cut" ${c.on?'checked':''}><span></span></label>${hq('cutover',{module:'host'})}</div></div>`}
 
 /* other tabs */
 const qFetch={vars:'/api/vars',queue:'/api/queues',triggers:'/api/automations/triggers',hotkeys:'/api/automations/hotkeys',connect:'/api/endpoints'};
@@ -1268,6 +1263,7 @@ const ecoField=k=>{const v=ECO.vals[k],ch=JSON.stringify(v)!==JSON.stringify(ECO
   const inp=typeof v==='boolean'?`<input type="checkbox" data-ek="${k}"${v?' checked':''}>`:`<input data-ek="${k}" value="${esc(ecoStr(v))}" style="width:${k==='TipCurve'?'230':'110'}px">`;
   return `<label class="row" style="gap:8px;margin:4px 0"><span style="flex:1;min-width:190px">${esc(humanKey(k))}${ch?' <span class="pill">changed</span>':''}</span>${inp}</label>`};
 pages.economy=()=>{
+  ECO.bad={};   // a redraw rebuilds every field from the saved/typed values, so no field is invalid any more
   if(ECO.d===undefined){loadEconomy();return '<div class="dim">Loading the points settings…</div>'}
   if(!ECO.d)return `<div class="card"><h3>Economy</h3><div class="dim">The Host did not answer${ECO.err?' ('+esc(ECO.err)+')':''}, or it is an older build without the points settings.</div><div class="row" style="margin-top:10px"><button class="sm" id="eco-retry">Retry</button></div></div>`;
   const cur=ECO.d.currency||'points',n=Object.keys(ecoChanged()).length,s=ECO.sum||{};
@@ -1286,11 +1282,14 @@ function bindEconomy(){
   const preview=debounce(async()=>{const ch=ecoChanged();if(!Object.keys(ch).length){ECO.ex=ECO.d.examples||null;const e=$('#eco-ex');if(e)e.innerHTML=ecoExamples();return}
     try{const r=await hostJ('/api/economy/points-settings',{values:ch,dry:true});if(!r.ok)throw new Error(hostErr(r));ECO.ex=r.examples;const m=$('#eco-msg');if(m)m.textContent=''}catch(e){const m=$('#eco-msg');if(m)m.textContent='Preview: '+(e.message||e)}
     const e=$('#eco-ex');if(e)e.innerHTML=ecoExamples()},350);
+  const ecoBtns=()=>{const n=Object.keys(ecoChanged()).length,bad=Object.keys(ECO.bad||{}),sv=$('#eco-save'),rv=$('#eco-revert'),m=$('#eco-msg');
+    if(sv){sv.disabled=!n||!!bad.length||ECO.saving;sv.textContent='Save'+(n?' ('+n+' changed)':'')}if(rv)rv.disabled=!n;
+    if(m&&bad.length)m.textContent='Not a valid number in '+bad.join(', ')+': fix the red field to save.';else if(m&&m.textContent.startsWith('Not a valid number'))m.textContent=''};
   $$('[data-ek]').forEach(i=>{i.oninput=i.onchange=()=>{const k=i.dataset.ek;let v;
-    if(i.type==='checkbox')v=i.checked;else{v=ecoParse(k,i.value);if(v==null||(typeof v==='number'&&v<0)){i.style.outline='2px solid var(--bad,#d44)';return}}
-    i.style.outline='';ECO.vals[k]=v;
-    const n=Object.keys(ecoChanged()).length,sv=$('#eco-save'),rv=$('#eco-revert');if(sv){sv.disabled=!n;sv.textContent='Save'+(n?' ('+n+' changed)':'')}if(rv)rv.disabled=!n;
-    preview()}});
+    ECO.bad=ECO.bad||{};
+    if(i.type==='checkbox')v=i.checked;else{v=ecoParse(k,i.value);if(v==null||(typeof v==='number'&&v<0)){i.style.outline='2px solid var(--bad,#d44)';ECO.bad[k]=1;ecoBtns();return}}
+    i.style.outline='';delete ECO.bad[k];ECO.vals[k]=v;
+    ecoBtns();preview()}});
   $('#eco-revert')&&($('#eco-revert').onclick=()=>{ECO.vals=JSON.parse(JSON.stringify(ECO.base));ECO.ex=ECO.d.examples||null;draw(true)});
   $('#eco-save')&&($('#eco-save').onclick=async()=>{const ch=ecoChanged();if(!Object.keys(ch).length)return;ECO.saving=true;$('#eco-save').disabled=true;
     try{const r=await hostJ('/api/economy/points-settings',{values:ch});if(!r.ok)throw new Error(hostErr(r));toast('Points settings saved');ECO.d=r;ECO.base=JSON.parse(JSON.stringify(r.values||{}));ECO.vals=JSON.parse(JSON.stringify(ECO.base));ECO.ex=r.examples||null}
@@ -1299,15 +1298,18 @@ function bindEconomy(){
     try{const r=await hostJ('/api/economy/preview',{type:ECO.calc.type,amount:ECO.calc.amount,tier:ECO.calc.tier});ECO.calc.out=r.ok?`${r.points} ${ECO.d.currency||'points'} · ${r.detail||''}`:('Could not: '+hostErr(r))}catch(e){ECO.calc.out='Could not reach the Host'}
     const o=$('#ec-out');if(o)o.textContent=ECO.calc.out})}
 
+/* Two-click armed button (confirm() is blocked in the webview): the first click changes the label, a second click within 4 s runs fn. */
+function armBtn(b,label,fn){if(b.dataset.arm){clearTimeout(+b.dataset.arm);b.dataset.arm='';b.textContent=b.dataset.lbl;return fn()}
+  b.dataset.lbl=b.textContent;b.textContent=label;b.dataset.arm=String(setTimeout(()=>{b.dataset.arm='';if(b.isConnected)b.textContent=b.dataset.lbl},4000))}
 /* ---- Timers (GET|POST /api/timers) ---- */
-const TM={d:undefined,err:'',open:{}};
-async function loadTimers(){try{const r=await hostGet('/api/timers');if(r.ok===false||!r.timers)throw new Error(r.error||'no timers list');TM.d=r;TM.err=''}catch(e){TM.d=null;TM.err=String(e&&e.message||e)}if(route==='timers'&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))draw(true)}
+const TM={d:undefined,err:'',open:{},draft:{},pend:{},last:{}};   // draft: unsaved edits per timer card, kept across redraws
+async function loadTimers(force){try{const r=await hostGet('/api/timers');if(r.ok===false||!r.timers)throw new Error(r.error||'no timers list');TM.d=r;TM.err=''}catch(e){TM.d=null;TM.err=String(e&&e.message||e)}if(route==='timers'&&(force||(!document.activeElement?.matches?.('#page input,#page textarea,#page select')&&!Object.keys(TM.draft).length)))draw(true)}
 const tmWhen=s=>s<=0?'due now':s<90?s+' s':s<5400?Math.round(s/60)+' min':(s/3600).toFixed(1)+' h';
 pages.timers=()=>{
-  if(TM.d===undefined){loadTimers();return '<div class="dim">Loading timers…</div>'}
+  if(TM.d===undefined){loadTimers(true);return '<div class="dim">Loading timers…</div>'}
   const d=TM.d;
   if(!d)return `<div class="card"><h3>Timers</h3><div class="dim">The Host did not answer${TM.err?' ('+esc(TM.err)+')':''}, or it is an older build without timers.</div><div class="row" style="margin-top:10px"><button class="sm" id="tm-retry">Retry</button></div></div>`;
-  const min=d.minEverySec||60,card=t=>`<div class="card" data-tid="${esc(t.id)}"><div class="row wrap"><label class="row" style="gap:6px"><input type="checkbox" data-tf="enabled"${t.enabled?' checked':''}><b>${esc(t.name||t.id)}</b></label><span class="pill">${t.enabled?'on':'off'}</span><span class="sm faint">next in <span data-nxt="${esc(t.id)}" data-s="${t.nextInSec|0}">${t.enabled?tmWhen(t.nextInSec|0):'paused'}</span></span><span class="sp"></span><button class="sm" data-tact="now" title="Say the next message now">Send now</button><button class="sm" data-tact="del">Delete</button></div>
+  const min=d.minEverySec||60,card=t=>`<div class="card" data-tid="${esc(t.id)}"><div class="row wrap"><label class="row" style="gap:6px"><input type="checkbox" data-tf="enabled"${t.enabled?' checked':''}><b style="overflow-wrap:anywhere">${esc(t.name||t.id)}</b></label><span class="pill">${t.enabled?'on':'off'}</span><span class="sm faint">next in <span data-nxt="${esc(t.id)}" data-s="${t.nextInSec|0}">${t.enabled?tmWhen(t.nextInSec|0):'paused'}</span></span><span class="sp"></span><button class="sm" data-tact="now" title="Say the next message now">Send now</button><button class="sm" data-tact="del">Delete</button></div>
     <div class="row wrap" style="margin-top:8px;gap:12px"><label class="sm">Every <input data-tf="everyMin" type="number" min="${Math.ceil(min/60)}" step="1" style="width:70px" value="${Math.round((t.everySec||900)/60)}"> min</label>
       <label class="sm">After <input data-tf="minChatMessages" type="number" min="0" style="width:70px" value="${t.minChatMessages|0}"> chat lines</label>
       <label class="sm"><input type="checkbox" data-tf="onlineOnly"${t.onlineOnly?' checked':''}> only while live</label>
@@ -1321,17 +1323,30 @@ pages.timers=()=>{
 setInterval(()=>{if(route==='timers'&&TM.d&&!document.hidden)$$('[data-nxt]').forEach(e=>{const s=Math.max(0,(+e.dataset.s||0)-1);e.dataset.s=s;if(e.parentNode&&e.closest('.card')&&e.closest('.card').querySelector('[data-tf=enabled]').checked)e.textContent=tmWhen(s)})},1000);
 setInterval(()=>{if(route==='timers'&&!document.hidden&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))loadTimers()},30000);
 function bindTimers(){
-  const re=()=>{TM.d=undefined;draw(true)},tpost=async(b,ok)=>{try{const r=await hostJ('/api/timers',b);if(r.ok===false)throw new Error(hostErr(r));if(ok)toast(ok);if(r.timers){TM.d=r;draw(true)}else re()}catch(e){toast('Timers: '+(e.message||e))}};
+  const re=()=>{TM.d=undefined;draw(true)};
+  const tpost=async(b,ok,clr)=>{const key=JSON.stringify(b);if(TM.pend[key])return false;TM.pend[key]=1;   // the same request is never sent twice while it is in flight
+    try{const r=await hostJ('/api/timers',b);if(r.ok===false)throw new Error(hostErr(r));if(ok)toast(ok);if(clr)delete TM.draft[clr];if(r.timers){TM.d=r;draw(true)}else re();return true}
+    catch(e){toast('Timers: '+(e.message||e));return false}
+    finally{delete TM.pend[key]}};
+  const snap=card=>{const o={};card.querySelectorAll('[data-tf]').forEach(f=>{if(f.dataset.tf!=='enabled')o[f.dataset.tf]=f.type==='checkbox'?f.checked:f.value});TM.draft[card.dataset.tid]=o;const sv=card.querySelector('[data-tact=save]');if(sv)sv.classList.add('pri')};
+  $$('[data-tid]').forEach(card=>{const dr=TM.draft[card.dataset.tid];   // put back what was typed but not saved, then keep tracking it
+    if(dr){Object.keys(dr).forEach(k=>{const f=card.querySelector(`[data-tf=${k}]`);if(!f)return;if(f.type==='checkbox')f.checked=dr[k];else f.value=dr[k]});snap(card)}
+    card.querySelectorAll('[data-tf]').forEach(f=>{if(f.dataset.tf!=='enabled')f.oninput=f.onchange=()=>snap(card)})});
   $('#tm-retry')&&($('#tm-retry').onclick=re);$('#tm-reload')&&($('#tm-reload').onclick=re);
   $('#tm-gapsave')&&($('#tm-gapsave').onclick=()=>tpost({globalGapSec:Math.max(0,Math.min(3600,+$('#tm-gap').value||0))},'Gap saved'));
-  $('#tm-add')&&($('#tm-add').onclick=()=>{const n=$('#tm-new').value.trim();if(!n){toast('Give the timer a name');return}tpost({timer:{name:n}},'Timer added (off)')});
-  $$('[data-tid] [data-tf=enabled]').forEach(c=>c.onchange=()=>tpost({id:c.closest('[data-tid]').dataset.tid,enabled:c.checked},c.checked?'Timer on':'Timer off'));
-  $$('[data-tid] [data-tact]').forEach(b=>b.onclick=()=>{const card=b.closest('[data-tid]'),id=card.dataset.tid,a=b.dataset.tact,f=n=>card.querySelector(`[data-tf=${n}]`);
-    if(a==='now')return tpost({now:id},'Sent');
-    if(a==='del'){if(!confirm('Delete the timer "'+id+'"? Its messages go with it.'))return;return tpost({delete:id},'Timer deleted')}
+  $('#tm-add')&&($('#tm-add').onclick=async e=>{const b=e.currentTarget,n=$('#tm-new').value.trim();if(b.disabled)return;if(!n){toast('Give the timer a name');return}
+    b.disabled=true;const ok=await tpost({timer:{name:n}},'Timer added (off)');if(!ok&&b.isConnected)b.disabled=false});
+  $$('[data-tid] [data-tf=enabled]').forEach(c=>c.onchange=async()=>{const want=c.checked;c.disabled=true;
+    const ok=await tpost({id:c.closest('[data-tid]').dataset.tid,enabled:want},want?'Timer on':'Timer off');if(!ok&&c.isConnected){c.checked=!want;c.disabled=false}});
+  $$('[data-tid] [data-tact]').forEach(b=>b.onclick=()=>{if(b.disabled)return;const card=b.closest('[data-tid]'),id=card.dataset.tid,a=b.dataset.tact,f=n=>card.querySelector(`[data-tf=${n}]`);
+    const run=async(body,ok,clr)=>{b.disabled=true;const done=await tpost(body,ok,clr);if(!done&&b.isConnected)b.disabled=false;return done};
+    if(a==='now'){if(Date.now()-(TM.last[id]||0)<5000){toast('Just sent. Wait a few seconds before sending again.');return}   // a real chat message: never twice by a double click
+      TM.last[id]=Date.now();return run({now:id},'Sent').then(ok=>{if(!ok)delete TM.last[id]})}
+    if(a==='del')return armBtn(b,'Click again to delete',()=>run({delete:id},'Timer deleted',id));
     const msgs=f('messages').value.split('\n').map(x=>x.trim()).filter(Boolean);
-    if(!msgs.length&&!confirm('This timer has no messages and will say nothing. Save anyway?'))return;
-    tpost({timer:{id,enabled:f('enabled').checked,everySec:Math.max(TM.d.minEverySec||60,Math.round((+f('everyMin').value||15)*60)),minChatMessages:+f('minChatMessages').value||0,onlineOnly:f('onlineOnly').checked,mode:f('mode').value,messages:msgs,automation:f('automation').value.trim()}},'Timer saved')})}
+    const doSave=()=>run({timer:{id,enabled:f('enabled').checked,everySec:Math.max(TM.d.minEverySec||60,Math.round((+f('everyMin').value||15)*60)),minChatMessages:+f('minChatMessages').value||0,onlineOnly:f('onlineOnly').checked,mode:f('mode').value,messages:msgs,automation:f('automation').value.trim()}},'Timer saved',id);
+    if(!msgs.length)return armBtn(b,'No messages: click again to save',doSave);
+    doSave()})}
 
 /* ---- Overlay fit options (GET /api/overlay-options/schema, GET|POST /api/overlay-options) ---- */
 const OV={sch:undefined,raw:{},name:'*',err:''};
@@ -1347,10 +1362,10 @@ pages.overlays=()=>{
   const own=ovOwn(),names=['*'].concat(OV.sch.overlays||[]);
   const ctl=o=>{const set=o.key in own,v=set?own[o.key]:o.default,dim=set?'':' faint';
     let c='';
-    if(o.type==='number')c=`<input type="range" data-ov="${o.key}" min="${o.min}" max="${o.max}" step="${o.step}" value="${esc(v)}" style="flex:1;min-width:140px"><input type="number" data-ovn="${o.key}" min="${o.min}" max="${o.max}" step="${o.step}" value="${esc(v)}" style="width:84px">`;
-    else if(o.type==='enum')c=`<select data-ov="${o.key}">${set?'':`<option value=""${v===''?' selected':''}>(default${o.default?': '+esc(o.default):''})</option>`}${(o.values||[]).map(x=>`<option${set&&String(v)===String(x)?' selected':''}>${esc(x)}</option>`).join('')}</select>`;
-    else c=`<input type="checkbox" data-ov="${o.key}"${v&&v!=='0'?' checked':''}>`;
-    return `<div class="row${dim}" style="gap:10px;margin:6px 0" title="${esc(o.help||'')}"><span style="width:170px">${esc(o.label)}</span>${c}<button class="sm" data-ovx="${o.key}"${set?'':' disabled'} title="Back to the default">${set?'Reset':'default'}</button></div>`};
+    if(o.type==='number')c=`<input type="range" data-ov="${esc(o.key)}" min="${o.min}" max="${o.max}" step="${o.step}" value="${esc(v)}" style="flex:1;min-width:140px"><input type="number" data-ovn="${esc(o.key)}" min="${o.min}" max="${o.max}" step="${o.step}" value="${esc(v)}" style="width:84px">`;
+    else if(o.type==='enum')c=`<select data-ov="${esc(o.key)}">${set?'':`<option value=""${v===''?' selected':''}>(default${o.default?': '+esc(o.default):''})</option>`}${(o.values||[]).map(x=>`<option${set&&String(v)===String(x)?' selected':''}>${esc(x)}</option>`).join('')}</select>`;
+    else c=`<input type="checkbox" data-ov="${esc(o.key)}"${v&&v!=='0'?' checked':''}>`;
+    return `<div class="row${dim}" style="gap:10px;margin:6px 0" title="${esc(o.help||'')}"><span style="width:170px">${esc(o.label)}</span>${c}<button class="sm" data-ovx="${esc(o.key)}"${set?'':' disabled'} title="Back to the default">${set?'Reset':'default'}</button></div>`};
   return `<div style="max-width:1100px"><div class="pnote">Fix an overlay that does not fit its OBS source without editing it: size, corner, safe margin, nudge. <b>All overlays</b> applies to every overlay; a single overlay's own numbers win. OBS picks the change up within 5 seconds, no reload.</div>
    <div class="row wrap" style="margin:8px 0">${names.map(n=>`<span class="chip${OV.name===n?' on':''}" data-ovname="${esc(n)}">${n==='*'?'All overlays':esc(n)}</span>`).join('')}</div>
    <div class="grid g2" style="align-items:start"><div class="card"><h3>${OV.name==='*'?'All overlays':esc(OV.name)}</h3>${(OV.sch.options||[]).map(ctl).join('')}
@@ -1363,18 +1378,18 @@ function bindOverlays(){
   $$('[data-ovname]').forEach(b=>b.onclick=()=>{OV.name=b.dataset.ovname;draw(true)});
   const msg=t=>{const m=$('#ov-msg');if(m)m.textContent=t};
   const send=async(opts,after)=>{try{const r=await hostJ('/api/overlay-options',{name:OV.name,options:opts});if(r.ok===false)throw new Error(hostErr(r));
-      const all=await hostGet('/api/overlay-options');OV.raw=all&&all.options&&typeof all.options==='object'?all.options:OV.raw;msg('Saved');if(after)after()}catch(e){msg('');toast('Overlay options: '+(e.message||e))}};
-  const sendSoon=debounce((k,v)=>send({[k]:v}),250);
+      const all=await hostGet('/api/overlay-options');OV.raw=all&&all.options&&typeof all.options==='object'?all.options:OV.raw;msg('Saved');if(after)after()}catch(e){msg('');toast('Overlay options: '+(e.message||e));draw(true)}};   // not saved: show the last saved values again
+  const soon={},sendSoon=(k,v)=>{(soon[k]||(soon[k]=debounce(x=>send({[k]:x}),250)))(v)};   // one debounce per option: two sliders moved together both save
   const opt=k=>(OV.sch.options||[]).find(o=>o.key===k);
   $$('[data-ov]').forEach(i=>{const k=i.dataset.ov,o=opt(k);i.oninput=i.onchange=()=>{let v;
     if(o.type==='number'){v=+i.value;const n=$(`[data-ovn="${k}"]`);if(n&&n!==i)n.value=v}else if(o.type==='bool')v=i.checked?1:0;else v=i.value===''?null:i.value;
     const row=i.closest('.row');if(row)row.classList.remove('faint');sendSoon(k,v)}});
   $$('[data-ovn]').forEach(i=>{const k=i.dataset.ovn;i.onchange=()=>{const v=Math.max(+i.min,Math.min(+i.max,+i.value||0));i.value=v;const r=$(`[data-ov="${k}"]`);if(r)r.value=v;sendSoon(k,v)}});
   $$('[data-ovx]').forEach(b=>b.onclick=()=>send({[b.dataset.ovx]:null},()=>draw(true)));
-  $('#ov-clear')&&($('#ov-clear').onclick=()=>{if(!confirm('Reset every option for '+(OV.name==='*'?'all overlays':OV.name)+' to the defaults?'))return;send(null,()=>draw(true))});
+  $('#ov-clear')&&($('#ov-clear').onclick=e=>armBtn(e.currentTarget,'Click again to reset',()=>send(null,()=>draw(true))));
   $('#ov-rl')&&($('#ov-rl').onclick=()=>{const f=$('#ov-frame');if(f)f.src=f.src})}
 /* ============ Canned commands (Host: GET|POST /api/canned; set / add / test / cooldown; no delete: turn off instead) ============ */
-const CAN={d:undefined,err:'',out:{},user:'viewer',touser:'friend',msg:''};
+const CAN={d:undefined,err:'',out:{},user:'viewer',touser:'friend',msg:'',draft:{},nw:null};   // draft / nw: unsaved edits kept across redraws
 async function loadCanned(){try{const r=await hostGet('/api/canned');if(r.ok===false)throw new Error(r.error||'not ok');CAN.d=r;CAN.err=''}catch(e){CAN.d=null;CAN.err=String(e&&e.message||e)}
   if(route==='canned'&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))draw(true)}
 const canBadText=(t,vars)=>{t=String(t||'');if(!t.trim())return 'write the line first';if(t.length>400)return 'too long (max 400 characters)';if(/^[\/.!]/.test(t.trim()))return 'cannot start with / . or !';
@@ -1408,23 +1423,30 @@ function bindCanned(){
   $$('[data-cn]').forEach(card=>{const name=card.dataset.cn,cmd=CAN.d.commands.find(c=>c.name===name),f=n=>card.querySelector(`[data-cf=${n}]`),save=card.querySelector('[data-cact=save]'),msg=card.querySelector('[data-cmsg]');
     const cur=()=>{const o={};if(f('text'))o.text=f('text').value;if(f('choices'))o.choices=f('choices').value.split('\n').map(x=>x.trim()).filter(Boolean);o.aliases=names(f('aliases').value);return o};
     const changes=()=>{const c=cur(),o={};if('text'in c&&c.text!==(cmd.text||''))o.text=c.text;if('choices'in c&&JSON.stringify(c.choices)!==JSON.stringify(cmd.choices||[]))o.choices=c.choices;if(JSON.stringify(c.aliases)!==JSON.stringify(cmd.aliases||[]))o.aliases=c.aliases;return o};
-    const check=()=>{const c=cur(),ch=changes();let bad='';if('text'in c&&'text'in ch)bad=canBadText(c.text,vars);if('choices'in ch)bad=bad||(c.choices.length?c.choices.map(t=>canBadText(t,vars)).find(Boolean)||'':'add at least one choice');
+    let check=()=>{const c=cur(),ch=changes();let bad='';if('text'in c&&'text'in ch)bad=canBadText(c.text,vars);if('choices'in ch)bad=bad||(c.choices.length?c.choices.map(t=>canBadText(t,vars)).find(Boolean)||'':'add at least one choice');
       msg.textContent=bad;save.disabled=!!bad||!Object.keys(ch).length;const l=card.querySelector('[data-clen]');if(l&&f('text'))l.textContent=f('text').value.length};
+    const snap=()=>{const o={};card.querySelectorAll('[data-cf]').forEach(i=>{if(i.dataset.cf!=='enabled')o[i.dataset.cf]=i.value});return o};
+    const check0=check;check=()=>{check0();if(save.disabled&&!msg.textContent)delete CAN.draft[name];else CAN.draft[name]=snap()};
     card.querySelectorAll('[data-cf]').forEach(i=>{if(i.dataset.cf!=='enabled')i.oninput=check});
+    {const dr=CAN.draft[name];if(dr){Object.keys(dr).forEach(k=>{if(f(k))f(k).value=dr[k]});check()}}
     f('enabled').onchange=async()=>{try{await cpost({action:'set',name,enabled:f('enabled').checked});toast('!'+name+(f('enabled').checked?' on':' off'));cmd.enabled=f('enabled').checked}catch(e){toast('Not saved: '+(e.message||e));f('enabled').checked=!f('enabled').checked}};
-    save.onclick=async()=>{save.disabled=true;try{await cpost({action:'set',name,...changes()});toast('!'+name+' saved');re()}catch(e){msg.textContent=String(e.message||e);save.disabled=false}};
-    card.querySelector('[data-cact=test]').onclick=async()=>{const c=cur(),o=card.querySelector('[data-cout]'),b={action:'test',...who()};if('choices'in c)b.choices=c.choices;else b.text=c.text;
-      try{const r=await cpost(b);CAN.out[name]=o.textContent='Preview: '+r.line}catch(e){CAN.out[name]=o.textContent='Could not preview: '+(e.message||e)}}});
-  $('#cn-addtest')&&($('#cn-addtest').onclick=async()=>{const m=$('#cn-newmsg');try{const r=await cpost({action:'test',text:$('#cn-newt').value,...who()});m.textContent='Preview: '+r.line}catch(e){m.textContent=String(e.message||e)}});
-  $('#cn-add')&&($('#cn-add').onclick=async()=>{const m=$('#cn-newmsg'),n=$('#cn-new').value.trim().toLowerCase().replace(/^!/,''),t=$('#cn-newt').value;
+    save.onclick=async()=>{save.disabled=true;try{await cpost({action:'set',name,...changes()});toast('!'+name+' saved');delete CAN.draft[name];re()}catch(e){msg.textContent=String(e.message||e);save.disabled=false}};
+    card.querySelector('[data-cact=test]').onclick=async e=>{const tb=e.currentTarget;if(tb.disabled)return;const c=cur(),o=card.querySelector('[data-cout]'),b={action:'test',...who()};if('choices'in c)b.choices=c.choices;else b.text=c.text;
+      tb.disabled=true;try{const r=await cpost(b);CAN.out[name]=o.textContent='Preview: '+r.line}catch(e){CAN.out[name]=o.textContent='Could not preview: '+(e.message||e)}tb.disabled=false}});
+  const nwk=['cn-new','cn-newa','cn-newt'];
+  if(CAN.nw)nwk.forEach(i=>{if($('#'+i)&&CAN.nw[i]!=null)$('#'+i).value=CAN.nw[i]});
+  nwk.forEach(i=>{$('#'+i)&&($('#'+i).oninput=()=>{CAN.nw=CAN.nw||{};CAN.nw[i]=$('#'+i).value})});
+  $('#cn-addtest')&&($('#cn-addtest').onclick=async e=>{const tb=e.currentTarget;if(tb.disabled)return;const m=$('#cn-newmsg');tb.disabled=true;try{const r=await cpost({action:'test',text:$('#cn-newt').value,...who()});m.textContent='Preview: '+r.line}catch(e){m.textContent=String(e.message||e)}tb.disabled=false});
+  $('#cn-add')&&($('#cn-add').onclick=async e=>{const ab=e.currentTarget;if(ab.disabled)return;const m=$('#cn-newmsg'),n=$('#cn-new').value.trim().toLowerCase().replace(/^!/,''),t=$('#cn-newt').value;
     if(!/^[a-z0-9_]{1,24}$/.test(n)){m.textContent='Name: a-z, 0-9 and _, up to 24 characters';return}
     const bad=canBadText(t,vars);if(bad){m.textContent=bad;return}
     const b={action:'add',name:n,text:t};const al=names($('#cn-newa').value);if(al.length)b.aliases=al;
-    try{await cpost(b);toast('!'+n+' added');re()}catch(e){m.textContent=String(e.message||e)}})}
+    ab.disabled=true;try{await cpost(b);toast('!'+n+' added');CAN.nw=null;re()}catch(e){m.textContent=String(e.message||e);ab.disabled=false}})}
 /* ============ Report a problem (every page): note + screenshots -> core writes Data\feedback\<time>-<page>.md/.json for 00 / the engines ============ */
 const RP={imgs:[],busy:false};
 function initReport(){
-  const st=document.createElement('style');st.textContent=`#rp-fab{position:fixed;right:20px;bottom:20px;z-index:60;opacity:.75;padding:6px 12px;font-size:12px;border-radius:999px}#rp-fab:hover{opacity:1}
+  const st=document.createElement('style');st.textContent=`#page:not(.flush){padding-bottom:64px}   /* room under the content so the floating button never covers a bottom-right control */
+  #rp-fab{position:fixed;right:20px;bottom:20px;z-index:60;opacity:.75;padding:6px 12px;font-size:12px;border-radius:999px}#rp-fab:hover{opacity:1}
   #rp-box{position:fixed;right:20px;bottom:62px;z-index:61;width:min(440px,calc(100vw - 40px));background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.45);display:none}
   #rp-box textarea{width:100%;min-height:96px;margin:8px 0}#rp-box .th{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}#rp-box .th span{position:relative}#rp-box .th img{height:54px;border-radius:6px;border:1px solid var(--line2)}#rp-box .th b{position:absolute;top:-6px;right:-6px;cursor:pointer;background:#000a;border-radius:50%;width:16px;height:16px;text-align:center;font-size:11px;line-height:16px}`;
   document.head.append(st);
@@ -1437,16 +1459,22 @@ function initReport(){
   const msg=t=>{$('#rp-msg').textContent=t},th=()=>{$('#rp-th').innerHTML=RP.imgs.map((m,i)=>`<span><img src="${m.data}" alt=""><b data-i="${i}" title="remove">×</b></span>`).join('');$$('#rp-th b').forEach(b=>b.onclick=()=>{RP.imgs.splice(+b.dataset.i,1);th()})};
   const add=files=>{for(const f of files){if(!/^image\//.test(f.type))continue;if(RP.imgs.length>=6){msg('At most 6 screenshots');break}if(f.size>8*1024*1024){msg('That image is over 8 MB');continue}
     const r=new FileReader();r.onload=()=>{RP.imgs.push({name:f.name||'pasted.png',data:r.result});th()};r.readAsDataURL(f)}};
-  fab.onclick=()=>{const o=box.style.display!=='block';box.style.display=o?'block':'none';if(o){$('#rp-where').textContent='· '+(titles[route]||(modOf(route)&&modOf(route).name)||route);msg('');$('#rp-note').focus()}};
-  $('#rp-close').onclick=()=>{box.style.display='none'};
+  const shut=()=>{box.style.display='none';fab.focus()};   // closing hands the focus back to the button that opened it
+  fab.onclick=()=>{const o=box.style.display!=='block';if(!o){shut();return}box.style.display='block';$('#rp-where').textContent='· '+(titles[route]||(modOf(route)&&modOf(route).name)||route);msg('');$('#rp-note').focus()};
+  $('#rp-close').onclick=shut;
   $('#rp-file').onchange=e=>{add([...e.target.files]);e.target.value=''};
   box.addEventListener('paste',e=>{const fs=[...(e.clipboardData&&e.clipboardData.files||[])];if(fs.length){e.preventDefault();add(fs)}});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.style.display==='block')box.style.display='none'});
+  document.addEventListener('keydown',e=>{if(box.style.display!=='block')return;
+    if(e.key==='Escape'){shut();return}
+    if(e.key==='Tab'){const fs=[...box.querySelectorAll('textarea,button:not([disabled]),a[href],input:not([hidden])')].filter(x=>x.offsetParent!==null);   // keep Tab inside the open box
+      if(!fs.length)return;const first=fs[0],last=fs[fs.length-1];
+      if(e.shiftKey&&(document.activeElement===first||!box.contains(document.activeElement))){e.preventDefault();last.focus()}
+      else if(!e.shiftKey&&(document.activeElement===last||!box.contains(document.activeElement))){e.preventDefault();first.focus()}}});
   $('#rp-open').onclick=async e=>{e.preventDefault();try{const r=await post('/api/feedback/open');if(r.detail)msg('Could not open the folder: '+r.detail)}catch{msg('Could not open the folder')}};
   $('#rp-send').onclick=async()=>{if(RP.busy)return;const note=$('#rp-note').value.trim();if(!note&&!RP.imgs.length){msg('Write a note or attach a screenshot first');return}
     RP.busy=true;$('#rp-send').disabled=true;msg('Saving…');
     try{const r=await post('/api/feedback',{note,page:titles[route]||route,route,url:location.href.split('#')[0]+'#'+route,images:RP.imgs});
-      if(r&&r.ok){msg('Saved. Thank you.');$('#rp-note').value='';RP.imgs=[];th();setTimeout(()=>{box.style.display='none'},1200)}else msg('Not saved: '+((r&&r.detail)||'unknown error'))}
+      if(r&&r.ok){msg('Saved. Thank you.');$('#rp-note').value='';RP.imgs=[];th();setTimeout(()=>{if(box.style.display==='block')shut()},1200)}else msg('Not saved: '+((r&&r.detail)||'unknown error'))}
     catch(e){msg('Not saved: '+(e.message||e))}
     RP.busy=false;$('#rp-send').disabled=false}}
 initReport();
@@ -1454,7 +1482,7 @@ initReport();
 const RPL={d:undefined,err:'',showDone:false,limit:30};
 async function loadReports(){try{const r=await fetch('/api/feedback?limit='+RPL.limit).then(x=>x.json());if(!r||!Array.isArray(r.items))throw new Error((r&&r.detail)||'this build has no report list');RPL.d=r;RPL.err=''}catch(e){RPL.d=null;RPL.err=String(e&&e.message||e)}
   const open=RPL.d?(RPL.d.open!=null?RPL.d.open:RPL.d.items.filter(i=>!i.handled).length):0,b=$('#rbadge');if(b){b.textContent=open||'';b.style.display=open?'':'none'}
-  if(route==='reports'&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))draw(true)}
+  if(route==='reports'&&!document.activeElement?.matches?.('#page input,#page textarea,#page select')){const sc=$('#page').scrollTop;draw(true);$('#page').scrollTop=sc}}
 /* Health card: the core's /api/selfcheck in plain words (module states, data folder, Listen database, disk space). Read only, no secrets. */
 const HC={d:undefined,err:'',busy:false};
 async function loadHealth(){HC.busy=true;try{const r=await fetch('/api/selfcheck').then(x=>x.json());if(!r||!Array.isArray(r.problems))throw new Error((r&&r.detail)||'this build has no self-check yet');HC.d=r;HC.err=''}catch(e){HC.d=null;HC.err=String(e&&e.message||e)}
@@ -1472,14 +1500,14 @@ pages.reports=()=>{
   const d=RPL.d;
   if(!d)return `<div class="card"><h3>Problem reports</h3><div class="dim">Could not load the list (${esc(RPL.err)}). An older Suite core has no list yet.</div><div class="row" style="margin-top:10px"><button class="sm" id="rpl-reload">Retry</button></div></div>`;
   const items=d.items,open=items.filter(i=>!i.handled),shown=RPL.showDone?items:open,nOpen=d.open!=null?d.open:open.length,nTotal=d.total!=null?d.total:items.length,more=nTotal>items.length;
-  const card=i=>`<div class="card" data-rid="${esc(i.id)}"${i.handled?' style="opacity:.6"':''}><div class="row wrap"><b>${esc(i.page||i.route||'?')}</b><span class="sm faint">${esc((i.time||'').replace('T',' '))}</span><span class="pill">${esc(i.route||'')}</span>${(i.screenshots||[]).length?`<span class="pill">📷 ${(i.screenshots||[]).length}</span>`:''}${i.handled?'<span class="pill">handled</span>':''}<span class="sp"></span><button class="sm${i.handled?'':' pri'}" data-rhandled="${i.handled?0:1}">${i.handled?'Reopen':'Handled'}</button></div>
-    <div style="white-space:pre-wrap;margin-top:6px">${esc(i.note||'(screenshot only)')}</div>${i.version?`<div class="sm faint" style="margin-top:4px">Suite ${esc(i.version)}</div>`:''}</div>`;
+  const card=i=>`<div class="card" data-rid="${esc(i.id)}"${i.handled?' style="opacity:.6"':''}><div class="row wrap"><b style="overflow-wrap:anywhere">${esc(i.page||i.route||'?')}</b><span class="sm faint">${esc((i.time||'').replace('T',' '))}</span><span class="pill">${esc(i.route||'')}</span>${(i.screenshots||[]).length?`<span class="pill">📷 ${(i.screenshots||[]).length}</span>`:''}${i.handled?'<span class="pill">handled</span>':''}<span class="sp"></span><button class="sm${i.handled?'':' pri'}" data-rhandled="${i.handled?0:1}">${i.handled?'Reopen':'Handled'}</button></div>
+    <div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:6px">${esc(i.note||'(screenshot only)')}</div>${i.version?`<div class="sm faint" style="margin-top:4px">Suite ${esc(i.version)}</div>`:''}</div>`;
   return `<div style="max-width:900px">${healthCard()}<div class="pnote" style="margin-top:10px">Everything sent with the "Report a problem" button. Mark a report handled once it is dealt with. Files live in ${esc(d.dir||'Data')} (screenshots included).</div>
    <div class="row wrap" style="margin:8px 0"><span class="pill">${nOpen} open</span><span class="pill">${nTotal-nOpen} handled</span><label class="sm"><input type="checkbox" id="rpl-done"${RPL.showDone?' checked':''}> show handled</label><span class="sp"></span><button class="sm" id="rpl-reload">Reload</button><button class="sm" id="rpl-folder">Open folder</button></div>
    ${shown.length?shown.map(card).join(''):'<div class="card dim">'+(items.length?'Nothing open. All reports are handled.':'No reports yet.')+'</div>'}${more?`<div class="row" style="margin-top:8px"><span class="sm faint">Showing the newest ${items.length} of ${nTotal}.</span><button class="sm" id="rpl-more">Show 30 more</button></div>`:''}</div>`};
 setInterval(()=>{if(route==='reports'&&!document.hidden&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))loadReports()},30000);
 function bindReports(){
-  const re=()=>{RPL.d=undefined;draw(true)};
+  const re=()=>{loadReports()};
   $('#hc-reload')&&($('#hc-reload').onclick=()=>{HC.d=undefined;draw(true)});
   $('#rpl-reload')&&($('#rpl-reload').onclick=re);
   $('#rpl-more')&&($('#rpl-more').onclick=()=>{RPL.limit+=30;re()});
