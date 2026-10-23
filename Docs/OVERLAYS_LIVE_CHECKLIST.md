@@ -4,7 +4,7 @@ Owner: 13 Overlays. Never go live in OBS to run this: use the browser pane / a p
 The static pages (`?part=` modes, wheel look) are served from disk and work before the restart; the items marked **[restart]** need the rebuilt Host.
 
 ## 1. Host is up with the new build
-1. `http://127.0.0.1:8770/api/scene-widgets` lists 22 widgets incl. `wheel_only, wheel_teams, players_teams, players_header, queue_list, queue_idle, customs_status, customs_info`, all `available:true`. **[restart]**
+1. `http://127.0.0.1:8770/api/scene-widgets` lists 20 widgets incl. `wheel_only, wheel_teams, players_teams, players_header, queue_list, queue_idle, customs_status, customs_info`, all `available:true`. **[restart]**
 2. `http://127.0.0.1:8770/api/scene-layouts?profile=h` answers with `currentGame` and `resolvedBy`. **[restart]**
 3. `http://127.0.0.1:8770/api/overlay-options/health` has an empty `missing` list.
 
