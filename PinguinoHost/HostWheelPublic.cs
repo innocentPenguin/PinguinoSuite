@@ -12,15 +12,16 @@ namespace PinguinoHost
     {
         /// <summary>how the spin ends, set in the Suite (Tune > Tournament wheel): tail 0..100 (how long and slow the last part of the spin is), nearMiss (the pointer lands close to a slice edge). File Data/runtime/wheel_look.json.</summary>
         static string LookP { get { return System.IO.Path.Combine(HostApi.DataDir, "runtime", "wheel_look.json"); } }
+        static readonly object LookLock = new object();
         public static JObject Look()
         {
-            JObject j = null; try { if (System.IO.File.Exists(LookP)) j = JObject.Parse(System.IO.File.ReadAllText(LookP)); } catch (Exception) { }
+            JObject j = null; try { lock (LookLock) { if (System.IO.File.Exists(LookP)) j = JObject.Parse(System.IO.File.ReadAllText(LookP)); } } catch (Exception) { }
             j = j ?? new JObject(); double tail = j["spinTail"] == null ? 50 : Math.Max(0, Math.Min(100, (double)j["spinTail"]));
             return new JObject { { "spinTail", tail }, { "nearMiss", (bool?)j["nearMiss"] ?? true } };
         }
         public static void SetLook(string key, JToken v)
         {
-            var j = Look(); j[key] = v; System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(LookP)); System.IO.File.WriteAllText(LookP, j.ToString(), new System.Text.UTF8Encoding(false));
+            lock (LookLock) { var j = Look(); j[key] = v; System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(LookP)); System.IO.File.WriteAllText(LookP, j.ToString(), new System.Text.UTF8Encoding(false)); }
         }
         public static JObject Adapt(JObject j)
         {
