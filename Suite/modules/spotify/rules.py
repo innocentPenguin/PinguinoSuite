@@ -114,6 +114,14 @@ def _norm(s):
 def blocked_reason(settings, track):
     hay = _norm(track.get("name", "")) + " | " + " | ".join(_norm(a) for a in track.get("artists", []))
     ids = {_norm(track.get("id", "")), _norm(track.get("uri", ""))}
+    banned = {}
+    for e in settings.get("blocked_artists", []):
+        aid, _, nm = str(e).partition("|")
+        if aid.strip():
+            banned[aid.strip()] = nm.strip() or aid.strip()
+    for aid in track.get("artist_ids") or []:
+        if aid in banned:
+            return _norm("artist:" + banned[aid])
     for b in settings["blocklist"]:
         tid = _norm(track_id_from(b) or "")
         b = _norm(b)

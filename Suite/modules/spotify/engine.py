@@ -22,6 +22,7 @@ import store
 from queue_core import Queue, QueueError, new_item
 from spotify_api import ApiError, NotConnected, RateLimited, norm_playback
 
+_ARTIST_ID = re.compile(r"[A-Za-z0-9]{22}")
 VERIFY_EVERY_S = 20
 NO_REFUND = {"blocked", "user_blocked", "dup_recent", "dup_skipped"}   # troll codes: never refunded
 SKIP_EARLY_MS = 20000     # cut off with more than this left = counted as skipped
@@ -103,7 +104,9 @@ class Engine:
     def settings(self):
         s = rules.merged(self.cfg.get("settings"))
         sb = self.site_block
-        s["blocklist"] = s["blocklist"] + list(sb.get("tracks", [])) + list(sb.get("artists", []))
+        site_artists = list(sb.get("artists", []))
+        s["blocklist"] = s["blocklist"] + list(sb.get("tracks", [])) + [a for a in site_artists if not _ARTIST_ID.fullmatch(a)]
+        s["blocked_artists"] = s["blocked_artists"] + [a + "|" for a in site_artists if _ARTIST_ID.fullmatch(a)]      # the site may send ids
         s["blocked_users"] = s["blocked_users"] + list(sb.get("users", []))
         return s
 
@@ -634,6 +637,26 @@ class Engine:
         m = re.search(r"playlist[/:]([A-Za-z0-9]+)", v)
         return m.group(1) if m else (v if re.fullmatch(r"[A-Za-z0-9]{10,}", v) else "")
 
+    def _ban_artist(self, t, idx=0):
+        """Ban the idx-th credit of this track: by Spotify id when known (exact), else as a word like before. -> True when banned by id."""
+        names, ids = t.get("artists") or [], t.get("artist_ids") or []
+        if idx >= len(names):
+            return False
+        name = names[idx]
+        own = self._own_settings()
+        if len(ids) == len(names):                                   # ids line up with the names (a local file has none)
+            aid = ids[idx]
+            if aid not in [e.partition("|")[0] for e in own["blocked_artists"]]:
+                patch = {"blocked_artists": own["blocked_artists"] + [f"{aid}|{name}"]}
+            else:
+                patch = {}
+            patch["blocklist"] = [b for b in own["blocklist"] if rules._norm(b) != rules._norm(name)]     # old word ban of this artist is upgraded
+            self.save_settings(patch)
+            return True
+        if name.lower() not in [str(x).lower() for x in own["blocklist"]]:
+            self.save_settings({"blocklist": own["blocklist"] + [name]})
+        return False
+
     def import_blocklist(self, text):
         """Merge track IDs / links / URIs / words (one per line, # comments) into the blocklist -> {added, total}."""
         cur = list(self.settings["blocklist"])
@@ -840,9 +863,7 @@ class Engine:
             if not t or not t["artists"]:
                 return self._r(False, "none", "skip_none", user=user)
             artist = t["artists"][0]
-            cur = self._own_settings()["blocklist"]
-            if artist.lower() not in [str(x).lower() for x in cur]:
-                self.save_settings({"blocklist": cur + [artist]})
+            self._ban_artist(t, 0)
             self._reject(t, user, "blocked")
             self.skip(force=True, by=user)
             return self._r(True, "artist_blocked", user=user, title=t["name"], artist=artist)
@@ -863,9 +884,11 @@ class Engine:
             keys.discard("")
             cur = self._own_settings()["blocklist"]
             keep = [b for b in cur if rules._norm(b) not in keys and rules._norm(rules.track_id_from(b) or "") not in keys]
-            if not keys or len(keep) == len(cur):
+            cur_a = self._own_settings()["blocked_artists"] if cmd == "unbanartist" else []
+            keep_a = [e for e in cur_a if rules._norm(e.partition("|")[0]) not in keys and rules._norm(e.partition("|")[2]) not in keys]
+            if not keys or (len(keep) == len(cur) and len(keep_a) == len(cur_a)):
                 return self._r(False, "none", "unblock_none", user=user, prefix=s["prefix"])
-            self.save_settings({"blocklist": keep})
+            self.save_settings({"blocklist": keep, "blocked_artists": keep_a} if cmd == "unbanartist" else {"blocklist": keep})
             self._bump()
             return self._r(True, cmd, "unblock_ok", user=user, target=label)
         if cmd == "blocksong" and staff:
@@ -1002,9 +1025,7 @@ class Engine:
         elif action == "ban_artist":
             if not artist:
                 return {"ok": False, "code": "none", "error": "no artist on this song"}
-            cur = self._own_settings()["blocklist"]
-            if artist.lower() not in [str(x).lower() for x in cur]:
-                self.save_settings({"blocklist": cur + [artist]})
+            self._ban_artist(t, 0)
             self._reject(t, user, "blocked")
             self.skip(force=True, by=user)
             r = {"ok": True, "code": "artist_banned"}

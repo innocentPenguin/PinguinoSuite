@@ -825,6 +825,59 @@ class RobustLoadTests(unittest.TestCase):
                 c.track(bad)
 
 
+class ArtistIdBanTests(unittest.TestCase):
+    QUEEN, OTHER = "1dfeR4HaWDbWqFHLkxsg1d", "2ABCDEFGHIJKLMNOPQRSTu"
+
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True})
+
+    def _playing(self, n=1, artists=("Queen",), ids=None):
+        t = T(n)
+        t["artists"], t["artist_ids"] = list(artists), list(ids if ids is not None else [self.QUEEN][:len(artists)])
+        self.api.tracks[f"t{n}"] = t
+        self.api.playing = f"spotify:track:t{n}"
+        self.e.tick()
+        self.e.pb["track"] = t
+        return t
+
+    def test_id_ban_blocks_collab_not_lookalike(self):
+        self._playing()
+        self.assertTrue(self.e.chat("boss", "!banartist", ["broadcaster"])["ok"])
+        self.assertIn(f"{self.QUEEN}|Queen", self.e.settings["blocked_artists"])
+        self.assertEqual(self.e.settings["blocklist"], [], "no word entry for an artist with an id")
+        collab = {**T(5), "artists": ["Other", "Queen"], "artist_ids": [self.OTHER, self.QUEEN]}
+        self.assertTrue(rules.blocked_reason(self.e.settings, collab))
+        lookalike = {**T(6), "name": "Queen of Hearts", "artists": ["Queensryche"], "artist_ids": [self.OTHER]}
+        self.assertIsNone(rules.blocked_reason(self.e.settings, lookalike))
+
+    def test_old_word_ban_is_upgraded(self):
+        self.e.save_settings({"blocklist": ["queen", "other word"]})
+        self._playing()
+        self.e.chat("boss", "!banartist", ["broadcaster"])
+        self.assertEqual(self.e.settings["blocklist"], ["other word"])
+
+    def test_local_file_without_ids_falls_back_to_word(self):
+        self._playing(artists=("Local Band",), ids=[])
+        self.e.chat("boss", "!banartist", ["broadcaster"])
+        self.assertEqual(self.e.settings["blocklist"], ["Local Band"])
+        self.assertEqual(self.e.settings["blocked_artists"], [])
+
+    def test_unban_by_name_and_site_ids(self):
+        self._playing()
+        self.e.chat("boss", "!banartist", ["broadcaster"])
+        self.assertTrue(self.e.chat("boss", "!unbanartist queen", ["broadcaster"])["ok"])
+        self.assertEqual(self.e.settings["blocked_artists"], [])
+        self.e.site_block = {"artists": [self.OTHER, "some word"]}
+        s = self.e.settings
+        self.assertIn(self.OTHER + "|", s["blocked_artists"])
+        self.assertIn("some word", s["blocklist"])
+        self.assertTrue(rules.blocked_reason(s, {**T(7), "artist_ids": [self.OTHER]}))
+
+
 class ManifestHelpTests(unittest.TestCase):
     def test_every_prestream_item_id_has_help(self):
         m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))

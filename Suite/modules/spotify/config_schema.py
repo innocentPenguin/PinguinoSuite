@@ -137,6 +137,7 @@ SCHEMA = [
         ("dup_cooldown_min", "int", 60, "Replay cooldown (min)", "A song can't be requested again within this many minutes of playing (0 = off)."),
         ("skip_cooldown_min", "int", 180, "Skipped-song cooldown (min)", "A song that was skipped (so probably not liked) can't be requested again for this long (0 = off)."),
         ("blocklist", "list", [], "Blocklist", "One per line: a word in the title/artist, or a Spotify track link/URI."),
+        ("blocked_artists", "list", [], "Banned artists (exact)", "One per line as artist-id|Name. Added by the ban-artist button/command; blocks that exact Spotify artist, also on features, never by word."),
         ("blocked_users", "list", [], "Blocked viewers", "One name per line; these viewers can't request."),
     ]},
     {"id": "fair", "title": "Order & priority", "items": [
