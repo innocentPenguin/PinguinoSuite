@@ -1,20 +1,39 @@
 # Session notes: 53 Voice (worker under 50 - Tools)
 
-Last updated: 2026-10-23 06:20. Hand-over from the old 06 session: `Docs\sessions\06-voice.md`. Docs: `Docs\VOICE.md`, `Docs\VOICE_ROUTING.md`.
+Last updated: 2026-10-23 08:50. Hand-over from the old 06 session: `Docs\sessions\06-voice.md`. Docs: `Docs\VOICE.md`, `Docs\VOICE_ROUTING.md` (Windows), `Docs\VOICE_MAC.md` (Mac).
+Module: `Suite\modules\voice` (Speak, id voice, port 8772), version 0.9.0. Tests: `cd Suite\modules\voice` then `..\..\.venv\Scripts\python.exe -m unittest discover -s tests` -> 121 pass (temp data dir, fake player and fake synthesiser, no audio).
 
-## Done
-- Task 1a: `output.device` matching (engine.py `dedupe_devices`/`pick_device`/`find_device`): case-insensitive substring, WASAPI > DirectSound > MME, `/api/devices` is de-duplicated and stable. WASAPI plays with `auto_convert` (shared mode otherwise rejects 22.05 kHz). Tests: tests/test_devices.py. (Committed inside 7844318 by another session's commit.)
-- Task 2: audit rounds 2-3, findings in the shared notes (`53-voice-audit23.md`), 11 fixes, tests/test_audit23.py. Tests now 90.
+## What I built (commit hashes)
+| Hash | What |
+|---|---|
+| 7844318 | `output.device` matching: case-insensitive substring, WASAPI > DirectSound > MME, de-duplicated stable device list; WASAPI plays with `auto_convert` (shared mode rejects 22.05 kHz). (Committed inside another session's commit through the shared index.) |
+| c20416c | Audit rounds 2-3, 11 fixes: spoken numbers/names/commands cannot carry text, priority clamped 1..9, speech-interval race, history.jsonl rotation at 5 MB, 24-bit WAV rejected, message cap 2000 chars, non-dict JSON bodies. |
+| d15ed20 | `!speak` readiness: Host sends role as a number ("3" mod, "4" broadcaster), now understood; `redeem: true` lets anyone through (channel-point paid); speech-interval tests; `version` in module.json; Docs\VOICE.md "!speak: what the Host needs". |
+| cc1683c | Spoken mic-lost alert: event `mic_alert` (OFF by default), polls Listen `/api/status` every 10 s, speaks one fixed line per distinct alert, never Listen's text. |
+| 7a2ee86 | Mac/Linux support: backends `Sapi` (Windows, unchanged), `MacSay` (`say`, aiff/wav to sounddevice), `Espeak`; chosen by `sys.platform`; the page shows "Voices come from: ..."; plain-language messages when no voice or no output device exists (voices, devices, preview, sound check, self-test). |
+| 6b14a81 | Docs\VOICE_MAC.md (say voices, BlackHole 2ch/16ch routing, fallback, troubleshooting). |
+| a370c17 | Third review of c20416c/d15ed20/cc1683c: no regressions. |
+| 1d1932a | Read-only Routing check (`GET /api/routing-check` + button in the Output card; checks voice=Voicemeeter AUX Input, music=CABLE Input, and whether Play on resolves; plain fixes); spoken-name cleanup (emoji dropped, CamelCase split, xX decoration, trailing digits, all-emoji -> "someone", secrets scrubbed first; per-name override = the existing `nicknames` setting). |
+Also: read-only review of 51's Connect work (`53-connect-review.md` in 50's notes folder, 25 findings) and the update of Docs\SPOTIFY_CONNECT.md to match connect.py as built.
 
-## Open
-- Task 3: tests/test_intervals.py (4). Listen only uses speaking.json to ignore voice commands (listen/voice.py bot_speaking), it does not skip transcribing; request for 20 sent via 50.
-- Item 4 of 06 section 4 (mic-lost alert): event `mic_alert` (OFF by default), server.mic_loop polls Listen /api/status every 10 s, speaks one fixed line per distinct alert, never Listen's text. tests/test_micalert.py. Tests 101.
-- Task 4: role bug fixed (Host sends numeric role), redeem path, module.json version 0.9.0, Docs/VOICE.md "!speak: what the Host needs". Tests 97.
-- Needs a Voice restart by 100 to take effect.
+## Restart needs
+- Voice needs ONE restart by 100 (`App\Update-Module.ps1 voice`) for everything above to take effect. Nothing was restarted or pushed by me. The master switch is OFF and stays OFF until Ivan turns it on.
+- Behaviour to expect after the restart: the Windows speech path is unchanged; the Speak page gets the Routing check button, "Voices come from: Windows SAPI", and the hints; `mic_alert` stays off until enabled.
 
-## Batch 2 (Mac support)
-- Item 1+2: TTS backend abstraction (engine.py: Sapi / MacSay `say` / Espeak, `make_backend` by sys.platform, injectable runner, text only on stdin). Non-Windows Player always plays through sounddevice. Speak page shows "Voices come from: <backend>". No-voice / no-output-device now give plain messages (hints in /api/voices, /api/devices, preview, sound check, self-test). tests/test_backends.py (12). Tests 113.
-- Item 3 (Docs\VOICE_MAC.md) and item 4 (third review) follow.
-- Item 3 done: Docs\VOICE_MAC.md.
-- Item 4: third review of c20416c/d15ed20/cc1683c: no regressions found (checked _num with nan/inf/bool, safe_name skip->"someone", role_of fallbacks, history rotation inside the OSError guard, mic_loop re-arm after the alert clears, redeem still needs tts.enabled). Noted, not changed: redeem bypass only for JSON true (a "true" string from the Host would not bypass; Host sends booleans via module_command today).
-- Batch 3: /api/routing-check + Routing check button (Output card), spoken-name cleanup (emoji, CamelCase, secrets scrubbed first; nicknames map = per-name override already existed). tests/test_routing_names.py. Tests 121.
+## Open items and owners
+| Item | Owner |
+|---|---|
+| Listen should skip the bot's own voice: read `GET :8772/api/speech-intervals?since=<oldest queued segment epoch - 5>` (1 s timeout), drop or tag overlapping segments; Listen segment times are relative to `_t0`, so epoch = `_t0` + start/end. Request sent via 50. | 20-Suite (Listen) |
+| Raid-by-voice (pending-confirm only) | 02, needs their endpoint |
+| Core `/api/voice/dispatch` must also refuse obs/stream actions | 01 / core |
+| Memory watchdog for VOD jobs; `listen.log` rotation (was 82 MB) | Listen / core |
+| First live check on a real Mac (Sound check, then one Preview); Mac go-librespot binary | Ivan / 51 |
+| Tune the hourly review on a real, supervised stream with the master ON | Ivan |
+| Redeem bypass accepts JSON `true` only (string "true" would not); Host sends booleans today | Host (02), only if that changes |
+| The 24 old `vod-*.mp4` files (~21 GB) in Listen's sources await Ivan's say-so | Ivan |
+
+## Ivan's questions, with my defaults
+1. `!speak` command name: default `!speak` (alias `!tts` stays). 2. Price: a Host channel-point redeem, default 500 points, set in the Host, not Speak. 3. Minimum role without a redeem: default mod. 4. Is a second virtual cable for the voice OK: default yes, "Voicemeeter AUX Input" (fallback "CABLE In 16ch"), see VOICE_ROUTING.md. 5. Do one supervised test with the master ON before relying on it (never while live in OBS).
+
+## Rules I follow
+Never go live in OBS; the module never posts to chat itself (only the Host `say` endpoint); no secrets read aloud or logged; no pushes; no restarts; never flip the master switch; tests never play real audio or touch the real Data\runtime\voice.
