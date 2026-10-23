@@ -47,3 +47,4 @@ Installer/dist/
 **/*.secrets.zip
 **/host_secrets.json
 **/bots_secrets.json
+PinguinoB0t/overlays/live_state.js
