@@ -10,6 +10,9 @@ import time
 import config
 
 MIN_TIER_FOR_CARD = ("medium", "high")
+VIEW_MISSED_CAP = 200          # /api/cards sends at most this many missed cards (newest); the rest stay in the DB and the recap
+EVICT_DISMISSED_S = 600        # finished cards leave memory after this long (they are in SQLite); open/missed/snoozed never leave
+EVICT_ANSWERED_S = 3600
 
 
 def _num(x, default=0.0):
@@ -197,6 +200,10 @@ class CardManager:
                 c["faded"] = True
                 self._save(c, "card.update")
                 changed.append(c)
+        for c in self._all():                                    # soak test: dismissed/answered cards piled up in memory for the whole stream
+            s = c["state"]
+            if (s == "dismissed" and now - c["updated"] > EVICT_DISMISSED_S) or (s == "answered" and c["faded"] and now - c["updated"] > EVICT_ANSWERED_S):
+                self.cards.pop(c["id"], None)
         return changed
 
     def view(self):
@@ -211,6 +218,8 @@ class CardManager:
                 out["missed"].append(c)
         out["open"].sort(key=lambda c: (-_num(c["score"]), _num(c["created"])))
         out["missed"].sort(key=lambda c: -_num(c["updated"]))
+        out["missed_total"] = len(out["missed"])
+        del out["missed"][VIEW_MISSED_CAP:]
         return out
 
     def recap(self, limit=50):

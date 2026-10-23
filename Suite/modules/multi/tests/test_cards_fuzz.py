@@ -73,3 +73,22 @@ def test_view_while_cards_are_added_mid_iteration():
         m.cards[f"c:{i}"] = Adding(cm.normalize({"id": f"c:{i}", "state": "open", "score": i}))
     m.view(); m.recap(); m.tick(); m._enforce_cap()
     assert len(m.cards) > 5
+
+
+def test_view_caps_missed_and_tick_evicts_finished_cards():
+    now = [1000.0]
+    m = cm.CardManager(FakeStore([]), clock=lambda: now[0])
+    for i in range(cm.VIEW_MISSED_CAP + 50):
+        m.cards[f"c:m{i}"] = cm.normalize({"id": f"c:m{i}", "state": "missed", "updated": 1000 + i, "created": 1000}, 1000)
+    v = m.view()
+    assert len(v["missed"]) == cm.VIEW_MISSED_CAP and v["missed_total"] == cm.VIEW_MISSED_CAP + 50
+    assert v["missed"][0]["id"] == f"c:m{cm.VIEW_MISSED_CAP + 49}"          # newest first
+    m.cards["c:d"] = cm.normalize({"id": "c:d", "state": "dismissed", "updated": 1000}, 1000)
+    m.cards["c:a"] = cm.normalize({"id": "c:a", "state": "answered", "faded": True, "answered_at": 1000, "updated": 1000}, 1000)
+    m.cards["c:o"] = cm.normalize({"id": "c:o", "state": "open", "created": 1e12, "updated": 1000}, 1000)
+    now[0] = 1000 + cm.EVICT_DISMISSED_S + 1
+    m.tick()
+    assert "c:d" not in m.cards and "c:a" in m.cards
+    now[0] = 1000 + cm.EVICT_ANSWERED_S + 1
+    m.tick()
+    assert "c:a" not in m.cards and "c:o" in m.cards and "c:m0" in m.cards       # open + missed stay
