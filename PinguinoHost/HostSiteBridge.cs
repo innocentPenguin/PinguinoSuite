@@ -145,7 +145,10 @@ namespace PinguinoHost
         // ---- settings (defaults; Data\runtime\site_shop_settings.json overrides) ----
         public static JObject Cfg()
         {
-            var d = new JObject { { "BuyChattyPrice", 5000 }, { "MinStake", 100 }, { "MaxStake", 2000 }, { "UserCooldownSec", 1800 }, { "GlobalCooldownSec", 600 }, { "GuessSeconds", 300 }, { "MaxGuesses", 3 }, { "HistoryDays", 14 } };
+            var d = new JObject { { "BuyChattyPrice", 5000 }, { "MinStake", 100 }, { "MaxStake", 2000 }, { "UserCooldownSec", 1800 }, { "GlobalCooldownSec", 600 }, { "GuessSeconds", 300 }, { "MaxGuesses", 3 }, { "HistoryDays", 14 }, { "ShopOpen", true },
+                { "ChatItems", new JObject {   // what !shop shows (edit in Data\runtime\site_shop_settings.json); enabled=false lists it as "soon"
+                    { "guess_chatter", new JObject { { "name", "Guess the Chatter" }, { "enabled", true } } },
+                    { "buy_chatty", new JObject { { "name", "Unlock ChattyPinguino" }, { "enabled", false } } } } } };
             foreach (var p in SiteHttp.ReadJ(Path.Combine(HostApi.DataDir, "site_shop_settings.json")).Properties()) d[p.Name] = p.Value;
             int u, g; if (int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_SHOP_USER_CD_SEC"), out u)) d["UserCooldownSec"] = u; if (int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_SHOP_GLOBAL_CD_SEC"), out g)) d["GlobalCooldownSec"] = g;
             return d;
@@ -188,6 +191,7 @@ namespace PinguinoHost
 
         public static void Tick()
         {
+            try { ExpireGame(); } catch (Exception) { }
             if (!SiteHttp.Enabled("SiteShop")) { _result = "off"; return; }
             string key = SiteHttp.Key(); if (key == "") { _result = "no key (vault name BOT_API_KEY)"; return; }
             if (!Lease.MayRun) return;
@@ -268,6 +272,7 @@ namespace PinguinoHost
                 var d = Doc(); var g = d["game"] as JObject; if (g == null) return;
                 if (Now() - (long)g["at"] < I(Cfg(), "GuessSeconds")) return;
                 Finish(d, g, false, "time ran out, it was " + (string)g["answer"]);
+                if (((string)g["id"]).StartsWith("chat-")) ChannelLore.SayCore("@" + (string)g["login"] + " time is up, it was " + (string)g["answer"] + ". Better luck next time!");
             }
         }
         static void Finish(JObject d, JObject g, bool won, string note)
@@ -276,7 +281,55 @@ namespace PinguinoHost
             if (won) Economy.Credit("shop-win-" + id, login, pay, "shop guess_chatter win");
             Record(d, id + "#result", login, "guess_chatter", won ? "won" : "lost", pay, note, true);
             ((JObject)d["processed"])[id + "#result"]["site"] = id;   // the site knows the purchase by its own id
+            if (id.StartsWith("chat-")) ((JObject)d["processed"])[id + "#result"]["posted"] = true;   // started from chat: the site has nothing to update
             d["game"] = null; Save(d);
+        }
+        static string ChatName(JObject c, string id, string dflt) { var it = c["ChatItems"] as JObject; return (string)(it == null || it[id] == null ? null : it[id]["name"]) ?? dflt; }
+        static bool ChatOn(JObject c, string id) { var it = c["ChatItems"] as JObject; return it != null && it[id] != null && (bool?)it[id]["enabled"] != false; }
+        /// <summary>!shop (list the items) and !shop guess &lt;stake&gt; (start Guess the Chatter). One reply per command; the price is taken with a unique id, so a repeat never charges twice.</summary>
+        public static void HandleShop(string user, string[] args, Action<string> say)
+        {
+            var c = Cfg(); if ((bool?)c["ShopOpen"] == false) return;
+            string cur = Economy.CurrencyName, me = (user ?? "").ToLowerInvariant();
+            long min = I(c, "MinStake"), max = I(c, "MaxStake"); int tries = (int)I(c, "MaxGuesses");
+            if (args == null || args.Length == 0)
+            {
+                var items = new List<string>();
+                if (ChatOn(c, "guess_chatter")) items.Add(ChatName(c, "guess_chatter", "Guess the Chatter") + " (stake " + min + "-" + max + " " + cur + ", right answer pays 2x): !shop guess <stake>");
+                var soon = new List<string>(); foreach (var p in (c["ChatItems"] as JObject ?? new JObject()).Properties()) if (p.Name != "guess_chatter" && (bool?)p.Value["enabled"] != true) soon.Add((string)p.Value["name"] ?? p.Name);
+                say("@" + user + " Shop: " + (items.Count == 0 ? "nothing open right now." : string.Join(" | ", items)) + (soon.Count > 0 ? " Coming soon: " + string.Join(", ", soon) + "." : "")); return;
+            }
+            string item = NormItem(args[0]);
+            if (item != "guess_chatter") { say("@" + user + " " + (item == "buy_chatty" || (c["ChatItems"] as JObject)?[item] != null ? "that one is not open yet." : "no such item. Type !shop to see what is for sale.")); return; }
+            if (!ChatOn(c, "guess_chatter")) { say("@" + user + " that one is not open yet."); return; }
+            long stake; string sa = args.Length > 1 ? args[1].Replace(",", "").Trim().ToLowerInvariant() : "";
+            if (sa == "all") stake = Math.Min(max, Economy.Balance(me));
+            else if (!long.TryParse(sa, out stake)) { say("@" + user + " " + ChatName(c, "guess_chatter", "Guess the Chatter") + ": I show an old chat line and you name who said it with !guess <name> (" + tries + " tries, " + I(c, "GuessSeconds") + "s). Stake " + min + "-" + max + " " + cur + ", right answer pays 2x. Start: !shop guess <stake>"); return; }
+            string msg;
+            lock (L)
+            {
+                var d = Doc(); long now = Now(); string id = "chat-" + me + "-" + Guid.NewGuid().ToString("N").Substring(0, 10);
+                if (Economy.Balance(me) < 1) msg = "you have no " + cur + ".";
+                else if (stake < min || stake > max) msg = "the stake must be " + min + " to " + max + " " + cur + ".";
+                else if (Economy.Balance(me) < stake) msg = "not enough " + cur + " (you have " + Economy.Balance(me) + ").";
+                else if (d["game"] != null && d["game"].Type != JTokenType.Null) msg = "a round is already running, wait for it to finish.";
+                else if (now - ((long?)d["userLast"][me] ?? 0) < I(c, "UserCooldownSec")) msg = "you played a moment ago, wait a little (" + Math.Max(1, (I(c, "UserCooldownSec") - (now - (long)d["userLast"][me])) / 60) + " min).";
+                else if (now - ((long?)d["globalLast"] ?? 0) < I(c, "GlobalCooldownSec")) msg = "the game is cooling down, try again soon.";
+                else
+                {
+                    string who; string line = PickLine(me, out who);
+                    if (line == null) msg = "no suitable chat line to use right now.";
+                    else
+                    {
+                        string err = Economy.Spend("shop-" + id, me, stake, "shop guess_chatter"); if (err != null) { say("@" + user + " " + err + "."); return; }
+                        d["userLast"][me] = now; d["globalLast"] = now;
+                        d["game"] = new JObject { { "id", id }, { "login", me }, { "stake", stake }, { "line", line }, { "answer", who }, { "at", now }, { "guesses", 0 } };
+                        Record(d, id, me, "guess_chatter", "accepted", 0, "chat round", false); ((JObject)d["processed"])[id]["posted"] = true; Save(d);
+                        msg = "Who said this? \"" + line + "\" Answer with !guess <name>, " + tries + " tries. Stake " + stake + " " + cur + ", right answer pays " + stake * 2 + ".";
+                    }
+                }
+            }
+            say("@" + user + " " + msg);
         }
         /// <summary>!guess &lt;name&gt; from chat. Only the player of the running round gets an answer; everyone else gets nothing (the shop is hidden).</summary>
         public static bool HandleGuess(string user, string[] args, Action<string> say)
@@ -300,6 +353,7 @@ namespace PinguinoHost
 
         // ---- the line: old chat, anonymised, never from someone who opted out, never anything heavy ----
         static readonly Regex Sensitive = new Regex(@"\b(kill (my|him|her|your)self|suicid|self[- ]?harm|want to die|end it all|cutting myself|rape|nigg|fagg|retard|kys|nazi|hitler|porn|nsfw|nude|dox|address is|phone number|my (real )?name is|i live in|password|token|cancer|diagnos|funeral|passed away|died|abus|overdose|drugs?|cocaine|weed|trump|biden|election|gaza|israel)\b|\d{3}[-. ]?\d{3}[-. ]?\d{4}|[\w.+-]+@[\w-]+\.\w+", RegexOptions.IgnoreCase);
+        public static bool OptedOutNow(string login) { return OptedOut().Contains((login ?? "").ToLowerInvariant()); }
         static HashSet<string> OptedOut()
         {
             var set = new HashSet<string>();

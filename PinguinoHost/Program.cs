@@ -249,7 +249,7 @@ namespace PinguinoHost
             try { ProfileSync.OnEvent(args); } catch (Exception) { }
             try { if (Convert.ToString(args.ContainsKey("eventType") ? args["eventType"] : "") == "TwitchRedeem") TimeoutReward.OnRedeem(args); } catch (Exception ex) { Clog.Warn("timeout-reward", "redeem failed: " + ex.Message); }
             try { Auto.OnEvent(args); } catch (Exception ex) { Clog.Warn("automation", "event trigger failed: " + ex.Message); }
-            object et0; if (args.TryGetValue("eventType", out et0) && !new[] { "TwitchSub", "TwitchReSub", "TwitchGiftBomb", "TwitchCheer", "TwitchRaid", "TwitchFollow", "TwitchHype", "StreamOnline", "StreamOffline" }.Contains(Convert.ToString(et0))) return;   // automation-only events
+            object et0; if (args.TryGetValue("eventType", out et0) && !new[] { "TwitchSub", "TwitchReSub", "TwitchGiftBomb", "TwitchCheer", "TwitchRaid", "TwitchFollow", "TwitchHype", "PgGame", "StreamOnline", "StreamOffline" }.Contains(Convert.ToString(et0))) return;   // automation-only events
             lock (dispatchLock)
             {
                 cph.Args.Clear(); foreach (var kv in args) cph.Args[kv.Key] = kv.Value;

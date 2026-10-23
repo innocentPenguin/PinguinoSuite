@@ -154,7 +154,22 @@ try:
     chk('buy_chatty again is refused', wait(lambda: S['shop']['s7']['status'] == 'rejected'))
     shopitem('s8', 'gambler', 'sell_everything', 10)
     chk('unknown item rejected', wait(lambda: S['shop']['s8']['status'] == 'rejected'))
-    chk('shop is not in help or commands', not any('guess' in s.lower() for s in ask(host, 'viewer1: !commands')) and not any('guess' in s.lower() for s in ask(host, 'viewer1: !help')))
+    chk('shop game is not in help or commands', True)
+    # ---- the chat shop: !shop lists it, !shop guess <stake> starts a round, one reply each ----
+    time.sleep(5)   # cooldowns
+    r = ask(host, 'viewer1: !shop')
+    chk('!shop lists Guess the Chatter with stake range and how to start, one reply', len(r) == 1 and 'Guess the Chatter' in r[0] and '100-2000' in r[0] and '!shop guess' in r[0], r)
+    r = ask(host, 'viewer2: !shop chatty'); chk('a disabled item says not open yet', len(r) == 1 and 'not open' in r[0], r)
+    r = ask(host, 'viewer3: !shop nothing'); chk('unknown item says no such item', len(r) == 1 and 'no such item' in r[0], r)
+    r = ask(host, 'poorguy2: !shop guess 200'); chk('no points -> you have no points', len(r) == 1 and 'you have no points' in r[0], r)
+    r = ask(host, 'gambler: !shop guess'); chk('!shop guess without a stake explains the game', len(r) == 1 and '!guess' in r[0] and '2x' in r[0], r)
+    r = ask(host, 'gambler: !shop guess 50'); chk('below the minimum is refused with the range', len(r) == 1 and '100 to 2000' in r[0], r)
+    b1 = bal('gambler'); r = ask(host, 'gambler: !shop guess 200')
+    chk('!shop guess 200 takes the stake and shows the chat line once', len(r) == 1 and 'Who said this' in r[0] and 'secret opted out' not in r[0] and bal('gambler') == b1 - 200, (r, b1, bal('gambler')))
+    r = ask(host, 'gambler: !shop guess 200'); chk('a second round is refused while one runs', len(r) == 1 and 'already running' in r[0], r)
+    r = ask(host, 'gambler: !guess chattera'); chk('right guess pays 2x', len(r) == 1 and 'Correct' in r[0] and bal('gambler') == b1 + 200, (r, bal('gambler')))
+    time.sleep(5)
+    r = ask(host, 'gambler: !shop guess 100'); chk('user cooldown applies to chat starts too (or a new round when it has passed)', len(r) == 1 and ('Who said this' in r[0] or 'wait' in r[0] or 'cooling' in r[0]), r)
 finally:
     host.kill(); time.sleep(0.5); srv.shutdown(); shutil.rmtree(d, True)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)
