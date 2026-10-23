@@ -75,3 +75,27 @@ The pushed `<view>` (section 1) and the Host's `GET /api/economy/me` / `GET /api
 `POST /api/points/loan {action:'take'|'repay', amount}` on the Host (local) = `POST /api/economy/loan` (`login` is needed there because the Host never sees a viewer's token). From the site the loan still travels through the request queue of section 2 (`loan_take` / `loan_repay`).
 
 **Depreciation basis (confirmed):** 2.5% of the WHOLE balance (`basis:"total"`) for anyone above 100,000; `basis:"excess"` (only the part above 100,000) is a setting but not the default.
+
+## Who speaks: PinguinoB0t = utility, ChattyPinguino = personality (decided 2026-10-23)
+- **PinguinoB0t** = utility only: queue/customs, song requests, `!rank`, `!points`, mod tools, raids/alerts, info, vote skip.
+- **ChattyPinguino** = all personality: gambling and games results, fun, banter.
+- The **economy engine stays in the Host** (`HostGamble.cs`, Economy): bets, Spend/Credit, cooldowns, validation, duel state. It is the source of truth.
+
+### `PgGame` event (Host -> Chatty)
+One event per finished game action, forwarded like the other Twitch events (event type `PgGame` in the Host's forward list). Chatty turns it into ONE short line (no AI call). Args:
+
+| arg | meaning |
+|---|---|
+| `kind` | `gamble`, `slots`, `duel`, `give` |
+| `outcome` | `win`, `lose`, `jackpot`, `challenge` (duel offered), `declined`, `expired`, `broke` (balance 0), `invalid` (needs `reason`) |
+| `user`, `display` | the player (login, display name). For a duel result `user` = the winner, `opponent` = the loser; for a challenge `user` = challenger, `opponent` = challenged |
+| `amount`, `payout`, `balance` | stake, total paid out (stake included, as the Host credits it), balance after |
+| `reel` | slots only: the three symbols as real Unicode emoji, e.g. `🍒 🍋 🔔` (UTF-8, no text codes) |
+| `reason` | for `invalid` / `expired`: the Host's own plain sentence, shown after the name |
+| `currency`, `timeoutSec` | currency name; duel accept window |
+| `optout` | `1` for a viewer who opted out: plain result, no banter |
+| `gameId` | unique per action; Chatty drops a repeated id (dedupe) |
+
+**One reply guarantee:** the Host decides who posts, before sending. It sends `PgGame` only when Chatty can post (`chat_settings.json`: `Enabled` and `ChatReplies` and `GameVoice`); otherwise it says its own plain line as before. It never does both. Chatty also gives a plain result only (no banter) in a heated chat, and the shared 30 s duplicate guard stays on every send path. Chatty does not check IsLive for `PgGame` (the Host already decided).
+
+Slots symbols (`slotsSymbols` in `Data\economy\gambling.json`) should be real emoji, e.g. 🍒 🍋 🔔 ⭐ 7️⃣ 💎 🐧, with 🐧 as `slotsJackpotSymbol`.
