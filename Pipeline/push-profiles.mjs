@@ -8,13 +8,15 @@
 // Birthday (month and day only) and US state are included. WHO IS LEFT OUT: anyone who used !optmeout / !forgetme with the chat bot (Privacy "anon" / "forget").
 // A member can also hide the section for themself in Settings. The notes field is sent as written: keep private things out of it.
 // The website address and key come from <data folder>\settings.json (WebSyncUrl / WebSyncKey, the same ones PinguinoB0t uses). Nothing secret is printed.
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { dataDir } from './lib-paths.mjs';
+import { stubRoles } from './lib-stubs.mjs';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const profDir = join(here, '..', 'Data', 'profiles');
+const dataRoot = process.env.PINGUINO_PROFILE_DATA || join(here, '..', 'Data');   // the env override is for tests (a temp folder)
+const profDir = join(dataRoot, 'profiles');
 const appData = dataDir();
 const dry = process.argv.includes('--dry');
 const settings = JSON.parse(readFileSync(join(appData, 'settings.json'), 'utf8'));
@@ -58,17 +60,17 @@ for (const f of readdirSync(profDir)) {
   console.log(`Message counts: +${tot} messages on ${n} profiles from the Streamer.bot sidecar and the Host recording (per-day max with the log sites).`);
 }
 // LIVE DATA from the Host (refreshed every 10 min and on sub events): active subs straight from Twitch, profile pictures, bots.
-const dataRoot = join(here, '..', 'Data');
 const readJ = f => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
 const liveSubs = readJ(join(dataRoot, 'subs', 'live_subs.json')), avatars = readJ(join(dataRoot, 'avatars.json')) || {}, botFile = readJ(join(dataRoot, 'profile_bots.json'));
 const bots = new Set((botFile && botFile.bots) || []);
+const subMaster = readJ(join(dataRoot, 'subs', 'subscribers_master.json'));   // read only
 let subFlagged = 0, subRemoved = 0, subStubs = 0, avaSet = 0, botSet = 0;
 if (liveSubs && liveSubs.users && liveSubs.count > 0) {
   const ageH = (Date.now() / 1000 - (liveSubs.at || 0)) / 3600;
   if (ageH > 1) console.log(`WARNING: the live sub list is ${ageH.toFixed(1)} h old (the Host refreshes it every 10 min while it runs).`);
   for (const [lg, u] of Object.entries(liveSubs.users)) {
     if (out.has(lg)) continue;
-    const p = profiles[lg] || (profiles[lg] = { login: lg, name: u.name || lg, roles: {} }); if (!p.roles) p.roles = {};
+    const p = profiles[lg] || (profiles[lg] = { login: lg, name: u.name || lg, roles: { ...stubRoles(subMaster, lg) } }); if (!p.roles) p.roles = {};
     if (!readJ(join(profDir, lg + '.json'))) subStubs++;
     if (p.roles.sub !== true || p.roles.lapsed) subFlagged++;
     Object.assign(p.roles, { sub: true, subTier: u.tier || 1, subType: u.prime ? 'prime' : u.isGift ? 'gift' : 'paid', lapsed: false });
@@ -91,6 +93,7 @@ for (const [lg, p] of Object.entries(profiles)) {
 console.log(`Live merge: ${liveSubs ? liveSubs.count : 0} active subs per Twitch (${subFlagged} fixed on profiles, ${subStubs} profiles created for subs without one, ${subRemoved} marked ended), ${avaSet} avatars, ${botSet} bots flagged isBot.`);
 const logins = Object.keys(profiles);
 console.log(`${logins.length} profiles ready (${out.size} opted-out people left out).`);
+if (process.env.PUSH_PROFILES_DUMP) writeFileSync(process.env.PUSH_PROFILES_DUMP, JSON.stringify(profiles));   // tests only
 if (dry) process.exit(0);
 
 async function post(body) {
