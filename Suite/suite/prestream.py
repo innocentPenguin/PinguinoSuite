@@ -143,8 +143,6 @@ def run_checks(modules, token_for, console_dir, errors_30min, disk_path, slot=No
                                "" if up else f"state: {m['state']}"))
             if up:
                 items += futs[m["id"]].result()
-    sb = _tcp("127.0.0.1", 8080)
-    items.append(_item("core", "streamerbot", "Streamer.bot reachable (:8080)", "pass" if sb else "warn", "" if sb else "not reachable (fine once Host replaces it)"))
     obs = _tcp("127.0.0.1", 4455)
     items.append(_item("core", "obs", "OBS websocket reachable (:4455)", "pass" if obs else "warn", "" if obs else "OBS closed or websocket off"))
     try:

@@ -1681,7 +1681,7 @@ def _integrations_local():
         site = pool.submit(_site_item)
         items = [x for f in futs for x in f.result()]
         items.append(site.result())
-    for label, port, note in (("Streamer.bot", 8080, "legacy bridge; not needed once Host replaces it"), ("OBS", 4455, "OBS websocket")):
+    for label, port, note in (("OBS", 4455, "OBS websocket"),):    # Streamer.bot is gone; :8080 is the Host's own credits server now
         up = integrations.tcp("127.0.0.1", port)
         items.append({"id": f"core:{label}", "module": "core", "group": "Streaming tools", "name": label, "status": "connected" if up else "off",
                       "detail": f"reachable on :{port}" if up else f"not reachable ({note})"})
