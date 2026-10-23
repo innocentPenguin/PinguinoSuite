@@ -3,6 +3,7 @@
 // Prints scene and input names, never the password. Without a password or without OBS it prints one line saying why and exits 0.
 //   node src/obsreadcheck.mjs            real check
 //   node src/obsreadcheck.mjs --selftest against the fake OBS (also proves only read requests are sent)
+import './testenv.mjs';
 import { fileURLToPath } from 'node:url';
 import * as cfgm from './config.mjs';
 import { obsConn } from './vault.mjs';

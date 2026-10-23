@@ -1,6 +1,7 @@
 // Lite self-update apply: hash re-check, wait for exit, backup, silent install (fake installer), relaunch, auto-restore. Run: node src/applycheck.mjs
 process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
 process.env.PINGUINO_LITE_TEST = '1';
+import './testenv.mjs';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'; import crypto from 'node:crypto';
 import { createLite } from './lite.mjs';
 const results = []; const check = (n, ok, x = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${ok ? '' : '  ' + x}`); };

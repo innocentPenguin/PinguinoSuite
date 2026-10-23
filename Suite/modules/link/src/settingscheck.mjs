@@ -1,5 +1,6 @@
 // Settings and macro-editor API check (no OBS needed). Run: node src/settingscheck.mjs
 process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
+import './testenv.mjs';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import fs from 'node:fs';

@@ -1,5 +1,6 @@
 // Lite start/stop/restart checks with a fake Suite core (consumes control files) and a fake health. Run: node src/controlcheck.mjs
 process.env.PINGUINO_NEVER_REAL_OBS = '1';
+import './testenv.mjs';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { fileURLToPath } from 'node:url'; import { createLite } from './lite.mjs';
 const results = []; const check = (n, ok, x = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${ok ? '' : '  ' + x}`); };

@@ -2,6 +2,7 @@
 // Fake OBS / fake peers only; PINGUINO_NEVER_REAL_OBS blocks port 4455.
 process.env.PINGUINO_NEVER_REAL_OBS = '1';
 process.env.PINGUINO_MESH_TEST = '1';
+import './testenv.mjs';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import crypto from 'node:crypto';

@@ -1,5 +1,6 @@
 // PinguinoLite's own Link child must reuse a Link that already runs on the port. Run: node src/reusecheck.mjs
 process.env.PINGUINO_NEVER_REAL_OBS = '1';
+import './testenv.mjs';
 import { spawn } from 'node:child_process'; import os from 'node:os'; import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 const cli = fileURLToPath(new URL('./cli.mjs', import.meta.url));
 const results = []; const check = (n, ok, x = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${ok ? '' : '  ' + x}`); };

@@ -1,5 +1,6 @@
 // Remote macros through pairing: a CLIENT presses a macro, the paired HUB runs it in a FAKE OBS. Run: node src/remotecheck.mjs
 process.env.PINGUINO_NEVER_REAL_OBS = '1';   // tests must never reach the real OBS
+import './testenv.mjs';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -72,8 +73,8 @@ try {
   const items = (await B.call('GET', '/api/prestream')).json.items;
   check('client prestream asks the hub about OBS', items.some(i => i.id === 'hub-obs' && i.status === 'pass') && items.some(i => i.id === 'hub-macros' && i.status === 'pass') && !items.some(i => i.id === 'obs'), JSON.stringify(items.map(i => i.id + '=' + i.status)));
   obs.scenes = ['Main'];
-  await sleep(2200);
-  const items2 = (await B.call('GET', '/api/prestream')).json.items;
+  // poll instead of one fixed sleep: the hub's OBS state cache lives 2 s and a loaded PC needs longer
+  const items2 = await until(async () => { const it = (await B.call('GET', '/api/prestream')).json.items; return it.find(i => i.id === 'hub-macros')?.status === 'fail' ? it : null; }, 12000) || (await B.call('GET', '/api/prestream')).json.items;
   check('hub macro problems show on the client report', items2.find(i => i.id === 'hub-macros')?.status === 'fail');
 } finally {
   for (const n of [A, B]) { n.child.kill(); try { fs.rmSync(n.dir, { recursive: true, force: true }); } catch {} }
