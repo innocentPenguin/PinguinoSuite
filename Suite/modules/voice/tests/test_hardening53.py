@@ -146,6 +146,53 @@ class Web(unittest.TestCase):
         self.assertEqual(c.getresponse().status, 413)
         c.close()
 
+    # ---- page token (the Suite shell frames http://127.0.0.1:8772/ directly)
+    SHELL = {"Sec-Fetch-Dest": "iframe", "Sec-Fetch-Site": "cross-site", "Referer": "http://tauri.localhost/"}
+
+    def test_page_loaded_in_the_suite_frame_gets_the_token(self):
+        st, hd, body = self.req("GET", "/", self.SHELL)
+        self.assertEqual(st, 200)
+        self.assertIn(("TOKEN='%s'" % TOKEN).encode(), body)
+        self.assertNotIn(b"__TOKEN__", body)
+        self.assertIn("frame-ancestors", hd["content-security-policy"])
+        self.assertEqual(hd["cache-control"], "no-store")
+
+    def test_page_through_a_proxy_or_odd_host_gets_no_token(self):
+        for extra in ({"X-Forwarded-For": "1.2.3.4"}, {"Forwarded": "for=1.2.3.4"}, {"Via": "1.1 x"}, {"Tailscale-User-Login": "a@b.c"}):
+            st, _, body = self.req("GET", "/", extra)
+            self.assertEqual(st, 200)
+            self.assertIn(b"TOKEN=''", body)
+            self.assertNotIn(TOKEN.encode(), body)
+        self.assertEqual(self.req("GET", "/", {"Host": "evil.com"})[0], 403)
+
+    def test_page_without_a_suite_token_runs_on_same_origin_rules(self):
+        old = os.environ.pop("PINGUINO_API_TOKEN")
+        try:
+            st, _, body = self.req("GET", "/", self.SHELL)
+            self.assertIn(b"TOKEN=''", body)
+            self.assertEqual(self.req("POST", "/api/master", {"Origin": "http://" + self.host}, body={"on": False})[0] not in (401, 403), True)
+        finally:
+            os.environ["PINGUINO_API_TOKEN"] = old
+
+    def test_dangerous_posts_need_the_token_even_from_the_page(self):
+        own = {"Origin": "http://" + self.host, "Sec-Fetch-Site": "same-origin"}
+        for p in sorted(server.TOKEN_POST):
+            self.assertEqual(self.req("POST", p, own, body={})[0], 401, p)
+            self.assertNotIn(self.req("POST", p, dict(own, **{"X-Pinguino-Token": TOKEN}), body={})[0], (401, 403), p)
+            self.assertNotIn(self.req("POST", p, {"Authorization": "Bearer " + TOKEN}, body={})[0], (401, 403), p)      # core / Host style
+
+    def test_harmless_buttons_still_work_without_a_token(self):
+        own = {"Origin": "http://" + self.host, "Sec-Fetch-Site": "same-origin"}
+        for p in ("/api/mute", "/api/stop", "/api/replay", "/api/control/cancel", "/api/counters-reset"):
+            self.assertNotIn(self.req("POST", p, own, body={})[0], (401, 403), p)
+
+    def test_chat_command_still_open_for_the_host(self):
+        self.assertEqual(self.req("POST", "/api/chat-command", body={"command": "nothing-here", "role": "4"})[0], 200)
+
+    def test_page_gets_with_token_header(self):
+        own = {"Sec-Fetch-Site": "same-origin", "X-Pinguino-Token": TOKEN}
+        self.assertEqual(self.req("GET", "/api/config", own)[0], 200)
+
     def test_handler_has_a_socket_timeout(self):
         self.assertEqual(server.H.timeout, 15)
 

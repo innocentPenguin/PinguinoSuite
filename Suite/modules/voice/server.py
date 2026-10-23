@@ -67,6 +67,23 @@ def browser_same(headers):
     return bool(host) and ref.startswith("http://" + host + "/") and host_ok(host)
 
 
+PROXY_HEADERS = ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "forwarded", "via", "x-real-ip", "tailscale-user-login")
+# POSTs that change settings, speak, enable spoken control or call a paid service: with a Suite token set they need that token. The page
+# gets it inside its own HTML (direct loopback loads only), the core and the Host send it as a header. The other buttons (mute, stop, replay,
+# preview, sound check ...) stay same-origin so a page that was loaded some other way keeps working.
+TOKEN_POST = {"/api/config", "/api/preset", "/api/master", "/api/speak", "/api/event", "/api/sound-upload", "/api/sound-delete", "/api/control/enable",
+              "/api/control/confirm", "/api/control/try", "/api/review/apply", "/api/test-cloud", "/api/timer-fire"}
+
+
+def page_token(headers):
+    """The token to hand to the page: only when the page is loaded directly on loopback (the Suite shell's frame), never through a proxy, tunnel
+    or a made-up Host name. Empty = the page runs without one and the same-origin rules apply."""
+    tok = os.environ.get("PINGUINO_API_TOKEN") or ""
+    if not tok or not host_ok(headers.get("host")) or any(headers.get(h) is not None for h in PROXY_HEADERS):
+        return ""
+    return tok
+
+
 def token_ok(headers):
     want = os.environ.get("PINGUINO_API_TOKEN")
     if not want:
@@ -662,6 +679,12 @@ class H(BaseHTTPRequestHandler):
         except ValueError:
             n = 0
         if n >= MAX_BODY:
+            left = min(n, 16_000_000)                 # read and drop it, so the client gets the 413 instead of a reset connection
+            while left > 0:
+                chunk = self.rfile.read(min(65536, left))
+                if not chunk:
+                    break
+                left -= len(chunk)
             raise TooLarge(f"body over {MAX_BODY // 1_000_000} MB")
         try:
             body = json.loads(self.rfile.read(n) or b"{}") if n > 0 else {}
@@ -679,6 +702,8 @@ class H(BaseHTTPRequestHandler):
                 self._send(403, "forbidden origin", "text/plain")
                 return False
             same = bool(origin) and origin.split("://", 1)[-1] == self.headers.get("host")
+            if path in TOKEN_POST and os.environ.get("PINGUINO_API_TOKEN"):
+                same = False
             if not (same or (path in OPEN_POST and not origin) or token_ok(self.headers)):
                 self._send(401, "token required", "text/plain")
                 return False
@@ -700,7 +725,8 @@ class H(BaseHTTPRequestHandler):
             return
         try:
             if method == "GET" and path in PAGES:
-                return self._send(200, (ROOT / PAGES[path]).read_bytes(), "text/html")
+                html = (ROOT / PAGES[path]).read_bytes().replace(b"__TOKEN__", page_token(self.headers).encode())
+                return self._send(200, html, "text/html")
             fn = (GET if method == "GET" else POST).get(path)
             if fn is None:
                 return self._send(404, {"error": "not found"})

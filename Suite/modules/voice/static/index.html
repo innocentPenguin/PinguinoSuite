@@ -53,7 +53,7 @@ const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelecto
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let SND=[],CNT=null,DEVS=[],VHINT='',BACKEND='',DHINT='',C=null,META=null,ST=null,dirty=false,tab=localStorage.getItem('pv-tab')||'overview',sel=null,LOG=[],PRE=null,vcache=[];
 const TABS=[['overview','Overview'],['personas','Personas'],['events','Events'],['schedule','Schedule'],['who','Who & where'],['limits','Limits & queue'],['words','Words'],['review','Review & control'],['presets','Presets'],['log','Log']];
-const api=async(p,b)=>{const r=await fetch(p,b===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const TOKEN='__TOKEN__';const api=async(p,b)=>{const r=await fetch(p,b===undefined?(TOKEN?{headers:{'X-Pinguino-Token':TOKEN}}:{}):{method:'POST',headers:Object.assign({'Content-Type':'application/json'},TOKEN?{'X-Pinguino-Token':TOKEN}:{}),body:JSON.stringify(b)});
   if((r.headers.get('content-type')||'').includes('audio'))return {blob:await r.blob(),said:decodeURIComponent(r.headers.get('X-Said')||'')};
   const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j};
 const toast=(m,ms=2600)=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',ms)};
