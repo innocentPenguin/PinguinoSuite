@@ -9,7 +9,10 @@ import json
 import os
 import urllib.error
 import urllib.parse
+import re
+import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -119,7 +122,111 @@ class Sapi:
         self.p = None
 
 
-sapi = Sapi()
+Sapi.name = "Windows SAPI"
+
+
+def _run(args, input=None, timeout=40):
+    """Default runner for the command-line backends: (returncode, stdout). Never raises."""
+    try:
+        r = subprocess.run(args, input=input, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return r.returncode, r.stdout
+    except (OSError, subprocess.SubprocessError):
+        return 127, ""
+
+
+class CliTTS:
+    """Base for macOS `say` and Linux espeak: the text goes in on stdin (never on the command line), the answer is a WAV file.
+    `runner(args, input=None, timeout=40) -> (rc, stdout)` is injectable so tests never run a real synthesiser."""
+    name = ""
+    binary = ""
+
+    def __init__(self, runner=None):
+        self.run = runner or _run
+        self._voices = None
+
+    def _voice_list(self):
+        raise NotImplementedError
+
+    def _args(self, voice, rate, out):
+        raise NotImplementedError
+
+    def voices(self, refresh=False):
+        if self._voices is None or refresh:
+            self._voices = self._voice_list()
+        return self._voices
+
+    def speak_to_wav(self, text, voice, rate):
+        fd, out = tempfile.mkstemp(suffix=".wav", prefix="pv-")
+        os.close(fd)
+        try:
+            known = self.voices()
+            rc, _ = self.run(self._args(voice if voice in known else "", int(rate), out), input=text, timeout=40)
+            if rc != 0 or not os.path.getsize(out):
+                raise RuntimeError(self.name + " could not speak (is " + self.binary + " installed and a voice available?)")
+            with open(out, "rb") as f:
+                return f.read()
+        finally:
+            try:
+                os.unlink(out)
+            except OSError:
+                pass
+
+    def close(self):
+        pass
+
+
+class MacSay(CliTTS):
+    name = "macOS say"
+    binary = "say"
+
+    def _voice_list(self):
+        rc, out = self.run(["say", "-v", "?"], timeout=15)
+        names = []
+        for ln in (out or "").splitlines():
+            m = re.match(r"^(.+?)\s{2,}[a-z]{2,3}[_-][A-Za-z0-9]+\s", ln)     # "Alex      en_US    # Most people..."
+            if rc == 0 and m:
+                names.append(m.group(1).strip())
+        return names
+
+    def _args(self, voice, rate, out):
+        a = ["say", "-o", out, "--data-format=LEI16@22050", "-r", str(max(80, min(400, 175 + rate * 15)))]
+        if voice:
+            a += ["-v", voice]
+        return a + ["-f", "-"]
+
+
+class Espeak(CliTTS):
+    name = "espeak"
+    binary = "espeak-ng"
+
+    def __init__(self, runner=None, binary=None):
+        super().__init__(runner)
+        self.binary = binary or shutil.which("espeak-ng") or shutil.which("espeak") or "espeak-ng"
+
+    def _voice_list(self):
+        rc, out = self.run([self.binary, "--voices"], timeout=15)
+        rows = [ln.split() for ln in (out or "").splitlines()[1:]]
+        return [r[3] for r in rows if rc == 0 and len(r) >= 4]
+
+    def _args(self, voice, rate, out):
+        a = [self.binary, "-w", out, "-s", str(max(80, min(450, 175 + rate * 15)))]
+        if voice:
+            a += ["-v", voice]
+        return a + ["--stdin"]
+
+
+def make_backend(platform=None, runner=None):
+    """The speech backend for this OS: Windows SAPI (unchanged), macOS `say`, otherwise espeak if it is installed (a Sapi object that finds no voices when nothing fits)."""
+    p = platform or sys.platform
+    if p == "darwin":
+        return MacSay(runner)
+    if p.startswith("win"):
+        return Sapi()
+    return Espeak(runner)
+
+
+sapi = make_backend()
 
 
 # ------------------------------------------------------------------ cloud voices (optional; keys come from the vault, memory only)
@@ -415,12 +522,15 @@ class Player:
         except ImportError:
             self.ws = None
         self._tmp = None
+        self.native = self.ws is None      # no winsound (macOS, Linux): everything plays through sounddevice, device or default
 
     def play(self, wav, seconds, device=""):
         """Blocks until finished or stopped. Returns True when played to the end. `device` = part of an output device name, empty = Windows default."""
         self.stopped.clear()
-        if not (self.enabled and self.ws):
+        if not self.enabled:
             return True
+        if self.native:
+            return self._play_native(wav, seconds, device)
         if device:
             dev = find_device(device)
             if dev is not None:
@@ -449,6 +559,16 @@ class Player:
                     os.unlink(f)
                 except OSError:
                     pass
+
+    def _play_native(self, wav, seconds, device):
+        dev = find_device(device) if device else None
+        if device and dev is None:
+            console_log.warn("output", "output device '" + device[:40] + "' not found, using the default", dedupe_s=300)
+        try:
+            return self._play_sd(wav, seconds, dev)
+        except Exception as e:
+            console_log.warn("output", "playing failed (" + type(e).__name__ + "): no usable output device?", dedupe_s=300)
+            return False
 
     def _play_sd(self, wav, seconds, dev):
         import sounddevice as sd

@@ -11,3 +11,7 @@ Last updated: 2026-10-23 06:20. Hand-over from the old 06 session: `Docs\session
 - Item 4 of 06 section 4 (mic-lost alert): event `mic_alert` (OFF by default), server.mic_loop polls Listen /api/status every 10 s, speaks one fixed line per distinct alert, never Listen's text. tests/test_micalert.py. Tests 101.
 - Task 4: role bug fixed (Host sends numeric role), redeem path, module.json version 0.9.0, Docs/VOICE.md "!speak: what the Host needs". Tests 97.
 - Needs a Voice restart by 100 to take effect.
+
+## Batch 2 (Mac support)
+- Item 1+2: TTS backend abstraction (engine.py: Sapi / MacSay `say` / Espeak, `make_backend` by sys.platform, injectable runner, text only on stdin). Non-Windows Player always plays through sounddevice. Speak page shows "Voices come from: <backend>". No-voice / no-output-device now give plain messages (hints in /api/voices, /api/devices, preview, sound check, self-test). tests/test_backends.py (12). Tests 113.
+- Item 3 (Docs\VOICE_MAC.md) and item 4 (third review) follow.

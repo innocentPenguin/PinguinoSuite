@@ -143,7 +143,7 @@ def g_status(h, q):
     c = brain.cfg
     return {"ok": True, "name": "PinguinoVoice", "uptime": int(time.time() - START), "state": brain.state(), "master": c["master"], "mute_until": c["mute_until"],
             "queue": len(brain.q), "speaking": brain.current["text"] if brain.current else None, "stats": brain.stats, "last_error": brain.last_error,
-            "feed": {"ok": feed["ok"], "err": feed["err"], "events": feed["events"]}, "quiet_now": textproc.in_quiet(c), "persona": c["default_persona"]}
+            "backend": getattr(brain.sapi, "name", ""), "feed": {"ok": feed["ok"], "err": feed["err"], "events": feed["events"]}, "quiet_now": textproc.in_quiet(c), "persona": c["default_persona"]}
 
 
 def g_config(h, q):
@@ -173,10 +173,23 @@ def p_mute(h, b):
     return {"ok": True, "state": brain.state()}
 
 
+NO_VOICE_HINT = {
+    "win": "No Windows voice was found. Open Windows Settings > Time & Language > Speech and add a voice, then press Refresh.",
+    "dar": "No macOS voice was found. Open System Settings > Accessibility > Spoken Content > System Voice > Manage Voices and download one, then press Refresh.",
+    "lin": "No voice was found. Install espeak-ng (for example: sudo apt install espeak-ng), then press Refresh."}
+
+
+def _voice_problem(e):
+    """A plain sentence for a speech-engine failure (shown in the page), never a traceback."""
+    if not brain.sapi.voices():
+        return "No voice is available yet. " + NO_VOICE_HINT.get(sys.platform[:3], NO_VOICE_HINT["lin"])
+    return "The voice engine could not speak this: " + str(e)[:150]
+
+
 def g_voices(h, q):
     from engine import sapi
     v = sapi.voices(refresh=q.get("refresh") == "1")
-    return {"ok": bool(v), "voices": v}
+    return {"ok": bool(v), "voices": v, "backend": getattr(sapi, "name", ""), "hint": "" if v else NO_VOICE_HINT.get(sys.platform[:3], NO_VOICE_HINT["lin"])}
 
 
 def p_speak(h, b):
@@ -210,7 +223,10 @@ def p_preview(h, b):
     if not text:
         import random
         text = textproc.render("This is {persona}. {catch}", {}, persona)
-    wav, said = brain.preview(pid, text, c)
+    try:
+        wav, said = brain.preview(pid, text, c)
+    except RuntimeError as e:
+        raise ValueError(_voice_problem(e))
     return ("audio/wav", wav, {"X-Said": urllib.parse.quote(said)})
 
 
@@ -341,7 +357,13 @@ def p_soundcheck(h, b):
     origin = h.headers.get("origin") or ""
     if not origin or origin.split("://", 1)[-1] != h.headers.get("host"):
         raise ValueError("Sound check only works from the Speak page button")
-    return brain.soundcheck()
+    import engine
+    if not engine.devices() and (sys.platform != "win32" or brain.cfg["output"]["device"]):
+        raise ValueError("No audio output device was found on this computer, so there is nothing to play on. Plug in or enable speakers/headphones.")
+    try:
+        return brain.soundcheck()
+    except RuntimeError as e:
+        raise ValueError(_voice_problem(e))
 
 
 def g_intervals(h, q):
@@ -352,7 +374,9 @@ def g_intervals(h, q):
 
 def g_devices(h, q):
     import engine
-    return {"devices": engine.devices(), "current": brain.cfg["output"]["device"]}
+    d = engine.devices()
+    return {"devices": d, "current": brain.cfg["output"]["device"],
+            "hint": "" if d else "No audio output device was found on this computer. Plug in or enable speakers/headphones; until then Speak cannot play anything (previews inside this page still work)."}
 
 
 def p_test_cloud(h, b):
@@ -520,7 +544,7 @@ def g_selftest(h, q):
         wav, _ = brain.preview(brain.cfg["default_persona"], "Test.")
         return {"ok": True, "ms": int((time.time() - t) * 1000), "bytes": len(wav)}
     except Exception as e:
-        return {"ok": False, "error": str(e)[:200]}
+        return {"ok": False, "error": ("No voice is available yet: " + NO_VOICE_HINT.get(sys.platform[:3], NO_VOICE_HINT["lin"])) if not brain.sapi.voices() else "The voice engine failed: " + str(e)[:150]}
 
 
 GET = {"/api/speech-intervals": g_intervals, "/api/sounds": g_sounds, "/api/counters": g_counters, "/api/history.csv": g_history_csv, "/api/devices": g_devices, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
