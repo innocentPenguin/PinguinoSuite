@@ -78,6 +78,7 @@ namespace PinguinoHost
         public static void TestReset() { lock (L) { _cache.Clear(); _health.Clear(); _lastGood = ""; } }
         public static void TestClearBackoff() { lock (L) { foreach (var h in _health.Values) { h.BackoffUntil = 0; h.Fails = 0; } foreach (var c in _cache.Values) c.Remove("retryAt"); } }
         static long Now() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
+        static long _cfSeen, _cfWarned;   // last time tracker.gg answered with its Cloudflare "Just a moment" page
         /// <summary>old test hooks: PINGUINO_RANK_FIXTURE (a profile JSON, or file.<name>.json per account) and PINGUINO_RANK_CALLLOG (one line per account looked up)</summary>
         static string EnvFixture(string epic)
         {
@@ -162,7 +163,7 @@ namespace PinguinoHost
         {
             if (string.IsNullOrWhiteSpace(body)) return "empty";
             if (body.Contains("CollectorResultStatus::NotFound")) return "notfound";
-            if (!body.TrimStart().StartsWith("{")) return "blocked";
+            if (!body.TrimStart().StartsWith("{")) return body.Contains("Just a moment") || body.Contains("cf-chl") || body.Contains("challenge-platform") ? "cloudflare" : "blocked";
             int n = 0;
             try
             {
@@ -206,9 +207,11 @@ namespace PinguinoHost
                 }
                 if (st == "notfound") { lock (L) { c["status"] = "notfound"; c["at"] = Now(); SaveCache(); } return "notfound"; }
                 Clog.Warn("rank", key + ": " + s.Name + " -> " + st);
+                if (st == "cloudflare") _cfSeen = Now();
             }
             lock (L) { c["retryAt"] = Now() + RetryGapSec; SaveCache(); }   // all failed: do not hammer; the old values stay
             if (srcs.Count == 0) Clog.Warn("rank", key + ": every source is in backoff, served from cache");
+            else if (_cfSeen > Now() - 60 && Now() - _cfWarned > 1800) { _cfWarned = Now(); Clog.Warn("rank", "REASON: tracker.gg answers every automatic lookup with a Cloudflare challenge ('Just a moment'), so !rank has no live source. Add a working JSON source to Data\rank_sources.json, or mods can set ranks with !setrank. Saved ranks still answer."); }
             return result;
         }
 
@@ -448,7 +451,7 @@ namespace PinguinoHost
                 if (status == "notfound") say("Could not find " + epic + " on " + (plat == "epic" ? "Epic" : plat) + ". Try !rank epic:name, steam:name, xbox:name or psn:name.");
                 else if (status == "pending") SayOnce(say, "Checking " + (isOwner ? "the ranks" : nm) + "... ask again in a few seconds.");
                 else if (only != "" && (status == "ok" || status == "cached" || status == "stale")) say((isOwner ? "" : nm + ": ") + "No " + Label(only) + " rank found.");
-                else if (status == "none" || status == "stale") SayOnce(say, "No rank data for " + (isOwner ? "the streamer" : nm) + " right now, try again in a bit." + (isOwner ? " A mod can set it with !setrank 2v2 Champion I Div II (1400)." : ""));
+                else if (status == "none" || status == "stale") SayOnce(say, "No rank data for " + (isOwner ? "the streamer" : nm) + " right now" + (Now() - _cfSeen < 3600 ? " (the rank site is blocking our lookups)" : ", try again in a bit") + "." + (isOwner ? " A mod can set it with !setrank 2v2 Champion I Div II (1400)." : ""));
                 else say(isOwner ? "No rank saved yet, a mod can set it with !setrank 2v2 Champion I Div II (1400)." : "No ranked playlists found for " + nm + ".");
                 return;
             }

@@ -84,6 +84,20 @@ namespace PinguinoHost
                             { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", "http://127.0.0.1:8771/api/chat-command" }, { "command", "sr" }, { "redeem", true }, { "as", "core" } } } } });
                     seeded.Add("spotify-redeem"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
                 }
+                if (seeded.Any(x => (string)x == "spotify") && !seeded.Any(x => (string)x == "spotify2"))
+                {
+                    // one-time: !skip and !voteskip are one vote command for everyone (the module counts the votes); !vol / !volume read out (mods set) the volume. Enabled flags stay as they are.
+                    var acts2 = (JArray)doc["actions"]; var sk = acts2.OfType<JObject>().FirstOrDefault(x => (string)x["id"] == "spotify-skip");
+                    if (sk != null) foreach (var t in ((JArray)sk["triggers"]).OfType<JObject>()) { t["names"] = new JArray("!skip", "!voteskip"); t["permission"] = "everyone"; }
+                    if (!acts2.OfType<JObject>().Any(x => (string)x["id"] == "spotify-vol"))
+                    {
+                        var v = new JObject { { "id", "spotify-vol" }, { "name", "Spotify: !vol" }, { "group", "Spotify" }, { "enabled", sk != null && (bool?)sk["enabled"] == true }, { "importNotes", "preset: !vol shows the volume, mods can set it (!vol 60 or !vol60)" },
+                            { "triggers", new JArray { new JObject { { "type", "command" }, { "names", new JArray("!vol", "!volume") }, { "permission", "everyone" }, { "cooldownSec", 5 }, { "userCooldownSec", 0 }, { "consume", true } } } }, { "conditions", new JArray() },
+                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", "http://127.0.0.1:8771/api/chat-command" }, { "command", "volume" }, { "as", "core" } } } } };
+                        acts2.Add(v);
+                    }
+                    seeded.Add("spotify2"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
+                }
                 if (seeded.Any(x => (string)x == "spotify")) return;
                 const string url = "http://127.0.0.1:8771/api/chat-command";
                 Func<string, string, string[], string, int, int, JObject> mk = (id, cmd, names, perm, cd, ucd) => new JObject {
@@ -92,7 +106,7 @@ namespace PinguinoHost
                     { "conditions", new JArray() }, { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", url }, { "command", cmd }, { "as", "core" } } } } };
                 var acts = (JArray)doc["actions"];
                 foreach (var a in new[] {
-                    mk("sr", "sr", new[] { "!sr", "!songrequest" }, "everyone", 0, 10), mk("skip", "skip", new[] { "!skip" }, "mod", 0, 0),
+                    mk("sr", "sr", new[] { "!sr", "!songrequest" }, "everyone", 0, 10), mk("skip", "skip", new[] { "!skip", "!voteskip" }, "everyone", 0, 0), mk("vol", "volume", new[] { "!vol", "!volume" }, "everyone", 5, 0),
                     mk("song", "song", new[] { "!song", "!currentsong", "!np" }, "everyone", 8, 0), mk("queue", "queue", new[] { "!songqueue", "!srqueue" }, "everyone", 15, 0),
                     mk("oops", "oops", new[] { "!oops", "!wrongsong" }, "everyone", 0, 10), mk("block", "blocksong", new[] { "!blocksong" }, "mod", 0, 0), mk("clear", "srclear", new[] { "!srclear" }, "mod", 0, 0) })
                     if (!acts.OfType<JObject>().Any(x => (string)x["id"] == (string)a["id"])) acts.Add(a);
@@ -160,6 +174,7 @@ namespace PinguinoHost
             string login = (display ?? "").ToLowerInvariant(); text = (text ?? "").Trim(); if (text == "") return false;
             bool firstToday = Roster.FirstToday(login);
             string cmd = text.StartsWith("!") ? text.Split(' ')[0] : ""; string rest = cmd != "" && text.Length > cmd.Length ? text.Substring(cmd.Length).Trim() : "";
+            var volm = Regex.Match(cmd, @"^!(vol|volume)(\d{1,3})$", RegexOptions.IgnoreCase); if (volm.Success) { cmd = "!" + volm.Groups[1].Value; rest = (volm.Groups[2].Value + " " + rest).Trim(); }   // "!vol60" = "!vol 60"
             foreach (var a in Actions())
                 foreach (var t in (a["triggers"] as JArray ?? new JArray()).OfType<JObject>())
                 {
@@ -440,6 +455,7 @@ namespace PinguinoHost
                 {
                     var body = new JObject { { "command", cmd }, { "args", ctx.ContainsKey("args") && ctx["args"] != "" ? ctx["args"] : ctx.ContainsKey("input") ? ctx["input"] : "" }, { "redeem", (bool?)st["redeem"] == true }, { "user", ctx.ContainsKey("userName") ? ctx["userName"] : "" }, { "display", ctx.ContainsKey("display") ? ctx["display"] : "" },
                         { "role", ctx.ContainsKey("role") ? ctx["role"] : "1" }, { "isMod", ctx.ContainsKey("isMod") && ctx["isMod"] == "true" }, { "isSub", ctx.ContainsKey("isSub") && ctx["isSub"] == "true" }, { "isVip", ctx.ContainsKey("isVip") && ctx["isVip"] == "true" }, { "subTier", ctx.ContainsKey("subTier") && int.TryParse(ctx["subTier"], out var stv) ? stv : 0 }, { "msgId", ctx.ContainsKey("msgId") ? ctx["msgId"] : "" } };
+                    if (cmd == "skip" || cmd == "voteskip") { try { SkipVote.Fill(body); } catch (Exception) { } }   // vote threshold from the people chatting lately
                     var rq = new HttpRequestMessage(HttpMethod.Post, u) { Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json") };
                     string tok = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? ""; if (tok != "" && ((IPAddress.TryParse(u.Host, out var ip) && IPAddress.IsLoopback(ip)) || u.Host == "localhost")) rq.Headers.Add("Authorization", "Bearer " + tok);
                     var r = h.SendAsync(rq).Result; var j = JObject.Parse(r.Content.ReadAsStringAsync().Result);

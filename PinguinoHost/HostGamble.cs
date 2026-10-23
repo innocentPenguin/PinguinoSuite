@@ -62,6 +62,7 @@ namespace PinguinoHost
         static string Check(string login, long amt, long bal)
         {
             string cur = Economy.CurrencyName; long min = (long)N("minBet", 1), max = (long)N("maxBet", 0);
+            if (bal < 1) return "you have no " + cur + ".";
             if (amt < Math.Max(1, min)) return "the minimum is " + Math.Max(1, min) + " " + cur + ".";
             if (max > 0 && amt > max) return "the maximum bet is " + max + " " + cur + ".";
             if (amt > bal) return "you only have " + bal + " " + cur + ".";

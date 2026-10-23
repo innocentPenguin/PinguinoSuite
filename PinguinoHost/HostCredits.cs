@@ -37,6 +37,8 @@ namespace PinguinoHost
         }
         /// <summary>everyone who chatted in the last <paramref name="hours"/> hours (login, display name, role, sub, last message unix time), newest first.</summary>
         public static List<Tuple<string, string, int, bool, long>> Recent(double hours) { long min = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (long)(hours * 3600); lock (L) { Load(); return D.Where(k => k.Value.Last >= min).OrderByDescending(k => k.Value.Last).Select(k => Tuple.Create(k.Key, k.Value.Name, k.Value.Role, k.Value.Sub, k.Value.Last)).ToList(); } }
+        /// <summary>distinct people (bots left out) who chatted in the last <paramref name="sec"/> seconds</summary>
+        public static int ActiveCount(int sec) { long min = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - sec; lock (L) { Load(); return D.Where(k => k.Value.Last >= min && !Boards.IsBot(k.Key)).Count(); } }
         public static int RoleOf(string login) { login = (login ?? "").ToLowerInvariant(); lock (L) { Load(); E e; return D.TryGetValue(login, out e) ? e.Role : 0; } }
         public static List<string> Names(Func<int, bool, bool> keep) { lock (L) { Load(); return D.Values.Where(e => keep(e.Role, e.Sub)).OrderBy(e => e.First).Select(e => e.Name).ToList(); } }
         /// <summary>true the first time this login chats today (local date), for the first_today trigger.</summary>

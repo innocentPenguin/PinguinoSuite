@@ -39,7 +39,7 @@ def ran(name): return sum(1 for r in runs() if r['action'] == name and not r['te
 try:
     until(lambda: api('/api/status')['name'] == 'PinguinoHost', 30, 'host up'); time.sleep(25)   # the bot modules finish loading a little after the API is up (slower when the PC is busy)
     seeded = api('/api/automations')['doc']
-    if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 8: fails.append('spotify presets missing or enabled')
+    if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 9: fails.append('spotify presets missing or enabled')
     acts = [
         {'id': 'lurk', 'name': 'Lurk', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!lurkx'], 'permission': 'everyone', 'cooldownSec': 30}],
          'steps': [{'type': 'inc_var', 'name': 'lurkers'}, {'type': 'say', 'as': 'core', 'text': 'Enjoy the lurk {user}! total {count}'}]},
@@ -52,6 +52,8 @@ try:
             {'type': 'http', 'method': 'GET', 'url': 'http://127.0.0.1:8862/x', 'say': True}, {'type': 'say', 'text': 'status {http.status} n={http.n}'},
             {'type': 'http', 'method': 'GET', 'url': 'http://example.com/', 'say': True}]},
         {'id': 'song', 'name': 'Song', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!sr']}], 'steps': [{'type': 'module_command', 'url': 'http://127.0.0.1:8862/api/chat-command', 'command': 'sr'}]},
+        {'id': 'skp', 'name': 'Skip', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!skip', '!voteskip']}], 'steps': [{'type': 'module_command', 'url': 'http://127.0.0.1:8862/api/chat-command', 'command': 'skip'}]},
+        {'id': 'vl', 'name': 'Vol', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!vol', '!volume']}], 'steps': [{'type': 'module_command', 'url': 'http://127.0.0.1:8862/api/chat-command', 'command': 'volume'}]},
         {'id': 'off', 'name': 'Disabled', 'enabled': False, 'triggers': [{'type': 'command', 'names': ['!off']}], 'steps': [{'type': 'say', 'text': 'should not run'}]},
     ]
     r = api('/api/automations', {'doc': {'version': 1, 'actions': acts}});
@@ -81,6 +83,12 @@ try:
     until(lambda: said('queued: never gonna give you up'), 10, 'module command round trip')
     if not MOCK_POSTS or MOCK_POSTS[0].get('command') != 'sr' or MOCK_POSTS[0].get('user') != 'viewer3': fails.append('module command body: ' + str(MOCK_POSTS[:1]))
     elif MOCK_POSTS[0].get('subTier') != 0 or MOCK_POSTS[0].get('isVip') is not False: fails.append('module command body lacks subTier/isVip: ' + str(MOCK_POSTS[:1]))
+    # vote skip: the Host sends how many people chatted lately and the votes needed (40 %, floor 2); !vol60 = !vol 60
+    for u in ['c1', 'c2', 'c3', 'c4', 'c5', 'c6']: feed(u + ': hi')
+    time.sleep(1); n0 = len(MOCK_POSTS); feed('c1: !voteskip'); feed('c2: !vol60'); time.sleep(3)
+    sk = [m for m in MOCK_POSTS[n0:] if m.get('command') == 'skip']; vl = [m for m in MOCK_POSTS[n0:] if m.get('command') == 'volume']
+    if not sk or sk[0].get('activeChatters', 0) < 6 or sk[0].get('skipNeed') != max(2, -(-sk[0]['activeChatters'] * 40 // 100)): fails.append('vote skip body: ' + str(sk[:1]))
+    if not vl or vl[0].get('args') != '60': fails.append('!vol60 body: ' + str(vl[:1]))
 
     t = api('/api/automations/test', {'id': 'lurk'})
     if not t.get('ok') or not any('(dry run) would say' in o for o in t['run']['output']): fails.append('dry run: ' + str(t))

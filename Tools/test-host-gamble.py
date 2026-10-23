@@ -29,7 +29,7 @@ try:
     setcfg(gambleWinChance=0.0); time.sleep(1.2)
     r = ask('alice: !gamble 100'); chk('loss takes', 'lost 100' in r[0] and bal('alice') == 1000, (r, bal('alice')))
     r = ask('alice: !gamble all'); chk('all in, no max bet', bal('alice') == 0 and 'lost 1000' in r[0], (r, bal('alice')))
-    r = ask('alice: !gamble 5'); chk('broke refused', 'only have 0' in r[0], r)
+    r = ask('alice: !gamble 5'); chk('broke refused', 'you have no points' in r[0], r)
     r = ask('alice: !gamble'); chk('usage', 'usage' in r[0], r)
     r = ask('bob: !gamble 0'); chk('zero bet refused', ('usage' in r[0] or 'minimum' in r[0]) and bal('bob') == 500, r)
     setcfg(gambleWinChance=0.0, maxBet=50); time.sleep(1.2)
