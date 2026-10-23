@@ -19,13 +19,24 @@ try { const p = new URLSearchParams(location.search).get('fixture'); if (p) FIX 
 const FIXTURE = {goal: {title: 'Road to 100 followers', current: 64, target: 100, pct: 64, unit: 'followers'},
   poll: {title: 'Which game next?', state: 'progress', choices: [{id: 'a', title: 'Celeste', votes: 42}, {id: 'b', title: 'Hades', votes: 77}, {id: 'c', title: 'Tunic', votes: 12}]},
   prediction: {title: 'Will I beat the boss?', state: 'progress', outcomes: [{id: 'a', title: 'Yes', users: 31, channel_points: 52000}, {id: 'b', title: 'No', users: 14, channel_points: 18000}]},
-  hype: {state: 'progress', level: 2, progress: 640, goal: 1000, total: 2140}};
+  hype: {state: 'progress', level: 2, progress: 640, goal: 1000, total: 2140},
+  hypebar: {visible: true, active: true, level: 2, progress: 640, goal: 1000, total: 2140, look: {label: 'Hype train', c1: '#ff8a1f', c2: '#ffb35c', bg: '#14110d', fg: '#ffffff', show_level: true, show_numbers: true}}};
 function bars(items, valKey, win) {
   const tot = items.reduce((a, c) => a + num(c[valKey]), 0) || 1;
   return items.map(c => { const v = num(c[valKey]), pct = Math.round(v * 100 / tot);
     return `<div class="row ${win && c.id === win ? 'win' : ''}"><div class="lab"><b>${esc(c.title)}</b><span>${v.toLocaleString()} (${pct}%)</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`; }).join('');
 }
+function drawHypeBar(d) {
+  if (!d || !d.visible) { box.className = ''; return; }
+  const L = d.look || {}, goal = num(d.goal), p = goal ? Math.min(100, Math.round(num(d.progress) * 100 / goal)) : 0, ended = !d.active;
+  box.style.background = L.bg || ''; box.style.color = L.fg || ''; box.style.borderColor = L.c1 || '';
+  const lab = `${esc(L.label || 'Hype train')}${L.show_level === false ? '' : ' - level ' + esc(d.level)}`;
+  box.innerHTML = `<h1 style="color:${esc(L.c1)}">${lab}<span class="pill" style="background:${esc(L.c1)}">${ended ? 'COMPLETE' : 'LIVE'}</span></h1><div class="bar"><i style="width:${ended ? 100 : p}%;background:linear-gradient(90deg,${esc(L.c1)},${esc(L.c2)})"></i></div>`
+    + (L.show_numbers === false || !goal ? '' : `<div class="sub" style="margin-top:6px">${num(d.progress).toLocaleString()} / ${goal.toLocaleString()}</div>`);
+  box.className = 'on';
+}
 function draw(st) {
+  if (KIND === 'hypebar') return drawHypeBar(st);
   const d = st && st[KIND === 'predict' ? 'prediction' : KIND]; if (!d || (KIND === 'goal' && new URLSearchParams(location.search).get('hide') === 'idle' && !d.current)) { box.className = ''; return; }
   const end = d.state === 'end', pill = `<span class="pill">${esc(d.state === 'begin' || d.state === 'progress' ? 'LIVE' : d.state === 'lock' ? 'LOCKED' : 'ENDED')}</span>`;
   if (KIND === 'goal') box.innerHTML = `<h1>${esc(d.title)}${d.done ? '<span class="pill">DONE</span>' : ''}</h1><div class="bar"><i style="width:${num(d.pct)}%"></i></div><div class="sub" style="margin-top:6px">${num(d.current).toLocaleString()} / ${num(d.target).toLocaleString()} ${esc(d.unit)} (${num(d.pct)}%)</div>`;
@@ -36,7 +47,7 @@ function draw(st) {
   box.className = 'on';
 }
 async function tick() {
-  try { draw(FIX ? FIXTURE : await fetch('/api/live-state', {cache: 'no-store'}).then(r => r.json())); } catch (e) { /* Host down: keep what is shown */ }
+  try { draw(FIX ? (KIND === 'hypebar' ? FIXTURE.hypebar : FIXTURE) : await fetch(KIND === 'hypebar' ? '/api/hypebar' : '/api/live-state', {cache: 'no-store'}).then(r => r.json())); } catch (e) { /* Host down: keep what is shown */ }
 }
 if (new URLSearchParams(location.search).get('bg')) document.body.classList.add('bg');   // ?bg=1: dark checker to look at it in a normal browser (OBS stays transparent)
 tick(); setInterval(tick, 2000);

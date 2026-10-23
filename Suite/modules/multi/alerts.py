@@ -632,6 +632,8 @@ def test_event(t, user="penguin", amount=None, variants=(), **kw):
             ev["amount"] = amt
     if t == "tip":
         ev["currency"] = "USD"
+    if t in ("hype_start", "hype_level", "hype_end"):
+        ev.update(progress=640, goal=1000, total=2140)
     for v in variants or ():
         v = str(v).lower()
         if t in MILESTONE_TEST and v in ("small", "mid", "big", "huge"):

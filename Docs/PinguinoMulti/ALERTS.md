@@ -33,3 +33,11 @@ Events from the other platforms enter the same queue (see Docs/MULTISTREAM_PLAN.
 
 ## Viewer intros: Host contract (2026-10-23, 40 - Multi)
 The Host's plain `GET /api/intro` is its old sub-intro video system (returns settings, queue, slots). Viewer intros therefore use **`GET http://127.0.0.1:8770/api/intro/viewer?platform=&user_id=`** (Origin `http://127.0.0.1:8766` + Bearer module token) -> `{text, sound_id, status: "approved"}`. Multi plays only answers whose `status` is exactly `"approved"` and that carry a `text` field; anything else (404, pending, the old settings blob) counts as "no intro" and is cached for 60 s. Code: `intros.py` (`VIEWER_PATH`).
+
+## Hype train bar (/obs/hypebar)
+
+A progress bar like the goal bar, separate from the hype alert cards (`/obs/hype` is unchanged: it shows the Host's live-state train).
+- Fed by `hype_start` / `hype_level` / `hype_end` events with `{level, progress, goal, total}` through `POST /api/alerts/fire` (the bar updates even if the alert type is off), by Host feed `hype` rows (phase start/end), and by the Host `live-state` hype object while it reports a running train (that wins).
+- Stays visible `show_after_s` seconds (default 30) after the train ends, showing COMPLETE.
+- `GET /api/hypebar` = state + look; `POST /api/hypebar {label,c1,c2,bg,fg,show_after_s,show_level,show_numbers}` saves the look (kv `hypebar:cfg`). Edit it in the alerts editor under "Bars", which also has Test start / level up / end buttons.
+- `?bg=1` shows a checker background in a normal browser; `?fixture=1` draws sample data.

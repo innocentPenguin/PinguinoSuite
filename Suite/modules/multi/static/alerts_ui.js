@@ -65,6 +65,7 @@ function alDraw() {
     <details class="box"><summary><b>Scene profiles</b> <small class="mut">(switch profile when the OBS scene changes)</small></summary>
       <textarea id="al-scenes" rows="3" style="width:100%" placeholder="one per line:  Scene name = Profile name">${esc(Object.entries(c.scenes || {}).map(([k, v]) => k + ' = ' + v).join(String.fromCharCode(10)))}</textarea>
       <small class="mut">Link or the Host tells Multi the scene on air (POST /api/alerts/scene). Profiles: ${esc(Object.keys(c.profiles).join(', '))}</small></details>
+    <details class="box" id="al-bars"><summary><b>Bars</b> <small class="mut">(hype train bar)</small></summary><div id="al-bars-body" class="mut">Loading...</div></details>
     <div class="act" style="margin-top:8px">${types}</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
       <div style="flex:0 0 480px"><div class="box"><b>Preview</b>
@@ -105,7 +106,7 @@ function alDraw() {
         <b>Image / GIF / video</b>${f('media.url', 'Media address (png, gif, webm, mp4). http(s):// or /', 'txt')}${f('media.kind', 'Type', 'sel', {opts: ['image', 'video']})}
         ${f('media.position', 'Position', 'sel', {opts: ['above', 'left', 'bg']})}${f('media.size', 'Size', 'num', {lo: 40, hi: 600, unit: ' px'})}
       </div></div></div></div>`;
-  alLog(); alPreview();
+  alLog(); alPreview(); alBars();
 }
 function alState(t) { const el = $('#al-state'); if (el) { el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 2500); } }
 function alSave() {
@@ -217,3 +218,29 @@ document.addEventListener('click', async e => {
 });
 
 document.addEventListener('click', async e => { const b = e.target.closest && e.target.closest('[data-qrm]'); if (b) { await alPost('/api/alerts/control', {action: 'remove:' + b.dataset.qrm}); alLog(); } });
+
+// Bars: hype train bar look (/obs/hypebar). Saves on change straight to /api/hypebar (not part of the alert profile).
+async function alBars() {
+  const box = $('#al-bars-body'); if (!box) return;
+  const h = await fetch('/api/hypebar').then(r => r.json()), L = h.look, url = location.origin + '/obs/hypebar';
+  const col = (k, lab) => `<label class="cf">${lab} <input type="color" data-albar="${k}" value="${esc(L[k])}"></label>`;
+  box.innerHTML = `<b>Hype train bar</b> <small class="mut">appears while a hype train runs (hype_start / hype_level / hype_end) and stays a little after it ends</small>
+    <input readonly value="${esc(url)}" style="width:100%" onclick="this.select()"><small class="mut">OBS browser source, any size around 800 x 120; add ?bg=1 to look at it in a browser.</small>
+    <label class="cf">Label <input type="text" data-albar="label" value="${esc(L.label)}" maxlength="40"></label>
+    ${col('c1', 'Bar colour')}${col('c2', 'Bar end colour')}${col('bg', 'Background')}${col('fg', 'Text colour')}
+    <label class="cf">Stay after it ends <input type="range" data-albar="show_after_s" min="0" max="300" value="${L.show_after_s}"><b>${L.show_after_s} s</b></label>
+    <label class="cf"><input type="checkbox" data-albar="show_level" ${L.show_level ? 'checked' : ''}> Show the level</label>
+    <label class="cf"><input type="checkbox" data-albar="show_numbers" ${L.show_numbers ? 'checked' : ''}> Show progress numbers</label>
+    <div class="act"><button data-albtn="hype_start">Test start</button> <button data-albtn="hype_level">Test level up</button> <button data-albtn="hype_end">Test end</button>
+    <a href="${esc(url)}?bg=1" target="_blank" rel="noopener"><button type="button">Open</button></a></div>`;
+}
+document.addEventListener('change', async e => {
+  if (W.type !== 'alerts') return; const t = e.target, k = t.dataset && t.dataset.albar; if (!k) return;
+  const v = t.type === 'checkbox' ? t.checked : t.type === 'range' ? +t.value : t.value;
+  if (t.type === 'range') { const b = t.parentElement.querySelector('b'); if (b) b.textContent = t.value + ' s'; }
+  await alPost('/api/hypebar', {[k]: v}); alState('Bar saved');
+});
+document.addEventListener('click', async e => {
+  const b = W.type === 'alerts' && e.target.closest && e.target.closest('[data-albtn]'); if (!b) return;
+  const r = await alPost('/api/alerts/test', {type: b.dataset.albtn, user: 'penguin', level: 3}); alState(r.text);
+});

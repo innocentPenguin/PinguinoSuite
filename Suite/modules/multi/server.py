@@ -109,6 +109,8 @@ def _alert_from_message(m):
         meta["message"] = m.text
     if meta.get("sim") or meta.get("test"):
         return
+    if m.event == "hype":
+        hypebar.observe("hype", meta)
     if m.event in ("follow", "sub", "resub", "gift", "cheer") and hub.loop:
         hub.loop.call_soon_threadsafe(goal.observe, m.event, m.amount)
     ev = dict(meta, platform=m.platform, id=m.id, type=m.event, user=m.user, display=m.display, amount=m.amount, first_time=bool(meta.get("first_time") or m.first_time),
@@ -119,6 +121,7 @@ def _alert_from_message(m):
 
 pipeline.on_event = _alert_from_message
 goal = goals_mod.Goal(store, alert_engine.submit)
+hypebar = goals_mod.HypeBar(store)
 pipeline.intros = intros_mod.Intros(store, alert_engine.submit, lambda: pipeline.ding.started)
 inbox = Inbox(pipeline)
 connectors = {}
@@ -344,6 +347,7 @@ async def alerts_test(request: Request):
         raise HTTPException(400, "unknown alert type: " + ", ".join(alerts_mod.TYPES))
     ev = alerts_mod.test_event(t, str(b.get("user") or "penguin")[:40], b.get("amount"), b.get("variant") or [], source=str(b.get("source") or "ui")[:10],
                                tier=b.get("tier"), months=b.get("months"), message=str(b.get("message") or "")[:200], level=b.get("level"))
+    hypebar.observe(t, ev)                              # editor previews of the hype bar
     ok, why = alert_engine.submit(ev)
     return {"ok": ok, "queued": ok, "text": f"test {t} {why}" if ok else f"test {t} not shown: {why}", "id": ev["id"]}
 
@@ -393,8 +397,9 @@ async def alerts_fire(request: Request):
         b = dict(b, message=b.get("message") or b.get("type") or "")
     if b.get("test") or b.get("sim"):
         raise HTTPException(400, "test events go through /api/alerts/test")
-    ev = {k: b[k] for k in ("id", "user", "display", "amount", "tier", "months", "message", "level", "rank_colour", "avatar", "first_time", "recipient", "refollow", "streak", "hours", "years", "platform", "currency", "clip", "phase", "source") if k in b}
+    ev = {k: b[k] for k in ("id", "user", "display", "amount", "tier", "months", "message", "level", "rank_colour", "avatar", "first_time", "recipient", "refollow", "streak", "hours", "years", "platform", "currency", "clip", "phase", "source", "progress", "goal", "total") if k in b}
     ev["type"] = t
+    hypebar.observe(t, ev)                              # the bar follows the train even when its alert type is switched off
     ok, why = alert_engine.submit(ev)
     return {"ok": ok, "queued": ok, "text": why}
 
@@ -541,6 +546,23 @@ def obs_predict():
 @app.get("/obs/hype")
 def obs_hype():
     return _live_page()
+
+
+@app.get("/obs/hypebar")
+def obs_hypebar():
+    return _live_page()
+
+
+@app.get("/api/hypebar")
+async def hypebar_get():
+    return hypebar.view((await host_feed.live_state()).get("hype"))
+
+
+@app.post("/api/hypebar")
+async def hypebar_set(request: Request):
+    """{label?, c1?, c2?, bg?, fg?, show_after_s?, show_level?, show_numbers?} -> saved look"""
+    b = await request.json()
+    return {"look": hypebar.set_look(b if isinstance(b, dict) else {})}
 
 
 @app.get("/obs/goal")

@@ -83,3 +83,69 @@ class Goal:
             c["done"] = True
             self._save()
             self.submit({"type": "goal", "id": f"goal:{c['title']}:{c['target']}:{int(time.time())}", "user": "chat", "message": c["title"], "amount": c["target"]})
+
+
+HYPE_LOOK = {"label": "Hype train", "c1": "#ff8a1f", "c2": "#ffb35c", "bg": "#14110d", "fg": "#ffffff", "show_after_s": 30, "show_level": True, "show_numbers": True}
+_COL = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+class HypeBar:
+    """Hype-train progress bar (/obs/hypebar). Fed by hype_start / hype_level / hype_end events ({level, progress, goal, total}) from /api/alerts/fire
+    and the Host feed, or by the Host live-state hype object; stays on screen show_after_s seconds after the train ends. Look is editable and stored in kv."""
+
+    def __init__(self, store):
+        self.store = store
+        self.look = self.clean_look(store.kv_get("hypebar:cfg") or {}, dict(HYPE_LOOK))
+        self.st = {"active": False, "level": 0, "progress": 0, "goal": 0, "total": 0, "ended_at": 0}
+
+    @staticmethod
+    def clean_look(src, base):
+        out = dict(base)
+        if isinstance(src, dict):
+            if "label" in src:
+                out["label"] = re.sub(r"\s+", " ", str(src["label"] or "")).strip()[:40] or base["label"]
+            for k in ("c1", "c2", "bg", "fg"):
+                if k in src and _COL.match(str(src[k])):
+                    out[k] = str(src[k]).lower()
+            if "show_after_s" in src:
+                out["show_after_s"] = _int(src["show_after_s"], 0, 3600, base["show_after_s"])
+            for k in ("show_level", "show_numbers"):
+                if k in src:
+                    out[k] = bool(src[k])
+        return out
+
+    def set_look(self, src):
+        self.look = self.clean_look(src, self.look)
+        self.store.kv_set("hypebar:cfg", self.look)
+        return self.look
+
+    def observe(self, etype, ev):
+        """etype hype_start | hype_level | hype_end (or the legacy 'hype' with phase start/end); anything else is ignored"""
+        if etype == "hype":
+            etype = "hype_end" if str(ev.get("phase") or "") == "end" else "hype_start"
+        if etype not in ("hype_start", "hype_level", "hype_end"):
+            return
+        s = self.st
+        for k in ("level", "progress", "goal", "total"):
+            if ev.get(k) not in (None, ""):
+                s[k] = _int(ev[k], 0, 10**9, s[k])
+        if etype == "hype_start":
+            s.update(active=True, ended_at=0)
+            s["level"] = s["level"] or 1
+        elif etype == "hype_level":
+            s.update(active=True, ended_at=0)
+        else:
+            s.update(active=False, ended_at=time.time())
+
+    def view(self, live=None, now=None):
+        """what the overlay draws: the Host's live hype object wins while it reports a running train, else the pushed state"""
+        now = now or time.time()
+        s = dict(self.st)
+        if isinstance(live, dict) and live.get("state") in ("begin", "progress"):
+            s.update(active=True, ended_at=0, level=_int(live.get("level"), 0, 10**9, s["level"]), progress=_int(live.get("progress"), 0, 10**9, 0),
+                     goal=_int(live.get("goal"), 0, 10**9, 0), total=_int(live.get("total"), 0, 10**9, 0))
+        after = self.look["show_after_s"]
+        visible = bool(s["active"] or (s["ended_at"] and now - s["ended_at"] < after))
+        s["pct"] = min(100, int(s["progress"] * 100 / s["goal"])) if s["goal"] else 0
+        s["visible"], s["look"] = visible, dict(self.look)
+        return s

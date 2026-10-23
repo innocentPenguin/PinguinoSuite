@@ -1749,3 +1749,41 @@ def test_test_events_carry_realistic_text():
     assert gp["amount"] == 42 and gp["message"] != "hello colony"
     assert al.test_event("tip", amount=9)["amount"] == 9
     assert al.test_event("poll")["message"].endswith("?")
+
+
+def test_hypebar_follows_events_and_lingers():
+    import goals
+    h = goals.HypeBar(_kv())
+    assert not h.view()["visible"]
+    h.observe("hype_start", {"level": 1, "progress": 100, "goal": 500, "total": 100})
+    v = h.view()
+    assert v["visible"] and v["pct"] == 20 and v["level"] == 1
+    h.observe("hype_level", {"level": 2, "progress": 250, "goal": 1000})
+    assert h.view()["level"] == 2 and h.view()["pct"] == 25
+    h.observe("hype_end", {"level": 2})
+    t = time.time()
+    assert h.view(now=t + 5)["visible"] and not h.view(now=t + 31)["visible"]
+    h.observe("follow", {"level": 9})
+    assert h.st["level"] == 2                       # unrelated events are ignored
+    h.observe("hype", {"phase": "start"})
+    assert h.st["active"]
+
+
+def test_hypebar_live_state_wins_and_look_is_sanitised():
+    import goals
+    h = goals.HypeBar(_kv())
+    v = h.view({"state": "progress", "level": 4, "progress": 900, "goal": 1000, "total": 5000})
+    assert v["visible"] and v["level"] == 4 and v["pct"] == 90
+    look = h.set_look({"c1": "red", "c2": "#ABCDEF", "label": "  x  y ", "show_after_s": 99999, "show_level": 0})
+    assert look["c1"] == goals.HYPE_LOOK["c1"] and look["c2"] == "#abcdef" and look["label"] == "x y" and look["show_after_s"] == 3600 and look["show_level"] is False
+
+
+class _kv:
+    def __init__(self):
+        self.d = {}
+
+    def kv_get(self, k, d=None):
+        return self.d.get(k, d)
+
+    def kv_set(self, k, v):
+        self.d[k] = v
