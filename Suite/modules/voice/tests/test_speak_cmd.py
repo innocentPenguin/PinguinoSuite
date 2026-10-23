@@ -47,6 +47,35 @@ class SpeakCommand(unittest.TestCase):
         self.assertEqual(r["say"], "")
         self.assertEqual(self.call("!speak")["say"], "")   # never posts to chat itself
 
+    def host_call(self, **kw):
+        body = {"command": "speak", "args": "hello chat", "user": "kara", "redeem": False, **kw}
+        return server.p_chat_command(None, body)
+
+    def test_host_numeric_roles(self):
+        """The Host sends role as a number string, not a name."""
+        self.cfg["tts"]["enabled"] = True
+        self.host_call(role="1")
+        self.host_call(role="2")
+        self.assertEqual(server.brain.got, [])          # viewer, vip: below mod
+        self.host_call(role="3", isMod=True)
+        self.host_call(role="4", isMod=True, isBroadcaster=True)
+        self.assertEqual([e["role"] for e in server.brain.got], ["mod", "broadcaster"])
+
+    def test_redeem_lets_anyone_but_still_needs_the_switch(self):
+        self.host_call(role="1", redeem=True)
+        self.assertEqual(server.brain.got, [])          # tts.enabled is off
+        self.cfg["tts"]["enabled"] = True
+        self.host_call(role="1", redeem=True)
+        self.host_call(role="1")
+        self.assertEqual(len(server.brain.got), 1)
+        self.assertEqual(server.brain.got[0]["role"], "viewer")
+
+    def test_role_of_fallbacks(self):
+        self.assertEqual(server.role_of({"isMod": True, "user": "ivan", "channel": "ivan"}), "broadcaster")
+        self.assertEqual(server.role_of({"isSub": True}), "sub")
+        self.assertEqual(server.role_of({"role": "weird"}), "viewer")
+        self.assertEqual(server.role_of({"role": None}), "viewer")
+
 
 if __name__ == "__main__":
     unittest.main()

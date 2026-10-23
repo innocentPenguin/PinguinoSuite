@@ -248,16 +248,29 @@ def g_export(h, q):
     return ("application/json", json.dumps(c, indent=2, ensure_ascii=False).encode(), {"Content-Disposition": 'attachment; filename="pinguino-voice-setup.json"'})
 
 
+def role_of(b):
+    """The Host sends role as a number ("0" viewer ... "2" vip, "3" mod, "4" broadcaster) plus isMod/isSub/isVip flags; tests and older callers send a name."""
+    r = str(b.get("role") if b.get("role") is not None else "").strip().lower()
+    if r in ROLE_RANK:
+        return r
+    if r.isdigit():
+        n = int(r)
+        return "broadcaster" if n >= 4 else "mod" if n == 3 else "vip" if n == 2 else "sub" if b.get("isSub") is True or str(b.get("isSub")).lower() == "true" else "viewer"
+    if b.get("isBroadcaster") is True or (b.get("isMod") and b.get("user") and b.get("user") == b.get("channel")):
+        return "broadcaster"
+    return "mod" if b.get("isMod") is True else "vip" if b.get("isVip") is True else "sub" if b.get("isSub") is True else "viewer"
+
+
 def p_chat_command(h, b):
     """Host module_command contract. !tts <text> (if enabled, role check) and !voice mute|unmute|stop|again (mods). Always answers silently."""
     cmd, args = str(b.get("command") or "").lower().lstrip("!"), str(b.get("args") or "").strip()
-    role = b.get("role") or ("broadcaster" if b.get("isMod") and b.get("user") == b.get("channel") else "mod" if b.get("isMod") else "sub" if b.get("isSub") else "viewer")
+    role = role_of(b)
     user = str(b.get("user") or "")
     c = brain.cfg
     if cmd in ("tts", "speak"):   # same switch and role check; the final command name is Ivan's call
         if not c["tts"]["enabled"]:
             return {"ok": True, "say": ""}
-        if ROLE_RANK.get(role, 0) < ROLE_RANK[c["tts"]["min_role"]]:
+        if b.get("redeem") is not True and ROLE_RANK.get(role, 0) < ROLE_RANK[c["tts"]["min_role"]]:     # a channel-point redeem was already paid for: anyone
             return {"ok": True, "say": ""}
         r = brain.handle({"kind": "say", "message": args, "user": user, "role": role, "platform": b.get("platform") or "twitch"})
         return {"ok": True, "say": "", "outcome": r.get("outcome")}

@@ -7,5 +7,6 @@ Last updated: 2026-10-23 06:20. Hand-over from the old 06 session: `Docs\session
 - Task 2: audit rounds 2-3, findings in the shared notes (`53-voice-audit23.md`), 11 fixes, tests/test_audit23.py. Tests now 90.
 
 ## Open
-- Tasks 3 (speech intervals + Listen check) and 4 (!speak readiness, module.json version).
+- Task 3: tests/test_intervals.py (4). Listen only uses speaking.json to ignore voice commands (listen/voice.py bot_speaking), it does not skip transcribing; request for 20 sent via 50.
+- Task 4: role bug fixed (Host sends numeric role), redeem path, module.json version 0.9.0, Docs/VOICE.md "!speak: what the Host needs". Tests 97.
 - Needs a Voice restart by 100 to take effect.

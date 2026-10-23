@@ -1,5 +1,6 @@
 {
   "id": "voice",
+  "version": "0.9.0",
   "name": "PenguinComm Speak",
   "desc": "The bot's voice: speaks alerts and chat commands out loud with named personas, your wording, limits and quiet hours. Silent until you switch it on.",
   "cmd": [

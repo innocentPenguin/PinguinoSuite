@@ -63,3 +63,10 @@ Not built on purpose: a second simultaneous Speak output (stream and headphones 
 
 **!speak.** The viewer text-to-speech command is the existing `!tts` path, now also answering to `!speak` (same switch `tts.enabled`, OFF by default; same minimum role `tts.min_role`, default mod; same profanity, link, secret, rate and per-user limits; replies nothing in chat). `speak` was added to module.json `commands`, so the Host must reload manifests to register it. Price is not Speak's job: put it on a channel-points redeem or sub-only role in the Host; Speak only checks role and limits.
 Apply: `Update-Module.bat voice -NoBuild`; the Host must re-read the manifest to route `!speak`.
+
+## !speak: what the Host needs (checked 2026-10-23, worker 53)
+- The Host does not read `commands` in module.json; chat commands reach a module only through an Automation action with a `module_command` step (PinguinoHost\HostAuto.cs ModuleCommand). So `!speak` needs two actions on Actions & Events (none is seeded yet, nothing is spoken until both Speak's switch and the action are on):
+  1. Trigger: chat command `!speak` (alias `!tts`), permission "everyone" (Speak itself checks the role: mod when typed), user cooldown 20 s. Step: module_command, url `http://127.0.0.1:8772/api/chat-command`, command `speak`, as `core`.
+  2. Trigger: channel-point redeem with the reward title Ivan picks, same step plus `"redeem": true`. A redeem lets anyone through (the points were the price); the Host passes the viewer's input as `args`.
+- Speak side is ready: `tts.enabled` (OFF) is the switch; the Host sends `role` as a number ("3" = mod, "4" = broadcaster), which `role_of()` in server.py now understands (before 53's fix a typed `!speak` from a mod was refused). The reply is always silent: nothing is posted to chat.
+- Defaults recommended to Ivan: name `!speak`, 100 channel points, anyone when redeemed, mod when typed. Name and price are his decision.
