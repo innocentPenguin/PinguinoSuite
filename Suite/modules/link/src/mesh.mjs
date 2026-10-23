@@ -11,6 +11,7 @@ import net from 'node:net';
 import crypto from 'node:crypto';
 import { DIR } from './config.mjs';
 import { log } from './log.mjs';
+import { jsonCapped } from './httpcap.mjs';
 import * as ts from './tailscale.mjs';
 
 const TEST = process.env.PINGUINO_MESH_TEST === '1';   // test hook only: allows loopback peers
@@ -68,6 +69,13 @@ export function createMesh(cfg, { port }) {
   };
   save();
   const peerList = () => Object.values(state.peers);
+  /** A name no other device (or this one) uses, so lookups by name can never reach the wrong PC. */
+  const uniqueName = (name, id) => {
+    const taken = n => n.toLowerCase() === String(state.self.name).toLowerCase() || peerList().some(p => p.id !== id && p.name.toLowerCase() === n.toLowerCase());
+    const base = name.slice(0, 60); let n = base, i = 2;
+    while (taken(n)) n = `${base}-${i++}`;
+    return n;
+  };
   const headersFor = p => ({ 'content-type': 'application/json', 'x-link-peer': state.self.id, 'x-link-token': p.outbound });
   const url = (p, route) => `http://${urlHost(p.addr)}:${p.port}${route}`;
 
@@ -87,11 +95,11 @@ export function createMesh(cfg, { port }) {
   async function call(p, route, body, timeout = 1500) {
     const r = R(p.id);
     try {
-      const res = await fetch(url(p, route), { method: 'POST', headers: headersFor(p), body: JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
+      const res = await fetch(url(p, route), { method: 'POST', headers: headersFor(p), body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(timeout) });
       if (res.status === 401) throw new Error('peer no longer trusts this device (unpair and pair again)');
       if (!res.ok) throw new Error(`peer answered ${res.status}`);
       seen(p);
-      return await res.json().catch(() => ({}));
+      return await jsonCapped(res).catch(() => ({}));
     } catch (e) {
       r.fails++; r.nextTry = Date.now() + Math.min(15000, 1000 * 2 ** r.fails);
       const msg = e.name === 'TimeoutError' ? 'no answer' : (e.cause?.code || e.message);
@@ -105,16 +113,16 @@ export function createMesh(cfg, { port }) {
     const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
     if (!p) return null;
     try {
-      const res = await fetch(url(p, route), { method: 'POST', headers: headersFor(p), body: JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
+      const res = await fetch(url(p, route), { method: 'POST', headers: headersFor(p), body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(timeout) });
       if (res.status !== 401) seen(p);
-      return { status: res.status, json: await res.json().catch(() => ({})) };
+      return { status: res.status, json: await jsonCapped(res).catch(() => ({})) };
     } catch (e) { throw Object.assign(new Error(`cannot reach ${p.name}: ${e.name === 'TimeoutError' ? 'no answer' : (e.cause?.code || e.message)}`), { status: 502 }); }
   }
   /** Raw POST to a paired peer by name; returns the fetch Response (caller reads/streams it). Used for update files. */
   async function rawByName(name, route, body, timeout = 30000) {
     const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
     if (!p) throw new Error(`${name} is not paired`);
-    const res = await fetch(url(p, route), { method: 'POST', headers: headersFor(p), body: JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
+    const res = await fetch(url(p, route), { method: 'POST', headers: headersFor(p), body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(timeout) });
     if (res.status === 401) throw new Error('peer no longer trusts this device');
     seen(p);
     return res;
@@ -124,10 +132,10 @@ export function createMesh(cfg, { port }) {
     const p = peerList().find(x => x.name.toLowerCase() === String(name).toLowerCase());
     if (!p) return [{ id: 'hub-obs', label: 'OBS on the hub', status: 'warn', detail: `no hub is paired. If this PC runs OBS and is the only streaming PC: Link page > Settings > Role > hub > confirm. Otherwise pair with "${name}" (needs Tailscale).` }];
     try {
-      const res = await fetch(url(p, '/api/prestream'), { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(url(p, '/api/prestream'), { redirect: 'error', signal: AbortSignal.timeout(5000) });
       if (!res.ok) throw new Error(`hub answered ${res.status}`);
       seen(p);
-      return ((await res.json()).items || []).filter(i => ['obs', 'macros'].includes(i.id)).map(i => ({ id: `hub-${i.id}`, label: `${p.name}: ${i.label}`, status: i.status, detail: i.detail, help: i.help }));
+      return ((await jsonCapped(res)).items || []).filter(i => ['obs', 'macros'].includes(i.id)).map(i => ({ id: `hub-${i.id}`, label: `${p.name}: ${i.label}`, status: i.status, detail: i.detail, help: i.help }));
     } catch (e) { return [{ id: 'hub-obs', label: `OBS on ${p.name}`, status: 'fail', detail: `cannot ask ${p.name}: ${e.cause?.code || e.message}` }]; }
   }
   async function tick() {
@@ -151,34 +159,39 @@ export function createMesh(cfg, { port }) {
   }
 
   // ---- pairing ----
-  const attempts = [];                  // global limiter for unauthenticated pair requests
+  const attempts = new Map();           // source address -> request times; counted only while a code is open
   async function pairRequest(remote, body) {
-    const now = Date.now();
-    while (attempts.length && now - attempts[0] > 60000) attempts.shift();
-    if (attempts.length >= 10) throw fail(429, 'too many pairing attempts');
-    attempts.push(now);
-    if (!pairing || now > pairing.expires) throw fail(403, 'no pairing in progress on this device');
+    const now = Date.now(), who = bare(remote);
+    if (!pairing || now > pairing.expires) throw fail(403, 'no pairing in progress on this device');   // junk sent while nothing is open costs nothing
+    const recent = (attempts.get(who) || []).filter(t => now - t < 60000);
+    if (recent.length >= 10) throw fail(429, 'too many pairing attempts');
+    recent.push(now); attempts.set(who, recent);
+    if (pairing.claimed) throw fail(409, 'another device is already pairing; wait for it to finish');
+    if ((pairing.blocked ||= new Set()).has(who)) throw fail(429, 'too many wrong codes from this device');
     if (!TEST && !isTailnetIp(remote)) throw fail(403, 'pairing is only accepted over Tailscale');
     if (!eq(body?.code, pairing.code)) {
       pairing.attempts++;
-      log('warn', 'pairing', `wrong pairing code from ${bare(remote)} (${pairing.attempts}/3)`);
-      if (pairing.attempts >= 3) { pairing = null; log('warn', 'pairing', 'pairing code cancelled after 3 wrong tries'); }
+      pairing.wrong ||= new Map(); const w = (pairing.wrong.get(who) || 0) + 1; pairing.wrong.set(who, w);
+      log('warn', 'pairing', `wrong pairing code from ${who} (${w}/3 from it, ${pairing.attempts}/30 in total)`);
+      if (w >= 3) pairing.blocked.add(who);                                   // that device is done; the code stays alive for the owner
+      if (pairing.attempts >= 30) { pairing = null; log('warn', 'pairing', 'pairing code cancelled after 30 wrong tries'); }
       throw fail(403, 'wrong code');
     }
     const device = cleanDevice(body.device);
     if (device.id === state.self.id) throw fail(400, 'cannot pair with itself');
     const peerPort = Number(body.port), token = str(body.token, 128);
-    if (!Number.isInteger(peerPort) || peerPort < 1 || peerPort > 65535 || token.length < 32) throw fail(400, 'bad request');
+    if (!Number.isInteger(peerPort) || peerPort < 1 || peerPort > 65535 || !/^[0-9a-f]{32,128}$/.test(token)) throw fail(400, 'bad request');
+    pairing.claimed = true;                              // one request at a time; the code is single use whatever the answer
     const id = rnd(8);
     log('info', 'pairing', `${device.name} (${device.os}) asks to pair; waiting for approval`);
     const ok = await new Promise(decide => {
       pending.set(id, { id, device, remote: bare(remote), port: peerPort, token, decide });
       setTimeout(() => { if (pending.delete(id)) decide(false); }, APPROVE_MS).unref();
     });
+    pairing = null;                                      // single use, also when denied
     if (!ok) { log('warn', 'pairing', `pairing with ${device.name} denied or timed out`); throw fail(403, 'pairing denied or timed out'); }
-    pairing = null;                                      // single use
     const mine = rnd(24);
-    state.peers[device.id] = { ...device, addr: bare(remote), port: peerPort, inbound: token, outbound: mine, paired: new Date().toISOString() };
+    state.peers[device.id] = { ...device, name: uniqueName(device.name, device.id), addr: bare(remote), port: peerPort, inbound: token, outbound: mine, paired: new Date().toISOString() };
     save();
     log('info', 'pairing', `paired with ${device.name}`);
     return { device: state.self, token: mine };
@@ -200,15 +213,18 @@ export function createMesh(cfg, { port }) {
     let res;
     try {
       res = await fetch(`http://${urlHost(ip)}:${peerPort}/api/mesh/pair/request`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json' }, redirect: 'error',
         body: JSON.stringify({ code: String(code || '').trim(), device: state.self, port, token: mine }), signal: AbortSignal.timeout(APPROVE_MS + 10000),
       });
     } catch (e) { throw fail(502, `cannot reach ${ip}:${peerPort} (${e.cause?.code || e.message})`); }
-    const j = await res.json().catch(() => ({}));
+    const j = await jsonCapped(res).catch(() => ({}));
     if (!res.ok) throw fail(res.status === 403 ? 403 : 502, j.error || `peer answered ${res.status}`);
     const device = cleanDevice(j.device), theirs = str(j.token, 128);
-    if (theirs.length < 32) throw fail(502, 'the other device sent no usable pairing token; pairing cancelled');
-    state.peers[device.id] = { ...device, addr: ip, port: peerPort, inbound: theirs, outbound: mine, paired: new Date().toISOString() };
+    if (!/^[0-9a-f]{32,128}$/.test(theirs)) throw fail(502, 'the other device sent no usable pairing token; pairing cancelled');
+    if (device.id === state.self.id) throw fail(502, 'that address answered with this device\'s own id; pairing cancelled');
+    const known = Object.hasOwn(state.peers, device.id) ? state.peers[device.id] : null;
+    if (known && known.addr !== ip) throw fail(502, `${known.name} is already paired from another address; unpair it first. Pairing cancelled`);
+    state.peers[device.id] = { ...device, name: uniqueName(device.name, device.id), addr: ip, port: peerPort, inbound: theirs, outbound: mine, paired: new Date().toISOString() };
     save();
     log('info', 'pairing', `paired with ${device.name}`);
     tick();
@@ -223,7 +239,7 @@ export function createMesh(cfg, { port }) {
   };
   function heartbeat(peerId, token, body) {
     const p = authPeer(peerId, token);
-    if (body?.device?.name) { const n = str(body.device.name); if (n && n !== p.name) { p.name = n; save(); } }
+    if (body?.device?.name) { const n = str(body.device.name); if (n && n !== p.name && uniqueName(n, p.id) === n) { p.name = n; save(); } }   // a name another device already has is ignored
     seen(p);
     return { ok: true, device: state.self };
   }
@@ -255,6 +271,14 @@ export function createMesh(cfg, { port }) {
     }
     return { ok: true };
   }
+  /** Log (once per peer) when a valid token arrives from an address other than the one that was paired. Never blocks. */
+  const odd = new Set();
+  function watchSource(peerId, token, remote) {
+    const id = str(peerId), p = Object.hasOwn(state.peers, id) ? state.peers[id] : null;
+    if (!p || typeof token !== 'string' || typeof p.inbound !== 'string' || !eq(token, p.inbound)) return;
+    const from = bare(remote);
+    if (from !== p.addr && !odd.has(id + from)) { odd.add(id + from); log('warn', 'peer', `${p.name}'s token was used from ${from}, not from the paired address ${p.addr}`); }
+  }
   /** Peer asks us to forget it (it unpaired from its side). */
   function peerUnpaired(peerId, token) {
     const p = authPeer(peerId, token);
@@ -277,7 +301,7 @@ export function createMesh(cfg, { port }) {
       self: state.self,
       peers: peerList().map(p => ({ id: p.id, name: p.name, os: p.os, online: R(p.id).online, last_seen: R(p.id).last_seen || null, error: R(p.id).error })),
       pairing: pairing && Date.now() < pairing.expires ? { code: pairing.code, expires: pairing.expires } : null,
-      pending: [...pending.values()].map(p => ({ id: p.id, name: p.device.name, os: p.device.os, from: p.remote })),
+      pending: [...pending.values()].map(p => ({ id: p.id, name: p.device.name, os: p.device.os, from: p.remote, replaces: Object.hasOwn(state.peers, p.device.id), nameTaken: peerList().some(x => x.id !== p.device.id && x.name.toLowerCase() === p.device.name.toLowerCase()) })),
     };
   }
   function startPairing() {
@@ -301,5 +325,5 @@ export function createMesh(cfg, { port }) {
     setInterval(tick, BEAT_MS).unref();
     tick();
   }
-  return { rawByName, peerNames: () => peerList().map(p => p.name), hubPrestream, hasPeer: name => peerList().some(p => p.name.toLowerCase() === String(name).toLowerCase()), peerAuth: authPeer, callByName, start, tick, status, pairRequest, approve, join, heartbeat, broadcast, receive, peerUnpaired, removePeer, startPairing, setName, getName, prestreamItems };
+  return { rawByName, peerNames: () => peerList().map(p => p.name), hubPrestream, hasPeer: name => peerList().some(p => p.name.toLowerCase() === String(name).toLowerCase()), peerAuth: authPeer, callByName, start, tick, status, pairRequest, approve, join, heartbeat, broadcast, receive, peerUnpaired, watchSource, removePeer, startPairing, setName, getName, prestreamItems };
 }

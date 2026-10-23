@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawn, execFile } from 'node:child_process';
 import { log } from './log.mjs';
+import { readCapped, jsonCapped } from './httpcap.mjs';
 import { installPackage, uninstallModule, rollbackModule } from './pkg.mjs';
 
 const SUITE = fileURLToPath(new URL('../../../../', import.meta.url));   // .../PinguinoSuite/
@@ -116,7 +117,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
     let fetched = 0;
     for (const peer of peers.names()) {
       let items;
-      try { const r = await peers.post(peer, '/api/mesh/updates/list', {}, 8000); if (!r.ok) continue; items = (await r.json()).files || []; } catch { continue; }
+      try { const r = await peers.post(peer, '/api/mesh/updates/list', {}, 8000); if (!r.ok) continue; items = (await jsonCapped(r)).files || []; } catch { continue; }
       const installed = Object.fromEntries(scanModules(modulesRoot).map(m => [m.id, m.version]));
       const live = process.env.PINGUINO_LITE_VERSION || '0.0.0';
       for (const it of items.slice(0, 50)) {
@@ -125,13 +126,13 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
         const ver = zip ? zip[2] : exe[1];
         if (zip ? (zip[1] === 'link' || (installed[zip[1]] && cmpVersion(ver, installed[zip[1]]) <= 0)) : cmpVersion(ver, live) <= 0) continue;
         const dest = path.join(shareDir(dir, it.name), it.name);
-        if (fs.existsSync(dest) && sidecarHash(dest) === it.sha256) continue;
+        if (fs.existsSync(dest)) { if (sidecarHash(dest) !== it.sha256) log('warn', 'lite', `${peer} offers ${it.name} with a different hash than the file already here; kept the old one`); continue; }   // never overwrite
+        if (shareBytes(dir) + it.size > MAX_TOTAL) { log('warn', 'lite', `update folders are full (${Math.round(MAX_TOTAL / 1e6)} MB limit); ${it.name} from ${peer} skipped`); continue; }
         try {
           const r = await peers.post(peer, '/api/mesh/updates/get', { name: it.name }, 120000);
           if (!r.ok) continue;
-          if (Number(r.headers.get('content-length')) > MAX_SHARE) { log('warn', 'lite', `${it.name} from ${peer} is larger than the limit; skipped`); try { await r.body?.cancel(); } catch {} continue; }
-          const buf = Buffer.from(await r.arrayBuffer());
-          if (buf.length > MAX_SHARE || crypto.createHash('sha256').update(buf).digest('hex') !== it.sha256) { log('warn', 'lite', `${it.name} from ${peer} failed the hash check; discarded`); continue; }
+          const buf = await readCapped(r, Math.min(MAX_SHARE, it.size + 1));   // stops reading as soon as the peer sends more than it announced
+          if ( crypto.createHash('sha256').update(buf).digest('hex') !== it.sha256) { log('warn', 'lite', `${it.name} from ${peer} failed the hash check; discarded`); continue; }
           fs.mkdirSync(path.dirname(dest), { recursive: true });
           fs.writeFileSync(dest + '.tmp', buf); fs.renameSync(dest + '.tmp', dest);
           fs.writeFileSync(dest + '.sha256.tmp', it.sha256 + '\n'); fs.renameSync(dest + '.sha256.tmp', dest + '.sha256');
@@ -297,6 +298,12 @@ function unixLiteExe() {
 // ---- sharing update files between this user's own paired PCs (served only to paired peers, see server.mjs) ----
 const SHARE_RE = /^(?:[a-z0-9_-]{1,40}-\d+(?:\.\d+)*\.zip|PinguinoLite-\d+(?:\.\d+)*-setup\.(?:exe|sh))$/;
 const MAX_SHARE = 300 * 1024 * 1024;
+const MAX_TOTAL = 2 * 1024 * 1024 * 1024;     // all fetched + local update files together
+function shareBytes(dir) {
+  let n = 0;
+  for (const sub of ['packages', 'staging']) { try { for (const f of fs.readdirSync(path.join(dir, sub))) { try { n += fs.statSync(path.join(dir, sub, f)).size; } catch {} } } catch {} }
+  return n;
+}
 const shareDir = (dir, name) => path.join(dir, name.endsWith('.zip') ? 'packages' : 'staging');
 const sidecarHash = f => { try { const h = fs.readFileSync(f + '.sha256', 'utf8').trim().split(/\s+/)[0].toLowerCase(); return /^[0-9a-f]{64}$/.test(h) ? h : ''; } catch { return ''; } };
 

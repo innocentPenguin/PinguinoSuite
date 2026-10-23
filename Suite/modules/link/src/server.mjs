@@ -47,7 +47,7 @@ export async function runMacro(cfg, name) {
   if (!hub) throw new Error(`hub "${cfg.hub}" not found on the tailnet`);
   if (!hub.online) { log('warn', 'relay', `hub ${cfg.hub} is offline`); throw new Error(`hub "${cfg.hub}" is offline`); }
   const r = await fetch(`http://${hub.ip}:${cfg.port}/api/macro/${name}`, {
-    method: 'POST', headers: { 'x-link-token': cfg.token }, signal: AbortSignal.timeout(8000),
+    method: 'POST', headers: { 'x-link-token': cfg.token }, redirect: 'error', signal: AbortSignal.timeout(8000),
   });
   if (!r.ok) { log('warn', 'relay', `hub answered ${r.status} for macro ${name}`); throw new Error(`hub said ${r.status}: ${await r.text()}`); }
   return r.json();
@@ -135,6 +135,7 @@ export async function serve(cfg) {
       }
       // Peer routes authenticate themselves (pairing code / per-peer token), not with the module token.
       const peer = [req.headers['x-link-peer'], req.headers['x-link-token']];
+      if (peer[0] && peer[1]) mesh.watchSource(peer[0], peer[1], req.socket.remoteAddress);   // log only
       if (req.method === 'POST' && req.url === '/api/mesh/pair/request') return json(200, await mesh.pairRequest(req.socket.remoteAddress, await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/mesh/heartbeat') return json(200, mesh.heartbeat(...peer, await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/mesh/msg') return json(200, await mesh.receive(...peer, await readJson(req)));
