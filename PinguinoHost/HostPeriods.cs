@@ -24,7 +24,7 @@ namespace PinguinoHost
         public const double DayShiftHours = 0;                  // 0 = local midnight. 4 would keep a stream that runs until 3 am on the day it started.
         public const double XpPerLevelSq = 50;                  // level = 1 + floor(sqrt(xp / 50))
         public const double XpPerMinute = 1, XpPerMessage = 2;
-        public static readonly string[] Known = { "watchtime", "points", "points_spent", "messages", "xp", "gifts", "bits", "follows", "refollows", "commands", "wins" };
+        public static readonly string[] Known = { "watchtime", "points", "points_spent", "points_backpay", "messages", "xp", "gifts", "bits", "follows", "refollows", "commands", "wins" };
         public static readonly string[] Pers = { "day", "week", "month", "year", "all" };
 
         static readonly object L = new object();
@@ -112,6 +112,7 @@ namespace PinguinoHost
             double amount = (double?)o["amount"] ?? 0; long ts = (long?)o["ts"] ?? 0;
             if (user == "" || user == "anonymous" || metric == "" || amount <= 0 || ts <= 0) return;
             if (!string.IsNullOrEmpty(id) && !Ids.Add(id)) return;
+            if (metric == "points" && id != null && (id.StartsWith("ap:backfill:") || id.StartsWith("ap:grant-") || id.StartsWith("ap:backpay"))) metric = "points_backpay";   // back-pay and admin grants are not points GAINED by playing: kept apart (also for lines logged before this rule)
             BumpAll(metric, user, amount, ts, grain);
             double xp = metric == "watchtime" ? amount * XpPerMinute : metric == "messages" ? amount * XpPerMessage : 0;
             if (xp > 0)
@@ -176,7 +177,7 @@ namespace PinguinoHost
         static string Mapped(string metric)
         {
             metric = (metric ?? "").ToLowerInvariant();
-            switch (metric) { case "watch": case "watchtime": case "watch_time": return "watchtime"; case "point": case "points": return "points"; case "spent": case "points_spent": return "points_spent"; case "chat": case "yap": case "messages": return "messages"; case "level": case "levels": case "lvl": return "level"; case "gift": case "gifts": return "gifts"; case "bit": case "bits": return "bits"; case "xp": return "xp"; case "follow": case "follows": return "follows"; case "refollows": return "refollows"; case "command": case "commands": return "commands"; case "win": case "wins": return "wins"; default: return ""; }
+            switch (metric) { case "watch": case "watchtime": case "watch_time": return "watchtime"; case "point": case "points": case "points_gained": case "gained": case "earned": return "points"; case "points_backpay": return "points_backpay"; case "spent": case "points_spent": return "points_spent"; case "chat": case "yap": case "messages": return "messages"; case "level": case "levels": case "lvl": return "level"; case "gift": case "gifts": return "gifts"; case "bit": case "bits": return "bits"; case "xp": return "xp"; case "follow": case "follows": return "follows"; case "refollows": return "refollows"; case "command": case "commands": return "commands"; case "win": case "wins": return "wins"; default: return ""; }
         }
         public static string Metric(string s) { return Mapped(s); }
         static Dictionary<string, double> Folded(string metric, string key)
@@ -280,7 +281,7 @@ namespace PinguinoHost
         public static JObject ForSite()
         {
             var o = new JObject(); Dictionary<string, int> keep = new Dictionary<string, int> { { "day", 14 }, { "week", 12 }, { "month", 1000 }, { "year", 1000 } };
-            foreach (var met in new[] { "watchtime", "points", "messages", "level", "gifts", "bits" })
+            foreach (var met in new[] { "watchtime", "points", "points_gained", "messages", "level", "gifts", "bits" })
             {
                 var pm = new JObject();
                 foreach (var per in Pers)

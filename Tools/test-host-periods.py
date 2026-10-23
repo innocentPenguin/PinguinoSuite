@@ -111,6 +111,16 @@ try:
     chk('backfill: gift lands on its exact day', val('gifts', 'day', '2025-03-03', 'fay') == 5 and val('gifts', 'year', '2025', 'fay') == 5, board('gifts', 'day', '2025-03-03'))
     chk('backfill: bits', val('bits', 'month', '2025-03', 'fay') == 300)
     chk('backfill: month-only messages are in the month, not in a day', val('messages', 'month', '2025-03', 'fay') == 40 and board('messages', 'day', '2025-03-15')['rows'] == [])
+    # ---- points GAINED + watch time across the Oct 31 -> Nov 1 month rollover (Chicago: Oct 31 23:30 CDT = Nov 1 04:30 UTC; Nov 1 00:30 CDT = 05:30 UTC)
+    ev('rollo', 'points', 100, U(2026, 11, 1, 4, 30), 'ap:play-oct'); ev('rollo', 'points', 40, U(2026, 11, 1, 5, 30), 'ap:play-nov')
+    ev('rollo', 'watchtime', 60, U(2026, 11, 1, 4, 30), 'wt-oct'); ev('rollo', 'watchtime', 25, U(2026, 11, 1, 5, 30), 'wt-nov')
+    ev('rollo', 'points', 9000, U(2026, 11, 1, 6, 0), 'ap:backfill:bits:cheer:rollo::1'); ev('rollo', 'points', 5000, U(2026, 11, 1, 6, 0), 'ap:grant-firsts-1-rollo')
+    chk('gained: October month', val('points_gained', 'month', '2026-10', 'rollo') == 100, board('points_gained', 'month', '2026-10'))
+    chk('gained: November month starts at day 1 and leaves out back-pay and grants', val('points_gained', 'month', '2026-11', 'rollo') == 40, board('points_gained', 'month', '2026-11'))
+    chk('watch time rolls over the month', val('watchtime', 'month', '2026-10', 'rollo') == 60 and val('watchtime', 'month', '2026-11', 'rollo') == 25)
+    chk('week/day/year gained agree', val('points_gained', 'day', '2026-11-01', 'rollo') == 40 and val('points_gained', 'year', '2026', 'rollo') == 140, board('points_gained', 'year', '2026'))
+    chk('back-pay is kept apart, not lost', val('points_backpay', 'month', '2026-11', 'rollo') == 14000)
+    site = get('/api/bot/boards') if False else None
     # ---- bad input, old shape
     chk('bad metric refused', board('nope', 'day').get('ok') is False)
     chk('bad period refused', get('/api/boards?metric=points&period=hour').get('ok') is False)

@@ -63,7 +63,7 @@ namespace PinguinoHost
                 led[id] = new JObject { { "login", login }, { "delta", delta }, { "reason", note != "" ? note : source }, { "source", source }, { "note", note }, { "balance", before + delta }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 Save();
             }
-            if (source != "loan" && source != "loan_repay" && source != "depreciation") Periods.Add(login, delta > 0 ? "points" : "points_spent", Math.Abs((double)delta), 0, "ap:" + id);
+            if (source != "loan" && source != "loan_repay" && source != "depreciation") Periods.Add(login, delta < 0 ? "points_spent" : (source == "backpay" || source == "grant") ? "points_backpay" : "points", Math.Abs((double)delta), 0, "ap:" + id);
             return null;
         }
 
