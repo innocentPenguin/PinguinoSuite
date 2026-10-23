@@ -732,7 +732,7 @@ public class CPHInline
     static readonly Dictionary<string, long> _gateAt = new Dictionary<string, long>();
     bool GateTaken(string key, int sec) { long n = Now(), l; if (_gateAt.TryGetValue(key, out l) && n - l < sec) return true; _gateAt[key] = n; return false; }
     // ── GAMES: the Host runs the economy (bets, balances, cooldowns) and reports every finished action as a PgGame event; this turns it into ONE short line with a personality.
-    //    Args: kind (gamble|slots|duel|give), outcome (win|lose|jackpot|challenge|declined|expired|broke|invalid), user (login) + display, amount, payout, balance, opponent, reel (real emoji),
+    //    Args: kind (gamble|slots|duel|give|guess|shop), outcome (win|lose|jackpot|challenge|declined|expired|broke|invalid), user (login) + display, amount, payout, balance, opponent, reel (real emoji),
     //    reason (a ready plain sentence for invalid / expired), currency, timeoutSec, optout ("1" = no banter), gameId (dedupe). The Host decides who posts: it only sends the event when Chatty is
     //    on (Enabled + ChatReplies), otherwise it says its own plain line. Not tied to IsLive: the Host already decided. A heated chat or an opted-out viewer gets the plain result only. ──
     static readonly Dictionary<string, long> _gameSeen = new Dictionary<string, long>();
@@ -748,16 +748,16 @@ public class CPHInline
         string disp = ArgS("display") != "" ? ArgS("display") : login;
         bool plain = ArgS("optout") == "1" || ArgS("optout").ToLower() == "true";
         lock (_lock) { if (!plain && IsHeated()) plain = true; }
-        string line = GameLine(ArgS("kind").ToLower(), ArgS("outcome").ToLower(), disp, ArgL("amount"), ArgL("payout"), ArgL("balance"), ArgS("opponent"), ArgS("reel"), ArgS("reason"), ArgS("currency") != "" ? ArgS("currency") : "points", (int)ArgL("timeoutSec"), plain);
+        string line = GameLine(ArgS("kind").ToLower(), ArgS("outcome").ToLower(), disp, ArgL("amount"), ArgL("payout"), ArgL("balance"), ArgS("opponent"), ArgS("reel"), ArgS("reason"), ArgS("currency") != "" ? ArgS("currency") : "points", (int)ArgL("timeoutSec"), plain, (int)ArgL("tries"));
         if (!string.IsNullOrWhiteSpace(line)) PgSay("chat", line);
     }
     long ArgL(string k) { CPH.TryGetArg(k, out object o); long r; return o != null && long.TryParse(Convert.ToString(o, System.Globalization.CultureInfo.InvariantCulture), out r) ? r : 0; }
     string Pick(params string[] v) { return v[_rng.Next(v.Length)]; }
-    string GameLine(string kind, string outcome, string d, long amt, long pay, long bal, string opp, string reel, string reason, string cur, int timeout, bool plain)
+    string GameLine(string kind, string outcome, string d, long amt, long pay, long bal, string opp, string reel, string reason, string cur, int timeout, bool plain, int tries = 0)
     {
         string at = "@" + d + " "; long net = pay - amt; string sr = reel != "" ? reel + " " : "";
         if (outcome == "broke") return at + (plain ? "you have no " + cur + "." : Pick("you have no " + cur + " right now. Hang out in chat and you will earn some \U0001F427", "you have no " + cur + " at the moment. Chat a bit and come back for a spin!"));
-        if (outcome == "invalid" || outcome == "expired" || outcome == "declined")
+        if (outcome == "invalid" || (outcome == "expired" && kind != "guess") || outcome == "declined")
         {
             if (outcome == "declined") return opp != "" ? "@" + opp + " " + d + " passed on the duel." + (plain ? "" : " Next time!") : null;
             return reason != "" ? at + reason : null;
@@ -777,6 +777,21 @@ public class CPHInline
         {
             if (outcome == "challenge") return "@" + opp + " " + d + " challenges you to a duel for " + amt + " " + cur + "!" + (plain ? " Type !accept" : " \u2694\uFE0F Brave enough? Type !accept") + (timeout > 0 ? " within " + timeout + "s." : ".");
             return plain ? d + " wins the duel against " + opp + " and takes " + pay + " " + cur + "! GG." : Pick(d + " takes down " + opp + " and walks off with " + pay + " " + cur + "! \U0001F94A GG to both.", d + " wins the duel against " + opp + "! +" + pay + " " + cur + " \U0001F3C6 Great fight, " + opp + "!", "the dust settles... " + d + " beats " + opp + " and takes " + pay + " " + cur + "! GG \U0001F427");
+        }
+        if (kind == "shop")
+        {
+            if (outcome == "bought") return at + (plain ? "done! " + amt + " " + cur + " taken, a mod will gift you a sub on Twitch soon." : Pick("done! " + amt + " " + cur + " well spent 🎁 A mod will gift you a sub on Twitch soon, hang tight!", "sub on its way! 🐧 " + amt + " " + cur + " taken, a mod will gift it to you on Twitch soon."));
+            return reason != "" ? at + reason : null;
+        }
+        if (kind == "guess")
+        {
+            string ans = opp;
+            if (outcome == "start") return reason != "" ? at + "Who said this? \"" + reason + "\" Answer with !guess <name>, " + Math.Max(1, tries) + " tries." + (plain ? " Stake " + amt + " " + cur + ", right answer pays " + pay + "." : " Stake " + amt + " " + cur + ", right answer pays " + pay + ". Good luck! 🕵️") : null;
+            if (outcome == "win") return at + (plain ? "Correct! It was " + ans + ". You win " + pay + " " + cur + "!" : Pick("Correct! 🎉 It was " + ans + ". You win " + pay + " " + cur + "! You have " + bal + " now.", "got it! 🕵️ It was " + ans + ", +" + pay + " " + cur + " for you!", "spot on, it was " + ans + "! +" + pay + " " + cur + " 🐧"));
+            if (outcome == "retry") return at + (plain ? "Nope, " + tries + (tries == 1 ? " try" : " tries") + " left." : Pick("nope, " + tries + (tries == 1 ? " try" : " tries") + " left!", "not them! " + tries + (tries == 1 ? " try" : " tries") + " left 🤔", "close, but no. " + tries + (tries == 1 ? " try" : " tries") + " left."));
+            if (outcome == "lose") return at + (plain ? "No luck, it was " + ans + "." : Pick("no luck, it was " + ans + "! Better luck next time 🐧", "so close! It was " + ans + ". Try again later!"));
+            if (outcome == "expired") return at + (plain ? "time is up, it was " + ans + ". Better luck next time!" : Pick("time is up! It was " + ans + ". Better luck next time 🐧", "the clock ran out, it was " + ans + "!"));
+            return reason != "" ? at + reason : null;
         }
         if (kind == "give") return at + "gave " + amt + " " + cur + " to " + opp + "." + (plain ? " Thank you for sharing!" : Pick(" So generous, thank you! \U0001F49B", " That is so kind, thank you for sharing! \U0001F427", " What a legend, thank you! \U0001F49B"));
         return reason != "" ? at + reason : null;

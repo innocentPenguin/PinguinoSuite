@@ -1021,6 +1021,24 @@ public static class Harness
             Check("games: a refusal passes the Host's reason along", Last() == "@Stefan the minimum is 5 points.", Last());
             Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "quiet1" }, { "display", "Quiet1" }, { "amount", 5 }, { "payout", 0 }, { "balance", 5 }, { "optout", "1" }, { "gameId", "g10" } });
             Check("games: an opted-out viewer gets the plain result (no banter)", Last() == "@Quiet1 you lost 5 points. Now at 5.", Last());
+            Game(new Dictionary<string, object> { { "kind", "shop" }, { "outcome", "bought" }, { "item", "get_sub" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 500 }, { "balance", 40 }, { "gameId", "st1" } });
+            Check("games: a Get a sub purchase is ONE line with the price and who gifts it", CPHProxy.Sent.Count == 1 && Last().StartsWith("@Stefan") && Last().Contains("500") && System.Text.RegularExpressions.Regex.IsMatch(Last(), "mod"), Last());
+            Game(new Dictionary<string, object> { { "kind", "shop" }, { "outcome", "invalid" }, { "item", "get_sub" }, { "user", "stefan" }, { "display", "Stefan" }, { "reason", "you already have a sub waiting to be gifted." }, { "gameId", "st2" } });
+            Check("games: a refused shop purchase passes the Host's reason", Last() == "@Stefan you already have a sub waiting to be gifted.", Last());
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "start" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 100 }, { "payout", 200 }, { "tries", 3 }, { "reason", "i cant believe it is already friday" }, { "gameId", "gu1" } });
+            Check("guess: the round start quotes the line, says how to answer, tries and payout, in one line", CPHProxy.Sent.Count == 1 && Last().Contains("\"i cant believe it is already friday\"") && Last().Contains("!guess") && Last().Contains("3 tries") && Last().Contains("200"), Last());
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "retry" }, { "user", "stefan" }, { "display", "Stefan" }, { "tries", 2 }, { "gameId", "gu2" } });
+            Check("guess: a wrong answer says how many tries are left", Last() != null && Last().StartsWith("@Stefan") && Last().Contains("2 tries"), Last());
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "retry" }, { "user", "stefan" }, { "display", "Stefan" }, { "tries", 1 }, { "gameId", "gu3" } });
+            Check("guess: singular 'try' for the last one", Last() != null && Last().Contains("1 try") && !Last().Contains("1 tries"), Last());
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 100 }, { "payout", 200 }, { "balance", 340 }, { "opponent", "bobby" }, { "gameId", "gu4" } });
+            Check("guess: a right answer names the chatter and the winnings", Last() != null && Last().Contains("bobby") && Last().Contains("200"), Last());
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "bobby" }, { "gameId", "gu5" } });
+            Check("guess: out of tries reveals the chatter", Last() != null && Last().Contains("bobby"), Last());
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "expired" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "bobby" }, { "gameId", "gu6" } });
+            Check("guess: a timeout reveals the chatter", Last() != null && Last().Contains("bobby") && Last().Contains("time"), Last());
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "start" }, { "user", "quiet1" }, { "display", "Quiet1" }, { "amount", 100 }, { "payout", 200 }, { "tries", 3 }, { "reason", "hello there" }, { "optout", "1" }, { "gameId", "gu7" } });
+            Check("guess: an opted-out viewer gets the plain start (no banter)", Last() == "@Quiet1 Who said this? \"hello there\" Answer with !guess <name>, 3 tries. Stake 100 points, right answer pays 200.", Last());
             // heated chat: plain result only
             Msg("a1", "stfu you are trash"); Msg("b2", "lol shut up clown"); Msg("a1", "you are so dumb honestly");
             Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 5 }, { "payout", 0 }, { "balance", 5 }, { "gameId", "g11" } });

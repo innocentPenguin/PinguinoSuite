@@ -14,7 +14,7 @@ def chatty(on):   # GameVoice on: the Host sends PgGame events to Chatty instead
 chatty.n = 1
 chatty(False)
 def setcfg(**kw):
-    c = {'cooldownSec': 0}; c.update(kw); json.dump(c, open(cfgp, 'w')); os.utime(cfgp, (time.time() + len(kw) + setcfg.n, time.time() + setcfg.n)); setcfg.n += 1
+    c = {'cooldownSec': 0, 'giveDailyPct': 100}; c.update(kw); json.dump(c, open(cfgp, 'w')); os.utime(cfgp, (time.time() + len(kw) + setcfg.n, time.time() + setcfg.n)); setcfg.n += 1
 setcfg.n = 0
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8997'})
 setcfg(gambleWinChance=1.0, gamblePayout=2.0)
@@ -83,6 +83,17 @@ try:
     chatty(False); time.sleep(1.2)
     n1 = len(events()); r = ask('bob: !gamble 1')
     chk('Chatty off: the plain Host line, no event', len(r) == 1 and len(events()) == n1, (r, len(events()) - n1))
+    # ---- shop: Get a sub purchase through !shop sub (kind=shop) ----
+    json.dump({'settings': {'enabled': True, 'price': 50, 'cooldownHours': 0, 'monthlyCapUser': 5}, 'tickets': []}, open(os.path.join(eco, 'sub_tickets.json'), 'w'))
+    chatty(True); time.sleep(1.2)
+    n2 = len(events()); b0 = bal('carl'); r = ask('carl: !shop sub'); e = events()[n2:]
+    chk('shop: Get a sub purchase -> one PgGame kind=shop, no plain line to the buyer', not [x for x in r if x.startswith('@carl')] and len(e) == 1 and e[0]['kind'] == 'shop' and e[0]['outcome'] == 'bought' and e[0]['item'] == 'get_sub' and e[0]['amount'] == '50' and e[0]['user'] == 'carl' and bal('carl') == b0 - 50, (r, e, bal('carl')))
+    r = ask('carl: !shop sub'); e = events()[n2 + 1:]
+    chk('shop: a refused purchase -> kind=shop invalid with the Host sentence', not [x for x in r if x.startswith('@carl')] and len(e) == 1 and e[0]['outcome'] == 'invalid' and 'waiting' in e[0]['reason'] and bal('carl') == b0 - 50, (r, e))
+    chatty(False); time.sleep(1.2)
+    json.dump({'settings': {'enabled': True, 'price': 50, 'cooldownHours': 0, 'monthlyCapUser': 5}, 'tickets': []}, open(os.path.join(eco, 'sub_tickets.json'), 'w')); time.sleep(0.5)
+    n3 = len(events()); r = ask('dina: !shop sub'); mine = [x for x in r if x.startswith('@dina')]
+    chk('shop: Chatty off -> the plain Host line, no event', len(mine) == 1 and 'a mod will gift you' in mine[0] and len(events()) == n3, (r, len(events()) - n3))
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS gamble'); sys.exit(1 if fails else 0)

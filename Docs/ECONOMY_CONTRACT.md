@@ -86,8 +86,8 @@ One event per finished game action, forwarded like the other Twitch events (even
 
 | arg | meaning |
 |---|---|
-| `kind` | `gamble`, `slots`, `duel`, `give` |
-| `outcome` | `win`, `lose`, `jackpot`, `challenge` (duel offered), `declined`, `expired`, `broke` (balance 0), `invalid` (needs `reason`) |
+| `kind` | `gamble`, `slots`, `duel`, `give`, `guess` (Guess the Chatter), `shop` (shop purchases) |
+| `outcome` | `win`, `lose`, `jackpot`, `challenge` (duel offered), `declined`, `expired`, `broke` (balance 0), `invalid` (needs `reason`). `guess` also: `start`, `retry`, `win`, `lose`, `expired`. `shop`: `bought`, `invalid` |
 | `user`, `display` | the player (login, display name). For a duel result `user` = the winner, `opponent` = the loser; for a challenge `user` = challenger, `opponent` = challenged |
 | `amount`, `payout`, `balance` | stake, total paid out (stake included, as the Host credits it), balance after |
 | `reel` | slots only: the three symbols as real Unicode emoji, e.g. `🍒 🐟 ⭐` (UTF-8, no text codes) |
@@ -95,6 +95,12 @@ One event per finished game action, forwarded like the other Twitch events (even
 | `currency`, `timeoutSec` | currency name; duel accept window |
 | `optout` | `1` for a viewer who opted out: plain result, no banter |
 | `gameId` | unique per action; Chatty drops a repeated id (dedupe) |
+| `item` | `shop` only: the item id (`get_sub`) |
+| `tries` | `guess` only: tries allowed (`start`) or tries left (`retry`) |
+
+**`kind=shop`** (`bought` / `invalid`): `amount` = price paid, `balance` = after, `item`, `reason` = the Host's sentence for `invalid` (e.g. "you already have a sub waiting to be gifted."). Emitted by `SubTickets.HandleBuy` (`!shop sub`). The mod notice to the broadcaster is not a game line and stays a Host line.
+
+**`kind=guess`** (Guess the Chatter): `start` (`user` = player, `amount` = stake, `payout` = 2x, `tries`, `reason` = the quoted old chat line, `timeoutSec`), `retry` (`tries` = left), `win` (`opponent` = the chatter, `payout`, `balance`), `lose` (out of tries, `opponent` = the chatter), `expired` (time ran out, `opponent` = the chatter), `invalid` (`reason`). Templates only, no AI; the quoted line is passed through unchanged.
 
 **One reply guarantee:** the Host decides who posts, before sending. It sends `PgGame` only when Chatty can post (`chat_settings.json`: `Enabled` and `ChatReplies` and `GameVoice`); otherwise it says its own plain line as before. It never does both. Chatty also gives a plain result only (no banter) in a heated chat, and the shared 30 s duplicate guard stays on every send path. Chatty does not check IsLive for `PgGame` (the Host already decided).
 

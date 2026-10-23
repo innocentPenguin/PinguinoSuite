@@ -93,7 +93,11 @@ namespace PinguinoHost
             catch (Exception) { return true; }
         }
         public static readonly List<JObject> Sent = new List<JObject>();   // the last PgGame events (for tests and the Suite), newest last
-        static void Out(Action<string> say, string plain, string kind, string outcome, string user, long amount = 0, long payout = 0, long balance = 0, string opponent = "", string reel = "", string reason = "", string gameId = "", int timeoutSec = 0)
+        public static void GameOut(Action<string> say, string plain, string kind, string outcome, string user, long amount = 0, long payout = 0, long balance = 0, string opponent = "", string reel = "", string reason = "", string gameId = "", int timeoutSec = 0, string item = "", int tries = 0)
+        {
+            Out(say, plain, kind, outcome, user, amount, payout, balance, opponent, reel, reason, gameId, timeoutSec, item, tries);
+        }
+        static void Out(Action<string> say, string plain, string kind, string outcome, string user, long amount = 0, long payout = 0, long balance = 0, string opponent = "", string reel = "", string reason = "", string gameId = "", int timeoutSec = 0, string item = "", int tries = 0)
         {
             if (!ChattyCanPost()) { say(plain); return; }
             string login = (user ?? "").ToLowerInvariant();
@@ -101,7 +105,7 @@ namespace PinguinoHost
             var a = new Dictionary<string, object> {
                 { "eventType", "PgGame" }, { "kind", kind }, { "outcome", outcome }, { "user", login }, { "display", user ?? "" }, { "amount", amount.ToString(CultureInfo.InvariantCulture) }, { "payout", payout.ToString(CultureInfo.InvariantCulture) },
                 { "balance", balance.ToString(CultureInfo.InvariantCulture) }, { "opponent", opponent ?? "" }, { "reel", reel ?? "" }, { "reason", reason ?? "" }, { "currency", Economy.CurrencyName },
-                { "timeoutSec", timeoutSec.ToString(CultureInfo.InvariantCulture) }, { "optout", opt ? "1" : "" }, { "gameId", string.IsNullOrEmpty(gameId) ? Guid.NewGuid().ToString("N") : gameId } };
+                { "timeoutSec", timeoutSec.ToString(CultureInfo.InvariantCulture) }, { "item", item ?? "" }, { "tries", tries.ToString(CultureInfo.InvariantCulture) }, { "optout", opt ? "1" : "" }, { "gameId", string.IsNullOrEmpty(gameId) ? Guid.NewGuid().ToString("N") : gameId } };
             lock (Sent) { var o = new JObject(); foreach (var kv in a) o[kv.Key] = Convert.ToString(kv.Value, CultureInfo.InvariantCulture); Sent.Add(o); if (Sent.Count > 50) Sent.RemoveAt(0); }
             if (HostApi.SimMode) { Console.WriteLine("[pggame] " + Newtonsoft.Json.JsonConvert.SerializeObject(a, Newtonsoft.Json.Formatting.None)); return; }
             System.Threading.Tasks.Task.Run(() => { try { Program.DispatchEvent(a); } catch (Exception ex) { Clog.Warn("gamble", "PgGame event failed, plain line sent: " + ex.Message); try { say(plain); } catch (Exception) { } } });
