@@ -160,7 +160,7 @@ namespace PinguinoHost
         {
             double intervalMin = Math.Max(0.01, PS("WatchIntervalMin")); long ivSec = (long)Math.Round(intervalMin * 60), slack = Math.Min(5, ivSec / 10), gap = Math.Max(150, ivSec / 2);
             JObject w; lock (L) { var d = Doc(); w = d["watch"] as JObject; if (w == null || (string)w["sid"] != sid) d["watch"] = w = new JObject { { "sid", sid }, { "users", new JObject() } }; }
-            var users = (JObject)w["users"]; var here = new HashSet<string>(present); int paidN = 0; long entry = (long)PS("EntryBonus"), arrival = (long)PS("RaidArrival");
+            var users = (JObject)w["users"]; var here = new HashSet<string>(present); StrikeCheckIn.Step(now, here); int paidN = 0; long entry = (long)PS("EntryBonus"), arrival = (long)PS("RaidArrival");
             foreach (var c in here)
             {
                 JObject st; lock (L) st = users[c] as JObject;

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scene Layout Editor</title>
+<!-- Editor for the full-screen scenes (scene.html). Open in a normal browser tab (or embed it in the Suite): http://127.0.0.1:8770/scene-editor.html
+     Drag a widget to move it, drag the corner to resize, edit numbers on the right. Layouts are saved on the Host (/api/scene-layouts); the OBS source switches within 5 s of Activate.
+     ?profile=h|v  ?host=http://127.0.0.1:8770 -->
+<style>
+  :root { --bg:#14161b; --panel:#1d2027; --line:#2c313b; --fg:#e8eaee; --dim:#8b93a1; --accent:#ff8a1f; --blue:#0ac8ff; --ok:#34c759; --bad:#ff453a; }
+  * { box-sizing:border-box; } html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,Segoe UI,Arial,sans-serif; }
+  #app { display:grid; grid-template-columns:1fr 330px; grid-template-rows:auto 1fr; height:100%; }
+  #bar { grid-column:1/3; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line); }
+  #bar .sp { flex:1; }
+  button, select, input, textarea { font:inherit; color:var(--fg); background:#262a33; border:1px solid var(--line); border-radius:6px; padding:5px 9px; }
+  button { cursor:pointer; } button:hover { border-color:var(--accent); } button.pri { background:var(--accent); color:#1a1000; border-color:var(--accent); font-weight:700; } button.bad:hover { border-color:var(--bad); color:var(--bad); }
+  button:disabled { opacity:.45; cursor:default; }
+  #canvasWrap { position:relative; overflow:auto; padding:16px; } #holder { position:relative; margin:0 auto; }
+  #canvas { position:absolute; left:0; top:0; transform-origin:0 0; background:#0b0c10; outline:2px solid #ff3b30; background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px); background-size:100px 100px; }
+  .safe { position:absolute; pointer-events:none; border:2px dashed #34c75988; } .safe.tv { border-color:#ffd60a66; }
+  .wd { position:absolute; border:2px solid #0ac8ff; background:#0ac8ff1a; cursor:move; overflow:hidden; user-select:none; }
+  .wd.sel { border-color:var(--accent); background:#ff8a1f22; box-shadow:0 0 0 3px #ff8a1f55; } .wd.off { border-style:dotted; opacity:.55; }
+  .wd .nm { position:absolute; left:6px; top:4px; background:#000b; padding:2px 8px; border-radius:4px; font:700 20px/1.2 Consolas,monospace; pointer-events:none; z-index:3; }
+  .wd iframe { position:absolute; left:0; top:0; border:0; pointer-events:none; transform-origin:0 0; background:transparent; }
+  .wd .h { position:absolute; right:0; bottom:0; width:34px; height:34px; background:var(--accent); cursor:nwse-resize; z-index:4; opacity:.9; }
+  #side { overflow:auto; border-left:1px solid var(--line); background:var(--panel); padding:10px 12px; }
+  #side h3 { margin:14px 0 6px; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--dim); } #side h3:first-child { margin-top:0; }
+  .row { display:grid; grid-template-columns:90px 1fr; gap:6px 8px; align-items:center; margin:4px 0; } .row input[type=number], .row input[type=text], .row select, .row textarea { width:100%; }
+  .list .it { display:flex; align-items:center; gap:6px; padding:5px 7px; border:1px solid var(--line); border-radius:6px; margin:3px 0; cursor:pointer; } .list .it.sel { border-color:var(--accent); background:#ff8a1f1a; }
+  .list .it .z { margin-left:auto; color:var(--dim); font-size:12px; }
+  .tags { display:flex; flex-wrap:wrap; gap:4px; } .tags label { display:flex; gap:4px; align-items:center; background:#262a33; border:1px solid var(--line); border-radius:6px; padding:2px 7px; }
+  #msg { color:var(--dim); font-size:13px; } #msg.ok { color:var(--ok); } #msg.err { color:var(--bad); }
+  .hint { color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <b>Scene layouts</b>
+    <select id="profile"><option value="h">Horizontal 1920x1080</option><option value="v">Vertical 1080x1920</option></select>
+    <select id="layout"></select><span id="active" class="hint"></span>
+    <button id="bSave" class="pri">Save</button><button id="bSaveAs">Save as…</button><button id="bDup">Duplicate</button><button id="bRen">Rename</button><button id="bAct">Activate</button><button id="bDel" class="bad">Delete</button>
+    <span class="sp"></span>
+    <label><input type="checkbox" id="live"> live preview</label>
+    <label><input type="checkbox" id="snap" checked> snap</label>
+    <label><input type="checkbox" id="safe" checked> safe areas</label>
+    <button id="bUndo">Undo</button>
+    <span id="msg"></span>
+  </div>
+  <div id="canvasWrap"><div id="holder"><div id="canvas"></div></div></div>
+  <div id="side">
+    <h3>Widgets</h3><div class="list" id="wlist"></div>
+    <h3>Selected widget</h3><div id="props"><div class="hint">Click a widget.</div></div>
+    <h3>Game / activity</h3>
+    <div class="row"><span>Layout game</span><input type="text" id="game" list="games" placeholder="e.g. Rocket League"></div><datalist id="games"></datalist>
+    <div class="row"><span></span><button id="bTag">Tag this layout</button></div>
+    <div class="hint">Clone this layout for several games:</div><div class="tags" id="cloneGames"></div>
+    <div class="row"><span></span><button id="bClone">Clone to ticked games</button></div>
+    <div class="row"><span>Auto-switch</span><label><input type="checkbox" id="auto"> follow the current game</label></div>
+    <div class="row"><span>Current game</span><input type="text" id="curGame" list="games"></div>
+    <div class="row"><span></span><button id="bSet">Apply</button></div>
+    <div class="hint" id="resolved"></div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var Q = new URLSearchParams(location.search);
+  var HOST = /[?&]host=([^&]+)/.test(location.search) ? decodeURIComponent(RegExp.$1) : (location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770");
+  var BASE = HOST + "/";
+  var $ = function (id) { return document.getElementById(id); };
+  var profile = Q.get("profile") === "v" ? "v" : "h", SW = 1920, SH = 1080, scale = 1;
+  var data = null, widgets = [], reg = {}, sel = "", name = "", dirty = false, undoStack = [];
+
+  function say(t, cls) { var m = $("msg"); m.textContent = t || ""; m.className = cls || ""; if (t) setTimeout(function () { if (m.textContent === t) m.textContent = ""; }, 4000); }
+  function api(body) {
+    return fetch(HOST + "/api/scene-layouts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ profile: profile }, body)) }).then(function (r) { return r.json(); });
+  }
+  function load(layoutName) {
+    var u = HOST + "/api/scene-layouts?profile=" + profile + (layoutName ? "&layout=" + encodeURIComponent(layoutName) : "") + "&t=" + Date.now();
+    return fetch(u).then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) { say(j.error || "load failed", "err"); return; } setData(j); }).catch(function () { say("Host not reachable", "err"); });
+  }
+  function setData(j) {
+    data = j; SW = j.width; SH = j.height; name = j.name; reg = {}; (j.registry || []).forEach(function (r) { reg[r.id] = r; });
+    widgets = JSON.parse(JSON.stringify(j.layout.widgets)); undoStack = []; dirty = false; if (!reg[sel] && !widgets.some(function (w) { return w.id === sel; })) sel = "";
+    $("profile").value = profile;
+    var ls = $("layout"); ls.innerHTML = ""; j.names.forEach(function (n) { var o = document.createElement("option"); o.value = n; o.textContent = n + (j.tags[n] ? "  [" + j.tags[n] + "]" : "") + (n === j.active ? "  ★" : ""); ls.appendChild(o); }); ls.value = name;
+    $("active").textContent = "active: " + j.active;
+    $("games").innerHTML = (j.games || []).map(function (g) { return "<option value=\"" + g + "\">"; }).join("");
+    $("cloneGames").innerHTML = (j.games || []).map(function (g) { return "<label><input type=\"checkbox\" value=\"" + g + "\"> " + g + "</label>"; }).join("");
+    $("game").value = j.game || ""; $("auto").checked = !!j.autoSwitch; $("curGame").value = j.currentGame || "";
+    $("resolved").textContent = "OBS currently shows: " + (j.resolvedBy === "game" ? "the layout for the current game" : j.resolvedBy === "active" ? "the active layout" : "the layout named in the URL") + " (" + j.name + ")";
+    layoutCanvas(); draw();
+  }
+  function fitCanvas() {
+    var wrap = $("canvasWrap"), aw = wrap.clientWidth - 32, ah = wrap.clientHeight - 32; scale = Math.max(0.1, Math.min(aw / SW, ah / SH, 1));
+    $("holder").style.width = SW * scale + "px"; $("holder").style.height = SH * scale + "px";
+    var c = $("canvas"); c.style.width = SW + "px"; c.style.height = SH + "px"; c.style.transform = "scale(" + scale + ")";
+  }
+  function layoutCanvas() { fitCanvas(); }
+  window.addEventListener("resize", function () { fitCanvas(); });
+
+  function pushUndo() { undoStack.push(JSON.stringify(widgets)); if (undoStack.length > 60) undoStack.shift(); }
+  function mark() { dirty = true; }
+  function byId(id) { return widgets.filter(function (w) { return w.id === id; })[0]; }
+  function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
+
+  function draw() {
+    var c = $("canvas"); c.innerHTML = "";
+    if ($("safe").checked) { [["safe", 0.05], ["tv", 0.10]].forEach(function (s) { var m = Math.round(Math.min(SW, SH) * s[1]), d = document.createElement("div"); d.className = "safe " + s[0]; d.style.cssText = "left:" + m + "px;top:" + m + "px;right:" + m + "px;bottom:" + m + "px"; c.appendChild(d); }); }
+    widgets.slice().sort(function (a, b) { return num(a.z, 1) - num(b.z, 1); }).forEach(function (w) {
+      var r = reg[w.id] || {}, dw = num(r.designW, 400), dh = num(r.designH, 300);
+      var d = document.createElement("div"); d.className = "wd" + (w.id === sel ? " sel" : "") + (w.visible === false ? " off" : ""); d.setAttribute("data-id", w.id);
+      d.style.left = num(w.x, 0) + "px"; d.style.top = num(w.y, 0) + "px"; d.style.width = num(w.w, dw) + "px"; d.style.height = num(w.h, dh) + "px"; d.style.zIndex = String(num(w.z, 1)); d.style.opacity = w.visible === false ? "" : String(num(w.opacity, 1));
+      if ($("live").checked && w.visible !== false) {
+        var s = Math.min(num(w.w, dw) / dw, num(w.h, dh) / dh) * num(w.scale, 1), ox = (num(w.w, dw) - dw * s) / 2, oy = (num(w.h, dh) - dh * s) / 2;
+        var f = document.createElement("iframe"); f.style.width = dw + "px"; f.style.height = dh + "px"; f.style.transform = "translate(" + ox + "px," + oy + "px) scale(" + s + ")";
+        var src = w.src || r.src || ""; var ext = /^https?:/i.test(src); var qs = ext ? [] : ["scene=1", "preview=1"]; var p = w.params || {}; for (var k in p) qs.push(encodeURIComponent(k) + "=" + encodeURIComponent(p[k]));
+        f.src = (ext ? src : BASE + src) + (qs.length ? (src.indexOf("?") >= 0 ? "&" : "?") + qs.join("&") : ""); d.appendChild(f);
+      }
+      var nm = document.createElement("div"); nm.className = "nm"; nm.textContent = (r.label || w.id) + "  " + Math.round(num(w.w, dw)) + "x" + Math.round(num(w.h, dh)); d.appendChild(nm);
+      var h = document.createElement("div"); h.className = "h"; d.appendChild(h);
+      d.addEventListener("pointerdown", function (e) { startDrag(e, w, e.target === h ? "resize" : "move"); });
+      c.appendChild(d);
+    });
+    drawList(); drawProps();
+  }
+  function drawList() {
+    var l = $("wlist"); l.innerHTML = "";
+    widgets.slice().sort(function (a, b) { return num(b.z, 1) - num(a.z, 1); }).forEach(function (w) {
+      var r = reg[w.id] || {}, it = document.createElement("div"); it.className = "it" + (w.id === sel ? " sel" : "");
+      var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = w.visible !== false; cb.title = "visible"; cb.addEventListener("click", function (e) { e.stopPropagation(); }); cb.addEventListener("change", function () { pushUndo(); w.visible = cb.checked; mark(); draw(); });
+      var t = document.createElement("span"); t.textContent = r.label || w.id; var z = document.createElement("span"); z.className = "z"; z.textContent = "z" + num(w.z, 1) + (r.pinned ? " 📌" : "");
+      it.appendChild(cb); it.appendChild(t); it.appendChild(z); it.addEventListener("click", function () { sel = w.id; draw(); }); l.appendChild(it);
+    });
+  }
+  var STYLE = [["radius", "Corner radius", 0, 400, 1], ["rotate", "Rotate °", -360, 360, 1], ["brightness", "Brightness", 0, 3, 0.05], ["saturate", "Saturation", 0, 3, 0.05], ["hue", "Hue °", -360, 360, 1], ["blur", "Blur px", 0, 40, 1]];
+  function drawProps() {
+    var p = $("props"), w = sel ? byId(sel) : null; if (!w) { p.innerHTML = "<div class=\"hint\">Click a widget.</div>"; return; }
+    var r = reg[w.id] || {}, pinned = !!r.pinned; w.params = w.params || {}; w.style = w.style || {};
+    var h = "<div class=\"hint\">" + (r.help || "") + "</div>";
+    [["x", "X", -8000, 8000], ["y", "Y", -8000, 8000], ["w", "Width", 20, 8000], ["h", "Height", 20, 8000]].forEach(function (f) { h += "<div class=\"row\"><span>" + f[1] + "</span><input type=\"number\" data-k=\"" + f[0] + "\" min=\"" + f[2] + "\" max=\"" + f[3] + "\" value=\"" + Math.round(num(w[f[0]], 0)) + "\"></div>"; });
+    h += "<div class=\"row\"><span>Scale</span><input type=\"number\" data-k=\"scale\" step=\"0.05\" min=\"0.1\" max=\"8\" value=\"" + num(w.scale, 1) + "\"></div>";
+    h += "<div class=\"row\"><span>Layer (z)</span><input type=\"number\" data-k=\"z\" min=\"0\" max=\"99\" " + (pinned ? "disabled title=\"pinned on top\"" : "") + " value=\"" + (pinned ? 100 : num(w.z, 1)) + "\"></div>";
+    h += "<div class=\"row\"><span>Opacity</span><input type=\"number\" data-k=\"opacity\" step=\"0.05\" min=\"0\" max=\"1\" value=\"" + num(w.opacity, 1) + "\"></div>";
+    h += "<div class=\"row\"><span>Takeover</span><label><input type=\"checkbox\" data-k=\"takeover\" " + (w.takeover ? "checked" : "") + "> (stored, used later)</label></div>";
+    STYLE.forEach(function (f) { h += "<div class=\"row\"><span>" + f[1] + "</span><input type=\"number\" data-s=\"" + f[0] + "\" step=\"" + f[4] + "\" min=\"" + f[2] + "\" max=\"" + f[3] + "\" value=\"" + (w.style[f[0]] === undefined ? "" : w.style[f[0]]) + "\" placeholder=\"default\"></div>"; });
+    h += "<div class=\"row\"><span>Shadow</span><label><input type=\"checkbox\" data-s=\"shadow\" " + (w.style.shadow ? "checked" : "") + "></label></div>";
+    h += "<div class=\"row\"><span>Background</span><input type=\"text\" data-s=\"bg\" placeholder=\"css colour\" value=\"" + (w.style.bg || "") + "\"></div>";
+    var pl = Object.keys(w.params).map(function (k) { return k + "=" + w.params[k]; }).join("\n");
+    h += "<div class=\"row\"><span>Page params</span><textarea id=\"pp\" rows=\"3\" placeholder=\"layout=sprinkled\">" + pl.replace(/</g, "&lt;") + "</textarea></div>";
+    h += "<div class=\"row\"><span></span><button id=\"bFront\">Bring to front</button></div>";
+    p.innerHTML = h;
+    p.querySelectorAll("input[data-k]").forEach(function (i) { i.addEventListener("change", function () { pushUndo(); var k = i.getAttribute("data-k"); w[k] = i.type === "checkbox" ? i.checked : num(i.value, w[k]); mark(); draw(); }); });
+    p.querySelectorAll("[data-s]").forEach(function (i) { i.addEventListener("change", function () { pushUndo(); var k = i.getAttribute("data-s"); if (i.type === "checkbox") w.style[k] = i.checked; else if (i.value === "") delete w.style[k]; else w.style[k] = k === "bg" ? i.value : num(i.value, 0); mark(); draw(); }); });
+    $("pp").addEventListener("change", function () { pushUndo(); var o = {}; this.value.split("\n").forEach(function (ln) { var i = ln.indexOf("="); if (i > 0) o[ln.slice(0, i).trim()] = ln.slice(i + 1).trim(); }); w.params = o; mark(); draw(); });
+    $("bFront").addEventListener("click", function () { pushUndo(); var mx = 0; widgets.forEach(function (x) { if (!(reg[x.id] || {}).pinned) mx = Math.max(mx, num(x.z, 1)); }); w.z = Math.min(99, mx + 1); mark(); draw(); });
+  }
+
+  function snapv(v, edges) {
+    if (!$("snap").checked) return Math.round(v);
+    var g = Math.round(v / 10) * 10, best = g, bd = 8 / scale;
+    edges.forEach(function (e) { if (Math.abs(e - v) < bd) { bd = Math.abs(e - v); best = e; } }); return Math.round(best);
+  }
+  function startDrag(e, w, mode) {
+    e.preventDefault(); sel = w.id; pushUndo();
+    var sx = e.clientX, sy = e.clientY, ox = num(w.x, 0), oy = num(w.y, 0), ow = num(w.w, 100), oh = num(w.h, 100), moved = false;
+    var mg = Math.round(Math.min(SW, SH) * 0.05), edgesX = [0, SW, mg, SW - mg, SW / 2], edgesY = [0, SH, mg, SH - mg, SH / 2];
+    function mv(ev) {
+      var dx = (ev.clientX - sx) / scale, dy = (ev.clientY - sy) / scale; moved = true;
+      if (mode === "move") {
+        var nx = ox + dx, ny = oy + dy;
+        w.x = snapv(nx, edgesX.concat(edgesX.map(function (e2) { return e2 - ow; }))); w.y = snapv(ny, edgesY.concat(edgesY.map(function (e2) { return e2 - oh; })));
+      } else { w.w = Math.max(20, snapv(ow + dx, edgesX.map(function (e2) { return e2 - ox; }))); w.h = Math.max(20, snapv(oh + dy, edgesY.map(function (e2) { return e2 - oy; }))); }
+      mark(); var d = $("canvas").querySelector("[data-id=\"" + w.id + "\"]"); if (d) { d.style.left = w.x + "px"; d.style.top = w.y + "px"; d.style.width = w.w + "px"; d.style.height = w.h + "px"; }
+    }
+    function up() { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); if (!moved) undoStack.pop(); draw(); }
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); draw();
+  }
+
+  function layoutBody() { return { widgets: widgets, game: $("game").value.trim() || undefined }; }
+  function done(j, ok) { if (j && j.ok) { setData(j); say(ok || "Done", "ok"); } else say((j && j.error) || "failed", "err"); }
+  function ask(t, d) { var v = prompt(t, d || ""); return v === null ? null : v.trim(); }
+  $("profile").addEventListener("change", function () { if (dirty && !confirm("Discard unsaved changes?")) { $("profile").value = profile; return; } profile = $("profile").value; sel = ""; load(); });
+  $("layout").addEventListener("change", function () { if (dirty && !confirm("Discard unsaved changes?")) { $("layout").value = name; return; } load($("layout").value); });
+  $("bSave").addEventListener("click", function () { api({ action: "save", name: name, layout: layoutBody() }).then(function (j) { done(j, "Saved \"" + name + "\""); }); });
+  $("bSaveAs").addEventListener("click", function () { var n = ask("New layout name", name + " copy"); if (!n) return; api({ action: "save", name: n, layout: layoutBody() }).then(function (j) { done(j, "Saved \"" + n + "\""); }); });
+  $("bDup").addEventListener("click", function () { var n = ask("Name of the copy", name + " copy"); if (!n) return; api({ action: "duplicate", from: name, name: n }).then(function (j) { done(j, "Duplicated"); }); });
+  $("bRen").addEventListener("click", function () { var n = ask("New name", name); if (!n || n === name) return; api({ action: "rename", name: name, to: n }).then(function (j) { done(j, "Renamed"); }); });
+  $("bAct").addEventListener("click", function () { var go = function () { api({ action: "activate", name: name }).then(function (j) { done(j, "\"" + name + "\" is now the active layout (OBS follows within 5 s)"); }); }; if (dirty) api({ action: "save", name: name, layout: layoutBody() }).then(go); else go(); });
+  $("bDel").addEventListener("click", function () { if (!confirm("Delete layout \"" + name + "\"?")) return; api({ action: "delete", name: name }).then(function (j) { done(j, "Deleted"); }); });
+  $("bTag").addEventListener("click", function () { api({ action: "tag", name: name, game: $("game").value.trim() }).then(function (j) { if (j.ok) { var keep = widgets; setData(j); if (dirty) widgets = keep; say("Tagged", "ok"); } else say(j.error, "err"); }); });
+  $("bClone").addEventListener("click", function () { var gs = [].slice.call($("cloneGames").querySelectorAll("input:checked")).map(function (i) { return i.value; }); var extra = $("game").value.trim(); if (!gs.length) { say("Tick at least one game", "err"); return; } api({ action: "save", name: name, layout: layoutBody() }).then(function () { return api({ action: "clonetogames", from: name, games: gs }); }).then(function (j) { done(j, "Cloned for " + gs.join(", ")); }); });
+  $("bSet").addEventListener("click", function () { api({ action: "settings", autoSwitch: $("auto").checked, game: $("curGame").value.trim() }).then(function (j) { if (j.ok) { var keep = widgets, d = dirty; setData(j); if (d) { widgets = keep; dirty = true; draw(); } say("Applied", "ok"); } else say(j.error, "err"); }); });
+  $("bUndo").addEventListener("click", function () { var s = undoStack.pop(); if (!s) return; widgets = JSON.parse(s); mark(); draw(); });
+  $("live").addEventListener("change", draw); $("safe").addEventListener("change", draw);
+  window.addEventListener("keydown", function (e) {
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; var w = sel && byId(sel); if (!w) return;
+    var st = e.shiftKey ? 10 : 1, ch = true;
+    if (e.key === "ArrowLeft") { pushUndo(); w.x = num(w.x, 0) - st; } else if (e.key === "ArrowRight") { pushUndo(); w.x = num(w.x, 0) + st; } else if (e.key === "ArrowUp") { pushUndo(); w.y = num(w.y, 0) - st; } else if (e.key === "ArrowDown") { pushUndo(); w.y = num(w.y, 0) + st; } else ch = false;
+    if (ch) { e.preventDefault(); mark(); draw(); }
+  });
+  window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+  load();
+})();
+</script>
+</body>
+</html>

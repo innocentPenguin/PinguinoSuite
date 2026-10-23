@@ -66,11 +66,14 @@ namespace PinguinoHost
             Bool("open", "Queue open", false, "Open or close the customs queue."),
             Bool("recycler", "Recycler allowed", true, "Players who turned !recycle on go back to the end of the queue after a game."),
             Num("inactivityMinutes", "Close after idle", 0, 240, 5, "min", 15, "The queue closes by itself after this many minutes with no activity (0 = never)."),
-            Num("strikeLimit", "Strikes that block joining", 1, 10, 1, "strikes", 3, "At this many strikes (temporary + permanent) a player cannot join customs or the tournament wheel.") }; }
+            Num("strikeLimit", "Strikes that block joining", 1, 10, 1, "strikes", 3, "At this many strikes (temporary + permanent) a player cannot join customs or the tournament wheel."),
+            Bool("checkinOn", "Strike check-in", true, "Quiet: a player with temporary strikes who watches one stretch of the stream loses some, once a day. Never announced."),
+            Num("checkinMinutes", "Check-in watch time", 1, 240, 1, "min", 15, "Continuous minutes watched (live) before the check-in counts."),
+            Num("checkinPerDay", "Strikes removed per day", 1, 10, 1, "strikes", 1, "Temporary strikes removed per player per day. Permanent strikes are never touched.") }; }
         static JObject QueueValues()
         {
             var s = ReadState("live_state.json");
-            return new JObject { { "open", Pick(s["queueOpen"], false) }, { "recycler", Pick(s["recyclerEnabled"], true) }, { "inactivityMinutes", Pick(s["inactivityMinutes"], 15) }, { "strikeLimit", Pick(s["strikeLimit"], 3) } };
+            return new JObject { { "open", Pick(s["queueOpen"], false) }, { "recycler", Pick(s["recyclerEnabled"], true) }, { "inactivityMinutes", Pick(s["inactivityMinutes"], 15) }, { "strikeLimit", Pick(s["strikeLimit"], 3) }, { "checkinOn", StrikeCheckIn.Settings()["on"] }, { "checkinMinutes", StrikeCheckIn.Settings()["minutes"] }, { "checkinPerDay", StrikeCheckIn.Settings()["perDay"] } };
         }
         static List<TF> GamblingFields() { return new List<TF> {
             Bool("enabled", "Gambling on", true, "Master switch for !gamble, !slots, !duel and !give."),
@@ -174,6 +177,9 @@ namespace PinguinoHost
                     if (kv.Key == "open") RunAsStreamer("!queue " + ((bool)kv.Value ? "open" : "close"));
                     else if (kv.Key == "recycler") RunAsStreamer("!tune recycler " + ((bool)kv.Value ? "on" : "off"));
                     else if (kv.Key == "strikeLimit") RunAsStreamer("!tune strikes " + (long)kv.Value);
+                    else if (kv.Key == "checkinOn") StrikeCheckIn.SetSetting("on", kv.Value);
+                    else if (kv.Key == "checkinMinutes") StrikeCheckIn.SetSetting("minutes", kv.Value);
+                    else if (kv.Key == "checkinPerDay") StrikeCheckIn.SetSetting("perDay", kv.Value);
                     else RunAsStreamer("!tune idle " + (long)kv.Value);
                     applied[kv.Key] = kv.Value;
                 }

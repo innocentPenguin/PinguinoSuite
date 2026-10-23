@@ -4880,6 +4880,33 @@ public class CPHInline
         if (n > 0) { SavePlayers(); _standingsDirty = true; _stateDirty = true; CPH.LogInfo("[BVQ] Strike check: temporary strikes updated for " + n + " player(s)."); }
     }
 
+    // Strike check-in: the Host (watch tracking) queues "this player has watched long enough today"; temporary strikes only, permanent ones are never touched. Quiet: no chat line. The Host logs each removal in the mod audit.
+    void ApplyStrikeCheckIns()
+    {
+        try
+        {
+            string qf = Path.Combine(_dataDir, "runtime", "strike_checkin_queue.json"); if (!File.Exists(qf)) return;
+            var q = JObject.Parse(File.ReadAllText(qf).TrimStart((char)0xFEFF)); File.Delete(qf);
+            var done = new List<string>();
+            foreach (var r in (q["items"] as JArray ?? new JArray()).OfType<JObject>())
+            {
+                string login = ((string)r["login"] ?? "").ToLowerInvariant(); int left = Math.Max(1, (int?)r["n"] ?? 1); Player p;
+                if (!_players.TryGetValue(login, out p)) continue;
+                int before = K(p, false).Strikes + K(p, true).Strikes, want = left;
+                foreach (var fn in new[] { false, true }) { var kk = K(p, fn); int take = Math.Min(left, kk.Strikes); if (take <= 0) continue; kk.Strikes -= take; left -= take; }
+                int removed = want - left; if (removed <= 0) continue;
+                done.Add(new JObject { { "at", Now() }, { "login", login }, { "removed", removed }, { "before", before }, { "after", before - removed } }.ToString(Newtonsoft.Json.Formatting.None));
+            }
+            if (done.Count > 0)
+            {
+                SavePlayers(); _standingsDirty = true; _stateDirty = true;
+                File.AppendAllText(Path.Combine(_dataDir, "runtime", "strike_checkin_done.jsonl"), string.Join("\n", done) + "\n");
+                CPH.LogInfo("[BVQ] Strike check-in: " + done.Count + " player(s) lost a temporary strike.");
+            }
+        }
+        catch (Exception ex) { CPH.LogInfo("[BVQ] Strike check-in failed: " + ex.Message); }
+    }
+
     bool HandleStrike(string user, string input, bool isPrivileged, int delta)
     {
         if (!isPrivileged) { Say("@" + user + " Only mods can " + (delta > 0 ? "give" : "remove") + " strikes."); return true; }
@@ -4962,6 +4989,7 @@ public class CPHInline
     void ApplyLive(bool live)
     {
         DecayStrikes(Now());
+        ApplyStrikeCheckIns();
         if (live)
         {
             if (!_settings.WasLive)
