@@ -1282,8 +1282,8 @@ def test_alert_media_library_and_host_import(tmp_path, monkeypatch):
     import alerts
     monkeypatch.setattr(alert_media, "DIR", tmp_path / "lib")
     assert alert_media.safe_name("../../evil.exe") == "" and alert_media.safe_name("My Sound!.WAV") == "My_Sound_.WAV"
-    n = alert_media.save("ding.wav", b"RIFFxxxx")
-    assert alert_media.save("ding.wav", b"RIFFyyyy") != n                               # never overwrites
+    n = alert_media.save("ding.wav", b"RIFF\0\0\0\0WAVEx")
+    assert alert_media.save("ding.wav", b"RIFF\0\0\0\0WAVEy") != n                               # never overwrites
     assert [f["kind"] for f in alert_media.listing()] == ["sound", "sound"]
     try:
         alert_media.save("x.exe", b"1")
@@ -1626,6 +1626,17 @@ def test_host_status_reports_unreachable_host(monkeypatch):
         host_feed._get("/api/live-state")
     j = TestClient(server.app, base_url="http://127.0.0.1:8766").get("/api/host-status").json()
     assert j["up"] is False and j["url"] == "http://127.0.0.1:1" and j["error"]
+    import urllib.error
+
+    class Boom:
+        def __enter__(self):
+            raise urllib.error.HTTPError("u", 404, "nf", {}, None)
+        def __exit__(self, *a):
+            return False
+    monkeypatch.setattr(host_feed.urllib.request, "urlopen", lambda *a, **k: Boom())
+    with pytest.raises(urllib.error.HTTPError):
+        host_feed._get("/api/live-state")
+    assert host_feed.status()["up"] is True and "404" in host_feed.status()["error"]       # the Host answered: reachable, just no such route
 
 
 def test_dedupe_by_real_id_only_when_there_is_one(tmp_path):
@@ -1903,3 +1914,69 @@ def test_clip_hosts_are_twitch_only_unless_rehearsal_env(monkeypatch):
     monkeypatch.setattr(al, "_EXTRA", ["127.0.0.1:8785"])
     assert al.Engine._clip(c, ev("http://127.0.0.1:8785/clip.webm"))["url"].endswith("clip.webm")
     assert al.Engine._clip(c, ev("http://127.0.0.1:9999/clip.webm")) is None
+
+
+def test_alert_media_upload_edge_cases(tmp_path, monkeypatch):
+    import alert_media
+    import pytest
+    import server
+    from fastapi.testclient import TestClient
+    monkeypatch.setattr(alert_media, "DIR", tmp_path / "lib")
+    monkeypatch.setattr(alert_media, "MAX_BYTES", 2000)
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    wav, png = b"RIFF\0\0\0\0WAVE" + b"x" * 20, bytes.fromhex("89504e470d0a1a0a") + b"x" * 20
+    up = lambda name, data: c.post("/api/alerts/media", params={"name": name}, content=data, headers={"Content-Type": "application/octet-stream"})
+    assert up("big.wav", wav + b"x" * 3000).status_code == 413 or up("big.wav", wav + b"x" * 3000).status_code == 400   # oversize (header or body check)
+    assert up("empty.wav", b"").status_code == 400
+    assert up("run.exe", b"MZ" + b"x" * 20).status_code == 400 and up("page.html", b"<html>").status_code == 400 and up("pic.svg", b"<svg/>").status_code == 400
+    assert up("fake.png", b"<html><script>alert(1)</script>").status_code == 400            # right extension, wrong content
+    assert up("noext", wav).status_code == 400 and up("", wav).status_code == 400
+    ok = up("ding.wav", wav)
+    assert ok.status_code == 200 and ok.json()["name"] == "ding.wav"
+    assert up("ding.wav", wav).json()["name"] == "ding_1.wav"                                # collisions never overwrite
+    assert up("DING.wav", wav).json()["name"] not in ("ding.wav", "DING.wav")                # Windows names are case-insensitive
+    for evil in ("../../evil.wav", r"..\..\evil.wav", "/etc/passwd.wav", "a/../../b.png", "..%2f..%2fx.png"):
+        r = up(evil, wav if evil.endswith("wav") else png)
+        assert r.status_code == 200 and "/" not in r.json()["name"] and "\\" not in r.json()["name"]
+    assert all((tmp_path / "lib" / f["name"]).parent == tmp_path / "lib" for f in alert_media.listing())
+    assert not (tmp_path / "evil.wav").exists()
+    assert up("CON.wav", wav).json()["name"] == "_CON.wav"                                   # Windows device names
+    # delete while in use: refused (and says where) unless forced; unknown / traversal names never touch other files
+    cfg = server.alert_engine.cfg
+    prof = cfg["profiles"][cfg["active"]]["types"]
+    old = prof["follow"]["sound"].get("url")
+    prof["follow"]["sound"]["url"] = "/alert-media/ding.wav"
+    try:
+        r = c.post("/api/alerts/media/delete", json={"name": "ding.wav"}).json()
+        assert r["ok"] is False and r["in_use"] and (tmp_path / "lib" / "ding.wav").exists()
+        assert c.post("/api/alerts/media/delete", json={"name": "ding.wav", "force": True}).json()["ok"] is True
+        assert not (tmp_path / "lib" / "ding.wav").exists()
+    finally:
+        prof["follow"]["sound"]["url"] = old
+    outside = tmp_path / "keep.wav"
+    outside.write_bytes(wav)
+    assert c.post("/api/alerts/media/delete", json={"name": "../keep.wav"}).json()["ok"] is False and outside.exists()
+    assert c.post("/api/alerts/media/delete", json={"name": "nothing.wav"}).json()["ok"] is False
+    with pytest.raises(ValueError):
+        alert_media.save("x.mp3", b"just text, not audio")
+    assert alert_media.save("t.mp3", b"ID3\x04\0\0")
+
+
+def test_intro_retries_after_host_outage(tmp_path):
+    import asyncio
+    import intros
+    from models import ChatMessage
+    st = Store(str(tmp_path / "r.db"))
+    got, up, now = [], [False], [1000.0]
+    fetch = lambda platform, uid: {"text": "back online", "status": "approved"} if up[0] else None
+    it = intros.Intros(st, lambda ev: (got.append(ev) or (True, "queued")), lambda: 1, fetch=fetch, clock=lambda: now[0])
+    msg = lambda **kw: ChatMessage(id="m", platform="twitch", channel="c", user_id="v1", user="v1", display="V1", text="hello", ts=1.0, **kw)
+
+    async def go():
+        assert not await it.observe(msg(flags=["new"]))        # Host down on their first message
+        assert not await it.observe(msg())                     # a plain message inside the 60 s cache: nothing
+        up[0], now[0] = True, now[0] + 61
+        assert await it.observe(msg())                         # next message after the cache, Host is back: the intro plays now
+        assert not await it.observe(msg())                     # and only once
+    asyncio.run(go())
+    assert len(got) == 1 and got[0]["message"] == "back online"

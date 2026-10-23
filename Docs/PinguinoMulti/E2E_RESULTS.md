@@ -124,3 +124,27 @@ Not covered: shoutout clip playback (needs a Twitch clip host, see item 4), audi
 `Suite/modules/multi/scripts/fake_host.py` is a stand-in Host: `serve` answers GET /api/intro/viewer (and /api/intro) with `{text, sound_id, status:"approved"}` and serves a test clip; `shoutout` fires a shoutout with that clip through POST /api/alerts/fire. Run Multi with `MULTI_HOST_URL=http://127.0.0.1:<fake port>` and `MULTI_CLIP_EXTRA_HOSTS=127.0.0.1:<fake port>` (both rehearsal-only; production clip hosts stay Twitch-only).
 Result in the browser: a first-time chatter message -> "NewPenguin has arrived / Hi chat, ..." intro card; the shoutout card plays the clip after the 10 s delay with the progress bar, then the clip-only card now fades out with the clip (it used to linger empty).
 Finding: Multi asks the Host for `/api/intro/viewer`, NOT `/api/intro` (the plain path is the Host's old sub-intro video system and answers 200 with its settings/queue; that 200 was not a viewer intro). The Host must answer `/api/intro/viewer?platform=&user_id=` with status "approved" for intros to play.
+
+## Full-Host rehearsal, all paths at once (2026-10-23, worker 41, `scripts/rehearse.py`)
+Rig: Multi in-process on a throwaway DB (port 8788) + `scripts/fake_host.py` (viewer intros by user-id prefix: ok / pending / link / long / err = HTTP 500 / slow = 4 s), a recorder on the engine's emit, real Host-style `POST /api/alerts/fire`, chat messages injected into the inbox so intros come through the real pipeline. ~4 min, `/obs/alerts` open in the browser pane without `?demo` the whole time. Run it again with `python scripts/rehearse.py` (exits 1 on any problem). Nothing left this PC, nobody went live.
+
+Fired at once: 7-alert mixed burst on a paused queue, 6 first-time viewers (+ a repeat message), 3 shoutouts (webm clip, `.mkv` clip, clip from a disallowed host), hype_start/level/end, tip (+ the same id again), gamble_win, shop, guess, loan, give, 12 follows, an unknown Host type, and the Host stopped for ~15 s in the middle with new viewers chatting.
+
+Result (last run: 23 shows = 23 ends, queue drained, longest idle gap between alerts 0 s beyond a shoutout's own "delay before it plays"):
+- Queue order is right: raid (9) > tip/gift/hype_start (8, in arrival order) > sub/hype_level (7) > cheer/gamble (6) > intro/guess (5) > shop/custom (4) > follows (3, merged 4-into-1 while queued).
+- No duplicates: the repeated tip id and the doubled intro (two messages from one viewer in the same tick) were dropped as "already fired (replay)". `loan`/`give` log "skipped: type disabled". The unknown Host type plays as "Other event" with the Host's text.
+- Intros: approved plays once; pending, link text, 300-char text and HTTP 500 never play; a Host slower than 2.5 s plays nothing (no stall).
+- Shoutouts: playable-host clip makes a video card; `.mkv` (not playable) falls back to the name card at once (seen in the overlay DOM); a clip from a disallowed host plays as a plain name card (clip dropped, shoutout kept).
+- Overlay: followed every show, never stuck on an old card, text-only cards leave on time.
+- Editor feed (`/api/alerts` log): every alert shows queued -> fired, merges and duplicates and disabled skips are listed with the reason.
+
+Defects found and fixed:
+1. **A viewer whose first message met a dead/slow Host never got their intro** (the `new` flag only exists on the first message). Now a failed lookup (no answer, not "no intro") puts the viewer on a retry list: their next message after the 60 s cache asks again. Test `test_intro_retries_after_host_outage`.
+2. **"Host unreachable" banner when the Host merely answered 404/500**: `host_feed._get` now counts an HTTP error answer as reachable (`up: true`, error says `HTTP 404 on /api/...`). Test added to the host-status test.
+3. Rig-only: the stdlib fake Host refused some of 7 simultaneous lookups (listen backlog 5), which looked like a Multi bug until the retry list showed it; the rig now uses a backlog of 128.
+
+Not covered: a truly playable mp4/webm clip (no ffmpeg here; webm playback was checked earlier with a browser-recorded clip), and real Twitch clip hosts (rehearsal env only allows the fake Host).
+
+## Media upload edge cases (2026-10-23, worker 41)
+Checked on the real routes with TestClient (`test_alert_media_upload_edge_cases`): oversize (413/400), empty, wrong extension (exe, html, svg, no extension, empty name), right extension but wrong bytes (html named .png, text named .mp3), name collisions (`ding_1.wav`, case-insensitive), traversal (`../../x.wav`, `..\..\x.wav`, `/etc/passwd.wav`, `a/../../b.png`, `..%2f..%2fx.png`: all end up inside the library with a plain name, nothing written outside), delete of a name outside the library or unknown (no file touched).
+Fixed: (1) content sniffing so a renamed non-media file is refused; (2) Windows device names (CON, NUL, COM1...) get a leading `_` instead of opening a device; (3) **delete while in use**: an alert type that still points at the file now blocks the delete (`{ok:false,in_use:["Penguin: follow"]}`), `force:true` deletes anyway. The editor has no delete button, so nothing in the UI changes.

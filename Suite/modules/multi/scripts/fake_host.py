@@ -9,6 +9,8 @@ Point Multi at it with MULTI_HOST_URL=http://127.0.0.1:8798 and allow its clip h
 import argparse
 import json
 import pathlib
+import time
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -32,10 +34,29 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "*")
         self.end_headers()
 
+    def _viewer_intro(self, uid):
+        """user ids pick a behaviour so a rehearsal can hit every case: pending / link / long / err / slow, anything else = approved"""
+        if uid.startswith("pending"):
+            return self._send(200, dict(INTRO, status="pending"))
+        if uid.startswith("link"):
+            return self._send(200, dict(INTRO, text="follow me at example.com for more"))
+        if uid.startswith("long"):
+            return self._send(200, dict(INTRO, text="x" * 300))
+        if uid.startswith("err"):
+            return self._send(500, {"ok": False})
+        if uid.startswith("slow"):
+            time.sleep(4)
+        self._send(200, dict(INTRO, text=f"Hi chat, {uid} has arrived!"))
+
     def do_GET(self):
         path = self.path.split("?")[0]
-        if path in ("/api/intro", "/api/intro/viewer"):
+        if path == "/api/intro/viewer":
+            uid = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("user_id") or [""])[0]
+            return self._viewer_intro(uid)
+        if path == "/api/intro":
             return self._send(200, INTRO)
+        if path == "/clip.mkv":                           # a clip the browser cannot play (not mp4/webm): the overlay must fall back to the text card
+            return self._send(200, b"not a video", "video/x-matroska")
         for name, ctype in (("clip.mp4", "video/mp4"), ("clip.webm", "video/webm")):
             if path == "/" + name and (HERE / name).is_file():
                 return self._send(200, (HERE / name).read_bytes(), ctype)

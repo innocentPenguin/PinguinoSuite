@@ -382,7 +382,12 @@ async def alerts_media_upload(request: Request, name: str = ""):
 
 @app.post("/api/alerts/media/delete")
 async def alerts_media_delete(request: Request):
-    return {"ok": alert_media.delete(str((await request.json()).get("name") or ""))}
+    b = await request.json()
+    n = alert_media.safe_name(str(b.get("name") or ""))
+    use = alert_media.used_by(alert_engine.cfg, n) if n else []
+    if use and not b.get("force"):                      # an alert still plays this file: say where instead of leaving it silent/broken
+        return {"ok": False, "in_use": [f"{p}: {t}" for p, t in use]}
+    return {"ok": alert_media.delete(n)}
 
 
 @app.post("/api/alerts/import-host")

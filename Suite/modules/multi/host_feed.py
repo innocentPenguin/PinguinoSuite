@@ -86,6 +86,9 @@ def _get(path):
     try:
         with urllib.request.urlopen(HOST + path, timeout=3) as r:
             d = json.loads(r.read())
+    except urllib.error.HTTPError as e:                  # the Host answered (even with 404/500): it is reachable
+        STATE.update(up=True, last_ok=time.time(), error=f"HTTP {e.code} on {path.split('?')[0]}")
+        raise
     except Exception as e:
         STATE.update(up=False, error=type(e).__name__)
         raise

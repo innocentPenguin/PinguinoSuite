@@ -14,10 +14,35 @@ MAX_BYTES = 25 * 1024 * 1024
 HOST_SOUND_TYPES = ("follow", "sub", "resub", "gift", "cheer", "raid")
 
 
+_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}     # Windows device names stay devices even with an extension
+
+
 def safe_name(name):
-    base = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(str(name or "")).name).strip("._")[:80]
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name or "").replace("\\", "/").rsplit("/", 1)[-1]).strip("._")[:80]
     ext = Path(base).suffix.lower()
-    return base if base and ext in EXT else ""
+    if not base or ext not in EXT:
+        return ""
+    return "_" + base if Path(base).stem.lower() in _RESERVED else base
+
+
+_MAGIC = {".png": bytes.fromhex("89504e470d0a1a0a"), ".gif": b"GIF8", ".webm": bytes.fromhex("1a45dfa3"), ".ogg": b"OggS"}
+
+
+def sniff_ok(ext, d):
+    """the bytes must look like what the extension says (a renamed text/html/exe file is refused); mp3 is lenient (ID3 tag or a frame sync early on)"""
+    if ext in _MAGIC:
+        return d.startswith(_MAGIC[ext])
+    if ext in (".jpg", ".jpeg"):
+        return d[:3] == bytes.fromhex("ffd8ff")
+    if ext == ".webp":
+        return d[:4] == b"RIFF" and d[8:12] == b"WEBP"
+    if ext == ".wav":
+        return d[:4] == b"RIFF" and d[8:12] == b"WAVE"
+    if ext in (".mp4", ".m4a"):
+        return d[4:8] == b"ftyp"
+    if ext == ".mp3":
+        return d[:3] == b"ID3" or any(d[i] == 0xFF and d[i + 1] & 0xE0 == 0xE0 for i in range(min(len(d) - 1, 65536)))
+    return False
 
 
 def save(name, data):
@@ -28,6 +53,8 @@ def save(name, data):
         raise ValueError("file too large (max 25 MB)")
     if not data:
         raise ValueError("empty file")
+    if not sniff_ok(Path(n).suffix.lower(), data):
+        raise ValueError("the file content does not match its type (" + Path(n).suffix.lower() + ")")
     DIR.mkdir(parents=True, exist_ok=True)
     p, stem, i = DIR / n, Path(n).stem, 1
     while p.exists():                                  # never overwrite a file an alert may be using
@@ -44,9 +71,20 @@ def listing():
             for f in sorted(DIR.iterdir(), key=lambda x: x.name.lower()) if f.is_file()]
 
 
+def used_by(cfg, name):
+    """alert types (in any profile) whose config still points at this file: [(profile, type)]"""
+    url, out = "/alert-media/" + name, []
+    for pn, prof in (cfg.get("profiles") or {}).items():
+        for t, tc in (prof.get("types") or {}).items():
+            if url in json.dumps(tc):
+                out.append((pn, t))
+    return out
+
+
 def delete(name):
-    p = DIR / safe_name(name)
-    if p.is_file() and p.parent == DIR:
+    n = safe_name(name)
+    p = DIR / n
+    if n and p.is_file() and p.parent == DIR:
         p.unlink()
         return True
     return False

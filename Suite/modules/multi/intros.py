@@ -48,6 +48,7 @@ def fetch_host(platform, user_id):
 class Intros:
     def __init__(self, store, submit, epoch, fetch=fetch_host, clock=time.time):
         self.store, self.submit, self.epoch, self.fetch, self.clock = store, submit, epoch, fetch, clock
+        self.retry = set()                                  # viewers whose lookup FAILED (Host down/slow): their next message asks again, since "new" only flags the first one
         self.miss = {}                                      # (platform, user_id) -> ts of a "no intro" answer (cached 60 s)
         s = store.kv_get("intro:played") or {}
         self.stream, self.played = s.get("stream", 0), set(s.get("users", []))
@@ -63,7 +64,7 @@ class Intros:
     def wants(self, m):
         fl = m.flags or []
         return bool(config.settings().get("intro_enabled", True) and m.user_id and not m.is_bot and not m.is_self
-                    and (m.first_time or "new" in fl or "returning" in fl))
+                    and (m.first_time or "new" in fl or "returning" in fl or f"{m.platform}:{m.user_id}" in self.retry))
 
     async def observe(self, m):
         """Never raises. Returns True when an intro was queued."""
@@ -76,6 +77,12 @@ class Intros:
             if key in self.played or now - self.miss.get(key, 0) < 60:
                 return False
             d = await asyncio.to_thread(self.fetch, m.platform, m.user_id)
+            if d is None:                                    # the Host could not answer: not a "no intro", try again on their next message (after the 60 s cache)
+                self.miss[key] = now
+                if len(self.retry) < 500:
+                    self.retry.add(key)
+                return False
+            self.retry.discard(key)
             if not d or d.get("status") != "approved" or not d.get("approved", True) or "text" not in d:
                 self.miss[key] = now
                 self.stats["none"] += 1
