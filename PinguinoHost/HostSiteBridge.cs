@@ -177,7 +177,8 @@ namespace PinguinoHost
             var c = Cfg();
             return new JObject { { "currency", Economy.CurrencyName }, { "items", new JObject {   // the site's final contract (Docs/SHOP_BRIDGE.md section 5)
                 { "guess", new JObject { { "min", I(c, "MinStake") }, { "max", I(c, "MaxStake") }, { "payoutMultiplier", 2 }, { "cooldownUser", I(c, "UserCooldownSec") }, { "cooldownGlobal", I(c, "GlobalCooldownSec") } } },
-                { "chatty", new JObject { { "price", I(c, "BuyChattyPrice") } } } } } };
+                { "chatty", new JObject { { "price", I(c, "BuyChattyPrice") } } },
+                { "getsub", new JObject { { "enabled", SubTickets.Enabled() }, { "price", SubTickets.Price() } } } } } };
         }
 
         /// <summary>The site sends its item ids (guess-the-chatter, buy-chatty); the short keys and the old names are accepted too.</summary>
@@ -186,6 +187,7 @@ namespace PinguinoHost
             item = (item ?? "").ToLowerInvariant().Replace('-', '_');
             if (item == "guess" || item == "guess_the_chatter" || item == "guess_chatter") return "guess_chatter";
             if (item == "chatty" || item == "buy_chatty") return "buy_chatty";
+            if (item == "getsub" || item == "get_sub" || item == "sub") return "get_sub";
             return item;
         }
 
@@ -260,6 +262,11 @@ namespace PinguinoHost
                     d["game"] = new JObject { { "id", id }, { "login", login }, { "stake", stake }, { "line", line }, { "answer", who }, { "at", now }, { "guesses", 0 } };
                     Record(d, id, login, item, "accepted", 0, "Who said this? \"" + (line.Length > 110 ? line.Substring(0, 110) : line) + "\" Answer in chat with !guess <name>, " + I(c, "MaxGuesses") + " tries.", false); Save(d); return;
                 }
+                if (item == "get_sub")
+                {
+                    string tid; string serr = SubTickets.Buy(login, id, out tid); if (serr != null) { no(serr); return; }
+                    Record(d, id, login, item, "accepted", 0, "A mod will gift you a sub on Twitch soon (ticket " + tid + ")", true); Save(d); return;
+                }
                 no("unknown item");
             }
         }
@@ -296,10 +303,12 @@ namespace PinguinoHost
             {
                 var items = new List<string>();
                 if (ChatOn(c, "guess_chatter")) items.Add(ChatName(c, "guess_chatter", "Guess the Chatter") + " (stake " + min + "-" + max + " " + cur + ", right answer pays 2x): !shop guess <stake>");
+                { string sl = SubTickets.ShopLine(); if (sl != null) items.Add(sl); }
                 var soon = new List<string>(); foreach (var p in (c["ChatItems"] as JObject ?? new JObject()).Properties()) if (p.Name != "guess_chatter" && (bool?)p.Value["enabled"] != true) soon.Add((string)p.Value["name"] ?? p.Name);
                 say("@" + user + " Shop: " + (items.Count == 0 ? "nothing open right now." : string.Join(" | ", items)) + (soon.Count > 0 ? " Coming soon: " + string.Join(", ", soon) + "." : "")); return;
             }
             string item = NormItem(args[0]);
+            if (item == "get_sub") { SubTickets.HandleBuy(user, say); return; }
             if (item != "guess_chatter") { say("@" + user + " " + (item == "buy_chatty" || (c["ChatItems"] as JObject)?[item] != null ? "that one is not open yet." : "no such item. Type !shop to see what is for sale.")); return; }
             if (!ChatOn(c, "guess_chatter")) { say("@" + user + " that one is not open yet."); return; }
             long stake; string sa = args.Length > 1 ? args[1].Replace(",", "").Trim().ToLowerInvariant() : "";

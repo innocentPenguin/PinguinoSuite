@@ -61,6 +61,7 @@ namespace PinguinoHost
             if (Teach.IsCommand(cmd)) { Teach.Handle(user, cmd, args, role, say); return true; }
             if (cmd == "!guess") { SiteShop.HandleGuess(user, args, say); return true; }
             if (cmd == "!shop") { if (args.Length > 0 || !Cooling("u|!shop|" + me, 10)) SiteShop.HandleShop(user, args, say); return true; }   // the chat shop: lists the items, starts Guess the Chatter
+            if (SubTickets.IsModCommand(cmd)) { if (!mod) return false; ModAudit.Log(user, "mod", cmd, string.Join(" ", args)); SubTickets.HandleMod(user, cmd, args, say); return true; }
             string b = BoardOf(cmd);
             bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!command" || cmd == "!cmds" || cmd == "!cmd" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || cmd == "!uptime" || cmd == "!downtime" || Economy.IsViewerCommand(cmd) || Gamble.IsCommand(cmd);
             bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd);

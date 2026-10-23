@@ -615,6 +615,42 @@
       "importance": 3
     },
     {
+      "command": "!subowed",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Economy (mods)",
+      "who": "mods",
+      "usage": "!subowed",
+      "description": "Lists the viewers who bought Get a sub with points and are still waiting for you to gift them a sub.",
+      "examples": [],
+      "section": "Viewers",
+      "importance": 3
+    },
+    {
+      "command": "!subdone",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Economy (mods)",
+      "who": "mods",
+      "usage": "!subdone <user>",
+      "description": "Marks a bought sub as gifted (you gifted it on Twitch).",
+      "examples": ["!subdone cyfirl"],
+      "section": "Viewers",
+      "importance": 3
+    },
+    {
+      "command": "!subrefund",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Economy (mods)",
+      "who": "mods",
+      "usage": "!subrefund <user>",
+      "description": "Cancels a bought sub and gives the points back.",
+      "examples": ["!subrefund cyfirl"],
+      "section": "Viewers",
+      "importance": 3
+    },
+    {
       "command": "!me",
       "aliases": [],
       "action": "PinguinoBotCore",
