@@ -492,6 +492,7 @@ class Engine:
         text, sub, avatar = render(c["text"], ev), render(c["subtext"], ev), _url(ev.get("avatar"))
         if clip:
             dur = max(dur, int(min(clip["max_s"], clip["duration_s"] or clip["max_s"]) + 2))
+            clip["fallback"] = {"text": text, "subtext": sub}      # shown by the overlay when the clip cannot play (clip-only card would be empty)
             text = text if cc.get("show_text") else []
             sub = [[str(ev.get("message") or ""), ""]] if cc.get("show_msg") and ev.get("message") else (sub if cc.get("show_text") else [])
             avatar = avatar if cc.get("show_image") else ""

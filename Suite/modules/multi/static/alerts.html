@@ -82,8 +82,13 @@ function build(a) {
     const v = document.createElement('video'), c = a.clip;
     v.className = 'clipv'; v.src = c.url; v.playsInline = true; v.muted = !!c.muted; v.volume = Math.max(0, Math.min(1, c.volume / 100));
     const stop = () => { v.pause(); v.style.opacity = 0; };
-    v.addEventListener('ended', stop); v.addEventListener('error', () => { v.remove(); });
-    const go = () => v.play().catch(() => { v.muted = true; v.play().catch(() => { v.remove(); }); });
+    const fail = () => {               // clip cannot load/play: never leave an empty box, show the name card instead
+      v.remove(); const pb = el.querySelector('.pb'); if (pb) pb.remove();
+      const tx = el.querySelector('.tx'), fb = c.fallback || {};
+      if (tx && tx.hidden) { tx.innerHTML = `<div class="t1">${segs(fb.text, acc)}</div>${fb.subtext && fb.subtext.length ? `<div class="t2">${segs(fb.subtext, acc)}</div>` : ''}`; tx.hidden = false; }
+    };
+    v.addEventListener('ended', stop); v.addEventListener('error', fail);
+    const go = () => v.play().catch(() => { v.muted = true; v.play().catch(fail); });
     setTimeout(go, 60); setTimeout(stop, c.max_s * 1000);
     el.prepend(v);
     if (c.progress) {                    // thin bar: remaining clip time (starts when the video really plays)

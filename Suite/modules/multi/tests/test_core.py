@@ -1686,6 +1686,7 @@ def test_shoutout_clip_defaults_clip_only_with_delay(tmp_path):
     assert eng.submit(ev)[0]
     p = eng.heap[0][2]
     assert p["text"] == [] and p["subtext"] == [] and p["avatar"] == "" and p["pre_ms"] == 10000 and p["clip"]["progress"]
+    assert p["clip"]["fallback"]["text"] and any(k == "user" for _, k in p["clip"]["fallback"]["text"])   # name card when the clip cannot play
     eng.heap.clear()
     assert eng.submit(dict(ev, id="so:a:2", user="amy", clip=None))[0]          # no clip: the normal name card shows, no delay
     q = eng.heap[0][2]
