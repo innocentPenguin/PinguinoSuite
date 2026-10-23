@@ -20,7 +20,7 @@ const SIDE_SECTIONS = [
     ${(CS.keywords || []).map((k, i) => quickRow('keywords.' + i + '.rule', '"' + k.word + '"') + `<div class="act"><button data-cs-act="delkw" data-i="${i}">Remove "${esc(k.word)}"</button></div>`).join('')}`},
   {id: 'mysound', title: 'Sounds for me (this page, not in OBS)', help: 'sound audio volume master first time chatter mention question sent message notification mute ding', body: () => soundsBox()},
   {id: 'sound', title: 'Sounds (server ding / chat pop)', help: 'sound audio ding pop volume new chatter returning mute notification', body: () => !SIDE.dg ? '<div class="empty">Loading...</div>' :
-    `<h4>New-chatter ding</h4>${dingBox(SIDE.dg)}<h4>Chat pop</h4>${popBox(SIDE.pp)}`},
+    `<h4>${SIDE.dg.rows ? 'Chatter sounds' : 'New-chatter ding'}</h4>${dingBox(SIDE.dg)}<h4>Chat pop</h4>${popBox(SIDE.pp)}`},
   {id: 'split', title: 'Split chat and pop-out', help: 'split pop out window monitor half top bottom always on top', body: () => SIDE.pn ? splitBox(SIDE.pn) : '<div class="empty">Loading...</div>'},
   {id: 'more', title: 'Connections and more', help: 'setup connect twitch youtube discord editor look presets', body: () => `<div class="act"><a href="/?type=launcher"><button type="button">Setup (connections)</button></a> <a href="/?type=style"><button type="button">Full look editor and presets</button></a> <a href="/?type=dash"><button type="button">Dashboard</button></a> <a href="/?type=obs&widget=chat"><button type="button">OBS chat widget</button></a> <a href="/?type=obs&widget=activity"><button type="button">OBS activity widget</button></a> <a href="/?type=obs&widget=follow"><button type="button">OBS follow alert</button></a></div>`},
 ];
