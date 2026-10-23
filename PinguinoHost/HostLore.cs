@@ -114,8 +114,17 @@ namespace PinguinoHost
             });
             return Links.Expand(t).Trim();
         }
+        static readonly Regex TwitchClip = new Regex(@"(?:twitch\.tv/[^/\s]+/clip/|clips\.twitch\.tv/)([A-Za-z0-9_-]+)", RegexOptions.IgnoreCase);
+        /// <summary>Shared clip rule (ClipPick): a lore line that carries a Twitch clip is not posted when that clip is one of the last 3 any bot sent (returns ""); otherwise it is recorded as sent by "lore".</summary>
+        static bool ClipBlocked(JObject e)
+        {
+            var m = TwitchClip.Match((string)e["response"] ?? ""); if (!m.Success) return false;
+            try { if (ClipPick.WasRecent(m.Groups[1].Value)) { Clog.Info("lore", "clip " + (string)e["id"] + " skipped: one of the last 3 clips sent"); return true; } ClipPick.Mark(m.Groups[1].Value, "lore"); } catch (Exception) { }
+            return false;
+        }
         static string Full(JObject e, string user, string[] args)
         {
+            if (ClipBlocked(e)) return "";
             string r = Render(e, user, args);
             foreach (var id in (e["also"] as JArray) ?? new JArray())
             {
@@ -134,7 +143,8 @@ namespace PinguinoHost
                 JObject e; if (!Index().TryGetValue(cmd, out e) || ChattyOwns(cmd)) return;
                 string key = (string)e["id"]; long now = Now(), cd = S("commandCooldownSec", 5);
                 lock (L) { long last; if (LastEntry.TryGetValue("c|" + key, out last) && now - last < cd) return; LastEntry["c|" + key] = now; }
-                (IsFun(e) ? (Action<string>)Say : say)(Full(e, user, args));   // fun / people lines: ChattyPinguino; info / link / clip lines stay with the account that got the command (B0t)
+                string full = Full(e, user, args); if (full == "") return;
+                (IsFun(e) ? (Action<string>)Say : say)(full);   // fun / people lines: ChattyPinguino; info / link / clip lines stay with the account that got the command (B0t)
             }
             catch (Exception ex) { Clog.Warn("lore", cmd + " failed: " + ex.Message); }
         }
