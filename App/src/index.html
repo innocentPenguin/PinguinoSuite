@@ -284,7 +284,11 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
+/* every request to the core gives up after 15 s (2 min for the long jobs), so a hung call can never leave a button dead */
+const LONG_JOB=/prestream\/run|backup|update|simulate|upload|restore|vault|portable|import|export/;
+function tfetch(u,o){const c=new AbortController(),t=setTimeout(()=>c.abort(),LONG_JOB.test(String(u))?120000:15000);
+  return fetch(u,{...(o||{}),signal:c.signal}).finally(()=>clearTimeout(t))}
+const post=(p,b)=>tfetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let LISTEN='http://127.0.0.1:8765';
 const POP=new URLSearchParams(location.search).get('popout');if(POP)document.body.classList.add('popout');
@@ -885,7 +889,7 @@ function chatRateCard(){
     ${ss.length?`<table class="tbl" style="margin-top:6px"><tr><th>Stream</th><th>Min</th><th>Msgs</th><th>/min</th></tr>${ss.map(s=>{const mins=s.perMinute?s.perMinute.length:Math.round((Date.parse(s.end)-Date.parse(s.start))/60000);return `<tr><td>${esc(new Date(s.start).toLocaleDateString([], {month:'short',day:'numeric'}))}</td><td>${mins||''}</td><td>${s.total??''}</td><td>${mins?(s.total/mins).toFixed(1):''}</td></tr>`}).join('')}</table>`:''}</div>`}
 /* ============ Quick actions (Host automations: GET /api/automations, POST /api/automations/test, GET /api/automations/log) ============ */
 const Q={tab:'actions',data:{},doc:null,err:null,q:'',group:'',out:{},busy:{},pins:(()=>{try{return JSON.parse(localStorage.getItem('qpins')||'[]')}catch{return[]}})()};
-const hostGet=p=>fetch('/api/modules/host/get?path='+encodeURIComponent(p)).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+const hostGet=p=>tfetch('/api/modules/host/get?path='+encodeURIComponent(p)).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
 const hostPost=(p,b)=>post('/api/modules/host/post',{path:p,body:b});
 async function loadQuick(){try{const j=await hostGet('/api/automations');Q.doc=j.doc;Q.master=j.master;Q.err=null}catch{Q.err='The Host is not answering (is PinguinoHost on?).'}if(route==='quick')draw(true)}
 const trigText=t=>{const k=t.type;return k==='command'?(t.names||[]).join(' / '):k==='redeem'?'redeem: '+(t.title||''):k==='hotkey'?'hotkey '+(t.key||''):k==='timer'?'every '+Math.round((t.everySec||600)/60)+' min':k==='chat'?'chat /'+(t.pattern||'')+'/':k}
@@ -1300,8 +1304,13 @@ function bindEconomy(){
     const o=$('#ec-out');if(o)o.textContent=ECO.calc.out})}
 
 /* Two-click armed button (confirm() is blocked in the webview): the first click changes the label, a second click within 4 s runs fn. */
-function armBtn(b,label,fn){if(b.dataset.arm){clearTimeout(+b.dataset.arm);b.dataset.arm='';b.textContent=b.dataset.lbl;return fn()}
-  b.dataset.lbl=b.textContent;b.textContent=label;b.dataset.arm=String(setTimeout(()=>{b.dataset.arm='';if(b.isConnected)b.textContent=b.dataset.lbl},4000))}
+/* The second click only runs fn when its label is the same as the one that was armed: a label that names a value ("give 100 points to
+   EVERYONE") changes when the value changes, and then the button re-arms with the new text instead of acting on something the user did not see. */
+function armBtn(b,label,fn){
+  if(b.dataset.arm&&b.dataset.armlbl===label){clearTimeout(+b.dataset.arm);b.dataset.arm='';b.dataset.armlbl='';b.textContent=b.dataset.lbl;return fn()}
+  if(b.dataset.arm)clearTimeout(+b.dataset.arm);else b.dataset.lbl=b.textContent;
+  b.dataset.armlbl=label;b.textContent=label;
+  b.dataset.arm=String(setTimeout(()=>{b.dataset.arm='';b.dataset.armlbl='';if(b.isConnected)b.textContent=b.dataset.lbl},4000))}
 /* Every page button whose handler returns a promise (a POST) ignores further clicks until it settles, whatever page it is on.
    Handlers that already guard themselves keep working: this uses its own flag, not .disabled. Runs after every bind(). */
 function flyGuard(root){(root||document).querySelectorAll('#page button,#page .btn,#mod-cards button').forEach(b=>{
@@ -1339,7 +1348,13 @@ function bindTimers(){
     try{const r=await hostJ('/api/timers',b);if(r.ok===false)throw new Error(hostErr(r));if(ok)toast(ok);if(clr)delete TM.draft[clr];if(r.timers){TM.d=r;draw(true)}else re();return true}
     catch(e){toast('Timers: '+(e.message||e));return false}
     finally{delete TM.pend[key]}};
-  const snap=card=>{const o={};card.querySelectorAll('[data-tf]').forEach(f=>{if(f.dataset.tf!=='enabled')o[f.dataset.tf]=f.type==='checkbox'?f.checked:f.value});TM.draft[card.dataset.tid]=o;const sv=card.querySelector('[data-tact=save]');if(sv)sv.classList.add('pri')};
+  const snap=card=>{const o={};let dirty=false;card.querySelectorAll('[data-tf]').forEach(f=>{if(f.dataset.tf==='enabled')return;o[f.dataset.tf]=f.type==='checkbox'?f.checked:f.value;
+      const was=f.type==='checkbox'?f.defaultChecked:f.tagName==='SELECT'?((([...f.options].find(x=>x.defaultSelected))||f.options[0]||{}).value):f.defaultValue;
+      if((f.type==='checkbox'?f.checked:f.value)!==was)dirty=true});
+    if(dirty)TM.draft[card.dataset.tid]=o;else delete TM.draft[card.dataset.tid];   // Save only looks "dirty" when something really differs from what the Host has
+    const sv=card.querySelector('[data-tact=save]');if(sv){sv.classList.toggle('pri',dirty);let n=card.querySelector('[data-tdirty]');
+      if(dirty&&!n){n=document.createElement('span');n.className='sm';n.dataset.tdirty='1';n.style.cssText='color:var(--warn);margin-left:8px';n.textContent='unsaved edits (kept until you save or reload)';sv.after(n)}
+      else if(!dirty&&n)n.remove()}};
   $$('[data-tid]').forEach(card=>{const dr=TM.draft[card.dataset.tid];   // put back what was typed but not saved, then keep tracking it
     if(dr){Object.keys(dr).forEach(k=>{const f=card.querySelector(`[data-tf=${k}]`);if(!f)return;if(f.type==='checkbox')f.checked=dr[k];else f.value=dr[k]});snap(card)}
     card.querySelectorAll('[data-tf]').forEach(f=>{if(f.dataset.tf!=='enabled')f.oninput=f.onchange=()=>snap(card)})});
@@ -1389,7 +1404,9 @@ function bindOverlays(){
   $$('[data-ovname]').forEach(b=>b.onclick=()=>{OV.name=b.dataset.ovname;draw(true)});
   const msg=t=>{const m=$('#ov-msg');if(m)m.textContent=t};
   const send=async(opts,after)=>{try{const r=await hostJ('/api/overlay-options',{name:OV.name,options:opts});if(r.ok===false)throw new Error(hostErr(r));
-      const all=await hostGet('/api/overlay-options');OV.raw=all&&all.options&&typeof all.options==='object'?all.options:OV.raw;msg('Saved');if(after)after()}catch(e){msg('');toast('Overlay options: '+(e.message||e));draw(true)}};   // not saved: show the last saved values again
+      const all=await hostGet('/api/overlay-options');OV.raw=all&&all.options&&typeof all.options==='object'?all.options:OV.raw;msg('Saved');if(after)after()}catch(e){const t=String(e.message||e);msg('Not saved: '+t);toast('Overlay options: '+t);   // not saved: put back only the controls that failed, the other unsaved sliders stay
+      if(opts&&typeof opts==='object'){const sv=(OV.raw&&OV.raw[OV.name])||{};Object.keys(opts).forEach(k=>{const o=opt(k),v=sv[k]!==undefined?sv[k]:(o?o.default:undefined);if(v===undefined)return;
+        const c=$(`[data-ov="${k}"]`),n=$(`[data-ovn="${k}"]`);if(c){if(c.type==='checkbox')c.checked=!!+v;else c.value=v}if(n)n.value=v})}else draw(true)}};
   const soon={},sendSoon=(k,v)=>{(soon[k]||(soon[k]=debounce(x=>send({[k]:x}),250)))(v)};   // one debounce per option: two sliders moved together both save
   const opt=k=>(OV.sch.options||[]).find(o=>o.key===k);
   $$('[data-ov]').forEach(i=>{const k=i.dataset.ov,o=opt(k);i.oninput=i.onchange=()=>{let v;
@@ -1442,8 +1459,8 @@ function bindCanned(){
     {const dr=CAN.draft[name];if(dr){Object.keys(dr).forEach(k=>{if(f(k))f(k).value=dr[k]});check()}}
     f('enabled').onchange=async()=>{try{await cpost({action:'set',name,enabled:f('enabled').checked});toast('!'+name+(f('enabled').checked?' on':' off'));cmd.enabled=f('enabled').checked}catch(e){toast('Not saved: '+(e.message||e));f('enabled').checked=!f('enabled').checked}};
     save.onclick=async()=>{save.disabled=true;try{await cpost({action:'set',name,...changes()});toast('!'+name+' saved');delete CAN.draft[name];re()}catch(e){msg.textContent=String(e.message||e);save.disabled=false}};
-    card.querySelector('[data-cact=test]').onclick=async e=>{const tb=e.currentTarget;if(tb.disabled)return;const c=cur(),o=card.querySelector('[data-cout]'),b={action:'test',...who()};if('choices'in c)b.choices=c.choices;else b.text=c.text;
-      tb.disabled=true;try{const r=await cpost(b);CAN.out[name]=o.textContent='Preview: '+r.line}catch(e){CAN.out[name]=o.textContent='Could not preview: '+(e.message||e)}tb.disabled=false}});
+    card.querySelector('[data-cact=test]').onclick=async e=>{const tb=e.currentTarget;if(tb.disabled)return;const o=card.querySelector('[data-cout]');
+      tb.disabled=true;try{const c=cur(),b={action:'test',...who()};if('choices'in c)b.choices=c.choices;else b.text=c.text;const r=await cpost(b);CAN.out[name]=o.textContent='Preview: '+r.line}catch(e){CAN.out[name]=o.textContent='Could not preview: '+(e.message||e)}finally{tb.disabled=false}}});
   const nwk=['cn-new','cn-newa','cn-newt'];
   if(CAN.nw)nwk.forEach(i=>{if($('#'+i)&&CAN.nw[i]!=null)$('#'+i).value=CAN.nw[i]});
   nwk.forEach(i=>{$('#'+i)&&($('#'+i).oninput=()=>{CAN.nw=CAN.nw||{};CAN.nw[i]=$('#'+i).value})});
@@ -1470,7 +1487,7 @@ function initReport(){
   const msg=t=>{$('#rp-msg').textContent=t},th=()=>{$('#rp-th').innerHTML=RP.imgs.map((m,i)=>`<span><img src="${m.data}" alt=""><b data-i="${i}" title="remove">×</b></span>`).join('');$$('#rp-th b').forEach(b=>b.onclick=()=>{RP.imgs.splice(+b.dataset.i,1);th()})};
   const add=files=>{for(const f of files){if(!/^image\//.test(f.type))continue;if(RP.imgs.length>=6){msg('At most 6 screenshots');break}if(f.size>8*1024*1024){msg('That image is over 8 MB');continue}
     const r=new FileReader();r.onload=()=>{RP.imgs.push({name:f.name||'pasted.png',data:r.result});th()};r.readAsDataURL(f)}};
-  const shut=()=>{box.style.display='none';fab.focus()};   // closing hands the focus back to the button that opened it
+  const shut=(refocus=true)=>{box.style.display='none';if(refocus)fab.focus()};   // closing hands the focus back to the button that opened it
   fab.onclick=()=>{const o=box.style.display!=='block';if(!o){shut();return}box.style.display='block';$('#rp-where').textContent='· '+(titles[route]||(modOf(route)&&modOf(route).name)||route);msg('');$('#rp-note').focus()};
   $('#rp-close').onclick=shut;
   $('#rp-file').onchange=e=>{add([...e.target.files]);e.target.value=''};
@@ -1485,7 +1502,7 @@ function initReport(){
   $('#rp-send').onclick=async()=>{if(RP.busy)return;const note=$('#rp-note').value.trim();if(!note&&!RP.imgs.length){msg('Write a note or attach a screenshot first');return}
     RP.busy=true;$('#rp-send').disabled=true;msg('Saving…');
     try{const r=await post('/api/feedback',{note,page:titles[route]||route,route,url:location.href.split('#')[0]+'#'+route,images:RP.imgs});
-      if(r&&r.ok){msg('Saved. Thank you.');$('#rp-note').value='';RP.imgs=[];th();setTimeout(()=>{if(box.style.display==='block')shut()},1200)}else msg('Not saved: '+((r&&r.detail)||'unknown error'))}
+      if(r&&r.ok){msg('Saved. Thank you.');$('#rp-note').value='';RP.imgs=[];th();setTimeout(()=>{if(box.style.display==='block')shut(box.contains(document.activeElement)||document.activeElement===document.body)},1200)}else msg('Not saved: '+((r&&r.detail)||'unknown error'))}
     catch(e){msg('Not saved: '+(e.message||e))}
     RP.busy=false;$('#rp-send').disabled=false}}
 initReport();
