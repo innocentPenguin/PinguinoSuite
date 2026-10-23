@@ -9,9 +9,10 @@ def _free():
 PORT, SITE, WSPORT = _free(), _free(), _free(); B = 'http://127.0.0.1:%d' % PORT; KEY = 'test-key-123'
 d = tempfile.mkdtemp(prefix='pgecs_'); out = os.path.join(d, 'out.txt'); os.makedirs(os.path.join(d, 'economy'))
 json.dump({'Channel': 'streamer1', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
+json.dump({'Url': 'http://127.0.0.1:%d' % SITE}, open(os.path.join(d, 'alert_bridge.json'), 'w'))   # Multi's intro options come from the stub
 json.dump({'Earning': False, 'WelcomeBonus': 0}, open(os.path.join(d, 'economy', 'settings.json'), 'w'))
 json.dump({'earned': {'zed': {'points': 40, 'minutes': 600}, 'amy': {'points': 7, 'minutes': 5}}}, open(os.path.join(d, 'economy', 'points.json'), 'w'))
-S = {'reqs': {}, 'users': [], 'answers': [], 'badkey': False, 'answer_code': 200}
+S = {'opts': [], 'reqs': {}, 'users': [], 'answers': [], 'badkey': False, 'answer_code': 200}
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def send(self, code, obj):
@@ -20,12 +21,14 @@ class H(BaseHTTPRequestHandler):
         if S['badkey'] or self.headers.get('Authorization') != 'Bearer ' + KEY: self.send(401, {'error': 'unauthorized'}); return False
         return True
     def do_GET(self):
+        if self.path == '/api/intro/options': return self.send(200, {'max_len': 140, 'sounds': [{'id': 'pop.wav', 'label': 'pop'}]})   # stands in for Multi
         if not self.auth(): return
         if self.path.startswith('/api/bot/economy/requests'): return self.send(200, {'requests': [r for r in S['reqs'].values() if r['status'] == 'pending']})
         self.send(404, {})
     def do_POST(self):
         if not self.auth(): return
         b = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))) or b'{}')
+        if self.path == '/api/bot/intro-options': S['opts'].append(b); return self.send(200, {'ok': True})
         if self.path == '/api/bot/economy/users': S['users'].append(b); return self.send(200, {'ok': True})
         if self.path == '/api/bot/economy/answers':
             S['answers'].append(b)
@@ -73,6 +76,11 @@ try:
     chk('intro_submit answer says pending', ia.get('i1', {}).get('status') == 'done' and (ia['i1'].get('data') or {}).get('intro', {}).get('status') == 'pending', ia.get('i1'))
     chk('intro_approve answer says approved', (ia.get('i2', {}).get('data') or {}).get('intro', {}).get('status') == 'approved', ia.get('i2'))
     chk('intro_remove answer says removed', (ia.get('i3', {}).get('data') or {}).get('intro', {}).get('status') == 'removed', ia.get('i3'))
+    # ---- the push carries the intro rows and the real cap; Multi's sound options go to /api/bot/intro-options
+    last = S['users'][-1]; zi = [i for i in last.get('intros', []) if i['user_id'] == '4242']
+    chk('push carries intro_max_len', last.get('intro_max_len') == 80 and last['settings'].get('intro_max_len') == 80, last.get('intro_max_len'))
+    chk('push carries the intro row (removed)', len(zi) == 1 and zi[0]['status'] == 'removed' and zi[0]['login'] == 'zed' and zi[0]['text'] == '' and zi[0]['updatedAt'] > 0 and set(zi[0]) >= {'login', 'user_id', 'text', 'sound_id', 'status', 'note', 'updatedAt'}, zi)
+    chk('Multi sound options pushed once at start', len(S['opts']) == 1 and S['opts'][0]['sounds'][0]['id'] == 'pop.wav' and S['opts'][0]['max_len'] == 80, S['opts'])
     # ---- the site is down for answers: kept and retried
     S['answer_code'] = 503; S['reqs']['r5'] = {'id': 'r5', 'login': 'zed', 'action': 'loan_repay', 'amount': 0, 'status': 'pending'}; time.sleep(4)
     S['answer_code'] = 200; time.sleep(4)

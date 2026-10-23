@@ -70,6 +70,21 @@ namespace PinguinoHost
             }
             var nr = new JObject { { "ok", false }, { "text", "Multi is not reachable (" + Short(last) + ")" } }; if (timedOut) nr["unknown"] = true; return nr;
         }
+        /// <summary>Multi's viewer-intro choices (GET /api/intro/options: sounds + cap) for the site's form; null when Multi cannot be asked (sim Host on the real port, or not reachable)</summary>
+        public static Func<string, JObject> TestGet;
+        public static JObject GetJson(string path)
+        {
+            if (TestGet != null) return TestGet(path);
+            try
+            {
+                var set = Settings(); string url = ((string)set["Url"] ?? "http://127.0.0.1:8766").TrimEnd('/');
+                if (HostApi.SimMode && url.EndsWith(":8766")) return null;
+                string tok = (string)set["Token"] ?? ""; if (tok == "") tok = Environment.GetEnvironmentVariable("PINGUINO_MODULE_TOKEN") ?? Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? "";
+                var rq = new HttpRequestMessage(HttpMethod.Get, url + path); if (tok != "") { rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("X-Pinguino-Token", tok); }
+                var r = Http.SendAsync(rq).Result; return r.IsSuccessStatusCode ? JObject.Parse(r.Content.ReadAsStringAsync().Result) : null;
+            }
+            catch (Exception) { return null; }
+        }
         static string Short(string s) { s = (s ?? "").Replace("\r", " ").Replace("\n", " "); return s.Length > 70 ? s.Substring(0, 70) : s; }
 
         // ================= !alert =================

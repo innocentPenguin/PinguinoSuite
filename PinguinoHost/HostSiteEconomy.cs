@@ -18,7 +18,7 @@ namespace PinguinoHost
         static readonly object L = new object(); static bool _started; static string _result = "not started";
         static string P { get { return System.IO.Path.Combine(HostApi.DataDir, "site_economy.json"); } }
         static readonly Regex RxId = new Regex("^[A-Za-z0-9_-]{1,64}$"), RxLogin = new Regex("^[a-z0-9_]{1,25}$");
-        static string _marketSent = ""; static readonly Dictionary<string, string> Sent = new Dictionary<string, string>(); static DateTime _lastPush = DateTime.MinValue;
+        static string _marketSent = "", _introSent = ""; static DateTime _optsAt = DateTime.MinValue; static readonly Dictionary<string, string> Sent = new Dictionary<string, string>(); static DateTime _lastPush = DateTime.MinValue;
         static int PushSec { get { int v; return int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_PUSH_SEC"), out v) && v > 0 ? v : 60; } }
 
         static JObject Doc() { var d = SiteHttp.ReadJ(P); if (!(d["processed"] is JObject)) d["processed"] = new JObject(); return d; }
@@ -28,6 +28,16 @@ namespace PinguinoHost
         {
             if (_started) return; _started = true;
             Task.Run(async () => { await Task.Delay(8000); while (true) { try { Tick(); } catch (Exception ex) { _result = "error: " + ex.Message; } await Task.Delay(SiteHttp.PollSec * 1000); } });
+        }
+
+        /// <summary>Multi's intro sound choices to the site's form, at start and every ~30 min (POST /api/bot/intro-options); skipped quietly when Multi or the site cannot take it</summary>
+        public static int OptionsPushes;
+        static void PushIntroOptions(string key)
+        {
+            if ((DateTime.UtcNow - _optsAt).TotalMinutes < 30) return; _optsAt = DateTime.UtcNow;
+            var o = AlertBridge.GetJson("/api/intro/options"); if (o == null) return;
+            o["max_len"] = ViewerIntro.MaxLen();   // the Host's cap is the real one
+            JObject r; int code = SiteHttp.Call("POST", "/api/bot/intro-options", o, key, out r); if (code == 200) OptionsPushes++; else _optsAt = DateTime.UtcNow.AddMinutes(-25);   // retry in 5 min
         }
 
         static string Hash(string s) { using (var h = SHA1.Create()) return Convert.ToBase64String(h.ComputeHash(Encoding.UTF8.GetBytes(s))); }
@@ -41,6 +51,7 @@ namespace PinguinoHost
             if (code == 401) { _result = "site refused the key (HTTP 401)"; return; }
             if (code != 200 || j == null) { _result = code == 0 ? "site not reachable" : "site answered HTTP " + code; if (code != 404) return; }
             else foreach (var s in ((j["requests"] ?? j["items"]) as JArray ?? new JArray()).OfType<JObject>()) { Process(s); n++; }
+            PushIntroOptions(key);
             int answered = Flush(key); if (_result.StartsWith("site refused")) return;
             int pushed = 0; if ((DateTime.UtcNow - _lastPush).TotalSeconds >= PushSec || n > 0) { _lastPush = DateTime.UtcNow; pushed = PushUsers(key); }
             if (!_result.StartsWith("site refused")) _result = "ok (" + n + " requests, " + answered + " answers sent, " + pushed + " users pushed)";
@@ -51,14 +62,16 @@ namespace PinguinoHost
         {
             var cx = Economy.BuildCtx();
             var logins = cx.S.Users.Where(k => !Boards.IsBot(k.Key) && (k.Value.Points >= 1 || cx.Led.ContainsKey(k.Key))).Select(k => k.Key).Concat(Economy.LoanLogins()).Concat(LoansP2P.Logins()).Distinct().ToList();
-            var market = LoansP2P.MarketView(); string mh = Hash(market.ToString(Newtonsoft.Json.Formatting.None));   // the open loan requests ride along on every push
+            var market = LoansP2P.MarketView(); string mh = Hash(market.ToString(Newtonsoft.Json.Formatting.None));
+            var intros = ViewerIntro.PushList(); int introMax = ViewerIntro.MaxLen(); string ih = Hash(intros.ToString(Newtonsoft.Json.Formatting.None) + introMax);   // the viewer intros and their real cap ride along too
+            var pubSettings = Economy.PublicSettings(); pubSettings["intro_max_len"] = introMax;   // the open loan requests ride along on every push
             var batch = new JArray(); var hashes = new Dictionary<string, string>(); int total = 0;
             Func<bool> flush = () =>
             {
-                if (batch.Count == 0 && _marketSent == mh) return true;
-                JObject r; int code = SiteHttp.Call("POST", "/api/bot/economy/users", new JObject { { "currency", Economy.CurrencyName }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "settings", Economy.PublicSettings() }, { "market", market }, { "users", batch } }, key, out r);
+                if (batch.Count == 0 && _marketSent == mh && _introSent == ih) return true;
+                JObject r; int code = SiteHttp.Call("POST", "/api/bot/economy/users", new JObject { { "currency", Economy.CurrencyName }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "settings", pubSettings }, { "intro_max_len", introMax }, { "intros", intros }, { "market", market }, { "users", batch } }, key, out r);
                 if (code == 401) { _result = "site refused the key (HTTP 401)"; return false; }
-                if (code == 200) { total += batch.Count; _marketSent = mh; foreach (var kv in hashes) Sent[kv.Key] = kv.Value; }
+                if (code == 200) { total += batch.Count; _marketSent = mh; _introSent = ih; foreach (var kv in hashes) Sent[kv.Key] = kv.Value; }
                 else if (code == 404) return false;   // the site has no Points page yet
                 batch = new JArray(); hashes = new Dictionary<string, string>(); return code != 0 && code < 500;
             };

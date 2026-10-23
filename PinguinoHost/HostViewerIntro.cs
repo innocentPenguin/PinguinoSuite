@@ -110,6 +110,18 @@ namespace PinguinoHost
                 return new JObject { { "text", it["text"] }, { "sound_id", it["sound_id"] }, { "status", "approved" } };
             }
         }
+        /// <summary>the intro rows the site keeps in step with the Host (POST /api/bot/economy/users, key "intros"): removed rows are sent with status "removed" and empty text; newest 500</summary>
+        public static JArray PushList()
+        {
+            lock (L)
+            {
+                var d = Doc();
+                return new JArray(((JObject)d["intros"]).Properties().Select(p => (JObject)p.Value).OrderByDescending(x => Math.Max((long?)x["decided_at"] ?? 0, (long?)x["submitted_at"] ?? 0)).Take(500).Select(x =>
+                    new JObject { { "login", (string)x["login"] ?? "" }, { "user_id", (string)x["user_id"] ?? "" }, { "text", (string)x["text"] ?? "" }, { "sound_id", (string)x["sound_id"] ?? "" }, { "status", (string)x["status"] ?? "" },
+                        { "note", (string)x["status"] == "approved" || (string)x["status"] == "rejected" ? "by " + ((string)x["approved_by"] ?? "") : "" }, { "updatedAt", Math.Max((long?)x["decided_at"] ?? 0, (long?)x["submitted_at"] ?? 0) } }));
+            }
+        }
+        public static int MaxLen() { lock (L) return Math.Max(10, Math.Min(200, (int?)Doc()["settings"]["maxLen"] ?? 80)); }
         public static JObject Mine(string platform, string uid)
         {
             platform = (platform ?? "twitch").Trim().ToLowerInvariant(); uid = (uid ?? "").Trim();
