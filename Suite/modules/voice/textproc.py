@@ -7,13 +7,19 @@ looks like a token, key, password, oauth string, long random run, e-mail or IP a
 import random
 import re
 import time
+import unicodedata
 
 import config as cfg
 
 SECRET_PATTERNS = [
     re.compile(r"(?i)\boauth:[a-z0-9]{10,}"),
     re.compile(r"(?i)\b(?:bearer|basic)\s+[a-z0-9._~+/=-]{8,}"),
-    re.compile(r"(?i)\b(?:api[_ -]?key|token|secret|password|passwd|pwd|passphrase|auth(?:orization)?|client[_ -]?secret|stream[_ -]?key)\b\s*(?:is|=|:)?\s*\S+"),
+    # a keyword swallows the next few words too: a spoken passphrase has several ("password is correct horse battery staple")
+    re.compile(r"(?i)\b(?:api[_ -]?key|token|secret|password|passwd|pwd|passphrase|pin|auth(?:orization)?|client[_ -]?secret|stream[_ -]?key)\b\s*(?:is|=|:)?\s*(?:\S+\s*){1,6}"),
+    # the same keywords spelled out with separators between the letters ("p a s s w o r d", "t.o.k.e.n")
+    re.compile(r"(?i)\b(?:" + "|".join(r"[\s._*-]*".join(w) for w in ("password", "passphrase", "token", "secret", "passwd")) + r")\b\s*(?:is|=|:)?\s*(?:\S+\s*){1,6}"),
+    re.compile(r"\b[\w-]{24,26}\.[\w-]{6}\.[\w-]{25,}"),                  # Discord-style token: three dotted segments, none of them 28 long
+    re.compile(r"\b\d{8,}\b|\b\d{3}[ .-]\d{3}[ .-]\d{4}\b"),               # long digit runs and phone numbers
     re.compile(r"\b(?:sk|pk|rk|xox[abp]|ghp|gho|AKIA|AIza)[-_A-Za-z0-9]{12,}"),
     re.compile(r"\b[A-Fa-f0-9]{32,}\b"),
     re.compile(r"\b[A-Za-z0-9+/_-]{28,}={0,2}"),
@@ -26,9 +32,17 @@ EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿⬀-⯿️‍←-⇿⌀-⏿]+")
 VARIABLE = re.compile(r"\{(\w+)\}")
 
 
+def _fold(text):
+    """Full-width / look-alike letters to plain ones (NFKC) and zero-width or other invisible format characters dropped, so
+    "ｐａｓｓｗｏｒｄ" or "pass\u200bword" cannot slip past the patterns."""
+    text = unicodedata.normalize("NFKC", str(text))
+    return "".join(c for c in text if unicodedata.category(c) != "Cf")
+
+
 def scrub_secrets(text):
     """Replace anything secret-looking. Returns (text, found)."""
     found = False
+    text = _fold(text)
     for rx in SECRET_PATTERNS:
         def sub(m):
             nonlocal found

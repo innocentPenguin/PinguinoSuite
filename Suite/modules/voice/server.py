@@ -4,6 +4,7 @@ Silent unless the master switch is on. Page calls are same-origin; other callers
 import hmac
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -41,14 +42,35 @@ def host_ok(h):
     return h in LOCAL_HOSTS
 
 
+LOCAL_ORIGIN = re.compile(r"^http://(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$")
+
+
 def origin_ok(o):
-    return not o or o in TAURI_ORIGINS or o.startswith(tuple(f"http://{h}" for h in LOCAL_HOSTS))
+    """No Origin (a program, not a browser), a Tauri webview, or exactly a local host:port ("http://127.0.0.1.evil.com" is not local)."""
+    return not o or o in TAURI_ORIGINS or bool(LOCAL_ORIGIN.match(o))
+
+
+# Routes that show private text (chat that was spoken, the whole config, review reports built from transcripts). Callers need the module
+# token (the core and the Host send it) or must be this module's own page in a browser; the page is served without a token (open item).
+SENSITIVE_GET = {"/api/history", "/api/history.csv", "/api/export", "/api/incidents", "/api/review/report", "/api/review/reports", "/api/control", "/api/config"}
+
+
+def browser_same(headers):
+    """True for a request made by a page of this module itself (or a Suite webview). A browser sets these headers and a web page of another
+    site cannot fake them; a local program can, so this is a speed bump for them, not a lock (token injection into the page is the real fix)."""
+    host = headers.get("host") or ""
+    if (headers.get("sec-fetch-site") or "").lower() == "same-origin":
+        return True
+    if (headers.get("origin") or "") in TAURI_ORIGINS:
+        return True
+    ref = headers.get("referer") or ""
+    return bool(host) and ref.startswith("http://" + host + "/") and host_ok(host)
 
 
 def token_ok(headers):
     want = os.environ.get("PINGUINO_API_TOKEN")
     if not want:
-        return True
+        return False          # started outside the Suite: no token to compare with, so nobody counts as the Suite (the page still works through same-origin)
     got = headers.get("x-pinguino-token") or headers.get("authorization", "").removeprefix("Bearer ").strip()
     return hmac.compare_digest(got.encode(), want.encode())
 
@@ -459,6 +481,7 @@ def p_sound_upload(h, b):
     name = re.sub(r"[^\w .()-]", "", os.path.basename(str(b.get("name") or "sound.wav")))[:60]
     if not name.lower().endswith(".wav"):
         name += ".wav"
+    name = cfg.dev_safe(name[:-4].rstrip(" .") or "sound") + ".wav"          # CON.wav / NUL.wav / trailing dots are not files on Windows
     raw = base64.b64decode(str(b.get("data") or ""), validate=False)
     if not (0 < len(raw) <= 2_000_000):
         raise ValueError("sound must be under 2 MB")
@@ -474,7 +497,8 @@ def p_sound_upload(h, b):
 def p_sound_delete(h, b):
     import os as _os
     f = _sounds_dir() / _os.path.basename(str(b.get("name") or ""))
-    f.unlink(missing_ok=True)
+    if f.is_file() and f.suffix.lower() == ".wav":
+        f.unlink()
     return {"ok": True}
 
 
@@ -599,9 +623,17 @@ class Server(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
+MAX_BODY = 4_000_000
+
+
+class TooLarge(Exception):
+    pass
+
+
 class H(BaseHTTPRequestHandler):
     server_version = "PinguinoVoice"
     protocol_version = "HTTP/1.1"
+    timeout = 15           # a client that connects and sends nothing must not hold a thread for ever
 
     def log_message(self, *a):
         pass
@@ -613,15 +645,26 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype.startswith("text") else ""))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        if ctype == "text/html":          # only this page, the Suite and its webviews may frame the page: no clickjacking from another site
+            self.send_header("Content-Security-Policy", "frame-ancestors 'self' http://127.0.0.1:* http://localhost:* tauri://localhost http://tauri.localhost https://tauri.localhost")
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
     def _body(self):
+        if self.headers.get("transfer-encoding"):
+            raise TooLarge("chunked bodies are not accepted")
         try:
             n = int(self.headers.get("content-length") or 0)
-            body = json.loads(self.rfile.read(n) or b"{}") if 0 < n < 4_000_000 else {}
+        except ValueError:
+            n = 0
+        if n >= MAX_BODY:
+            raise TooLarge(f"body over {MAX_BODY // 1_000_000} MB")
+        try:
+            body = json.loads(self.rfile.read(n) or b"{}") if n > 0 else {}
             return body if isinstance(body, dict) else {}
         except ValueError:
             return {}
@@ -639,6 +682,9 @@ class H(BaseHTTPRequestHandler):
             if not (same or (path in OPEN_POST and not origin) or token_ok(self.headers)):
                 self._send(401, "token required", "text/plain")
                 return False
+        elif path in SENSITIVE_GET and not (token_ok(self.headers) or browser_same(self.headers)):
+            self._send(401, "token required", "text/plain")
+            return False
         return True
 
     def do_GET(self):
@@ -663,6 +709,9 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, res[1], res[0], res[2] if len(res) > 2 else None)
             if res is not None:
                 self._send(200, res)
+        except TooLarge as e:
+            self._send(413, {"ok": False, "error": str(e)}, extra={"Connection": "close"})
+            self.close_connection = True
         except ValueError as e:
             self._send(400, {"ok": False, "error": str(e)})
         except Exception as e:

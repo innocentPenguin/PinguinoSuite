@@ -148,8 +148,7 @@ class Control:
         rec = {"ts": self.now(), "outcome": outcome, "detail": detail, **kw}
         self.log.append(rec)
         try:
-            with open(cfg.path("control.jsonl"), "a", encoding="utf8") as f:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            cfg.append_line("control.jsonl", json.dumps(rec, ensure_ascii=False))
         except OSError:
             pass
         console_log.log("warn" if outcome in ("failed", "unsupported") else "info", "control", f"{outcome}: {detail}" + (f" [{kw.get('action')}]" if kw.get("action") else ""))
@@ -203,9 +202,9 @@ class Control:
         summary = self.summary(intent)
         with self.lock:
             self.pending = {"intent": intent, "summary": summary, "expires": self.now() + c.get("expire_s", 25), "heard": heard[:160]}
-        if not c.get("require_confirm", True):
+        if not c.get("require_confirm", True) and act != "timeout":       # a timeout hurts a third party: it is always confirmed, and only from the page
             return self.confirm(by="auto")
-        self._say(f"I heard: {summary}. Confirm, or cancel?")
+        self._say(f"I heard: {summary}. " + ("Press Confirm on the page, or say cancel." if act == "timeout" else "Confirm, or cancel?"))
         return self._log("pending", summary, action=act)
 
     def summary(self, i):
@@ -254,6 +253,9 @@ class Control:
     # ------------------------------------------------------------ decide / run
     def confirm(self, by="page"):
         with self.lock:
+            if by == "voice" and self.pending and self.pending["intent"].get("action") == "timeout":     # any voice in the room (or a video) could say "yes"
+                self._log("blocked", "a timeout is only confirmed with the Confirm button on the page", action="timeout")
+                return {"ok": False, "outcome": "blocked"}
             p, self.pending = self.pending, None
         if not p:
             return self._log("ignored", "nothing was waiting for a confirm")

@@ -250,10 +250,9 @@ def save_report(rep, keep=48):
     files = sorted(_rdir().glob("*.json"))
     for f in files[:-keep]:
         f.unlink(missing_ok=True)
-    with open(cfg.path("incidents.jsonl"), "a", encoding="utf8") as f:
-        for fd in rep["findings"]:
-            if fd["sev"] == "high":
-                f.write(json.dumps({"ts": rep["ts"], "report": rep["id"], "id": fd["id"], "title": fd["title"], "evidence": fd["evidence"][:4]}, ensure_ascii=False) + "\n")
+    for fd in rep["findings"]:
+        if fd["sev"] == "high":
+            cfg.append_line("incidents.jsonl", json.dumps({"ts": rep["ts"], "report": rep["id"], "id": fd["id"], "title": fd["title"], "evidence": fd["evidence"][:4]}, ensure_ascii=False))
     for fd in rep["findings"]:
         if fd["sev"] != "info":
             console_log.log("warn" if fd["sev"] == "high" else "info", "review", f"{fd['title']}")

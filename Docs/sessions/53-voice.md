@@ -1,7 +1,7 @@
 # Session notes: 53 Voice (worker under 50 - Tools)
 
 Last updated: 2026-10-23 08:50. Hand-over from the old 06 session: `Docs\sessions\06-voice.md`. Docs: `Docs\VOICE.md`, `Docs\VOICE_ROUTING.md` (Windows), `Docs\VOICE_MAC.md` (Mac).
-Module: `Suite\modules\voice` (Speak, id voice, port 8772), version 0.9.0. Tests: `cd Suite\modules\voice` then `..\..\.venv\Scripts\python.exe -m unittest discover -s tests` -> 121 pass (temp data dir, fake player and fake synthesiser, no audio).
+Module: `Suite\modules\voice` (Speak, id voice, port 8772), version 0.9.0. Tests: `cd Suite\modules\voice` then `..\..\.venv\Scripts\python.exe -m unittest discover -s tests` -> 145 pass (temp data dir, fake player and fake synthesiser, no audio).
 
 ## What I built (commit hashes)
 | Hash | What |
@@ -14,6 +14,7 @@ Module: `Suite\modules\voice` (Speak, id voice, port 8772), version 0.9.0. Tests
 | 6b14a81 | Docs\VOICE_MAC.md (say voices, BlackHole 2ch/16ch routing, fallback, troubleshooting). |
 | a370c17 | Third review of c20416c/d15ed20/cc1683c: no regressions. |
 | 1d1932a | Read-only Routing check (`GET /api/routing-check` + button in the Output card; checks voice=Voicemeeter AUX Input, music=CABLE Input, and whether Play on resolves; plain fixes); spoken-name cleanup (emoji dropped, CamelCase split, xX decoration, trailing digits, all-emoji -> "someone", secrets scrubbed first; per-name override = the existing `nicknames` setting). |
+| (this batch) | Fixes from 52's security review (`52-voice-review.md`): security headers + `frame-ancestors` on the page, exact local Origin match, `token_ok` fails closed without a token, sensitive GETs (history, history.csv, export, incidents, review reports, control, config) need the module token or the page's own same-origin request, 413 for bodies over 4 MB or chunked, 15 s socket timeout, secret filter (NFKC + invisible characters dropped, keyword swallows the next 6 words, spaced-out keywords, Discord-style tokens, PIN, 8+ digit runs and phone numbers), a spoken timeout can never be confirmed by voice and `require_confirm=false` never auto-runs a timeout, Windows device names (CON, NUL ...) cannot be file names for sounds/presets/backups, `control.jsonl` and `incidents.jsonl` rotate at 5 MB, `restore_backup` needs a real file. Tests: `tests/test_hardening53.py`. |
 Also: read-only review of 51's Connect work (`53-connect-review.md` in 50's notes folder, 25 findings) and the update of Docs\SPOTIFY_CONNECT.md to match connect.py as built.
 
 ## Restart needs
@@ -29,6 +30,8 @@ Also: read-only review of 51's Connect work (`53-connect-review.md` in 50's note
 | Memory watchdog for VOD jobs; `listen.log` rotation (was 82 MB) | Listen / core |
 | First live check on a real Mac (Sound check, then one Preview); Mac go-librespot binary | Ivan / 51 |
 | Tune the hourly review on a real, supervised stream with the master ON | Ivan |
+| Token on the Voice page itself (52 finding 1): serve the page with the module token injected and then drop the same-origin shortcut for POSTs and the page exception for sensitive GETs. Until then a local program can still forge Origin/Sec-Fetch-Site headers; web pages of other sites cannot. | 53 (after 50 agrees the embed path) |
+| `/api/chat-command` must require the module token (52 finding 2): 02 must send `Authorization: Bearer <module token>` on `module_command` first; then 53 removes it from OPEN_POST. Until then a local program can post a forged role/redeem. | 02 first, then 53 |
 | Redeem bypass accepts JSON `true` only (string "true" would not); Host sends booleans today | Host (02), only if that changes |
 | The 24 old `vod-*.mp4` files (~21 GB) in Listen's sources await Ivan's say-so | Ivan |
 

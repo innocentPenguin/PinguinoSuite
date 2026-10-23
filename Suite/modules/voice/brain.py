@@ -156,11 +156,7 @@ class Brain:
         rec["ts"] = self.now()
         self.history.append(rec)
         try:
-            hp = cfg.path("history.jsonl")
-            if hp.exists() and hp.stat().st_size > 5_000_000:      # keep the log bounded: one older generation
-                os.replace(hp, hp.with_name("history.1.jsonl"))
-            with open(hp, "a", encoding="utf8") as f:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            cfg.append_line("history.jsonl", json.dumps(rec, ensure_ascii=False))      # bounded: one older generation
         except OSError:
             pass
         lvl = "warn" if rec["outcome"] in ("error",) else "info" if rec["outcome"] in ("spoken", "queued") else "debug"

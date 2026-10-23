@@ -506,9 +506,30 @@ def backups():
     return sorted((f.name for f in bd.glob("config-*.json")), reverse=True) if bd.exists() else []
 
 
+_DEVICE_NAME = re.compile(r"(?i)^(?:con|prn|aux|nul|com\d|lpt\d)(?:\..*)?$")
+
+
+def dev_safe(name):
+    """Windows treats CON, NUL, COM1 ... as devices even with an extension; a file with such a name must never be written."""
+    name = str(name).rstrip(" .")
+    if _DEVICE_NAME.match(name):
+        base, dot, rest = name.partition(".")
+        return base + "_" + dot + rest        # CON.wav -> CON_.wav
+    return name
+
+
+def append_line(name, line, cap=5_000_000):
+    """Append one line to a log file in the data folder; one older generation is kept when it passes `cap` bytes."""
+    p = path(name)
+    if p.exists() and p.stat().st_size > cap:
+        os.replace(p, p.with_name(p.stem + ".1" + p.suffix))
+    with open(p, "a", encoding="utf8") as f:
+        f.write(line if line.endswith("\n") else line + "\n")
+
+
 def restore_backup(name):
-    f = path("backups") / re.sub(r"[^\w.-]", "", name)
-    if not f.exists():
+    f = path("backups") / dev_safe(re.sub(r"[^\w.-]", "", name))
+    if not f.is_file():
         raise ValueError("no such backup")
     return save(json.loads(f.read_text("utf8")))
 
@@ -520,7 +541,7 @@ def _preset_dir():
 
 
 def _pname(n):
-    return re.sub(r"[^\w -]", "", _s(n, 40)).strip() or "preset"
+    return dev_safe(re.sub(r"[^\w -]", "", _s(n, 40)).strip() or "preset")
 
 
 def preset_list():
