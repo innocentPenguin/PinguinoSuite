@@ -1,3 +1,5 @@
+**Fast path after a Host restart:** `python Tools\post-restart-check.py` (read-only: GET on loopback 8770 only, no posts, no chat, no OBS). It checks status, live-state, every pre-stream item, scene health/layouts/widgets, every overlay page (200 + fit-script tag), the overlay-options schema/health, economy preview, intro, and each GET route the commits since the Host build added (never `clips-pick` or anything that reserves/fires/polls/spins). Prints a table; exit 0 = no FAIL, 1 = a FAIL. Options: `--base URL` (loopback only), `--since REV`, `--no-routes`. Tested against a sim Host by `Tools	est-host-postrestart.py`.
+
 # Overlays - live check after the next Host restart
 
 Owner: 13 Overlays. Never go live in OBS to run this: use the browser pane / a plain browser tab on the Host port (8770). Nothing here needs a stream.
