@@ -32,7 +32,11 @@ def opted_out():
             j = json.load(open(f, encoding='utf-8'))
         except (OSError, ValueError): continue
         for u, v in (j.get('Users', j) if isinstance(j, dict) else {}).items():
-            if isinstance(v, dict) and str(v.get('Privacy', '')).lower() in ('anon', 'forget'): names.add(u.lower())
+            # chat_memory.json is keyed by Twitch id; the login is in v['Login'] (plus v['Aliases']). Keep the key too for older layouts.
+            if isinstance(v, dict) and str(v.get('Privacy', '')).lower() in ('anon', 'forget'):
+                names.add(u.lower())
+                if v.get('Login'): names.add(str(v['Login']).lower())
+                names.update(str(a).lower() for a in (v.get('Aliases') or []))
     return names
 
 def known_commands():
