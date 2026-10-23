@@ -60,6 +60,7 @@ import goals as goals_mod
 import scene_follow
 import stream_info
 import secrets_store
+import platform_api
 import windows as win
 from connectors.discord import Discord
 from connectors.kick import Kick
@@ -202,6 +203,7 @@ def _seed_defaults():
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(platform_api.router)      # Kick / YouTube sign-in (worker 42)
 
 
 @app.exception_handler(Exception)
