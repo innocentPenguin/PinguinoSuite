@@ -1616,6 +1616,38 @@ def test_alert_queue_merge_overflow_remove(tmp_path):
     assert e.cfg["profiles"]["Penguin"]["types"]["raid"]["delay_ms"] == 30000
 
 
+def test_loan_give_returning_chatter_are_off_by_default(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    for t in ("loan", "give", "returning_chatter"):
+        assert alerts.DEFAULT_TYPES[t]["enabled"] is False
+        assert eng.type_cfg(t)["enabled"] is False
+        ok, why = eng.submit({"type": t, "user": "someone", "id": "off-" + t, "amount": 5})
+        assert not ok and eng.heap == [], t
+
+
+def test_alert_overflow_drop_new_and_viewer_override_scope(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    c = eng.cfg
+    c["global"]["max_queue"] = 5
+    c["global"]["overflow"] = "drop_new"
+    c["profiles"]["Penguin"]["types"]["follow"]["merge_min"] = 0
+    c["overrides"]["quiet"] = {"follow": {"enabled": False}}
+    eng.save(c)
+    assert eng.submit({"type": "follow", "user": "Quiet", "id": "q1"})[0] is False            # override is per viewer (case-insensitive)...
+    assert eng.submit({"type": "raid", "user": "Quiet", "id": "q2", "amount": 9})[0] is True   # ...and per type
+    for i in range(4):
+        assert eng.submit({"type": "follow", "user": f"u{i}", "id": f"d{i}"})[0]
+    ok, _ = eng.submit({"type": "raid", "user": "big", "amount": 20, "id": "big"})
+    assert not ok and len(eng.heap) == 5                       # drop_new: even a higher priority alert is turned away
+
+
+def test_alert_submit_survives_odd_input(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    for i, amt in enumerate((None, "", "abc", float("nan"), float("inf"), 1e30, -5, True)):
+        eng.submit({"type": "cheer", "user": None, "id": f"o{i}", "amount": amt, "message": None, "tier": None})
+    assert len(eng.heap) >= 1
+
+
 def test_intros_play_approved_once_per_stream(tmp_path, monkeypatch):
     import asyncio
     import intros
