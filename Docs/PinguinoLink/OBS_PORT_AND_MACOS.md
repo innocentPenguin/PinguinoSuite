@@ -31,3 +31,27 @@ Fixed during this pass
 - `tailscale.mjs:15` had its Windows fallback paths with single backslashes inside JS strings (`'C:\Program Files\Tailscale\tailscale.exe'` became `C:Program FilesTailscale<TAB>ailscale.exe`), so Link could not find Tailscale when it was not on PATH. Now doubled; verified with PATH stripped.
 To prove on a real Mac (needs Ivan's MacBook, offline 23 days): run `node Suite/modules/link/src/selfcheck.mjs` and `meshcheck.mjs`, start Link, confirm Tailscale status shows, pair with the Windows PC (PAIRING_TEST.md), press a macro from the Mac.
 Note for future editing: the shell tool that sessions use can silently halve backslashes in typed text. Windows paths in JS strings need `\\`; check with `node -e` after editing (this caused the INDEX.md and tailscale.mjs bugs).
+
+## 3. Mac Lite design (what a macOS PinguinoLite must provide for the .sh installer contract)
+Session 52, 2026-10-23. Link side is already built (`lite.mjs`: `litePlatform()`, `installerExt()`, `installerRe()`, `unixLiteExe()`, `SHARE_RE` accepts `.exe` and `.sh`). This is what the Lite app and the build must supply. Nothing here was run on a Mac.
+
+**Contract (same shape as Windows, different file):**
+1. Release build produces `PinguinoLite-<ver>-setup.sh` plus `PinguinoLite-<ver>-setup.sh.sha256` (lowercase hex of the file, as on Windows). They land in `Data/lite/staging` (or arrive by the mesh pull, integrity-checked, not signed).
+2. Link re-hashes the installer right before running it, then starts a detached helper: `/bin/sh <installer>` (no shell string, no args from the network). The script must be self-contained: it gets only env `PINGUINO_LITE_APP` (path of the installed `.app`, from `unixLiteExe()`), and must exit 0 on success, non-zero on failure.
+3. The script installs by replacing the `.app`: copy the new bundle from a payload appended to the script (or a sibling `.tar.gz` named in the .sha256 manifest) to `<app>.new`, then swap with `mv`. It must NOT touch `Data/`, the mesh or OBS settings.
+4. The helper backs up the old `.app` folder to `<app>.bak` before the swap and restores it if the script fails or the new app does not start (Windows helper does the same with the .exe).
+5. Running-process check before install: `ps -A -o comm=` lists `PinguinoLite`; helper waits for Lite to exit (Lite exits itself after the click), up to 30 s, then continues. Relaunch with `open -a <app>` (never run the binary directly, so Gatekeeper and the Dock work).
+6. Install locations searched: `/Applications/PinguinoLite.app`, then `~/Applications/PinguinoLite.app`. Per-user install needs no password; `/Applications` needs the user to own it (normal for a drag-installed app). The installer must never call `sudo`.
+
+**What Lite on macOS needs (Tauri, as on Windows):**
+- A `.app` bundle named `PinguinoLite.app` with process name `PinguinoLite`; app data under `~/Library/Application Support/PinguinoSuite` (or `PINGUINO_DATA_DIR`).
+- Build the `.sh` as a wrapper around the Tauri `.app.tar.gz` (the Tauri bundler already makes it) with a fixed header; `shasum -a 256` for the .sha256.
+- Code signing and notarization: without an Apple Developer ID the downloaded app is quarantined. Updates fetched by Link are written by Link itself (no quarantine attribute), so only the first install is blocked; right-click > Open once. Notarization is Ivan's decision (paid account), same class as the Windows release-signing question.
+- Local-only listening stays: Link on 7777 and Tailscale app path already handled.
+
+**Risks and limits:**
+- The `.sh` is code that Link runs; the only protection is the sha256 next to it and pairing (a paired peer or the staging folder can supply both). Same trust as the Windows `.exe`, no signature. Signing both with a key Ivan holds is the real fix.
+- `open -a` and `ps` behave the same on Linux only partly (`open` is `xdg-open`); Linux Lite is out of scope, `unixLiteExe()` guesses `~/.local/share/PinguinoLite/PinguinoLite` and may need a revisit.
+- macOS may ask for permission the first time Lite touches the microphone, screen or network folders; not a Link issue.
+
+**Proof still needed (needs the MacBook):** stage a dummy `PinguinoLite-9.9.9-setup.sh` that only writes a marker file, click Update in a fake Lite, confirm hash re-check, backup, marker, relaunch and rollback on a failing script. Test hooks `PINGUINO_LITE_PLATFORM=darwin` with `PINGUINO_LITE_TEST=1` already let `applycheck.mjs` exercise the Link half on Windows.
