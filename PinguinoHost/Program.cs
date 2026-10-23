@@ -209,13 +209,37 @@ namespace PinguinoHost
             }
         }
 
+        // Port guard: only the real Host (data = <suite>\Data\runtime or %AppData%\BVQ) may fall back to 8770. A --sim Host without OverlayPort takes a free
+        // ephemeral port; any other non-sim Host with its own --data must name its port, or it refuses to start (test Hosts once collided with the live one on 8770).
+        internal static int ResolvePort(JObject s, bool sim)
+        {
+            int? p = s.Value<int?>("OverlayPort");
+            if (p.HasValue && p.Value > 0) return p.Value;
+            if (sim) { int fp = FreePort(); Console.WriteLine("PORT GUARD: --sim with no OverlayPort, using free port " + fp + " (never 8770)"); return fp; }
+            if (IsRealDataDir(dataDir, suite)) return 8770;
+            Console.WriteLine("PORT GUARD: refusing to start: --data " + dataDir + " is not the real data folder and host_secrets.json has no OverlayPort. Set OverlayPort explicitly.");
+            Environment.Exit(3); return 0;
+        }
+        internal static bool IsRealDataDir(string dir, string suiteDir)
+        {
+            string F(string x) => Path.GetFullPath(x).TrimEnd('\\', '/');
+            try
+            {
+                if (string.Equals(F(dir), F(Path.Combine(suiteDir, "Data", "runtime")), StringComparison.OrdinalIgnoreCase)) return true;
+                var ad = Environment.GetEnvironmentVariable("APPDATA");
+                return !string.IsNullOrEmpty(ad) && string.Equals(F(dir), F(Path.Combine(ad, "BVQ")), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception) { return false; }
+        }
+        static int FreePort() { var l = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0); l.Start(); int p = ((System.Net.IPEndPoint)l.LocalEndpoint).Port; l.Stop(); return p; }
+
         // OBS, Twitch events and the overlay web server (what Streamer.bot used to provide).
         static void WireServices(JObject s, bool sim)
         {
             if ((!sim || Environment.GetEnvironmentVariable("PINGUINO_OBS") == "1") && (s.Value<bool?>("ObsEnabled") ?? true))   // sim skips OBS unless a test sets PINGUINO_OBS=1 (mock-obs)
             { cph.Obs = new ObsClient(s.Value<string>("ObsHost") ?? "127.0.0.1", s.Value<int?>("ObsPort") ?? 4455, s.Value<string>("ObsPassword") ?? ""); Task.Run(() => cph.Obs.RunForever()); ObsTree.Start(); }
             if (!sim) CarryOverApiKey();   // never in --sim: a test Host must not copy the real key into its temp data folder
-            HostApi.DataDir = dataDir; HostApi.Port = s.Value<int?>("OverlayPort") ?? 8770; HostApi.SimMode = sim; if (!sim) HostApi.StartPrestreamLoop(); HostApi.ObsConnected = () => cph.ObsIsConnected();
+            HostApi.DataDir = dataDir; HostApi.Port = ResolvePort(s, sim); HostApi.SimMode = sim; if (!sim) HostApi.StartPrestreamLoop(); HostApi.ObsConnected = () => cph.ObsIsConnected();
             string overlayDir = null;
             try { var f = Path.Combine(dataDir, "settings.json"); if (File.Exists(f)) overlayDir = JObject.Parse(File.ReadAllText(f)).Value<string>("OverlayDir"); } catch (Exception) { }
             OverlayServer.Start(HostApi.Port, overlayDir, Path.Combine(suite, "PinguinoB0t", "overlays"), dataDir);
