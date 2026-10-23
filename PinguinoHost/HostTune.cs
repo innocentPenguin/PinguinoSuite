@@ -85,8 +85,11 @@ namespace PinguinoHost
             Num("minBet", "Minimum bet", 1, 1000000000, 1, "points", 1, "Smallest allowed bet."),
             Num("maxBet", "Maximum bet", 1, 1000000000, 1, "points", JValue.CreateNull(), "Empty = no maximum bet.", true),
             Num("cooldownSec", "Cooldown per user", 0, 3600, 1, "s", 15, "Seconds between two bets by the same person."),
-            Bool("slotsEnabled", "!slots on", true, ""), Bool("duelEnabled", "!duel on", true, ""), Bool("giveEnabled", "!give on", true, "") }; }
-        static readonly Dictionary<string, string> GambleKey = new Dictionary<string, string> { { "enabled", "enabled" }, { "winChance", "gambleWinChance" }, { "payout", "gamblePayout" }, { "pairPayout", "slotsPairPayout" }, { "triplePayout", "slotsTriplePayout" }, { "jackpotPayout", "slotsJackpotPayout" }, { "minBet", "minBet" }, { "maxBet", "maxBet" }, { "cooldownSec", "cooldownSec" }, { "slotsEnabled", "slotsEnabled" }, { "duelEnabled", "duelEnabled" }, { "giveEnabled", "giveEnabled" } };
+            Bool("slotsEnabled", "!slots on", true, ""), Bool("duelEnabled", "!duel on", true, ""), Bool("giveEnabled", "!give on", true, ""),
+            Num("giveDailyPct", "Give limit (% of balance)", 0, 100, 1, "%", 10, "Per stream, a person can give this share of what they have right now (counter resets when a new stream starts)."),
+            Num("giveDailyMin", "Give limit: at least", 0, 1000000000, 1, "points", 0, "Everybody may give at least this much per stream."),
+            Num("giveDailyMax", "Give limit: at most", 0, 1000000000, 1, "points", 0, "Upper cap per stream (0 = no cap).") }; }
+        static readonly Dictionary<string, string> GambleKey = new Dictionary<string, string> { { "enabled", "enabled" }, { "winChance", "gambleWinChance" }, { "payout", "gamblePayout" }, { "pairPayout", "slotsPairPayout" }, { "triplePayout", "slotsTriplePayout" }, { "jackpotPayout", "slotsJackpotPayout" }, { "giveDailyPct", "giveDailyPct" }, { "giveDailyMin", "giveDailyMin" }, { "giveDailyMax", "giveDailyMax" }, { "minBet", "minBet" }, { "maxBet", "maxBet" }, { "cooldownSec", "cooldownSec" }, { "slotsEnabled", "slotsEnabled" }, { "duelEnabled", "duelEnabled" }, { "giveEnabled", "giveEnabled" } };
         static JObject GamblingValues()
         {
             var c = Gamble.Config(); var o = new JObject();

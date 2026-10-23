@@ -7,7 +7,7 @@ dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 
 def _free():
     s = socket.socket(); s.bind(('127.0.0.1', 0)); n = s.getsockname()[1]; s.close(); return n
 PORT, SITE, WSPORT = _free(), _free(), _free(); B = 'http://127.0.0.1:%d' % PORT; KEY = 'test-key-123'
-d = tempfile.mkdtemp(prefix='pgact_'); out = os.path.join(d, 'out.txt'); os.makedirs(os.path.join(d, 'economy')); json.dump({'giveDailyMax': 300}, open(os.path.join(d, 'economy', 'gambling.json'), 'w'))
+d = tempfile.mkdtemp(prefix='pgact_'); out = os.path.join(d, 'out.txt'); os.makedirs(os.path.join(d, 'economy')); json.dump({'giveDailyPct': 100, 'giveDailyMax': 300}, open(os.path.join(d, 'economy', 'gambling.json'), 'w'))
 json.dump({'Channel': 'streamer1', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 json.dump({'Earning': False, 'WelcomeBonus': 0}, open(os.path.join(d, 'economy', 'settings.json'), 'w'))
 json.dump({'earned': {'zed': {'points': 40, 'minutes': 600}, 'amy': {'points': 7, 'minutes': 5}, 'bob': {'points': 1000, 'minutes': 600}, 'cat': {'points': 500, 'minutes': 600}, 'whale': {'points': 300000, 'minutes': 9000}, 'huge': {'points': 2000000, 'minutes': 9000}}}, open(os.path.join(d, 'economy', 'points.json'), 'w'))

@@ -104,6 +104,7 @@ namespace PinguinoHost
             }
             return s;
         }
+        internal static string TestSid; internal static string StreamId() { return TestSid ?? CurSid(); }
         static string CurSid() { lock (L) { var st = StreamDoc(); return (bool?)st["open"] == true && !string.IsNullOrEmpty((string)st["id"]) ? (string)st["id"] : "off"; } }
 
         /// <summary>caller holds L</summary>

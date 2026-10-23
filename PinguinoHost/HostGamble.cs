@@ -22,7 +22,7 @@ namespace PinguinoHost
                 { "gambleWinChance", 0.45 }, { "gamblePayout", 2.0 },
                 { "slotsEnabled", true }, { "slotsSymbols", new JArray("🍒", "🐟", "⭐", "⚽", "🐧") }, { "slotsPairPayout", 1.5 }, { "slotsTriplePayout", 5.0 }, { "slotsJackpotSymbol", "🐧" }, { "slotsJackpotPayout", 10.0 },
                 { "duelEnabled", true }, { "duelTimeoutSec", 60 }, { "duelHouseCutPercent", 0 },
-                { "giveEnabled", true }, { "giveMin", 1 }, { "giveDailyMax", 25000 } };
+                { "giveEnabled", true }, { "giveMin", 1 }, { "giveDailyPct", 10 }, { "giveDailyMin", 0 }, { "giveDailyMax", 0 } };
         }
         public static JObject Config()
         {
@@ -111,19 +111,28 @@ namespace PinguinoHost
         // ---- !give / site Give: one door, one set of rules ----
         static string GiveP { get { return Path.Combine(HostApi.DataDir, "economy", "give_daily.json"); } }
         static string GiveDay() { return DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture); }
-        public static long GiveLimit() { return (long)N("giveDailyMax", 25000); }
+        public static double GivePct() { return Math.Max(0, N("giveDailyPct", 10)); }
+        /// <summary>what this person may give per stream: giveDailyPct % of their CURRENT balance (rounded down), at least giveDailyMin, at most giveDailyMax (0 = no cap). Live: it follows the balance, the counter does not shrink.</summary>
+        public static long GiveLimit(string login)
+        {
+            long bal = Economy.Balance(Canon(login)); long lim = (long)Math.Floor(bal * GivePct() / 100.0);
+            long min = (long)N("giveDailyMin", 0), max = (long)N("giveDailyMax", 0);
+            if (lim < min) lim = min; if (max > 0 && lim > max) lim = max; return lim;
+        }
+        /// <summary>the counter belongs to a stream: a new stream id clears it; while offline it carries over</summary>
         static JObject GiveDoc()
         {
             JObject d = null; try { if (File.Exists(GiveP)) d = JObject.Parse(File.ReadAllText(GiveP, Encoding.UTF8)); } catch (Exception) { }
-            if (d == null || (string)d["day"] != GiveDay()) d = new JObject { { "day", GiveDay() }, { "users", new JObject() } };
+            string sid = Economy.StreamId();
+            if (d == null || !(d["users"] is JObject) || (sid != "off" && (string)d["sid"] != sid)) d = new JObject { { "sid", sid == "off" ? "" : sid }, { "users", new JObject() } };
             return d;
         }
         public static long GiveToday(string login) { lock (L) { var u = GiveDoc()["users"] as JObject; return (long?)u[(login ?? "").ToLowerInvariant()] ?? 0; } }
-        /// <summary>give points to someone: min, no self, no bots, balance, the daily cap (giveDailyMax, 0 = none), unique ids. Returns {ok, error|message, balance, givenToday, limit}.</summary>
+        /// <summary>give points to someone: min, no self, no bots, balance, the per-stream cap (giveDailyPct % of the balance, see GiveLimit), unique ids. Returns {ok, error|message, balance, givenToday, limit}.</summary>
         public static JObject Give(string from, string to, long amount, string reqId = null)
         {
             string me = Canon(from), tl = Canon(to), cur = Economy.CurrencyName;
-            Func<string, JObject> no = why => new JObject { { "ok", false }, { "error", why }, { "balance", Economy.Balance(me) }, { "givenToday", GiveToday(me) }, { "limit", GiveLimit() } };
+            Func<string, JObject> no = why => new JObject { { "ok", false }, { "error", why }, { "balance", Economy.Balance(me) }, { "givenToday", GiveToday(me) }, { "givenThisStream", GiveToday(me) }, { "limit", GiveLimit(me) }, { "pct", GivePct() } };
             if (!B("enabled") || !B("giveEnabled")) return no("giving points is switched off.");
             if (tl == "" || tl == me) return no("pick someone else to give to.");
             bool bot = false; try { bot = Boards.IsBot(tl); } catch (Exception) { }
@@ -132,14 +141,14 @@ namespace PinguinoHost
             long bal = Economy.Balance(me); if (amount > bal) return no("you only have " + bal + " " + cur + ".");
             lock (L)
             {
-                long lim = GiveLimit(), given = GiveToday(me);
-                if (lim > 0 && given + amount > lim) return no(given >= lim ? "you have given the daily limit (" + lim + " " + cur + "), try again tomorrow." : "the daily give limit is " + lim + " " + cur + " (you can still give " + (lim - given) + " today).");
+                long lim = GiveLimit(me), given = GiveToday(me);
+                if (given + amount > lim) return no(given >= lim ? "you have given " + given.ToString("N0", CultureInfo.InvariantCulture) + " this stream and the limit is " + lim.ToString("N0", CultureInfo.InvariantCulture) + " " + cur + " (" + GivePct().ToString("0.##", CultureInfo.InvariantCulture) + "% of what you have), try again next stream." : "you can give " + lim.ToString("N0", CultureInfo.InvariantCulture) + " " + cur + " per stream (" + GivePct().ToString("0.##", CultureInfo.InvariantCulture) + "% of what you have), you have given " + given.ToString("N0", CultureInfo.InvariantCulture) + " so " + (lim - given).ToString("N0", CultureInfo.InvariantCulture) + " is left.");
                 string id = reqId != null ? "give-" + reqId : Id("give", me);
                 string err = Economy.Spend(id, me, amount, "give to " + tl); if (err != null) return no(err + ".");
                 Economy.Credit(id + "-in", tl, amount, "given by " + me);
                 var d = GiveDoc(); var u = (JObject)d["users"]; u[me] = ((long?)u[me] ?? 0) + amount;
                 try { Directory.CreateDirectory(Path.GetDirectoryName(GiveP)); File.WriteAllText(GiveP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
-                return new JObject { { "ok", true }, { "message", "gave " + amount + " " + cur + " to " + Boards.DisplayName(tl) }, { "balance", Economy.Balance(me) }, { "givenToday", (long)u[me] }, { "limit", lim }, { "id", id } };
+                return new JObject { { "ok", true }, { "message", "gave " + amount + " " + cur + " to " + Boards.DisplayName(tl) }, { "balance", Economy.Balance(me) }, { "givenToday", (long)u[me] }, { "givenThisStream", (long)u[me] }, { "limit", lim }, { "pct", GivePct() }, { "id", id } };
             }
         }
 

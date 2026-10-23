@@ -7,7 +7,7 @@ dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 
 def _free():
     s = socket.socket(); s.bind(('127.0.0.1', 0)); n = s.getsockname()[1]; s.close(); return n
 PORT, SITE, WSPORT = _free(), _free(), _free(); B = 'http://127.0.0.1:%d' % PORT; KEY = 'test-key-123'
-d = tempfile.mkdtemp(prefix='pggive_'); out = os.path.join(d, 'out.txt'); os.makedirs(os.path.join(d, 'economy')); json.dump({'giveDailyMax': 300}, open(os.path.join(d, 'economy', 'gambling.json'), 'w'))
+d = tempfile.mkdtemp(prefix='pggive_'); out = os.path.join(d, 'out.txt'); os.makedirs(os.path.join(d, 'economy')); json.dump({'giveDailyPct': 100, 'giveDailyMax': 300}, open(os.path.join(d, 'economy', 'gambling.json'), 'w'))
 json.dump({'Channel': 'streamer1', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 json.dump({'Earning': False, 'WelcomeBonus': 0}, open(os.path.join(d, 'economy', 'settings.json'), 'w'))
 json.dump({'earned': {'zed': {'points': 40, 'minutes': 600}, 'amy': {'points': 7, 'minutes': 5}, 'bob': {'points': 1000, 'minutes': 600}, 'cat': {'points': 500, 'minutes': 600}, 'whale': {'points': 300000, 'minutes': 9000}, 'huge': {'points': 2000000, 'minutes': 9000}}}, open(os.path.join(d, 'economy', 'points.json'), 'w'))
@@ -58,9 +58,9 @@ try:
     q('g1', 'bob', 'give', toLogin='zed', amount=100, note='thanks'); a = ans('g1')
     chk('site give works', a.get('status') == 'done' and a['data']['givenToday'] == 100 and a['data']['limit'] == 300 and bal('bob') == 900 and bal('zed') == 140, (a, bal('bob'), bal('zed')))
     q('g2', 'bob', 'give', toLogin='bob', amount=5); chk('no giving to yourself', ans('g2').get('status') == 'rejected', ans('g2'))
-    q('g3', 'bob', 'give', toLogin='zed', amount=250); a = ans('g3'); chk('over the daily limit is refused with a clear reply', a.get('status') == 'rejected' and 'daily' in a['message'] and '200' in a['message'], a)
+    q('g3', 'bob', 'give', toLogin='zed', amount=250); a = ans('g3'); chk('over the daily limit is refused with a clear reply', a.get('status') == 'rejected' and 'per stream' in a['message'] and '200' in a['message'], a)
     q('g4', 'bob', 'give', toLogin='zed', amount=200); chk('up to the limit is fine', ans('g4').get('status') == 'done' and bal('bob') == 700, ans('g4'))
-    q('g5', 'bob', 'give', toLogin='zed', amount=1); a = ans('g5'); chk('then nothing more today', a.get('status') == 'rejected' and 'tomorrow' in a['message'], a)
+    q('g5', 'bob', 'give', toLogin='zed', amount=1); a = ans('g5'); chk('then nothing more this stream', a.get('status') == 'rejected' and 'next stream' in a['message'], a)
     q('g6', 'amy', 'give', toLogin='zed', amount=50); chk('no giving more than you have', ans('g6').get('status') == 'rejected', ans('g6'))
     q('g7', 'zed', 'give', toLogin='cat', amount=0); chk('minimum 1', ans('g7').get('status') == 'rejected', ans('g7'))
     time.sleep(2)
