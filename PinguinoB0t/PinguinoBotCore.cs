@@ -954,7 +954,8 @@ public class CPHInline
             var we = _wheel == null ? null : _wheel.Entrants.FirstOrDefault(e => e.Login == login);
             if (we != null) WheelRemoveEntrant(_wheel, we);
             if (_lastBalance == null || !IsPracticeLast()) _players.Remove(login);
-            _practice.Remove(login); _sim.Remove(login); gone++;
+            if (!_players.ContainsKey(login)) _practice.Remove(login);   // a row kept for the match record stays practice so SavePlayers never writes it and PracticeClear removes it
+            _sim.Remove(login); gone++;
         }
         CompactPositions();
         return gone;

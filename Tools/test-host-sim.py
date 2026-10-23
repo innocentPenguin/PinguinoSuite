@@ -3,12 +3,14 @@ silent in chat, sim:true on what Core pushes to the site, sendSimToSite OFF leav
 Usage: python Tools/test-host-sim.py [dll]"""
 import hashlib, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
+def _free():
+    import socket; k = socket.socket(); k.bind(('127.0.0.1', 0)); n = k.getsockname()[1]; k.close(); return n
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
-PORT, SITE = 8976, 8977; B = 'http://127.0.0.1:%d' % PORT
+PORT, SITE = _free(), _free(); B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pgsim_'); out = os.path.join(d, 'out.txt')
 json.dump({'Channel': 'simt', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
-json.dump({'WebSyncUrl': 'http://127.0.0.1:%d' % SITE, 'WebSyncKey': 'k'}, open(os.path.join(d, 'settings.json'), 'w'))
+json.dump({'WebSyncUrl': 'http://127.0.0.1:%d' % SITE, 'WebSyncKey': 'k', 'AutoNextMatch': False}, open(os.path.join(d, 'settings.json'), 'w'))
 SITE_NAMES = ['Aurora1', 'Borealis2', 'Cinder3', 'Drift4', 'Eclipse5', 'Fjord6', 'Glacier7', 'Harbor8', 'Iris9', 'Jade10', 'Kelp11', 'Lagoon12', 'Mesa13', 'Nimbus14', 'Opal15', 'Pebble16']
 POSTS = []
 class H(BaseHTTPRequestHandler):
@@ -26,13 +28,14 @@ class H(BaseHTTPRequestHandler):
         self._send({'ok': True})
 srv = HTTPServer(('127.0.0.1', SITE), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
-env.update({'PINGUINO_COMPAT_WS_PORT': '8978', 'PINGUINO_LIVE': '0', 'PINGUINO_SITE_BASE': 'http://127.0.0.1:%d' % SITE, 'BOT_API_KEY': 'testkey'})
+env.update({'PINGUINO_COMPAT_WS_PORT': str(_free()), 'PINGUINO_LIVE': '0', 'PINGUINO_SITE_BASE': 'http://127.0.0.1:%d' % SITE, 'BOT_API_KEY': 'testkey'})
 fails = []; h = None
 def chk(n, ok, x=''):
     if not ok: fails.append('%s %s' % (n, str(x)[:300]))
 def get(p): return json.load(urllib.request.urlopen(B + p, timeout=15))
 def post(p, o=None): return json.load(urllib.request.urlopen(urllib.request.Request(B + p, json.dumps(o or {}).encode(), {'Content-Type': 'application/json', 'Origin': B}), timeout=30))
-def says(): return [l[6:] for l in open(out, encoding='utf-8', errors='replace').read().splitlines() if l.startswith('[say] ')]
+def _balanced(l): return '[avg ' in l and ('Blue' in l or 'Orange' in l)   # a sim lobby's balanced-team announcement is expected sim output
+def says(): return [l[6:] for l in open(out, encoding='utf-8', errors='replace').read().splitlines() if l.startswith('[say] ') and not _balanced(l)]
 def start(extra=None):
     e = dict(env); e.update(extra or {})
     p = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=e, stdin=subprocess.PIPE, stdout=open(out, 'ab'), stderr=subprocess.STDOUT)
