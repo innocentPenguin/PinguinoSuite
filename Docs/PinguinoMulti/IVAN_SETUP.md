@@ -1,5 +1,16 @@
 # Setting up Kick, YouTube and TikTok in Multi (for Ivan)
 
+## YouTube in 5 lines (do this once, then it renews itself)
+
+1. console.cloud.google.com: create a project, then **APIs & Services -> Library -> YouTube Data API v3 -> Enable**.
+2. **OAuth consent screen**: user type **External**, then press **Publish app** so it is in **production** (left in "Testing", Google kills the sign-in after 7 days).
+3. **Credentials -> Create credentials -> OAuth client ID -> Desktop app**. Copy the client id and secret.
+4. Multi launcher, **YouTube sign-in** box: paste the id and secret, press **Save** (the secret goes to Windows Credential Manager).
+5. Press **Sign in to YouTube** and approve in the Google tab. Status reads "Signed in (renews itself)", so never paste a token again. Multi connects by itself once you are live on YouTube.
+
+Details, quota maths and troubleshooting are in section 2 below.
+
+
 You do every click that signs in or approves something. Multi only builds the link and receives the answer. Nothing here needs a password pasted into chat. Client secrets are typed into the Multi card and go to Windows Credential Manager; they are never shown again.
 
 Where it all lives: open Multi's launcher (the home screen). Under "1 Connect your platforms" you will see two boxes, **Kick sign-in** and **YouTube sign-in** (from `static/connect.js`), above the per-platform list.

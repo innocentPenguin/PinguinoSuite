@@ -49,11 +49,10 @@ HELP = {
     },
     "conn-youtube": {
         "title": "YouTube connection",
-        "summary": "Optional. Multi reads the chat of your active YouTube live broadcast with a Google access token.",
+        "summary": "Optional. Multi reads the chat of your active YouTube live broadcast. Sign in once with Google and Multi renews the access by itself.",
         "steps": [
-            "You need a Google OAuth access token with the YouTube live-chat permission for your channel.",
-            "Paste it in Multi setup > YouTube > Save, or store it as MULTI_YOUTUBE_TOKEN in the key vault.",
-            "Tokens expire (about an hour) and Multi cannot refresh them yet: paste a fresh one before going live.",
+            "Set it up once: follow the 5-line checklist at the top of Docs/PinguinoMulti/IVAN_SETUP.md (Google Cloud project, YouTube Data API v3, consent screen published to production, Desktop OAuth client).",
+            "Then paste the client id and secret in the YouTube sign-in box on the Multi launcher, press Save, then 'Sign in to YouTube'. Multi renews the access by itself, so there is nothing to paste again.",
             "'waiting: no active broadcast' means you are not live on YouTube yet; it connects by itself once you are.",
             "YouTube has no reply threads, so replies are plain messages.",
         ],
@@ -179,10 +178,10 @@ SECRETS = [
                   "Turn on Message Content Intent on the same page.", "Paste it here; it is never shown again."],
         "example": "a long string of letters, numbers and dots (70+ characters)",
         "link": {"label": "Discord developer portal", "url": "https://discord.com/developers/applications"}}},
-    {"name": "MULTI_YOUTUBE_TOKEN", "label": "YouTube access token", "help": {
-        "title": "YouTube access token", "summary": "A Google OAuth access token for live chat. It expires in about an hour.",
-        "steps": ["Create it with the YouTube live-chat scope for your channel.",
-                  "Paste a fresh one before you go live; Multi cannot refresh it yet."],
+    {"name": "MULTI_YOUTUBE_TOKEN", "label": "YouTube access token (old way, optional)", "help": {
+        "title": "YouTube access token", "summary": "Not needed any more: use the YouTube sign-in box on the Multi launcher. A pasted token only lasts about an hour.",
+        "steps": ["Press 'Sign in to YouTube' in the YouTube sign-in box instead; Multi then renews the access by itself.",
+                  "Only paste a token here as a quick one-off test."],
         "scopes": ["https://www.googleapis.com/auth/youtube.force-ssl"],
         "link": {"label": "OAuth 2.0 Playground", "url": "https://developers.google.com/oauthplayground"}}},
     {"name": "MULTI_AI_KEY", "label": "AI provider key for ranking (optional)", "help": {
