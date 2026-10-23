@@ -46,7 +46,10 @@ try:
     ev('channel.raid', {'from_broadcaster_user_login': 'bigstreamer', 'to_broadcaster_user_id': '1', 'viewers': 42}); time.sleep(1.2)
     ev('channel.channel_points_custom_reward_redemption.add', {'user_login': 'redeemer', 'id': 'rd1', 'reward': {'title': 'Hydrate', 'cost': 100, 'id': 'r1'}}); time.sleep(1.2)
     ev('channel.hype_train.end', {'level': 3, 'id': 'h1', 'total': 900}); time.sleep(1.2)
-    ev('channel.follow', {'user_login': 'newfollower'}); time.sleep(6)
+    ev('channel.follow', {'user_login': 'newfollower'})
+    for _ in range(40):   # the push loop batches; on a loaded machine the 7 events can arrive later than a fixed sleep (KeyError 'resub' in the QA run)
+        if sum(len(b['events']) for b in S['pushes']) >= 8: break
+        time.sleep(1)
     p = S['pushes']; chk('events pushed', len(p) >= 1, p)
     chk('old activity endpoint is not used', not S.get('old'))
     evs = [e for b in p for e in b['events']]

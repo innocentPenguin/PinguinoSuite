@@ -9,7 +9,7 @@ json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.joi
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8997', 'PINGUINO_MENTION_COOL_USER': '6', 'PINGUINO_MENTION_COOL_GLOBAL': '0'})
 h = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(outf, 'ab'), stderr=subprocess.STDOUT)
 def says(): return [l[6:] for l in open(outf, encoding='utf-8', errors='replace').read().splitlines() if l.startswith('[say] ')]
-def ask(line, wait=0.8):
+def ask(line, wait=2.5):
     n = len(says()); h.stdin.write((line + '\n').encode()); h.stdin.flush(); time.sleep(wait); return says()[n:]
 fails = []
 def chk(n, ok, x=''):

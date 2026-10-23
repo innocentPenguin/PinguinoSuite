@@ -6,6 +6,7 @@ dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 
 PORT = 8996; B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pgcf_'); outf = os.path.join(d, 'out.txt')
 json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
+json.dump({'ApiKey': '', 'Provider': ''}, open(os.path.join(d, 'chat_settings.json'), 'w'))   # a blank key in a test data dir must stay blank (no carry-over from the legacy folder)
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8998'})
 h = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(outf, 'ab'), stderr=subprocess.STDOUT)
 def clog():
@@ -37,6 +38,9 @@ try:
         r = ask('i%d: %s' % (i, w), 1.5); chk(w + ' runs as ' + to, ('%s -> %s' % (w, to)) in clog() and not any('did you mean' in x for x in r), (to, r))
     r = ask('i9: !xyzzy'); chk('a word near nothing is left alone', r == [] and '!xyzzy ->' not in clog(), r)
     r = ask('i10: !ran'); chk('a very short word is not guessed', r == [] and '!ran ->' not in clog(), r)
+    try: ak = json.load(open(os.path.join(d, 'chat_settings.json'), encoding='utf-8-sig')).get('ApiKey', '')
+    except Exception: ak = ''
+    chk('sim Host never copies the real AI key into a test data dir', ak == '', 'key present')
     r = ask('c6: !joni'); chk('unlisted join near miss asks', len(r) == 1 and 'did you mean !join?' in r[0], r)
     r = ask('c3: !joke'); chk('known lore words are not near misses', not any('did you mean' in x for x in r), r)
     r = ask('c4: !peng'); chk('no !peng alias, no did-you-mean', not any('did you mean' in x for x in r), r)

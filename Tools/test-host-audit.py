@@ -24,9 +24,12 @@ try:
     # 1) one command, one reply (a fresh user every time so cooldowns do not hide anything)
     viewer = ['!points', '!watchtime', '!toppoints', '!topwatch', '!topgifters', '!topbits', '!topyappers', '!topstreaks', '!rank', '!uptime', '!downtime',
               '!commands', '!leaderboards', '!bits', '!gifted', '!sub', '!founders', '!pm']
+    n0 = len(says())
     for i, c in enumerate(viewer):
-        r = ask('viewer%d: %s' % (i, c), 0.9)
+        r = ask('viewer%d: %s' % (i, c), 4.0 if c == '!rank' else 1.5)   # !rank waits up to ChatWaitMs (3 s) for the tracker, one line, and blocks the next sim line
         chk('one reply for ' + c, len(r) <= 1, r)
+    time.sleep(3)   # settle: late replies must not hide a command that says two things
+    tot = len(says()) - n0; chk('guard: %d commands, at most one chat line each (total %d)' % (len(viewer), tot), tot <= len(viewer), says()[n0:])
     # 2) cooldowns: the same user + command again inside 20 s is silent; another user inside 8 s is silent; another command is fine
     ask('cd1: !uptime', 0.9)
     r = ask('cd1: !uptime'); chk('same user, same command: silent', r == [], r)

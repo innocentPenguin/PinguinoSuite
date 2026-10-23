@@ -214,7 +214,7 @@ namespace PinguinoHost
         {
             if ((!sim || Environment.GetEnvironmentVariable("PINGUINO_OBS") == "1") && (s.Value<bool?>("ObsEnabled") ?? true))   // sim skips OBS unless a test sets PINGUINO_OBS=1 (mock-obs)
             { cph.Obs = new ObsClient(s.Value<string>("ObsHost") ?? "127.0.0.1", s.Value<int?>("ObsPort") ?? 4455, s.Value<string>("ObsPassword") ?? ""); Task.Run(() => cph.Obs.RunForever()); ObsTree.Start(); }
-            CarryOverApiKey();
+            if (!sim) CarryOverApiKey();   // never in --sim: a test Host must not copy the real key into its temp data folder
             HostApi.DataDir = dataDir; HostApi.Port = s.Value<int?>("OverlayPort") ?? 8770; HostApi.SimMode = sim; if (!sim) HostApi.StartPrestreamLoop(); HostApi.ObsConnected = () => cph.ObsIsConnected();
             string overlayDir = null;
             try { var f = Path.Combine(dataDir, "settings.json"); if (File.Exists(f)) overlayDir = JObject.Parse(File.ReadAllText(f)).Value<string>("OverlayDir"); } catch (Exception) { }
@@ -227,6 +227,7 @@ namespace PinguinoHost
         {
             try
             {
+                if (!string.Equals(Path.GetFullPath(dataDir).TrimEnd('\\', '/'), Path.GetFullPath(Path.Combine(suite, "Data", "runtime")).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) return;   // only the real runtime folder, never a --data test dir
                 var legacy = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BVQ", "chat_settings.json");
                 var cur = Path.Combine(dataDir, "chat_settings.json");
                 if (!File.Exists(legacy) || !File.Exists(cur) || Path.GetFullPath(legacy) == Path.GetFullPath(cur)) return;
