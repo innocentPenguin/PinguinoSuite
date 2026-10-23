@@ -156,7 +156,7 @@
   }
   function setOv(o) { const until = Date.now() + 5000; for (const k in o) if (o[k] != null) ui.ov[k] = { v: o[k], until }; schedule('customs'); setTimeout(() => schedule('customs'), 5100); }
   // 023's per-game overlay layouts: the activity decides the game (layouts are tagged by game name; '' = no game). Host: POST /api/scene-layouts setgame.
-  const gameOf = sub => (sub === 'end' ? '' : /^(boxfights|zonewars|fnviewers)$/.test(sub) ? 'Fortnite' : 'Rocket League');
+  const gameOf = C.gameOf;
   async function setOverlayGame(sub) {
     const game = gameOf(sub); if (ui.sim || ui.lastGame === game) return;
     const r = await api.post('/api/scene-layouts', { action: 'setgame', profile: '*', game });
@@ -475,7 +475,7 @@
     ui.teamsOv[side] = Object.assign({}, ui.teamsOv[side], p, { until: Date.now() + 5000 }); schedule('customs'); setTimeout(() => schedule('customs'), 5100);
     if (ui.sim) { Object.assign(ui.simState.teams[side], p); schedule('customs'); return; }
     const all = ls.get('teams') || {}; all[side] = Object.assign({}, all[side], p); ls.set('teams', all);
-    await tokenReady; ui.tookControl = true; const r = await api.post('/api/customs/teams', { [side]: { name: p.name, hex: p.color } });
+    await tokenReady; ui.tookControl = true; const r = await api.post('/api/customs/teams', { [side]: { name: p.name, color: p.color } });
     if (r.ok && !(r.json && r.json.ok === false)) toast(side + ' team: ' + ((p.name || '') + ' ' + (p.color || '')).trim()); else if (r.status === 404) toast('Team names/colours need the Host /api/customs/teams (Host restart needed)', true); else toast('Team: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
   }
   function renderTeamsEditor() {

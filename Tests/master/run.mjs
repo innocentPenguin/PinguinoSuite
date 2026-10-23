@@ -233,6 +233,13 @@ await t('teams + stream info round trips on the mock', async () => {
   assert.equal((await api.post('/api/stream/schedule', { platform: 'youtube', title: 'x', startsAt: '2030-01-01T00:00:00Z' })).json.broadcastId, 'bc1');
 });
 
+await t('setgame: activity -> game name, Host contract on the mock; teams POST uses color', async () => {
+  assert.equal(C.gameOf('fnviewers'), 'Fortnite'); assert.equal(C.gameOf('boxfights'), 'Fortnite'); assert.equal(C.gameOf('zonewars'), 'Fortnite'); assert.equal(C.gameOf('competitive'), 'Rocket League'); assert.equal(C.gameOf('koth'), 'Rocket League'); assert.equal(C.gameOf('end'), '');
+  const r = await api.post('/api/scene-layouts', { action: 'setgame', profile: '*', game: C.gameOf('fnviewers') }); assert.equal(r.json.ok, true); assert.equal(r.json.currentGame, 'Fortnite');
+  assert.equal((await api.post('/api/scene-layouts', { action: 'setgame', profile: 'x', game: 'Fortnite' })).json.ok, false);
+  const tm = await api.post('/api/customs/teams', { blue: { name: 'Frost', color: '#5aaeff' } }); assert.equal(tm.json.teams.blue.color, '#5aaeff');
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);
