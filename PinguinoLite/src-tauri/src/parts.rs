@@ -31,21 +31,45 @@ pub fn installed_parts(inst: &Value) -> Option<Vec<String>> {
 pub fn is_installed(parts: &Option<Vec<String>>, id: &str) -> bool {
     parts.as_ref().map(|p| p.iter().any(|x| x == id)).unwrap_or(true)
 }
-/// True when Link's status.json no longer reports the module as running (missing entry = stopped).
+/// True when Link's status.json no longer reports the module as running (missing entry = stopped) and Link is not mid-way through a request for it.
 pub fn module_stopped(status: &Value, id: &str) -> bool {
-    !matches!(status["modules"][id]["state"].as_str(), Some("running") | Some("degraded") | Some("starting") | Some("stopping"))
+    let busy = status["busy"][id].as_str().map(|s| !s.is_empty()).unwrap_or(false);
+    !busy && !matches!(status["modules"][id]["state"].as_str(), Some("running") | Some("degraded") | Some("starting") | Some("stopping"))
 }
 
-/// Wait until Link reports the module stopped. Link not answering (status.json older than 90 s or missing) means nothing is managing it, so nothing to wait for.
+/// Port each on-demand module listens on (module.json); used as the ground truth that a module really is down.
+pub fn module_port(id: &str) -> Option<u16> {
+    match id {
+        "listen" => Some(8765),
+        "multi" => Some(8766),
+        "spotify" => Some(8771),
+        _ => None,
+    }
+}
+
+fn port_open(port: u16) -> bool {
+    std::net::TcpStream::connect_timeout(&std::net::SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_millis(400)).is_ok()
+}
+
+/// Link's last error text for a request (update_status.json), shown when a stop did not happen so the user sees why.
+pub fn link_error(update_status: &Value) -> Option<String> {
+    update_status["error"].as_str().filter(|s| !s.is_empty()).map(|s| s.chars().take(160).collect())
+}
+
+/// Wait until the module is really stopped: Link reports it stopped and the module's port is closed. When Link is not answering
+/// (status.json missing or older than 90 s) nothing is managing the module, so the port alone decides. `secs` should cover Link's own
+/// pickup (6 s) plus its settle time (20 s).
 fn wait_module_stopped(id: &str, secs: u64) -> bool {
     let path = crate::lite_dir().join("status.json");
     for _ in 0..secs {
         let fresh = std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|e| e.as_secs() < 90).unwrap_or(false);
-        if !fresh {
-            return true;
-        }
-        let v: Value = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
-        if module_stopped(&v, id) {
+        let link_ok = if fresh {
+            let v: Value = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+            module_stopped(&v, id)
+        } else {
+            true
+        };
+        if link_ok && !module_port(id).map(port_open).unwrap_or(false) {
             return true;
         }
         std::thread::sleep(Duration::from_secs(1));
@@ -332,8 +356,9 @@ pub fn parts_eject(app: AppHandle, id: String) -> Value {
     }
     start_job("eject", &[id.clone()], move || {
         crate::request_module(app, "stop", &id); // best effort: Link stops the module before its files move
-        if !wait_module_stopped(&id, 20) {
-            return json!({"ok": false, "message": format!("{} did not stop within 20 s, so nothing was moved. Stop it and try again.", module_name(&id))});
+        if !wait_module_stopped(&id, 35) {
+            let why = std::fs::read(crate::lite_dir().join("update_status.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).as_ref().and_then(link_error).map(|e| format!(" Link says: {e}")).unwrap_or_default();
+            return json!({"ok": false, "message": format!("{} did not stop within 35 s, so nothing was moved. Stop it and try again.{}", module_name(&id), why)});
         }
         std::thread::sleep(Duration::from_secs(1)); // let Windows release the file locks
         run_updater(&["eject", "--part", &id])
@@ -410,6 +435,23 @@ mod tests {
         assert!(module_stopped(&st, "multi"));
         assert!(module_stopped(&st, "listen"));
         assert!(module_stopped(&Value::Null, "spotify"));
+        // Link is still working on a stop request for it: not stopped yet, even if the state already reads stopped
+        assert!(!module_stopped(&json!({"modules": {"multi": {"state": "stopped"}}, "busy": {"multi": "stopping"}}), "multi"));
+        assert!(module_stopped(&json!({"modules": {"multi": {"state": "stopped"}}, "busy": {}}), "multi"));
+    }
+
+    #[test]
+    fn stop_ground_truth_and_link_errors() {
+        assert_eq!((module_port("listen"), module_port("multi"), module_port("spotify"), module_port("link")), (Some(8765), Some(8766), Some(8771), None));
+        // a listening port is seen as open, a free one as closed
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        assert!(port_open(port));
+        drop(l);
+        assert!(!port_open(port));
+        assert_eq!(link_error(&json!({"result": "error", "error": "multi has no port"})).as_deref(), Some("multi has no port"));
+        assert_eq!(link_error(&json!({"result": "ok"})), None);
+        assert_eq!(link_error(&json!({"error": ""})), None);
     }
 
     #[test]
