@@ -1583,3 +1583,34 @@ def test_sounds_config_endpoint(monkeypatch):
     assert c.post("/api/sounds", json={"config": {"master": 40}}, headers={"origin": "http://127.0.0.1:8766"}).json()["ok"]
     assert c.get("/api/sounds").json()["config"]["master"] == 40
     assert c.post("/api/sounds", json={"config": "x"}, headers={"origin": "http://127.0.0.1:8766"}).status_code == 400
+
+
+def test_alert_queue_merge_overflow_remove(tmp_path):
+    import alerts
+    st = Store(str(tmp_path / "q.db"))
+    e = alerts.Engine(st, lambda x: None)          # runner not started: items just wait in the heap
+    for i in range(5):
+        e.submit({"type": "follow", "user": f"viewer{i}", "id": f"f{i}", "platform": "twitch"})
+    items = e.status()["items"]
+    assert len(items) == 2 or len(items) == 1                      # 4th follow merged the first four; the 5th waits (merge needs 4)
+    assert any("new followers" in x["text"] for x in items)
+    e.submit({"type": "raid", "user": "raider", "amount": 9, "id": "r1"})
+    assert e.status()["items"][0]["type"] == "raid"
+    assert e.remove("r1") and not e.remove("r1")
+    # overflow: queue of 5 low-priority items, a higher-priority one pushes the lowest out
+    c = e.cfg
+    c["global"]["max_queue"] = 5
+    c["profiles"]["Penguin"]["types"]["follow"]["merge_min"] = 0
+    e.save(c)
+    e.clear()
+    for i in range(5):
+        e.submit({"type": "follow", "user": f"u{i}", "id": f"x{i}"})
+    ok, _ = e.submit({"type": "follow", "user": "late", "id": "late"})
+    assert not ok and len(e.heap) == 5                              # same priority: newest is dropped
+    ok, _ = e.submit({"type": "raid", "user": "big", "amount": 20, "id": "big"})
+    assert ok and len(e.heap) == 5 and e.status()["items"][0]["user"] == "big"
+    # per-type delay is sanitised
+    c = e.cfg
+    c["profiles"]["Penguin"]["types"]["raid"]["delay_ms"] = 999999
+    e.save(c)
+    assert e.cfg["profiles"]["Penguin"]["types"]["raid"]["delay_ms"] == 30000

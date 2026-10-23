@@ -384,10 +384,17 @@ async def alerts_fire(request: Request):
         raise HTTPException(400, "unknown alert type")
     if b.get("test") or b.get("sim"):
         raise HTTPException(400, "test events go through /api/alerts/test")
-    ev = {k: b[k] for k in ("id", "user", "display", "amount", "tier", "months", "message", "level", "rank_colour", "avatar", "first_time", "recipient", "refollow") if k in b}
+    ev = {k: b[k] for k in ("id", "user", "display", "amount", "tier", "months", "message", "level", "rank_colour", "avatar", "first_time", "recipient", "refollow", "streak", "hours", "years", "platform", "currency") if k in b}
     ev["type"] = t
     ok, why = alert_engine.submit(ev)
     return {"ok": ok, "queued": ok, "text": why}
+
+
+@app.get("/api/intro/options")
+def intro_options():
+    """What a viewer may pick on the website intro form (05 reads this): short text, sounds from the allowed list only."""
+    names = [m for m in alert_media.listing() if m["kind"] == "sound"]
+    return {"max_len": 140, "links_allowed": False, "sounds": [{"id": m["name"], "label": m["name"].rsplit(".", 1)[0].replace("_", " ")} for m in names][:60]}
 
 
 @app.get("/api/sounds")
@@ -501,6 +508,8 @@ async def alerts_control(request: Request):
         alert_engine.skip()
     elif a == "clear":
         return {"ok": True, "cleared": alert_engine.clear(), "text": "queue cleared"}
+    elif a.startswith("remove:"):
+        return {"ok": alert_engine.remove(a[7:]), "status": alert_engine.status()}
     elif a in ("pause", "resume"):
         alert_engine.pause(a == "pause")
     elif a.startswith("profile:") and a[8:] in alert_engine.cfg["profiles"]:

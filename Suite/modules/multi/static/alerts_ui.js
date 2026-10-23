@@ -71,6 +71,11 @@ function alDraw() {
         <div style="width:480px;height:360px;position:relative;margin:6px 0"><iframe id="al-pv" src="/obs/alerts?bg=1&pv=1" style="width:800px;height:600px;border:1px solid var(--line);transform:scale(.6);transform-origin:0 0;position:absolute"></iframe></div>
         <div class="act"><button data-alact="pv" class="p">Show preview</button> <button data-alact="test">Queue test</button> <button data-alact="testall">Test all</button>
         <button data-alact="stress">Stress (30)</button> <button data-alact="skip">Skip</button> <button data-alact="clear">Clear queue</button> <button data-alact="pause">Pause/resume</button></div>
+        <details class="box"><summary><b>Queue rules</b> <small class="mut">(all alert types, one at a time)</small></summary>
+          <label class="cf">Pause between alerts <input type="number" id="al-g-gap" min="0" max="5000" step="100" value="${c.global.gap_ms}" style="width:80px"> ms</label>
+          <label class="cf">Max waiting <input type="number" id="al-g-max" min="5" max="200" value="${c.global.max_queue}" style="width:70px"></label>
+          <label class="cf">When full <select id="al-g-ovf"><option value="drop_lowest" ${c.global.overflow !== 'drop_new' ? 'selected' : ''}>drop the lowest priority</option><option value="drop_new" ${c.global.overflow === 'drop_new' ? 'selected' : ''}>drop the new one</option></select></label>
+          <small class="mut">Order: highest priority first, first come first served within a level. Per-type pause and merge are in each type's settings.</small></details>
         <div class="act"><label class="cf">Viewer <input id="al-tuser" value="${esc(AL.who || 'penguin')}" style="width:110px"></label>
         <label class="cf">Amount <input id="al-tamt" type="number" style="width:70px" placeholder="auto"></label> ${variants}</div>
         <small class="mut">Tests are flagged: they never reach credits, stats, points or chat. In chat (mods): <code>!alert test follow penguin</code>, <code>!alert test sub penguin tier3</code>, <code>!alert test gift penguin 50</code></small></div>
@@ -83,6 +88,7 @@ function alDraw() {
         <div class="act">${d.vars.map(v => `<button type="button" data-alvarins="${v}">${v}</button>`).join('')}</div>
         ${f('priority', 'Priority (higher plays first)', 'num', {lo: 1, hi: 9})}${f('duration', 'Duration', 'num', {lo: 1, hi: 30, unit: ' s'})}
         ${f('min_amount', 'Minimum amount', 'num', {lo: 0, hi: 1000})}${f('cooldown_s', 'Per-viewer cooldown', 'num', {lo: 0, hi: 600, unit: ' s'})}${f('max_per_min', 'Max per minute (0 = no limit)', 'num', {lo: 0, hi: 60})}
+        ${f('delay_ms', 'Extra pause after this alert (ms, on top of the global gap)', 'num', {lo: 0, hi: 30000})}${f('merge_min', 'Merge when this many are waiting (0 = never)', 'num', {lo: 0, hi: 50})}${f('merge_text', 'Merged text ({n} count, {names})', 'txt')}
         ${f('conditions.first_time_only', 'Only first-time viewers', 'chk')}<div class="act">Tiers (none = all): ${tiers}</div>
         <b>Look</b>${f('style.layout', 'Layout', 'sel', {opts: d.layouts})}${f('style.anim_in', 'Animation in', 'sel', {opts: d.anims})}${f('style.anim_out', 'Animation out', 'sel', {opts: d.anims})}
         ${f('style.font', 'Font', 'sel', {opts: d.fonts})}${f('style.size', 'Text size', 'num', {lo: 14, hi: 80, unit: ' px'})}
@@ -120,11 +126,15 @@ async function alPreview() {
 async function alLog() {
   const el = $('#al-log'); if (!el) { clearInterval(AL.logT); return; }
   const d = await fetch('/api/alerts').then(r => r.json()); AL.d.status = d.status;
-  el.innerHTML = `<div class="mut">queued: ${d.status.queued}${d.status.paused ? ' (PAUSED)' : ''}</div>` + d.log.slice(0, 40).map(l => `<div>${new Date(l.ts * 1000).toLocaleTimeString()} <b>${esc(l.type || '?')}</b> ${esc(l.user || '')} ${l.amount ? esc(l.amount) : ''} - ${esc(l.status)} <span class="mut">${esc(l.why || '')}${l.test ? ' [test]' : ''}</span></div>`).join('');
+  const qi = (d.status.items || []).map(x => `<div>${x.priority} <b>${esc(x.type)}</b> ${esc(x.user)} <span class="mut">${esc(x.text)}</span> <button class="chip2" data-qrm="${esc(x.id)}">Remove</button></div>`).join('');
+  el.innerHTML = `<div class="mut">queued: ${d.status.queued}${d.status.paused ? ' (PAUSED)' : ''}</div>${qi ? '<div style="border-bottom:1px solid var(--line);margin-bottom:4px">' + qi + '</div>' : ''}` + d.log.slice(0, 40).map(l => `<div>${new Date(l.ts * 1000).toLocaleTimeString()} <b>${esc(l.type || '?')}</b> ${esc(l.user || '')} ${l.amount ? esc(l.amount) : ''} - ${esc(l.status)} <span class="mut">${esc(l.why || '')}${l.test ? ' [test]' : ''}</span></div>`).join('');
 }
 async function alPost(u, b) { return fetch(u, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b || {})}).then(r => r.json()); }
 document.addEventListener('change', e => {
   if (W.type !== 'alerts') return; const t = e.target;
+  if (t.id === 'al-g-gap' || t.id === 'al-g-max' || t.id === 'al-g-ovf') {
+    const g = AL.d.config.global; g.gap_ms = +($('#al-g-gap').value || 0); g.max_queue = +($('#al-g-max').value || 50); g.overflow = $('#al-g-ovf').value; alSave(); return;
+  }
   if (t.id === 'al-scenes') {
     const m = {}; t.value.split(String.fromCharCode(10)).forEach(l => { const i = l.indexOf('='); if (i > 0) { const k = l.slice(0, i).trim(), v = l.slice(i + 1).trim(); if (k && AL.d.config.profiles[v]) m[k] = v; } });
     AL.d.config.scenes = m; alSave(); alState('Scene profiles saved'); return;
@@ -200,3 +210,5 @@ document.addEventListener('click', async e => {
   else if (a === 'adduser') { const n = ($('#al-newuser').value || '').trim().toLowerCase(); if (n) { c.overrides[n] = c.overrides[n] || {}; AL.who = n; alDraw(); } }
   else if (a === 'clrov') { if (AL.who && c.overrides[AL.who]) { delete c.overrides[AL.who][AL.sel]; if (!Object.keys(c.overrides[AL.who]).length) { delete c.overrides[AL.who]; AL.who = ''; } alSave(); alDraw(); } }
 });
+
+document.addEventListener('click', async e => { const b = e.target.closest && e.target.closest('[data-qrm]'); if (b) { await alPost('/api/alerts/control', {action: 'remove:' + b.dataset.qrm}); alLog(); } });

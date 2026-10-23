@@ -34,7 +34,7 @@ def _ms(points, what):
 
 
 def _t(text, sub="", prio=5, dur=6, **kw):
-    d = {"enabled": True, "priority": prio, "duration": dur, "text": text, "subtext": sub, "min_amount": 0, "silent": False, "cooldown_s": 0, "max_per_min": 0,
+    d = {"enabled": True, "priority": prio, "duration": dur, "text": text, "subtext": sub, "min_amount": 0, "silent": False, "cooldown_s": 0, "max_per_min": 0, "delay_ms": 0, "merge_min": 0, "merge_text": "{n} new viewers: {names}",
          "conditions": {"first_time_only": False, "tiers": []}, "milestones": [], "exact": False, "style": dict(_STYLE), "sound": copy.deepcopy(_SOUND), "media": dict(_MEDIA)}
     d.update(kw)
     return d
@@ -57,8 +57,9 @@ DEFAULT_TYPES = {
     "comeback": _t("{user} is back for the first stream in a while!", "welcome back", 4, 5),
     "intro": _t("{user} has arrived", "{message}", 5, 6),
 }
+DEFAULT_TYPES["follow"].update(merge_min=4, merge_text="{n} new followers! {names}")
 DEFAULT_TYPES["streak"].update(text="{user} is on a {streak}-stream watch streak!", subtext="", exact=True, milestones=_ms([3, 5, 10, 25, 50, 100], "streak"))
-GLOBAL = {"gap_ms": 600, "max_queue": 50, "dedupe_s": 10}
+GLOBAL = {"gap_ms": 600, "max_queue": 50, "dedupe_s": 10, "overflow": "drop_lowest"}
 THEMES = {"Penguin": {}, "Light": {"*": {"style": {"bg": "#fff7ec", "fg": "#2b1a05", "accent": "#e56f00"}}},
           "Minimal": {"*": {"style": {"layout": "center", "bg": "#000000", "opacity": 0, "border": 0}}}}
 
@@ -107,10 +108,10 @@ def sanitize_type(c, base):
     for k in ("enabled", "silent"):
         if k in c:
             out[k] = bool(c[k])
-    for k, lo, hi in (("priority", 1, 9), ("duration", 1, 30), ("min_amount", 0, 1000000), ("cooldown_s", 0, 3600), ("max_per_min", 0, 600)):
+    for k, lo, hi in (("priority", 1, 9), ("duration", 1, 30), ("min_amount", 0, 1000000), ("cooldown_s", 0, 3600), ("max_per_min", 0, 600), ("delay_ms", 0, 30000), ("merge_min", 0, 50)):
         if k in c:
             out[k] = int(_num(c[k], lo, hi, out[k]))
-    for k in ("text", "subtext"):
+    for k in ("text", "subtext", "merge_text"):
         if k in c:
             out[k] = str(c[k] or "")[:200]
     if isinstance(c.get("milestones"), list):
@@ -188,6 +189,7 @@ def sanitize_config(src):
         d["global"]["gap_ms"] = int(_num(g.get("gap_ms"), 0, 5000, GLOBAL["gap_ms"]))
         d["global"]["max_queue"] = int(_num(g.get("max_queue"), 5, 200, GLOBAL["max_queue"]))
         d["global"]["dedupe_s"] = int(_num(g.get("dedupe_s"), 0, 120, GLOBAL["dedupe_s"]))
+        d["global"]["overflow"] = g.get("overflow") if g.get("overflow") in ("drop_lowest", "drop_new") else GLOBAL["overflow"]
     profs = src.get("profiles")
     if isinstance(profs, dict):
         for name, p in list(profs.items())[:20]:
@@ -230,6 +232,7 @@ def _clean_partial(c):
 _VAR = re.compile(r"\{(user|amount|tier|months|message|level|recipient|streak|hours|years|platform|currency)\}")
 
 
+DEFAULT_MERGE = "{n} new viewers: {names}"
 VALUE_OF = {"streak": "streak", "watchtime": "hours", "anniversary": "years"}
 
 
@@ -355,14 +358,41 @@ class Engine:
             self.recent[key] = now                      # only an event that is really shown counts as "just fired"
             if len(self.recent) > 500:
                 self.recent = {k: v for k, v in self.recent.items() if now - v < 120}
-        if len(self.heap) >= self.cfg["global"]["max_queue"]:
-            return self._note(ev, "dropped", "queue full")
         payload = self._payload(c, ev, test)
+        if len(self.heap) >= self.cfg["global"]["max_queue"]:
+            low = max(self.heap, key=lambda x: (x[0], x[1]))             # lowest priority, newest among equals
+            if self.cfg["global"].get("overflow") == "drop_lowest" and -low[0] < c["priority"]:
+                self.heap.remove(low)
+                heapq.heapify(self.heap)
+                self._note(low[2], "dropped", "queue full: made room for a higher priority alert")
+            else:
+                return self._note(ev, "dropped", "queue full")
         self.seq += 1
         heapq.heappush(self.heap, (-c["priority"], self.seq, payload))
         self._note(ev, "queued", f"priority {c['priority']}")
+        self._merge(c, ev["type"])
         self._poke()
         return True, "queued"
+
+    def _merge(self, c, t):
+        """several waiting alerts of one type (e.g. a follow flood) become one: '5 new followers! a, b, c'. Never touches the alert on screen."""
+        n = c.get("merge_min", 0)
+        same = [x for x in self.heap if x[2]["type"] == t and not x[2].get("test") and not x[2].get("merged_from")]
+        if not n or len(same) < n:
+            return
+        same.sort(key=lambda x: x[1])
+        names = [x[2]["user"] for x in same]
+        top = min(same, key=lambda x: (x[0], x[1]))
+        base = dict(top[2])
+        shown = ", ".join(names[:5]) + (f" +{len(names) - 5}" if len(names) > 5 else "")
+        base.update(id=f"merge:{t}:{time.time_ns()}", subtext="", user=names[0], merged_from=names)
+        base["text"] = (c.get("merge_text") or DEFAULT_MERGE).replace("{n}", str(len(names))).replace("{names}", shown).replace("{user}", names[0])[:200]
+        for x in same:
+            self.heap.remove(x)
+        self.seq += 1
+        heapq.heappush(self.heap, (top[0], self.seq, base))
+        heapq.heapify(self.heap)
+        self._note(base, "merged", f"{len(names)} {t} alerts merged into one")
 
     def _milestone(self, c, t, ev):
         """celebration tiers: pick the biggest milestone reached and apply its look; exact types only fire ON a milestone. Returns a skip reason or ''."""
@@ -413,7 +443,7 @@ class Engine:
         return {"id": ev["id"], "type": ev["type"], "label": LABEL[ev["type"]], "priority": c["priority"], "duration": c["duration"], "test": test,
                 "text": render(c["text"], ev), "subtext": render(c["subtext"], ev), "style": c["style"], "media": c["media"] if c["media"]["url"] else None,
                 "sound": {"on": bool(so["enabled"] and not c["silent"]), "url": url, "volume": so["volume"]},
-                "platform": str(ev.get("platform") or ""), "rank_colour": _color(str(ev.get("rank_colour") or ""), ""), "avatar": _url(ev.get("avatar")), "user": ev["user"]}
+                "delay_ms": c.get("delay_ms", 0), "platform": str(ev.get("platform") or ""), "rank_colour": _color(str(ev.get("rank_colour") or ""), ""), "avatar": _url(ev.get("avatar")), "user": ev["user"]}
 
     def preview(self, t, ev=None):
         """Resolved payload without queueing (editor preview)."""
@@ -455,13 +485,24 @@ class Engine:
                 self.emit({"type": "alert.end", "id": p["id"]})
             except Exception:
                 pass
-            await asyncio.sleep(self.cfg["global"]["gap_ms"] / 1000)
+            await asyncio.sleep(max(self.cfg["global"]["gap_ms"], p.get("delay_ms", 0)) / 1000)      # per-type delay can only lengthen the global gap
 
     def _state(self):
         self.emit({"type": "alert.state", **self.status()})
 
     def status(self):
-        return {"queued": len(self.heap), "current": self.current["id"] if self.current else None, "paused": self.paused}
+        items = [{"id": p["id"], "type": p["type"], "user": p["user"], "text": p["text"], "priority": p["priority"]} for _, _, p in sorted(self.heap)[:60]]
+        return {"queued": len(self.heap), "current": self.current["id"] if self.current else None, "paused": self.paused, "items": items}
+
+    def remove(self, aid):
+        """take one waiting alert out of the queue (editor / Suite queue list)"""
+        for x in list(self.heap):
+            if x[2]["id"] == aid:
+                self.heap.remove(x)
+                heapq.heapify(self.heap)
+                self._state()
+                return True
+        return False
 
     def skip(self):
         if self.skip_ev:
