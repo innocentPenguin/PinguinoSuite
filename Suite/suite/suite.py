@@ -474,6 +474,10 @@ class Module:
         self._miss = 0        # health pings missed in a row (4 = called down)
         self.last_ok = 0.0    # when a health ping last answered OK
         self.last_err = ""    # why the latest ping failed ("" while it answers)
+        self.last_ms = None   # how long the latest answered ping took
+        self.slow_until = 0.0  # a recent slow answer or timeout: ping with the longer timeout until then
+        self.last_change = None   # latest state transition: {"state","reason","ts"}
+        self._rlock = threading.Lock()
         self.adopted = False  # already running when this core started (or started by an older core): we supervise it but hold no process handle
         self.adopt_pid = 0
 
@@ -586,12 +590,23 @@ class Module:
             pass
         bus.emit("module", id=self.id, state="stopped")
 
+    PING_TIMEOUT, SLOW_TIMEOUT, SLOW_MS, SLOW_FOR = 1.5, 4.0, 800, 120
+
+    def ping_timeout(self):
+        return self.SLOW_TIMEOUT if time.time() < self.slow_until else self.PING_TIMEOUT
+
     def _ping(self):
+        t0 = time.time()
         try:
-            r = requests.get(self.spec["url"] + self.spec.get("health", "/"), timeout=1.5)
+            r = requests.get(self.spec["url"] + self.spec.get("health", "/"), timeout=self.ping_timeout())
         except Exception as e:  # noqa: BLE001
             self.last_err = f"{type(e).__name__}: {_scrub_err(e)}"
+            if "Timeout" in type(e).__name__:
+                self.slow_until = time.time() + self.SLOW_FOR    # it is busy, not gone: give the next pings longer
             return False
+        self.last_ms = round((time.time() - t0) * 1000)
+        if self.last_ms > self.SLOW_MS:
+            self.slow_until = time.time() + self.SLOW_FOR
         if r.ok:
             self.last_ok, self.last_err = time.time(), ""
         else:
@@ -604,7 +619,7 @@ class Module:
         return {"id": self.id, "state": self.public()["state"], "healthy": self.healthy, "wanted": self.wanted, "failed": self.failed, "deferred": self.deferred, "adopted": self.adopted,
                 "miss": self._miss, "last_ok_age": round(now - self.last_ok, 1) if self.last_ok else None, "last_error": self.last_err,
                 "pid": (self.proc.pid if self.proc is not None else self.adopt_pid) or None, "alive": self.running, "crashes_5min": len([t for t in self.crashes if now - t < 300]),
-                "url": self.spec["url"] + self.spec.get("health", "/")}
+                "url": self.spec["url"] + self.spec.get("health", "/"), "last_ms": self.last_ms, "ping_timeout": self.ping_timeout(), "last_change": self.last_change}
 
     def supervise(self):
         """Restart a wanted module that exited on its own: backoff 2/5/15/30/60s, give up after 5 crashes in 5 min."""
@@ -646,7 +661,11 @@ class Module:
             if self._miss >= 4 or (self.proc is not None and not self.running):
                 self.healthy = False
         if self.healthy != was:
-            bus.emit("module", id=self.id, state="running" if self.healthy else ("starting" if self.running else "stopped"))
+            st = "running" if self.healthy else ("starting" if self.running else "stopped")
+            reason = (f"health answered in {self.last_ms} ms" if self.healthy else
+                      f"{self._miss} missed pings in a row ({self.last_err or 'no answer'})" if self.running else "process is gone")
+            self.last_change = {"state": st, "reason": reason, "ts": time.time()}
+            bus.emit("module", id=self.id, state=st, reason=reason)
 
     def call(self, hook):
         """POST a module's on_live / on_offline hook, retrying while it boots."""
@@ -899,20 +918,32 @@ def device_sync_loop():
 
 def refresh_all():
     """One health pass. A failure in one module's refresh must not skip the others (or end the loop): states would freeze at their last value, e.g. 'starting' forever."""
-    for m in list(modules.values()):
+    def one(m):
+        if not m._rlock.acquire(blocking=False):    # the previous pass for this module is still waiting on a hung ping
+            return
         try:
             m.refresh()
         except Exception as e:  # noqa: BLE001
             console_log.log("warn", "supervisor", f"{m.id}: health check failed: {e}", module=m.id)
+        finally:
+            m._rlock.release()
+    ts = [threading.Thread(target=one, args=(m,), daemon=True) for m in list(modules.values())]
+    for t in ts:    # in parallel: one hung module must not delay the others' recovery
+        t.start()
+    end = time.time() + 12
+    for t in ts:
+        t.join(max(0.0, end - time.time()))
 
 
 def health_loop():
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
     tick = 0
     while True:
-        process_control()
-        reconcile_devices()
-        console_log.ingest(list(modules))
+        for step in (process_control, reconcile_devices, lambda: console_log.ingest(list(modules))):
+            try:
+                step()
+            except Exception as e:  # noqa: BLE001  (one failing step must not end the loop: modules would stay "starting" forever)
+                print(f"[Pinguino] health loop step failed: {e}", file=sys.stderr)
         if tick % 4 == 0:  # health every ~4s, control files every second
             refresh_all()
         tick += 1

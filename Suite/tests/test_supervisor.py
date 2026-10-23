@@ -86,6 +86,7 @@ class Recovery(unittest.TestCase):
         try:
             m = suite.Module({"id": "rec", "name": "rec", "url": f"http://127.0.0.1:{srv.server_port}", "health": "/api/health", "cmd": ["x"], "cwd": "."})
             m.healthy = True
+            m.SLOW_TIMEOUT = 1.5     # this test is about the miss counting; the longer timeout has its own test
             m.supervise = lambda: None
             events = []
             orig = suite.bus.emit
@@ -200,3 +201,96 @@ class Diag(unittest.TestCase):
         self.assertTrue(m.last_err)
         self.assertNotIn("http", m.last_err)
         self.assertNotIn("127.0.0.1", m.last_err)
+
+
+class SlowModule(unittest.TestCase):
+    """A module that answers slowly, hangs, then recovers: a good ping always moves it back to running, with the reason logged."""
+
+    def test_slow_hang_recover_and_longer_timeout(self):
+        import threading
+        import time
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        mode = ["slow"]
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                if mode[0] == "slow":
+                    time.sleep(1.0)
+                elif mode[0] == "hang":
+                    time.sleep(2.5)
+                try:
+                    self.send_response(200)
+                    self.send_header("Content-Length", "2")
+                    self.end_headers()
+                    self.wfile.write(b"ok")
+                except OSError:
+                    pass
+
+        srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        port = srv.server_port
+        m = suite.Module({"id": "slw", "name": "slw", "url": f"http://127.0.0.1:{port}", "health": "/api/health", "cmd": ["x"], "cwd": "."})
+        m.supervise = lambda: None
+        m.proc = __import__("types").SimpleNamespace(pid=1, poll=lambda: None)   # "running" process
+        m.healthy = True
+        events = []
+        orig = suite.bus.emit
+        suite.bus.emit = lambda t, **k: events.append(k)
+        try:
+            self.assertEqual(m.ping_timeout(), 1.5)
+            mode[0] = "hang"
+            m.refresh()                      # times out at 1.5 s: now marked slow
+            self.assertEqual(m.ping_timeout(), 4.0)
+            m.refresh()                      # the 2.5 s answer fits the longer timeout: a good ping
+            self.assertEqual(m._miss, 0)
+            self.assertTrue(m.healthy)
+            mode[0] = "slow"
+            m.refresh()
+            self.assertTrue(m.last_ms >= 900)
+            srv.shutdown()
+            srv.server_close()
+            for _ in range(4):               # now really gone
+                m.refresh()
+            self.assertFalse(m.healthy)
+            self.assertIn("missed pings", events[-1]["reason"])
+            srv2 = HTTPServer(("127.0.0.1", port), H)
+            threading.Thread(target=srv2.serve_forever, daemon=True).start()
+            mode[0] = "ok"
+            m.refresh()
+            self.assertTrue(m.healthy)
+            self.assertEqual(events[-1]["state"], "running")
+            self.assertIn("answered in", events[-1]["reason"])
+            self.assertEqual(m.diag()["last_change"]["state"], "running")
+            srv2.shutdown()
+        finally:
+            suite.bus.emit = orig
+
+    def test_refresh_all_runs_modules_in_parallel_and_survives_failures(self):
+        import threading
+        import time
+        calls = []
+
+        class Fake:
+            def __init__(self, i, delay, boom=False):
+                self.id, self.delay, self.boom = i, delay, boom
+                self._rlock = threading.Lock()
+
+            def refresh(self):
+                time.sleep(self.delay)
+                if self.boom:
+                    raise RuntimeError("x")
+                calls.append(self.id)
+        saved = dict(suite.modules)
+        suite.modules.clear()
+        suite.modules.update({"a": Fake("a", 0.6), "b": Fake("b", 0.6, True), "c": Fake("c", 0.6)})
+        try:
+            t = time.time()
+            suite.refresh_all()
+            self.assertLess(time.time() - t, 1.5)    # not 1.8 s one after the other
+            self.assertEqual(sorted(calls), ["a", "c"])
+        finally:
+            suite.modules.clear()
+            suite.modules.update(saved)
