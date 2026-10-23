@@ -271,7 +271,7 @@ body.r-pill button,body.r-pill input[type=text],body.r-pill select{border-radius
 </nav>
 <div class="col">
   <div class="top"><button class="sm" id="nav-toggle" title="Show / hide the sidebar (Ctrl+B)">☰</button><button class="sm" id="fs-toggle" title="Full screen (F11)">⛶</button><h2 id="title">Dashboard</h2><div class="livepill" id="pill"><i></i><span id="pill-t">Offline</span></div><span class="dim sm" id="pill-sub"></span><button class="hq" id="hq-page" title="How this page works">?</button><button class="sm" id="popout-btn" title="Open this page in its own window">⤢ Pop out</button>
-    <div class="row sp"><button id="simon" class="sm" title="Pretend we went live to test auto-start">▶ Test go-live</button><button id="simoff" class="sm">■ End test</button></div></div>
+    <div class="row sp"><button id="simon" class="sm" title="Starts every module that follows the live state (and runs their go-live hooks) as if you went live. Ends by itself after 15 minutes. Click twice to confirm.">▶ Simulate going live (starts modules)</button><button id="simoff" class="sm" title="Ends the simulation. Only runs the go-offline hooks if the simulation started them.">■ End test</button></div></div>
   <div id="connban" role="alert" style="display:none;margin:8px 16px 0;align-items:center;gap:12px;padding:8px 14px;border-radius:10px;background:#8a5a00;color:#fff;font-weight:600"><span id="connmsg"></span><span class="sp"></span><button class="sm" id="conn-retry">Retry now</button></div>
   <div id="simglobal" class="simban" role="alert" style="display:none;margin:8px 16px 0;cursor:pointer" title="Open the simulator"></div>
   <div id="page"></div>
@@ -2070,8 +2070,11 @@ window.pgFsBar=function(on){let b=document.getElementById('pg-fsbar');
   requestAnimationFrame(()=>b.classList.toggle('on',!!on))};
 window.pgFsState=function(on){const t=document.getElementById('fs-toggle');if(t){t.textContent=on?'⤡':'⛶';t.title=on?'Exit full screen (F11)':'Full screen (F11)'}};
 document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#fs-toggle')){try{window.__TAURI__.core.invoke('toggle_fullscreen')}catch{toast('Full screen works in the desktop app')}}});
-$('#simon').onclick=()=>{post('/api/simulate',{live:true});toast('Simulating go-live…')};
-$('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/simulate',{live:null}));
+{const b=$('#simon'),label=b.textContent;let armed=0;   // two clicks: the first only arms the button
+  b.onclick=async()=>{if(!armed){b.textContent='Click again to start the test';armed=setTimeout(()=>{armed=0;b.textContent=label},5000);return}
+    clearTimeout(armed);armed=0;b.textContent=label;
+    try{const r=await post('/api/simulate',{live:true});toast(r.ok===false?(r.detail||'Not started'):'Simulating go-live (ends by itself in 15 min)…')}catch{toast('Could not start the test')}}}
+$('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(r=>toast(r&&r.ok===false?(r.detail||'Not ended'):'Test ended')).catch(()=>toast('Could not end the test'));
 
 let MODOK=0,COMMOK=0;
 const CONN={fails:0,backoff:2000,hiddenAt:0,modDown:null,miss:0};

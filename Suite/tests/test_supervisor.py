@@ -125,3 +125,45 @@ class Recovery(unittest.TestCase):
             suite.modules.clear()
             suite.modules.update(saved)
         self.assertEqual(seen, ["b"])
+
+
+class Simulation(unittest.TestCase):
+    """'Test go-live': refused while really live, ends by itself, End test only stops what the simulation started."""
+
+    def setUp(self):
+        self.calls = []
+        self.saved = (dict(suite.live_state), suite.on_transition)
+        suite.live_state.update(live=False, since=None, simulated=None, sim_until=None, viewers=0)
+        suite.on_transition = lambda is_live: self.calls.append(is_live)
+        self.sim = lambda v: suite.simulate(suite.Sim(live=v))
+
+    def tearDown(self):
+        suite.live_state.clear()
+        suite.live_state.update(self.saved[0])
+        suite.on_transition = self.saved[1]
+
+    def test_start_and_end_run_the_hooks_once(self):
+        self.assertTrue(self.sim(True)["ok"])
+        self.assertTrue(self.sim(True)["ok"])      # a second click only extends it
+        self.assertEqual(self.calls, [True])
+        self.sim(False)
+        self.assertEqual(self.calls, [True, False])
+        self.assertIsNone(suite.live_state["simulated"])
+
+    def test_refused_while_really_live_and_end_does_not_stop_the_real_stream(self):
+        suite.live_state.update(live=True)
+        r = self.sim(True)
+        self.assertFalse(r["ok"])
+        self.assertEqual(self.calls, [])
+        self.sim(False)                            # not ours: no offline hooks, stream stays live
+        self.assertEqual(self.calls, [])
+        self.assertTrue(suite.live_state["live"])
+
+    def test_expires_and_real_detection_returns(self):
+        self.sim(True)
+        suite.expire_simulation(now=suite.live_state["sim_until"] - 5)
+        self.assertTrue(suite.live_state["simulated"])
+        suite.expire_simulation(now=suite.live_state["sim_until"] + 1)
+        self.assertIsNone(suite.live_state["simulated"])
+        self.assertFalse(suite.live_state["live"])
+        self.assertEqual(self.calls, [True, False])

@@ -657,8 +657,9 @@ modules = {mid: Module(spec) for mid, spec in discover_specs().items()}
 
 
 # ------------------------------------------------------------------ go-live handling
-live_state = {"live": False, "since": None, "title": "", "game": "", "viewers": 0, "simulated": None, "error": None}
+live_state = {"live": False, "since": None, "title": "", "game": "", "viewers": 0, "simulated": None, "sim_until": None, "error": None}
 _offline_since = None
+SIM_SECS = 15 * 60   # a "Test go-live" simulation ends by itself, so real Twitch detection always comes back
 
 
 def on_transition(is_live):
@@ -692,10 +693,26 @@ def apply_stream(info):
             on_transition(False)
 
 
+def end_simulation():
+    """Leave simulation mode. The offline path (module on_offline hooks, e.g. Spotify closing song requests) runs only when WE faked the live state."""
+    ours = live_state["simulated"] is True
+    live_state.update(simulated=None, sim_until=None)
+    if ours and live_state["live"]:
+        live_state.update(live=False, since=None, viewers=0)
+        on_transition(False)
+
+
+def expire_simulation(now=None):
+    if live_state["simulated"] is not None and live_state.get("sim_until") and (now or time.time()) >= live_state["sim_until"]:
+        console_log.log("info", "live", "test go-live expired; back to real Twitch detection")
+        end_simulation()
+
+
 def twitch_loop():
     while True:
         s = load_settings()
         try:
+            expire_simulation()
             if live_state["simulated"] is None:
                 apply_stream(livedetect.stream_info(s["channel"]))
                 live_state["error"] = None
@@ -1956,14 +1973,18 @@ class Sim(BaseModel):
 
 @app.post("/api/simulate")
 def simulate(b: Sim):
-    """Test button: pretend we went live / offline without touching Twitch."""
-    live_state["simulated"] = b.live
-    if b.live is True and not live_state["live"]:
-        live_state.update(live=True, since=time.time(), title="(simulated stream)", game="", viewers=0)
+    """Test button: pretend we went live without touching Twitch. Refused while really live; ends by itself after 15 minutes;
+    ending it only runs the offline hooks (Spotify stop etc.) if this simulation started them."""
+    if b.live is True:
+        if live_state["live"] and live_state["simulated"] is None:
+            return {"ok": False, "detail": "You are really live: nothing to simulate."}
+        if live_state["simulated"] is True:
+            live_state["sim_until"] = time.time() + SIM_SECS
+            return {"ok": True}
+        live_state.update(simulated=True, sim_until=time.time() + SIM_SECS, live=True, since=time.time(), title="(simulated stream)", game="", viewers=0)
         on_transition(True)
-    elif b.live is False and live_state["live"]:
-        live_state.update(live=False, since=None, viewers=0)
-        on_transition(False)
+    else:
+        end_simulation()   # False and None both just end it
     return {"ok": True}
 
 
