@@ -1429,7 +1429,7 @@ function initReport(){
   #rp-box textarea{width:100%;min-height:96px;margin:8px 0}#rp-box .th{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}#rp-box .th span{position:relative}#rp-box .th img{height:54px;border-radius:6px;border:1px solid var(--line2)}#rp-box .th b{position:absolute;top:-6px;right:-6px;cursor:pointer;background:#000a;border-radius:50%;width:16px;height:16px;text-align:center;font-size:11px;line-height:16px}`;
   document.head.append(st);
   const fab=document.createElement('button');fab.id='rp-fab';fab.className='sm';fab.textContent='⚑ Report a problem';fab.title='Tell us what is wrong on this page. Saved on this PC only.';
-  const box=document.createElement('div');box.id='rp-box';
+  const box=document.createElement('div');box.id='rp-box';box.hidden=true;box.style.display='none';   // hidden on the element itself, not only by the injected stylesheet
   box.innerHTML=`<b>Report a problem</b> <span class="sm faint" id="rp-where"></span><textarea id="rp-note" maxlength="8000" placeholder="What is wrong, or what did you expect? You can paste a screenshot here (Ctrl+V) or attach one."></textarea>
    <div class="th" id="rp-th"></div><div class="row wrap" style="gap:8px"><label class="sm" style="cursor:pointer"><input type="file" id="rp-file" accept="image/*" multiple hidden><span class="pill">📎 Attach screenshot</span></label><span class="sp"></span><button class="sm" id="rp-close">Close</button><button class="pri sm" id="rp-send">Send</button></div>
    <div class="sm" id="rp-msg" style="margin-top:6px"></div><div class="sm faint" style="margin-top:4px">Saved in Data\\feedback on this PC (nothing is sent anywhere). <a href="#" id="rp-open">Open folder</a></div>`;
