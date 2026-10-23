@@ -865,6 +865,9 @@ public class CPHInline
     static readonly HashSet<string> _practice = new HashSet<string>();
     static bool _practiceOn;
     bool IsPractice(string login) { return _practice.Count > 0 && login != null && _practice.Contains(login); }
+    // belt and braces: sim logins ("sim_<name>") are never saved, even if a drop left them out of _practice
+    static bool IsSimKey(string login) { return login != null && login.StartsWith("sim_", StringComparison.Ordinal); }
+    static bool HasSimKey(MatchRecord m) { return m != null && ((m.Blue ?? new List<TeamPlayer>()).Concat(m.Orange ?? new List<TeamPlayer>()).Any(tp => IsSimKey(tp.Username))); }
     bool IsPracticeMatch(MatchRecord m)
     {
         return _practice.Count > 0 && m != null && ((m.Blue ?? new List<TeamPlayer>()).Concat(m.Orange ?? new List<TeamPlayer>()).Any(tp => IsPractice(tp.Username)));
@@ -1867,9 +1870,9 @@ public class CPHInline
     }
 
 
-    void SavePlayers() { SaveJson("players.json", _practice.Count == 0 ? _players : _players.Where(kv => !IsPractice(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value)); _standingsDirty = true; }   // [NEW][WEB] league table changed (practice players are never saved)
+    void SavePlayers() { SaveJson("players.json", _players.Where(kv => !IsPractice(kv.Key) && !IsSimKey(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value)); _standingsDirty = true; }   // [NEW][WEB] league table changed (practice players are never saved)
     void SaveQueue() { SaveJson("queue.json", _practice.Count == 0 ? _queue : _queue.Where(e => !IsPractice(e.Username)).ToList()); }
-    void SaveMatches() { SaveJson("matches.json", _practice.Count == 0 && !_matches.Any(IsPracticeMatch) ? _matches : _matches.Where(m => !IsPracticeMatch(m)).ToList()); _matchesDirty = true; }   // [NEW][WEB] history changed: send it to the website
+    void SaveMatches() { SaveJson("matches.json", _matches.Where(m => !IsPracticeMatch(m) && !HasSimKey(m)).ToList()); _matchesDirty = true; }   // [NEW][WEB] history changed: send it to the website
     void SaveMmrCache() { SaveJson("mmr_cache.json", _mmrCache); }
     void SaveSettings() { SaveJson("settings.json", _settings); }
     void SaveCurrentMatch() { if (_lastBalance != null && IsPracticeLast()) return; SaveJson("current_match.json", _lastBalance); }   // a practice lobby lives in memory only
