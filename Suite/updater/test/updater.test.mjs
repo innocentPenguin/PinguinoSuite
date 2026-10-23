@@ -430,3 +430,26 @@ test('Lite command lines: lite is staged then swapped by launch; link applies; r
   // a part Lite never offers is refused by the updater too when unknown
   o = run('apply', '--only', 'nonsense', '--install', inst); assert.equal(o.ok, false);
 });
+
+// ---- fresh-PC failure modes (Installer review) ----
+import { onlyEmptyDirs, pruneEmptyDirs, writeFailure, shortcutSpec } from '../lib/install.mjs';
+import { defaultTimeoutMs } from '../lib/sources.mjs';
+
+test('install: leftover empty folders do not block a retry, files do', async () => {
+  const d = tmp('empty-'); fs.mkdirSync(path.join(d, 'Data', 'runtime'), { recursive: true });
+  assert.equal(onlyEmptyDirs(d), true);
+  fs.writeFileSync(path.join(d, 'Data', 'runtime', 'x.txt'), '1'); assert.equal(onlyEmptyDirs(d), false);
+  fs.unlinkSync(path.join(d, 'Data', 'runtime', 'x.txt')); pruneEmptyDirs(d, true); assert.deepEqual(fs.readdirSync(d), []);
+  // a retry into a folder that only holds empty folders works
+  fs.mkdirSync(path.join(d, 'Data', 'runtime'), { recursive: true });
+  const rel = makeRelease('1.0.0', [['App/app.txt', 'a']]);
+  const r = await installRelease({ target: d, source: { type: 'local', path: rel } }); assert.equal(r.ok, true, JSON.stringify(r));
+});
+
+test('install: failure messages name the cause; shortcuts differ for a lite-minimal install; big downloads get a long time limit', () => {
+  assert.match(writeFailure({ code: 'ENOSPC', message: 'x' }), /disk is full/);
+  assert.match(writeFailure({ code: 'EBUSY', message: 'x' }), /antivirus/);
+  assert.match(writeFailure({ code: 'ENAMETOOLONG', message: 'x' }), /too long/);
+  assert.equal(shortcutSpec('lite-minimal').exeRel, 'PinguinoLite/Start-Lite.bat'); assert.match(shortcutSpec('full').exeRel, /pinguino-suite\.exe$/);
+  assert.equal(defaultTimeoutMs(256 * 1024), 10000); assert.ok(defaultTimeoutMs(2 * 1024 ** 3) >= 15 * 60 * 1000);
+});

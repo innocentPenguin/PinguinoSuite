@@ -13,7 +13,11 @@ let defaultToken = null;
 /** Read-only repo token for private GitHub sources (set by the Updater/Installer from the DPAPI file). Only ever sent to api.github.com. */
 export const setToken = t => { defaultToken = t || null; };
 
-async function httpGet(url, { timeoutMs = 10000, maxBytes = MAX_FILE, allowHttpLocal = false, token = null, accept = null } = {}) {
+/** Whole-request time limit: short for manifests and signatures, long for the release zip (66 MB+ on a slow line must not be cut off after 10 s). */
+export const defaultTimeoutMs = maxBytes => maxBytes > 8 * 1024 * 1024 ? 20 * 60 * 1000 : 10000;
+
+async function httpGet(url, { timeoutMs, maxBytes = MAX_FILE, allowHttpLocal = false, token = null, accept = null } = {}) {
+  timeoutMs ??= defaultTimeoutMs(maxBytes);
   const u = new URL(url);
   const local = ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
   if (u.protocol !== 'https:' && !(allowHttpLocal && local && u.protocol === 'http:')) throw new Error('updates must come from an https address');

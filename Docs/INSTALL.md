@@ -45,3 +45,18 @@ Exactly one online device is master and runs the bots; see "Devices: master / au
 | `PINGUINO_DATA_DIR` | where settings, bot data, console logs live | `<Suite parent>\Data\runtime` |
 | `PINGUINO_SUITE_ROOT` | where the app looks for `Suite\suite\suite.py` | found from the exe location upward |
 | `PINGUINO_PORT` | core port | 8760 |
+
+## Fresh-PC failure modes (reviewed 2026-10-23 by 21-Lite)
+Read: `Installer/install.mjs`, `Install-PinguinoSuite.cmd`, `Build-Installer.bat`, `pinguino_installer.rs`, `prereqs.mjs`, `Suite/updater/lib/install.mjs`.
+| Situation | What happens now |
+|---|---|
+| Node.js missing (script install, for example Lite on a second PC) | `Install-PinguinoSuite.cmd` now checks first and says how to install Node 22+ (exit 3); a too-old Node gets its own message. `PinguinoSuiteSetup.exe` carries its own node.exe, so it never needs Node. |
+| Path with spaces or a OneDrive folder | Fine: the .cmd quotes `%~dp0`, the Rust setup passes paths as arguments, all paths go through `path.resolve`. Prefer a folder you own (`%LOCALAPPDATA%\PinguinoSuite`) over `Program Files` (needs admin) or a very long path. |
+| No admin rights | The install itself needs none (writes only to the target folder, shortcuts in your own profile). Only the optional `--prereqs` winget installs may show a Windows permission prompt. |
+| Antivirus or another program blocks a file, disk full, path too long | The install stops, removes the files it wrote and now also the empty folders it made (before, a leftover empty `Datauntime` made the retry say "that folder is not empty"). The message names the cause and what to try. A folder that only holds empty folders now counts as empty. |
+| Offline, or the update server is down | Each source is tried in order (`--url` then `--local`); with none working: "every source failed; nothing was installed" and the reasons. Put the release on a USB stick and use `--local`. |
+| Slow connection | Fixed: downloads of the release zip were cut off after 10 s (the limit covered the whole body, so anything slower than about 50 Mbit/s failed for a 66 MB zip). Manifest and signature keep 10 s; files get 20 minutes. |
+| `--shortcuts` on a lite-minimal install | Fixed: it pointed at `pinguino-suite.exe`, which a minimal install does not have. It now makes a PinguinoLite shortcut to `PinguinoLite\Start-Lite.bat`, and refuses to make a shortcut to a file that is not there. Desktop and Start menu folders come from Windows, so a OneDrive-redirected Desktop works. |
+| `Installer.hta` / `mshta` blocked (company policy) | Not fixable here: use the command line (`install.mjs`). The Rust setup shows "Setup is damaged" only when the hta is missing. |
+| Windows older than 10 1803 | `tar.exe` is missing: setup says so. |
+Not tested on a clean Windows install (no spare PC); the code paths above are covered by `Suite/updater/test` (42 tests) and by running the .cmd with and without Node on PATH.

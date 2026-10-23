@@ -55,3 +55,11 @@ Everything below is source-only until Lite is rebuilt (`cargo build --release --
 5. The exe in the release is the new one: `Installer\Build-Release.mjs` lite part has 2 files (exe + Start-Lite.bat); check the exe timestamp is after the rebuild.
 6. Release/signing: follow Docs/LITE_RELEASE.md and Docs/RELEASE_DRYRUN.md (key with Installer/Make-SigningKey.mjs, `--sign-key`, publish three files, install on the second PC with `--url ... --pubkey ... --profile lite-minimal`).
 7. On the gaming PC (the only one with Rocket League): the replay scan finds the Demos folder under OneDrive\Documents if Documents is redirected. Do not run the live scan on the main PC.
+
+## 8. Compile Lite on this PC (21-Lite, 2026-10-23)
+Findings: the earlier "paging file too small" / "metadata stub" / LNK1108 failures had two causes. (1) C: was 100% full (425 MB free; scratch targets under `%TEMP%` live on C:), so linker writes failed. I deleted my own scratch folders (4 GB free now). (2) Windows commit limit: 45 GB RAM + 30 GB pagefile (auto-managed) = 75 GB, and at the time about 74.7 GB was committed (big python processes: 3.5 GB, 2.4 GB, 1.4 GB, node 1.7 GB, ...), leaving about 0.6 GB free commit. Free physical RAM is not the limit.
+Command to try (not run in full by me; 100 was going to do the real build):
+```
+$env:CARGO_TARGET_DIR='D:\cargo-target\lite'; $env:CARGO_BUILD_JOBS='1'; $env:CARGO_PROFILE_DEV_DEBUG='0'; cargo test --manifest-path D:\PinguinoSuite\PinguinoLite\src-tauri\Cargo.toml
+```
+D: has 266 GB free, so the target dir goes there. If it still dies with os error 1455 / exit 0xc000012d: the commit limit is the cause; ask Ivan/100 to add a pagefile on D: (System > Advanced > Performance > Virtual memory, 32 GB on D:); I did not change system settings. Without the full build, the pure parts of parts.rs and replays.rs are tested in a tiny scratch crate (copy the functions plus `serde_json`, no tauri), which compiles in about 10 s.

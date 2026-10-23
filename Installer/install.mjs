@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { installRelease, makeShortcuts } from '../Suite/updater/lib/install.mjs';
+import { installRelease, makeShortcuts, shortcutSpec } from '../Suite/updater/lib/install.mjs';
 import { unseal, storeToken } from '../Suite/updater/lib/secret.mjs';
 import { setToken } from '../Suite/updater/lib/sources.mjs';
 
@@ -68,7 +68,7 @@ async function main() {
       if (r.ok) {
         if (token) { try { storeToken(path.resolve(target), token); r.keyStored = true; } catch (e) { r.keyStored = false; r.keyError = String(e.message).slice(0, 120); } }
         if (has('prereqs')) r.prereqs = await prereqs();
-        if (has('shortcuts')) { try { r.shortcuts = makeShortcuts({ target }); } catch (e) { r.shortcutsError = String(e.message).slice(0, 120); } }
+        if (has('shortcuts')) { try { r.shortcuts = makeShortcuts({ target, ...shortcutSpec(profile) }); } catch (e) { r.shortcutsError = String(e.message).slice(0, 120); } }
         return out({ ...r, via: name, tried });
       }
       tried.push(`${name}: ${r.message}`);
