@@ -20,7 +20,7 @@ namespace PinguinoHost
         /// <summary>keeps runtime\obs_tree.json fresh (every 5 s while OBS is connected) so the bot's published state always carries the real tree.</summary>
         public static void Start()
         {
-            if (_started) return; _started = true;
+            if (_started) return; _started = true; GameWatch.EnsureStarted();
             System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(6000); while (true) { try { if (Lease.MayRun) Get(null); } catch (Exception) { } await System.Threading.Tasks.Task.Delay(5000); } });
         }
         static string FoldersP { get { return Path.Combine(HostApi.DataDir, "config", "obs_folders.json"); } }
@@ -136,5 +136,42 @@ namespace PinguinoHost
         }
 
         static JObject Err(string m) { return new JObject { { "ok", false }, { "error", m } }; }
+    }
+
+    /// <summary>Fallback for the scene-layout "current game": when the Twitch category changes (the bot publishes it as obs.twitchGame in live_state.json every ~30 s; if that is missing the
+    /// channel info is asked every 60 s) the new category goes to Scenes.SetGameAll so the layout tagged with it is served. Master View's activity selector stays primary: only a CHANGE of the
+    /// category is applied (never re-asserted), plus the first sighting when no current game is set yet. Started by ObsTree.Start and by the first scene request (so the sim Host has it too).</summary>
+    public static class GameWatch
+    {
+        static readonly object L = new object(); static bool _started; static string _seen = ""; static DateTime _infoAt = DateTime.MinValue;
+        public static void EnsureStarted()
+        {
+            lock (L) { if (_started) return; _started = true; }
+            System.Threading.Tasks.Task.Run(async () => { while (true) { try { Poll(); } catch (Exception) { } await System.Threading.Tasks.Task.Delay(5000); } });
+        }
+        static string FromState()
+        {
+            foreach (var f in new[] { Path.Combine(HostApi.DataDir, "live_state.json"), Path.Combine(HostApi.DataDir, "runtime", "live_state.json") })
+                try { if (File.Exists(f)) { var j = JObject.Parse(File.ReadAllText(f).TrimStart((char)0xFEFF)); return ((string)j["obs"]?["twitchGame"] ?? "").Trim(); } } catch (Exception) { }
+            return "";
+        }
+        /// <summary>one check; returns true when the scenes were told about a new game (public so a test can drive it)</summary>
+        public static bool Poll()
+        {
+            if (!Lease.MayRun) return false;
+            string g = FromState();
+            if (g == "" && (DateTime.UtcNow - _infoAt).TotalSeconds >= 60 && HostApi.IrcConnected) { _infoAt = DateTime.UtcNow; try { g = ((string)ChannelControl.Info()["game"] ?? "").Trim(); } catch (Exception) { } }
+            return Observe(g);
+        }
+        public static bool Observe(string g)
+        {
+            g = (g ?? "").Trim(); if (g == "") return false;
+            bool first;
+            lock (L) { if (g == _seen) return false; first = _seen == ""; _seen = g; }
+            if (first && Scenes.CurrentGame() != "") return false;   // the Host just started and someone already chose a game: do not override it
+            Scenes.Set(new JObject { { "action", "setgame" }, { "profile", "*" }, { "game", g } });
+            ChannelControl.Audit("scenes", "setgame", "twitch category " + g);
+            return true;
+        }
     }
 }

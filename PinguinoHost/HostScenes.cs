@@ -129,8 +129,14 @@ namespace PinguinoHost
                 { "params", "free query-string pairs passed to the widget page, e.g. {\"layout\":\"sprinkled\",\"scale\":\"1.2\"} (same names the standalone page takes)" } };
         }
 
+        /// <summary>the current game both profiles are on ("" = none set); read by GameWatch</summary>
+        public static string CurrentGame()
+        {
+            lock (L) { var ps = Load()["profiles"] as JObject; var p = ps == null ? null : ps["h"] as JObject; return Game((string)p?["currentGame"] ?? ""); }
+        }
         public static JObject Get(string profile, string layout)
         {
+            GameWatch.EnsureStarted();
             profile = (profile ?? "h").ToLowerInvariant(); if (!Profiles.ContainsKey(profile)) return Err("profile must be h or v");
             lock (L)
             {
