@@ -139,7 +139,7 @@ class Twitch(Connector):
             body = {"type": typ, "version": "1", "condition": cond,
                     "transport": {"method": "websocket", "session_id": self.session_id}}
             r = requests.post(f"{HELIX}/eventsub/subscriptions", json=body, headers=self._headers(tok), timeout=10)
-            if r.status_code not in (200, 202):
+            if r.status_code not in (200, 202, 409):          # 409 = already subscribed on this session (a reconnect keeps its subscriptions)
                 if typ == "channel.chat.message":
                     raise RuntimeError(f"subscribe failed {r.status_code}: {r.text[:200]}")
                 console_log.warn("twitch", f"could not subscribe to stream events ({r.status_code}); chat still works", dedupe_s=600)
@@ -150,9 +150,12 @@ class Twitch(Connector):
         t = meta.get("message_type")
         if t == "session_welcome":
             self.session_id = payload["session"]["id"]
-            await asyncio.to_thread(self._subscribe, tok)
+            if not getattr(self, "reconnecting", False):          # after a session_reconnect the subscriptions carry over; resubscribing only gets a 409
+                await asyncio.to_thread(self._subscribe, tok)
+            self.reconnecting = False
             self.set_status("connected", f"as {self.user['login']}")
         elif t == "session_reconnect":
+            self.reconnecting = True
             return payload["session"]["reconnect_url"]
         elif t == "notification" and meta.get("subscription_type") == "channel.chat.message":
             msg = normalize_event(payload["event"])
@@ -192,6 +195,7 @@ class Twitch(Connector):
                             if url:
                                 break
             except Exception as e:
+                self.reconnecting = False                     # any failure (incl. close code 4007 "invalid reconnect") starts a clean session: full subscribe
                 self.state["reconnects"] += 1
                 self.set_status("reconnecting", str(e)[:120])
                 await asyncio.sleep(min(backoff, 60))

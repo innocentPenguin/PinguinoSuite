@@ -1685,3 +1685,21 @@ def test_shoutout_clip_defaults_clip_only_with_delay(tmp_path):
     assert eng.submit(dict(ev, id="so:a:2", user="amy", clip=None))[0]          # no clip: the normal name card shows, no delay
     q = eng.heap[0][2]
     assert q["text"] and q["pre_ms"] == 0
+
+
+def test_twitch_reconnect_does_not_resubscribe(monkeypatch):
+    import asyncio as aio
+    from connectors.twitch import Twitch
+    t = Twitch(None, lambda e: None)
+    t.user = {"login": "me", "user_id": "1"}
+    calls = []
+    monkeypatch.setattr(t, "_subscribe", lambda tok: calls.append(tok))
+    welcome = {"metadata": {"message_type": "session_welcome"}, "payload": {"session": {"id": "s1"}}}
+    aio.run(t.handle_frame(welcome, "tok"))
+    assert calls == ["tok"]
+    url = aio.run(t.handle_frame({"metadata": {"message_type": "session_reconnect"}, "payload": {"session": {"reconnect_url": "wss://x"}}}, "tok"))
+    assert url == "wss://x"
+    aio.run(t.handle_frame(welcome, "tok"))                      # the welcome of the reconnected socket: subscriptions carried over
+    assert calls == ["tok"]
+    aio.run(t.handle_frame(welcome, "tok"))                      # a later fresh session subscribes again
+    assert calls == ["tok", "tok"]
