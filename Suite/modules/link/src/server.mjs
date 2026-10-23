@@ -15,6 +15,7 @@ import { createMesh } from './mesh.mjs';
 import * as settings from './settings.mjs';
 import * as macros from './macros.mjs';
 import { obsConn } from './vault.mjs';
+import { morning, probeObsPort } from './morning.mjs';
 import { resolveSteps, resolveName, nameHint } from './names.mjs';
 
 /** Run a macro. Hub talks to OBS directly; clients forward to the hub over the tailnet. */
@@ -166,6 +167,7 @@ export async function serve(cfg) {
       if (req.method === 'GET' && req.url === '/api/prestream') return json(200, { items: await allItems() });
       // Everything else needs the token, loopback included.
       if (!tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization)) { log('warn', 'http', `unauthorized ${req.method} ${req.url.split('?')[0]} (401)`); return json(401, { error: 'bad token' }); }
+      if (req.method === 'GET' && req.url === '/api/morning') return json(200, morning(cfg, { items: await allItems(), mesh: mesh.status(), probe: cfg.role === 'hub' ? await probeObsPort(cfg.obs?.port || 4455) : null }));   // read-only, plain language
       if (req.method === 'GET' && req.url === '/api/status') {
         const t = await ts.status();
         selfName = t.self?.name || selfName;

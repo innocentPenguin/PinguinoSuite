@@ -34,3 +34,6 @@ Only after the user clicks Update in Lite: Lite writes `selfupdate-apply` and ex
 
 ## OBS scene/input names (names.mjs)
 Default macros use guessed names BRB, Main, Mic/Aux. They live in one config map `obsNames` (`brb`, `main`, `mic`). Set the real OBS names there, e.g. `"obsNames": { "main": "Gameplay" }`; macros are translated when they run and in the pre-stream check. Test: `node src/namescheck.mjs`.
+
+## Morning check (morning.mjs, GET /api/morning)
+Read-only, token required, no secrets. Returns `{verdict: good|attention|problem, headline, lines:[{status: good|note|bad, label, text}]}` in plain language, one screen: this PC's role (hub/client), other PCs online, OBS reachable (client: asks the hub), scene/mic names resolved (`obsNames`), Tailscale, whether buttons can start the stream, remote stop, and on the hub whether OBS port 4455 is reachable from the network (a TCP connect to this PC's own addresses, no OBS protocol). Test: `node src/morningcheck.mjs`. Quick look: `curl -H "x-link-token: <token>" http://127.0.0.1:7777/api/morning`. A dashboard card or a 100 summary can render `lines` as they are.
