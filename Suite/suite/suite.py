@@ -175,6 +175,7 @@ import io
 import json
 import hmac
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -447,6 +448,16 @@ def pid_alive(pid):
 PIDS = Path(DATA_DIR) / "pids"
 
 
+_URL = re.compile(r"https?://[^\s)'\"]*")   # error texts name the URL asked: keep them short and free of addresses
+
+
+def _scrub_err(e) -> str:
+    t = re.sub(r"\w*ConnectionPool\([^)]*\):\s*", "", str(e))
+    t = _URL.sub("<url>", t)
+    t = re.sub(r"\s*with url: \S+", "", t)
+    return re.sub(r"\(Caused by (\w+)\(.*$", r"(\g<1>)", t)[:120]
+
+
 class Module:
     def __init__(self, spec):
         self.spec = spec
@@ -552,6 +563,7 @@ class Module:
         finally:
             log.close()
         self._write_pid(self.proc.pid)
+        self.last_ok, self.last_err = 0.0, ""    # a new process: the old one's "last OK" says nothing about it
         bus.emit("module", id=self.id, state="starting")
         if self.spec.get("on_start"):   # manifest hook fired once after launch (Listen: start the mic even when not live)
             threading.Thread(target=self.call, args=("on_start",), daemon=True).start()
@@ -578,7 +590,7 @@ class Module:
         try:
             r = requests.get(self.spec["url"] + self.spec.get("health", "/"), timeout=1.5)
         except Exception as e:  # noqa: BLE001
-            self.last_err = f"{type(e).__name__}: {str(e)[:120]}"
+            self.last_err = f"{type(e).__name__}: {_scrub_err(e)}"
             return False
         if r.ok:
             self.last_ok, self.last_err = time.time(), ""

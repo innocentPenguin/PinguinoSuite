@@ -193,3 +193,10 @@ class Diag(unittest.TestCase):
         r = c.get("/api/modules/diag", headers={"Authorization": "Bearer " + suite.TOKEN})
         self.assertEqual(r.status_code, 200)
         self.assertEqual({m["id"] for m in r.json()["modules"]}, set(suite.modules))
+
+    def test_last_error_has_no_urls_and_restart_clears_last_ok(self):
+        m = suite.Module({"id": "dg2", "name": "dg2", "url": "http://127.0.0.1:1", "health": "/h", "cmd": ["x"], "cwd": "."})
+        m._ping()
+        self.assertTrue(m.last_err)
+        self.assertNotIn("http", m.last_err)
+        self.assertNotIn("127.0.0.1", m.last_err)
