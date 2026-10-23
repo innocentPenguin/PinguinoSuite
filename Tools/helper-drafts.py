@@ -11,6 +11,7 @@ import os, re, sys, collections
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NIGHTLY = os.path.join(ROOT, "Docs", "nightly")
 OUT = os.path.join(ROOT, "Docs", "HELPER_DRAFTS.md")
+ES_MARK = "<!-- SPANISH-DRAFTS -->"
 LINE = re.compile(r"^- (\d\d:\d\d) ([^:\s]+): (.*?)(?: \(([^()]*)\))?$")
 
 
@@ -48,8 +49,16 @@ def main():
         out.append("_No unanswered questions in the nightly logs._")
     for g in rows:
         out += ["## " + g["q"][:90], "- asked %d time(s) by %d viewer(s), last %s%s" % (g["n"], len(g["users"]), g["last"], (" (" + g["why"] + ")") if g["why"] else ""), "- Answer: ", ""]
+    keep = ""   # the hand-written Spanish drafts below the marker survive a re-run
+    try:
+        with open(OUT, encoding="utf-8") as f:
+            old = f.read().replace("\r\n", "\n")
+        if ES_MARK in old:
+            keep = old[old.index(ES_MARK):]
+    except OSError:
+        pass
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(out) + "\n")
+        f.write("\n".join(out) + "\n" + ("\n" + keep.rstrip("\n") + "\n" if keep else ""))
     print("wrote %s (%d question(s))" % (os.path.relpath(OUT, ROOT), len(rows)))
 
 
