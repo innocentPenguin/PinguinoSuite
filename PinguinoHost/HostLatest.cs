@@ -49,6 +49,7 @@ namespace PinguinoHost
         {
             if (!new[] { "follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "ban", "unban", "mod", "unmod", "clip", "replay", "first5", "shoutout", "raid_out", "poll", "prediction", "hype", "streak" }.Contains(kind)) return;
             Func<string, string> g = k => ctx.ContainsKey(k) ? ctx[k] : "";
+            if (kind == "hype") AlertBridge.OnHypeAsync(ctx);   // Multi hype alerts (start / each new level / end); off unless EmitHypeTip is on
             if ((kind == "poll" || kind == "prediction" || kind == "hype") && g("state") == "progress") return;   // only begin / lock / end go in the feed (progress would flood it)
             string who = g("user") != "" ? g("user") : g("userName"), what = ""; int amount = 0, tier = 0; string message = "";
             int.TryParse(g("tier"), out tier);

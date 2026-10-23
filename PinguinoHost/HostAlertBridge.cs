@@ -25,7 +25,7 @@ namespace PinguinoHost
         static string StateP { get { return Path.Combine(HostApi.DataDir, "alert_bridge_state.json"); } }
         public static JObject Settings()
         {
-            var d = new JObject { { "Enabled", true }, { "Url", "http://127.0.0.1:8766" }, { "Token", "" }, { "ComebackDays", 30 }, { "WatchHours", new JArray(10, 25, 50, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000, 3000, 5000) } };
+            var d = new JObject { { "Enabled", true }, { "EmitHypeTip", false }, { "Url", "http://127.0.0.1:8766" }, { "Token", "" }, { "ComebackDays", 30 }, { "WatchHours", new JArray(10, 25, 50, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000, 3000, 5000) } };
             try { if (File.Exists(SetP)) foreach (var p in JObject.Parse(File.ReadAllText(SetP, Encoding.UTF8))) d[p.Key] = p.Value; else File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
             return d;
         }
@@ -147,6 +147,46 @@ namespace PinguinoHost
             Clog.Info("alerts", "shoutout " + login + " clip " + clipId + " -> " + (ok ? "queued" : "not queued: " + Short((string)r["text"])));
             return ok;
         }
+
+        // ================= hype train + tips (settings EmitHypeTip, default OFF until Multi confirms the event names) =================
+        static int _hypeLevel; static string _hypeId = "";
+        /// <summary>a Twitch hype train event (ctx = the EventSub context: state begin|progress|end, x.id, x.level, x.progress, x.goal, x.total). Fires type "hype" with phase start|level|end; one level alert per new level. Never test or sim.</summary>
+        public static void OnHype(Dictionary<string, string> ctx)
+        {
+            try
+            {
+                var set = Settings(); if ((bool?)set["Enabled"] == false || (bool?)set["EmitHypeTip"] != true) return;
+                Func<string, string> g = k => ctx.ContainsKey(k) ? ctx[k] : "";
+                if (g("sim") == "true" || g("test") == "true") return;
+                string st = g("state"), tid = g("x.id") != "" ? g("x.id") : DateTime.UtcNow.ToString("yyyyMMddHH"); int lv; int.TryParse(g("x.level"), out lv); if (lv < 1) lv = 1;
+                string phase; string id;
+                if (st == "begin") { phase = "start"; _hypeLevel = lv; _hypeId = tid; id = "hype:" + tid + ":start"; }
+                else if (st == "progress") { if (_hypeId == tid && lv <= _hypeLevel) return; if (_hypeId != tid) { _hypeId = tid; _hypeLevel = 1; if (lv <= 1) return; } _hypeLevel = lv; phase = "level"; id = "hype:" + tid + ":level" + lv; }
+                else if (st == "end") { phase = "end"; id = "hype:" + tid + ":end"; }
+                else return;
+                lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
+                var body = new JObject { { "type", "hype" }, { "phase", phase }, { "user", "Hype train" }, { "display", "Hype train" }, { "id", id }, { "level", lv }, { "amount", lv } };
+                foreach (var k in new[] { "progress", "goal", "total" }) { long v; if (long.TryParse(g("x." + k), out v)) body[k] = v; }
+                var r = Post("/api/alerts/fire", body); Clog.Info("alerts", "hype " + phase + " level " + lv + " -> " + ((bool?)r["ok"] == true ? "queued" : "not queued: " + Short((string)r["text"])));
+            }
+            catch (Exception ex) { Clog.Warn("alerts", "hype emit failed: " + ex.Message); }
+        }
+        public static void OnHypeAsync(Dictionary<string, string> ctx) { var c = new Dictionary<string, string>(ctx); ThreadPool.QueueUserWorkItem(_ => OnHype(c)); }
+        /// <summary>a tip (!tip / POST /api/economy/event): type "tip" with amount + currency, stable id from the tip id. Never sim/test names.</summary>
+        public static void OnTip(string login, double amount, string currency, string tipId)
+        {
+            try
+            {
+                var set = Settings(); if ((bool?)set["Enabled"] == false || (bool?)set["EmitHypeTip"] != true || string.IsNullOrEmpty(login) || Sim.IsSim(login) || amount <= 0) return;
+                string id = "tip:" + tipId; lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
+                var body = new JObject { { "type", "tip" }, { "user", login }, { "display", Boards.DisplayName(login) }, { "id", id }, { "amount", amount }, { "currency", string.IsNullOrEmpty(currency) ? "USD" : currency.ToUpperInvariant() } };
+                string av = AvatarOf(login); if (av != "") body["avatar"] = av;
+                var r = Post("/api/alerts/fire", body); Clog.Info("alerts", "tip " + login + " " + amount + " -> " + ((bool?)r["ok"] == true ? "queued" : "not queued: " + Short((string)r["text"])));
+            }
+            catch (Exception ex) { Clog.Warn("alerts", "tip emit failed: " + ex.Message); }
+        }
+        public static void OnTipAsync(string login, double amount, string currency, string tipId) { ThreadPool.QueueUserWorkItem(_ => OnTip(login, amount, currency, tipId)); }
+        internal static void TestResetHype() { _hypeLevel = 0; _hypeId = ""; }
 
         /// <summary>every watch-streak notification (viewer_milestone): Multi shows it once per id</summary>
         public static void OnStreak(string login, string notifId, long streak) { FireAsync("streak", login, "streak:" + (notifId != "" ? notifId : login + ":" + streak + ":" + DateTime.UtcNow.ToString("yyyyMMddHH")), "streak", streak); }

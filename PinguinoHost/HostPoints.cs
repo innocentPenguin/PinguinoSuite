@@ -240,7 +240,7 @@ namespace PinguinoHost
             string type = ((string)b["type"] ?? "").ToLowerInvariant(), login = Norm((string)b["login"]); string id = (string)b["id"]; if (login == "") return new JObject { { "ok", false }, { "error", "login is required" } };
             if (string.IsNullOrEmpty(id)) return new JObject { { "ok", false }, { "error", "id is required (a unique id per event keeps a retry from paying twice)" } };
             var pv = Preview(b); if (pv["ok"] != null && !(bool)pv["ok"]) return pv; long pts = (long)pv["points"]; string sid = CurSid(); string err = null; double amt = D(b["amount"]);
-            if (type == "tip") { err = PayEvent(sid, login, pts, "tip", "Tip $" + amt.ToString("0.##", CultureInfo.InvariantCulture), "tip:" + id); if (err == null) RecordTip(login, amt, id); }
+            if (type == "tip") { err = PayEvent(sid, login, pts, "tip", "Tip $" + amt.ToString("0.##", CultureInfo.InvariantCulture), "tip:" + id); if (err == null) { RecordTip(login, amt, id); AlertBridge.OnTipAsync(login, amt, (string)b["currency"] ?? "USD", id); } }
             else
             {
                 var a = new Dictionary<string, object> { { "userName", login }, { "eventId", id }, { "tier", (string)b["tier"] ?? "1" }, { "bits", (long)amt }, { "viewers", (long)amt }, { "total", (long)amt }, { "bitsType", (string)b["bitsType"] ?? "" } };
