@@ -6,7 +6,7 @@ Owner: session 013, started by 00 (coordinator, local_9b055c40-005d-4fad-892a-71
 The Master View is one page inside the Suite app (Tauri v2), under `App/src/master/` (`master.html`, `master.css`, `master-core.js` = pure logic, `master.js` = UI). It talks to the Host (127.0.0.1:8770), the Spotify module (8771) and Multi (8766). Ivan's brief, relayed by 00: one super-responsive control page in Penguin orange/dark.
 Docs: `Docs/MASTER_VIEW_APP.md`. Tests: `Tests/master/run.mjs` (37 tests) + `Tests/master/mock-host.mjs`.
 
-Commits (oldest to newest): b065ab7, 97c1a33, 83e3918, 4834b5b, 9e4f47c, 497ec62, 37b6a16 (base, feeds, logs); 47c618c Spotify strip; 7b4ad4f docked player; 7e3cd84 drag/drop + strikes; ed421f8 simulator chat, activity defaults, streamer row; 30bbd14 wheel Queue/Undo/Tourney; d33ceec activity "what about the N players?" chooser, sim streamer, toast dedupe, site-style queue, Wheel Cancel dropped (Ivan: Cancel means the GAME); 48c67a1 "Fill empty slots"; 41d1855 strike chips labelled by game; 0813384 team name/colour editor, Fortnite row + sizes, Stream tab; 5a5be09 recap preview/post, raid prep, teams POST uses `hex`.
+Commits (oldest to newest): b065ab7, 97c1a33, 83e3918, 4834b5b, 9e4f47c, 497ec62, 37b6a16 (base, feeds, logs); 47c618c Spotify strip; 7b4ad4f docked player; 7e3cd84 drag/drop + strikes; ed421f8 simulator chat, activity defaults, streamer row; 30bbd14 wheel Queue/Undo/Tourney; d33ceec activity "what about the N players?" chooser, sim streamer, toast dedupe, site-style queue, Wheel Cancel dropped (Ivan: Cancel means the GAME); 48c67a1 "Fill empty slots"; 41d1855 strike chips labelled by game; 0813384 team name/colour editor, Fortnite row + sizes, Stream tab; 5a5be09 recap preview/post, raid prep, teams POST uses `hex`; a74f201 activity change calls `POST /api/scene-layouts setgame` (RL -> "Rocket League", Fortnite activities -> "Fortnite", End -> ""); needs the rebuilt shell.
 
 ## 2. Decisions and failures
 - Optimistic overlays (`ui.ov`, `teamsOv`...) so clicks feel instant; `reconcile` only updates rows when their `sig` changes, so rows must carry every displayed field.
@@ -39,3 +39,6 @@ Session id 2ea0c6c4-3f9f-4f2b-a70e-a6b34c1a07de. Transcript: `C:\Users\ivanm\.cl
 - Spotify cover art needs the CSP `img-src https://i.scdn.co` (01 added; confirm it is in the build).
 - Simulator "Chat ON" would post to real chat; keep it off unless intended.
 - Recap "Post in chat" is a real chat post (30 s duplicate guard only).
+
+## Status 2026-10-23 05:35
+Role changed by 00: Q&A pool only (no coding, no restarts). Questions come via old 00; new supervisor is 100 - Coordinator (Docs/SESSIONS_STRUCTURE.md). Also found: Listen review card first line (52:24) has a 0.4 s clip for a 14-word sentence (reported to 01).
