@@ -73,7 +73,24 @@ def recent(root: Path, limit: int = 30) -> list:
     out = []
     for p in sorted(root.glob("*.json"), reverse=True)[:limit] if root.is_dir() else []:
         try:
-            out.append(json.loads(p.read_text("utf8")))
+            m = json.loads(p.read_text("utf8"))
         except Exception:
-            pass
+            continue
+        m["handled"] = bool(m.get("handled"))
+        m["screenshots"] = m.get("screenshots") or []
+        out.append(m)
     return out
+
+
+def set_handled(root: Path, rid: str, handled: bool = True) -> dict:
+    """Flip the handled flag stored in the report's .json. Only ids that look like our own file names are accepted."""
+    if not re.fullmatch(r"[0-9]{8}-[0-9]{6}-[a-z0-9-]{1,80}", str(rid or "")):
+        raise ValueError("bad id")
+    p = root / (rid + ".json")
+    if not p.is_file():
+        raise KeyError(rid)
+    m = json.loads(p.read_text("utf8"))
+    m["handled"] = bool(handled)
+    m["handled_at"] = datetime.now().isoformat(timespec="seconds") if handled else ""
+    p.write_text(json.dumps(m, indent=2), "utf8")
+    return m

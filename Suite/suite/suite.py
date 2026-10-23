@@ -1039,6 +1039,22 @@ def feedback_list():
     return {"dir": str(FEEDBACK_DIR), "items": feedbacklib.recent(FEEDBACK_DIR)}
 
 
+class Handled(BaseModel):
+    id: str
+    handled: bool = True
+
+
+@app.post("/api/feedback/handled")
+def feedback_handled(b: Handled):
+    try:
+        m = feedbacklib.set_handled(FEEDBACK_DIR, b.id, b.handled)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except KeyError:
+        raise HTTPException(404, "no such report")
+    return {"ok": True, "id": m["id"], "handled": m["handled"]}
+
+
 @app.post("/api/feedback/open")
 def feedback_open():
     FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)

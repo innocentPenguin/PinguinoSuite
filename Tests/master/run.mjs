@@ -254,6 +254,12 @@ await t('stream info: description + tags reach Multi, schedule body carries star
   assert.equal((await api.get('/api/channel/info')).json.ok, true);
 });
 
+await t('last stream card: recapView shapes the Host recap, only https clips link; mock preview round trip', async () => {
+  const v = C.recapView((await api.get('/api/recap/preview')).json); assert.equal(v.text, 'Recap text'); assert.equal(v.clipUrl, 'https://clips.twitch.tv/x'); assert.equal(v.views, 12); assert.equal(v.hasClip, true);
+  assert.equal(C.recapView({ line: 'L', clip: { url: 'javascript:alert(1)', title: 'x' } }).hasClip, false); assert.equal(C.recapView({ line: 'L', clip: null }).text, 'L'); assert.equal(C.recapView(null).text, '');
+  const r = await api.post('/api/raid/prep', {}); assert.equal(r.json.fired, true);
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);

@@ -41,5 +41,23 @@ class Feedback(unittest.TestCase):
         self.assertEqual(feedback._slug("../../Evil Page!"), "evil-page")
 
 
+    def test_handled_flag(self):
+        m = feedback.save(self.d, "something odd", "Timers", "timers", now=1_700_000_000)
+        self.assertFalse(feedback.recent(self.d)[0]["handled"])
+        r = feedback.set_handled(self.d, m["id"])
+        self.assertTrue(r["handled"])
+        self.assertTrue(json.loads((self.d / (m["id"] + ".json")).read_text("utf8"))["handled"])
+        self.assertTrue(feedback.recent(self.d)[0]["handled"])
+        self.assertFalse(feedback.set_handled(self.d, m["id"], False)["handled"])
+        self.assertEqual(feedback.recent(self.d)[0]["note"], "something odd")
+
+    def test_handled_rejects_bad_ids(self):
+        for bad in ("../x", "", "20231114-221320-../../a", "nope"):
+            with self.assertRaises(ValueError):
+                feedback.set_handled(self.d, bad)
+        with self.assertRaises(KeyError):
+            feedback.set_handled(self.d, "20231114-221320-missing")
+
+
 if __name__ == "__main__":
     unittest.main()

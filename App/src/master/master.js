@@ -621,6 +621,13 @@
     out.textContent = (j.text || j.line || '(empty recap)') + (clip && clip.url ? '\n\nBest clip: ' + (clip.title || '') + ' ' + clip.url + (clip.views != null ? ' (' + clip.views + ' views)' : '') : '\n\n(no clip found)') + (post ? (j.duplicate ? '\n\nNot posted: same recap was posted in the last 30 s' : j.posted ? '\n\nPosted in chat' : '\n\nNot posted') : '');
     if (post) toast(j.posted ? 'Recap posted' : 'Recap not posted', !j.posted);
   }
+  async function lastCard(show) {
+    const card = $('#lastcard'); if (show === false) { card.hidden = true; return; } card.hidden = false; $('#lc-text').textContent = 'Loading…'; $('#lc-clip').replaceChildren();
+    const r = await api.get('/api/recap/preview');
+    if (!(r.ok && r.json && r.json.ok !== false)) { $('#lc-text').textContent = hostRes(r, 'Last stream', '/api/recap/preview'); return; }
+    const v = C.recapView(r.json); $('#lc-text').textContent = v.text || '(no recap yet)';
+    if (v.hasClip) { const a = h('a', '', 'Best clip: ' + (v.clipTitle || v.clipUrl) + (v.views != null ? ' (' + v.views + ' views)' : '')); a.href = v.clipUrl; a.target = '_blank'; a.rel = 'noopener'; $('#lc-clip').append(a); } else $('#lc-clip').textContent = '(no clip found)';
+  }
   async function raidPrep(btn) {
     flash(btn); await tokenReady; ui.tookControl = true; const t = $('#rd-target').value.trim().replace(/^@/, '');
     const r = await api.post('/api/raid/prep', t ? { target: t } : {}), ok = r.ok && r.json && r.json.ok !== false, j = r.json || {};
@@ -905,6 +912,8 @@
     if (e.shiftKey && !e.repeat) {
       const m = { N: ['next', ''], O: ['queue-open'], C: ['queue-close'] }[e.key.toUpperCase()];
       if (m) { e.preventDefault(); sendCustom(m[0], m[1] || '', null); return; }
+      if (e.key.toUpperCase() === 'R') { e.preventDefault(); $('#b-raid').click(); return; }
+      if (e.key.toUpperCase() === 'L') { e.preventDefault(); $('#b-last').click(); return; }
       if (e.key.toUpperCase() === 'S') { e.preventDefault(); tokenReady.then(() => api.post('/api/wheel/spin')).then(r => r.ok ? toast('Wheel: spin') : toast(r.error, true)); return; }
     }
     if (/^[1-4]$/.test(e.key) && !e.shiftKey) { setTab(['customs', 'feed', 'cmds', 'overlays'][+e.key - 1]); return; }
@@ -916,6 +925,9 @@
     if (pane === 'scenes' && e.key === 'Enter') { e.preventDefault(); if (r.type === 'folder') { ui.folders.has(r.name) ? ui.folders.delete(r.name) : ui.folders.add(r.name); ls.set('folders', [...ui.folders]); renderScenes(); } else goScene(r.name, false); }
     if (pane === 'sources' && (e.key === ' ' || e.key.toLowerCase() === 'e' || e.key === 'Enter')) { e.preventDefault(); toggleItem(r.id); }
   });
+  $('#b-last').addEventListener('click', () => lastCard($('#lastcard').hidden ? true : false));
+  $('#lc-refresh').addEventListener('click', () => lastCard(true));
+  $('#b-raid').addEventListener('click', e => { if (armed(e.currentTarget)) raidPrep(e.currentTarget); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Object.values(pollers).forEach(p => p.kick()); });
   window.addEventListener('focus', () => Object.values(pollers).forEach(p => p.kick()));
 

@@ -223,3 +223,7 @@ button.q-on,button.is-live{font-weight:700}
 .si-h{margin:14px 0 2px;color:var(--accent)}.si-res{display:flex;flex-direction:column;gap:4px;margin-top:4px}
 .sir{font-size:12px;padding:3px 8px;border-radius:6px;border:1px solid var(--line)}.sir.ok{border-color:#ff9900;color:#ffb347}.sir.bad{border-color:#e74c3c;color:#ff8a7a}
 .plat.cur{background:var(--accent);color:#1b1203;border-color:var(--accent)}
+
+.lastcard{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--panel2);border-bottom:1px solid var(--line);color:var(--fg)}
+.lastcard #lc-text{flex:1 1 280px;min-width:0;white-space:pre-wrap}
+.lastcard a{color:var(--accent)}

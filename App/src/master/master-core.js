@@ -136,6 +136,11 @@
   }
   // Overlay-layout game for an activity (Host layouts are tagged with Twitch category names; '' = none). Sent as POST /api/scene-layouts {action:'setgame',profile:'*',game}.
   const gameOf = (sub, game) => (sub === 'end' ? '' : game === 'fn' || /^(boxfights|zonewars|fnviewers)$/.test(sub) ? 'Fortnite' : 'Rocket League');   // game: 'fn'/'rl' prefix of '!activity fn koth'
+  // Recap card: {text|line, clip:{title,url,views}} from the Host -> what the header card and the Stream tab show. clip.url only https.
+  function recapView(j) {
+    j = j || {}; const c = j.clip && typeof j.clip === 'object' ? j.clip : null, url = c && String(c.url || '').startsWith('https://') ? String(c.url) : '';
+    return { text: String(j.text || j.line || '').trim(), clipTitle: c ? String(c.title || '') : '', clipUrl: url, views: c && c.views != null ? +c.views : null, hasClip: !!url };
+  }
   // Team size from a format like "3v3" (2 when unknown). Works for 10v10 too.
   const fmtSize = f => { const m = /^(\d{1,2})v\d{1,2}$/.exec(String(f || '')); return m ? +m[1] || 2 : 2; };
   // Team name + colour (customs only; the emoji team lines are for tourneys). Colour = #rrggbb.
@@ -358,5 +363,5 @@
     }
   }
 
-  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });
