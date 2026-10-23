@@ -32,7 +32,7 @@ namespace PinguinoHost
             var d = new JObject {
                 { "Types", "follow,sub,cheer,raid" }, { "Color", "ff9900" }, { "TextColor", "ffffff" }, { "Size", 64 }, { "Font", "bahnschrift" }, { "Rotate", 5 }, { "Bold", true }, { "Shadow", true }, { "ShowDetail", true },
                 { "Align", "center" }, { "Labels", new JObject { { "follow", "follower" }, { "sub", "sub" }, { "resub", "resub" }, { "gift", "gifter" }, { "cheer", "cheer" }, { "raid", "raid" }, { "redeem", "redeem" } } },
-                { "TextSource", "" }, { "ForwardToSite", false }, { "SiteEventsUrl", "https://innocentpenguin.com/api/bot/events" } };
+                { "TextSource", "" }, { "ForwardToSite", true }, { "SiteEventsUrl", "https://innocentpenguin.com/api/bot/events" } };
             try
             {
                 var f = System.IO.Path.Combine(HostApi.DataDir, "latest_settings.json");
