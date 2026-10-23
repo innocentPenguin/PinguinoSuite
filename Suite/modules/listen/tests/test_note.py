@@ -27,7 +27,7 @@ class Note(unittest.TestCase):
         self.assertEqual(db.one("SELECT note FROM segments WHERE id=?", (sg["id"],))["note"], "it said hullo")
         jw = [{"w": "word", "s": 0.26, "e": 0.26, "p": 0.1}] * 14   # a hallucinated sentence in a 0.26 s chunk is not offered for review
         db.add_segment("s", 1, 0.0, 0.26, None, jw, {"words": jw, "text": " ".join(["word"] * 14), "raw_text": "x", "unsure": 99.0})
-        self.assertNotEqual(c.get("/api/review/next?confident=true").json()["segment"]["unsure"], 99.0)
+        self.assertIsNone(c.get("/api/review/next?confident=true").json()["segment"])   # the only other segment was corrected above
         self.assertEqual(c.post("/api/segments/999/note", json={"note": "x"}).status_code, 404)
 
 
