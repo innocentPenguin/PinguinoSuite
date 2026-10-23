@@ -543,7 +543,7 @@
       <div class="note sm">Edit once, push to the platforms you tick. This only changes text (and can schedule a YouTube broadcast). It never starts a stream.</div>
       <label class="lbl" for="si-title">Title</label><input type="text" id="si-title" maxlength="140" autocomplete="off" placeholder="Stream title">
       <label class="lbl" for="si-game">Game / category <span class="faint">(Twitch)</span></label><input type="text" id="si-game" maxlength="60" autocomplete="off" placeholder="Rocket League">
-      <label class="lbl" for="si-desc">Description <span class="faint">(YouTube, Kick, TikTok; Twitch has none)</span></label><textarea id="si-desc" rows="5" placeholder="What is this stream about?"></textarea>
+      <label class="lbl" for="si-desc">Description <span class="faint">(YouTube and TikTok; Twitch and Kick have none)</span></label><textarea id="si-desc" rows="5" placeholder="What is this stream about?"></textarea>
       <label class="lbl" for="si-tags">Tags <span class="faint" id="si-tn"></span></label><input type="text" id="si-tags" autocomplete="off" placeholder="comma separated: rocket league, customs, viewers">
       <div class="lbl">Push to</div><div class="btns" id="si-plats"></div>
       <div class="btns" style="margin-top:8px"><button class="sm pri" id="si-push">Push to selected</button><button class="sm" id="si-load" title="Read the current title, game, tags and description from the platforms">Load current</button><span class="faint sm" id="si-note"></span></div>
@@ -583,7 +583,8 @@
     const yt = b.ok && b.json && b.json.platforms && b.json.platforms.youtube;
     if (yt && yt.connected) { if (yt.description != null) si.description = yt.description; if (!a.ok && yt.title) si.title = yt.title; if (!a.ok && Array.isArray(yt.tags)) si.tags = yt.tags.join(', '); got.push('YouTube'); }
     ui.siPlat = b.ok && b.json && b.json.platforms || null; siSave();
-    note.textContent = got.length ? 'Loaded from ' + got.join(' + ') : 'Nothing to load yet (Host /api/channel/info and Multi /api/stream/info are not there yet): type it in.';
+    const ytErr = b.ok && b.json && b.json.platforms && b.json.platforms.youtube && b.json.platforms.youtube.error;
+    note.textContent = got.length ? 'Loaded from ' + got.join(' + ') + (ytErr ? ' · YouTube: ' + ytErr : '') : ytErr ? 'YouTube: ' + ytErr : 'Nothing to load yet (Host /api/channel/info and Multi /api/stream/info are not there yet): type it in.';
   }
   async function siPush(btn) {
     const si = ui.si, want = PLAT.filter(([k]) => si.plat[k]).map(([k]) => k), rows = [];
@@ -608,6 +609,7 @@
     const r = await xapi.post('/api/stream/schedule', { platform: 'youtube', title: si.title.trim(), description: si.description.trim(), tags: C.parseTags(si.tags), startsAt: when.toISOString(), privacy: si.privacy || 'public' });
     const ok = r.ok && r.json && r.json.ok !== false;
     siShow($('#si-sres'), [[ok, ok ? 'Scheduled for ' + when.toLocaleString() + (r.json.url ? ' · ' + r.json.url : '') : r.status === 404 || r.status === 0 ? 'Multi has no /api/stream/schedule yet (asked 03)' : (r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status]]);
+    if (ok && r.json.warning) $('#si-sres').append(h('div', 'sir bad', 'Warning: ' + r.json.warning));
     if (ok && r.json.url) { const a = h('a', 'sir ok', 'Open the broadcast'); a.href = r.json.url; a.target = '_blank'; a.rel = 'noopener'; $('#si-sres').append(a); }
   }
   function hostRes(r, what, need) { return r.status === 404 ? what + ': the Host has no ' + need + ' yet (restart needed)' : what + ': ' + ((r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status); }
