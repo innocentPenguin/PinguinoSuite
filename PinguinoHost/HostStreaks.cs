@@ -89,6 +89,7 @@ namespace PinguinoHost
                 lock (L) File.AppendAllText(NoticeP, rec.ToString(Newtonsoft.Json.Formatting.None) + "\n");
             }
             catch (Exception ex) { Clog.Warn("streaks", "usernotice log: " + ex.Message); }
+            try { GiftTags.OnNotice(msgId, T); } catch (Exception) { }
             if (msgId == "viewermilestone" && T("msg-param-category") == "watch-streak")
             {
                 int v; if (!int.TryParse(T("msg-param-value"), out v)) return;

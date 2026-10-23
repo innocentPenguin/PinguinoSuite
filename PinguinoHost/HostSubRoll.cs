@@ -46,17 +46,19 @@ namespace PinguinoHost
         /// <summary>one viewer's sub facts for the profile: {months (total months subscribed), streak (current consecutive months), tier 1-3, active (subscribed right now)}. Zeros when never subscribed.</summary>
         public static JObject ViewOf(string login)
         {
-            login = (login ?? "").Trim().TrimStart('@').ToLowerInvariant(); int months = 0, streak = 0, tier = 0; bool active = false;
+            login = (login ?? "").Trim().TrimStart('@').ToLowerInvariant(); int months = 0, streak = 0, tier = 0; bool active = false; string subType = "";
             try
             {
                 var users = (Read(Path.Combine("subs", "subscribers_master.json"))["users"] as JObject) ?? new JObject();
-                var u = users[login] as JObject; if (u != null) { months = (int?)u["tenure"] ?? 0; streak = (int?)u["streak"] ?? 0; tier = Math.Max(1, Math.Min(3, (int?)u["tier"] ?? 1)); active = (bool?)u["lapsed"] != true; }
+                var u = users[login] as JObject; if (u != null) { months = (int?)u["tenure"] ?? 0; streak = (int?)u["streak"] ?? 0; tier = Math.Max(1, Math.Min(3, (int?)u["tier"] ?? 1)); active = (bool?)u["lapsed"] != true; subType = (string)u["subType"] ?? ""; }
                 var a = Active().FirstOrDefault(x => (string)x["login"] == login);
                 if (a != null) { active = true; months = Math.Max(months, (int?)a["tenure"] ?? 0); streak = Math.Max(streak, (int?)a["streak"] ?? 0); tier = Math.Max(1, Math.Min(3, (int?)a["tier"] ?? 1)); }
                 else if (u != null) { var live = (Read(Path.Combine("subs", "live_subs.json"))["users"] as JObject); if (live != null && live.Count > 0) active = live[login] != null; }
             }
             catch (Exception) { }
-            return new JObject { { "months", months }, { "streak", streak }, { "tier", tier }, { "active", active } };
+            var res = new JObject { { "months", months }, { "streak", streak }, { "tier", tier }, { "active", active } };
+            try { foreach (var kv in GiftTags.ViewOf(login, subType)) res[kv.Key] = kv.Value; } catch (Exception) { }   // gifted, gifter, gifterAnonymous
+            return res;
         }
 
         /// <summary>every current subscriber (cached 60 s): login, name, tier 1-3, tenure (months), streak, type, founder, subscribed, watch (minutes, all time), gifts (all time)</summary>

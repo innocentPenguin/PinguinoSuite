@@ -247,6 +247,7 @@ namespace PinguinoHost
             if (p == "/api/teach/decide" && m == "POST") { Write(c, Teach.Decide(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/links" && m == "GET") { var lj = Links.Doc(); lj["mismatches"] = Links.Audit(ChannelLore.AllEntries()); Write(c, lj.ToString(), "application/json"); return true; }
             if (p == "/api/links" && m == "POST") { var lb = Body(c); lock (typeof(Links)) { var ld = Links.Doc(); var lk = (JObject)ld["links"]; if (lb["links"] is JObject nl) foreach (var pr in nl.Properties()) lk[pr.Name.ToLowerInvariant()] = pr.Value; System.IO.File.WriteAllText(System.IO.Path.Combine(HostApi.DataDir, "links.json"), ld.ToString(), new UTF8Encoding(false)); } Write(c, "{\"ok\":true}", "application/json"); return true; }
+            if (p == "/api/giftags") { if (m == "POST") { var gb = Body(c); if ((bool?)gb["backfill"] == true) GiftTags.Backfill(); } Write(c, GiftTags.Report().ToString(), "application/json"); return true; }
             if (p == "/api/modaudit" && m == "GET") { int ml; if (!int.TryParse(c.Request.QueryString["limit"], out ml)) ml = 200; Write(c, ModAudit.Read(ml, c.Request.QueryString["before"]).ToString(), "application/json"); return true; }
             if (p == "/api/sitebridge" && m == "GET") { Write(c, SiteHttp.Status().ToString(), "application/json"); return true; }
             if (p == "/api/lore" && m == "GET") { Write(c, ChannelLore.Api().ToString(), "application/json"); return true; }
