@@ -29,7 +29,7 @@ const SND_NOTES = {
   alert: [[880, 0, .15, 'sawtooth'], [660, .18, .15, 'sawtooth'], [880, .36, .2, 'sawtooth']], droplet: [[1200, 0, .12, 'sine'], [700, .05, .2, 'sine']],
   sparkle: [[1568, 0, .12, 'sine'], [2093, .08, .12, 'sine'], [2637, .16, .3, 'sine']],
 };
-const SND = {cfg: JSON.parse(JSON.stringify(SND_DEFAULT)), ctx: null, last: {}, id: Math.random().toString(36).slice(2), loaded: false, saveT: null, lead: false};
+const SND = {cs: null, cfg: JSON.parse(JSON.stringify(SND_DEFAULT)), ctx: null, last: {}, id: Math.random().toString(36).slice(2), loaded: false, saveT: null, lead: false};
 
 function sndMerge(src) {
   const c = JSON.parse(JSON.stringify(SND_DEFAULT));
@@ -50,7 +50,29 @@ async function sndLoad() {
   try { const r = await fetch('/api/sounds'); if (r.ok) SND.cfg = sndMerge((await r.json()).config); } catch (e) { /* server copy unavailable: keep local */ }
   if (SND.cfg.migrated) { delete SND.cfg.migrated; sndSave(); }
   SND.loaded = true;
+  csProbe();
 }
+// A backend whose GET /api/ding has `rows` plays the three chatter sounds itself (first time ever / new this stream / returning). Then this page must not
+// play its own 'first' / 'returning' sounds (they would double up) and it shows those rows' desktop notifications from /api/newchatters.
+const CS_LABEL = {first: 'First time ever', new_stream: 'New this stream', returning: 'Returning after a long gap'};
+async function csProbe() {
+  try {
+    const r = await fetch('/api/ding'); if (!r.ok) return;
+    const j = await r.json(), was = !!SND.cs;
+    SND.cs = j && j.rows && typeof j.rows === 'object' ? {rows: j.rows, since: SND.cs ? SND.cs.since : Date.now() / 1000} : null;
+    if (!!SND.cs !== was && typeof sideRender === 'function') sideRender();
+  } catch (e) { /* old or unreachable backend: keep the old behaviour */ }
+}
+setInterval(csProbe, 30000);
+setInterval(async () => {
+  const c = SND.cs; if (!c || !SND.loaded || !SND.lead || !['chat', 'dash', 'popout'].includes(W.type)) return;
+  if (!Object.values(c.rows).some(r => r && r.notify)) return;
+  try {
+    const r = await fetch('/api/newchatters?since=' + c.since); if (!r.ok) return;
+    const j = await r.json(); if (j.ts) c.since = j.ts;
+    for (const x of j.items || []) { const row = c.rows[x.kind]; if (row && row.notify) sndNotify(CS_LABEL[x.kind] || 'Chatter', (x.display || x.user || x.name || '') + (x.platform ? ' (' + x.platform + ')' : '')); }
+  } catch (e) { /* try again in 3 s */ }
+}, 3000);
 function sndSave() {
   try { localStorage.setItem('multi-snd', JSON.stringify(SND.cfg)); } catch (e) { /* ignore */ }
   clearTimeout(SND.saveT);
@@ -111,10 +133,11 @@ window.soundMsg = function (m) {
   if (m.is_self) { sndFire('sent', m); return; }
   if (!sndHuman(m)) return;
   const fl = m.flags || [], isNew = m.first_time || fl.includes('new');
-  if (isNew && SND.cfg.ev.first.on) { sndFire('first', m); return; }          // first / returning own the message: no second sound on top of it
-  if (fl.includes('returning') && SND.cfg.ev.returning.on) { sndFire('returning', m); return; }
-  if (isNew && sndFire('first', m)) return;                                    // notification-only setting
-  if (fl.includes('returning') && sndFire('returning', m)) return;
+  if (SND.cs) { /* the server plays first / new / returning */ }
+  else if (isNew && SND.cfg.ev.first.on) { sndFire('first', m); return; }          // first / returning own the message: no second sound on top of it
+  else if (fl.includes('returning') && SND.cfg.ev.returning.on) { sndFire('returning', m); return; }
+  else if (isNew && sndFire('first', m)) return;                               // notification-only setting
+  else if (fl.includes('returning') && sndFire('returning', m)) return;
   if (mentionsMe(m) && sndFire('mention', m)) return;
   if ((isQuestionForMe(m) || m.tier === 'high') && sndFire('question', m)) return;
   sndFire('person', m);
@@ -138,7 +161,8 @@ function soundsBox() {
     <div id="snd-lock" class="empty" style="display:${sndLocked() ? '' : 'none'}">Sound is asleep until you click anywhere in this window once (browser rule). <button class="chip2" data-snd-unlock="1">Enable sound</button></div>
     <label class="cf">Master volume <input type="range" data-snd="master" min="0" max="100" step="5" value="${c.master}"><b>${c.master}%</b></label>
     <label class="cf">Minimum gap between real-person message sounds <input type="range" data-snd="gap" min="0" max="30" step="1" value="${c.gap}"><b>${c.gap ? c.gap + "s" : "0 s (back to back)"}</b></label>
-    ${SND_EVENTS.map(row).join('')}
+    ${SND_EVENTS.filter(e => !(SND.cs && (e[0] === 'first' || e[0] === 'returning'))).map(row).join('')}
+    ${SND.cs ? '<small class="mut">First-time, new-this-stream and returning chatter sounds are set in the "Chatter sounds" panel.</small>' : ''}
     <div class="act" style="margin-top:8px"><button class="chip2" data-snd-notify="1">Allow desktop notifications</button> <small class="mut">now: ${esc(notifyState)}</small></div></div>`;
 }
 document.addEventListener('input', ev => {

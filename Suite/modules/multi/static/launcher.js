@@ -188,7 +188,7 @@ document.addEventListener('click', async e => {
       $('#recap').innerHTML = r.count ? r.cards.map(c => `<div class="wrow"><b>${esc(c.display || c.user)}</b> <span class="mut">${esc(c.platform || '')}</span> ${esc(c.text)}</div>`).join('') : '<div class="empty">Nothing unanswered. Nice.</div>'; return; }
     else if (a === 'ding-save' || a === 'ding-test') {
       const plats = ['twitch', 'youtube'].filter(p => $('#dg-' + p).checked);
-      const r = await fetch('/api/ding/settings', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({platforms: plats, first_ever: $('#dg-first').checked,
+      const r = await fetch('/api/ding/settings', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify($('#cs-first-on') ? csBody(plats) : {platforms: plats, first_ever: $('#dg-first').checked,
         returning: $('#dg-returning').checked, scope: (document.querySelector('input[name=dg-scope]:checked') || {}).value || 'stream',
         sound: v('dg-sound'), first_sound: v('dg-fsound'), returning_sound: v('dg-rsound'), volume: parseInt(v('dg-vol')),
         returning_volume: parseInt(v('dg-rvol')), master_volume: parseInt(v('dg-mvol')), cooldown_s: parseFloat(v('dg-gap'))})});
@@ -271,7 +271,58 @@ function popClose(label) { if (parent !== window) parent.postMessage({pinguino: 
 document.addEventListener('change', e => { if (e.target.id === 'sp-mode') { const pl = $('#sp-plats'); if (pl) pl.hidden = e.target.value !== 'platform'; } });
 
 // Boxes shared by the chat page's settings panel (side.js). They used to live in Setup.
-function dingBox(dg) { return `  <div class="box"><small class="mut">Plays on this PC only${dg.master ? '' : ' (this PC is not the master, so it stays silent)'}. Everything you change here is saved and remembered after Multi or the app closes.</small>
+// "Chatter sounds": one panel for the three sounds that say who just chatted (needs a backend whose GET /api/ding has `rows`).
+const CS_ROWS = [
+  ['first', 'First time ever', 'Never seen by Multi before, or Twitch flagged it as their very first message.'],
+  ['new_stream', 'New this stream', 'Known from an earlier stream; this is their first message this stream.'],
+  ['returning', 'Returning after a long gap', 'Silent for the number of hours below, then chatting again.'],
+];
+let CS_FILES = null;
+const csNorm = p => String(p || '').replace(/[\\/]+/g, '/').toLowerCase();
+async function csLoadFiles() {
+  if (CS_FILES === null) { try { const r = await fetch('/api/sounds/files'); CS_FILES = r.ok ? await r.json() : false; } catch (e) { CS_FILES = false; } }
+  csFillPicks();
+}
+function csFillPicks() {
+  const list = CS_FILES && (Array.isArray(CS_FILES) ? CS_FILES : CS_FILES.files); if (!list || !list.length) return;
+  document.querySelectorAll('select.cs-pick').forEach(s => {
+    const input = document.getElementById(s.dataset.target), cur = input ? csNorm(input.value) : '';
+    s.innerHTML = '<option value="">Pick a file...</option>' + list.map(f => {
+      const n = typeof f === 'string' ? f : f.name, p = (typeof f === 'string' ? '' : f.path) || ((CS_FILES.dir ? CS_FILES.dir + '/' : '') + n);
+      return `<option value="${esc(p)}" ${csNorm(p) === cur ? 'selected' : ''}>${esc(n)}</option>`;
+    }).join('');
+    s.hidden = false;
+  });
+}
+document.addEventListener('change', e => { const s = e.target.closest && e.target.closest('select.cs-pick'); if (s && s.value) { const i = document.getElementById(s.dataset.target); if (i) i.value = s.value; } });
+function csDingBox(dg) {
+  const row = ([k, label, hint]) => {
+    const r = (dg.rows || {})[k] || {};
+    return `<div class="cs-row" style="border-top:1px solid var(--line);padding-top:6px;margin-top:6px">
+      <label class="chk"><input type="checkbox" id="cs-${k}-on" ${r.on ? 'checked' : ''}> <b>${esc(label)}</b></label> <small class="mut">${esc(hint)}</small>
+      <label>Sound ${r.sound_exists === false ? '<b class="tbadc">(file not found)</b>' : ''}<span class="row"><input id="cs-${k}-sound" value="${esc(r.sound || '')}" style="flex:1"><select class="cs-pick" data-target="cs-${k}-sound" hidden></select><button data-act="ding-pick" data-target="cs-${k}-sound">Choose...</button><button data-act="ding-test" data-kind="${k}">Test</button></span></label>
+      <label>Volume <span id="cs-${k}-vol-n">${r.volume == null ? 80 : r.volume}</span>%<input id="cs-${k}-vol" type="range" min="0" max="100" value="${r.volume == null ? 80 : r.volume}" data-live="cs-${k}-vol-n"></label>
+      <label class="chk"><input type="checkbox" id="cs-${k}-notify" ${r.notify ? 'checked' : ''}> Also show a desktop notification</label></div>`;
+  };
+  const plats = dg.platforms || [];
+  setTimeout(csLoadFiles, 0);
+  return `  <div class="box"><small class="mut">Plays on this PC only${dg.master ? '' : ' (this PC is not the master, so it stays silent)'}. Everything you change here is saved and remembered after Multi or the app closes.</small>
+    <div class="row"><b>On for:</b> <label class="chk"><input type="checkbox" id="dg-twitch" ${plats.includes('twitch') ? 'checked' : ''}> Twitch</label>
+      <label class="chk"><input type="checkbox" id="dg-youtube" ${plats.includes('youtube') ? 'checked' : ''}> YouTube</label></div>
+    ${CS_ROWS.map(row).join('')}
+    <label style="margin-top:8px">A returning chatter is one who was silent for <input id="cs-gap-h" type="number" min="1" max="168" step="1" value="${dg.gap_h == null ? 6 : dg.gap_h}" style="width:70px"> hours</label>
+    <label>Master volume <span id="dg-mvol-n">${dg.master_volume}</span>% <small class="mut">multiplies the volumes above</small><input id="dg-mvol" type="range" min="0" max="100" value="${dg.master_volume}" data-live="dg-mvol-n"></label>
+    <label>At most one sound every (seconds)<input id="dg-gap" type="number" min="0.2" max="30" step="0.1" value="${dg.cooldown_s}" style="width:90px"></label>
+    <div class="act"><button class="p" data-act="ding-save">Save</button> <button data-act="ding-reset">New stream (everyone counts as returning)</button></div>
+    <small class="mut">Which sound fires when: only ONE sound plays per message, in this order:<br>1. First time ever<br>2. New this stream<br>3. Returning after a long gap</small><br>
+    <small class="mut">${dg.chatters_this_stream} chatter(s) counted this stream, ${dg.known_chatters} known from earlier, ${dg.played} sound(s) played${dg.dropped ? ', ' + dg.dropped + ' skipped during bursts' : ''}.</small></div>`;
+}
+function csBody(plats) {
+  const rows = {};
+  for (const [k] of CS_ROWS) rows[k] = {on: $('#cs-' + k + '-on').checked, sound: $('#cs-' + k + '-sound').value.trim(), volume: parseInt($('#cs-' + k + '-vol').value), notify: $('#cs-' + k + '-notify').checked};
+  return {platforms: plats, rows, gap_h: parseFloat($('#cs-gap-h').value) || 6, master_volume: parseInt($('#dg-mvol').value), cooldown_s: parseFloat($('#dg-gap').value)};
+}
+function dingBox(dg) { if (dg && dg.rows) return csDingBox(dg); return `  <div class="box"><small class="mut">Plays on this PC only${dg.master ? '' : ' (this PC is not the master, so it stays silent)'}. Everything you change here is saved and remembered after Multi or the app closes.</small>
     <div class="row"><b>On for:</b> <label class="chk"><input type="checkbox" id="dg-twitch" ${dg.platforms.includes('twitch') ? 'checked' : ''}> Twitch</label>
       <label class="chk"><input type="checkbox" id="dg-youtube" ${dg.platforms.includes('youtube') ? 'checked' : ''}> YouTube</label></div>
     <div class="row"><label class="chk"><input type="radio" name="dg-scope" value="stream" ${dg.scope !== 'ever' ? 'checked' : ''}> New chatter: once per person <b>per stream</b></label>
