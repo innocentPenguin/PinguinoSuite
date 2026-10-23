@@ -1,0 +1,41 @@
+# Session 013 - Master View (notes)
+
+Owner: session 013, started by 00 (coordinator, local_9b055c40-005d-4fad-892a-7133e1382dd1). Last updated 2026-10-23.
+
+## 1. What was built, and why
+The Master View is one page inside the Suite app (Tauri v2), under `App/src/master/` (`master.html`, `master.css`, `master-core.js` = pure logic, `master.js` = UI). It talks to the Host (127.0.0.1:8770), the Spotify module (8771) and Multi (8766). Ivan's brief, relayed by 00: one super-responsive control page in Penguin orange/dark.
+Docs: `Docs/MASTER_VIEW_APP.md`. Tests: `Tests/master/run.mjs` (37 tests) + `Tests/master/mock-host.mjs`.
+
+Commits (oldest to newest): b065ab7, 97c1a33, 83e3918, 4834b5b, 9e4f47c, 497ec62, 37b6a16 (base, feeds, logs); 47c618c Spotify strip; 7b4ad4f docked player; 7e3cd84 drag/drop + strikes; ed421f8 simulator chat, activity defaults, streamer row; 30bbd14 wheel Queue/Undo/Tourney; d33ceec activity "what about the N players?" chooser, sim streamer, toast dedupe, site-style queue, Wheel Cancel dropped (Ivan: Cancel means the GAME); 48c67a1 "Fill empty slots"; 41d1855 strike chips labelled by game; 0813384 team name/colour editor, Fortnite row + sizes, Stream tab; 5a5be09 recap preview/post, raid prep, teams POST uses `hex`.
+
+## 2. Decisions and failures
+- Optimistic overlays (`ui.ov`, `teamsOv`...) so clicks feel instant; `reconcile` only updates rows when their `sig` changes, so rows must carry every displayed field.
+- Two-click `armed()` for dangerous buttons; no `confirm()`/`prompt()` (Tauri blocks them).
+- Customs actions go through `/api/customs/mod` allow-list, anything else through `/api/run` as broadcaster.
+- Teams: Host stores `{name,color}` in customs state; POST body is `{orange:{name,hex}}` (02's shape). Fallback to localStorage + a toast if the route 404s.
+- Team size: customs 2v2/3v3/4v4 (1v1 button removed, KOTH sets it); Fortnite 1/2/3 + free 1-16.
+- Stream tab: Twitch via Host `/api/channel/update|info`; YouTube/Kick via Multi `/api/stream/info|schedule`; TikTok = copy block. Scheduling creates an entry only.
+- Failures fixed: stale mock host (kill port 8798 and restart); `\n` escaping in generated test code; old "9v9 -> null" test changed to 17v17.
+
+## 3. Pass-on / gotchas
+- HARD RULE from Ivan via 00: NEVER go live or test going live in OBS. No go-live control exists in Master View and none may be added.
+- Only 00 builds/launches/restarts app, Host, modules. Never edit `PinguinoHost\*.cs`. Commit own files only (`git add <paths>`, never -A). Never push.
+- Test only against the mock: `MOCK_OPEN=1 node Tests/master/mock-host.mjs` (port 8798) and `python -m http.server 8811` in `App/src`; open `http://127.0.0.1:8811/master/master.html?host=http://127.0.0.1:8798&music=http://127.0.0.1:8798&multi=http://127.0.0.1:8798`. Force fresh files with `fetch('/master/<f>',{cache:'reload'})` then reload. Run `node Tests/master/run.mjs`.
+- Do not post to the real chat, spin the wheel, or toggle scenes while testing.
+- Open bugs/unverified: see section 6.
+
+## 4. Future ideas (priority order)
+1. Live check of everything below once Ivan is at the PC.
+2. "Last stream" card in the header (recap text + best clip).
+3. Raid prep hotkey with a confirm step.
+4. Fix editor hint text: customs chat lines keep the 🔷/🔶 emoji prefix before the team name (02), not plain text.
+
+## 5. Chat history
+Session id 2ea0c6c4-3f9f-4f2b-a70e-a6b34c1a07de. Transcript: `C:\Users\ivanm\.claude\projects\D--\2ea0c6c4-3f9f-4f2b-a70e-a6b34c1a07de.jsonl`. Grep for: `Master View`, `teamsNow`, `wheelQueue`, `askDo`, `siPush`, `recapDo`, `NEVER go live`.
+
+## 6. Things Ivan may be forgetting
+- Everything is verified on the mock/simulator only; no live writes tested (team names/colours, `!format` above 4v4, Fortnite KOTH, Twitch title/tags push, recap post, raid prep, wheel Queue/Undo).
+- YouTube needs a token with the youtube scope pasted in Multi's settings; Kick needs a `kick_token` with channel:write from a Kick app login that does not exist yet (Kick stays read-only); TikTok is manual copy only.
+- Spotify cover art needs the CSP `img-src https://i.scdn.co` (01 added; confirm it is in the build).
+- Simulator "Chat ON" would post to real chat; keep it off unless intended.
+- Recap "Post in chat" is a real chat post (30 s duplicate guard only).
