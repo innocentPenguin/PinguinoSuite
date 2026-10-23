@@ -56,24 +56,20 @@ def test_new_cards_with_nan_or_none_scores():
     json.dumps(m.view(), allow_nan=False)
 
 
-def test_view_while_another_thread_adds_cards():
+def test_view_while_cards_are_added_mid_iteration():
+    """Deterministic stand-in for the thread race: reading a card's fields adds another card to the manager
+    (what the pipeline does from the event loop while /api/cards iterates in a worker thread)."""
     m = cm.CardManager(FakeStore([]), clock=lambda: 5.0)
-    stop, errs = False, []
 
-    def writer():
-        i = 0
-        while not stop and i < 3000:
-            m.cards[f"c:w{i}"] = cm.normalize({"id": f"c:w{i}", "state": "open", "score": i % 7})
-            i += 1
-    t = threading.Thread(target=writer)
-    t.start()
-    try:
-        for _ in range(200):
-            try:
-                m.view(); m.recap()
-            except RuntimeError as e:                                # "dictionary changed size during iteration"
-                errs.append(e)
-    finally:
-        stop = True
-        t.join()
-    assert not errs
+    class Adding(dict):
+        n = 0
+
+        def __getitem__(self, k):
+            if k == "state" and Adding.n < 50:
+                Adding.n += 1
+                m.cards[f"c:new{Adding.n}"] = cm.normalize({"id": f"c:new{Adding.n}", "state": "open"})
+            return dict.__getitem__(self, k)
+    for i in range(5):
+        m.cards[f"c:{i}"] = Adding(cm.normalize({"id": f"c:{i}", "state": "open", "score": i}))
+    m.view(); m.recap(); m.tick(); m._enforce_cap()
+    assert len(m.cards) > 5

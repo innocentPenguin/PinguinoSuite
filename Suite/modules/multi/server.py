@@ -840,7 +840,7 @@ async def hotkey(action: str):
     """Act on the top open card (highest score, newest). Target for global hotkeys, Stream Deck, AutoHotkey."""
     if action not in ("answer", "dismiss", "snooze"):
         raise HTTPException(400, "unknown action")
-    opened = sorted((c for c in cards.cards.values() if c["state"] == "open"), key=lambda c: (-c["score"], -c["created"]))
+    opened = sorted((c for c in cards._all() if c["state"] == "open"), key=lambda c: (-c["score"], -c["created"]))
     if not opened:
         return {"ok": False, "reason": "no open cards"}
     cid = opened[0]["id"]
@@ -1207,7 +1207,7 @@ def chatter(platform: str, user_id: str):
     if not hist:
         raise HTTPException(404, "never seen")
     last = hist[0]
-    mine = [c for c in cards.cards.values() if c["platform"] == platform and c["user_id"] == user_id]
+    mine = [c for c in cards._all() if c["platform"] == platform and c["user_id"] == user_id]
     count = lambda st: sum(1 for c in mine if c["state"] == st)
     return {"platform": platform, "user_id": user_id, "user": last["user"], "display": last.get("display") or last["user"],
             "first_seen": min(h["ts"] for h in hist), "last_seen": last["ts"], "messages": store.user_count(platform, user_id),
@@ -1544,7 +1544,7 @@ def claims():
     and stay quiet on these message ids until `expires`. Read-only, nothing here can post."""
     ttl, now = config.settings()["claim_ttl_s"], time.time()
     out = [{"message_id": c["message_id"], "platform": c["platform"], "user_id": c["user_id"], "tier": c["tier"],
-            "expires": c["created"] + ttl} for c in cards.cards.values()
+            "expires": c["created"] + ttl} for c in cards._all()
            if c["state"] == "open" and c["tier"] in ("medium", "high") and c["created"] + ttl > now]
     return {"ttl_s": ttl, "claims": out}
 
@@ -1555,7 +1555,7 @@ async def voice_transcript(request: Request):
     if not config.settings()["voice_enabled"]:
         return {"enabled": False, "suggestions": []}
     text = str((await request.json()).get("text", ""))[:2000]
-    sug = voice.match(text, cards.cards.values())
+    sug = voice.match(text, cards._all())
     for s in sug:
         hub.emit({"type": "reply.suggested", **s})
     return {"enabled": True, "suggestions": sug}

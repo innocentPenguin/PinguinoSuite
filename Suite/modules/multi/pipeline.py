@@ -41,7 +41,7 @@ class Pipeline:
         hist = self.recent_by_user.get(key, [])
         answered = any(c["user_id"] == m.user_id and c["platform"] == m.platform and c["state"] == "answered"
                        and time.time() - (c["answered_at"] or 0) <= self.rules["conversation_window_s"]
-                       for c in self.cards.cards.values())
+                       for c in list(self.cards.cards.values()))
         return prio.Context(recent_by_user=hist, user_count=self.store.user_count(m.platform, m.user_id),
                             answered_recently=answered, learned=self.store.kv_get("learned", {}))
 
