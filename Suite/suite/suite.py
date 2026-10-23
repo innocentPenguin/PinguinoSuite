@@ -607,7 +607,14 @@ class Module:
                     return
             self.start()
         was = self.healthy
-        self.healthy = self._ping()
+        if self._ping():
+            self._miss, self.healthy = 0, True
+        else:
+            # a busy module (transcribing, loading a model) can miss one 1.5 s ping; the shell swaps its page for a "starting" card the moment
+            # it is not "running", which threw the user back to the module's home page. Call it down only after several misses in a row, or when its process is gone.
+            self._miss = getattr(self, "_miss", 0) + 1
+            if self._miss >= 4 or (self.proc is not None and not self.running):
+                self.healthy = False
         if self.healthy != was:
             bus.emit("module", id=self.id, state="running" if self.healthy else ("starting" if self.running else "stopped"))
 

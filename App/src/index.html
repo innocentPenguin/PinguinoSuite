@@ -402,7 +402,7 @@ function bindSources(){if(!$('#src-grid'))return;
 pages.master=()=>`<iframe id="mif-master" src="master/master.html" title="Master View"></iframe>`;
 pages.module=r=>{const m=modOf(r);
   if(!m)return `<div class="card" style="max-width:520px"><h3>Module not found</h3><div class="dim">It may have been removed from the registry.</div></div>`;
-  if(m.state==='running')return `<iframe id="mif" data-src="${esc(modSrc(m))}" src="${esc(modSrc(m))}" onload="this.dataset.ok=1"></iframe>`;
+  if(m.state==='running')return `<iframe id="mif" data-t="${Date.now()}" data-src="${esc(modSrc(m))}" src="${esc(modSrc(m))}" onload="this.dataset.ok=1"></iframe>`;
   return `<div class="card" style="max-width:520px"><h3>${esc(m.name)}</h3><div class="dim">${esc(m.desc||'')}</div><div class="row" style="margin-top:14px">${hq('module:'+m.id+(m.state==='running'?'':':'+(m.state||'unknown')),{module:m.id})} <span class="pill">${esc(m.state||'unavailable')}</span><button class="pri" data-act="${esc(m.id)}:start">Start ${esc(m.name)}</button></div></div>`};
 
 /* ============ Integrations hub (core: GET /api/integrations; contract in Docs/MODULE_CONTRACT.md) ============ */
@@ -1932,7 +1932,7 @@ function renderNav(){if(!S)return;
   $('#modnav').innerHTML=h;$$('#modnav .item').forEach(i=>i.onclick=()=>go(i.dataset.r));navStatic()}
 const isMod=r=>r.startsWith('m:');
 const flushed=()=>route==='master'||(isMod(route)&&modOf(route)?.state==='running');
-function go(r){TPLM.menu=null;CMD.ask=null;CMD.menu=null;if(r==='voice'){V.style=null;V.err=null}if(r==='integrations'){I.items=null;VT.keys=null;VT.edit=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));{const a=$('nav .item.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest'})}
+function go(r){if(r===route&&isMod(r))mifReload();TPLM.menu=null;CMD.ask=null;CMD.menu=null;if(r==='voice'){V.style=null;V.err=null}if(r==='integrations'){I.items=null;VT.keys=null;VT.edit=null}route=r;navSig='';renderNav();$$('nav .item').forEach(i=>i.classList.toggle('on',i.dataset.r===r));{const a=$('nav .item.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest'})}
   const m=isMod(r)?modOf(r):null;$('#title').textContent=m?(m.ui?.nav||m.name):(titles[r]||r);
   $('#page').classList.toggle('flush',flushed());draw(true)}
 let lastHtml='';
@@ -1944,10 +1944,19 @@ function draw(force){if(!S)return;renderNav();
   if(route==='master'){$('#page').classList.add('flush');if(!$('#mif-master'))$('#page').innerHTML=pages.master();lastHtml='';return}
   const html=isMod(route)?pages.module(route):pages[route]();
   if(route==='console'&&!force&&html===lastHtml)return;
-  if(isMod(route)){const run=flushed();$('#page').classList.toggle('flush',run);
-    if(run&&!force&&$('#mif')&&$('#mif').dataset.src===modSrc(modOf(route)))return;
+  if(isMod(route)){const run=flushed(),mf=$('#mif');if(run&&mf)MODOK=Date.now();
+    // A module page that is already loaded is never rebuilt by a redraw (any poll, forced or not): that threw the user back to the module's home page.
+    // It is reloaded only by mifReload() (the module went down and came back, or the user pressed Retry / the module's own nav item).
+    if(!run&&mf&&modOf(route)?.state==='starting'&&Date.now()-MODOK<30000)return;   // one missed health ping must not swap the page for a card
+    $('#page').classList.toggle('flush',run);
+    if(run&&mf&&mf.dataset.src===modSrc(modOf(route)))return;
     if(!run&&!force&&html===lastHtml)return;
     $('#page').innerHTML=html;lastHtml=html;bind();return}
+  if(route==='comm'&&!force){   // PenguinComm holds two module frames: a poll may refresh the headers but must not rebuild a frame that is already loaded
+    const have=$$('#page iframe').map(f=>f.getAttribute('src')),want=[...html.matchAll(/<iframe src="([^"]*)"/g)].map(x=>x[1].replace(/&amp;/g,'&'));
+    if(have.length){if(have.join()===want.join())return;
+      if(['listen','voice'].some(i=>commMod(i)?.state==='starting')&&Date.now()-COMMOK<30000)return}}
+  if(route==='comm'&&$$('#page iframe').length)COMMOK=Date.now();
   if(!force&&html===lastHtml)return;
   const sc=$('#page').scrollTop,focus=document.activeElement?.id;
   if(route==='settings'&&!force&&document.activeElement?.tagName==='INPUT')return;
@@ -2006,15 +2015,17 @@ document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#fs
 $('#simon').onclick=()=>{post('/api/simulate',{live:true});toast('Simulating go-live…')};
 $('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(()=>post('/api/simulate',{live:null}));
 
-const CONN={fails:0,backoff:2000,hiddenAt:0,modDown:null};
+let MODOK=0,COMMOK=0;
+const CONN={fails:0,backoff:2000,hiddenAt:0,modDown:null,miss:0};
 function connShow(msg){const e=$('#connban');if(!e)return;e.style.display=msg?'flex':'none';if(msg)$('#connmsg').textContent=msg;document.body.classList.toggle('disconnected',!!CONN.fails)}
-function mifReload(){const f=$('#mif');if(f&&f.dataset.src){f.dataset.ok='';f.src=f.dataset.src}}
+function mifReload(){const f=$('#mif');if(f&&f.dataset.src){f.dataset.ok='';f.dataset.t=Date.now();f.src=f.dataset.src}}
 async function connRetry(){connShow('Reconnecting…');try{await PG.reconfig()}catch{}await load();await modWatch(true)}
 // The module page the user is looking at: probe the module itself (not the core), and reload the frame when it was down, never loaded, or the window sat idle.
 async function modWatch(force){if(POP&&!isMod(route))return;if(!isMod(route))return;const m=modOf(route);if(!m||m.state!=='running')return;
-  let ok=true;try{await fetch(modSrc(m),{mode:'no-cors',cache:'no-store',signal:AbortSignal.timeout(5000)})}catch{ok=false}
-  if(!ok){CONN.modDown=m.id;connShow(dispName(m)+' is not answering. Retrying…');return}
-  const f=$('#mif'),stuck=f&&!f.dataset.ok;
+  let ok=true;try{await fetch(modSrc(m),{mode:'no-cors',cache:'no-store',signal:AbortSignal.timeout(8000)})}catch{ok=false}
+  if(!ok){if(++CONN.miss<3&&!force)return;CONN.modDown=m.id;connShow(dispName(m)+' is not answering. Retrying…');return}   // a busy module can miss a probe; only 3 in a row count as down
+  CONN.miss=0;
+  const f=$('#mif'),stuck=f&&!f.dataset.ok&&Date.now()-(+f.dataset.t||0)>90000;   // never finished loading for 90 s
   if(CONN.modDown===m.id||force||stuck){CONN.modDown=null;if(!CONN.fails)connShow('');mifReload()}}
 /* Modules are separate programs: while the core is restarting each one is judged by its OWN port, never by the core being away. */
 async function probeModules(){if(!S||!S.modules)return;
@@ -2022,7 +2033,7 @@ async function probeModules(){if(!S||!S.modules)return;
     m.state=up?'running':'stopped'}));
   try{renderNav()}catch{}}
 async function load(){try{const r=await fetch('/api/state');if(!r.ok)throw new Error('http '+r.status);S=await r.json()}catch{CONN.fails++;probeModules();if(CONN.fails>=2){connShow('The core is restarting. Modules keep running on their own. Retrying…');try{PG.reconfig()}catch{}}return}
-  if(CONN.fails){CONN.fails=0;connShow('');if(isMod(route))mifReload()}
+  if(CONN.fails){CONN.fails=0;connShow('')}   // the core coming back does not touch the modules: they run on their own ports
   const l=S.live;$('#pill').classList.toggle('on',l.live);$('#pill-t').textContent=l.live?PF.text.live_pill:PF.text.offline_pill;
   $('#pill-sub').textContent=l.live?`${l.viewers} watching · ${up(l.since)}`:(l.error?'Twitch check: '+l.error.slice(0,60):'');
   const lm=listenMod();if(lm?.url)LISTEN=lm.url.replace(/\/$/,'');
@@ -2042,7 +2053,7 @@ async function loadListen(){try{const st=await (await fetch(LISTEN+'/api/status'
   go(POP||(PF.layout.start&&PF.layout.start!=='dashboard'&&routeOk(PF.layout.start)?PF.layout.start:'dashboard'));loadPrefs();loadSounds();loadListen();setInterval(load,4000);setInterval(loadListen,3000);if(!POP)loadSetup();loadDevice();loadMulti();setInterval(loadDevice,5000);setInterval(loadMulti,6000);pollConsole();pollPrestream();setInterval(pollConsole,1500);setInterval(()=>{if(route==='integrations')loadIntegrations()},20000);setInterval(pollPrestream,10000);
   const ws=()=>{const w=PG.ws();w.onmessage=()=>{CONN.backoff=2000;load()};w.onclose=()=>{try{PG.reconfig().catch(()=>{})}catch{}setTimeout(ws,CONN.backoff);CONN.backoff=Math.min(15000,CONN.backoff*1.6)}};ws();
   $('#conn-retry').onclick=connRetry;setInterval(()=>{if(!document.hidden)modWatch(false)},30000);
-  const wake=()=>{if(document.hidden){CONN.hiddenAt=Date.now();return}const idle=CONN.hiddenAt&&Date.now()-CONN.hiddenAt>60000;CONN.hiddenAt=0;load();if(idle){try{PG.reconfig().catch(()=>{})}catch{}}modWatch(!!idle)};
+  const wake=()=>{if(document.hidden){CONN.hiddenAt=Date.now();return}const idle=CONN.hiddenAt&&Date.now()-CONN.hiddenAt>60000;CONN.hiddenAt=0;load();if(idle){try{PG.reconfig().catch(()=>{})}catch{}}modWatch(false)};   // coming back after a while only probes the module; it never reloads a page that is still answering
   document.addEventListener('visibilitychange',wake);window.addEventListener('focus',()=>{if(!CONN.hiddenAt)CONN.hiddenAt=0;wake()});window.addEventListener('blur',()=>{if(!CONN.hiddenAt)CONN.hiddenAt=Date.now()});
   try{if(!POP&&window.__TAURI__&&window.__TAURI__.core)window.__TAURI__.core.invoke('app_ready')}catch{}})();   // the shell closes the splash and reopens the windows
 </script>

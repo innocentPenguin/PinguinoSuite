@@ -30,3 +30,27 @@ class PortGuard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Hysteresis(unittest.TestCase):
+    """A busy module missing one health ping must not flip to 'starting' (the shell would swap its page for a card and lose the user's place)."""
+
+    def test_one_or_three_missed_pings_keep_it_running_the_fourth_does_not(self):
+        m = suite.Module({"id": "h", "name": "h", "url": "http://127.0.0.1:1", "cmd": ["x"], "cwd": "."})
+        m.healthy = True
+        m.supervise = lambda: None
+        m._ping = lambda: False
+        for _ in range(3):
+            m.refresh()
+            self.assertTrue(m.healthy)
+        m.refresh()
+        self.assertFalse(m.healthy)
+
+    def test_an_answer_resets_the_count(self):
+        m = suite.Module({"id": "h2", "name": "h2", "url": "http://127.0.0.1:1", "cmd": ["x"], "cwd": "."})
+        m.healthy = True
+        m.supervise = lambda: None
+        for ok in (False, False, True, False, False, False):
+            m._ping = lambda ok=ok: ok
+            m.refresh()
+        self.assertTrue(m.healthy)
