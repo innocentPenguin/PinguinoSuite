@@ -112,7 +112,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
 
   /** Fetch newer packages / Lite installers from paired PCs into the local folders. Hash-checked; nothing is installed or run. */
   async function syncFromPeers() {
-    if (!peers || peers.enabled?.() === false) return { fetched: 0 };
+    if (!peers || peers.enabled?.() !== true) return { fetched: 0 };
     let fetched = 0;
     for (const peer of peers.names()) {
       let items;
@@ -135,7 +135,8 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
           fs.mkdirSync(path.dirname(dest), { recursive: true });
           fs.writeFileSync(dest + '.tmp', buf); fs.renameSync(dest + '.tmp', dest);
           fs.writeFileSync(dest + '.sha256.tmp', it.sha256 + '\n'); fs.renameSync(dest + '.sha256.tmp', dest + '.sha256');
-          fetched++; log('info', 'lite', `fetched ${it.name} from ${peer} (hash verified)`);
+          fs.writeFileSync(dest + '.from', peer + '\n');                       // where it came from, for the install prompt
+          fetched++; log('info', 'lite', `fetched ${it.name} from ${peer} (integrity checked, not signed)`);
         } catch (e) { log('warn', 'lite', `could not fetch ${it.name} from ${peer}: ${e.message}`); }
       }
     }

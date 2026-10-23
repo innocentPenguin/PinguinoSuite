@@ -44,8 +44,8 @@ export const SCHEMA = [
     { key: 'mesh.allowRemoteMacros', label: 'Let paired devices run my OBS macros', type: 'bool', def: true, help: 'A paired client can press the macros on this PC (scene, mute...). Turn off to make this PC ignore remote presses.' },
     { key: 'mesh.remoteRisky', label: 'Let paired devices start/stop my stream', type: 'bool', def: false, help: 'Allows remote start/stop-stream macros. Off by default: only press those on this PC.' },
     { key: 'mesh.codeMinutes', label: 'Pairing code lifetime (minutes)', type: 'number', min: 1, max: 15, def: 5, help: 'How long a pairing code stays valid. It always works only once.' },
-    { key: 'mesh.shareUpdates', label: 'Share update files with my paired PCs', type: 'bool', def: true, help: 'Paired PCs may download module packages and Lite installers from this PC (hash-checked, nothing runs by itself).' },
-    { key: 'mesh.fetchUpdates', label: 'Fetch update files from my paired PCs', type: 'bool', def: true, help: 'On "Check for updates", pull newer packages from paired PCs into this PC. Installing still needs your click.' },
+    { key: 'mesh.shareUpdates', label: 'Share update files with my paired PCs', type: 'bool', def: false, help: 'OFF by default. Paired PCs may download module packages and Lite installers from this PC. Files are integrity-checked only (not signed): turn on only between your own PCs.' },
+    { key: 'mesh.fetchUpdates', label: 'Fetch update files from my paired PCs', type: 'bool', def: false, help: 'OFF by default. When on, newer packages from paired PCs are pulled into this PC (integrity-checked, not signed) and shown with the PC they came from. Installing still needs your click.' },
   ] },
   { group: 'Logging', fields: [
     { key: 'log.level', label: 'Console log level', type: 'select', options: ['debug', 'info', 'warn', 'error'], def: 'info', help: 'Lowest level written to the Suite console (warn = only problems).' },
@@ -90,7 +90,10 @@ function clean(f, v) {
 }
 
 /** Apply {key: value|null}. null = reset to default. Validates everything first; nothing is applied if any value is bad. */
-export function apply(cfg, ctx, changes, { confirmRole = false } = {}) {
+export const NEEDS_LIVE_CONFIRM = new Set(['safety.allowStartStream', 'mesh.remoteRisky']);
+/** Keys a settings FILE may carry (looks only; nothing that opens a door, moves files or points at another machine). */
+export const IMPORTABLE = k => /^(ui|prestream|log)\./.test(k) || /^cooldown\.(macroMs|riskyMs)$/.test(k);
+export function apply(cfg, ctx, changes, { confirmRole = false, confirmLive = false } = {}) {
   const todo = [];
   for (const [key, raw] of Object.entries(changes || {})) {
     const f = FIELDS[key];
@@ -99,6 +102,8 @@ export function apply(cfg, ctx, changes, { confirmRole = false } = {}) {
   }
   const roleChange = todo.find(([f, v]) => f.key === 'role' && v !== cfg.role);
   if (roleChange && !confirmRole) throw fail(409, `Switching to ${roleChange[1]} needs confirmation`, { needs: 'confirm_role', to: roleChange[1] });
+  const turnOn = todo.find(([f, v]) => NEEDS_LIVE_CONFIRM.has(f.key) && v === true && value(cfg, ctx, f.key) !== true);
+  if (turnOn && !confirmLive) throw fail(409, `Turning on "${turnOn[0].label}" needs confirmation`, { needs: 'confirm_live', key: turnOn[0].key });
   const changed = [];
   for (const [f, v] of todo) {
     if (JSON.stringify(value(cfg, ctx, f.key)) === JSON.stringify(v)) continue;
@@ -107,7 +112,7 @@ export function apply(cfg, ctx, changes, { confirmRole = false } = {}) {
     else if (JSON.stringify(v) === JSON.stringify(f.def)) delPath(cfg, f.key);
     else setPath(cfg, f.key, v);
     changed.push(f.key);
-    log(f.danger ? 'warn' : 'info', 'settings', `${f.key} changed${f.danger ? ` to ${v}` : ''}`);
+    log(f.danger || NEEDS_LIVE_CONFIRM.has(f.key) ? 'warn' : 'info', 'settings', `${f.key} changed${f.danger || NEEDS_LIVE_CONFIRM.has(f.key) ? ` to ${v}` : ''}`);
     if (f.key === 'log.level') setLevel(v);
   }
   if (changed.length) cfgm.save(cfg);

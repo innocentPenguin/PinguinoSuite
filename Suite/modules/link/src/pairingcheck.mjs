@@ -26,7 +26,7 @@ async function node(name, port, role) {
   dirs.push(dir);
   fs.mkdirSync(path.join(dir, 'link'), { recursive: true });
   const lite = path.join(dir, 'lite');
-  const cfg = { role, hub: 'hubpc', port, token: `module-token-${name}-module-token-0003`, inbox: dir, obs: { host: '127.0.0.1', port: obsPort, password: 'pw-secret-1' }, macros, claude: { enabled: false, cli: 'claude' }, cooldown: { macroMs: 0, riskyMs: 0 } };
+  const cfg = { role, hub: 'hubpc', port, mesh: { shareUpdates: true, fetchUpdates: true }, token: `module-token-${name}-module-token-0003`, inbox: dir, obs: { host: '127.0.0.1', port: obsPort, password: 'pw-secret-1' }, macros, claude: { enabled: false, cli: 'claude' }, cooldown: { macroMs: 0, riskyMs: 0 } };
   fs.writeFileSync(path.join(dir, 'link', 'config.json'), JSON.stringify(cfg));
   const child = spawn(process.execPath, [cli, 'serve'], { stdio: 'ignore', windowsHide: true,
     env: { ...process.env, PINGUINO_LINK_PORT: String(port), PINGUINO_API_TOKEN: `core-${name}`, PINGUINO_DATA_DIR: dir, PINGUINO_MESH_TEST: '1', PINGUINO_CORE_URL: 'http://127.0.0.1:1', PINGUINO_LITE_DIR: lite, PINGUINO_LITE_VERSION: '0.1.0' } });

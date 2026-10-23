@@ -74,10 +74,11 @@ const dflt=f.type==='list'?(f.def||[]).join(', ')||'none':(f.def===''?'none':f.d
 return '<div class=row><div><b>'+esc(f.label)+'</b></div><div>'+ctl+(f.changed?'<button class="sm" data-reset="'+esc(f.key)+'">Reset</button>':'')+'<small class=dim>'+esc(f.help)+' <i>Default: '+esc(dflt)+'.</i></small><span id="sv-'+esc(f.key)+'"></span></div></div>';}).join('')).join('');
 }catch(e){$('se').textContent='settings unavailable: '+e.message;}}
 $('sdet').addEventListener('toggle',()=>{if($('sdet').open)loadSettings();});
-let pendingRole=null;
+let pendingRole=null,pendingLive=null;
 document.addEventListener('change',async e=>{const t=e.target,k=t.dataset&&t.dataset.set;if(!k)return;
 const v=t.type==='checkbox'?t.checked:t.value;
 if(k==='role'){pendingRole=v;$('smsg').innerHTML='Switch this PC to <b>'+esc(v)+'</b>? '+(v==='hub'?'It will run OBS macros itself.':'It will forward macros to the hub.')+' <button id=rolego class=danger>Yes, change role</button> <button id=rolestop>Cancel</button>';return;}
+if((k==='safety.allowStartStream'||k==='mesh.remoteRisky')&&v===true){pendingLive={k:k,v:v};$('smsg').innerHTML='<b>This lets a button '+(k==='mesh.remoteRisky'?'on another PC ':'')+'go live.</b> Sure? <button id=livego class=danger>Yes, allow it</button> <button id=livestop>Cancel</button>';return;}
 await saveSetting(k,v);});
 async function saveSetting(k,v,extra){try{const r=await api('/api/settings',Object.assign({changes:{[k]:v}},extra||{}));$('smsg').textContent=r.changed.length?('Saved'+(r.restart?' (restart Link to apply)':'')+'.'):'No change.';await loadSettings();load();}catch(err){$('smsg').textContent=err.message;}}
 
@@ -115,6 +116,8 @@ if(t.id==='sexp'){const r=await api('/api/export');const a=document.createElemen
 if(t.id==='simp'){$('sfile').click();return;}
 if(d.reset){await saveSetting(d.reset,null);return;}
 if(t.id==='rolego'){const v=pendingRole;pendingRole=null;await saveSetting('role',v,{confirm_role:true});return;}
+if(t.id==='livego'){const p=pendingLive;pendingLive=null;await saveSetting(p.k,p.v,{confirm_live:true});return;}
+if(t.id==='livestop'){pendingLive=null;$('smsg').textContent='';loadSettings();return;}
 if(t.id==='rolestop'){pendingRole=null;$('smsg').textContent='';loadSettings();return;}
 /* macro editor */
 if(t.id==='mnew'){$('mform').innerHTML=macroForm({name:'',steps:[{kind:'scene',value:''}],meta:{}});return;}

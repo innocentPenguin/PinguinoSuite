@@ -53,7 +53,7 @@ try {
 
   const start = await B.call('POST', '/api/macro/start');
   check('remote start-stream is refused by default (403)', start.status === 403 && obs.streaming === false && /turned off/.test(start.json.error || ''), JSON.stringify(start));
-  await A.call('POST', '/api/settings', { changes: { 'mesh.remoteRisky': true } });
+  await A.call('POST', '/api/settings', { changes: { 'mesh.remoteRisky': true }, confirm_live: true });
   check('after the hub allows it, remote start works', (await B.call('POST', '/api/macro/start')).status === 200 && obs.streaming === true);
   check('remote stop works', (await B.call('POST', '/api/macro/stop')).status === 200 && obs.streaming === false);
   check('hub guard still applies through the client (stop while idle = 409)', (await B.call('POST', '/api/macro/stop')).status === 409);

@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import net from 'node:net';
 import crypto from 'node:crypto';
 import { DIR } from './config.mjs';
 import { log } from './log.mjs';
@@ -38,9 +39,8 @@ const PEER_HELP = {
 
 export function isTailnetIp(ip) {
   ip = bare(ip);
-  const m = ip.match(/^100\.(\d+)\./);
-  if (m) return +m[1] >= 64 && +m[1] <= 127;
-  return ip.toLowerCase().startsWith('fd7a:115c:a1e0:');
+  if (net.isIPv4(ip)) { const o = ip.split('.').map(Number); return o[0] === 100 && o[1] >= 64 && o[1] <= 127; }
+  return net.isIPv6(ip) && ip.toLowerCase().startsWith('fd7a:115c:a1e0:');   // a real address, never a name like 100.64.0.1.evil.com
 }
 
 function cleanDevice(d) {
