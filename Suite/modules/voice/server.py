@@ -372,6 +372,38 @@ def g_intervals(h, q):
     return {"now": now, "speaking": bool(brain.current) or brain.player.busy, "intervals": [[a, b] for a, b in list(brain.intervals) if b >= since]}
 
 
+ROUTING_PLAN = [("voice", "Bot voice", "Voicemeeter AUX Input", "Voicemeeter is not installed or not running. Use 'CABLE In 16ch' instead (music then stays on 'CABLE Input')."),
+                ("music", "Music", "CABLE Input", "Install VB-Cable (vb-audio.com/Cable) and restart the PC, or leave the music on the default output.")]
+
+
+def g_routing_check(h, q):
+    """Read-only: which output devices exist, whether the planned routing devices are there and whether the chosen Play-on device resolves. Plays nothing."""
+    import engine
+    raw = engine._raw_outputs()
+    names = [d["name"] for d in engine.dedupe_devices(raw)]
+    checks = []
+    for cid, label, want, fix in ROUTING_PLAN:
+        i = engine.pick_device(want, raw)
+        found = next((e["name"] for e in raw if e["index"] == i), "") if i is not None else ""
+        checks.append({"id": cid, "label": label, "want": want, "found": bool(found), "device": found, "status": "pass" if found else "warn",
+                       "detail": f"{label}: '{found}' is available." if found else f"{label}: no output called '{want}' was found. {fix}"})
+    dev = str(brain.cfg["output"]["device"] or "")
+    if not names:
+        po = {"id": "play_on", "label": "Play on", "want": dev, "found": False, "device": "", "status": "fail",
+              "detail": "No audio output device was found on this computer, so Speak cannot play anything. Plug in or enable speakers/headphones."}
+    elif not dev:
+        po = {"id": "play_on", "label": "Play on", "want": "", "found": True, "device": "", "status": "pass",
+              "detail": "Play on is 'System default': Speak uses the system output, one shared volume. Pick the planned voice device for a separate stream fader."}
+    else:
+        i = engine.pick_device(dev, raw)
+        found = next((e["name"] for e in raw if e["index"] == i), "") if i is not None else ""
+        po = {"id": "play_on", "label": "Play on", "want": dev, "found": bool(found), "device": found, "status": "pass" if found else "fail",
+              "detail": f"Play on '{dev}' resolves to '{found}'." if found else f"Play on is '{dev}', but no such output exists right now. Speak will use the system default instead. Pick another device or start the program that provides it."}
+    checks.append(po)
+    worst = "fail" if any(c["status"] == "fail" for c in checks) else "warn" if any(c["status"] == "warn" for c in checks) else "pass"
+    return {"status": worst, "devices": names, "checks": checks}
+
+
 def g_devices(h, q):
     import engine
     d = engine.devices()
@@ -547,7 +579,7 @@ def g_selftest(h, q):
         return {"ok": False, "error": ("No voice is available yet: " + NO_VOICE_HINT.get(sys.platform[:3], NO_VOICE_HINT["lin"])) if not brain.sapi.voices() else "The voice engine failed: " + str(e)[:150]}
 
 
-GET = {"/api/speech-intervals": g_intervals, "/api/sounds": g_sounds, "/api/counters": g_counters, "/api/history.csv": g_history_csv, "/api/devices": g_devices, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
+GET = {"/api/speech-intervals": g_intervals, "/api/sounds": g_sounds, "/api/counters": g_counters, "/api/history.csv": g_history_csv, "/api/devices": g_devices, "/api/routing-check": g_routing_check, "/api/integrations": g_integrations, "/api/status": g_status, "/api/config": g_config, "/api/voices": g_voices, "/api/history": g_history, "/api/presets": g_presets, "/api/export": g_export,
        "/api/control": g_control, "/api/review/reports": g_reports, "/api/review/report": g_report, "/api/incidents": g_incidents, "/api/prestream": g_prestream, "/api/help": g_help, "/api/selftest": g_selftest}
 POST = {"/api/control/enable": p_control_enable, "/api/control/confirm": p_control_confirm, "/api/control/cancel": p_control_cancel, "/api/control/try": p_control_try, "/api/review/run": p_review_run, "/api/review/apply": p_review_apply, "/api/soundcheck": p_soundcheck, "/api/sound-upload": p_sound_upload, "/api/sound-delete": p_sound_delete, "/api/sound-preview": p_sound_play_preview, "/api/counters-reset": p_counters_reset, "/api/test-cloud": p_test_cloud, "/api/timer-fire": p_timer_fire, "/api/config": p_config, "/api/master": p_master, "/api/mute": p_mute, "/api/speak": p_speak, "/api/event": p_event, "/api/test-event": p_test_event,
         "/api/preview": p_preview, "/api/stop": p_stop, "/api/replay": p_replay, "/api/preset": p_preset, "/api/chat-command": p_chat_command}

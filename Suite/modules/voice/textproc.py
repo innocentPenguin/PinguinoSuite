@@ -39,15 +39,20 @@ def scrub_secrets(text):
 
 
 def clean_name(name, on=True):
+    """How a display name is said: emoji and symbols dropped, _ - . become spaces, xX..Xx decoration and trailing digits removed,
+    CamelCase split ("DragonSlayer" -> "Dragon Slayer"). A name with nothing sayable left becomes "someone"."""
     n = str(name or "").strip()
     if not on:
         return n
-    n = re.sub(r"[_\-.]+", " ", n)
-    n = re.sub(r"(?i)^(?:x+\s*)|(?:\s*x+)$", "", n) if len(n) > 6 else n
-    n = re.sub(r"\d{3,}$", "", n)
-    n = re.sub(r"(?<=[a-z])\d+$", "", n)
+    n = scrub_secrets(n)[0]                                    # before any symbol is stripped: "oauth:abc..." must still be recognised
+    n = re.sub(r"[^\w\s'.\-]|_", " ", n)         # emoji / symbols; \w keeps letters of any language and digits
+    n = re.sub(r"[\-.]+", " ", n)
+    n = re.sub(r"(?i)^\s*xx+\s*|\s*xx+\s*$", " ", n) if len(n) > 6 else n
+    n = re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", n)
+    n = re.sub(r"\d{3,}\s*$", "", n.strip())
+    n = re.sub(r"(?<=[A-Za-z])\d+$", "", n)
     n = re.sub(r"\s+", " ", n).strip()
-    return n or str(name or "someone")
+    return n if re.search(r"[^\W_]", n) else "someone"
 
 
 def profane(text, extra):

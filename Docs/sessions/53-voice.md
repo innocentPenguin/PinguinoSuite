@@ -17,3 +17,4 @@ Last updated: 2026-10-23 06:20. Hand-over from the old 06 session: `Docs\session
 - Item 3 (Docs\VOICE_MAC.md) and item 4 (third review) follow.
 - Item 3 done: Docs\VOICE_MAC.md.
 - Item 4: third review of c20416c/d15ed20/cc1683c: no regressions found (checked _num with nan/inf/bool, safe_name skip->"someone", role_of fallbacks, history rotation inside the OSError guard, mic_loop re-arm after the alert clears, redeem still needs tts.enabled). Noted, not changed: redeem bypass only for JSON true (a "true" string from the Host would not bypass; Host sends booleans via module_command today).
+- Batch 3: /api/routing-check + Routing check button (Output card), spoken-name cleanup (emoji, CamelCase, secrets scrubbed first; nicknames map = per-name override already existed). tests/test_routing_names.py. Tests 121.
