@@ -52,6 +52,13 @@ namespace PinguinoHost
         // NEVER SAY THE SAME LINE TWICE: every chat send (timers, reminders, commands, shoutouts...) passes here. Same text (case/spacing ignored) inside the window is dropped.
         static readonly System.Collections.Generic.Dictionary<string, DateTime> _said = new System.Collections.Generic.Dictionary<string, DateTime>();
         public static int DupSeconds { get { int n; return int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_DUP_SECONDS"), out n) ? n : 30; } }
+        /// <summary>clip routes: this computer only AND not from a web page (a browser always sends Origin on fetch/POST; bots do not), Host header must be local (no DNS rebinding)</summary>
+        static bool ClipLocalOnly(System.Net.HttpListenerContext c)
+        {
+            if (!System.Net.IPAddress.IsLoopback(c.Request.RemoteEndPoint.Address)) return false;
+            if (!string.IsNullOrEmpty(c.Request.Headers["Origin"])) return false;
+            string h = c.Request.Headers["Host"] ?? ""; return h.StartsWith("127.0.0.1:") || h.StartsWith("localhost:") || h.StartsWith("[::1]:");
+        }
         public static bool SaidRecently(string text)
         {
             string k = System.Text.RegularExpressions.Regex.Replace((text ?? "").ToLowerInvariant(), "[​‍️]", "");
@@ -212,14 +219,16 @@ namespace PinguinoHost
             }
             if (p == "/api/clips-pick" && m == "GET")
             {   // a clip for a bot to post (own channel: featured, last 2 weeks, not one of the last 3 sent). Read only: the sender calls POST /api/clips-sent after posting.
-                if (!System.Net.IPAddress.IsLoopback(c.Request.RemoteEndPoint.Address)) { c.Response.StatusCode = 403; return true; }
-                var pk = ClipPick.PickOwn(); Write(c, new JObject { { "ok", true }, { "clip", pk == null ? null : new JObject { { "id", pk["id"] }, { "url", pk["url"] }, { "title", pk["title"] }, { "views", pk["view_count"] }, { "created_at", pk["created_at"] } } }, { "recent", new JArray(ClipPick.Recent()) } }.ToString(), "application/json"); return true;
+                if (!ClipLocalOnly(c)) { c.Response.StatusCode = 403; return true; }
+                bool rsv = c.Request.QueryString["reserve"] == "1"; var pk = rsv ? ClipPick.PickOwnReserved(c.Request.QueryString["by"]) : ClipPick.PickOwn(); Write(c, new JObject { { "ok", true }, { "clip", pk == null ? null : new JObject { { "id", pk["id"] }, { "url", pk["url"] }, { "title", pk["title"] }, { "views", pk["view_count"] }, { "created_at", pk["created_at"] } } }, { "recent", new JArray(ClipPick.Recent()) } }.ToString(), "application/json"); return true;
             }
             if (p == "/api/clips-sent" && m == "POST")
             {   // a bot posted this clip: remember it in the shared last-clips list (idempotent: marking the clip that was marked last changes nothing)
-                if (!System.Net.IPAddress.IsLoopback(c.Request.RemoteEndPoint.Address)) { c.Response.StatusCode = 403; return true; }
+                if (!ClipLocalOnly(c)) { c.Response.StatusCode = 403; return true; }
                 var cb = Body(c); string cu = (string)cb["url"] ?? (string)cb["id"] ?? ""; if (ClipPick.IdOf(cu) == "") { c.Response.StatusCode = 400; Write(c, "{\"ok\":false,\"error\":\"url required\"}", "application/json"); return true; }
-                bool already = ClipPick.Recent(1).LastOrDefault() == ClipPick.IdOf(cu); if (!already) ClipPick.Mark(cu, (string)cb["by"] ?? "bot");
+                bool rel = (bool?)cb["release"] == true, already = ClipPick.Recent(1).LastOrDefault() == ClipPick.IdOf(cu);
+                if (rel) { Write(c, new JObject { { "ok", true }, { "released", ClipPick.Confirm(cu, true) } }.ToString(), "application/json"); return true; }
+                if (already) ClipPick.Confirm(cu, false); else ClipPick.Mark(cu, (string)cb["by"] ?? "bot");
                 Write(c, new JObject { { "ok", true }, { "already", already } }.ToString(), "application/json"); return true;
             }
             if (p == "/api/clips-dump" && m == "GET") { Write(c, ClipsDump.Run().ToString(), "application/json"); return true; }

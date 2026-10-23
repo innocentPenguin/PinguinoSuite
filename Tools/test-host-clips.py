@@ -1,5 +1,5 @@
 """GET /api/clips-dump against a fake Helix: cursor paging, per-year windows, dedupe, saved file shape.  Usage: python Tools/test-host-clips.py [dll]"""
-import json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request, urllib.parse
+import urllib.error, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
@@ -25,7 +25,7 @@ def chk(n, ok, x=''):
     if not ok: fails.append('%s %s' % (n, x))
 try:
     host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(80):
+    for _ in range(240):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
     r = json.load(urllib.request.urlopen(B + '/api/clips-dump', timeout=120)); chk('ok', r['ok'] and r['count'] == 130, r)
@@ -35,10 +35,11 @@ try:
     chk('paged with cursor', any(q.get('after') == ['p2'] for q in reqs))
     chk('sorted by date', [x['created_at'] for x in rows] == sorted(x['created_at'] for x in rows))
     def jget(p): return json.load(urllib.request.urlopen(B + p, timeout=20))
-    def jpost(p, b): return json.load(urllib.request.urlopen(urllib.request.Request(B + p, data=json.dumps(b).encode(), headers={'Content-Type': 'application/json', 'Origin': B}), timeout=20))
+    def jpost(p, b): return json.load(urllib.request.urlopen(urllib.request.Request(B + p, data=json.dumps(b).encode(), headers={'Content-Type': 'application/json'}), timeout=20))
     ownq.clear(); r = jget('/api/clips-pick?own=1'); chk('pick: featured only, most viewed first (F4, never the 999-view non-featured)', r['ok'] and r['clip']['id'] == 'F4', r)
     chk('pick asks Helix for the last 14 days', len(ownq) == 1 and 12.9 < (time.time() - time.mktime(time.strptime(ownq[0], '%Y-%m-%dT%H:%M:%SZ')) + time.timezone) / 86400 < 14.1, ownq)
     chk('pick is read only (same answer twice)', jget('/api/clips-pick?own=1')['clip']['id'] == 'F4')
+    chk('Helix list is cached: three picks made one Helix request', len(ownq) == 1, ownq)
     chk('sent: marks it', jpost('/api/clips-sent', {'url': 'https://clips.twitch.tv/F4', 'by': 'chatty'})['ok'])
     chk('sent twice in a row is idempotent', jpost('/api/clips-sent', {'url': 'https://clips.twitch.tv/F4', 'by': 'chatty'}).get('already') is True)
     chk('next pick skips the one just sent', jget('/api/clips-pick?own=1')['clip']['id'] == 'F3')
@@ -46,6 +47,19 @@ try:
     r = jget('/api/clips-pick?own=1'); chk('never one of the last 3 sent by any bot -> F1', r['clip']['id'] == 'F1' and r['recent'] == ['f4', 'f3', 'f2'], r)
     jpost('/api/clips-sent', {'url': 'F1', 'by': 'x'}); chk('after 4 sends the oldest (F4) is free again', jget('/api/clips-pick?own=1')['clip']['id'] == 'F4')
     rec = json.load(open(os.path.join(d, 'clips_recent.json'))); chk('shared file holds the sends with who sent them', [x['by'] for x in rec] == ['chatty', 'lore', 'helper', 'x'], rec)
+    # reserve=1: pick + mark in one step so two bots asking together get different clips
+    a1 = jget('/api/clips-pick?own=1&reserve=1&by=helper')['clip']['id']; a2 = jget('/api/clips-pick?own=1&reserve=1&by=lore')['clip']['id']
+    chk('two reserved picks in a row are different clips (%s %s)' % (a1, a2), a1 == 'F4' and a2 == 'F3')
+    chk('confirming a reserved clip keeps it', jpost('/api/clips-sent', {'url': a2, 'by': 'lore'}).get('already') is True)
+    chk('giving a reserved clip back (post timed out)', jpost('/api/clips-sent', {'url': a2, 'release': True}).get('released') is False)   # F3 was confirmed above, so it cannot be released
+    a3 = jget('/api/clips-pick?own=1&reserve=1&by=chatty')['clip']['id']; chk('third bot gets a different clip again (' + a3 + ')', a3 not in (a1, a2))
+    chk('release hands it back', jpost('/api/clips-sent', {'url': a3, 'release': True}).get('released') is True and jget('/api/clips-pick?own=1')['clip']['id'] == a3)
+    # a web page (Origin header) is refused on both routes
+    def code(rq):
+        try: return urllib.request.urlopen(rq, timeout=10).status
+        except urllib.error.HTTPError as e: return e.code
+    chk('clips-pick with an Origin header is refused', code(urllib.request.Request(B + '/api/clips-pick?own=1', headers={'Origin': 'https://evil.example'})) == 403)
+    chk('clips-sent with an Origin header is refused', code(urllib.request.Request(B + '/api/clips-sent', data=b'{"url":"zz"}', headers={'Origin': 'https://evil.example', 'Content-Type': 'application/json'})) == 403 and 'zz' not in json.load(open(os.path.join(d, 'clips_recent.json')))[-1]['id'])
 finally:
     if host: host.kill()
     time.sleep(0.5); shutil.rmtree(d, True)

@@ -71,7 +71,11 @@ namespace PinguinoHost
         }
         static JArray LoadRecent()
         {
-            try { if (File.Exists(RecentPath)) return JArray.Parse(File.ReadAllText(RecentPath, Encoding.UTF8).TrimStart((char)0xFEFF)); } catch (Exception) { }
+            try
+            {   // a reservation (pending) that nobody confirmed within 2 minutes is dropped: the bot that reserved it never posted
+                if (File.Exists(RecentPath)) { long old = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 120; return new JArray(JArray.Parse(File.ReadAllText(RecentPath, Encoding.UTF8).TrimStart((char)0xFEFF)).Where(x => !((bool?)x["pending"] == true && ((long?)x["ts"] ?? 0) < old))); }
+            }
+            catch (Exception) { }
             return new JArray();
         }
         /// <summary>ids of the last n clips sent by any bot, newest last</summary>
@@ -79,16 +83,40 @@ namespace PinguinoHost
         /// <summary>true when this clip is one of the last 3 sent (by any bot)</summary>
         public static bool WasRecent(string urlOrId) { string id = IdOf(urlOrId); return id != "" && Recent().Contains(id); }
         /// <summary>record a clip that was just posted (by = which bot / feature)</summary>
-        public static void Mark(string urlOrId, string by = "host")
+        public static void Mark(string urlOrId, string by = "host") { lock (L) MarkLocked(urlOrId, by, false); }
+        static void MarkLocked(string urlOrId, string by, bool pending)
         {
             string id = IdOf(urlOrId); if (id == "") return;
-            lock (L)
+            var a = LoadRecent(); var o = new JObject { { "id", id }, { "ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "by", by } }; if (pending) o["pending"] = true; a.Add(o);
+            while (a.Count > Keep) a.RemoveAt(0);
+            Save(a);
+        }
+        static void Save(JArray a) { try { Directory.CreateDirectory(HostApi.DataDir); File.WriteAllText(RecentPath, a.ToString(Newtonsoft.Json.Formatting.None), new UTF8Encoding(false)); } catch (Exception) { } }
+        /// <summary>the sender confirms a reserved clip was posted (pending off) or, with release, gives it back (the post timed out). Returns false when the newest entry is not this clip.</summary>
+        public static bool Confirm(string urlOrId, bool release)
+        {
+            string id = IdOf(urlOrId); lock (L)
             {
-                var a = LoadRecent(); a.Add(new JObject { { "id", id }, { "ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "by", by } });
-                while (a.Count > Keep) a.RemoveAt(0);
-                try { Directory.CreateDirectory(HostApi.DataDir); File.WriteAllText(RecentPath, a.ToString(Newtonsoft.Json.Formatting.None), new UTF8Encoding(false)); } catch (Exception) { }
+                var a = LoadRecent(); var e = a.OfType<JObject>().LastOrDefault(x => (string)x["id"] == id); if (e == null || a.Last != e) return false;
+                if (release) { if ((bool?)e["pending"] == true) a.Remove(e); else return false; } else e.Remove("pending");
+                Save(a); return true;
             }
         }
+        /// <summary>pick an own-channel clip AND reserve it in one step, so two bots asking at the same moment get different clips. Confirm() it once posted, or Confirm(release) if the post failed.</summary>
+        public static JObject PickOwnReserved(string by)
+        {
+            lock (L) { var c = PickOwn(); if (c != null) MarkLocked((string)c["id"], by ?? "bot", true); return c; }
+        }
+        static readonly Dictionary<string, KeyValuePair<DateTime, List<JObject>>> Cache = new Dictionary<string, KeyValuePair<DateTime, List<JObject>>>();
+        /// <summary>Helix clip list cached for 60 s per channel/window, so several bots polling do not hit Helix each time</summary>
+        static List<JObject> Cached(string bid, DateTime? since)
+        {
+            string key = bid + "|" + (since == null ? "all" : since.Value.ToString("yyyyMMddHH"));
+            lock (Cache) { KeyValuePair<DateTime, List<JObject>> v; if (Cache.TryGetValue(key, out v) && (DateTime.UtcNow - v.Key).TotalSeconds < 60) return v.Value; }
+            var l = Fetch(bid, since); lock (Cache) { Cache[key] = new KeyValuePair<DateTime, List<JObject>>(DateTime.UtcNow, l); if (Cache.Count > 50) Cache.Clear(); }
+            return l;
+        }
+        public static void TestResetCache() { lock (Cache) Cache.Clear(); }
         /// <summary>clips of a channel from Helix, newest window first (since = null: all time). Each row {id,title,url,view_count,created_at,duration,is_featured,thumbnail_url}.</summary>
         public static List<JObject> Fetch(string broadcasterId, DateTime? since = null)
         {
@@ -123,12 +151,12 @@ namespace PinguinoHost
         {
             string bid = TwitchApi.BroadcasterId(); if (bid == "" && TestFetch == null) return null;
             var rec = Recent();
-            return Rank(Fetch(bid, DateTime.UtcNow.AddDays(-OwnDays)), true).FirstOrDefault(c => !rec.Contains(IdOf((string)c["id"])));
+            return Rank(Cached(bid, DateTime.UtcNow.AddDays(-OwnDays)), true).FirstOrDefault(c => !rec.Contains(IdOf((string)c["id"])));
         }
         /// <summary>a clip of another streamer for a shoutout: their featured clips first, then the most viewed (all time), skipping the last 3 sent and clips without a playable video URL. null = no clips.</summary>
         public static JObject PickFor(string broadcasterId, bool needMedia = true)
         {
-            var rec = Recent(); var ranked = Rank(Fetch(broadcasterId)).Where(c => !needMedia || MediaUrl(c) != "").ToList();
+            var rec = Recent(); var ranked = Rank(Cached(broadcasterId, null)).Where(c => !needMedia || MediaUrl(c) != "").ToList();
             return ranked.FirstOrDefault(c => !rec.Contains(IdOf((string)c["id"]))) ?? ranked.FirstOrDefault();
         }
     }

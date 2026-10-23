@@ -55,7 +55,7 @@ def chk(n, ok):
     res.append((n, bool(ok)))
     if not ok: print('   says:', says(), 'posts:', posts)
 try:
-    for _ in range(60):
+    for _ in range(240):
         try: api('/api/status'); break
         except Exception: time.sleep(0.5)
     ts = time.time() - t0
