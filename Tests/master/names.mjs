@@ -31,10 +31,12 @@ const probe = `(async () => { const out = {}; const w = ms => new Promise(r => s
  for (const t of ['customs', 'feed', 'cmds', 'overlays', 'stream']) { document.querySelector('[data-tab=' + t + ']').click(); await w(1500);
   const root = document.querySelector('#tab-' + t), wide = [];
   for (const e of root.querySelectorAll('*')) if (e.offsetParent && e.scrollWidth > e.clientWidth + 2 && getComputedStyle(e).overflowX === 'visible') wide.push((e.id || e.className || e.tagName) + ':' + e.scrollWidth + '>' + e.clientWidth);
+  if (t === 'customs' || t === 'feed') { out.literal = (out.literal || false) || document.body.innerText.includes('<b id="zz">'); if (t === 'customs') out.shown = root.innerText.length; }
   out[t] = { wide: wide.slice(0, 6), rootX: root.scrollWidth - root.clientWidth, markup: root.querySelectorAll('#zz, img[src=x], script').length }; }
  const sc = document.querySelector('#scenes'); out.docX = document.documentElement.scrollWidth - innerWidth; out.xss = !!window.__xss; out.zz = !!document.getElementById('zz');
- out.literal = document.body.innerText.includes('<b id="zz">'); out.shown = document.querySelector('#tab-customs').innerText.length; return JSON.stringify(out); })()`;
+ return JSON.stringify(out); })()`;
 const out = JSON.parse(await ev(probe)); console.log(JSON.stringify(out, null, 1));
-const bad = out.xss || out.zz || out.docX > 2 || Object.values(out).some(v => v && typeof v === 'object' && (v.markup || v.rootX > 2 || (v.wide && v.wide.length)));
+const bad = out.literal !== true || !(out.shown > 200) ||  out.xss || out.zz || out.docX > 2 || Object.values(out).some(v => v && typeof v === 'object' && (v.markup || v.rootX > 2 || (v.wide && v.wide.length)));
+if (out.literal !== true || !(out.shown > 200)) console.log('page did not render the hostile names (literal=' + out.literal + ', customs text length=' + out.shown + ')');
 console.log(bad ? 'FAIL' : 'PASS (nothing rendered as markup, nothing widened the page)');
 try { await cdp('Browser.close'); } catch { } ch.kill(); web.close(); mock.close(); process.exit(bad ? 1 : 0);

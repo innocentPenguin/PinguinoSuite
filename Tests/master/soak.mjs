@@ -32,6 +32,9 @@ while (Date.now() - t0 < secs * 1000) {
 }
 const f = rows.slice(Math.floor(rows.length / 3)), mx = k => Math.max(...f.map(r => r[k])), mn = k => Math.min(...f.map(r => r[k]));
 const grow = { nodes: mx('nodes') - mn('nodes'), si: mx('si') - mn('si'), st: mx('st') - mn('st'), heap: +(mx('heap') - mn('heap')).toFixed(1) };
-const bad = grow.si > 0 || grow.st > 60 || grow.nodes > 400 || grow.heap > 15;
+const last = rows[rows.length - 1];
+const dead = rows.length < 3 || !last || !(last.si > 0) || !(last.nodes > 500);   // too short a run, or the page never started its pollers
+if (dead) console.log('soak invalid: rows=' + rows.length + ' (need >= 3, i.e. run >= ~3 min), pollers/nodes missing in the last sample');
+const bad = dead || grow.si > 0 || grow.st > 60 || grow.nodes > 400 || grow.heap > 15;
 console.log('growth after warm-up (max-min):', JSON.stringify(grow), bad ? 'FAIL' : 'FLAT');
 try { await cdp('Browser.close'); } catch { } ch.kill(); web.close(); mock.close(); process.exit(bad ? 1 : 0);

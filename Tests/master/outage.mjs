@@ -18,14 +18,14 @@ const ws = new WebSocket(tab.webSocketDebuggerUrl); await new Promise(r => ws.on
 let id = 0; const pend = new Map(); ws.onmessage = m => { const j = JSON.parse(m.data); if (j.id && pend.has(j.id)) { pend.get(j.id)(j); pend.delete(j.id); } };
 const cdp = (method, params = {}) => new Promise(r => { const i = ++id; pend.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 const ev = async expr => (await cdp('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })).result.result.value;
-await cdp('Page.enable');
+await cdp('Page.enable'); await cdp('Page.addScriptToEvaluateOnNewDocument', { source: "window.addEventListener('error', () => window.__err = 1); window.addEventListener('unhandledrejection', () => window.__err = 1)" });
 await cdp('Page.navigate', { url: 'http://127.0.0.1:8814/master/master.html?host=http://127.0.0.1:8801&music=http://127.0.0.1:8802&multi=http://127.0.0.1:8803' });
 await sleep(4000);
 await ev("document.querySelector('[data-tab=feed]').click()");
 const snap = () => ev(`JSON.stringify({ link: document.querySelector('#p-link').innerText, banner: document.querySelector('#offline').hidden ? '' : document.querySelector('#offline').innerText,
   scenes: document.querySelectorAll('#scenes .r').length, feed: document.querySelector('#feedlist').children.length, body: document.body.innerText.length, tabs: document.querySelectorAll('[data-tab]').length, err: !!window.__err })`).then(JSON.parse);
-await ev("window.addEventListener('error', () => window.__err = 1); window.addEventListener('unhandledrejection', () => window.__err = 1)");
 const base = await snap(); console.log('baseline', JSON.stringify(base));
+if (!(base.scenes > 0 && base.feed > 0 && base.body > 200)) { console.log('FAIL baseline page is empty; nothing below would mean anything'); process.exit(1); }
 const hostOff = s => /Host offline|old/.test(s.link) && /Host is not answering/.test(s.banner), spo = s => /Spotify/.test(s.banner), mul = s => /Multi/.test(s.banner);
 const none = s => !/Spotify|Multi|Host is not/.test(s.banner);
 const cases = [
@@ -39,7 +39,8 @@ const cases = [
   ['host malformed JSON (stale badge)', { host: 'bad' }, s => /old/.test(s.link)],
   ['spotify malformed JSON', { music: 'bad' }, spo],
   ['multi malformed JSON', { multi: 'bad' }, mul],
-  ['all slow (3 s)', { host: 'slow', music: 'slow', multi: 'slow' }, s => none(s) || true],
+  // Intentionally weak: 3 s answers are slower than usual but inside the 4 s timeout, so the page may or may not show a banner. This case only requires: page kept, never blank, no banner left over afterwards.
+  ['all slow (3 s)', { host: 'slow', music: 'slow', multi: 'slow' }, () => true],
 ];
 let failed = 0; const rows = [];
 for (const [name, set, want] of cases) {

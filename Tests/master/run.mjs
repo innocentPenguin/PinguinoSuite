@@ -147,7 +147,7 @@ await t('events: an old Host without /api/events backs off and reports offline (
 });
 
 console.log('end to end: optimistic click against a failing Host');
-await t('optimistic scene change rolls back when the Host refuses, and the error text is usable', async () => {
+await t('UNIT ONLY (helper + mock failNext, not master.js itself): optimistic scene change rolls back when the Host refuses, and the error text is usable', async () => {
   const opt = C.createOptimistic(2500); opt.set('scene', 'Rocket'); st.failNext.add('/api/obs/scene'); const r = await api.post('/api/obs/scene', { scene: 'Rocket' });
   if (!r.ok) opt.drop('scene'); assert.equal(opt.has('scene'), false); assert.equal(r.error, 'OBS refused the change');
 });
@@ -361,6 +361,7 @@ await t('focus/keys/overflow: armed buttons disarm on Esc and blur, Esc closes p
 await t('keyboard: no positive tabindex, every control is a real button/input, scenes+sources lists are focusable in DOM order', () => {
   const html = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.html'), 'utf8'), js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
   assert.equal(/tabindex="[1-9]/.test(html + js), false); assert.equal(/<div[^>]*onclick/.test(html), false);
+  for (const k of ['b-last', 'scenes', 'sources', 'tab-customs']) assert.ok(html.indexOf('id="' + k + '"') >= 0, k + ' is missing from master.html');
   assert.ok(html.indexOf('id="b-last"') < html.indexOf('id="scenes"') && html.indexOf('id="scenes"') < html.indexOf('id="sources"') && html.indexOf('id="sources"') < html.indexOf('id="tab-customs"'));
 });
 
