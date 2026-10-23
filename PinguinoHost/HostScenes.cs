@@ -45,6 +45,23 @@ namespace PinguinoHost
                 Def = new Dictionary<string, int[]> { { "h", new[] { 40, 780, 420, 160, 8, 0 } }, { "v", new[] { 330, 1000, 420, 160, 8, 0 } } } },
             new W { Id = "nowplaying", Label = "Now playing", Src = "http://127.0.0.1:8771/overlay", Dw = 640, Dh = 200, Help = "The Spotify module's own now-playing overlay (port 8771, themes via its settings; ?next=0 hides up-next). Blank when the module is not running.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 40, 860, 640, 200, 8, 0 } }, { "v", new[] { 220, 1700, 640, 200, 8, 0 } } } },
+            // ---- sub-part widgets (?part= modes of the standalone pages): all OFF by default ----
+            new W { Id = "wheel_only", Label = "Wheel only", Src = "wheel.html?part=wheel", Dw = 1080, Dh = 1080, Takeover = true, Help = "Just the wheel and its title (wheel.html?part=wheel), full width, no camera zone. Takes over the scene while it has something to show.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1080, 1080, 6, 0 } }, { "v", new[] { 0, 300, 1080, 1080, 6, 0 } } } },
+            new W { Id = "wheel_teams", Label = "Wheel team box", Src = "wheel.html?part=teams", Dw = 700, Dh = 700, Takeover = true, Help = "Just the team box of the wheel: pick text, teams as they fill (wheel.html?part=teams). Takes over the scene while it has something to show.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 1200, 300, 700, 700, 6, 0 } }, { "v", new[] { 190, 1300, 700, 600, 6, 0 } } } },
+            new W { Id = "players_teams", Label = "Players: team cards only", Src = "players.html?part=teams", Dw = 1920, Dh = 1080, Help = "The team cards of the running match without the MATCH READY header (players.html?part=teams).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1920, 1080, 2, 0 } }, { "v", new[] { 0, 0, 1080, 608, 2, 0 } } } },
+            new W { Id = "players_header", Label = "Players: header only", Src = "players.html?part=header", Dw = 1920, Dh = 1080, Help = "Only the MATCH READY title block of the players page (players.html?part=header).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1920, 1080, 2, 0 } }, { "v", new[] { 0, 0, 1080, 608, 2, 0 } } } },
+            new W { Id = "queue_list", Label = "Queue list only", Src = "queue.html?part=list", Dw = 560, Dh = 720, Help = "The queue card only, never the idle leaderboards (queue.html?part=list).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 40, 40, 560, 720, 3, 0 } }, { "v", new[] { 260, 1100, 560, 720, 3, 0 } } } },
+            new W { Id = "queue_idle", Label = "Leaderboards only", Src = "queue.html?part=idle", Dw = 560, Dh = 720, Help = "The idle leaderboards / subs cards only, never the queue card (queue.html?part=idle).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 40, 40, 560, 720, 3, 0 } }, { "v", new[] { 260, 1100, 560, 720, 3, 0 } } } },
+            new W { Id = "customs_status", Label = "Customs: status only", Src = "customs.html?part=status", Dw = 420, Dh = 160, Help = "Customs card with just the title and QUEUE OPEN/CLOSED (customs.html?part=status).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 40, 780, 420, 160, 8, 0 } }, { "v", new[] { 330, 1000, 420, 160, 8, 0 } } } },
+            new W { Id = "customs_info", Label = "Customs: details only", Src = "customs.html?part=info", Dw = 420, Dh = 160, Help = "Customs card with just the title and the waiting / mode / format line (customs.html?part=info).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 40, 780, 420, 160, 8, 0 } }, { "v", new[] { 330, 1000, 420, 160, 8, 0 } } } },
         };
         static W Find(string id) { return Registry.FirstOrDefault(w => w.Id == id); }
 
@@ -124,7 +141,7 @@ namespace PinguinoHost
         public static JObject Widgets()
         {
             return new JObject { { "ok", true }, { "profiles", new JObject { { "h", new JArray(1920, 1080) }, { "v", new JArray(1080, 1920) } } },
-                { "widgets", new JArray(Registry.Select(w => new JObject { { "id", w.Id }, { "label", w.Label }, { "src", w.Src }, { "designW", w.Dw }, { "designH", w.Dh }, { "takeover", w.Takeover }, { "available", w.Host || w.Src.StartsWith("http") || File.Exists(Path.Combine(OverlayFiles.Root ?? "", w.Src)) }, { "pinned", w.Pinned }, { "help", w.Help } })) },
+                { "widgets", new JArray(Registry.Select(w => new JObject { { "id", w.Id }, { "label", w.Label }, { "src", w.Src }, { "designW", w.Dw }, { "designH", w.Dh }, { "takeover", w.Takeover }, { "available", w.Host || w.Src.StartsWith("http") || File.Exists(Path.Combine(OverlayFiles.Root ?? "", w.Src.Split('?')[0])) }, { "pinned", w.Pinned }, { "help", w.Help } })) },
                 { "style", new JArray("radius (px)", "rotate (deg)", "brightness (0-3)", "saturate (0-3)", "hue (deg)", "blur (px)", "shadow (bool)", "bg (css colour)") },
                 { "params", "free query-string pairs passed to the widget page, e.g. {\"layout\":\"sprinkled\",\"scale\":\"1.2\"} (same names the standalone page takes)" } };
         }

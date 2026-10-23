@@ -76,7 +76,10 @@
   .crown { width:max-content; margin:0 auto 4px; background:#ffe169; color:#3a2a00;
            font-weight:800; font-size:28px; line-height:1; letter-spacing:3px; padding:8px 24px; border-radius:999px; display:none; }
   .team.winner .crown { display:block; animation:pop .5s; }
-</style>
+/* ?part=teams: just the two team cards | ?part=header: just the MATCH READY title */
+.part-teams .header{display:none!important}
+.part-header #teams,.part-header #groupWrap{display:none!important}
+</style><script>(function(){var p=(new URLSearchParams(location.search).get("part")||"").replace(/[^a-z]/g,"");if(p)document.documentElement.classList.add("part-"+p)})();</script>
 </head>
 <body>
 <div id="stage">

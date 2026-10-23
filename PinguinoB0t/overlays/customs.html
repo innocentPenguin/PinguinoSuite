@@ -11,7 +11,9 @@
   #s{margin-top:2px;font-size:30px;font-weight:800}
   #s.open{color:#6dff8a}#s.closed{color:#ff6b5c}
   #d{margin-top:2px;font-size:19px;color:#cfc6bb}
-</style></head><body>
+  /* ?part=status: title + queue state | ?part=info: title + counts/mode line */
+  .part-status #d{display:none}.part-info #s{display:none}
+</style><script>(function(){var p=(new URLSearchParams(location.search).get("part")||"").replace(/[^a-z]/g,"");if(p)document.documentElement.classList.add("part-"+p)})();</script></head><body>
 <div id="c"><div id="t">CUSTOMS</div><div id="s" class="closed">QUEUE CLOSED</div><div id="d">&nbsp;</div></div>
 <script>
 (function(){

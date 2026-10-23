@@ -56,7 +56,14 @@ body.vertical .team{width:min(92vw,88vmin)}
 @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
 @keyframes slam{0%{transform:translate(-50%,-50%) scale(.2);opacity:0}65%{transform:translate(-50%,-50%) scale(1.15);opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
 @keyframes glow{0%{filter:drop-shadow(0 0 5vmin #ffcc66)}100%{filter:none}}
-</style></head><body>
+/* ?part=wheel: the wheel and its title only, full width, no camera zone | ?part=teams: the team box (pick text, teams, wait line) only */
+.part-wheel{--l:0vw!important;--r:0vw!important}
+.part-wheel #side{display:none!important}
+.part-teams #stage{visibility:hidden}
+.part-teams #side{position:fixed;left:0;right:0;top:0;bottom:0;max-width:none;width:auto;margin:0;padding:1vmin;align-items:center;justify-content:center}
+.part-teams #teams{display:flex;flex-direction:column;align-items:center}
+.part-teams .team{width:min(98vw,100vmin)}
+</style><script>(function(){var p=(new URLSearchParams(location.search).get("part")||"").replace(/[^a-z]/g,"");if(p)document.documentElement.classList.add("part-"+p)})();</script></head><body>
 <div id="stage"><div id="head"><div id="title"></div><div id="label"></div></div><div id="body"><div id="wheelbox"><canvas id="cv"></canvas><img id="hub" src="penguin-anim.gif" alt=""><div id="pick" hidden></div></div></div></div><div id="side"><div id="big"></div><div id="teams"></div><div id="final"></div><div id="wait"></div></div>
 <script>(()=>{
 const q=new URLSearchParams(location.search),R=document.documentElement.style;
