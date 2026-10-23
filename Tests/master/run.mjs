@@ -261,6 +261,28 @@ await t('last stream card: recapView shapes the Host recap, only https clips lin
   const r = await api.post('/api/raid/prep', {}); assert.equal(r.json.fired, true);
 });
 
+await t('writes: 401/403/429/503 come back as ok:false with plain words, never silent success', async () => {
+  const fake = st => async () => ({ ok: false, status: st, json: async () => ({}) });
+  for (const [st, re] of [[401, /token rejected/], [403, /Refused/], [429, /slow down/], [503, /busy/], [500, /HTTP 500/]]) {
+    const r = await C.createApi({ base: 'http://x', fetch: fake(st), getToken: () => 't' }).post('/api/obs/scene', { scene: 'A' }); assert.equal(r.ok, false); assert.equal(r.status, st); assert.match(r.error, re);
+  }
+  const soft = await C.createApi({ base: 'http://x', fetch: async () => ({ ok: true, status: 200, json: async () => ({ ok: false, error: 'no such scene' }) }) }).post('/x', {}); assert.equal(soft.ok, false); assert.equal(soft.error, 'no such scene');
+});
+
+await t('writes: slow Host times out, unreachable Host reports it; identical in-flight POSTs are sent once (double-click)', async () => {
+  const slow = C.createApi({ base: 'http://x', fetch: (u, o) => new Promise((res, rej) => o.signal.addEventListener('abort', () => rej(Object.assign(new Error('a'), { name: 'AbortError' })))), timeoutMs: 60 });
+  assert.equal((await slow.post('/api/wheel/spin')).error, 'timeout');
+  let sent = 0; const f = async () => { sent++; await sleep(40); return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
+  const a = C.createApi({ base: 'http://x', fetch: f }); const [r1, r2, r3] = await Promise.all([a.post('/api/wheel/spin'), a.post('/api/wheel/spin'), a.post('/api/wheel/spin', { other: 1 })]);
+  assert.equal(sent, 2); assert.equal(r1, r2); assert.notEqual(r1, r3); await a.post('/api/wheel/spin'); assert.equal(sent, 3);   // after it finishes, a new press sends again
+});
+
+await t('keyboard: no positive tabindex, every control is a real button/input, scenes+sources lists are focusable in DOM order', () => {
+  const html = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.html'), 'utf8'), js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
+  assert.equal(/tabindex="[1-9]/.test(html + js), false); assert.equal(/<div[^>]*onclick/.test(html), false);
+  assert.ok(html.indexOf('id="b-last"') < html.indexOf('id="scenes"') && html.indexOf('id="scenes"') < html.indexOf('id="sources"') && html.indexOf('id="sources"') < html.indexOf('id="tab-customs"'));
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);

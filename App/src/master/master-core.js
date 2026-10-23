@@ -190,7 +190,9 @@
 
   /* ---------- Host client ---------- */
   function createApi(o) {
-    const base = o.base, f = o.fetch, tok = o.getToken || (() => ''), timeout = o.timeoutMs || 5000;
+    const base = o.base, f = o.fetch, tok = o.getToken || (() => ''), timeout = o.timeoutMs || 5000, inflight = new Map();
+    // Plain words for the statuses a write can come back with (toasts show r.error): never a silent success.
+    const why = (st, j) => st === 401 ? 'Not signed in to the Host (token rejected). Reopen the app' : st === 403 ? 'Refused by the Host (not allowed)' : st === 429 ? 'Host says slow down (rate limited). Try again in a moment' : st === 503 ? 'Host is busy or starting (503)' : j && (j.error || j.code) ? String(j.error || j.code) : 'HTTP ' + st;
     async function call(method, path, body, extra) {
       const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timer = ctl ? setTimeout(() => ctl.abort(), (extra && extra.timeoutMs) || timeout) : null;
@@ -200,12 +202,17 @@
       try {
         const r = await f(base + path, { method, headers, body: body == null ? undefined : JSON.stringify(body), cache: 'no-store', signal: ctl && ctl.signal });
         let j = null; try { j = await r.json(); } catch (e) { /* empty body */ }
-        return { ok: r.ok && !(j && j.ok === false), status: r.status, json: j, ms: Date.now() - t0, error: !r.ok ? 'HTTP ' + r.status : (j && j.ok === false ? (j.error || 'refused') : '') };
+        return { ok: r.ok && !(j && j.ok === false), status: r.status, json: j, ms: Date.now() - t0, error: !r.ok ? why(r.status, j) : (j && j.ok === false ? (j.error || 'refused') : '') };
       } catch (e) {
         return { ok: false, status: 0, json: null, ms: Date.now() - t0, error: e && e.name === 'AbortError' ? 'timeout' : 'Host not reachable' };
       } finally { if (timer) clearTimeout(timer); }
     }
-    return { get: (p, x) => call('GET', p, null, x), post: (p, b, x) => call('POST', p, b || {}, x), base };
+    // An identical POST (same path + body) while one is still in flight shares its answer: a double-click or key repeat sends once.
+    function post(p, b, x) {
+      const key = p + ' ' + JSON.stringify(b || {}); if (inflight.has(key)) return inflight.get(key);
+      const pr = call('POST', p, b || {}, x).finally(() => inflight.delete(key)); inflight.set(key, pr); return pr;
+    }
+    return { get: (p, x) => call('GET', p, null, x), post, base };
   }
 
   /* ---------- poller: self-scheduling, one request in flight, kick() for "now", pausable, interval can change ---------- */
