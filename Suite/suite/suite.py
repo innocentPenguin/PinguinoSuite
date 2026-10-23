@@ -1107,12 +1107,19 @@ class Report(BaseModel):
     images: list[dict] = []
 
 
+def _report_health():
+    try:
+        return selfcheck()
+    except Exception:  # noqa: BLE001  (a report must still save when the self-check itself breaks)
+        return None
+
+
 @app.post("/api/feedback")
 def feedback_save(b: Report, request: Request):
     if int(request.headers.get("content-length") or 0) > 60 * 1024 * 1024:
         raise HTTPException(413, "too large")
     try:
-        meta = feedbacklib.save(FEEDBACK_DIR, b.note, b.page, b.route, b.url, read_update_status().get("version") or "", b.images)
+        meta = feedbacklib.save(FEEDBACK_DIR, b.note, b.page, b.route, b.url, read_update_status().get("version") or "", b.images, health=_report_health())
     except ValueError as e:
         raise HTTPException(400, str(e))
     console_log.log("info", "feedback", "problem report saved: " + meta["id"])

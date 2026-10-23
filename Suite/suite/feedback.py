@@ -18,6 +18,16 @@ def scrub(text: str) -> str:
     return _SECRET.sub("[removed]", text or "")
 
 
+def _scrub_deep(v):
+    if isinstance(v, str):
+        return scrub(v)
+    if isinstance(v, dict):
+        return {str(k): _scrub_deep(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_scrub_deep(x) for x in v]
+    return v if isinstance(v, (int, float, bool)) or v is None else scrub(str(v))
+
+
 def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(s or "page").lower()).strip("-")[:40] or "page"
 
@@ -29,7 +39,7 @@ def _ext(raw: bytes):
     return "webp" if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP" else None
 
 
-def save(root: Path, note: str, page: str = "", route: str = "", url: str = "", version: str = "", images=None, now: float | None = None) -> dict:
+def save(root: Path, note: str, page: str = "", route: str = "", url: str = "", version: str = "", images=None, now: float | None = None, health: dict | None = None) -> dict:
     note = scrub(str(note or "")).strip()
     images = list(images or [])
     if not note and not images:
@@ -62,8 +72,16 @@ def save(root: Path, note: str, page: str = "", route: str = "", url: str = "", 
             files.append(f"{base}/shot{i}.{ext}")
     meta = {"id": base, "time": datetime.fromtimestamp(t).isoformat(timespec="seconds"), "page": scrub(str(page))[:120], "route": scrub(str(route))[:120],
             "url": scrub(str(url))[:300], "version": str(version)[:40], "note": note, "screenshots": files}
+    if health:   # the Suite's own selfcheck at the time of the report (module states, disk space); scrubbed again here
+        meta["health"] = _scrub_deep(health)
     (root / (base + ".json")).write_text(json.dumps(meta, indent=2), "utf8")
     md = [f"# Problem report {meta['time']}", "", f"- Page: {meta['page']} ({meta['route']})", f"- URL: {meta['url']}", f"- Suite version: {meta['version'] or 'dev'}", "", note, ""]
+    h = meta.get("health")
+    if h:
+        md += ["## Health at the time", "", "- " + ("all OK" if h.get("ok") else "; ".join(map(str, h.get("problems") or ["unknown"])))]
+        md += [f"- {m.get('id')}: {m.get('state')}" + (f" ({m['last_error']})" if m.get("last_error") else "") for m in h.get("modules") or []]
+        md += [f"- disk {d.get('drive')}: {d.get('free_gb')} GB free" for d in h.get("disks") or []]
+        md += [""]
     md += [f"![shot]({f})" for f in files]
     (root / (base + ".md")).write_text("\n".join(md), "utf8")
     return meta

@@ -23,6 +23,19 @@ class Feedback(unittest.TestCase):
         self.assertIn("Overlay is cut off", (self.d / (m["id"] + ".md")).read_text("utf8"))
         self.assertEqual(feedback.recent(self.d)[0]["id"], m["id"])
 
+    def test_health_snapshot_saved_and_scrubbed(self):
+        h = {"ok": False, "problems": ["link is starting (ConnectTimeout)"], "modules": [{"id": "link", "state": "starting", "last_error": "token=abcdef123456"}],
+             "disks": [{"drive": "D:\\", "free_gb": 3.2}]}
+        m = feedback.save(self.d, "stuck", "Console", "console", "", "1", health=h, now=1_700_000_000)
+        j = json.loads((self.d / (m["id"] + ".json")).read_text("utf8"))
+        self.assertEqual(j["health"]["problems"], h["problems"])
+        md = (self.d / (m["id"] + ".md")).read_text("utf8")
+        self.assertIn("link is starting", md)
+        self.assertIn("3.2 GB free", md)
+        self.assertNotIn("abcdef123456", md + json.dumps(j))
+        m2 = feedback.save(self.d, "plain", now=1_700_000_100)    # no health: no section, still fine
+        self.assertNotIn("health", json.loads((self.d / (m2["id"] + ".json")).read_text("utf8")))
+
     def test_same_second_does_not_overwrite(self):
         a = feedback.save(self.d, "one", route="x", now=1_700_000_000)
         b = feedback.save(self.d, "two", route="x", now=1_700_000_000)

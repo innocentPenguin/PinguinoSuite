@@ -340,3 +340,23 @@ class SelfCheck(unittest.TestCase):
             self.assertTrue(any(m.id in p for p in r["problems"]))
         finally:
             m.wanted, m.healthy = was
+
+    def test_problem_report_carries_the_selfcheck(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from fastapi.testclient import TestClient
+        d = Path(tempfile.mkdtemp())
+        old = suite.FEEDBACK_DIR
+        suite.FEEDBACK_DIR = d
+        try:
+            c = TestClient(suite.app, base_url="http://127.0.0.1:8760")
+            r = c.post("/api/feedback", json={"note": "link stuck", "page": "Console"}, headers={"Authorization": "Bearer " + suite.TOKEN})
+            self.assertEqual(r.status_code, 200)
+            raw = (d / (r.json()["id"] + ".json")).read_text("utf8")
+            j = json.loads(raw)
+            self.assertEqual({m["id"] for m in j["health"]["modules"]}, set(suite.modules))
+            self.assertIn("disks", j["health"])
+            self.assertNotIn(suite.TOKEN, raw)
+        finally:
+            suite.FEEDBACK_DIR = old
