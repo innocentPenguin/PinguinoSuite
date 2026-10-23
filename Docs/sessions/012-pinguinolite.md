@@ -1,6 +1,6 @@
 # Session 012 - PinguinoLite (notes, plain language)
 
-Updated 2026-10-23. Repo: D:\PinguinoSuite (all work is local commits, nothing pushed). App code: PinguinoLite\ (Tauri 2). Coordinator = 00, installer/updater = 01, Link = 04.
+Updated 2026-10-23 (final, coding stopped on 01's order). Latest Lite commit 141a126; rebuild needed for everything since c2dada3. Repo: D:\PinguinoSuite (all work is local commits, nothing pushed). App code: PinguinoLite\ (Tauri 2). Coordinator = 00, installer/updater = 01, Link = 04.
 
 ## 1. What I built and why
 PinguinoLite = a light app (Dashboard, Modules, Replays pages) that bundles PinguinoLink, for a second/lighter PC.
@@ -11,6 +11,9 @@ PinguinoLite = a light app (Dashboard, Modules, Replays pages) that bundles Ping
 - Quit failsafes (2dbbe6c) and Suite parity (ff8c379): Alt+F4/close asks first in an in-page dialog (confirm() is blocked in the webview), tray Quit, tray Force quit, 6 s watchdog, F11 full screen. Copied from the Suite's 2a7fec6 / 6684691.
 - Per-part updates (fd20321, 01's fe6f71f added the `lite` part): Parts card calling the shared Node updater.
 - Module files card (ff8c379, b41c28e): Verify / Repair / Eject / Install per on-demand module (listen, multi, spotify) + install profiles (`lite-minimal` = parts lite, link, tools). Ivan/00: "other PC minimal install: only Link, everything else listed as Install, downloaded only on click".
+
+- Follow-ups (141a126, 2026-10-23, approved by 01): eject polls Link's status.json until the module stops (20 s, no fixed wait); Install refuses with a clear message when install.json has no update source; quit dialog got "Quit, keep Link running" (my reading of "Quit and stop Link", since Lite already stops the Link it started); Dashboard Replays card.
+- Real scratch test of the profile cycle (Build-Release -> install --profile lite-minimal -> add spotify -> damage -> repair -> eject -> install again) passed. 01 then removed the empty module folder left after eject (da0d8b2).
 
 ## 2. Decisions and failures
 - Network/native access only through Rust commands (CSP connect-src 'self').
