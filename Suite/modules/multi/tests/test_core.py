@@ -1787,3 +1787,14 @@ class _kv:
 
     def kv_set(self, k, v):
         self.d[k] = v
+
+
+def test_goal_defaults_to_manual_and_counts_only_its_kind():
+    import goals
+    g = goals.Goal(_kv(), lambda ev: (True, ""))
+    assert g.state()["kind"] == "manual"
+    g.observe("follow")
+    assert g.state()["current"] == 0                # manual goal ignores live events
+    g.set({"kind": "follow"})
+    g.observe("follow")
+    assert g.state()["current"] == 1

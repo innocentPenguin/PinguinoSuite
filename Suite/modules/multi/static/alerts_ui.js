@@ -65,7 +65,7 @@ function alDraw() {
     <details class="box"><summary><b>Scene profiles</b> <small class="mut">(switch profile when the OBS scene changes)</small></summary>
       <textarea id="al-scenes" rows="3" style="width:100%" placeholder="one per line:  Scene name = Profile name">${esc(Object.entries(c.scenes || {}).map(([k, v]) => k + ' = ' + v).join(String.fromCharCode(10)))}</textarea>
       <small class="mut">Link or the Host tells Multi the scene on air (POST /api/alerts/scene). Profiles: ${esc(Object.keys(c.profiles).join(', '))}</small></details>
-    <details class="box" id="al-bars"><summary><b>Bars</b> <small class="mut">(hype train bar)</small></summary><div id="al-bars-body" class="mut">Loading...</div></details>
+    <details class="box" id="al-bars" ${q.get('section') === 'bars' ? 'open' : ''}><summary><b>Bars</b> <small class="mut">(goal bar, hype train bar)</small></summary><div id="al-bars-body" class="mut">Loading...</div></details>
     <div class="act" style="margin-top:8px">${types}</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
       <div style="flex:0 0 480px"><div class="box"><b>Preview</b>
@@ -222,9 +222,19 @@ document.addEventListener('click', async e => { const b = e.target.closest && e.
 // Bars: hype train bar look (/obs/hypebar). Saves on change straight to /api/hypebar (not part of the alert profile).
 async function alBars() {
   const box = $('#al-bars-body'); if (!box) return;
-  const h = await fetch('/api/hypebar').then(r => r.json()), L = h.look, url = location.origin + '/obs/hypebar';
+  const h = await fetch('/api/hypebar').then(r => r.json()), L = h.look, url = location.origin + '/obs/hypebar', G = await fetch('/api/goal').then(r => r.json());
   const col = (k, lab) => `<label class="cf">${lab} <input type="color" data-albar="${k}" value="${esc(L[k])}"></label>`;
-  box.innerHTML = `<b>Hype train bar</b> <small class="mut">appears while a hype train runs (hype_start / hype_level / hype_end) and stays a little after it ends</small>
+  const gk = ['manual', 'follow', 'sub', 'bits'].map(k => `<option value="${k}" ${G.kind === k ? 'selected' : ''}>${{manual: 'by hand', follow: 'new followers', sub: 'subs (gifts count)', bits: 'bits cheered'}[k]}</option>`).join('');
+  box.innerHTML = `<b>Goal bar</b> <small class="mut">${G.current} / ${G.target} (${G.pct}%)${G.done ? ' - reached' : ''}. Counts only real events; tests never move it.</small>
+    <input readonly value="${esc(location.origin + '/obs/goal')}" style="width:100%" onclick="this.select()">
+    <label class="cf">Label <input type="text" data-algoal="title" value="${esc(G.title)}" maxlength="80"></label>
+    <label class="cf">Counts <select data-algoal="kind">${gk}</select></label>
+    <label class="cf">Target <input type="number" data-algoal="target" min="1" value="${G.target}" style="width:90px"></label>
+    <label class="cf">Current <input type="number" data-algoal="current" min="0" value="${G.current}" style="width:90px"></label>
+    <label class="cf">Unit <input type="text" data-algoal="unit" value="${esc(G.unit)}" maxlength="12" style="width:90px" placeholder="followers"></label>
+    <div class="act"><button data-algbtn="add1">+1</button> <button data-algbtn="add10">+10</button> <button data-algbtn="reset">Reset to 0</button>
+    <a href="${esc(location.origin + '/obs/goal')}?bg=1" target="_blank" rel="noopener"><button type="button">Open</button></a></div>
+    <hr><b>Hype train bar</b> <small class="mut">appears while a hype train runs (hype_start / hype_level / hype_end) and stays a little after it ends</small>
     <input readonly value="${esc(url)}" style="width:100%" onclick="this.select()"><small class="mut">OBS browser source, any size around 800 x 120; add ?bg=1 to look at it in a browser.</small>
     <label class="cf">Label <input type="text" data-albar="label" value="${esc(L.label)}" maxlength="40"></label>
     ${col('c1', 'Bar colour')}${col('c2', 'Bar end colour')}${col('bg', 'Background')}${col('fg', 'Text colour')}
@@ -243,4 +253,13 @@ document.addEventListener('change', async e => {
 document.addEventListener('click', async e => {
   const b = W.type === 'alerts' && e.target.closest && e.target.closest('[data-albtn]'); if (!b) return;
   const r = await alPost('/api/alerts/test', {type: b.dataset.albtn, user: 'penguin', level: 3}); alState(r.text);
+});
+
+document.addEventListener('change', async e => {
+  if (W.type !== 'alerts') return; const t = e.target, k = t.dataset && t.dataset.algoal; if (!k) return;
+  const v = t.type === 'number' ? +t.value : t.value, r = await alPost('/api/goal', {[k]: v}); alState('Goal saved'); if (k === 'kind' || k === 'target' || k === 'current') alBars();
+});
+document.addEventListener('click', async e => {
+  const b = W.type === 'alerts' && e.target.closest && e.target.closest('[data-algbtn]'); if (!b) return;
+  const a = b.dataset.algbtn; await alPost('/api/goal', a === 'reset' ? {reset: true} : {add: a === 'add1' ? 1 : 10}); alState('Goal updated'); alBars();
 });

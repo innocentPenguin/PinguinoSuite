@@ -19,6 +19,9 @@ const dName = m => (m.display || m.user || '');
 const dRest = m => String(m.text || '').replace(new RegExp('^' + dName(m).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').replace(/^(followed|redeemed|subscribed|resubscribed|gifted subs|cheered|is raiding)\s*/i, '');
 
 const D_CSS = `
+#d-wrap{display:flex;height:100vh}.d-nav{flex:0 0 58px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;background:var(--panel,#1a1814);border-right:1px solid var(--line,#3a2f22);box-sizing:border-box}
+.d-nav a{display:flex;flex-direction:column;align-items:center;width:50px;padding:6px 0;border-radius:8px;color:inherit;text-decoration:none;font-size:10px;opacity:.75}.d-nav a span{font-size:20px;line-height:1.2}.d-nav a:hover{opacity:1;background:#ff8a1f20}.d-nav a.on{opacity:1;background:#ff8a1f30;color:var(--accent,#ff8a1f)}
+#d-wrap #dash{flex:1;min-width:0}
 #dash{display:flex;flex-direction:column;height:100vh;box-sizing:border-box;padding:6px;gap:6px;background:var(--bg)}
 .d-top,.d-tabs{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--panel,#1a1814)}
 .d-top .grow{flex:1}.d-btn{background:transparent;border:1px solid var(--line);color:inherit;border-radius:6px;padding:3px 10px;cursor:pointer;font:inherit}.d-btn:hover{border-color:var(--accent)}.d-btn.on{background:var(--accent);color:#111}
@@ -50,7 +53,8 @@ async function renderDash() {
   $('#hdr').style.display = 'none';
   if (!$('#d-css')) { const s = document.createElement('style'); s.id = 'd-css'; s.textContent = D_CSS; document.head.appendChild(s); }
   const only = q.get('panel');
-  $('#body').innerHTML = `<div id="dash" class="${DASH.edit ? 'd-edit' : ''}">${only ? '' : `<div class="d-top" id="d-top"></div><div class="d-tabs" id="d-tabs"></div>`}<div id="d-panels"></div></div>`;
+  const nav = only ? '' : `<nav class="d-nav" id="d-nav"><a class="on" href="/" title="Chat and activity"><span>&#128172;</span>Chat</a><a href="/?type=alerts" title="Alert editor"><span>&#128039;</span>Alerts</a><a href="/?type=alerts&section=bars" title="Goal and hype train bars"><span>&#127919;</span>Goal</a><a href="/?type=launcher" title="Connections and setup"><span>&#9881;</span>Setup</a></nav>`;
+  $('#body').innerHTML = `<div id="d-wrap">${nav}<div id="dash" class="${DASH.edit ? 'd-edit' : ''}">${only ? '' : `<div class="d-top" id="d-top"></div><div class="d-tabs" id="d-tabs"></div>`}<div id="d-panels"></div></div></div>`;
   if (!only) { dTop(); dTabs(); }
   dPanels(); dFill(); dViewRefresh();
   fetch('/api/viewers').then(r => r.json()).then(c => window.dashViewers(c.counts)).catch(() => {});
