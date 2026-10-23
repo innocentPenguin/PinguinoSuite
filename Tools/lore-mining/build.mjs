@@ -61,7 +61,7 @@ for(const [u,v] of ids){
 const nodeSet=new Set(cards.map(c=>c.login));
 const edges=pairs.filter(p=>nodeSet.has(p.a)&&nodeSet.has(p.b)&&p.tot>=30).map(p=>({a:p.a,b:p.b,aToB:p.ab,bToA:p.ba,mutual:p.mutual,tags:pairTag(tone[pairKey(p.a,p.b)]||{n:1,r:0,w:0,g:0}),example:(tone[pairKey(p.a,p.b)]?.ex||[])[0]||null}));
 const groupsOut=clusters.slice(0,8).map((g,i)=>({group:i+1,size:g.length,members:g.slice(0,40),eraGuess:(()=>{const mm={};for(const u of g.slice(0,10))for(const [k,c] of Object.entries(months[u]||{}))mm[k]=(mm[k]||0)+c;return eraOf(mm)})()}));
-fs.writeFileSync(OUT+'/people_graph.json',JSON.stringify({built:new Date().toISOString(),source:'Data/chat_logs 2026-02-15..2026-10-20 (666,891 messages, 1,775 logins, aliases merged)',aliasesApplied:alias,nodes:people,edges,groups:groupsOut},null,1));
+fs.writeFileSync(OUT+'/people_graph.json',JSON.stringify({built:new Date().toISOString(),source:'Data/chat_logs '+msgs[0].d+'..'+msgs[msgs.length-1].d+' ('+msgs.length.toLocaleString('en-US')+' messages, '+new Set(msgs.map(m=>m.u)).size.toLocaleString('en-US')+' logins, aliases merged)',aliasesApplied:alias,nodes:people,edges,groups:groupsOut},null,1));
 fs.writeFileSync(OUT+'/channel_lore.json',JSON.stringify({built:new Date().toISOString(),botRules:BOT_RULES,items:LORE.map(x=>({...x,howBotsUse:(x.howBotsUse||'').replace(/\s+$/,'')+(x.howBotsUse&&x.howBotsUse.includes('recounting who said')?'':' Never explain this by recounting who said it or who started it: play along, or stay silent.')})),streamer:NOTES.streamer_note},null,1));
 fs.writeFileSync(S+'/cards.json',JSON.stringify(cards));
 import {execFileSync} from 'child_process';import {fileURLToPath} from 'url';
