@@ -39,7 +39,7 @@ Nav entry `Master View` (route `master`) = a full-size `<iframe src="master/mast
 | Overlay chat | `/api/overlaychat/status\|ask\|apply` | Host has it switched off today (no key / `enabled:false`): the box says so |
 
 ## Keyboard
-`/` search - `Esc` clear - `Alt+1..9` scene N - `Up/Down` move - `Enter` scene live / fold - `Space` or `E` toggle source - `[` `]` or `Tab` switch list - `Shift+N` next match, `Shift+O` / `Shift+C` open / close queue, `Shift+S` spin wheel - `1..4` side tab - `?` help.
+`/` search - `Esc` clear - `Alt+1..9` scene N - `Up/Down` move - `Enter` scene live / fold - `Space` or `E` toggle source - `[` `]` or `Tab` switch list - `Shift+N` next match, `Shift+O` / `Shift+C` open / close queue, `Shift+S` spin wheel - `Shift+R` raid prep (press twice to confirm) - `Shift+L` last-stream card - `1..4` side tab - `?` help.
 
 ## Host contract: DELIVERED by 02 in Host commit `b9fad8f` (live after the Host module restarts)
 
@@ -52,6 +52,20 @@ Original wish list (kept for reference; the page works without any of it):
 4. `/api/obs/status` is missing the OBS **stream** output state (`streaming`) and there are no start/stop record, start/stop stream or save-replay endpoints, so those are read-only pills today.
 5. `/api/wheel/spin|new|reset` return only `{ok}`; returning the new wheel state would save one poll.
 
+## Header and text size (2026-10-23)
+- **🎬 Last stream** (`Shift+L`): banner with the recap line and best clip from `GET /api/recap/preview` (read only; only https clip links are shown). **Raid prep** (`Shift+R`, press twice): `POST /api/raid/prep`, says the prepare-your-emotes line once, does not start a raid.
+- **Text size** select (90 / 100 / 115 / 130 %): CSS zoom on this page's root, saved in localStorage (`mv.scale`). It does not touch the Suite shell.
+- **Offline banner**: Host, Spotify (`?music=`) and Multi (`?multi=`) are tracked separately. After 2 failed calls a source counts as down; its pollers back off x2 up to 30 s and the banner names it; the first answer clears it and kicks that source's pollers at once. A small read-only ping to Multi runs only while it is down.
+- Every write failure is turned into plain words (401 not signed in, 403 refused, 429 slow down, 503 busy) and shown as a toast; an identical POST already in flight is not sent twice.
+
+## Feed tab extras (read only unless stated)
+- **Mods** chip: `GET /api/modaudit?limit=60` ({entries:[{id,at,who,role,action,target,before,after}]}); not mixed into All.
+- Status strip: Shoutout now / queued / last (`GET /api/shoutouts`), Intros waiting (`GET /api/intros?status=pending`), Scenes problems (`GET /api/scene-health`, shown only when `ok:false`), top watch streak (`GET /api/streaks`, card with the top 5, polled every 60 s). Polled only while the Feed tab is open; a Host without an endpoint just hides its chip.
+- **Intro approve / reject** (click the Intros chip): two-click buttons, `POST /api/intros {action:"approve"|"reject", platform, user_id, by:"master-view"}`. The row hides at once and returns with a toast if the Host refuses. Written to the real Host only when a person clicks it.
+
+## Stream tab sources
+Title, game, tags -> Twitch via the Host (`POST /api/channel/update`, `GET /api/channel/info`); YouTube / Kick via Multi (`GET|POST /api/stream/info`, `POST /api/stream/schedule` for a scheduled YouTube broadcast, never live). Description goes to YouTube and TikTok only. YouTube without a token reports it in the note. Recap: `GET /api/recap/preview`, `POST` to say it in chat (30 s duplicate guard, two clicks).
+
 ## Stubbed / not done
 No OBS recording/stream/replay *controls* (no Host endpoint). No source reorder / lock. Overlay file *editing* is not in the page (the overlay chat covers changes). Chat sending is not offered (`/api/say` needs the module token by design). Scene folders come from the Host's prefix/override logic only.
 
@@ -59,7 +73,7 @@ No OBS recording/stream/replay *controls* (no Host endpoint). No source reorder 
 `App/src/**` is new: **one `App\Rebuild-App.bat` (shell only)**, after 01 adds the nav entry. No core rebuild. Host additions (SSE etc.) need only a Host module restart.
 
 ## Test
-`node Tests/master/run.mjs` (26 tests: row builders, folders, groups, search, optimistic/rollback, customs allow-list, SSE parser + reconnect + Last-Event-ID, poller, reconcile cost, round trip against the mock). Visual check: `python -m http.server 8799 --bind 127.0.0.1` in `App/src`, `MOCK_OPEN=1 node Tests/master/mock-host.mjs 8798`, open `http://127.0.0.1:8799/master/master.html?host=http://127.0.0.1:8798`. The real OBS was never toggled; the one-off live fixtures were read with GETs only.
+`node Tests/master/run.mjs` (49 tests as of 2026-10-23: row builders, folders, groups, search, optimistic/rollback, customs allow-list, SSE parser + reconnect + Last-Event-ID, poller, reconcile cost, round trip against the mock). Visual check: `python -m http.server 8799 --bind 127.0.0.1` in `App/src`, `MOCK_OPEN=1 node Tests/master/mock-host.mjs 8798`, open `http://127.0.0.1:8799/master/master.html?host=http://127.0.0.1:8798`. The real OBS was never toggled; the one-off live fixtures were read with GETs only.
 
 ## Live verification (2026-10-21, Host b9fad8f, read-only)
 

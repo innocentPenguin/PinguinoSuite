@@ -63,6 +63,10 @@ Everything here talks to the real Host. Use the 🧪 Simulator button first (fak
 | Control | Safe? | Expected | Failure |
 |---|---|---|---|
 | Chips All / Chat / Players / Backend / Events | SAFE | Filters the log; scroll sticks to the bottom only if you were at the bottom | Filter hides everything, or scroll jumps while reading |
+| Mods chip | SAFE (read only) | Latest mod actions: who, action, target | Empty list while mods used commands; All chip shows mods lines (they must not) |
+| Status strip: Shoutout, Intros waiting, Streaks, Scenes problems | SAFE (read only) | Chips match the Host (shoutout queue, pending intros count) | Chip missing while the Host has the endpoint; Scenes chip shows although scene-health is ok |
+| Streaks chip | SAFE | Top 5 list: name, best, now | Order not best-first |
+| Intros chip -> Approve / Reject | CAUTION, two clicks. Real viewer intros: approving lets Multi play the intro on stream | First click "Sure?", second approves; row disappears, chip count drops | Row returns with an error toast (Host refused), or approves with a single click |
 | Clear / any send box | SAFE (if present: it only clears the local list). Any "say" box = **DO NOT CLICK on a live stream** | — | — |
 
 ### 1.5 Commands tab
@@ -97,6 +101,12 @@ Everything here talks to the real Host. Use the 🧪 Simulator button first (fak
 | 🚫 Ban song / Ban artist | CAUTION, two clicks (permanent ban list) | Skips and bans | One click bans |
 | 🔊 volume / Device | CAUTION | Pick device; list loads (may 429 once: wait) | List empty with Spotify connected |
 | – (shrink) | SAFE | Collapses the player | — |
+
+### 1.8b Text size and offline banner
+| Control | Safe? | Expected | Failure |
+|---|---|---|---|
+| Text size select (header) | SAFE (this PC only) | 90 / 100 / 115 / 130 % resizes the Master View page, not the Suite menu; remembered after reopening | Whole Suite shell scales, or setting forgotten |
+| Stop the Spotify module (off-stream) | SAFE | Banner names Spotify within ~10 s; back instantly when it starts | Banner stays after Spotify is back, or never shows |
 
 ### 1.9 Test go-live (not in Master View; Suite simulator)
 The "Test go-live" control of the core runs /api/simulate. It does NOT touch OBS or chat, but it starts the live-reactive modules and "End test" closes song requests. **DO NOT CLICK on a live stream.**
