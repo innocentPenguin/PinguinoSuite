@@ -36,6 +36,10 @@ try:
     # Host-owned info commands: a clear near-miss runs, no question; join/leave type still ask
     for i, (w, to) in enumerate((('!poinst', '!points'), ('!ponts', '!points'), ('!leaderbords', '!leaderboards'), ('!watchtim', '!watchtime'), ('!topgiftrs', '!topgifters'), ('!ranck', '!rank'), ('!comands', '!commands'), ('!topbitz', '!topbits'))):
         r = ask('i%d: %s' % (i, w), 1.5); chk(w + ' runs as ' + to, ('%s -> %s' % (w, to)) in clog() and not any('did you mean' in x for x in r), (to, r))
+    for i, (w, to) in enumerate((('!leaderbrds', '!leaderboards'), ('!topgiftrz', '!topgifters'))):
+        r = ask('j%d: %s' % (i, w), 1.5); chk(w + ' (two slips, long command) runs as ' + to, ('%s -> %s' % (w, to)) in clog() and not any('did you mean' in x for x in r), (to, r))
+    r = ask('j5: !!points', 1.5); chk('!!points runs !points', len(r) == 1 and 'points' in r[0].lower() and 'did you mean' not in r[0], r)
+    r = ask('j6: !!join', 1.5); chk('!!join is !join (a normal reply, no question)', len(r) == 1 and 'did you mean' not in r[0], r)
     r = ask('i9: !xyzzy'); chk('a word near nothing is left alone', r == [] and '!xyzzy ->' not in clog(), r)
     r = ask('i10: !ran'); chk('a very short word is not guessed', r == [] and '!ran ->' not in clog(), r)
     try: ak = json.load(open(os.path.join(d, 'chat_settings.json'), encoding='utf-8-sig')).get('ApiKey', '')

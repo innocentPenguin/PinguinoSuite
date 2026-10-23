@@ -37,3 +37,6 @@ Mods can mark a game as incomplete when it did not finish normally.
 
 ## Show or reload the helper pack
 !helperpack shows how many entries the helper knows (public and mod). !helperpack reload loads the newest knowledge files right away instead of waiting for the next refresh.
+
+## Typo fixing for commands (cmdfix)
+The Host fixes clear typos before any bot sees them: "! join", "!!points", "!poinst", "!leaderbrds". Info commands (!points, !rank, !leaderboards, !commands, !watchtime, !queue and the top boards) just run. !join and !leave typos ask "did you mean !join?" and wait for a yes. Settings are in Data\config\cmdfix.json: enabled, didYouMean, and extra aliases ("!jon": "!join"). Words that belong to any bot, and short words, are never rewritten.

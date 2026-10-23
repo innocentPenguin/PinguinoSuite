@@ -50,6 +50,7 @@ namespace PinguinoHost
               lock (L) { have = Pending.TryGetValue(u0, out p); if (have && (DateTime.UtcNow - p.Value).TotalSeconds > 30) { Pending.Remove(u0); have = false; } }
               if (have) { if (Yes.IsMatch(text)) { lock (L) Pending.Remove(u0); Clog.Info("cmdfix", "confirmed " + p.Key); return p.Key; } if (No.IsMatch(text)) { lock (L) Pending.Remove(u0); swallowed = true; return text; } } }
             string t = text.TrimStart(); if (!t.StartsWith("!")) return text;
+            if (t.StartsWith("!!")) { string t1 = "!" + t.TrimStart('!'); if (t1.Length > 1 && char.IsLetterOrDigit(t1[1])) { Clog.Info("cmdfix", "double ! -> single"); t = t1; text = t1; } }   // "!!points" / "!!join" -> "!points" / "!join" (then the normal rules below, so !join-type still asks)
             var m = Regex.Match(t, @"^!\s{0,2}([A-Za-z0-9_]{1,20})[.,'`´’""!?]*(?=\s|$)(.*)$", RegexOptions.Singleline); if (!m.Success) return text;
             string cmd = "!" + m.Groups[1].Value.ToLowerInvariant(), rest = m.Groups[2].Value; bool spaced = Regex.IsMatch(t, @"^!\s");
             string to = null; var extra = c["aliases"] as JObject; JToken x;
@@ -60,6 +61,7 @@ namespace PinguinoHost
             if ((bool?)c["didYouMean"] == false || cmd.Length < 4 || IsKnown(cmd)) return text;
             string near = Targets.FirstOrDefault(tg => tg != cmd && Dist(tg, cmd) == 1);
             if (near == null && cmd.Length >= 5) { var hits = InfoTargets.Where(tg => Dist(tg, cmd) == 1).ToList(); if (hits.Count == 1) near = hits[0]; }   // exactly one info command one edit away, else leave it alone
+            if (near == null && cmd.Length >= 9) { var h2 = InfoTargets.Where(tg => tg.Length >= 9 && Dist(tg, cmd) == 2).ToList(); if (h2.Count == 1 && !InfoTargets.Any(tg => tg != h2[0] && Dist(tg, cmd) <= 2)) near = h2[0]; }   // long commands only: two slips ("!leaderbrds") when exactly one command is that close
             if (near == null) return text;
             if (AskFirst(user, near, rest, say)) { swallowed = true; return text; }
             Clog.Info("cmdfix", cmd + " -> " + near + " (info command, just runs)"); return near + rest;
