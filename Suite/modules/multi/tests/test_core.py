@@ -1800,6 +1800,47 @@ def test_goal_defaults_to_manual_and_counts_only_its_kind():
     assert g.state()["current"] == 1
 
 
+def test_bits_goal_counts_only_twitch_cheers():
+    import goals
+    g = goals.Goal(_kv(), lambda ev: (True, ""))
+    g.set({"kind": "bits"})
+    g.observe("cheer", 100, "tiktok")
+    g.observe("cheer", 50, "youtube")
+    assert g.state()["current"] == 0
+    g.observe("cheer", 100, "twitch")
+    g.observe("cheer", 5)                          # default platform keeps old callers working
+    assert g.state()["current"] == 105
+    g.set({"kind": "follow", "current": 0})
+    g.observe("follow", 1, "kick")
+    assert g.state()["current"] == 1                # follow goals count every platform
+
+
+def test_goal_add_rejects_bool_and_inf():
+    import json
+    from fastapi.testclient import TestClient
+    import server
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    before = c.get("/api/goal").json()["current"]
+    for bad in (True, "5", None, float("inf"), 1e30):
+        r = c.post("/api/goal", content=json.dumps({"add": bad}), headers={"content-type": "application/json"})
+        assert r.status_code == 400, bad
+    assert c.get("/api/goal").json()["current"] == before
+    server.goal.set({"kind": "manual", "current": before})
+
+
+def test_goal_counts_events_whose_alert_type_is_switched_off(monkeypatch):
+    import server
+    from types import SimpleNamespace
+    seen = []
+    monkeypatch.setattr(server.goal, "observe", lambda *a: seen.append(a))
+    loop = SimpleNamespace(call_soon_threadsafe=lambda fn, *a: fn(*a))
+    monkeypatch.setattr(server.hub, "loop", loop)
+    monkeypatch.setattr(server.alert_engine, "submit", lambda ev: None)
+    m = SimpleNamespace(event="cheer", amount=40, platform="twitch", meta={}, text="", user="u", display="U", id="1", first_time=False, flags=[], color="")
+    server._alert_from_message(m)
+    assert seen == [("cheer", 40, "twitch")]
+
+
 def test_clip_hosts_are_twitch_only_unless_rehearsal_env(monkeypatch):
     import alerts as al
     c = {"clip": dict(al.CLIP_DEFAULT)}

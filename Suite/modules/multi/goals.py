@@ -60,8 +60,9 @@ class Goal:
     def reset(self):
         return self.set({"current": 0, "done": False})
 
-    def observe(self, etype, amount=0):
-        """a real (non-test) event: follows count 1, subs 1 (gifts: their amount), bits their amount"""
+    def observe(self, etype, amount=0, platform="twitch"):
+        """a real (non-test) event: follows count 1, subs 1 (gifts: their amount), bits their amount (Twitch only: TikTok gifts and
+        YouTube Super Chats are also "cheer" events but are not bits); follow and sub goals count every platform"""
         k = self.cfg["kind"]
         n = 0
         if k == "follow" and etype == "follow":
@@ -70,7 +71,7 @@ class Goal:
             n = 1
         elif k == "sub" and etype == "gift":
             n = max(1, int(amount or 1))
-        elif k == "bits" and etype == "cheer":
+        elif k == "bits" and etype == "cheer" and platform == "twitch":
             n = max(0, int(amount or 0))
         if n:
             self.cfg["current"] = min(10**9, self.cfg["current"] + n)

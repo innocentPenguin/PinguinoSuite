@@ -224,7 +224,7 @@ async function alBars() {
   const box = $('#al-bars-body'); if (!box) return;
   const h = await fetch('/api/hypebar').then(r => r.json()), L = h.look, url = location.origin + '/obs/hypebar', G = await fetch('/api/goal').then(r => r.json());
   const col = (k, lab) => `<label class="cf">${lab} <input type="color" data-albar="${k}" value="${esc(L[k])}"></label>`;
-  const gk = ['manual', 'follow', 'sub', 'bits'].map(k => `<option value="${k}" ${G.kind === k ? 'selected' : ''}>${{manual: 'by hand', follow: 'new followers', sub: 'subs (gifts count)', bits: 'bits cheered'}[k]}</option>`).join('');
+  const gk = ['manual', 'follow', 'sub', 'bits'].map(k => `<option value="${k}" ${G.kind === k ? 'selected' : ''}>${{manual: 'by hand', follow: 'new followers (all platforms)', sub: 'subs (all platforms, gifts count)', bits: 'bits cheered (Twitch only)'}[k]}</option>`).join('');
   box.innerHTML = `<b>Goal bar</b> <small class="mut">${G.current} / ${G.target} (${G.pct}%)${G.done ? ' - reached' : ''}. Counts only real events; tests never move it.</small>
     <input readonly value="${esc(location.origin + '/obs/goal')}" style="width:100%" onclick="this.select()">
     <label class="cf">Label <input type="text" data-algoal="title" value="${esc(G.title)}" maxlength="80"></label>

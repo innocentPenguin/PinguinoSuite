@@ -115,7 +115,7 @@ def _alert_from_message(m):
     if m.event == "hype" and not config.settings().get("feed_hype_alerts", False):
         return                      # the Host fires hype_start/level/end itself on /api/alerts/fire; the feed item only feeds the bar
     if m.event in ("follow", "sub", "resub", "gift", "cheer") and hub.loop:
-        hub.loop.call_soon_threadsafe(goal.observe, m.event, m.amount)
+        hub.loop.call_soon_threadsafe(goal.observe, m.event, m.amount, m.platform)
     ev = dict(meta, platform=m.platform, id=m.id, type=m.event, user=m.user, display=m.display, amount=m.amount, first_time=bool(meta.get("first_time") or m.first_time),
               refollow="refollow" in m.flags, rank_colour=meta.get("rank_colour") or m.color)
     if hub.loop:
@@ -584,8 +584,11 @@ async def goal_set(request: Request):
     b = await request.json()
     if b.get("reset"):
         st = goal.reset()
-    elif isinstance(b.get("add"), (int, float)):
-        st = goal.set({"current": goal.cfg["current"] + int(b["add"])})
+    elif "add" in b:
+        a = b["add"]
+        if isinstance(a, bool) or not isinstance(a, (int, float)) or a != a or abs(a) > 10**9:
+            raise HTTPException(400, "add must be a number")
+        st = goal.set({"current": goal.cfg["current"] + int(a)})
     else:
         st = goal.set(b)
     hub.emit({"type": "goal.changed", "goal": st})
