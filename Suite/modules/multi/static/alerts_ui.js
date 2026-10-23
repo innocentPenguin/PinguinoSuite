@@ -97,6 +97,7 @@ function alDraw() {
         ${f('style.confetti', 'Confetti', 'chk')}${msBox}
         <b>Sound</b>${f('sound.enabled', 'Play a sound', 'chk')}${f('sound.url', 'Sound file address (empty = built-in chime). http(s):// or /', 'txt')}${f('sound.volume', 'Volume', 'num', {lo: 0, hi: 100, unit: '%'})}
         ${['1', '2', '3'].map(t => f('sound.tier_urls.' + t, 'Tier ' + t + ' sound (optional)', 'txt')).join('')}
+        ${e.clip ? `<b>Shoutout clip</b>${f('clip.enabled', 'Play the streamer\'s clip', 'chk')}${f('clip.muted', 'Mute the clip', 'chk')}${f('clip.volume', 'Clip volume', 'num', {lo: 0, hi: 100, unit: '%'})}${f('clip.max_s', 'Longest clip (seconds)', 'num', {lo: 3, hi: 60, unit: ' s'})}` : ''}
         <b>Image / GIF / video</b>${f('media.url', 'Media address (png, gif, webm, mp4). http(s):// or /', 'txt')}${f('media.kind', 'Type', 'sel', {opts: ['image', 'video']})}
         ${f('media.position', 'Position', 'sel', {opts: ['above', 'left', 'bg']})}${f('media.size', 'Size', 'num', {lo: 40, hi: 600, unit: ' px'})}
       </div></div></div></div>`;

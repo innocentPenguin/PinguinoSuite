@@ -1647,3 +1647,25 @@ def test_intros_play_approved_once_per_stream(tmp_path, monkeypatch):
     asyncio.run(go())
     assert got[0]["type"] == "intro" and got[0]["message"] == "hi I am Bob" and len(got) == 2
     assert intros.clean_text("x" * 141) == "" and intros.clean_text("hello  there ") == "hello there"
+
+
+def test_new_alert_types_and_shoutout_clip(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    for t in ("shoutout", "raid_out", "hype_start", "hype_level", "hype_end", "goal_progress", "poll", "prediction", "first_chatter", "tip", "gamble_win",
+              "shop", "guess", "milestone", "custom"):
+        assert t in alerts.TYPES and t in alerts.LABEL and t in eng.cfg["profiles"]["Penguin"]["types"]
+        c = eng.type_cfg(t)
+        assert {"enabled", "priority", "duration", "delay_ms", "merge_min", "sound", "media"} <= set(c)
+    ok = "https://clips-media-assets2.twitch.tv/abc-123.mp4"
+    ev = {"id": "so:x:1", "type": "shoutout", "user": "bob", "message": "bob", "clip": {"url": ok, "title": "t", "duration_s": 12}}
+    assert eng.submit(ev)[0]
+    p = eng.heap[0][2]
+    assert p["clip"]["url"] == ok and p["clip"]["max_s"] == 15 and p["duration"] >= 14
+    eng.heap.clear()
+    ev2 = dict(ev, id="so:x:2", user="eve", clip={"url": "https://evil.example/x.mp4"})
+    assert eng.submit(ev2)[0] and eng.heap[0][2]["clip"] is None             # foreign clip hosts never play, the name card still does
+    eng.heap.clear()
+    assert eng.submit({"id": "h1", "type": "hype", "phase": "end", "user": "x", "level": 4})[0] and eng.heap[0][2]["type"] == "hype_end"
+    cfg = eng.cfg
+    cfg["profiles"]["Penguin"]["types"]["shoutout"]["clip"].update(muted=True, max_s=999)
+    assert eng.save(cfg)["profiles"]["Penguin"]["types"]["shoutout"]["clip"]["max_s"] == 60

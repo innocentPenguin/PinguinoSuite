@@ -3,14 +3,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <!-- OBS browser source: 800x600. ?bg=1 dark checker for viewing in a normal browser; ?demo=1 plays sample alerts; the editor drives it by postMessage. -->
 <style>
-html,body{margin:0;width:800px;height:600px;overflow:hidden;background:transparent;font-family:Nunito,'Segoe UI',sans-serif}
+:root{--W:800px;--H:600px}
+html,body{margin:0;width:var(--W);height:var(--H);overflow:hidden;background:transparent;font-family:Nunito,'Segoe UI',sans-serif}
 body.bg{background:repeating-conic-gradient(#1b1b1b 0 25%,#262626 0 50%) 0 0/24px 24px}
-#stage{position:relative;width:800px;height:600px}
-.al{position:absolute;left:50%;top:50%;width:max-content;max-width:740px;text-align:center;display:flex;gap:14px;align-items:center;justify-content:center;box-sizing:border-box;padding:18px 28px;line-height:1.2;
+#stage{position:relative;width:var(--W);height:var(--H)}
+.al{position:absolute;left:50%;top:50%;width:max-content;max-width:calc(var(--W) - 60px);text-align:center;display:flex;gap:14px;align-items:center;justify-content:center;box-sizing:border-box;padding:18px 28px;line-height:1.2;
   --d:.5s;animation-duration:var(--d);animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.9,.3,1.1)}
 .al.layout-card{flex-direction:column}.al.layout-stack{flex-direction:row;text-align:left}
 .al.layout-banner{top:auto;bottom:40px;width:740px;flex-direction:row;justify-content:flex-start;text-align:left}
 .al.layout-center{background:none!important;border:none!important;flex-direction:column}
+.al.clip{max-height:calc(var(--H) - 20px)}.al video.clipv{width:min(640px,calc(var(--W) - 120px));max-height:calc(var(--H) - 170px);border-radius:10px;background:#000;object-fit:contain;transition:opacity .4s}
 .al .t1{font-weight:800}.al .t2{opacity:.85;font-size:.62em;margin-top:4px}
 .al .u{color:var(--acc)}
 .al img.m,.al video.m{border-radius:10px;object-fit:contain;max-width:100%}
@@ -36,6 +38,10 @@ body.bg{background:repeating-conic-gradient(#1b1b1b 0 25%,#262626 0 50%) 0 0/24p
 <body><div id="stage"></div><canvas id="cf" width="800" height="600" style="position:absolute;left:0;top:0;pointer-events:none"></canvas>
 <script>
 const Q = new URLSearchParams(location.search), stage = document.getElementById('stage');
+if (innerHeight > innerWidth && innerWidth > 100) {          // vertical browser source: the stage follows the real size
+  document.documentElement.style.setProperty('--W', innerWidth + 'px'); document.documentElement.style.setProperty('--H', innerHeight + 'px');
+  const cv = document.getElementById('cf'); cv.width = innerWidth; cv.height = innerHeight;
+}
 if (Q.get('bg')) document.body.classList.add('bg');
 const FONTS = {nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: 'Roboto,Arial,sans-serif'};
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
@@ -56,13 +62,23 @@ function segs(list, acc) { return (list || []).map(([t, k]) => k === 'user' ? `<
 function build(a) {
   const st = a.style, acc = a.rank_colour || st.accent, el = document.createElement('div');
   const hasBox = st.layout !== 'center' && st.opacity > 0;
-  el.className = `al layout-${st.layout}` + (a.media && a.media.position === 'bg' ? ' pos-bg' : '');
+  el.className = `al layout-${st.layout}` + (a.clip ? ' clip' : '') + (a.media && a.media.position === 'bg' ? ' pos-bg' : '');
   el.style.cssText = `--acc:${acc};font-family:${FONTS[st.font] || esc(st.font)};font-size:${st.size}px;color:${st.fg};` +
     (hasBox ? `background:${st.bg}${Math.round(st.opacity * 2.55).toString(16).padStart(2, '0')};border:${st.border}px solid ${st.accent};border-radius:${st.radius}px;box-shadow:0 8px 30px #0008;` : '');
   const m = a.media;
   const media = m ? (m.kind === 'video' ? `<video class="m" src="${esc(m.url)}" autoplay muted loop playsinline style="height:${m.size}px"></video>` : `<img class="m" src="${esc(m.url)}" style="height:${m.size}px" alt="">`) : '';
   const av = !m && a.avatar && st.layout !== 'center' ? `<img class="m" src="${esc(a.avatar)}" style="height:${Math.round(st.size * 2.2)}px;border-radius:50%" alt="">` : '';
   el.innerHTML = `${a.test ? '<span class="tag">TEST</span>' : ''}${a.platform && a.platform !== 'twitch' ? `<span class="pt">${esc(a.platform)}</span>` : ''}${m && m.position !== 'bg' ? media : m ? media : av}<div class="tx"><div class="t1">${segs(a.text, acc)}</div>${a.subtext && a.subtext.length ? `<div class="t2">${segs(a.subtext, acc)}</div>` : ''}</div>`;
+  if (a.clip) {                       // shoutout clip: video above the name card, capped at max_s, ends cleanly
+    const v = document.createElement('video'), c = a.clip;
+    v.className = 'clipv'; v.src = c.url; v.playsInline = true; v.muted = !!c.muted; v.volume = Math.max(0, Math.min(1, c.volume / 100));
+    const stop = () => { v.pause(); v.style.opacity = 0; };
+    v.addEventListener('ended', stop); v.addEventListener('error', () => { v.remove(); });
+    const go = () => v.play().catch(() => { v.muted = true; v.play().catch(() => { v.remove(); }); });
+    setTimeout(go, 60); setTimeout(stop, c.max_s * 1000);
+    el.prepend(v);
+    el.classList.remove('layout-stack', 'layout-banner'); el.classList.add('layout-card');
+  }
   return el;
 }
 let cfT = 0;

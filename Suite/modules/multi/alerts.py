@@ -11,9 +11,15 @@ from collections import deque
 
 from obs import FONTS, _color, _num
 
-TYPES = ["follow", "refollow", "sub", "resub", "gift", "cheer", "raid", "hype", "goal", "redeem", "streak", "watchtime", "anniversary", "comeback", "intro"]
+TYPES = ["follow", "refollow", "sub", "resub", "gift", "cheer", "raid", "hype", "goal", "redeem", "streak", "watchtime", "anniversary", "comeback", "intro",
+         "shoutout", "raid_out", "hype_start", "hype_level", "hype_end", "goal_progress", "poll", "prediction", "first_chatter", "returning_chatter", "tip",
+         "gamble_win", "shop", "guess", "loan", "give", "milestone", "custom"]
 LABEL = {"follow": "Follow", "refollow": "Refollow", "sub": "Subscription", "resub": "Resub", "gift": "Gift subs", "cheer": "Bits", "raid": "Raid",
-         "hype": "Hype train", "goal": "Goal reached", "redeem": "Redemption", "streak": "Watch streak", "watchtime": "Watch-time milestone", "anniversary": "Anniversary", "comeback": "First stream back", "intro": "Intro"}
+         "hype": "Hype train", "goal": "Goal reached", "redeem": "Redemption", "streak": "Watch streak", "watchtime": "Watch-time milestone", "anniversary": "Anniversary", "comeback": "First stream back", "intro": "Intro",
+         "shoutout": "Shoutout (with clip)", "raid_out": "Raid out", "hype_start": "Hype train start", "hype_level": "Hype train level up", "hype_end": "Hype train end",
+         "goal_progress": "Goal progress", "poll": "Poll", "prediction": "Prediction", "first_chatter": "First-time chatter", "returning_chatter": "Returning chatter",
+         "tip": "Tip", "gamble_win": "Gamble win / jackpot", "shop": "Shop purchase", "guess": "Guess the Chatter", "loan": "Loan", "give": "Give", "milestone": "Milestone",
+         "custom": "Other event"}
 ANIMS = ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "zoom", "bounce", "flip"]
 LAYOUTS = ["card", "banner", "center", "stack"]
 VARS = ["{user}", "{amount}", "{tier}", "{months}", "{message}", "{level}", "{recipient}", "{streak}", "{hours}", "{years}", "{platform}", "{currency}"]
@@ -33,7 +39,7 @@ def _ms(points, what):
     return out
 
 
-def _t(text, sub="", prio=5, dur=6, **kw):
+def _t(text, sub="", prio=5, dur=6, confetti=None, **kw):
     d = {"enabled": True, "priority": prio, "duration": dur, "text": text, "subtext": sub, "min_amount": 0, "silent": False, "cooldown_s": 0, "max_per_min": 0, "delay_ms": 0, "merge_min": 0, "merge_text": "{n} new viewers: {names}",
          "conditions": {"first_time_only": False, "tiers": []}, "milestones": [], "exact": False, "style": dict(_STYLE), "sound": copy.deepcopy(_SOUND), "media": dict(_MEDIA)}
     d.update(kw)
@@ -56,7 +62,28 @@ DEFAULT_TYPES = {
     "anniversary": _t("{user}: {years} year(s) watching!", "happy colony-versary", 7, 8, exact=True, milestones=_ms([1, 2, 3, 4, 5], "years")),
     "comeback": _t("{user} is back for the first stream in a while!", "welcome back", 4, 5),
     "intro": _t("{user} has arrived", "{message}", 5, 6),
+    "shoutout": _t("Go check out {user}!", "{message}", 6, 18, clip={"enabled": True, "muted": False, "volume": 80, "max_s": 15}),
+    "raid_out": _t("Raiding {user} with {amount} viewers!", "go go go", 8, 7),
+    "hype_start": _t("HYPE TRAIN!", "all aboard", 8, 7),
+    "hype_level": _t("Hype train level {level}!", "", 7, 5),
+    "hype_end": _t("Hype train finished!", "level {level}", 6, 6),
+    "goal_progress": _t("Goal: {message}", "{amount}", 3, 5, silent=True),
+    "poll": _t("Poll", "{message}", 4, 6),
+    "prediction": _t("Prediction", "{message}", 4, 6),
+    "first_chatter": _t("{user} says hi for the first time!", "{message}", 3, 5),
+    "returning_chatter": _t("{user} is back in chat", "", 2, 4, enabled=False),
+    "tip": _t("{user} tipped {amount} {currency}!", "{message}", 8, 8),
+    "gamble_win": _t("{user} won {amount}!", "{message}", 6, 6),
+    "shop": _t("{user} bought {message}", "", 4, 5),
+    "guess": _t("{user} guessed the chatter!", "{message}", 5, 6),
+    "loan": _t("{user}: loan {amount}", "{message}", 3, 5, enabled=False),
+    "give": _t("{user} gave {amount}", "{message}", 3, 5, enabled=False),
+    "milestone": _t("Milestone: {message}", "{amount}", 7, 8, confetti=False),
+    "custom": _t("{message}", "", 4, 5),
 }
+DEFAULT_TYPES["hype_start"]["style"]["confetti"] = True
+DEFAULT_TYPES["tip"]["style"]["confetti"] = True
+DEFAULT_TYPES["milestone"]["style"]["confetti"] = True
 DEFAULT_TYPES["follow"].update(merge_min=4, merge_text="{n} new followers! {names}")
 DEFAULT_TYPES["streak"].update(text="{user} is on a {streak}-stream watch streak!", subtext="", exact=True, milestones=_ms([3, 5, 10, 25, 50, 100], "streak"))
 GLOBAL = {"gap_ms": 600, "max_queue": 50, "dedupe_s": 10, "overflow": "drop_lowest"}
@@ -118,6 +145,15 @@ def sanitize_type(c, base):
         out["milestones"] = _clean_ms(c["milestones"])
     if "exact" in c:
         out["exact"] = bool(c["exact"])
+    cl = c.get("clip")
+    if isinstance(cl, dict) and isinstance(out.get("clip"), dict):
+        o = out["clip"]
+        for k in ("enabled", "muted"):
+            if k in cl:
+                o[k] = bool(cl[k])
+        for k, lo, hi in (("volume", 0, 100), ("max_s", 3, 60)):
+            if k in cl:
+                o[k] = int(_num(cl[k], lo, hi, o[k]))
     cd = c.get("conditions")
     if isinstance(cd, dict):
         if "first_time_only" in cd:
@@ -232,6 +268,7 @@ def _clean_partial(c):
 _VAR = re.compile(r"\{(user|amount|tier|months|message|level|recipient|streak|hours|years|platform|currency)\}")
 
 
+CLIP_URL = re.compile(r"https://(clips-media-assets2\.twitch\.tv|production\.assets\.clips\.twitchcdn\.net|clips\.twitch\.tv)/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]{1,300}")
 DEFAULT_MERGE = "{n} new viewers: {names}"
 VALUE_OF = {"streak": "streak", "watchtime": "hours", "anniversary": "years"}
 
@@ -323,6 +360,9 @@ class Engine:
         t = ev.get("type")
         if t == "follow" and ev.get("refollow"):
             return "refollow"
+        ph = str(ev.get("phase") or "")
+        if t == "hype" and ph in ("start", "level", "end"):
+            return {"start": "hype_start", "level": "hype_level", "end": "hype_end"}[ph]
         return t if t in TYPES else None
 
     def submit(self, ev):
@@ -443,10 +483,25 @@ class Engine:
         su = str(ev.get("sound_url") or "")
         if re.fullmatch(r"/alert-media/[A-Za-z0-9._-]{1,80}", su) and so["enabled"] and not c["silent"]:
             url = su                                    # the sound a viewer picked for their intro (media library only)
-        return {"id": ev["id"], "type": ev["type"], "label": LABEL[ev["type"]], "priority": c["priority"], "duration": c["duration"], "test": test,
+        clip, dur = self._clip(c, ev), c["duration"]
+        if clip:
+            dur = max(dur, int(min(clip["max_s"], clip["duration_s"] or clip["max_s"]) + 2))
+        return {"id": ev["id"], "type": ev["type"], "label": LABEL[ev["type"]], "priority": c["priority"], "duration": dur, "test": test, "clip": clip,
                 "text": render(c["text"], ev), "subtext": render(c["subtext"], ev), "style": c["style"], "media": c["media"] if c["media"]["url"] else None,
                 "sound": {"on": bool(so["enabled"] and not c["silent"]), "url": url, "volume": so["volume"]},
                 "delay_ms": c.get("delay_ms", 0), "platform": str(ev.get("platform") or ""), "rank_colour": _color(str(ev.get("rank_colour") or ""), ""), "avatar": _url(ev.get("avatar")), "user": ev["user"]}
+
+    @staticmethod
+    def _clip(c, ev):
+        """a Twitch clip to play inside the alert: only direct clip media URLs on Twitch's own hosts, only for types with a clip setting"""
+        cc, cl = c.get("clip"), ev.get("clip")
+        if not cc or not cc.get("enabled") or not isinstance(cl, dict):
+            return None
+        u = str(cl.get("url") or "")
+        if not CLIP_URL.fullmatch(u):
+            return None
+        return {"url": u, "title": str(cl.get("title") or "")[:100], "duration_s": max(0, min(120, _int(cl.get("duration_s")))), "muted": bool(cc["muted"]),
+                "volume": cc["volume"], "max_s": cc["max_s"]}
 
     def preview(self, t, ev=None):
         """Resolved payload without queueing (editor preview)."""

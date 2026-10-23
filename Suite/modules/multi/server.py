@@ -99,11 +99,13 @@ pipeline = Pipeline(store, cards, hub.emit)
 
 def _alert_from_message(m):
     """stored stream event (Host feed or /api/events) -> alert engine event; test/sim items never get here as real alerts"""
-    if m.event not in alerts_mod.TYPES and m.event not in ("follow",):
+    if m.event not in alerts_mod.TYPES and m.event not in ("follow", "hype"):
         return
-    if m.event == "hype" and "started" not in m.text:
-        return
-    meta = m.meta or {}
+    meta = dict(m.meta or {})
+    if m.event == "hype":
+        meta["phase"] = "start" if "started" in m.text else "end"
+    if m.event in ("shoutout", "raid_out", "poll", "prediction", "hype") and not meta.get("message"):
+        meta["message"] = m.text
     if meta.get("sim") or meta.get("test"):
         return
     ev = dict(meta, platform=m.platform, id=m.id, type=m.event, user=m.user, display=m.display, amount=m.amount, first_time=bool(meta.get("first_time") or m.first_time),
@@ -383,10 +385,11 @@ async def alerts_fire(request: Request):
     b = await request.json()
     t = str(b.get("type") or "")
     if t not in alerts_mod.TYPES:
-        raise HTTPException(400, "unknown alert type")
+        t = "custom"                                    # nothing the Host sends goes unalerted: unknown types use the editable "Other event" type
+        b = dict(b, message=b.get("message") or b.get("type") or "")
     if b.get("test") or b.get("sim"):
         raise HTTPException(400, "test events go through /api/alerts/test")
-    ev = {k: b[k] for k in ("id", "user", "display", "amount", "tier", "months", "message", "level", "rank_colour", "avatar", "first_time", "recipient", "refollow", "streak", "hours", "years", "platform", "currency") if k in b}
+    ev = {k: b[k] for k in ("id", "user", "display", "amount", "tier", "months", "message", "level", "rank_colour", "avatar", "first_time", "recipient", "refollow", "streak", "hours", "years", "platform", "currency", "clip", "phase", "source") if k in b}
     ev["type"] = t
     ok, why = alert_engine.submit(ev)
     return {"ok": ok, "queued": ok, "text": why}
