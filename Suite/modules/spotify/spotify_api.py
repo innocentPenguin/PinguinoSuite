@@ -7,6 +7,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -215,6 +216,9 @@ class Client:
         return [t for t in out if t][:limit]
 
     def track(self, tid):
+        tid = str(tid or "")
+        if not re.fullmatch(r"[A-Za-z0-9]{22}", tid):              # the id lands in the URL path: never let "../me/player" through
+            raise ApiError(400, "bad track id")
         return norm_track(self._req("GET", "/tracks/" + tid, {"market": "from_token"}))
 
     # control

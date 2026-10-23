@@ -799,6 +799,32 @@ class SettingsSanityTests(unittest.TestCase):
         self.assertTrue(all(len(v) <= 2000 for v in s.values() if isinstance(v, str)))
 
 
+class RobustLoadTests(unittest.TestCase):
+    def test_queue_repairs_damaged_items(self):
+        q = Queue([{"uri": "spotify:track:a"}, {"uri": "spotify:track:b", "requester": None, "pushed": None}, "junk", None, {"name": "no uri"}],
+                  ["x", {"uri": "spotify:track:h"}])
+        self.assertEqual([i["uri"] for i in q.items], ["spotify:track:a", "spotify:track:b"])
+        self.assertEqual(q.pending_for("bob"), 0)
+        self.assertEqual(q.frozen(), 0)
+        self.assertEqual(q.items[1]["requester"], "")
+        self.assertEqual(len(q.history), 1)
+        q.remove_by("bob")
+
+    def test_queue_non_list_state(self):
+        q = Queue("oops", {"a": 1})
+        self.assertEqual((q.items, q.history), ([], []))
+
+    def test_new_item_null_duration(self):
+        self.assertEqual(new_item({"uri": "spotify:track:z", "duration_ms": None}, "a", "viewer")["duration_ms"], 0)
+
+    def test_track_id_must_look_like_an_id(self):
+        cls = [v for v in vars(spotify_api).values() if isinstance(v, type) and hasattr(v, "track") and v.__name__ != "FakeApi"][0]
+        c = cls.__new__(cls)
+        for bad in ("../me/player", "", None, "abc", "x" * 23):
+            with self.assertRaises(spotify_api.ApiError):
+                c.track(bad)
+
+
 class ManifestHelpTests(unittest.TestCase):
     def test_every_prestream_item_id_has_help(self):
         m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))

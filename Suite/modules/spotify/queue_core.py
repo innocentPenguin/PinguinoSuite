@@ -20,16 +20,35 @@ class QueueError(Exception):
 def new_item(track, requester="", source="streamer", tier=0):
     return {"id": uuid.uuid4().hex[:10], "uri": track["uri"], "track_id": track.get("id", ""),
             "name": track.get("name", ""), "artists": list(track.get("artists", [])), "album": track.get("album", ""),
-            "art": track.get("art", ""), "duration_ms": int(track.get("duration_ms", 0)), "explicit": bool(track.get("explicit")),
+            "art": track.get("art", ""), "duration_ms": int(track.get("duration_ms") or 0), "explicit": bool(track.get("explicit")),
             "requester": requester, "source": source, "tier": (lambda t: int(t) if t == int(t) else round(t, 2))(float(tier)), "added": time.time(),
             "locked": source != "viewer", "pushed": False, "skip_on_play": False, "key": None}
+
+
+def clean_item(it):
+    """A queue item from disk (old file, hand edit) with every field the logic reads; None when it can't be repaired."""
+    if not isinstance(it, dict) or not isinstance(it.get("uri"), str) or not it["uri"]:
+        return None
+    arts = it.get("artists")
+    req = it.get("requester")
+    out = dict(it)
+    out.update({"id": str(it.get("id") or uuid.uuid4().hex[:10]), "track_id": str(it.get("track_id") or ""), "name": str(it.get("name") or ""),
+                "artists": [str(a) for a in arts] if isinstance(arts, list) else [], "album": str(it.get("album") or ""), "art": str(it.get("art") or ""),
+                "requester": "" if req is None else str(req), "explicit": bool(it.get("explicit")),
+                "locked": bool(it.get("locked")), "pushed": bool(it.get("pushed")), "skip_on_play": bool(it.get("skip_on_play"))})
+    out["source"] = str(it.get("source") or ("viewer" if out["requester"] else "streamer"))
+    for k, d in (("duration_ms", 0), ("tier", 0), ("added", time.time())):
+        v = it.get(k)
+        out[k] = v if isinstance(v, (int, float)) and not isinstance(v, bool) else d
+    out.setdefault("key", None)
+    return out
 
 
 class Queue:
     def __init__(self, items=None, history=None):
         self.lock = threading.RLock()
-        self.items = items or []
-        self.history = history or []
+        self.items = [c for c in (clean_item(x) for x in (items if isinstance(items, list) else [])) if c]
+        self.history = [c for c in (clean_item(x) for x in (history if isinstance(history, list) else [])) if c][-HISTORY_MAX:]
         self._undo = []
 
     def frozen(self):
