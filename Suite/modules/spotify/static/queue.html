@@ -2,7 +2,8 @@
 <html><head><meta charset="utf-8"><title>Song queue</title>
 <!-- OBS browser source: http://127.0.0.1:8771/overlay/queue   Public page (if you expose the port): /queue
      Query: ?count=8 ?theme=dark|light|glass|minimal ?accent=ff9900 ?width=420 ?size=100 ?eta=0 ?now=0 -->
-<style>
+<style>*{scrollbar-width:thin;scrollbar-color:var(--accent,#ff9900) transparent}::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--accent,#ff9900) 70%,transparent);border-radius:3px}::-webkit-scrollbar-corner{background:transparent}
+
 :root{--fg:#fff;--bg:rgba(14,14,16,.86);--accent:#ff9900;--w:420px;--s:1;font-family:"Segoe UI",system-ui,sans-serif}
 body{margin:0;background:transparent;color:var(--fg)}
 body.light{--fg:#111;--bg:rgba(255,255,255,.9)}
