@@ -31,7 +31,7 @@ export function extractZip(file, dest) {
     if (flags & 1) throw new Error('encrypted zips are not supported');
     if (csize === 0xffffffff || usize === 0xffffffff) throw new Error('zip64 is not supported');
     const clean = name.replace(/\\/g, '/');
-    if (!clean || clean.startsWith('/') || /^[a-zA-Z]:/.test(clean) || clean.split('/').includes('..')) throw new Error(`unsafe path in package: ${name.slice(0, 60)}`);
+    if (!clean || clean.startsWith('/') || /^[a-zA-Z]:/.test(clean) || clean.split('/').includes('..') || /[:\x00]/.test(clean)) throw new Error(`unsafe path in package: ${name.slice(0, 60)}`);
     const out = path.resolve(dest, clean);
     if (!(out + path.sep).startsWith(root)) throw new Error('unsafe path in package');
     if (clean.endsWith('/')) { fs.mkdirSync(out, { recursive: true }); continue; }
@@ -40,7 +40,7 @@ export function extractZip(file, dest) {
     const start = lo + 30 + buf.readUInt16LE(lo + 26) + buf.readUInt16LE(lo + 28);
     const raw = buf.subarray(start, start + csize);
     let data;
-    if (method === 0) data = raw; else if (method === 8) data = zlib.inflateRawSync(raw); else throw new Error('unsupported compression');
+    if (method === 0) data = raw; else if (method === 8) data = zlib.inflateRawSync(raw, { maxOutputLength: Math.max(usize, 1) }); else throw new Error('unsupported compression');
     if (data.length !== usize) throw new Error('damaged zip (size)');
     if (zlib.crc32 && zlib.crc32(data) !== crc) throw new Error('damaged zip (crc)');
     fs.mkdirSync(path.dirname(out), { recursive: true });

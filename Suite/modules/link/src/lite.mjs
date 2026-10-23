@@ -129,6 +129,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
         try {
           const r = await peers.post(peer, '/api/mesh/updates/get', { name: it.name }, 120000);
           if (!r.ok) continue;
+          if (Number(r.headers.get('content-length')) > MAX_SHARE) { log('warn', 'lite', `${it.name} from ${peer} is larger than the limit; skipped`); try { await r.body?.cancel(); } catch {} continue; }
           const buf = Buffer.from(await r.arrayBuffer());
           if (buf.length > MAX_SHARE || crypto.createHash('sha256').update(buf).digest('hex') !== it.sha256) { log('warn', 'lite', `${it.name} from ${peer} failed the hash check; discarded`); continue; }
           fs.mkdirSync(path.dirname(dest), { recursive: true });

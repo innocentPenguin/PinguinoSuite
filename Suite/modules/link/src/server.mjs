@@ -18,8 +18,8 @@ import { obsConn } from './vault.mjs';
 
 /** Run a macro. Hub talks to OBS directly; clients forward to the hub over the tailnet. */
 export async function runMacro(cfg, name) {
-  const steps = cfg.macros[name];
-  if (!steps) throw new Error(`unknown macro "${name}" (have: ${Object.keys(cfg.macros).join(', ')})`);
+  const steps = Object.hasOwn(cfg.macros, name) ? cfg.macros[name] : null;
+  if (!Array.isArray(steps)) throw Object.assign(new Error(`unknown macro "${name}" (have: ${Object.keys(cfg.macros).join(', ')})`), { status: 404 });
   if (cfg.role === 'hub') {
     const conn = await obsConn(cfg);
     // State-aware guard so a double press cannot end or restart a live stream by mistake.
@@ -55,7 +55,9 @@ async function readJson(req) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw Object.assign(new Error('content-type must be application/json'), { status: 415 });
   let n = 0; const parts = [];
   for await (const c of req) { n += c.length; if (n > 16384) throw Object.assign(new Error('body too large'), { status: 413 }); parts.push(c); }
-  try { return JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'); } catch { throw Object.assign(new Error('bad JSON'), { status: 400 }); }
+  let v; try { v = JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'); } catch { throw Object.assign(new Error('bad JSON'), { status: 400 }); }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw Object.assign(new Error('body must be a JSON object'), { status: 400 });
+  return v;
 }
 const CORE_URL = (process.env.PINGUINO_CORE_URL || 'http://127.0.0.1:8760').replace(/[/]$/, '');
 const LOOP = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -79,7 +81,7 @@ function tokenOk(cfg, given) {
 function hostOk(host, selfName) {
   const h = String(host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
   if (!h) return false;
-  if (h === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.includes(':')) return true;
+  if (h === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(h) || /^[0-9a-f:.]*:[0-9a-f:.]*$/.test(h)) return true;
   return h.endsWith('.ts.net') || (!!selfName && h === selfName.toLowerCase());
 }
 
@@ -93,8 +95,8 @@ export async function serve(cfg) {
   async function guarded(name, via) {
     const risky = macros.isRisky(cfg, name), now = Date.now();
     const cd = risky ? (cfg.cooldown?.riskyMs ?? 3000) : (cfg.cooldown?.macroMs ?? 600);
-    if (cfg.macros[name] && now - (lastRun.get(name) || 0) < cd) { act('macro', name, false, 'ignored: pressed again too fast'); throw Object.assign(new Error(`"${name}" was just pressed; ignored (repeat guard ${cd} ms)`), { status: 429 }); }
-    if (cfg.macros[name]) lastRun.set(name, now);
+    if (Object.hasOwn(cfg.macros, name) && now - (lastRun.get(name) || 0) < cd) { act('macro', name, false, 'ignored: pressed again too fast'); throw Object.assign(new Error(`"${name}" was just pressed; ignored (repeat guard ${cd} ms)`), { status: 429 }); }
+    if (Object.hasOwn(cfg.macros, name)) lastRun.set(name, now);
     try {
       const results = cfg.role === 'hub' || !mesh.hasPeer(cfg.hub) ? await runMacro(cfg, name) : await viaHub(name);
       log('info', 'macro', `ran ${name}${via === 'page/api' ? '' : ' (' + via + ')'}`); act('macro', name, true, via === 'page/api' ? '' : via); return results;
@@ -103,7 +105,7 @@ export async function serve(cfg) {
   const allItems = async () => [...await prestream(cfg), ...(cfg.prestream?.devices === false ? [] : mesh.prestreamItems()), ...(cfg.role === 'client' && cfg.prestream?.obs !== false ? await mesh.hubPrestream(cfg.hub) : [])];
   /** A client presses a macro on the hub it is paired with (no shared token to copy around). */
   async function viaHub(name) {
-    if (!cfg.macros[name]) throw new Error(`unknown macro "${name}" (have: ${Object.keys(cfg.macros).join(', ')})`);
+    if (!Object.hasOwn(cfg.macros, name)) throw Object.assign(new Error(`unknown macro "${name}" (have: ${Object.keys(cfg.macros).join(', ')})`), { status: 404 });
     const r = await mesh.callByName(cfg.hub, '/api/mesh/macro', { name });
     if (r.status !== 200) throw Object.assign(new Error(r.json?.error || `hub answered ${r.status}`), { status: r.status === 401 ? 502 : r.status });
     return r.json.results;
@@ -132,7 +134,7 @@ export async function serve(cfg) {
         const p = mesh.peerAuth(...peer), b = await readJson(req), name = String(b.name || '');
         if (cfg.role !== 'hub') throw Object.assign(new Error('this device is not a hub'), { status: 409 });
         if (cfg.mesh?.allowRemoteMacros === false) throw Object.assign(new Error(`remote macros are turned off on this PC (Link > Settings > Devices)`), { status: 403 });
-        if (!cfg.macros[name]) throw Object.assign(new Error(`no macro "${name}" on the hub`), { status: 404 });
+        if (!Object.hasOwn(cfg.macros, name)) throw Object.assign(new Error(`no macro "${name}" on the hub`), { status: 404 });
         if (macros.isRisky(cfg, name) && !cfg.mesh?.remoteRisky) throw Object.assign(new Error('remote start/stop of the stream is turned off on the hub (Link > Settings > Devices)'), { status: 403 });
         return json(200, { ok: true, results: await guarded(name, `from ${p.name}`) });
       }
@@ -144,7 +146,9 @@ export async function serve(cfg) {
         const f = sharedPath(liteDir(), (await readJson(req)).name);
         if (!f) throw Object.assign(new Error('no such update file'), { status: 404 });
         res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': fs.statSync(f).size, 'cache-control': 'no-store' });
-        return fs.createReadStream(f).pipe(res);
+        const rs = fs.createReadStream(f);
+        rs.on('error', e => { log('warn', 'http', `update file read failed: ${e.code || e.message}`); res.destroy(); });   // file vanished or locked mid-send: drop the connection, never crash
+        return rs.pipe(res);
       }
       // The dashboard page on loopback gets the token injected (same-origin only; Host/Origin checks stop other sites).
       if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html') && local) {

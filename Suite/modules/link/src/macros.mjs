@@ -30,7 +30,7 @@ function toStep(r) {
 }
 const targets = r => [r.data?.sceneName, r.data?.inputName].filter(Boolean);
 
-export const isRisky = (cfg, name) => (cfg.macros[name] || []).some(r => RISKY_TYPES.has(r.type)) || (cfg.ui?.confirmMacros || []).includes(name);
+export const isRisky = (cfg, name) => (Object.hasOwn(cfg.macros, name) ? cfg.macros[name] : []).some(r => RISKY_TYPES.has(r.type)) || (cfg.ui?.confirmMacros || []).includes(name);
 
 export function list(cfg) {
   const meta = cfg.macroMeta || {};

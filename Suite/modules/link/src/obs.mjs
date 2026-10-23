@@ -26,7 +26,7 @@ export function runRequests({ host, port, password }, requests, timeoutMs = 5000
       ws.send(JSON.stringify({ op: 6, d: { requestType: r.type, requestId: String(next), requestData: r.data } }));
     };
     ws.onerror = () => fail(new Error(`cannot reach OBS at ${host}:${port}`));
-    ws.onmessage = ev => {
+    ws.onmessage = ev => { try {
       const m = JSON.parse(ev.data);
       if (m.op === 0) {                                    // Hello
         const id = { rpcVersion: 1 };
@@ -38,10 +38,10 @@ export function runRequests({ host, port, password }, requests, timeoutMs = 5000
       } else if (m.op === 2) sendNext();                   // Identified
       else if (m.op === 7) {                               // RequestResponse
         results.push(m.d.requestStatus);
-        if (!m.d.requestStatus.result) return fail(new Error(`${m.d.requestType}: ${m.d.requestStatus.comment}`));
+        if (!m.d.requestStatus?.result) return fail(new Error(`${m.d.requestType}: ${m.d.requestStatus?.comment}`));
         next++; sendNext();
       }
-    };
+    } catch (e) { fail(new Error('OBS sent an unreadable message')); } };   // a rogue listener on the port must not crash Link
     ws.onclose = e => { if (e.code === 4009) fail(new Error('OBS WebSocket password is wrong')); };
   });
 }
@@ -56,7 +56,7 @@ export function getData({ host, port, password }, types, timeoutMs = 4000) {
     const fail = e => { clearTimeout(timer); try { ws.close(); } catch {} reject(e); };
     ws.onerror = () => fail(new Error(`cannot reach OBS at ${host}:${port}`));
     ws.onclose = e => { if (e.code === 4009) fail(new Error('OBS WebSocket password is wrong')); };
-    ws.onmessage = ev => {
+    ws.onmessage = ev => { try {
       const m = JSON.parse(ev.data);
       if (m.op === 0) {
         const id = { rpcVersion: 1 };
@@ -64,10 +64,13 @@ export function getData({ host, port, password }, types, timeoutMs = 4000) {
         ws.send(JSON.stringify({ op: 1, d: id }));
       } else if (m.op === 2) types.forEach((t, i) => ws.send(JSON.stringify({ op: 6, d: { requestType: t, requestId: String(i) } })));
       else if (m.op === 7) {
-        res[Number(m.d.requestId)] = m.d.responseData || {};
+        if (!m.d.requestStatus?.result) return fail(new Error(`${m.d.requestType || 'request'} failed${m.d.requestStatus?.comment ? ': ' + m.d.requestStatus.comment : ''}`));
+        const i = Number(m.d.requestId);
+        if (!Number.isInteger(i) || i < 0 || i >= types.length) return;
+        res[i] = m.d.responseData || {};
         if (res.filter(Boolean).length === types.length) { clearTimeout(timer); ws.close(); resolve(res); }
       }
-    };
+    } catch (e) { fail(new Error('OBS sent an unreadable message')); } };
   });
 }
 

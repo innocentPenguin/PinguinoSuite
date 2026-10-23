@@ -55,7 +55,7 @@ export function createMesh(cfg, { port }) {
   try { state = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
   state.self ||= { id: crypto.randomUUID(), name: os.hostname() };
   state.self.os = os.platform();
-  state.peers ||= {};
+  state.peers = Object.assign(Object.create(null), state.peers);   // no prototype: a peer id like "constructor" must never resolve to an inherited member
   const rt = new Map();                 // runtime per peer: last_seen, online, fails, nextTry, error
   const R = id => { let r = rt.get(id); if (!r) rt.set(id, r = { last_seen: 0, online: false, fails: 0, nextTry: 0, error: '' }); return r; };
   let pairing = null;                   // {code, expires, attempts}
@@ -206,8 +206,9 @@ export function createMesh(cfg, { port }) {
     } catch (e) { throw fail(502, `cannot reach ${ip}:${peerPort} (${e.cause?.code || e.message})`); }
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw fail(res.status === 403 ? 403 : 502, j.error || `peer answered ${res.status}`);
-    const device = cleanDevice(j.device);
-    state.peers[device.id] = { ...device, addr: ip, port: peerPort, inbound: str(j.token, 128), outbound: mine, paired: new Date().toISOString() };
+    const device = cleanDevice(j.device), theirs = str(j.token, 128);
+    if (theirs.length < 32) throw fail(502, 'the other device sent no usable pairing token; pairing cancelled');
+    state.peers[device.id] = { ...device, addr: ip, port: peerPort, inbound: theirs, outbound: mine, paired: new Date().toISOString() };
     save();
     log('info', 'pairing', `paired with ${device.name}`);
     tick();
@@ -216,8 +217,8 @@ export function createMesh(cfg, { port }) {
 
   // ---- peer messages ----
   const authPeer = (peerId, token) => {
-    const p = state.peers[str(peerId)];
-    if (!p || !eq(token, p.inbound)) throw fail(401, 'unknown peer or bad token');
+    const id = str(peerId), p = Object.hasOwn(state.peers, id) ? state.peers[id] : null;
+    if (!p || typeof p.inbound !== 'string' || p.inbound.length < 32 || typeof token !== 'string' || !eq(token, p.inbound)) throw fail(401, 'unknown peer or bad token');
     return p;
   };
   function heartbeat(peerId, token, body) {
@@ -237,7 +238,7 @@ export function createMesh(cfg, { port }) {
   async function receive(peerId, token, body) {
     const p = authPeer(peerId, token);
     seen(p);
-    if (!body || typeof body.type !== 'string' || typeof body.payload !== 'object') throw fail(400, 'bad message');
+    if (!body || typeof body.type !== 'string' || !body.payload || typeof body.payload !== 'object') throw fail(400, 'bad message');
     const t = process.env.PINGUINO_API_TOKEN || '';
     try {
       const r = await fetch(`${CORE}/api/device/peer`, {
@@ -262,7 +263,7 @@ export function createMesh(cfg, { port }) {
     return { ok: true };
   }
   async function removePeer(id) {
-    const p = state.peers[id];
+    const p = Object.hasOwn(state.peers, id) ? state.peers[id] : null;
     if (!p) throw fail(404, 'no such device');
     await call(p, '/api/mesh/forget', {}, 1500).catch(() => {});     // best effort; if it is offline it will see a 401 later
     delete state.peers[id]; rt.delete(id); save();
