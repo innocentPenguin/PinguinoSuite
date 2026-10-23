@@ -22,6 +22,8 @@ With signing (recommended once the key exists, see RELEASE_DRYRUN.md):
 ```
 node Installer\Build-Release.mjs --version 1.0.0 --out Installer\dist\release --sign-key C:\path\to\signing-seed.txt
 ```
+Before a real release, run `Installer\Selftest.bat` (17 PASS/FAIL steps in a temp folder, about 15 s, nothing real touched; see `RELEASE_DRYRUN.md`). For release notes: `node Installer\Release-Notes.mjs --from <last tag or commit> --out notes.txt`, then add `--notes-file notes.txt` to the Build-Release command.
+
 Output in `Installer\dist\release`: `manifest.json`, `suite-1.0.0.zip`, and `manifest.sig` when signed. The script reads only; it refuses when something secret-looking would ship (vault, .env, tokens) and when Host or core are missing.
 
 ## Publish to GitHub (nothing is pushed by the build)

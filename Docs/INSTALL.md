@@ -20,7 +20,7 @@ Built on the main PC with `Installer\Build-Installer.bat` (run `App\Build-All.ba
 4. Move your settings and keys: on the main PC open Settings > Backup & move > **Export encrypted** (choose a passphrase). It saves one zip with your settings, bot files and the key vault (the vault is encrypted with that passphrase because it cannot be copied between Windows users). Copy the zip to the other PC, then Settings > Backup & move > Import, pick it, review the preview, enter the passphrase, Apply. The keys land in that PC's own vault.
 5. Pair the PCs in Link; exactly one device is master and runs the bots.
 
-Not covered yet: macOS, code signing of the exe (Windows SmartScreen may warn on first run: More info > Run anyway), Lite.
+Not covered yet: macOS, code signing of the exe (Windows SmartScreen may warn on first run: More info > Run anyway). Lite on a second PC has its own steps: `LITE_RELEASE.md` (publish) and `LITE_GAMING_PC.md` (install and first day).
 
 ## What you get
 - **Portable folder (works today, Windows):** copy or `git clone` the Suite folder anywhere, run `App\Setup-Suite.ps1`, start `App\src-tauri\target\release\pinguino-suite.exe`.
@@ -59,7 +59,7 @@ Read: `Installer/install.mjs`, `Install-PinguinoSuite.cmd`, `Build-Installer.bat
 | `--shortcuts` on a lite-minimal install | Fixed: it pointed at `pinguino-suite.exe`, which a minimal install does not have. It now makes a PinguinoLite shortcut to `PinguinoLite\Start-Lite.bat`, and refuses to make a shortcut to a file that is not there. Desktop and Start menu folders come from Windows, so a OneDrive-redirected Desktop works. |
 | `Installer.hta` / `mshta` blocked (company policy) | Not fixable here: use the command line (`install.mjs`). The Rust setup shows "Setup is damaged" only when the hta is missing. |
 | Windows older than 10 1803 | `tar.exe` is missing: setup says so. |
-Not tested on a clean Windows install (no spare PC); the code paths above are covered by `Suite/updater/test` (42 tests) and by running the .cmd with and without Node on PATH.
+Not tested on a clean Windows install (no spare PC); the code paths above are covered by `Suite/updater/test` (52 tests), by `Installer\Selftest.bat` (17-step release self-test, see `RELEASE_DRYRUN.md`) and by running the .cmd with and without Node on PATH.
 
 ## Repair and uninstall (added 2026-10-23 by 21-Lite)
 Both work on an existing install folder and are tested on scratch copies (`Suite/updater/test`). Close the Suite/Lite first. Nothing is ever deleted.

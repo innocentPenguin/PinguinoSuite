@@ -73,7 +73,7 @@ node C:\PinguinoSetup\Installer\install.mjs --target C:\PinguinoLite --uninstall
 ```
 Everything except `Data\` is MOVED into `C:\PinguinoLite\Data\updates\ejected\uninstall-<time>\`. Your settings and tokens in `Data\` stay (add `--purge-data` only if you want those moved too). Shortcuts stay until you delete them. To free the space, delete the dated `uninstall-<time>` folder yourself once you are sure.
 
-A damaged install (missing files after an antivirus run, say) can be fixed without uninstalling: `node C:\PinguinoSetup\Installer\install.mjs --target C:\PinguinoLite --repair`.
+A damaged install (missing files after an antivirus run, say) can be fixed without uninstalling: `node C:\PinguinoSetup\Installer\install.mjs --target C:\PinguinoLite --repair`. An install made with `--local` has no update source recorded, so add `--source <release folder, zip or manifest url>` to the repair command.
 
 ## Things that are NOT done by this guide
 - No push, no release publishing, no live stream, no OAuth or passwords. The release must already exist (Ivan publishes it; see `LITE_RELEASE.md`).
