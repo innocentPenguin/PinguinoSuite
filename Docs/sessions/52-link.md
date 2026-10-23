@@ -1,6 +1,36 @@
 # 52 - Link (worker under 50 - Tools)
 Owns Suite\modules\link. Supervisor 50 (local_0e1e5827-e0dc-4136-863e-75f19f882578). Never pushes, never restarts modules.
 
+
+## HAND-OVER (2026-10-23, for 50 / 100)
+**Commits (all local, none pushed):** 3116fc7 Lite start/stop/restart via control files · ce70ea9, 3dc9d70 apply audit 1 · 0cce111 controlcheck + INDEX path fix · fe539ca obsreadcheck · 1a088ac audit round 2 (critical auth fix) · 48565c6 testenv + poll-based remotecheck · 5e8f48c port-4455 design, macOS read-through, tailscale path fix · 81ac2fa pairingcheck · 415a4ee platform-neutral Lite apply · e035fbb `obsNames` map.
+
+**Tests:** 13 suites in `Suite\modules\link\src\*check*.mjs` (selfcheck, meshcheck, remotecheck, pairingcheck, updcheck, pkgcheck, litecheck, applycheck, controlcheck, macrocheck, reusecheck, settingscheck, auditcheck2, namescheck; obsreadcheck has `--selftest`). All use `testenv.mjs` (strips live PINGUINO_* env, never reaches real OBS port 4455). Last full run green. Run one: `node src\<name>.mjs` from the link folder.
+
+**RESTART NEEDED (100 only):** the running Link still has the peer-auth bypass (header `x-link-peer: constructor`, no token) and the tailscale Windows fallback-path bug. Also needed for `obsNames`, platform-neutral apply, 404 on unknown macros. Until then, anything on the tailnet can call the peer routes. Restart through the Suite control file, not by hand.
+
+**Open items and owners**
+| Item | Owner | Note |
+|---|---|---|
+| Restart Link | 100 | see above |
+| `Suite\updater\lib\install.mjs:29` prints "C:PinguinoSuite" (single backslash in a template literal; needs `C:\\PinguinoSuite`) | updater owner (via 50) | cosmetic |
+| Real-OBS read check (`node src\obsreadcheck.mjs`) | 52 after 50 says OBS_WS_PASSWORD is in the vault | read-only: GetVersion/GetSceneList/GetInputList |
+| Put Ivan's real scene/input names in `obsNames` | Ivan, then anyone | one line in Data\runtime\link\config.json |
+| Close OBS port 4455 to the network | Ivan says go; design in Docs\PinguinoLink\OBS_PORT_AND_MACOS.md | needs a Link "Save replay" macro first |
+| Real two-PC pairing + a Mac run | Ivan (MacBook offline 23 days) | steps in Docs\PinguinoLink\PAIRING_TEST.md |
+| Audit round 2 open list A-H (name spoofing between peers, global pairing rate limit, streaming download cap, unsigned packages, ...) | 52, low priority | notes in the notes folder, 52-link-audit2.md |
+| `pack` writes to Data\lite, not PINGUINO_DATA_DIR | everyone | use PINGUINO_LITE_DIR for tests |
+| C: drive nearly full earlier (ENOSPC in applycheck) | 100 | other sessions' scratch dirs |
+
+**Ivan's questions, with the default I used** (change by saying so):
+1. Real OBS scene and mic names? Default: BRB, Main, Mic/Aux (guesses, editable in `obsNames`).
+2. May Link start the stream? Default: NO (`safety.allowStartStream` off, remote start off).
+3. Close OBS port 4455 to the network? Default: not touched, design only.
+4. Should a paired PC be able to press stop-stream? Default: no (`mesh.remoteRisky` off).
+5. Mac Lite installer format? Default: `PinguinoLite-<v>-setup.sh` (my choice, nothing exists yet).
+
+**Hard rules kept:** never live in OBS, no secrets printed or committed, Link posts no chat lines, no pushes, no restarts.
+
 ## Task log
 - Task 1 (2026-10-23): 11 suites pass (remotecheck "hub macro problems" check is timing-flaky under load: 2200 ms sleep; passes alone). Control-file protocol verified against Suite\suite\suite.py process_control: name `<start|stop|restart>-<module id>` in Data\runtime\control, core deletes the file, honours only registered ids. Matches lite.mjs controlModule. controlcheck extended (12 checks, reads suite.py to catch drift). INDEX.md garbled path fixed.
 - Task 2: src/obsreadcheck.mjs (GetVersion, GetSceneList, GetInputList only; password from vault via PINGUINO_API_TOKEN or Link config; never printed). `node src/obsreadcheck.mjs --selftest` uses the fake OBS (5 checks). Real path only run with no password (prints one-line reason). The vault needs a module token, which only the core hands to module processes, so run standalone it falls back to the config file password.
