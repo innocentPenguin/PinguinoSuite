@@ -35,3 +35,12 @@ Host API (for the Suite): `GET /api/overlay-options[?name=queue]`, `POST /api/ov
 
 ## Sub anniversary (Subs! card)
 A sub whose subscribe date (month/day) falls within the last day to the next 6 days, with at least 1 full year, gets a pulsing white outline and an "N YR" tag on the Subs! card.
+
+## Pre-stream check
+
+`GET /api/overlay-options/health` -> `{ok, scriptPresent, folder, pages:[{page,hasOptions}], missing:[...]}`.
+`ok` is false when `overlay-options.js` is missing from the overlay folder or any overlay page (backup pages are ignored) lacks the `<script src="overlay-options.js">` tag. Call it before going live; `missing` names the pages to fix.
+
+## New-subs idle card
+
+Queue idle item `{"metric":"newsubs","period":"all","days":30,"top":8}` shows subscribers from the last `days` days, newest first (gifted included), titled "NEW SUBS · LAST 30 DAYS", values "N d ago". Config version 3 adds it to existing sequences (backup `.bak-v2`).

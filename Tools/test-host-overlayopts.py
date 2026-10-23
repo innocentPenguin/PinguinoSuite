@@ -38,6 +38,8 @@ try:
     ov = os.path.join(suite, 'PinguinoB0t', 'overlays')
     for f in ('queue', 'players', 'players_vertical', 'wheel', 'subroll'):
         chk(f + '.html loads the shared script', 'overlay-options.js' in open(os.path.join(ov, f + '.html'), encoding='utf-8-sig').read())
+    hl = json.loads(get('/api/overlay-options/health'))
+    chk('health: every overlay page carries the tag (pre-stream check)', hl['scriptPresent'] and hl['missing'] == [] and any(p['page'] == 'queue' for p in hl['pages']), hl)
     chk('shared script exists', os.path.exists(os.path.join(ov, 'overlay-options.js')))
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)

@@ -54,7 +54,7 @@ namespace PinguinoHost
                 {
                     try { File.Copy(Path_, Path_ + ".bak-v2", true); } catch (Exception) { }
                     var seq = j["sequence"] as JArray ?? new JArray();
-                    if (!seq.Any(x => ((string)x["metric"] ?? "") == "newsubs")) seq.Add(new JObject { { "metric", "newsubs" }, { "period", "all" }, { "days", 30 }, { "top", 8 } });
+                    if (!seq.SelectMany(x => x is JArray ? ((JArray)x).Cast<JToken>() : new[] { x }).Any(x => ((string)x["metric"] ?? "") == "newsubs")) seq.Add(new JObject { { "metric", "newsubs" }, { "period", "all" }, { "days", 30 }, { "top", 8 } });
                     j["sequence"] = seq; j["version"] = 3; try { File.WriteAllText(Path_, j.ToString()); } catch (Exception) { }
                 }
                 foreach (var p in def.Properties()) if (j[p.Name] == null) j[p.Name] = p.Value;
