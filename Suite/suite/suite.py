@@ -851,6 +851,15 @@ def device_sync_loop():
             pass
 
 
+def refresh_all():
+    """One health pass. A failure in one module's refresh must not skip the others (or end the loop): states would freeze at their last value, e.g. 'starting' forever."""
+    for m in list(modules.values()):
+        try:
+            m.refresh()
+        except Exception as e:  # noqa: BLE001
+            console_log.log("warn", "supervisor", f"{m.id}: health check failed: {e}", module=m.id)
+
+
 def health_loop():
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
     tick = 0
@@ -859,8 +868,7 @@ def health_loop():
         reconcile_devices()
         console_log.ingest(list(modules))
         if tick % 4 == 0:  # health every ~4s, control files every second
-            for m in modules.values():
-                m.refresh()
+            refresh_all()
         tick += 1
         time.sleep(1)
 
