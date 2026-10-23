@@ -12,7 +12,8 @@ const jobFile = process.argv[2];
 const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
 const { liteDir, installer, sha256, exe, from, to, waitMs = 90000, installMs = 300000 } = job;
 const TEST = process.env.PINGUINO_LITE_TEST === '1';          // tests may swap the process name and the installer command
-const procName = TEST && job.procName ? job.procName : 'PinguinoLite.exe';
+const plat = (TEST && (job.platform || process.env.PINGUINO_LITE_PLATFORM)) || process.platform, WIN = plat === 'win32';
+const procName = TEST && job.procName ? job.procName : (WIN ? 'PinguinoLite.exe' : 'PinguinoLite');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const iso = () => new Date().toISOString();
 const logf = path.join(liteDir, 'lite_apply.log');
@@ -24,8 +25,13 @@ const result = (ok, msg, extra = {}) => {
   say(`${ok ? 'OK' : 'FAILED'}: ${msg}`);
 };
 
-const running = () => new Promise(res => execFile('tasklist.exe', ['/FI', `IMAGENAME eq ${procName}`, '/NH'], { windowsHide: true }, (e, out) => res(!e && out.toLowerCase().includes(procName.toLowerCase()))));
-const launch = file => { try { const c = spawn(file, [], { detached: true, stdio: 'ignore', windowsHide: false }); c.on('error', e => say(`relaunch error: ${e.code || e.message}`)); c.unref(); say(`relaunched ${file}`); return true; } catch (e) { say(`could not relaunch: ${e.message}`); return false; } };
+// Windows: tasklist. macOS/Linux: the process list (`ps -A -o comm=`), matched on the base name. Tests can swap the lister (job.listCmd).
+const running = () => new Promise(res => {
+  if (WIN) return execFile('tasklist.exe', ['/FI', `IMAGENAME eq ${procName}`, '/NH'], { windowsHide: true }, (e, out) => res(!e && out.toLowerCase().includes(procName.toLowerCase())));
+  const cmd = TEST && job.listCmd ? job.listCmd : ['ps', '-A', '-o', 'comm='];
+  execFile(cmd[0], cmd.slice(1), { maxBuffer: 8 * 1024 * 1024 }, (e, out) => res(!e && String(out).split('\n').some(l => path.basename(l.trim()) === procName)));
+});
+const launch = file => { try { const mac = plat === 'darwin' && file.endsWith('.app'); const c = spawn(mac ? 'open' : file, mac ? [file] : [], { detached: true, stdio: 'ignore', windowsHide: false }); c.on('error', e => say(`relaunch error: ${e.code || e.message}`)); c.unref(); say(`relaunched ${file}`); return true; } catch (e) { say(`could not relaunch: ${e.message}`); return false; } };
 const hashOf = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 
 async function main() {
@@ -33,20 +39,20 @@ async function main() {
   // 1. verify before anything else (the file could have changed since the click)
   const staging = path.resolve(liteDir, 'staging') + path.sep;
   const inst = path.resolve(installer);
-  if (!inst.startsWith(staging) || !/^PinguinoLite-\d+(\.\d+)*-setup\.exe$/.test(path.basename(inst))) return result(false, 'installer is not a staged PinguinoLite setup file; nothing was changed');
+  if (!inst.startsWith(staging) || !new RegExp('^PinguinoLite-\\d+(\\.\\d+)*-setup\\.' + (WIN ? 'exe' : 'sh') + '$').test(path.basename(inst))) return result(false, 'installer is not a staged PinguinoLite setup file; nothing was changed');
   let want = ''; try { want = fs.readFileSync(inst + '.sha256', 'utf8').trim().split(/\s+/)[0].toLowerCase(); } catch {}
   if (!/^[0-9a-f]{64}$/.test(want) || want !== sha256 || hashOf(inst) !== want) return result(false, 'installer hash does not match; nothing was changed');
   // 2. wait for Lite to be closed (we never kill it)
   const t0 = Date.now();
   while (await running()) { if (Date.now() - t0 > waitMs) return result(false, 'PinguinoLite did not close in time; nothing was changed. Close it and click Update again'); await sleep(1000); }
   // 3. back up the install folder
-  const dir = path.dirname(exe);
+  const dir = exe.endsWith('.app') ? exe : path.dirname(exe);   // a macOS app is a folder
   const backup = path.join(liteDir, 'backup', `lite-${from}-${iso().replace(/[-:T]/g, '').slice(0, 14)}`);
   try { fs.mkdirSync(path.dirname(backup), { recursive: true }); fs.cpSync(dir, backup, { recursive: true }); }
   catch (e) { return result(false, `could not back up the current version (${e.code || e.message}); nothing was changed`); }
   say(`backup at ${backup}`);
   // 4. silent install
-  const cmd = TEST && job.installCmd ? job.installCmd : [inst, '/S'];
+  const cmd = TEST && job.installCmd ? job.installCmd : (WIN ? [inst, '/S'] : ['/bin/sh', inst]);
   const code = await new Promise(res => {
     let done = false; const fin = c => { if (!done) { done = true; res(c); } };
     const c = spawn(cmd[0], cmd.slice(1), { stdio: 'ignore', windowsHide: true });

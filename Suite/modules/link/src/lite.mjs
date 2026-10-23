@@ -94,7 +94,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
   function checkLiteUpdate() {
     const cur = process.env.PINGUINO_LITE_VERSION || '0.0.0';
     let best = null;
-    try { for (const f of fs.readdirSync(path.join(dir, 'staging'))) { const m = /^PinguinoLite-(\d+(?:\.\d+)*)-setup\.exe$/.exec(f); if (m && (!best || cmpVersion(m[1], best.v) > 0)) best = { v: m[1], f }; } } catch {}
+    try { for (const f of fs.readdirSync(path.join(dir, 'staging'))) { const m = installerRe().exec(f); if (m && (!best || cmpVersion(m[1], best.v) > 0)) best = { v: m[1], f }; } } catch {}
     if (!best || cmpVersion(best.v, cur) <= 0) { try { fs.unlinkSync(path.join(dir, 'update_manifest.json')); } catch {} return false; }
     const file = path.join(dir, 'staging', best.f);
     let want = ''; try { want = fs.readFileSync(file + '.sha256', 'utf8').trim().split(/\s+/)[0].toLowerCase(); } catch {}
@@ -121,7 +121,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
       const live = process.env.PINGUINO_LITE_VERSION || '0.0.0';
       for (const it of items.slice(0, 50)) {
         if (!SHARE_RE.test(it?.name || '') || !/^[0-9a-f]{64}$/.test(it.sha256 || '') || !(it.size <= MAX_SHARE)) continue;
-        const zip = /^([a-z0-9_-]+)-(\d+(?:\.\d+)*)\.zip$/.exec(it.name), exe = /^PinguinoLite-(\d+(?:\.\d+)*)-setup\.exe$/.exec(it.name);
+        const zip = /^([a-z0-9_-]+)-(\d+(?:\.\d+)*)\.zip$/.exec(it.name), exe = installerRe().exec(it.name);
         const ver = zip ? zip[2] : exe[1];
         if (zip ? (zip[1] === 'link' || (installed[zip[1]] && cmpVersion(ver, installed[zip[1]]) <= 0)) : cmpVersion(ver, live) <= 0) continue;
         const dest = path.join(shareDir(dir, it.name), it.name);
@@ -216,6 +216,7 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
   function findLiteExe() {
     return new Promise(res => {
       if (process.env.PINGUINO_LITE_EXE) return res(process.env.PINGUINO_LITE_EXE);
+      if (litePlatform() !== 'win32') return res(unixLiteExe());
       const fallback = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'PinguinoLite', 'PinguinoLite.exe') : '';
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "(Get-Process -Name PinguinoLite -ErrorAction SilentlyContinue | Select-Object -First 1).Path"], { timeout: 8000, windowsHide: true },
         (e, out) => { const p = String(out || '').trim(); res(!e && /PinguinoLite.exe$/i.test(p) ? p : (fallback && fs.existsSync(fallback) ? fallback : '')); });
@@ -224,12 +225,12 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
   /** The user clicked Update in Lite. Re-verify the staged installer, then hand over to the detached helper (Lite is exiting and takes Link with it). */
   async function applyLiteUpdate() {
     if (busy.lite === 'updating') { log('warn', 'lite', 'Lite update already in progress; extra request ignored'); return; }
-    if (!checkLiteUpdate()) { fail('Lite update: no verified installer is staged (needs PinguinoLite-<version>-setup.exe with a matching .sha256)'); return; }
+    if (!checkLiteUpdate()) { fail(`Lite update: no verified installer is staged (needs PinguinoLite-<version>-setup.${installerExt()} with a matching .sha256)`); return; }
     const man = readJson(path.join(dir, 'update_manifest.json'));
     const installer = path.join(dir, ...String(man.staged_file || '').split(/[\\/]/));
     const exe = await findLiteExe();
-    if (!exe) { fail('Lite update: cannot find the installed PinguinoLite.exe to update'); return; }
-    const job = { liteDir: dir, installer, sha256: man.sha256, exe, from: process.env.PINGUINO_LITE_VERSION || '0.0.0', to: man.latest_version };
+    if (!exe) { fail(`Lite update: cannot find the installed ${litePlatform() === 'win32' ? 'PinguinoLite.exe' : 'PinguinoLite'} to update`); return; }
+    const job = { liteDir: dir, installer, sha256: man.sha256, exe, platform: litePlatform(), from: process.env.PINGUINO_LITE_VERSION || '0.0.0', to: man.latest_version };
     if (process.env.PINGUINO_LITE_TEST === '1' && process.env.PINGUINO_LITE_TEST_JOB) Object.assign(job, JSON.parse(process.env.PINGUINO_LITE_TEST_JOB));
     const jf = path.join(dir, 'lite_apply_job.json');
     fs.writeFileSync(jf, JSON.stringify(job, null, 2));
@@ -278,8 +279,22 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
   };
 }
 
+// ---- platform: Windows installs PinguinoLite-<v>-setup.exe (/S); macOS/Linux install PinguinoLite-<v>-setup.sh (run with /bin/sh)
+/** The OS the apply path targets. Tests may fake it with PINGUINO_LITE_PLATFORM (only when PINGUINO_LITE_TEST=1). */
+export const litePlatform = () => (process.env.PINGUINO_LITE_TEST === '1' && process.env.PINGUINO_LITE_PLATFORM) || process.platform;
+export const installerExt = () => litePlatform() === 'win32' ? 'exe' : 'sh';
+export const installerRe = () => new RegExp('^PinguinoLite-(' + '\\d+(?:\\.\\d+)*' + ')-setup\\.' + installerExt() + '$');
+/** Where an installed PinguinoLite lives on macOS/Linux when nothing says otherwise ('' = not found). */
+function unixLiteExe() {
+  const home = process.env.HOME || '';
+  const c = litePlatform() === 'darwin'
+    ? ['/Applications/PinguinoLite.app', home && path.join(home, 'Applications', 'PinguinoLite.app')]
+    : [home && path.join(home, '.local', 'share', 'PinguinoLite', 'PinguinoLite'), '/opt/PinguinoLite/PinguinoLite'];
+  return c.find(p => p && fs.existsSync(p)) || '';
+}
+
 // ---- sharing update files between this user's own paired PCs (served only to paired peers, see server.mjs) ----
-const SHARE_RE = /^(?:[a-z0-9_-]{1,40}-\d+(?:\.\d+)*\.zip|PinguinoLite-\d+(?:\.\d+)*-setup\.exe)$/;
+const SHARE_RE = /^(?:[a-z0-9_-]{1,40}-\d+(?:\.\d+)*\.zip|PinguinoLite-\d+(?:\.\d+)*-setup\.(?:exe|sh))$/;
 const MAX_SHARE = 300 * 1024 * 1024;
 const shareDir = (dir, name) => path.join(dir, name.endsWith('.zip') ? 'packages' : 'staging');
 const sidecarHash = f => { try { const h = fs.readFileSync(f + '.sha256', 'utf8').trim().split(/\s+/)[0].toLowerCase(); return /^[0-9a-f]{64}$/.test(h) ? h : ''; } catch { return ''; } };
