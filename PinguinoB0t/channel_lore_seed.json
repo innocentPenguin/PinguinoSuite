@@ -136,7 +136,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:ash|bits clip|he gives bits)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:ash|bits clip|he gives bits)\\b",
     "\\b(?:ash|bits clip|he gives bits)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -254,7 +254,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:blizzy)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:blizzy)\\b",
     "\\b(?:blizzy)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -305,7 +305,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:burglin|burgling ?nomes)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:burglin|burgling ?nomes)\\b",
     "\\b(?:burglin|burgling ?nomes)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -330,7 +330,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:cat)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:cat)\\b",
     "\\b(?:cat)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -439,7 +439,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:crimson)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:crimson)\\b",
     "\\b(?:crimson)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -764,7 +764,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:geo ?guess?er)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:geo ?guess?er)\\b",
     "\\b(?:geo ?guess?er)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -808,7 +808,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:golf)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:golf)\\b",
     "\\b(?:golf)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -982,7 +982,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:how big is it)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:how big is it)\\b",
     "\\b(?:how big is it)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -1166,7 +1166,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:marsh)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:marsh)\\b",
     "\\b(?:marsh)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -1310,7 +1310,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:minecraft|piglin)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:minecraft|piglin)\\b",
     "\\b(?:minecraft|piglin)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -1492,7 +1492,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:oopsie)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:oopsie)\\b",
     "\\b(?:oopsie)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -1539,7 +1539,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:peak)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:peak)\\b",
     "\\b(?:peak)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -1777,7 +1777,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:repo)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:repo)\\b",
     "\\b(?:repo)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -1802,7 +1802,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:rl|rocket league)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:rl|rocket league)\\b",
     "\\b(?:rl|rocket league)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -2015,7 +2015,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:settings)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:settings)\\b",
     "\\b(?:settings)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -2160,7 +2160,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:squishy)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:squishy)\\b",
     "\\b(?:squishy)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -2520,7 +2520,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:uk)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:uk)\\b",
     "\\b(?:uk)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
@@ -2798,7 +2798,7 @@
    "publicSafe": true,
    "enabled": true,
    "patterns": [
-    "\\b(?:clip|video|link|show|send|post|play|watch)\\b.*\\b(?:yen|20 subs|gifted 20)\\b",
+    "\\b(?:clip|video|link)\\b.*\\b(?:yen|20 subs|gifted 20)\\b",
     "\\b(?:yen|20 subs|gifted 20)\\b.*\\b(?:clip|video)\\b"
    ],
    "anyShape": true,
