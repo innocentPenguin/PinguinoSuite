@@ -112,6 +112,8 @@ namespace PinguinoHost
             items.Add(Item("obs", "OBS connected", ObsConnected() ? "pass" : obsCfg ? "fail" : "warn", ObsConnected() ? "" : obsCfg ? "OBS WebSocket not reachable (is OBS open, WebSocket on?)" : "OBS is not set up in the Host (overlays/scenes need it)"));
             { var oh = OverlayOptions.Health(); var om = (oh["missing"] as JArray ?? new JArray()).Select(x => (string)x).ToList(); bool jsOk = (bool?)oh["scriptPresent"] == true;
               items.Add(Item("overlays", "Overlay pages carry the fit-options script", jsOk && om.Count == 0 ? "pass" : "fail", jsOk ? (om.Count == 0 ? "" : "missing overlay-options.js tag: " + string.Join(", ", om)) : "overlay-options.js not found in the overlay folder")); }
+            { var scs = Scenes.Health(); var scp = (scs["problems"] as JArray ?? new JArray()).Select(x => (string)x).ToList();
+              items.Add(Item("scenes", "Scene layouts have something to show", scp.Count == 0 ? "pass" : "warn", string.Join("; ", scp))); }
             if (ObsConnected())
             {
                 var rb = Program.ObsData("GetReplayBufferStatus", null); bool running = rb != null && ((bool?)rb["outputActive"] ?? false);

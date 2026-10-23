@@ -84,6 +84,19 @@ try:
     fj = json.load(open(os.path.join(d, 'scene_layouts.json'))); chk('saved to Data/runtime/scene_layouts.json', 'h' in fj['profiles'], list(fj.get('profiles', {})))
     ov = os.path.join(suite, 'PinguinoB0t', 'overlays')
     chk('scene.html exists and is not flagged by the overlay-options health check', os.path.exists(os.path.join(ov, 'scene.html')) and 'scene' not in json.loads(get('/api/overlay-options/health'))['missing'])
+    sh = json.loads(get('/api/scene-health'))
+    chk('scene health: defaults have visible widgets and no problems', sh['ok'] is True and sh['profiles']['h']['visible'] > 0 and sh['profiles']['v']['visible'] > 0, sh)
+    allw = [{'id': w['id'], 'visible': False} for w in json.loads(get('/api/scene-layouts?profile=h'))['layout']['widgets']]
+    post('/api/scene-layouts', {'action': 'save', 'profile': 'h', 'name': 'Empty', 'layout': {'widgets': allw}, 'activate': True})
+    sh = json.loads(get('/api/scene-health'))
+    chk('scene health: an active layout with nothing visible is reported', sh['ok'] is False and any('no visible widget' in x and x.startswith('h:') for x in sh['problems']), sh)
+    import socket
+    s8 = socket.socket(); s8.settimeout(0.5); up = s8.connect_ex(('127.0.0.1', 8766)) == 0; s8.close()
+    if not up:
+        allw = [dict(w, visible=(w['id'] == 'alerts')) for w in allw]
+        post('/api/scene-layouts', {'action': 'save', 'profile': 'h', 'name': 'Empty', 'layout': {'widgets': allw}, 'activate': True})
+        sh = json.loads(get('/api/scene-health'))
+        chk('scene health: a visible widget on a dead port (alerts 8766) is reported', any('alerts' in x and '8766' in x for x in sh['problems']), sh)
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS scenes'); sys.exit(1 if fails else 0)

@@ -146,6 +146,29 @@ namespace PinguinoHost
                 { "params", "free query-string pairs passed to the widget page, e.g. {\"layout\":\"sprinkled\",\"scale\":\"1.2\"} (same names the standalone page takes)" } };
         }
 
+        /// <summary>Pre-stream check of what the stage would show: per profile the served layout has at least one visible widget, and every visible widget that lives on another local port (alerts 8766, now playing 8771)
+        /// has something listening there. A missing layout file is fine (defaults are generated). Used by the prestream list and GET-able via Health().</summary>
+        public static JObject Health()
+        {
+            var problems = new JArray(); var profs = new JObject();
+            foreach (var pr in Profiles.Keys)
+            {
+                var r = Get(pr, null); if ((bool?)r["ok"] != true) { problems.Add(pr + ": layout unreadable"); continue; }
+                var ws = (r["layout"]?["widgets"] as JArray ?? new JArray()).OfType<JObject>().Where(w => (bool?)w["visible"] != false).ToList();
+                profs[pr] = new JObject { { "layout", r["name"] }, { "visible", ws.Count } };
+                if (ws.Count == 0) problems.Add(pr + ": layout '" + (string)r["name"] + "' has no visible widget (the scene would be empty)");
+                foreach (var w in ws)
+                {
+                    var reg = Find((string)w["id"]); string src = (string)w["src"] ?? reg?.Src ?? "";
+                    Uri u; if (!src.StartsWith("http", StringComparison.OrdinalIgnoreCase) || !Uri.TryCreate(src, UriKind.Absolute, out u) || u.Port == HostPort()) continue;
+                    bool up = false; try { using (var tc = new System.Net.Sockets.TcpClient()) up = tc.ConnectAsync(u.Host, u.Port).Wait(600); } catch (Exception) { }
+                    if (!up) problems.Add(pr + ": widget '" + (string)w["id"] + "' is on, but nothing listens on port " + u.Port);
+                }
+            }
+            return new JObject { { "ok", problems.Count == 0 }, { "problems", problems }, { "profiles", profs } };
+        }
+        static int HostPort() { try { return HostApi.Port; } catch (Exception) { return 8770; } }
+
         /// <summary>the current game both profiles are on ("" = none set); read by GameWatch</summary>
         public static string CurrentGame()
         {
