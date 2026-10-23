@@ -333,6 +333,15 @@ await t('pre-stream chip, scene-health hints and stale badge: pure helpers + moc
   const h = C.headsView(null, null, (await api.get('/api/scene-health')).json).find(x => x.k === 'scenes'); assert.match(h.tip, /->/);
 });
 
+await t('help overlay lists every shortcut the page handles; empty lists say why', () => {
+  const dir = path.join(here, '..', '..', 'App', 'src', 'master'), html = fs.readFileSync(path.join(dir, 'master.html'), 'utf8'), js = fs.readFileSync(path.join(dir, 'master.js'), 'utf8');
+  const help = html.slice(html.indexOf('id="help"'), html.indexOf('<script src="master-core.js"'));
+  for (const k of ['/', 'Esc', 'Alt', '?', '[', ']', 'Space', 'Enter']) assert.ok(help.includes('<kbd>' + k + '</kbd>'), 'help lacks ' + k);
+  for (const k of ['N', 'O', 'C', 'S', 'R', 'L']) assert.ok(help.includes('<kbd>' + k + '</kbd>'), 'help lacks Shift+' + k);
+  assert.ok(help.includes('<kbd>1</kbd>…<kbd>5</kbd>') && js.includes("'overlays', 'stream'][+e.key - 1]"), 'tab keys 1-5'); assert.ok(/text size/i.test(help) && /Pre-stream/.test(help));
+  assert.ok(js.includes('The Host is offline: this fills in when it is back.') && js.includes('The Host is offline: commands show up when it is back.') && js.includes('Waiting for the first line'));
+});
+
 await t('keyboard: no positive tabindex, every control is a real button/input, scenes+sources lists are focusable in DOM order', () => {
   const html = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.html'), 'utf8'), js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
   assert.equal(/tabindex="[1-9]/.test(html + js), false); assert.equal(/<div[^>]*onclick/.test(html), false);

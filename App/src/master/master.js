@@ -678,6 +678,7 @@
     if (ui.chatOk === false) n.push('Live chat needs the Host chat feed.');
     if (ui.logsOk === false && (ui.logCat === 'backend' || ui.logCat === 'all')) n.push('Backend log (bot + overlay actions) needs the Host /api/eventlog: not connected yet. Players log is built here from queue changes (no history before this window opened).');
     if (ui.logsOk === true && !rows.length) n.push('Nothing in this log yet.');
+    if (!rows.length && !n.length) n.push(H.down('host') ? 'The Host is offline: this fills in when it is back.' : 'Waiting for the first line…');
     $('#feed-note').textContent = n.join(' ');
   }
   // Mods activity (Host /api/modaudit) and the status strip (shoutouts, intro queue, scene health): read only, polled only while the Feed tab is open
@@ -750,6 +751,8 @@
     const q = ui.query.toLowerCase(), all = S.get('cmds') || [];
     const rows = all.filter(c => !c.archived && (!q || (c.name + ' ' + (c.aliases || []).join(' ') + ' ' + (c.description || '') + ' ' + (c.category || '')).toLowerCase().includes(q))).slice(0, 250)
       .map(c => ({ id: c.id, name: c.name, d: (c.permission || '') + (c.uses ? ' · ' + c.uses + ' uses' : ''), on: opt.has('c:' + c.id) ? opt.get('c:' + c.id) : c.enabled !== false, p: opt.has('c:' + c.id) }));
+    let em = $('#cmd-empty'); if (!em) { em = h('div', 'note faint'); em.id = 'cmd-empty'; $('#cmdlist').before(em); }
+    em.hidden = rows.length > 0; em.textContent = ui.query ? 'No command matches "' + ui.query + '".' : H.down('host') ? 'The Host is offline: commands show up when it is back.' : all.length ? 'Every command is archived.' : 'Loading commands…';
     C.reconcile($('#cmdlist'), rows, r => r.id, () => { const d = h('div', 'cmd'); d.append(h('span', 't'), h('span', 'd'), h('span', 'sw')); return d; },
       (d, r) => { d.dataset.id = r.id; d.children[0].textContent = r.name; d.children[1].textContent = r.d; d.children[2].className = 'sw' + (r.on ? ' on' : ''); d.style.opacity = r.p ? '.7' : ''; });
   }
@@ -982,7 +985,7 @@
       if (e.key.toUpperCase() === 'L') { e.preventDefault(); $('#b-last').click(); return; }
       if (e.key.toUpperCase() === 'S') { e.preventDefault(); tokenReady.then(() => api.post('/api/wheel/spin')).then(r => r.ok ? toast('Wheel: spin') : toast(r.error, true)); return; }
     }
-    if (/^[1-4]$/.test(e.key) && !e.shiftKey) { setTab(['customs', 'feed', 'cmds', 'overlays'][+e.key - 1]); return; }
+    if (/^[1-5]$/.test(e.key) && !e.shiftKey) { setTab(['customs', 'feed', 'cmds', 'overlays', 'stream'][+e.key - 1]); return; }
     const pane = paneOf(document.activeElement) || ui.pane, rows = pane === 'scenes' ? rowsScenes : rowsSources;
     if (!rows.length) return;
     let i = rows.findIndex(r => r.key === ui.kb[pane]);
