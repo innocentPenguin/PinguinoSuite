@@ -17,15 +17,16 @@
       else { const m = document.querySelector('meta[name="pinguino-token"]'); token = m ? m.content : ''; }
     } catch (e) { /* GETs work without it; writes will say so */ }
   })();
+  const F = (u, o) => fetch(u, o);   // the one fetch the Host / Spotify / Multi clients and the live-event stream share
   const H = C.createHealth();   // per source (host / music / multi): consecutive failures -> poll back-off + the offline banner
   const track = src => r => { if (r.status === 0 || r.status >= 502) H.fail(src); else H.ok(src); };
-  const api = C.createApi({ base: HOST, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000, onResult: track('host') });
+  const api = C.createApi({ base: HOST, fetch: F, getToken: () => token, timeoutMs: 4000, onResult: track('host') });
 
   /* ---------- Spotify strip (the Spotify module, 127.0.0.1:8771) ---------- */
   const MUSIC = (new URLSearchParams(location.search).get('music')) || 'http://127.0.0.1:8771';
-  const mapi = C.createApi({ base: MUSIC, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000, onResult: track('music') });
+  const mapi = C.createApi({ base: MUSIC, fetch: F, getToken: () => token, timeoutMs: 4000, onResult: track('music') });
   const MULTI = (new URLSearchParams(location.search).get('multi')) || 'http://127.0.0.1:8766';   // PinguinoMulti: YouTube / Kick stream info
-  const xapi = C.createApi({ base: MULTI, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 15000, onResult: track('multi') });
+  const xapi = C.createApi({ base: MULTI, fetch: F, getToken: () => token, timeoutMs: 15000, onResult: track('multi') });
 
   /* ---------- state ---------- */
   const cached = ls.get('cache', {});
@@ -842,7 +843,7 @@
 
   /* ---------- live push from the Host (/api/events, see Docs/MASTER_VIEW_APP.md); polling keeps running slowly as a safety net ---------- */
   const events = C.createEvents({
-    url: HOST + '/api/events', fetch: (u, o) => fetch(u, o),
+    url: HOST + '/api/events', fetch: F,
     onState: on => { S.set({ link: { sse: on, ms: S.get('link').ms } }); if (!on) Object.values(pollers).forEach(p => p.kick()); },
     onMessage: m => {
       const d = m.data;
@@ -996,5 +997,7 @@
   setTab(ui.tab);
   renderBar(); renderScenes(); renderSources(); renderCustoms(); renderFeed();    // first paint from the cached state, before any request returns
   tokenReady.then(() => { Object.values(pollers).forEach(p => p.start()); events.start(); });
+  window.addEventListener('pagehide', () => { Object.values(pollers).forEach(p => p.stop()); events.stop(); });
+  window.addEventListener('pageshow', e => { if (e.persisted) { Object.values(pollers).forEach(p => p.start()); events.start(); } });   // restored from the back/forward cache   // the page is going away (pop-out closed, shell swapped it): no timers or open stream left behind
   window.MasterView = { S, ui, opt, pollers, api, goScene, toggleItem, sendCmd, applyTree };   // for the browser console / tests
 })();
