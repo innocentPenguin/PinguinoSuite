@@ -1041,6 +1041,15 @@ def set_autostart(on):
 
 # ------------------------------------------------------------------ app
 @asynccontextmanager
+def write_core_pid():
+    """Data\pids\core.json: lets a module tell "my core was restarted" (new pid) from "my core is dead" (see Listen's corewatch, opt-in)."""
+    try:
+        PIDS.mkdir(parents=True, exist_ok=True)
+        (PIDS / "core.json").write_text(json.dumps({"pid": os.getpid(), "started": time.time()}), "utf8")
+    except OSError:
+        pass
+
+
 def shutdown_all():
     """Stop every module (and its children) exactly once, even if one of them fails to stop; nothing is started afterwards."""
     SHUTDOWN.set()
@@ -1057,6 +1066,7 @@ async def lifespan(app):
         o = m.opts()
         if o.get("enabled") and o.get("start_with_suite"):
             m.start()
+    write_core_pid()
     threading.Thread(target=pack_archive, daemon=True).start()
     threading.Thread(target=health_loop, daemon=True).start()
     threading.Thread(target=twitch_loop, daemon=True).start()

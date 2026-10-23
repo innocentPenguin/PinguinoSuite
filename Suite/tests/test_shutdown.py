@@ -126,5 +126,17 @@ class Shutdown(unittest.TestCase):
         self.assertFalse(suite.pid_alive(pids[1]))      # the second module was still stopped
 
 
+class CorePid(unittest.TestCase):
+    def test_core_pid_file_is_written(self):
+        import json
+        saved = suite.PIDS
+        suite.PIDS = Path(tempfile.mkdtemp()) / "pids"
+        try:
+            suite.write_core_pid()
+            self.assertEqual(json.loads((suite.PIDS / "core.json").read_text())["pid"], os.getpid())
+        finally:
+            suite.PIDS = saved
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -99,6 +99,7 @@ from pydantic import BaseModel
 
 import asr as asr_mod
 import config as cfg
+import corewatch
 import db
 import ingest
 import learn
@@ -206,12 +207,25 @@ def autolearn_loop():
         time.sleep(1800)  # turning the toggle on also syncs immediately (see /api/settings)
 
 
+def _core_gone():
+    """The Suite core has been gone for 30 s (it was hard-killed): finish what is queued, release the mic and the GPU, exit."""
+    print("[Listen] the Suite core is gone; closing the mic and exiting", flush=True)
+    try:
+        mic.stop()
+        end = time.time() + 10
+        while time.time() < end and not (mic._utts.empty() and mic._blocks.empty()):
+            time.sleep(0.5)
+    finally:
+        os._exit(0)
+
+
 @asynccontextmanager
 async def lifespan(app):
     hub.loop = asyncio.get_running_loop()
     threading.Thread(target=asr.load, daemon=True).start()
     threading.Thread(target=autolearn_loop, daemon=True).start()
     threading.Thread(target=lambda: oggfix.repair_all(cfg.DATA / "audio", log=lambda m: print(m, flush=True)), daemon=True).start()   # VOD audio made before the 62 s timeline fix
+    corewatch.start(_core_gone)    # opt-in: PINGUINO_LISTEN_WATCHDOG=1 (the core sets nothing; see Docs / 20-zombie-design)
     yield
     mic.stop()
 
