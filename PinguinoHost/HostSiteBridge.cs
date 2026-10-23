@@ -279,7 +279,7 @@ namespace PinguinoHost
                 var d = Doc(); var g = d["game"] as JObject; if (g == null) return;
                 if (Now() - (long)g["at"] < I(Cfg(), "GuessSeconds")) return;
                 Finish(d, g, false, "time ran out, it was " + (string)g["answer"]);
-                if (((string)g["id"]).StartsWith("chat-")) ChannelLore.SayCore("@" + (string)g["login"] + " time is up, it was " + (string)g["answer"] + ". Better luck next time!");
+                if (((string)g["id"]).StartsWith("chat-")) Gamble.GameOut(m => ChannelLore.SayCore(m), "@" + (string)g["login"] + " time is up, it was " + (string)g["answer"] + ". Better luck next time!", "guess", "expired", (string)g["login"], (long)g["stake"], 0, 0, (string)g["answer"], "", "", (string)g["id"] + "#expired");
             }
         }
         static void Finish(JObject d, JObject g, bool won, string note)
@@ -314,7 +314,7 @@ namespace PinguinoHost
             long stake; string sa = args.Length > 1 ? args[1].Replace(",", "").Trim().ToLowerInvariant() : "";
             if (sa == "all") stake = Math.Min(max, Economy.Balance(me));
             else if (!long.TryParse(sa, out stake)) { say("@" + user + " " + ChatName(c, "guess_chatter", "Guess the Chatter") + ": I show an old chat line and you name who said it with !guess <name> (" + tries + " tries, " + I(c, "GuessSeconds") + "s). Stake " + min + "-" + max + " " + cur + ", right answer pays 2x. Start: !shop guess <stake>"); return; }
-            string msg;
+            string msg; bool started = false; string startLine = "", gid = ""; long bal0 = 0;
             lock (L)
             {
                 var d = Doc(); long now = Now(); string id = "chat-" + me + "-" + Guid.NewGuid().ToString("N").Substring(0, 10);
@@ -335,29 +335,32 @@ namespace PinguinoHost
                         d["game"] = new JObject { { "id", id }, { "login", me }, { "stake", stake }, { "line", line }, { "answer", who }, { "at", now }, { "guesses", 0 } };
                         Record(d, id, me, "guess_chatter", "accepted", 0, "chat round", false); ((JObject)d["processed"])[id]["posted"] = true; Save(d);
                         msg = "Who said this? \"" + line + "\" Answer with !guess <name>, " + tries + " tries. Stake " + stake + " " + cur + ", right answer pays " + stake * 2 + ".";
+                        started = true; startLine = line; gid = id; bal0 = Economy.Balance(me);
                     }
                 }
             }
-            say("@" + user + " " + msg);
+            if (started) Gamble.GameOut(say, "@" + user + " " + msg, "guess", "start", user, stake, stake * 2, bal0, "", "", startLine, gid, (int)I(c, "GuessSeconds"), "", tries);
+            else Gamble.GameOut(say, "@" + user + " " + msg, "guess", "invalid", user, 0, 0, Economy.Balance(me), "", "", msg, "", 0, "", 0);
         }
         /// <summary>!guess &lt;name&gt; from chat. Only the player of the running round gets an answer; everyone else gets nothing (the shop is hidden).</summary>
         public static bool HandleGuess(string user, string[] args, Action<string> say)
         {
-            string msg = null;
+            string msg = null; string oc = "", ans = "", gid = ""; long stk = 0, pay2 = 0; int left2 = 0;
             lock (L)
             {
                 var d = Doc(); var g = d["game"] as JObject; string me = (user ?? "").ToLowerInvariant();
                 if (g == null || (string)g["login"] != me) return false;
                 string guess = string.Join(" ", args ?? new string[0]).Trim().TrimStart('@').ToLowerInvariant(); if (guess == "") return false;
-                if (guess == (string)g["answer"]) { long pay = (long)g["stake"] * 2; Finish(d, g, true, "right, it was " + (string)g["answer"]); msg = "@" + user + " Correct! It was " + (string)g["answer"] + ". You win " + pay + " " + Economy.CurrencyName + "!"; }
+                if (guess == (string)g["answer"]) { long pay = (long)g["stake"] * 2; Finish(d, g, true, "right, it was " + (string)g["answer"]); oc = "win"; ans = (string)g["answer"]; stk = (long)g["stake"]; pay2 = pay; gid = (string)g["id"] + "#win"; msg = "@" + user + " Correct! It was " + (string)g["answer"] + ". You win " + pay + " " + Economy.CurrencyName + "!"; }
                 else
                 {
                     int n = (int)g["guesses"] + 1; g["guesses"] = n; int left = (int)I(Cfg(), "MaxGuesses") - n;
-                    if (left <= 0) { Finish(d, g, false, "out of tries, it was " + (string)g["answer"]); msg = "@" + user + " No luck, it was " + (string)g["answer"] + "."; }
-                    else { Save(d); msg = "@" + user + " Nope, " + left + " " + (left == 1 ? "try" : "tries") + " left."; }
+                    if (left <= 0) { Finish(d, g, false, "out of tries, it was " + (string)g["answer"]); oc = "lose"; ans = (string)g["answer"]; stk = (long)g["stake"]; gid = (string)g["id"] + "#lose"; msg = "@" + user + " No luck, it was " + (string)g["answer"] + "."; }
+                    else { Save(d); oc = "retry"; left2 = left; gid = (string)g["id"] + "#try" + n; msg = "@" + user + " Nope, " + left + " " + (left == 1 ? "try" : "tries") + " left."; }
                 }
             }
-            if (msg != null) say(msg); return true;
+            if (msg != null) Gamble.GameOut(say, msg, "guess", oc, user, stk, pay2, Economy.Balance((user ?? "").ToLowerInvariant()), ans, "", "", gid, 0, "", left2);
+            return true;
         }
 
         // ---- the line: old chat, anonymised, never from someone who opted out, never anything heavy ----

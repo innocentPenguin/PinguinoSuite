@@ -3,7 +3,7 @@ Usage: python Tools/test-host-gamble.py [dll]"""
 import re, json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
-PORT = 8995; B = 'http://127.0.0.1:%d' % PORT
+PORT = int(os.environ.get('PGTEST_PORT', 8995)); B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pggm_'); outf = os.path.join(d, 'out.txt'); eco = os.path.join(d, 'economy'); os.makedirs(eco)
 json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 json.dump({'adjust': {'alice': 1000, 'bob': 500, 'carl': 300, 'dina': 200, 'eve': 100}}, open(os.path.join(eco, 'points.json'), 'w'))
@@ -31,18 +31,18 @@ try:
     for _ in range(120):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
-    r = ask('alice: !gamble 100'); chk('win pays', len(r) == 1 and 'won 100' in r[0] and bal('alice') == 1100, (r, bal('alice')))
-    setcfg(gambleWinChance=0.0); time.sleep(1.2)
+    time.sleep(4); r = ask('alice: !gamble 100', 2.5); chk('win pays', len(r) == 1 and 'won 100' in r[0] and bal('alice') == 1100, (r, bal('alice')))
+    setcfg(gambleWinChance=0.0); time.sleep(2.0)
     r = ask('alice: !gamble 100'); chk('loss takes', 'lost 100' in r[0] and bal('alice') == 1000, (r, bal('alice')))
     r = ask('alice: !gamble all'); chk('all in, no max bet', bal('alice') == 0 and 'lost 1000' in r[0], (r, bal('alice')))
     r = ask('alice: !gamble 5'); chk('broke refused', 'you have no points' in r[0], r)
     r = ask('alice: !gamble'); chk('usage', 'usage' in r[0], r)
     r = ask('bob: !gamble 0'); chk('zero bet refused', ('usage' in r[0] or 'minimum' in r[0]) and bal('bob') == 500, r)
-    setcfg(gambleWinChance=0.0, maxBet=50); time.sleep(1.2)
+    setcfg(gambleWinChance=0.0, maxBet=50); time.sleep(2.0)
     r = ask('bob: !gamble 100'); chk('max bet optional setting', 'maximum bet is 50' in r[0] and bal('bob') == 500, r)
-    setcfg(gambleWinChance=1.0, gamblePayout=3.0, slotsSymbols=['x','x'], slotsTriplePayout=4.0, slotsJackpotSymbol='x', slotsJackpotPayout=6.0); time.sleep(1.2)
+    setcfg(gambleWinChance=1.0, gamblePayout=3.0, slotsSymbols=['x','x'], slotsTriplePayout=4.0, slotsJackpotSymbol='x', slotsJackpotPayout=6.0); time.sleep(2.0)
     r = ask('bob: !slots 10'); chk('slots jackpot', 'won 60' in r[0] and bal('bob') == 550, (r, bal('bob')))
-    setcfg(gambleWinChance=1.0); time.sleep(1.2)   # no slotsSymbols in the file: the built-in defaults are real emoji, intact through the send path
+    setcfg(gambleWinChance=1.0); time.sleep(2.0)   # no slotsSymbols in the file: the built-in defaults are real emoji, intact through the send path
     r = ask('bob: !slots 1'); allowed = ['🍒', '🐟', '⭐', '⚽', '🐧']
     reel = r[0].split(' ', 1)[1].split(' you won')[0].split(' no luck')[0] if r else ''
     got = []; rest = reel
@@ -58,12 +58,12 @@ try:
     r = ask('dina: !accept'); chk('duel settles', 'wins the duel' in r[0] and sorted([bal('carl'), bal('dina')]) == [150, 350], (r, bal('carl'), bal('dina')))
     r = ask('dina: !accept'); chk('no second accept', r == [], r)
     r = ask('eve: !duel @bob 80'); r = ask('bob: !decline'); chk('decline', 'passed' in r[0], r)
-    setcfg(cooldownSec=30, gambleWinChance=0.0); time.sleep(1.2)
+    setcfg(cooldownSec=30, gambleWinChance=0.0); time.sleep(2.0)
     ask('eve: !gamble 1'); r = ask('eve: !gamble 1'); chk('cooldown silent', r == [], r)
-    setcfg(enabled=False); time.sleep(1.2)
+    setcfg(enabled=False); time.sleep(2.0)
     r = ask('bob: !gamble 5'); chk('off switch', r == [], r)
     # ---- Chatty on: the Host sends ONE PgGame event and says nothing itself ----
-    chatty(True); setcfg(gambleWinChance=1.0, gamblePayout=2.0, slotsSymbols=['🍒', '🍒'], slotsJackpotSymbol='🍒', slotsJackpotPayout=7.0); time.sleep(1.2)
+    chatty(True); setcfg(gambleWinChance=1.0, gamblePayout=2.0, slotsSymbols=['🍒', '🍒'], slotsJackpotSymbol='🍒', slotsJackpotPayout=7.0); time.sleep(2.0)
     n0 = len(events()); r = ask('alice: !gamble 1')
     chk('no balance: broke event, host silent', r == [] and events()[n0:] and events()[n0]['outcome'] == 'broke' and events()[n0]['kind'] == 'gamble', (r, events()[n0:]))
     r = ask('bob: !gamble 10'); e = events()[n0 + 1:]
@@ -80,20 +80,30 @@ try:
     chk('duel result event: winner is user, payout 2x stake', r == [] and e and e[0]['kind'] == 'duel' and e[0]['outcome'] == 'win' and e[0]['payout'] == '40' and e[0]['opponent'], (r, e))
     ask('eve: !duel @bob 10'); r = ask('bob: !decline'); e = events()[-1]
     chk('decline event', r == [] and e['outcome'] == 'declined' and e['user'] == 'bob', (r, e))
-    chatty(False); time.sleep(1.2)
+    chatty(False); time.sleep(2.0)
     n1 = len(events()); r = ask('bob: !gamble 1')
     chk('Chatty off: the plain Host line, no event', len(r) == 1 and len(events()) == n1, (r, len(events()) - n1))
     # ---- shop: Get a sub purchase through !shop sub (kind=shop) ----
     json.dump({'settings': {'enabled': True, 'price': 50, 'cooldownHours': 0, 'monthlyCapUser': 5}, 'tickets': []}, open(os.path.join(eco, 'sub_tickets.json'), 'w'))
-    chatty(True); time.sleep(1.2)
+    chatty(True); time.sleep(2.0)
     n2 = len(events()); b0 = bal('carl'); r = ask('carl: !shop sub'); e = events()[n2:]
     chk('shop: Get a sub purchase -> one PgGame kind=shop, no plain line to the buyer', not [x for x in r if x.startswith('@carl')] and len(e) == 1 and e[0]['kind'] == 'shop' and e[0]['outcome'] == 'bought' and e[0]['item'] == 'get_sub' and e[0]['amount'] == '50' and e[0]['user'] == 'carl' and bal('carl') == b0 - 50, (r, e, bal('carl')))
     r = ask('carl: !shop sub'); e = events()[n2 + 1:]
     chk('shop: a refused purchase -> kind=shop invalid with the Host sentence', not [x for x in r if x.startswith('@carl')] and len(e) == 1 and e[0]['outcome'] == 'invalid' and 'waiting' in e[0]['reason'] and bal('carl') == b0 - 50, (r, e))
-    chatty(False); time.sleep(1.2)
+    chatty(False); time.sleep(2.0)
     json.dump({'settings': {'enabled': True, 'price': 50, 'cooldownHours': 0, 'monthlyCapUser': 5}, 'tickets': []}, open(os.path.join(eco, 'sub_tickets.json'), 'w')); time.sleep(0.5)
     n3 = len(events()); r = ask('dina: !shop sub'); mine = [x for x in r if x.startswith('@dina')]
     chk('shop: Chatty off -> the plain Host line, no event', len(mine) == 1 and 'a mod will gift you' in mine[0] and len(events()) == n3, (r, len(events()) - n3))
+    # ---- Guess the Chatter (kind=guess): with no chat log in the sim there is no line, so the refusal is an invalid event; a started round is exercised when a line exists ----
+    chatty(True); time.sleep(2.0)
+    n4 = len(events()); r = ask('bob: !shop guess 100'); e = events()[n4:]
+    chk('guess: !shop guess -> exactly one PgGame kind=guess (start or invalid), no plain line to the player', not [x for x in r if x.startswith('@bob')] and len(e) == 1 and e[0]['kind'] == 'guess' and e[0]['outcome'] in ('start', 'invalid') and (e[0]['outcome'] != 'invalid' or e[0]['reason']) and (e[0]['outcome'] != 'start' or (e[0]['payout'] == '200' and e[0]['tries'] == '3' and e[0]['reason'])), (r, e))
+    if e and e[0]['outcome'] == 'start':
+        r = ask('bob: !guess nobody_here'); e2 = events()[n4 + 1:]
+        chk('guess: a wrong answer -> kind=guess retry with the tries left', not [x for x in r if x.startswith('@bob')] and len(e2) == 1 and e2[0]['outcome'] == 'retry' and e2[0]['tries'] == '2', (r, e2))
+    chatty(False); time.sleep(2.0)
+    n5 = len(events()); r = ask('carl: !shop guess 100')
+    chk('guess: Chatty off -> the plain Host line, no event', len(r) >= 1 and len(events()) == n5, (r, len(events()) - n5))
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS gamble'); sys.exit(1 if fails else 0)
