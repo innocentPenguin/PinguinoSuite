@@ -79,7 +79,7 @@ def pronounce(text, table):
 def clean_message(text, c):
     """User-written text (chat/messages). Returns (text or None, reasons list)."""
     L, why = c["limits"], []
-    text = str(text or "")
+    text = str(text or "")[:2000]
     text, secret = scrub_secrets(text)
     if secret:
         why.append("secret")
@@ -95,6 +95,16 @@ def clean_message(text, c):
         why.append("masked")
     text = re.sub(r"\s+", " ", text).strip()
     return text, why
+
+
+def safe_name(name, c):
+    """A display name that may be spoken: secrets, links and profanity removed (names come from any platform). Empty when nothing is left."""
+    n, _ = scrub_secrets(str(name or "")[:60])
+    n = URL.sub("", n)
+    L = c["limits"]
+    if L["profanity"] != "off" and profane(n, L["bad_words"]):
+        n = "" if L["profanity"] == "skip" else mask_profanity(n, L["bad_words"])
+    return n.strip()
 
 
 def finish(text, c):

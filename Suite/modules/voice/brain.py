@@ -156,7 +156,10 @@ class Brain:
         rec["ts"] = self.now()
         self.history.append(rec)
         try:
-            with open(cfg.path("history.jsonl"), "a", encoding="utf8") as f:
+            hp = cfg.path("history.jsonl")
+            if hp.exists() and hp.stat().st_size > 5_000_000:      # keep the log bounded: one older generation
+                os.replace(hp, hp.with_name("history.1.jsonl"))
+            with open(hp, "a", encoding="utf8") as f:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         except OSError:
             pass
@@ -233,8 +236,9 @@ class Brain:
                 tpl = "{message}"
             if not ecfg["read_message"] and kind not in ("chat", "command"):
                 tpl = tpl.replace("{message}", "")
-            vars_ = {"user": c["nicknames"].get(user.lower()) or textproc.clean_name(user, L["clean_names"]) or "someone", "command": ev.get("what") or "", "amount": amount, "viewers": ev.get("viewers") or amount, "bits": ev.get("bits") or amount,
-                     "tier": ev.get("tier") or 1, "what": textproc.scrub_secrets(str(ev.get("what") or ""))[0], "message": msg}
+            vars_ = {"user": c["nicknames"].get(user.lower()) or textproc.safe_name(textproc.clean_name(user, L["clean_names"]), c) or "someone",
+                     "command": textproc.scrub_secrets(str(ev.get("what") or ""))[0], "amount": amount, "viewers": self._num(ev.get("viewers"), amount), "bits": self._num(ev.get("bits"), amount),
+                     "tier": self._num(ev.get("tier"), 1), "what": textproc.scrub_secrets(str(ev.get("what") or ""))[0], "message": msg}
             text = textproc.render(tpl, vars_, persona, self.rng)
             if "{catch}" not in tpl and persona["catchphrases"] and self.rng.random() * 100 < persona["catch_chance"]:
                 text += " " + self.rng.choice(persona["catchphrases"])
@@ -254,10 +258,18 @@ class Brain:
             self.last_text[key] = t
             if len(self.last_text) > 500:
                 self.last_text = {k: v for k, v in self.last_text.items() if t - v < L["dedupe_s"]}
-        prio = int(ev.get("priority") or ecfg["priority"])
+        prio = self._num(ev.get("priority"), ecfg["priority"], 1, 9)
         item = {"id": f"{int(t * 1000)}-{self.rng.randrange(10**4)}", "kind": kind, "user": user, "text": text, "persona": pid, "priority": prio, "t": t,
                 "sting": (ecfg.get("stinger") or persona["stinger"]), "whisper": st == "quiet-whisper", "notes": why + why2, "names": [user] if user else []}
         return self._enqueue(item, ecfg)
+
+    @staticmethod
+    def _num(v, default, lo=0, hi=10**9):
+        """Event numbers come from callers we do not control: always an int in range, never text that would be spoken."""
+        try:
+            return max(lo, min(hi, int(float(v)))) if v not in (None, "") else default
+        except (TypeError, ValueError, OverflowError):
+            return default
 
     def _enqueue(self, item, ecfg):
         Q = self.cfg["queue"]

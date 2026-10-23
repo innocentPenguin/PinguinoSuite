@@ -207,7 +207,7 @@ def p_replay(h, b):
 
 
 def g_history(h, q):
-    return {"history": brain.tail(int(q.get("n") or 60))}
+    return {"history": brain.tail(max(1, min(500, int(q.get("n") or 60))))}
 
 
 def g_presets(h, q):
@@ -318,7 +318,7 @@ def p_soundcheck(h, b):
 def g_intervals(h, q):
     since = float(q.get("since") or 0)
     now = time.time()
-    return {"now": now, "speaking": bool(brain.current) or brain.player.busy, "intervals": [[a, b] for a, b in brain.intervals if b >= since]}
+    return {"now": now, "speaking": bool(brain.current) or brain.player.busy, "intervals": [[a, b] for a, b in list(brain.intervals) if b >= since]}
 
 
 def g_devices(h, q):
@@ -536,7 +536,8 @@ class H(BaseHTTPRequestHandler):
     def _body(self):
         try:
             n = int(self.headers.get("content-length") or 0)
-            return json.loads(self.rfile.read(n) or b"{}") if 0 < n < 4_000_000 else {}
+            body = json.loads(self.rfile.read(n) or b"{}") if 0 < n < 4_000_000 else {}
+            return body if isinstance(body, dict) else {}
         except ValueError:
             return {}
 

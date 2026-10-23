@@ -222,6 +222,8 @@ def wav_to_np(b):
     with wave.open(io.BytesIO(b)) as w:
         ch, sw, sr, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
         raw = w.readframes(n)
+    if sw not in (1, 2):
+        raise ValueError("only 8-bit and 16-bit WAV files are supported")
     a = np.frombuffer(raw, dtype=np.int16 if sw == 2 else np.uint8).astype(np.float32)
     if sw == 1:
         a = (a - 128) * 256
@@ -430,7 +432,8 @@ class Player:
         with self.lock:
             fd, f = tempfile.mkstemp(suffix=".wav", prefix="pvp-")
             os.close(fd)
-            open(f, "wb").write(wav)
+            with open(f, "wb") as fh:
+                fh.write(wav)
             try:
                 self.playing_until = time.time() + seconds
                 self.ws.PlaySound(f, self.ws.SND_FILENAME | self.ws.SND_ASYNC)
@@ -450,10 +453,16 @@ class Player:
     def _play_sd(self, wav, seconds, dev):
         import sounddevice as sd
         a, sr = wav_to_np(wav)
+        extra = None
+        try:
+            if "wasapi" in sd.query_hostapis(sd.query_devices(dev)["hostapi"])["name"].lower():
+                extra = sd.WasapiSettings(auto_convert=True)      # shared mode otherwise refuses 22.05 kHz ("Invalid sample rate")
+        except Exception:
+            extra = None
         with self.lock:
             try:
                 self.playing_until = time.time() + seconds
-                sd.play(a, sr, device=dev)
+                sd.play(a, sr, device=dev, extra_settings=extra)
                 end = time.time() + seconds + 0.2
                 while time.time() < end:
                     if self.stopped.wait(0.05):
