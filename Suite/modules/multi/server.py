@@ -112,6 +112,8 @@ def _alert_from_message(m):
         return
     if m.event == "hype":
         hypebar.observe("hype", meta)
+    if m.event == "hype" and not config.settings().get("feed_hype_alerts", False):
+        return                      # the Host fires hype_start/level/end itself on /api/alerts/fire; the feed item only feeds the bar
     if m.event in ("follow", "sub", "resub", "gift", "cheer") and hub.loop:
         hub.loop.call_soon_threadsafe(goal.observe, m.event, m.amount)
     ev = dict(meta, platform=m.platform, id=m.id, type=m.event, user=m.user, display=m.display, amount=m.amount, first_time=bool(meta.get("first_time") or m.first_time),

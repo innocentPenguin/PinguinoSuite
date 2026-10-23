@@ -20,6 +20,7 @@ DEFAULTS = {
     "kick_enabled": False,            # Kick: UNOFFICIAL read-only chat feed (public Pusher socket); official events come by webhook (POST /hook/kick)
     "kick_channel": "",               # channel slug
     "link_url": "",                   # blank = http://127.0.0.1:7777 (Link): follow the OBS scene for alert profiles (scene_follow.py)
+    "feed_hype_alerts": False,        # hype-train alerts from the Host activity feed (OFF: the Host fires them directly on /api/alerts/fire)
     "intro_enabled": True,            # play viewers' approved intros (Host) for first-time / returning chatters
     "kick_client_id": "",             # Kick developer app client id (secret goes to Credential Manager as kick_client_secret)
     "kick_redirect_uri": "http://127.0.0.1:8766/auth/kick/callback",
