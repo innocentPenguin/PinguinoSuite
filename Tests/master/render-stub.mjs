@@ -11,6 +11,8 @@ process.on('unhandledRejection', e => errors.push('rejection: ' + String(e && e.
 
 const els = new Map(); let customsHtml = '';
 const buttonsFor = () => [...customsHtml.matchAll(/<button[^>]*data-st="([^"]+)"[^>]*>/g)].map(m => mkBtn(m[1]));
+const wsButtons = () => [...customsHtml.matchAll(/<button[^>]*data-ws="([^"]+)"[^>]*>/g)].map(m => { const b = mkBtn('ws:' + m[1]); b.dataset.ws = m[1]; return b; });
+const wheelFx = fs.readFileSync(path.join(here, 'fixtures', 'wheel_public.json'), 'utf8');
 const btns = new Map(); const mkBtn = st => { if (btns.has(st)) return btns.get(st); const cls = new Set(); const b = { dataset: { st }, disabled: false, textContent: '', style: { setProperty() { } }, classList: { toggle(k, on) { (on === undefined ? !cls.has(k) : on) ? cls.add(k) : cls.delete(k); }, add: k => cls.add(k), remove: k => cls.delete(k), contains: k => cls.has(k) }, _cls: cls }; btns.set(st, b); return b; };
 function mk(sel) {
   const store = { dataset: {}, style: { setProperty() { }, removeProperty() { } }, hidden: false, value: '', textContent: '', className: '', children: [], _cls: new Set() };
@@ -19,7 +21,7 @@ function mk(sel) {
     get(_, k) {
       if (k === Symbol.iterator) return [][Symbol.iterator].bind([]); if (k === Symbol.toPrimitive) return () => ''; if (k === 'then') return undefined;
       if (k === 'classList') return cl; if (k in store) return store[k]; if (k === 'length') return 0; if (k === 'isConnected') return true;
-      if (k === 'querySelectorAll') return s => /data-st/.test(s) ? buttonsFor() : []; if (k === 'querySelector') return s => sel + ' ' + s === 'x' ? null : mk(sel + ' ' + s);
+      if (k === 'querySelectorAll') return s => /data-ws/.test(s) ? wsButtons() : /data-st/.test(s) ? buttonsFor() : []; if (k === 'querySelector') return s => sel + ' ' + s === 'x' ? null : mk(sel + ' ' + s);
       if (k === 'firstChild' || k === 'nextSibling' || k === 'firstElementChild') return null; if (k === 'closest') return () => null; if (k === 'getAttribute') return () => null; if (k === 'getBoundingClientRect') return () => ({ left: 0, top: 0, width: 0, height: 0 });
       if (k === 'offsetWidth' || k === 'clientWidth' || k === 'scrollWidth' || k === 'scrollTop' || k === 'scrollHeight' || k === 'clientHeight') return 0;
       return self;
@@ -30,7 +32,7 @@ function mk(sel) {
   store.children = self; return self;
 }
 const getEl = sel => { if (!els.has(sel)) els.set(sel, mk(sel)); return els.get(sel); };
-const doc = { querySelector: getEl, querySelectorAll: s => /data-st/.test(s) ? buttonsFor() : [], createElement: () => mk('new'), body: mk('body'), documentElement: mk('html'), addEventListener() { }, hidden: false, activeElement: null, getElementById: id => getEl('#' + id), createTextNode: () => mk('t'), title: '' };
+const doc = { querySelector: getEl, querySelectorAll: s => /data-ws/.test(s) ? wsButtons() : /data-st/.test(s) ? buttonsFor() : [], createElement: () => mk('new'), body: mk('body'), documentElement: mk('html'), addEventListener() { }, hidden: false, activeElement: null, getElementById: id => getEl('#' + id), createTextNode: () => mk('t'), title: '' };
 const realBody = u => { if (!REAL) return u.includes('/api/obs/tree') ? '{"connected":false,"scenes":[],"folders":[],"items":[]}' : '{}'; const p = (u.startsWith('http://m/') ? 'm_' : '') + u.replace(/^https?:\/\/[^/]+\/api\//, '').replace(/[/?&=]/g, '_'); try { return fs.readFileSync(path.join(REAL, p + (p.endsWith('.json') ? '' : '.json')), 'utf8'); } catch { return '{}'; } };
 const store = new Map(); const ctx = {
   document: doc, localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) }, location: { search: '?host=http://h&music=http://m&multi=http://x', hash: '', href: 'http://t/master.html' },
@@ -38,7 +40,7 @@ const store = new Map(); const ctx = {
   addEventListener() { }, removeEventListener() { }, requestAnimationFrame: f => setTimeout(f, 0), matchMedia: () => ({ matches: false, addEventListener() { } }), getComputedStyle: () => ({}), innerWidth: 900, innerHeight: 800, open() { },
   fetch: async (u, o) => { u = String(u);
     if (/\/api\/events/.test(u)) return new Promise(() => { });   // the live stream never connects: polling carries the page
-    const body = /\/api\/customs\/state/.test(u) ? (fixture) : realBody(u);
+    const body = /\/api\/customs\/state/.test(u) ? (fixture) : (!REAL && /wheel.public/.test(u)) ? wheelFx : realBody(u);
     return { ok: true, status: 200, headers: { get: () => 'application/json' }, text: async () => body, json: async () => JSON.parse(body) }; },
 };
 ctx.window = ctx; ctx.parent = ctx; ctx.self = ctx; ctx.globalThis = ctx; vm.createContext(ctx);
@@ -53,6 +55,10 @@ console.log('buttons with .cur: ' + JSON.stringify(cur) + '   buttons seen: ' + 
 console.log('errors: ' + (errors.length ? '\n  ' + errors.slice(0, 6).join('\n  ') : 'none'));
 console.log('customs note: ' + (shownNote ? note : '(hidden)'));
 let bad = false;
+const wheelBtns = (customsHtml.match(/data-wa="[a-z]+"/g) || []).length;
+console.log('wheel admin buttons in markup: ' + wheelBtns + '   wheel highlights: ' + JSON.stringify(cur.filter(x => x.startsWith('ws:'))));
+if (wheelBtns < 19) { bad = true; console.log('wheel admin controls missing from the Wheel panel'); }
+if (!REAL && !wantThrow) for (const want of ['ws:mode:random', 'ws:size:2']) if (!cur.includes(want)) { bad = true; console.log('MISSING wheel highlight: ' + want); }
 if (!/Customs data: (live|updated)/.test(String(getEl('#cu-data').textContent))) { bad = true; console.log('data line missing'); }
 const relevant = REAL ? errors : errors.filter(e => /ustoms/.test(e));   // without real bodies the other panes get '{}' and may fail to draw; only Customs errors count then
 if (!wantThrow) { for (const want of ['mode:balanced', 'format:2v2', 'gamemode:standard', 'koth:off']) if (!cur.includes(want)) { bad = true; console.log('MISSING highlight: ' + want); } if (relevant.length) bad = true; }

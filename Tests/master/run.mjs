@@ -210,6 +210,33 @@ await t('activity defaults: one table, ordered Host steps', () => {
   assert.deepEqual(C.activityPlan('casual', { koth: true, format: '1v1' }), [['koth', 'off']]); assert.deepEqual(C.activityPlan('nope', {}), []);
 });
 
+await t('wheel admin: !wheel commands are whitelisted and validated', () => {
+  assert.equal(C.wheelCmd('close'), '!wheel close'); assert.equal(C.wheelCmd('undo'), '!wheel undo'); assert.equal(C.wheelCmd('end'), '!wheel end');
+  assert.equal(C.wheelCmd('mode', 'balanced'), '!wheel mode balanced'); assert.equal(C.wheelCmd('mode', 'chaos'), null); assert.equal(C.wheelCmd('size', '3'), '!wheel size 3'); assert.equal(C.wheelCmd('size', '5'), null);
+  assert.equal(C.wheelCmd('odd', 'partial'), '!wheel odd partial'); assert.equal(C.wheelCmd('eligibility', 'subs'), '!wheel eligibility subs'); assert.equal(C.wheelCmd('odd', 'x; !queue clear'), null);
+  assert.equal(C.wheelCmd('remove', '@Ann_1'), '!wheel remove Ann_1'); assert.equal(C.wheelCmd('remove', 'a b'), null); assert.equal(C.wheelCmd('remove', ''), null);
+  assert.equal(C.wheelCmd('mmr', 'Ann_1 1500'), '!wheel mmr Ann_1 1500'); assert.equal(C.wheelCmd('mmr', 'Ann_1 99999'), null); assert.equal(C.wheelCmd('mmr', 'Ann_1'), null);
+  assert.equal(C.wheelCmd('spin'), null); assert.equal(C.wheelCmd('reset'), null);   // spin / reset / new keep their own Host routes
+});
+await t('wheel admin: view from the real GET /api/wheel/public body; fresh overlay wins, stale does not; Host change round trip', async () => {
+  const real = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'wheel_public.json'), 'utf8'));
+  const body = (await api.get('/api/wheel/public')).json;
+  let v = C.wheelView(body, {}, 1000); assert.equal(v.mode, real.mode); assert.equal(v.size, String(real.teamSize)); assert.equal(v.entrants, real.entrantCount); assert.equal(v.teams, 0); assert.equal(v.waitlist, 0); assert.equal(v.odd, null);
+  assert.equal(C.wheelView(body, { size: { v: '4', until: 2000 } }, 1000).size, '4'); assert.equal(C.wheelView(body, { size: { v: '4', until: 500 } }, 1000).size, String(real.teamSize));
+  const r = await api.post('/api/run', { text: '!wheel size 4', user: 'broadcaster' }); assert.ok(r.ok);
+  assert.equal(C.wheelView((await api.get('/api/wheel/public')).json, {}, 1000).size, '4');
+  await api.post('/api/run', { text: '!wheel mode balanced', user: 'broadcaster' }); assert.equal(C.wheelView((await api.get('/api/wheel/public')).json).mode, 'balanced');
+});
+await t('wheel admin buttons: destructive ones are two-click, one in flight per control, optimistic overlay rolls back, every Host call goes through a whitelisted text', () => {
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
+  const a = js.indexOf('async function wheelAdmin'), end = js.indexOf('const curCustoms', a); assert.ok(a > 0 && end > a); const f = js.slice(a, end);
+  assert.ok(f.indexOf('C.wheelCmd(') < f.indexOf('armed(b)') && f.indexOf('armed(b)') < f.indexOf('api.post('), 'validate, then arm, then post');
+  assert.ok(/wbusy\.has\(sub\)/.test(f) && /finally \{ wbusy\.delete\(sub\)/.test(f), 'in-flight guard');
+  assert.ok(/undo\(\)/.test(f) && /delete ui\.wov\[opt\]/.test(f), 'rollback of the optimistic overlay');
+  assert.ok(/if \(ui\.sim\)/.test(f) && f.indexOf('if (ui.sim)') < f.indexOf('api.post('), 'the simulator never posts');
+  const html = js.slice(js.indexOf('function wheelAdminHtml'), a);
+  for (const w of ['undo', 'end', 'remove']) assert.ok(html.includes("'" + w + "', null, " ) && html.split("'" + w + "', null, "+ "'").length > 1 && /warn/.test(html.slice(html.indexOf("'" + w + "', null"), html.indexOf("'" + w + "', null") + 40)), w + ' must carry the warn class (two-click)');
+});
 await t('wheel: Tourney maps to !wheel open only; queue-add / remove / cancel / queue-add round trip', async () => {
   assert.equal(C.customsText('wheel', 'open'), '!wheel open'); assert.equal(C.customsText('wheel', 'x; !queue clear'), null);
   const a = await api.post('/api/wheel/queue-add', { users: ['ann', 'bob'] }); assert.deepEqual(a.json.added, ['ann', 'bob']);

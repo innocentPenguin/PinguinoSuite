@@ -169,6 +169,26 @@
   }
   // final 1-based queue position when a row is dropped before/after row `target` (fromIdx = -1 when the player is not in the queue yet)
   function dropPos(fromIdx, target, after) { let j = target + (after ? 1 : 0); if (fromIdx >= 0 && fromIdx < j) j--; return Math.max(0, j) + 1; }
+
+  // Wheel admin = the chat command "!wheel ..." (the site has no wheel admin page; the Host runs it through POST /api/run as the broadcaster).
+  // Spin / New round / Reset keep their own Host routes (/api/wheel/spin|new|reset); remove and queue-add use /api/wheel/remove and /queue-add.
+  const WHEEL_OPT = { mode: ['random', 'balanced'], size: ['1', '2', '3', '4'], odd: ['waitlist', 'trio', 'partial', 'hold', 'mod'], eligibility: ['all', 'subs'] };
+  const WHEEL_PLAIN = ['open', 'close', 'draw', 'undo', 'announce', 'end'];
+  function wheelCmd(sub, val) {
+    sub = String(sub || ''); val = String(val == null ? '' : val).trim().replace(/^@/, '');
+    if (WHEEL_PLAIN.includes(sub)) return '!wheel ' + sub;
+    if (WHEEL_OPT[sub]) return WHEEL_OPT[sub].includes(val) ? '!wheel ' + sub + ' ' + val : null;
+    if (sub === 'remove') return /^[A-Za-z0-9_]{2,25}$/.test(val) ? '!wheel remove ' + val : null;
+    if (sub === 'mmr') { const m = /^([A-Za-z0-9_]{2,25})[ :]+([0-9]{1,5})$/.exec(val); return m && +m[2] <= 20000 ? '!wheel mmr ' + m[1] + ' ' + (+m[2]) : null; }
+    return null;
+  }
+  // what the segmented buttons highlight: the Host's value (GET /api/wheel/public) unless a just-clicked overlay is still fresh
+  function wheelView(w, ov, now) {
+    w = w || {}; ov = ov || {}; now = now || Date.now();
+    const pick = (k, hostV) => { const o = ov[k]; let v = o && o.until > now ? o.v : hostV; v = v == null ? null : String(v).toLowerCase(); return v && WHEEL_OPT[k].includes(v) ? v : null; };
+    return { mode: pick('mode', w.mode), size: pick('size', w.teamSize), odd: pick('odd', w.oddPolicy), eligibility: pick('eligibility', w.eligibility),
+      status: w.status || null, entrants: w.entrantCount != null ? w.entrantCount : (w.names || []).length, teams: (w.teams || []).length, waitlist: (w.waitlist || []).length };
+  }
   function customsText(action, value) { const f = CUSTOMS[action]; return f ? f(value == null ? '' : String(value)) : null; }
 
   /* ---------- SSE parsing (fetch stream or EventSource text): feed chunks, get {id,event,data} messages ---------- */
@@ -427,5 +447,5 @@
     return { known, on, name: on ? 'takeback' : 'songify', label: on ? 'Take back' : 'Hand off to Songify', armLabel: on ? 'Sure? Take the music back' : 'Sure? Hand the music to Songify',
       text: on == null ? 'State unknown (the player is not answering)' : (on ? 'Songify has the music' : 'The bot runs the music') + (known ? '' : ' (last action, not confirmed)') };
   }
-  return { songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

@@ -58,6 +58,10 @@ Everything here talks to the real Host. Use the 🧪 Simulator button first (fak
 | Wheel: New round, Reset | **DO NOT CLICK on a live stream** (Reset: two clicks) | Entrants cleared | — |
 | Wheel: Queue / Undo | CAUTION | Queue copies waiting players onto the wheel, button becomes Undo; Undo removes exactly those | Duplicates on the wheel |
 | Wheel: Tourney | CAUTION (opens tournament sign-ups in chat) | Wheel status becomes open | — |
+| Wheel: Close sign-ups, Announce teams | **DO NOT CLICK on a live stream** (posts to chat) | Wheel status closed / teams posted | — |
+| Wheel: Undo draw, End tournament, Remove, Reset | **DO NOT CLICK on a live stream** (two clicks; takes teams back / ends the tournament) | Armed first click, second click sends | Armed label stuck |
+| Wheel: Mode, Team size, Odd player, Who can join | CAUTION (changes the live tournament rules; sim mode is safe) | Clicked value lights at once, stays after the Host poll; on error it reverts with a toast | Highlight flips back |
+| Wheel: Set MMR | CAUTION (needs name + number, e.g. name 1500) | Toast Sent !wheel mmr … | Refused text for a bad number |
 
 ### 1.4 Feed tab
 | Control | Safe? | Expected | Failure |

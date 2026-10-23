@@ -41,7 +41,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
-    drawErr: {}, customsAt: 0,
+    drawErr: {}, customsAt: 0, wov: {},
     wq: ls.get('wq') || null, teamsOv: {}, si: Object.assign({ title: '', description: '', tags: '', game: '', plat: { twitch: true, youtube: true, kick: false }, at: '', privacy: 'public' }, ls.get('si') || {}), ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, heads: {}, modsOk: null, pre: null, preOpen: false, introOpen: false, streaksOpen: false, introGone: new Set(), tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
@@ -388,8 +388,43 @@
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
         ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div>`)}
         ${sec('c-sim', 'Player simulator', `<div class="btns">${b('+ Player', 'sim', 'add')}${b('+ 4', 'sim', 'add4')}${b('+ 8', 'sim', 'add8')}${b('Remove one', 'sim', 'rm')}${b('Reset sim', 'sim', 'reset', 'rd')}</div><div class="row" style="margin-top:6px"><button class="sm" id="cu-simchat" title="Speak the simulator's events in the real Twitch chat (Chatty), so you can judge the wording">Chat: ON</button><span class="faint sm" id="cu-simnote"></span></div>`)}
-        ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="btns" style="margin-top:6px"><button class="sm" id="wh-q" data-wq="queue">Queue</button><button class="sm" id="wh-t" data-wq="tourney" title="Open the wheel for tournament sign-ups (!wheel open)">Tourney</button></div><div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
+        ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="btns" style="margin-top:6px"><button class="sm" id="wh-q" data-wq="queue">Queue</button><button class="sm" id="wh-t" data-wq="tourney" title="Open the wheel for tournament sign-ups (!wheel open)">Tourney</button></div>${wheelAdminHtml()}<div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
       </div>`;
+  }
+  /* Wheel admin = the chat command !wheel (the website has no wheel admin page; the Host runs it through POST /api/run). Click-path: CAUTION, every button here is a real stream effect. */
+  function wheelAdminHtml() {
+    const wb = (label, sub, v, cls, tip) => `<button class="sm ${cls || ''}" data-wa="${sub}"${v != null ? ` data-v="${v}"` : ''}${tip ? ` title="${tip}"` : ''}>${label}</button>`;
+    const ws = (key, items) => `<div class="seg">${items.map(([l, v]) => `<button class="sm" data-wa="${key}" data-v="${v}" data-ws="${key}:${v}">${l}</button>`).join('')}</div>`;
+    return `<div class="btns" style="margin-top:6px">${wb('Close sign-ups', 'close', null, '', '!wheel close')}${wb('Announce teams', 'announce', null, '', '!wheel announce: post the teams to chat')}${wb('Undo draw', 'undo', null, 'warn', '!wheel undo: take back the last draw (click twice)')}${wb('End tournament', 'end', null, 'rd warn', '!wheel end (click twice)')}</div>
+      <div class="faint sm" style="margin-top:6px">Mode</div>${ws('mode', [['Random', 'random'], ['Balanced', 'balanced']])}
+      <div class="faint sm" style="margin-top:4px">Team size</div>${ws('size', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']])}
+      <div class="faint sm" style="margin-top:4px">Odd player</div>${ws('odd', [['Waitlist', 'waitlist'], ['Trio', 'trio'], ['Partial', 'partial'], ['Hold', 'hold'], ['Mod', 'mod']])}
+      <div class="faint sm" style="margin-top:4px">Who can join</div>${ws('eligibility', [['Everyone', 'all'], ['Subs', 'subs']])}
+      <div class="row" style="margin-top:6px"><input type="text" id="wh-user" placeholder="Remove entrant" style="flex:1;min-width:0" autocomplete="off" spellcheck="false">${wb('Remove', 'remove', null, 'rd warn', 'Take this name off the wheel (click twice)')}</div>
+      <div class="row" style="margin-top:4px"><input type="text" id="wh-mmr" placeholder="Set MMR: name 1500" style="flex:1;min-width:0" autocomplete="off" spellcheck="false">${wb('Set MMR', 'mmr', null, '', '!wheel mmr <name> <n> (0-20000)')}</div>`;
+  }
+  const wbusy = new Set();
+  async function wheelAdmin(b) {
+    if (b.disabled) return;
+    const sub = b.dataset.wa; let val = b.dataset.v || ''; if (sub === 'remove') val = $('#wh-user').value; else if (sub === 'mmr') val = $('#wh-mmr').value;
+    const text = C.wheelCmd(sub, val);
+    if (!text) { toast(sub === 'remove' ? 'Type a Twitch name first' : sub === 'mmr' ? 'Type: name 1500 (0 to 20000)' : 'Not allowed: ' + sub, true); return; }
+    if (b.classList.contains('warn') && !armed(b)) return;
+    if (wbusy.has(sub)) return; wbusy.add(sub); b.disabled = true; flash(b);
+    const opt = C.WHEEL_OPT[sub] ? sub : null, undo = () => { if (opt) { delete ui.wov[opt]; schedule('customs'); } };
+    try {
+      if (opt) { ui.wov[opt] = { v: val, until: Date.now() + 5000 }; schedule('customs'); setTimeout(() => schedule('customs'), 5100); }
+      if (ui.sim) {   // simulator: nothing leaves the app
+        const W = simWheel(), n = text.slice(7);
+        if (opt) { W[opt === 'size' ? 'teamSize' : opt === 'odd' ? 'oddPolicy' : opt] = opt === 'size' ? +val : val; } else if (sub === 'open') W.status = 'open'; else if (sub === 'close') W.status = 'closed'; else if (sub === 'end') { W.entrants = []; W.teams = []; W.status = 'none'; } else if (sub === 'undo') { W.teams = []; W.status = 'closed'; } else if (sub === 'remove') W.entrants = W.entrants.filter(u => u !== val.toLowerCase());
+        toast('Sim wheel: ' + n); schedule('customs'); return;
+      }
+      ui.tookControl = true; await tokenReady;
+      const r = sub === 'remove' ? await api.post('/api/wheel/remove', { users: [val.toLowerCase()] }) : await api.post('/api/run', { text, user: 'broadcaster' });
+      if (!r.ok || (r.json && r.json.ok === false)) { undo(); wheelErr(r.ok ? { status: 200, json: r.json } : r, text, sub === 'remove' ? '/api/wheel/remove' : '/api/run'); return; }
+      toast('Sent ' + text); if (sub === 'remove') $('#wh-user').value = ''; if (sub === 'mmr') $('#wh-mmr').value = ''; pollers.wheel.kick();
+    } catch (e) { undo(); toast(text + ': ' + (e && e.message || e), true); }
+    finally { wbusy.delete(sub); b.disabled = false; }
   }
   const curCustoms = () => (ui.sim ? ui.simState : S.get('customs'));
   const strikesFor = u => { const c = curCustoms(), k = String(u).toLowerCase(), x = c && c.strikes && c.strikes[k]; return C.normStrike(x || ui.strikeOv[k]); };
@@ -564,14 +599,15 @@
       fb.title = live ? 'Bring the next players from the queue into every empty slot of this game' : 'Start a game from the queue';
     }
     $('#cu-manual').hidden = !(c && c.mode === 'picks');
-    const W0 = ui.sim && ui.simState.wheel, w = ui.sim ? { status: W0.status, entrantCount: W0.entrants.length, names: W0.entrants, mode: 'random', teamSize: W0.teamSize, teams: W0.teams, waitlist: [] } : S.get('wheel');
+    const W0 = ui.sim && ui.simState.wheel, w = ui.sim ? { status: W0.status, entrantCount: W0.entrants.length, names: W0.entrants, mode: W0.mode || 'random', oddPolicy: W0.oddPolicy, eligibility: W0.eligibility, teamSize: W0.teamSize, teams: W0.teams, waitlist: [] } : S.get('wheel');
     { const wq = $('#wh-q'); wq.textContent = ui.wq ? 'Undo' : 'Queue'; wq.classList.toggle('cur', !!ui.wq); wq.disabled = !ui.wq && !queueNames().length; wq.title = ui.wq ? 'Take back what Queue added: they leave the wheel and, if they are still on it, return to the queue in their old order' : 'Copy everyone in the customs queue onto the wheel'; $('#wh-t').classList.toggle('cur', !!w && w.status === 'open'); }
+    { const wv = C.wheelView(w, ui.wov); document.querySelectorAll('#tab-customs [data-ws]').forEach(x => { const [k, v] = x.dataset.ws.split(':'); x.classList.toggle('cur', wv[k] === v); }); }
     $('#wh-badge').textContent = w ? '· ' + (w.status || '?') : '';
     const kv = [['Entrants', w ? (w.entrantCount ?? (w.names || []).length) : '–'], ['Mode', w ? [w.label || w.mode, w.teamSize ? w.teamSize + 'v' + w.teamSize : ''].filter(Boolean).join(' · ') : '–'], ['Teams', w ? (w.teams || []).length : '–'], ['Waitlist', w ? (w.waitlist || []).length : '–']];
     const box = $('#wh-kv'), sigv = C.sig(kv); if (box._s !== sigv) { box._s = sigv; box.textContent = ''; kv.forEach(([a, b2]) => box.append(h('b', '', a), h('span', '', String(b2)))); }
   }
 
-  const normWheel = w => (w && w.public && typeof w.public === 'object' ? Object.assign({}, w.public, { status: w.status || w.public.status, round: w.round, teamSize: w.teamSize || w.public.teamSize }) : w);
+  const normWheel = w => (w && w.public && typeof w.public === 'object' ? Object.assign({}, w.public, { status: w.status || w.public.status, round: w.round, teamSize: w.teamSize || w.public.teamSize, mode: w.mode || w.public.mode, oddPolicy: w.oddPolicy || w.public.oddPolicy, eligibility: w.eligibility || w.public.eligibility }) : w);
 
   /* ---------- stream info: title / description / tags to every platform. Never goes live: it edits text and can schedule a YouTube entry on a click. ---------- */
   const PLAT = [['twitch', 'Twitch', 'Host'], ['youtube', 'YouTube', 'Multi'], ['kick', 'Kick', 'Multi']];
@@ -942,6 +978,7 @@
     if (b && b.classList.contains('swc')) { setTeam(b.closest('.tn').dataset.side, { color: b.dataset.c }); return; }
     if (b && b.classList.contains('tn-reset')) { const k = b.closest('.tn').dataset.side; setTeam(k, { name: C.TEAM_DEFAULTS[k].name }).then(() => setTeam(k, { color: C.TEAM_DEFAULTS[k].color })); return; }
     if (b && b.dataset.ask) { askDo(b.dataset.ask); return; }
+    if (b && b.dataset.wa) { wheelAdmin(b); return; }
     if (b && b.dataset.wq) {
       if (b.disabled) return; flash(b);
       if (b.dataset.wq === 'queue') ui.wq ? wheelUndo() : wheelQueue(); else sendCustom('wheel', 'open', b);
