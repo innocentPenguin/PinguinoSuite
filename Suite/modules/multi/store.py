@@ -24,6 +24,19 @@ _ORDER = ["none", "low", "medium", "high"]
 _TIERS_FROM = {t: _ORDER[i:] for i, t in enumerate(_ORDER)}
 
 
+def _limit(n, default=200, cap=5000):
+    """Safe LIMIT: SQLite treats a negative LIMIT as 'no limit'; None/NaN/strings must not reach the query either."""
+    try:
+        n = int(n)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return max(1, min(n, cap))
+
+
+def _like(term):
+    return "%" + str(term).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 def _msg(r):
     d = json.loads(r["json"])
     d["score"], d["tier"] = r["score"], r["tier"]
@@ -78,11 +91,11 @@ class Store:
         if before:
             q += " AND ts<?"
             a.append(before)
-        if min_tier:
+        if min_tier in _TIERS_FROM:                  # unknown tier name: no filter (was a KeyError -> HTTP 500)
             q += " AND tier IN (%s)" % ",".join("?" * len(_TIERS_FROM[min_tier]))
             a += _TIERS_FROM[min_tier]
         q += " ORDER BY ts DESC LIMIT ?"
-        a.append(limit)
+        a.append(_limit(limit))
         with self.lock:
             rows = self.db.execute(q, a).fetchall()
         return [_msg(r) for r in reversed(rows)]
@@ -98,15 +111,15 @@ class Store:
     def search(self, term, limit=100):
         with self.lock:
             rows = self.db.execute(
-                "SELECT json,score,tier FROM messages WHERE text LIKE ? OR user LIKE ? ORDER BY ts DESC LIMIT ?",
-                (f"%{term}%", f"%{term}%", limit)).fetchall()
+                "SELECT json,score,tier FROM messages WHERE text LIKE ? ESCAPE '\\' OR user LIKE ? ESCAPE '\\' ORDER BY ts DESC LIMIT ?",
+                (_like(term), _like(term), _limit(limit, 100))).fetchall()
         return [_msg(r) for r in rows]
 
     def user_history(self, platform, user_id, limit=20):
         with self.lock:
             rows = self.db.execute(
                 "SELECT json,score,tier FROM messages WHERE platform=? AND user_id=? ORDER BY ts DESC LIMIT ?",
-                (platform, user_id, limit)).fetchall()
+                (platform, user_id, _limit(limit, 20))).fetchall()
         return [_msg(r) for r in rows]
 
     def user_count(self, platform, user_id):
@@ -142,7 +155,13 @@ class Store:
         with self.lock:
             rows = self.db.execute("SELECT json FROM cards WHERE state IN (%s)" % ",".join("?" * len(states)),
                                    list(states)).fetchall()
-        return [json.loads(r["json"]) for r in rows]
+        out = []
+        for r in rows:
+            try:
+                out.append(json.loads(r["json"]))
+            except ValueError:                       # one corrupt row must not stop Multi from starting
+                continue
+        return out
 
     # windows / profiles ---------------------------------------------
     def save_window(self, w):
@@ -183,7 +202,12 @@ class Store:
     def kv_get(self, k, default=None):
         with self.lock:
             r = self.db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
-        return json.loads(r["v"]) if r else default
+        if not r:
+            return default
+        try:
+            return json.loads(r["v"])
+        except ValueError:
+            return default
 
     def kv_set(self, k, v):
         with self.lock:

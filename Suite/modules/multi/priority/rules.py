@@ -116,6 +116,8 @@ def is_question(text, min_len=4):
 def mentions_me(text, names):
     t = text.lower()
     for n in names:
+        if not n or not n.strip("_ "):               # an empty/underscore-only name made the pattern match every message
+            continue
         if re.search(r"(?<![a-z0-9_])@?" + re.escape(n.lower().rstrip("_")) + r"_?(?![a-z0-9_])", t):
             return True
     return False
