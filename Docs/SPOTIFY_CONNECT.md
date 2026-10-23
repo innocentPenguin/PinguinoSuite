@@ -44,7 +44,27 @@ Fake go-librespot = small stdlib HTTP server in tests/fakes.py (`/`, `/status`, 
 5. Your own volume: OBS has no separate monitor fader per source, so set it with the Windows volume mixer for the headphones (or Voicemeeter if you prefer); the stream's level is the OBS "Music" fader; Spotify's own volume (the Suite box, !volume) changes both at once. Keep the Spotify box high (70-100) and balance with the two faders.
 6. Make sure OBS "Desktop Audio" does not also capture the cable (Settings > Audio > Desktop Audio = your speakers, not CABLE Output), or the music will be doubled.
 7. The bot voice gets the same treatment on a second cable: see Docs\VOICE_ROUTING.md.
-Mac later: same steps with BlackHole (2ch) in place of VB-Cable; the Suite picks the audio-toolbox backend by itself. The Mac needs its own go-librespot binary (darwin arm64 or amd64) in `Suite\modules\spotifybin\mac\go-librespot`; the Windows exe is not used there and until the Mac binary exists the card says "not installed" and the browser player is used. After copying it: `chmod +x go-librespot` and clear the download quarantine with `xattr -d com.apple.quarantine go-librespot`, otherwise macOS refuses to start it (card: "could not start: PermissionError"). Voice routing on the Mac: Docs\VOICE_MAC.md.
+### Mac plan (not done yet; needs Ivan or the Mac owner, nothing here was downloaded or run on a Mac)
+The module already handles the Mac side: `connect.py` picks `bin/mac/go-librespot` and backend `audio-toolbox`, lists outputs through `system_profiler SPAudioDataType`, and on a start failure the card says how to fix permissions. Only the binary and the routing are missing.
+
+1. **Where the binary comes from** (pick one; both give the same program, v0.10.5 or newer):
+   - *Release file:* github.com/devgianlu/go-librespot/releases/latest, the asset named for darwin and your chip (Apple Silicon = arm64, Intel = amd64). Check the exact asset name on that page, it is not guessed here. Before using it compare its SHA-256 with the checksum the release page lists (if the page lists none, build it yourself instead): `shasum -a 256 <file>`. Record the verified version and hash in this doc when it is done.
+   - *Homebrew:* `brew install go-librespot` (the project README names this route). Copy the installed file (`$(brew --prefix)/bin/go-librespot`) to the folder below. A brew build links the decode libraries (libogg, libvorbis, flac, mpg123) from Homebrew, so keep those installed.
+   - *Build:* Go 1.25+, `brew install libogg libvorbis flac mpg123`, then `go build ./cmd/daemon` in a checkout of the repo (the README has the details).
+2. **Where it goes:** `Suite/modules/spotify/bin/mac/go-librespot` (file name without extension; this replaces the wrong path in older notes). If the release asset is a `.tar.gz`, unpack it first and copy only the daemon file.
+3. **Make it runnable:** in Terminal, from that folder:
+   - `chmod +x go-librespot`
+   - `xattr -d com.apple.quarantine go-librespot` (only needed for a file that came out of a browser download; if it says "No such xattr" it is already clean)
+   - Test: `./go-librespot --help` must print usage. If macOS says the developer cannot be verified, System Settings > Privacy & Security > "Allow anyway" once, or re-run the xattr step. If it complains about a missing `.dylib`, run `otool -L go-librespot` and install the listed Homebrew libraries.
+4. **Audio routing (BlackHole instead of VB-Cable):**
+   - Install BlackHole 2ch (existential.audio/blackhole, or `brew install blackhole-2ch`) and restart the Mac when asked. The voice uses BlackHole 16ch, see Docs\VOICE_MAC.md; two different devices keep the faders apart.
+   - Suite > Spotify > Setup card > Output = **BlackHole 2ch** (the list on the Mac comes from `system_profiler`, so the name must match what you see there). Save.
+   - OBS (Mac) > Sources > + > **Audio Input Capture** > name "Music" > Device = BlackHole 2ch. Its fader is the stream's music volume.
+   - Your own headphones: BlackHole is silent in the headphones. Easiest: Audio MIDI Setup > + > Create **Multi-Output Device** with your headphones and BlackHole 2ch (tick Drift Correction on the headphones), then choose that device as the Suite output. The headphone level is the Mac's volume for the headphones; the stream level stays the OBS fader. Alternative: leave the Suite on the headphones and set OBS Audio Input Capture to BlackHole while OBS monitors it ("Monitor and Output" in Advanced Audio Properties).
+   - OBS "Desktop Audio" must not also capture BlackHole, or the music is doubled.
+5. **First login on the Mac:** same as Windows. The card shows the pair code or link, Ivan opens it in Safari or Chrome and logs in himself. The credentials live in the module's config dir (never in git).
+6. **Check when done:** Setup card says "ready", the Spotify app shows a device "PinguinoSuite", play something there and the OBS Music meter moves.
+7. **Unknown until tried on a Mac:** whether `audio_device` accepts the BlackHole name exactly as `system_profiler` prints it (Windows has the same open question, section 5(b)); if not, set BlackHole as the Mac's default output for the test and report the exact device name go-librespot logs.
 
 ### As built, differences from sections 1-5 (53 review of 015b0cf, 2026-10-23)
 - Health: the engine tick drives `Connect.tick()` (no thread of its own); it polls `GET /status` and, until ready, `GET /auth/code` every 3 s (not `GET /` every 5 s and `/status` every 10 s).
@@ -54,7 +74,7 @@ Mac later: same steps with BlackHole (2ch) in place of VB-Cable; the Suite picks
 - No network I/O or waiting happens under the lock, so `info()` never stalls. Ready drops to starting only after 3 failed polls in a row; a failed spawn backs off like a crash (2, 5, 15, 60, 60 s, then it gives up until Restart).
 - `waiting_login`: changing port, bitrate or normalisation does not restart (applied at the next start), so the pairing code is kept. The login link (`code_url`) is only in `info()` while waiting_login; the user name in go-librespot's log lines is masked.
 - If the binary rejects `device_auth`, the card shows a login LINK instead of a code: open it in the same browser on this PC. Stop in the Suite turns Connect off persistently (`connect_on` false); Start turns it on. Auto-select of the device needs Spotify connected first.
-- Mac: there is no bundled binary. Download the darwin build into `bin/mac/`, `chmod +x` it and run `xattr -d com.apple.quarantine <file>`; the error text says so.
+- Mac: there is no bundled binary (see "Mac plan" above). Put the darwin build into `bin/mac/`, `chmod +x` it and run `xattr -d com.apple.quarantine <file>`; the error text says so.
 - Not yet proven live: that `audio_device` / `POST /player/output` accept the WASAPI name `CABLE Input (VB-Audio Virtual Cable)`; if not, set the app's output in Windows Settings > Sound > Volume mixer.
 
 ## 9. To verify in the spike before coding (51 review 2026-10-23 06:00)
