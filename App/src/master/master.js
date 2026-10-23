@@ -17,13 +17,15 @@
       else { const m = document.querySelector('meta[name="pinguino-token"]'); token = m ? m.content : ''; }
     } catch (e) { /* GETs work without it; writes will say so */ }
   })();
-  const api = C.createApi({ base: HOST, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000 });
+  const H = C.createHealth();   // per source (host / music / multi): consecutive failures -> poll back-off + the offline banner
+  const track = src => r => { if (r.status === 0 || r.status >= 502) H.fail(src); else H.ok(src); };
+  const api = C.createApi({ base: HOST, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000, onResult: track('host') });
 
   /* ---------- Spotify strip (the Spotify module, 127.0.0.1:8771) ---------- */
   const MUSIC = (new URLSearchParams(location.search).get('music')) || 'http://127.0.0.1:8771';
-  const mapi = C.createApi({ base: MUSIC, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000 });
+  const mapi = C.createApi({ base: MUSIC, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 4000, onResult: track('music') });
   const MULTI = (new URLSearchParams(location.search).get('multi')) || 'http://127.0.0.1:8766';   // PinguinoMulti: YouTube / Kick stream info
-  const xapi = C.createApi({ base: MULTI, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 15000 });
+  const xapi = C.createApi({ base: MULTI, fetch: (u, o) => fetch(u, o), getToken: () => token, timeoutMs: 15000, onResult: track('multi') });
 
   /* ---------- state ---------- */
   const cached = ls.get('cache', {});
@@ -257,6 +259,9 @@
     const off = $('#offline'); let msg = '';
     if (up === false) msg = 'The Host is not answering on ' + HOST.replace('http://', '') + '. Showing the last known state; controls are paused until it is back.';
     else if (!tree.connected) msg = 'OBS is not connected to the Host. Scenes below are the last ones seen (greyed); start OBS or check the websocket settings.';
+    const hn = u => u.split('//').pop();
+    if (H.down('music')) msg += (msg ? ' ' : '') + 'Spotify (' + hn(MUSIC) + ') is not answering: the player is paused.';
+    if (H.down('multi')) msg += (msg ? ' ' : '') + 'Multi (' + hn(MULTI) + ') is not answering: YouTube/Kick stream info waits for it.';
     off.hidden = !msg; off.textContent = msg;
     $('#pane-scenes').style.opacity = tree.connected && up !== false ? '' : '.6';
     $('#pane-sources').style.opacity = tree.connected && up !== false ? '' : '.6';
@@ -777,6 +782,7 @@
   /* ---------- rendering scheduler (poll-driven renders coalesce to one per tick; clicks render synchronously) ---------- */
   const dirty = new Set(); let raf = 0;
   function schedule(...names) { names.forEach(n => dirty.add(n)); if (!raf) raf = setTimeout(() => { raf = 0; const d = [...dirty]; dirty.clear(); d.forEach(n => R[n] && R[n]()); }, 0); }
+  H.onChange((src, st) => { schedule('bar'); if (st === 'up') polled.forEach(([p, s]) => s === src && p.kick()); });   // a source coming back is picked up at once, not after the back-off
   const R = { scenes: renderScenes, sources: renderSources, bar: renderBar, music: renderMusic, customs: renderCustoms, feed: renderFeed, cmds: renderCmds, overlays: renderOverlays };
   S.subscribe(ch => {
     if (ch.includes('tree')) schedule('scenes', 'sources', 'bar');
@@ -793,7 +799,8 @@
   let linkMs = []; const noteMs = ms => { linkMs.push(ms); if (linkMs.length > 8) linkMs.shift(); S.set({ link: { sse: S.get('link').sse, ms: Math.round(linkMs.reduce((a, b) => a + b, 0) / linkMs.length) } }); };
   const sse = () => S.get('link').sse;
   function seen(r) { if (r.status > 0) { if (S.get('hostUp') !== true) S.set({ hostUp: true }); noteMs(r.ms); } else if (S.get('hostUp') !== false) S.set({ hostUp: false }); }
-  const P = (interval, run, shouldRun) => C.createPoller({ interval, run, shouldRun: shouldRun || visible });
+  const polled = [];   // [poller, source]: a source coming back kicks all of its pollers at once
+  const P = (interval, run, shouldRun, src) => { src = src || 'host'; const p = C.createPoller({ interval: () => H.delay(src, typeof interval === 'function' ? interval() : interval), run, shouldRun: shouldRun || visible }); polled.push([p, src]); return p; };
   const pollers = {
     tree: P(() => (sse() ? 4000 : 450), async () => { const vs = viewScene(), q = vs && vs !== S.get('tree').current ? '?scene=' + encodeURIComponent(vs) : ''; const r = await api.get('/api/obs/tree' + q); seen(r); if (r.ok) { applyTree(r.json); saveCacheSoon(); } }),
     slow: P(() => (sse() ? 6000 : 2000), async () => {
@@ -822,10 +829,11 @@
       ui.heads = Object.assign(ui.heads, { shout: a.ok ? a.json : null, intro: b.ok ? b.json : null, health: c.json && Array.isArray(c.json.problems) ? c.json : null }); renderHeads();
     }, () => visible() && ui.tab === 'feed'),
     streaks: P(60000, async () => { const r = await api.get('/api/streaks'); if (r.ok) { ui.heads.streaks = r.json; renderHeads(); } }, () => visible() && ui.tab === 'feed'),
+    multi: P(10000, async () => { await xapi.get('/api/stream/info'); }, () => visible() && H.down('multi'), 'multi'),   // only while Multi is down: a read-only ping so the banner clears when it is back
     music: P(() => (document.hidden ? 8000 : 2500), async () => {
       const [a, b] = await Promise.all([mapi.get('/api/now'), mapi.get('/api/state')]);
       if (a.ok || b.ok) S.set({ now: a.ok ? a.json : S.get('now'), mstate: b.ok ? b.json : null, nowOk: true }); else S.set({ nowOk: false });
-    }),
+    }, null, 'music'),
     cmds: P(5000, async () => { const r = await api.get('/api/commands/profiles'); if (r.ok) S.set({ cmds: r.json.commands || [] }); }, () => visible() && ui.tab === 'cmds'),
     overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = { ovErr: a.ok ? null : (a.error || 'HTTP ' + a.status) }; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
   };

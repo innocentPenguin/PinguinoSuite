@@ -192,10 +192,11 @@
 
   /* ---------- Host client ---------- */
   function createApi(o) {
-    const base = o.base, f = o.fetch, tok = o.getToken || (() => ''), timeout = o.timeoutMs || 5000, inflight = new Map();
+    const base = o.base, f = o.fetch, onResult = o.onResult || (() => {}), tok = o.getToken || (() => ''), timeout = o.timeoutMs || 5000, inflight = new Map();
     // Plain words for the statuses a write can come back with (toasts show r.error): never a silent success.
     const why = (st, j) => st === 401 ? 'Not signed in to the Host (token rejected). Reopen the app' : st === 403 ? 'Refused by the Host (not allowed)' : st === 429 ? 'Host says slow down (rate limited). Try again in a moment' : st === 503 ? 'Host is busy or starting (503)' : j && (j.error || j.code) ? String(j.error || j.code) : 'HTTP ' + st;
-    async function call(method, path, body, extra) {
+    async function call(method, path, body, extra) { const r = await call0(method, path, body, extra); try { onResult(r); } catch (e) { /* observer only */ } return r; }
+    async function call0(method, path, body, extra) {
       const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timer = ctl ? setTimeout(() => ctl.abort(), (extra && extra.timeoutMs) || timeout) : null;
       const headers = {};
@@ -215,6 +216,19 @@
       const pr = call('POST', p, b || {}, x).finally(() => inflight.delete(key)); inflight.set(key, pr); return pr;
     }
     return { get: (p, x) => call('GET', p, null, x), post, base };
+  }
+
+  /* ---------- source health: Host / Spotify / Multi each count consecutive failures; pollers back off (x2 up to 30 s) while their source fails and recover on the first success ---------- */
+  function createHealth(o) {
+    const max = (o && o.maxMs) || 30000, DOWN = 2, fails = {}, subs = [];
+    const note = (n, st) => subs.forEach(cb => { try { cb(n, st); } catch (e) { /* a listener must not break the poll */ } });
+    return {
+      ok(n) { const was = fails[n] || 0; fails[n] = 0; if (was >= DOWN) note(n, 'up'); },
+      fail(n) { const f = fails[n] = (fails[n] || 0) + 1; if (f === DOWN) note(n, 'down'); },
+      fails: n => fails[n] || 0, down: n => (fails[n] || 0) >= DOWN,
+      delay: (n, base) => Math.min(Math.max(max, base), base * Math.pow(2, Math.min(fails[n] || 0, 8))),
+      onChange: cb => subs.push(cb),
+    };
   }
 
   /* ---------- poller: self-scheduling, one request in flight, kick() for "now", pausable, interval can change ---------- */
@@ -389,5 +403,5 @@
     }
   }
 
-  return { streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });

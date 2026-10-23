@@ -288,6 +288,20 @@ await t('watch streaks: top 5 rows from /api/streaks and the strip chip', async 
   assert.deepEqual(C.streakRows(null, 5), []); assert.deepEqual(C.streakRows({ board: [] }, 5), []);
   assert.equal(C.headsView(null, null, null, j).find(x => x.k === 'streaks').text, 'Streaks: User0 12'); assert.equal(C.headsView(null, null, null, { ok: true, board: [] }).length, 0);
 });
+await t('error budget: failures double the poll delay up to 30 s per source, down after 2, one success recovers and notifies once', async () => {
+  const H = C.createHealth(), ev = []; H.onChange((n, s) => ev.push(n + ':' + s));
+  assert.equal(H.delay('host', 1000), 1000); H.fail('host'); assert.equal(H.delay('host', 1000), 2000); assert.equal(H.down('host'), false);
+  H.fail('host'); assert.equal(H.delay('host', 1000), 4000); assert.equal(H.down('host'), true); assert.equal(H.down('music'), false, 'sources are independent');
+  for (let i = 0; i < 12; i++) H.fail('host'); assert.equal(H.delay('host', 1000), 30000, 'capped at 30 s'); assert.equal(H.delay('host', 2500), 30000); assert.equal(H.delay('host', 60000), 60000, 'a slow poller is never sped up');
+  H.ok('host'); assert.equal(H.delay('host', 1000), 1000); assert.equal(H.down('host'), false); H.ok('host');
+  assert.deepEqual(ev, ['host:down', 'host:up'], 'one down and one up notice, no repeats');
+  const bad = C.createApi({ base: 'http://127.0.0.1:1', fetch: (u, o) => fetch(u, o), timeoutMs: 800, onResult: r => (r.status === 0 || r.status >= 502 ? H.fail('x') : H.ok('x')) });
+  await bad.get('/api/status'); await bad.get('/api/status'); assert.equal(H.down('x'), true, 'two unreachable calls mark the source down');
+  const good = C.createApi({ base: 'http://127.0.0.1:' + port, fetch: (u, o) => fetch(u, o), onResult: r => (r.status === 0 || r.status >= 502 ? H.fail('x') : H.ok('x')) });
+  await good.get('/api/status'); assert.equal(H.down('x'), false, 'the first answer clears it');
+  const js = fs.readFileSync(new URL('../../App/src/master/master.js', import.meta.url), 'utf8');
+  assert.ok(js.includes("track('host')") && js.includes("track('music')") && js.includes("track('multi')") && js.includes("H.down('music')") && js.includes("H.down('multi')"), 'banner and trackers wired for Host, Spotify and Multi');
+});
 await t('last stream card: recapView shapes the Host recap, only https clips link; mock preview round trip', async () => {
   const v = C.recapView((await api.get('/api/recap/preview')).json); assert.equal(v.text, 'Recap text'); assert.equal(v.clipUrl, 'https://clips.twitch.tv/x'); assert.equal(v.views, 12); assert.equal(v.hasClip, true);
   assert.equal(C.recapView({ line: 'L', clip: { url: 'javascript:alert(1)', title: 'x' } }).hasClip, false); assert.equal(C.recapView({ line: 'L', clip: null }).text, 'L'); assert.equal(C.recapView(null).text, '');
