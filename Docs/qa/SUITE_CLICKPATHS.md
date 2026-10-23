@@ -177,3 +177,31 @@ Put results in Docs\qa\<date>-clickpaths.md: row, PASS / FAIL, what you saw, scr
 - Tab through the header: every control shows an orange focus ring. (SAFE)
 - Shrink the window to ~900 px: no sideways scrollbar in Feed/Stream/Overlays; a 150-character chat line wraps. (SAFE)
 - Host stopped: Feed and Commands show "The Host is offline ..." instead of an empty list. (SAFE)
+
+## 2. Master View post-rebuild live check (about 10 minutes, SAFE only)
+Do this OFF STREAM, right after a rebuild. Every step is read-only or touches only this window. Nothing here goes live, posts to chat, spins the wheel, or switches scenes. If a step says "DO NOT", skip it.
+
+| # | Do this | Expected | If not |
+|---|---|---|---|
+| 1 | Open the Suite, click "Master View" in the sidebar | Page loads within 3 s; header pills fill in (not stuck on "..."); no red banner | Note which pill is stuck; open the Problem report box |
+| 2 | Look at the Host pill (right of the header) | "push NN ms" (or "poll NN ms"); the ms number changes | "Host offline" while the Host is running = bug |
+| 3 | Press ? | Shortcut table opens; press Esc: it closes | Esc does nothing |
+| 4 | Press 1, 2, 3, 4, 5 with nothing focused | Tabs Customs, Feed, Commands, Overlays, Stream in that order | A digit typed into the page without switching |
+| 5 | Press / , type 3 in the search box | Search filters; the tab does NOT change to Commands | Tab changes while typing |
+| 6 | Feed tab: look at the newest line | Opens at the bottom (newest line visible). Scroll up a little and wait 10 s: the text under your eyes does not move; scroll to the bottom: it follows again | Page jumps while reading |
+| 7 | Feed tab: click each chip (All, Chat, Players, Backend, Events, Mods) | List filters; an empty chip says why ("Waiting for the first line", not a blank box) | Blank list with no sentence |
+| 8 | Click the "Pre-stream ..." chip in the header, then Esc | A list of checks opens (read only); Esc closes it | Opens a stream start action (it must not exist) |
+| 9 | Hover "Scenes: N problems" chip (Feed status strip) | Each problem shows a "->" fix hint | Problem without a hint |
+| 10 | Scenes panel: click the fold button, then expand again | Folders collapse/expand; the LIVE badge stays on the real live scene. Do NOT click a scene row | -- |
+| 11 | Header: change the Text size select to 130 %, then back to 100 % | Only the Master View page scales; the Suite sidebar stays the same | Sidebar scales too |
+| 12 | Press Tab repeatedly through the header | Every control shows an orange focus ring in order | Focus disappears |
+| 13 | Click Raid prep ONCE, then press Esc | Label changes to "Sure?" then goes back. Never click it twice | It fired on the first click |
+| 14 | Resize the window to about 900 px wide | No sideways scrollbar on Feed, Overlays, Stream; a long chat line wraps | Sideways scroll |
+| 15 | Customs tab: look at the queue and the team names | Long names wrap inside their box; empty names show a placeholder, not a blank gap | Names push the columns apart |
+| 16 | Stream tab: read the note under the fields (do NOT press Push) | Says which platforms loaded (Twitch / YouTube) or plainly "Multi did not answer" | A blank note |
+| 17 | Overlays tab: look at the file list | The Host's overlay files, or "not connected yet" with a reason | Blank |
+| 18 | Leave the page open for 5 minutes on the Feed tab, then look at the Host pill | Still "push NN ms" and the ms number still changes; chat lines still arrive | Stuck number, no new lines |
+| 19 | Off stream only: stop the Spotify module in Modules, wait 10 s, look at the top of Master View, then start it again | A banner names Spotify within about 10 s and goes away by itself when Spotify is back | Banner stays or never shows |
+| 20 | Off stream only: stop the Host module for 15 s, then start it again | Pill turns "Host offline" with a banner; Feed/Commands say "The Host is offline ..."; last scenes/chat stay on screen; everything recovers by itself without reloading | Blank page, or needs a reload to recover |
+
+Pass = all 20 as expected. Write failures (step number and what you saw) into the Problem report box on that page.
