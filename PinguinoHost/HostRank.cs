@@ -451,7 +451,7 @@ namespace PinguinoHost
                 if (status == "notfound") say("Could not find " + epic + " on " + (plat == "epic" ? "Epic" : plat) + ". Try !rank epic:name, steam:name, xbox:name or psn:name.");
                 else if (status == "pending") SayOnce(say, "Checking " + (isOwner ? "the ranks" : nm) + "... ask again in a few seconds.");
                 else if (only != "" && (status == "ok" || status == "cached" || status == "stale")) say((isOwner ? "" : nm + ": ") + "No " + Label(only) + " rank found.");
-                else if (status == "none" || status == "stale") SayOnce(say, "No rank data for " + (isOwner ? "the streamer" : nm) + " right now" + (Now() - _cfSeen < 3600 ? " (the rank site is blocking our lookups)" : ", try again in a bit") + "." + (isOwner ? " A mod can set it with !setrank 2v2 Champion I Div II (1400)." : ""));
+                else if (status == "none" || status == "stale") SayOnce(say, "No rank data for " + (isOwner ? "the streamer" : nm) + " right now" + (Now() - _cfSeen < 3600 ? " (rank sites block automatic lookups, so ranks are set by hand)" : ", try again in a bit") + "." + (isOwner ? " A mod can set it with !setrank 2v2 Champion I Div II (1400)." : ""));
                 else say(isOwner ? "No rank saved yet, a mod can set it with !setrank 2v2 Champion I Div II (1400)." : "No ranked playlists found for " + nm + ".");
                 return;
             }
