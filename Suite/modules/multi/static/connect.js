@@ -16,13 +16,16 @@
     return 'Ready: click Sign in';
   }
 
+  const ready = st => !!(st.client_id_set && st.client_secret_set);
+  const redirectFor = p => location.origin + '/auth/' + p + '/callback';     // what THIS Multi instance actually listens on
+
   async function card(p) {
     const st = await j('/auth/' + p + '/status');
     return `<div class="box conn42" data-p="${p}"><b>${NAMES[p]} sign-in</b> <small class="mut">${esc(state(st))}</small>
-      <details><summary class="mut">How to set it up</summary><small class="mut">${HELP[p]}<br>Redirect address: <code>${esc(st.redirect_uri || '')}</code></small></details>
+      <details><summary class="mut">How to set it up</summary><small class="mut">${HELP[p]}<br>Redirect address (saved when you click Save): <code>${esc(redirectFor(p))}</code>${st.redirect_uri && st.redirect_uri !== redirectFor(p) ? ' <b>currently set to ' + esc(st.redirect_uri) + '</b>' : ''}</small></details>
       <div><input class="c42-id" placeholder="client id" autocomplete="off" size="26"> <input class="c42-sec" type="password" placeholder="client secret" autocomplete="new-password" size="20">
         <button type="button" class="c42-save">Save</button>
-        <button type="button" class="c42-go p">Sign in to ${NAMES[p]}</button></div>
+        <button type="button" class="c42-go p"${ready(st) ? '' : ' disabled title="Save the client id and secret first"'}>Sign in to ${NAMES[p]}</button></div>
       <div class="c42-msg mut"></div></div>`;
   }
 
@@ -42,10 +45,11 @@
       if (e.target.classList.contains('c42-save')) {
         const id = box.querySelector('.c42-id').value, sec = box.querySelector('.c42-sec').value;
         if (!id && !sec) { msg.textContent = 'Type a client id and/or secret first.'; return; }
-        await post('/auth/' + p + '/client', {client_id: id, client_secret: sec});
+        await post('/auth/' + p + '/client', {client_id: id, client_secret: sec, redirect_uri: redirectFor(p)});
         box.querySelector('.c42-sec').value = '';
         msg.textContent = 'Saved.';
         const st = await j('/auth/' + p + '/status'); box.querySelector('small').textContent = state(st);
+        const go = box.querySelector('.c42-go'); go.disabled = !ready(st); go.title = ready(st) ? '' : 'Save the client id and secret first';
       } else if (e.target.classList.contains('c42-go')) {
         const r = await post('/auth/' + p + '/start');
         if (!r.ok) { msg.textContent = r.error || 'Could not start.'; return; }

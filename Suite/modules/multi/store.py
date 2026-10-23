@@ -142,7 +142,13 @@ class Store:
         with self.lock:
             self.db.execute("DELETE FROM messages WHERE ts<?", (cut,))
             self.db.execute("DELETE FROM cards WHERE updated<? AND state IN ('answered','dismissed')", (cut,))
+            self.prune_events()
             self.db.commit()
+
+    def prune_events(self, days=30, max_rows=200_000):
+        """The learning log is the only table prune() never trimmed: keep `days` days and at most `max_rows` newest rows."""
+        self.db.execute("DELETE FROM events WHERE ts<?", (time.time() - days * 86400,))
+        self.db.execute("DELETE FROM events WHERE id <= (SELECT MAX(id) FROM events) - ?", (max_rows,))
 
     # cards ----------------------------------------------------------
     def save_card(self, c):

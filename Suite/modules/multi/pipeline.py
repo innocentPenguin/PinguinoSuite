@@ -128,10 +128,16 @@ class Inbox:
 
     def put(self, m):
         if self.q.qsize() >= self.cap:
-            # drop the oldest message that is not a likely priority candidate; never drop mentions/questions
+            # full: ordinary messages are dropped; mentions/questions are kept, but only up to 2x cap so a question flood cannot grow the queue forever
+            # (past that the OLDEST queued message makes room, so the newest questions win)
             self.p.stats["dropped"] += 1
             if not (prio.is_question(m.text) or prio.mentions_me(m.text, config.settings()["my_names"])):
                 return
+            if self.q.qsize() >= self.cap * 2:
+                try:
+                    self.q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
         self.q.put_nowait(m)
 
     async def run(self):

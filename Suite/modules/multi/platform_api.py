@@ -30,6 +30,9 @@ async def auth_client(platform: str, request: Request):
         return {"ok": False, "error": "unknown platform"}
     b = await request.json()
     cid, sec = str(b.get("client_id") or "").strip()[:200], str(b.get("client_secret") or "").strip()[:300]
+    ru = str(b.get("redirect_uri") or "").strip()[:200]
+    if ru.startswith(("http://127.0.0.1", "http://localhost", "http://[::1]")) and ru.endswith(f"/auth/{platform}/callback"):
+        config.save_settings({f"{platform}_redirect_uri": ru})          # loopback only: the consent page must send the code back to this PC
     if cid:
         config.save_settings({f"{platform}_client_id": cid})
     if sec:

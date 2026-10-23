@@ -40,7 +40,7 @@ async def run(cards, emit, ws_url=LISTEN_WS):
                     ev = json.loads(raw)
                     if ev.get("type") == "segment":
                         text = win.add(ev["segment"].get("text", ""))
-                        for s in voice.match(text, cards.cards.values()):
+                        for s in voice.match(text, list(cards.cards.values())):
                             emit({"type": "reply.suggested", **s})
         except Exception:
             await asyncio.sleep(10)
