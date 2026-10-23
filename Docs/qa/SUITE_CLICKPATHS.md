@@ -168,3 +168,12 @@ Put results in Docs\qa\<date>-clickpaths.md: row, PASS / FAIL, what you saw, scr
 - Header chip "Pre-stream ..." shows fail/warn counts; click it to open/close the list. Nothing here changes anything.
 - Hover the Feed "Scenes: N problems" chip: each problem has a "->" fix hint.
 - Link pill showing "data N s old" means the Host stopped answering for >10 s; it clears by itself.
+
+### 1.8d Reading and keys (SAFE)
+- Feed tab opens at the newest line. Scroll up and read: new lines must not move the text you are reading; scroll to the bottom and it follows again. (SAFE)
+- Press 1-5 with nothing focused: tabs Customs, Feed, Commands, Overlays, Stream. Type "3" into a search box: tab must not change. (SAFE)
+- Click Raid prep once ("Sure?"), press Esc or click elsewhere: it must go back to normal without firing. (CAUTION: do NOT click it a second time on a live stream)
+- Esc closes the ? help, Pre-stream list, intros and streaks panels. (SAFE)
+- Tab through the header: every control shows an orange focus ring. (SAFE)
+- Shrink the window to ~900 px: no sideways scrollbar in Feed/Stream/Overlays; a 150-character chat line wraps. (SAFE)
+- Host stopped: Feed and Commands show "The Host is offline ..." instead of an empty list. (SAFE)

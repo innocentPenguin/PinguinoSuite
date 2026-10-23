@@ -144,3 +144,10 @@ The Match **Fill** button stays visible during a running game: "▶ Start" when 
 - **Pre-stream chip** (`#b-pre`, header): polls Host `GET /api/prestream` every 30 s. The label shows the fail/warn counts; click it to list the non-passing items (worst first). Read only.
 - **Scenes chip tooltip** now adds a plain-words fix hint per problem (`healthHint`).
 - **Stale badge**: if the Host is up but its last answer is over 10 s old, the link pill turns amber with "data N s old" (repainted every 2 s).
+
+## Reading, keys and focus (batch Q-S)
+- **Feed scroll**: if you scroll up to read, the row at the top of your view stays put while old rows are trimmed (cap 300 shown, 800-1500 kept). Opening the Feed tab starts at the newest line.
+- **Keys**: 1-5 switch tabs (Customs, Feed, Commands, Overlays, Stream), ignored while typing; Esc closes help, the Pre-stream list, intros and streaks, and cancels any "Sure?" button (which also cancels when it loses focus). Every button/chip has a visible focus ring.
+- **Long text**: chat lines, team names, banners and toasts wrap anywhere instead of widening the page (checked at 900 px).
+- **Empty states**: Feed and Commands say whether the Host is offline, still loading, or nothing matches.
+- **SSE**: the page sends no custom header on /api/events; reconnect uses plain GET.
