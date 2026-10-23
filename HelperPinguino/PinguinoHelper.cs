@@ -1000,7 +1000,7 @@ public class CPHInline
     // ---- typo commands ----
     static readonly string[] TypoExec = { "!pos", "!queue", "!mmr", "!stats", "!myrank", "!topwins", "!strikes" };                 // game manager viewer info commands: a clear typo just runs
     static readonly string[] TypoAsk = { "!join", "!leave", "!register" };                                                          // affect the queue: ask first
-    static readonly string[] TypoHint = { "!points", "!rank", "!leaderboards", "!commands", "!streak", "!watchtime", "!topgifters", "!topbits", "!emote", "!remindme", "!notme", "!helper" };   // owned by other bots: suggest only
+    static readonly string[] TypoHint = { "!emote", "!remindme", "!notme", "!helper" };   // owned by other bots: suggest only (the Host router (HostCmdFix.cs) now runs typos of !points !rank !leaderboards !commands !streak !watchtime !topgifters !topbits itself)
     static HashSet<string> _knownCmds; static DateTime _knownAt = DateTime.MinValue;
     static readonly Dictionary<string, long> _typoCd = new Dictionary<string, long>();
 
@@ -1027,7 +1027,7 @@ public class CPHInline
             foreach (var e in KbEntries(false)) { string id = (string)e["id"] ?? ""; if (id.StartsWith("cmd:!")) set.Add(id.Substring(4)); }
         }
         catch (Exception) { }
-        foreach (string x in TypoExec.Concat(TypoAsk).Concat(TypoHint)) set.Add(x);
+        foreach (string x in TypoExec.Concat(TypoAsk).Concat(TypoHint).Concat(new[] { "!points", "!rank", "!leaderboards", "!commands", "!streak", "!watchtime", "!topgifters", "!topbits" })) set.Add(x);
         foreach (string x in new[] { "!ask", "!pinguino", "!lobbyname", "!lobbypass", "!lobbypassword", "!discord", "!unping", "!helperpack" }) set.Add(x);
         _knownCmds = set; _knownAt = DateTime.UtcNow;
         return set;

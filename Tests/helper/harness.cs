@@ -432,7 +432,8 @@ public static class Harness
             setKnown(); Msg("Ana", "!jion"); Msg("Ana", "when"); Check("a word that merely ends in n is not a 'no'", Last() == null, Last()); Msg("Ana", "no");
             setKnown(); Msg("Ana", "!posx"); run = CoreRun(); Check("typo of an info command just runs it (!pos)", run != null && (string)run["command"] == "!pos", run == null ? "no run" : (string)run["command"]);
             setKnown(); Msg("Ana", "!qeue"); run = CoreRun(); Check("typo !qeue runs !queue", run != null && (string)run["command"] == "!queue", run == null ? "no run" : (string)run["command"]);
-            setKnown(); Msg("Ana", "!pints"); Check("typo of another bot's command only suggests it", Last() != null && Last().Contains("Did you mean !points?") && CoreRun() == null, Last());
+            setKnown(); Msg("Ana", "!notmee"); Check("typo of another bot's command only suggests it", Last() != null && Last().Contains("Did you mean !notme?") && CoreRun() == null, Last());
+            setKnown(); Msg("Ana2", "!pints"); Check("typo of a Host-run info command: the Helper stays silent (the Host runs it)", Last() == null && CoreRun() == null, Last());
             setKnown(); Msg("Ana", "!zzzzzz"); Check("an unknown word near nothing is left alone", Last() == null && Forwarded(), Last());
             setKnown(); Msg("Ana", "!fake3"); Check("a real command is never 'corrected'", Last() == null && Forwarded(), Last());
             setKnown(); Msg("Ana", "!ban"); Check("short words are never guessed", Last() == null && Forwarded(), Last());

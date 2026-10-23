@@ -21,7 +21,7 @@ try:
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
     for w, want in (('! queue', '! queue -> !queue'), ('!q', '!q -> !queue'), ('!list', '!list -> !queue'), ('!queue.', 'punctuation after !queue'), ('! join', '! join -> !join'), ("!join'", 'punctuation after !join')):
-        r = ask('b1: ' + w, 0.5); chk(w + ' rewritten', want in clog() and not any('did you mean' in x for x in r), (want, r))
+        r = ask('b1: ' + w, 1.5); chk(w + ' rewritten', want in clog() and not any('did you mean' in x for x in r), (want, r))
     # join-type typos are a question until the person says yes
     for i, (w, to) in enumerate((('!jon', '!join'), ('!joi', '!join'), ('!jpin', '!join'), ('!joinm', '!join'), ('!rejoin', '!join'), ('!unjoin', '!leave'), ('!quit', '!leave'))):
         u = 'q%d' % i
@@ -32,6 +32,11 @@ try:
     r = ask('n3: yes', 0.4); chk('a yes with nothing pending is ignored', r == [], r)
     r = ask('c1: !queu'); chk('info near miss just runs, no question', r == [] and '!queu -> !queue' in clog(), r)
     r = ask('c2: !poinst'); chk('info near miss !points just runs', '!poinst -> !points' in clog() and not any('did you mean' in x for x in r), r)
+    # Host-owned info commands: a clear near-miss runs, no question; join/leave type still ask
+    for i, (w, to) in enumerate((('!poinst', '!points'), ('!ponts', '!points'), ('!leaderbords', '!leaderboards'), ('!watchtim', '!watchtime'), ('!topgiftrs', '!topgifters'), ('!ranck', '!rank'), ('!comands', '!commands'), ('!topbitz', '!topbits'))):
+        r = ask('i%d: %s' % (i, w), 1.5); chk(w + ' runs as ' + to, ('%s -> %s' % (w, to)) in clog() and not any('did you mean' in x for x in r), (to, r))
+    r = ask('i9: !xyzzy'); chk('a word near nothing is left alone', r == [] and '!xyzzy ->' not in clog(), r)
+    r = ask('i10: !ran'); chk('a very short word is not guessed', r == [] and '!ran ->' not in clog(), r)
     r = ask('c6: !joni'); chk('unlisted join near miss asks', len(r) == 1 and 'did you mean !join?' in r[0], r)
     r = ask('c3: !joke'); chk('known lore words are not near misses', not any('did you mean' in x for x in r), r)
     r = ask('c4: !peng'); chk('no !peng alias, no did-you-mean', not any('did you mean' in x for x in r), r)

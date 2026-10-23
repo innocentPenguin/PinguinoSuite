@@ -18,6 +18,8 @@ namespace PinguinoHost
             { "!unjoin", "!leave" }, { "!quit", "!leave" }, { "!unqueue", "!leave" }, { "!leaveq", "!leave" },
             { "!list", "!queue" }, { "!q", "!queue" } };
         static readonly string[] Targets = { "!join", "!leave", "!queue", "!points" };
+        // Host-owned, read-only viewer info commands: a clear near-miss ("!poinst", "!ponts", "!leaderbords") just runs. The Helper's TypoHint no longer lists these, so only one bot reacts.
+        static readonly string[] InfoTargets = { "!points", "!watchtime", "!toppoints", "!topwatch", "!topgifters", "!topbits", "!topyappers", "!topstreak", "!streak", "!streakrecord", "!leaderboards", "!commands", "!rank", "!economy", "!topemotes" };
         static readonly HashSet<string> Told = new HashSet<string>(); static readonly object L = new object();
         static string CfgP { get { return Path.Combine(HostApi.DataDir, "config", "cmdfix.json"); } }
         static JObject Cfg() { try { return JObject.Parse(File.ReadAllText(CfgP).TrimStart((char)0xFEFF)); } catch (Exception) { return new JObject(); } }
@@ -56,7 +58,9 @@ namespace PinguinoHost
             if (spaced) { if (Targets.Contains(cmd) || IsKnown(cmd)) { Clog.Info("cmdfix", "! " + cmd.Substring(1) + " -> " + cmd); return cmd + rest; } return text; }   // "! join" -> "!join" (only for real commands)
             if (cmd != t.Split(' ')[0].ToLowerInvariant() && (Targets.Contains(cmd) || IsKnown(cmd))) { Clog.Info("cmdfix", "punctuation after " + cmd); return cmd + rest; }   // "!join." / "!join'" -> "!join"
             if ((bool?)c["didYouMean"] == false || cmd.Length < 4 || IsKnown(cmd)) return text;
-            string near = Targets.FirstOrDefault(tg => tg != cmd && Dist(tg, cmd) == 1); if (near == null) return text;
+            string near = Targets.FirstOrDefault(tg => tg != cmd && Dist(tg, cmd) == 1);
+            if (near == null && cmd.Length >= 5) { var hits = InfoTargets.Where(tg => Dist(tg, cmd) == 1).ToList(); if (hits.Count == 1) near = hits[0]; }   // exactly one info command one edit away, else leave it alone
+            if (near == null) return text;
             if (AskFirst(user, near, rest, say)) { swallowed = true; return text; }
             Clog.Info("cmdfix", cmd + " -> " + near + " (info command, just runs)"); return near + rest;
         }
