@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "open": false,
+  "activity": "none",
+  "mode": "balanced",
+  "gameMode": "standard",
+  "format": "2v2",
+  "koth": false,
+  "casualStyle": "teams",
+  "teams": {
+    "orange": {
+      "name": "Orange",
+      "color": "#ff7a00"
+    },
+    "blue": {
+      "name": "Blue",
+      "color": "#1e8fff"
+    }
+  },
+  "strikes": {},
+  "strikeLimit": 3,
+  "strikeGame": "rl",
+  "queue": [],
+  "match": null,
+  "controlHolder": null,
+  "sim": false,
+  "updatedAt": 1792746390
+}

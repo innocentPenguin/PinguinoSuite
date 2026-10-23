@@ -420,5 +420,12 @@
     }
   }
 
-  return { prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  /* Songify hand-off button: the Spotify module's /api/state reports songify:true/false; when it does not, the last successful action is shown and marked as such */
+  function songifyView(st, last) {
+    const known = !!st && typeof st.songify === 'boolean', ok = !!last && last.ok === true && (last.name === 'songify' || last.name === 'takeback');
+    const on = known ? st.songify : ok ? last.name === 'songify' : null;
+    return { known, on, name: on ? 'takeback' : 'songify', label: on ? 'Take back' : 'Hand off to Songify', armLabel: on ? 'Sure? Take the music back' : 'Sure? Hand the music to Songify',
+      text: on == null ? 'State unknown (the player is not answering)' : (on ? 'Songify has the music' : 'The bot runs the music') + (known ? '' : ' (last action, not confirmed)') };
+  }
+  return { songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

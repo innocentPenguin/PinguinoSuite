@@ -365,6 +365,38 @@ await t('keyboard: no positive tabindex, every control is a real button/input, s
   assert.ok(html.indexOf('id="b-last"') < html.indexOf('id="scenes"') && html.indexOf('id="scenes"') < html.indexOf('id="sources"') && html.indexOf('id="sources"') < html.indexOf('id="tab-customs"'));
 });
 
+await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
+  let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
+  v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);
+  v = C.songifyView({ playback: null }, { name: 'songify', ok: true }); assert.equal(v.on, true); assert.equal(v.name, 'takeback'); assert.match(v.text, /last action/);
+  v = C.songifyView(null, { name: 'takeback', ok: true }); assert.equal(v.on, false); assert.match(v.text, /last action/);
+  v = C.songifyView(null, { name: 'songify', ok: false }); assert.equal(v.on, null); assert.equal(v.name, 'songify'); assert.match(v.text, /unknown/i);
+  assert.equal(C.songifyView({ songify: false }, { name: 'songify', ok: true }).on, false, 'the module state wins over the remembered action');
+});
+await t('Songify button talks to POST /api/preset: songify then takeback flips the module state, refusals and a missing route come back as errors', async () => {
+  delete st.songify; st.presets = [];
+  assert.equal((await api.get('/api/state')).json.songify, false);
+  let r = await api.post('/api/preset', { name: 'songify' }); assert.equal(r.ok, true); assert.deepEqual(st.presets[0], { name: 'songify' }); assert.equal((await api.get('/api/state')).json.songify, true);
+  r = await api.post('/api/preset', { name: 'takeback' }); assert.equal(r.ok, true); assert.equal((await api.get('/api/state')).json.songify, false);
+  r = await api.post('/api/preset', { name: 'nope' }); assert.equal(r.ok, false); assert.match(r.error, /unknown preset/);
+  st.presetFail = 404; r = await api.post('/api/preset', { name: 'songify' }); assert.equal(r.ok, false); assert.equal(r.status, 404); delete st.presetFail;
+  const noTok = await C.createApi({ base, fetch, getToken: () => '' }).post('/api/preset', { name: 'songify' }); assert.equal(noTok.ok, false); assert.equal(noTok.status, 401);
+});
+await t('Songify button is two-click, uses the name captured when it was armed, and the mock test never posts for real', () => {
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
+  const a = js.indexOf("b.id === 'sg-btn'"), b2 = js.indexOf('armed(b)', a), c = js.indexOf('songifyDo(b, b.dataset.pend)', a);
+  assert.ok(a >= 0 && b2 > a && c > b2, 'confirm path must go through armed() and then run with the armed name');
+  assert.ok(js.indexOf("mapi.post('/api/preset'") >= 0, 'the module (8771) api posts the preset');
+  assert.ok(js.indexOf('state changed while you were confirming') >= 0);
+});
+await t('REAL Host customs/state body (fixture from 127.0.0.1:8770): every field the Customs tab reads is there with the expected type', () => {
+  const j = JSON.parse(fs.readFileSync(path.join(here, 'fixtures-customs-real.json'), 'utf8'));
+  assert.equal(j.ok, true); for (const k of ['mode', 'format', 'gameMode', 'activity', 'casualStyle']) assert.equal(typeof j[k], 'string', k);
+  assert.equal(typeof j.koth, 'boolean'); assert.equal(typeof j.open, 'boolean'); assert.ok(Array.isArray(j.queue)); assert.equal(j.match, null); assert.equal(j.controlHolder, null);
+  assert.equal(typeof j.teams.orange.name, 'string'); assert.equal(C.fmtSize(j.format), 2); assert.deepEqual(C.diffCustoms(j, j), []); assert.deepEqual(C.diffCustoms(null, j), []);
+  assert.ok(['balanced', 'random', 'picks'].includes(j.mode), 'mode value must be one of the Teams buttons: ' + j.mode); assert.ok(['2v2', '3v3', '4v4'].includes(j.format)); assert.ok(['standard', 'dropshot', 'rumble'].includes(j.gameMode));
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);

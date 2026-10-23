@@ -201,7 +201,22 @@
     return { title: t ? t.name : n.title, artist: t ? (t.artists || []).join(', ') : n.artist, album: t ? t.album : '', art: t ? t.art : '',
       playing: p ? !!p.is_playing : null, prog: p ? p.progress_ms : 0, dur: t ? t.duration_ms : 0, vol: p && p.device ? p.device.volume : null, dev: p && p.device ? p.device.name : '', req };
   }
+  function renderSongify() {
+    const b = $('#sg-btn'); if (!b) return; const v = C.songifyView(S.get('mstate'), ui.sgLast);
+    $('#sg-state').textContent = v.text; b.dataset.name = v.name; b.dataset.arm = v.armLabel;
+    if (!b._armT && !b.disabled) b.textContent = v.label;
+  }
+  async function songifyDo(b, name) {
+    if (name !== b.dataset.name) { toast('The music state changed while you were confirming: check it and click again', true); renderSongify(); return; }   // never run the opposite action of what was shown
+    flash(b); await tokenReady; b.disabled = true;
+    try {
+      const r = await mapi.post('/api/preset', { name }), ok = r.ok && r.json && r.json.ok !== false, res = $('#sg-res');
+      if (ok) { ui.sgLast = { name, ok: true, at: Date.now() }; toast(name === 'songify' ? 'Handed the music to Songify' : 'Took the music back'); res.textContent = ''; pollers.music.kick(); }
+      else { const why = r.status === 404 ? 'the Spotify module has no /api/preset yet (restart needed)' : ((r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status); res.textContent = 'Songify: ' + why; toast('Songify: ' + why, true); }
+    } finally { b.disabled = false; renderSongify(); }
+  }
   function renderMusic() {
+    renderSongify();
     const ok = S.get('nowOk'), box = $('#player'), v = plView();
     box.hidden = ok === null; box.classList.toggle('mini', pl.mini); box.classList.toggle('off', ok === false);
     $('#pl-title').textContent = ok === false ? 'Spotify module not reachable' : v.title || 'Nothing playing';
@@ -553,6 +568,9 @@
   const PLAT = [['twitch', 'Twitch', 'Host'], ['youtube', 'YouTube', 'Multi'], ['kick', 'Kick', 'Multi']];
   function mkStream() {
     $('#tab-stream').innerHTML = `<div class="si">
+      <h4 class="si-h" style="margin-top:0">Music: Songify</h4>
+      <div class="row"><button class="sm rd warn" id="sg-btn" title="Turns the bot's own player off so another app (Songify) can run the music, or takes it back. Two clicks.">Hand off to Songify</button><span class="faint sm" id="sg-state" role="status"></span></div>
+      <div id="sg-res" class="si-res"></div>
       <div class="note sm">Edit once, push to the platforms you tick. This only changes text (and can schedule a YouTube broadcast). It never starts a stream.</div>
       <label class="lbl" for="si-title">Title</label><input type="text" id="si-title" maxlength="140" autocomplete="off" placeholder="Stream title">
       <label class="lbl" for="si-game">Game / category <span class="faint">(Twitch)</span></label><input type="text" id="si-game" maxlength="60" autocomplete="off" placeholder="Rocket League">
@@ -577,7 +595,7 @@
       <textarea id="si-tt" rows="5" readonly></textarea><div class="btns" style="margin-top:6px"><button class="sm" id="si-copy">Copy for TikTok</button></div>
     </div>`;
     $('#si-plats').append(...PLAT.map(([k, l, via]) => { const b = h('button', 'sm plat', l); b.dataset.plat = k; b.title = 'Sent through ' + via; return b; }));
-    renderStream();
+    renderStream(); renderSongify();
   }
   function renderStream() {
     const si = ui.si, tw = C.parseTags(si.tags), box = $('#tab-stream');
@@ -655,6 +673,7 @@
   $('#tab-stream').addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.plat) { ui.si.plat[b.dataset.plat] = !ui.si.plat[b.dataset.plat]; siSave(); return; }
+    if (b.id === 'sg-btn') { if (b.disabled) return; if (!b._armT) b.dataset.pend = b.dataset.name; if (!armed(b)) { b.textContent = b.dataset.arm || 'Sure?'; return; } songifyDo(b, b.dataset.pend); return; }
     if (b.id === 'si-push') siPush(b); else if (b.id === 'si-load') siLoad();
     else if (b.id === 'rc-prev') recapDo(false, b); else if (b.id === 'rc-say') { if (armed(b)) recapDo(true, b); } else if (b.id === 'rd-go') { if (armed(b)) raidPrep(b); }
     else if (b.id === 'si-sched') { if (!armed(b)) return; siSchedule(b); }
