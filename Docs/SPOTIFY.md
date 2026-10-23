@@ -138,3 +138,6 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 
 ### Announce per tier (51)
 `announce_tiers` (default normal, sub, redeem; also streamer, fallback) decides which songs get a now-playing line; `announce_track_sub` / `announce_track_redeem` are optional templates (empty = the normal line; extra placeholder `{tier}`); `announce_min_gap_s` (20) keeps only the newest track line when songs change faster. `/api/announcements` lines now also carry `kind` ("track"), `tier`, `requester`, `uri` (additive; the Host just posts `text`).
+
+### Leaderboard periods (51)
+`GET /api/leaderboard?period=day|week|month|all&limit=`: `all` (default) is the old output; the others read per-day buckets (`board.days`, US Central days, kept 400 days) and add `period`, `key` (e.g. `2026-W44`), `since`. Names are merged case-insensitively and blocked viewers are hidden. Week/month start empty the day this shipped.

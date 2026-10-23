@@ -10,6 +10,7 @@ What: the brain. Polls Spotify, owns queue state, JIT push, request pipeline, ch
 Related: rules.py, queue_core.py, config_schema.py, spotify_api.py, server.py, tests/test_spotify.py, tests/e2e.py, Docs/SPOTIFY.md
 """
 import copy
+import datetime
 import math
 import re
 import threading
@@ -23,6 +24,16 @@ from queue_core import Queue, QueueError, new_item
 from spotify_api import ApiError, NotConnected, RateLimited, norm_playback
 
 _ARTIST_ID = re.compile(r"[A-Za-z0-9]{22}")
+def local_day(ts):
+    """YYYY-MM-DD in US Central time (the channel's zone; computed by rule because Windows Python has no tz database)."""
+    t = datetime.datetime.fromtimestamp(ts, datetime.timezone.utc)
+    nth_sunday = lambda y, m, n: [d for d in (datetime.datetime(y, m, i, tzinfo=datetime.timezone.utc) for i in range(1, 32 if m == 3 else 8)) if d.weekday() == 6][n - 1].day
+    start = datetime.datetime(t.year, 3, nth_sunday(t.year, 3, 2), 8, tzinfo=datetime.timezone.utc)      # 2:00 CST
+    end = datetime.datetime(t.year, 11, nth_sunday(t.year, 11, 1), 7, tzinfo=datetime.timezone.utc)      # 2:00 CDT
+    off = -5 if start <= t < end else -6
+    return (t + datetime.timedelta(hours=off)).strftime("%Y-%m-%d")
+
+
 VERIFY_EVERY_S = 20
 NO_REFUND = {"blocked", "user_blocked", "dup_recent", "dup_skipped"}   # troll codes: never refunded
 SKIP_EARLY_MS = 20000     # cut off with more than this left = counted as skipped
@@ -282,6 +293,17 @@ class Engine:
 
     def _board_add(self, t, outcome, requester):
         b = self.board
+        day = b.setdefault("days", {}).setdefault(local_day(self.clock()), {"requesters": {}, "plays": {}, "skips": {}})
+        skey = t["id"] or t["uri"]
+        day["plays" if outcome == "played" else "skips"][skey] = day["plays" if outcome == "played" else "skips"].get(skey, 0) + 1
+        if requester:
+            ln = requester.strip().lower()
+            day["requesters"][ln] = day["requesters"].get(ln, 0) + 1
+            b.setdefault("names", {})[ln] = requester
+        b.setdefault("since", local_day(self.clock()))
+        if len(b["days"]) > 400:
+            for d in sorted(b["days"])[:-400]:
+                del b["days"][d]
         row = b["songs"].setdefault(t["id"] or t["uri"], {"title": t["name"], "artists": t["artists"][:3], "plays": 0, "skips": 0})
         row["plays" if outcome == "played" else "skips"] += 1
         if requester:
@@ -290,9 +312,37 @@ class Engine:
             for k in sorted(b["songs"], key=lambda k: b["songs"][k]["plays"] + b["songs"][k]["skips"])[:500]:
                 del b["songs"][k]
 
-    def leaderboard(self, limit=10):
-        """Public, names only: for the song pages (not the site's main boards)."""
+    def _period_board(self, period, limit):
+        today = local_day(self.clock())
+        d = datetime.date.fromisoformat(today)
+        if period == "day":
+            key, want = today, lambda x: x == today
+        elif period == "week":
+            iy, iw, _ = d.isocalendar()
+            key = f"{iy}-W{iw:02d}"
+            want = lambda x: datetime.date.fromisoformat(x).isocalendar()[:2] == (iy, iw)
+        else:
+            key, want = today[:7], lambda x: x[:7] == today[:7]
+        days = {k: v for k, v in self.board.get("days", {}).items() if want(k)}
+        req, plays, skips = {}, {}, {}
+        for v in days.values():
+            for src, dst in ((v["requesters"], req), (v["plays"], plays), (v["skips"], skips)):
+                for k, n in src.items():
+                    dst[k] = dst.get(k, 0) + n
+        hidden = {rules._norm(u) for u in self.settings["blocked_users"]}
+        names = self.board.get("names", {})
+        songs = self.board["songs"]
+        top = lambda dct: [{"title": songs[k]["title"], "artists": songs[k]["artists"], "count": n} for k, n in sorted(dct.items(), key=lambda x: -x[1]) if k in songs][:limit]
+        return {"v": 1, "period": period, "key": key, "since": min(days) if days else self.board.get("since", ""),
+                "requesters": [{"name": names.get(n, n), "count": c} for n, c in sorted(req.items(), key=lambda x: -x[1]) if n not in hidden][:limit],
+                "most_played": top(plays), "most_skipped": top(skips)}
+
+    def leaderboard(self, limit=10, period="all"):
+        """Public, names only: for the song pages (not the site's main boards). period: all | day | week | month (Chicago days)."""
         limit = max(1, min(int(limit), 50))
+        if period in ("day", "week", "month"):
+            with self.lock:
+                return self._period_board(period, limit)
         with self.lock:
             songs = list(self.board["songs"].values())
             top = lambda key, flt: [{"title": r["title"], "artists": r["artists"], "count": r[key]} for r in sorted(songs, key=lambda r: -r[key])[:limit] if flt(r)]

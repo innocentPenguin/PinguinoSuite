@@ -933,6 +933,59 @@ class AnnounceTierTests(unittest.TestCase):
         self.assertEqual(len(self.e.announcements(0)["lines"]), 1)
 
 
+class PeriodBoardTests(unittest.TestCase):
+    def setUp(self):
+        import datetime as dt
+        self.dt = dt
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+
+    def at(self, iso):             # Chicago wall time (CDT, UTC-5) as a clock value
+        self.clock.t = self.dt.datetime.fromisoformat(iso).replace(tzinfo=self.dt.timezone(self.dt.timedelta(hours=-5))).timestamp()
+
+    def test_local_day_rolls_over_at_chicago_midnight(self):
+        import engine as eng
+        self.at("2026-10-23T23:59:00")
+        self.assertEqual(eng.local_day(self.clock.t), "2026-10-23")
+        self.at("2026-10-24T00:01:00")
+        self.assertEqual(eng.local_day(self.clock.t), "2026-10-24")
+
+    def test_week_month_and_all(self):
+        self.at("2026-10-24T12:00:00")                                  # Saturday, ISO week 43
+        self.e._board_add(T(1), "played", "Ann")
+        self.at("2026-10-26T09:00:00")                                  # Monday: new ISO week
+        self.e._board_add(T(2), "played", "ann")
+        self.e._board_add(T(2), "skipped", "Bob")
+        wk = self.e.leaderboard(10, "week")
+        self.assertEqual((wk["period"], wk["key"]), ("week", "2026-W44"))
+        self.assertEqual({r["name"].lower(): r["count"] for r in wk["requesters"]}, {"ann": 1, "bob": 1})
+        self.assertEqual([m["title"] for m in wk["most_played"]], ["Song 2"])
+        self.at("2026-11-01T12:00:00")                                   # month boundary
+        self.e._board_add(T(3), "played", "Ann")
+        self.assertEqual(self.e.leaderboard(10, "month")["key"], "2026-11")
+        self.assertEqual([m["title"] for m in self.e.leaderboard(10, "month")["most_played"]], ["Song 3"])
+        old = self.e.leaderboard(10)
+        self.assertEqual(set(old), {"v", "requesters", "most_played", "most_skipped"}, "period=all keeps the old shape")
+        self.assertEqual(old["requesters"][0], {"name": "Ann", "count": 2}, "all-time keeps the old per-spelling counts")
+
+    def test_case_merge_and_blocked_users_hidden(self):
+        self.at("2026-10-26T09:00:00")
+        for u in ("Ann", "ann", "ANN", "troll"):
+            self.e._board_add(T(1), "played", u)
+        self.e.save_settings({"blocked_users": ["Troll"]})
+        r = self.e.leaderboard(10, "day")["requesters"]
+        self.assertEqual(r, [{"name": "ANN", "count": 3}])
+
+    def test_old_days_are_pruned(self):
+        self.at("2026-01-01T12:00:00")
+        for i in range(410):
+            self.clock.t += 86400
+            self.e._board_add(T(1), "played", "ann")
+        self.assertLessEqual(len(self.e.board["days"]), 400)
+
+
 class ManifestHelpTests(unittest.TestCase):
     def test_every_prestream_item_id_has_help(self):
         m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))
