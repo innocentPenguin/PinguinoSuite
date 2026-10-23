@@ -124,6 +124,8 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
 </section>
 
 <section id="t-setup" hidden>
+  <div class="card"><b>Channel playlist</b> <span class="small dim">Mods can add the playing song to it from the site ("Add to stream playlist").</span>
+    <div class="ctl" style="margin-top:6px"><select id="cplsel" style="max-width:320px"><option value="">(none)</option></select><button id="cplset">Save</button><button id="cplreload">Reload list</button><span class="small dim" id="cplnote"></span></div></div>
   <div class="card"><h3 style="margin-top:0">Built-in player <span id="plstat" class="small dim"></span></h3>
     <div class="small dim" style="margin-bottom:8px">Plays Spotify inside Pinguino as the device <b>PinguinoSuite</b> (no Spotify desktop app). Needs Premium and a Widevine-capable browser. Keep the player page open.</div>
     <div class="ctl"><button class="pri" id="bplopen">Open player window</button><button id="bplcopy" title="Copy the player URL">Copy URL</button><label><input type="checkbox" id="plon"> use the built-in player</label>
@@ -412,5 +414,16 @@ else{try{const t=sessionStorage.getItem('sp_tab');if(['queue','search','req','se
  $('lgclear').onclick=()=>{lgAll=[];box.textContent='';$('lgn').textContent='cleared (new lines keep arriving)'};
  $('lgcopy').onclick=()=>copyText([...box.children].map(d=>d.textContent).join('\n'));
  lgT=setInterval(pull,2000);pull();
+}
+// Channel playlist picker (Setup tab)
+{const sel=$('cplsel'),note=$('cplnote');
+ async function load(){try{const r=await api('/api/playlists');const cur=r.channel&&r.channel.id||'';
+   sel.innerHTML='<option value="">(none)</option>'+r.playlists.map(p=>`<option value="${esc(p.id)}" data-n="${esc(p.name)}" ${p.id===cur?'selected':''}>${esc(p.name)} (${p.tracks})</option>`).join('');
+   if(cur&&!r.playlists.some(p=>p.id===cur))sel.insertAdjacentHTML('beforeend',`<option value="${esc(cur)}" data-n="${esc(r.channel.name)}" selected>${esc(r.channel.name||cur)}</option>`);
+   note.textContent=r.channel?'Current: '+(r.channel.name||r.channel.id):'None chosen'}catch(e){note.textContent=S&&!S.connected?'Connect Spotify first':'Could not load playlists: '+e.message}}
+ $('cplreload').onclick=load;
+ $('cplset').onclick=async()=>{const o=sel.selectedOptions[0];try{await api('/api/channel-playlist',{id:sel.value,name:o?o.dataset.n||'':''});toast(sel.value?'Channel playlist saved':'Channel playlist cleared');load()}catch(e){toast(e.message,true)}};
+ $('tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b&&b.dataset.t==='setup')load()});
+ if(tab==='setup')load();
 }
 </script></body></html>

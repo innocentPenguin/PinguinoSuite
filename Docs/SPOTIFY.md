@@ -123,3 +123,10 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 - Leaderboard: `GET /api/leaderboard` -> `{v:1, requesters, most_played, most_skipped}`. For song pages only, not the main site boards. Persisted in state.json (`board`).
 - Lyrics: setting `lyrics_on` (Spotify settings, "Playback" section). `GET /api/lyrics` (LRCLIB lookup by artist/title/duration only, cached, nothing else sent). OBS overlay: `/overlay/lyrics` (synced lines; blank when off or not found).
 - Site /queue page: proposed to 05 as optional fields on the push state (`leaderboard`, `lyrics`) in `Docs/SPOTIFY_CONTRACT.md`; not yet agreed.
+
+## Channel playlist (cycle 9)
+
+- Ivan picks it on the Spotify page, Setup tab (settings `channel_playlist_id` / `channel_playlist_name`). `GET /api/playlists` lists his playlists, `POST /api/channel-playlist {id,name}` sets it (empty id clears).
+- `POST /api/channel-playlist/add {user, track?}` adds the playing song (or a track id) -> `{ok, code: added|duplicate|no_playlist|none|rate|error, title, playlist}`. Dedupes against the playlist, rate limit 10/min overall and 4/min per user, Logs entry (source `playlist`).
+- Site: push `status.channelPlaylist = {id,name}|null`; mod event `{type:"mod", action:"playlist-add", value:<optional 22-char track id>}`; ack reasons `duplicate`, `no_playlist`, `rate_limited`.
+- Logs tab: `GET /api/logs?since=`. Vote skip: `/api/chat-command` takes `activeChatters` and `skipNeed`.

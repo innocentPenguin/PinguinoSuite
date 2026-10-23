@@ -892,6 +892,64 @@ class Engine:
             except QueueError as e:
                 return bad(str(e))
 
+    def playlists(self):
+        return self.api.my_playlists()
+
+    def set_channel_playlist(self, pid, name=""):
+        pid = str(pid or "").strip()
+        if pid and not re.fullmatch(r"[A-Za-z0-9]{22}", pid):
+            raise QueueError("not a playlist id")
+        self._cpl_have = None
+        self.save_settings({"channel_playlist_id": pid, "channel_playlist_name": str(name or "")[:100] if pid else ""})
+        console_log.info("playlist", f"channel playlist set to {name or pid or '(none)'}")
+        return self.channel_playlist()
+
+    def channel_playlist(self):
+        s = self._own_settings()
+        pid = s.get("channel_playlist_id", "")
+        return {"id": pid, "name": s.get("channel_playlist_name", ""), "url": f"https://open.spotify.com/playlist/{pid}" if pid else ""} if pid else None
+
+    def playlist_add(self, user="mod", track_id=None):
+        """Add the playing song (or `track_id`) to the channel playlist. -> {ok, code: added|duplicate|no_playlist|none|rate|error, title, playlist}."""
+        pl = self.channel_playlist()
+        if not pl:
+            return {"ok": False, "code": "no_playlist", "error": "no channel playlist chosen (Setup tab)"}
+        t = self.pb["track"] if self.pb and self.pb["track"] else None
+        if track_id:
+            if not re.fullmatch(r"[A-Za-z0-9]{22}", str(track_id)):
+                return {"ok": False, "code": "none", "error": "bad track id"}
+            tid, title = str(track_id), ""
+        elif t:
+            tid, title = t["id"], t["name"]
+        else:
+            return {"ok": False, "code": "none", "error": "nothing is playing"}
+        uri = "spotify:track:" + tid
+        now = self.clock()
+        with self.lock:
+            tm = [x for x in getattr(self, "_cpl_times", []) if now - x[0] < 60]
+            if len(tm) >= 10 or len([x for x in tm if x[1] == user.lower()]) >= 4:
+                self._cpl_times = tm
+                return {"ok": False, "code": "rate", "error": "slow down: too many playlist adds"}
+            have = getattr(self, "_cpl_have", None)
+            if have is None or have[0] != pl["id"]:
+                try:
+                    have = (pl["id"], {x["uri"] for x in self.api.context_tracks("playlist", pl["id"], 1000)})
+                except Exception:           # noqa: BLE001
+                    have = (pl["id"], set())    # cannot read it: rely on what we add from now on
+                self._cpl_have = have
+            if uri in have[1]:
+                return {"ok": False, "code": "duplicate", "title": title, "playlist": pl["name"]}
+            tm.append((now, user.lower()))
+            self._cpl_times = tm
+        try:
+            self.api.playlist_add(pl["id"], uri)
+        except Exception as e:                  # noqa: BLE001
+            console_log.warn("playlist", f"add by {user} failed: {e}", dedupe_s=10)
+            return {"ok": False, "code": "error", "error": "Spotify refused the add"}
+        have[1].add(uri)
+        console_log.info("playlist", f"{user} added {title or tid} to {pl['name'] or pl['id']}")
+        return {"ok": True, "code": "added", "title": title, "playlist": pl["name"]}
+
     def mod_action(self, action, user="streamer"):
         """One-click actions for the Master view: like | skip | previous | ban_song | ban_artist -> {ok, code, title, artist}. Acts on the current song."""
         t = self.pb["track"] if self.pb and self.pb["track"] else None
@@ -1121,7 +1179,8 @@ class Engine:
                       "durationMs": t["duration_ms"], "progressMs": pb["progress_ms"], "isPlaying": pb["is_playing"],
                       "requestedBy": (self.now_item or {}).get("requester") or None, "progressAt": int(self.pb_at * 1000)}
             return {"v": 1, "updatedAt": ms,
-                    "status": {"requestsOpen": bool(s["requests_open"]), "paused": bool(pb and not pb["is_playing"]), "maxQueue": s["queue_max"]},
+                    "status": {"requestsOpen": bool(s["requests_open"]), "paused": bool(pb and not pb["is_playing"]), "maxQueue": s["queue_max"],
+                               "channelPlaylist": ({"id": s["channel_playlist_id"], "name": s["channel_playlist_name"]} if s.get("channel_playlist_id") else None)},
                     "nowPlaying": np,
                     "queue": [{"rid": i["id"], "id": i["track_id"], "title": i["name"], "artists": i["artists"], "art": i["art"],
                                "durationMs": i["duration_ms"], "requestedBy": i["requester"] or "", "votes": len(i.get("voters", []))}

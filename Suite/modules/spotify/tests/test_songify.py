@@ -287,6 +287,26 @@ class SongifyTests(unittest.TestCase):
         self.assertEqual(v["code"], "volume")                                  # viewers can read the volume
         self.assertNotEqual(self.e.chat("anyone", "!vol 99", ("viewer",))["code"], "volume_set")   # but not set it
 
+    def test_channel_playlist_add(self):
+        self.assertEqual(self.e.playlist_add("mod")["code"], "no_playlist")
+        pid = "P" * 22
+        self.e.set_channel_playlist(pid, "Stream faves")
+        added = []
+        self.api.context_tracks = lambda kind, cid, limit=100: []
+        self.api.playlist_add = lambda p, u: added.append((p, u))
+        self.assertEqual(self.e.playlist_add("mod")["code"], "none")           # nothing playing
+        self.play(3)
+        r = self.e.playlist_add("mod")
+        self.assertEqual((r["ok"], r["code"], r["playlist"]), (True, "added", "Stream faves"))
+        self.assertEqual(added[0][0], pid)
+        self.assertEqual(self.e.playlist_add("mod2")["code"], "duplicate")     # already in it
+        self.assertEqual(len(added), 1)
+        self.assertEqual(self.e.playlist_add("mod", "bad id")["code"], "none")
+        for n in range(4, 9):
+            self.e.playlist_add("spam", ("id%d" % n).ljust(22, "x"))
+        self.assertEqual(self.e.playlist_add("spam", "idzzzzzzzzzzzzzzzzzzzz"[:22].ljust(22, "z"))["code"], "rate")
+        self.assertEqual(self.e.site_snapshot()["status"]["channelPlaylist"]["name"], "Stream faves")
+
     def test_leaderboard(self):
         self.sr("ann", 3)
         self.play(3)

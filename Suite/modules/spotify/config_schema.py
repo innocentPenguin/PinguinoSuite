@@ -168,6 +168,8 @@ SCHEMA = [
         ("fallback_shuffle", "bool", True, "Shuffle background playlist", ""),
         ("fallback_after_s", "int", 20, "Idle seconds before background music", ""),
         ("lyrics_on", "bool", True, "Show lyrics", "Lyrics overlay (/overlay/lyrics) fetches lines for the playing song from LRCLIB. Off = the overlay stays blank."),
+        ("channel_playlist_id", "str", "", "Channel playlist ID", "Chosen with the picker on the Setup tab. Mods can add the playing song to it from the site."),
+        ("channel_playlist_name", "str", "", "Channel playlist name", ""),
         ("fallback_only_open", "bool", True, "Only while requests are open", "Safety: no surprise music when you are not streaming."),
     ]},
     {"id": "player", "title": "Playback & text files", "items": [

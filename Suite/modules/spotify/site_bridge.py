@@ -231,6 +231,10 @@ class Bridge:
                 e.control("pause")
             elif action == "resume":
                 e.control("resume")
+            elif action == "playlist-add":
+                r = e.playlist_add(user, value or None)
+                if not r["ok"]:
+                    return {"id": eid, "ok": False, "reason": {"duplicate": "duplicate", "no_playlist": "no_playlist", "rate": "rate_limited"}.get(r["code"], "unknown_request")}
             else:
                 return {"id": eid, "ok": False, "reason": "unknown_request"}
         except (QueueError, ApiError) as ex:

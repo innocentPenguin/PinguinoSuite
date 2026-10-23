@@ -224,6 +224,20 @@ class Client:
     def playlist_add(self, playlist_id, uri):
         self._req("POST", f"/playlists/{playlist_id}/tracks", body={"uris": [uri]})
 
+    def my_playlists(self, limit=100):
+        out, offset = [], 0
+        while len(out) < limit:
+            js = self._req("GET", "/me/playlists", {"limit": 50, "offset": offset}) or {}
+            items = js.get("items", [])
+            out += [{"id": p["id"], "name": p.get("name", ""), "tracks": (p.get("tracks") or {}).get("total", 0)} for p in items if p]
+            offset += 50
+            if len(items) < 50 or not js.get("next"):
+                break
+        return out[:limit]
+
+    def playlist_add(self, playlist_id, uri):
+        self._req("POST", f"/playlists/{playlist_id}/tracks", body={"uris": [uri]})
+
     def save_track(self, track_id):
         self._req("PUT", "/me/tracks", params={"ids": track_id})
 
