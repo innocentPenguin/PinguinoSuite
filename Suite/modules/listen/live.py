@@ -3,7 +3,6 @@ import collections
 import queue
 import threading
 import time
-import uuid
 import wave
 
 import numpy as np

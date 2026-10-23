@@ -1,7 +1,6 @@
 """VOD / clip / file ingestion: download audio -> compact 16k opus -> transcribe in chunks -> segments. One job at a time."""
 import hashlib
 import queue
-import re
 import threading
 import time
 import uuid
