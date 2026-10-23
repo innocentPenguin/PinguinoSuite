@@ -1,5 +1,6 @@
 """Learning from corrections: vocabulary (biases Whisper), replacement rules (fix repeat mistakes), uncertainty flags."""
 import difflib
+import json
 import re
 
 import config as cfg
@@ -154,29 +155,96 @@ def parse_note(note: str) -> dict:
     return out
 
 
-def learn_from_note(seg_id: int, note: str):
-    """Feed one saved note into the rules / vocabulary / wrong-word list. Returns what was learned, or None (setting off, nothing recognised, already learned)."""
-    if not cfg.settings().get("learn_from_notes"):
-        return None
-    note = " ".join((note or "").split())
-    done = db.one("SELECT note FROM note_learned WHERE seg_id=?", (seg_id,))
-    if done and done["note"] == note:
-        return None
+MAX_NOTE_RULES = 2000     # notes cannot grow the tables without limit
+MAX_NOTE_VOCAB = 5000
+FLIP_NEEDS = 2            # a rule's right side changes only when this many different segments' notes say so
+
+
+def _want(note: str) -> dict:
+    """What a note should teach, after the safety filters: no rule on an everyday one-word term, no self-rules, no duplicates."""
     p = parse_note(note)
+    rules, seen = [], set()
     for wrong, right in p["rules"]:
-        if wrong and wrong != right:
-            db.run("INSERT INTO rules(wrong,right,count) VALUES(?,?,1) ON CONFLICT(wrong) DO UPDATE SET "
-                   "right=excluded.right, count=CASE WHEN rules.right=excluded.right THEN rules.count+1 ELSE 1 END", (wrong, right))
-        for t in right.split():
-            t = _strip_punct(t)
-            if t and t.lower() not in common_words() and not t.isdigit():
-                add_vocab(t, "note")
-    for t in p["vocab"]:
-        add_vocab(t, "note")
-    db.run("INSERT INTO note_learned(seg_id,note,wrong) VALUES(?,?,?) ON CONFLICT(seg_id) DO UPDATE SET note=excluded.note, wrong=excluded.wrong", (seg_id, note, " ".join(p["wrong"])))
-    if not (p["rules"] or p["vocab"] or p["wrong"]):
+        if not wrong or wrong == right or (" " not in wrong and wrong in common_words()) or (wrong, right) in seen:
+            continue
+        seen.add((wrong, right))
+        rules.append([wrong, right])
+    vocab = []
+    for t in p["vocab"] + [_strip_punct(w) for _, right in rules for w in right.split()]:
+        if t and t.lower() not in common_words() and not t.isdigit() and t not in vocab:
+            vocab.append(t)
+    return {"rules": rules, "vocab": vocab, "wrong": list(dict.fromkeys(p["wrong"]))}
+
+
+def _undo(seg_id: int, produced: dict):
+    """Take back what this segment's earlier note taught."""
+    for wrong, right in produced.get("applied_rules", []):
+        db.run("UPDATE rules SET count=count-1 WHERE wrong=? AND right=?", (wrong, right))
+    db.run("DELETE FROM rules WHERE count<=0")
+    for t in produced.get("applied_vocab", []):
+        db.run("UPDATE vocab SET count=count-1 WHERE term=?", (t,))
+    db.run("DELETE FROM vocab WHERE count<=0")
+    db.run("DELETE FROM rule_pending WHERE seg_id=?", (seg_id,))
+
+
+def learn_from_note(seg_id: int, note: str):
+    """Feed one saved note into the rules / vocabulary / wrong-word list. A segment counts once per rule however often its note is saved; editing or
+    deleting the note takes back what it taught. Returns what was learned, or None (setting off, nothing recognised, same result as before)."""
+    on = bool(cfg.settings().get("learn_from_notes"))
+    note = " ".join((note or "").split())
+    prev = db.one("SELECT note,produced FROM note_learned WHERE seg_id=?", (seg_id,))
+    if not on and prev is None:
         return None
-    return {"rules": p["rules"], "vocab": p["vocab"], "wrong": p["wrong"]}
+    want = _want(note) if on else {"rules": [], "vocab": [], "wrong": []}
+    try:
+        old = json.loads(prev["produced"]) if prev and prev.get("produced") else {}
+    except ValueError:
+        old = {}
+    if prev is not None and old.get("want") == want:       # same parsed result: nothing to do (a stray "." or space changes nothing)
+        if prev["note"] != note:
+            db.run("UPDATE note_learned SET note=? WHERE seg_id=?", (note, seg_id))
+        return None
+    if prev is None and not (want["rules"] or want["vocab"] or want["wrong"]):
+        return None
+    if prev is not None:
+        _undo(seg_id, old)
+    applied_rules, applied_vocab, conflicts = [], [], []
+    for wrong, right in want["rules"]:
+        cur = db.one("SELECT right FROM rules WHERE wrong=?", (wrong,))
+        if cur is None:
+            if db.one("SELECT COUNT(*) n FROM rules")["n"] >= MAX_NOTE_RULES:
+                continue
+            db.run("INSERT INTO rules(wrong,right,count) VALUES(?,?,1)", (wrong, right))
+        elif cur["right"] == right:
+            db.run("UPDATE rules SET count=count+1 WHERE wrong=?", (wrong,))
+        else:    # disagrees with the rule we have: keep it until a second segment agrees with the new answer
+            db.run("INSERT OR IGNORE INTO rule_pending(wrong,right,seg_id) VALUES(?,?,?)", (wrong, right, seg_id))
+            if db.one("SELECT COUNT(*) n FROM rule_pending WHERE wrong=? AND right=?", (wrong, right))["n"] < FLIP_NEEDS:
+                conflicts.append([wrong, cur["right"], right])
+                continue
+            db.run("UPDATE rules SET right=?, count=1 WHERE wrong=?", (right, wrong))
+            db.run("DELETE FROM rule_pending WHERE wrong=?", (wrong,))
+        applied_rules.append([wrong, right])
+    for t in want["vocab"]:
+        if not db.one("SELECT 1 x FROM vocab WHERE term=?", (t,)) and db.one("SELECT COUNT(*) n FROM vocab")["n"] >= MAX_NOTE_VOCAB:
+            continue
+        add_vocab(t, "note")
+        applied_vocab.append(t)
+    produced = {"want": want, "applied_rules": applied_rules, "applied_vocab": applied_vocab}
+    db.run("INSERT INTO note_learned(seg_id,note,wrong,produced) VALUES(?,?,?,?) ON CONFLICT(seg_id) DO UPDATE SET note=excluded.note, wrong=excluded.wrong, produced=excluded.produced",
+           (seg_id, note, " ".join(want["wrong"]), json.dumps(produced)))
+    if not (want["rules"] or want["vocab"] or want["wrong"] or conflicts):
+        return None
+    return {"rules": applied_rules, "vocab": applied_vocab, "wrong": want["wrong"], "conflicts": conflicts}
+
+
+def note_conflicts() -> list:
+    """Rules where notes disagree with what is already learned: [{wrong, kept, proposed, votes}]."""
+    out = []
+    for r in db.rows("SELECT wrong,right,COUNT(*) n FROM rule_pending GROUP BY wrong,right ORDER BY wrong"):
+        cur = db.one("SELECT right FROM rules WHERE wrong=?", (r["wrong"],))
+        out.append({"wrong": r["wrong"], "kept": cur["right"] if cur else None, "proposed": r["right"], "votes": r["n"]})
+    return out
 
 
 NOTE_BOOST = 3.0   # a line the reviewer flagged "wrong: word" sorts like a very unsure line
@@ -185,7 +253,6 @@ NOTE_BOOST = 3.0   # a line the reviewer flagged "wrong: word" sorts like a very
 def regrade_unreviewed() -> int:
     """Re-run current rules over every segment nobody has reviewed yet. With learn_from_notes on, noted lines go first (their notes teach the rules
     the rest of the pass uses) and a line whose note names a wrong word that is really in it is pushed up the review queue."""
-    import json
     on = bool(cfg.settings().get("learn_from_notes"))
     n = 0
     sql = "SELECT id,raw_words,note FROM segments WHERE status='new'" + (" ORDER BY (COALESCE(note,'')!='') DESC, id" if on else "")

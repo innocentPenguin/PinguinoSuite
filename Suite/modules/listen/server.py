@@ -569,6 +569,11 @@ def segment_note(sid: int, b: Note):
     return {"note": note, "learned": learned}
 
 
+@app.get("/api/note-conflicts")
+def note_conflicts():
+    return {"conflicts": learn.note_conflicts()}
+
+
 @app.post("/api/regrade")
 def regrade():
     return {"updated": learn.regrade_unreviewed()}

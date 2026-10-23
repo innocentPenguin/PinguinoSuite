@@ -16,7 +16,7 @@ import botvoice  # noqa: E402
 
 class Fake:
     def __init__(self):
-        self.mode, self.intervals, self.hits, self.since = "ok", [], 0, []
+        self.mode, self.intervals, self.hits, self.since, self.speaking = "ok", [], 0, [], False
         outer = self
 
         class H(BaseHTTPRequestHandler):
@@ -33,7 +33,7 @@ class Fake:
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                     return
-                b = json.dumps({"now": time.time(), "speaking": False, "intervals": outer.intervals}).encode() if outer.mode != "junk" else b"not json"
+                b = json.dumps({"now": time.time(), "speaking": outer.speaking, "intervals": outer.intervals}).encode() if outer.mode != "junk" else b"not json"
                 try:
                     self.send_response(200)
                     self.send_header("Content-Length", str(len(b)))
@@ -90,6 +90,41 @@ class BotVoice(unittest.TestCase):
         t = time.time()
         self.assertTrue(botvoice.is_bot(1.0, 2.0, fallback=lambda: True, base=self.f.url))
         self.assertLess(time.time() - t, 2.0)
+
+    def test_cache_not_used_for_a_segment_that_ended_after_it_was_fetched(self):
+        now = time.time()
+        self.f.intervals = []
+        self.assertFalse(botvoice.is_bot(now - 1.0, now - 0.2, base=self.f.url))   # fetched now; segment ended 0.2 s ago: too fresh to trust a cache
+        self.f.intervals = [[now - 0.4, now]]    # the bot started a moment later
+        self.assertTrue(botvoice.is_bot(now - 0.8, now - 0.1, base=self.f.url))
+        self.assertEqual(self.f.hits, 2)
+        # an old segment is happy with the cache
+        botvoice.reset_cache()
+        botvoice.is_bot(now - 60, now - 59, base=self.f.url)
+        botvoice.is_bot(now - 59, now - 58, base=self.f.url)
+        self.assertEqual(self.f.hits, 3)
+
+    def test_speaking_flag_is_an_open_interval(self):
+        now = time.time()
+        self.f.speaking = True
+        self.assertTrue(botvoice.is_bot(now - 1.0, now - 0.2, base=self.f.url))
+        botvoice.reset_cache()
+        self.f.speaking = False
+        self.assertFalse(botvoice.is_bot(now - 1.0, now - 0.2, base=self.f.url))
+
+    def test_failure_is_cached_and_does_not_wait_again(self):
+        self.f.mode = "slow"
+        t = time.time()
+        self.assertTrue(botvoice.is_bot(1.0, 2.0, fallback=lambda: True, base=self.f.url))
+        self.assertLess(time.time() - t, 2.0)
+        t = time.time()
+        for _ in range(5):
+            self.assertTrue(botvoice.is_bot(3.0, 4.0, fallback=lambda: True, base=self.f.url))
+        self.assertLess(time.time() - t, 0.3)    # no more waiting on the hung Voice
+        self.assertEqual(self.f.hits, 1)
+        botvoice.reset_cache()                    # (the real code retries after FAIL_S)
+        self.f.mode = "ok"
+        self.assertFalse(botvoice.is_bot(1.0, 2.0, base=self.f.url))
 
 
 class Wiring(unittest.TestCase):

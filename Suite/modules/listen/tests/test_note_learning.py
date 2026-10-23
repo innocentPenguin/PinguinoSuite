@@ -94,5 +94,93 @@ class On(unittest.TestCase):
         self.assertEqual(db.one("SELECT text FROM segments WHERE id=?", (s,))["text"], "say hello please")
 
 
+class Safety(unittest.TestCase):
+    def setUp(self):
+        import config as cfg
+        import db
+        import learn
+        self._common = learn._common
+        learn._common = {"the", "a", "cat", "and"}      # do not depend on the word-list file
+        cfg.save_settings({"learn_from_notes": True})
+        for t in ("rules", "vocab", "note_learned", "rule_pending"):
+            db.run("DELETE FROM " + t)
+
+    def tearDown(self):
+        import config as cfg
+        import learn
+        learn._common = self._common
+        cfg.save_settings({"learn_from_notes": False})
+
+    def test_common_word_rule_never_created_and_trivial_edits_do_not_count(self):
+        import db
+        import learn
+        s1 = seg(db, "the cat", sid="sf")
+        learn.learn_from_note(s1, "the -> a")
+        learn.learn_from_note(s1, "the -> a.")
+        self.assertEqual(db.rows("SELECT * FROM rules"), [])
+        learn.learn_from_note(s1, "pingwin -> Pinguino")
+        learn.learn_from_note(s1, "  pingwin   ->  Pinguino. ")     # same parsed result
+        learn.learn_from_note(s1, '"pingwin" -> "Pinguino"')
+        self.assertEqual(db.one("SELECT count FROM rules WHERE wrong='pingwin'")["count"], 1)
+        s2 = seg(db, "pingwin again", sid="sf")
+        learn.learn_from_note(s2, "pingwin -> Pinguino")
+        self.assertEqual(db.one("SELECT count FROM rules WHERE wrong='pingwin'")["count"], 2)   # a second segment does count
+
+    def test_editing_or_deleting_a_note_takes_back_what_it_taught(self):
+        import db
+        import learn
+        s = seg(db, "hullo Pingwin", sid="ed")
+        learn.learn_from_note(s, "pingwin -> Pinguino; vocab: Zorbax")
+        self.assertTrue(db.one("SELECT 1 x FROM rules WHERE wrong='pingwin'"))
+        self.assertTrue(db.one("SELECT 1 x FROM vocab WHERE term='Zorbax'"))
+        learn.learn_from_note(s, "vocab: Zorbax")
+        self.assertIsNone(db.one("SELECT 1 x FROM rules WHERE wrong='pingwin'"))
+        self.assertTrue(db.one("SELECT 1 x FROM vocab WHERE term='Zorbax'"))
+        self.assertIsNone(db.one("SELECT 1 x FROM vocab WHERE term='Pinguino'"))
+        learn.learn_from_note(s, "")
+        self.assertEqual(db.rows("SELECT * FROM vocab"), [])
+
+    def test_setting_off_still_takes_back_an_edited_note(self):
+        import config as cfg
+        import db
+        import learn
+        s = seg(db, "x", sid="off2")
+        learn.learn_from_note(s, "pingwin -> Pinguino")
+        cfg.save_settings({"learn_from_notes": False})
+        learn.learn_from_note(s, "something else")
+        self.assertEqual(db.rows("SELECT * FROM rules"), [])
+
+    def test_conflicting_note_does_not_flip_until_a_second_segment_agrees(self):
+        import db
+        import learn
+        a, b, c = (seg(db, "x", sid="cf") for _ in range(3))
+        learn.learn_from_note(a, "pingwin -> Pinguino")
+        r = learn.learn_from_note(b, "pingwin -> Penguin")
+        self.assertEqual(db.one("SELECT right,count FROM rules WHERE wrong='pingwin'"), {"right": "Pinguino", "count": 1})
+        self.assertEqual(r["conflicts"], [["pingwin", "Pinguino", "Penguin"]])
+        self.assertEqual(learn.note_conflicts(), [{"wrong": "pingwin", "kept": "Pinguino", "proposed": "Penguin", "votes": 1}])
+        learn.learn_from_note(c, "pingwin -> Penguin")
+        self.assertEqual(db.one("SELECT right FROM rules WHERE wrong='pingwin'")["right"], "Penguin")
+        self.assertEqual(learn.note_conflicts(), [])
+
+    def test_caps(self):
+        import db
+        import learn
+        old = learn.MAX_NOTE_RULES
+        learn.MAX_NOTE_RULES = 2
+        try:
+            for i in range(4):
+                learn.learn_from_note(seg(db, "x", sid="cap"), f"zzword{i} -> Right{i}")
+            self.assertEqual(db.one("SELECT COUNT(*) n FROM rules")["n"], 2)
+        finally:
+            learn.MAX_NOTE_RULES = old
+
+    def test_conflicts_endpoint(self):
+        import server
+        from fastapi.testclient import TestClient
+        c = TestClient(server.app, base_url="http://127.0.0.1:8765")
+        self.assertEqual(c.get("/api/note-conflicts").json(), {"conflicts": []})
+
+
 if __name__ == "__main__":
     unittest.main()
