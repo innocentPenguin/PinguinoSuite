@@ -100,7 +100,10 @@ try:
     feed('ann: !latest'); time.sleep(1.0)
     if 'Latest' not in ' '.join(o for r in api('/api/automations/log?n=100')['runs'] for o in r.get('output', []) if 'latest:' in o): fails.append('!latest produced no line')
     r1 = api('/api/shoutouts', {'user': 'someone', 'by': 'mod'}); r2 = api('/api/shoutouts', {'user': 'someone', 'by': 'mod'})
-    if r1['result'] != 'queued' or r2['result'] != 'duplicate': fails.append('shoutout dedupe: %s %s' % (r1, r2))
+    if r1['result'] != 'queued' or r2['result'] != 'cooldown': fails.append('shoutout cooldown (manual shoutouts share one cooldown window): %s %s' % (r1, r2))
+    json.dump({'CooldownSec': 0}, open(os.path.join(d, 'shout_settings.json'), 'w'))   # cooldown off: now the same person again is a duplicate
+    r3 = api('/api/shoutouts', {'user': 'someone', 'by': 'mod'})
+    if r3['result'] != 'duplicate': fails.append('shoutout dedupe: %s' % (r3,))
     time.sleep(2.0)
     if api('/api/shoutouts')['pending']: fails.append('shoutout queue did not drain')
 finally:
