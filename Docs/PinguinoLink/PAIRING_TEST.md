@@ -19,7 +19,7 @@ Call them PC1 (the streaming PC, will be the hub) and PC2 (the other PC, with Pi
 ## B. Make PC1 the hub (one deliberate click)
 Only the PC that runs OBS is the hub.
 1. On PC1: Link page > **Settings** > **Role** > choose **hub**.
-2. A line appears: "Switch this PC to hub? It will run OBS macros itself." with a confirm button. Click it. Nothing changes until you do.
+2. A line appears: "Switch this PC to hub? It will run OBS macros itself." with a **Yes, change role** button. Click it. Nothing changes until you do.
 3. On PC2 leave Role = **client** and set **Hub device** to PC1's Tailscale name.
 4. Leave "Let paired devices start/stop my stream" OFF and "Allow Start Stream" OFF.
 
