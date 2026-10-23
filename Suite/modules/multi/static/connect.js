@@ -23,7 +23,7 @@
     const st = await j('/auth/' + p + '/status');
     return `<div class="box conn42" data-p="${p}"><b>${NAMES[p]} sign-in</b> <small class="mut">${esc(state(st))}</small>
       <details><summary class="mut">How to set it up</summary><small class="mut">${HELP[p]}<br>Redirect address (saved when you click Save): <code>${esc(redirectFor(p))}</code>${st.redirect_uri && st.redirect_uri !== redirectFor(p) ? ' <b>currently set to ' + esc(st.redirect_uri) + '</b>' : ''}</small></details>
-      <div><input class="c42-id" placeholder="client id" autocomplete="off" size="26"> <input class="c42-sec" type="password" placeholder="client secret" autocomplete="new-password" size="20">
+      <div><input class="c42-id" aria-label="${NAMES[p]} client id" placeholder="client id" autocomplete="off" size="26"> <input class="c42-sec" type="password" aria-label="${NAMES[p]} client secret" placeholder="client secret" autocomplete="new-password" size="20">
         <button type="button" class="c42-save">Save</button>
         <button type="button" class="c42-go p"${ready(st) ? '' : ' disabled title="Save the client id and secret first"'}>Sign in to ${NAMES[p]}</button></div>
       <div class="c42-msg mut"></div></div>`;

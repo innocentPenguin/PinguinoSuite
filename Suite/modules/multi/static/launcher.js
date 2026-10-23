@@ -36,12 +36,28 @@ function platformSetup(c, setup) {
     <label>Bot token ${has.discord ? `<b class="okc">(${setup.sources.discord_token === 'vault' ? 'in the Suite key vault' : 'saved'})</b>` : ''}<input id="dc-token" type="password" autocomplete="off" placeholder="${has.discord ? 'leave empty to keep the saved token' : 'paste bot token'}"></label>
     <label>Channel IDs (comma separated)<input id="dc-chans" value="${esc((s.discord_channels || []).join(', '))}" placeholder="123456789012345678"></label>
     <div class="act"><button class="p" data-act="save-discord">Save Discord</button> ${has.discord ? '<button data-act="clear-discord">Forget token</button>' : ''}</div>`;
-  if (c.platform === 'youtube') return `<p class="how">Use the YouTube sign-in box above. Multi reads your active broadcast's chat; replies are plain messages (YouTube has no reply threads).</p>`;
+  if (c.platform === 'youtube') return `<p class="how">Multi reads your active broadcast's chat; replies are plain messages (YouTube has no reply threads).</p>`;
+  if (c.platform === 'kick') return `<p class="how">Kick chat is read-only unless you sign in. The sign-in box explains the Kick developer app it needs.</p>`;
   if (c.platform === 'tiktok') return `<p class="how warn">UNOFFICIAL and read-only. TikTok has no official chat API, so this uses a third-party package that can break or break TikTok's rules. Off by default. You can read TikTok chat here but not reply.</p>
     <label class="chk"><input id="tt-on" type="checkbox" ${s.tiktok_enabled ? 'checked' : ''}> Read my TikTok LIVE chat</label>
     <label>TikTok username<input id="tt-user" value="${esc(s.tiktok_user)}" placeholder="yourname"></label>
     <div class="act"><button class="p" data-act="save-tiktok">Save TikTok</button></div>`;
   return '';
+}
+
+// the connectors report developer-style status lines; the launcher shows plain ones (the real detail still shows for errors)
+function plainDetail(c) {
+  const d = String(c.detail || '');
+  if (c.status === 'connected') return d.replace(/^as /, 'Signed in as ');
+  if (c.platform === 'discord' && c.status === 'needs_auth') return 'Not set up yet: paste the bot token and channel IDs below, then press Save Discord.';
+  if (c.platform === 'youtube' && c.status === 'needs_auth') return 'Not set up yet: use the YouTube sign-in box below the platform list.';
+  if (c.platform === 'tiktok' && c.status === 'disabled') return 'Off. Tick the box below and type the TikTok username to read its chat.';
+  if (c.platform === 'kick' && c.status === 'disabled') return 'Off. Use the Kick sign-in box below the platform list.';
+  return d.replace(/(kick_enabled|kick_chatroom_id)/g, 'the Kick settings');
+}
+
+function plainCheck(c) {      // "HTTP 200" etc. means nothing to a streamer: say what it means
+  return String(c.detail || '').replace(/HTTP (\d+)/g, (m, n) => c.ok ? 'answered' : +n >= 500 ? 'the server had an error (' + n + ')' : +n >= 400 ? 'refused (' + n + ')' : 'answered, but not as expected (' + n + ')').replace('scopes asked', 'permissions asked');
 }
 
 function platformCard(c, setup) {
@@ -51,7 +67,7 @@ function platformCard(c, setup) {
   return `<details class="pcard" ${open ? 'open' : ''}><summary><span class="dot ${c.status}"></span> <b>${esc(c.label)}</b>
     <span class="st ${cls}">${esc(label)}</span> ${c.official ? '' : '<span class="tag">UNOFFICIAL</span>'}
     ${can.includes('send') ? '' : '<span class="tag">read-only</span>'}</summary>
-    ${c.detail ? `<p class="detail">${esc(c.detail)}</p>` : ''}${platformSetup(c, setup)}</details>`;
+    ${c.detail ? `<p class="detail">${esc(plainDetail(c))}</p>` : ''}${platformSetup(c, setup)}</details>`;
 }
 
 async function renderLauncher() {
@@ -147,6 +163,7 @@ document.addEventListener('click', async e => {
     else if (a === 'save-discord') {
       const chans = v('dc-chans').split(/[,\s]+/).filter(Boolean);
       const body = {channels: chans}; if (v('dc-token').trim()) body.token = v('dc-token').trim();
+      if (!body.token && !(($('#dc-token') || {}).placeholder || '').startsWith('leave empty')) { toast('Paste the Discord bot token first.', false); return; }
       if (!await saveSecret('/api/secrets/discord', body, 'Discord saved. It connects in a few seconds.')) return;
     }
     else if (a === 'clear-discord') { await saveSecret('/api/secrets/discord', {clear: true}, 'Discord token removed.'); }
@@ -159,7 +176,7 @@ document.addEventListener('click', async e => {
     }
     else if (a === 'save-voice') { await api('/api/settings', {b: {voice_enabled: $('#voice').checked}}); toast($('#voice').checked ? 'Voice suggestions on.' : 'Voice suggestions off.'); }
     else if (a === 'checks') { const box = $('#checks'); box.textContent = 'Checking...'; const r = await api('/api/checks');
-      box.innerHTML = r.checks.map(c => `<div class="chk-row"><span class="dot ${c.ok ? 'connected' : 'error'}"></span> <b>${esc(c.label)}</b> ${esc(c.detail)}${c.ok ? '' : `<br><small>How to fix: ${esc(c.fix)}</small>`}</div>`).join(''); return; }
+      box.innerHTML = r.checks.map(c => `<div class="chk-row"><span class="dot ${c.ok ? 'connected' : 'error'}"></span> <b>${esc(c.label)}</b> ${esc(plainCheck(c))}${c.ok ? '' : `<br><small>How to fix: ${esc(c.fix)}</small>`}</div>`).join(''); return; }
     else if (a === 'learn') { const r = await api('/api/learning'); const k = Object.keys(r.rules);
       $('#learn').innerHTML = k.map(n => { const x = r.rules[n]; return `<div>${esc(n)}: <b>${x.delta > 0 ? '+' : ''}${x.delta} pts</b> <small class="mut">(${x.n} actions${x.delta ? '' : ', not enough yet'})</small></div>`; }).join('') || '<div class="empty">Nothing learned yet.</div>'; return; }
     else if (a === 'learn-reset') { await api('/api/learning/reset', {b: {}}); toast('Learning reset to defaults.'); return; }
