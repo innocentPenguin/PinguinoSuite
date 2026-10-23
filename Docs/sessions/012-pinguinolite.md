@@ -54,3 +54,4 @@ Everything below is source-only until Lite is rebuilt (`cargo build --release --
 4. Start/Stop/Restart from Lite on a module: goes through request files, Link drops Data/runtime/control/<action>-<id>, the Suite core acts. With the Suite closed, expect "the Suite core did not pick up the request".
 5. The exe in the release is the new one: `Installer\Build-Release.mjs` lite part has 2 files (exe + Start-Lite.bat); check the exe timestamp is after the rebuild.
 6. Release/signing: follow Docs/LITE_RELEASE.md and Docs/RELEASE_DRYRUN.md (key with Installer/Make-SigningKey.mjs, `--sign-key`, publish three files, install on the second PC with `--url ... --pubkey ... --profile lite-minimal`).
+7. On the gaming PC (the only one with Rocket League): the replay scan finds the Demos folder under OneDrive\Documents if Documents is redirected. Do not run the live scan on the main PC.

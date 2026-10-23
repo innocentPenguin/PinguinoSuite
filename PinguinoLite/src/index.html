@@ -201,7 +201,7 @@ function mergeRows(catalog, installed, status, mods, hidden) {
   return cat.filter(m => !hidden.includes(m.id)).map(m => {
     const i = inst[m.id], latest = m.version || m.latest_version, hasProf = Object.prototype.hasOwnProperty.call(prof, m.id);
     const installedNow = hasProf ? prof[m.id] : !!i;
-    const known = installedNow && !!i;   // a version is shown only when Link also knows the module
+    const known = installedNow && !!i && i.version != null;   // a version is shown only when Link also knows the module
     return { ...m, description: m.desc || m.description, latest_version: latest, installed: installedNow, installed_version: known ? i.version : null,
       update: known && cmpVer(latest, i.version) > 0, busy: busy[m.id] || '', conn: installedNow ? cs[m.id] : undefined, profile: hasProf };
   });

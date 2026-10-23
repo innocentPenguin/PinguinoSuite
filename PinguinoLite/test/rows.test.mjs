@@ -45,3 +45,8 @@ test('missing files never throw', () => {
   assert.deepEqual(merge(null, null, null, null, []), []);
   assert.deepEqual(merge({ exists: false }, { exists: false }, { exists: false }, { supported: true }, []), []);
 });
+
+test('installed.json entry without a version: installed, version unknown, no update badge', () => {
+  const r = byId(merge(catalog, { data: { modules: { spotify: {} } } }, status, mods, []));
+  assert.equal(r.spotify.installed, true); assert.equal(r.spotify.installed_version, null); assert.equal(r.spotify.update, false);
+});
