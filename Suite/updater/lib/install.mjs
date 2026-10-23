@@ -30,8 +30,18 @@ export function writeFailure(e) {
   return base;
 }
 
+/** Free bytes on the drive that holds `dir` (or its nearest existing parent); null when it cannot be told. */
+export function freeBytes(dir) {
+  let d = path.resolve(dir);
+  while (!fs.existsSync(d)) { const up = path.dirname(d); if (up === d) return null; d = up; }
+  try { const s = fs.statfsSync(d); return Number(s.bavail) * Number(s.bsize); } catch { return null; }
+}
+/** Space an install needs: the download held in memory and written to disk, plus room for logs and Data. */
+export const neededBytes = releaseBytes => releaseBytes * 2 + 500 * 1024 * 1024;
+const mb = n => Math.round(n / 1048576);
+
 /** Install from one source spec. Returns {ok, message, version}. Never overwrites an existing install (that is the Updater's job). */
-export async function installRelease({ target, source, channel = 'stable', repairOver = false, pubkey = null, token = null, recordSource = null, profile = 'full' }) {
+export async function installRelease({ target, source, channel = 'stable', repairOver = false, pubkey = null, token = null, recordSource = null, profile = 'full', free = freeBytes }) {
   if (!PROFILES[profile]) return { ok: false, message: `unknown install profile: ${profile}` };
   const keepParts = PROFILES[profile].parts;   // null = everything
   const dst = path.resolve(target), D = dirs(dst);
@@ -39,6 +49,8 @@ export async function installRelease({ target, source, channel = 'stable', repai
   if (fs.existsSync(dst) && !fs.existsSync(D.install) && !onlyEmptyDirs(dst)) return { ok: false, message: 'that folder is not empty; pick an empty folder' };
   const src = await openSource(source, { pubkey, token }), m = src.manifest;
   if (m.channel !== channel && !(channel === 'beta' && m.channel === 'stable')) return { ok: false, message: `that release is on the ${m.channel} channel` };
+  const need = neededBytes(m.files.reduce((a, f) => a + (f.size || 0), 0)), have = free(dst);
+  if (have != null && have < need) return { ok: false, message: `not enough free space on ${path.parse(dst).root || dst}: the install needs about ${mb(need)} MB and ${mb(have)} MB are free; free some space or pick another drive` };
   const plan = [];
   for (const f of m.files) {
     const buf = await src.fetchFile(f);
@@ -63,7 +75,7 @@ export async function installRelease({ target, source, channel = 'stable', repai
   return { ok: true, message: `PinguinoSuite ${m.version} installed in ${dst}`, version: m.version, files: kept.length, profile };
 }
 
-/** Start-menu + desktop shortcuts via PowerShell/WScript. Opt-in; returns the paths made. The folders come from Windows (GetFolderPath), so a OneDrive-redirected Desktop works.
+/** Start-menu + desktop shortcuts via PowerShell/WScript. Opt-in; returns the paths made. PINGUINO_SHORTCUT_DIR (tests) puts them in <dir>\Desktop and <dir>\Programs instead. The folders come from Windows (GetFolderPath), so a OneDrive-redirected Desktop works.
  *  A lite-minimal install has no Suite exe: its shortcut starts PinguinoLite\Start-Lite.bat (which also applies a staged Lite update). */
 export function shortcutSpec(profile) {
   return profile === 'lite-minimal' ? { exeRel: 'PinguinoLite/Start-Lite.bat', name: 'PinguinoLite' } : { exeRel: 'App/src-tauri/target/release/pinguino-suite.exe', name: 'PinguinoSuite' };
@@ -76,8 +88,8 @@ export function makeShortcuts({ target, exeRel = 'App/src-tauri/target/release/p
   if (startMenu) places.push('Programs');
   if (desktop) places.push('Desktop');
   for (const place of places) {
-    const ps = `$d=if($env:PG_PLACE -eq 'Programs'){[Environment]::GetFolderPath('Programs')}else{[Environment]::GetFolderPath('Desktop')};$l=Join-Path $d ($env:PG_NAME+'.lnk');$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l);$s.TargetPath=$env:PG_EXE;$s.WorkingDirectory=Split-Path $env:PG_EXE;$s.Save();Write-Output $l`;
-    const r = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { env: { ...process.env, PG_PLACE: place, PG_NAME: name, PG_EXE: exe }, windowsHide: true }).toString().trim();
+    const ps = `$d=if($env:PG_DIR){Join-Path $env:PG_DIR $env:PG_PLACE}elseif($env:PG_PLACE -eq 'Programs'){[Environment]::GetFolderPath('Programs')}else{[Environment]::GetFolderPath('Desktop')};New-Item -ItemType Directory -Force -Path $d | Out-Null;$l=Join-Path $d ($env:PG_NAME+'.lnk');$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l);$s.TargetPath=$env:PG_EXE;$s.WorkingDirectory=Split-Path $env:PG_EXE;$s.Save();Write-Output $l`;
+    const r = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { env: { ...process.env, PG_PLACE: place, PG_NAME: name, PG_EXE: exe, PG_DIR: process.env.PINGUINO_SHORTCUT_DIR || '' }, windowsHide: true }).toString().trim();
     made.push(r);
   }
   return made;

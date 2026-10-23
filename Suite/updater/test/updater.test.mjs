@@ -432,7 +432,7 @@ test('Lite command lines: lite is staged then swapped by launch; link applies; r
 });
 
 // ---- fresh-PC failure modes (Installer review) ----
-import { onlyEmptyDirs, pruneEmptyDirs, writeFailure, shortcutSpec } from '../lib/install.mjs';
+import { onlyEmptyDirs, pruneEmptyDirs, writeFailure, shortcutSpec, makeShortcuts, neededBytes, freeBytes } from '../lib/install.mjs';
 import { defaultTimeoutMs } from '../lib/sources.mjs';
 
 test('install: leftover empty folders do not block a retry, files do', async () => {
@@ -452,4 +452,29 @@ test('install: failure messages name the cause; shortcuts differ for a lite-mini
   assert.match(writeFailure({ code: 'ENAMETOOLONG', message: 'x' }), /too long/);
   assert.equal(shortcutSpec('lite-minimal').exeRel, 'PinguinoLite/Start-Lite.bat'); assert.match(shortcutSpec('full').exeRel, /pinguino-suite\.exe$/);
   assert.equal(defaultTimeoutMs(256 * 1024), 10000); assert.ok(defaultTimeoutMs(2 * 1024 ** 3) >= 15 * 60 * 1000);
+});
+
+test('install: refuses with a clear message when the drive is too small (mocked free space), installs when it fits', async () => {
+  const rel = makeRelease('1.0.0', [['App/app.txt', 'a']]), size = fs.statSync(path.join(rel, 'suite-1.0.0.zip')).size;
+  const d = tmp('space-'); const small = await installRelease({ target: d, source: { type: 'local', path: rel }, free: () => neededBytes(size) - 1 });
+  assert.equal(small.ok, false); assert.match(small.message, /not enough free space.*MB are free/); assert.deepEqual(fs.readdirSync(d), []);
+  const fits = await installRelease({ target: d, source: { type: 'local', path: rel }, free: () => neededBytes(size) }); assert.equal(fits.ok, true, JSON.stringify(fits));
+  assert.equal(neededBytes(0), 500 * 1024 * 1024); assert.ok(freeBytes(path.join(d, 'not', 'there', 'yet')) > 0);   // walks up to an existing parent
+  const unknown = await installRelease({ target: tmp('space2-'), source: { type: 'local', path: rel }, free: () => null }); assert.equal(unknown.ok, true);   // cannot tell = do not block
+});
+
+test('shortcuts: full and lite-minimal targets, written to a scratch folder (PINGUINO_SHORTCUT_DIR), never the real Desktop', { skip: process.platform !== 'win32' }, () => {
+  const inst = tmp('lnk-inst-'), out = tmp('lnk-out-');
+  for (const f of ['PinguinoLite/Start-Lite.bat', 'App/src-tauri/target/release/pinguino-suite.exe']) { fs.mkdirSync(path.dirname(path.join(inst, f)), { recursive: true }); fs.writeFileSync(path.join(inst, f), 'x'); }
+  const old = process.env.PINGUINO_SHORTCUT_DIR; process.env.PINGUINO_SHORTCUT_DIR = out;
+  try {
+    const target = lnk => execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "(New-Object -ComObject WScript.Shell).CreateShortcut($env:L).TargetPath"], { env: { ...process.env, L: lnk } }).toString().trim();
+    const lite = makeShortcuts({ target: inst, ...shortcutSpec('lite-minimal') });
+    assert.deepEqual(lite.map(p => path.relative(out, p)).sort(), [path.join('Desktop', 'PinguinoLite.lnk'), path.join('Programs', 'PinguinoLite.lnk')]);
+    assert.equal(target(lite[0]).toLowerCase(), path.join(inst, 'PinguinoLite', 'Start-Lite.bat').toLowerCase());
+    const full = makeShortcuts({ target: inst, ...shortcutSpec('full') });
+    assert.equal(target(full[0]).toLowerCase(), path.join(inst, 'App', 'src-tauri', 'target', 'release', 'pinguino-suite.exe').toLowerCase());
+    // a target that is not in the install makes no shortcut
+    assert.throws(() => makeShortcuts({ target: tmp('lnk-empty-'), ...shortcutSpec('lite-minimal') }), /not in this install/);
+  } finally { if (old === undefined) delete process.env.PINGUINO_SHORTCUT_DIR; else process.env.PINGUINO_SHORTCUT_DIR = old; }
 });
