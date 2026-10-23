@@ -254,7 +254,7 @@ def p_chat_command(h, b):
     role = b.get("role") or ("broadcaster" if b.get("isMod") and b.get("user") == b.get("channel") else "mod" if b.get("isMod") else "sub" if b.get("isSub") else "viewer")
     user = str(b.get("user") or "")
     c = brain.cfg
-    if cmd == "tts":
+    if cmd in ("tts", "speak"):   # same switch and role check; the final command name is Ivan's call
         if not c["tts"]["enabled"]:
             return {"ok": True, "say": ""}
         if ROLE_RANK.get(role, 0) < ROLE_RANK[c["tts"]["min_role"]]:

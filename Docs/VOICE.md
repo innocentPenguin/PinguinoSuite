@@ -47,3 +47,19 @@ Needs Host endpoints `POST /api/channel/update {game|title}` and `POST /api/mod/
 
 New API: GET `/api/control /api/review/reports /api/review/report?id= /api/incidents` · POST `/api/control/enable|confirm|cancel|try`, `/api/review/run|apply`. Pre-stream items `voice-control`, `voice-review`. Tests: 65 (`test_review_control.py` adds 19).
 Apply: `Update-Module.bat voice -NoBuild` (manifest help only changed; Listen VOD fix needs `Update-Module.bat listen -NoBuild`).
+
+## Cycle 7: audio routing with Spotify, and !speak
+
+**Routing (design, nothing depends on the go-librespot spike).** Speak already plays to one named output: Output > Device (`output.device`, a part of a device name; empty = Windows default). Recommended layout, all done in Windows and OBS, no Speak code needed:
+
+| Sound | Plays to | OBS | Headphones |
+|---|---|---|---|
+| Music (Spotify / go-librespot) | virtual cable A | "Audio Output Capture" of cable A, own fader | OBS monitoring "Monitor and Output" on that source |
+| Speak voice | virtual cable B (`output.device` = "Cable B") | second capture of cable B, own fader | OBS monitoring on that source |
+| Everything else | Windows default | normal desktop audio | direct |
+
+Why two cables: the voice and the music get separate OBS faders, so the voice can sit above the music, and Listen's mic never hears either one. Never point the Speak device at a cable the mic or Listen records. If cable B is unplugged Speak logs "output device not found, using the default" (once per 5 min) and plays on the default instead of going silent. Without a second cable, leave Device empty and capture the Windows default in OBS.
+Not built on purpose: a second simultaneous Speak output (stream and headphones from Speak itself). OBS monitoring already does that and keeps the two in sync.
+
+**!speak.** The viewer text-to-speech command is the existing `!tts` path, now also answering to `!speak` (same switch `tts.enabled`, OFF by default; same minimum role `tts.min_role`, default mod; same profanity, link, secret, rate and per-user limits; replies nothing in chat). `speak` was added to module.json `commands`, so the Host must reload manifests to register it. Price is not Speak's job: put it on a channel-points redeem or sub-only role in the Host; Speak only checks role and limits.
+Apply: `Update-Module.bat voice -NoBuild`; the Host must re-read the manifest to route `!speak`.

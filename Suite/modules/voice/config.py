@@ -122,7 +122,7 @@ HELP = {
     "milestone.scope": "'day' starts again at midnight, 'forever' never resets (until you press Reset counters).",
     "milestone.lines": "What it says, one per row. Variables: {count} {every} {event} {catch} {time}.",
     "sounds": "Your own WAV sounds (max 2 MB each, kept in the Speak data folder). Use them as a persona's or an event's sound.",
-    "tts.enabled": "Lets people type !tts <text> in chat to have it spoken (the Host runs the command; set it up on Actions & Events). Off by default.",
+    "tts.enabled": "Lets people type !tts or !speak <text> in chat to have it spoken (the Host runs the command; set it up on Actions & Events). Off by default.",
     "tts.min_role": "Lowest role allowed to use !tts: viewer, sub, vip, mod or broadcaster.",
     "listen.confirm_commands": "When a voice command is heard and fires, say a tiny confirmation. Voice commands stay silent in chat either way.",
     "review.enabled": "Every hour of stream, compare what the bot said with what you said, what chat said and what the logs recorded, and write a report (Review tab). Local only; it never speaks.",
