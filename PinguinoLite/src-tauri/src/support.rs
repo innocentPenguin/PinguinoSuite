@@ -62,8 +62,39 @@ fn secret_end(lower: &[u8], i: usize) -> Option<usize> {
     None
 }
 
-/// Replace secret-looking text with [removed] (same patterns as the Suite's feedback scrub, plus quoted JSON values).
+/// Hide the Windows account name in paths: C:\Users\<name>\x becomes C:\Users\<user>\x (also with /, and with the doubled backslashes of JSON).
+pub fn mask_user(text: &str) -> String {
+    let lower = text.to_ascii_lowercase();
+    let (b, l) = (text.as_bytes(), lower.as_bytes());
+    let sep = |c: u8| c == b'/' || c == b'\\';
+    let (mut out, mut last, mut i) = (String::with_capacity(text.len()), 0, 0);
+    while i + 7 < b.len() {
+        if l[i..].starts_with(b"users") && i > 0 && sep(b[i - 1]) && sep(b[i + 5]) {
+            let mut s = i + 6;
+            while s < b.len() && sep(b[s]) {
+                s += 1; // JSON escaping doubles the backslash
+            }
+            let n = b[s..].iter().take_while(|c| !sep(**c) && !matches!(**c, b'"' | b'\'' | b'<' | b'>' | b'|' | b'\r' | b'\n')).count();
+            if n > 0 && &text[s..s + n] != "<user>" {
+                out.push_str(&text[last..s]);
+                out.push_str("<user>");
+                last = s + n;
+                i = s + n;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    out.push_str(&text[last..]);
+    out
+}
+
+/// Replace secret-looking text with [removed] (same patterns as the Suite's feedback scrub, plus quoted JSON values), and hide the Windows account name in paths.
 pub fn scrub(text: &str) -> String {
+    mask_user(&scrub_secrets(text))
+}
+
+fn scrub_secrets(text: &str) -> String {
     let lower = text.to_ascii_lowercase();
     let (b, l) = (text.as_bytes(), lower.as_bytes());
     let mut out = String::with_capacity(text.len());
@@ -122,6 +153,32 @@ pub fn tail(text: &str, max: usize) -> String {
 
 pub fn bundle_name(secs: u64) -> String {
     format!("bundle-{}", secs)
+}
+
+/// Bundles kept in <lite dir>\support: older ones are removed so repeated clicks never fill the disk.
+pub const KEEP_BUNDLES: usize = 5;
+
+/// Which entries of the support folder to remove: only "bundle-<digits>" folders and "bundle-<digits>.zip" files, all but the newest `keep`.
+pub fn bundles_to_remove(names: &[String], keep: usize) -> Vec<String> {
+    let num = |n: &str| -> Option<u64> {
+        let stem = n.strip_suffix(".zip").unwrap_or(n);
+        stem.strip_prefix("bundle-").filter(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit())).and_then(|d| d.parse().ok())
+    };
+    let mut ids: Vec<u64> = names.iter().filter_map(|n| num(n)).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    let cut = ids.len().saturating_sub(keep);
+    let old: Vec<u64> = ids.into_iter().take(cut).collect();
+    names.iter().filter(|n| num(n).map_or(false, |v| old.contains(&v))).cloned().collect()
+}
+
+fn prune_bundles(support: &Path) {
+    let Ok(rd) = std::fs::read_dir(support) else { return };
+    let names: Vec<String> = rd.flatten().filter_map(|e| e.file_name().into_string().ok()).collect();
+    for n in bundles_to_remove(&names, KEEP_BUNDLES) {
+        let p = support.join(&n);
+        let _ = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+    }
 }
 
 fn write(dir: &Path, name: &str, body: &str) {
@@ -213,6 +270,7 @@ pub fn support_bundle() -> Value {
                 .status()
                 .map(|s| s.success())
                 .unwrap_or(false);
+            prune_bundles(&parent);
             json!({"ok": true, "folder": dir.to_string_lossy(), "zip": if ok { json!(zip.to_string_lossy()) } else { Value::Null }})
         }
         Err(m) => json!({"ok": false, "message": m}),
@@ -247,6 +305,30 @@ mod tests {
         assert_eq!(s["source"]["repo"], "a/b");
         assert_eq!(s["api_key"], "[removed]");
         assert_eq!(s["parts"][0], "lite");
+    }
+
+    #[test]
+    fn account_name_in_paths_is_hidden() {
+        let u = |s: &str| mask_user(s);
+        assert_eq!(u(r"C:\Users\ivanm\AppData\x.log"), r"C:\Users\<user>\AppData\x.log");
+        assert_eq!(u("c:/users/Ivan M/Documents"), "c:/users/<user>/Documents");
+        assert_eq!(u(r#"{"p":"C:\\Users\\ivanm\\x"}"#), r#"{"p":"C:\\Users\\<user>\\x"}"#);
+        assert_eq!(u(r"see 'D:\Users\bob' ok"), r"see 'D:\Users\<user>' ok");
+        assert_eq!(u("no users here, users/ x"), "no users here, users/ x");
+        assert_eq!(u(r"Ünï C:\Users\Zoë\a"), r"Ünï C:\Users\<user>\a");
+        assert_eq!(u(&u(r"C:\Users\ivanm\a")), r"C:\Users\<user>\a");
+        assert_eq!(scrub(r"token=abcdefgh in C:\Users\ivanm\z"), r"[removed] in C:\Users\<user>\z");
+    }
+
+    #[test]
+    fn only_old_bundles_are_removed() {
+        let n = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+        let all = n(&["bundle-1", "bundle-1.zip", "bundle-2", "bundle-3.zip", "bundle-3", "bundle-10", "notes.txt", "bundle-x", "bundle-", "bundle-5.zip.bak"]);
+        let mut r = bundles_to_remove(&all, 2);
+        r.sort();
+        assert_eq!(r, n(&["bundle-1", "bundle-1.zip", "bundle-2"]));
+        assert!(bundles_to_remove(&all, 5).is_empty());
+        assert!(bundles_to_remove(&n(&["bundle-9"]), 0) == n(&["bundle-9"]));
     }
 
     #[test]

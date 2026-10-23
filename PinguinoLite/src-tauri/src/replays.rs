@@ -257,6 +257,18 @@ pub fn parse_guarded(data: Vec<u8>, limit: Duration) -> Result<Value, String> {
     rx.recv_timeout(limit).unwrap_or_else(|_| Err("replay took too long to parse".into()))
 }
 
+/// Seen-state never grows without limit: once it holds more than `max` fingerprints, those of replay files that are gone are forgotten
+/// (a deleted replay can never be scanned again, so its entry is dead weight). Nothing is pruned when no file was seen (folder offline).
+pub fn prune_state(state: &mut Map<String, Value>, live: &std::collections::HashSet<String>, max: usize) -> usize {
+    if state.len() <= max || live.is_empty() {
+        return 0;
+    }
+    let before = state.len();
+    state.retain(|k, _| live.contains(k));
+    before - state.len()
+}
+pub const MAX_STATE: usize = 2000;
+
 fn mtime_secs(p: &Path) -> Option<u64> {
     std::fs::metadata(p).and_then(|m| m.modified()).ok().and_then(|m| m.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs())
 }
@@ -272,6 +284,7 @@ pub fn scan() -> Value {
     let pend = pend_g.get_or_insert_with(HashMap::new);
     let mut tw: Option<TwitchMap> = None;
     let mut seen_now: HashMap<PathBuf, (u64, u64)> = HashMap::new();
+    let mut live: std::collections::HashSet<String> = std::collections::HashSet::new();
     let (mut new, mut errors, mut scanned, mut unreadable) = (0, 0, 0, 0);
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     for d in &dirs {
@@ -286,6 +299,7 @@ pub fn scan() -> Value {
             scanned += 1;
             // state key = hash-free fingerprint (name + size + mtime); no full path is stored in any output
             let key = format!("{}|{}|{}", path.file_name().and_then(|n| n.to_str()).unwrap_or(""), meta.len(), mt);
+            live.insert(key.clone());
             if state.contains_key(&key) {
                 continue;
             }
@@ -323,7 +337,8 @@ pub fn scan() -> Value {
         }
     }
     *pend = seen_now;
-    if new > 0 || errors > 0 || !state_path.exists() {
+    let pruned = prune_state(state, &live, MAX_STATE);
+    if new > 0 || errors > 0 || pruned > 0 || !state_path.exists() {
         let _ = write_atomic(&state_path, &serde_json::to_string_pretty(&*state).unwrap_or_default());
         rebuild_index(&dirs);
     }
@@ -506,6 +521,20 @@ mod tests {
         assert_eq!(off["attributed"], false);
         assert_eq!(off["blue"]["score"], 4);
         assert_eq!(SCAN_EVERY_SECS, 3);
+    }
+
+    #[test]
+    fn state_map_is_bounded() {
+        let mut st: Map<String, Value> = Map::new();
+        for i in 0..10 {
+            st.insert(format!("f{i}|1|1"), json!({"match_id": i}));
+        }
+        let live: std::collections::HashSet<String> = ["f1|1|1".to_string(), "f2|1|1".to_string()].into_iter().collect();
+        assert_eq!(prune_state(&mut st, &live, 10), 0, "at the limit: untouched");
+        assert_eq!(prune_state(&mut st, &std::collections::HashSet::new(), 5), 0, "nothing seen (folder offline): untouched");
+        assert_eq!(st.len(), 10);
+        assert_eq!(prune_state(&mut st, &live, 5), 8);
+        assert!(st.contains_key("f1|1|1") && st.contains_key("f2|1|1") && st.len() == 2);
     }
 
     #[test]
