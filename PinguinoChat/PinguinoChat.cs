@@ -476,6 +476,8 @@ public class CPHInline
         public string LoreFile { get; set; } = @"D:\PinguinoSuite\Data\lore.json";   // running jokes / catchphrases / emotes with where they came from (Pipeline\build-lore.mjs)
         public bool ChannelLoreOn { get; set; } = true;            // PRIVATE channel lore (Data\lore, built from the logs): the bot understands the running jokes and the regulars. Never quoted or sent anywhere.
         public bool CannedOn { get; set; } = true;                 // the ported Nightbot canned-reply commands (CannedFile; the Host stays silent on these terms): works online and offline, ChatReplies off or on
+        public bool StayOutOfArguments { get; set; } = true;      // heated chat (viewers bickering, insults, a bots debate): the bot stays out unless it is itself attacked or called out
+        public int ReplyGapSec { get; set; } = 240;                // after answering someone, a new tag from them inside this time only gets an answer when it is a real question, an attack/call-out, or the conversation is still going
         public bool ReactRaids { get; set; } = true;               // a short "make yourself at home" line for the raiders a few seconds after the Host's own thank-you (never the same words)
         public int RaidMinViewers { get; set; } = 5;               // smaller raids get no extra line
         public bool ReactHype { get; set; } = true;                // one cheer per hype-train level-up (level 2 and up; the Host already announces the start and the end)
@@ -534,7 +536,7 @@ public class CPHInline
     class Ctx
     {
         public string Login, Display, UserId, Text;
-        public bool Mod, Sub, Vip, Broadcaster, Random, FirstMessage;
+        public bool Mod, Sub, Vip, Broadcaster, Random, FirstMessage, Defend;   // Defend: the viewer is attacking / calling out the bot itself
         public string Past = "", Lore = "", ChLore = "", Cards = "";   // filled before the prompt is built: log search hits for what the message refers to, and lore entries for its phrases
         public int AdvLevel;                  // romantic / sexual advances in the recent window (0-4), see AdvanceLevel
         public bool AdvCounted;               // this message was already counted as an advance by the pattern check
@@ -862,12 +864,16 @@ public class CPHInline
                 { string ca = CapabilityAnswer(login, text); if (ca != null) { if (ca != "") Say(cx, ca); return; } }   // "can you make commands / change the title": a short true answer, no AI
                 { string bc = BareCallAck(login, text); if (bc != null) { if (bc != "") Say(cx, bc); return; } }   // just the name ("CHATTY", "ask chatty pinguino!"): one playful line, once in a while   // never a timeout / ban / rank change from the bot: "ask a mod"
                 bool quiet = Hushed(login) || Flooding(login);                    // told to be quiet / a real flood: stays ignored on purpose
+                bool atBot = RxAtBot.IsMatch(text), question = text.Contains("?") && !RxHeat.IsMatch(text);
+                if (atBot && !quiet) cx.Defend = true;                            // attacked or called out: it may answer, briefly and kindly
+                if (!quiet && !atBot && !question && IsHeated()) quiet = true;    // a heated exchange that only happens to tag the bot: it stays out
+                if (!quiet && !atBot && !question && RepliedRecently(login)) quiet = true;   // already answered them a moment ago: no second reply to the next tag
                 if (!quiet && RepeatedPrompt(login, text)) quiet = true;          // the same prompt again and again: answered once, then ignored
                 if (!quiet && OverShare(login)) quiet = true;                     // had their share of the bot's attention: others get a turn (no Miss: it is not a failure)
                 accept = !quiet && TakeCooldown(login, false);
                 if (!quiet && !accept) Miss(login);                                // pinged but the cooldown / hourly cap dropped it: they are still waiting
             }
-            else if (!welcome && back == null && !optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
+            else if (!welcome && back == null && !optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && !IsHeated() && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
                      && GateAllowsChime() && Now() - _lastRandom >= _cfg.RandomMinGapSec && TakeCooldown(login, true))
             { cx.Random = true; _lastRandom = Now(); accept = true; }
         }
@@ -1015,6 +1021,25 @@ public class CPHInline
         if (Now() < until) return true;
         _hush.Remove(login);
         return false;
+    }
+
+    // ARGUMENTS: the bot never jumps into a heated exchange and never snarks at someone who is arguing. Heat = in the last 90 s at least 3 lines from 2+ people with insults / swearing / put-downs / the bots debate.
+    static readonly Regex RxHeat = new Regex(@"\b(stfu|shut ?up|shut your|idiot|dumb|stupid|moron|trash|garbage|liar|liars|loser|bozo|clown|cringe|pathetic|useless|annoying|hate you|hate this|you suck|u suck|ur bad|youre bad|you're bad|fuck\w*|wtf|bullshit|bs|bots?|ineffective|dependent|delusional|shut)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // aimed at the bot itself: asked to stop, told off, insulted, told it is not liked
+    static readonly Regex RxAtBot = new Regex(@"\b(stop (@ ?ing|tagging|pinging|replying|answering|talking|responding)|(dont|don't|do not|never) (do that|reply|respond|answer|talk|tag|ping|@)|(i )?(dont|don't|do not) like (you|u|the bot|this bot)|shut ?up|stfu|(you|u|ur|youre|you're|youre) ?(suck|bad|trash|garbage|annoying|useless|dumb|stupid|cringe|a bot)|annoying|hate (you|u|this bot|the bot)|go away|get lost|leave me alone|(stupid|dumb|trash|useless|annoying) bot|nobody asked)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    bool IsHeated()
+    {
+        if (!_cfg.StayOutOfArguments) return false;
+        long now = Now();
+        var hot = _buf.Where(x => !x.FromBot && !x.Command && now - x.At <= 90 && RxHeat.IsMatch(x.Text ?? "")).ToList();
+        return hot.Count >= 3 && hot.Select(x => x.Login).Distinct().Count() >= 2;
+    }
+    // the bot answered this viewer less than ReplyGapSec ago and they are not in a live conversation with it
+    bool RepliedRecently(string login)
+    {
+        long fv; if (_cfg.ReplyGapSec <= 0 || IsMaster(login) || (_focus.TryGetValue(login, out fv) && Now() - fv < _cfg.FocusSeconds)) return false;
+        List<long> log; if (!_replyLog.TryGetValue(login, out log) || log.Count == 0) return false;
+        return Now() - log.Max() < _cfg.ReplyGapSec;
     }
 
     // fairness: one viewer cannot take the bot over. The streamer and the people the bot is already in a conversation with are not limited.
@@ -1407,6 +1432,7 @@ FRIENDSHIP, NOT ROMANCE
 
 CLOSE FRIENDS, NOT POSSESSIVE
 - You can be a real friend and even a bestie to people: warm, loyal, you remember what matters to them and you are happy when they show up. Close friendship is welcome.
+- Arguments: never join, referee or comment on a heated exchange between viewers (bickering, insults, a debate about bots), never take a side and never snark at someone who is arguing. Stay out of it. You may only answer when YOU are attacked or called out, and then briefly, humbly and kindly.
 - Nobody owns you. If a viewer gets possessive, jealous, demanding or clingy (claims you as theirs, gets upset that you talk to or like others, wants you only for themselves, demands your attention, answers or replies, guilt-trips you, tests whether you love them more than others), do not play along and do not feed it. Make space kindly but clearly, in ONE short friendly line with light humour: you are everybody's friend, you have time for the whole chat, and a bit of breathing room is fine ('lol i'm everybody's bestie, no exclusives, but i like you too', 'easy there, i've got love for the whole chat'). Do not lecture, do not scold, do not accuse, do not get dramatic and do not argue.
 - If it keeps going after that, keep the boundary the same and keep it short and calm: shorter replies, less back and forth, no extra warmth that could be read as encouragement. If they stay intense, step back from that person for a while (use hush, 10 to 30 minutes, after one friendly line like 'i'm gonna give us some space, talk later'). When they come back calm, be friendly again, no grudge.
 - Never promise exclusivity, never say they are your favorite or your only friend, never say you need them or will miss them, never say jealous things yourself, and never use their feelings to keep them talking. This stays on top of the FRIENDSHIP, NOT ROMANCE rules and the privacy rules: no flirting, no escalation, and do not recite or over-share what you remember about them.
@@ -1755,6 +1781,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             sb.AppendLine(LiveStateText());
         }
 
+        if (c.Defend) sb.AppendLine("[CALLED OUT] This viewer is attacking, insulting or telling YOU (the bot) to stop. Answer in ONE short line. If they ask you to stop or say not to do something: be humble and agree, no excuses ('fair, i'll stay out of your way'). If it is an unfair insult: a light, kind, good-humoured defence, never hostile, never sarcastic, never snarky, no insult back, no lecture. Do not argue.");
         if (_cfg.ReplyWordTarget > 0)
             sb.AppendLine("[BREVITY] Viewers complained about long messages. Casual talk, jokes, opinions and chit-chat: ONE short sentence, " + _cfg.ReplyWordTarget + " words at most, no lists, no paragraph. Only when the viewer clearly asked for information (what do you know about me, explain, how does X work) may you go longer" +
                 (_cfg.InfoWordLimit > 0 ? ", and even then under " + _cfg.InfoWordLimit + " words" : "") + ". Never answer a question about yourself with a speech.");

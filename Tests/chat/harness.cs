@@ -87,7 +87,7 @@ public static class Harness
         Environment.SetEnvironmentVariable("PINGUINO_DATA_DIR", dir);
         Environment.SetEnvironmentVariable("BVQ_CHAT_INLINE", "1");
         File.WriteAllText(Path.Combine(dir, "chat_settings.json"),
-            "{\"ChatReplies\":true,\"RolesUrl\":\"http://test/roles\",\"GlobalCooldownSec\":0,\"UserCooldownSec\":0,\"RandomChance\":0,\"GateEnabled\":false,\"MinReplyGapSec\":0,\"MaxRepliesPerViewer10Min\":0,\"StreamerInfo\":\"Peng is 24 and streams daily at 5pm CDT\",\"ApiKey\":\"test\",\"HistoryDir\":\"" + Path.Combine(dir, "history").Replace("\\", "\\\\") + "\",\"UpdatesFile\":\"" + Path.Combine(dir, "updates.json").Replace("\\", "\\\\") + "\",\"OpinionsFile\":\"" + Path.Combine(dir, "opinions.json").Replace("\\", "\\\\") + "\",\"CommandsFile\":\"" + Path.Combine(dir, "commands.json").Replace("\\", "\\\\") + "\"}");
+            "{\"ChatReplies\":true,\"RolesUrl\":\"http://test/roles\",\"GlobalCooldownSec\":0,\"UserCooldownSec\":0,\"ReplyGapSec\":0,\"RandomChance\":0,\"GateEnabled\":false,\"MinReplyGapSec\":0,\"MaxRepliesPerViewer10Min\":0,\"StreamerInfo\":\"Peng is 24 and streams daily at 5pm CDT\",\"ApiKey\":\"test\",\"HistoryDir\":\"" + Path.Combine(dir, "history").Replace("\\", "\\\\") + "\",\"UpdatesFile\":\"" + Path.Combine(dir, "updates.json").Replace("\\", "\\\\") + "\",\"OpinionsFile\":\"" + Path.Combine(dir, "opinions.json").Replace("\\", "\\\\") + "\",\"CommandsFile\":\"" + Path.Combine(dir, "commands.json").Replace("\\", "\\\\") + "\"}");
         File.WriteAllText(Path.Combine(dir, "updates.json"), "[{\"At\":\"2026-10-18T10:00:00-05:00\",\"By\":\"test\",\"Title\":\"Older update\",\"Details\":\"first\"},{\"At\":\"2026-10-19T08:15:00-05:00\",\"By\":\"test\",\"Title\":\"Names and trust\",\"Details\":\"nicknames follow trust\"}]");
         Directory.CreateDirectory(Path.Combine(dir, "history", "daily")); Directory.CreateDirectory(Path.Combine(dir, "history", "monthly", "hist1")); Directory.CreateDirectory(Path.Combine(dir, "history", "monthly", "histforget"));
         File.WriteAllText(Path.Combine(dir, "history", "daily", "2026-10-17.json"), "{\"summary\":\"Horror game night with mod talk.\",\"games\":[\"Minecraft\"],\"topics\":[\"mods\"],\"moments\":[\"19:00 - mod talk\"]}");
@@ -954,6 +954,42 @@ public static class Harness
           Msg("ModS", "!chatbot status", null, true);
           Check("status says WHY the bot is quiet while offline", Last() != null && Last().Contains("quiet: the stream is offline"), Last());
           Live(true); SF("_liveChecked").SetValue(null, DateTime.MinValue);
+        }
+
+        // ── 19g. arguments: stay out of heated chat, defend only when attacked / called out, no second reply to the same tag within minutes (lines from the 2026-10-22 stream, 22:27-22:55) ──
+        {
+            Live(true); Extra.Clear(); ReactReset();
+            Action clearAll = () => { ((System.Collections.IList)SF("_buf").GetValue(null)).Clear(); ((System.Collections.IDictionary)SF("_focus").GetValue(null)).Clear(); ((System.Collections.IDictionary)SF("_replyLog").GetValue(null)).Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); };
+            Action<string> freshMsg = null;
+            nextReply = "{\"reply\":\"fair, i will stay out of your way\",\"remember\":[]}";
+            clearAll(); int g0 = llmCalls;
+            Msg("snowyroses_", "u just wanna add bots for no reason");
+            Msg("snowyroses_", "stream elements and other bots do the same thing as ur bots");
+            Msg("pineyapplie", "peng u know you can stream without bots");
+            Msg("snowyroses_", "yeah dude I wonder why everyone else won't use it, maybe cause it's just ineffective and has multiple problems?");
+            Msg("aceislosst", "@chattypinguino what do you think about bots?");
+            Check("argument: a heated bots debate that tags the bot gets no answer", llmCalls == g0 && Last() == null, Last() + " calls=" + (llmCalls - g0));
+            Msg("aceislosst", "@ChattyPinguino stop @ ing me i dont like you");
+            Check("argument: but when the bot itself is told off it answers (called-out hint in the prompt)", llmCalls == g0 + 1 && Last() != null && lastPrompt.Contains("[CALLED OUT]"), Last() + "");
+            clearAll(); g0 = llmCalls;
+            Msg("ziubat", "ace you used a bot and got your account banned stfu");
+            Msg("aceislosst", "you lowk hella dependent on the bots");
+            Msg("ziubat", "your a bot");
+            Msg("aceislosst", "dont do that again pinguinobot");
+            Check("argument: 'dont do that again pinguinobot' is answered, short and humble", llmCalls == g0 + 1 && lastPrompt.Contains("[CALLED OUT]"), Last() + "");
+            clearAll(); g0 = llmCalls;
+            Msg("synther_rl", "i went to the state fair today");
+            Msg("lvlmarshmello", "@chattypinguino hey chatty good evening");
+            Check("calm chat: a normal tag is answered", llmCalls == g0 + 1 && Last() != null && !lastPrompt.Contains("[CALLED OUT]"), Last() + "");
+            SetCfg("ReplyGapSec", 240); ((System.Collections.IDictionary)SF("_focus").GetValue(null)).Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); g0 = llmCalls;
+            Msg("lvlmarshmello", "@chattypinguino lol you tag me like its your job");
+            Check("repeat tag: a second tag from the same viewer minutes later gets no second reply", llmCalls == g0 && Last() == null, Last());
+            Msg("lvlmarshmello", "@chattypinguino what song is this?");
+            Check("repeat tag: a real question is still answered", llmCalls == g0 + 1 && Last() != null, Last());
+            clearAll(); g0 = llmCalls; Msg("lvlmarshmello", "@chattypinguino first one"); Msg("lvlmarshmello", "@chattypinguino and then this one");
+            Check("repeat tag: inside a live conversation it keeps answering", llmCalls == g0 + 2, Last());
+            SetCfg("ReplyGapSec", 0);
+            clearAll();
         }
 
         // ── 19e. lore proposals: no moderation from the bot, repeat guard, private lore + person cards in the prompt ──
