@@ -35,6 +35,17 @@ try:
     js = get('/api/overlay-options?name=queue&js=1'); chk('?js=1 is a script', js.startswith('window.OVERLAY_OPTIONS={') and js.endswith(';'), js[:50])
     fj = json.load(open(os.path.join(d, 'overlay_options.json'))); chk('saved to Data/runtime/overlay_options.json', fj['queue'] == {'anchor': 'tr'} and fj['*'] == {'pad': 20}, fj)
     r = post('/api/overlay-options', {'name': 'queue', 'options': None}); chk('options:null clears the overlay', 'anchor' not in r['options'], r)
+    # per source-size profiles: name@profile
+    post('/api/overlay-options', {'name': '*', 'options': {'pad': 20}}); post('/api/overlay-options', {'name': 'queue', 'options': {'scale': 1.1}})
+    r = post('/api/overlay-options', {'name': 'queue@vertical', 'options': {'pad': 60, 'anchor': 'bc'}}); chk('set per profile', r.get('ok') and r['profile'] == 'vertical' and r['name'] == 'queue', r)
+    r = post('/api/overlay-options', {'name': '*@1440p', 'options': {'preset': 'tv'}}); chk('global per profile', r.get('ok') and r['profile'] == '1440p', r)
+    chk('vertical: * then queue then queue@vertical (later wins)', json.loads(get('/api/overlay-options?name=queue@vertical'))['options'] == {'pad': 60, 'scale': 1.1, 'anchor': 'bc'}, get('/api/overlay-options?name=queue@vertical'))
+    chk('1440p gets *@1440p', json.loads(get('/api/overlay-options?name=queue@1440p'))['options'] == {'pad': 20, 'preset': 'tv', 'scale': 1.1}, get('/api/overlay-options?name=queue@1440p'))
+    chk('plain name is untouched by profile keys', json.loads(get('/api/overlay-options?name=queue'))['options'] == {'pad': 20, 'scale': 1.1}, get('/api/overlay-options?name=queue'))
+    chk('unknown profile refused on save', post('/api/overlay-options', {'name': 'queue@8k', 'options': {'pad': 1}}).get('ok') is False)
+    r = post('/api/overlay-options', {'name': 'queue@vertical', 'options': None}); chk('options:null clears one profile only', r['options'] == {'pad': 20, 'scale': 1.1}, r)
+    sc = json.loads(get('/api/overlay-options/schema')); chk('schema lists profiles and preset pads in px', sc['profiles'] == ['1080p', '1440p', '4k', 'vertical'] and sc['presetPads']['1440p'] == {'safe': 72, 'tv': 144}, sc.get('profiles'))
+    chk('script detects the profile', 'function profile()' in open(os.path.join(suite, 'PinguinoB0t', 'overlays', 'overlay-options.js'), encoding='utf-8-sig').read())
     ov = os.path.join(suite, 'PinguinoB0t', 'overlays')
     for f in ('queue', 'players', 'players_vertical', 'wheel', 'subroll'):
         chk(f + '.html loads the shared script', 'overlay-options.js' in open(os.path.join(ov, f + '.html'), encoding='utf-8-sig').read())

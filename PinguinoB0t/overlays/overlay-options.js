@@ -14,6 +14,8 @@
      preset    safe | tv | fit-safe   ready-made safe areas: safe = 5% margin (title-safe), tv = 10% margin (action-safe), fit-safe = 5% margin + scaled down to fit. pad / fit given next to it win.
      guides    1           draw the guides (viewport, safe area, overlay box, size label). Use with ?preview=1 in a normal browser tab.
      overlay   name        use another overlay name for the saved options (default: the file name)
+     profile   1080p|1440p|4k|vertical   force the source-size profile (default: detected from the page size: portrait = vertical, 1300+ px tall = 1440p, 2000+ = 4k, else 1080p).
+               Options saved as "name@profile" (or "*@profile") apply only at that size and win over the plain ones, so one overlay can have its own safe area per source size.
    Works by moving/scaling the page body (transform), so it never edits an overlay's own layout code. */
 (function () {
   "use strict";
@@ -22,6 +24,10 @@
   var HOST = /[?&]host=([^&]+)/.test(location.search) ? decodeURIComponent(RegExp.$1) : (location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770");
   var ANCHORS = ["tl", "tc", "tr", "cl", "c", "cr", "bl", "bc", "br"], saved = {}, fetching = false, guideEl = null;
 
+  function profile() {
+    var f = String(Q.get("profile") || "").toLowerCase(); if (f === "1080p" || f === "1440p" || f === "4k" || f === "vertical") return f;
+    var w = window.innerWidth, h = window.innerHeight; return h > w * 1.15 ? "vertical" : h >= 2000 ? "4k" : h >= 1300 ? "1440p" : "1080p";
+  }
   function num(v, lo, hi) { if (v === null || v === undefined || v === "") return null; var d = Number(v); if (!isFinite(d)) return null; return Math.max(lo, Math.min(hi, d)); }
   function clean(src) {
     var o = {}, d;
@@ -60,7 +66,7 @@
     m("left:" + (vw / 2 - 12) + "px;top:" + (vh / 2) + "px;width:24px;height:0;border-top:1px solid #ffffff99"); m("left:" + (vw / 2) + "px;top:" + (vh / 2 - 12) + "px;width:0;height:24px;border-left:1px solid #ffffff99");
     if (rect) m("left:" + rect.left + "px;top:" + rect.top + "px;width:" + rect.width + "px;height:" + rect.height + "px;border:2px solid #0ac8ff");   // where the overlay body ends up
     var t = m("left:" + (sx + 6) + "px;top:" + (sx + 6) + "px;background:#000c;color:#fff;font:12px/1.35 Consolas,monospace;padding:4px 8px;border-radius:4px;white-space:pre");
-    t.textContent = NAME + "  " + vw + " x " + vh + "\nscale " + (o.scale || 1) + "  anchor " + (o.anchor || "tl") + "  pad " + pad + "  x/y " + (o.x || 0) + "/" + (o.y || 0) + (o.maxw || o.maxh ? "  max " + (o.maxw || "-") + "x" + (o.maxh || "-") : "") + (o.fit ? "  fit" : "") + "\nred = source, green = safe area, blue = overlay";
+    t.textContent = NAME + " @" + profile() + "  " + vw + " x " + vh + "\nscale " + (o.scale || 1) + "  anchor " + (o.anchor || "tl") + "  pad " + pad + "  x/y " + (o.x || 0) + "/" + (o.y || 0) + (o.maxw || o.maxh ? "  max " + (o.maxw || "-") + "x" + (o.maxh || "-") : "") + (o.fit ? "  fit" : "") + "\nred = source, green = safe area, blue = overlay";
   }
   function apply() {
     var o = effective(), b = document.body, h = document.documentElement; if (!b) return;
@@ -82,12 +88,12 @@
   function load() {
     if (fetching) return; fetching = true;
     var sc = document.createElement("script");
-    sc.src = HOST + "/api/overlay-options?js=1&name=" + encodeURIComponent(NAME) + "&t=" + Date.now();
+    sc.src = HOST + "/api/overlay-options?js=1&name=" + encodeURIComponent(NAME + "@" + profile()) + "&t=" + Date.now();
     sc.onload = function () { fetching = false; var j = window.OVERLAY_OPTIONS; if (j && j.ok && j.options) { var n = JSON.stringify(j.options); if (n !== JSON.stringify(saved)) { saved = j.options; apply(); } } sc.remove(); };
     sc.onerror = function () { fetching = false; sc.remove(); };   // Host not running: the URL options still work
     document.body.appendChild(sc);
   }
-  window.OverlayOptions = { name: NAME, get: effective, apply: apply };
-  window.addEventListener("resize", apply);
+  window.OverlayOptions = { name: NAME, profile: profile, get: effective, apply: apply };
+  var lastProf = profile(); window.addEventListener("resize", function () { apply(); if (profile() !== lastProf) { lastProf = profile(); saved = {}; load(); } });
   apply(); load(); setInterval(load, 5000);
 })();

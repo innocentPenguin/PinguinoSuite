@@ -16,6 +16,9 @@ namespace PinguinoHost
     {
         static readonly object L = new object();
         static string P { get { return Path.Combine(HostApi.DataDir, "overlay_options.json"); } }
+        /// <summary>source-size profiles: an overlay (or "*") may carry its own options per profile under the key "name@profile" (e.g. "queue@vertical"); the page detects its profile from the source size
+        /// (portrait = vertical, height 1300+ = 1440p, 2000+ = 4k, else 1080p). Order of merge: "*", "*@profile", name, name@profile (later wins).</summary>
+        public static readonly string[] SourceProfiles = { "1080p", "1440p", "4k", "vertical" };
         public static readonly string[] Anchors = { "tl", "tc", "tr", "cl", "c", "cr", "bl", "bc", "br" };
 
         static JObject Load()
@@ -29,15 +32,23 @@ namespace PinguinoHost
             {
                 var all = Load();
                 if (string.IsNullOrEmpty(name)) return new JObject { { "ok", true }, { "options", all } };
-                var o = new JObject(); foreach (var k in new[] { "*", Clean(name) }) { var s = all[k] as JObject; if (s != null) foreach (var p in s.Properties()) o[p.Name] = p.Value; }
-                return new JObject { { "ok", true }, { "name", Clean(name) }, { "options", o } };
+                string cn = Clean(name), prof = ""; int at = cn.IndexOf('@'); if (at >= 0) { prof = cn.Substring(at + 1); cn = cn.Substring(0, at); }
+                var keys = new List<string> { "*" }; if (prof != "") keys.Add("*@" + prof); keys.Add(cn); if (prof != "") keys.Add(cn + "@" + prof);
+                var o = new JObject(); foreach (var k in keys) { var s = all[k] as JObject; if (s != null) foreach (var p in s.Properties()) o[p.Name] = p.Value; }
+                return new JObject { { "ok", true }, { "name", cn }, { "profile", prof }, { "options", o } };
             }
         }
-        static string Clean(string n) { n = (n ?? "").Trim().ToLowerInvariant(); return n == "*" ? "*" : new string(n.Where(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '-').ToArray()); }
+        static string Clean(string n)
+        {
+            n = (n ?? "").Trim().ToLowerInvariant(); string prof = ""; int at = n.IndexOf('@');
+            if (at >= 0) { prof = n.Substring(at + 1); n = n.Substring(0, at); if (!SourceProfiles.Contains(prof)) prof = ""; }
+            n = n == "*" ? "*" : new string(n.Where(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '-').ToArray());
+            return n != "" && prof != "" ? n + "@" + prof : n;
+        }
         static double? Num(JToken t, double lo, double hi) { double d; if (t == null || t.Type == JTokenType.Null || !double.TryParse(Convert.ToString(t, System.Globalization.CultureInfo.InvariantCulture), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out d) || double.IsNaN(d) || double.IsInfinity(d)) return null; return Math.Max(lo, Math.Min(hi, d)); }
         public static JObject Set(JObject b)
         {
-            string name = Clean((string)b?["name"]); if (name == "") return new JObject { { "ok", false }, { "error", "name is required (the overlay file name without .html, or *)" } };
+            string rawName = ((string)b?["name"] ?? "").ToLowerInvariant(); string name = Clean(rawName); if (rawName.Contains("@") && !name.Contains("@")) return new JObject { { "ok", false }, { "error", "unknown source profile (one of " + string.Join(", ", SourceProfiles) + ")" } }; if (name == "") return new JObject { { "ok", false }, { "error", "name is required (the overlay file name without .html, or *)" } };
             lock (L)
             {
                 var all = Load();
@@ -75,6 +86,8 @@ namespace PinguinoHost
             Func<string, string, double, double, double, double, string, JObject> num = (k, label, lo, hi, step, def, help) => new JObject { { "key", k }, { "label", label }, { "type", "number" }, { "min", lo }, { "max", hi }, { "step", step }, { "default", def }, { "help", help } };
             Func<string, string, string[], string, string, JObject> en = (k, label, vals, def, help) => new JObject { { "key", k }, { "label", label }, { "type", "enum" }, { "values", new JArray(vals) }, { "default", def }, { "help", help } };
             return new JObject { { "ok", true }, { "overlays", new JArray("queue", "players", "players_vertical", "wheel", "subroll") }, { "global", "*" },
+                { "profiles", new JArray(SourceProfiles) }, { "profileHelp", "Save options for one source size as name@profile (queue@vertical, *@1440p). The page picks its profile from its size: portrait = vertical, 1300+ px tall = 1440p, 2000+ = 4k, else 1080p. Merge order: *, *@profile, name, name@profile." },
+                { "presetPads", new JObject { { "1080p", new JObject { { "safe", 54 }, { "tv", 108 } } }, { "1440p", new JObject { { "safe", 72 }, { "tv", 144 } } }, { "4k", new JObject { { "safe", 108 }, { "tv", 216 } } }, { "vertical", new JObject { { "safe", 54 }, { "tv", 108 } } } } },
                 { "options", new JArray {
                     num("scale", "Size", 0.2, 4, 0.05, 1, "Size of the whole overlay (1 = as designed)"),
                     en("anchor", "Anchor", Anchors, "tl", "The point of the source the overlay grows/shrinks from"),
