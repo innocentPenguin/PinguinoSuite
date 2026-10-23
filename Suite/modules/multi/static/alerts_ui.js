@@ -78,6 +78,7 @@ function alDraw() {
           <small class="mut">Order: highest priority first, first come first served within a level. Per-type pause and merge are in each type's settings.</small></details>
         <div class="act"><label class="cf">Viewer <input id="al-tuser" value="${esc(AL.who || 'penguin')}" style="width:110px"></label>
         <label class="cf">Amount <input id="al-tamt" type="number" style="width:70px" placeholder="auto"></label> ${variants}</div>
+        <small class="mut"><b>Sizes and scenes:</b> the alerts page is 800x600 by default. For a bigger box add <code>?w=1080&amp;h=1920</code> (box size) and/or <code>&amp;scale=1.5</code> (zoom the content) to the address; without them a source taller or wider than 800x600 fills its real size. <b>Use only ONE alerts source:</b> if the alerts are placed inside a full-screen scene, delete the separate 800x600 alerts source, or every alert plays twice. <b>Sound:</b> sounds and shoutout clips play inside the browser source, so keep that source's audio on (Control audio via OBS) or the alerts are silent.</small><br>
         <small class="mut">Tests are flagged: they never reach credits, stats, points or chat. In chat (mods): <code>!alert test follow penguin</code>, <code>!alert test sub penguin tier3</code>, <code>!alert test gift penguin 50</code></small></div>
         <div class="box"><b>What fired</b> <div id="al-log" style="max-height:230px;overflow:auto;font-size:12px"></div></div></div>
       <div style="flex:1 1 380px;min-width:340px"><div class="box"><b>${esc(d.labels[AL.sel])}</b>

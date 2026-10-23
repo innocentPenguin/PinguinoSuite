@@ -4,7 +4,7 @@
 <!-- OBS browser source: 800x600. ?bg=1 dark checker for viewing in a normal browser; ?demo=1 plays sample alerts; the editor drives it by postMessage. -->
 <style>
 :root{--W:800px;--H:600px}
-html,body{margin:0;width:var(--W);height:var(--H);overflow:hidden;background:transparent;font-family:Nunito,'Segoe UI',sans-serif}
+html,body{margin:0;width:var(--BW,var(--W));height:var(--BH,var(--H));overflow:hidden;background:transparent;font-family:Nunito,'Segoe UI',sans-serif}
 body.bg{background:repeating-conic-gradient(#1b1b1b 0 25%,#262626 0 50%) 0 0/24px 24px}
 #stage{position:relative;width:var(--W);height:var(--H)}
 .al{position:absolute;left:50%;top:50%;width:max-content;max-width:calc(var(--W) - 60px);text-align:center;display:flex;gap:14px;align-items:center;justify-content:center;box-sizing:border-box;padding:18px 28px;line-height:1.2;
@@ -40,9 +40,16 @@ body.bg{background:repeating-conic-gradient(#1b1b1b 0 25%,#262626 0 50%) 0 0/24p
 <body><div id="stage"></div><canvas id="cf" width="800" height="600" style="position:absolute;left:0;top:0;pointer-events:none"></canvas>
 <script>
 const Q = new URLSearchParams(location.search), stage = document.getElementById('stage');
-if (innerHeight > innerWidth && innerWidth > 100) {          // vertical browser source: the stage follows the real size
-  document.documentElement.style.setProperty('--W', innerWidth + 'px'); document.documentElement.style.setProperty('--H', innerHeight + 'px');
-  const cv = document.getElementById('cf'); cv.width = innerWidth; cv.height = innerHeight;
+{ // size: ?w=&h= (box size in px), ?scale= (content zoom), else the real window size when it is not the usual 800x600 (e.g. a vertical source)
+  const num = (k, lo, hi) => { const v = parseFloat(Q.get(k)); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0; };
+  let w = num('w', 200, 4000), h = num('h', 200, 4000); const sc = num('scale', .25, 4) || 1;
+  if (!w && !h && innerWidth > 100 && (innerHeight > innerWidth || innerWidth > 800 || innerHeight > 600)) { w = innerWidth; h = innerHeight; }
+  w = w || 800; h = h || 600;
+  const rs = document.documentElement.style;
+  rs.setProperty('--BW', w + 'px'); rs.setProperty('--BH', h + 'px');
+  rs.setProperty('--W', w / sc + 'px'); rs.setProperty('--H', h / sc + 'px');
+  if (sc !== 1) stage.style.zoom = sc;
+  const cv = document.getElementById('cf'); cv.width = w; cv.height = h;
 }
 if (Q.get('bg')) document.body.classList.add('bg');
 const FONTS = {nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: 'Roboto,Arial,sans-serif'};
@@ -91,12 +98,12 @@ function build(a) {
 let cfT = 0;
 function confetti(n) {
   const cv = document.getElementById('cf'), g = cv.getContext('2d'), cols = ['#ff8a1f', '#ffd23f', '#ffe9cc', '#ff5d2e', '#ffffff'];
-  const ps = Array.from({length: n}, () => ({x: 400 + (Math.random() - .5) * 200, y: 300, vx: (Math.random() - .5) * 14, vy: -Math.random() * 14 - 4, s: 4 + Math.random() * 6, c: cols[Math.floor(Math.random() * cols.length)], r: Math.random() * 6, vr: (Math.random() - .5) * .4}));
+  const ps = Array.from({length: n}, () => ({x: cv.width / 2 + (Math.random() - .5) * 200, y: cv.height / 2, vx: (Math.random() - .5) * 14, vy: -Math.random() * 14 - 4, s: 4 + Math.random() * 6, c: cols[Math.floor(Math.random() * cols.length)], r: Math.random() * 6, vr: (Math.random() - .5) * .4}));
   clearInterval(cfT); let f = 0;
   cfT = setInterval(() => {
-    g.clearRect(0, 0, 800, 600); f++;
+    g.clearRect(0, 0, cv.width, cv.height); f++;
     ps.forEach(p => { p.vy += .35; p.x += p.vx; p.y += p.vy; p.r += p.vr; g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c; g.globalAlpha = Math.max(0, 1 - f / 170); g.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); g.restore(); });
-    if (f > 170) { clearInterval(cfT); g.clearRect(0, 0, 800, 600); }
+    if (f > 170) { clearInterval(cfT); g.clearRect(0, 0, cv.width, cv.height); }
   }, 16);
 }
 function show(a) {
