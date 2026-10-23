@@ -29,6 +29,8 @@ try:
     chk('pending is not served', get('/api/intro?platform=twitch&user_id=111')[0] == 404)
     r = post('/api/intros', {'action': 'approve', 'platform': 'twitch', 'user_id': '111', 'by': 'modguy'}); chk('approve', r['ok'] and r['intro']['status'] == 'approved' and r['intro']['approved_by'] == 'modguy', r)
     c, j = get('/api/intro?platform=twitch&user_id=111'); chk('served after approval', c == 200 and j == {'text': 'The legend arrives!', 'sound_id': 'bell', 'status': 'approved'}, (c, j))
+    c, j = get('/api/intro/viewer?login=Alice'); chk('/api/intro/viewer finds the approved intro by login', c == 200 and j['text'] == 'The legend arrives!', (c, j))
+    chk('unknown login is 404', get('/api/intro/viewer?login=nobody')[0] == 404)
     r = sub('Edited intro'); chk('edit back to pending', r['intro']['status'] == 'pending', r)
     chk('edit not served', get('/api/intro?platform=twitch&user_id=111')[0] == 404)
     r = post('/api/intros', {'action': 'reject', 'platform': 'twitch', 'user_id': '111', 'by': 'modguy'}); chk('reject', r['intro']['status'] == 'rejected', r)

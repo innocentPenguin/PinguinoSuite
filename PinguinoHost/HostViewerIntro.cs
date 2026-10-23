@@ -122,6 +122,17 @@ namespace PinguinoHost
             }
         }
         public static int MaxLen() { lock (L) return Math.Max(10, Math.Min(200, (int?)Doc()["settings"]["maxLen"] ?? 80)); }
+        /// <summary>same as Approved, found by chat login when the caller has no user id (newest decision wins)</summary>
+        public static JObject ApprovedByLogin(string platform, string login)
+        {
+            platform = (platform ?? "twitch").Trim().ToLowerInvariant(); login = (login ?? "").Trim().TrimStart('@').ToLowerInvariant(); if (login == "") return null;
+            lock (L)
+            {
+                var it = ((JObject)Doc()["intros"]).Properties().Select(p => p.Value as JObject).Where(x => x != null && (string)x["platform"] == platform && (string)x["login"] == login && (string)x["status"] == "approved" && !string.IsNullOrEmpty((string)x["text"]))
+                    .OrderByDescending(x => (long?)x["decided_at"] ?? 0).FirstOrDefault();
+                return it == null ? null : new JObject { { "text", it["text"] }, { "sound_id", it["sound_id"] }, { "status", "approved" } };
+            }
+        }
         public static JObject Mine(string platform, string uid)
         {
             platform = (platform ?? "twitch").Trim().ToLowerInvariant(); uid = (uid ?? "").Trim();
