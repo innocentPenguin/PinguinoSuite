@@ -17,7 +17,7 @@ Needs the Host restart (`App\Update-Module.ps1 host`, coordinator only): Chatty 
 |---|---|
 | Raid with >= `RaidMinViewers` | after about 7 s (the Host's thank-you goes first) ONE Chatty welcome naming the raider; a second raid within 2 min: nothing |
 | Hype train level 2+ | one line per new level (60 s cooldown); begin/end are the Host's, Chatty stays silent |
-| A regular back after `WelcomeBackDays` | one private welcome-back line (name only); opted-out viewers never get it |
+| A regular back after `WelcomeBackDays` (default 7) | one private welcome-back line from the Host's people-graph pool (`TimeoutReward.PeopleGraph.WelcomeLine`: banded by days away, warmer for chat regulars; extra lines in `Data\lore\welcome_lines.json`), name only, no numbers; a recent supporter gets the thank-you version; opted-out viewers and bots never get anything |
 | Someone tells Chatty off ("stop @ing me") | one short humble reply; a heated argument that only tags it: silence; same person's tag twice in 4 min: second is skipped (unless a real question) |
 | Calm "bots are cool" chat, 3 lines, then a question to Chatty | answered (bots alone is no longer heat) |
 

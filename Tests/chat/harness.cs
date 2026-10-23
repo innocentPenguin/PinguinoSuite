@@ -949,6 +949,16 @@ public static class Harness
           Check("welcome back: an opted-out viewer gets nothing", Last() == null, Last());
           SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); SetCfgB("WelcomeBack", false); mkViewer("Offline3", 10); SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Offline3", "hello");
           Check("welcome back: can be switched off", Last() == null, Last()); SetCfgB("WelcomeBack", true);
+          { var pg = typeof(PinguinoHost.TimeoutReward.PeopleGraph);
+            SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); mkViewer("Voyager", 40); SF("_lastWelcome").SetValue(null, 0L); Msg("Voyager", "back again");
+            Check("welcome back: the Host's people-graph line is used when it exists (name + days away passed)", Last() != null && Last().Contains("Voyager is back, stub line") && PinguinoHost.TimeoutReward.PeopleGraph.LastDays >= 39 && PinguinoHost.TimeoutReward.PeopleGraph.LastLogin == "voyager", Last());
+            SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); mkViewer("Forgetful2", 40); SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear();
+            PinguinoHost.TimeoutReward.PeopleGraph.Calls = 0; mkViewer("forgetful", 40); SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); Msg("forgetful", "hello there");
+            Check("welcome back: the Host answering \"\" (bot / opted out) means no welcome and no fallback line", Last() == null || !System.Text.RegularExpressions.Regex.IsMatch(Last(), "back|long time|missed you"), Last());
+            SF("_hostWelcomeLooked").SetValue(null, true); SF("_hostWelcome").SetValue(null, null);
+            SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); mkViewer("Nohost", 40); SF("_lastWelcome").SetValue(null, 0L); Msg("Nohost", "hi chat");
+            Check("welcome back: without the Host method the fixed pool still greets", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), "back|long time|missed you"), Last());
+            SF("_hostWelcomeLooked").SetValue(null, false); SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); }
 
           Live(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); SF("_liveChecked").SetValue(null, DateTime.MinValue);
           Msg("ModS", "!chatbot status", null, true);
@@ -1161,5 +1171,23 @@ public static class Harness
         Console.WriteLine(fails == 0 ? "ALL " + passes + " CHAT CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;
+    }
+}
+
+// stands in for the Host's people-graph welcome lines (Chatty finds it by reflection); "" = opted out / bot
+namespace PinguinoHost
+{
+    public static class TimeoutReward
+    {
+        public static class PeopleGraph
+        {
+            public static int Calls; public static int LastDays; public static string LastLogin = "";
+            public static string WelcomeLine(string login, string display, int daysAway, Func<string, bool> seen)
+            {
+                Calls++; LastDays = daysAway; LastLogin = login;
+                if (login == "forgetful") return "";
+                string a = display + " is back, stub line A", b = display + " is back, stub line B"; return seen(a) ? b : a;
+            }
+        }
     }
 }

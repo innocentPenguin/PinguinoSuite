@@ -860,14 +860,48 @@ public class CPHInline
     // ── WELCOME BACK: a regular (4+ earlier messages) who has been away for WelcomeBackDays. Private by design: a fixed pool, only their name, never a remembered fact; a recent
     //    sub / gift / bits event of theirs just changes the thanks to a generic one. Opted-out viewers never get it (the caller checks). ──
     static long _lastBack;
-    string WelcomeBackLine(string login, long prevSeen)
+    string WelcomeBackLine(string login, long prevSeen, string display = "")
     {
         long now = Now(); if (now - prevSeen < Math.Max(1, _cfg.WelcomeBackDays) * 86400L || now - _lastBack < 60) return null;
         bool supporter; lock (_lock) { supporter = Events().Any(e => e.User == login && e.Type != "follow" && e.Type != "raidin" && e.At >= prevSeen - 3 * 86400L && e.At <= prevSeen + 3600); }
         string[] v = supporter
             ? new[] { "welcome back! 🐧 Thank you again for the support, it really means a lot here.", "look who's back! 🐧 Your support last time was awesome, glad you're here." }
             : new[] { "welcome back, it's been a while! 🐧 Good to see you again.", "hey, long time no see! 🐧 Glad you stopped by again.", "you're back! 🐧 We missed you, pull up a chair." };
+        if (!supporter)
+        {
+            // the Host's people-graph lines (IDEAS #36, TimeoutReward.PeopleGraph.WelcomeLine): banded by days away, warmer for chat regulars, "" for bots / opted-out viewers.
+            // Called by reflection so this file still compiles without the Host; no such method = the fixed pool below.
+            string hl; if (HostWelcomeLine(login, string.IsNullOrWhiteSpace(display) ? login : display, (int)((now - prevSeen) / 86400L), out hl))
+            {
+                if (string.IsNullOrWhiteSpace(hl)) return null;   // the Host says no (opted out, bot, or not away long enough)
+                _lastBack = now; _backSeen.Add(hl); while (_backSeen.Count > 12) _backSeen.RemoveAt(0); return hl;
+            }
+        }
         _lastBack = now; return v[_rng.Next(v.Length)];
+    }
+    static readonly List<string> _backSeen = new List<string>();
+    static System.Reflection.MethodInfo _hostWelcome; static bool _hostWelcomeLooked;
+    static bool HostWelcomeLine(string login, string display, int days, out string line)
+    {
+        line = "";
+        try
+        {
+            if (!_hostWelcomeLooked)
+            {
+                _hostWelcomeLooked = true;
+                foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    Type t = null; try { t = a.GetType("PinguinoHost.TimeoutReward+PeopleGraph", false); } catch (Exception) { }
+                    if (t == null) continue;
+                    _hostWelcome = t.GetMethod("WelcomeLine", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static, null, new[] { typeof(string), typeof(string), typeof(int), typeof(Func<string, bool>) }, null);
+                    if (_hostWelcome != null) break;
+                }
+            }
+            if (_hostWelcome == null) return false;
+            Func<string, bool> seen = x => { lock (_backSeen) return _backSeen.Contains(x); };
+            line = Convert.ToString(_hostWelcome.Invoke(null, new object[] { login, display, days, seen })) ?? ""; return true;
+        }
+        catch (Exception) { return false; }
     }
     static int TierOf(string s) { s = (s ?? "").ToLower(); return s.Contains("prime") || s.Contains("1") ? 1 : s.Contains("2") ? 2 : s.Contains("3") ? 3 : 1; }
 
@@ -974,7 +1008,7 @@ public class CPHInline
             if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { welcome = true; _lastWelcome = Now(); }
             if (!welcome && !mention && !second && !optedOut && !cx.Broadcaster && _cfg.WelcomeBack && prevSeen > 0 && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
-            { back = WelcomeBackLine(login, prevSeen); if (back != null) _lastWelcome = Now(); }
+            { back = WelcomeBackLine(login, prevSeen, cx.Display); if (back != null) _lastWelcome = Now(); }
             if (mention)
             {
                 if (!cx.Broadcaster && ModActionAsk(text)) { string mr = ModRefusal(login, text); if (mr != "") Say(cx, mr); return; }
