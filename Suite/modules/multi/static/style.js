@@ -255,7 +255,7 @@ async function renderStyleEditor() {
   if (!EDP) await loadPresets();
   const bgBtn = (v, t) => `<button class="${edView.bg === v ? 'p' : ''}" data-cs-act="pvbg" data-v="${v}">${t}</button>`;
   $('#body').innerHTML = `<div class="launch style-ed"><div class="ed-top"><h2>Chat look</h2>
-      <span class="act"><button data-cs-act="popout" title="Open this editor in its own window - drag it to any monitor">Pop out</button> <a href="/?type=chat"><button type="button">Back to chat</button></a> <a href="/"><button type="button">Setup</button></a> <span id="cs-state" class="mut"></span></span></div>
+      <span class="act"><button data-cs-act="popout" title="Open this editor in its own window - drag it to any monitor">Pop out</button> <a href="/?type=chat"><button type="button">Back to chat</button></a> <a href="/?type=launcher"><button type="button">Setup</button></a> <span id="cs-state" class="mut"></span></span></div>
     <div class="ed-grid"><div id="ed-left" class="ed-left"></div>
       <div class="ed-right"><div class="act"><b>Preview</b> <button data-cs-act="pvreal" class="${edView.real ? 'p' : ''}" title="Show your real recent chat instead of the samples">My real chat</button> ${bgBtn('dark', 'Dark')}${bgBtn('light', 'Light')}${bgBtn('game', 'Over a game')}${bgBtn('checker', 'See-through')}</div>
         <div id="cs-pwrap" class="cs-pwrap"><div id="cs-preview" class="cfeed cs-preview"></div></div></div></div></div>`;
