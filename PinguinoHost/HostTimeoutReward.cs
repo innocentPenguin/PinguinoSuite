@@ -161,8 +161,68 @@ namespace PinguinoHost
             LogEvent("timeout", rlogin, hit.Login, secs, (string)cfg["title"], who2);
             Complete(cfg, redemptionId, rewardId);
             Wait(1000, 2000);
-            ChattySay(Pick(aiV, cfg, tname + " has been timed out by " + rname, tname, rname));
+            ChattySay(Pick(aiV, cfg, FriendLine(hit.Login, rlogin, tname, rname) ?? (tname + " has been timed out by " + rname), tname, rname));
             return Done("timed out " + hit.Login + " " + secs + " s via " + who2 + " (score " + hit.Score.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + ")");
+        }
+
+        // ------------------------------------------------------------------ people graph flavour (PRIVATE)
+        /// <summary>Who chats with whom, from Data\lore\people_graph.json (private lore, mined from the logs). Only a coarse closeness level ever leaves this class: never the example messages,
+        /// counts or dates. Anyone who typed !optmeout (Boards.IsAnon) is left out, and so is any pair that includes a bot. PINGUINO_PEOPLE_GRAPH overrides the file (tests).</summary>
+        public static class PeopleGraph
+        {
+            static JObject _doc; static DateTime _mt = DateTime.MinValue; static string _src = "";
+            static string PathF { get { string e = Environment.GetEnvironmentVariable("PINGUINO_PEOPLE_GRAPH"); return !string.IsNullOrEmpty(e) ? e : Path.Combine(Program.SuiteDir ?? "", "Data", "lore", "people_graph.json"); } }
+            static JObject Doc()
+            {
+                lock (L)
+                {
+                    try { string f = PathF; if (!File.Exists(f)) return null; var mt = File.GetLastWriteTimeUtc(f); if (_doc == null || mt != _mt || f != _src) { _doc = JObject.Parse(File.ReadAllText(f, Encoding.UTF8).TrimStart((char)0xFEFF)); _mt = mt; _src = f; } }
+                    catch (Exception ex) { Clog.Warn("timeout-reward", "people_graph.json: " + ex.Message); _doc = null; }
+                    return _doc;
+                }
+            }
+            static bool Allowed(string login) { return login != "" && !Boards.IsBot(login) && !Boards.IsAnon(login); }
+            /// <summary>"duo" (very close chat pair), "buddies" (regular chat), "acquainted" (a few exchanges), "crowd" (same regular group, no direct link) or "" (nothing known, opted out, or a bot).</summary>
+            public static string Closeness(string a, string b)
+            {
+                a = Norm(a); b = Norm(b); if (a == b || !Allowed(a) || !Allowed(b)) return "";
+                var d = Doc(); if (d == null) return "";
+                a = Boards.CanonLogin(a); b = Boards.CanonLogin(b);
+                foreach (var e in (d["edges"] as JArray ?? new JArray()).OfType<JObject>())
+                {
+                    string x = (string)e["a"], y = (string)e["b"];
+                    if (!((x == a && y == b) || (x == b && y == a))) continue;
+                    long m = (long?)e["mutual"] ?? 0; return m >= 200 ? "duo" : m >= 30 ? "buddies" : "acquainted";
+                }
+                foreach (var g in (d["groups"] as JArray ?? new JArray()).OfType<JObject>())
+                {
+                    var mem = (g["members"] as JArray ?? new JArray()).Select(t => (string)t).ToList();
+                    if (mem.Contains(a) && mem.Contains(b)) return "crowd";
+                }
+                return "";
+            }
+            /// <summary>A background sentence for the language model (never quoted back as facts or numbers), or "".</summary>
+            public static string Hint(string a, string b)
+            {
+                switch (Closeness(a, b))
+                {
+                    case "duo": return "They are one of the channel's closest chat duos. A light wink about being old friends is fine; do not give numbers or say how you know.";
+                    case "buddies": return "They are regular chat buddies. A light friendly wink is fine; do not give numbers or say how you know.";
+                    case "acquainted": return "They have chatted before. At most a very light nod.";
+                    case "crowd": return "They hang in the same regular crowd of chat. At most a very light nod.";
+                    default: return "";
+                }
+            }
+        }
+        static readonly string[] FriendTemplates = {
+            "{t} timed out by {r}. Chat friends, no hard feelings?", "{r} timed out {t}. Friendship tested.", "Friendly fire! {r} just timed out {t}.", "{t} got timed out by {r}. Old chat buddies, new grudge." };
+        /// <summary>A plain (no-AI) line for a timeout between two people who chat a lot together, or null when the graph knows nothing (or someone opted out).</summary>
+        static string FriendLine(string targetLogin, string redeemerLogin, string tname, string rname)
+        {
+            string c = PeopleGraph.Closeness(targetLogin, redeemerLogin); Out("people-graph closeness " + (c == "" ? "none" : c));
+            if (c != "duo" && c != "buddies") return null;
+            var fresh = FriendTemplates.Select(t => t.Replace("{t}", tname).Replace("{r}", rname)).Where(t => !Seen(t)).ToList(); if (fresh.Count == 0) fresh = FriendTemplates.Select(t => t.Replace("{t}", tname).Replace("{r}", rname)).ToList();
+            return fresh[Rnd.Next(fresh.Count)];
         }
         static string Done(string s) { LastResult = s; Out(s); return s; }
         static string Clip(string s, int n) { s = Regex.Replace(s ?? "", @"\s+", " ").Trim(); return s.Length > n ? s.Substring(0, n) : s; }

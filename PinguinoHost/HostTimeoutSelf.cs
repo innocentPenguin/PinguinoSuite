@@ -139,6 +139,7 @@ namespace PinguinoHost
                 string what = kind == "self" ? redeemer + " spent channel points to time themselves out for " + secs + " s" + (typed != "" ? " (they typed: " + Clip(typed, 40) + ")" : "") + ". Mention " + redeemer + " by name."
                     : kind == "blunder" ? redeemer + " spent channel points to time out " + target + ", but " + target + " is protected, so " + redeemer + " got timed out instead. Mention " + redeemer + " by name."
                     : redeemer + " spent channel points to time out " + target + " for " + secs + " s and it worked. Mention both " + redeemer + " and " + target + " by name.";
+                string rel = kind == "self" ? "" : PeopleGraph.Hint(redeemer, target); if (rel != "") what += " Private background (do not quote or explain): " + rel;
                 string usr = what + "\nRecent chat (oldest first):\n" + (chat.Count == 0 ? "(nothing)" : string.Join("\n", chat)) + "\nPrevious timeouts involving them:\n" + (hist.Count == 0 ? "(none)" : string.Join("\n", hist));
                 for (int i = 0; i < 2; i++)
                 {

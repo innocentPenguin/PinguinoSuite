@@ -42,7 +42,7 @@ Curve in settings: under 500 bits x10, 500-999 x11, 1000+ x15; back-pay = 40% of
 Top 10 people hold ~87% of the payout; cyfirl alone is 33%.
 
 ## Anomalies
-1. **`twitch` was paid** (2 cheers, 25 bits, 100 pts). It is a system/anonymous-cheer pseudo-login, not a person; those points are stranded. Harmless but should be excluded in `BackPay` (add to the skip list) and the 100 pts can be reversed.
+1. **`twitch` was paid** (2 cheers, 25 bits, 100 pts). It is a system/anonymous-cheer pseudo-login, not a person; those points are stranded. BackPay now skips pseudo users (commit 8deb5a3, applies to future runs only); the 100 pts already paid on 10-22 can be reversed by hand if wanted.
 2. **Alias split**: sg_yen is an alias of cyfirl, and the ledger paid it under the canonical login, but adday_rl / addayofficial are two separate paid logins (80 + 40 pts) and may be one person; not in the alias map.
 3. **ixsamux** (3 cheers, 145 bits) got nothing: it is an alias of ixsamuu (merged 10-21) and the streamer is skipped by design.
 4. **Tiny cheers**: 73 of 248 cheers are under 10 bits; 52 are exactly 1 bit (4 pts each). cups0ftea alone has 12 one-bit cheers. Fine, just low value.
@@ -51,4 +51,4 @@ Top 10 people hold ~87% of the payout; cyfirl alone is 33%.
 7. Coverage: only 5 cheers in October, 2 in February (logs start 2026-02-15); the ledger covers the whole log range.
 
 ## Sane?
-Yes. 118k points is small next to the economy (admin adjust balances alone sum ~223k, yoohoo15 holds 42k of it), the distribution matches who actually cheered, and totals reconcile three ways (ledger, events.json, metric_events). Only action worth doing: skip `twitch` in BackPay and optionally reverse its 100 pts, and decide the adday alias.
+Yes. 118k points is small next to the economy (admin adjust balances alone sum ~223k, yoohoo15 holds 42k of it), the distribution matches who actually cheered, and totals reconcile three ways (ledger, events.json, metric_events). Only action worth doing: optionally reverse the 100 pts paid to `twitch`, and decide the adday alias.

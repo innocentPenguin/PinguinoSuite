@@ -1,4 +1,5 @@
 import fs from 'fs';import {NOTES,LORE} from './notes.mjs';
+const BOT_RULES=["Never recount who said a lore term, who started it, or when; play along or stay silent.", "Lore is private background: no verbatim quotes of chat, no counts, no dates, no names of who is in a group.", "Do not comment on mod/VIP status, rank changes, favourites, relationships or anyone's private life.", "When someone says \"clanker\" or \"L bots\": one dry line, then move on; never escalate.", "Anyone who typed !optmeout or !forgetme is left out of every line."];
 const S=process.argv[2];const OUT='D:/PinguinoSuite/Data/lore';fs.mkdirSync(OUT+'/person_cards',{recursive:true});
 const msgs=fs.readFileSync(S+'/msgs.jsonl','utf8').split('\n').map(l=>JSON.parse(l));
 const feat=JSON.parse(fs.readFileSync(S+'/feat.json','utf8'));
@@ -60,6 +61,6 @@ const nodeSet=new Set(cards.map(c=>c.login));
 const edges=pairs.filter(p=>nodeSet.has(p.a)&&nodeSet.has(p.b)&&p.tot>=30).map(p=>({a:p.a,b:p.b,aToB:p.ab,bToA:p.ba,mutual:p.mutual,tags:pairTag(tone[pairKey(p.a,p.b)]||{n:1,r:0,w:0,g:0}),example:(tone[pairKey(p.a,p.b)]?.ex||[])[0]||null}));
 const groupsOut=clusters.slice(0,8).map((g,i)=>({group:i+1,size:g.length,members:g.slice(0,40),eraGuess:(()=>{const mm={};for(const u of g.slice(0,10))for(const [k,c] of Object.entries(months[u]||{}))mm[k]=(mm[k]||0)+c;return eraOf(mm)})()}));
 fs.writeFileSync(OUT+'/people_graph.json',JSON.stringify({built:new Date().toISOString(),source:'Data/chat_logs 2026-02-15..2026-10-20 (666,891 messages, 1,775 logins, aliases merged)',aliasesApplied:alias,nodes:people,edges,groups:groupsOut},null,1));
-fs.writeFileSync(OUT+'/channel_lore.json',JSON.stringify({built:new Date().toISOString(),items:LORE,streamer:NOTES.streamer_note},null,1));
+fs.writeFileSync(OUT+'/channel_lore.json',JSON.stringify({built:new Date().toISOString(),botRules:BOT_RULES,items:LORE.map(x=>({...x,howBotsUse:(x.howBotsUse||'').replace(/\s+$/,'')+(x.howBotsUse&&x.howBotsUse.includes('recounting who said')?'':' Never explain this by recounting who said it or who started it: play along, or stay silent.')})),streamer:NOTES.streamer_note},null,1));
 fs.writeFileSync(S+'/cards.json',JSON.stringify(cards));
 console.log('cards',cards.length,'edges',edges.length,'groups',groupsOut.length);
