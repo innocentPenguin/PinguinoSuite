@@ -187,17 +187,27 @@ function replayCard() {
      <div class="note">Blue won ${blue}, Orange won ${orange}. Last: <b>${esc(l.blue)} - ${esc(l.orange)}</b>${l.mvp ? ', MVP ' + esc(l.mvp) : ''} (${esc(ago(iso(l.played_at)))})</div></div>`;
 }
 
-// Merge catalog + installed -> rows. A module is "installed" only if installed.json says so; "update" if catalog version is newer.
-function rows() {
-  const cat = state.catalog && state.catalog.data && Array.isArray(state.catalog.data.modules) ? state.catalog.data.modules : [];
-  const inst = state.installed && state.installed.data && state.installed.data.modules || {};
-  const busy = state.status && state.status.data && state.status.data.busy || {};
-  const cs = state.status && state.status.data && state.status.data.modules || {};
-  return cat.filter(m => !HIDDEN.includes(m.id)).map(m => {
-    const i = inst[m.id], latest = m.version || m.latest_version;
-    return { ...m, description: m.desc || m.description, latest_version: latest, installed: !!i, installed_version: i && i.version, update: !!i && cmpVer(latest, i.version) > 0, busy: busy[m.id] || '', conn: cs[m.id] };
+// Merge catalog + installed.json (Link) + install.json parts (parts_modules) -> rows. One source of truth for "Not installed":
+// when this copy has an install.json, ITS parts decide whether a module (and Link) is installed; Link's installed.json only supplies versions.
+// "update" if the catalog version is newer. Pure function, tested in PinguinoLite/test/rows.test.mjs.
+// ROWS-BEGIN
+function mergeRows(catalog, installed, status, mods, hidden) {
+  const cat = catalog && catalog.data && Array.isArray(catalog.data.modules) ? catalog.data.modules : [];
+  const inst = installed && installed.data && installed.data.modules || {};
+  const busy = status && status.data && status.data.busy || {};
+  const cs = status && status.data && status.data.modules || {};
+  const prof = {};
+  if (mods && mods.supported) { (mods.modules || []).forEach(x => { prof[x.id] = !!x.installed; }); if (typeof mods.link === 'boolean') prof.link = mods.link; }
+  return cat.filter(m => !hidden.includes(m.id)).map(m => {
+    const i = inst[m.id], latest = m.version || m.latest_version, hasProf = Object.prototype.hasOwnProperty.call(prof, m.id);
+    const installedNow = hasProf ? prof[m.id] : !!i;
+    const known = installedNow && !!i;   // a version is shown only when Link also knows the module
+    return { ...m, description: m.desc || m.description, latest_version: latest, installed: installedNow, installed_version: known ? i.version : null,
+      update: known && cmpVer(latest, i.version) > 0, busy: busy[m.id] || '', conn: installedNow ? cs[m.id] : undefined, profile: hasProf };
   });
 }
+// ROWS-END
+function rows() { return mergeRows(state.catalog, state.installed, state.status, mods, HIDDEN); }
 
 function dashboard() {
   const h = state.host || {}, r = rows(), n = r.filter(x => x.installed).length, u = r.filter(x => x.update).length;
@@ -242,7 +252,7 @@ function modules() {
     <td><b>${esc(m.name || m.id)}</b><div class="d">${esc(m.description)}</div></td>
     <td class="mono">${m.installed ? esc(m.installed_version) : '-'}${m.installed && m.update ? ` -> ${esc(m.latest_version)}` : m.installed ? '' : ` <span class="d">(${esc(m.latest_version)})</span>`}</td>
     <td>${m.installed && m.conn && m.conn.state && m.conn.state !== 'running' && !m.busy ? `<span class="pill ${m.conn.state === 'error' || m.conn.state === 'degraded' ? 'bad' : ''}" title="${esc(m.conn.detail)} ${esc(m.conn.fix_hint)}">${esc(m.conn.state)}</span> ` : ''}${m.busy ? `<span class="pill warn">${esc(m.busy)}...</span>` : m.update ? '<span class="pill warn">Update available</span>' : m.installed ? '<span class="pill ok">Installed</span>' : '<span class="pill">Not installed</span>'}</td>
-    <td style="text-align:right">${m.busy ? '' : m.update ? `<button class="btn pri" data-act="update" data-id="${esc(m.id)}">Update</button>` : m.installed ? `<button class="btn" data-act="rollback" data-id="${esc(m.id)}" title="Restore the previous version kept by PinguinoLink">Rollback</button>` : `<button class="btn pri" data-act="install" data-id="${esc(m.id)}">Install</button>`}</td></tr>`).join('')}</tbody></table>`;
+    <td style="text-align:right">${m.busy ? '' : m.update ? `<button class="btn pri" data-act="update" data-id="${esc(m.id)}">Update</button>` : m.installed ? `<button class="btn" data-act="rollback" data-id="${esc(m.id)}" title="Restore the previous version kept by PinguinoLink">Rollback</button>` : `<button class="btn pri" ${m.profile && m.id !== 'link' ? `data-mod-install="${esc(m.id)}"` : `data-act="install" data-id="${esc(m.id)}"`}>Install</button>`}</td></tr>`).join('')}</tbody></table>`;
   const gen = c && c.data && (c.data.generated || c.data.generated_at);
   return `<h1>Modules</h1><p class="sub">Modules available from PinguinoLink${gen ? ` - catalog from ${esc(ago(iso(gen)))}` : ''}.
    <span class="pill">Local packages only for now</span></p>
