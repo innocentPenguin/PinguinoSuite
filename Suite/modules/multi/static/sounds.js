@@ -2,21 +2,21 @@
 // Settings live on the Multi server (/api/sounds, survive restarts) with a localStorage copy as fallback. One window plays at a time (leader lock),
 // so a chat window and a dashboard open together do not double up. Globals used: $, esc, W, isBot, mentionsMe, isQuestionForMe (chat.js).
 const SND_EVENTS = [
-  ['sent', 'A message I (or a bot of mine) sent', 'Plays when your own line appears in chat.'],
+  ['person', 'Message from a real person (real people only)', 'Any viewer message. Never bots (Nightbot, StreamElements, Chatty, Helper, anything ending in bot/b0t, your bot list), never you or your own accounts.'],
+  ['sent', 'A message I (or a bot of mine) sent', 'Plays when your own line appears in chat. Off by default.'],
   ['first', 'First-time chatter', 'Someone chats here for the very first time.'],
   ['mention', 'Someone mentions me', 'Your name / channel is in a message.'],
   ['question', 'Question or priority for me', 'A question to you, a reply to you, a cheer, or a high-priority card.'],
-  ['chat', 'Any new chat message', 'Every message from viewers. Can get busy: it has a minimum gap.'],
   ['follow', 'New follow', 'Stream event (also shown in the activity feed).'],
   ['sub', 'Sub, resub or gift', ''],
   ['raid', 'Raid', ''],
 ];
 const SND_TONES = ['chime', 'ping', 'soft', 'pop', 'bell', 'blip', 'coin', 'drum', 'harp', 'alert', 'droplet', 'sparkle'];
 const SND_DEFAULT = {
-  master: 70, gap: 3,
+  v: 2, master: 70, gap: 2,
   ev: {
-    sent: {on: true, vol: 60, tone: 'blip', notify: false}, first: {on: true, vol: 90, tone: 'harp', notify: true}, mention: {on: true, vol: 90, tone: 'bell', notify: true},
-    question: {on: true, vol: 90, tone: 'alert', notify: true}, chat: {on: false, vol: 40, tone: 'pop', notify: false},
+    person: {on: true, vol: 80, tone: 'pop', notify: false}, sent: {on: false, vol: 60, tone: 'blip', notify: false}, first: {on: true, vol: 90, tone: 'harp', notify: true}, mention: {on: true, vol: 90, tone: 'bell', notify: true},
+    question: {on: true, vol: 90, tone: 'alert', notify: true},
     follow: {on: false, vol: 70, tone: 'ping', notify: false}, sub: {on: false, vol: 80, tone: 'sparkle', notify: false}, raid: {on: false, vol: 80, tone: 'coin', notify: false},
   },
 };
@@ -35,6 +35,8 @@ function sndMerge(src) {
   if (!src || typeof src !== 'object') return c;
   const n = (v, lo, hi, d) => { v = Number(v); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
   c.master = n(src.master, 0, 100, c.master); c.gap = n(src.gap, 0, 60, c.gap);
+  if ((src.v || 1) < 2) { c.migrated = true; return c; }        // one-time migration: v1 saved prefs (sent on, chat off) get the v2 defaults: real people on, sent off, 2 s gap
+  c.migrated = false;
   for (const [k] of SND_EVENTS) {
     const s = (src.ev || {})[k] || {}, d = c.ev[k];
     d.on = s.on == null ? d.on : !!s.on; d.vol = n(s.vol, 0, 100, d.vol); d.notify = s.notify == null ? d.notify : !!s.notify;
@@ -45,6 +47,7 @@ function sndMerge(src) {
 async function sndLoad() {
   try { SND.cfg = sndMerge(JSON.parse(localStorage.getItem('multi-snd') || 'null')); } catch (e) { /* storage may be blocked */ }
   try { const r = await fetch('/api/sounds'); if (r.ok) SND.cfg = sndMerge((await r.json()).config); } catch (e) { /* server copy unavailable: keep local */ }
+  if (SND.cfg.migrated) { delete SND.cfg.migrated; sndSave(); }
   SND.loaded = true;
 }
 function sndSave() {
@@ -86,23 +89,30 @@ function sndNotify(title, body) {
 }
 function sndFire(key, m) {
   const e = SND.cfg.ev[key]; if (!e || !e.on && !e.notify) return false;
-  const now = Date.now(), gap = (key === 'chat' ? Math.max(SND.cfg.gap, 1) : .4) * 1000;
+  const now = Date.now(), gap = (key === 'person' ? SND.cfg.gap : .4) * 1000;
   if (now - (SND.last[key] || 0) < gap) return false;
   SND.last[key] = now;
   if (e.on) sndPlay(e.tone, e.vol);
-  if (e.notify) sndNotify(({first: 'First-time chatter', mention: 'Mention', question: 'For you', sent: 'Sent', chat: 'Chat', follow: 'New follow', sub: 'New sub', raid: 'Raid'})[key], (m.display || m.user || '') + (m.text ? ': ' + m.text : ''));
+  if (e.notify) sndNotify(({first: 'First-time chatter', mention: 'Mention', question: 'For you', sent: 'Sent', person: 'Chat', follow: 'New follow', sub: 'New sub', raid: 'Raid'})[key], (m.display || m.user || '') + (m.text ? ': ' + m.text : ''));
   return true;
+}
+// a real person: not a bot (flag, your bot list, known bot names, *bot / *b0t), not the streamer, not one of your own accounts
+const SND_BOTS = /(^|_)(b[o0]t|chatty|helper)$|b[o0]t$|^(nightbot|streamelements|streamlabs|moobot|fossabot|wizebot|pinguino\w*)$/;
+function sndHuman(m) {
+  const u = String(m.user || '').toLowerCase();
+  if (!u || isBot(m) || m.is_self || SND_BOTS.test(u) || MYNAMES.has(u)) return false;
+  return !(m.badges || []).includes('broadcaster');
 }
 // called for every LIVE message (index.html on()); history loaded at start never calls this
 window.soundMsg = function (m) {
   if (!SND.loaded || !m || !SND.lead || !['chat', 'dash', 'popout'].includes(W.type)) return;
   if (m.event) { if (['follow', 'sub', 'resub', 'gift', 'raid'].includes(m.event)) sndFire(m.event === 'resub' || m.event === 'gift' ? 'sub' : m.event, m); else if (m.event === 'cheer') sndFire('question', m); return; }
   if (m.is_self) { sndFire('sent', m); return; }
-  if (isBot(m)) return;
+  if (!sndHuman(m)) return;
   if (m.first_time && sndFire('first', m)) return;
   if (mentionsMe(m) && sndFire('mention', m)) return;
   if ((isQuestionForMe(m) || m.tier === 'high') && sndFire('question', m)) return;
-  sndFire('chat', m);
+  sndFire('person', m);
 };
 function sndBanner() {
   const b = $('#snd-lock'); if (b) b.style.display = sndLocked() ? '' : 'none';
@@ -122,7 +132,7 @@ function soundsBox() {
   return `<div class="box"><small class="mut">Plays from this page on this PC only, <b>never in OBS</b>. Saved automatically. One open Multi window plays at a time.</small>
     <div id="snd-lock" class="empty" style="display:${sndLocked() ? '' : 'none'}">Sound is asleep until you click anywhere in this window once (browser rule). <button class="chip2" data-snd-unlock="1">Enable sound</button></div>
     <label class="cf">Master volume <input type="range" data-snd="master" min="0" max="100" step="5" value="${c.master}"><b>${c.master}%</b></label>
-    <label class="cf">Minimum gap between "any new chat message" sounds <input type="range" data-snd="gap" min="1" max="30" step="1" value="${c.gap}"><b>${c.gap}s</b></label>
+    <label class="cf">Minimum gap between real-person message sounds <input type="range" data-snd="gap" min="1" max="30" step="1" value="${c.gap}"><b>${c.gap}s</b></label>
     ${SND_EVENTS.map(row).join('')}
     <div class="act" style="margin-top:8px"><button class="chip2" data-snd-notify="1">Allow desktop notifications</button> <small class="mut">now: ${esc(notifyState)}</small></div></div>`;
 }
