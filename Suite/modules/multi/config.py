@@ -30,9 +30,9 @@ DEFAULTS = {
     "tiktok_sign_url": "",            # optional own sign server for TikTokLive ("" = library default)
     "kick_chatroom_id": "",           # numeric chatroom id (kick.com/api/v2/channels/<slug> -> chatroom.id; pasted once)
     "ding_platforms": [],            # new-chatter ding: platforms it is ON for (twitch, youtube); empty = off
-    "ding_first_ever": False,        # Twitch "first message ever" gets its own (optional) sound
+    "ding_first_ever": True,         # Twitch "first message ever" gets its own (optional) sound
     "ding_sound": r"D:\PinguinoSuite\Data\sounds\new-chatter-bell.wav",   # = Streamer.bot "First TIme System (Bell)" sound
-    "ding_first_sound": "",
+    "ding_first_sound": r"D:\PinguinoSuite\Data\sounds\chat-pop.mp3",   # brand-new chatter (first message ever)
     "ding_returning": True,         # a different ding for someone who chatted in an earlier stream
     "ding_returning_sound": r"D:\PinguinoSuite\Data\sounds\first-today-ding.mp3",   # = Streamer.bot "chat (first time today)" at 50 %
     "ding_returning_volume": 50,
