@@ -51,6 +51,8 @@ try:
         chk(f + '.html loads the shared script', 'overlay-options.js' in open(os.path.join(ov, f + '.html'), encoding='utf-8-sig').read())
     hl = json.loads(get('/api/overlay-options/health'))
     chk('health: every overlay page carries the tag (pre-stream check)', hl['scriptPresent'] and hl['missing'] == [] and any(p['page'] == 'queue' for p in hl['pages']), hl)
+    it = [i for i in json.loads(get('/api/prestream'))['items'] if i['id'] == 'overlays']
+    chk('prestream carries the overlay-options health item (pass when every page has the tag)', len(it) == 1 and it[0]['status'] == 'pass', it)
     chk('shared script exists', os.path.exists(os.path.join(ov, 'overlay-options.js')))
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
