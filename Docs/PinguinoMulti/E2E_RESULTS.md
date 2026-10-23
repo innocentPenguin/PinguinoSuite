@@ -90,3 +90,16 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Safety | non-loopback Host refused | PASS | 403 |
 | Performance | 300-message burst handled | PASS | {'in': 305, 'dupes': 1, 'dropped': 0} |
 | Performance | queue drained | PASS | 0 |
+
+## 2026-10-23 05:40-06:00, 40 - Multi: first browser look at the alert engine (throwaway server on port 8797, built-in browser)
+| Area | Result |
+|---|---|
+| `/obs/alerts?demo=1&bg=1` at 800x600 | PASS. Cards render, no console errors. |
+| 15 new types via `POST /api/alerts/test` (hype_start/level/end, goal_progress, tip, gamble_win, shop, guess, milestone, raid_out, poll, prediction, first_chatter, custom) | PASS. Every card has text (e.g. "Hype train level 3!", "Raiding penguin with 7 viewers!", "penguin guessed the chatter!"); played in priority order, one at a time. |
+| loan / give / returning_chatter | PASS. Off by default ("test loan not shown: type disabled"). |
+| Shoutout with a clip via `POST /api/alerts/fire` | BUG FIXED (ef540a1). Clip-only card with an unplayable clip URL was an empty box with a progress bar for ~14 s. Now falls back to the name card ("Go check out Pengu_Friend!"). A real Twitch clip URL has still not been seen playing (needs the Host's fire call with a direct mp4). |
+| Alerts editor `/?type=alerts` | PASS. All 33 types listed (off ones marked), shoutout panel has clip + rules fields, export/import/duplicate/delete profile, media upload buttons, "what fired" log live. Not exercised: actual file upload, import of a file. |
+| `/obs/goal` | PASS. Bar + "42 / 100 (42%)" after `POST /api/goal`. Page only polled, no WS (by design). Added `?bg=1` preview background. |
+| Dashboard `/` | PASS as the default window (activity feed + chat, Alerts button). No left nav yet (backlog). |
+| Not yet looked at | `?w=1920&h=1080&scale=1.5` and vertical 1080x1920, chat page Sounds section, launcher `/?type=launcher`, scene follow against Link, intros against the real Host. |
+Host contract finding: `GET http://127.0.0.1:8770/api/intro` already exists and is the Host's OLD sub-intro video system (returns settings/queue). Viewer intros moved to `GET /api/intro/viewer` (commit 157bdd9); 10 - Bots must implement that path.
