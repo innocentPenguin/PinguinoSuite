@@ -8,7 +8,8 @@ Stored here:  youtube_token (access token; connectors/stream_info/viewers read i
 How to (Ivan): 1) console.cloud.google.com: new project, enable "YouTube Data API v3". 2) OAuth consent screen: External, add yourself as test user, then
 PUBLISH to "In production" (in Testing status refresh tokens die after 7 days; the "unverified app" warning is fine). 3) Credentials -> OAuth client ID ->
 type "Desktop app"; client id into Multi settings, client secret into Credential Manager as PinguinoMulti/youtube_client_secret. 4) Click "Sign in to YouTube"
-in the launcher, approve (scope youtube.force-ssl). Refresh is automatic afterwards.
+in the launcher, approve (scope youtube.force-ssl). Refresh is automatic afterwards. 5) Quota: chat polling costs 5 of 10,000 units/day, so Multi polls
+no faster than every youtube_min_poll_s (default 10 s, about 5.5 h of chat per day).
 """
 import secrets
 
