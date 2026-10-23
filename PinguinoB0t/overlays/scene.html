@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scene Overlay</title>
+<!--
+  FULL-SCREEN SCENE ("stage"): ONE OBS browser source that holds every overlay as a placeable widget.
+    horizontal  http://127.0.0.1:8770/scene.html?profile=h   (source 1920 x 1080)
+    vertical    http://127.0.0.1:8770/scene.html?profile=v   (source 1080 x 1920)
+  Each widget is an iframe of the normal overlay page (queue.html, players.html, wheel.html ...), so every standalone overlay keeps working on its own.
+  The layout (which widgets, where, how big, z-order, style) comes from the Host: GET /api/scene-layouts?js=1&profile=h (edit with POST /api/scene-layouts, see Docs\OVERLAY_SCENES_PLAN.md).
+  The page re-reads it every 5 s, so activating / saving a layout shows live in OBS.
+  URL: profile=h|v (default: by window shape) | layout=name (instead of the active one) | host=http://127.0.0.1:8770 | preview=1 (dashed outline + name on every widget, dark backdrop) | grid=1 (preview + 100px grid)
+  Widget {id, x, y, w, h, scale, z, visible, opacity, takeover, params, style:{radius, rotate, brightness, saturate, hue, blur, shadow, bg}}:
+   the box is x,y,w,h on the stage; the overlay page keeps its design size (e.g. 1920x1080) and is scaled to fit the box (contain, centred) times "scale".
+   params are added to the widget page's query string (the same names the standalone page takes, e.g. layout=sprinkled); the page also gets scene=1.
+-->
+<style>
+  html, body { margin:0; padding:0; background:transparent; overflow:hidden; width:100%; height:100%; }
+  #stage { position:absolute; left:0; top:0; transform-origin:0 0; overflow:hidden; }
+  .w { position:absolute; overflow:hidden; box-sizing:border-box; }
+  .w iframe { position:absolute; left:0; top:0; border:0; background:transparent; transform-origin:0 0; }
+  body.preview { background:#12141a; }
+  body.preview #stage { outline:2px dashed #ff3b30; }
+  body.preview .w { outline:2px dashed #0ac8ff; }
+  body.preview .w .tag { position:absolute; left:6px; top:4px; z-index:9; font:700 22px/1 Consolas,monospace; color:#fff; background:#000c; padding:3px 7px; border-radius:4px; pointer-events:none; }
+  body.grid #stage { background-image:linear-gradient(#ffffff14 1px,transparent 1px),linear-gradient(90deg,#ffffff14 1px,transparent 1px); background-size:100px 100px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+(function () {
+  "use strict";
+  var Q = new URLSearchParams(location.search);
+  var HOST = /[?&]host=([^&]+)/.test(location.search) ? decodeURIComponent(RegExp.$1) : (location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770");
+  var BASE = location.protocol.indexOf("http") === 0 ? location.href.replace(/[^\/]*(\?.*)?$/, "") : HOST + "/";   // where the widget pages are
+  var PREVIEW = Q.get("preview") === "1" || Q.get("grid") === "1";
+  var PROFILE = (Q.get("profile") || "").toLowerCase();
+  if (PROFILE !== "h" && PROFILE !== "v") PROFILE = window.innerWidth >= window.innerHeight ? "h" : "v";
+  var stage = document.getElementById("stage"), cur = "", nodes = {}, fetching = false, SW = PROFILE === "h" ? 1920 : 1080, SH = PROFILE === "h" ? 1080 : 1920;
+  if (PREVIEW) document.body.classList.add("preview");
+  if (Q.get("grid") === "1") document.body.classList.add("grid");
+
+  function fit() {   // the stage keeps its real size (1920x1080 / 1080x1920) and is scaled to the window, so a smaller test window shows everything
+    var s = Math.min(window.innerWidth / SW, window.innerHeight / SH); if (!(s > 0)) s = 1;   // a hidden / 0-size window: keep full size
+    stage.style.width = SW + "px"; stage.style.height = SH + "px"; stage.style.transform = s === 1 ? "" : "scale(" + s + ")";
+  }
+  window.addEventListener("resize", fit); fit();
+
+  function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
+  function srcOf(w, reg) {
+    var base = w.src || (reg && reg.src) || "";
+    if (!base) return "";
+    var qs = ["scene=1"]; var p = w.params || {}; for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) qs.push(encodeURIComponent(k) + "=" + encodeURIComponent(p[k]));
+    return BASE + base + "?" + qs.join("&");
+  }
+  function filterOf(st) {
+    var f = [];
+    if (st.brightness !== undefined && st.brightness !== 1) f.push("brightness(" + st.brightness + ")");
+    if (st.saturate !== undefined && st.saturate !== 1) f.push("saturate(" + st.saturate + ")");
+    if (st.hue) f.push("hue-rotate(" + st.hue + "deg)");
+    if (st.blur) f.push("blur(" + st.blur + "px)");
+    if (st.shadow) f.push("drop-shadow(0 8px 18px rgba(0,0,0,.6))");
+    return f.join(" ");
+  }
+  function place(node, w, reg) {
+    var st = w.style || {}, dw = num(w.designW || (reg && reg.designW), 400), dh = num(w.designH || (reg && reg.designH), 300);
+    var bw = num(w.w, dw), bh = num(w.h, dh), s = Math.min(bw / dw, bh / dh) * num(w.scale, 1);
+    var ox = (bw - dw * s) / 2, oy = (bh - dh * s) / 2;
+    var d = node.div, f = node.frame;
+    d.style.left = num(w.x, 0) + "px"; d.style.top = num(w.y, 0) + "px"; d.style.width = bw + "px"; d.style.height = bh + "px";
+    d.style.zIndex = String(num(w.z, 1)); d.style.opacity = String(num(w.opacity, 1));
+    d.style.borderRadius = st.radius ? st.radius + "px" : ""; d.style.background = st.bg || "";
+    d.style.transform = st.rotate ? "rotate(" + st.rotate + "deg)" : ""; d.style.filter = filterOf(st);
+    f.style.width = dw + "px"; f.style.height = dh + "px"; f.style.transform = "translate(" + ox + "px," + oy + "px) scale(" + s.toFixed(5) + ")";
+    if (node.tag) node.tag.textContent = w.id + "  " + Math.round(bw) + "x" + Math.round(bh) + " @" + Math.round(num(w.x, 0)) + "," + Math.round(num(w.y, 0)) + "  z" + num(w.z, 1);
+  }
+  function render(j) {
+    var reg = {}; (j.registry || []).forEach(function (r) { reg[r.id] = r; });
+    var seen = {};
+    ((j.layout && j.layout.widgets) || []).forEach(function (w) {
+      var id = w.id, r = reg[id]; seen[id] = 1;
+      if (w.visible === false) { if (nodes[id]) { nodes[id].div.remove(); delete nodes[id]; } return; }   // hidden widgets are not loaded at all
+      var url = srcOf(w, r); if (!url) return;
+      var n = nodes[id];
+      if (n && n.url !== url) { n.div.remove(); delete nodes[id]; n = null; }   // other page / params: reload this one widget only
+      if (!n) {
+        var div = document.createElement("div"); div.className = "w"; div.setAttribute("data-widget", id);
+        var fr = document.createElement("iframe"); fr.setAttribute("allowtransparency", "true"); fr.setAttribute("scrolling", "no"); fr.src = url; div.appendChild(fr);
+        var tag = null; if (PREVIEW) { tag = document.createElement("div"); tag.className = "tag"; div.appendChild(tag); }
+        stage.appendChild(div); n = nodes[id] = { div: div, frame: fr, tag: tag, url: url };
+      }
+      place(n, w, r);
+    });
+    Object.keys(nodes).forEach(function (id) { if (!seen[id]) { nodes[id].div.remove(); delete nodes[id]; } });
+  }
+  function load() {
+    if (fetching) return; fetching = true;
+    var sc = document.createElement("script");
+    sc.src = HOST + "/api/scene-layouts?js=1&profile=" + PROFILE + (Q.get("layout") ? "&layout=" + encodeURIComponent(Q.get("layout")) : "") + "&t=" + Date.now();
+    sc.onload = function () {
+      fetching = false; var j = window.SCENE_LAYOUT;
+      if (j && j.ok) { SW = num(j.width, SW); SH = num(j.height, SH); fit(); var s = JSON.stringify(j); if (s !== cur) { cur = s; render(j); } }
+      sc.remove();
+    };
+    sc.onerror = function () { fetching = false; sc.remove(); };   // Host not running: keep what is shown
+    document.body.appendChild(sc);
+  }
+  window.SceneStage = { profile: PROFILE, reload: function () { cur = ""; load(); } };
+  load(); setInterval(load, 5000);
+})();
+</script>
+</body>
+</html>

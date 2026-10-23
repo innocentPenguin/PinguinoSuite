@@ -96,7 +96,7 @@ namespace PinguinoHost
                 js = File.Exists(Path.Combine(root, "overlay-options.js"));
                 foreach (var f in Directory.GetFiles(root, "*.html", SearchOption.TopDirectoryOnly).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
                 {
-                    string n = Path.GetFileNameWithoutExtension(f); if (n.ToLowerInvariant().Contains("backup") || n.ToLowerInvariant().Contains("bak")) continue;
+                    string n = Path.GetFileNameWithoutExtension(f); if (n.ToLowerInvariant().Contains("backup") || n.ToLowerInvariant().Contains("bak") || n.ToLowerInvariant().StartsWith("scene")) continue;   // scene pages (stage, editor) are not widgets
                     bool has; try { has = File.ReadAllText(f).Contains("overlay-options.js"); } catch (Exception) { has = false; }
                     pages.Add(new JObject { { "page", n }, { "hasOptions", has } }); if (!has) missing.Add(n);
                 }

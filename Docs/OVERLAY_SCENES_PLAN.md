@@ -54,3 +54,13 @@ Each phase: committed locally, tested in the browser pane at 1920x1080 and 1080x
 1. Do players/subroll/wheel stay full-canvas widgets scaled into a box, or should the editor also let players be arranged as sub-parts (e.g. only the team cards)? Proposal: whole-page widgets in v1.
 2. Should the 800x600 alerts source be framed inside the scenes by default, or only exist standalone (so alerts keep their own OBS audio/duck behaviour)? Proposal: standalone stays the default; widget optional.
 3. Layout switching by chat command in v1 or later? Proposal: later.
+
+## Status: phase 1 built (testable)
+- Host: `PinguinoHost/HostScenes.cs` (registry, validation, layouts), routes `GET /api/scene-widgets`, `GET|POST /api/scene-layouts` (js=1 form). Test `Tools/test-host-scenes.py`.
+- Stage: `PinguinoB0t/overlays/scene.html?profile=h|v` (`&layout=name`, `&preview=1` outlines, `&grid=1`). OBS: two browser sources, 1920x1080 and 1080x1920, URL `http://127.0.0.1:8770/scene.html?profile=h` / `v`.
+- Widget box x,y,w,h on the stage; the page keeps its design size and is scaled to fit the box (contain, centred) times `scale`. Hidden widgets are not loaded at all. Per-widget `params` go into the page's query string (+ `scene=1`); per-widget `style`: radius, rotate, brightness, saturate, hue, blur, shadow, bg.
+- Custom widgets: `custom-<name>` with `src` = another `.html` page of the overlay folder (relative only).
+- `scene*` pages are skipped by the overlay-options health check (the stage is not a widget).
+- Default layouts are generated on first read: h shows players, queue, subroll, wheel, alerts; v shows players_vertical, queue, subroll, wheel, alerts. Positions are first guesses (queue at 40,40 etc.): adjust in the editor (phase 2).
+- Alerts widget points at `alerts.html` (03's page; not in the overlay folder yet, the registry reports `available:false`). Audio caveat: a browser source's sound goes through the scene source, so level/ducking is set on the scene source in OBS, not on the old standalone alerts source (keep that one for 800x600 use).
+- `takeover` is stored, not acted on yet (phase 3). Sub-part widgets (just the team cards, wheel only, team box only) are phase 3: they need each overlay to expose a part mode (`?part=teams`), planned with 02 so the new double-width team box / vertical layout are included.
