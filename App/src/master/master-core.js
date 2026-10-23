@@ -262,7 +262,7 @@
       while (!closed) {
         try {
           ctl = new AbortController();
-          const h = { Accept: 'text/event-stream' }; if (lastId != null) h['Last-Event-ID'] = lastId;
+          const h = { Accept: 'text/event-stream' };   // no Last-Event-ID: the Host ignores it and the Host CORS list does not allow it, so sending it blocked every reconnect
           const r = await o.fetch(o.url, { headers: h, cache: 'no-store', signal: ctl.signal });
           if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
           failures = 0; connected = true; o.onState && o.onState(true);

@@ -134,11 +134,11 @@ await t('events: snapshot on connect, then pushes arrive within a few ms of the 
   mock.addChat('SpyWobbles', 'push test'); await sleep(40); assert.equal(got.find(m => m.event === 'chat').data.text, 'push test');
   ev.stop();
 });
-await t('events: reconnects after the stream drops and resumes with Last-Event-ID', async () => {
+await t('events: reconnects after the stream drops and sends no custom header (the Host CORS list would block it)', async () => {
   const got = []; const states = []; const seenIds = []; const rf = (u, o) => { seenIds.push(o.headers['Last-Event-ID']); return fetch(u, o); };
   const ev = C.createEvents({ url: base + '/api/events', fetch: rf, onMessage: m => got.push(m), onState: s => states.push(s), sleep: ms => sleep(20) });
   ev.start(); await sleep(120); mock.st.sse.forEach(r => r.end()); await sleep(200);
-  assert.deepEqual(states.slice(0, 3), [true, false, true]); assert.equal(seenIds[0], undefined); assert.ok(seenIds[1] != null); ev.stop();
+  assert.deepEqual(states.slice(0, 3), [true, false, true]); assert.equal(seenIds.length >= 2, true); assert.ok(seenIds.every(x => x === undefined)); ev.stop();
 });
 await t('events: an old Host without /api/events backs off and reports offline (polling stays in charge)', async () => {
   const m2 = await startMock(0, { noEvents: true }); const states = []; let tries = 0;
