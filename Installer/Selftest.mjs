@@ -9,6 +9,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPair } from '../Suite/updater/lib/sign.mjs';
+import { plan as rebuildPlan, steps as rebuildSteps } from './Rebuild-Plan.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(HERE, '..');
 const args = process.argv.slice(2), opt = n => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; }, has = n => args.includes('--' + n);
@@ -149,6 +150,51 @@ try {
     const ej = path.join(inst, 'Data/updates/ejected'), dirs = fs.existsSync(ej) ? fs.readdirSync(ej).filter(n => n.startsWith('uninstall-')) : [];
     must(dirs.length === 1, 'no dated ejected folder'); const moved = count(path.join(ej, dirs[0]));
     must(moved >= before, `only ${moved} of ${before} files were moved`);
+  });
+  step('Rebuild-Plan: path rules put each commit in the right group, builds newer than a commit drop it', () => {
+    const c = (hash, time, ...files) => ({ hash, time, subject: hash, files });
+    const g = rebuildPlan([c('a', 200, 'App/src/index.html'), c('b', 200, 'Suite/suite/suite.py', 'Docs/x.md'), c('c', 200, 'Suite/modules.json'), c('d', 200, 'Suite/modules/listen/listen.py'),
+      c('e', 200, 'PinguinoLite/src/index.html'), c('f', 200, 'PinguinoLite/test/rows.test.mjs', 'Suite/tests/test_x.py'), c('g', 50, 'App/src-tauri/src/main.rs'), c('h', 200, 'PinguinoHost/Foo.cs')], { shell: 100, core: 100, host: 100, modules: 100, lite: 100 }, 100);
+    const ids = k => g[k].map(x => x.hash).join('');
+    must(ids('shell') === 'a' && ids('core') === 'bc' && ids('modules') === 'd' && ids('lite') === 'e' && ids('host') === 'h' && ids('none') === 'f', JSON.stringify(Object.fromEntries(Object.keys(g).map(k => [k, ids(k)]))));
+    must(rebuildSteps({ groups: Object.fromEntries(Object.keys(g).map(k => [k, []])) })[0] === 'Nothing to rebuild or restart.', 'empty plan not recognised');
+    must(rebuildSteps({ groups: { ...Object.fromEntries(Object.keys(g).map(k => [k, []])), core: g.core } }).some(x => /--force/.test(x)), 'core step lacks --force');
+  });
+  // ---- a FULL profile install (this PC's kind) in its own folder, from the same fake tree: every part, no `parts` list ----
+  const inst2 = path.join(W, 'install-full'), upd2 = (cmd, a = []) => node(UP(inst2), [cmd, '--install', inst2, '--core-port', CORE_PORT, ...a]);
+  step('install the full profile from 1.0.0: every part present, no parts list, key recorded', () => {
+    const r = node(IN, ['--target', inst2, '--local', rel100, '--pubkey', key.pubkey, '--profile', 'full']);
+    must(r.json && r.json.ok, 'install failed: ' + (r.json ? r.json.message : r.err).slice(0, 200));
+    const j = rd(path.join(inst2, 'install.json'));
+    must(j.profile === 'full' && j.version === '1.0.0' && j.pubkey === key.pubkey && !('parts' in j), 'install.json wrong: ' + JSON.stringify(j).slice(0, 200));
+    for (const f of ['Suite/suite/suite.py', 'Suite/modules.json', 'Suite/modules/link/link.py', 'Suite/modules/listen/listen.py', 'Suite/modules/multi/multi.py', 'PinguinoHost/bin/Release/net8.0/PinguinoHost.dll',
+      'App/src-tauri/target/release/pinguino-suite.exe', 'PinguinoLite/Start-Lite.bat', 'App/Setup-Suite.ps1', 'Docs/INSTALL.md']) must(fs.existsSync(path.join(inst2, f)), 'missing in a full install: ' + f);
+    const ids = Object.keys(j.components || {}); for (const id of ['lite', 'link', 'listen', 'multi']) must(ids.includes(id), 'part not recorded: ' + id + ' (have ' + ids + ')');
+    const v = upd2('verify', src(rel100)); must(v.json && v.json.ok, 'verify not ok: ' + v.out.slice(0, 200));
+  });
+  step('full install: check shows the release notes, only link changed, nothing optional', () => {
+    const r = upd2('check', src(rel101)); must(r.json && r.json.ok && r.json.available && r.json.version === '1.0.1' && r.json.profile === 'full', 'no update offered: ' + r.out.slice(0, 200));
+    must(/second version/.test(r.json.notes), 'notes missing from check: ' + JSON.stringify(r.json.notes));
+    const ch = r.json.components.filter(c => c.changed).map(c => c.id); must(JSON.stringify(ch) === '["link"]', 'changed parts: ' + ch);
+    must(!r.json.optional || r.json.optional.length === 0, 'full install lists optional parts: ' + JSON.stringify(r.json.optional));
+  });
+  step('full install: apply 1.0.1 touches only link, other modules and Data stay byte-identical', () => {
+    wr(inst2, 'Data/mine.txt', 'full data'); const before = fs.readFileSync(path.join(inst2, 'Suite/modules/listen/listen.py'), 'utf8');
+    const r = upd2('apply', src(rel101)); must(r.json && r.json.ok && !r.json.deferred, 'apply failed: ' + r.out.slice(0, 250));
+    must(rd(path.join(inst2, 'install.json')).version === '1.0.1', 'version not 1.0.1');
+    must(fs.readFileSync(path.join(inst2, 'Suite/modules/link/link.py'), 'utf8') === 'LINK = "two"', 'link.py not updated');
+    must(fs.readFileSync(path.join(inst2, 'Suite/modules/listen/listen.py'), 'utf8') === before, 'listen changed');
+    must(fs.readFileSync(path.join(inst2, 'Data/mine.txt'), 'utf8') === 'full data', 'Data changed');
+    const v = upd2('verify', src(rel101)); must(v.json && v.json.ok, 'verify after apply not ok: ' + v.out.slice(0, 200));
+  });
+  step('manifest notes: long notes are cut to 2000 characters, signature still valid; no --notes-file = short default text', () => {
+    wr(W, 'long-notes.txt', 'Suite:\n' + '- a very long line of notes that goes on and on\n'.repeat(120));
+    const out = path.join(W, 'rel-notes'), r = node(BR, ['--root', tree, '--version', '1.0.2', '--out', out, '--sign-key', seedFile, '--notes-file', path.join(W, 'long-notes.txt')]);
+    must(r.json && r.json.ok, 'Build-Release refused long notes: ' + (r.err || r.out).slice(0, 200));
+    const m = rd(path.join(out, 'manifest.json')); must(String(m.notes || '').length <= 2000, 'notes not capped: ' + String(m.notes || '').length);
+    const c = upd2('check', src(out)); must(c.json && c.json.ok && c.json.version === '1.0.2' && String(c.json.notes).length <= 2000 && c.json.notes.length > 100, 'check of the long-notes release: ' + c.out.slice(0, 200));
+    const out2 = path.join(W, 'rel-nonotes'), r2 = node(BR, ['--root', tree, '--version', '1.0.3', '--out', out2, '--sign-key', seedFile]); must(r2.json && r2.json.ok, 'build without notes failed');
+    const c2 = upd2('check', src(out2)); must(c2.json && c2.json.ok && String(c2.json.notes || '').length < 100, 'default notes too long: ' + JSON.stringify(c2.json && c2.json.notes));
   });
 } finally {
   const keep = has('keep');
