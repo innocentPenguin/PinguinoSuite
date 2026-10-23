@@ -142,7 +142,7 @@ async def ws_drain(stop, counter):
 
 def main():
     tmp = tempfile.mkdtemp(prefix="multi_soak_")
-    env = dict(os.environ, MULTI_PORT=str(PORT), PINGUINO_DATA_DIR=tmp, PINGUINO_CORE_URL="http://127.0.0.1:1", MULTI_NO_KEYRING="1")
+    env = dict(os.environ, MULTI_PORT=str(PORT), PINGUINO_DATA_DIR=tmp, PINGUINO_CORE_URL="http://127.0.0.1:1", MULTI_NO_KEYRING="1", MULTI_NO_SEND="1")
     proc = subprocess.Popen([sys.executable, "server.py"], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     rows, counter, stop = [], {}, threading.Event()
     try:

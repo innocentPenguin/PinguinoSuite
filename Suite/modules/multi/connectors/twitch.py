@@ -16,7 +16,7 @@ import websockets
 import config
 import console_log
 import secrets_store
-from connectors.base import Connector
+from connectors.base import Connector, SendRejected, refused
 from models import ChatMessage
 
 EVENTSUB_URL = "wss://eventsub.wss.twitch.tv/ws"
@@ -24,11 +24,11 @@ HELIX = "https://api.twitch.tv/helix"
 VALIDATE = "https://id.twitch.tv/oauth2/validate"
 
 
-class TwitchAuthError(RuntimeError):
+class TwitchAuthError(SendRejected):
     """The token is dead or lacks permission: the card shows 'needs_auth' (Ivan must reconnect), not a retry loop."""
 
 
-class TwitchBusy(RuntimeError):
+class TwitchBusy(SendRejected):
     """Helix 429. `wait` = seconds Twitch asked us to hold off."""
     def __init__(self, wait):
         super().__init__(f"Twitch rate limit: try again in {int(wait)} s")
@@ -356,10 +356,10 @@ class Twitch(Connector):
             body["reply_parent_message_id"] = reply_to.split(":")[-1]
         r = self._call("post", f"{HELIX}/chat/messages", tok=tok, json=body)
         if r.status_code != 200:
-            raise RuntimeError(f"send failed {r.status_code}: {r.text[:200]}")
+            raise refused(r.status_code, f"send failed {r.status_code}: {r.text[:200]}")
         d = r.json()["data"][0]
         if not d.get("is_sent"):
-            raise RuntimeError("Twitch dropped the message: " + json.dumps(d.get("drop_reason")))
+            raise SendRejected("Twitch dropped the message: " + json.dumps(d.get("drop_reason")))
         return d["message_id"]
 
     def _mod_sync(self, action, user_id="", message_id="", seconds=600, reason=""):
@@ -386,9 +386,9 @@ class Twitch(Connector):
 
     async def send(self, text, reply_to=None):
         if not (self.user and self.capabilities.get("send")):
-            raise RuntimeError("Twitch send is not authorised (needs user:write:chat)")
+            raise SendRejected("Twitch send is not authorised (needs user:write:chat)")
         try:
-            mid = await asyncio.to_thread(self._send_sync, text, reply_to)
+            mid = await self.send_once(text, reply_to, lambda: asyncio.to_thread(self._send_sync, text, reply_to))
         except TwitchAuthError as e:
             self.set_status("needs_auth", str(e)[:120])
             raise

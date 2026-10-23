@@ -17,7 +17,7 @@ import config
 import secrets_store
 import xplat
 from connectors import kick_auth
-from connectors.base import Connector
+from connectors.base import Connector, SendRejected, refused
 
 PUSHER = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false"
 PUBKEY_URL = "https://api.kick.com/public/v1/public-key"
@@ -69,16 +69,16 @@ class Kick(Connector):
             body["reply_to_message_id"] = str(reply_to).split(":")[-1]
         r = requests.post(f"{API}/chat", json=body, headers=self._headers(), timeout=10)
         if r.status_code != 200:
-            raise RuntimeError(f"Kick send failed {r.status_code}: {r.text[:160]}")
+            raise refused(r.status_code, f"Kick send failed {r.status_code}: {r.text[:160]}")
         d = r.json().get("data") or {}
         if not d.get("is_sent"):
-            raise RuntimeError("Kick did not send the message")
+            raise SendRejected("Kick did not send the message")
         return d.get("message_id", "")
 
     async def send(self, text, reply_to=None):
         if not self.refresh_caps():
-            raise RuntimeError("Kick send is not authorised (sign in to Kick with the chat:write scope)")
-        mid = await asyncio.to_thread(self._send_sync, text, reply_to)
+            raise SendRejected("Kick send is not authorised (sign in to Kick with the chat:write scope)")
+        mid = await self.send_once(text, reply_to, lambda: asyncio.to_thread(self._send_sync, text, reply_to))
         self.sent_ids.add(mid)
         return f"kick:{config.settings().get('kick_channel') or 'kick'}:{mid}"
 

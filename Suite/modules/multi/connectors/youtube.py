@@ -13,7 +13,7 @@ import config
 import secrets_store
 from connectors import youtube_auth
 import xplat
-from connectors.base import Connector
+from connectors.base import Connector, SendRejected, refused
 from models import ChatMessage
 
 API = "https://www.googleapis.com/youtube/v3"
@@ -118,10 +118,10 @@ class YouTube(Connector):
                           json={"snippet": {"liveChatId": self.chat_id, "type": "textMessageEvent",
                                             "textMessageDetails": {"messageText": text}}})
         if r.status_code != 200:
-            raise RuntimeError(f"send failed {r.status_code}: {r.text[:160]}")
+            raise refused(r.status_code, f"send failed {r.status_code}: {r.text[:160]}")
         return f"youtube:{self.chat_id}:{r.json()['id']}"
 
     async def send(self, text, reply_to=None):
         if not self.chat_id:
-            raise RuntimeError("YouTube is not connected to a live chat")
-        return await asyncio.to_thread(self._send_sync, text)
+            raise SendRejected("YouTube is not connected to a live chat")
+        return await self.send_once(text, reply_to, lambda: asyncio.to_thread(self._send_sync, text))

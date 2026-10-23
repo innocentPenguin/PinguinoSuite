@@ -13,7 +13,7 @@ import websockets
 
 import config
 import secrets_store
-from connectors.base import Connector
+from connectors.base import Connector, SendRejected, refused
 from models import ChatMessage
 
 GATEWAY = "wss://gateway.discord.gg/?v=10&encoding=json"
@@ -115,14 +115,14 @@ class Discord(Connector):
             parts = reply_to.split(":")
             cid, body["message_reference"] = parts[1], {"message_id": parts[2], "channel_id": parts[1]}
         if cid not in {str(c) for c in chans}:
-            raise RuntimeError("channel not in the Discord channel list")
+            raise SendRejected("channel not in the Discord channel list")
         r = requests.post(f"{API}/channels/{cid}/messages", json=body,
                           headers={"Authorization": f"Bot {self.token()}"}, timeout=10)
         if r.status_code not in (200, 201):
-            raise RuntimeError(f"send failed {r.status_code}: {r.text[:160]}")
+            raise refused(r.status_code, f"send failed {r.status_code}: {r.text[:160]}")
         return f"discord:{cid}:{r.json()['id']}"
 
     async def send(self, text, reply_to=None):
         if not (self.user and self.capabilities.get("send")):
-            raise RuntimeError("Discord is not connected")
-        return await asyncio.to_thread(self._send_sync, text, reply_to)
+            raise SendRejected("Discord is not connected")
+        return await self.send_once(text, reply_to, lambda: asyncio.to_thread(self._send_sync, text, reply_to))
