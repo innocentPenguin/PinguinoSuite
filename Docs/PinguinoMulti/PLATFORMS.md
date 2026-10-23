@@ -79,3 +79,14 @@ Routes for the launcher (file `platform_api.py`; one line in server.py: `import 
 - `viewers.py`: no token -> that platform simply has no count (dash in UI), no HTTP call, no log. A failing call now logs one warn line per 30 min per platform (before: swallowed silently).
 - `stream_info.py`: no token -> `{"connected": false, "error": "..."}` with no network call, no log.
 - `connectors/*`: retry loops (`needs_auth` every 10-30 s) used to emit a `conn.status` event on every pass; `Connector.set_status` now suppresses identical repeats (heartbeat every 30 s) and still logs only on a change.
+
+## Status 2026-10-23 (end of day)
+
+| Item | State |
+|---|---|
+| Kick/YouTube **Connect cards** | Built: `static/connect.js` (one include in `index.html`) adds a card per platform to the launcher: client id + secret fields (id -> settings, secret -> Credential Manager via `POST /auth/<p>/client`, never echoed back), status text, "Sign in" button that opens the consent URL in a new tab. Ivan clicks consent himself. Proven on a throwaway server (`tests/e2e_connect.py`): callback GET passes the origin/token middleware, POSTs need same-origin. Needs a Multi restart to appear. |
+| Kick chat **send** + stream **title** | Built (`chat:write` / `channel:write`); `send` capability only shows once a token with `chat:write` exists. |
+| Kick **webhook relay** (site mailbox) | Multi side built: `connectors/kick_relay.py` (`to_webhook`, `replay`, `pull_once`; re-verifies Kick's RSA signature through `Kick.ingest_webhook`, dedupes by message id, never advances past a transient failure). Site side (receive + `GET /api/bot/kick/events?since=`) is NOT built; contract is in the side-session note `40-kick-webhook-relay.md`. No Multi poller yet by decision: wire `pull_once` to a timer only when the site route exists. `POST /hook/kick` on Multi still works for a tunnel. |
+| TikTok | Adapter built and tested with mocks; TikTokLive is NOT installed (waits for Ivan's yes). |
+| Failure modes | YouTube: 401 -> `needs_auth`; 429 / 403 quota -> back off 2-10+ min (honours `Retry-After`, cap 1 h); network down / bad JSON -> retry 20 s. Kick: bad websocket frames skipped, bad channel lookup is a clean error. TikTok: any error -> retry 30 s. Covered in `tests/test_connectors.py`. |
+| Cards | `cards.py` hardened for odd stored cards, NaN scores and concurrent reads (`tests/test_cards_fuzz.py`). |

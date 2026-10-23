@@ -4,6 +4,7 @@ States: open -> answered (fades after answered_fade_s) | missed (after missed_af
         | dismissed | snoozed (returns to open when the snooze ends). missed/answered/dismissed can be reopened.
 The clock is injectable so timers are testable. Every change goes through _emit so the UI sees one event stream.
 """
+import math
 import time
 
 import config
@@ -11,10 +12,58 @@ import config
 MIN_TIER_FOR_CARD = ("medium", "high")
 
 
+def _num(x, default=0.0):
+    """Finite float or `default`: None/NaN/inf/strings would break sorting and JSON (FastAPI refuses NaN -> 500)."""
+    try:
+        f = float(x)
+    except (TypeError, ValueError):
+        return default
+    return f if math.isfinite(f) else default
+
+
+STATES = ("open", "answered", "missed", "dismissed", "snoozed")
+
+
+def normalize(c, now=None):
+    """Repair a card loaded from an old/odd store so every reader can rely on the fields. Returns the card or None if unusable."""
+    if not isinstance(c, dict) or not c.get("id"):
+        return None
+    now = now if now is not None else time.time()
+    for k in ("message_id", "platform", "channel", "user", "user_id", "display", "text"):
+        if c.get(k) is None:
+            c[k] = ""
+        elif not isinstance(c[k], str):
+            c[k] = str(c[k])
+    c["score"] = _num(c.get("score"))
+    for k in ("created", "updated", "msg_ts"):
+        c[k] = _num(c.get(k), now)
+    for k in ("answered_at", "snooze_until"):
+        c[k] = None if c.get(k) is None else _num(c[k], None)
+    if c.get("state") not in STATES:
+        c["state"] = "open"
+    c["faded"] = bool(c.get("faded"))
+    c.setdefault("answered_via", None)
+    c["tier"] = c.get("tier") if isinstance(c.get("tier"), str) else "medium"
+    rs = c.get("reasons")
+    c["reasons"] = [r for r in rs if isinstance(r, dict) and "rule" in r] if isinstance(rs, list) else []
+    if not isinstance(c.get("context"), list):
+        c["context"] = []
+    return c
+
+
 class CardManager:
     def __init__(self, store, emit=lambda ev: None, clock=time.time):
         self.store, self.emit, self.clock = store, emit, clock
-        self.cards = {c["id"]: c for c in store.load_cards()}
+        now = clock()
+        self.cards = {}
+        for c in store.load_cards():
+            c = normalize(c, now)
+            if c:
+                self.cards[c["id"]] = c
+
+    def _all(self):
+        """Snapshot: /api/cards runs in a worker thread while the pipeline adds cards on the loop ('dict changed size during iteration')."""
+        return list(self.cards.values())
 
     # creation -------------------------------------------------------
     def maybe_create(self, msg, decision, context=None):
@@ -28,7 +77,7 @@ class CardManager:
         c = {
             "id": cid, "message_id": msg.id, "platform": msg.platform, "channel": msg.channel,
             "user": msg.user, "user_id": msg.user_id, "display": msg.display, "text": msg.text,
-            "msg_ts": msg.ts, "score": decision.score, "tier": decision.tier, "reasons": decision.reasons,
+            "msg_ts": msg.ts, "score": _num(decision.score), "tier": decision.tier, "reasons": decision.reasons,
             "context": context or [], "state": "open", "created": now, "updated": now,
             "answered_at": None, "answered_via": None, "snooze_until": None, "faded": False,
         }
@@ -44,7 +93,7 @@ class CardManager:
         if c:
             if not any(r["rule"] == "marked" for r in c["reasons"]):
                 c["reasons"] = [{"rule": "marked", "points": 0, "detail": "you marked this to answer"}] + c["reasons"]
-            c["score"] = max(c["score"], 60.0)
+            c["score"] = max(_num(c["score"]), 60.0)
             if c["state"] != "open":
                 self.set_state(cid, "open", reason="marked to answer")
             else:
@@ -62,7 +111,7 @@ class CardManager:
 
     def _enforce_cap(self):
         cap = config.settings()["max_cards"]
-        open_cards = sorted((c for c in self.cards.values() if c["state"] == "open"), key=lambda c: c["score"])
+        open_cards = sorted((c for c in self._all() if c["state"] == "open"), key=lambda c: _num(c["score"]))
         while len(open_cards) > cap:
             low = open_cards.pop(0)
             self.set_state(low["id"], "missed", reason="over card cap")
@@ -123,7 +172,7 @@ class CardManager:
         Platform reply (reply_to) is exact; an @mention of the viewer only counts on the same platform."""
         closed = []
         text = msg.text.lower()
-        for c in list(self.cards.values()):
+        for c in self._all():
             if c["state"] not in ("open", "missed", "snoozed") or c["platform"] != msg.platform:
                 continue
             if msg.reply_to and msg.reply_to == c["message_id"]:
@@ -136,7 +185,7 @@ class CardManager:
     def tick(self):
         now, st = self.clock(), config.settings()
         changed = []
-        for c in list(self.cards.values()):
+        for c in self._all():
             s = c["state"]
             if s == "open" and now - c["created"] >= st["missed_after_s"]:
                 changed.append(self.set_state(c["id"], "missed"))
@@ -144,7 +193,7 @@ class CardManager:
                 c["state"], c["snooze_until"], c["updated"] = "open", None, now
                 self._save(c, "card.update")
                 changed.append(c)
-            elif s == "answered" and not c["faded"] and now - c["answered_at"] >= st["answered_fade_s"]:
+            elif s == "answered" and not c["faded"] and now - _num(c["answered_at"], now) >= st["answered_fade_s"]:
                 c["faded"] = True
                 self._save(c, "card.update")
                 changed.append(c)
@@ -153,21 +202,21 @@ class CardManager:
     def view(self):
         """Cards the UI should show: open + snoozed hidden, answered until faded, missed separately."""
         out = {"open": [], "answered": [], "missed": []}
-        for c in self.cards.values():
+        for c in self._all():
             if c["state"] == "open":
                 out["open"].append(c)
             elif c["state"] == "answered" and not c["faded"]:
                 out["answered"].append(c)
             elif c["state"] == "missed":
                 out["missed"].append(c)
-        out["open"].sort(key=lambda c: (-c["score"], c["created"]))
-        out["missed"].sort(key=lambda c: -c["updated"])
+        out["open"].sort(key=lambda c: (-_num(c["score"]), _num(c["created"])))
+        out["missed"].sort(key=lambda c: -_num(c["updated"]))
         return out
 
     def recap(self, limit=50):
         """Post-stream list of everything never answered (open, missed, snoozed), best first."""
-        todo = [c for c in self.cards.values() if c["state"] in ("open", "missed", "snoozed")]
-        todo.sort(key=lambda c: (-c["score"], c["created"]))
+        todo = [c for c in self._all() if c["state"] in ("open", "missed", "snoozed")]
+        todo.sort(key=lambda c: (-_num(c["score"]), _num(c["created"])))
         return todo[:limit]
 
     def _save(self, c, ev):
