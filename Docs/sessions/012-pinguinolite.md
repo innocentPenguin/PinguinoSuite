@@ -25,7 +25,7 @@ PinguinoLite = a light app (Dashboard, Modules, Replays pages) that bundles Ping
 - Only 00 launches/rebuilds. Release build: `cargo build --release --features custom-protocol` in PinguinoLite\src-tauri. Tests: `cargo test` (15 pass). UI script check: extract inline <script> and `node --check`.
 - Real test done on a scratch copy (Build-Release -> install.mjs --profile lite-minimal --local -> updater verify/apply/eject cycle): all OK. Buttons in the actual window are NOT clicked yet.
 - Verify live: icon/taskbar, Alt+F4 dialog, tray Force quit, F11, Replays page + slider, Parts and Module files cards (need an installed copy with install.json), update check button.
-- Open: parser never run on a real replay; Lite GitHub repo has no release/manifest; empty module folder left after eject; eject waits a fixed 3 s after asking Link to stop (should check it stopped); Modules catalog (from 04) can disagree with the install profile.
+- Open (updated 2026-10-23 by 21-Lite): Lite GitHub repo has no release/manifest (404 or private); empty module folder left after eject. Done since: parser run on a real 2v2 replay (fixture test), eject waits until Link reports stopped AND the module port is closed (35 s, shows Link's error), Modules catalog follows install.json parts (mergeRows, node tests).
 
 ## 4. Future ideas (priority)
 1. Run the parser on a real replay and compare with the scoreboard.
@@ -45,3 +45,12 @@ Session id f4dd94ce-1d48-45f2-96c8-ed0a9c4fab57, transcript C:\Users\ivanm\.clau
 - Replays only work if Rocket League saves replays on that PC; Demos folder was not found on this one.
 - Scratch test data (~100 MB) sits in this session's scratchpad folder and can be deleted.
 - Quit/Force quit/F11 and the icon are unverified until someone launches the rebuilt app.
+
+## 7. Verify after the next Lite rebuild (for the coordinator)
+Everything below is source-only until Lite is rebuilt (`cargo build --release --features custom-protocol`, Lite closed). Unit tests pass; none of it was clicked in the real window.
+1. Replays page: lists replays from Documents AND OneDrive\Documents (OneDrive must be running; online-only files are skipped and counted as `unreadable`). Platforms show Steam/Epic/Xbox/PlayStation/Switch, not raw names like dingo.
+2. Modules page on a lite-minimal install: listen/multi/spotify show "Not installed" with an Install button (calls Lite parts_install, not Link); link shows installed. No version/update/conn state on not-installed rows.
+3. Install a module: waits, then the row turns installed. Eject a running module: Lite asks Link to stop, waits until status.json says stopped and the port is closed (up to 35 s), then moves files. If it refuses, the message includes Link's error.
+4. Start/Stop/Restart from Lite on a module: goes through request files, Link drops Data/runtime/control/<action>-<id>, the Suite core acts. With the Suite closed, expect "the Suite core did not pick up the request".
+5. The exe in the release is the new one: `Installer\Build-Release.mjs` lite part has 2 files (exe + Start-Lite.bat); check the exe timestamp is after the rebuild.
+6. Release/signing: follow Docs/LITE_RELEASE.md and Docs/RELEASE_DRYRUN.md (key with Installer/Make-SigningKey.mjs, `--sign-key`, publish three files, install on the second PC with `--url ... --pubkey ... --profile lite-minimal`).
