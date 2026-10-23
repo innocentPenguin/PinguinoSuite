@@ -32,6 +32,15 @@ Needs the Host restart (`App\Update-Module.ps1 host`, coordinator only): Chatty 
 | Same with `GameVoice` off in `chat_settings.json` | the plain Host line instead, never both |
 | Heated chat or opted-out viewer | plain result, no banter |
 
+## Replies and status
+| Try | Expect |
+|---|---|
+| Two viewers tag Chatty a few seconds apart (the second while the first answer is still being written) | each answer is a Twitch reply under ITS OWN message, never under the other viewer's; the parent travels with the answer itself (`PgReplyTo`), not through the shared message arguments |
+| A timer or event line right after a reply | plain line with its "@name" (no reply), never under the last viewer's message |
+| `!chatbot status` (mod) while offline / replies off / switched off / hourly AI cap used up | the status line says `(quiet: ...)` with the reason; nothing when it is live, on and under the cap |
+| Stream-end recap (`RecapOnStreamEnd`, off by default; wording still waits for a mod's OK) | one closing line with the stream's follows / subs / bits / raids; `POST /api/recap/test {post:true}` previews it |
+| Raid "prepare your emotes" (Host automation `raid_start`) | said once when the raid is scheduled (about 80 s before it lands, or at once with Raid prep), never when it lands; `!unraid` / stream offline cancels it; `alerttest` covers it |
+
 ## What to look at if something is off
 - Two lines for one action: `pinguino.said.recent` guard + Host log `[pggame]` / `Clog` "PgGame event failed".
 - No Chatty line: `chat_settings.json` Enabled / ChatReplies / GameVoice (never print that file, it holds the AI key), or Chatty offline (`WasLive` false; PgGame ignores it).

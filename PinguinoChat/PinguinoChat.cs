@@ -3193,6 +3193,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         if (!_cfg.Enabled) return " (quiet: switched off, !chatbot on turns it back on)";
         if (!_cfg.ChatReplies) return " (quiet: replies are off in the settings, commands and logging still run)";
         if (!IsLive()) return " (quiet: the stream is offline, I only answer canned commands; !offlinemode on makes me act live)";
+        if (_callLog.Count >= _cfg.MaxCallsPerHour) return " (quiet: the hourly AI cap of " + _cfg.MaxCallsPerHour + " calls is used up, it frees up as calls age past an hour; canned commands and game lines still work)";
         return "";
     }
     string StatusText()

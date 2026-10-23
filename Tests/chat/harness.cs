@@ -964,6 +964,11 @@ public static class Harness
           Msg("ModS", "!chatbot status", null, true);
           Check("status says WHY the bot is quiet while offline", Last() != null && Last().Contains("quiet: the stream is offline"), Last());
           Live(true); SF("_liveChecked").SetValue(null, DateTime.MinValue);
+          { var cl = (System.Collections.Generic.List<long>)SF("_callLog").GetValue(null); int capWas = 300; SetCfg("MaxCallsPerHour", 1); cl.Add(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("ModS", "!chatbot status", null, true);
+            Check("status says WHY the bot is quiet when the hourly AI cap is used up", Last() != null && Last().Contains("quiet: the hourly AI cap of 1"), Last());
+            cl.Clear(); SetCfg("MaxCallsPerHour", capWas); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("ModS", "!chatbot status", null, true);
+            Check("no quiet note when live, on and under the cap", Last() != null && !Last().Contains("(quiet:"), Last()); }
         }
 
         // ── 19g. arguments: stay out of heated chat, defend only when attacked / called out, no second reply to the same tag within minutes (lines from the 2026-10-22 stream, 22:27-22:55) ──
