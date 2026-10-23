@@ -518,6 +518,9 @@ public class CPHInline
         public bool ReactHype { get; set; } = true;                // one cheer per hype-train level-up (level 2 and up; the Host already announces the start and the end)
         public bool WelcomeBack { get; set; } = true;              // a light "good to see you again" for a regular who has been away for WelcomeBackDays (private: only the name, never a remembered fact)
         public int WelcomeBackDays { get; set; } = 7;
+        public bool DailyGreeting { get; set; } = true;            // a regular's first message of the day (they were last here on an earlier day, but not long enough for welcome-back): a varied one-line hello, and on the day they first showed up a year(s) ago, a "chat anniversary" line. Private, name only, once per chatter per day, opt-outs never
+        public int DailyGreetingChance { get; set; } = 40;         // percent of first-of-the-day regulars who get the plain hello (anniversaries always get their line)
+        public int DailyGreetingMax { get; set; } = 6;             // plain hellos per local day, so a busy day stays calm
         public bool RecapOnStreamEnd { get; set; } = false;        // one closing line with the stream's follows / subs / bits / raids when the stream ends (off by default; needs the Host to pass StreamOffline)
         public string CannedFile { get; set; } = @"D:\PinguinoSuite\PinguinoChat\canned_commands.json";   // {cooldownSec, commands:[{name, aliases, text | choices, enabled}]}; reloads when saved
         public string ChannelLoreFile { get; set; } = @"D:\PinguinoSuite\Data\lore\channel_lore.json";   // {items:[{term, meaning, howBotsUse}]}
@@ -551,6 +554,7 @@ public class CPHInline
         public string SelfNick { get; set; } = "";      // a name they asked to be called (used after the community's nickname, before the one the bot invented)
         public string Opinion { get; set; } = "";       // the bot's own short opinion of this viewer (kept so it stays consistent; changes slowly as it gets to know them)
         public long OpinionAt { get; set; }
+        public int AnnivYear { get; set; }              // the last chat-anniversary number already celebrated (never twice for the same year)
         public List<Fact> Facts { get; set; } = new List<Fact>();
     }
 
@@ -884,6 +888,35 @@ public class CPHInline
         }
         _lastBack = now; return v[_rng.Next(v.Length)];
     }
+    // ── DAILY GREETING (IDEAS #40): a regular's first message of the local day, plus the "first seen here N year(s) ago" anniversary. Name only, nothing remembered is quoted. ──
+    static readonly string[] DailyLines = {
+        "hey {n}, good to see you again today! 🐧", "{n} is here! 🐧 Welcome back to the igloo.", "morning, afternoon or night, hi {n}! 🐧",
+        "oh hi {n}! 🐧 Glad you dropped in.", "{n}, there you are! 🐧 Make yourself comfy.", "hi {n}! 🐧 Chat is better with you in it.", "look who showed up: {n}! 🐧" };
+    static string _dailyDay = ""; static int _dailyCount; static readonly HashSet<string> _dailyDone = new HashSet<string>();
+    static string LocalDay(long unix) { return DateTimeOffset.FromUnixTimeSeconds(unix).ToLocalTime().ToString("yyyy-MM-dd"); }
+    /// <summary>null = nothing to say. Called under _lock, once per message of a regular who is not opted out; prevSeen = the last time we saw them before this line.</summary>
+    string DailyGreetingLine(Viewer v, long prevSeen, string display)
+    {
+        if (!_cfg.DailyGreeting || v == null || prevSeen <= 0) return null;
+        long now = Now(); string today = LocalDay(now);
+        if (_dailyDay != today) { _dailyDay = today; _dailyCount = 0; _dailyDone.Clear(); }
+        if (LocalDay(prevSeen) == today || !_dailyDone.Add(v.Id ?? v.Login)) return null;   // already here today: one line per chatter per day
+        string n = string.IsNullOrWhiteSpace(display) ? v.Login : display;
+        if (v.FirstSeen > 0)
+        {
+            DateTime first = DateTimeOffset.FromUnixTimeSeconds(v.FirstSeen).ToLocalTime().DateTime, t = DateTimeOffset.FromUnixTimeSeconds(now).ToLocalTime().DateTime;
+            int years = t.Year - first.Year;
+            if (years >= 1 && first.Month == t.Month && first.Day == t.Day && v.AnnivYear < years)
+            {
+                v.AnnivYear = years; _dirty = true;
+                string y = years == 1 ? "a year" : years + " years";
+                return Pick("happy chat-iversary, " + n + "! 🐧 I first saw you here " + y + " ago today, thanks for sticking around.", n + ", today is " + y + " since you first showed up in this chat! 🐧 Glad you're still here.",
+                            "it was " + y + " ago today that " + n + " first said hi here! 🐧 Happy anniversary.");
+            }
+        }
+        if (_dailyCount >= Math.Max(0, _cfg.DailyGreetingMax) || _rng.Next(100) >= _cfg.DailyGreetingChance) return null;
+        _dailyCount++; return DailyLines[_rng.Next(DailyLines.Length)].Replace("{n}", n);
+    }
     static readonly List<string> _backSeen = new List<string>();
     static System.Reflection.MethodInfo _hostWelcome; static bool _hostWelcomeLooked;
     static bool HostWelcomeLine(string login, string display, int days, out string line)
@@ -1014,6 +1047,8 @@ public class CPHInline
             { welcome = true; _lastWelcome = Now(); }
             if (!welcome && !mention && !second && !optedOut && !cx.Broadcaster && _cfg.WelcomeBack && prevSeen > 0 && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { back = WelcomeBackLine(login, prevSeen, cx.Display); if (back != null) _lastWelcome = Now(); }
+            if (!welcome && back == null && !mention && !second && !optedOut && !cx.Broadcaster && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
+            { back = DailyGreetingLine(v, prevSeen, cx.Display); if (back != null) _lastWelcome = Now(); }
             if (mention)
             {
                 if (!cx.Broadcaster && ModActionAsk(text)) { string mr = ModRefusal(login, text); if (mr != "") Say(cx, mr); return; }

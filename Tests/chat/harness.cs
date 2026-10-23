@@ -960,6 +960,29 @@ public static class Harness
             Check("welcome back: without the Host method the fixed pool still greets", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), "back|long time|missed you"), Last());
             SF("_hostWelcomeLooked").SetValue(null, false); SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); }
 
+          // daily greeting (IDEAS #40): first message of the day for a regular who was last here 2 days ago: one varied hello; anniversary on the day; once per day; opt-outs never
+          {
+            Action reset = () => { SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); SF("_dailyDay").SetValue(null, ""); SF("_dailyCount").SetValue(null, 0); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); };
+            SetCfg("DailyGreetingChance", 100); SetCfg("DailyGreetingMax", 6);
+            var dv = mkViewer("Dailyone", 2); reset(); Msg("Dailyone", "morning everyone");
+            Check("daily greeting: a regular's first message of the day gets one hello by name", Last() != null && Last().Contains("Dailyone") && !System.Text.RegularExpressions.Regex.IsMatch(Last(), "since you first|ago today"), Last());
+            int n1 = CPHProxy.Sent.Count; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Dailyone", "and another thing");
+            Check("daily greeting: only once per chatter per day", CPHProxy.Sent.Count == n1, CPHProxy.Sent.Count + " vs " + n1);
+            var seen = new System.Collections.Generic.HashSet<string>();
+            for (int i = 0; i < 12; i++) { mkViewer("Dv" + i, 2); reset(); Msg("Dv" + i, "hello chat " + i); if (Last() != null) seen.Add(Last().Replace("Dv" + i, "X").Replace("@dv" + i, "@X").Replace("@X ", "")); }
+            Check("daily greeting: the wording varies", seen.Count >= 3, "" + seen.Count);
+            SetCfg("DailyGreetingMax", 2); reset(); int got = 0; for (int i = 0; i < 6; i++) { mkViewer("Cap" + i, 2); SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Cap" + i, "hey cap " + i); if (Last() != null) got++; }
+            Check("daily greeting: capped per day", got == 2, "" + got); SetCfg("DailyGreetingMax", 6);
+            var av = mkViewer("Annie", 2); av.GetType().GetProperty("FirstSeen").SetValue(av, DateTimeOffset.UtcNow.AddYears(-2).AddHours(-1).ToUnixTimeSeconds(), null); SetCfg("DailyGreetingChance", 0); reset(); Msg("Annie", "hi from annie");
+            Check("anniversary: two years to the day gets its line even when plain hellos are off", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), "2 years"), Last());
+            SF("_dailyDay").SetValue(null, ""); SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); av.GetType().GetProperty("LastSeen").SetValue(av, DateTimeOffset.UtcNow.AddDays(-2).ToUnixTimeSeconds(), null); Msg("Annie", "hi again");
+            Check("anniversary: said once per year number", Last() == null || !Last().Contains("2 years"), Last());
+            SetCfg("DailyGreetingChance", 100); var gv = mkViewer("Quietone", 2); gv.GetType().GetProperty("Privacy").SetValue(gv, "forget", null); reset(); Msg("Quietone", "hello");
+            Check("daily greeting: opted-out viewers get nothing", Last() == null, Last());
+            SetCfgB("DailyGreeting", false); mkViewer("Offd", 2); reset(); Msg("Offd", "hello"); Check("daily greeting: off switch", Last() == null, Last()); SetCfgB("DailyGreeting", true);
+            reset();
+          }
+
           Live(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); SF("_liveChecked").SetValue(null, DateTime.MinValue);
           Msg("ModS", "!chatbot status", null, true);
           Check("status says WHY the bot is quiet while offline", Last() != null && Last().Contains("quiet: the stream is offline"), Last());
