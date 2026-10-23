@@ -339,13 +339,19 @@
   const modText = e => { const w = e.who || '?', r = e.role && e.role !== 'mod' ? ' (' + e.role + ')' : '', t = e.target ? ' ' + e.target : '', ch = e.before || e.after ? ' [' + (e.before || '–') + ' → ' + (e.after || '–') + ']' : ''; return w + r + ': ' + (e.action || 'action') + t + ch; };
   const normMod = e => ({ k: 'M' + e.id, t: 'm', ts: +e.at || 0, type: 'mod', user: e.who || '', text: modText(e) });
   // Status strip for the Feed tab from the Host's /api/shoutouts, /api/intros?status=pending and /api/scene-health answers (any may be null = not available)
-  function headsView(sh, intro, health) {
+  function headsView(sh, intro, health, streaks) {
     const out = [];
     if (sh && sh.ok !== false) { const cur = sh.current, pend = (sh.pending || []).length, last = (sh.recent || [])[0]; out.push({ k: 'shout', warn: false, text: 'Shoutout: ' + (cur ? 'now ' + cur : 'idle') + (pend ? ' · ' + pend + ' queued' : '') + (last ? ' · last ' + last.user + ' ' + (last.minAgo < 1 ? 'just now' : last.minAgo + ' min ago') : '') }); }
     if (intro && intro.ok !== false && typeof intro.pending === 'number') out.push({ k: 'intro', warn: intro.pending > 0, text: 'Intros waiting: ' + intro.pending });
+    if (streaks && streaks.ok !== false && (streaks.board || []).length) { const t = streaks.board[0]; out.push({ k: 'streaks', warn: false, text: 'Streaks: ' + (t.name || t.login || '?') + ' ' + (+t.best || 0) }); }
     if (health && health.ok === false && Array.isArray(health.problems) && health.problems.length) out.push({ k: 'scenes', warn: true, text: 'Scenes: ' + health.problems.length + ' problem' + (health.problems.length > 1 ? 's' : ''), tip: health.problems.join('\n') });
     return out;
   }
+  // Host /api/streaks {board:[{login,name,best,current,...}]} (already sorted best first) -> top n rows for the card
+  const streakRows = (j, n) => ((j && j.board) || []).slice(0, n || 5).map((u, i) => ({ k: String(u.login || u.name || i), n: i + 1, name: u.name || u.login || '?', best: +u.best || 0, current: +u.current || 0 }));
+  // pending viewer intros for the approve/reject list: rows still waiting, minus the ones just decided here (optimistic), oldest first as the Host sends them
+  const introKey = i => (i.platform || 'twitch') + ':' + (i.user_id != null ? i.user_id : i.login);
+  const introRows = (intro, gone) => ((intro && intro.intros) || []).filter(i => i && i.status === 'pending' && !(gone && gone.has(introKey(i)))).map(i => ({ k: introKey(i), platform: i.platform || 'twitch', user_id: String(i.user_id != null ? i.user_id : ''), login: i.login || '?', text: String(i.text || '') }));
   // 02's /api/eventlog event {id, ts(ms), kind, type, user, text, group, detail} -> feed item
   function normLog(e) {
     const d = e.detail || {}, T = { players: 'p', backend: 'b', chat: 'c' };
@@ -383,5 +389,5 @@
     }
   }
 
-  return { modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });

@@ -267,9 +267,26 @@ await t('Host extras: Mods feed items and the Feed status strip (shoutouts, intr
   const feed = m.concat([{ k: 'x', t: 'c', ts: 1, user: 'a', text: 'hi' }]);
   assert.equal(C.logRows(feed, 'all', '', null, 50).length, 1, 'Mods are not mixed into All'); assert.equal(C.logRows(feed, 'mods', '', null, 50).length, 2);
   const v = C.headsView((await api.get('/api/shoutouts')).json, (await api.get('/api/intros?status=pending')).json, (await api.get('/api/scene-health')).json);
-  assert.deepEqual(v.map(x => x.k), ['shout', 'intro', 'scenes']); assert.equal(v[0].text, 'Shoutout: now kira · 1 queued · last ann 7 min ago'); assert.equal(v[1].text, 'Intros waiting: 3'); assert.equal(v[1].warn, true); assert.equal(v[2].text, 'Scenes: 1 problem'); assert.match(v[2].tip, /no visible widget/);
+  assert.deepEqual(v.map(x => x.k), ['shout', 'intro', 'scenes']); assert.equal(v[0].text, 'Shoutout: now kira · 1 queued · last ann 7 min ago'); assert.equal(v[1].text, 'Intros waiting: 2'); assert.equal(v[1].warn, true); assert.equal(v[2].text, 'Scenes: 1 problem'); assert.match(v[2].tip, /no visible widget/);
   assert.deepEqual(C.headsView(null, { ok: true, pending: 0 }, { ok: true, problems: [] }).map(x => x.k), ['intro']); assert.equal(C.headsView(null, null, null).length, 0);
   assert.equal(C.headsView({ ok: true, current: '', pending: [], recent: [] }, null, null)[0].text, 'Shoutout: idle');
+});
+await t('intro approve/reject: pending rows, optimistic hide, exact Host body, Host refusal surfaces, UI wiring (armed, textContent)', async () => {
+  const j = (await api.get('/api/intros?status=pending')).json; const rows = C.introRows(j, new Set());
+  assert.deepEqual(rows.map(r => r.k), ['twitch:1', 'twitch:2']); assert.equal(rows[0].text, 'hello <b>there</b>', 'raw text kept; the page sets it with textContent');
+  assert.deepEqual(C.introRows(j, new Set(['twitch:1'])).map(r => r.k), ['twitch:2']); assert.deepEqual(C.introRows(null, null), []);
+  const ok = await api.post('/api/intros', { action: 'approve', platform: 'twitch', user_id: '1', by: 'master-view' }); assert.equal(ok.ok && ok.json.ok, true);
+  const again = await api.post('/api/intros', { action: 'approve', platform: 'twitch', user_id: '1', by: 'master-view' }); assert.equal(again.json.ok, false); assert.match(again.json.error, /not waiting/);
+  assert.deepEqual(C.introRows((await api.get('/api/intros?status=pending')).json, new Set()).map(r => r.k), ['twitch:2']);
+  const js = fs.readFileSync(new URL('../../App/src/master/master.js', import.meta.url), 'utf8');
+  const dec = js.slice(js.indexOf('async function decideIntro')); assert.ok(dec.indexOf('armed(btn)') > 0 && dec.indexOf('armed(btn)') < dec.indexOf('introGone.add'), 'decideIntro must arm before anything is hidden or sent');
+  assert.ok(js.includes("d.children[1].textContent = r.text"), 'intro text goes in with textContent, never innerHTML');
+});
+await t('watch streaks: top 5 rows from /api/streaks and the strip chip', async () => {
+  const j = (await api.get('/api/streaks')).json, r = C.streakRows(j, 5);
+  assert.equal(r.length, 5); assert.deepEqual(r[0], { k: 'u0', n: 1, name: 'User0', best: 12, current: 10 }); assert.equal(r[4].name, 'User4');
+  assert.deepEqual(C.streakRows(null, 5), []); assert.deepEqual(C.streakRows({ board: [] }, 5), []);
+  assert.equal(C.headsView(null, null, null, j).find(x => x.k === 'streaks').text, 'Streaks: User0 12'); assert.equal(C.headsView(null, null, null, { ok: true, board: [] }).length, 0);
 });
 await t('last stream card: recapView shapes the Host recap, only https clips link; mock preview round trip', async () => {
   const v = C.recapView((await api.get('/api/recap/preview')).json); assert.equal(v.text, 'Recap text'); assert.equal(v.clipUrl, 'https://clips.twitch.tv/x'); assert.equal(v.views, 12); assert.equal(v.hasClip, true);

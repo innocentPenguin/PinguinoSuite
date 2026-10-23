@@ -36,7 +36,7 @@
   const ui = {
     wq: ls.get('wq') || null, teamsOv: {}, si: Object.assign({ title: '', description: '', tags: '', game: '', plat: { twitch: true, youtube: true, kick: false }, at: '', privacy: 'public' }, ls.get('si') || {}), ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
-    itemsBy: {}, heads: {}, modsOk: null, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
+    itemsBy: {}, heads: {}, modsOk: null, introOpen: false, streaksOpen: false, introGone: new Set(), tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
   const saveCache = () => ls.set('cache', { tree: S.get('tree'), customs: S.get('customs') });
 
@@ -649,7 +649,7 @@
 
   /* ---------- feed ---------- */
   function mkFeed() {
-    $('#tab-feed').innerHTML = '<div class="row sm" style="margin-bottom:6px;gap:4px" id="feed-chips">' + [['all', 'All'], ['chat', 'Chat'], ['players', 'Players'], ['backend', 'Backend'], ['events', 'Events'], ['mods', 'Mods']].map(([k, l]) => `<button class="sm chip" data-lc="${k}">${l}</button>`).join('') + '</div><div class="row sm" id="feed-heads" style="gap:6px;margin-bottom:6px" hidden></div><div class="faint sm" id="feed-note" style="margin-bottom:6px"></div><div id="feedlist"></div>';
+    $('#tab-feed').innerHTML = '<div class="row sm" style="margin-bottom:6px;gap:4px" id="feed-chips">' + [['all', 'All'], ['chat', 'Chat'], ['players', 'Players'], ['backend', 'Backend'], ['events', 'Events'], ['mods', 'Mods']].map(([k, l]) => `<button class="sm chip" data-lc="${k}">${l}</button>`).join('') + '</div><div class="row sm" id="feed-heads" style="gap:6px;margin-bottom:6px" hidden></div><div id="feed-intros" class="intros" hidden></div><div id="feed-streaks" class="intros" hidden></div><div class="faint sm" id="feed-note" style="margin-bottom:6px"></div><div id="feedlist"></div>';
   }
   const fmtT = ts => new Date(ts * 1000).toTimeString().slice(0, 5);
   function renderFeed() {
@@ -674,10 +674,37 @@
   }
   // Mods activity (Host /api/modaudit) and the status strip (shoutouts, intro queue, scene health): read only, polled only while the Feed tab is open
   function renderHeads() {
-    const box = $('#feed-heads'), v = C.headsView(ui.heads.shout, ui.heads.intro, ui.heads.health);
+    const box = $('#feed-heads'), v = C.headsView(ui.heads.shout, ui.heads.intro, ui.heads.health, ui.heads.streaks);
     C.reconcile(box, v.map(x => Object.assign(x, { sg: x.k + '|' + x.text + '|' + x.warn + '|' + (x.tip || '') })), x => x.k, () => h('span', 'hd'),
-      (d, x) => { d.textContent = x.text; d.className = 'hd' + (x.warn ? ' warn' : ''); d.title = x.tip || ''; });
+      (d, x) => { d.dataset.k = x.k; d.textContent = x.text; d.className = 'hd' + (x.warn ? ' warn' : ''); d.title = x.tip || ''; });
     box.hidden = !v.length;
+    const ib = box.querySelector('[data-k="intro"]'); if (ib) { ib.setAttribute('role', 'button'); ib.tabIndex = 0; ib.title = 'Show / hide the intros waiting for approval'; }
+    const sb = box.querySelector('[data-k="streaks"]'); if (sb) { sb.setAttribute('role', 'button'); sb.tabIndex = 0; sb.title = 'Show / hide the top 5 watch streaks'; }
+    renderIntros(); renderStreaks();
+  }
+  function renderStreaks() {
+    const box = $('#feed-streaks'), rows = ui.streaksOpen ? C.streakRows(ui.heads.streaks, 5) : []; box.hidden = !ui.streaksOpen; if (!ui.streaksOpen) return;
+    if (!rows.length) { box.textContent = 'No streaks yet.'; box.dataset.empty = '1'; return; }
+    if (box.dataset.empty) { box.textContent = ''; delete box.dataset.empty; }
+    C.reconcile(box, rows.map(r => Object.assign(r, { sg: r.k + '|' + r.n + '|' + r.name + '|' + r.best + '|' + r.current })), r => r.k, () => { const d = h('div', 'intro'); d.append(h('b', ''), h('span', 'it')); return d; },
+      (d, r) => { d.children[0].textContent = '#' + r.n + ' ' + r.name; d.children[1].textContent = 'best ' + r.best + ' · now ' + r.current; });
+  }
+  // Viewer intros waiting for approval: Approve / Reject, two clicks each, the row disappears at once and comes back with a toast if the Host refuses. Never sent unless you click.
+  function renderIntros() {
+    const box = $('#feed-intros'), rows = ui.introOpen ? C.introRows(ui.heads.intro, ui.introGone) : [];
+    box.hidden = !ui.introOpen;
+    if (ui.introOpen && !rows.length) { box.textContent = 'No intros waiting.'; box.dataset.empty = '1'; return; }
+    if (box.dataset.empty) { box.textContent = ''; delete box.dataset.empty; }
+    C.reconcile(box, rows.map(r => Object.assign(r, { sg: r.k + '|' + r.login + '|' + r.text })), r => r.k, () => { const d = h('div', 'intro'); d.append(h('b', ''), h('span', 'it'), h('button', 'sm g', 'Approve'), h('button', 'sm rd warn', 'Reject')); d.children[2].dataset.ia = 'approve'; d.children[3].dataset.ia = 'reject'; return d; },
+      (d, r) => { d.dataset.k = r.k; d.children[0].textContent = r.login; d.children[1].textContent = r.text; });
+  }
+  async function decideIntro(btn) {
+    const row = btn.closest('.intro'), key = row && row.dataset.k, i = ((ui.heads.intro && ui.heads.intro.intros) || []).find(x => C.introKey(x) === key); if (!i) return;
+    if (!armed(btn)) return;
+    const approve = btn.dataset.ia === 'approve'; ui.introGone.add(key); renderIntros();
+    await tokenReady; const r = await api.post('/api/intros', { action: approve ? 'approve' : 'reject', platform: i.platform || 'twitch', user_id: String(i.user_id != null ? i.user_id : ''), by: 'master-view' });
+    if (r.ok && !(r.json && r.json.ok === false)) { toast((approve ? 'Approved ' : 'Rejected ') + (i.login || 'intro')); pollers.heads.kick(); }
+    else { ui.introGone.delete(key); renderIntros(); toast((approve ? 'Approve' : 'Reject') + ': ' + ((r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status), true); }
   }
   function addMods(list) {
     const add = (list || []).filter(e => e && e.id != null).map(C.normMod);
@@ -792,8 +819,9 @@
     mods: P(() => (ui.modsOk === false ? 60000 : 8000), async () => { const r = await api.get('/api/modaudit?limit=60'); if (r.status === 404) { ui.modsOk = false; return; } if (r.ok) { ui.modsOk = true; addMods(r.json.entries); } }, () => visible() && ui.tab === 'feed'),
     heads: P(10000, async () => {
       const [a, b, c] = await Promise.all([api.get('/api/shoutouts'), api.get('/api/intros?status=pending'), api.get('/api/scene-health')]);
-      ui.heads = { shout: a.ok ? a.json : null, intro: b.ok ? b.json : null, health: c.json && Array.isArray(c.json.problems) ? c.json : null }; renderHeads();
+      ui.heads = Object.assign(ui.heads, { shout: a.ok ? a.json : null, intro: b.ok ? b.json : null, health: c.json && Array.isArray(c.json.problems) ? c.json : null }); renderHeads();
     }, () => visible() && ui.tab === 'feed'),
+    streaks: P(60000, async () => { const r = await api.get('/api/streaks'); if (r.ok) { ui.heads.streaks = r.json; renderHeads(); } }, () => visible() && ui.tab === 'feed'),
     music: P(() => (document.hidden ? 8000 : 2500), async () => {
       const [a, b] = await Promise.all([mapi.get('/api/now'), mapi.get('/api/state')]);
       if (a.ok || b.ok) S.set({ now: a.ok ? a.json : S.get('now'), mstate: b.ok ? b.json : null, nowOk: true }); else S.set({ nowOk: false });
@@ -909,7 +937,7 @@
   function setTab(t) {
     ui.tab = t; ls.set('tab', t); $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabbody').forEach(d => d.hidden = d.id !== 'tab-' + t);
     if (t === 'stream') siLoad();
-    if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') { pollers.mods.kick(); pollers.heads.kick(); renderFeed(); }
+    if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') { pollers.mods.kick(); pollers.heads.kick(); pollers.streaks.kick(); renderFeed(); }
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
   { const sel = $('#b-scale'), apply = v => { document.documentElement.style.zoom = v === 100 ? '' : String(v / 100); };   // zoom on this page's root only; the Suite shell is a different document
@@ -952,6 +980,9 @@
 
   /* ---------- start ---------- */
   mkCustomsSkeleton(); mkFeed(); mkCmds(); mkOverlays(); mkStream();
+  $('#feed-heads').addEventListener('click', e => { if (e.target.closest('[data-k="intro"]')) { ui.introOpen = !ui.introOpen; renderIntros(); } else if (e.target.closest('[data-k="streaks"]')) { ui.streaksOpen = !ui.streaksOpen; renderStreaks(); } });
+  $('#feed-heads').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-k="intro"], [data-k="streaks"]')) { e.preventDefault(); e.target.click(); } });
+  $('#feed-intros').addEventListener('click', e => { const b = e.target.closest('[data-ia]'); if (b) decideIntro(b); });
   $('#feed-chips').addEventListener('click', e => { const b = e.target.closest('[data-lc]'); if (b) { ui.logCat = b.dataset.lc; ls.set('logcat', ui.logCat); renderFeed(); } });
   $('#feedlist').addEventListener('click', e => { const g = e.target.closest('a.grp'); if (g) { const k = g.dataset.g; ui.openGroups.has(k) ? ui.openGroups.delete(k) : ui.openGroups.add(k); renderFeed(); } });
   setTab(ui.tab);

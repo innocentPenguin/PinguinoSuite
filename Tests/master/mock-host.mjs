@@ -11,6 +11,7 @@ const fx = n => JSON.parse(fs.readFileSync(path.join(dir, n + '.json'), 'utf8'))
 
 export function startMock(port = 8798, opts = {}) {
   const st = {
+    intros: [{ platform: 'twitch', user_id: '1', login: 'amy', text: 'hello <b>there</b>', status: 'pending', submitted_at: 1 }, { platform: 'twitch', user_id: '2', login: 'bob', text: 'yo', status: 'pending', submitted_at: 2 }, { platform: 'twitch', user_id: '3', login: 'cy', text: 'old', status: 'approved', submitted_at: 0 }],
     tree: fx('obs_tree'), status: fx('obs_status'), live: fx('live'), act: fx('activity_limit_30'), wheel: fx('wheel_public'),
     cmds: fx('commands_profiles'), overlays: fx('overlays'), ochat: fx('overlaychat_status'),
     customs: { open: true, activity: 'competitive', mode: 'balanced', format: '3v3', queue: [{ username: 'spywobbles', display: 'spywobbles', mmr: 800 }, { username: 'pineyapplie', display: 'PineyApplie', mmr: 1700 }], match: null },
@@ -44,6 +45,7 @@ export function startMock(port = 8798, opts = {}) {
         else ran = '!' + a;
         st.modCalls.push({ a, v }); push('customs', st.customs); return send(res, 200, { ok: true, ran, customs: st.customs });
       }
+      if (p === '/api/intros' && req.method === 'POST') { st.introCalls = st.introCalls || []; st.introCalls.push(b); const it = st.intros.find(x => String(x.user_id) === String(b.user_id) && x.platform === (b.platform || 'twitch')); if (!['approve', 'reject'].includes(b.action)) return send(res, 200, { ok: false, error: 'action must be submit, remove, approve, reject or settings' }); if (!it) return send(res, 200, { ok: false, error: 'no such intro' }); if (it.status !== 'pending') return send(res, 200, { ok: false, error: 'that intro is not waiting for approval' }); it.status = b.action === 'approve' ? 'approved' : 'rejected'; return send(res, 200, { ok: true, intro: it }); }
       if (p === '/api/scene-layouts' && req.method === 'POST') { if (b.action === 'setgame') { if (b.profile !== '*' && !/^[hv]$/.test(b.profile || '')) return send(res, 200, { ok: false, error: 'profile must be h or v' }); st.currentGame = String(b.game || '').slice(0, 40); st.gameCalls = (st.gameCalls || 0) + 1; return send(res, 200, { ok: true, currentGame: st.currentGame }); } return send(res, 200, { ok: false, error: 'unsupported in mock' }); }
       if (p === '/api/customs/teams') { st.customs.teams = st.customs.teams || { orange: { name: 'Orange', color: '#ff7a00' }, blue: { name: 'Blue', color: '#1e8fff' } }; for (const k of ['orange', 'blue']) if (b[k]) Object.assign(st.customs.teams[k], { name: b[k].name || st.customs.teams[k].name, color: b[k].color || st.customs.teams[k].color }); push('customs', st.customs); return send(res, 200, { ok: true, teams: st.customs.teams }); }
       if (p === '/api/recap/test') { (st.rcalls = st.rcalls || []).push(b); return send(res, 200, { ok: true, text: 'Recap text', clip: { title: 'Clutch', url: 'https://clips.twitch.tv/x', views: 12 }, posted: !!b.post, duplicate: false }); }
@@ -78,8 +80,9 @@ export function startMock(port = 8798, opts = {}) {
     if (p === '/api/live') return send(res, 200, st.live);
     if (p === '/api/activity') { const since = +u.searchParams.get('since') || 0; return send(res, 200, { ok: true, seq: st.act.seq, items: st.act.items.filter(i => i.seq > since) }); }
     if (p === '/api/modaudit') return send(res, 200, { ok: true, entries: [{ id: 'h-2', at: 1700000100, who: 'modsam', role: 'mod', action: 'timeout', target: 'troll', before: '', after: '600s', page: 'host', src: 'host' }, { id: 'h-1', at: 1700000000, who: 'viewerx', role: 'viewer', action: 'intro submitted', target: 'twitch:1', before: '', after: 'hello', page: 'host', src: 'host' }], more: false });
+    if (p === '/api/streaks') return send(res, 200, { ok: true, people: 7, board: [12, 9, 7, 5, 4, 3, 1].map((n, i) => ({ login: 'u' + i, name: 'User' + i, best: n, current: Math.max(0, n - 2) })) });
     if (p === '/api/shoutouts') return send(res, 200, { ok: true, current: 'kira', pending: [{ user: 'bo', by: 'modsam', queuedSecAgo: 5 }], recent: [{ user: 'ann', minAgo: 7 }] });
-    if (p === '/api/intros') return send(res, 200, { ok: true, settings: {}, pending: 3, intros: [] });
+    if (p === '/api/intros') { const stt = u.searchParams.get('status'); return send(res, 200, { ok: true, settings: {}, pending: st.intros.filter(x => x.status === 'pending').length, intros: st.intros.filter(x => !stt || x.status === stt) }); }
     if (p === '/api/scene-health') return send(res, 200, { ok: false, problems: ['main: layout has no visible widget'], profiles: {} });
     if (p === '/api/recap/preview') return send(res, 200, { ok: true, text: 'Recap text', line: 'Recap', clip: { title: 'Clutch', url: 'https://clips.twitch.tv/x', views: 12 }, window: { start: 1, end: 2 } });
     if (p === '/api/channel/info') return send(res, 200, { ok: true, title: 'Customs with viewers', game: 'Rocket League', tags: ['English', 'Customs'] });
