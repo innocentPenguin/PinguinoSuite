@@ -325,3 +325,51 @@ def test_community_gift_counts_once():
     assert tw.normalize_notice(dict(base, notice_type="sub_gift", sub_gift={"community_gift_id": "X", "recipient_user_login": "r"})) is None
     single = tw.normalize_notice(dict(base, notice_type="sub_gift", sub_gift={"community_gift_id": None, "recipient_user_login": "r"}))
     assert single.event == "gift"
+
+
+# ---- kick relay replay (no network) ----
+from connectors import kick_relay
+
+
+def _row(seq, i, body=b'{"x":1}', sig="SIG"):
+    return {"seq": seq, "id": i, "type": "channel.followed", "version": 1, "ts": "2026-10-23T10:00:00Z", "sig": sig, "body_b64": base64.b64encode(body).decode()}
+
+
+def test_relay_to_webhook_headers_and_raw_body():
+    h, b = kick_relay.to_webhook(_row(1, "ULID1", b'{"a": 1}'))
+    assert b == b'{"a": 1}' and h["kick-event-message-id"] == "ULID1" and h["kick-event-signature"] == "SIG"
+    assert h["kick-event-type"] == "channel.followed" and h["kick-event-message-timestamp"] == "2026-10-23T10:00:00Z"
+    assert kick_relay.to_webhook({"id": "x", "sig": "s", "body_b64": "!!notb64"}) is None
+    assert kick_relay.to_webhook(_row(1, "", )) is None and kick_relay.to_webhook("junk") is None
+
+
+def test_relay_replay_orders_dedupes_and_counts():
+    got = []
+
+    async def ingest(h, b):
+        got.append(h["kick-event-message-id"])
+        return (401, "bad signature") if h["kick-event-message-id"] == "BAD" else (200, "ok")
+    rows = [_row(3, "C"), _row(1, "A"), _row(2, "BAD"), _row(4, "A"), {"seq": 5, "id": "M", "sig": "s", "body_b64": "%%"}]
+    res = asyncio.run(kick_relay.replay(rows, ingest))
+    assert got == ["A", "BAD", "C"] and res == {"ok": 2, "rejected": 1, "malformed": 1, "dupes": 1, "last_seq": 5}
+
+
+def test_relay_transient_failure_keeps_cursor():
+    async def ingest(h, b):
+        return (503, "down")
+
+    async def fetch(since, limit):
+        return {"seq": 9, "events": [_row(8, "A"), _row(9, "B")]}
+    assert asyncio.run(kick_relay.pull_once(fetch, ingest, 7)) == 7
+
+    async def ok(h, b):
+        return (200, "ok")
+    assert asyncio.run(kick_relay.pull_once(fetch, ok, 7)) == 9
+
+
+def test_relay_into_real_ingest_rejects_forged_signature(monkeypatch):
+    from connectors.kick import Kick
+    k = Kick(None, lambda e: None)
+    monkeypatch.setattr(k, "verify", lambda *a: False)
+    res = asyncio.run(kick_relay.replay([_row(1, "A")], k.ingest_webhook))
+    assert res["rejected"] == 1 and res["ok"] == 0
