@@ -1431,7 +1431,7 @@ function initReport(){
   const box=document.createElement('div');box.id='rp-box';
   box.innerHTML=`<b>Report a problem</b> <span class="sm faint" id="rp-where"></span><textarea id="rp-note" maxlength="8000" placeholder="What is wrong, or what did you expect? You can paste a screenshot here (Ctrl+V) or attach one."></textarea>
    <div class="th" id="rp-th"></div><div class="row wrap" style="gap:8px"><label class="sm" style="cursor:pointer"><input type="file" id="rp-file" accept="image/*" multiple hidden><span class="pill">📎 Attach screenshot</span></label><span class="sp"></span><button class="sm" id="rp-close">Close</button><button class="pri sm" id="rp-send">Send</button></div>
-   <div class="sm" id="rp-msg" style="margin-top:6px"></div><div class="sm faint" style="margin-top:4px">Saved in Data\feedback on this PC (nothing is sent anywhere). <a href="#" id="rp-open">Open folder</a></div>`;
+   <div class="sm" id="rp-msg" style="margin-top:6px"></div><div class="sm faint" style="margin-top:4px">Saved in Data\\feedback on this PC (nothing is sent anywhere). <a href="#" id="rp-open">Open folder</a></div>`;
   document.body.append(fab,box);
   const msg=t=>{$('#rp-msg').textContent=t},th=()=>{$('#rp-th').innerHTML=RP.imgs.map((m,i)=>`<span><img src="${m.data}" alt=""><b data-i="${i}" title="remove">×</b></span>`).join('');$$('#rp-th b').forEach(b=>b.onclick=()=>{RP.imgs.splice(+b.dataset.i,1);th()})};
   const add=files=>{for(const f of files){if(!/^image\//.test(f.type))continue;if(RP.imgs.length>=6){msg('At most 6 screenshots');break}if(f.size>8*1024*1024){msg('That image is over 8 MB');continue}

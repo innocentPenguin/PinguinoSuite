@@ -59,3 +59,14 @@ Requests come from 00 (relaying Ivan). Main work, newest first (commit hashes in
 
 **012 Lite final (reported to me, stopped coding):** commits ff8c379, b41c28e, 141a126 (+ earlier c2dada3, 8993507, 2dbbe6c, fd20321, 9671ad7, b6e4f8a), all local/unpushed. Needs a Lite release rebuild (`--features custom-protocol`) for everything since b6e4f8a+9671ad7. Open: Lite buttons/quit dialog/F11/icon not clicked live; replay parser never run on a real replay; Lite GitHub repo has no release/manifest; a minimal PC must be installed with --github/--url/--update-from or Install says "no update source"; Modules catalog (04) vs profile can disagree. Its notes: Docs/sessions/012-pinguinolite.md (not committed by 012).
 **013 Master View:** did not get the stop order (messaging was throttled); its commits a74f201, 0813384.
+
+### 7b. Read-only verification 2026-10-23 05:50-05:58 (23 - Listen/Core, running app, HTTP GET only)
+| Check | Result |
+|---|---|
+| Suite core tests / Listen tests (temp dirs) | 91 OK / 24 OK |
+| Core 8760 `/` | 200. `/api/*` needs the per-launch token (401), so /api/state and module health could not be read; module state read from `Suite\logs\events.jsonl` instead |
+| `/api/feedback` on the running core | OPTIONS answers 405 `Allow: POST`: running core has only POST /api/feedback (GET list is not in the live build; expected, it is newer) |
+| Module ports 8765/8766/7777/8770/8771/8772 `/` polled every ~12 s for 3 min | all 200 every sample (no flaps seen from outside) |
+| Core-side module state (events.jsonl) | after the 05:50 restart all running. **link went "starting" at 05:54:59 and no "running" followed in the next 3+ min**, although Link `/api/health` answered 200 in 30-1000 ms (slow, near the core's 1.5 s ping timeout) and the machine was low on memory (bash fork failed). Needs a look by 20/100: a one-off 4-miss flip is by design, but a missing recovery is not. Check the Link row in the shell |
+| Listen 8765 `/`, `/api/status` (asr ready, large-v3-turbo on cuda, live session on), `/api/review/next` | 200, a segment comes back |
+| Shot-Quiet screenshot | taken (Spotify page). The "Report a problem" panel is drawn as an open, unstyled block at the right edge and the fab floats mid-window, so the fixed-position styling is not applying in the real window. Cause not known (CSS looks right in source); could be the Shot-Quiet capture. **The text there read "Dataeedback": `` in a template literal is a form feed. Fixed in source (not live until shell rebuild)** |
