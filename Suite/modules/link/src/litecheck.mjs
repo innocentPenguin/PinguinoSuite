@@ -23,7 +23,7 @@ try {
   check('*.tmp requests are ignored', fs.existsSync(path.join(dir, 'requests', '2-check.json.tmp')));
   fs.writeFileSync(path.join(dir, 'requests', '3-start-aaa.json'), JSON.stringify({ schema: 1, action: 'start', id: 'aaa' }));
   await lite.poll();
-  check('start is consumed and reported as not available (not silent)', rd('update_status.json').result === 'error' && /not available/.test(rd('update_status.json').error) && fs.readdirSync(path.join(dir, 'requests')).every(f => f.endsWith('.tmp')));
+  check('start request is consumed (module without a port is refused, see controlcheck.mjs)', /no port/.test(rd('update_status.json').error) && fs.readdirSync(path.join(dir, 'requests')).every(f => f.endsWith('.tmp')));
   process.env.PINGUINO_LITE_VERSION = '0.1.0';
   fs.mkdirSync(path.join(dir, 'staging'), { recursive: true });
   const exe = path.join(dir, 'staging', 'PinguinoLite-0.2.0-setup.exe'); fs.writeFileSync(exe, 'fake installer');

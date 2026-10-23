@@ -2,8 +2,8 @@
 // Writes: status.json (heartbeat), installed.json, modules_catalog.json, update_status.json. Reads+consumes: requests/*.json.
 // Sources are LOCAL only (Suite/modules/*/module.json, optional <lite dir>/packages). No internet, no downloads, no executing anything.
 // install/update/uninstall/rollback: local zip packages (pkg.mjs), only for a stopped module. selfupdate-apply starts the detached
-// applyupdate.mjs helper (hash re-check, backup, silent install, relaunch, auto-restore). start/stop/restart are
-// not implemented yet: such requests are consumed and reported as an error, never silently dropped.
+// applyupdate.mjs helper (hash re-check, backup, silent install, relaunch, auto-restore). start/stop/restart drop the Suite core's
+// control file (Data/runtime/control/<action>-<id>) and wait for the module's health to agree. Earlier note, no longer true: such requests are consumed and reported as an error, never silently dropped.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -49,7 +49,10 @@ export function scanModules(root = MODULES) {
   return out;
 }
 
-export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(), modulesRoot = MODULES } = {}) {
+/** Where the Suite core watches for <start|stop|restart>-<module id> files (same folder the core uses). */
+export const controlDir = () => path.join(process.env.PINGUINO_DATA_DIR || path.join(SUITE, 'Data', 'runtime'), 'control');
+
+export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(), modulesRoot = MODULES, control = controlDir(), settleMs = 20000 } = {}) {
   const busy = {};
   let timer = null, polling = false, lastError = null, mstate = {};
   const since = {};                                            // id@version -> when Link first saw it installed
@@ -172,13 +175,40 @@ export function createLite({ getHealth, peers, version = '0.3.0', dir = liteDir(
       return;
     }
     if (action === 'selfupdate-apply') { await applyLiteUpdate(); return; }
-    if (['start', 'stop', 'restart'].includes(action)) {
-      const msg = `${action} is not available yet (Link currently supports local listing and checking only)`;
-      lastError = msg; log('warn', 'lite', msg + (id && ID.test(id) ? ` [${id}]` : ''));
-      writeJson(dir, 'update_status.json', { ...(readJson(path.join(dir, 'update_status.json')) || {}), result: 'error', error: msg });
-      return;
-    }
+    if (['start', 'stop', 'restart'].includes(action)) { await controlModule(action, id); return; }
     log('warn', 'lite', 'ignored a request with an unknown action');
+  }
+
+  /** start/stop/restart a module: drop the core's control file (the core consumes it and acts), then wait until the module's health agrees. */
+  async function controlModule(action, id) {
+    if (!ID.test(id || '')) { fail(`${action}: missing or bad module id`); return; }
+    const verb = { start: 'starting', stop: 'stopping', restart: 'restarting' }[action];
+    busy[id] = verb; writeStatus();
+    try {
+      const cur = scanModules(modulesRoot).find(m => m.id === id);
+      if (!cur) throw new Error(`${id} is not installed`);
+      if (id === 'link' && action !== 'start') throw new Error('Link cannot stop or restart itself from here; use the Suite (Modules > Link)');
+      if (!readJson(path.join(cur.path, 'module.json'))?.port) throw new Error(`${id} has no port, so its state cannot be checked; use the Suite`);
+      const before = await moduleState(cur);
+      if (action === 'start' && before === 'running') { delete errors[id]; await refresh(); return; }
+      if (action === 'stop' && before === 'stopped') { delete errors[id]; await refresh(); return; }
+      fs.mkdirSync(control, { recursive: true });
+      const f = path.join(control, `${action}-${id}`);
+      fs.writeFileSync(f, '');
+      const t0 = Date.now();
+      while (fs.existsSync(f)) { if (Date.now() - t0 > 6000) { try { fs.unlinkSync(f); } catch {} throw new Error('the Suite core did not pick up the request (is the Suite running?)'); } await new Promise(r => setTimeout(r, 200)); }
+      const want = action === 'stop' ? 'stopped' : 'running';
+      if (action === 'restart') await new Promise(r => setTimeout(r, Math.min(1500, settleMs)));   // let the old one go down before judging
+      const t1 = Date.now();
+      while ((await moduleState(cur)) !== want) { if (Date.now() - t1 > settleMs) throw new Error(`${id} did not become ${want} within ${Math.round(settleMs / 1000)} s; check its log in the Suite`); await new Promise(r => setTimeout(r, 500)); }
+      delete errors[id];
+      log('info', 'lite', `${action} ${id} ok`);
+      await refresh();
+    } catch (e) {
+      errors[id] = String(e.message || e).slice(0, 200);
+      fail(`${action} ${id}: ${errors[id]}`, true);
+      await refresh('error', errors[id]).catch(() => {});
+    } finally { delete busy[id]; writeStatus(); }
   }
 
   /** Where the running PinguinoLite.exe lives (so the helper can back it up and relaunch it). */
