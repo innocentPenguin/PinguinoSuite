@@ -422,7 +422,10 @@ class Player:
         if device:
             dev = find_device(device)
             if dev is not None:
-                return self._play_sd(wav, seconds, dev)
+                try:
+                    return self._play_sd(wav, seconds, dev)
+                except Exception as e:
+                    console_log.warn("output", "playing on '" + device[:40] + "' failed (" + type(e).__name__ + "), using the default", dedupe_s=300)
             console_log.warn("output", "output device '" + device[:40] + "' not found, using the default", dedupe_s=300)
         with self.lock:
             fd, f = tempfile.mkstemp(suffix=".wav", prefix="pvp-")
@@ -479,23 +482,56 @@ class Player:
         return time.time() < self.playing_until
 
 
-def devices():
-    """Output devices as [{index, name}] (empty list when sounddevice is unavailable)."""
+_HOSTAPI_RANK = {"windows wasapi": 0, "windows wdm-ks": 3, "windows directsound": 1, "mme": 2}
+
+
+def _raw_outputs():
+    """Every output entry as {index, name, api}; empty when sounddevice is unavailable."""
     try:
         import sounddevice as sd
-        out, seen = [], set()
+        apis = [h.get("name", "") for h in sd.query_hostapis()]
+        out = []
         for i, d in enumerate(sd.query_devices()):
-            if d["max_output_channels"] > 0 and d["name"] not in seen:
-                seen.add(d["name"])
-                out.append({"index": i, "name": d["name"]})
+            if d["max_output_channels"] > 0:
+                ha = d.get("hostapi", -1)
+                out.append({"index": i, "name": str(d["name"]), "api": apis[ha] if 0 <= ha < len(apis) else ""})
         return out
     except Exception:
         return []
 
 
+def _rank(e):
+    return _HOSTAPI_RANK.get(e["api"].lower(), 5)
+
+
+def dedupe_devices(entries):
+    """One entry per physical device, WASAPI preferred, in stable name order.
+    MME truncates names to 31 chars, so a name that is the start of a better one is a duplicate."""
+    kept = []
+    for e in sorted(entries, key=lambda e: (_rank(e), e["index"])):
+        n = e["name"].strip().lower()
+        if not any(k["name"].strip().lower().startswith(n) or n.startswith(k["name"].strip().lower()) for k in kept):
+            kept.append(e)
+    kept.sort(key=lambda e: (e["name"].lower(), e["index"]))
+    return [{"index": e["index"], "name": e["name"]} for e in kept]
+
+
+def devices():
+    """Output devices as [{index, name}], de-duplicated across host APIs (empty list when sounddevice is unavailable)."""
+    return dedupe_devices(_raw_outputs())
+
+
+def pick_device(part, entries):
+    """Index of the best output entry whose name contains `part` (case-insensitive); WASAPI first, then an exact name, then the lowest index."""
+    part = (part or "").strip().lower()
+    if not part:
+        return None
+    hits = [e for e in entries if part in e["name"].lower()]
+    if not hits:
+        return None
+    hits.sort(key=lambda e: (_rank(e), e["name"].lower() != part, e["index"]))
+    return hits[0]["index"]
+
+
 def find_device(part):
-    part = (part or "").lower()
-    for d in devices():
-        if part and part in d["name"].lower():
-            return d["index"]
-    return None
+    return pick_device(part, _raw_outputs())
