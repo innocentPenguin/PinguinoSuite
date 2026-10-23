@@ -28,11 +28,33 @@ fn root() -> PathBuf {
     crate::lite_dir().join("replays")
 }
 
+/// Possible "Documents" folders: plain profile Documents plus the OneDrive-redirected one (Windows moves Documents under OneDrive by default;
+/// found on the dev PC where the real Demos folder lives only under OneDrive/Documents). Only existing, distinct folders are returned.
+pub fn documents_roots() -> Vec<PathBuf> {
+    let mut c: Vec<PathBuf> = Vec::new();
+    if let Ok(h) = std::env::var("USERPROFILE") {
+        c.push(PathBuf::from(&h).join("Documents"));
+        c.push(PathBuf::from(&h).join("OneDrive").join("Documents"));
+    }
+    for k in ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"] {
+        if let Ok(o) = std::env::var(k) {
+            c.push(PathBuf::from(o).join("Documents"));
+        }
+    }
+    let mut out: Vec<PathBuf> = Vec::new();
+    for p in c {
+        if p.is_dir() && !out.iter().any(|q| q.to_string_lossy().eq_ignore_ascii_case(&p.to_string_lossy())) {
+            out.push(p);
+        }
+    }
+    out
+}
+
 /// Folders watched: the two standard Rocket League ones (Steam: Demos, Epic: DemosEpic) + one path per line in <state dir>\replay_dirs.txt.
 pub fn scan_dirs() -> Vec<PathBuf> {
     let mut v = Vec::new();
-    if let Ok(home) = std::env::var("USERPROFILE") {
-        let base = PathBuf::from(home).join("Documents").join("My Games").join("Rocket League").join("TAGame");
+    for docs in documents_roots() {
+        let base = docs.join("My Games").join("Rocket League").join("TAGame");
         v.push(base.join("Demos"));
         v.push(base.join("DemosEpic"));
     }
@@ -65,7 +87,14 @@ fn text(v: &Value) -> Option<String> {
 
 fn platform(v: Option<&Value>) -> String {
     let t = v.and_then(text).unwrap_or_default();
-    t.trim_start_matches("OnlinePlatform_").to_lowercase()
+    let p = t.trim_start_matches("OnlinePlatform_").to_lowercase();
+    // Rocket League's internal names -> what a viewer would call them (Dingo = Xbox, NNX = Switch)
+    match p.as_str() {
+        "dingo" => "xbox".to_string(),
+        "ps4" | "ps5" => "playstation".to_string(),
+        "nnx" => "switch".to_string(),
+        _ => p,
+    }
 }
 
 /// Header properties as a JSON object, whether boxcars serialised them as a map or as [key, value] pairs.
@@ -217,7 +246,7 @@ pub fn scan() -> Value {
     let pend = pend_g.get_or_insert_with(HashMap::new);
     let mut tw: Option<TwitchMap> = None;
     let mut seen_now: HashMap<PathBuf, (u64, u64)> = HashMap::new();
-    let (mut new, mut errors, mut scanned) = (0, 0, 0);
+    let (mut new, mut errors, mut scanned, mut unreadable) = (0, 0, 0, 0);
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     for d in &dirs {
         let Ok(rd) = std::fs::read_dir(d) else { continue };
@@ -238,7 +267,10 @@ pub fn scan() -> Value {
             if pend.get(&path) != Some(&(meta.len(), mt)) || now.saturating_sub(mt) < 2 {
                 continue;
             }
-            let Ok(data) = std::fs::read(&path) else { continue };
+            let Ok(data) = std::fs::read(&path) else {
+                unreadable += 1; // e.g. an OneDrive online-only placeholder while OneDrive is not running; retried on later ticks
+                continue;
+            };
             match parse_file(&data) {
                 Ok(rep) => {
                     let res = apply_gate(extract(&rep, tw.get_or_insert_with(twitch_map), &fnv(&data)), GATE.load(std::sync::atomic::Ordering::Relaxed));
@@ -263,7 +295,7 @@ pub fn scan() -> Value {
         let _ = write_atomic(&state_path, &serde_json::to_string_pretty(&*state).unwrap_or_default());
         rebuild_index(&dirs);
     }
-    json!({"scanned": scanned, "new": new, "errors": errors, "dirs": dirs.iter().map(|d| json!({"name": d.file_name().and_then(|n| n.to_str()), "exists": d.is_dir()})).collect::<Vec<_>>()})
+    json!({"scanned": scanned, "new": new, "errors": errors, "unreadable": unreadable, "dirs": dirs.iter().map(|d| json!({"name": d.file_name().and_then(|n| n.to_str()), "exists": d.is_dir()})).collect::<Vec<_>>()})
 }
 
 fn rebuild_index(dirs: &[PathBuf]) {
@@ -462,6 +494,83 @@ mod tests {
         assert!(gate_active(&json!({"ok": true, "activity": "ranked", "open": true}), &["ranked"])); // but pluggable later
         assert!(!gate_active(&json!({"ok": false}), en));
         assert!(!gate_active(&Value::Null, en)); // unreadable => fail safe
+    }
+
+    /// Parses real replays when available: every *.replay in PINGUINO_REPLAY_DIR, else the watched Rocket League folders. Skips (passes) when none
+    /// exist, so CI/other PCs stay green. PINGUINO_REPLAY_DUMP=<dir> also writes each extracted result JSON there for inspection.
+    #[test]
+    fn real_replays_parse_and_extract() {
+        let dirs: Vec<PathBuf> = match std::env::var("PINGUINO_REPLAY_DIR") {
+            Ok(d) => vec![PathBuf::from(d)],
+            Err(_) => scan_dirs(),
+        };
+        let mut files: Vec<PathBuf> = Vec::new();
+        for d in dirs {
+            if let Ok(rd) = std::fs::read_dir(d) {
+                files.extend(rd.flatten().map(|e| e.path()).filter(|p| p.extension().and_then(|x| x.to_str()) == Some("replay")));
+            }
+        }
+        if files.is_empty() {
+            eprintln!("no real replays on this PC, skipping");
+            return;
+        }
+        let dump = std::env::var("PINGUINO_REPLAY_DUMP").ok();
+        let (mut complete, mut parsed) = (0, 0);
+        for f in &files {
+            let Ok(data) = std::fs::read(f) else { continue }; // OneDrive online-only placeholder: not readable here, skipped like the scanner does
+            parsed += 1;
+            let rep = parse_file(&data).unwrap_or_else(|e| panic!("{:?}: {e}", f.file_name()));
+            let r = extract(&rep, &TwitchMap::new(), &fnv(&data));
+            if let Some(d) = &dump {
+                let _ = std::fs::create_dir_all(d);
+                let _ = std::fs::write(Path::new(d).join(f.file_name().unwrap()).with_extension("json"), serde_json::to_string_pretty(&r).unwrap());
+                let _ = std::fs::write(Path::new(d).join(f.file_name().unwrap()).with_extension("raw.json"), serde_json::to_string_pretty(&rep).unwrap());
+            }
+            if r["status"] != "complete" {
+                continue;
+            }
+            complete += 1;
+            let (b, o) = (&r["blue"], &r["orange"]);
+            let ps = |t: &Value| t["players"].as_array().unwrap().len();
+            assert!(ps(b) + ps(o) >= 2, "{:?}: players missing", f.file_name());
+            assert!(r["team_size"].as_i64().unwrap_or(0) >= 1, "{:?}: team_size", f.file_name());
+            assert!(r["match_id"].as_str().map(|s| !s.is_empty()).unwrap_or(false));
+            assert!(r["played_at"].as_str().map(|s| s.contains('T') && !s.contains(' ')).unwrap_or(false), "{:?}: played_at {}", f.file_name(), r["played_at"]);
+            let (sb, so) = (b["score"].as_i64().unwrap(), o["score"].as_i64().unwrap());
+            let w = if sb > so { "blue" } else if so > sb { "orange" } else { "draw" };
+            assert_eq!(r["winner"], w);
+            // team score equals the sum of player goals (own goals aside, the header counts them for the scoring team: allow <=)
+            let goals = |t: &Value| t["players"].as_array().unwrap().iter().map(|p| p["goals"].as_i64().unwrap()).sum::<i64>();
+            assert!(goals(b) <= sb && goals(o) <= so, "{:?}: player goals exceed team score", f.file_name());
+            assert_eq!(r["goals"].as_array().unwrap().len() as i64, sb + so, "{:?}: goal list vs score", f.file_name());
+            assert!(!r.to_string().contains("OnlineID"));
+        }
+        if parsed == 0 {
+            eprintln!("{} replays found but none readable (cloud placeholders?), skipping", files.len());
+            return;
+        }
+        assert!(complete > 0, "none of {parsed} readable real replays came out complete");
+    }
+
+    /// Header of one real 2v2 replay (boxcars 0.10, header-only), names/ids anonymised: the field names and shapes the scanner meets in practice.
+    #[test]
+    fn real_header_fixture() {
+        let rep: Value = serde_json::from_str(include_str!("../tests/fixtures/real_header_2v2.json")).unwrap();
+        let r = extract(&rep, &TwitchMap::new(), "fallback");
+        assert_eq!((r["status"].as_str(), r["winner"].as_str(), r["team_size"].as_i64()), (Some("complete"), Some("blue"), Some(2)));
+        assert_eq!((r["blue"]["score"].as_i64(), r["orange"]["score"].as_i64()), (Some(4), Some(3)));
+        assert_eq!(r["match_id"], "FIXTURE000000000000000000000001");
+        assert_eq!(r["played_at"], "2026-08-24T03:20:10");
+        assert_eq!(r["map"], "mall_day_p");
+        assert_eq!(r["duration_s"], 317);
+        assert_eq!(r["blue"]["players"][0]["name"], "Player1");
+        assert_eq!((r["blue"]["players"][0]["goals"].as_i64(), r["blue"]["players"][0]["saves"].as_i64(), r["blue"]["players"][0]["score"].as_i64()), (Some(4), Some(5), Some(1104)));
+        assert_eq!(r["blue"]["players"][0]["platform"], "steam");
+        assert_eq!(r["orange"]["players"].as_array().unwrap().iter().map(|p| p["platform"].as_str().unwrap()).collect::<Vec<_>>(), vec!["xbox", "steam"]);
+        assert_eq!(r["goals"].as_array().unwrap().len(), 7);
+        assert_eq!(r["goals"][0]["t_s"], 57.8);
+        assert_eq!(r["mvp"], "Player1");
+        assert!(!r.to_string().contains("OnlineID"));
     }
 
     #[test]

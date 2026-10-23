@@ -1,0 +1,118 @@
+{
+ "_note": "Header of one real 2v2 replay (parsed by boxcars 0.10 header-only); names/ids anonymised, nothing else changed.",
+ "properties": {
+  "BuildVersion": "260811.1257.524913",
+  "Date": "2026-08-24 03-20-10",
+  "GameVersion": 30,
+  "MapName": "mall_day_p",
+  "MatchType": "Online",
+  "NumFrames": 11144,
+  "RecordFPS": 30,
+  "ReplayVersion": 8,
+  "Team0Score": 4,
+  "Team1Score": 3,
+  "TeamSize": 2,
+  "TotalSecondsPlayed": 317.6632080078125,
+  "UnfairTeamSize": 1,
+  "Id": "FIXTURE000000000000000000000001",
+  "Goals": [
+   {
+    "PlayerName": "Player3",
+    "PlayerTeam": 1,
+    "frame": 1734
+   },
+   {
+    "PlayerName": "Player1",
+    "PlayerTeam": 0,
+    "frame": 3216
+   },
+   {
+    "PlayerName": "Player3",
+    "PlayerTeam": 1,
+    "frame": 4313
+   },
+   {
+    "PlayerName": "Player2",
+    "PlayerTeam": 1,
+    "frame": 4698
+   },
+   {
+    "PlayerName": "Player1",
+    "PlayerTeam": 0,
+    "frame": 5547
+   },
+   {
+    "PlayerName": "Player1",
+    "PlayerTeam": 0,
+    "frame": 5931
+   },
+   {
+    "PlayerName": "Player1",
+    "PlayerTeam": 0,
+    "frame": 11057
+   }
+  ],
+  "PlayerStats": [
+   {
+    "Assists": 0,
+    "Goals": 4,
+    "Name": "Player1",
+    "OnlineID": "0",
+    "Platform": {
+     "kind": "OnlinePlatform",
+     "value": "OnlinePlatform_Steam"
+    },
+    "Saves": 5,
+    "Score": 1104,
+    "Shots": 8,
+    "Team": 0,
+    "bBot": false
+   },
+   {
+    "Assists": 1,
+    "Goals": 1,
+    "Name": "Player2",
+    "OnlineID": "0",
+    "Platform": {
+     "kind": "OnlinePlatform",
+     "value": "OnlinePlatform_Dingo"
+    },
+    "Saves": 3,
+    "Score": 624,
+    "Shots": 6,
+    "Team": 1,
+    "bBot": false
+   },
+   {
+    "Assists": 0,
+    "Goals": 2,
+    "Name": "Player3",
+    "OnlineID": "0",
+    "Platform": {
+     "kind": "OnlinePlatform",
+     "value": "OnlinePlatform_Steam"
+    },
+    "Saves": 4,
+    "Score": 717,
+    "Shots": 4,
+    "Team": 1,
+    "bBot": false
+   },
+   {
+    "Assists": 1,
+    "Goals": 0,
+    "Name": "Player4",
+    "OnlineID": "0",
+    "Platform": {
+     "kind": "OnlinePlatform",
+     "value": "OnlinePlatform_Epic"
+    },
+    "Saves": 1,
+    "Score": 376,
+    "Shots": 4,
+    "Team": 0,
+    "bBot": false
+   }
+  ]
+ }
+}
