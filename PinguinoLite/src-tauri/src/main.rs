@@ -259,7 +259,7 @@ pub(crate) fn request_module(app: AppHandle, action: &str, id: &str) {
     let _ = send_request(app, action.to_string(), Some(id.to_string()));
 }
 
-/// Open the Host dashboard or the contract folder. Only those two targets exist; no arbitrary paths or URLs from the UI.
+/// Open the Host dashboard, release page, contract folder or support folder. Only these targets exist; no arbitrary paths or URLs from the UI.
 #[tauri::command]
 fn open_target(target: String) -> Result<(), String> {
     #[cfg(windows)]
@@ -276,8 +276,8 @@ fn open_target(target: String) -> Result<(), String> {
                 c.args(["url.dll,FileProtocolHandler", updatecheck::RELEASES_URL]);
                 c
             }
-            "folder" => {
-                let d = lite_dir();
+            "folder" | "support" => {
+                let d = if target == "support" { lite_dir().join("support") } else { lite_dir() };
                 let _ = std::fs::create_dir_all(&d);
                 let mut c = std::process::Command::new("explorer");
                 c.arg(d);

@@ -150,6 +150,7 @@ async function checkLite(manual) {
 
 function toast(t) { const e = $('#toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', 3500); }
 
+let supportInfo = null;
 async function refresh() {
   const rd = n => inv('read_contract', { name: n }).catch(() => ({ exists: false }));
   ports = await inv('probe_ports').catch(() => ({}));
@@ -168,7 +169,7 @@ function replaysPage() {
     ? `<table><thead><tr><th>Played</th><th>Size</th><th>Score</th><th>Result</th><th>MVP</th></tr></thead><tbody>${r.items.map(m => `<tr>
         <td class="mono">${esc((m.played_at || '').replace('T', ' ').slice(0, 16))}</td><td>${m.team_size ? m.team_size + 'v' + m.team_size : '-'}</td>
         <td class="mono"><b>${esc(m.blue)} - ${esc(m.orange)}</b></td><td>${m.status === 'complete' ? wl(m.winner) : '<span class="pill">incomplete</span>'}</td><td>${esc(m.mvp || '-')}</td></tr>`).join('')}</tbody></table>`
-    : `<div class="empty">No replay found yet.<br>In Rocket League, save a replay from the match history or post-match screen. Lite picks it up within 30 seconds.</div>`;
+    : `<div class="empty">No replay found yet.<br>${esc(hintsNow().replays || 'In Rocket League, save a replay from the match history or post-match screen. Lite picks it up within a few seconds.')}</div>`;
   return `<h1>Replays</h1><p class="sub">Who won and per-player stats, read locally from your saved Rocket League replays. Nothing leaves this PC.</p>
    <div class="row" style="margin:0 0 10px">Watching: ${dirs || '<span class="d">nothing</span>'}</div>
    <div class="card" style="padding:4px 8px">${body}</div>
@@ -190,6 +191,21 @@ function replayCard() {
 // Merge catalog + installed.json (Link) + install.json parts (parts_modules) -> rows. One source of truth for "Not installed":
 // when this copy has an install.json, ITS parts decide whether a module (and Link) is installed; Link's installed.json only supplies versions.
 // "update" if the catalog version is newer. Pure function, tested in PinguinoLite/test/rows.test.mjs.
+// HINTS-BEGIN
+// Empty / first-run states: one plain sentence each saying WHY something is missing and WHAT to do. Pure; tested in test/rows.test.mjs.
+function hints(x) {
+  const out = { install: '', link: '', catalog: '', replays: '' };
+  if (x.parts && x.parts.supported === false) out.install = 'This copy has no install.json, so it was not set up by the installer and cannot update itself. To get updates, run Install-PinguinoSuite.cmd from the release folder.';
+  const linkUp = !!(x.ports && x.ports['7777']), statusSeen = !!(x.status && x.status.exists);
+  if (!linkUp && !statusSeen) out.link = 'PinguinoLink is not running, so modules cannot be installed or started. Lite normally starts it with the app: wait a few seconds, or close and reopen Lite. If it stays off, make a support bundle (Dashboard) and send it to Ivan.';
+  else if (!linkUp) out.link = 'PinguinoLink is not answering right now (it left status.json earlier). Wait a few seconds or restart Lite.';
+  if (!x.catalog || !x.catalog.exists) out.catalog = linkUp ? 'PinguinoLink is running but has not written the module list yet. Wait a minute, then press Check for updates.' : 'No module list yet, because PinguinoLink is not running. Start Lite again, or see the Dashboard.';
+  const dirs = (x.replays && x.replays.dirs) || [];
+  if (!dirs.some(d => d.exists)) out.replays = 'No Rocket League replay folder found on this PC (looked for Documents\\My Games\\Rocket League\\TAGame\\Demos, also under OneDrive). Play and save one replay in Rocket League, or this is the wrong PC.';
+  else if (!((x.replays && x.replays.items) || []).length) out.replays = 'The folder exists but has no replays Lite could read yet. In Rocket League, save a replay from the match history; Lite picks it up within a few seconds.';
+  return out;
+}
+// HINTS-END
 // ROWS-BEGIN
 function mergeRows(catalog, installed, status, mods, hidden) {
   const cat = catalog && catalog.data && Array.isArray(catalog.data.modules) ? catalog.data.modules : [];
@@ -209,6 +225,8 @@ function mergeRows(catalog, installed, status, mods, hidden) {
 // ROWS-END
 function rows() { return mergeRows(state.catalog, state.installed, state.status, mods, HIDDEN); }
 
+function hintsNow() { return hints({ ports, parts, catalog: state.catalog, status: state.status, replays: state.replays }); }
+
 function dashboard() {
   const h = state.host || {}, r = rows(), n = r.filter(x => x.installed).length, u = r.filter(x => x.update).length;
   const us = state.upd && state.upd.data || {};
@@ -219,6 +237,7 @@ function dashboard() {
   return `<h1>Dashboard</h1><p class="sub">PinguinoLite is a light shell: no modules are loaded by default.</p>
   ${gh && gh.ok && gh.update ? `<div class="banner">PinguinoLite <b>${esc(gh.latest)}</b> is available (you have ${esc(info && info.version)}). <button class="btn pri" data-open="release">Open release page</button></div>` : ''}
   ${selfUpd ? `<div class="banner">PinguinoLite ${esc(lm.latest)} is ready. <button class="btn pri" data-act="selfupdate-apply">Restart &amp; update</button> <span class="d">Lite closes, updates and reopens.</span></div>` : ''}
+  ${[hintsNow().install, hintsNow().link].filter(Boolean).map(t => `<div class="banner">${esc(t)}</div>`).join('')}
   <div class="grid">
    <div class="card"><h3>Host (127.0.0.1:8770)</h3><div class="big">${h.reachable ? '<span style="color:var(--ok)">Reachable</span>' : '<span style="color:var(--bad)">Not reachable</span>'}</div>
      <div class="note">${h.reachable ? `/api/live answered HTTP ${esc(h.status)} in ${esc(h.ms)} ms` : 'Host is not running (or not on this PC). Lite works without it.'}</div></div>
@@ -233,7 +252,8 @@ function dashboard() {
   </div>
   ${partsCard()}
   <div class="row"><button class="btn" data-open="host">Open Host dashboard</button><button class="btn" data-open="folder">Open Lite data folder</button><button class="btn" data-act="check">Check modules for updates</button><button class="btn pri" data-gh="1"${ghBusy ? ' disabled' : ''}>Check Lite for updates</button></div>
-  <div class="row"><button class="btn" data-support="1">Make support bundle</button><span class="d">Collects logs (secrets removed), install info and a parts check into <span class="mono">support</span> so you can send it to Ivan.</span></div>
+  <div class="row"><button class="btn" data-support="1">Make support bundle</button>${supportInfo && supportInfo.ok ? `<button class="btn pri" data-open="support">Open bundle folder</button>` : ''}</div>
+  <p class="note">${supportInfo ? (supportInfo.ok ? `Bundle ready: <span class="mono">${esc(supportInfo.zip || supportInfo.folder)}</span>. ` : `Bundle failed: ${esc(supportInfo.message || 'unknown error')}. `) : ''}The support bundle holds logs, install info and a parts check. It never includes your replays' contents or any token or password.</p>
   <p class="note">Contract folder: <span class="mono">${esc(info && info.lite_dir)}</span></p>`;
 }
 
@@ -246,7 +266,7 @@ function modules() {
   const r = rows();
   const c = state.catalog;
   let body;
-  if (!c || !c.exists) body = `<div class="empty">No catalog yet.<br>PinguinoLink writes <span class="mono">modules_catalog.json</span> into <span class="mono">${esc(info && info.lite_dir)}</span>.</div>`;
+  if (!c || !c.exists) body = `<div class="empty">${esc(hintsNow().catalog)}<br><span class="d">PinguinoLink writes <span class="mono">modules_catalog.json</span> into <span class="mono">${esc(info && info.lite_dir)}</span>.</span></div>`;
   else if (c.error) body = `<div class="empty" style="color:var(--bad)">modules_catalog.json is not readable: ${esc(c.error)}</div>`;
   else if (!r.length) body = `<div class="empty">The catalog is empty.</div>`;
   else body = `<table><thead><tr><th>Module</th><th>Version</th><th>Status</th><th></th></tr></thead><tbody>${r.map(m => `<tr>
@@ -315,9 +335,9 @@ document.addEventListener('click', async e => {
   const sb = e.target.closest('[data-support]');
   if (sb) {
     sb.disabled = true; toast('Making support bundle...');
-    try { const r = await inv('support_bundle'); toast(r.ok ? 'Support bundle ready: ' + (r.zip || r.folder) : 'Support bundle failed: ' + (r.message || 'unknown error')); }
-    catch (err) { toast(String(err)); }
-    sb.disabled = false; return;
+    try { supportInfo = await inv('support_bundle'); toast(supportInfo.ok ? 'Support bundle ready' : 'Support bundle failed'); }
+    catch (err) { supportInfo = { ok: false, message: String(err) }; }
+    render(); return;
   }
   const o = e.target.closest('[data-open]');
   if (o) return inv('open_target', { target: o.dataset.open }).catch(err => toast(String(err)));

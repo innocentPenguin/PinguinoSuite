@@ -50,3 +50,19 @@ test('installed.json entry without a version: installed, version unknown, no upd
   const r = byId(merge(catalog, { data: { modules: { spotify: {} } } }, status, mods, []));
   assert.equal(r.spotify.installed, true); assert.equal(r.spotify.installed_version, null); assert.equal(r.spotify.update, false);
 });
+
+// Empty / first-run hints
+const hintsBlock = html.slice(html.indexOf('// HINTS-BEGIN'), html.indexOf('// HINTS-END'));
+const hctx = {}; vm.createContext(hctx); vm.runInContext(`${hintsBlock}\nthis.hints = hints;`, hctx);
+const hints = x => JSON.parse(JSON.stringify(hctx.hints(x)));
+test('first run: no install.json, no Link, no replay folder each say why', () => {
+  const h = hints({ ports: {}, parts: { supported: false }, catalog: { exists: false }, status: { exists: false }, replays: { dirs: [{ name: 'Demos', exists: false }], items: [] } });
+  assert.match(h.install, /no install\.json/); assert.match(h.link, /PinguinoLink is not running/); assert.match(h.catalog, /not running/); assert.match(h.replays, /No Rocket League replay folder/);
+});
+test('Link up but catalog missing; folder present but empty; all fine = no hints', () => {
+  const h = hints({ ports: { 7777: true }, parts: { supported: true }, catalog: { exists: false }, status: { exists: true }, replays: { dirs: [{ exists: true }], items: [] } });
+  assert.equal(h.link, ''); assert.equal(h.install, ''); assert.match(h.catalog, /has not written/); assert.match(h.replays, /no replays Lite could read/);
+  const ok = hints({ ports: { 7777: true }, parts: { supported: true }, catalog: { exists: true }, status: { exists: true }, replays: { dirs: [{ exists: true }], items: [{}] } });
+  assert.deepEqual(Object.values(ok), ['', '', '', '']);
+  assert.match(hints({ ports: {}, status: { exists: true }, catalog: { exists: true }, replays: { dirs: [], items: [] } }).link, /not answering/);
+});
