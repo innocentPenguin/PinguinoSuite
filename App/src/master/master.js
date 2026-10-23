@@ -1,6 +1,7 @@
 /* Master View page (UI). Talks straight to the Host on 127.0.0.1:8770: no website, no core hop. Logic lives in master-core.js (tested in Tests/master). */
 (() => {
   'use strict';
+  const MV_BUILD = '2026-10-23 customs-guard+songify';   // shown in the Help overlay: tells which master.js a shell build shipped (bump when shipping a fix you need to identify)
   const C = MasterCore;
   const HOST = (new URLSearchParams(location.search).get('host')) || 'http://127.0.0.1:8770';
   const $ = (s, r) => (r || document).querySelector(s), $$ = (s, r) => [...(r || document).querySelectorAll(s)];
@@ -40,6 +41,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
+    drawErr: {}, customsAt: 0,
     wq: ls.get('wq') || null, teamsOv: {}, si: Object.assign({ title: '', description: '', tags: '', game: '', plat: { twitch: true, youtube: true, kick: false }, at: '', privacy: 'public' }, ls.get('si') || {}), ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, heads: {}, modsOk: null, pre: null, preOpen: false, introOpen: false, streaksOpen: false, introGone: new Set(), tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
@@ -373,6 +375,7 @@
     $('#tab-customs').innerHTML = `
       <div class="ctl free" id="cu-ctl"><span id="cu-who">In control: …</span><span class="sp"></span><span class="faint" id="cu-badge"></span><button class="sm" id="cu-sim" title="Play with fake players: nothing is sent to the Host">🧪 Simulator</button></div>
       <div id="cu-note" class="note" hidden></div>
+      <div id="cu-data" class="faint sm" role="status"></div>
       <div class="cgrid">
         ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div><div class="btns" style="margin-top:6px"><span class="faint sm" title="Fortnite activities">Fortnite</span>${[['Box fights', 'boxfights'], ['Zone wars', 'zonewars'], ['Viewers', 'fnviewers']].map(([l, v]) => b(l, 'activity', 'fn ' + v, 'rd warn', 'activity:' + v)).join('')}${b('KOTH', 'activity', 'fn koth', 'rd warn', null, 'Fortnite King of the Hill: 1v1, winners stay')}</div>`, ' <span class="faint" id="cu-act"></span>')}
         <section class="cs c-ask" id="cu-ask" hidden><b id="cu-ask-t"></b><div class="faint sm" id="cu-ask-s"></div><div class="btns" style="margin-top:6px"><button class="sm rd" data-ask="remove" title="Cancel the game and take everyone out of the queue">Remove them</button><button class="sm pri" data-ask="back" title="Cancel the game; players go back to the front of the queue in their old order, ahead of anyone who joined later">Put back in queue</button><button class="sm" data-ask="keep" title="Change it and leave everyone as they are">Leave as is</button><button class="sm ghost" data-ask="cancel" title="Do not change anything">✕</button></div></section>
@@ -514,12 +517,29 @@
       row.querySelectorAll('.swc').forEach(s => s.classList.toggle('cur', s.dataset.c === t[k].color));
     }
   }
+  /* The .cur/is-live/q-on highlighting of the Customs buttons. Runs first and on its own (own try/catch in renderCustoms), so a failure in any other section cannot leave every button un-highlighted. */
+  function paintCustomsButtons(c) {
+    const m = c && c.match, live = !!(m && m.status !== 'finished'), TN = teamsNow();
+    const cur = { mode: c && c.mode, format: c && c.format, gamemode: c && (c.gameMode || c.gamemode), koth: c ? (c.koth ? 'on' : 'off') : null, activity: c && c.activity, queue: c ? (c.open ? 'open' : 'close') : null };
+    cur.streamer = (ui.sim ? c && c.streamer : null) || (c && c.streamer);
+    for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];
+    for (const k in ui.ov) if (ui.ov[k].until > Date.now()) cur[k] = ui.ov[k].v;   // just-clicked values win until the Host state catches up   // Host offline: show what was last clicked
+    for (const bt of $$('#tab-customs [data-st]')) {
+      const [k, v] = bt.dataset.st.split(':'), on = cur[k] === v;
+      if (k === 'win') { bt.disabled = !live; const tk = TN[v]; bt.textContent = tk.name + ' wins'; bt.style.setProperty('--tc', tk.color); }
+      else if (k === 'activity') bt.classList.toggle('is-live', on);
+      else if (k === 'queue') bt.classList.toggle('q-on', on);
+      else { bt.classList.toggle('cur', on); bt.disabled = on; }
+    }
+  }
   function renderCustoms() {
     const c = ui.sim ? ui.simState : S.get('customs'), ok = ui.sim ? true : S.get('customsOk'), note = $('#cu-note');
+    try { paintCustomsButtons(c); delete ui.drawErr.paint; } catch (e) { console.error('Customs buttons failed to paint', e && e.stack || e); ui.drawErr.paint = e && e.message || String(e); }
     { const sc = $('#cu-simchat'); sc.textContent = 'Chat: ' + (ui.simChat ? 'ON' : 'OFF'); sc.classList.toggle('g', ui.simChat); $('#cu-simnote').textContent = ui.simChat ? 'Fake players, but the lines go to REAL chat' : 'Nothing is sent to the Host or chat'; }
     $('#cu-sim').classList.toggle('cur', !!ui.sim); $('.c-sim').hidden = !ui.sim;
     const msg = ok === false ? (c ? 'Customs state is stale (the Host stopped answering it).' : 'The Host has no /api/customs/state yet. Buttons still work (they run the same chat commands the website sends); the live queue appears once the Host has it.') : '';
-    note.hidden = !msg; note.textContent = msg;
+    const derr = ui.drawErr.customs || ui.drawErr.paint, msg2 = derr ? 'Customs failed to draw: ' + derr + (msg ? ' · ' + msg : '') : msg;
+    note.hidden = !msg2; note.textContent = msg2;
     const holder = ui.sim ? '' : holderName(c), mine = ui.tookControl && !holder;
     $('#cu-ctl').className = 'ctl ' + (ui.sim ? 'mine' : holder ? 'other' : mine ? 'mine' : 'free');
     $('#cu-who').textContent = ui.sim ? '🧪 Simulator: fake players, nothing is sent' : holder ? '🎮 In control: ' + holder : mine ? '🎮 In control: you (app)' : '🎮 In control: nobody · any click takes it';
@@ -538,17 +558,6 @@
     if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(String(n).toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
     renderPop(); renderAsk(); renderTeamsEditor();
     const isFn = !!c && /^(boxfights|zonewars|fnviewers)$/.test(c.activity || ''); $('#cu-rlsz').hidden = isFn; $('#cu-fnsz').hidden = !isFn; $('#cu-fmt').textContent = c && c.format ? '· ' + c.format : '';
-    const cur = { mode: c && c.mode, format: c && c.format, gamemode: c && (c.gameMode || c.gamemode), koth: c ? (c.koth ? 'on' : 'off') : null, activity: c && c.activity, queue: c ? (c.open ? 'open' : 'close') : null };
-    cur.streamer = (ui.sim ? c && c.streamer : null) || (c && c.streamer);
-    for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];
-    for (const k in ui.ov) if (ui.ov[k].until > Date.now()) cur[k] = ui.ov[k].v;   // just-clicked values win until the Host state catches up   // Host offline: show what was last clicked
-    for (const bt of $$('#tab-customs [data-st]')) {
-      const [k, v] = bt.dataset.st.split(':'), on = cur[k] === v;
-      if (k === 'win') { bt.disabled = !live; const tk = TN[v]; bt.textContent = tk.name + ' wins'; bt.style.setProperty('--tc', tk.color); }
-      else if (k === 'activity') bt.classList.toggle('is-live', on);
-      else if (k === 'queue') bt.classList.toggle('q-on', on);
-      else { bt.classList.toggle('cur', on); bt.disabled = on; }
-    }
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
       const empty = live ? C.fmtSize(c && c.format) * 2 - (m.orange || []).length - (m.blue || []).length : 0;
       fb.textContent = !live ? '▶ Start' : 'Fill empty slots' + (empty > 0 ? ' (' + empty + ')' : ''); fb.disabled = live && (empty <= 0 || !q.length);
@@ -823,13 +832,23 @@
 
   /* ---------- rendering scheduler (poll-driven renders coalesce to one per tick; clicks render synchronously) ---------- */
   const dirty = new Set(); let raf = 0;
-  function schedule(...names) { names.forEach(n => dirty.add(n)); if (!raf) raf = setTimeout(() => { raf = 0; const d = [...dirty]; dirty.clear(); d.forEach(n => R[n] && R[n]()); }, 0); }
+  /* One renderer throwing must not stop the others in the same batch (it used to abort the whole forEach, so e.g. a failing Scenes draw starved Customs forever). */
+  function drawOne(n) {
+    if (!R[n]) return;
+    try { R[n](); delete ui.drawErr[n]; } catch (e) {
+      const msg = (e && e.message) || String(e); console.error('Master View: ' + n + ' failed to draw', e && e.stack || e);
+      if (ui.drawErr[n] !== msg) { ui.drawErr[n] = msg; if (n !== 'customs') toast(n[0].toUpperCase() + n.slice(1) + ' failed to draw: ' + msg, true); }
+      if (n === 'customs') { const note = $('#cu-note'); if (note) { note.hidden = false; note.textContent = 'Customs failed to draw: ' + msg; } }
+    }
+  }
+  function schedule(...names) { names.forEach(n => dirty.add(n)); if (!raf) raf = setTimeout(() => { raf = 0; const d = [...dirty]; dirty.clear(); d.forEach(drawOne); }, 0); }
   H.onChange((src, st) => { schedule('bar'); if (st === 'up') polled.forEach(([p, s]) => s === src && p.kick()); });   // a source coming back is picked up at once, not after the back-off
   const R = { scenes: renderScenes, sources: renderSources, bar: renderBar, music: renderMusic, customs: renderCustoms, feed: renderFeed, cmds: renderCmds, overlays: renderOverlays };
   S.subscribe(ch => {
     if (ch.includes('tree')) schedule('scenes', 'sources', 'bar');
     if (ch.some(k => ['obsStatus', 'live', 'host', 'hostUp', 'link'].includes(k))) schedule('bar');
     if (ch.includes('customs') || ch.includes('wheel') || ch.includes('customsOk')) schedule('customs');
+    if (ch.includes('customs')) ui.customsAt = S.get('customs') ? Date.now() : ui.customsAt;
     if (ch.includes('customs')) { const nx = S.get('customs'); if (ui.logsOk !== true) { const add = C.diffCustoms(ui.prevCustoms, nx); if (add.length && C.mergeFeed(ui.feed, add, x => x.k, 800)) { ui.feed.sort((a, b2) => a.ts - b2.ts); schedule('feed'); } } ui.prevCustoms = nx; }
     if (ch.includes('now') || ch.includes('nowOk')) schedule('music');
     if (ch.includes('cmds')) schedule('cmds');
@@ -882,6 +901,9 @@
     overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = { ovErr: a.ok ? null : (a.error || 'HTTP ' + a.status) }; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
   };
   let cacheT = 0; function saveCacheSoon() { if (!cacheT) cacheT = setTimeout(() => { cacheT = 0; saveCache(); }, 3000); }
+  const customsDataLine = () => { const el = $('#cu-data'); if (!el) return; const c = S.get('customs'), s = ui.customsAt ? Math.max(0, Math.round((Date.now() - ui.customsAt) / 1000)) : null;
+    el.textContent = !c ? 'Customs data: none yet' + (S.get('customsOk') === false ? ' (the Host does not answer it)' : ' (waiting for the first answer)') : 'Customs data: ' + (s == null ? 'from the last session (cached)' : s <= 1 ? 'live' : 'updated ' + s + ' s ago') + (s != null && s > 20 ? ' · STALE' : ''); };
+  setInterval(customsDataLine, 1000); customsDataLine();
   setInterval(() => { if (opt.expire().length) { schedule('scenes', 'sources', 'cmds'); } }, 500);   // unconfirmed optimistic changes fall back to what the Host says
 
   /* ---------- live push from the Host (/api/events, see Docs/MASTER_VIEW_APP.md); polling keeps running slowly as a safety net ---------- */
@@ -995,6 +1017,7 @@
   { const sel = $('#b-scale'), apply = v => { document.documentElement.style.zoom = v === 100 ? '' : String(v / 100); };   // zoom on this page's root only; the Suite shell is a different document
     sel.innerHTML = C.UI_SCALES.map(v => `<option value="${v}">${v} %</option>`).join(''); const cur = C.normScale(ls.get('scale', 100)); sel.value = String(cur); apply(cur);
     sel.onchange = () => { const v = C.normScale(sel.value); ls.set('scale', v); apply(v); }; }
+  { const mb = $('#mv-build'); if (mb) mb.textContent = 'Master View build: ' + MV_BUILD; }
   $('#b-help').onclick = () => { $('#help').hidden = false; }; $('#help-close').onclick = () => { $('#help').hidden = true; };
   $('#help').addEventListener('click', e => { if (e.target.id === 'help') $('#help').hidden = true; });
   ['scenes', 'sources'].forEach(p => $('#' + p).addEventListener('focus', () => { ui.pane = p; p === 'scenes' ? renderScenes() : renderSources(); }));
@@ -1042,7 +1065,7 @@
   $('#feed-chips').addEventListener('click', e => { const b = e.target.closest('[data-lc]'); if (b) { ui.logCat = b.dataset.lc; ls.set('logcat', ui.logCat); renderFeed(); } });
   $('#feedlist').addEventListener('click', e => { const g = e.target.closest('a.grp'); if (g) { const k = g.dataset.g; ui.openGroups.has(k) ? ui.openGroups.delete(k) : ui.openGroups.add(k); renderFeed(); } });
   setTab(ui.tab);
-  renderBar(); renderScenes(); renderSources(); renderCustoms(); renderFeed();    // first paint from the cached state, before any request returns
+  ['bar', 'scenes', 'sources', 'customs', 'feed'].forEach(drawOne);    // first paint from the cached state, before any request returns
   tokenReady.then(() => { Object.values(pollers).forEach(p => p.start()); events.start(); });
   window.addEventListener('pagehide', () => { Object.values(pollers).forEach(p => p.stop()); events.stop(); });
   window.addEventListener('pageshow', e => { if (e.persisted) { Object.values(pollers).forEach(p => p.start()); events.start(); } });   // restored from the back/forward cache   // the page is going away (pop-out closed, shell swapped it): no timers or open stream left behind
