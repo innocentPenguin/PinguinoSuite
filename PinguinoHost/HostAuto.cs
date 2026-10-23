@@ -75,6 +75,21 @@ namespace PinguinoHost
             try
             {
                 var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
+                if (!seeded.Any(x => (string)x == "speak"))
+                {
+                    // !speak (viewer text-to-speech through the Speak module): created DISABLED. Speak's own switch (tts.enabled) is OFF too, so nothing is spoken until both are on.
+                    // Typed in chat: mods only. Channel-point redeem (reward title below; Ivan creates it on Twitch, 100 points): anyone, the points were the price (redeem:true).
+                    var acts1 = (JArray)doc["actions"]; const string vurl = "http://127.0.0.1:8772/api/chat-command";
+                    if (!acts1.OfType<JObject>().Any(x => (string)x["id"] == "speak-chat"))
+                        acts1.Add(new JObject { { "id", "speak-chat" }, { "name", "Speak: !speak (mods)" }, { "group", "Speak" }, { "enabled", false }, { "importNotes", "preset: also switch on tts.enabled in the Speak module; the module checks the role again" },
+                            { "triggers", new JArray { new JObject { { "type", "command" }, { "names", new JArray("!speak", "!tts") }, { "permission", "mod" }, { "cooldownSec", 0 }, { "userCooldownSec", 20 }, { "consume", true } } } }, { "conditions", new JArray() },
+                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", vurl }, { "command", "speak" }, { "as", "core" } } } } });
+                    if (!acts1.OfType<JObject>().Any(x => (string)x["id"] == "speak-redeem"))
+                        acts1.Add(new JObject { { "id", "speak-redeem" }, { "name", "Speak: channel point !speak" }, { "group", "Speak" }, { "enabled", false }, { "importNotes", "preset: create a 100-point reward called Speak on Twitch (text required), then enable; also switch on tts.enabled in the Speak module" },
+                            { "triggers", new JArray { new JObject { { "type", "redeem" }, { "title", "Speak" } } } }, { "conditions", new JArray() },
+                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", vurl }, { "command", "speak" }, { "redeem", true }, { "as", "core" } } } } });
+                    seeded.Add("speak"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
+                }
                 if (!seeded.Any(x => (string)x == "spotify-redeem"))
                 {
                     var acts0 = (JArray)doc["actions"];

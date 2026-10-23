@@ -40,7 +40,13 @@ try:
     until(lambda: api('/api/status')['name'] == 'PinguinoHost', 30, 'host up'); time.sleep(25)   # the bot modules finish loading a little after the API is up (slower when the PC is busy)
     seeded = api('/api/automations')['doc']
     if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 9: fails.append('spotify presets missing or enabled')
-    acts = [
+    sp = {x['id']: x for x in seeded['actions'] if x['id'].startswith('speak-')}
+    if set(sp) != {'speak-chat', 'speak-redeem'} or any(x['enabled'] is not False for x in sp.values()): fails.append('speak presets missing or enabled: ' + str(sp.keys()))
+    elif sp['speak-chat']['triggers'][0]['permission'] != 'mod' or sp['speak-redeem']['steps'][0].get('redeem') is not True or '8772' not in sp['speak-chat']['steps'][0]['url']: fails.append('speak presets wrong shape')
+    spk = []
+    for k, x in sp.items():   # the same actions, enabled and pointed at the mock module
+        x = json.loads(json.dumps(x)); x['enabled'] = True; [t.update({'title': '*'}) for t in x['triggers'] if t['type'] == 'redeem']; x['steps'][0]['url'] = 'http://127.0.0.1:8862/api/chat-command'; spk.append(x)
+    acts = spk + [
         {'id': 'lurk', 'name': 'Lurk', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!lurkx'], 'permission': 'everyone', 'cooldownSec': 30}],
          'steps': [{'type': 'inc_var', 'name': 'lurkers'}, {'type': 'say', 'as': 'core', 'text': 'Enjoy the lurk {user}! total {count}'}]},
         {'id': 'modonly', 'name': 'ModOnly', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!modonly'], 'permission': 'mod'}], 'steps': [{'type': 'say', 'text': 'mod command ok'}]},
@@ -89,6 +95,16 @@ try:
     sk = [m for m in MOCK_POSTS[n0:] if m.get('command') == 'skip']; vl = [m for m in MOCK_POSTS[n0:] if m.get('command') == 'volume']
     if not sk or sk[0].get('activeChatters', 0) < 6 or sk[0].get('skipNeed') != max(2, -(-sk[0]['activeChatters'] * 40 // 100)): fails.append('vote skip body: ' + str(sk[:1]))
     if not vl or vl[0].get('args') != '60': fails.append('!vol60 body: ' + str(vl[:1]))
+
+    # !speak: mods only when typed, any viewer through the Speak reward (redeem flag + the viewer's text)
+    n0 = len(MOCK_POSTS); feed('viewer9: !speak hello there'); time.sleep(2)
+    if [m for m in MOCK_POSTS[n0:] if m.get('command') == 'speak']: fails.append('!speak from a viewer reached the module')
+    feed('*mod1: !speak hello there'); until(lambda: any(m.get('command') == 'speak' for m in MOCK_POSTS[n0:]), 10, '!speak from a mod reaches the module')
+    m = [m for m in MOCK_POSTS[n0:] if m.get('command') == 'speak']
+    if m and (m[0].get('args') != 'hello there' or m[0].get('redeem') is not False): fails.append('!speak body: ' + str(m[:1]))
+    n0 = len(MOCK_POSTS); feed('event TwitchRedeem viewer9 hello'); time.sleep(2)
+    m = [m for m in MOCK_POSTS[n0:] if m.get('command') == 'speak']
+    if not m or m[0].get('redeem') is not True or m[0].get('user') != 'viewer9' or m[0].get('args') != 'hello': fails.append('speak redeem body: ' + str(m[:1]))
 
     t = api('/api/automations/test', {'id': 'lurk'})
     if not t.get('ok') or not any('(dry run) would say' in o for o in t['run']['output']): fails.append('dry run: ' + str(t))
