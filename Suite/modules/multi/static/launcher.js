@@ -36,9 +36,7 @@ function platformSetup(c, setup) {
     <label>Bot token ${has.discord ? `<b class="okc">(${setup.sources.discord_token === 'vault' ? 'in the Suite key vault' : 'saved'})</b>` : ''}<input id="dc-token" type="password" autocomplete="off" placeholder="${has.discord ? 'leave empty to keep the saved token' : 'paste bot token'}"></label>
     <label>Channel IDs (comma separated)<input id="dc-chans" value="${esc((s.discord_channels || []).join(', '))}" placeholder="123456789012345678"></label>
     <div class="act"><button class="p" data-act="save-discord">Save Discord</button> ${has.discord ? '<button data-act="clear-discord">Forget token</button>' : ''}</div>`;
-  if (c.platform === 'youtube') return `<p class="how">Paste a Google access token with the YouTube live-chat permission. Multi reads your active broadcast's chat. Tokens expire, so this needs re-pasting until automatic sign-in is added. Replies are plain messages (YouTube has no reply threads).</p>
-    <label>Access token ${has.youtube ? `<b class="okc">(${setup.sources.youtube_token === 'vault' ? 'in the Suite key vault' : 'saved'})</b>` : ''}<input id="yt-token" type="password" autocomplete="off" placeholder="paste token"></label>
-    <div class="act"><button class="p" data-act="save-youtube">Save YouTube</button> ${has.youtube ? '<button data-act="clear-youtube">Forget token</button>' : ''}</div>`;
+  if (c.platform === 'youtube') return `<p class="how">Use the YouTube sign-in box above. Multi reads your active broadcast's chat; replies are plain messages (YouTube has no reply threads).</p>`;
   if (c.platform === 'tiktok') return `<p class="how warn">UNOFFICIAL and read-only. TikTok has no official chat API, so this uses a third-party package that can break or break TikTok's rules. Off by default. You can read TikTok chat here but not reply.</p>
     <label class="chk"><input id="tt-on" type="checkbox" ${s.tiktok_enabled ? 'checked' : ''}> Read my TikTok LIVE chat</label>
     <label>TikTok username<input id="tt-user" value="${esc(s.tiktok_user)}" placeholder="yourname"></label>
@@ -152,8 +150,6 @@ document.addEventListener('click', async e => {
       if (!await saveSecret('/api/secrets/discord', body, 'Discord saved. It connects in a few seconds.')) return;
     }
     else if (a === 'clear-discord') { await saveSecret('/api/secrets/discord', {clear: true}, 'Discord token removed.'); }
-    else if (a === 'save-youtube') { if (!await saveSecret('/api/secrets/youtube', {token: v('yt-token')}, 'YouTube token saved.')) return; }
-    else if (a === 'clear-youtube') { await saveSecret('/api/secrets/youtube', {clear: true}, 'YouTube token removed.'); }
     else if (a === 'save-tiktok') { await api('/api/settings', {b: {tiktok_enabled: $('#tt-on').checked, tiktok_user: v('tt-user').replace('@', '').trim()}}); toast('TikTok settings saved.'); }
     else if (a === 'save-smart') {
       const mode = (document.querySelector('input[name=mode]:checked') || {}).value || 'local';

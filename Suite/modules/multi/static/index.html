@@ -259,7 +259,7 @@ function renderCards() {
   if (!['priority', 'missed'].includes(W.type)) return;
   const sec = (label, arr, kind) => arr.length ? `<h4>${label} (${arr.length})</h4>` + arr.map(c => cardHtml(c, kind)).join('') : '';
   const html = W.type === 'missed' ? sec('Missed', cards.missed, 'missed')
-    : sec('Needs a reply', cards.open.filter(c => pass(c)), 'open') + sec('Answered', cards.answered, 'answered') + (cards.missed.length ? `<h4>Missed: ${cards.missed.length} (open the Missed window)</h4>` : '');
+    : sec('Needs a reply', cards.open.filter(c => pass(c)), 'open') + sec('Answered', cards.answered, 'answered') + ((cards.missed_total || cards.missed.length) ? `<h4>Missed: ${cards.missed_total || cards.missed.length} (open the Missed window)</h4>` : '');
   $('#body').innerHTML = `<div class="cards">${html || '<div class="empty">Nothing needs a reply</div>'}</div>`;
 }
 document.addEventListener('keydown', e => {
