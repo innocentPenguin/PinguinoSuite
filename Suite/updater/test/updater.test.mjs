@@ -402,3 +402,9 @@ test('a full install records its profile and keeps every part', async () => {
   assert.equal((await installRelease({ target: dst, source: { type: 'local', path: rel } })).ok, true);
   const j = JSON.parse(read(dst, 'install.json')); assert.equal(j.profile, 'full'); assert.equal(j.parts, undefined); assert.ok(fs.existsSync(path.join(dst, 'Suite/modules/spotify/s.py')));
 });
+test('runtime files (spotify spike config + lockfile) never ship in a release', async () => {
+  const { SKIP_DIR, SKIP_FILE } = await import('../lib/components.mjs');
+  assert.ok(SKIP_DIR.test('Suite/modules/spotify/bin/spike-cfg/'));
+  assert.ok(SKIP_FILE.test('Suite/modules/spotify/bin/spike-cfg/lockfile') && SKIP_FILE.test('lockfile'));
+  assert.ok(!SKIP_FILE.test('Suite/modules/spotify/bin/librespot.exe'));
+});
