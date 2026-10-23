@@ -201,6 +201,20 @@ namespace PinguinoHost
                 }
                 return "";
             }
+            /// <summary>"core", "regular", "known" or "" (also "" for bots and opted-out people).</summary>
+            public static string Standing(string login)
+            {
+                login = Norm(login); if (!Allowed(login)) return "";
+                return WelcomeBack.Standing(Doc(), Boards.CanonLogin(login));
+            }
+            /// <summary>IDEAS #36: a welcome-back line for someone away daysAway days, or "" (not away long enough, bot, or opted out). Extra lines: Data\lore\welcome_lines.json.</summary>
+            public static string WelcomeLine(string login, string display, int daysAway, Func<string, bool> seen)
+            {
+                login = Norm(login); if (!Allowed(login)) return "";
+                JObject extra = null;
+                try { string f = Path.Combine(Program.SuiteDir ?? "", "Data", "lore", "welcome_lines.json"); if (File.Exists(f)) extra = JObject.Parse(File.ReadAllText(f, Encoding.UTF8)); } catch { }
+                return WelcomeBack.Pick(display, daysAway, Standing(login), seen, Rnd, extra);
+            }
             /// <summary>A background sentence for the language model (never quoted back as facts or numbers), or "".</summary>
             public static string Hint(string a, string b)
             {
@@ -215,7 +229,7 @@ namespace PinguinoHost
             }
         }
         static readonly string[] FriendTemplates = {
-            "{t} timed out by {r}. Chat friends, no hard feelings?", "{r} timed out {t}. Friendship tested.", "Friendly fire! {r} just timed out {t}.", "{t} got timed out by {r}. Old chat buddies, new grudge." };
+            "{t} timed out by {r}. Chat friends, no hard feelings?", "{r} timed out {t}. Friendship tested.", "Friendly fire! {r} just timed out {t}.", "{t} got timed out by {r}. Old chat buddies, new grudge.", "{r} really said no ban for everyone but {t}. {t} got timed out.", "{t} got slammed by {r}: timed out. Chat friends, still friends?" };
         /// <summary>A plain (no-AI) line for a timeout between two people who chat a lot together, or null when the graph knows nothing (or someone opted out).</summary>
         static string FriendLine(string targetLogin, string redeemerLogin, string tname, string rname)
         {
@@ -228,10 +242,11 @@ namespace PinguinoHost
         // IDEAS #35: friendly failure lines. Every no-match variant keeps the words "nobody in chat matched"; the points always come back; no variant repeats while a fresh one is left.
         static readonly string[] NoMatchLines = {
             "@{u} nobody in chat matched \"{x}\", so no timeout (points back).", "@{u} nobody in chat matched \"{x}\". Try the name again, points are back.",
-            "@{u} the penguins looked, but nobody in chat matched \"{x}\". Points refunded!", "@{u} nobody in chat matched \"{x}\", so everyone is safe today. Points back." };
+            "@{u} the penguins looked, but nobody in chat matched \"{x}\". Points refunded!", "@{u} nobody in chat matched \"{x}\", so everyone is safe today. Points back.",
+            "@{u} nobody in chat matched \"{x}\", mb, no ban today. Points back.", "@{u} swung at \"{x}\" but nobody in chat matched. Points are back, try again." };
         static readonly string[] CantLines = {
             "@{u} I couldn't time out {x} (no mod rights?), points back.", "@{u} {x} slipped away, I couldn't time them out. Points are back!",
-            "@{u} the timeout on {x} didn't go through, so your points are back." };
+            "@{u} the timeout on {x} didn't go through, so your points are back.", "@{u} {x} dodged it (mb, no rights there), your points are back." };
         static string Friendly(string[] set, string u, string x)
         {
             var all = set.Select(t => t.Replace("{u}", u).Replace("{x}", x)).ToList();

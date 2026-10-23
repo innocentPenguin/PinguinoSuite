@@ -49,7 +49,7 @@ out = run(ROSTER, [('alice', 'bobby'), ('carl', 'dora'), ('erin', 'finn'), ('gus
 check(lvl(out) == ['duo', 'buddies', 'acquainted', 'crowd', 'none', 'none'], 'closeness levels: %s' % lvl(out))
 s = [x for x in says(out) if 'timed out' in x]
 check(len(s) == 6, 'one line per redeem: %s' % s)
-check(s[0].startswith('Friendly fire') or ' by alice' in s[0] and 'bobby' in s[0], 'duo line names both: %s' % s)
+check('alice' in s[0] and 'bobby' in s[0] and 'has been timed out by' not in s[0], 'duo line names both: %s' % s)
 check(all(n in s[1] for n in ('dora', 'carl')) and 'has been timed out by' not in s[1], 'buddies line names both: %s' % s)
 check(all(x.endswith('has been timed out by ' + w) for x, w in zip(s[2:], ['erin', 'gus', 'zed', 'alice'])), 'acquainted / crowd / unknown / opted-out get the normal line: %s' % s)
 check(not any(SECRET in l for l in out), 'private example text leaked into the output')
