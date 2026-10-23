@@ -4,7 +4,8 @@
 const SND_EVENTS = [
   ['person', 'Message from a real person (real people only)', 'Any viewer message. Never bots (Nightbot, StreamElements, Chatty, Helper, anything ending in bot/b0t, your bot list), never you or your own accounts.'],
   ['sent', 'A message I (or a bot of mine) sent', 'Plays when your own line appears in chat. Off by default.'],
-  ['first', 'First-time chatter', 'Someone chats here for the very first time.'],
+  ['first', 'First-time chatter (real people only)', 'Someone chats here for the very first time (Twitch first-message flag, or never seen by Multi before).'],
+  ['returning', 'Returning chatter (real people only)', 'Someone known from before who is back after a long absence (Multi has not seen them for the "new stream" gap, 6 h by default). Replaces the normal chat sound for that message.'],
   ['mention', 'Someone mentions me', 'Your name / channel is in a message.'],
   ['question', 'Question or priority for me', 'A question to you, a reply to you, a cheer, or a high-priority card.'],
   ['follow', 'New follow', 'Stream event (also shown in the activity feed).'],
@@ -15,7 +16,7 @@ const SND_TONES = ['chime', 'ping', 'soft', 'pop', 'bell', 'blip', 'coin', 'drum
 const SND_DEFAULT = {
   v: 2, master: 70, gap: 2,
   ev: {
-    person: {on: true, vol: 80, tone: 'pop', notify: false}, sent: {on: false, vol: 60, tone: 'blip', notify: false}, first: {on: true, vol: 90, tone: 'harp', notify: true}, mention: {on: true, vol: 90, tone: 'bell', notify: true},
+    person: {on: true, vol: 80, tone: 'pop', notify: false}, sent: {on: false, vol: 60, tone: 'blip', notify: false}, first: {on: true, vol: 90, tone: 'harp', notify: true}, returning: {on: true, vol: 85, tone: 'chime', notify: false}, mention: {on: true, vol: 90, tone: 'bell', notify: true},
     question: {on: true, vol: 90, tone: 'alert', notify: true},
     follow: {on: false, vol: 70, tone: 'ping', notify: false}, sub: {on: false, vol: 80, tone: 'sparkle', notify: false}, raid: {on: false, vol: 80, tone: 'coin', notify: false},
   },
@@ -89,11 +90,11 @@ function sndNotify(title, body) {
 }
 function sndFire(key, m) {
   const e = SND.cfg.ev[key]; if (!e || !e.on && !e.notify) return false;
-  const now = Date.now(), gap = (key === 'person' ? SND.cfg.gap : .4) * 1000;
-  if (now - (SND.last[key] || 0) < gap) return false;
+  const now = Date.now(), gap = (['person', 'first', 'returning'].includes(key) ? SND.cfg.gap : .4) * 1000;
+  if (gap && now - (SND.last[key] || 0) < gap) return false;
   SND.last[key] = now;
   if (e.on) sndPlay(e.tone, e.vol);
-  if (e.notify) sndNotify(({first: 'First-time chatter', mention: 'Mention', question: 'For you', sent: 'Sent', person: 'Chat', follow: 'New follow', sub: 'New sub', raid: 'Raid'})[key], (m.display || m.user || '') + (m.text ? ': ' + m.text : ''));
+  if (e.notify) sndNotify(({first: 'First-time chatter', returning: 'Returning chatter', mention: 'Mention', question: 'For you', sent: 'Sent', person: 'Chat', follow: 'New follow', sub: 'New sub', raid: 'Raid'})[key], (m.display || m.user || '') + (m.text ? ': ' + m.text : ''));
   return true;
 }
 // a real person: not a bot (flag, your bot list, known bot names, *bot / *b0t), not the streamer, not one of your own accounts
@@ -109,7 +110,11 @@ window.soundMsg = function (m) {
   if (m.event) { if (['follow', 'sub', 'resub', 'gift', 'raid'].includes(m.event)) sndFire(m.event === 'resub' || m.event === 'gift' ? 'sub' : m.event, m); else if (m.event === 'cheer') sndFire('question', m); return; }
   if (m.is_self) { sndFire('sent', m); return; }
   if (!sndHuman(m)) return;
-  if (m.first_time && sndFire('first', m)) return;
+  const fl = m.flags || [], isNew = m.first_time || fl.includes('new');
+  if (isNew && SND.cfg.ev.first.on) { sndFire('first', m); return; }          // first / returning own the message: no second sound on top of it
+  if (fl.includes('returning') && SND.cfg.ev.returning.on) { sndFire('returning', m); return; }
+  if (isNew && sndFire('first', m)) return;                                    // notification-only setting
+  if (fl.includes('returning') && sndFire('returning', m)) return;
   if (mentionsMe(m) && sndFire('mention', m)) return;
   if ((isQuestionForMe(m) || m.tier === 'high') && sndFire('question', m)) return;
   sndFire('person', m);
@@ -132,7 +137,7 @@ function soundsBox() {
   return `<div class="box"><small class="mut">Plays from this page on this PC only, <b>never in OBS</b>. Saved automatically. One open Multi window plays at a time.</small>
     <div id="snd-lock" class="empty" style="display:${sndLocked() ? '' : 'none'}">Sound is asleep until you click anywhere in this window once (browser rule). <button class="chip2" data-snd-unlock="1">Enable sound</button></div>
     <label class="cf">Master volume <input type="range" data-snd="master" min="0" max="100" step="5" value="${c.master}"><b>${c.master}%</b></label>
-    <label class="cf">Minimum gap between real-person message sounds <input type="range" data-snd="gap" min="1" max="30" step="1" value="${c.gap}"><b>${c.gap}s</b></label>
+    <label class="cf">Minimum gap between real-person message sounds <input type="range" data-snd="gap" min="0" max="30" step="1" value="${c.gap}"><b>${c.gap ? c.gap + "s" : "0 s (back to back)"}</b></label>
     ${SND_EVENTS.map(row).join('')}
     <div class="act" style="margin-top:8px"><button class="chip2" data-snd-notify="1">Allow desktop notifications</button> <small class="mut">now: ${esc(notifyState)}</small></div></div>`;
 }
@@ -140,7 +145,7 @@ document.addEventListener('input', ev => {
   const t = ev.target.closest && ev.target.closest('[data-snd]'); if (!t) return;
   const [k, f] = t.dataset.snd.split('.'); const v = t.type === 'checkbox' ? t.checked : t.type === 'range' ? Number(t.value) : t.value;
   if (f == null) SND.cfg[k] = v; else SND.cfg.ev[k][f] = v;
-  if (t.type === 'range') { const b = t.parentElement.querySelector('b') || t.nextElementSibling; if (b) b.textContent = t.value + (t.dataset.snd === 'gap' ? 's' : '%'); }
+  if (t.type === 'range') { const b = t.parentElement.querySelector('b') || t.nextElementSibling; if (b) b.textContent = t.dataset.snd === 'gap' ? (Number(t.value) ? t.value + 's' : '0 s (back to back)') : t.value + '%'; }
   sndSave();
 });
 document.addEventListener('click', ev => {
