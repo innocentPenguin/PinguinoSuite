@@ -1903,7 +1903,7 @@ def test_goal_counts_events_whose_alert_type_is_switched_off(monkeypatch):
     monkeypatch.setattr(server.alert_engine, "submit", lambda ev: None)
     m = SimpleNamespace(event="cheer", amount=40, platform="twitch", meta={}, text="", user="u", display="U", id="1", first_time=False, flags=[], color="")
     server._alert_from_message(m)
-    assert seen == [("cheer", 40, "twitch")]
+    assert seen == [("cheer", 40, "twitch", "1")]
 
 
 def test_clip_hosts_are_twitch_only_unless_rehearsal_env(monkeypatch):
@@ -1981,3 +1981,69 @@ def test_intro_retries_after_host_outage(tmp_path):
         assert not await it.observe(msg())                     # and only once
     asyncio.run(go())
     assert len(got) == 1 and got[0]["message"] == "back online"
+
+
+def test_goal_survives_restart_and_replay_does_not_double_count(tmp_path):
+    import goals
+    st = Store(tmp_path / "gr.db")
+    fired = []
+    g = goals.Goal(st, lambda ev: fired.append(ev) or (True, "ok"))
+    g.set({"kind": "follow", "target": 3, "current": 0, "title": "Follows"})
+    g.observe("follow", 0, "twitch", "f1")
+    g.observe("follow", 0, "twitch", "f1")             # same event replayed
+    g.observe("follow", 0, "kick", "f2")
+    assert g.cfg["current"] == 2
+    g2 = goals.Goal(Store(tmp_path / "gr.db"), lambda ev: fired.append(ev) or (True, "ok"))   # Multi restarted mid-stream
+    assert g2.cfg["current"] == 2 and g2.cfg["target"] == 3
+    g2.observe("follow", 0, "twitch", "f1")             # the Host feed replays its recent events after the restart
+    g2.observe("follow", 0, "twitch", "f2")
+    assert g2.cfg["current"] == 2 and not fired
+    g2.observe("follow", 0, "twitch", "f3")
+    assert g2.cfg["current"] == 3 and len(fired) == 1
+    g3 = goals.Goal(Store(tmp_path / "gr.db"), lambda ev: fired.append(ev) or (True, "ok"))
+    g3.observe("follow", 0, "twitch", "f3")
+    assert len(fired) == 1 and g3.cfg["done"]            # finish alert is not re-fired after a restart
+
+
+def test_hypebar_state_survives_restart_and_ignores_replays(tmp_path):
+    import goals
+    st = Store(tmp_path / "hb.db")
+    h = goals.HypeBar(st)
+    h.observe("hype_start", {"id": "h1", "level": 1, "progress": 10, "goal": 100, "total": 10})
+    h.observe("hype_level", {"id": "h2", "level": 2, "progress": 40, "goal": 100, "total": 200})
+    h2 = goals.HypeBar(Store(tmp_path / "hb.db"))
+    v = h2.view()
+    assert v["visible"] and v["level"] == 2 and v["progress"] == 40 and v["goal"] == 100
+    h2.observe("hype_start", {"id": "h1", "level": 1, "progress": 10, "goal": 100})   # replayed old start must not rewind the bar
+    assert h2.view()["level"] == 2
+    h2.observe("hype_end", {"id": "h3", "level": 2, "progress": 100, "goal": 100})
+    h3 = goals.HypeBar(Store(tmp_path / "hb.db"))
+    assert h3.st["active"] is False and h3.view()["visible"]                           # still shown for show_after_s after the end
+    h3.observe("hype_level", {"id": "h2", "level": 2, "progress": 40, "goal": 100})   # replay after the train ended: stays ended
+    assert h3.st["active"] is False
+
+
+def test_checks_site_requests_run_together(monkeypatch):
+    import checks
+    import secrets_store
+    import threading
+    gate = threading.Barrier(3, timeout=3)       # all three requests must be in flight at once or this times out
+
+    class R:
+        status_code = 302
+        headers = {"location": "https://id.twitch.tv/x?scope=user%3Aread%3Achat+user%3Awrite%3Achat"}
+
+    def slow_get(*a, **k):
+        gate.wait()
+        return R()
+
+    def slow_post(*a, **k):
+        gate.wait()
+        return type("P", (), {"status_code": 400})()
+    monkeypatch.setattr(checks.requests, "get", slow_get)
+    monkeypatch.setattr(checks.requests, "post", slow_post)
+    monkeypatch.setattr(secrets_store, "get", lambda n, d=None: None)
+    res = checks.run(None)
+    ids = [c["id"] for c in res]
+    assert ids.index("site") < ids.index("connect") < ids.index("refresh") < ids.index("token")
+    assert all(c["ok"] for c in res if c["id"] in ("site", "connect", "refresh"))

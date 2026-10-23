@@ -2,6 +2,7 @@
 reaching the target fires one "goal" alert. Stored in the kv table, so it survives restarts."""
 import re
 import time
+from collections import deque
 
 KINDS = ("manual", "follow", "sub", "bits")
 DEFAULT = {"title": "Stream goal", "target": 100, "current": 0, "kind": "manual", "unit": "", "done": False, "updated": 0}
@@ -19,6 +20,7 @@ class Goal:
     def __init__(self, store, submit):
         self.store, self.submit = store, submit
         self.cfg = self.clean(store.kv_get("goal:cfg") or {}, dict(DEFAULT))
+        self.seen = deque(store.kv_get("goal:seen") or [], maxlen=500)     # event ids already counted: a replayed feed/restart must not count twice
 
     @staticmethod
     def clean(src, base):
@@ -60,11 +62,14 @@ class Goal:
     def reset(self):
         return self.set({"current": 0, "done": False})
 
-    def observe(self, etype, amount=0, platform="twitch"):
+    def observe(self, etype, amount=0, platform="twitch", eid=None):
         """a real (non-test) event: follows count 1, subs 1 (gifts: their amount), bits their amount (Twitch only: TikTok gifts and
         YouTube Super Chats are also "cheer" events but are not bits); follow and sub goals count every platform"""
         k = self.cfg["kind"]
         n = 0
+        eid = str(eid or "")
+        if eid and eid in self.seen:
+            return
         if k == "follow" and etype == "follow":
             n = 1
         elif k == "sub" and etype in SUBS:
@@ -74,6 +79,9 @@ class Goal:
         elif k == "bits" and etype == "cheer" and platform == "twitch":
             n = max(0, int(amount or 0))
         if n:
+            if eid:
+                self.seen.append(eid)
+                self.store.kv_set("goal:seen", list(self.seen))
             self.cfg["current"] = min(10**9, self.cfg["current"] + n)
             self._save()
             self._check()
@@ -98,6 +106,16 @@ class HypeBar:
         self.store = store
         self.look = self.clean_look(store.kv_get("hypebar:cfg") or {}, dict(HYPE_LOOK))
         self.st = {"active": False, "level": 0, "progress": 0, "goal": 0, "total": 0, "ended_at": 0}
+        saved = store.kv_get("hypebar:st")                 # a restart mid-train keeps the bar where it was
+        if isinstance(saved, dict):
+            for k in ("level", "progress", "goal", "total"):
+                self.st[k] = _int(saved.get(k), 0, 10**9, 0)
+            self.st["active"] = bool(saved.get("active"))
+            try:
+                self.st["ended_at"] = float(saved.get("ended_at") or 0)
+            except (TypeError, ValueError):
+                pass
+        self.seen = deque(store.kv_get("hypebar:seen") or [], maxlen=100)
 
     @staticmethod
     def clean_look(src, base):
@@ -126,6 +144,12 @@ class HypeBar:
             etype = "hype_end" if str(ev.get("phase") or "") == "end" else "hype_start"
         if etype not in ("hype_start", "hype_level", "hype_end"):
             return
+        eid = str(ev.get("id") or "")
+        if eid and eid in self.seen:
+            return                                          # replayed event (Host re-sent it, or Multi restarted): the bar already has it
+        if eid:
+            self.seen.append(eid)
+            self.store.kv_set("hypebar:seen", list(self.seen))
         s = self.st
         for k in ("level", "progress", "goal", "total"):
             if ev.get(k) not in (None, ""):
@@ -137,6 +161,7 @@ class HypeBar:
             s.update(active=True, ended_at=0)
         else:
             s.update(active=False, ended_at=time.time())
+        self.store.kv_set("hypebar:st", dict(s))
 
     def view(self, live=None, now=None):
         """what the overlay draws: the Host's live hype object wins while it reports a running train, else the pushed state"""

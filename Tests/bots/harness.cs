@@ -231,6 +231,27 @@ public static class Harness
         Check("no real message id: plain line, @name kept, no reply field", rp.Count == 1 && !rp[0].Contains("reply_parent") && rp[0].Contains("@viewer1 timer line"), string.Join("|", rp));
         rp.Clear(); Reset(); c.SayPublic("chat", "@viewer1 no args at all");
         Check("no arguments at all: plain line", rp.Count == 1 && !rp[0].Contains("reply_parent") && rp[0].Contains("@viewer1 no args at all"), string.Join("|", rp));
+        // ── the reply target travels on the sending thread (PgReplyTo), not through the shared CPH args the Host refills for the next chat message ──
+        {
+          string idA = "aaaaaaaa-1111-4222-8333-444444444444", idB = "bbbbbbbb-1111-4222-8333-444444444444";
+          var mi = typeof(CPHInline).GetMethod("PgReplyTo", BindingFlags.NonPublic | BindingFlags.Static);
+          Func<string, string, IDisposable> scope = (id, who) => (IDisposable)mi.Invoke(null, new object[] { id, who });
+          rp.Clear(); Reset(); CPHProxy.Args["msgId"] = idB; CPHProxy.Args["userName"] = "viewer2";   // the NEXT chat message already refilled the args
+          using (scope(idA, "viewer1")) c.SayPublic("chat", "@Viewer1 for the first one");
+          Check("pinned reply: targets its own message even when the shared args already hold the next one", rp.Count == 1 && rp[0].Contains(idA) && !rp[0].Contains(idB) && rp[0].Contains("\"message\":\"for the first one\""), string.Join("|", rp));
+          rp.Clear(); c.SayPublic("chat", "@viewer2 later line");
+          Check("the pin is gone afterwards: a later send follows the args again", rp.Count == 1 && rp[0].Contains(idB), string.Join("|", rp));
+          rp.Clear(); using (scope("", "viewer1")) c.SayPublic("chat", "@viewer1 no parent");
+          Check("an explicitly empty parent is a plain line, never the args' message", rp.Count == 1 && !rp[0].Contains("reply_parent") && rp[0].Contains("@viewer1 no parent"), string.Join("|", rp));
+          // two chats answered at the same time on two threads: each one goes out as a reply to its own message
+          rp.Clear(); Reset(); CPHProxy.Args["msgId"] = idB; CPHProxy.Args["userName"] = "viewer2";
+          var inA = new System.Threading.ManualResetEvent(false); var doneB = new System.Threading.ManualResetEvent(false);
+          var tA = new System.Threading.Thread(() => { using (scope(idA, "viewer1")) { inA.Set(); doneB.WaitOne(5000); c.SayPublic("chat", "@Viewer1 answer to A"); } });
+          var tB = new System.Threading.Thread(() => { inA.WaitOne(5000); using (scope(idB, "viewer2")) c.SayPublic("chat", "@Viewer2 answer to B"); doneB.Set(); });
+          tA.Start(); tB.Start(); tA.Join(8000); tB.Join(8000);
+          string ja = string.Join("|", rp.ToArray());
+          Check("interleaved replies: each reply targets its own message", rp.Count == 2 && rp.Any(x => x.Contains("answer to A") && x.Contains(idA) && !x.Contains(idB)) && rp.Any(x => x.Contains("answer to B") && x.Contains(idB) && !x.Contains(idA)), ja);
+        }
         { int attempts = 0; typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, (Func<string, string, string, string>)((url, auth, body) => { attempts++; throw new Exception("The remote server returned an error: (400) Bad Request."); }));
           Reset(); CPHProxy.Args["msgId"] = realId; CPHProxy.Args["userName"] = "viewer1"; CPHProxy.Args["user"] = "Viewer1"; c.SayPublic("chat", "@Viewer1 a late answer");
           Check("a reply Twitch rejects (stale / deleted parent, 400) is dropped: one attempt, not resent without the reply, no fallback account", attempts == 1 && CPHProxy.Sent.Count == 0, attempts + " attempts, sent " + CPHProxy.Sent.Count);

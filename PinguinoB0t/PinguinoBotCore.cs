@@ -282,16 +282,21 @@ public class CPHInline
     // (Helix reply_parent_message_id) and the leading "@sender " is dropped, because the reply already shows who it answers. A mention of anybody else stays in the text.
     // No real message id (timers, events, commands run by hand, Streamer.bot's own CPH.SendMessage fallback): the line is sent as it is, with its "@name".
     static readonly System.Text.RegularExpressions.Regex PgRxMsgId = new System.Text.RegularExpressions.Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    // A reply that runs on its own (a delayed AI answer) names its parent here, on its own thread, instead of writing the shared CPH arguments: the Host clears and refills
+    // those for the NEXT chat message while this one is still being answered. Use PgReplyTo(id, login) around the send; it restores itself ("" id = explicitly not a reply).
+    [ThreadStatic] static string _pgReplyId, _pgReplyUser;
+    struct PgReplyScope : IDisposable { string _i, _u; public PgReplyScope(string id, string user) { _i = _pgReplyId; _u = _pgReplyUser; _pgReplyId = id; _pgReplyUser = user; } public void Dispose() { _pgReplyId = _i; _pgReplyUser = _u; } }
+    static IDisposable PgReplyTo(string id, string user) { return new PgReplyScope(id, user); }
     string PgReplyParts(string text, out string parentId)
     {
         parentId = "";
         try
         {
-            object o; string id = (CPH.TryGetArg("msgId", out o) && o != null) ? Convert.ToString(o) : "";
+            object o; string id = _pgReplyId != null ? _pgReplyId : (CPH.TryGetArg("msgId", out o) && o != null) ? Convert.ToString(o) : "";
             if (!PgRxMsgId.IsMatch(id)) return text;
             parentId = id;
-            string who = (CPH.TryGetArg("userName", out o) && o != null) ? Convert.ToString(o) : "";
-            if (who == "") who = (CPH.TryGetArg("user", out o) && o != null) ? Convert.ToString(o) : "";
+            string who = _pgReplyId != null ? (_pgReplyUser ?? "") : (CPH.TryGetArg("userName", out o) && o != null) ? Convert.ToString(o) : "";
+            if (who == "" && _pgReplyId == null) who = (CPH.TryGetArg("user", out o) && o != null) ? Convert.ToString(o) : "";
             if (who == "") return text;
             var m = System.Text.RegularExpressions.Regex.Match(text ?? "", "^@" + System.Text.RegularExpressions.Regex.Escape(who.TrimStart('@')) + "(?![A-Za-z0-9_])[,:]?\\s*", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (m.Success && text.Length > m.Length) return text.Substring(m.Length).TrimStart();

@@ -1,5 +1,7 @@
 """Connection checks for the Twitch connect path. Each check returns {id, label, ok, detail, fix?}.
 Never returns or logs token values."""
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
 
 import config
@@ -19,6 +21,12 @@ def site_url():
 def run(tw, port=None):
     out = []
     site = site_url()
+    # the three website requests are independent: start them together so the page waits for the slowest, not the sum (each has its own timeout)
+    pool = ThreadPoolExecutor(max_workers=3)
+    f_site = pool.submit(requests.get, site, timeout=8)
+    f_conn = pool.submit(requests.get, site + "/auth/twitch/login?multi=1", timeout=8, allow_redirects=False)
+    f_ref = pool.submit(requests.post, site + "/api/multi/refresh", json={}, timeout=8)
+    pool.shutdown(wait=False)
 
     # 1 credential store
     probe = "_check_probe"
@@ -36,7 +44,7 @@ def run(tw, port=None):
 
     # 2 site reachable
     try:
-        r = requests.get(site, timeout=8)
+        r = f_site.result()
         out.append(_r("site", "Site reachable", r.status_code < 500, f"{site} -> HTTP {r.status_code}",
                       "Check your internet connection. If it is fine, the Pinguino website may be down; try again in a few minutes."))
     except Exception as e:
@@ -44,9 +52,8 @@ def run(tw, port=None):
                       "Check your internet connection. If it is fine, the Pinguino website may be down; try again in a few minutes."))
 
     # 3 connect endpoint exists (does not follow into Twitch)
-    url = site + "/auth/twitch/login?multi=1"
     try:
-        r = requests.get(url, timeout=8, allow_redirects=False)
+        r = f_conn.result()
         loc = r.headers.get("location", "")
         from urllib.parse import parse_qs, urlparse
         sc = set(parse_qs(urlparse(loc).query).get("scope", [""])[0].split())
@@ -59,7 +66,7 @@ def run(tw, port=None):
 
     # 4 refresh endpoint is deployed (no token sent: expect 400, not 404)
     try:
-        r = requests.post(site + "/api/multi/refresh", json={}, timeout=8)
+        r = f_ref.result()
         out.append(_r("refresh", "Token refresh endpoint deployed", r.status_code in (400, 401, 403),
                       f"HTTP {r.status_code}", "The Pinguino website cannot renew Twitch sign-ins yet, so Twitch would disconnect after a few hours. Ask whoever runs the site to update it."))
     except Exception as e:
