@@ -26,7 +26,9 @@
     var bits=[n+" waiting"]; if(j.gameMode) bits.push(j.gameMode); if(j.format) bits.push(j.format); if(j.mode) bits.push(j.mode);
     d.textContent=bits.join(" · ");
   }
-  function poll(){fetch(HOST+"/api/customs/state").then(function(r){return r.json();}).then(function(j){if(j&&j.ok!==false)show(j);}).catch(function(){});}
+  function poll(){fetch(HOST+"/api/customs/state").then(function(r){return r.json();}).then(function(j){if(j&&j.ok!==false){fails=0;c.style.opacity="";show(j);}else bad();}).catch(bad);}
+  var fails=0, c=document.getElementById("c");
+  function bad(){ if(++fails>=3) c.style.opacity="0"; }   // Host unreachable for ~9 s: hide the card rather than claim QUEUE CLOSED
   if(Q.get("preview")==="1") show({open:true,activity:"Competitive Customs",queue:[1,2,3,4,5],format:"3v3",gameMode:"Soccar"});
   else{poll();setInterval(poll,3000);}
 })();
