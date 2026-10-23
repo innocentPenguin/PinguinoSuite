@@ -105,7 +105,7 @@ body.side-open #sidebtn{display:none}
 <script>
 const q = new URLSearchParams(location.search), WID = q.get('win');
 const HALF = q.get('half'), PID = q.get('pane'), POPLABEL = q.get('pop');
-let W = {type: location.pathname === '/popout' ? 'popout' : (q.get('type') || 'launcher'), platforms: [], min_tier: 'none'};
+let W = {type: location.pathname === '/popout' ? 'popout' : (q.get('type') || 'dash'), platforms: [], min_tier: 'none'};
 if (HALF && W.type === 'chat') { W.type = 'unified'; W.link_group = 'chat-split'; W.link_order = (HALF === 'top' || HALF === 'left') ? 1 : 0; }   // one chat spread over two windows: older rows in the top/left one
 const TIERS = {none: 0, low: 1, medium: 2, high: 3};
 let conns = [], cards = {open: [], answered: [], missed: []}, msgs = [], target = null;
@@ -120,7 +120,7 @@ async function init() {
     if (PANE) {
       W.title = PANE.name || W.title;
       if (PANE.flow) { W.type = 'unified'; W.link_group = PANE.flow.group; W.link_order = PANE.flow.order; }
-      else if (W.type === 'launcher') W.type = 'chat';
+      else if (W.type === 'launcher' || !q.get('type')) W.type = 'chat';
     }
   }
   await loadStyle();

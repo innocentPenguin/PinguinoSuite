@@ -124,7 +124,7 @@ function chatBar() {
     <button class="chip2 ${CF.prio ? 'on' : ''}" data-cf="prio" title="Only show messages worth answering (plus bot replies)">Priority only</button>
     <a class="chip2" href="/?type=style" target="_self" title="Fonts, colours, backgrounds and highlights">Look</a>
     ${PANE ? `<span class="chip2" title="This window shows: ${esc(PANE.name || 'a part of the chat')}">${esc(PANE.name || 'pane')}</span>` : `<button class="chip2" data-cf="popout" title="Open this chat in its own window - drag it to any monitor">Pop out</button>`}
-    <a class="chip2" href="/" target="_self" title="Setup, layouts, smart features">Setup</a>`;
+    <a class="chip2" href="/?type=launcher" target="_self" title="Setup, layouts, smart features">Setup</a>`;
   $('#csearch').oninput = e => chatSearch(e.target.value);
 }
 
