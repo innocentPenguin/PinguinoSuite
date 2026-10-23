@@ -88,14 +88,15 @@ def save_settings(patch):
 DING_ROWS = ("first", "new_stream", "returning")
 
 
+HARP = ROOT.parents[2] / "Data" / "sounds" / "harp.wav"      # the old page "harp" tone: default sound of the first row
+
+
 def ding_rows(s=None):
     """The three chatter-sound rows. A row (or field) that was never saved is derived from the old ding_* keys, so nothing resets."""
     s = s if s is not None else settings()
-    first_snd = s["ding_first_sound"] if s.get("ding_first_ever") and s.get("ding_first_sound") else s["ding_sound"]
-    ret_snd = s.get("ding_returning_sound") or s["ding_sound"]
-    rows = {"first": {"on": bool(s.get("ding_platforms")), "sound": first_snd, "volume": s["ding_volume"], "notify": True},
-            "new_stream": {"on": bool(s.get("ding_returning")), "sound": ret_snd, "volume": s["ding_returning_volume"], "notify": False},
-            "returning": {"on": True, "sound": ret_snd, "volume": 50, "notify": False}}
+    rows = {"first": {"on": True, "sound": str(HARP) if HARP.is_file() else s["ding_sound"], "volume": 90, "notify": True},
+            "new_stream": {"on": True, "sound": s["ding_sound"], "volume": s["ding_volume"], "notify": False},
+            "returning": {"on": True, "sound": s.get("ding_returning_sound") or s["ding_sound"], "volume": s["ding_returning_volume"], "notify": False}}
     saved = s.get("ding_rows")
     if isinstance(saved, dict):
         for name, row in rows.items():

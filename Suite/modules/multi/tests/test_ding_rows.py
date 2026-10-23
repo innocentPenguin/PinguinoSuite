@@ -48,18 +48,18 @@ def test_rows_priority_sounds_volumes_and_recent_list(tmp_path, monkeypatch):
     assert d.observe(_m("amy")) == "first"
     d.new_stream("test")                                          # next stream: amy is now known
     assert d.observe(_m("amy", n=1)) == "new_stream" and d.observe(_m("zed")) == "first"
-    assert d.sound_for("new_stream") == str(ret) and d.sound_for("returning") == str(ret) and d.sound_for("first") == s["ding_first_sound"]
-    assert d.volume_for("first") == 40 and d.volume_for("new_stream") == 25 and d.volume_for("returning") == 25
+    assert d.sound_for("new_stream") == s["ding_sound"] and d.sound_for("returning") == str(ret)
+    assert d.volume_for("first") == 45 and d.volume_for("new_stream") == 40 and d.volume_for("returning") == 25
     assert [x["kind"] for x in d.recent] == ["first", "new_stream", "first"]
     assert d.recent[0]["notify"] is True and d.recent[1]["notify"] is False
-    s["ding_returning"] = False
+    s["ding_rows"] = {"new_stream": {"on": False}}
     d.new_stream("again")
     assert d.observe(_m("amy", n=2)) is False                    # new_stream row off: silent, never a lower row
-    s["ding_returning"] = True
+    s["ding_rows"] = {}
     d.new_stream("third")
     assert d.observe(_m("amy", n=3)) == "new_stream"
     s["ding_scope"] = "ever"
-    s["ding_returning"] = False
+    s["ding_rows"] = {"new_stream": {"on": False}}
     assert d.observe(_m("amy", n=4)) is False                    # 'ever' + row off: known people stay quiet
 
 
@@ -81,22 +81,26 @@ def test_exactly_one_row_fires_and_flagged_returning(tmp_path, monkeypatch):
 
 
 def test_rows_derive_from_old_keys_without_reset(tmp_path, monkeypatch):
-    d, s = _ding(tmp_path, monkeypatch, ding_volume=33, ding_returning=False, ding_returning_volume=61, ding_first_ever=False)
-    s["ding_returning_sound"] = ""
+    d, s = _ding(tmp_path, monkeypatch, ding_volume=24, ding_returning=True, ding_returning_volume=50, ding_first_ever=False, ding_first_sound="")
+    s["ding_returning_sound"] = str(tmp_path / "today.mp3")
+    harp = tmp_path / "harp.wav"
+    monkeypatch.setattr(config, "HARP", harp)
     r = config.ding_rows(s)
-    assert r["first"] == {"on": True, "sound": s["ding_sound"], "volume": 33, "notify": True}     # first_ever off -> ding_sound
-    assert r["new_stream"] == {"on": False, "sound": s["ding_sound"], "volume": 61, "notify": False}
-    assert r["returning"] == {"on": True, "sound": s["ding_sound"], "volume": 50, "notify": False}
-    s["ding_first_ever"] = True
-    assert config.ding_rows(s)["first"]["sound"] == s["ding_first_sound"]
+    assert r["first"] == {"on": True, "sound": s["ding_sound"], "volume": 90, "notify": True}      # no harp file: falls back to ding_sound
+    harp.write_bytes(b"h")
+    r = config.ding_rows(s)
+    assert r["first"] == {"on": True, "sound": str(harp), "volume": 90, "notify": True}            # first_ever / first_sound ignored
+    assert r["new_stream"] == {"on": True, "sound": s["ding_sound"], "volume": 24, "notify": False}
+    assert r["returning"] == {"on": True, "sound": s["ding_returning_sound"], "volume": 50, "notify": False}
+    s["ding_returning"] = False
     s["ding_platforms"] = []
-    assert config.ding_rows(s)["first"]["on"] is False
+    assert config.ding_rows(s)["new_stream"]["on"] is True and config.ding_rows(s)["first"]["on"] is True
     s["ding_rows"] = {"first": {"volume": 7, "bogus": 1}, "new_stream": "junk"}
     r = config.ding_rows(s)
-    assert r["first"]["volume"] == 7 and "bogus" not in r["first"] and r["new_stream"]["volume"] == 61
+    assert r["first"]["volume"] == 7 and "bogus" not in r["first"] and r["new_stream"]["volume"] == 24
     info = d.info()
     assert set(info["rows"]) == {"first", "new_stream", "returning"} and info["gap_h"] == 6 and info["rows"]["first"]["sound_exists"]
-    assert info["volume"] == 33 and "returning_sound" in info and "platforms" in info          # old keys unchanged
+    assert info["volume"] == 24 and "returning_sound" in info and "platforms" in info          # old keys unchanged
 
 
 def _client(monkeypatch):
@@ -119,8 +123,9 @@ def test_settings_endpoint_partial_patches_write_through_and_validation(tmp_path
     r = c.post("/api/ding/settings", json={"rows": {"returning": {"sound": str(snd), "on": False}}}, headers=h)
     assert r.json()["rows"]["returning"]["sound"] == str(snd) and r.json()["rows"]["returning"]["on"] is False
     assert r.json()["rows"]["first"]["volume"] == 100                                        # other rows untouched
-    r = c.post("/api/ding/settings", json={"volume": 20, "returning": False}, headers=h)    # old keys write through to saved fields
-    assert r.json()["rows"]["first"]["volume"] == 20 and r.json()["rows"]["new_stream"]["on"] is False and r.json()["volume"] == 20
+    c.post("/api/ding/settings", json={"rows": {"new_stream": {"on": False}}}, headers=h)
+    r = c.post("/api/ding/settings", json={"volume": 20, "returning": True}, headers=h)     # old keys write through to saved fields
+    assert r.json()["rows"]["first"]["volume"] == 20 and r.json()["rows"]["new_stream"]["on"] is True and r.json()["volume"] == 20
     for bad in ({"rows": []}, {"rows": {"nope": {}}}, {"rows": {"first": 5}}, {"rows": {"first": {"volume": "x"}}},
                 {"rows": {"first": {"sound": str(tmp_path / "missing.mp3")}}}, {"gap_h": "x"}, {"gap_h": [1]}, [], "x"):
         assert c.post("/api/ding/settings", json=bad, headers=h).status_code == 400, bad

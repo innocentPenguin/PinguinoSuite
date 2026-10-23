@@ -719,7 +719,7 @@ def test_ding_once_per_user_per_stream_and_per_platform(tmp_path, monkeypatch):
     assert not d.observe(_m("pinguinob0t")) and not d.observe(_m("me", is_self=True))
     while not d.q.empty():
         d.play_one(d.q.get())
-    assert len(pl.played) == 2 and pl.played[0][1] == 24
+    assert len(pl.played) == 2 and pl.played[0][1] == 90
 
 
 def test_ding_session_resets_after_gap_and_survives_restart(tmp_path, monkeypatch):
@@ -736,7 +736,7 @@ def test_ding_first_ever_sound_burst_limit_master_and_missing_file(tmp_path, mon
     d, pl, clk, s = _ding(tmp_path, monkeypatch, ding_first_ever=True)
     other = tmp_path / "first.wav"
     other.write_bytes(b"y")
-    s["ding_first_sound"] = str(other)
+    s["ding_rows"] = {"first": {"sound": str(other)}}
     d.observe(_m("new1", first_time=True))
     for i in range(10):
         d.observe(_m(f"raid{i}"))
@@ -748,7 +748,7 @@ def test_ding_first_ever_sound_burst_limit_master_and_missing_file(tmp_path, mon
     d.master = lambda: False
     d._master = (0, True)
     assert not d.observe(_m("auxuser"))                            # auxiliary device stays silent
-    s["ding_first_sound"] = str(tmp_path / "nope.mp3")
+    s["ding_rows"] = {"first": {"sound": str(tmp_path / "nope.mp3")}}
     assert d.play_one("first") is False and d.stats["errors"] == 1
 
 
