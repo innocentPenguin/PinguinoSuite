@@ -22,6 +22,9 @@ namespace PinguinoHost
             d["ActivityAwards"] = true;
             d["CustomsPlay"] = 5; d["CustomsWin"] = 10; d["CompPlay"] = 10; d["CompWin"] = 25; d["CasPlay"] = 5; d["CasWin"] = 15;
             d["DepreciationOn"] = true; d["DepreciationDryRun"] = true; d["DepreciationPct"] = 2.5; d["DepreciationThreshold"] = 100000; d["DepreciationBasis"] = "total";
+            // marginal bands: only the part of a balance inside a band is charged at that band's %. "to" 0/missing = no upper end. Add more rows any time; an empty list falls back to the flat DepreciationPct.
+            d["DepreciationTiers"] = new JArray { new JObject { { "from", 100000 }, { "to", 250000 }, { "pct", 1 } }, new JObject { { "from", 250000 }, { "to", 500000 }, { "pct", 2 } }, new JObject { { "from", 500000 }, { "to", 1000000 }, { "pct", 4 } }, new JObject { { "from", 1000000 }, { "to", 0 }, { "pct", 6 } } };
+            d["DepreciationCap"] = 0;   // most anyone can lose in one stream (0 = no cap)
             d["DepreciationExempt"] = new JArray(); d["DepreciationReminder"] = true; d["StreamEndGraceMin"] = 10;
             d["LoansOn"] = true; d["LoanPerHour"] = 100; d["LoanCap"] = 5000; d["LoanMinWatchHours"] = 1; d["LoanInterestPct"] = 5; d["LoanDefaultStreams"] = 10;
         }
@@ -63,7 +66,7 @@ namespace PinguinoHost
                 led[id] = new JObject { { "login", login }, { "delta", delta }, { "reason", note != "" ? note : source }, { "source", source }, { "note", note }, { "balance", before + delta }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 Save();
             }
-            if (source != "loan" && source != "loan_repay" && source != "depreciation") Periods.Add(login, delta < 0 ? "points_spent" : (source == "backpay" || source == "grant") ? "points_backpay" : "points", Math.Abs((double)delta), 0, "ap:" + id);
+            if (source != "loan" && source != "loan_repay" && source != "depreciation" && !source.StartsWith("p2p_")) Periods.Add(login, delta < 0 ? "points_spent" : (source == "backpay" || source == "grant") ? "points_backpay" : "points", Math.Abs((double)delta), 0, "ap:" + id);
             return null;
         }
 
@@ -90,6 +93,7 @@ namespace PinguinoHost
         {
             if (!Lease.MayRun) return;
             try { AwardMatches(); } catch (Exception ex) { Clog.Warn("economy", "match awards failed: " + ex.Message); }
+            try { LoansP2P.Tick(); } catch (Exception ex) { Clog.Warn("economy", "p2p loan tick failed: " + ex.Message); }
             bool live = IsLive(); bool open; lock (L) open = (bool?)StreamDoc()["open"] == true;
             if (live) _offlineSince = DateTime.MinValue;
             if (live && !open) StartStream();
@@ -189,12 +193,29 @@ namespace PinguinoHost
         {
             if (set == null) lock (L) set = Settings();
             double thr = D(set["DepreciationThreshold"]), pct = D(set["DepreciationPct"]); bal = Math.Floor(bal);
+            var tiers = set["DepreciationTiers"] as JArray;
+            if (tiers != null && tiers.Count > 0)
+            {
+                double sum = 0;
+                foreach (JObject t in tiers.OfType<JObject>())
+                {
+                    double from = Math.Max(thr, D(t["from"])), to = D(t["to"]) > 0 ? D(t["to"]) : double.MaxValue, p = D(t["pct"]);
+                    if (p <= 0 || bal <= from) continue;
+                    sum += (Math.Min(bal, to) - from) * p / 100.0;
+                }
+                long tl = (long)Math.Floor(sum); if (sum > 0 && tl < 1) tl = 1;
+                double cap = D(set["DepreciationCap"]); if (cap > 0 && tl > cap) tl = (long)cap;
+                return Math.Max(0, Math.Min(tl, (long)bal));
+            }
             if (pct <= 0 || bal <= thr) return 0;
             double basis = ((string)set["DepreciationBasis"] ?? "total").ToLowerInvariant() == "excess" ? bal - thr : bal;
             long loss = (long)Math.Floor(basis * pct / 100.0); if (loss < 1) loss = 1;
             if (bal - loss < thr && ((string)set["DepreciationBasis"] ?? "total").ToLowerInvariant() == "excess") loss = (long)(bal - thr);
             return Math.Max(0, loss);
         }
+        static bool HasTiers(JObject set) { var t = set["DepreciationTiers"] as JArray; return t != null && t.Count > 0; }
+        /// <summary>what this balance loses as a share of itself (for "about Y%")</summary>
+        static double EffectivePct(double bal, long loss) { return bal >= 1 ? Math.Round(loss * 100.0 / bal, 2) : 0; }
         static List<KeyValuePair<string, double>> Holders(JObject set)
         {
             var al = Boards.AliasMap(); var snap = Snapshot(al); var ex = DepExempt(set); double thr = D(set["DepreciationThreshold"]);
@@ -218,7 +239,7 @@ namespace PinguinoHost
             {
                 long loss = DepreciationFor(h.Value, set); if (loss <= 0) continue;
                 lines.Add(new JObject { { "login", h.Key }, { "balance", h.Value }, { "loss", loss } });
-                if (!dry && Award(h.Key, -loss, "depreciation", "Depreciation " + D(set["DepreciationPct"]).ToString("0.##", CultureInfo.InvariantCulture) + "% over " + Num(D(set["DepreciationThreshold"])), "depr:" + sid + ":" + h.Key) == null) { total += loss; taken++; }
+                if (!dry && Award(h.Key, -loss, "depreciation", "Depreciation on points over " + Num(D(set["DepreciationThreshold"])) + (HasTiers(set) ? "" : " (" + D(set["DepreciationPct"]).ToString("0.##", CultureInfo.InvariantCulture) + "%)"), "depr:" + sid + ":" + h.Key) == null) { total += loss; taken++; }
                 else if (dry) total += loss;
             }
             string line = DateTime.UtcNow.ToString("o") + "\t" + sid + "\t" + (dry ? "DRYRUN would take" : "took") + " " + total + " from " + lines.Count + " people: " + string.Join(", ", lines.Take(10).Select(x => (string)x["login"] + " -" + (long)x["loss"]));
@@ -231,12 +252,14 @@ namespace PinguinoHost
         }
 
         /// <summary>what depreciation would do right now (nobody is charged)</summary>
-        public static JObject DepreciationPreview()
+        public static JObject DepreciationPreview(JObject over = null)
         {
-            JObject set; lock (L) set = Settings(); var hs = Holders(set); long total = 0;
-            var rows = new JArray(); foreach (var h in hs) { long loss = DepreciationFor(h.Value, set); total += loss; if (rows.Count < 50) rows.Add(new JObject { { "login", h.Key }, { "balance", h.Value }, { "loss", loss } }); }
+            JObject set; lock (L) set = (JObject)Settings().DeepClone();
+            if (over != null) foreach (var k in new[] { "DepreciationTiers", "DepreciationCap", "DepreciationThreshold", "DepreciationPct", "DepreciationBasis" }) if (over[k] != null) set[k] = over[k];
+            var hs = Holders(set); long total = 0;
+            var rows = new JArray(); foreach (var h in hs) { long loss = DepreciationFor(h.Value, set); total += loss; if (rows.Count < 50) rows.Add(new JObject { { "login", h.Key }, { "balance", h.Value }, { "loss", loss }, { "effectivePct", EffectivePct(h.Value, loss) } }); }
             JObject st; lock (L) st = (JObject)StreamDoc().DeepClone();
-            return new JObject { { "ok", true }, { "on", (bool?)set["DepreciationOn"] != false }, { "dryRun", (bool?)set["DepreciationDryRun"] != false }, { "pct", D(set["DepreciationPct"]) }, { "threshold", D(set["DepreciationThreshold"]) }, { "basis", (string)set["DepreciationBasis"] ?? "total" },
+            return new JObject { { "ok", true }, { "on", (bool?)set["DepreciationOn"] != false }, { "dryRun", (bool?)set["DepreciationDryRun"] != false }, { "pct", D(set["DepreciationPct"]) }, { "threshold", D(set["DepreciationThreshold"]) }, { "basis", (string)set["DepreciationBasis"] ?? "total" }, { "tiers", set["DepreciationTiers"] }, { "cap", D(set["DepreciationCap"]) },
                 { "people", hs.Count }, { "total", total }, { "top", rows }, { "stream", st } };
         }
 
@@ -261,8 +284,8 @@ namespace PinguinoHost
                     if ((DateTime.UtcNow - _lastRemind).TotalSeconds < 15) return;   // one reminder at a time in the whole chat
                     rem.Add(login); _lastRemind = DateTime.UtcNow; Save();
                 }
-                double pct = D(set["DepreciationPct"]); long loss = DepreciationFor(bal, set);
-                say("@" + user + " you hold " + Num(bal) + " " + CurrencyName + "; over " + Num(D(set["DepreciationThreshold"])) + " you lose " + pct.ToString("0.##", CultureInfo.InvariantCulture) + "% each stream (about " + Num(loss) + " at the end of this one). Spend, gamble or give some away.");
+                long loss = DepreciationFor(bal, set); double pct = EffectivePct(bal, loss);
+                say("@" + user + " you hold " + Num(bal) + " " + CurrencyName + "; points over " + Num(D(set["DepreciationThreshold"])) + " lose value each stream: about " + Num(loss) + " (" + pct.ToString("0.##", CultureInfo.InvariantCulture) + "%) at the end of this one. Spend, gamble or give some away.");
             }
             catch (Exception ex) { Clog.Warn("economy", "reminder failed: " + ex.Message); }
         }
@@ -294,6 +317,7 @@ namespace PinguinoHost
             Func<string, JObject> no = m => new JObject { { "ok", false }, { "error", m } };
             if (login == "" || Boards.IsBot(login)) return no("no user");
             if ((bool?)set["LoansOn"] == false) return no("the bank is closed for loans right now");
+            if (LoansP2P.Defaulted(login) && !Applied("loan-" + (reqId ?? ""))) return no("you have an overdue loan: repay it before borrowing again");
             string id = string.IsNullOrEmpty(reqId) ? "loan:" + login + ":" + DateTimeOffset.UtcNow.ToUnixTimeSeconds() : "loan-" + reqId;
             if (Applied(id)) return new JObject { { "ok", true }, { "message", "already applied" } };
             JObject ln; lock (L) ln = Loans()[login] as JObject;
@@ -374,7 +398,7 @@ namespace PinguinoHost
         static readonly Dictionary<string, string> Labels = new Dictionary<string, string> {
             { "watching", "Watching the stream" }, { "imported", "Imported balance" }, { "customs_play", "Playing customs" }, { "customs_win", "Winning customs" }, { "comp_play", "Playing competitive" }, { "comp_win", "Winning competitive" },
             { "cas_play", "Playing casual" }, { "cas_win", "Winning casual" }, { "welcome", "Welcome bonus" }, { "gamble", "Gambling" }, { "slots", "Slots" }, { "duel", "Duels" }, { "gifts", "Gifts between viewers" }, { "shop", "Shop" },
-            { "loan", "Loans taken" }, { "loan_repay", "Loan repayments" }, { "depreciation", "Depreciation" }, { "grant", "Given by the streamer" }, { "other", "Other" }, { "cheer", "Cheers" }, { "sub", "Subs" }, { "gift", "Gift subs" }, { "tip", "Tips" }, { "follow", "Follow" }, { "raid_in", "Raid arrivals" }, { "raid_out", "Raids led" } };
+            { "loan", "Loans taken" }, { "p2p_out", "Loans to other viewers" }, { "p2p_in", "Loans from other viewers" }, { "p2p_repay", "Loan repayments (to a viewer)" }, { "p2p_repaid", "Loan repaid to you" }, { "loan_repay", "Loan repayments" }, { "depreciation", "Depreciation" }, { "grant", "Given by the streamer" }, { "other", "Other" }, { "cheer", "Cheers" }, { "sub", "Subs" }, { "gift", "Gift subs" }, { "tip", "Tips" }, { "follow", "Follow" }, { "raid_in", "Raid arrivals" }, { "raid_out", "Raids led" } };
         static string Label(string s) { string l; return Labels.TryGetValue(s, out l) ? l : s; }
 
         /// <summary>everything the Points page needs for one person: GET /api/economy/me?login=</summary>
@@ -474,13 +498,15 @@ namespace PinguinoHost
             JObject st; lock (L) st = StreamDoc();
             bool open = (bool?)st["open"] == true; bool dry = (bool?)set["DepreciationDryRun"] != false;
             var res = new JObject { { "ok", true }, { "login", c }, { "currency", CurrencyName }, { "balance", Math.Floor(bal) }, { "rank", cx.Rank.ContainsKey(c) ? cx.Rank[c] : 0 }, { "of", cx.Of }, { "minutes", minutes },
-                { "depreciation", new JObject { { "on", (bool?)set["DepreciationOn"] != false }, { "dryRun", dry }, { "pct", D(set["DepreciationPct"]) }, { "threshold", D(set["DepreciationThreshold"]) }, { "basis", (string)set["DepreciationBasis"] ?? "total" },
+                { "depreciation", new JObject { { "on", (bool?)set["DepreciationOn"] != false }, { "dryRun", dry }, { "pct", HasTiers(set) ? EffectivePct(bal, dep) : D(set["DepreciationPct"]) }, { "threshold", D(set["DepreciationThreshold"]) }, { "basis", (string)set["DepreciationBasis"] ?? "total" }, { "perStream", dep }, { "effectivePct", EffectivePct(bal, dep) },
                     { "amount", dep }, { "applies", dep > 0 }, { "when", open ? "end of this stream" : "end of the next stream" }, { "streamOpen", open } } },
                 { "loans", LoanView(c, set, minutes) },
                 { "earnings", new JArray(groups.Values.OrderByDescending(g => (double)g["earned"] + (double)g["spent"])) },
                 { "ledger", new JArray(Enumerable.Reverse(rows).Take(Math.Max(1, Math.Min(500, ledgerLimit))).Select(x => { var y = (JObject)x.DeepClone(); y["label"] = Label((string)y["source"]); return y; })) },
-                { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) }, { "tipped", TippedView(c) }, { "sub", SubRoll.ViewOf(c) } };
+                { "hidden", PageHidden(c) }, { "giveToday", Gamble.GiveToday(c) }, { "giveLimit", Gamble.GiveLimit() }, { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) }, { "tipped", TippedView(c) }, { "sub", SubRoll.ViewOf(c) } };
             res["categories"] = Categories(rows, watched, imported, (JArray)res["streams"]);
+            int actTotal; res["activity"] = Activity(c, rows, bal, 300, out actTotal); res["activityTotal"] = actTotal;   // the checkbook: newest first, running balance
+            try { res["p2p"] = LoansP2P.ViewOf(c); } catch (Exception ex) { Clog.Warn("p2p", "view failed: " + ex.Message); }
             var dp = (JObject)res["depreciation"]; dp["ratePct"] = dp["pct"]; dp["nextAmount"] = dp["amount"]; dp["nextAt"] = null; dp["nextAtKind"] = open ? "end_of_stream" : "next_stream_start";
             return res;
         }
@@ -491,7 +517,7 @@ namespace PinguinoHost
         /// <summary>the knobs the Points page explains to viewers (no secrets in there)</summary>
         public static JObject PublicSettings()
         {
-            JObject s; lock (L) s = Settings(); var o = new JObject();
+            JObject s; lock (L) s = Settings(); var o = new JObject(); try { o["p2p"] = LoansP2P.Public(); } catch (Exception) { }
             foreach (var k in new[] { "CurrencyName", "ActivityAwards", "CustomsPlay", "CustomsWin", "CompPlay", "CompWin", "CasPlay", "CasWin", "DepreciationOn", "DepreciationDryRun", "DepreciationPct", "DepreciationThreshold", "DepreciationBasis", "LoansOn", "LoanPerHour", "LoanCap", "LoanMinWatchHours", "LoanInterestPct", "LoanDefaultStreams" }.Concat(PointsKeys)) o[k] = s[k];
             return o;
         }
@@ -502,6 +528,7 @@ namespace PinguinoHost
         {
             try
             {
+                if (path == "/api/economy/public" && method == "GET") return PublicView(login);
                 if ((path == "/api/economy/me" || path == "/api/points") && method == "GET") return Me2(login);
                 if (path == "/api/points/loan" && method == "POST") { var q = new JObject { { "action", body["action"] }, { "login", body["login"] ?? login }, { "amount", body["amount"] }, { "id", body["id"] } }; return Phase2Api("/api/economy/loan", "POST", login, q); }
                 if (path == "/api/economy/preview") return Preview(body);
@@ -509,7 +536,7 @@ namespace PinguinoHost
                 if (path == "/api/economy/points-settings") return PointsSettingsApi(body, method == "POST");
                 if (path == "/api/economy/event" && method == "POST") return EventApi(body);
                 if (path == "/api/economy/streams" && method == "GET") return new JObject { { "ok", true }, { "login", Canon(Boards.AliasMap(), login) }, { "streams", StreamsView(login) } };
-                if (path == "/api/economy/depreciation" && method == "GET") return DepreciationPreview();
+                if (path == "/api/economy/depreciation") return DepreciationPreview(method == "POST" ? body : null);
                 if (path == "/api/economy/loan" && method == "POST")
                 {
                     string act = ((string)body["action"] ?? "").ToLowerInvariant(); string who = (string)body["login"] ?? ""; string rid = (string)body["id"];

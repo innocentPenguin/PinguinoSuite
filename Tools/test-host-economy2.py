@@ -7,7 +7,7 @@ PORT = 8970; B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pgec2_'); out = os.path.join(d, 'out.txt')
 os.makedirs(os.path.join(d, 'runtime')); os.makedirs(os.path.join(d, 'economy'))
 json.dump({'Channel': 'streamer1', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
-json.dump({'Earning': False, 'WelcomeBonus': 0}, open(os.path.join(d, 'economy', 'settings.json'), 'w'))
+json.dump({'Earning': False, 'WelcomeBonus': 0, 'DepreciationTiers': []}, open(os.path.join(d, 'economy', 'settings.json'), 'w'))
 json.dump({'earned': {'zed': {'points': 0, 'minutes': 600}}}, open(os.path.join(d, 'economy', 'points.json'), 'w'))
 now = int(time.time())
 def P(*n): return [{'Username': x} for x in n]

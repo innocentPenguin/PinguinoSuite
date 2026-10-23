@@ -71,7 +71,7 @@ namespace PinguinoHost
             if (!LoadModules()) return 2;
             if (!sim) WireTwitch(secrets);
             WireServices(secrets, sim);
-            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); WheelEmoji.Start(); SiteTeach.Start(); LobbyPush.Start(); Redeems.Start(); SiteCommands.Start(); EventLog.Start(); Replays.Start(); SiteShop.Start(); Periods.Start(); SiteEconomy.Start(); OverlayChat.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start(); Streaks.Start(); Boards.Start(); Emotes.Start(); Timers.Start(); StreamTimers.Start(); Reminders.Start(); Economy.Start(); ProfileSync.Start();
+            Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Auto.SeedDefaults(); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); WheelEmoji.Start(); SiteTeach.Start(); LobbyPush.Start(); Redeems.Start(); SiteCommands.Start(); EventLog.Start(); Replays.Start(); SiteShop.Start(); Periods.Start(); SiteEconomy.Start(); ModAudit.Start(); OverlayChat.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start(); Streaks.Start(); Boards.Start(); Emotes.Start(); Timers.Start(); StreamTimers.Start(); Reminders.Start(); Economy.Start(); ProfileSync.Start();
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
             if (!argv.Contains("--no-sync")) StartSyncTimer();

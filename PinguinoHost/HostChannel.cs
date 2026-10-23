@@ -16,6 +16,7 @@ namespace PinguinoHost
         public static void Audit(string who, string what, string detail)
         {
             try { Directory.CreateDirectory(Path.GetDirectoryName(AuditP)); File.AppendAllText(AuditP, DateTime.UtcNow.ToString("o") + "\t" + who + "\t" + what + "\t" + (detail ?? "").Replace('\n', ' ').Replace('\r', ' ') + "\n"); } catch (Exception) { }
+            ModAudit.Log(who, "", what, detail);
             Clog.Info("channel", who + " " + what + " " + detail);
         }
 

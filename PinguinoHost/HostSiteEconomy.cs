@@ -18,7 +18,7 @@ namespace PinguinoHost
         static readonly object L = new object(); static bool _started; static string _result = "not started";
         static string P { get { return System.IO.Path.Combine(HostApi.DataDir, "site_economy.json"); } }
         static readonly Regex RxId = new Regex("^[A-Za-z0-9_-]{1,64}$"), RxLogin = new Regex("^[a-z0-9_]{1,25}$");
-        static readonly Dictionary<string, string> Sent = new Dictionary<string, string>(); static DateTime _lastPush = DateTime.MinValue;
+        static string _marketSent = ""; static readonly Dictionary<string, string> Sent = new Dictionary<string, string>(); static DateTime _lastPush = DateTime.MinValue;
         static int PushSec { get { int v; return int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_ECONOMY_PUSH_SEC"), out v) && v > 0 ? v : 60; } }
 
         static JObject Doc() { var d = SiteHttp.ReadJ(P); if (!(d["processed"] is JObject)) d["processed"] = new JObject(); return d; }
@@ -50,14 +50,15 @@ namespace PinguinoHost
         static int PushUsers(string key)
         {
             var cx = Economy.BuildCtx();
-            var logins = cx.S.Users.Where(k => !Boards.IsBot(k.Key) && (k.Value.Points >= 1 || cx.Led.ContainsKey(k.Key))).Select(k => k.Key).Concat(Economy.LoanLogins()).Distinct().ToList();
+            var logins = cx.S.Users.Where(k => !Boards.IsBot(k.Key) && (k.Value.Points >= 1 || cx.Led.ContainsKey(k.Key))).Select(k => k.Key).Concat(Economy.LoanLogins()).Concat(LoansP2P.Logins()).Distinct().ToList();
+            var market = LoansP2P.MarketView(); string mh = Hash(market.ToString(Newtonsoft.Json.Formatting.None));   // the open loan requests ride along on every push
             var batch = new JArray(); var hashes = new Dictionary<string, string>(); int total = 0;
             Func<bool> flush = () =>
             {
-                if (batch.Count == 0) return true;
-                JObject r; int code = SiteHttp.Call("POST", "/api/bot/economy/users", new JObject { { "currency", Economy.CurrencyName }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "settings", Economy.PublicSettings() }, { "users", batch } }, key, out r);
+                if (batch.Count == 0 && _marketSent == mh) return true;
+                JObject r; int code = SiteHttp.Call("POST", "/api/bot/economy/users", new JObject { { "currency", Economy.CurrencyName }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "settings", Economy.PublicSettings() }, { "market", market }, { "users", batch } }, key, out r);
                 if (code == 401) { _result = "site refused the key (HTTP 401)"; return false; }
-                if (code == 200) { total += batch.Count; foreach (var kv in hashes) Sent[kv.Key] = kv.Value; }
+                if (code == 200) { total += batch.Count; _marketSent = mh; foreach (var kv in hashes) Sent[kv.Key] = kv.Value; }
                 else if (code == 404) return false;   // the site has no Points page yet
                 batch = new JArray(); hashes = new Dictionary<string, string>(); return code != 0 && code < 500;
             };
@@ -68,7 +69,7 @@ namespace PinguinoHost
                 batch.Add(v); hashes[l] = h;
                 if (batch.Count >= 100 && !flush()) return total;
             }
-            flush(); return total;
+            flush(); return total;   // (also sends an empty user list when only the market changed)
         }
 
         static void Process(JObject s)
@@ -81,14 +82,28 @@ namespace PinguinoHost
                 var seen = pr[id] as JObject; if (seen != null) { int again = (int?)seen["again"] ?? 0; if ((bool?)seen["posted"] == true && again < 20) { seen["posted"] = false; seen["again"] = again + 1; SiteHttp.WriteJ(P, d); } return; }   // the site still lists it: say the answer again, never decide again
                 JObject r;
                 if (!RxLogin.IsMatch(login)) r = new JObject { { "ok", false }, { "error", "bad user" } };
+                else if (act == "give") r = SiteGive(login, s, id);
+                else if (act == "page_hide") r = Economy.SetHidden(login, (bool?)s["hide"] == true);
                 else if (act == "loan_take") r = Economy.LoanTake(login, amount, "site-" + id);
+                else if (act == "loan_repay" && !string.IsNullOrEmpty((string)s["loanId"])) r = LoansP2P.Handle(login, act, s, "site-" + id);   // a loanId means a loan from another viewer
                 else if (act == "loan_repay") r = Economy.LoanRepay(login, amount, "site-" + id);
+                else if (act.StartsWith("loan_")) r = LoansP2P.Handle(login, act, s, "site-" + id);
                 else r = new JObject { { "ok", false }, { "error", "unknown action" } };
                 bool ok = (bool?)r["ok"] == true; string msg = Regex.Replace((string)(ok ? r["message"] : r["error"]) ?? "", @"\s+", " ").Trim(); if (msg.Length > 200) msg = msg.Substring(0, 200);
-                pr[id] = new JObject { { "login", login }, { "action", act }, { "status", ok ? "done" : "rejected" }, { "message", msg }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "posted", false } };
+                pr[id] = new JObject { { "login", login }, { "action", act }, { "status", ok ? "done" : "rejected" }, { "message", msg }, { "data", ok ? r["data"] : null }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "posted", false } };
                 SiteHttp.WriteJ(P, d);
                 Sent.Remove(login);   // their view changed: send it again on the next push
             }
+        }
+
+        /// <summary>site "Give points": same rules as !give (min, no self, no bots, balance, daily cap), unique ids per queue request, ledger rows "Gave"/"Received" for both</summary>
+        static JObject SiteGive(string login, JObject s, string id)
+        {
+            string to = ((string)s["toLogin"] ?? "").Trim().TrimStart('@').ToLowerInvariant();
+            if (!RxLogin.IsMatch(to)) return new JObject { { "ok", false }, { "error", "pick someone to give to." } };
+            var r = Gamble.Give(login, to, (long?)s["amount"] ?? 0, "site-" + id);
+            if ((bool?)r["ok"] == true) { Sent.Remove(to); return new JObject { { "ok", true }, { "message", (string)r["message"] }, { "data", new JObject { { "balance", r["balance"] }, { "givenToday", r["givenToday"] }, { "limit", r["limit"] } } } }; }
+            return r;
         }
 
         static int Flush(string key)
@@ -99,7 +114,7 @@ namespace PinguinoHost
             foreach (var kv in todo)
             {
                 var o = kv.Value; string lg = (string)o["login"];
-                JObject r; int code = SiteHttp.Call("POST", "/api/bot/economy/answers", new JObject { { "id", kv.Key }, { "status", o["status"] }, { "message", o["message"] }, { "balance", Economy.Balance(lg) }, { "owed", Economy.LoanOwed(lg) } }, key, out r);
+                JObject r; int code = SiteHttp.Call("POST", "/api/bot/economy/answers", new JObject { { "id", kv.Key }, { "status", o["status"] }, { "message", o["message"] }, { "data", o["data"] }, { "balance", Economy.Balance(lg) }, { "owed", Economy.LoanOwed(lg) } }, key, out r);
                 if (code == 401) { _result = "site refused the key (HTTP 401)"; return sent; }
                 if (code == 0 || code >= 500 || code == 429) continue;
                 lock (L) { var d = Doc(); var e = ((JObject)d["processed"])[kv.Key] as JObject; if (e == null) continue; e["posted"] = true; e["http"] = code; SiteHttp.WriteJ(P, d); if (code == 200) sent++; else Clog.Warn("economy", "answer for " + kv.Key + " not accepted (HTTP " + code + ")"); }

@@ -20,9 +20,9 @@ namespace PinguinoHost
         {
             return new JObject { { "enabled", true }, { "cooldownSec", 15 }, { "minBet", 1 }, { "maxBet", 0 },
                 { "gambleWinChance", 0.45 }, { "gamblePayout", 2.0 },
-                { "slotsEnabled", true }, { "slotsSymbols", new JArray("🍒", "🍋", "🔔", "⭐", "7️⃣", "💎", "🐧") }, { "slotsPairPayout", 1.5 }, { "slotsTriplePayout", 5.0 }, { "slotsJackpotSymbol", "🐧" }, { "slotsJackpotPayout", 10.0 },
+                { "slotsEnabled", true }, { "slotsSymbols", new JArray("🍒", "🐟", "⭐", "⚽", "🐧") }, { "slotsPairPayout", 1.5 }, { "slotsTriplePayout", 5.0 }, { "slotsJackpotSymbol", "🐧" }, { "slotsJackpotPayout", 10.0 },
                 { "duelEnabled", true }, { "duelTimeoutSec", 60 }, { "duelHouseCutPercent", 0 },
-                { "giveEnabled", true }, { "giveMin", 1 } };
+                { "giveEnabled", true }, { "giveMin", 1 }, { "giveDailyMax", 25000 } };
         }
         public static JObject Config()
         {
@@ -108,6 +108,41 @@ namespace PinguinoHost
         }
         static string Reel(string[] r) { return string.Join(" ", r); }
 
+        // ---- !give / site Give: one door, one set of rules ----
+        static string GiveP { get { return Path.Combine(HostApi.DataDir, "economy", "give_daily.json"); } }
+        static string GiveDay() { return DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture); }
+        public static long GiveLimit() { return (long)N("giveDailyMax", 25000); }
+        static JObject GiveDoc()
+        {
+            JObject d = null; try { if (File.Exists(GiveP)) d = JObject.Parse(File.ReadAllText(GiveP, Encoding.UTF8)); } catch (Exception) { }
+            if (d == null || (string)d["day"] != GiveDay()) d = new JObject { { "day", GiveDay() }, { "users", new JObject() } };
+            return d;
+        }
+        public static long GiveToday(string login) { lock (L) { var u = GiveDoc()["users"] as JObject; return (long?)u[(login ?? "").ToLowerInvariant()] ?? 0; } }
+        /// <summary>give points to someone: min, no self, no bots, balance, the daily cap (giveDailyMax, 0 = none), unique ids. Returns {ok, error|message, balance, givenToday, limit}.</summary>
+        public static JObject Give(string from, string to, long amount, string reqId = null)
+        {
+            string me = Canon(from), tl = Canon(to), cur = Economy.CurrencyName;
+            Func<string, JObject> no = why => new JObject { { "ok", false }, { "error", why }, { "balance", Economy.Balance(me) }, { "givenToday", GiveToday(me) }, { "limit", GiveLimit() } };
+            if (!B("enabled") || !B("giveEnabled")) return no("giving points is switched off.");
+            if (tl == "" || tl == me) return no("pick someone else to give to.");
+            bool bot = false; try { bot = Boards.IsBot(tl); } catch (Exception) { }
+            if (bot) return no("bots do not need " + cur + ".");
+            if (amount < Math.Max(1, (long)N("giveMin", 1))) return no("the minimum is " + Math.Max(1, (long)N("giveMin", 1)) + " " + cur + ".");
+            long bal = Economy.Balance(me); if (amount > bal) return no("you only have " + bal + " " + cur + ".");
+            lock (L)
+            {
+                long lim = GiveLimit(), given = GiveToday(me);
+                if (lim > 0 && given + amount > lim) return no(given >= lim ? "you have given the daily limit (" + lim + " " + cur + "), try again tomorrow." : "the daily give limit is " + lim + " " + cur + " (you can still give " + (lim - given) + " today).");
+                string id = reqId != null ? "give-" + reqId : Id("give", me);
+                string err = Economy.Spend(id, me, amount, "give to " + tl); if (err != null) return no(err + ".");
+                Economy.Credit(id + "-in", tl, amount, "given by " + me);
+                var d = GiveDoc(); var u = (JObject)d["users"]; u[me] = ((long?)u[me] ?? 0) + amount;
+                try { Directory.CreateDirectory(Path.GetDirectoryName(GiveP)); File.WriteAllText(GiveP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
+                return new JObject { { "ok", true }, { "message", "gave " + amount + " " + cur + " to " + Boards.DisplayName(tl) }, { "balance", Economy.Balance(me) }, { "givenToday", (long)u[me] }, { "limit", lim }, { "id", id } };
+            }
+        }
+
         public static void Handle(string user, string cmd, string[] args, Action<string> say)
         {
             try
@@ -136,12 +171,10 @@ namespace PinguinoHost
                     if (!B("giveEnabled")) return;
                     if (args.Length < 2) { Uncool(me); bad("usage: !give @user <amount>"); return; }
                     string to = Canon(args[0]); var a = Amount(args[1], bal);
-                    if (to == "" || to == me) { Uncool(me); bad("pick someone else to give to."); return; }
-                    if (a == null || a.Value < Math.Max(1, (long)N("giveMin", 1))) { Uncool(me); bad("usage: !give @user <amount>"); return; }
-                    if (a.Value > bal) { Uncool(me); bad("you only have " + bal + " " + cur + "."); return; }
-                    string id = Id("give", me); string err = Economy.Spend(id, me, a.Value, "give to " + to); if (err != null) { bad(err + "."); return; }
-                    Economy.Credit(id + "-in", to, a.Value, "given by " + me);
-                    Out(say, "@" + user + " gave " + a.Value + " " + cur + " to " + Boards.DisplayName(to) + ". Thank you for sharing!", "give", "win", user, a.Value, a.Value, Economy.Balance(me), Boards.DisplayName(to), "", "", id); return;
+                    if (a == null) { Uncool(me); bad("usage: !give @user <amount>"); return; }
+                    var gr = Give(me, to, a.Value);
+                    if ((bool?)gr["ok"] != true) { Uncool(me); bad((string)gr["error"]); return; }
+                    Out(say, "@" + user + " gave " + a.Value + " " + cur + " to " + Boards.DisplayName(to) + ". Thank you for sharing!", "give", "win", user, a.Value, a.Value, Economy.Balance(me), Boards.DisplayName(to), "", "", (string)gr["id"]); return;
                 }
                 if (cmd == "!duel")
                 {

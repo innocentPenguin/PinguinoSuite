@@ -90,7 +90,7 @@ One event per finished game action, forwarded like the other Twitch events (even
 | `outcome` | `win`, `lose`, `jackpot`, `challenge` (duel offered), `declined`, `expired`, `broke` (balance 0), `invalid` (needs `reason`) |
 | `user`, `display` | the player (login, display name). For a duel result `user` = the winner, `opponent` = the loser; for a challenge `user` = challenger, `opponent` = challenged |
 | `amount`, `payout`, `balance` | stake, total paid out (stake included, as the Host credits it), balance after |
-| `reel` | slots only: the three symbols as real Unicode emoji, e.g. `🍒 🍋 🔔` (UTF-8, no text codes) |
+| `reel` | slots only: the three symbols as real Unicode emoji, e.g. `🍒 🐟 ⭐` (UTF-8, no text codes) |
 | `reason` | for `invalid` / `expired`: the Host's own plain sentence, shown after the name |
 | `currency`, `timeoutSec` | currency name; duel accept window |
 | `optout` | `1` for a viewer who opted out: plain result, no banter |
@@ -98,4 +98,4 @@ One event per finished game action, forwarded like the other Twitch events (even
 
 **One reply guarantee:** the Host decides who posts, before sending. It sends `PgGame` only when Chatty can post (`chat_settings.json`: `Enabled` and `ChatReplies` and `GameVoice`); otherwise it says its own plain line as before. It never does both. Chatty also gives a plain result only (no banter) in a heated chat, and the shared 30 s duplicate guard stays on every send path. Chatty does not check IsLive for `PgGame` (the Host already decided).
 
-Slots symbols (`slotsSymbols` in `Data\economy\gambling.json`) should be real emoji, e.g. 🍒 🍋 🔔 ⭐ 7️⃣ 💎 🐧, with 🐧 as `slotsJackpotSymbol`.
+Slots symbols (`slotsSymbols` in `Data\economy\gambling.json`) should be real emoji, e.g. 🍒 🐟 ⭐ ⚽ 🐧, with 🐧 as `slotsJackpotSymbol`.

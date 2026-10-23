@@ -65,6 +65,7 @@ namespace PinguinoHost
             bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!command" || cmd == "!cmds" || cmd == "!cmd" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || cmd == "!uptime" || cmd == "!downtime" || Economy.IsViewerCommand(cmd) || Gamble.IsCommand(cmd);
             bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd);
             if (!viewer && !modOnly) return false;
+            if (modOnly && mod) ModAudit.Log(user, "mod", cmd, string.Join(" ", args));   // every mod command is on the audit log
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
             if (viewer && !Gamble.IsCommand(cmd) && !Economy.IsBankCommand(cmd))
             {

@@ -43,7 +43,7 @@ try:
     setcfg(gambleWinChance=1.0, gamblePayout=3.0, slotsSymbols=['x','x'], slotsTriplePayout=4.0, slotsJackpotSymbol='x', slotsJackpotPayout=6.0); time.sleep(1.2)
     r = ask('bob: !slots 10'); chk('slots jackpot', 'won 60' in r[0] and bal('bob') == 550, (r, bal('bob')))
     setcfg(gambleWinChance=1.0); time.sleep(1.2)   # no slotsSymbols in the file: the built-in defaults are real emoji, intact through the send path
-    r = ask('bob: !slots 1'); allowed = ['🍒', '🍋', '🔔', '⭐', '7️⃣', '💎', '🐧']
+    r = ask('bob: !slots 1'); allowed = ['🍒', '🐟', '⭐', '⚽', '🐧']
     reel = r[0].split(' ', 1)[1].split(' you won')[0].split(' no luck')[0] if r else ''
     got = []; rest = reel
     while rest:
