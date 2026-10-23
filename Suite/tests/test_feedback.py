@@ -23,6 +23,17 @@ class Feedback(unittest.TestCase):
         self.assertIn("Overlay is cut off", (self.d / (m["id"] + ".md")).read_text("utf8"))
         self.assertEqual(feedback.recent(self.d)[0]["id"], m["id"])
 
+    def test_folder_is_capped(self):
+        old = feedback.MAX_TOTAL_BYTES
+        feedback.MAX_TOTAL_BYTES = 1000
+        try:
+            feedback.save(self.d, "a" * 2000, "p", "r", now=1_700_000_000)
+            with self.assertRaises(ValueError) as cm:
+                feedback.save(self.d, "second", "p", "r", now=1_700_000_100)
+            self.assertIn("2 GB", str(cm.exception))
+        finally:
+            feedback.MAX_TOTAL_BYTES = old
+
     def test_health_snapshot_saved_and_scrubbed(self):
         h = {"ok": False, "problems": ["link is starting (ConnectTimeout)"], "modules": [{"id": "link", "state": "starting", "last_error": "token=abcdef123456"}],
              "disks": [{"drive": "D:\\", "free_gb": 3.2}]}

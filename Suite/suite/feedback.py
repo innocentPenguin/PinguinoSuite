@@ -9,6 +9,7 @@ from pathlib import Path
 
 MAX_NOTE = 8000
 MAX_IMAGES = 6
+MAX_TOTAL_BYTES = 2 * 1024 ** 3   # Data\feedback never grows past this: new reports are refused with a plain message until old ones are deleted
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 _MAGIC = ((b"\x89PNG\r\n\x1a\n", "png"), (b"\xff\xd8\xff", "jpg"), (b"GIF8", "gif"))
 _SECRET = re.compile(r"(oauth:[a-z0-9]{10,}|bearer\s+[a-z0-9._~+/=-]{16,}|(?:token|secret|password|api[_-]?key)\s*[:=]\s*\S{6,})", re.I)
@@ -39,6 +40,20 @@ def _ext(raw: bytes):
     return "webp" if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP" else None
 
 
+def dir_bytes(root: Path) -> int:
+    n = 0
+    try:
+        for p in root.rglob("*"):
+            try:
+                if p.is_file():
+                    n += p.stat().st_size
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return n
+
+
 def save(root: Path, note: str, page: str = "", route: str = "", url: str = "", version: str = "", images=None, now: float | None = None, health: dict | None = None) -> dict:
     note = scrub(str(note or "")).strip()
     images = list(images or [])
@@ -48,6 +63,8 @@ def save(root: Path, note: str, page: str = "", route: str = "", url: str = "", 
         raise ValueError(f"note too long (max {MAX_NOTE} characters)")
     if len(images) > MAX_IMAGES:
         raise ValueError(f"at most {MAX_IMAGES} screenshots")
+    if dir_bytes(root) > MAX_TOTAL_BYTES:
+        raise ValueError("the feedback folder is over 2 GB: open it from this page and delete handled reports first")
     t = now if now is not None else time.time()
     stamp = datetime.fromtimestamp(t).strftime("%Y%m%d-%H%M%S")
     base = f"{stamp}-{_slug(route or page)}"   # slug keeps a-z0-9 only: nothing token-like survives, scrubbed or not

@@ -216,6 +216,7 @@ ROOT = Path(os.environ["PINGUINO_SUITE_DIR"]) if FROZEN and os.environ.get("PING
 LOGS = Path(os.environ["PINGUINO_LOG_DIR"]) if os.environ.get("PINGUINO_LOG_DIR") else ROOT / "logs"   # tests point this at a temp dir so they never write the real event log
 LOGS.mkdir(parents=True, exist_ok=True)
 LOG_MAX = 10 * 1024 * 1024   # a module log bigger than this is moved to logs/Archive/ the next time its module starts (never deleted)
+LOG_WARN = 3 * LOG_MAX       # a RUNNING module's log past this is flagged (it cannot be moved while the module holds it open)
 
 
 def rotate_log(f, limit=LOG_MAX):
@@ -230,6 +231,50 @@ def rotate_log(f, limit=LOG_MAX):
         return dest
     except OSError:
         return None
+
+
+def pack_archive(folder=None):
+    """gzip every plain log in logs/Archive (82 MB of text becomes a few MB). Best effort, never deletes anything that did not compress."""
+    import gzip
+    d = folder or (LOGS / "Archive")
+    n = 0
+    try:
+        files = [p for p in d.iterdir() if p.is_file() and p.suffix in (".log", ".jsonl")]
+    except OSError:
+        return 0
+    for p in files:
+        gz = p.with_name(p.name + ".gz")
+        try:
+            with open(p, "rb") as a, gzip.open(gz, "wb", compresslevel=6) as b:
+                shutil.copyfileobj(a, b)
+            p.unlink()
+            n += 1
+        except OSError:
+            try:
+                gz.unlink()
+            except OSError:
+                pass
+    return n
+
+
+def oversized_logs(limit=None):
+    """[(name, MB)] of module logs in logs/ bigger than `limit` (default LOG_WARN)."""
+    out = []
+    for p in LOGS.glob("*.log"):
+        try:
+            if p.stat().st_size > (limit or LOG_WARN):
+                out.append((p.name, round(p.stat().st_size / 1048576)))
+        except OSError:
+            pass
+    return out
+
+
+def log_watch(warned={}):
+    """A module's log is only archived when the module (re)starts; a module that runs for days can still grow it. Say so, once an hour."""
+    for name, mb in oversized_logs():
+        if time.time() - warned.get(name, 0) > 3600:
+            warned[name] = time.time()
+            console_log.log("warn", "supervisor", f"{name} is {mb} MB. It is archived the next time that module restarts.", module=name.rsplit(".", 1)[0])
 SETTINGS = ROOT / "suite_settings.json"
 PORT = int(os.environ.get("PINGUINO_PORT", "8760"))
 PY = os.environ.get("PINGUINO_PYTHON") or (("python" if os.name == "nt" else "python3") if FROZEN else sys.executable)
@@ -388,10 +433,17 @@ bus = Bus()
 
 
 # ------------------------------------------------------------------ modules
+SHUTDOWN = threading.Event()   # set when the core is stopping: nothing may start a module any more and the health loop ends
+
+
 def kill_tree(proc):
     """Stop a module and its children on any OS."""
     if IS_WIN:
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        try:
+            proc.wait(timeout=5)    # the port is free and the exit is reaped before stop() reports "stopped"
+        except Exception:  # noqa: BLE001
+            pass
         return
     try:
         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
@@ -530,7 +582,7 @@ class Module:
         bus.emit("module", id=self.id, state="running")
 
     def start(self):
-        if self.running:
+        if self.running or SHUTDOWN.is_set():    # a health pass that was already in flight must not spawn a module after shutdown began
             return
         if self._ping():
             self.adopt()
@@ -548,7 +600,8 @@ class Module:
                 console_log.log("error", "supervisor", f"{self.id}: port {port} is held by a process that does not answer; not starting a second copy. Stop that process (or restart the Suite) to recover.", module=self.id)
             return
         cmd = [PY if c == "{py}" else c for c in self.spec["cmd"]]
-        rotate_log(LOGS / f"{self.id}.log")
+        if rotate_log(LOGS / f"{self.id}.log"):
+            threading.Thread(target=pack_archive, daemon=True).start()
         log = open(LOGS / f"{self.id}.log", "ab")
         if IS_WIN:
             extra = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -938,7 +991,7 @@ def refresh_all():
 def health_loop():
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
     tick = 0
-    while True:
+    while not SHUTDOWN.is_set():
         for step in (process_control, reconcile_devices, lambda: console_log.ingest(list(modules))):
             try:
                 step()
@@ -946,8 +999,13 @@ def health_loop():
                 print(f"[Pinguino] health loop step failed: {e}", file=sys.stderr)
         if tick % 4 == 0:  # health every ~4s, control files every second
             refresh_all()
+        if tick % 600 == 599:   # every ~10 min
+            try:
+                log_watch()
+            except Exception as e:  # noqa: BLE001
+                print(f"[Pinguino] log watch failed: {e}", file=sys.stderr)
         tick += 1
-        time.sleep(1)
+        SHUTDOWN.wait(1)
 
 
 # ------------------------------------------------------------------ windows autostart
@@ -983,12 +1041,23 @@ def set_autostart(on):
 
 # ------------------------------------------------------------------ app
 @asynccontextmanager
+def shutdown_all():
+    """Stop every module (and its children) exactly once, even if one of them fails to stop; nothing is started afterwards."""
+    SHUTDOWN.set()
+    for m in list(modules.values()):
+        try:
+            m.stop()
+        except Exception as e:  # noqa: BLE001  (one stubborn module must not leave the others running)
+            print(f"[Pinguino] stopping {m.id} failed: {e}", file=sys.stderr)
+
+
 async def lifespan(app):
     bus.loop = asyncio.get_running_loop()
     for m in modules.values():
         o = m.opts()
         if o.get("enabled") and o.get("start_with_suite"):
             m.start()
+    threading.Thread(target=pack_archive, daemon=True).start()
     threading.Thread(target=health_loop, daemon=True).start()
     threading.Thread(target=twitch_loop, daemon=True).start()
     threading.Thread(target=prestream_loop, daemon=True).start()
@@ -997,8 +1066,7 @@ async def lifespan(app):
     threading.Thread(target=backup_loop, daemon=True).start()
     bus.emit("suite", state="started")
     yield
-    for m in modules.values():
-        m.stop()
+    shutdown_all()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -1298,6 +1366,9 @@ def selfcheck():
         except OSError:
             pass
     out["disks"] = disks
+    out["big_logs"] = oversized_logs()
+    for name, mb in out["big_logs"]:
+        problems.append(f"{name} is {mb} MB (archived when that module restarts)")
     out["token_present"] = bool(TOKEN) and len(TOKEN) >= 16
     out["ok"], out["problems"] = not problems, problems
     return out
