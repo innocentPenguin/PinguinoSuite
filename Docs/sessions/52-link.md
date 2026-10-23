@@ -3,3 +3,4 @@ Owns Suite\modules\link. Supervisor 50 (local_0e1e5827-e0dc-4136-863e-75f19f8825
 
 ## Task log
 - Task 1 (2026-10-23): 11 suites pass (remotecheck "hub macro problems" check is timing-flaky under load: 2200 ms sleep; passes alone). Control-file protocol verified against Suite\suite\suite.py process_control: name `<start|stop|restart>-<module id>` in Data\runtime\control, core deletes the file, honours only registered ids. Matches lite.mjs controlModule. controlcheck extended (12 checks, reads suite.py to catch drift). INDEX.md garbled path fixed.
+- Task 2: src/obsreadcheck.mjs (GetVersion, GetSceneList, GetInputList only; password from vault via PINGUINO_API_TOKEN or Link config; never printed). `node src/obsreadcheck.mjs --selftest` uses the fake OBS (5 checks). Real path only run with no password (prints one-line reason). The vault needs a module token, which only the core hands to module processes, so run standalone it falls back to the config file password.
