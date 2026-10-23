@@ -81,7 +81,7 @@ window.onSpotifyWebPlaybackSDKReady = () => {
   player = new Spotify.Player({name: "PinguinoSuite", getOAuthToken: getToken, volume: Math.max(0, Math.min(1, (+cfg.volume || 0)/100))});
   player.addListener("ready", ({device_id}) => {deviceId = device_id; state = "ready"; err = ""; applyVolume(); report()});
   player.addListener("not_ready", () => {state = "not_ready"; report()});
-  for(const [ev, m] of [["initialization_error", "this browser cannot run the player (needs Widevine/EME)"], ["authentication_error", "Spotify login rejected: reconnect in the module"],
+  for(const [ev, m] of [["initialization_error", "this window cannot run the player (needs Widevine/EME): open this page in Edge or Chrome"], ["authentication_error", "Spotify login rejected: reconnect in the module"],
                         ["account_error", "Spotify Premium is required for the player"], ["playback_error", "playback error"]])
     player.addListener(ev, e => fail(m + (e && e.message ? " (" + e.message + ")" : "")));
   player.connect().then(ok => {if(!ok) fail("could not connect the player")});

@@ -127,8 +127,8 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
   <div class="card"><b>Channel playlist</b> <span class="small dim">Mods can add the playing song to it from the site ("Add to stream playlist").</span>
     <div class="ctl" style="margin-top:6px"><select id="cplsel" style="max-width:320px"><option value="">(none)</option></select><button id="cplset">Save</button><button id="cplreload">Reload list</button><span class="small dim" id="cplnote"></span></div></div>
   <div class="card"><h3 style="margin-top:0">Built-in player <span id="plstat" class="small dim"></span></h3>
-    <div class="small dim" style="margin-bottom:8px">Plays Spotify inside Pinguino as the device <b>PinguinoSuite</b> (no Spotify desktop app). Needs Premium and a Widevine-capable browser. Keep the player page open.</div>
-    <div class="ctl"><button class="pri" id="bplopen">Open player window</button><button id="bplcopy" title="Copy the player URL">Copy URL</button><label><input type="checkbox" id="plon"> use the built-in player</label>
+    <div class="small dim" style="margin-bottom:8px">Plays Spotify inside Pinguino as the device <b>PinguinoSuite</b> (no Spotify desktop app). Needs Premium and a browser with Widevine: <b>Edge or Chrome</b>. The app's own window usually cannot play protected audio, so the player opens in your system browser. Keep that tab open (minimised is fine).</div>
+    <div class="ctl"><button class="pri" id="bplopen">Open player in my browser</button><button id="bplcopy" title="Copy the player URL">Copy URL</button><label><input type="checkbox" id="plon"> use the built-in player</label>
       <span>Volume <input type="number" id="plvol" min="0" max="100" style="width:70px"> %</span><button id="bplvol">Set</button></div>
     <div id="plfallback" hidden class="small" style="margin-top:6px">Window did not open? <a href="/player" target="_blank" rel="noopener" style="color:var(--accent)">Open player in browser</a></div>
     <div class="small dim" id="pldetail" style="margin-top:6px"></div></div>
@@ -340,7 +340,9 @@ async function loadPlayer(){try{const p=await api('/api/player');
   $('plstat').textContent='- '+st;$('plstat').style.color=p.live&&!p.needs_reauth?'var(--ok)':'var(--warn)';
   if(document.activeElement!==$('plvol'))$('plvol').value=p.volume;$('plon').checked=p.native;
   $('pldetail').textContent=(p.active_device?'Active device: '+p.active_device+'. ':'')+(p.error||'')+(p.sink_label?' Output: '+p.sink_label+(p.sink_note?' ('+p.sink_note+')':''):'')}catch(e){}}
-$('bplopen').onclick=()=>popOut('spotify-player',location.origin+'/player','Spotify player',460,440);
+$('bplopen').onclick=()=>{const u=location.origin+'/player';
+  if(window.parent&&window.parent!==window){window.parent.postMessage({pinguino:'window',op:'external',url:u},'*');copyText(u);toast('Opening the player in your browser. Link copied too: '+u);setTimeout(showFallback,2000)}
+  else{const x=window.open(u,'spotify-player','width=460,height=440');toast(x?'Opening the player…':'Pop-up blocked: use the link below',!x);if(!x)showFallback()}};
 $('bplcopy').onclick=()=>copyText(location.origin+'/player');
 $('plon').onchange=async()=>{await act('/api/settings',{player_native:$('plon').checked},'Saved');loadPlayer()};
 $('bplvol').onclick=()=>busy($('bplvol'),async()=>{await api('/api/control',{action:'volume',value:+$('plvol').value});toast('Volume set to '+$('plvol').value+'%');loadPlayer()});
@@ -365,9 +367,12 @@ function loop(){clearTimeout(pollT);if(!document.hidden&&!dragId)refresh();pollT
 drawTabs();loop();loadSetup();
 // Built-in player: while this page is open and Spotify is connected, host the /player page in a hidden frame so "PinguinoSuite" shows up as a device.
 // Skipped when a player page is already live (OBS source / own window), so two pages never fight over the device.
-let plHosted=false;
+let plHosted=false,plEme=null;
 async function hostPlayer(){
   if(plHosted||!S||!S.connected)return;
+  if(!navigator.requestMediaKeySystemAccess)return;
+  if(plEme===null){try{await navigator.requestMediaKeySystemAccess('com.widevine.alpha',[{initDataTypes:['cenc'],audioCapabilities:[{contentType:'audio/mp4;codecs="mp4a.40.2"'}]}]);plEme=true}catch(e){plEme=false}}
+  if(!plEme)return;               // this window has no Widevine (e.g. the app's WebView2): hosting the player here would only report an error
   try{const p=await api('/api/player');if(!p.native||p.live||p.needs_reauth){return}
     plHosted=true;const f=document.createElement('iframe');f.id='plframe';f.src='/player';f.allow='autoplay; encrypted-media';
     f.style.cssText='position:fixed;left:-9999px;width:320px;height:200px;border:0';document.body.appendChild(f)}catch(e){}
