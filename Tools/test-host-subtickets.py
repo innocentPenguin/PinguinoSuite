@@ -8,6 +8,7 @@ d = tempfile.mkdtemp(prefix='pgst_'); outf = os.path.join(d, 'out.txt'); eco = o
 json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 json.dump({'adjust': {'alice': 5000, 'bob': 5000, 'carl': 5000, 'dina': 100}}, open(os.path.join(eco, 'points.json'), 'w'))
 json.dump({'Earning': False, 'WelcomeBonus': 0}, open(os.path.join(eco, 'settings.json'), 'w'))
+json.dump({'Enabled': True, 'ChatReplies': True, 'GameVoice': False}, open(os.path.join(d, 'chat_settings.json'), 'w'))   # Chatty voices game lines when GameVoice is on; this test reads the Host's plain line
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8985'})
 h = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(outf, 'ab'), stderr=subprocess.STDOUT)
 def says(): return [l[6:] for l in open(outf, encoding='utf-8', errors='replace').read().splitlines() if l.startswith('[say] ')]
