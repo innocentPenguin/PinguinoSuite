@@ -61,3 +61,36 @@ class Feedback(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Robust(unittest.TestCase):
+    def test_handled_on_hand_edited_files(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        root = Path(tempfile.mkdtemp())
+        (root / "20260101-000000-a.json").write_text(json.dumps({"note": "no id key"}), "utf8")
+        (root / "20260101-000001-b.json").write_text("[1, 2]", "utf8")
+        m = feedback.set_handled(root, "20260101-000000-a")
+        self.assertEqual(m["id"], "20260101-000000-a")
+        self.assertTrue(feedback.recent(root)[0]["handled"])
+        with self.assertRaises(ValueError):
+            feedback.set_handled(root, "20260101-000001-b")
+        self.assertEqual(len(feedback.recent(root)), 1)   # the list file is skipped, not a crash
+
+    def test_counts_cover_more_than_one_page(self):
+        import tempfile
+        from pathlib import Path
+        root = Path(tempfile.mkdtemp())
+        ids = [feedback.save(root, f"n{i}", "p", "r", now=1_700_000_000 + i)["id"] for i in range(40)]
+        feedback.set_handled(root, ids[0])
+        self.assertEqual(feedback.counts(root), {"total": 40, "open": 39})
+        self.assertEqual(len(feedback.recent(root, 30)), 30)
+        self.assertEqual(len(feedback.recent(root, 60)), 40)
+
+    def test_page_and_route_are_scrubbed(self):
+        import tempfile
+        from pathlib import Path
+        m = feedback.save(Path(tempfile.mkdtemp()), "x", "token=abcdef123456", "password: hunter2222")
+        self.assertNotIn("abcdef123456", m["page"])
+        self.assertNotIn("hunter2222", m["route"])

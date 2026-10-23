@@ -40,7 +40,7 @@ def save(root: Path, note: str, page: str = "", route: str = "", url: str = "", 
         raise ValueError(f"at most {MAX_IMAGES} screenshots")
     t = now if now is not None else time.time()
     stamp = datetime.fromtimestamp(t).strftime("%Y%m%d-%H%M%S")
-    base = f"{stamp}-{_slug(route or page)}"
+    base = f"{stamp}-{_slug(route or page)}"   # slug keeps a-z0-9 only: nothing token-like survives, scrubbed or not
     root.mkdir(parents=True, exist_ok=True)
     n = 1
     while (root / (base + ".json")).exists():
@@ -60,7 +60,7 @@ def save(root: Path, note: str, page: str = "", route: str = "", url: str = "", 
                 raise ValueError(f"screenshot {i} must be a png/jpg/gif/webp under 8 MB")
             (d / f"shot{i}.{ext}").write_bytes(raw)
             files.append(f"{base}/shot{i}.{ext}")
-    meta = {"id": base, "time": datetime.fromtimestamp(t).isoformat(timespec="seconds"), "page": str(page)[:120], "route": str(route)[:120],
+    meta = {"id": base, "time": datetime.fromtimestamp(t).isoformat(timespec="seconds"), "page": scrub(str(page))[:120], "route": scrub(str(route))[:120],
             "url": scrub(str(url))[:300], "version": str(version)[:40], "note": note, "screenshots": files}
     (root / (base + ".json")).write_text(json.dumps(meta, indent=2), "utf8")
     md = [f"# Problem report {meta['time']}", "", f"- Page: {meta['page']} ({meta['route']})", f"- URL: {meta['url']}", f"- Suite version: {meta['version'] or 'dev'}", "", note, ""]
@@ -69,12 +69,34 @@ def save(root: Path, note: str, page: str = "", route: str = "", url: str = "", 
     return meta
 
 
+def _load(p: Path):
+    """A report's dict, or None for a hand-edited / broken file (a list, a string, bad json)."""
+    try:
+        m = json.loads(p.read_text("utf8"))
+    except Exception:
+        return None
+    return m if isinstance(m, dict) else None
+
+
+def counts(root: Path) -> dict:
+    """{'total': n, 'open': n} over ALL report files (the nav badge must not undercount when more than a page of reports exist)."""
+    total = opened = 0
+    for p in root.glob("*.json") if root.is_dir() else []:
+        m = _load(p)
+        if m is None:
+            continue
+        total += 1
+        opened += 0 if m.get("handled") else 1
+    return {"total": total, "open": opened}
+
+
 def recent(root: Path, limit: int = 30) -> list:
     out = []
-    for p in sorted(root.glob("*.json"), reverse=True)[:limit] if root.is_dir() else []:
-        try:
-            m = json.loads(p.read_text("utf8"))
-        except Exception:
+    for p in sorted(root.glob("*.json"), reverse=True) if root.is_dir() else []:
+        if len(out) >= limit:
+            break
+        m = _load(p)
+        if m is None:
             continue
         m["handled"] = bool(m.get("handled"))
         m["screenshots"] = m.get("screenshots") or []
@@ -89,7 +111,10 @@ def set_handled(root: Path, rid: str, handled: bool = True) -> dict:
     p = root / (rid + ".json")
     if not p.is_file():
         raise KeyError(rid)
-    m = json.loads(p.read_text("utf8"))
+    m = _load(p)
+    if m is None:
+        raise ValueError("that report file is not readable")
+    m["id"] = rid
     m["handled"] = bool(handled)
     m["handled_at"] = datetime.now().isoformat(timespec="seconds") if handled else ""
     p.write_text(json.dumps(m, indent=2), "utf8")

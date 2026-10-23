@@ -1043,8 +1043,8 @@ def feedback_save(b: Report, request: Request):
 
 
 @app.get("/api/feedback")
-def feedback_list():
-    return {"dir": str(FEEDBACK_DIR), "items": feedbacklib.recent(FEEDBACK_DIR)}
+def feedback_list(limit: int = 30):
+    return {"dir": str(FEEDBACK_DIR), "items": feedbacklib.recent(FEEDBACK_DIR, max(1, min(limit, 500))), **feedbacklib.counts(FEEDBACK_DIR)}
 
 
 class Handled(BaseModel):
