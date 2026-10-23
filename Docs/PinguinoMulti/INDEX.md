@@ -19,10 +19,11 @@
 - chat.js, side.js, launcher.js, style.js: classic chat page, side panel, launcher, chat look.
 
 ## Docs
-- OBS_WIDGETS.md (widgets, dashboard features), STREAM_READY.md (stream checklist), SITE_SCOPE_PROPOSAL.md.
+- See README.md for every doc. API_ROUTES.md and CONFIG_REFERENCE.md are generated from the code.
+- Also in the backend: alerts.py, alert_media.py, goals.py, intros.py, scene_follow.py (alert engine and overlays, see ALERTS.md), xplat.py, connectors/kick.py (multistream), checks.py (Test my setup), vault.py / secrets_store.py (secrets), platform_api.py, stream_info.py.
 
 ## Tests
-- Suite/modules/multi/tests/test_core.py (84 pytest), tests/e2e_live.py (throwaway server on 8799).
+- Suite/modules/multi/tests/test_core.py (about 285 pytest; run with the command in README.md), tests/e2e_live.py (throwaway server on 8799).
 
 ## Changes log (night run)
 - Chat comfort: AUTO pill + hotkey, hold/sprint scroll buttons, follow/welcome-back card (static/chatux.js).
