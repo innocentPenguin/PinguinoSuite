@@ -645,7 +645,7 @@ class Engine:
             self._bump()
 
     # ---- chat
-    def chat(self, user, text, roles=(), redeem=False):
+    def chat(self, user, text, roles=(), redeem=False, active_chatters=None):
         """Entry for the Host / Streamer.bot. -> {handled, ok, reply, code}. `reply` is empty when chat_replies is off."""
         cmd, arg = rules.parse(text, self.settings)
         if not cmd:
@@ -658,7 +658,9 @@ class Engine:
             if not self.settings["chat_replies"]:
                 out["reply"] = ""
             return out
+        self._active_chatters = active_chatters if isinstance(active_chatters, int) and active_chatters > 0 else None
         out = self._chat_cmd(cmd, arg, user, roles, staff, redeem)
+        console_log.info("chat", f"{user}: !{cmd} {arg[:60]}".rstrip() + f" -> {out.get('code', '')}")
         out["handled"] = True
         if not self.settings["chat_replies"]:
             out["reply"] = ""
@@ -722,8 +724,10 @@ class Engine:
             if not mine:
                 return self._r(True, "mine", "mine_none", user=user)
             return self._r(True, "mine", user=user, mine=", ".join(f"{it['name']} (#{self.queue.index(it['id']) + 1})" for it in mine))
-        if cmd == "volume" and staff:
+        if cmd == "volume":          # everyone can read the volume; only staff can set it
             cur = (self.pb or {}).get("device") or {}
+            if arg.strip().lstrip("+-").isdigit() and not staff:
+                return self._r(False, "denied", "cmd_denied", user=user)
             if arg.strip().lstrip("+-").isdigit():
                 v = int(arg.strip())
                 v = self.clamp_volume(v if not arg.strip()[0] in "+-" else (cur.get("volume") or 0) + v)
@@ -944,10 +948,16 @@ class Engine:
         if staff and s["skip_mod_instant"]:
             self.skip(force=True, by=user)
             return self._r(True, "skipped", user=user)
+        uri = self.pb["track"]["uri"]
+        active = getattr(self, "_active_chatters", None)
+        need = max(2, -(-int(active) * 2 // 5)) if active else max(1, int(s["skip_votes"]))      # ~40% of active chatters, rounded up, floor 2
+        if uri == getattr(self, "_voted_off", None):          # the vote already passed; Spotify is still moving on: never skip twice
+            return self._r(True, "vote", user=user, votes=need, need=need)
         self.skip_votes.add(user.lower())
-        need = max(1, int(s["skip_votes"]))
         n = len(self.skip_votes)
         if n >= need:
+            self._voted_off = uri
+            self.skip_votes.clear()
             self.skip(force=True, by="vote")
             return self._r(True, "skipped", "vote_skipped", user=user, votes=n, need=need)
         self._bump()
@@ -955,6 +965,7 @@ class Engine:
 
     # ---- playback control (UI + chat)
     def skip(self, force=False, by=""):
+        console_log.info("skip", f"skip by {by or 'streamer'}")
         with self.lock:
             if self.pb and self.pb["track"]:
                 self._skip_mark = {"uri": self.pb["track"]["uri"], "by": by or "streamer", "at": self.clock()}
@@ -1040,6 +1051,7 @@ class Engine:
             console_log.warn("player", f"could not select the PinguinoSuite player: {e}", dedupe_s=60)
 
     def _set_volume(self, v):
+        console_log.info("volume", f"volume set to {v}")
         """Volume for the active device. With the built-in player live and active (or idle) it is stored as player_volume, which the page applies via setVolume."""
         own = self.player_live() and ((self.pb or {}).get("device") or {}).get("id") in (None, self.player["device_id"])
         if own:

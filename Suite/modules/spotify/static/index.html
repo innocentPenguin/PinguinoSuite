@@ -111,6 +111,18 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
   <div class="card" id="savebar" style="position:sticky;bottom:8px;display:flex;gap:10px;align-items:center;border-color:var(--accent)"><span id="dirty" class="small dim">No unsaved changes</span><span style="flex:1"></span><button id="bdiscard">Discard</button><button class="pri" id="bsave">Save settings</button></div>
 </section>
 
+<section id="t-logs" hidden>
+  <div class="card"><div class="ctl">
+    <input type="text" id="lgq" placeholder="Filter (text, e.g. skip, volume, chat)" style="max-width:260px">
+    <select id="lgl"><option value="">all levels</option><option>warn</option><option>error</option></select>
+    <label class="small"><input type="checkbox" id="lgauto" checked> auto-scroll</label>
+    <label class="small"><input type="checkbox" id="lgpause"> pause</label>
+    <button id="lgclear">Clear</button><button id="lgcopy">Copy</button><span class="small dim" id="lgn"></span>
+  </div>
+  <div id="lgbox" style="margin-top:8px;height:60vh;overflow:auto;font:12px/1.5 Consolas,monospace;white-space:pre-wrap;word-break:break-word;background:#0006;border-radius:6px;padding:6px"></div>
+  <div class="small dim" style="margin-top:6px">Live tail of this module's log plus requests, skips, chat commands, volume changes and errors. Secrets are scrubbed.</div></div>
+</section>
+
 <section id="t-setup" hidden>
   <div class="card"><h3 style="margin-top:0">Built-in player <span id="plstat" class="small dim"></span></h3>
     <div class="small dim" style="margin-bottom:8px">Plays Spotify inside Pinguino as the device <b>PinguinoSuite</b> (no Spotify desktop app). Needs Premium and a Widevine-capable browser. Keep the player page open.</div>
@@ -166,7 +178,7 @@ function popOut(label,url,title,w,h){
 async function act(p,b,ok){try{await api(p,b||{});if(ok)toast(ok);refresh()}catch(e){toast(e.message,true)}}
 const fmt=ms=>{ms=Math.max(0,ms|0);const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 
-const TABS=[['queue','Queue'],['search','Search'],['req','Requests'],['set','Settings'],['setup','Setup']];
+const TABS=[['queue','Queue'],['search','Search'],['req','Requests'],['set','Settings'],['setup','Setup'],['logs','Logs']];
 function drawTabs(){
   const pend=S&&S.inbox?S.inbox.length:0;
   $('tabs').innerHTML=TABS.map(([k,l])=>`<button data-t="${k}" class="${k===tab?'on':''}">${l}${k==='req'&&pend?`<span class="badge">${pend}</span>`:''}</button>`).join('');
@@ -368,7 +380,7 @@ document.addEventListener('click',async e=>{
 });
 if(new URLSearchParams(location.search).has('setup')){tab='setup'}
 // the Suite shell can reload this page: remember the open tab so it does not jump back to Queue
-else{try{const t=sessionStorage.getItem('sp_tab');if(['queue','search','req','set','setup'].includes(t)){tab=t;drawTabs()}}catch(_){}}
+else{try{const t=sessionStorage.getItem('sp_tab');if(['queue','search','req','set','setup','logs'].includes(t)){tab=t;drawTabs()}}catch(_){}}
 // Keep the Settings view steady across redraws and shell reloads: remember which groups are open and where it was scrolled.
 {const _ds=drawSettings,se=()=>document.scrollingElement||document.documentElement;
  drawSettings=function(){
@@ -380,5 +392,25 @@ else{try{const t=sessionStorage.getItem('sp_tab');if(['queue','search','req','se
  };
  let st=0;addEventListener('scroll',()=>{clearTimeout(st);st=setTimeout(()=>{try{sessionStorage.setItem('sp_y_'+tab,String(se().scrollTop))}catch(_){}},150)},{passive:true});
  try{const y=+sessionStorage.getItem('sp_y_'+tab);if(y>0)setTimeout(()=>{se().scrollTop=y},400)}catch(_){}
+}
+// Logs tab: incremental append (cursor = last timestamp), so scroll position is never reset; auto-scroll is optional.
+{let lgSince=0,lgAll=[],lgT=0;
+ const box=$('lgbox'),fmtE=e=>new Date(e.ts*1000).toLocaleTimeString([], {hour12:false})+' '+(e.level||'info').toUpperCase().padEnd(5)+' '+(e.source||'').padEnd(7)+' '+e.msg;
+ const vis=e=>(!$('lgl').value||(e.level===$('lgl').value||(e.level==='error'&&$('lgl').value==='warn')))&&(!$('lgq').value||fmtE(e).toLowerCase().includes($('lgq').value.toLowerCase()));
+ const line=e=>{const d=document.createElement('div');d.textContent=fmtE(e);if(e.level==='error')d.style.color='#ff6b6b';else if(e.level==='warn')d.style.color='#ffb347';return d};
+ function redraw(){box.textContent='';const f=lgAll.filter(vis);const fr=document.createDocumentFragment();f.forEach(e=>fr.appendChild(line(e)));box.appendChild(fr);$('lgn').textContent=f.length+' lines';if($('lgauto').checked)box.scrollTop=box.scrollHeight}
+ async function pull(){
+  if(tab!=='logs'||document.hidden||$('lgpause').checked)return;
+  try{const r=await api('/api/logs?since='+lgSince+'&limit='+(lgSince?300:500));const n=(r.entries||[]).filter(e=>e.ts>lgSince);
+   if(!n.length)return;lgSince=Math.max(lgSince,...n.map(e=>e.ts));lgAll=lgAll.concat(n).slice(-2000);
+   const keep=box.scrollTop;const vs=n.filter(vis);vs.forEach(e=>box.appendChild(line(e)));
+   while(box.childElementCount>2000)box.removeChild(box.firstChild);
+   $('lgn').textContent=box.childElementCount+' lines';
+   if($('lgauto').checked)box.scrollTop=box.scrollHeight;else box.scrollTop=keep}catch(e){}
+ }
+ $('lgq').oninput=redraw;$('lgl').onchange=redraw;$('lgauto').onchange=()=>{if($('lgauto').checked)box.scrollTop=box.scrollHeight};
+ $('lgclear').onclick=()=>{lgAll=[];box.textContent='';$('lgn').textContent='cleared (new lines keep arriving)'};
+ $('lgcopy').onclick=()=>copyText([...box.children].map(d=>d.textContent).join('\n'));
+ lgT=setInterval(pull,2000);pull();
 }
 </script></body></html>

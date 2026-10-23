@@ -264,6 +264,26 @@ class SongifyTests(unittest.TestCase):
         self.e.cfg.setdefault("settings", {})["lyrics_on"] = False
         self.assertFalse(self.e.lyrics()["enabled"])
 
+    def test_vote_skip_scaled_once_and_vol_read(self):
+        self.sr("ann", 3)
+        self.play(3)
+        calls = []
+        orig = self.e.skip
+        self.e.skip = lambda *a, **k: (calls.append(k), orig(*a, **k))[1]
+        r = self.e.chat("v1", "!skip", ("viewer",), active_chatters=10)       # 40% of 10 = need 4
+        self.assertEqual((r["ok"], r["code"]), (True, "vote"))
+        for u in ("v2", "v3"):
+            self.e.chat(u, "!skip", ("viewer",), active_chatters=10)
+        self.assertEqual(calls, [])
+        self.e.chat("v4", "!skip", ("viewer",), active_chatters=10)
+        self.e.chat("v5", "!skip", ("viewer",), active_chatters=10)           # still the same track: no second skip
+        self.e.chat("v6", "!skip", ("viewer",), active_chatters=10)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.e.chat("v1", "!skip", ("viewer",), active_chatters=1)["code"], "vote")    # floor 2 applies
+        v = self.e.chat("anyone", "!vol", ("viewer",))
+        self.assertEqual(v["code"], "volume")                                  # viewers can read the volume
+        self.assertNotEqual(self.e.chat("anyone", "!vol 99", ("viewer",))["code"], "volume_set")   # but not set it
+
     def test_leaderboard(self):
         self.sr("ann", 3)
         self.play(3)

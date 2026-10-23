@@ -278,7 +278,7 @@ def g_queue_public(h, q):
 
 
 GET = {"/api/queue.json": g_queue_public, "/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
-       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/lyrics": lambda h, q: engine.lyrics(), "/api/leaderboard": lambda h, q: engine.leaderboard(int(q.get("limit") or 10)), "/api/song-log": lambda h, q: engine.song_log(int(q.get("limit") or 50), int(q.get("minutes") or 60)), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/refunds": lambda h, q: engine.pending_refunds(int(q.get("since") or 0)), "/api/setup": g_setup, "/api/player": lambda h, q: engine.player_info(), "/api/player-token": g_player_token, "/callback": g_callback, "/auth/login": g_login}
+       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/logs": lambda h, q: {"entries": console_log.tail(float(q.get("since") or 0), min(int(q.get("limit") or 300), 1000))}, "/api/lyrics": lambda h, q: engine.lyrics(), "/api/leaderboard": lambda h, q: engine.leaderboard(int(q.get("limit") or 10)), "/api/song-log": lambda h, q: engine.song_log(int(q.get("limit") or 50), int(q.get("minutes") or 60)), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/refunds": lambda h, q: engine.pending_refunds(int(q.get("since") or 0)), "/api/setup": g_setup, "/api/player": lambda h, q: engine.player_info(), "/api/player-token": g_player_token, "/callback": g_callback, "/auth/login": g_login}
 
 
 # ---- POST routes
@@ -433,7 +433,8 @@ def p_chat_command(h, b):
     if b.get("isVip"):
         roles.add("vip")
     src = str(b.get("source") or ("voice" if b.get("silent") else "chat"))[:20]
-    r = engine.chat(user, f"{engine.settings['prefix']}{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")))
+    r = engine.chat(user, f"{engine.settings['prefix']}{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")),
+                    active_chatters=int(b["activeChatters"]) if str(b.get("activeChatters", "")).isdigit() else None)
     if not r["handled"]:
         return {"ok": False, "say": "", "error": "unknown command"}
     if cmd.lower() in ("skip", "voteskip", "blocksong"):

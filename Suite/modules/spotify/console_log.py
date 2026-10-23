@@ -55,3 +55,25 @@ def warn(source, msg, **kw):
 
 def error(source, msg, **kw):
     log("error", source, msg, **kw)
+
+
+def tail(since=0.0, limit=300):
+    """Recent entries (newest last) from this module's console file, only those newer than `since`."""
+    try:
+        p = data_dir() / "console" / (MODULE + ".jsonl")
+        with p.open("rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 256 * 1024))
+            raw = f.read().decode("utf-8", "replace")
+    except OSError:
+        return []
+    out = []
+    for line in raw.splitlines():
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(e, dict) and float(e.get("ts", 0)) > since:
+            out.append({"ts": e["ts"], "level": e.get("level", "info"), "source": e.get("source", ""), "msg": e.get("msg", "")})
+    return out[-limit:]
