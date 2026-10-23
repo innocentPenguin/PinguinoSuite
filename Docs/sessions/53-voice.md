@@ -15,3 +15,4 @@ Last updated: 2026-10-23 06:20. Hand-over from the old 06 session: `Docs\session
 ## Batch 2 (Mac support)
 - Item 1+2: TTS backend abstraction (engine.py: Sapi / MacSay `say` / Espeak, `make_backend` by sys.platform, injectable runner, text only on stdin). Non-Windows Player always plays through sounddevice. Speak page shows "Voices come from: <backend>". No-voice / no-output-device now give plain messages (hints in /api/voices, /api/devices, preview, sound check, self-test). tests/test_backends.py (12). Tests 113.
 - Item 3 (Docs\VOICE_MAC.md) and item 4 (third review) follow.
+- Item 3 done: Docs\VOICE_MAC.md.
