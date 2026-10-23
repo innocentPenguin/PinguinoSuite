@@ -83,7 +83,7 @@ namespace PinguinoHost
                 JObject r;
                 if (!RxLogin.IsMatch(login)) r = new JObject { { "ok", false }, { "error", "bad user" } };
                 else if (act == "give") r = SiteGive(login, s, id);
-                else if (act.StartsWith("intro_")) r = ViewerIntro.Act(act, s);
+                else if (act.StartsWith("intro_")) { r = ViewerIntro.Act(act, s); IntroData(r, act); }
                 else if (act == "page_hide") r = Economy.SetHidden(login, (bool?)s["hide"] == true);
                 else if (act == "loan_take") r = Economy.LoanTake(login, amount, "site-" + id);
                 else if (act == "loan_repay" && !string.IsNullOrEmpty((string)s["loanId"])) r = LoansP2P.Handle(login, act, s, "site-" + id);   // a loanId means a loan from another viewer
@@ -95,6 +95,15 @@ namespace PinguinoHost
                 SiteHttp.WriteJ(P, d);
                 Sent.Remove(login);   // their view changed: send it again on the next push
             }
+        }
+
+        /// <summary>intro_* answers carry data={intro:{status}} so the site can tell auto-approved from pending (Submit/Decide return the intro, Remove has none)</summary>
+        static void IntroData(JObject r, string act)
+        {
+            if ((bool?)r["ok"] != true || r["data"] != null) return;
+            string st = (string)(r["intro"] as JObject)?["status"];
+            if (st == null && act == "intro_remove") st = "removed";
+            if (st != null) r["data"] = new JObject { { "intro", new JObject { { "status", st } } } };
         }
 
         /// <summary>site "Give points": same rules as !give (min, no self, no bots, balance, daily cap), unique ids per queue request, ledger rows "Gave"/"Received" for both</summary>

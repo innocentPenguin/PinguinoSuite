@@ -65,6 +65,14 @@ try:
     chk('same request id is never applied twice', get('/api/economy/me?login=zed')['balance'] == 340 and sum(1 for a in S['answers'] if a['id'] == 'r1') >= 2)
     S['reqs']['r4'] = {'id': 'r4', 'login': 'zed', 'action': 'loan_repay', 'amount': 100, 'status': 'pending'}; time.sleep(4)
     chk('repay through the queue', {a['id']: a for a in S['answers']}['r4']['owed'] == 200 and get('/api/economy/me?login=zed')['balance'] == 240)
+    # ---- intro_* answers carry data.intro.status (pending vs approved vs removed)
+    S['reqs']['i1'] = {'id': 'i1', 'login': 'zed', 'action': 'intro_submit', 'user_id': '4242', 'text': 'Zed has arrived', 'status': 'pending'}; time.sleep(4)
+    S['reqs']['i2'] = {'id': 'i2', 'login': 'zed', 'action': 'intro_approve', 'user_id': '4242', 'by': 'mod1', 'status': 'pending'}; time.sleep(4)
+    S['reqs']['i3'] = {'id': 'i3', 'login': 'zed', 'action': 'intro_remove', 'user_id': '4242', 'status': 'pending'}; time.sleep(4)
+    ia = {a['id']: a for a in S['answers']}
+    chk('intro_submit answer says pending', ia.get('i1', {}).get('status') == 'done' and (ia['i1'].get('data') or {}).get('intro', {}).get('status') == 'pending', ia.get('i1'))
+    chk('intro_approve answer says approved', (ia.get('i2', {}).get('data') or {}).get('intro', {}).get('status') == 'approved', ia.get('i2'))
+    chk('intro_remove answer says removed', (ia.get('i3', {}).get('data') or {}).get('intro', {}).get('status') == 'removed', ia.get('i3'))
     # ---- the site is down for answers: kept and retried
     S['answer_code'] = 503; S['reqs']['r5'] = {'id': 'r5', 'login': 'zed', 'action': 'loan_repay', 'amount': 0, 'status': 'pending'}; time.sleep(4)
     S['answer_code'] = 200; time.sleep(4)
