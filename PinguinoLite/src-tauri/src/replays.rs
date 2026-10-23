@@ -231,6 +231,32 @@ fn parse_file(data: &[u8]) -> Result<Value, String> {
     serde_json::to_value(&r).map_err(|e| e.to_string())
 }
 
+/// Real replays are 1-10 MB; anything above this is not read at all.
+pub const MAX_REPLAY_BYTES: u64 = 64 * 1024 * 1024;
+/// A parse that takes longer than this is abandoned (its thread finishes or dies on its own).
+pub const PARSE_TIMEOUT: Duration = Duration::from_secs(8);
+
+/// Cheap checks before reading a file: Err(reason) means skip it and count it as `unreadable`.
+pub fn size_ok(len: u64) -> Result<(), &'static str> {
+    if len == 0 {
+        Err("empty file")
+    } else if len > MAX_REPLAY_BYTES {
+        Err("file too large")
+    } else {
+        Ok(())
+    }
+}
+
+/// parse_file that can never panic or hang the scanner: runs on its own thread, panics become errors, time is capped.
+pub fn parse_guarded(data: Vec<u8>, limit: Duration) -> Result<Value, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let r = std::panic::catch_unwind(|| parse_file(&data)).unwrap_or_else(|_| Err("replay could not be parsed (parser panic)".into()));
+        let _ = tx.send(r);
+    });
+    rx.recv_timeout(limit).unwrap_or_else(|_| Err("replay took too long to parse".into()))
+}
+
 fn mtime_secs(p: &Path) -> Option<u64> {
     std::fs::metadata(p).and_then(|m| m.modified()).ok().and_then(|m| m.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs())
 }
@@ -267,13 +293,19 @@ pub fn scan() -> Value {
             if pend.get(&path) != Some(&(meta.len(), mt)) || now.saturating_sub(mt) < 2 {
                 continue;
             }
+            if let Err(why) = size_ok(meta.len()) {
+                unreadable += 1; // zero-byte or huge: never read; remembered so it is not looked at again until it changes
+                state.insert(key, json!({"error": why}));
+                continue;
+            }
             let Ok(data) = std::fs::read(&path) else {
                 unreadable += 1; // e.g. an OneDrive online-only placeholder while OneDrive is not running; retried on later ticks
                 continue;
             };
-            match parse_file(&data) {
+            let fid = fnv(&data);
+            match parse_guarded(data, PARSE_TIMEOUT) {
                 Ok(rep) => {
-                    let res = apply_gate(extract(&rep, tw.get_or_insert_with(twitch_map), &fnv(&data)), GATE.load(std::sync::atomic::Ordering::Relaxed));
+                    let res = apply_gate(extract(&rep, tw.get_or_insert_with(twitch_map), &fid), GATE.load(std::sync::atomic::Ordering::Relaxed));
                     let id = safe_name(res["match_id"].as_str().unwrap_or(""));
                     if id.is_empty() || write_atomic(&root().join("results").join(format!("{id}.json")), &serde_json::to_string_pretty(&res).unwrap_or_default()).is_err() {
                         errors += 1;
@@ -578,5 +610,32 @@ mod tests {
         let mut s = sample();
         s["properties"]["Team1Score"] = json!(4);
         assert_eq!(extract(&s, &TwitchMap::new(), "x")["winner"], "draw");
+    }
+
+    #[test]
+    fn bad_files_never_panic_or_hang() {
+        assert!(size_ok(0).is_err() && size_ok(MAX_REPLAY_BYTES + 1).is_err() && size_ok(5_000_000).is_ok());
+        let mut garbage = Vec::new();
+        let mut x: u32 = 12345;
+        for _ in 0..200_000 {
+            x = x.wrapping_mul(1664525).wrapping_add(1013904223);
+            garbage.push((x >> 24) as u8);
+        }
+        let limit = Duration::from_secs(8);
+        assert!(parse_guarded(Vec::new(), limit).is_err());
+        assert!(parse_guarded(vec![0u8; 4096], limit).is_err());
+        assert!(parse_guarded(garbage.clone(), limit).is_err());
+        assert!(parse_guarded(b"not a replay".to_vec(), limit).is_err());
+        // a real header cut off at every few offsets: error, never a panic
+        if let Some(f) = std::env::var("PINGUINO_TEST_REPLAY").ok() {
+            let full = std::fs::read(f).unwrap();
+            for cut in [1usize, 8, 100, 1000, full.len() / 3, full.len() - 1] {
+                let _ = parse_guarded(full[..cut.min(full.len())].to_vec(), limit);
+            }
+        }
+        // 200 MB of garbage is refused by size before it is ever read
+        assert!(size_ok(200 * 1024 * 1024).is_err());
+        // time cap: a zero limit gives up at once instead of waiting
+        assert!(parse_guarded(garbage, Duration::from_nanos(1)).is_err());
     }
 }
