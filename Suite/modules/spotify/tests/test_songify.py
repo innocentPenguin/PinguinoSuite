@@ -279,6 +279,9 @@ class SongifyTests(unittest.TestCase):
         self.e.chat("v5", "!skip", ("viewer",), active_chatters=10)           # still the same track: no second skip
         self.e.chat("v6", "!skip", ("viewer",), active_chatters=10)
         self.assertEqual(len(calls), 1)
+        self.play(10)
+        self.e.chat("w1", "!skip", ("viewer",), skip_need=2)
+        self.assertEqual(self.e.chat("w2", "!skip", ("viewer",), active_chatters=50, skip_need=2)["code"], "skipped")   # Host skipNeed wins
         self.assertEqual(self.e.chat("v1", "!skip", ("viewer",), active_chatters=1)["code"], "vote")    # floor 2 applies
         v = self.e.chat("anyone", "!vol", ("viewer",))
         self.assertEqual(v["code"], "volume")                                  # viewers can read the volume

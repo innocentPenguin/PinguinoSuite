@@ -645,7 +645,7 @@ class Engine:
             self._bump()
 
     # ---- chat
-    def chat(self, user, text, roles=(), redeem=False, active_chatters=None):
+    def chat(self, user, text, roles=(), redeem=False, active_chatters=None, skip_need=None):
         """Entry for the Host / Streamer.bot. -> {handled, ok, reply, code}. `reply` is empty when chat_replies is off."""
         cmd, arg = rules.parse(text, self.settings)
         if not cmd:
@@ -658,6 +658,7 @@ class Engine:
             if not self.settings["chat_replies"]:
                 out["reply"] = ""
             return out
+        self._skip_need = skip_need if isinstance(skip_need, int) and skip_need >= 1 else None
         self._active_chatters = active_chatters if isinstance(active_chatters, int) and active_chatters > 0 else None
         out = self._chat_cmd(cmd, arg, user, roles, staff, redeem)
         console_log.info("chat", f"{user}: !{cmd} {arg[:60]}".rstrip() + f" -> {out.get('code', '')}")
@@ -950,7 +951,8 @@ class Engine:
             return self._r(True, "skipped", user=user)
         uri = self.pb["track"]["uri"]
         active = getattr(self, "_active_chatters", None)
-        need = max(2, -(-int(active) * 2 // 5)) if active else max(1, int(s["skip_votes"]))      # ~40% of active chatters, rounded up, floor 2
+        forced = getattr(self, "_skip_need", None)
+        need = forced if forced else max(2, -(-int(active) * 2 // 5)) if active else max(1, int(s["skip_votes"]))      # ~40% of active chatters, rounded up, floor 2
         if uri == getattr(self, "_voted_off", None):          # the vote already passed; Spotify is still moving on: never skip twice
             return self._r(True, "vote", user=user, votes=need, need=need)
         self.skip_votes.add(user.lower())

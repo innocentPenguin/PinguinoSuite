@@ -434,7 +434,8 @@ def p_chat_command(h, b):
         roles.add("vip")
     src = str(b.get("source") or ("voice" if b.get("silent") else "chat"))[:20]
     r = engine.chat(user, f"{engine.settings['prefix']}{cmd} {b.get('args', '')}".strip(), roles, bool(b.get("redeem")),
-                    active_chatters=int(b["activeChatters"]) if str(b.get("activeChatters", "")).isdigit() else None)
+                    active_chatters=int(b["activeChatters"]) if str(b.get("activeChatters", "")).isdigit() else None,
+                    skip_need=int(b["skipNeed"]) if str(b.get("skipNeed", "")).isdigit() else None)
     if not r["handled"]:
         return {"ok": False, "say": "", "error": "unknown command"}
     if cmd.lower() in ("skip", "voteskip", "blocksong"):
