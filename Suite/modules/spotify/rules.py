@@ -18,7 +18,9 @@ def _type_ok(default, v):
     if isinstance(default, bool):
         return isinstance(v, bool)
     if isinstance(default, (int, float)):
-        return isinstance(v, (int, float)) and not isinstance(v, bool)
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) or abs(v) > 10 ** 9:
+            return False                              # inf / nan / absurd values would crash the maths later
+        return v >= 0 if default >= 0 else v >= -1    # a limit of -1 means "off" only where the default says so
     return isinstance(v, type(default))
 
 
@@ -62,7 +64,11 @@ def merged(saved):
             if isinstance(v, str) and 0 < len(v.strip()) <= 3:
                 s[k] = v.strip()
         elif _type_ok(DEFAULTS[k], v):
-            s[k] = v[:500] if isinstance(v, list) else v
+            if isinstance(v, list):
+                v = [x[:200] for x in v if isinstance(x, str)][:500]       # a number/null in a list must not crash the rules
+            elif isinstance(v, str):
+                v = v[:2000]
+            s[k] = v
     return s
 
 

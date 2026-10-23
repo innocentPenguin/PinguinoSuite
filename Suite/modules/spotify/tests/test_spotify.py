@@ -778,6 +778,27 @@ class StoreSafetyTests(unittest.TestCase):
         self.assertEqual(store.load("sw.json", {}), {"a": 1})
 
 
+class SettingsSanityTests(unittest.TestCase):
+    def test_non_string_blocklist_items_dropped_and_evaluate_works(self):
+        s = rules.merged({"blocklist": ["bad", 5, None, {"a": 1}, "x" * 500]})
+        self.assertEqual(s["blocklist"][0], "bad")
+        self.assertTrue(all(isinstance(x, str) and len(x) <= 200 for x in s["blocklist"]))
+        self.assertIsNone(rules.blocked_reason(s, T(1)))
+
+    def test_inf_nan_and_negative_numbers_rejected(self):
+        d = rules.merged({})
+        s = rules.merged({"queue_max": float("inf"), "max_length_s": -5, "per_user_limit": float("nan"), "limit_vip": -1, "limit_sub": -7})
+        self.assertEqual(s["queue_max"], d["queue_max"])
+        self.assertEqual(s["max_length_s"], d["max_length_s"])
+        self.assertEqual(s["per_user_limit"], d["per_user_limit"])
+        self.assertEqual(s["limit_vip"], -1)
+        self.assertEqual(s["limit_sub"], d["limit_sub"])
+
+    def test_long_strings_are_capped(self):
+        s = rules.merged({"announce_template": "y" * 100000}) if "announce_template" in rules.DEFAULTS else rules.merged({})
+        self.assertTrue(all(len(v) <= 2000 for v in s.values() if isinstance(v, str)))
+
+
 class ManifestHelpTests(unittest.TestCase):
     def test_every_prestream_item_id_has_help(self):
         m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))
