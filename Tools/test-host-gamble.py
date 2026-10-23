@@ -40,8 +40,10 @@ try:
     r = ask('bob: !gamble 0'); chk('zero bet refused', ('usage' in r[0] or 'minimum' in r[0]) and bal('bob') == 500, r)
     setcfg(gambleWinChance=0.0, maxBet=50); time.sleep(2.0)
     r = ask('bob: !gamble 100'); chk('max bet optional setting', 'maximum bet is 50' in r[0] and bal('bob') == 500, r)
-    setcfg(gambleWinChance=1.0, gamblePayout=3.0, slotsSymbols=['x','x'], slotsTriplePayout=4.0, slotsJackpotSymbol='x', slotsJackpotPayout=6.0); time.sleep(2.0)
+    setcfg(gambleWinChance=1.0, gamblePayout=3.0, slotsSymbols=['x','x'], slotsTriplePayout=4.0, slotsJackpotSymbol='x', slotsJackpotPayout=6.0, slotsSymbolPayouts={}); time.sleep(2.0)
     r = ask('bob: !slots 10'); chk('slots jackpot', 'won 60' in r[0] and bal('bob') == 550, (r, bal('bob')))
+    setcfg(slotsSymbols=['x','x'], slotsSymbolPayouts={'x': 2.5}, slotsJackpotSymbol='🐧'); time.sleep(2.0)   # per-symbol triple payout beats the generic one
+    r = ask('bob: !slots 10'); chk('slots per-symbol payout (3 x = 2.5 x bet)', 'won 25' in r[0] and bal('bob') == 565, (r, bal('bob')))
     setcfg(gambleWinChance=1.0); time.sleep(2.0)   # no slotsSymbols in the file: the built-in defaults are real emoji, intact through the send path
     r = ask('bob: !slots 1'); allowed = ['🍒', '🐟', '⭐', '⚽', '🐧']
     reel = r[0].split(' ', 1)[1].split(' you won')[0].split(' no luck')[0] if r else ''
@@ -63,7 +65,7 @@ try:
     setcfg(enabled=False); time.sleep(2.0)
     r = ask('bob: !gamble 5'); chk('off switch', r == [], r)
     # ---- Chatty on: the Host sends ONE PgGame event and says nothing itself ----
-    chatty(True); setcfg(gambleWinChance=1.0, gamblePayout=2.0, slotsSymbols=['🍒', '🍒'], slotsJackpotSymbol='🍒', slotsJackpotPayout=7.0); time.sleep(2.0)
+    chatty(True); setcfg(gambleWinChance=1.0, gamblePayout=2.0, slotsSymbols=['🍒', '🍒'], slotsJackpotSymbol='🍒', slotsJackpotPayout=7.0, slotsSymbolPayouts={}); time.sleep(2.0)
     n0 = len(events()); r = ask('alice: !gamble 1')
     chk('no balance: broke event, host silent', r == [] and events()[n0:] and events()[n0]['outcome'] == 'broke' and events()[n0]['kind'] == 'gamble', (r, events()[n0:]))
     r = ask('bob: !gamble 10'); e = events()[n0 + 1:]

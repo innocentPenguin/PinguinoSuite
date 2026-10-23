@@ -21,6 +21,7 @@ namespace PinguinoHost
             return new JObject { { "enabled", true }, { "cooldownSec", 15 }, { "minBet", 1 }, { "maxBet", 0 },
                 { "gambleWinChance", 0.45 }, { "gamblePayout", 2.0 },
                 { "slotsEnabled", true }, { "slotsSymbols", new JArray("🍒", "🐟", "⭐", "⚽", "🐧") }, { "slotsPairPayout", 1.5 }, { "slotsTriplePayout", 5.0 }, { "slotsJackpotSymbol", "🐧" }, { "slotsJackpotPayout", 10.0 },
+                { "slotsSymbolPayouts", new JObject { { "🍒", 2.0 }, { "🐟", 3.0 }, { "⭐", 4.0 }, { "⚽", 6.0 }, { "🐧", 11.0 } } },   // three of a kind pays this x the bet, per symbol (Docs/SLOTS_TABLE.md, about 92.8% back); {} = use slotsTriplePayout / slotsJackpotPayout for every symbol
                 { "duelEnabled", true }, { "duelTimeoutSec", 60 }, { "duelHouseCutPercent", 0 },
                 { "giveEnabled", true }, { "giveMin", 1 }, { "giveDailyPct", 10 }, { "giveDailyMin", 0 }, { "giveDailyMax", 0 } };
         }
@@ -212,13 +213,23 @@ namespace PinguinoHost
             if (win) { long pay = (long)Math.Floor(amt * mult); Economy.Credit(id + "-win", me, pay, "gamble win"); long nb = Economy.Balance(me); Out(say, "@" + user + " you won " + (pay - amt) + " " + cur + "! You now have " + nb + ".", "gamble", "win", user, amt, pay, nb, "", "", "", id); }
             else { long nb = Economy.Balance(me); Out(say, "@" + user + " you lost " + amt + " " + cur + ". Now at " + nb + ". Thanks for playing!", "gamble", "lose", user, amt, 0, nb, "", "", "", id); }
         }
+        /// <summary>payout multiplier of one spin: three of a kind = that symbol's slotsSymbolPayouts value (else slotsJackpotPayout for the jackpot symbol / slotsTriplePayout), any pair = slotsPairPayout. jackpot = three of the jackpot symbol.</summary>
+        public static double SlotMult(string[] r, out bool jackpot)
+        {
+            jackpot = false; var c = Config();
+            if (r[0] == r[1] && r[1] == r[2])
+            {
+                jackpot = r[0] == ((string)c["slotsJackpotSymbol"] ?? ""); var tb = c["slotsSymbolPayouts"] as JObject; JToken v = tb == null ? null : tb[r[0]];
+                if (v != null && (v.Type == JTokenType.Float || v.Type == JTokenType.Integer)) return (double)v;
+                return jackpot ? N("slotsJackpotPayout", 10) : N("slotsTriplePayout", 5);
+            }
+            return r[0] == r[1] || r[1] == r[2] || r[0] == r[2] ? N("slotsPairPayout", 1.5) : 0;
+        }
         static void Slots(string user, string me, long amt, string id, Action<string> say)
         {
             string cur = Economy.CurrencyName; var sym = (Config()["slotsSymbols"] as JArray ?? new JArray("a", "b", "c")).Select(x => (string)x).ToList(); if (sym.Count < 2) sym = new List<string> { "a", "b" };
             var r = new[] { sym[Rng.Next(sym.Count)], sym[Rng.Next(sym.Count)], sym[Rng.Next(sym.Count)] };
-            double mult = 0; string jp = (string)Config()["slotsJackpotSymbol"] ?? ""; bool jackpot = false;
-            if (r[0] == r[1] && r[1] == r[2]) { jackpot = r[0] == jp; mult = jackpot ? N("slotsJackpotPayout", 10) : N("slotsTriplePayout", 5); }
-            else if (r[0] == r[1] || r[1] == r[2] || r[0] == r[2]) mult = N("slotsPairPayout", 1.5);
+            bool jackpot; double mult = SlotMult(r, out jackpot);
             string reel = Reel(r);
             if (mult > 0) { long pay = (long)Math.Floor(amt * mult); Economy.Credit(id + "-win", me, pay, "slots win"); long nb = Economy.Balance(me); Out(say, "@" + user + " " + reel + " you won " + pay + " " + cur + "! You now have " + nb + ".", "slots", jackpot ? "jackpot" : "win", user, amt, pay, nb, "", reel, "", id); }
             else { long nb = Economy.Balance(me); Out(say, "@" + user + " " + reel + " no luck, lost " + amt + " " + cur + ". Thanks for playing!", "slots", "lose", user, amt, 0, nb, "", reel, "", id); }
@@ -250,7 +261,7 @@ namespace PinguinoHost
                 if (game == "slots")
                 {
                     var r = new[] { sym[Rng.Next(sym.Count)], sym[Rng.Next(sym.Count)], sym[Rng.Next(sym.Count)] }; mult = 0;
-                    if (r[0] == r[1] && r[1] == r[2]) mult = r[0] == jp ? N("slotsJackpotPayout", 10) : N("slotsTriplePayout", 5); else if (r[0] == r[1] || r[1] == r[2] || r[0] == r[2]) mult = N("slotsPairPayout", 1.5);
+                    bool jk; mult = SlotMult(r, out jk);
                 }
                 else mult = Rng.NextDouble() < N("gambleWinChance", 0.45) ? N("gamblePayout", 2.0) : 0;
                 long pay = (long)Math.Floor(amount * mult); net += pay - amount; if (pay > 0) wins++;
