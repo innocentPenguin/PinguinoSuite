@@ -31,3 +31,15 @@ One-time, by Ivan:
 Verified (scratch key, release 1.0.0, minimal install): `install.json` carries `pubkey`; check and verify OK; manifest edited after signing -> "the release signature does not match the configured key; refusing it"; `manifest.sig` removed -> "this release is not signed but a signing key is configured; refusing it"; a different public key -> signature mismatch; `Make-SigningKey` refuses to overwrite an existing seed or to write inside the repo.
 
 Re-run table (2026-10-23, after the `spike-cfg`/`lockfile` skip rule in `components.mjs`, commit 927a625): updater tests 39/39 pass; Build-Release signed OK (225 files, parts core, link, listen, multi, spotify, voice, tools, host, shell, lite); lite-minimal install 57 files; tamper/unsigned/wrong-key refusals unchanged.
+
+## Update and rollback dry run (2026-10-23, 21-Lite, scratch folder, throwaway key)
+Setup: signed Build-Release 1.0.0 and 1.0.1 (231 files, 66 MB each), `install.mjs --local <1.0.0> --pubkey <k> --profile lite-minimal` (59 files). The updater calls used `--source <folder>` and `--core-port 59999` (so the real Suite on 8760 is not mistaken for "app running").
+| Step | Result |
+|---|---|
+| `check --source <1.0.1>` | available 1.0.0 -> 1.0.1; parts: link changed (34 files), lite and tools unchanged |
+| `apply` | "updated 1.0.0 -> 1.0.1", backup `Data/updates/backup/1.0.0-<time>`, install.json version 1.0.1 |
+| `verify --source <1.0.1>` | all parts ok |
+| `rollback` | "rolled back to 1.0.0"; `status` 1.0.0; `verify --source <1.0.0>` all ok |
+| `apply` from a copy of the release whose zip has 8 bytes flipped inside a changed link file | refused: "suite-1.0.1.zip failed its sha256 check; nothing was changed"; file hash and install.json untouched, `verify` 1.0.0 ok |
+| `apply` of the good release right after | OK again, `check` says no update |
+Notes: (1) A previously staged good zip in `Data/updates/staging/<ver>` is reused only if its size and sha256 match the manifest, so a corrupted served zip cannot slip in; for a meaningful corruption test clear `staging` first (my first try was fooled by that cache, harmless). (2) Corrupting bytes in a part the install does not keep (for example host/core data in a minimal install) is not even read, so it is not detected and not needed. (3) A plain `http://127.0.0.1` update source is NOT usable: `allowHttpLocal` exists in sources.mjs but no caller sets it, so only https, a local folder or a local zip work. That is intended (the installs have a real https source); for dry runs use a folder. (4) Not covered here: a failure in the middle of the swap (the restore path is unit-tested in Suite/updater/test).
