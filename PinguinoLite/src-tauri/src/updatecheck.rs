@@ -77,8 +77,9 @@ fn get(path: &str) -> Result<(u16, Value), String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
+        let url = format!("https://api.github.com/repos/{REPO}/{path}");
         let out = std::process::Command::new("curl.exe")
-            .args(["-s", "-m", "8", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: PinguinoLite-update-check", "-w", "\n%{http_code}", &format!("https://api.github.com/repos/{REPO}/{path}")])
+            .args(["-s", "-m", "8", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: PinguinoLite-update-check", "-w", "\n%{http_code}", url.as_str()])
             .creation_flags(0x0800_0000)
             .output()
             .map_err(|_| "Could not run the update check (curl.exe missing).".to_string())?;

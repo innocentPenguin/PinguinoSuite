@@ -215,7 +215,7 @@ fn host_is_live() -> Option<bool> {
         Err(e) => return if e.kind() == std::io::ErrorKind::ConnectionRefused { Some(false) } else { None },
     };
     s.set_read_timeout(Some(Duration::from_millis(2000))).ok()?;
-    s.write_all(b"GET /api/live HTTP/1.1\r\nHost: 127.0.0.1:8770\r\nConnection: close\r\n\r\n").ok()?;
+    s.write_all(b"GET /api/live HTTP/1.0\r\nHost: 127.0.0.1:8770\r\nConnection: close\r\n\r\n").ok()?;
     let mut buf = Vec::new();
     s.take(256 * 1024).read_to_end(&mut buf).ok()?;
     let t = String::from_utf8_lossy(&buf);
