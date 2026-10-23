@@ -10,6 +10,7 @@ import time
 import requests
 
 import secrets_store
+from connectors import youtube_auth
 import xplat
 from connectors.base import Connector
 from models import ChatMessage
@@ -43,7 +44,7 @@ class YouTube(Connector):
         self.page = None
 
     def _h(self):
-        return {"Authorization": f"Bearer {secrets_store.get('youtube_token')}"}
+        return {"Authorization": f"Bearer {youtube_auth.access_token()}"}
 
     def _find_chat(self):
         r = requests.get(f"{API}/liveBroadcasts", params={"part": "snippet", "broadcastStatus": "active", "mine": "true"},

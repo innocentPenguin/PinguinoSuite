@@ -8,6 +8,7 @@ import requests
 
 import config
 import secrets_store
+from connectors import youtube_auth
 
 counts = {}      # platform -> {"n": int|None, "live": bool, "ts": float}
 
@@ -24,7 +25,7 @@ def _twitch(conn):
 
 
 def _youtube(conn):
-    vid, tok = getattr(conn, "video_id", None), secrets_store.get("youtube_token")
+    vid, tok = getattr(conn, "video_id", None), youtube_auth.access_token()
     if not vid or not tok:
         return None
     r = requests.get("https://www.googleapis.com/youtube/v3/videos", params={"part": "liveStreamingDetails", "id": vid}, headers={"Authorization": f"Bearer {tok}"}, timeout=10)

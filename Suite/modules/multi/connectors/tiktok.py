@@ -2,12 +2,13 @@
 
 TikTok has no official live-chat API. This uses the optional third-party `TikTokLive` package (reverse-engineered,
 can break or violate ToS). It is OFF by default (setting tiktok_enabled + tiktok_user) and never sends.
+Event mapping and the import guard live in connectors/tiktok_live.py.
 """
 import asyncio
 import time
 
 import config
-import xplat
+from connectors import tiktok_live
 from connectors.base import Connector
 from models import ChatMessage
 
@@ -34,49 +35,35 @@ class TikTok(Connector):
     async def run(self):
         while not self.stop:
             s = config.settings()
-            if not (s.get("tiktok_enabled") and s.get("tiktok_user")):
-                self.set_status("disabled", "Off by default (unofficial). Enable in settings.")
+            user = tiktok_live.handle(s)
+            if not (s.get("tiktok_enabled") and user):
+                self.set_status("disabled", "Off by default (unofficial). Enable in settings and set the @handle.")
                 await asyncio.sleep(10)
+                continue
+            ok, why = tiktok_live.available()
+            if not ok:
+                self.set_status("needs_auth", why + " (optional package; ask to install)")
+                await asyncio.sleep(60)
                 continue
             try:
                 from TikTokLive import TikTokLiveClient
-                from TikTokLive.events import CommentEvent
-            except ImportError:
-                self.set_status("needs_auth", "Install the optional 'TikTokLive' package to use this")
-                await asyncio.sleep(30)
-                continue
-            user = s["tiktok_user"].lstrip("@")
-            try:
-                client = TikTokLiveClient(unique_id="@" + user)
-
-                async def on_comment(ev: CommentEvent):
-                    self.state["last_message"] = time.time()
-                    self.inbox.put(normalize_comment(ev, user))
-                client.add_listener(CommentEvent, on_comment)
-                try:                                   # follows, gifts, subscriptions -> events (names differ a little between library versions)
-                    import TikTokLive.events as tev
-                    for kind, cls in (("follow", "FollowEvent"), ("gift", "GiftEvent"), ("subscribe", "SubscribeEvent")):
-                        if hasattr(tev, cls):
-                            def mk(kind):
-                                async def on_x(ev):
-                                    m = xplat.tiktok_event(kind, ev, user)
-                                    if m:
-                                        self.state["last_message"] = time.time()
-                                        self.inbox.put(m)
-                                return on_x
-                            client.add_listener(getattr(tev, cls), mk(kind))
-                except Exception:
-                    pass
-                try:                                   # room viewer count (field names differ between library versions)
-                    from TikTokLive.events import RoomUserSeqEvent
-
+                import TikTokLive.events as tev
+                kw = {"tiktok_sign_url": s["tiktok_sign_url"]} if s.get("tiktok_sign_url") else {}
+                try:
+                    client = TikTokLiveClient(unique_id="@" + user, **kw)
+                except TypeError:                     # option names differ between library versions
+                    client = TikTokLiveClient(unique_id="@" + user)
+                tiktok_live.attach(client, tev, user, self.inbox.put, self.state)
+                if hasattr(tev, "RoomUserSeqEvent"):                 # room viewer count (field names differ between versions)
                     async def on_room(ev):
                         n = getattr(ev, "total", None) or getattr(ev, "m_total", None) or getattr(ev, "viewer_count", None)
                         if n is not None:
                             self.state["viewers"] = int(n)
-                    client.add_listener(RoomUserSeqEvent, on_room)
-                except Exception:
-                    pass
+                    client.add_listener(tev.RoomUserSeqEvent, on_room)
+                if hasattr(tev, "ConnectEvent"):
+                    async def on_connect(ev):
+                        self.set_status("connected", f"@{user} (unofficial)")
+                    client.add_listener(tev.ConnectEvent, on_connect)
                 self.set_status("connecting")
                 await client.start()
             except Exception as e:

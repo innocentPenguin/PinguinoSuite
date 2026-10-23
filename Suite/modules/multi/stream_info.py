@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import requests
 
 import secrets_store
+from connectors import kick_auth, youtube_auth
 
 YT = "https://www.googleapis.com/youtube/v3"
 KICK = "https://api.kick.com/public/v1"
@@ -30,7 +31,7 @@ def _err(r):
 
 
 def _yh():
-    return {"Authorization": f"Bearer {secrets_store.get('youtube_token')}"}
+    return {"Authorization": f"Bearer {youtube_auth.access_token()}"}
 
 
 def _yt_current():
@@ -143,7 +144,7 @@ def youtube_schedule(title, description="", tags=None, starts_at="", privacy="pr
 
 # Kick: PATCH /public/v1/channels needs channel:write on Ivan's Kick app login (stored as secret 'kick_token'; no OAuth flow in Multi yet) ----------
 def _kh():
-    return {"Authorization": f"Bearer {secrets_store.get('kick_token')}"}
+    return {"Authorization": f"Bearer {kick_auth.access_token()}"}
 
 
 def kick_get():
