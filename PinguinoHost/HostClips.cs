@@ -52,4 +52,84 @@ namespace PinguinoHost
             foreach (var kv in got) byId[kv.Key] = kv.Value;
         }
     }
+    /// <summary>Clip picking rules shared by every bot that posts a clip (Host shoutouts, lore clip lines, Chatty, Helper).
+    ///  * Own channel (PickOwn): featured clips from the last 2 weeks only, most viewed first.
+    ///  * Someone else's channel (PickFor, shoutouts): their featured clips first, then the most viewed, all time.
+    ///  * Never repeat any of the last 3 clips sent: one shared list for all bots in Data\runtime\clips_recent.json [{id,ts,by}], newest last; anyone who posts a clip calls Mark.
+    /// Clip ids are Twitch slugs; a clip.twitch.tv URL or a plain id are both accepted.</summary>
+    public static class ClipPick
+    {
+        public const int NoRepeat = 3, OwnDays = 14, Keep = 30;
+        static readonly object L = new object();
+        public static Func<string, DateTime?, List<JObject>> TestFetch;   // test hook: (broadcaster id, since) -> clips
+        static string RecentPath { get { return Path.Combine(HostApi.DataDir, "clips_recent.json"); } }
+
+        public static string IdOf(string urlOrId)
+        {
+            string s = (urlOrId ?? "").Trim(); int q = s.IndexOfAny(new[] { '?', '#' }); if (q >= 0) s = s.Substring(0, q);
+            s = s.TrimEnd('/'); int i = s.LastIndexOf('/'); return (i >= 0 ? s.Substring(i + 1) : s).ToLowerInvariant();
+        }
+        static JArray LoadRecent()
+        {
+            try { if (File.Exists(RecentPath)) return JArray.Parse(File.ReadAllText(RecentPath, Encoding.UTF8).TrimStart((char)0xFEFF)); } catch (Exception) { }
+            return new JArray();
+        }
+        /// <summary>ids of the last n clips sent by any bot, newest last</summary>
+        public static List<string> Recent(int n = NoRepeat) { lock (L) return LoadRecent().OfType<JObject>().Select(x => (string)x["id"] ?? "").Where(x => x != "").Reverse().Take(n).Reverse().ToList(); }
+        /// <summary>true when this clip is one of the last 3 sent (by any bot)</summary>
+        public static bool WasRecent(string urlOrId) { string id = IdOf(urlOrId); return id != "" && Recent().Contains(id); }
+        /// <summary>record a clip that was just posted (by = which bot / feature)</summary>
+        public static void Mark(string urlOrId, string by = "host")
+        {
+            string id = IdOf(urlOrId); if (id == "") return;
+            lock (L)
+            {
+                var a = LoadRecent(); a.Add(new JObject { { "id", id }, { "ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "by", by } });
+                while (a.Count > Keep) a.RemoveAt(0);
+                try { Directory.CreateDirectory(HostApi.DataDir); File.WriteAllText(RecentPath, a.ToString(Newtonsoft.Json.Formatting.None), new UTF8Encoding(false)); } catch (Exception) { }
+            }
+        }
+        /// <summary>clips of a channel from Helix, newest window first (since = null: all time). Each row {id,title,url,view_count,created_at,duration,is_featured,thumbnail_url}.</summary>
+        public static List<JObject> Fetch(string broadcasterId, DateTime? since = null)
+        {
+            if (TestFetch != null) return TestFetch(broadcasterId, since);
+            var res = new List<JObject>(); string after = ""; int pages = 0;
+            do
+            {
+                string q = "/clips?broadcaster_id=" + Uri.EscapeDataString(broadcasterId) + "&first=100" + (since != null ? "&started_at=" + Uri.EscapeDataString(since.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")) : "") + (after != "" ? "&after=" + Uri.EscapeDataString(after) : "");
+                JObject j; string err, code = TwitchApi.CallFull(HttpMethod.Get, q, out j, out err);
+                if (code != "200" || j == null) { Clog.Warn("clips", "clip list failed (HTTP " + code + (err != "" ? ": " + err : "") + ")"); break; }
+                foreach (var c in (j["data"] as JArray ?? new JArray()).OfType<JObject>()) res.Add(c);
+                after = (string)j["pagination"]?["cursor"] ?? ""; pages++;
+            } while (after != "" && pages < 3);
+            return res;
+        }
+        /// <summary>the direct video URL Multi can play, from a Helix thumbnail (".../x-preview-480x272.jpg" -> ".../x.mp4"); "" when the thumbnail has no such form</summary>
+        public static string MediaUrl(JObject clip)
+        {
+            string t = (string)clip["media_url"] ?? ""; if (t != "") return t;
+            t = (string)clip["thumbnail_url"] ?? ""; int i = t.IndexOf("-preview-", StringComparison.Ordinal);
+            return i > 0 && t.StartsWith("https://") ? t.Substring(0, i) + ".mp4" : "";
+        }
+        static bool Featured(JObject c) { return (bool?)c["is_featured"] == true; }
+        static long Views(JObject c) { return (long?)c["view_count"] ?? 0; }
+        /// <summary>order for a pick: featured first, then most viewed; clips among the last 3 sent go last (used only when nothing else is left and allowRepeat)</summary>
+        public static List<JObject> Rank(IEnumerable<JObject> clips, bool featuredOnly = false)
+        {
+            return clips.Where(c => !string.IsNullOrEmpty((string)c["id"]) && (!featuredOnly || Featured(c))).OrderByDescending(Featured).ThenByDescending(Views).ToList();
+        }
+        /// <summary>a clip of THIS channel for a bot to post: featured, made in the last 2 weeks, not one of the last 3 sent. Returns null when there is none (say nothing then). Call Mark(url) after posting.</summary>
+        public static JObject PickOwn()
+        {
+            string bid = TwitchApi.BroadcasterId(); if (bid == "" && TestFetch == null) return null;
+            var rec = Recent();
+            return Rank(Fetch(bid, DateTime.UtcNow.AddDays(-OwnDays)), true).FirstOrDefault(c => !rec.Contains(IdOf((string)c["id"])));
+        }
+        /// <summary>a clip of another streamer for a shoutout: their featured clips first, then the most viewed (all time), skipping the last 3 sent and clips without a playable video URL. null = no clips.</summary>
+        public static JObject PickFor(string broadcasterId, bool needMedia = true)
+        {
+            var rec = Recent(); var ranked = Rank(Fetch(broadcasterId)).Where(c => !needMedia || MediaUrl(c) != "").ToList();
+            return ranked.FirstOrDefault(c => !rec.Contains(IdOf((string)c["id"]))) ?? ranked.FirstOrDefault();
+        }
+    }
 }

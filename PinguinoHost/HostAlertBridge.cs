@@ -135,6 +135,19 @@ namespace PinguinoHost
         }
         public static void FireAsync(string type, string login, string id, string field, long value, string message = "") { ThreadPool.QueueUserWorkItem(_ => { try { Fire(type, login, id, field, value, message); } catch (Exception ex) { Clog.Warn("alerts", "fire failed: " + ex.Message); } }); }
 
+        /// <summary>a shoutout: the target's clip plays in the alerts source (Multi shows it after its own delay and draws the progress bar). Stable id per queued shoutout (target + clip + the time it was queued, so a retry is shown once); never for sim or test names. Returns true when Multi queued it.</summary>
+        public static bool FireShoutout(string login, string display, string clipId, string mediaUrl, string title, double durationS, long stamp, string message = "")
+        {
+            var set = Settings(); if ((bool?)set["Enabled"] == false || string.IsNullOrEmpty(login) || string.IsNullOrEmpty(mediaUrl) || Sim.IsSim(login)) return false;
+            string id = "shoutout:" + login + ":" + clipId + ":" + stamp;
+            lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return false; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
+            var body = new JObject { { "type", "shoutout" }, { "user", login }, { "display", display }, { "id", id }, { "message", message }, { "clip", new JObject { { "url", mediaUrl }, { "title", title ?? "" }, { "duration_s", (int)Math.Ceiling(durationS) } } } };
+            string av = AvatarOf(login); if (av != "") body["avatar"] = av;
+            var r = Post("/api/alerts/fire", body); bool ok = (bool?)r["ok"] == true;
+            Clog.Info("alerts", "shoutout " + login + " clip " + clipId + " -> " + (ok ? "queued" : "not queued: " + Short((string)r["text"])));
+            return ok;
+        }
+
         /// <summary>every watch-streak notification (viewer_milestone): Multi shows it once per id</summary>
         public static void OnStreak(string login, string notifId, long streak) { FireAsync("streak", login, "streak:" + (notifId != "" ? notifId : login + ":" + streak + ":" + DateTime.UtcNow.ToString("yyyyMMddHH")), "streak", streak); }
 
