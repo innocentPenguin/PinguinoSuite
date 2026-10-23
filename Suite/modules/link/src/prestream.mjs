@@ -2,6 +2,7 @@
 import * as ts from './tailscale.mjs';
 import { obsConn } from './vault.mjs';
 import { getData, diagnoseObs } from './obs.mjs';
+import { resolveName, nameHint } from './names.mjs';
 
 const item = (id, label, status, detail) => ({ id, label, status, detail });
 
@@ -18,8 +19,9 @@ export async function prestream(cfg) {
     const inputs = new Set((inp?.inputs || []).map(i => i.inputName));
     const missing = [];
     for (const [name, steps] of Object.entries(cfg.macros)) for (const s of steps) {
-      if (s.data?.sceneName && !scenes.has(s.data.sceneName)) missing.push(`${name}: scene "${s.data.sceneName}"`);
-      if (s.data?.inputName && !inputs.has(s.data.inputName)) missing.push(`${name}: input "${s.data.inputName}"`);
+      const sc0 = s.data?.sceneName, in0 = s.data?.inputName;
+      if (sc0 && !scenes.has(resolveName(cfg, sc0))) missing.push(`${name}: scene "${resolveName(cfg, sc0)}" (${nameHint(sc0)})`);
+      if (in0 && !inputs.has(resolveName(cfg, in0))) missing.push(`${name}: input "${resolveName(cfg, in0)}" (${nameHint(in0)})`);
     }
     out.push(missing.length
       ? item('macros', 'OBS macro targets', 'fail', `not found in OBS: ${missing.join('; ')}. Fix: Link page > Edit macros (pick the real scene/input names), then press Check.`)

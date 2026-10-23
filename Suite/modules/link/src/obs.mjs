@@ -11,6 +11,13 @@ function noRealObs(port) { if (process.env.PINGUINO_NEVER_REAL_OBS && Number(por
 const GO_LIVE = new Set(['StartStream', 'ToggleStream']);
 export const goesLive = requests => requests.some(r => GO_LIVE.has(r.type));
 
+/** OBS says "No scene was found by that name." without the name; say which scene/input it was. */
+function explain(req, type, comment) {
+  const t = req?.data?.sceneName ? ['scene', req.data.sceneName] : req?.data?.inputName ? ['input', req.data.inputName] : null;
+  if (t && /No (scene|input|source) was found/i.test(String(comment))) return `OBS has no ${t[0]} named "${t[1]}" (${type})`;
+  return `${type}: ${comment}`;
+}
+
 export function runRequests({ host, port, password }, requests, timeoutMs = 5000, { allowStartStream = false } = {}) {
   if (goesLive(requests) && !allowStartStream) return Promise.reject(Object.assign(new Error('Start Stream is turned off. Turn on "Allow Start Stream" in Link settings (Buttons and safety) to use it.'), { status: 403 }));
   noRealObs(port);
@@ -38,7 +45,7 @@ export function runRequests({ host, port, password }, requests, timeoutMs = 5000
       } else if (m.op === 2) sendNext();                   // Identified
       else if (m.op === 7) {                               // RequestResponse
         results.push(m.d.requestStatus);
-        if (!m.d.requestStatus?.result) return fail(new Error(`${m.d.requestType}: ${m.d.requestStatus?.comment}`));
+        if (!m.d.requestStatus?.result) return fail(new Error(explain(requests[Number(m.d.requestId)], m.d.requestType, m.d.requestStatus?.comment)));
         next++; sendNext();
       }
     } catch (e) { fail(new Error('OBS sent an unreadable message')); } };   // a rogue listener on the port must not crash Link

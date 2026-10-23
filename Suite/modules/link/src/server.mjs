@@ -15,13 +15,14 @@ import { createMesh } from './mesh.mjs';
 import * as settings from './settings.mjs';
 import * as macros from './macros.mjs';
 import { obsConn } from './vault.mjs';
+import { resolveSteps, resolveName, nameHint } from './names.mjs';
 
 /** Run a macro. Hub talks to OBS directly; clients forward to the hub over the tailnet. */
 export async function runMacro(cfg, name) {
-  const steps = Object.hasOwn(cfg.macros, name) ? cfg.macros[name] : null;
-  if (!Array.isArray(steps)) throw Object.assign(new Error(`unknown macro "${name}" (have: ${Object.keys(cfg.macros).join(', ')})`), { status: 404 });
+  const raw = Object.hasOwn(cfg.macros, name) ? cfg.macros[name] : null;
+  if (!Array.isArray(raw)) throw Object.assign(new Error(`unknown macro "${name}" (have: ${Object.keys(cfg.macros).join(', ')})`), { status: 404 });
   if (cfg.role === 'hub') {
-    const conn = await obsConn(cfg);
+    const conn = await obsConn(cfg), steps = resolveSteps(cfg, raw);   // guessed scene/input names -> the configured real ones
     // State-aware guard so a double press cannot end or restart a live stream by mistake.
     const wants = t => steps.some(s => s.type === t);
     const allowStartStream = cfg.safety?.allowStartStream === true;
@@ -32,7 +33,13 @@ export async function runMacro(cfg, name) {
       if (wants('StartStream') && st.streaming) throw Object.assign(new Error('already live; start ignored'), { status: 409 });
       if (wants('StopStream') && !st.streaming) throw Object.assign(new Error('not streaming; stop ignored'), { status: 409 });
     }
-    try { return await runRequests(conn, steps, 5000, { allowStartStream }); } finally { forgetState(); }
+    try { return await runRequests(conn, steps, 5000, { allowStartStream }); }
+    catch (e) {                                                      // say how to fix a wrong scene/input name
+      const m = /^OBS has no (?:scene|input) named "(.*)" \(/.exec(e.message || '');
+      const guess = m && raw.map(r => r?.data?.sceneName ?? r?.data?.inputName).find(t => t && resolveName(cfg, t) === m[1]);
+      if (guess) e.message += `. ${nameHint(guess)}`;
+      throw e;
+    } finally { forgetState(); }
   }
   const st = await ts.status();
   const hub = st.peers?.find(p => p.name === cfg.hub);

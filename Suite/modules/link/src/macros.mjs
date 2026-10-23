@@ -3,6 +3,7 @@
 import { fail } from './mesh.mjs';
 import { log } from './log.mjs';
 import * as cfgm from './config.mjs';
+import { resolveName } from './names.mjs';
 
 export const KINDS = {
   scene:          { label: 'Switch scene',            param: 'scene', build: p => ({ type: 'SetCurrentProgramScene', data: { sceneName: p } }) },
@@ -89,7 +90,7 @@ export function move(cfg, name, dir) {
 export function missing(cfg, name, obs) {
   if (!cfg.macros[name]) throw fail(404, 'no such macro');
   const have = new Set([...(obs.scenes || []), ...(obs.inputs || [])]);
-  return cfg.macros[name].flatMap(targets).filter(t => !have.has(t));
+  return cfg.macros[name].flatMap(targets).filter(t => !have.has(resolveName(cfg, t)));
 }
 
 /** Portable copy of the macros the editor understands (hand-written steps are skipped and counted). */

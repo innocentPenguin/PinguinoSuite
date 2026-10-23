@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { GUESSES } from './names.mjs';
 
 const LEGACY = path.join(os.homedir(), '.pinguinolink');
 // The Suite core sets PINGUINO_DATA_DIR; standalone runs keep using ~/.pinguinolink.
@@ -21,6 +22,7 @@ export const DEFAULTS = {
   token: null,               // shared secret for the macro API; generated on first run
   inbox: path.join(os.homedir(), 'Downloads', 'PinguinoLink'),
   obs: { host: '127.0.0.1', port: 4455, password: '' },
+  obsNames: { ...GUESSES },   // the OBS scene/input names the default macros use; change a value here to match the real OBS (see names.mjs)
   macros: {
     brb:  [{ type: 'SetCurrentProgramScene', data: { sceneName: 'BRB' } }],
     live: [{ type: 'SetCurrentProgramScene', data: { sceneName: 'Main' } }],
@@ -38,7 +40,7 @@ export function load() {
   }
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
-  const merged = { ...DEFAULTS, ...cfg, obs: { ...DEFAULTS.obs, ...cfg.obs }, claude: { ...DEFAULTS.claude, ...cfg.claude } };
+  const merged = { ...DEFAULTS, ...cfg, obs: { ...DEFAULTS.obs, ...cfg.obs }, obsNames: { ...DEFAULTS.obsNames, ...(cfg.obsNames && typeof cfg.obsNames === 'object' ? cfg.obsNames : {}) }, claude: { ...DEFAULTS.claude, ...cfg.claude } };
   if (!merged.token) { merged.token = crypto.randomBytes(24).toString('hex'); save(merged); }
   return merged;
 }
