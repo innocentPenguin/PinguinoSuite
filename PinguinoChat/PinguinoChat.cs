@@ -478,6 +478,8 @@ public class CPHInline
         public bool CannedOn { get; set; } = true;                 // the ported Nightbot canned-reply commands (CannedFile; the Host stays silent on these terms): works online and offline, ChatReplies off or on
         public bool StayOutOfArguments { get; set; } = true;      // heated chat (viewers bickering, insults, a bots debate): the bot stays out unless it is itself attacked or called out
         public int ReplyGapSec { get; set; } = 240;                // after answering someone, a new tag from them inside this time only gets an answer when it is a real question, an attack/call-out, or the conversation is still going
+        public bool GameVoice { get; set; } = true;                // Chatty speaks the gambling / game results the Host reports (PgGame events); the Host keeps the economy and falls back to its own plain line when Chatty cannot post
+        public string GamblingFile { get; set; } = @"D:\PinguinoSuite\Data\economy\gambling.json";   // read-only here: which games are enabled, for !games
         public bool ReactRaids { get; set; } = true;               // a short "make yourself at home" line for the raiders a few seconds after the Host's own thank-you (never the same words)
         public int RaidMinViewers { get; set; } = 5;               // smaller raids get no extra line
         public bool ReactHype { get; set; } = true;                // one cheer per hype-train level-up (level 2 and up; the Host already announces the start and the end)
@@ -683,6 +685,7 @@ public class CPHInline
         string t = type.ToLower();
         string user = (ArgS("userName") != "" ? ArgS("userName") : ArgS("user") != "" ? ArgS("user") : ArgS("login")).ToLower();
         string react = null;
+        if (t == "pggame") { GameEvent(user); return true; }
         lock (_lock)
         {
             if (t == "streamonline") { _streamStart = Now(); _hypeLevel = 0; return true; }
@@ -701,6 +704,75 @@ public class CPHInline
         if (react != null) ReactSay(t.Contains("raid") ? "raid" : t.Contains("hype") ? "hype" : "recap", react);
         return true;
     }
+    static readonly Dictionary<string, long> _gateAt = new Dictionary<string, long>();
+    bool GateTaken(string key, int sec) { long n = Now(), l; if (_gateAt.TryGetValue(key, out l) && n - l < sec) return true; _gateAt[key] = n; return false; }
+    // ── GAMES: the Host runs the economy (bets, balances, cooldowns) and reports every finished action as a PgGame event; this turns it into ONE short line with a personality.
+    //    Args: kind (gamble|slots|duel|give), outcome (win|lose|jackpot|challenge|declined|expired|broke|invalid), user (login) + display, amount, payout, balance, opponent, reel (real emoji),
+    //    reason (a ready plain sentence for invalid / expired), currency, timeoutSec, optout ("1" = no banter), gameId (dedupe). The Host decides who posts: it only sends the event when Chatty is
+    //    on (Enabled + ChatReplies), otherwise it says its own plain line. Not tied to IsLive: the Host already decided. A heated chat or an opted-out viewer gets the plain result only. ──
+    static readonly Dictionary<string, long> _gameSeen = new Dictionary<string, long>();
+    void GameEvent(string login)
+    {
+        if (!_cfg.GameVoice || !_cfg.Enabled || !_cfg.ChatReplies) return;
+        string id = ArgS("gameId");
+        lock (_gameSeen)
+        {
+            long now = Now(); foreach (string k in _gameSeen.Where(kv => now - kv.Value > 300).Select(kv => kv.Key).ToList()) _gameSeen.Remove(k);
+            if (id != "") { if (_gameSeen.ContainsKey(id)) return; _gameSeen[id] = now; }
+        }
+        string disp = ArgS("display") != "" ? ArgS("display") : login;
+        bool plain = ArgS("optout") == "1" || ArgS("optout").ToLower() == "true";
+        lock (_lock) { if (!plain && IsHeated()) plain = true; }
+        string line = GameLine(ArgS("kind").ToLower(), ArgS("outcome").ToLower(), disp, ArgL("amount"), ArgL("payout"), ArgL("balance"), ArgS("opponent"), ArgS("reel"), ArgS("reason"), ArgS("currency") != "" ? ArgS("currency") : "points", (int)ArgL("timeoutSec"), plain);
+        if (!string.IsNullOrWhiteSpace(line)) PgSay("chat", line);
+    }
+    long ArgL(string k) { CPH.TryGetArg(k, out object o); long r; return o != null && long.TryParse(Convert.ToString(o, System.Globalization.CultureInfo.InvariantCulture), out r) ? r : 0; }
+    string Pick(params string[] v) { return v[_rng.Next(v.Length)]; }
+    string GameLine(string kind, string outcome, string d, long amt, long pay, long bal, string opp, string reel, string reason, string cur, int timeout, bool plain)
+    {
+        string at = "@" + d + " "; long net = pay - amt; string sr = reel != "" ? reel + " " : "";
+        if (outcome == "broke") return at + (plain ? "you have no " + cur + "." : Pick("you have no " + cur + " right now. Hang out in chat and you will earn some \U0001F427", "you have no " + cur + " at the moment. Chat a bit and come back for a spin!"));
+        if (outcome == "invalid" || outcome == "expired" || outcome == "declined")
+        {
+            if (outcome == "declined") return opp != "" ? "@" + opp + " " + d + " passed on the duel." + (plain ? "" : " Next time!") : null;
+            return reason != "" ? at + reason : null;
+        }
+        if (kind == "gamble")
+        {
+            if (outcome == "win") return at + (plain ? "you won " + net + " " + cur + "! You now have " + bal + "." : Pick("YES! +" + net + " " + cur + "! \U0001F389 You now have " + bal + ", keep it rolling!", "winner winner! +" + net + " " + cur + " \U0001F427\U0001F389 Balance: " + bal + ".", "nice one! +" + net + " " + cur + ", you are on fire! You have " + bal + " now."));
+            return at + (plain ? "you lost " + amt + " " + cur + ". Now at " + bal + "." : Pick("ouch, " + amt + " " + cur + " gone \U0001F62C You are at " + bal + ", the next one is yours!", "not this time, " + amt + " " + cur + " lost. " + bal + " left, chin up! \U0001F427", "so close! Lost " + amt + " " + cur + ", " + bal + " left. Shake it off!"));
+        }
+        if (kind == "slots")
+        {
+            if (outcome == "jackpot") return at + sr + (plain ? "JACKPOT, you won " + pay + " " + cur + "! You now have " + bal + "." : "JACKPOT!!! \U0001F3B0\U0001F389\U0001F427 +" + pay + " " + cur + "! You now have " + bal + ", unreal!");
+            if (outcome == "win") return at + sr + (plain ? "you won " + pay + " " + cur + "! You now have " + bal + "." : Pick("winner! +" + pay + " " + cur + " \U0001F389 You have " + bal + " now.", "ka-ching! +" + pay + " " + cur + ", balance " + bal + " \U0001F3B0", "the reels like you! +" + pay + " " + cur + ", you are at " + bal + "."));
+            return at + sr + (plain ? "no luck, lost " + amt + " " + cur + ". Now at " + bal + "." : Pick("so close... lost " + amt + " " + cur + ", " + bal + " left. Spin again! \U0001F3B0", "no match this time, " + amt + " " + cur + " lost. You have " + bal + " left, chin up! \U0001F427", "the reels said no. Lost " + amt + " " + cur + ", " + bal + " left."));
+        }
+        if (kind == "duel")
+        {
+            if (outcome == "challenge") return "@" + opp + " " + d + " challenges you to a duel for " + amt + " " + cur + "!" + (plain ? " Type !accept" : " \u2694\uFE0F Brave enough? Type !accept") + (timeout > 0 ? " within " + timeout + "s." : ".");
+            return plain ? d + " wins the duel against " + opp + " and takes " + pay + " " + cur + "! GG." : Pick(d + " takes down " + opp + " and walks off with " + pay + " " + cur + "! \U0001F94A GG to both.", d + " wins the duel against " + opp + "! +" + pay + " " + cur + " \U0001F3C6 Great fight, " + opp + "!", "the dust settles... " + d + " beats " + opp + " and takes " + pay + " " + cur + "! GG \U0001F427");
+        }
+        if (kind == "give") return at + "gave " + amt + " " + cur + " to " + opp + "." + (plain ? " Thank you for sharing!" : Pick(" So generous, thank you! \U0001F49B", " That is so kind, thank you for sharing! \U0001F427", " What a legend, thank you! \U0001F49B"));
+        return reason != "" ? at + reason : null;
+    }
+    // !games: the games that exist and are switched on (the Host's gambling.json), plus Guess the Chatter (started through !shop)
+    string GamesList()
+    {
+        bool on = true, slots = true, duel = true, give = true;
+        try
+        {
+            string p = _cfg.GamblingFile ?? "";
+            if (File.Exists(p)) { var j = JObject.Parse(File.ReadAllText(p, Encoding.UTF8).TrimStart((char)0xFEFF)); on = (bool?)j["enabled"] != false; slots = (bool?)j["slotsEnabled"] != false; duel = (bool?)j["duelEnabled"] != false; give = (bool?)j["giveEnabled"] != false; }
+        }
+        catch (Exception) { }
+        var l = new List<string>();
+        if (on) { l.Add("!gamble <amount>"); if (slots) l.Add("!slots <amount>"); if (duel) l.Add("!duel @user <amount>"); if (give) l.Add("!give @user <amount>"); }
+        l.Add("Guess the Chatter (start it through !shop)");
+        return l.Count == 1 ? l[0] : string.Join(", ", l.Take(l.Count - 1)) + " and " + l[l.Count - 1];
+    }
+    static readonly Regex RxGuessChatter = new Regex(@"guess( the)? ?chatter", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex RxHowPlay = new Regex(@"\b(how|start|play|where|what|can i|do i|started|works?)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // ── REACTIONS to stream events: short canned lines (no AI), only while live, switchable, each kind with its own cooldown, delayed so the Host's own thank-you goes first ──
     static long _streamStart; static int _hypeLevel; static readonly Dictionary<string, long> _reactAt = new Dictionary<string, long>();
     internal static int ReactDelayMs = 7000;
@@ -851,6 +923,8 @@ public class CPHInline
                 lock (_gateLock) { if (mention || _cfg.RandomChance > 0) _gateSkipped++; }
                 _pgPass = true; return;
             }
+            if (mention && RxGuessChatter.IsMatch(text) && RxHowPlay.IsMatch(text) && !text.Contains("!"))
+            { if (!GateTaken("gc|" + login, 60)) Say(cx, Pick("Guess the Chatter is started through !shop \U0001F427 Pick it there, put in your stake and the game begins. Type !games to see everything you can play.", "you start Guess the Chatter from !shop \U0001F427 Choose it, set your stake and off you go! !games lists all the games.")); return; }
             // A lobby / join / register question belongs to the helper: when the router has the helper next in line, hand it over without answering.
             if (mention && PgRouted() && PgNextHas("helper") && !PgNoDefer() && PgHelperTopic(text)) { _pgDefer = true; return; }
             if (mention && PgHelperTopic(text) && !text.Contains("!") && !ToneJoke.IsMatch(text)) { _pgPass = true; return; }   // "how do I join" and other things the helper / the website already answer: never the chatter (a failing !command is still fair game)
@@ -2682,7 +2756,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         if (string.IsNullOrWhiteSpace(reply)) return true;
         string arg = text.Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim() : "";
         string to = arg.Split(' ')[0].TrimStart('@'); if (!Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$")) to = c.Display;   // a name only: never a link, a /command or a pasted line
-        reply = reply.Replace("$(user)", c.Display).Replace("$(touser)", to).Replace("$(luck)", (_rng.Next(50) + 1).ToString());
+        reply = reply.Replace("$(user)", c.Display).Replace("$(touser)", to).Replace("$(luck)", (_rng.Next(50) + 1).ToString()).Replace("$(games)", GamesList());
         _cannedAt[ck] = now; _cannedAt["u|" + c.Login] = now; _cannedAny = now; PgSay("chat", reply);
         if (_cannedAt.Count > 600) { var old = _cannedAt.Where(kv => now - kv.Value > 600).Select(kv => kv.Key).ToList(); foreach (var k in old) _cannedAt.Remove(k); }
         return true;

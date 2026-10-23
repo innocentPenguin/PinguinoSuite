@@ -49,7 +49,7 @@ namespace PinguinoHost
             if (t.IndexOfAny(new[] { '\r', '\n' }) >= 0) return "the text must be one line";
             string s = t.TrimStart();
             if (s.StartsWith("/") || s.StartsWith(".") || s.StartsWith("!")) return "the text cannot start with / . or ! (that would run a Twitch or bot command)";
-            if (Regex.IsMatch(t, @"\$\((?!user\)|touser\)|luck\))")) return "only $(user), $(touser) and $(luck) can be used";
+            if (Regex.IsMatch(t, @"\$\((?!user\)|touser\)|luck\)|games\))")) return "only $(user), $(touser), $(luck) and $(games) can be used";
             return null;
         }
 
@@ -65,7 +65,7 @@ namespace PinguinoHost
                 try
                 {
                     var r = Read();
-                    return new JObject { { "ok", true }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 }, { "variables", new JArray("$(user)", "$(touser)", "$(luck)") }, { "file", PathOf() }, { "commands", new JArray(r["commands"].OfType<JObject>().Select(View)) } };
+                    return new JObject { { "ok", true }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 }, { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)") }, { "file", PathOf() }, { "commands", new JArray(r["commands"].OfType<JObject>().Select(View)) } };
                 }
                 catch (Exception ex) { return Err("could not read the canned commands: " + ex.Message); }
             }
@@ -76,7 +76,7 @@ namespace PinguinoHost
         {
             user = string.IsNullOrWhiteSpace(user) ? "Someone" : user.Trim();
             string to = (touser ?? "").Trim().TrimStart('@'); if (!Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$")) to = user;
-            return (text ?? "").Replace("$(user)", user).Replace("$(touser)", to).Replace("$(luck)", (Rng.Next(50) + 1).ToString());
+            return (text ?? "").Replace("$(user)", user).Replace("$(touser)", to).Replace("$(luck)", (Rng.Next(50) + 1).ToString()).Replace("$(games)", "!gamble <amount>, !slots <amount> and Guess the Chatter (start it through !shop)");
         }
 
         /// <summary>body: { action: set|add|test|cooldown, name, text?, choices?, aliases?, enabled?, user?, touser?, seconds? }</summary>

@@ -395,6 +395,11 @@
   {
    "name": "onlyfans",
    "text": "Join the Discord: https://discord.gg/fktz5sq4b8"
+  },
+  {
+   "name": "games",
+   "aliases": ["game"],
+   "text": "🎰 Games you can play in chat: $(games). Only bet what you can lose, and have fun! 🐧"
   }
  ]
 }

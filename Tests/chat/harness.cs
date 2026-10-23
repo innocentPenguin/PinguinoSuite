@@ -992,6 +992,61 @@ public static class Harness
             clearAll();
         }
 
+        // ── 19h. games: the Host reports finished gambling actions (PgGame), Chatty speaks them with ONE line; !games; Guess the Chatter pointer ──
+        {
+            Live(true); Extra.Clear(); ReactReset(); SetCfgB("GameVoice", true);
+            Action<Dictionary<string, object>> Game = (args) => { var A = CPHProxy.Args; A.Clear(); A["eventType"] = "PgGame"; foreach (var kv in args) A[kv.Key] = kv.Value; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); new CPHInline().Execute(); };
+            ((System.Collections.IList)SF("_buf").GetValue(null)).Clear();
+            int s0;
+            Game(new Dictionary<string, object> { { "kind", "slots" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 10 }, { "payout", 50 }, { "balance", 140 }, { "reel", "\U0001F352 \U0001F352 \U0001F352" }, { "currency", "points" }, { "gameId", "g1" } });
+            Check("games: a slots win is ONE line with the real emoji reel, the name and the numbers", CPHProxy.Sent.Count == 1 && Last().Contains("\U0001F352 \U0001F352 \U0001F352") && Last().StartsWith("@Stefan") && Last().Contains("50") && Last().Contains("140"), Last());
+            Check("games: the reel survives as real Unicode (no text codes)", Last() != null && !Last().Contains("cherry") && !Last().Contains(":"), Last());
+            s0 = CPHProxy.Sent.Count; var A2 = CPHProxy.Args; CPHProxy.Globals.Remove("pinguino.said.recent"); new CPHInline().Execute();
+            Check("games: the same game id twice is spoken once", CPHProxy.Sent.Count == s0);
+            Game(new Dictionary<string, object> { { "kind", "slots" }, { "outcome", "jackpot" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 10 }, { "payout", 100 }, { "balance", 300 }, { "reel", "\U0001F427 \U0001F427 \U0001F427" }, { "gameId", "g2" } });
+            Check("games: a jackpot is hyped", Last() != null && Last().Contains("JACKPOT") && Last().Contains("\U0001F427 \U0001F427 \U0001F427"), Last());
+            Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 25 }, { "payout", 0 }, { "balance", 75 }, { "gameId", "g3" } });
+            Check("games: a loss is consoling and short", Last() != null && Last().Contains("25") && Last().Contains("75") && Last().Length < 160, Last());
+            Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 20 }, { "payout", 40 }, { "balance", 120 }, { "gameId", "g4" } });
+            Check("games: a win shows the gain (payout minus stake)", Last() != null && Last().Contains("+20") , Last());
+            Game(new Dictionary<string, object> { { "kind", "duel" }, { "outcome", "challenge" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "bobby" }, { "amount", 30 }, { "timeoutSec", 60 }, { "gameId", "g5" } });
+            Check("games: a duel challenge tags the opponent and says how to accept", Last() != null && Last().StartsWith("@bobby") && Last().Contains("!accept") && Last().Contains("60"), Last());
+            Game(new Dictionary<string, object> { { "kind", "duel" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "Bobby" }, { "amount", 30 }, { "payout", 60 }, { "gameId", "g6" } });
+            Check("games: a duel result names both players", Last() != null && Last().Contains("Stefan") && Last().Contains("Bobby") && Last().Contains("60"), Last());
+            Game(new Dictionary<string, object> { { "kind", "give" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "Bobby" }, { "amount", 15 }, { "gameId", "g7" } });
+            Check("games: a gift is thanked", Last() != null && Last().Contains("15") && Last().Contains("Bobby") && System.Text.RegularExpressions.Regex.IsMatch(Last(), "thank"), Last());
+            Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "broke" }, { "user", "stefan" }, { "display", "Stefan" }, { "gameId", "g8" } });
+            Check("games: no balance says 'you have no points'", Last() != null && Last().Contains("you have no points"), Last());
+            Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "invalid" }, { "user", "stefan" }, { "display", "Stefan" }, { "reason", "the minimum is 5 points." }, { "gameId", "g9" } });
+            Check("games: a refusal passes the Host's reason along", Last() == "@Stefan the minimum is 5 points.", Last());
+            Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "quiet1" }, { "display", "Quiet1" }, { "amount", 5 }, { "payout", 0 }, { "balance", 5 }, { "optout", "1" }, { "gameId", "g10" } });
+            Check("games: an opted-out viewer gets the plain result (no banter)", Last() == "@Quiet1 you lost 5 points. Now at 5.", Last());
+            // heated chat: plain result only
+            Msg("a1", "stfu you are trash"); Msg("b2", "lol shut up clown"); Msg("a1", "you are so dumb honestly");
+            Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 5 }, { "payout", 0 }, { "balance", 5 }, { "gameId", "g11" } });
+            Check("games: in a heated chat only the plain result is posted", Last() == "@Stefan you lost 5 points. Now at 5.", Last());
+            ((System.Collections.IList)SF("_buf").GetValue(null)).Clear();
+            SetCfgB("GameVoice", false); Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 5 }, { "gameId", "g12" } });
+            Check("games: switched off, Chatty posts nothing (the Host speaks)", Last() == null, Last()); SetCfgB("GameVoice", true);
+            SetCfgB("ChatReplies", false); Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 5 }, { "gameId", "g13" } });
+            Check("games: with chatting off Chatty posts nothing", Last() == null, Last()); SetCfgB("ChatReplies", true);
+
+            // !games
+            string gf = Path.Combine(Path.GetTempPath(), "pg_gambling_" + Guid.NewGuid().ToString("N") + ".json");
+            File.WriteAllText(gf, "{\"enabled\":true,\"slotsEnabled\":true,\"duelEnabled\":false,\"giveEnabled\":true}"); SetCfgS("GamblingFile", gf);
+            _cannedReset(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Viewer1", "!games");
+            Check("!games: lists gamble, slots, give and Guess the Chatter with the !shop pointer, not the disabled duel", Last() != null && Last().Contains("!gamble") && Last().Contains("!slots") && Last().Contains("!give") && Last().Contains("Guess the Chatter") && Last().Contains("!shop") && !Last().Contains("!duel"), Last());
+            int gn = CPHProxy.Sent.Count; Msg("Viewer2", "!games");
+            Check("!games: the cooldown stops a second answer", CPHProxy.Sent.Count == gn);
+            File.WriteAllText(gf, "{\"enabled\":false}"); System.Threading.Thread.Sleep(20); _cannedReset(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Viewer3", "!games");
+            Check("!games: with gambling off only Guess the Chatter is listed", Last() != null && !Last().Contains("!gamble") && Last().Contains("Guess the Chatter"), Last());
+            // Guess the Chatter, natural wording
+            nextReply = "{\"reply\":\"should not be used\",\"remember\":[]}"; int gc0 = llmCalls; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("Newbie", "@chattypinguino how do i play guess the chatter?");
+            Check("guess the chatter: a how-to question is answered with the !shop pointer, no AI call", llmCalls == gc0 && Last() != null && Last().Contains("!shop"), Last());
+            File.Delete(gf);
+        }
+
         // ── 19e. lore proposals: no moderation from the bot, repeat guard, private lore + person cards in the prompt ──
         SetCfg("RepeatGapSec", 60);
         nextReply = "{\"reply\":\"sure\",\"remember\":[]}"; int cm = llmCalls; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
