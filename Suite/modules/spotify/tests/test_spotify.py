@@ -694,6 +694,58 @@ class BridgeTests(unittest.TestCase):
         self.assertNotIn("KEY", json.dumps(self.b.status()))
 
 
+class LyricsCacheTests(unittest.TestCase):
+    def setUp(self):
+        import lyrics
+        self.ly = lyrics
+        lyrics._cache.clear()
+        self.now = 5000.0
+        lyrics._now = lambda: self.now
+
+    def tearDown(self):
+        import time as _t
+        self.ly._now = _t.time
+        self.ly._cache.clear()
+
+    def test_404_is_cached_for_good(self):
+        calls = []
+
+        def http(url):
+            calls.append(url)
+            raise self.ly.NotFound()
+        self.assertFalse(self.ly.lookup("A", "T", 1000, http)["found"])
+        self.now += 3600
+        self.assertFalse(self.ly.lookup("A", "T", 1000, http)["found"])
+        self.assertEqual(len(calls), 1)
+
+    def test_network_failure_retried_only_after_a_minute(self):
+        calls = []
+
+        def http(url):
+            calls.append(url)
+            raise OSError("offline")
+        self.ly.lookup("A", "T", 0, http)
+        self.now += 10
+        self.ly.lookup("A", "T", 0, http)
+        self.assertEqual(len(calls), 1)
+        self.now += 61
+        self.ly.lookup("A", "T", 0, http)
+        self.assertEqual(len(calls), 2)
+
+    def test_multi_timestamp_lines_and_none_artist(self):
+        r = self.ly.parse_lrc("[00:10.00][00:42.50] chorus\n[00:20.00] verse")
+        self.assertEqual([(x["t"], x["text"]) for x in r], [(10000, "chorus"), (20000, "verse"), (42500, "chorus")])
+        calls = []
+        self.assertFalse(self.ly.lookup(None, "T", 0, lambda u: calls.append(u))["found"])
+        self.assertEqual(calls, [], "no artist: no lookup")
+
+    def test_result_is_a_copy(self):
+        d = {"syncedLyrics": "[00:01.00] hi", "plainLyrics": "hi"}
+        a = self.ly.lookup("A", "T", 0, lambda u: d)
+        a["synced"].append("junk")
+        self.assertEqual(len(self.ly.lookup("A", "T", 0, lambda u: d)["synced"]), 1)
+
+
 class ManifestHelpTests(unittest.TestCase):
     def test_every_prestream_item_id_has_help(self):
         m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))
