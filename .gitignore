@@ -52,3 +52,18 @@ PinguinoB0t/overlays/live_state.js
 Suite/modules/*/data/
 PinguinoB0t/channel_lore_seed.json
 Docs/nightly/lore-*
+
+# SQLite sidecars (only *.db was ignored, which is how the WAL/SHM slipped in)
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+# runtime data and logs wherever a module puts them
+Suite/logs/
+Suite/modules/*/data/
+# private lore seed, backups, leftovers
+PinguinoB0t/channel_lore_seed*.json
+*.bak
+*.orig
+*.tmp
