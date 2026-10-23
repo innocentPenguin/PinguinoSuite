@@ -52,8 +52,9 @@
   function srcOf(w, reg) {
     var base = w.src || (reg && reg.src) || "";
     if (!base) return "";
-    var qs = ["scene=1"]; var p = w.params || {}; for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) qs.push(encodeURIComponent(k) + "=" + encodeURIComponent(p[k]));
-    return BASE + base + "?" + qs.join("&");
+    var ext = /^https?:\/\//i.test(base);   // another local service (alerts on 8766): its own URL, no scene flag
+    var qs = ext ? [] : ["scene=1"]; var p = w.params || {}; for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) qs.push(encodeURIComponent(k) + "=" + encodeURIComponent(p[k]));
+    return (ext ? base : BASE + base) + (qs.length ? (base.indexOf("?") >= 0 ? "&" : "?") + qs.join("&") : "");
   }
   function filterOf(st) {
     var f = [];
@@ -87,7 +88,7 @@
       if (n && n.url !== url) { n.div.remove(); delete nodes[id]; n = null; }   // other page / params: reload this one widget only
       if (!n) {
         var div = document.createElement("div"); div.className = "w"; div.setAttribute("data-widget", id);
-        var fr = document.createElement("iframe"); fr.setAttribute("allowtransparency", "true"); fr.setAttribute("scrolling", "no"); fr.src = url; div.appendChild(fr);
+        var fr = document.createElement("iframe"); fr.setAttribute("allowtransparency", "true"); fr.setAttribute("scrolling", "no"); fr.setAttribute("allow", "autoplay"); fr.src = url; div.appendChild(fr);
         var tag = null; if (PREVIEW) { tag = document.createElement("div"); tag.className = "tag"; div.appendChild(tag); }
         stage.appendChild(div); n = nodes[id] = { div: div, frame: fr, tag: tag, url: url };
       }

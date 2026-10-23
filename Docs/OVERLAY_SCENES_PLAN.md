@@ -62,5 +62,14 @@ Each phase: committed locally, tested in the browser pane at 1920x1080 and 1080x
 - Custom widgets: `custom-<name>` with `src` = another `.html` page of the overlay folder (relative only).
 - `scene*` pages are skipped by the overlay-options health check (the stage is not a widget).
 - Default layouts are generated on first read: h shows players, queue, subroll, wheel, alerts; v shows players_vertical, queue, subroll, wheel, alerts. Positions are first guesses (queue at 40,40 etc.): adjust in the editor (phase 2).
-- Alerts widget points at `alerts.html` (03's page; not in the overlay folder yet, the registry reports `available:false`). Audio caveat: a browser source's sound goes through the scene source, so level/ducking is set on the scene source in OBS, not on the old standalone alerts source (keep that one for 800x600 use).
+- Alerts widget points at http://127.0.0.1:8766/obs/alerts (PinguinoMulti, 800x600, pinned z 100, no X-Frame-Options). Audio caveat: a browser source's sound goes through the scene source, so level/ducking is set on the scene source in OBS, not on the old standalone alerts source (keep that one for 800x600 use).
 - `takeover` is stored, not acted on yet (phase 3). Sub-part widgets (just the team cards, wheel only, team box only) are phase 3: they need each overlay to expose a part mode (`?part=teams`), planned with 02 so the new double-width team box / vertical layout are included.
+- Alerts (per 03): framed from port 8766, always on top (z 100; all other widgets are capped at 99), `allow="autoplay"`. Sound plays inside the iframe, so keep audio on for the scene source; remove the standalone alerts source while framed or every alert plays twice. 03 can add a w/h query if a bigger box is wanted.
+
+## Per-game layouts (Ivan's update)
+- Alerts stay a STANDALONE source (moved per game). The alerts widget exists but is hidden/off by default in every layout.
+- Each layout has an optional `game` tag (any text up to 40 chars; suggestions Just Chatting, Rocket League, Fortnite, Other in the `games` field). Layout key stays `{profile, name}`, plus `game`.
+- `POST /api/scene-layouts` actions added: `tag {profile,name,game}`, `duplicate {from,name,game?}`, `clonetogames {profile,from,games:[...]}` (copies "<from> - <game>", tagged), `settings {profile,autoSwitch,game}`, `setgame {profile:"*",game}` (current activity for both profiles).
+- Auto-switch: per profile `autoSwitch`. When on, `GET /api/scene-layouts` without `?layout=` serves the layout tagged with `currentGame` (case-insensitive), else the active one; the answer reports `resolvedBy` (layout|game|active). Manual activation changes the fallback `active`; `?layout=` always wins. The stage picks the change up within 5 s.
+- Who sets `currentGame`: whatever sees the activity/category change (the Master View activity selector, or the Host's Twitch category change) calls `setgame`. Not wired yet: needs 01/00 to say which one is the source of truth.
+- HUD widgets for per game info (game stats, now playing, customs/queue, goals, chat) are new widgets for phase 3; the registry accepts them as soon as the pages exist.

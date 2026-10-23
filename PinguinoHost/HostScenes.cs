@@ -18,7 +18,7 @@ namespace PinguinoHost
         static string P { get { return Path.Combine(HostApi.DataDir, "scene_layouts.json"); } }
         public static readonly Dictionary<string, int[]> Profiles = new Dictionary<string, int[]> { { "h", new[] { 1920, 1080 } }, { "v", new[] { 1080, 1920 } } };
 
-        class W { public string Id, Label, Src, Help; public int Dw, Dh; public bool Takeover; public Dictionary<string, int[]> Def; /* profile -> x,y,w,h,z,visible */ }
+        class W { public string Id, Label, Src, Help; public int Dw, Dh; public bool Takeover, Pinned; public Dictionary<string, int[]> Def; /* profile -> x,y,w,h,z,visible */ }
         static readonly W[] Registry = {
             new W { Id = "players", Label = "Players (teams)", Src = "players.html", Dw = 1920, Dh = 1080, Help = "Team cards of the running match. Full canvas, best in h.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1920, 1080, 2, 1 } }, { "v", new[] { 0, 0, 1080, 608, 2, 0 } } } },
@@ -30,8 +30,8 @@ namespace PinguinoHost
                 Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1920, 1080, 4, 1 } }, { "v", new[] { 0, 656, 1080, 608, 4, 1 } } } },
             new W { Id = "wheel", Label = "Tournament wheel", Src = "wheel.html", Dw = 1920, Dh = 1080, Takeover = true, Help = "Wheel / team box. Takes over the scene while it has something to show.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1920, 1080, 6, 1 } }, { "v", new[] { 0, 656, 1080, 608, 6, 1 } } } },
-            new W { Id = "alerts", Label = "Alerts", Src = "alerts.html", Dw = 800, Dh = 600, Help = "The 800x600 alerts overlay (03). Audio: a browser source's sound goes through the scene source, so level/ducking is set on the scene source in OBS, not on the old alerts source.",
-                Def = new Dictionary<string, int[]> { { "h", new[] { 560, 240, 800, 600, 9, 1 } }, { "v", new[] { 140, 660, 800, 600, 9, 1 } } } },
+            new W { Id = "alerts", Label = "Alerts", Src = "http://127.0.0.1:8766/obs/alerts", Dw = 800, Dh = 600, Pinned = true, Help = "The 800x600 alerts overlay (PinguinoMulti, port 8766; it only draws while an alert plays). OFF by default (alerts stay a standalone source that moves per game); when switched on it is always on top (z 100). Its sound plays inside the scene source, so keep audio on for the scene source in OBS, and REMOVE the standalone alerts source while it is framed here or every alert plays twice.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 560, 240, 800, 600, 100, 0 } }, { "v", new[] { 140, 660, 800, 600, 100, 0 } } } },
         };
         static W Find(string id) { return Registry.FirstOrDefault(w => w.Id == id); }
 
@@ -65,7 +65,7 @@ namespace PinguinoHost
             var r = new JObject { { "id", id } }; if (src != null) r["src"] = src;
             r["x"] = Clamp(o["x"], -8000, 8000, (double)def["x"]); r["y"] = Clamp(o["y"], -8000, 8000, (double)def["y"]);
             r["w"] = Clamp(o["w"], 20, 8000, (double)def["w"]); r["h"] = Clamp(o["h"], 20, 8000, (double)def["h"]);
-            r["scale"] = Clamp(o["scale"], 0.1, 8, 1); r["z"] = (int)Clamp(o["z"], 0, 100, (double)def["z"]);
+            r["scale"] = Clamp(o["scale"], 0.1, 8, 1); r["z"] = reg != null && reg.Pinned ? 100 : (int)Clamp(o["z"], 0, 99, (double)def["z"]);   // alerts are pinned on top, nothing else may reach 100
             r["visible"] = Bool(o["visible"], reg != null ? (bool)def["visible"] : true); r["opacity"] = Clamp(o["opacity"], 0, 1, 1);
             r["takeover"] = Bool(o["takeover"], reg != null && reg.Takeover);
             var pr = new JObject(); var pi = o["params"] as JObject; if (pi != null) foreach (var p in pi.Properties().Take(30)) { string k = Safe(p.Name, 30).Replace(" ", ""); if (k == "") continue; pr[k] = Safe(p.Value.ToString(), 80); }
@@ -84,6 +84,8 @@ namespace PinguinoHost
             }
             r["style"] = st; return r;
         }
+        public static readonly string[] Games = { "Just Chatting", "Rocket League", "Fortnite", "Other" };   // suggestions for the editor; any text up to 40 chars is accepted
+        static string Game(string g) { g = Safe(g, 40).Trim(); return g; }
         static JObject CleanLayout(JToken lay, string profile)
         {
             var arr = (lay as JObject)?["widgets"] as JArray; if (arr == null) return null;
@@ -91,7 +93,9 @@ namespace PinguinoHost
             foreach (var t in arr) { var w = CleanWidget(t, profile); if (w == null || !seen.Add((string)w["id"])) continue; ws.Add(w); if (ws.Count >= 40) break; }
             // registry widgets that the editor did not send keep their defaults, so a layout is always complete
             foreach (var reg in Registry) if (!seen.Contains(reg.Id)) ws.Add(DefaultWidget(reg, profile));
-            return new JObject { { "widgets", ws }, { "updated", DateTime.UtcNow.ToString("o") } };
+            var res = new JObject { { "widgets", ws }, { "updated", DateTime.UtcNow.ToString("o") } };
+            string g = Game((string)(lay as JObject)?["game"]); if (g != "") res["game"] = g;
+            return res;
         }
 
         static JObject Prof(JObject all, string profile)
@@ -107,7 +111,7 @@ namespace PinguinoHost
         public static JObject Widgets()
         {
             return new JObject { { "ok", true }, { "profiles", new JObject { { "h", new JArray(1920, 1080) }, { "v", new JArray(1080, 1920) } } },
-                { "widgets", new JArray(Registry.Select(w => new JObject { { "id", w.Id }, { "label", w.Label }, { "src", w.Src }, { "designW", w.Dw }, { "designH", w.Dh }, { "takeover", w.Takeover }, { "available", File.Exists(Path.Combine(OverlayFiles.Root ?? "", w.Src)) }, { "help", w.Help } })) },
+                { "widgets", new JArray(Registry.Select(w => new JObject { { "id", w.Id }, { "label", w.Label }, { "src", w.Src }, { "designW", w.Dw }, { "designH", w.Dh }, { "takeover", w.Takeover }, { "available", w.Src.StartsWith("http") || File.Exists(Path.Combine(OverlayFiles.Root ?? "", w.Src)) }, { "pinned", w.Pinned }, { "help", w.Help } })) },
                 { "style", new JArray("radius (px)", "rotate (deg)", "brightness (0-3)", "saturate (0-3)", "hue (deg)", "blur (px)", "shadow (bool)", "bg (css colour)") },
                 { "params", "free query-string pairs passed to the widget page, e.g. {\"layout\":\"sprinkled\",\"scale\":\"1.2\"} (same names the standalone page takes)" } };
         }
@@ -118,16 +122,28 @@ namespace PinguinoHost
             lock (L)
             {
                 var all = Load(); var p = Prof(all, profile);
-                string name = Name(layout); var ls = (JObject)p["layouts"]; if (name == "" || ls[name] == null) name = (string)p["active"];
+                string name = Name(layout); var ls = (JObject)p["layouts"]; string by = "layout"; bool auto = (bool?)p["autoSwitch"] ?? false; string cg = (string)p["currentGame"] ?? "";
+                if (name == "" || ls[name] == null)
+                {
+                    name = (string)p["active"]; by = "active";
+                    if (auto && cg != "") { var m = ls.Properties().FirstOrDefault(x => string.Equals((string)x.Value["game"] ?? "", cg, StringComparison.OrdinalIgnoreCase)); if (m != null) { name = m.Name; by = "game"; } }
+                }
                 var lay = (JObject)ls[name];
                 return new JObject { { "ok", true }, { "profile", profile }, { "width", Profiles[profile][0] }, { "height", Profiles[profile][1] }, { "active", (string)p["active"] }, { "name", name },
-                    { "names", new JArray(ls.Properties().Select(x => x.Name)) }, { "layout", lay }, { "registry", Widgets()["widgets"] } };
+                    { "names", new JArray(ls.Properties().Select(x => x.Name)) }, { "tags", new JObject(ls.Properties().Select(x => new JProperty(x.Name, (string)x.Value["game"] ?? ""))) }, { "game", (string)lay["game"] ?? "" }, { "autoSwitch", auto }, { "currentGame", cg }, { "resolvedBy", by }, { "games", new JArray(Games) }, { "layout", lay }, { "registry", Widgets()["widgets"] } };
             }
         }
 
+        /// <summary>The current game/activity for both profiles at once (called by whatever sees a category change; with autoSwitch on the layout tagged with it is served).</summary>
+        static JObject SetGameAll(JObject b)
+        {
+            lock (L) { var all = Load(); foreach (var pr in Profiles.Keys) Prof(all, pr)["currentGame"] = Game((string)b["game"]); try { Save(all); } catch (Exception e) { return Err("could not save: " + e.Message); } }
+            return new JObject { { "ok", true }, { "currentGame", Game((string)b["game"]) } };
+        }
         public static JObject Set(JObject b)
         {
             string action = ((string)b?["action"] ?? "save").ToLowerInvariant(), profile = ((string)b?["profile"] ?? "").ToLowerInvariant();
+            if (action == "setgame" && (profile == "*" || profile == "")) return SetGameAll(b);
             if (!Profiles.ContainsKey(profile)) return Err("profile must be h or v");
             lock (L)
             {
@@ -136,12 +152,23 @@ namespace PinguinoHost
                 {
                     case "save":
                         { if (name == "") return Err("name is required"); var lay = CleanLayout(b["layout"], profile); if (lay == null) return Err("layout.widgets must be an array"); if (ls[name] == null && ls.Count >= 30) return Err("at most 30 layouts per profile"); ls[name] = lay; if (b["activate"] != null && Bool(b["activate"], false)) p["active"] = name; break; }
+                    case "tag":
+                        { if (ls[name] == null) return Err("no such layout"); string g = Game((string)b["game"]); if (g == "") ((JObject)ls[name]).Remove("game"); else ((JObject)ls[name])["game"] = g; break; }
+                    case "settings":
+                        { if (b["autoSwitch"] != null) p["autoSwitch"] = Bool(b["autoSwitch"], false); if (b["game"] != null) p["currentGame"] = Game((string)b["game"]); break; }
+                    case "setgame":
+                        { p["currentGame"] = Game((string)b["game"]); break; }
+                    case "clonetogames":
+                        {   // one copy of a layout per game: "<from> - <game>", tagged (an existing one is left alone)
+                            string from = Name((string)b["from"]); if (ls[from] == null) return Err("no such layout to copy"); var gs = b["games"] as JArray; if (gs == null || gs.Count == 0) return Err("games must be a list");
+                            foreach (var gt in gs.Take(20)) { string g = Game((string)gt); if (g == "") continue; string nn = Name(from + " - " + g); if (nn == "" || ls[nn] != null || ls.Count >= 30) continue; var cp = (JObject)ls[from].DeepClone(); cp["game"] = g; cp["updated"] = DateTime.UtcNow.ToString("o"); ls[nn] = cp; }
+                            break; }
                     case "activate":
                         { if (ls[name] == null) return Err("no such layout"); p["active"] = name; break; }
                     case "delete":
                         { if (ls[name] == null) return Err("no such layout"); if (ls.Count <= 1) return Err("cannot delete the last layout"); ls.Remove(name); if ((string)p["active"] == name) p["active"] = ls.Properties().First().Name; break; }
                     case "duplicate":
-                        { string from = Name((string)b["from"]); if (ls[from] == null) return Err("no such layout to copy"); if (name == "") return Err("name is required"); if (ls[name] != null) return Err("name already used"); var cp = (JObject)ls[from].DeepClone(); cp["updated"] = DateTime.UtcNow.ToString("o"); ls[name] = cp; break; }
+                        { string from = Name((string)b["from"]); if (ls[from] == null) return Err("no such layout to copy"); if (name == "") return Err("name is required"); if (ls[name] != null) return Err("name already used"); var cp = (JObject)ls[from].DeepClone(); cp["updated"] = DateTime.UtcNow.ToString("o"); if (b["game"] != null) { string g = Game((string)b["game"]); if (g == "") cp.Remove("game"); else cp["game"] = g; } ls[name] = cp; break; }
                     case "rename":
                         { string to = Name((string)b["to"]); if (ls[name] == null) return Err("no such layout"); if (to == "") return Err("to is required"); if (ls[to] != null) return Err("name already used"); var cp = ls[name]; ls.Remove(name); ls[to] = cp; if ((string)p["active"] == name) p["active"] = to; name = to; break; }
                     default: return Err("action must be save, activate, delete, duplicate or rename");
