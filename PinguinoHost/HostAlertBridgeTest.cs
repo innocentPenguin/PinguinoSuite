@@ -72,16 +72,31 @@ namespace PinguinoHost
             // 4b. hype train + tips for Multi: off by default, then start / each new level / end once, tips with currency, never sim/test
             AlertBridge.TestReset(); AlertBridge.TestResetHype(); calls.Clear();
             Func<string, string, string, Dictionary<string, string>> hy = (st, lv, id) => new Dictionary<string, string> { { "state", st }, { "x.level", lv }, { "x.id", id }, { "x.progress", "40" }, { "x.goal", "100" }, { "x.total", "700" } };
-            AlertBridge.OnHype(hy("begin", "1", "ht1")); AlertBridge.OnTip("tipper", 5, "usd", "tp-1");
-            Check(calls.Count == 0, "hype and tip emits are OFF by default (EmitHypeTip)");
-            string abp = Path.Combine(HostApi.DataDir, "alert_bridge.json"); var abs = AlertBridge.Settings(); abs["EmitHypeTip"] = true; File.WriteAllText(abp, abs.ToString());
+            string abp = Path.Combine(HostApi.DataDir, "alert_bridge.json"); var abs = AlertBridge.Settings(); abs["EmitHypeTip"] = false; File.WriteAllText(abp, abs.ToString());
+            AlertBridge.OnHype(hy("begin", "1", "ht1")); AlertBridge.OnTip("tipper", 5, "usd", "tp-1"); AlertBridge.OnGameNow("slots", "jackpot", "p", "P", 100, 1000, "", "", "g0");
+            Check(calls.Count == 0, "all emits are silent when EmitHypeTip is switched off");
+            abs["EmitHypeTip"] = true; File.WriteAllText(abp, abs.ToString());
             AlertBridge.OnHype(hy("begin", "1", "ht1")); AlertBridge.OnHype(hy("begin", "1", "ht1")); AlertBridge.OnHype(hy("progress", "1", "ht1")); AlertBridge.OnHype(hy("progress", "2", "ht1")); AlertBridge.OnHype(hy("progress", "2", "ht1")); AlertBridge.OnHype(hy("progress", "3", "ht1")); AlertBridge.OnHype(hy("end", "3", "ht1")); AlertBridge.OnHype(hy("end", "3", "ht1"));
             var hf = calls.Where(x => x.Key == "/api/alerts/fire").Select(x => x.Value).ToList();
-            Check(hf.Select(f => (string)f["phase"] + ((int)f["level"])).SequenceEqual(new[] { "start1", "level2", "level3", "end3" }) && hf.All(f => (string)f["type"] == "hype") && (string)hf[1]["id"] == "hype:ht1:level2" && (long)hf[0]["goal"] == 100 && (long)hf[0]["total"] == 700, "hype: start, one alert per new level, end; repeats ignored: " + string.Join(",", hf.Select(f => (string)f["id"])));
+            Check(hf.Select(f => (string)f["phase"] + ((int)f["level"])).SequenceEqual(new[] { "start1", "level2", "level3", "end3" }) && hf.All(f => ((string)f["type"]).StartsWith("hype_") && (string)f["type"] == "hype_" + (string)f["phase"]) && (string)hf[1]["id"] == "hype:ht1:level2" && (long)hf[0]["goal"] == 100 && (long)hf[0]["total"] == 700, "hype: start, one alert per new level, end; repeats ignored: " + string.Join(",", hf.Select(f => (string)f["id"])));
             var simh = hy("begin", "1", "ht2"); simh["sim"] = "true"; calls.Clear(); AlertBridge.OnHype(simh); Check(calls.Count == 0, "sim hype train fires nothing");
             AlertBridge.OnTip("tipper", 5, "usd", "tp-1"); AlertBridge.OnTip("tipper", 5, "usd", "tp-1");
             var tf = calls.Where(x => x.Key == "/api/alerts/fire").Select(x => x.Value).ToList();
-            Check(tf.Count == 1 && (string)tf[0]["type"] == "tip" && (string)tf[0]["user"] == "tipper" && (double)tf[0]["amount"] == 5 && (string)tf[0]["currency"] == "USD" && (string)tf[0]["id"] == "tip:tp-1", "tip: amount + currency, stable id, once: " + tf.Count);
+            Check(tf.Count == 1 && (string)tf[0]["type"] == "tip" && (string)tf[0]["user"] == "tipper" && (long)tf[0]["amount"] == 5 && (string)tf[0]["currency"] == "USD" && (string)tf[0]["id"] == "tip:tp-1", "tip: amount + currency, stable id, once: " + tf.Count);
+            // game / economy emits, names as agreed with Multi
+            calls.Clear();
+            AlertBridge.OnGameNow("slots", "jackpot", "winner", "Winner", 100, 1000, "", "", "g1"); AlertBridge.OnGameNow("slots", "jackpot", "winner", "Winner", 100, 1000, "", "", "g1");
+            AlertBridge.OnGameNow("gamble", "win", "gam", "Gam", 50, 100, "", "", "g2"); AlertBridge.OnGameNow("gamble", "lose", "gam", "Gam", 50, 0, "", "", "g3");
+            AlertBridge.OnGameNow("shop", "bought", "buyer", "Buyer", 500, 0, "", "get_sub", "g4"); AlertBridge.OnGameNow("shop", "invalid", "buyer", "Buyer", 0, 0, "", "get_sub", "g5");
+            AlertBridge.OnGameNow("guess", "start", "gu", "Gu", 100, 200, "", "", "g6"); AlertBridge.OnGameNow("guess", "expired", "gu", "Gu", 100, 0, "", "", "g6");
+            AlertBridge.OnGameNow("give", "win", "giver", "Giver", 40, 40, "Taker", "", "g7"); AlertBridge.OnGameNow("slots", "win", "p", "P", 1, 2, "", "", "");
+            var gf = calls.Where(x => x.Key == "/api/alerts/fire").Select(x => x.Value).ToList();
+            Func<string, JObject> by = t => gf.FirstOrDefault(f => (string)f["type"] == t);
+            Check(gf.Count == 5 && gf.Count(f => (string)f["type"] == "gamble_win") == 2 && (long)gf.First(f => (string)f["id"] == "game:slots:g1:jackpot")["amount"] == 1000 && (string)gf.First(f => (string)f["id"] == "game:slots:g1:jackpot")["message"] == "jackpot!", "gamble_win: winnings as amount, jackpot message, once per game id; losses, invalid and idless results fire nothing: " + gf.Count);
+            Check(by("shop") != null && (string)by("shop")["message"] == "get_sub" && by("guess") != null && (string)by("guess")["user"] == "gu", "shop (item name) and guess (on start only)");
+            Check(by("give") != null && (string)by("give")["recipient"] == "Taker" && (long)by("give")["amount"] == 40, "give: user, recipient, amount");
+            calls.Clear(); AlertBridge.Emit("loan", "loan:ln-1", "lender", "Lender", 300, "Borrower"); AlertBridge.Emit("loan", "loan:ln-1", "lender", "Lender", 300, "Borrower");
+            Check(calls.Count == 1 && (string)calls[0].Value["type"] == "loan" && (string)calls[0].Value["recipient"] == "Borrower" && (long)calls[0].Value["amount"] == 300, "loan: lender, recipient, amount, once");
             abs["EmitHypeTip"] = false; File.WriteAllText(abp, abs.ToString()); calls.Clear();
 
             // 5. raid emote line: fires when the raid is SCHEDULED (raid_start), not when it lands (raid_out)

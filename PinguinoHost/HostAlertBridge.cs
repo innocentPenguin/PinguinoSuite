@@ -25,7 +25,7 @@ namespace PinguinoHost
         static string StateP { get { return Path.Combine(HostApi.DataDir, "alert_bridge_state.json"); } }
         public static JObject Settings()
         {
-            var d = new JObject { { "Enabled", true }, { "EmitHypeTip", false }, { "Url", "http://127.0.0.1:8766" }, { "Token", "" }, { "ComebackDays", 30 }, { "WatchHours", new JArray(10, 25, 50, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000, 3000, 5000) } };
+            var d = new JObject { { "Enabled", true }, { "EmitHypeTip", true }, { "Url", "http://127.0.0.1:8766" }, { "Token", "" }, { "ComebackDays", 30 }, { "WatchHours", new JArray(10, 25, 50, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000, 3000, 5000) } };
             try { if (File.Exists(SetP)) foreach (var p in JObject.Parse(File.ReadAllText(SetP, Encoding.UTF8))) d[p.Key] = p.Value; else File.WriteAllText(SetP, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
             return d;
         }
@@ -48,6 +48,7 @@ namespace PinguinoHost
         {
             if (TestPost != null) return TestPost(path, body);
             var set = Settings(); string url = ((string)set["Url"] ?? "http://127.0.0.1:8766").TrimEnd('/');
+            if (HostApi.SimMode && url.EndsWith(":8766")) return new JObject { { "ok", false }, { "text", "sim Host: the real Multi is never called" } };   // a test Host must not fire alerts on the live alerts source
             var toks = new List<string>(); string t0 = (string)set["Token"] ?? ""; if (t0 != "") toks.Add(t0);
             foreach (var n in new[] { "PINGUINO_MODULE_TOKEN", "PINGUINO_API_TOKEN" }) { string v = Environment.GetEnvironmentVariable(n) ?? ""; if (v != "" && !toks.Contains(v)) toks.Add(v); }
             if (toks.Count == 0) toks.Add("");
@@ -151,9 +152,9 @@ namespace PinguinoHost
             return ok;
         }
 
-        // ================= hype train + tips (settings EmitHypeTip, default OFF until Multi confirms the event names) =================
+        // ================= hype train + tips (settings EmitHypeTip, default ON: Multi gates what it shows) =================
         static int _hypeLevel; static string _hypeId = "";
-        /// <summary>a Twitch hype train event (ctx = the EventSub context: state begin|progress|end, x.id, x.level, x.progress, x.goal, x.total). Fires type "hype" with phase start|level|end; one level alert per new level. Never test or sim.</summary>
+        /// <summary>a Twitch hype train event (ctx = the EventSub context: state begin|progress|end, x.id, x.level, x.progress, x.goal, x.total). Fires type hype_start | hype_level | hype_end (phase set too); one level alert per new level. Never test or sim.</summary>
         public static void OnHype(Dictionary<string, string> ctx)
         {
             try
@@ -168,7 +169,7 @@ namespace PinguinoHost
                 else if (st == "end") { phase = "end"; id = "hype:" + tid + ":end"; }
                 else return;
                 lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
-                var body = new JObject { { "type", "hype" }, { "phase", phase }, { "user", "Hype train" }, { "display", "Hype train" }, { "id", id }, { "level", lv }, { "amount", lv } };
+                var body = new JObject { { "type", "hype_" + phase }, { "phase", phase }, { "user", "Hype train" }, { "display", "Hype train" }, { "id", id }, { "level", lv }, { "amount", lv } };
                 foreach (var k in new[] { "progress", "goal", "total" }) { long v; if (long.TryParse(g("x." + k), out v)) body[k] = v; }
                 var r = Post("/api/alerts/fire", body); Clog.Info("alerts", "hype " + phase + " level " + lv + " -> " + ((bool?)r["ok"] == true ? "queued" : "not queued: " + Short((string)r["text"])));
             }
@@ -182,13 +183,44 @@ namespace PinguinoHost
             {
                 var set = Settings(); if ((bool?)set["Enabled"] == false || (bool?)set["EmitHypeTip"] != true || string.IsNullOrEmpty(login) || Sim.IsSim(login) || amount <= 0) return;
                 string id = "tip:" + tipId; lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
-                var body = new JObject { { "type", "tip" }, { "user", login }, { "display", Boards.DisplayName(login) }, { "id", id }, { "amount", amount }, { "currency", string.IsNullOrEmpty(currency) ? "USD" : currency.ToUpperInvariant() } };
+                var body = new JObject { { "type", "tip" }, { "user", login }, { "display", Boards.DisplayName(login) }, { "id", id }, { "amount", (long)Math.Round(amount) }, { "currency", string.IsNullOrEmpty(currency) ? "USD" : currency.ToUpperInvariant() } };
                 string av = AvatarOf(login); if (av != "") body["avatar"] = av;
                 var r = Post("/api/alerts/fire", body); Clog.Info("alerts", "tip " + login + " " + amount + " -> " + ((bool?)r["ok"] == true ? "queued" : "not queued: " + Short((string)r["text"])));
             }
             catch (Exception ex) { Clog.Warn("alerts", "tip emit failed: " + ex.Message); }
         }
         public static void OnTipAsync(string login, double amount, string currency, string tipId) { ThreadPool.QueueUserWorkItem(_ => OnTip(login, amount, currency, tipId)); }
+        /// <summary>one fire for a game / economy result: gamble_win (amount = winnings, message "jackpot!"), shop (message = item), guess, give and loan (recipient + amount). Stable id, never sim/test players. Multi decides what is shown.</summary>
+        public static void Emit(string type, string id, string login, string display, long amount, string recipient = "", string message = "")
+        {
+            try
+            {
+                var set = Settings(); if ((bool?)set["Enabled"] == false || (bool?)set["EmitHypeTip"] != true || string.IsNullOrEmpty(login) || Sim.IsSim(login) || string.IsNullOrEmpty(id)) return;
+                lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
+                var body = new JObject { { "type", type }, { "user", login }, { "display", string.IsNullOrEmpty(display) ? login : display }, { "id", id } };
+                if (amount != 0) body["amount"] = amount; if (!string.IsNullOrEmpty(recipient)) body["recipient"] = recipient; if (!string.IsNullOrEmpty(message)) body["message"] = message;
+                string av = AvatarOf(login); if (av != "") body["avatar"] = av;
+                var r = Post("/api/alerts/fire", body); Clog.Info("alerts", type + " " + login + " -> " + ((bool?)r["ok"] == true ? "queued" : "not queued: " + Short((string)r["text"])));
+            }
+            catch (Exception ex) { Clog.Warn("alerts", type + " emit failed: " + ex.Message); }
+        }
+        /// <summary>called by the one game door (Gamble.Out) for every result line</summary>
+        public static void OnGame(string kind, string outcome, string login, string display, long amount, long payout, string opponent, string item, string gameId) { ThreadPool.QueueUserWorkItem(_ => OnGameNow(kind, outcome, login, display, amount, payout, opponent, item, gameId)); }
+        internal static void OnGameNow(string kind, string outcome, string login, string display, long amount, long payout, string opponent, string item, string gameId)
+        {
+            if (string.IsNullOrEmpty(gameId)) return; kind = kind ?? ""; outcome = outcome ?? "";
+            string type = "", msg = ""; long amt = 0; string rcp = "", id = "game:" + kind + ":" + gameId + ":" + outcome;
+            if ((kind == "slots" || kind == "gamble") && (outcome == "win" || outcome == "jackpot")) { type = "gamble_win"; amt = payout; msg = outcome == "jackpot" ? "jackpot!" : ""; }
+            else if (kind == "shop" && outcome == "bought") { type = "shop"; msg = item ?? ""; }
+            else if (kind == "guess" && outcome == "start") { type = "guess"; }
+            else if (kind == "give" && outcome == "win") { type = "give"; amt = payout; rcp = opponent; }
+            if (type == "") return;
+            Emit(type, id, login, display, amt, rcp, msg);
+        }
+        public static void OnLoan(string lender, string borrower, long amount, string loanId)
+        {
+            string l = lender, b = borrower; long a = amount; string id = "loan:" + loanId; ThreadPool.QueueUserWorkItem(_ => Emit("loan", id, l, Boards.DisplayName(l), a, Boards.DisplayName(b)));
+        }
         internal static void TestResetHype() { _hypeLevel = 0; _hypeId = ""; }
 
         /// <summary>every watch-streak notification (viewer_milestone): Multi shows it once per id</summary>

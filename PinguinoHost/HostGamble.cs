@@ -99,6 +99,7 @@ namespace PinguinoHost
         }
         static void Out(Action<string> say, string plain, string kind, string outcome, string user, long amount = 0, long payout = 0, long balance = 0, string opponent = "", string reel = "", string reason = "", string gameId = "", int timeoutSec = 0, string item = "", int tries = 0)
         {
+            try { AlertBridge.OnGame(kind, outcome, (user ?? "").ToLowerInvariant(), user, amount, payout, opponent, item, gameId); } catch (Exception) { }   // Multi alert (off by EmitHypeTip=false), whatever the chat voice does
             if (!ChattyCanPost()) { say(plain); return; }
             string login = (user ?? "").ToLowerInvariant();
             bool opt = false; try { opt = SiteShop.OptedOutNow(login); } catch (Exception) { }

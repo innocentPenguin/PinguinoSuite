@@ -171,7 +171,7 @@ namespace PinguinoHost
                 o["status"] = "accepted"; o["loanId"] = loanId;
                 string rq = (string)o["requestId"];
                 if (!string.IsNullOrEmpty(rq)) { var r = Tab("requests")[rq] as JObject; if (r != null) { r["status"] = "filled"; r["loanId"] = loanId; } foreach (var s in Tab("offers").Properties().Select(x => (JObject)x.Value).Where(x => (string)x["requestId"] == rq && (string)x["status"] == "open")) s["status"] = "cancelled"; }
-                Save(); return Yes("loan started: " + amount + " " + Cur + " from " + Disp(lender) + ", pay back " + (amount + interest) + " within " + days + " days", new JObject { { "loanId", loanId }, { "owed", amount + interest } });
+                Save(); AlertBridge.OnLoan(lender, borrower, amount, loanId); return Yes("loan started: " + amount + " " + Cur + " from " + Disp(lender) + ", pay back " + (amount + interest) + " within " + days + " days", new JObject { { "loanId", loanId }, { "owed", amount + interest } });
             }
         }
         public static JObject Decline(string borrower, string offerId)
