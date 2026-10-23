@@ -167,3 +167,29 @@ class Simulation(unittest.TestCase):
         self.assertIsNone(suite.live_state["simulated"])
         self.assertFalse(suite.live_state["live"])
         self.assertEqual(self.calls, [True, False])
+
+
+class Diag(unittest.TestCase):
+    def test_diag_reports_miss_error_and_age(self):
+        m = suite.Module({"id": "dg", "name": "dg", "url": "http://127.0.0.1:1", "health": "/h", "cmd": ["x"], "cwd": "."})
+        m.supervise = lambda: None
+        d = m.diag()
+        self.assertEqual((d["miss"], d["last_ok_age"], d["last_error"], d["pid"], d["state"]), (0, None, "", None, "stopped"))
+        m.refresh()   # nothing listens on port 1
+        d = m.diag()
+        self.assertEqual(d["miss"], 1)
+        self.assertTrue(d["last_error"])
+        m._ping = lambda: True
+        m.last_ok = __import__("time").time() - 3
+        m.refresh()
+        d = m.diag()
+        self.assertTrue(d["healthy"])
+        self.assertEqual(d["miss"], 0)
+
+    def test_endpoint_lists_every_module_and_needs_the_token(self):
+        from fastapi.testclient import TestClient
+        c = TestClient(suite.app, base_url="http://127.0.0.1:8760")
+        self.assertEqual(c.get("/api/modules/diag").status_code, 401)
+        r = c.get("/api/modules/diag", headers={"Authorization": "Bearer " + suite.TOKEN})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual({m["id"] for m in r.json()["modules"]}, set(suite.modules))

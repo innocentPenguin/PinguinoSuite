@@ -1740,7 +1740,12 @@ pages.console=()=>`<div class="card" id="prcard" style="margin-bottom:14px"><div
    <select id="c-lv"><option value="debug">Debug+</option><option value="info">Info+</option><option value="warn">Warn+</option><option value="error">Errors</option></select>
    <input type="text" id="c-q" placeholder="Search…"><label class="sm dim"><input type="checkbox" id="c-err"> Errors only</label>
    <button class="sm" id="c-pause">Pause</button><button class="sm" id="c-clear">Clear</button><button class="sm" id="c-copy" title="Copy the lines shown">Copy</button><button class="sm" id="c-save" title="Save the lines shown as a text file">Save</button><span class="sm faint sp" id="c-count"></span></div>
-  <div class="clog" id="clog"></div>`;
+  <div class="clog" id="clog"></div>
+  <details class="card" id="diag" style="margin-top:14px"><summary style="cursor:pointer"><b>Diagnostics</b> <span class="sm faint">what the core knows about each module (open this when a row looks stuck)</span></summary><div id="diag-body" class="sm" style="margin-top:8px"><span class="faint">Loading…</span></div></details>`;
+async function loadDiag(){const el=$('#diag-body');if(!el)return;
+  try{const r=await fetch('/api/modules/diag').then(x=>x.json());if(!r||!Array.isArray(r.modules))throw new Error('this build has no diagnostics yet');
+    el.innerHTML='<table style="border-collapse:collapse;width:100%"><tr class="faint" style="text-align:left"><th>Module</th><th>State</th><th>Missed pings</th><th>Last OK</th><th>Last error</th><th>PID</th><th>Crashes (5 min)</th></tr>'+r.modules.map(m=>`<tr><td><b>${esc(m.id)}</b></td><td>${esc(m.state)}${m.failed?' · failed':''}${m.deferred?' · waiting for master':''}${m.adopted?' · adopted':''}</td><td>${m.miss}/4</td><td>${m.last_ok_age==null?'never':m.last_ok_age+' s ago'}</td><td>${esc(m.last_error||'')}</td><td>${m.pid||''}${m.pid&&!m.alive&&!m.adopted?' (exited)':''}</td><td>${m.crashes_5min}</td></tr>`).join('')+'</table>'}
+  catch(e){el.innerHTML='<span class="faint">Could not load ('+esc(e.message||e)+'). An older Suite core has no diagnostics.</span>'}}
 const tm=t=>new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',...hr()});
 function renderLog(){const box=$('#clog');if(!box)return;
   const f=C.entries.filter(e=>e.seq>C.clearBefore&&(!C.mod||e.module===C.mod)&&LV[e.level]>=LV[C.errOnly?'error':C.level]&&(!C.q||(e.msg+' '+e.source+' '+e.module).toLowerCase().includes(C.q.toLowerCase())));
@@ -1781,6 +1786,7 @@ function bindConsole(){
   $('#c-copy').onclick=async()=>{try{await navigator.clipboard.writeText(txt());toast('Copied '+(C.shown||[]).length+' lines')}catch{toast('Could not copy')}};
   $('#c-save').onclick=()=>saveBlob(new Blob([txt()],{type:'text/plain'}),'pinguino-console.txt');
   $('#pr-run').onclick=async()=>{$('#pr-run').disabled=true;$('#pr-run').textContent='Running…';try{C.pr=await post('/api/prestream/run');renderPrestream();pollConsole()}catch{toast('Check failed to run')}$('#pr-run').disabled=false;$('#pr-run').textContent='Run now'};
+  const dg=$('#diag');if(dg){dg.ontoggle=()=>{if(dg.open)loadDiag()};clearInterval(C.diagTimer);C.diagTimer=setInterval(()=>{if(route==='console'&&dg.isConnected&&dg.open)loadDiag();else if(!dg.isConnected)clearInterval(C.diagTimer)},4000)}
   C.seen=C.seq;store.set('consoleSeen',C.seen);updateBadge();renderLog();renderPrestream()}
 /* ============ Updates card (Settings): check the release source, update one part at a time (core: suite/updates.py, updater: Suite/updater) ============ */
 const UPD={c:null,job:null,busy:false,err:'',timer:null};

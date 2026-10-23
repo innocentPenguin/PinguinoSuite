@@ -460,6 +460,9 @@ class Module:
         self.deferred = False  # singleton waiting for this device to become master
         self.port_warned = 0.0
         self.last_try = 0.0
+        self._miss = 0        # health pings missed in a row (4 = called down)
+        self.last_ok = 0.0    # when a health ping last answered OK
+        self.last_err = ""    # why the latest ping failed ("" while it answers)
         self.adopted = False  # already running when this core started (or started by an older core): we supervise it but hold no process handle
         self.adopt_pid = 0
 
@@ -573,9 +576,23 @@ class Module:
 
     def _ping(self):
         try:
-            return requests.get(self.spec["url"] + self.spec.get("health", "/"), timeout=1.5).ok
-        except Exception:
+            r = requests.get(self.spec["url"] + self.spec.get("health", "/"), timeout=1.5)
+        except Exception as e:  # noqa: BLE001
+            self.last_err = f"{type(e).__name__}: {str(e)[:120]}"
             return False
+        if r.ok:
+            self.last_ok, self.last_err = time.time(), ""
+        else:
+            self.last_err = f"HTTP {r.status_code}"
+        return r.ok
+
+    def diag(self):
+        """What the supervisor knows about this module right now (GET /api/modules/diag): the first thing to read when a row looks stuck."""
+        now = time.time()
+        return {"id": self.id, "state": self.public()["state"], "healthy": self.healthy, "wanted": self.wanted, "failed": self.failed, "deferred": self.deferred, "adopted": self.adopted,
+                "miss": self._miss, "last_ok_age": round(now - self.last_ok, 1) if self.last_ok else None, "last_error": self.last_err,
+                "pid": (self.proc.pid if self.proc is not None else self.adopt_pid) or None, "alive": self.running, "crashes_5min": len([t for t in self.crashes if now - t < 300]),
+                "url": self.spec["url"] + self.spec.get("health", "/")}
 
     def supervise(self):
         """Restart a wanted module that exited on its own: backoff 2/5/15/30/60s, give up after 5 crashes in 5 min."""
@@ -613,7 +630,7 @@ class Module:
         else:
             # a busy module (transcribing, loading a model) can miss one 1.5 s ping; the shell swaps its page for a "starting" card the moment
             # it is not "running", which threw the user back to the module's home page. Call it down only after several misses in a row, or when its process is gone.
-            self._miss = getattr(self, "_miss", 0) + 1
+            self._miss += 1
             if self._miss >= 4 or (self.proc is not None and not self.running):
                 self.healthy = False
         if self.healthy != was:
@@ -1169,6 +1186,11 @@ class Opt(BaseModel):
     enabled: bool | None = None
     start_with_suite: bool | None = None
     react_to_live: bool | None = None
+
+
+@app.get("/api/modules/diag")
+def modules_diag():
+    return {"now": time.time(), "modules": [m.diag() for m in modules.values()]}
 
 
 @app.get("/api/modules/{mid}/probe")
