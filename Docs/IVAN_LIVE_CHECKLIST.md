@@ -22,7 +22,7 @@ Your own volume = Windows volume mixer for the headphones. The stream's volume =
 5. Leave the Speak master switch OFF until you decide to test it (part 5 says how).
 
 ## 3. Link (two PCs and OBS)
-1. Morning check: open http://127.0.0.1:7777/api/morning in your browser. You should see plain sentences marked good, note or bad. Anything "bad" tells you the one thing to fix.
+1. Morning check: open the Link page (Modules, Link, or http://127.0.0.1:7777) and click **Run the morning check** in the card at the top. It only looks, it changes nothing. A good result: a green headline sentence on top and one line per check, each with a green tick (✔). A grey dot (•) is a note worth reading; a red ✘ with a red headline is a problem, and its line tells you the one thing to fix.
 2. OBS password: in OBS, Tools, WebSocket Server Settings, enable it (port 4455) and read the password. In the Suite, Integrations, **Key vault**, add **OBS_WS_PASSWORD** and type it yourself. Press **Test**: it should say OK. Nobody else types this.
 3. Real scene names: the macros use guessed names (scene `BRB`, scene `Main`, input `Mic/Aux`). On the Link page open **Edit macros** and use the names that really exist in OBS (or rename the scenes in OBS). The Check button must not say "missing: ...". These names live in the `obsNames` part of `Data\runtime\link\config.json`.
 4. Pairing (only if you want the second PC): follow Docs\PinguinoLink\PAIRING_TEST.md part A (**Show a pairing code**, then **Pair** on the other PC, then **Allow**). You should see a green dot next to the other PC.
