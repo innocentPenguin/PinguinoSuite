@@ -40,7 +40,7 @@ const eraOf=mm=>{const e=Object.entries(mm||{}).filter(x=>x[1]>=20).map(x=>x[0])
 for(const [u,v] of ids){
   const prof=readJ('D:/PinguinoSuite/Data/profiles/'+u+'.json')||{};
   const note=NOTES[u]||null;
-  const partners=(myPairs[u]||[]).filter(p=>!bots.has(p.a)&&!bots.has(p.b)&&p.a!=='innocentpenguin_'&&p.b!=='innocentpenguin_').sort((a,b)=>b.tot-a.tot).slice(0,8).map(p=>{const o=p.a===u?p.b:p.a;const t=tone[pairKey(u,o)]||{n:1,r:0,w:0,g:0};return {login:o,to:(p.a===u?p.ab:p.ba),from:(p.a===u?p.ba:p.ab),tags:pairTag(t)}});
+  const partners=(myPairs[u]||[]).filter(p=>!bots.has(p.a)&&!bots.has(p.b)&&!optOut.has(p.a)&&!optOut.has(p.b)&&p.a!=='innocentpenguin_'&&p.b!=='innocentpenguin_').sort((a,b)=>b.tot-a.tot).slice(0,8).map(p=>{const o=p.a===u?p.b:p.a;const t=tone[pairKey(u,o)]||{n:1,r:0,w:0,g:0};return {login:o,to:(p.a===u?p.ab:p.ba),from:(p.a===u?p.ba:p.ab),tags:pairTag(t)}});
   const label=(()=>{ if(note?.treatsIvan&&note.treatsIvan!=='n/a')return note.treatsIvan; const t=[];
     if(v.toIvan>=40){ if(v.tease>v.praise*1.5)t.push('mostly teasing/banter'); else if(v.praise>=v.tease)t.push('mostly supportive'); else t.push('mixed: banter and support'); if(v.insult>=3)t.push('a few harsh jabs, banter-level'); }
     else t.push('rarely addresses Ivan directly');
