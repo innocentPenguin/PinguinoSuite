@@ -581,7 +581,7 @@ window.addEventListener('message',async e=>{
     else if(d.op==='set'&&d.label&&typeof d.always_on_top==='boolean')await PGWin.onTop(d.label,d.always_on_top);
     else if(d.op==='list')e.source.postMessage({pinguino:'windows',windows:await PGWin.list()},e.origin);
     else if(d.op==='close')await PGWin.close(d.label);
-    else if(d.op==='external'&&/^https:\/\/[^\s]+$/i.test(String(d.url||'')))openExternal(d.url);   // module link -> system browser (iframe target=_blank is dead inside the webview)
+    else if(d.op==='external'&&/^https:\/\/[^\s]+$|^http:\/\/(127\.0\.0\.1|localhost):\d+\/[^\s]*$/i.test(String(d.url||'')))openExternal(d.url,true);   // module link -> system browser (iframe target=_blank is dead inside the webview)
     else if(d.op==='monitors')e.source.postMessage({pinguino:'monitors',monitors:await PGWin.monitors()},e.origin)}
   catch(err){e.source&&e.source.postMessage({pinguino:'window-error',error:String(err.message||err)},e.origin)}});
 /* ============ Personalization (per device; core: GET/POST /api/prefs, validated in Suite/suite/prefs.py; contract in Docs/MODULE_CONTRACT.md) ============ */
@@ -1040,8 +1040,10 @@ function bindAccounts(){
     catch(e){toast('Could not start the sign-in: '+(e&&e.message?e.message:e))}});
   $('#ac-restart')&&($('#ac-restart').onclick=async()=>{if(!confirm('Restart PinguinoHost now? Chat commands and alerts pause for a few seconds. Do not do this mid-stream unless you must.'))return;await post('/api/modules/host/restart');ACC.restartHint=false;toast('Restarting the Host…');draw(true)});
   $('#ac-signout')&&($('#ac-signout').onclick=async()=>{if(!confirm('Sign the streamer account out? Redeems, ads and clips stop until you sign in again.'))return;await hostJ('/api/account/streamer/signout',{});ACC.st=undefined;draw(true)})}
-const openExternal=u=>{
+const openExternal=(u,sys)=>{
   if(!window.__TAURI__)return window.open(u,'_blank');
+  // sys: a module asked for the user's real browser even for a local page (e.g. the Spotify player needs Widevine, which WebView2 lacks)
+  if(sys&&/^http:\/\/(127\.0\.0\.1|localhost):\d+\//i.test(u)&&window.__TAURI__.shell&&window.__TAURI__.shell.open)return window.__TAURI__.shell.open(u).catch(e=>toast('Could not open the browser: '+(e&&e.message?e.message:e)));
   // A local page (127.0.0.1) must never replace the shell itself (the shell would be stuck on it): give it its own window with a title bar and close button.
   if(/^https?:\/\/(127\.0\.0\.1|localhost)[:\/]/i.test(u)&&window.PGWin){const slug=u.replace(/^https?:\/\//,'').replace(/[^a-z0-9]+/gi,'-').slice(0,28).toLowerCase();
     return PGWin.open({label:'pop-ext-'+slug,url:u,title:'PinguinoSuite: '+u.replace(/^https?:\/\//,''),width:1100,height:700,remember:false}).catch(e=>toast('Could not open the page: '+(e&&e.message?e.message:e)))}
