@@ -141,7 +141,7 @@ namespace PinguinoHost
         static string PayEvent(string sid, string login, long amount, string type, string label, string id)
         {
             login = Canon(Boards.AliasMap(), login); if (login == "" || amount <= 0) return "nothing to pay";
-            if (Boards.IsBot(login) || login == Streamer()) return "not paid to bots or the streamer";
+            if (Boards.IsBot(login) || login == Streamer() || IsPseudoUser(login)) return "not paid to bots, system accounts or the streamer";
             if (!Sim.IsSim(login)) lock (L) if (Ledger()[id] != null) return null;
             string err = Award(login, amount, type, label, id); if (err != null) return err;
             if (!Sim.IsSim(login)) lock (L) { PRow(sid, login, type, label, amount, id); Save(); }

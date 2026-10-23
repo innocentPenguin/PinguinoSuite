@@ -110,6 +110,13 @@ try:
     feed('zed: !repay all', 1.5); chk('repaying clears it', me('zed')['loans']['owed'] == 0 and me('zed')['loans']['defaulted'] is False)
     # ---- Award refuses to overdraw
     ids = [r['id'] for r in me('ann')['ledger']]; chk('ledger ids unique', len(ids) == len(set(ids)))
+    # ---- audit: a take never goes below 0, system accounts are never paid, duplicate events pay once
+    feed('#streamer1: !addpoints bob 40'); feed('#streamer1: !removepoints bob 500'); chk('!removepoints stops at 0', bal('bob') == 0, bal('bob'))
+    r = post('/api/economy/event', {'type': 'gift', 'login': 'ananonymousgifter', 'amount': 5, 'id': 'aud-g1'}); chk('anonymous gifter is not paid', bal('ananonymousgifter') == 0, r)   # (the event route answers ok for non-tip types even when nothing is paid; the balance is what counts)
+    r = post('/api/economy/event', {'type': 'tip', 'login': 'twitch', 'amount': 5, 'id': 'aud-t1'}); chk('twitch pseudo user is not paid', r.get('ok') is False, r)
+    b0 = bal('cora'); post('/api/economy/event', {'type': 'resub', 'login': 'cora', 'tier': '1', 'amount': 1, 'id': 'aud-r1'}); b1 = bal('cora'); post('/api/economy/event', {'type': 'resub', 'login': 'cora', 'tier': '1', 'amount': 1, 'id': 'aud-r1'})
+    chk('a replayed resub pays once', b1 > b0 and bal('cora') == b1, (b0, b1, bal('cora')))
+    post('/api/economy/event', {'type': 'gift', 'login': 'cora', 'tier': '1', 'amount': 5, 'id': 'aud-g2'}); b2 = bal('cora'); post('/api/economy/event', {'type': 'gift', 'login': 'cora', 'tier': '1', 'amount': 5, 'id': 'aud-g2'}); chk('a replayed gift bomb pays once', b2 > b1 and bal('cora') == b2)
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS economy2'); sys.exit(1 if fails else 0)

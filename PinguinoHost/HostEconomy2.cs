@@ -57,11 +57,13 @@ namespace PinguinoHost
         static string Apply(string id, string login, long delta, string source, string note)
         {
             login = Canon(Boards.AliasMap(), login); if (login == "") return "no user";
-            long before = Balance(login);
-            if (delta < 0 && before < -delta) return "not enough " + CurrencyName;
-            lock (L)
+            if (delta > 0 && IsPseudoUser(login)) return "not paid to system accounts";
+            long before;
+            lock (L)   // the balance check and the write are one step: two spends at once can no longer both pass on the same balance
             {
                 var led = Ledger(); if (led[id] != null) return null;
+                before = Balance(login);
+                if (delta < 0 && before < -delta) return "not enough " + CurrencyName;
                 var adj = (JObject)Doc()["adjust"]; adj[login] = D(adj[login]) + delta;
                 led[id] = new JObject { { "login", login }, { "delta", delta }, { "reason", note != "" ? note : source }, { "source", source }, { "note", note }, { "balance", before + delta }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 Save();

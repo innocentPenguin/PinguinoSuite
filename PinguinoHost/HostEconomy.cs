@@ -310,6 +310,7 @@ namespace PinguinoHost
             login = Canon(Boards.AliasMap(), login); if (login == "") return "Which user?";
             lock (L)
             {
+                if (delta < 0) { double have = Math.Floor(Me(login).Points); delta = -Math.Min(-delta, Math.Max(0, have)); }   // a take never goes below 0
                 var adj = (JObject)Doc()["adjust"]; double cur = D(adj[login]); adj[login] = cur + delta; Save();
             }
             var me = Me(login);
