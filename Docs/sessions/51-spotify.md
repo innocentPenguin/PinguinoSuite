@@ -13,3 +13,8 @@ connect.py + tests per SPOTIFY_CONNECT.md, then audit fixes 1,2,4,5,6,7,12,14,9,
 ## Pitfalls noted
 - Python files are CRLF: patch with Edit or small Python scripts. Heredocs with backslash-n mangle strings.
 - Never port 8799 in tests; never restart modules (needs restart: spotify -> tell 50).
+
+## Phase B status (2026-10-23)
+Committed: 015b0cf Connect device (connect.py, /api/connect*, Setup card, fake go-librespot, tests); audit fixes 85c0e6d (1+2), b7f81ee (4), 187b4a9 (5+6), d95c2d5 (7+9), ec65f44 (12+14+19); Phase 4: 17aa9ae artist-id ban, a18bcf8 announce per tier, 0ca195a leaderboard day/week/month, ceb992f lyrics_toggle. Tests: unit 186, e2e 221.
+Not verified live (needs Ivan at the PC): go-librespot device_auth login, WASAPI audio_device = "CABLE Input" (fallback text: Windows Volume mixer per-app output), channel-playlist-add and YouTube-link manual tests (need Spotify connected). Remaining audit items: 3, 13, 15-18, 8, 10, 11 and the low ones.
+Tell 20 - Suite: master.html "Your own listening output is not available yet" is outdated; Lyrics button posts {action:"lyrics_toggle"} and reads lyrics_on from /api/now; leaderboard ?period=. Needs restart: spotify.
