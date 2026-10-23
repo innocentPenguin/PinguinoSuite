@@ -71,6 +71,7 @@ namespace PinguinoHost
         {
             if (Targets.Contains(cmd)) return true;
             try { if (ChannelLore.IsCommand(cmd) || ChannelLore.ChattyOwns(cmd)) return true; } catch (Exception) { }
+            try { if (Economy.IsBankCommand(cmd) || Gamble.IsCommand(cmd) || Rank.IsCommand(cmd)) return true; } catch (Exception) { }   // Host-owned commands are real: "!bank" must not become "!rank"
             try { var j = SubsImport.ParseJ(File.ReadAllText(Path.Combine(Program.SuiteDir ?? "", "PinguinoB0t", "commands.json"))); foreach (var e in (j["commands"] as JArray) ?? new JArray()) { if (string.Equals((string)e["command"], cmd, StringComparison.OrdinalIgnoreCase)) return true; foreach (var a in (e["aliases"] as JArray) ?? new JArray()) if (string.Equals((string)a, cmd, StringComparison.OrdinalIgnoreCase)) return true; } } catch (Exception) { }
             return false;
         }
