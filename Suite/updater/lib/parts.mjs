@@ -41,6 +41,10 @@ export function ejectPart(installDir, id) {
     const src = within(installDir, safeRel(rel)), dst = path.join(folder, 'files', rel);
     fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.renameSync(src, dst); moved++;
   }
+  for (const rel of files) {   // tidy: drop folders the move left EMPTY (rmdir refuses a folder that still holds anything, e.g. module data)
+    let d = path.dirname(within(installDir, safeRel(rel)));
+    while (d.length > path.resolve(installDir).length) { try { fs.rmdirSync(d) } catch { break } d = path.dirname(d) }
+  }
   const all = COMPONENTS.map(c => c.id), next = (parts || all).filter(x => x !== id), comps = { ...(inst.components || {}) };
   delete comps[id];
   writeJson(D.install, { ...inst, parts: next, ...(inst.components ? { components: comps } : {}) });

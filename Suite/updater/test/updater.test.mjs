@@ -393,7 +393,7 @@ test('install on demand, verify, repair, eject (files are moved, not deleted), a
   assert.ok(!fs.existsSync(path.join(dst, 'Suite/modules/spotify/s.py'))); assert.equal(read(dst, 'Suite/modules/spotify/data/tokens.json'), 'mine');   // module data stays
   assert.equal(fs.readFileSync(path.join(e.kept_in, 'files/Suite/modules/spotify/s.py'), 'utf8'), 'spotify 1');
   j = JSON.parse(read(dst, 'install.json')); assert.deepEqual([...j.parts].sort(), ['link', 'lite', 'tools']); assert.ok(!j.components.spotify);
-  assert.equal(ejectPart(dst, 'link').ok, true);   // link is a module part too: allowed
+  assert.equal(ejectPart(dst, 'link').ok, true); assert.ok(!fs.existsSync(path.join(dst, 'Suite/modules/link')));   // emptied folder removed; spotify's stays because its data is still there   // link is a module part too: allowed
   assert.equal(ejectPart(dst, 'lite').ok, false); assert.equal(ejectPart(dst, 'tools').ok, false); assert.equal(ejectPart(dst, 'zzz').ok, false);
 });
 
