@@ -57,7 +57,10 @@ class Kick(Connector):
             r = requests.get(f"{API}/channels", headers=self._headers(), timeout=10)
             if r.status_code != 200:
                 raise RuntimeError(f"Kick channel lookup failed {r.status_code}: {r.text[:120]}")
-            self.broadcaster_id = int(((r.json().get("data") or [{}])[0]).get("broadcaster_user_id"))
+            try:
+                self.broadcaster_id = int(((r.json().get("data") or [{}])[0]).get("broadcaster_user_id"))
+            except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+                raise RuntimeError("Kick channel lookup returned an unexpected body")
         return self.broadcaster_id
 
     def _send_sync(self, text, reply_to):
@@ -146,15 +149,22 @@ class Kick(Connector):
                     await ws.send(json.dumps({"event": "pusher:subscribe", "data": {"auth": "", "channel": f"chatrooms.{room}.v2"}}))
                     while True:
                         raw = await asyncio.wait_for(ws.recv(), timeout=130)
-                        fr = json.loads(raw)
-                        ev = fr.get("event", "")
+                        try:
+                            fr = json.loads(raw)
+                            ev = fr.get("event", "")
+                        except (ValueError, AttributeError):
+                            continue                 # one bad frame must not drop the connection
                         if ev == "pusher:ping":
                             await ws.send(json.dumps({"event": "pusher:pong", "data": {}}))
                         elif ev == "pusher_internal:subscription_succeeded":
                             self.set_status("connected", f"chatroom {room} (unofficial)")
                         elif ev.endswith("ChatMessageEvent"):
                             data = fr.get("data")
-                            m = xplat.kick_pusher(ev, json.loads(data) if isinstance(data, str) else data, chan or "kick")
+                            try:
+                                data = json.loads(data) if isinstance(data, str) else data
+                            except ValueError:
+                                continue
+                            m = xplat.kick_pusher(ev, data, chan or "kick")
                             if m:
                                 self.state["last_message"] = time.time()
                                 self.inbox.put(m)

@@ -68,6 +68,22 @@ class YouTube(Connector):
         self.page = j.get("nextPageToken")
         return j.get("items", []), max(float(config.settings().get("youtube_min_poll_s", 10)), j.get("pollingIntervalMillis", 6000) / 1000)   # 5 quota units per poll of 10,000/day
 
+    @staticmethod
+    def failure_plan(e):
+        """Exception from an API call -> (status, detail, sleep_s). 401: token dead (needs sign-in); 429/403 quota: back off hard so we never hammer; else retry in 20 s."""
+        r = getattr(e, "response", None)
+        code = getattr(r, "status_code", None)
+        if code == 401:
+            return "needs_auth", "YouTube token rejected: sign in again", 60
+        if code in (429, 403):
+            ra = 0
+            try:
+                ra = float((getattr(r, "headers", None) or {}).get("Retry-After") or 0)
+            except (TypeError, ValueError):
+                pass
+            return "reconnecting", f"YouTube {code} (quota/rate limit): backing off", min(max(ra, 600 if code == 403 else 120), 3600)
+        return "reconnecting", str(e)[:120], 20
+
     async def run(self):
         while not self.stop:
             if not secrets_store.get("youtube_token"):
@@ -93,8 +109,9 @@ class YouTube(Connector):
             except Exception as e:
                 self.state["reconnects"] += 1
                 self.chat_id = None
-                self.set_status("reconnecting", str(e)[:120])
-                await asyncio.sleep(20)
+                st, detail, wait = self.failure_plan(e)
+                self.set_status(st, detail)
+                await asyncio.sleep(wait)
 
     def _send_sync(self, text):
         r = requests.post(f"{API}/liveChat/messages?part=snippet", headers=self._h(), timeout=10,

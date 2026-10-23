@@ -373,3 +373,117 @@ def test_relay_into_real_ingest_rejects_forged_signature(monkeypatch):
     monkeypatch.setattr(k, "verify", lambda *a: False)
     res = asyncio.run(kick_relay.replay([_row(1, "A")], k.ingest_webhook))
     assert res["rejected"] == 1 and res["ok"] == 0
+
+
+# ---- failure modes: expired token, 429, network down, bad JSON ----
+class _HE(Exception):
+    def __init__(self, code, headers=None):
+        self.response = NS(status_code=code, headers=headers or {})
+
+
+def test_youtube_failure_plan():
+    from connectors.youtube import YouTube
+    assert YouTube.failure_plan(_HE(401))[0] == "needs_auth"
+    st, _, w = YouTube.failure_plan(_HE(429, {"Retry-After": "300"}))
+    assert st == "reconnecting" and w == 300
+    assert YouTube.failure_plan(_HE(429))[2] >= 120
+    assert YouTube.failure_plan(_HE(403))[2] >= 600          # quotaExceeded: do not hammer
+    assert YouTube.failure_plan(_HE(429, {"Retry-After": "junk"}))[2] >= 120
+    assert YouTube.failure_plan(ConnectionError("down"))[2] == 20
+    assert YouTube.failure_plan(_HE(429, {"Retry-After": "99999"}))[2] == 3600
+
+
+def test_youtube_run_survives_network_down_and_bad_json(monkeypatch):
+    from connectors import youtube as yt
+    monkeypatch.setattr(yt.secrets_store, "get", lambda k, d=None: "t")
+    monkeypatch.setattr(yt.youtube_auth, "access_token", lambda: "T")
+    y = yt.YouTube(None, lambda e: None)
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+        if len(sleeps) >= 2:
+            y.stop = True
+    monkeypatch.setattr(yt.asyncio, "sleep", fake_sleep)
+
+    def down(*a, **k):
+        raise ConnectionError("network down")
+    monkeypatch.setattr(yt.requests, "get", down)
+    asyncio.run(y.run())
+    assert y.state["status"] == "reconnecting" and y.state["reconnects"] == 2 and sleeps == [20, 20]
+
+    class BadJson(_R):
+        def raise_for_status(self): pass
+        def json(self): raise ValueError("not json")
+    y.stop, sleeps[:] = False, []
+    monkeypatch.setattr(yt.requests, "get", lambda *a, **k: BadJson())
+    asyncio.run(y.run())
+    assert y.chat_id is None and sleeps == [20, 20]
+
+
+def test_kick_channel_lookup_failures(monkeypatch):
+    kk, k = _kick(monkeypatch, {"kick_token": "t", "kick_oauth": {"scope": "chat:write"}})
+    monkeypatch.setattr(kk.requests, "get", lambda url, **kw: _R({}, 401))
+    with pytest.raises(RuntimeError, match="401"):
+        k._my_id()
+    for body in ({"data": []}, {"data": [{}]}, {"data": "x"}, {"data": [{"broadcaster_user_id": "abc"}]}):
+        monkeypatch.setattr(kk.requests, "get", lambda url, b=body, **kw: _R(b))
+        with pytest.raises(RuntimeError, match="unexpected"):
+            k._my_id()
+    monkeypatch.setattr(kk.requests, "get", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("down")))
+    with pytest.raises(ConnectionError):
+        k._my_id()                                   # propagates; send() callers see an error, nothing is cached
+    assert k.broadcaster_id is None
+
+
+def test_kick_send_429_and_bad_json(monkeypatch):
+    kk, k = _kick(monkeypatch, {"kick_token": "t", "kick_oauth": {"scope": "chat:write"}})
+    monkeypatch.setattr(kk.requests, "get", lambda url, **kw: _R({"data": [{"broadcaster_user_id": 1}]}))
+    monkeypatch.setattr(kk.requests, "post", lambda url, **kw: _R({}, 429))
+    with pytest.raises(RuntimeError, match="429"):
+        asyncio.run(k.send("hi"))
+
+    class Bad(_R):
+        def json(self): raise ValueError("bad")
+    monkeypatch.setattr(kk.requests, "post", lambda url, **kw: Bad())
+    with pytest.raises(ValueError):
+        asyncio.run(k.send("hi"))                    # surfaces as an error to the caller; the sent id is never recorded
+    assert not k.sent_ids
+
+
+def test_kick_feed_skips_bad_frames(monkeypatch):
+    from connectors import kick as kk
+    s = {"kick_enabled": True, "kick_chatroom_id": "5", "kick_channel": "c"}
+    monkeypatch.setattr(kk.config, "settings", lambda: s)
+    monkeypatch.setattr(kk.secrets_store, "get", lambda k, d=None: None)
+    frames = ["not json", json.dumps([1]), json.dumps({"event": "pusher_internal:subscription_succeeded"}),
+              json.dumps({"event": "App\Events\ChatMessageEvent", "data": "{bad"})]
+
+    class WS:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def send(self, x): pass
+        async def recv(self):
+            if frames:
+                return frames.pop(0)
+            raise ConnectionError("end")
+    monkeypatch.setattr(kk.websockets, "connect", lambda *a, **k: WS())
+    k = kk.Kick(None, lambda e: None)
+
+    async def fake_sleep(_):
+        k.stop = True
+    monkeypatch.setattr(kk.asyncio, "sleep", fake_sleep)
+    asyncio.run(k.run())
+    assert not frames and k.state["reconnects"] == 1            # only the final ConnectionError dropped the socket
+
+
+def test_viewers_failures_are_quiet_none(monkeypatch):
+    import viewers
+    monkeypatch.setattr(viewers.youtube_auth, "access_token", lambda: "T")
+    conn = NS(video_id="v")
+    monkeypatch.setattr(viewers.requests, "get", lambda *a, **k: _R({}, 401))
+    assert viewers._youtube(conn) is None
+    monkeypatch.setattr(viewers.requests, "get", lambda *a, **k: _R({}, 429))
+    assert viewers._youtube(conn) is None
+    monkeypatch.setattr(viewers.requests, "get", lambda *a, **k: _R({"items": []}))
+    assert viewers._youtube(conn) == {"n": 0, "live": False}
