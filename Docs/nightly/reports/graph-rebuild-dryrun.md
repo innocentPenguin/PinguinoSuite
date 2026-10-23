@@ -32,4 +32,5 @@ Nothing live was touched. Work dir `Data/lore-work/dry/` (git-ignored, ~117 MB o
 cd Tools/lore-mining
 node build.mjs D:/PinguinoSuite/Data/lore-work/dry      # writes Data/lore (+ people_graph.public.json and person_cards_public/)
 ```
+After the build, delete the 5 stale alias cards (`person_cards/` and `person_cards_public/` for rocketleaugelover221, ixsamux, mirihater, iq_zens, unninocence); build.mjs only writes cards, it does not remove old ones.
 (The work dir's msgs/feat/pairs/clusters are already built, so only build.mjs is needed. Before applying I would copy the current `Data/lore` to `Data/lore-work/backup-2026-10-23/` so it can be rolled back.) After applying: delete `Data/lore-work/dry` (117 MB) or keep for the next incremental run. Opt-outs: build.mjs excludes Privacy anon/forget users; none exist today.
