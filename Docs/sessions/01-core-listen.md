@@ -1,6 +1,6 @@
 # Session notes: UNIT 01 (Suite Core / shell lead + Listen module owner)
 
-Last updated 2026-10-23. Session id `9e804717-c369-472f-8998-483f8aefd7a3`.
+Last updated 2026-10-23 (final hand-over to the new supervisor "20 - Suite"; 01 has stopped coding). Session id `9e804717-c369-472f-8998-483f8aefd7a3`.
 
 ## 1. What I built or changed, and why
 Requests come from 00 (relaying Ivan). Main work, newest first (commit hashes in git):
@@ -44,3 +44,15 @@ Requests come from 00 (relaying Ivan). Main work, newest first (commit hashes in
 - The Report-a-problem folder (Data\feedback) will contain screenshots of the screen; keep it out of any push/zip (check .gitignore covers Data).
 - Core test suite earlier polluted real logs/DB twice before isolation fixes; check ears.db and events.jsonl look sane.
 - Uncommitted files by others in the tree (Deploy/, PinguinoSite-*, live_state.js) are not mine.
+
+## 7. HAND-OVER (final state, read this first)
+**Commits made after the sections above** (all local, not pushed): 73df6f8 (shell: module `op:external` links may be loopback http, opened with `__TAURI__.shell.open`; adds `shell:allow-open` to App/src-tauri/capabilities/default.json), bccadcd (App/src-tauri/tauri.conf.json `plugins.shell.open` regex = http(s) only), da0d8b2 (updater eject removes folders it leaves empty), 5502618 + c1de3f4 (Listen review hides hallucinated sentences: `(end-start)*40 >= length(text)` in review_next; 43 old junk rows in ears.db hidden, none deleted), fbea143 (these notes).
+**PENDING REBUILD / RESTART (nothing below is live yet):**
+- Full Tauri rebuild: 73df6f8 + bccadcd (capability + tauri.conf change, not just the frontend), plus 013's a74f201 (Master View setgame on activity change).
+- Listen module restart: 5502618 (and 584cfba was already restarted at 05:01).
+- No core rebuild pending. Updater is Node (no rebuild).
+**Workers I supervised:** 012 Lite (scratch lite-minimal install/verify/repair/eject PASSED; doing: poll Link instead of fixed 3 s, replay-stats card, "Quit and stop Link"), 013 Master View (a74f201 setgame, 0813384 title/tags). Both were told to finish, write their Docs/sessions files and stop. Their notes: Docs/sessions/012-pinguinolite.md and 013's file.
+**Signing-key steps (Ivan, one time, not done):** create the real Ed25519 key pair, seal the private seed with Installer/Seal-InstallKey.bat, put the public key in install.json (`pubkey`); then `Build-Release --sign-key`. Until then only unsigned/dry-run releases exist (Docs/RELEASE_DRYRUN.md). A real minimal PC must be installed with --github/--url or `--local ... --update-from owner/name`; a plain --local install records no update source by design.
+**Unverified in the real app (mock/browser-pane only):** Economy, Timers, Canned commands, Overlay fit pages; Report a problem box (Dataeedback output); the module-reset fix in the running Listen/Multi/Comm (watch a few minutes); Listen card controls (013 confirmed them on the live module page at 127.0.0.1:8765: PASS); fullscreen; sounds page; chat-sent sound; real signed update. Shell pages need the core token, so a plain browser cannot reach them: someone with the real window must click them.
+**Open questions to Ivan (defaults):** create the real signing key now (default: wait for his word); permanently hide the old junk Listen rows (default: filter only).
+**Where things are:** shell UI `App/src/index.html` (CRLF, patch via Python), core `Suite/suite/suite.py` (+ feedback.py), Listen `Suite/modules/listen/`, updater `Suite/updater`, installer `Installer/`. Test commands in section 3.

@@ -214,6 +214,26 @@ public static class Harness
         typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, null);
         File.Delete(Path.Combine(dir, "bots_secrets.json")); Registry("{}");
 
+        // ── native Twitch replies: a real chat message id makes the line a reply (no "@sender" text); no id = plain line with the "@name" ──
+        Registry("{\"Bots\":{\"chat\":{\"Account\":\"chattypinguino\",\"Sender\":\"helix\"}}}");
+        File.WriteAllText(Path.Combine(dir, "bots_secrets.json"), "{\"chat\":{\"ClientId\":\"c\",\"UserToken\":\"t1\",\"SenderId\":\"11\",\"BroadcasterId\":\"9\"}}");
+        var rp = new List<string>();
+        typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, (Func<string, string, string, string>)((url, auth, body) => { rp.Add(body); return "{}"; }));
+        string realId = "6b2c8d5e-1f0a-4c3b-9d7e-5a4f3e2d1c0b";
+        Reset(); CPHProxy.Args["msgId"] = realId; CPHProxy.Args["userName"] = "viewer1"; CPHProxy.Args["user"] = "Viewer1"; c.SayPublic("chat", "@Viewer1 nice to see you");
+        Check("a reply to a real message carries reply_parent_message_id", rp.Count == 1 && rp[0].Contains("\"reply_parent_message_id\":\"" + realId + "\""), string.Join("|", rp));
+        Check("and has no @sender in the text", rp.Count == 1 && rp[0].Contains("\"message\":\"nice to see you\""), string.Join("|", rp));
+        rp.Clear(); Reset(); CPHProxy.Args["msgId"] = realId; CPHProxy.Args["userName"] = "viewer1"; CPHProxy.Args["user"] = "Viewer1"; c.SayPublic("chat", "@viewer1, thanks! cc @othername");
+        Check("the comma form is dropped too and a mention of somebody else stays", rp.Count == 1 && rp[0].Contains("\"message\":\"thanks! cc @othername\""), string.Join("|", rp));
+        rp.Clear(); Reset(); CPHProxy.Args["msgId"] = realId; CPHProxy.Args["userName"] = "viewer1"; CPHProxy.Args["user"] = "Viewer1"; c.SayPublic("chat", "@viewer10 hello");
+        Check("a longer name that starts the same is not cut", rp.Count == 1 && rp[0].Contains("\"message\":\"@viewer10 hello\"") && rp[0].Contains(realId), string.Join("|", rp));
+        rp.Clear(); Reset(); CPHProxy.Args["msgId"] = "auto-123"; CPHProxy.Args["userName"] = "viewer1"; c.SayPublic("chat", "@viewer1 timer line");
+        Check("no real message id: plain line, @name kept, no reply field", rp.Count == 1 && !rp[0].Contains("reply_parent") && rp[0].Contains("@viewer1 timer line"), string.Join("|", rp));
+        rp.Clear(); Reset(); c.SayPublic("chat", "@viewer1 no args at all");
+        Check("no arguments at all: plain line", rp.Count == 1 && !rp[0].Contains("reply_parent") && rp[0].Contains("@viewer1 no args at all"), string.Join("|", rp));
+        typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, null);
+        File.Delete(Path.Combine(dir, "bots_secrets.json")); Registry("{}");
+
         // ── correlation: per-message result, msgId dedupe, routing.log ──
         string rlog = Path.Combine(dir, "routing.log");
         try { File.Delete(rlog); } catch (Exception) { }

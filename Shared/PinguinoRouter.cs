@@ -260,6 +260,28 @@ public class CPHInline
         catch (Exception) { return false; }
     }
 
+    // Twitch native replies: when this run was started by a real chat message (argument msgId is a Twitch message id, a dashed UUID), the line goes out as a reply to that message
+    // (Helix reply_parent_message_id) and the leading "@sender " is dropped, because the reply already shows who it answers. A mention of anybody else stays in the text.
+    // No real message id (timers, events, commands run by hand, Streamer.bot's own CPH.SendMessage fallback): the line is sent as it is, with its "@name".
+    static readonly System.Text.RegularExpressions.Regex PgRxMsgId = new System.Text.RegularExpressions.Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    string PgReplyParts(string text, out string parentId)
+    {
+        parentId = "";
+        try
+        {
+            object o; string id = (CPH.TryGetArg("msgId", out o) && o != null) ? Convert.ToString(o) : "";
+            if (!PgRxMsgId.IsMatch(id)) return text;
+            parentId = id;
+            string who = (CPH.TryGetArg("userName", out o) && o != null) ? Convert.ToString(o) : "";
+            if (who == "") who = (CPH.TryGetArg("user", out o) && o != null) ? Convert.ToString(o) : "";
+            if (who == "") return text;
+            var m = System.Text.RegularExpressions.Regex.Match(text ?? "", "^@" + System.Text.RegularExpressions.Regex.Escape(who.TrimStart('@')) + "(?![A-Za-z0-9_])[,:]?\\s*", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success && text.Length > m.Length) return text.Substring(m.Length).TrimStart();
+        }
+        catch (Exception) { parentId = ""; }
+        return text;
+    }
+
     // Sends as one bot's OWN Twitch account with Twitch's "send chat message" API. Needs bots_secrets.json: { "<role>": { "ClientId", "UserToken", "SenderId", "BroadcasterId" } }
     // (a user access token with user:write:chat for that bot account). Returns false when anything is missing or fails, then the Streamer.bot account is used.
     bool PgHelixSend(string role, string text)
@@ -273,7 +295,10 @@ public class CPHInline
             string cid = (string)s["ClientId"] ?? "", tok = (string)s["UserToken"] ?? "", sid = (string)s["SenderId"] ?? "", bid = (string)s["BroadcasterId"] ?? "";
             if (tok == "") tok = CPH.GetGlobalVar<string>("pinguino.secret.token." + role, false) ?? "";   // the key vault (Host), when bots_secrets.json no longer holds it
             if (cid == "" || tok == "" || sid == "" || bid == "") return false;
-            string body = new Newtonsoft.Json.Linq.JObject { ["broadcaster_id"] = bid, ["sender_id"] = sid, ["message"] = text }.ToString(Newtonsoft.Json.Formatting.None);
+            string parent; string line = PgReplyParts(text, out parent);
+            var bj = new Newtonsoft.Json.Linq.JObject { ["broadcaster_id"] = bid, ["sender_id"] = sid, ["message"] = line };
+            if (parent != "") bj["reply_parent_message_id"] = parent;   // a native Twitch reply to the viewer's message
+            string body = bj.ToString(Newtonsoft.Json.Formatting.None);
             if (_pgTestHttp != null) return _pgTestHttp("https://api.twitch.tv/helix/chat/messages", "Bearer " + tok + "|" + cid, body) != null;
             System.Net.ServicePointManager.SecurityProtocol |= System.Net.SecurityProtocolType.Tls12;
             var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("https://api.twitch.tv/helix/chat/messages");

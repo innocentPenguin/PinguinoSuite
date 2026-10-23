@@ -32,7 +32,7 @@ namespace PinguinoHost
                     using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) })
                     {
                         var rq = new HttpRequestMessage(HttpMethod.Post, Helix + "/chat/messages"); rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("Client-Id", cid);
-                        rq.Content = new StringContent(new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", text } }.ToString(), Encoding.UTF8, "application/json");
+                        rq.Content = new StringContent(ReplyCtx.Body(bid, sid, text).ToString(), Encoding.UTF8, "application/json");
                         var resp = http.SendAsync(rq).Result;
                         if (resp.IsSuccessStatusCode) { via = (string)bot["Account"] ?? r; return true; }
                         Clog.Warn("automation", "chat send as " + r + " refused (HTTP " + (int)resp.StatusCode + ")");

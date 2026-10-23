@@ -157,6 +157,7 @@ namespace PinguinoHost
         public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false, int subTier = 0)
         {
             if (!Lease.MayRun) return;
+            ReplyCtx.Begin(msgId, user);   // every reply made while handling this message is a native Twitch reply to it
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
             try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
@@ -287,6 +288,7 @@ namespace PinguinoHost
                 if (line == "backpay-dry" || line == "backpay-apply") { try { Console.WriteLine("[backpay] " + Economy.BackPay(line == "backpay-apply").ToString(Newtonsoft.Json.Formatting.None)); } catch (Exception ex) { Console.WriteLine("[backpay] error " + ex); } continue; }
                 if (line == "pointstest") { try { PointsTest.Run(); } catch (Exception ex) { Console.WriteLine("[pointstest] error " + ex); } continue; }
                 if (line == "givelimittest") { try { GiveLimitTest.Run(); } catch (Exception ex) { Console.WriteLine("[givelimittest] error " + ex); } continue; }
+                if (line == "replytest") { try { ReplyTest.Run(); } catch (Exception ex) { Console.WriteLine("[replytest] error " + ex); } continue; }
                 if (line == "strikechecktest") { try { StrikeCheckInTest.Run(); } catch (Exception ex) { Console.WriteLine("[strikechecktest] error " + ex); } continue; }
                 if (line == "alerttest") { try { AlertBridgeTest.Run(); } catch (Exception ex) { Console.WriteLine("[alerttest] error " + ex); } continue; }
                 if (line == "ranktest") { try { RankTest.Run(); } catch (Exception ex) { Console.WriteLine("[ranktest] error " + ex); } continue; }
@@ -323,7 +325,7 @@ namespace PinguinoHost
             {
                 if (!Lease.MayRun) return false;
                 if (HostApi.SaidRecently(m)) return true;   // never the same line twice
-                var resp = http.SendAsync(Req(HttpMethod.Post, HostApi.Helix + "/chat/messages", new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", m } })).Result;
+                var resp = http.SendAsync(Req(HttpMethod.Post, HostApi.Helix + "/chat/messages", ReplyCtx.Body(bid, sid, m))).Result;
                 if (!resp.IsSuccessStatusCode) Clog.Warn("twitch", "chat send refused by Twitch (HTTP " + (int)resp.StatusCode + (resp.StatusCode == (System.Net.HttpStatusCode)429 ? ", rate limited" : resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : "") + ")");
                 return resp.IsSuccessStatusCode;
             };
