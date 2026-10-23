@@ -235,3 +235,5 @@ button.q-on,button.is-live{font-weight:700}
 #feed-heads [data-k=intro]{cursor:pointer}
 .pre-fail{color:var(--bad,#e05050)}.pre-warn{color:var(--warn,#e8d44d)}
 #precard{flex-direction:column;align-items:flex-start;gap:2px}
+button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible,[tabindex]:focus-visible,.chip:focus-visible,.hd:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.feeditem .t{flex:1;min-width:0;overflow-wrap:anywhere}.msgs,.tm,.banner,.toast,#feed-note,#precard{overflow-wrap:anywhere}#tab-feed{overflow-x:hidden}

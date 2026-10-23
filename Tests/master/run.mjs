@@ -342,6 +342,15 @@ await t('help overlay lists every shortcut the page handles; empty lists say why
   assert.ok(js.includes('The Host is offline: this fills in when it is back.') && js.includes('The Host is offline: commands show up when it is back.') && js.includes('Waiting for the first line'));
 });
 
+await t('focus/keys/overflow: armed buttons disarm on Esc and blur, Esc closes panels, digits ignored in fields, long lines wrap, focus ring, feed keeps the reading place', () => {
+  const dir = path.join(here, '..', '..', 'App', 'src', 'master'), js = fs.readFileSync(path.join(dir, 'master.js'), 'utf8'), css = fs.readFileSync(path.join(dir, 'master.css'), 'utf8');
+  assert.ok(js.includes("addEventListener('blur', () => disarm(btn), { once: true })") && js.includes("e.key === 'Escape' && armedBtns.size"));
+  assert.ok(js.includes("(ui.preOpen || ui.introOpen || ui.streaksOpen) && !inField"));
+  assert.ok(js.includes('if (inField || e.target.isContentEditable) return;') && js.indexOf('if (inField || e.target.isContentEditable) return;') < js.indexOf("/^[1-5]$/.test(e.key)"));
+  assert.ok(css.includes('button:focus-visible') && css.includes('.feeditem .t{flex:1;min-width:0;overflow-wrap:anywhere}'));
+  assert.ok(js.includes('reading older lines') && js.includes('fb.scrollTop = fb.scrollHeight'));
+});
+
 await t('keyboard: no positive tabindex, every control is a real button/input, scenes+sources lists are focusable in DOM order', () => {
   const html = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.html'), 'utf8'), js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
   assert.equal(/tabindex="[1-9]/.test(html + js), false); assert.equal(/<div[^>]*onclick/.test(html), false);

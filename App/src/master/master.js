@@ -51,10 +51,13 @@
     const t = h('div', 'toast' + (bad ? ' bad' : ''), msg); t.dataset.m = msg; $('#toasts').append(t); t._t = setTimeout(() => t.remove(), bad ? 5000 : 2200);
   }
   function flash(btn) { if (!btn) return; btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 220); }
-  function armed(btn) {   // second click within 2.5 s confirms; returns true when this click is the confirming one
-    if (btn._armT) { clearTimeout(btn._armT); btn._armT = null; btn.classList.remove('arm'); btn.textContent = btn._lbl; return true; }
-    btn._lbl = btn.textContent; btn.textContent = 'Sure?'; btn.classList.add('arm');
-    btn._armT = setTimeout(() => { btn._armT = null; btn.classList.remove('arm'); btn.textContent = btn._lbl; }, 2500); return false;
+  const armedBtns = new Set();
+  function disarm(btn) { if (!btn._armT) return; clearTimeout(btn._armT); btn._armT = null; btn.classList.remove('arm'); btn.textContent = btn._lbl; armedBtns.delete(btn); }
+  function armed(btn) {   // second click within 2.5 s confirms; returns true when this click is the confirming one. Esc, or leaving the button, cancels
+    if (btn._armT) { disarm(btn); return true; }
+    btn._lbl = btn.textContent; btn.textContent = 'Sure?'; btn.classList.add('arm'); armedBtns.add(btn);
+    btn.addEventListener('blur', () => disarm(btn), { once: true });
+    btn._armT = setTimeout(() => disarm(btn), 2500); return false;
   }
   async function sendCmd(text, btn) {
     const now = Date.now(), last = ui.sent.get(text) || 0;
@@ -664,6 +667,9 @@
     $$('#feed-chips .chip').forEach(c => c.classList.toggle('on', c.dataset.lc === ui.logCat));
     const rows = C.logRows(ui.feed, ui.logCat, ui.query, ui.openGroups, 300).map(r => Object.assign(r, { sg: r.kind + '|' + (r.open ? 1 : 0) + '|' + r.text + '|' + (r.label || '') + '|' + (r.blue || []) + '|' + (r.orange || []) }));
     const box = $('#tab-feed'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    // reading older lines: remember which row is at the top of the view so trimming/adding rows above it does not move the text under the reader
+    let anchor = null, rel = 0; const bt = box.getBoundingClientRect().top;
+    if (!stick && box.clientHeight) for (const el of $('#feedlist').children) { const r = el.getBoundingClientRect(); if (r.bottom > bt) { anchor = el._k; rel = r.top - bt; break; } }
     C.reconcile($('#feedlist'), rows, x => x.key, () => { const d = h('div', 'feeditem'); d.append(h('span', 'ts'), h('span', 't')); return d; },
       (d, x) => {
         d.className = 'feeditem ' + (x.lvl === 'error' ? 'lvl-error ' : '') + (x.kind === 'sub' ? 'sub ' : '') + 'k-' + (x.t || (x.kind === 'group' ? 'p' : '')) + (x.t === 'e' ? ' ev' : ''); d.dataset.k = x.key;
@@ -674,6 +680,7 @@
         else t.append(h('span', x.t === 'e' ? 'who' : 'lg lg-' + (x.lvl === 'error' ? 'error' : (x.type || 'x')), x.text));
       });
     if (stick) box.scrollTop = box.scrollHeight;
+    else if (anchor != null) for (const el of $('#feedlist').children) if (el._k === anchor) { box.scrollTop += el.getBoundingClientRect().top - bt - rel; break; }
     const n = [];
     if (ui.chatOk === false) n.push('Live chat needs the Host chat feed.');
     if (ui.logsOk === false && (ui.logCat === 'backend' || ui.logCat === 'all')) n.push('Backend log (bot + overlay actions) needs the Host /api/eventlog: not connected yet. Players log is built here from queue changes (no history before this window opened).');
@@ -959,7 +966,7 @@
   function setTab(t) {
     ui.tab = t; ls.set('tab', t); $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabbody').forEach(d => d.hidden = d.id !== 'tab-' + t);
     if (t === 'stream') siLoad();
-    if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') { pollers.mods.kick(); pollers.heads.kick(); pollers.streaks.kick(); renderFeed(); }
+    if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') { pollers.mods.kick(); pollers.heads.kick(); pollers.streaks.kick(); renderFeed(); const fb = $('#tab-feed'); fb.scrollTop = fb.scrollHeight; }   // a hidden tab forgets its scroll: open on the newest line
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
   { const sel = $('#b-scale'), apply = v => { document.documentElement.style.zoom = v === 100 ? '' : String(v / 100); };   // zoom on this page's root only; the Suite shell is a different document
@@ -971,8 +978,10 @@
 
   document.addEventListener('keydown', e => {
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if (e.key === 'Escape' && armedBtns.size) [...armedBtns].forEach(disarm);
+    if (e.key === 'Escape' && (ui.preOpen || ui.introOpen || ui.streaksOpen) && !inField && $('#help').hidden) { ui.preOpen = ui.introOpen = ui.streaksOpen = false; renderPre(); renderIntros(); renderStreaks(); }
     if (e.key === 'Escape') { if (!$('#help').hidden) { $('#help').hidden = true; return; } if (ui.query || inField) { $('#q').value = ''; ui.query = ''; document.activeElement.blur(); renderScenes(); renderSources(); renderCmds(); renderOverlays(); renderFeed(); } return; }
-    if (inField) return;
+    if (inField || e.target.isContentEditable) return;
     if (e.altKey && /^[1-9]$/.test(e.key)) { const s = rowsScenes.filter(r => r.type === 'scene')[+e.key - 1]; if (s) { e.preventDefault(); goScene(s.name); } return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === '/') { e.preventDefault(); $('#q').focus(); return; }
