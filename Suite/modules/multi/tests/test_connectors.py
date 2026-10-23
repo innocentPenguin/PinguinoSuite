@@ -101,7 +101,8 @@ def test_run_loop_clears_reconnecting_flag_on_failure(monkeypatch):
 
 def test_recv_timeout_is_a_failure_not_a_hop(monkeypatch):
     h = Harness(monkeypatch, [[welcome("s1"), asyncio.TimeoutError()]])
-    assert isinstance(h.run(), asyncio.TimeoutError)
+    err = h.run()
+    assert isinstance(err, RuntimeError) and "keepalive" in str(err)     # readable status detail instead of an empty TimeoutError
     assert h.subs == ["s1"] and h.sockets[0].closed
 
 
@@ -457,7 +458,7 @@ def test_kick_feed_skips_bad_frames(monkeypatch):
     monkeypatch.setattr(kk.config, "settings", lambda: s)
     monkeypatch.setattr(kk.secrets_store, "get", lambda k, d=None: None)
     frames = ["not json", json.dumps([1]), json.dumps({"event": "pusher_internal:subscription_succeeded"}),
-              json.dumps({"event": "App\Events\ChatMessageEvent", "data": "{bad"})]
+              json.dumps({"event": "App\\Events\\ChatMessageEvent", "data": "{bad"})]
 
     class WS:
         async def __aenter__(self): return self

@@ -18,6 +18,33 @@ Rules: connectors declare capabilities; UI never offers what a platform cannot d
 
 Everything below was fetched on 2026-10-23. "Not verified" marks what the docs did not state. This replaces the "researched from prior knowledge" status of the table above.
 
+## Twitch (review 2026-10-23, worker 42; code + unit tests, not yet run against a live token)
+
+Subscriptions (both `version 1`, transport websocket, condition `broadcaster_user_id` + `user_id`): `channel.chat.message` (required) and `channel.chat.notification` (sub/resub/gift/raid/announcement; optional, a refusal only logs a warning). Both are covered by the one scope `user:read:chat`. Sending needs `user:write:chat`, moderation needs `moderator:manage:banned_users` (timeout/ban) and `moderator:manage:chat_messages` (delete); `ensure_auth` reads the scopes from `/oauth2/validate` and only switches on the capabilities the token really has. A token without `user:read:chat` shows "token lacks user:read:chat".
+
+What the card shows per failure:
+
+| Failure | Card status | Detail text | Recovery |
+|---|---|---|---|
+| No token saved | needs_auth | Connect Twitch in Settings (Connect Multi) | Ivan connects |
+| Token invalid and the site refuses the refresh token (400/401/403) | needs_auth | token expired; reconnect Twitch | Ivan reconnects; rechecked every 10 s |
+| Missing `user:read:chat` | needs_auth | token lacks user:read:chat | reconnect with all permissions |
+| Site refresh endpoint down (5xx/timeout), validate 5xx | reconnecting | token refresh via site 503 / Twitch validate 502 | automatic, backoff 1..60 s; the refresh token is NOT spent on a 5xx |
+| Chat subscription refused 400/403 | needs_auth | Twitch refused the chat subscription (403): reconnect Twitch with chat permissions | Ivan reconnects; retried every 30 s |
+| Chat subscription revoked (`authorization_revoked`, `user_removed`...) | needs_auth | subscription revoked (status): reconnect Twitch | session ends, token re-checked, then resubscribed or needs_auth |
+| Stream-event subscription revoked or refused | stays connected | (console warning only) | chat keeps working, no follows/subs/raids |
+| 429 on subscribe or Helix call | reconnecting | Twitch rate limit: try again in N s | waits `Retry-After` (or `Ratelimit-Reset`), clamped 1..300 s; a send/mod call fails with the same text |
+| 401 on send/moderation (access token expired mid-stream) | unchanged (retried) | - | token refreshed once through the site, request repeated; second 401 -> needs_auth |
+| No frame for 30 s (keepalive is ~10 s) | reconnecting | no keepalive from Twitch for 30 s | automatic new session, full resubscribe |
+| Socket closed (4000-4007) | reconnecting | the close text | automatic; 4007 on a reconnect hop starts a clean session |
+| Channel name not found | error | channel not found | fix the `channel` setting |
+
+Token upkeep: the stored token is validated every ~50 minutes while connected (Twitch requires hourly) and refreshed if it expired, so sending keeps working through a long stream; a network blip in that check is ignored, a dead refresh token ends the session (needs_auth).
+
+Replays and clocks: every EventSub frame carries `metadata.message_id`; redelivered frames (reconnect overlap) are processed once (last 500 remembered). Chat ids are `twitch:<channel>:<message_id>`, so a replay after a restart is dropped by the pipeline's seen-set and the SQLite primary key anyway. Message time comes from `metadata.message_timestamp`, never later than the PC clock (skew either way is harmless), and a stamp older than a day or unparsable falls back to "now".
+
+Not done: Twitch can also redeliver the same chat line after 5+ minutes outside our 500-frame window; the SQLite id check covers that. `channel.chat.notification` for `sub_gift` with a community gift id is deliberately skipped (the community notice already carries the total).
+
 ## Kick (official API)
 Sources: https://docs.kick.com/getting-started/generating-tokens-oauth2-flow , /getting-started/scopes , /events/event-types , /events/subscribe-to-events , /events/webhook-security , /events/introduction , /apis/chat , /apis/channels
 

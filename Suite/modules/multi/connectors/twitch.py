@@ -7,6 +7,8 @@ pasted manually for development. Refresh goes through the site (it holds the cli
 import asyncio
 import json
 import time
+from collections import OrderedDict
+from datetime import datetime, timezone
 
 import requests
 import websockets
@@ -22,11 +24,59 @@ HELIX = "https://api.twitch.tv/helix"
 VALIDATE = "https://id.twitch.tv/oauth2/validate"
 
 
+class TwitchAuthError(RuntimeError):
+    """The token is dead or lacks permission: the card shows 'needs_auth' (Ivan must reconnect), not a retry loop."""
+
+
+class TwitchBusy(RuntimeError):
+    """Helix 429. `wait` = seconds Twitch asked us to hold off."""
+    def __init__(self, wait):
+        super().__init__(f"Twitch rate limit: try again in {int(wait)} s")
+        self.wait = wait
+
+
+def retry_after(r, now=None):
+    """Seconds to wait after a 429: Retry-After (seconds), else Ratelimit-Reset (epoch), else 30. Clamped 1..300; junk headers fall back."""
+    h = getattr(r, "headers", None) or {}
+    try:
+        w = float(h.get("Retry-After"))
+    except (TypeError, ValueError):
+        try:
+            w = float(h.get("Ratelimit-Reset")) - (now if now is not None else time.time())
+        except (TypeError, ValueError):
+            w = 30.0
+    if w != w:                                           # NaN
+        w = 30.0
+    return max(1.0, min(w, 300.0))
+
+
+def event_ts(stamp, now=None):
+    """EventSub metadata.message_timestamp (RFC3339, nanoseconds) -> epoch; never in the future (clock skew), junk or older than a day -> now."""
+    now = time.time() if now is None else now
+    try:
+        txt = str(stamp).strip().replace("Z", "+00:00")
+        if "." in txt:                                   # fromisoformat takes at most 6 fractional digits
+            head, rest = txt.split(".", 1)
+            digits = ""
+            for ch in rest:
+                if not ch.isdigit():
+                    break
+                digits += ch
+            txt = head + "." + digits[:6].ljust(6, "0") + rest[len(digits):]
+        t = datetime.fromisoformat(txt)
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        t = t.timestamp()
+    except (ValueError, TypeError, OverflowError, OSError):
+        return now
+    return min(t, now) if t > now - 86400 else now
+
+
 NOTICE_EVENT = {"sub": "sub", "resub": "resub", "sub_gift": "gift", "community_sub_gift": "gift", "gift_paid_upgrade": "gift",
                 "prime_paid_upgrade": "sub", "raid": "raid", "announcement": "announcement", "bits_badge_tier": "cheer"}
 
 
-def normalize_notice(ev):
+def normalize_notice(ev, ts=None):
     """Twitch channel.chat.notification event (sub, resub, gift, raid, announcement) -> ChatMessage with .event. Pure."""
     chan, nt = ev["broadcaster_user_login"], ev.get("notice_type", "")
     if nt == "sub_gift" and (ev.get("sub_gift") or {}).get("community_gift_id"):
@@ -42,12 +92,12 @@ def normalize_notice(ev):
     user = ev.get("chatter_user_login") or "anonymous"
     return ChatMessage(
         id=f"twitch:{chan}:{ev['message_id']}", platform="twitch", channel=chan, user_id=ev.get("chatter_user_id") or "0",
-        user=user, display=ev.get("chatter_user_name") or user, text=text, ts=time.time(),
+        user=user, display=ev.get("chatter_user_name") or user, text=text, ts=ts or time.time(),
         badges=[b["set_id"] for b in ev.get("badges", [])], raw_type=nt, color=ev.get("color") or "",
         event=NOTICE_EVENT.get(nt, "announcement"), amount=amount)
 
 
-def normalize_event(ev):
+def normalize_event(ev, ts=None):
     """Twitch channel.chat.message event -> ChatMessage. Pure, unit-tested."""
     chan = ev["broadcaster_user_login"]
     reply = ev.get("reply") or {}
@@ -56,7 +106,7 @@ def normalize_event(ev):
         id=f"twitch:{chan}:{ev['message_id']}", platform="twitch", channel=chan,
         user_id=ev["chatter_user_id"], user=ev["chatter_user_login"],
         display=ev.get("chatter_user_name") or ev["chatter_user_login"],
-        text=(ev.get("message") or {}).get("text", ""), ts=time.time(), badges=badges,
+        text=(ev.get("message") or {}).get("text", ""), ts=ts or time.time(), badges=badges,
         reply_to=f"twitch:{chan}:{reply['parent_message_id']}" if reply.get("parent_message_id") else "",
         reply_to_user=reply.get("parent_user_login", ""),
         first_time=ev.get("message_type") == "user_intro",
@@ -78,6 +128,8 @@ class Twitch(Connector):
         self.broadcaster_id = None
         self.sent_ids = set()       # messages Multi sent itself (tagged, so bots/loops can ignore them)
         self.stop = False
+        self._frames = OrderedDict()   # EventSub metadata.message_id already handled: Twitch may redeliver frames around a reconnect
+        self._checked = time.time()
 
     # auth ------------------------------------------------------------
     def tokens(self):
@@ -89,8 +141,10 @@ class Twitch(Connector):
 
     def validate(self, tok):
         r = requests.get(VALIDATE, headers={"Authorization": f"OAuth {tok['access_token']}"}, timeout=10)
+        if r.status_code == 401:
+            return None                                  # only 401 means "token invalid"; a 5xx must not burn the refresh token
         if r.status_code != 200:
-            return None
+            raise RuntimeError(f"Twitch validate {r.status_code}")
         d = r.json()
         tok["client_id"] = d.get("client_id", tok.get("client_id"))
         return d
@@ -98,12 +152,48 @@ class Twitch(Connector):
     def refresh(self, tok):
         site = secrets_store.get("site_url") or "https://innocentpenguin.com"
         r = requests.post(f"{site}/api/multi/refresh", json={"refresh_token": tok.get("refresh_token")}, timeout=10)
+        if r.status_code in (400, 401, 403):
+            return None                                  # refresh token rejected: Ivan has to reconnect
         if r.status_code != 200:
-            return None
+            raise RuntimeError(f"token refresh via site {r.status_code}")      # site down or deploying: transient, keep retrying
         new = r.json()
         tok.update({k: new[k] for k in ("access_token", "refresh_token", "client_id") if k in new})
         secrets_store.put("twitch_tokens", tok)
         return tok
+
+    def _call(self, method, url, tok=None, **kw):
+        """Helix request with one token refresh on 401 and a clear error on 429 (Retry-After)."""
+        tok = tok or self.tokens()
+        r = getattr(requests, method)(url, headers=self._headers(tok), timeout=10, **kw)
+        if r.status_code == 401:
+            try:
+                new = self.refresh(tok)
+            except Exception:
+                new = None
+            if not new:
+                raise TwitchAuthError("Twitch token rejected: reconnect Twitch")
+            r = getattr(requests, method)(url, headers=self._headers(new), timeout=10, **kw)
+            if r.status_code == 401:
+                raise TwitchAuthError("Twitch token rejected: reconnect Twitch")
+        if r.status_code == 429:
+            raise TwitchBusy(retry_after(r))
+        return r
+
+    async def _keep_token(self, tok):
+        """Twitch wants a validate at least hourly; this also renews an access token that expired mid-stream so sending keeps working.
+        A dead token ends the session (needs_auth); a network blip is ignored this round."""
+        self._checked = time.time()
+        try:
+            info = await asyncio.to_thread(self.validate, tok)
+            if info is None:
+                new = await asyncio.to_thread(self.refresh, tok)
+                info = new and await asyncio.to_thread(self.validate, new)
+                if not info:
+                    raise TwitchAuthError("token expired; reconnect Twitch")
+        except TwitchAuthError:
+            raise
+        except Exception as e:
+            console_log.warn("twitch", f"hourly token check failed ({str(e)[:80]}); will retry", dedupe_s=600)
 
     async def ensure_auth(self):
         tok = self.tokens()
@@ -130,7 +220,7 @@ class Twitch(Connector):
     def _resolve_broadcaster(self, tok, login):
         if login.lower() == self.user["login"].lower():
             return self.user["user_id"]
-        r = requests.get(f"{HELIX}/users", params={"login": login}, headers=self._headers(tok), timeout=10)
+        r = self._call("get", f"{HELIX}/users", tok=tok, params={"login": login})
         data = r.json().get("data", []) if r.status_code == 200 else []
         return data[0]["id"] if data else None
 
@@ -140,9 +230,16 @@ class Twitch(Connector):
         for typ in ("channel.chat.message", "channel.chat.notification"):
             body = {"type": typ, "version": "1", "condition": cond,
                     "transport": {"method": "websocket", "session_id": self.session_id}}
-            r = requests.post(f"{HELIX}/eventsub/subscriptions", json=body, headers=self._headers(tok), timeout=10)
+            try:
+                r = self._call("post", f"{HELIX}/eventsub/subscriptions", tok=tok, json=body)
+            except (TwitchAuthError, TwitchBusy):
+                if typ == "channel.chat.message":
+                    raise
+                continue
             if r.status_code not in (200, 202, 409):          # 409 = already subscribed on this session (a reconnect keeps its subscriptions)
                 if typ == "channel.chat.message":
+                    if r.status_code in (400, 403):
+                        raise TwitchAuthError(f"Twitch refused the chat subscription ({r.status_code}): reconnect Twitch with chat permissions")
                     raise RuntimeError(f"subscribe failed {r.status_code}: {r.text[:200]}")
                 console_log.warn("twitch", f"could not subscribe to stream events ({r.status_code}); chat still works", dedupe_s=600)
 
@@ -150,6 +247,13 @@ class Twitch(Connector):
         """Process one EventSub frame. Returns a reconnect URL when Twitch asks for it."""
         meta, payload = frame.get("metadata", {}), frame.get("payload", {})
         t = meta.get("message_type")
+        fid = meta.get("message_id")
+        if fid and t in ("notification", "revocation"):         # redelivered frame (reconnect overlap): process once
+            if fid in self._frames:
+                return None
+            self._frames[fid] = 1
+            if len(self._frames) > 500:
+                self._frames.popitem(last=False)
         if t == "session_welcome":
             self.session_id = payload["session"]["id"]
             if not getattr(self, "reconnecting", False):          # after a session_reconnect the subscriptions carry over; resubscribing only gets a 409
@@ -160,23 +264,32 @@ class Twitch(Connector):
             self.reconnecting = True
             return payload["session"]["reconnect_url"]
         elif t == "notification" and meta.get("subscription_type") == "channel.chat.message":
-            msg = normalize_event(payload["event"])
+            msg = normalize_event(payload["event"], event_ts(meta.get("message_timestamp")))
             msg.is_self = msg.user_id == self.user["user_id"]
             self.state["last_message"] = time.time()
             self.inbox.put(msg)
         elif t == "notification" and meta.get("subscription_type") == "channel.chat.notification":
-            msg = normalize_notice(payload["event"])
+            msg = normalize_notice(payload["event"], event_ts(meta.get("message_timestamp")))
             if msg:
                 self.state["last_message"] = time.time()
                 self.inbox.put(msg)
         elif t == "revocation":
-            self.set_status("needs_auth", "subscription revoked; reconnect Twitch")
+            sub = payload.get("subscription") or {}
+            if sub.get("type") == "channel.chat.notification":          # only the stream-event feed is gone: chat keeps working
+                console_log.warn("twitch", f"stream-event subscription ended ({sub.get('status', '')})", dedupe_s=600)
+            else:                                                       # chat itself is gone: end the session so the run loop re-validates the token
+                raise TwitchAuthError(f"subscription revoked ({str(sub.get('status', 'unknown'))[:40]}): reconnect Twitch")
         return None
 
     async def _pump(self, ws, tok):
         """Read frames until Twitch sends session_reconnect (returns the new URL). Any close/timeout raises."""
         while True:
-            raw = await asyncio.wait_for(ws.recv(), timeout=30)   # keepalive is ~10 s
+            try:
+                raw = await asyncio.wait_for(ws.recv(), timeout=30)   # keepalive is ~10 s
+            except asyncio.TimeoutError:
+                raise RuntimeError("no keepalive from Twitch for 30 s") from None
+            if time.time() - self._checked > 3000:
+                await self._keep_token(tok)
             url = await self.handle_frame(json.loads(raw), tok)
             if url:
                 return url
@@ -185,6 +298,7 @@ class Twitch(Connector):
         """One EventSub session, following session_reconnect hops. The old socket stays open until the new one has
         sent its welcome (Twitch docs). A fresh connect (first, or after any error) subscribes; a hop does not."""
         self.reconnecting = False
+        self._checked = time.time()
         ws = await websockets.connect(EVENTSUB_URL, max_size=2**20)
         try:
             while True:
@@ -217,10 +331,20 @@ class Twitch(Connector):
                     continue
                 self.set_status("connecting")
                 await self._session(tok)
+            except TwitchAuthError as e:
+                self.reconnecting = False
+                self.state["reconnects"] += 1
+                self.set_status("needs_auth", str(e)[:120])
+                await asyncio.sleep(30)                      # Ivan has to act; rechecking every 30 s notices a fresh reconnect quickly
+            except TwitchBusy as e:
+                self.reconnecting = False
+                self.state["reconnects"] += 1
+                self.set_status("reconnecting", str(e)[:120])
+                await asyncio.sleep(e.wait)
             except Exception as e:
                 self.reconnecting = False                     # any failure (incl. close code 4007 "invalid reconnect") starts a clean session: full subscribe
                 self.state["reconnects"] += 1
-                self.set_status("reconnecting", str(e)[:120])
+                self.set_status("reconnecting", (str(e) or type(e).__name__)[:120])
                 await asyncio.sleep(min(backoff, 60))
                 backoff *= 2
 
@@ -230,7 +354,7 @@ class Twitch(Connector):
         body = {"broadcaster_id": self.broadcaster_id, "sender_id": self.user["user_id"], "message": text}
         if reply_to:
             body["reply_parent_message_id"] = reply_to.split(":")[-1]
-        r = requests.post(f"{HELIX}/chat/messages", json=body, headers=self._headers(tok), timeout=10)
+        r = self._call("post", f"{HELIX}/chat/messages", tok=tok, json=body)
         if r.status_code != 200:
             raise RuntimeError(f"send failed {r.status_code}: {r.text[:200]}")
         d = r.json()["data"][0]
@@ -242,14 +366,12 @@ class Twitch(Connector):
         tok = self.tokens()
         base = {"broadcaster_id": self.broadcaster_id, "moderator_id": self.user["user_id"]}
         if action == "delete":
-            r = requests.delete(f"{HELIX}/moderation/chat", params=dict(base, message_id=message_id),
-                                headers=self._headers(tok), timeout=10)
+            r = self._call("delete", f"{HELIX}/moderation/chat", tok=tok, params=dict(base, message_id=message_id))
         else:
             data = {"user_id": user_id, "reason": (reason or "Multi quick action")[:100]}
             if action == "timeout":
                 data["duration"] = max(1, min(int(seconds), 1209600))
-            r = requests.post(f"{HELIX}/moderation/bans", params=base, json={"data": data},
-                              headers=self._headers(tok), timeout=10)
+            r = self._call("post", f"{HELIX}/moderation/bans", tok=tok, params=base, json={"data": data})
         if r.status_code not in (200, 204):
             raise RuntimeError(f"{action} failed {r.status_code}: {r.text[:160]}")
         return True
@@ -265,6 +387,10 @@ class Twitch(Connector):
     async def send(self, text, reply_to=None):
         if not (self.user and self.capabilities.get("send")):
             raise RuntimeError("Twitch send is not authorised (needs user:write:chat)")
-        mid = await asyncio.to_thread(self._send_sync, text, reply_to)
+        try:
+            mid = await asyncio.to_thread(self._send_sync, text, reply_to)
+        except TwitchAuthError as e:
+            self.set_status("needs_auth", str(e)[:120])
+            raise
         self.sent_ids.add(mid)
         return f"twitch:{config.settings()['channel']}:{mid}"
