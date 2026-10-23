@@ -19,7 +19,8 @@
   })();
   const F = (u, o) => fetch(u, o);   // the one fetch the Host / Spotify / Multi clients and the live-event stream share
   const H = C.createHealth();   // per source (host / music / multi): consecutive failures -> poll back-off + the offline banner
-  const track = src => r => { if (r.status === 0 || r.status >= 502) H.fail(src); else H.ok(src); };
+  const lastOk = {};   // when each source last answered (the stale badge)
+  const track = src => r => { if (r.status === 0 || r.status >= 502) H.fail(src); else { H.ok(src); lastOk[src] = Date.now(); } };
   const api = C.createApi({ base: HOST, fetch: F, getToken: () => token, timeoutMs: 4000, onResult: track('host') });
 
   /* ---------- Spotify strip (the Spotify module, 127.0.0.1:8771) ---------- */
@@ -39,7 +40,7 @@
   const ui = {
     wq: ls.get('wq') || null, teamsOv: {}, si: Object.assign({ title: '', description: '', tags: '', game: '', plat: { twitch: true, youtube: true, kick: false }, at: '', privacy: 'public' }, ls.get('si') || {}), ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
-    itemsBy: {}, heads: {}, modsOk: null, introOpen: false, streaksOpen: false, introGone: new Set(), tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
+    itemsBy: {}, heads: {}, modsOk: null, pre: null, preOpen: false, introOpen: false, streaksOpen: false, introGone: new Set(), tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
   const saveCache = () => ls.set('cache', { tree: S.get('tree'), customs: S.get('customs') });
 
@@ -256,7 +257,8 @@
     pill('p-rec', os && os.recording ? 'live' : '', os && os.recording ? 'Recording' : 'Not recording');
     const rb = os && os.replayBuffer; pill('p-rb', rb && rb.active ? 'ok' : (os && os.replayBufferEnabled ? 'warn' : ''), rb && rb.active ? 'Replay on' : 'Replay off');
     pill('p-chat', ho ? (ho.chatConnected && ho.eventSubConnected ? 'ok' : 'warn') : '', ho ? (ho.chatConnected ? 'Chat' : 'Chat off') + (ho.eventSubConnected ? '' : ' · no events') : 'Chat');
-    pill('p-link', up === false ? 'bad' : (link.sse ? 'acc' : 'ok'), up === false ? 'Host offline' : (link.sse ? '⚡ push' : 'poll') + (link.ms != null ? ' ' + link.ms + ' ms' : ''));
+    const stale = up === false ? 0 : C.staleSecs(Date.now(), lastOk.host, 10000);
+    pill('p-link', up === false ? 'bad' : stale ? 'warn' : (link.sse ? 'acc' : 'ok'), up === false ? 'Host offline' : stale ? 'data ' + stale + ' s old' : (link.sse ? '⚡ push' : 'poll') + (link.ms != null ? ' ' + link.ms + ' ms' : ''));
     const off = $('#offline'); let msg = '';
     if (up === false) msg = 'The Host is not answering on ' + HOST.replace('http://', '') + '. Showing the last known state; controls are paused until it is back.';
     else if (!tree.connected) msg = 'OBS is not connected to the Host. Scenes below are the last ones seen (greyed); start OBS or check the websocket settings.';
@@ -688,6 +690,13 @@
     const sb = box.querySelector('[data-k="streaks"]'); if (sb) { sb.setAttribute('role', 'button'); sb.tabIndex = 0; sb.title = 'Show / hide the top 5 watch streaks'; }
     renderIntros(); renderStreaks();
   }
+  // Pre-stream checklist (Host /api/prestream): header chip, click for the failing and warning items. Read only.
+  function renderPre() {
+    const v = C.prestreamView(ui.pre), b = $('#b-pre'), box = $('#precard');
+    b.textContent = v.label + (ui.pre ? '' : ' …'); b.className = 'sm' + (v.state === 'bad' ? ' rd' : v.state === 'warn' ? ' og' : v.state === 'ok' ? ' g' : '');
+    box.hidden = !ui.preOpen; if (!ui.preOpen) return;
+    box.replaceChildren(...(v.items.length ? v.items.map(i => h('div', 'pre-' + i.status, (i.status === 'fail' ? '✕ ' : '! ') + i.text)) : [h('div', 'faint', ui.pre ? 'Everything the Host checks is fine.' : 'Not loaded yet.')]));
+  }
   function renderStreaks() {
     const box = $('#feed-streaks'), rows = ui.streaksOpen ? C.streakRows(ui.heads.streaks, 5) : []; box.hidden = !ui.streaksOpen; if (!ui.streaksOpen) return;
     if (!rows.length) { box.textContent = 'No streaks yet.'; box.dataset.empty = '1'; return; }
@@ -829,6 +838,7 @@
       const [a, b, c] = await Promise.all([api.get('/api/shoutouts'), api.get('/api/intros?status=pending'), api.get('/api/scene-health')]);
       ui.heads = Object.assign(ui.heads, { shout: a.ok ? a.json : null, intro: b.ok ? b.json : null, health: c.json && Array.isArray(c.json.problems) ? c.json : null }); renderHeads();
     }, () => visible() && ui.tab === 'feed'),
+    pre: P(30000, async () => { const r = await api.get('/api/prestream'); if (r.ok) { ui.pre = r.json; renderPre(); } }),
     streaks: P(60000, async () => { const r = await api.get('/api/streaks'); if (r.ok) { ui.heads.streaks = r.json; renderHeads(); } }, () => visible() && ui.tab === 'feed'),
     multi: P(10000, async () => { await xapi.get('/api/stream/info'); }, () => visible() && H.down('multi'), 'multi'),   // only while Multi is down: a read-only ping so the banner clears when it is back
     music: P(() => (document.hidden ? 8000 : 2500), async () => {
@@ -981,6 +991,8 @@
     if (pane === 'scenes' && e.key === 'Enter') { e.preventDefault(); if (r.type === 'folder') { ui.folders.has(r.name) ? ui.folders.delete(r.name) : ui.folders.add(r.name); ls.set('folders', [...ui.folders]); renderScenes(); } else goScene(r.name, false); }
     if (pane === 'sources' && (e.key === ' ' || e.key.toLowerCase() === 'e' || e.key === 'Enter')) { e.preventDefault(); toggleItem(r.id); }
   });
+  $('#b-pre').addEventListener('click', () => { ui.preOpen = !ui.preOpen; renderPre(); if (ui.preOpen) pollers.pre.kick(); });
+  setInterval(() => schedule('bar'), 2000);   // the stale badge needs a repaint even when nothing arrives
   $('#b-last').addEventListener('click', () => lastCard($('#lastcard').hidden ? true : false));
   $('#lc-refresh').addEventListener('click', () => lastCard(true));
   $('#b-raid').addEventListener('click', e => { if (armed(e.currentTarget)) raidPrep(e.currentTarget); });

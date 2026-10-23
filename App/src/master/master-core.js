@@ -358,11 +358,29 @@
     if (sh && sh.ok !== false) { const cur = sh.current, pend = (sh.pending || []).length, last = (sh.recent || [])[0]; out.push({ k: 'shout', warn: false, text: 'Shoutout: ' + (cur ? 'now ' + cur : 'idle') + (pend ? ' · ' + pend + ' queued' : '') + (last ? ' · last ' + last.user + ' ' + (last.minAgo < 1 ? 'just now' : last.minAgo + ' min ago') : '') }); }
     if (intro && intro.ok !== false && typeof intro.pending === 'number') out.push({ k: 'intro', warn: intro.pending > 0, text: 'Intros waiting: ' + intro.pending });
     if (streaks && streaks.ok !== false && (streaks.board || []).length) { const t = streaks.board[0]; out.push({ k: 'streaks', warn: false, text: 'Streaks: ' + (t.name || t.login || '?') + ' ' + (+t.best || 0) }); }
-    if (health && health.ok === false && Array.isArray(health.problems) && health.problems.length) out.push({ k: 'scenes', warn: true, text: 'Scenes: ' + health.problems.length + ' problem' + (health.problems.length > 1 ? 's' : ''), tip: health.problems.join('\n') });
+    if (health && health.ok === false && Array.isArray(health.problems) && health.problems.length) out.push({ k: 'scenes', warn: true, text: 'Scenes: ' + health.problems.length + ' problem' + (health.problems.length > 1 ? 's' : ''), tip: health.problems.map(p => p + ' -> ' + healthHint(p)).join('\n') });
     return out;
   }
   // Host /api/streaks {board:[{login,name,best,current,...}]} (already sorted best first) -> top n rows for the card
   const streakRows = (j, n) => ((j && j.board) || []).slice(0, n || 5).map((u, i) => ({ k: String(u.login || u.name || i), n: i + 1, name: u.name || u.login || '?', best: +u.best || 0, current: +u.current || 0 }));
+  // Host /api/prestream {status, items:[{id,label,status:pass|warn|fail,detail}]} -> header label + the items that are not fine, worst first
+  function prestreamView(j) {
+    if (!j || j.ok === false || !Array.isArray(j.items)) return { state: '', label: 'Pre-stream', items: [] };
+    const rank = { fail: 0, warn: 1 }, bad = j.items.filter(i => i.status === 'fail' || i.status === 'warn').sort((a, b) => rank[a.status] - rank[b.status]);
+    const f = bad.filter(i => i.status === 'fail').length, w = bad.length - f;
+    return { state: f ? 'bad' : w ? 'warn' : 'ok', label: f || w ? 'Pre-stream: ' + [f && f + ' fail', w && w + ' warn'].filter(Boolean).join(', ') : 'Pre-stream ok', items: bad.map(i => ({ id: i.id, status: i.status, text: i.label + (i.detail ? ' (' + i.detail + ')' : '') })) };
+  }
+  // plain-words fix for a /api/scene-health problem line
+  function healthHint(p) {
+    p = String(p || '');
+    if (/has no visible widget/.test(p)) return 'Open that layout in the website scene editor and switch at least one widget on, or pick another layout.';
+    const m = p.match(/nothing listens on port (\d+)/);
+    if (m) return 'Start the module that serves port ' + m[1] + (m[1] === '8766' ? ' (PinguinoMulti: alerts)' : '') + ', or hide that widget in the layout.';
+    if (/layout unreadable/.test(p)) return 'The layout file is broken: restore it from the layout history or re-save the layout.';
+    return 'Check the layout in the website scene editor.';
+  }
+  // seconds since the Host last answered, only when it is stale enough to matter (and not already reported offline)
+  const staleSecs = (now, last, limit) => (last && now - last > (limit || 10000) ? Math.round((now - last) / 1000) : 0);
   // pending viewer intros for the approve/reject list: rows still waiting, minus the ones just decided here (optimistic), oldest first as the Host sends them
   const introKey = i => (i.platform || 'twitch') + ':' + (i.user_id != null ? i.user_id : i.login);
   const introRows = (intro, gone) => ((intro && intro.intros) || []).filter(i => i && i.status === 'pending' && !(gone && gone.has(introKey(i)))).map(i => ({ k: introKey(i), platform: i.platform || 'twitch', user_id: String(i.user_id != null ? i.user_id : ''), login: i.login || '?', text: String(i.text || '') }));
@@ -402,5 +420,5 @@
     }
   }
 
-  return { createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

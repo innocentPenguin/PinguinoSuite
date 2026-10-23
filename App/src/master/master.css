@@ -233,3 +233,4 @@ button.q-on,button.is-live{font-weight:700}
 .intros{border:1px solid var(--line,#3a3a3a);border-radius:8px;padding:6px;margin-bottom:6px;display:grid;gap:4px}
 .intro{display:flex;gap:8px;align-items:center}.intro .it{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--faint)}
 #feed-heads [data-k=intro]{cursor:pointer}
+.pre-fail{color:var(--bad,#e05050)}.pre-warn{color:var(--warn,#e8d44d)}

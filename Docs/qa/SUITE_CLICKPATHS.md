@@ -163,3 +163,8 @@ The "Test go-live" control of the core runs /api/simulate. It does NOT touch OBS
 ---------------------------------------------------------------------------
 ## 3. Log what you find
 Put results in Docs\qa\<date>-clickpaths.md: row, PASS / FAIL, what you saw, screenshot name. Report each FAIL to 20 with the page, the step and the toast text.
+
+### 1.8c Pre-stream chip and stale badge (SAFE, read only)
+- Header chip "Pre-stream ..." shows fail/warn counts; click it to open/close the list. Nothing here changes anything.
+- Hover the Feed "Scenes: N problems" chip: each problem has a "->" fix hint.
+- Link pill showing "data N s old" means the Host stopped answering for >10 s; it clears by itself.

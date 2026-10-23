@@ -83,6 +83,7 @@ export function startMock(port = 8798, opts = {}) {
     if (p === '/api/streaks') return send(res, 200, { ok: true, people: 7, board: [12, 9, 7, 5, 4, 3, 1].map((n, i) => ({ login: 'u' + i, name: 'User' + i, best: n, current: Math.max(0, n - 2) })) });
     if (p === '/api/shoutouts') return send(res, 200, { ok: true, current: 'kira', pending: [{ user: 'bo', by: 'modsam', queuedSecAgo: 5 }], recent: [{ user: 'ann', minAgo: 7 }] });
     if (p === '/api/intros') { const stt = u.searchParams.get('status'); return send(res, 200, { ok: true, settings: {}, pending: st.intros.filter(x => x.status === 'pending').length, intros: st.intros.filter(x => !stt || x.status === stt) }); }
+    if (p === '/api/prestream') return send(res, 200, { ok: true, module: 'prestream', status: 'fail', ts: 1, items: [{ id: 'a', label: 'Chat connected', status: 'pass', detail: '' }, { id: 'b', label: 'Mic', status: 'warn', detail: 'quiet' }, { id: 'c', label: 'OBS WebSocket', status: 'fail', detail: 'not reachable' }] });
     if (p === '/api/scene-health') return send(res, 200, { ok: false, problems: ['main: layout has no visible widget'], profiles: {} });
     if (p === '/api/recap/preview') return send(res, 200, { ok: true, text: 'Recap text', line: 'Recap', clip: { title: 'Clutch', url: 'https://clips.twitch.tv/x', views: 12 }, window: { start: 1, end: 2 } });
     if (p === '/api/channel/info') return send(res, 200, { ok: true, title: 'Customs with viewers', game: 'Rocket League', tags: ['English', 'Customs'] });

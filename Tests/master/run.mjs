@@ -324,6 +324,15 @@ await t('writes: slow Host times out, unreachable Host reports it; identical in-
   assert.equal(sent, 2); assert.equal(r1, r2); assert.notEqual(r1, r3); await a.post('/api/wheel/spin'); assert.equal(sent, 3);   // after it finishes, a new press sends again
 });
 
+await t('pre-stream chip, scene-health hints and stale badge: pure helpers + mock Host', async () => {
+  const v = C.prestreamView((await api.get('/api/prestream')).json);
+  assert.equal(v.state, 'bad'); assert.equal(v.label, 'Pre-stream: 1 fail, 1 warn'); assert.equal(v.items.length, 2); assert.equal(v.items[0].status, 'fail'); assert.equal(v.items[0].text, 'OBS WebSocket (not reachable)');
+  assert.equal(C.prestreamView({ ok: true, items: [{ status: 'pass', label: 'x' }] }).label, 'Pre-stream ok'); assert.equal(C.prestreamView(null).state, ''); assert.equal(C.prestreamView({ ok: false }).items.length, 0);
+  assert.match(C.healthHint('main: layout has no visible widget'), /switch at least one widget on/); assert.match(C.healthHint('widget alerts: nothing listens on port 8766'), /port 8766 .PinguinoMulti/); assert.match(C.healthHint('x: layout unreadable'), /restore/); assert.match(C.healthHint('???'), /scene editor/);
+  assert.equal(C.staleSecs(20000, 0), 0); assert.equal(C.staleSecs(20000, 15000), 0); assert.equal(C.staleSecs(30000, 15000), 15);
+  const h = C.headsView(null, null, (await api.get('/api/scene-health')).json).find(x => x.k === 'scenes'); assert.match(h.tip, /->/);
+});
+
 await t('keyboard: no positive tabindex, every control is a real button/input, scenes+sources lists are focusable in DOM order', () => {
   const html = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.html'), 'utf8'), js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
   assert.equal(/tabindex="[1-9]/.test(html + js), false); assert.equal(/<div[^>]*onclick/.test(html), false);
