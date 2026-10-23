@@ -244,6 +244,25 @@ namespace PinguinoHost
             return changed;
         }
 
+        /// <summary>A live resub (EventSub channel.subscription.message: cumulative_months, streak_months) keeps the master and the viewer profile fresh between the CSV exports. Tenure only grows (max),
+        /// streak takes the event's value, tier the event's (never lower than the master's), the sub is active again. The same event id twice (EventSub redelivery) changes nothing: the last 300 ids are kept in the master.
+        /// Returns true when something was written.</summary>
+        public static bool NoteResub(string login, int months, int streak, int tier, string eventId)
+        {
+            login = (login ?? "").Trim().ToLowerInvariant(); if (login == "" || months <= 0 && streak <= 0) return false;
+            lock (L)
+            {
+                var master = LoadMaster(); var seen = master["resubSeen"] as JArray ?? new JArray();
+                if (!string.IsNullOrEmpty(eventId)) { if (seen.Any(x => (string)x == eventId)) return false; seen.Add(eventId); while (seen.Count > 300) seen.RemoveAt(0); master["resubSeen"] = seen; }
+                var users = (JObject)master["users"]; var u = users[login] as JObject;
+                if (u == null) { u = new JObject { { "login", login }, { "tier", Math.Max(1, tier) }, { "tenure", 0 }, { "streak", 0 }, { "subscribed", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") }, { "founder", false }, { "subType", "paid" }, { "lapsed", false } }; users[login] = u; }
+                u["tenure"] = Math.Max((int?)u["tenure"] ?? 0, months); if (streak > 0) u["streak"] = streak; u["tier"] = Math.Max((int?)u["tier"] ?? 1, Math.Max(1, tier)); u["lapsed"] = false;
+                try { Directory.CreateDirectory(SubsDir); File.WriteAllText(MasterP, master.ToString()); } catch (Exception ex) { Clog.Warn("subs", "resub master: " + ex.Message); return false; }
+                try { ApplyToProfiles(new JObject { { "users", new JObject { { login, u } } } }); } catch (Exception ex) { Clog.Warn("subs", "resub profile: " + ex.Message); }
+                return true;
+            }
+        }
+
         /// <summary>look for new subscriber-list*.csv files and merge them (oldest export first). Safe to call any time, from any thread.</summary>
         public static JObject ScanAndImport()
         {

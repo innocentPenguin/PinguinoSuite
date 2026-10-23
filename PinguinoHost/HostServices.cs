@@ -209,7 +209,9 @@ namespace PinguinoHost
             switch (t)
             {
                 case "channel.subscribe": if ((bool?)e["is_gift"] == true) { try { Economy.PointsEvent(new Dictionary<string, object> { { "eventType", "TwitchGiftRecipient" }, { "userName", U("user_login") }, { "eventId", (string)a["eventId"] }, { "tier", tier } }); } catch (Exception) { } return; } a["eventType"] = "TwitchSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
-                case "channel.subscription.message": a["eventType"] = "TwitchReSub"; a["userName"] = U("user_login"); a["tier"] = tier; break;
+                case "channel.subscription.message": a["eventType"] = "TwitchReSub"; a["userName"] = U("user_login"); a["tier"] = tier;
+                    if ((bool?)m["metadata"]["sim"] != true || Environment.GetEnvironmentVariable("PINGUINO_SIM_SUBS") == "1") { try { SubsImport.NoteResub(U("user_login"), (int?)e["cumulative_months"] ?? 0, (int?)e["streak_months"] ?? 0, int.Parse(tier), (string)m["metadata"]["message_id"] ?? U("id")); } catch (Exception) { } }   // keep the sub master + profile months/streak fresh
+                    break;
                 case "channel.subscription.gift": a["eventType"] = "TwitchGiftBomb"; a["userName"] = (bool?)e["is_anonymous"] == true ? "Anonymous" : U("user_login"); a["tier"] = tier; a["total"] = (int?)e["total"] ?? 1; a["cumulative"] = (int?)e["cumulative_total"] ?? 0; a["anonymous"] = ((bool?)e["is_anonymous"] ?? false).ToString().ToLowerInvariant(); break;
                 case "channel.cheer": a["eventType"] = "TwitchCheer"; a["userName"] = U("user_login"); a["bits"] = (int?)e["bits"] ?? 0; a["bitsType"] = U("type"); break;
                 case "channel.raid":
