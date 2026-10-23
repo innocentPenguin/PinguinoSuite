@@ -220,7 +220,7 @@
       for (var i = 0; i < q[1]; i++) { k++; subs.rows.push({ rank:k, tier:q[0], name:(q[0] === 3 ? "DiamondDiva" : q[0] === 2 ? "GoldGoose" : "SnowViewer") + k, value:Math.max(1, 60 - k), anniv:(k === 2 ? 2 : 0), extra:Math.max(30, 9000 - k * 150) }); }
       if (q[1]) subs.tiers.push(q[0]);
     });
-    return { ok:true, enabled:true, idleSeconds:20, secondsPerCard:5, visibleRows:8, scrollSpeed:45, scrollPauseSeconds:2.5, items:[
+    return { ok:true, enabled:true, idleSeconds:10, secondsPerCard:5, visibleRows:8, scrollSpeed:45, scrollPauseSeconds:2.5, items:[
       [subs],
       [card("gifts","month","TOP GIFTERS \u00b7 THIS MONTH","subs",40), card("bits","month","TOP CHEERERS \u00b7 THIS MONTH","bits",9000)],
       [card("gifts","month","TOP GIFTERS \u00b7 THIS MONTH","subs",40), card("gifts","all","TOP GIFTERS \u00b7 ALL TIME","subs",400)],
@@ -342,7 +342,7 @@
     // idle = empty queue, no match, no join / !queue pop-up, for idleSeconds; any activity ends it at once
     var quiet = !playersActive(s) && !(s.queue || []).length && Date.now() >= visibleUntil;
     if (!quiet) idleSince = Date.now();
-    var secs = (idleCfg && idleCfg.idleSeconds) || 20;
+    var secs = (idleCfg && idleCfg.idleSeconds) || 10;
     setIdle(!show && (PREVIEW || (quiet && idleCfg && idleCfg.enabled !== false && Date.now() - idleSince >= secs * 1000)));
   }
 

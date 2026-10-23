@@ -24,7 +24,7 @@ namespace PinguinoHost
             Func<string, string, JObject> c = (m, p) => new JObject { { "metric", m }, { "period", p } };
             return new JObject
             {
-                { "version", 3 }, { "enabled", true }, { "idleSeconds", 20 }, { "secondsPerCard", 8 }, { "top", 8 },
+                { "version", 3 }, { "enabled", true }, { "idleSeconds", 10 }, { "secondsPerCard", 8 }, { "top", 8 },
                 { "visibleRows", 8 }, { "scrollSpeed", 45 }, { "scrollPauseSeconds", 2.5 },   // a long list scrolls (px per second, pause at the top and bottom) and the card stays until everybody was shown
                 { "sequence", new JArray {
                     new JObject { { "metric", "subs" }, { "period", "all" }, { "first", true }, { "giftedT1", false }, { "giftedT23", true }, { "layout", "separated" }, { "top", 200 } },   // "Subs!": ONE list, T1 (not gifted) then T2 then T3; "first" = always opens a round
@@ -104,7 +104,7 @@ namespace PinguinoHost
                     }
                     if (chain.Count > 0) items.Add(chain);
                 }
-                _cache = new JObject { { "ok", true }, { "enabled", (bool?)cfg["enabled"] ?? true }, { "idleSeconds", Math.Max(3, (int?)cfg["idleSeconds"] ?? 20) }, { "secondsPerCard", Math.Max(3, (int?)cfg["secondsPerCard"] ?? 8) },
+                _cache = new JObject { { "ok", true }, { "enabled", (bool?)cfg["enabled"] ?? true }, { "idleSeconds", Math.Max(3, (int?)cfg["idleSeconds"] ?? 10) }, { "secondsPerCard", Math.Max(3, (int?)cfg["secondsPerCard"] ?? 8) },
                     { "visibleRows", Math.Max(3, Math.Min(12, (int?)cfg["visibleRows"] ?? 8)) }, { "scrollSpeed", Math.Max(10, Math.Min(200, (double?)cfg["scrollSpeed"] ?? 45)) }, { "scrollPauseSeconds", Math.Max(0.5, Math.Min(10, (double?)cfg["scrollPauseSeconds"] ?? 2.5)) }, { "items", items } };
                 _at = DateTime.UtcNow; return _cache;
             }
