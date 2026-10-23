@@ -492,6 +492,7 @@ def segments(session: str, after: int = 0, limit: int = 300):
 def review_next(session: str | None = None, exclude: str = "", confident: bool = False):
     ex = [int(x) for x in exclude.split(",") if x.strip().isdigit()]
     where = "status='new'" + ("" if confident else " AND unsure>0")
+    where += " AND (end-start)*40 >= length(text)"   # not speech: Whisper hallucinated a whole sentence into a ~0.3 s chunk (words with zero length) - nothing to listen to or correct
     args = []
     if session:
         where += " AND session_id=?"
