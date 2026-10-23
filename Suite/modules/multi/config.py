@@ -21,6 +21,13 @@ DEFAULTS = {
     "kick_channel": "",               # channel slug
     "link_url": "",                   # blank = http://127.0.0.1:7777 (Link): follow the OBS scene for alert profiles (scene_follow.py)
     "intro_enabled": True,            # play viewers' approved intros (Host) for first-time / returning chatters
+    "kick_client_id": "",             # Kick developer app client id (secret goes to Credential Manager as kick_client_secret)
+    "kick_redirect_uri": "http://127.0.0.1:8766/auth/kick/callback",
+    "kick_scopes": "user:read channel:read channel:write chat:write events:subscribe",
+    "youtube_client_id": "",          # Google OAuth Desktop-app client id (secret: Credential Manager youtube_client_secret)
+    "youtube_redirect_uri": "http://127.0.0.1:8766/auth/youtube/callback",
+    "youtube_min_poll_s": 10,         # liveChat poll floor: 5 quota units per poll of 10,000/day
+    "tiktok_sign_url": "",            # optional own sign server for TikTokLive ("" = library default)
     "kick_chatroom_id": "",           # numeric chatroom id (kick.com/api/v2/channels/<slug> -> chatroom.id; pasted once)
     "ding_platforms": [],            # new-chatter ding: platforms it is ON for (twitch, youtube); empty = off
     "ding_first_ever": False,        # Twitch "first message ever" gets its own (optional) sound

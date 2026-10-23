@@ -246,3 +246,11 @@ def test_stream_info_without_tokens_is_a_clean_error(monkeypatch):
     assert stream_info.youtube_get()["connected"] is False
     assert stream_info.kick_get()["connected"] is False
     assert stream_info.kick_update(title="x")["ok"] is False
+
+
+def test_config_defaults_for_platform_auth():
+    import config
+    d = config.DEFAULTS
+    assert d["youtube_min_poll_s"] == 10 and d["tiktok_sign_url"] == "" and d["kick_client_id"] == "" and d["youtube_client_id"] == ""
+    assert d["kick_redirect_uri"].endswith("/auth/kick/callback") and "chat:write" in d["kick_scopes"]
+    assert d["youtube_redirect_uri"].endswith("/auth/youtube/callback")
