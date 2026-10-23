@@ -1455,6 +1455,18 @@ const RPL={d:undefined,err:'',showDone:false,limit:30};
 async function loadReports(){try{const r=await fetch('/api/feedback?limit='+RPL.limit).then(x=>x.json());if(!r||!Array.isArray(r.items))throw new Error((r&&r.detail)||'this build has no report list');RPL.d=r;RPL.err=''}catch(e){RPL.d=null;RPL.err=String(e&&e.message||e)}
   const open=RPL.d?(RPL.d.open!=null?RPL.d.open:RPL.d.items.filter(i=>!i.handled).length):0,b=$('#rbadge');if(b){b.textContent=open||'';b.style.display=open?'':'none'}
   if(route==='reports'&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))draw(true)}
+/* Health card: the core's /api/selfcheck in plain words (module states, data folder, Listen database, disk space). Read only, no secrets. */
+const HC={d:undefined,err:'',busy:false};
+async function loadHealth(){HC.busy=true;try{const r=await fetch('/api/selfcheck').then(x=>x.json());if(!r||!Array.isArray(r.problems))throw new Error((r&&r.detail)||'this build has no self-check yet');HC.d=r;HC.err=''}catch(e){HC.d=null;HC.err=String(e&&e.message||e)}
+  HC.busy=false;if(route==='reports'&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))draw(true)}
+function healthCard(){
+  const d=HC.d,btn=`<button class="sm" id="hc-reload"${HC.busy?' disabled':''}>${HC.busy?'Checking…':'Refresh'}</button>`;
+  if(d===undefined){loadHealth();return `<div class="card" id="hc"><div class="row"><b>Health</b><span class="sm faint">checking…</span></div></div>`}
+  if(!d)return `<div class="card" id="hc"><div class="row wrap"><b>Health</b><span class="sm faint">could not check (${esc(HC.err)}). An older Suite core has no self-check.</span><span class="sp"></span>${btn}</div></div>`;
+  const ok=!d.problems.length,disks=(d.disks||[]).map(x=>`${esc(x.drive)} ${x.free_gb} GB free`).join(' · '),mods=(d.modules||[]).filter(m=>m.wanted||m.state==='running').map(m=>`${esc(m.id)}: ${esc(m.state)}`).join(' · ');
+  return `<div class="card" id="hc" style="border-left:3px solid ${ok?'var(--ok,#3fb950)':'var(--warn,#f0883e)'}"><div class="row wrap"><b>Health</b>${ok?'<span class="pill" style="color:var(--ok,#3fb950)">all OK</span>':`<span class="pill" style="color:var(--warn,#f0883e)">${d.problems.length} problem${d.problems.length>1?'s':''}</span>`}<span class="sm faint">checked ${esc(new Date(d.ts*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}))}</span><span class="sp"></span>${btn}</div>
+   ${ok?'':`<ul style="margin:8px 0 0 18px">${d.problems.map(p=>`<li>${esc(p)}</li>`).join('')}</ul>`}
+   <div class="sm faint" style="margin-top:6px">${mods?mods+'<br>':''}${disks?'Disk: '+disks:''}</div></div>`}
 pages.reports=()=>{
   if(RPL.d===undefined){loadReports();return '<div class="dim">Loading reports…</div>'}
   const d=RPL.d;
@@ -1462,12 +1474,13 @@ pages.reports=()=>{
   const items=d.items,open=items.filter(i=>!i.handled),shown=RPL.showDone?items:open,nOpen=d.open!=null?d.open:open.length,nTotal=d.total!=null?d.total:items.length,more=nTotal>items.length;
   const card=i=>`<div class="card" data-rid="${esc(i.id)}"${i.handled?' style="opacity:.6"':''}><div class="row wrap"><b>${esc(i.page||i.route||'?')}</b><span class="sm faint">${esc((i.time||'').replace('T',' '))}</span><span class="pill">${esc(i.route||'')}</span>${(i.screenshots||[]).length?`<span class="pill">📷 ${(i.screenshots||[]).length}</span>`:''}${i.handled?'<span class="pill">handled</span>':''}<span class="sp"></span><button class="sm${i.handled?'':' pri'}" data-rhandled="${i.handled?0:1}">${i.handled?'Reopen':'Handled'}</button></div>
     <div style="white-space:pre-wrap;margin-top:6px">${esc(i.note||'(screenshot only)')}</div>${i.version?`<div class="sm faint" style="margin-top:4px">Suite ${esc(i.version)}</div>`:''}</div>`;
-  return `<div style="max-width:900px"><div class="pnote">Everything sent with the "Report a problem" button. Mark a report handled once it is dealt with. Files live in ${esc(d.dir||'Data')} (screenshots included).</div>
+  return `<div style="max-width:900px">${healthCard()}<div class="pnote" style="margin-top:10px">Everything sent with the "Report a problem" button. Mark a report handled once it is dealt with. Files live in ${esc(d.dir||'Data')} (screenshots included).</div>
    <div class="row wrap" style="margin:8px 0"><span class="pill">${nOpen} open</span><span class="pill">${nTotal-nOpen} handled</span><label class="sm"><input type="checkbox" id="rpl-done"${RPL.showDone?' checked':''}> show handled</label><span class="sp"></span><button class="sm" id="rpl-reload">Reload</button><button class="sm" id="rpl-folder">Open folder</button></div>
    ${shown.length?shown.map(card).join(''):'<div class="card dim">'+(items.length?'Nothing open. All reports are handled.':'No reports yet.')+'</div>'}${more?`<div class="row" style="margin-top:8px"><span class="sm faint">Showing the newest ${items.length} of ${nTotal}.</span><button class="sm" id="rpl-more">Show 30 more</button></div>`:''}</div>`};
 setInterval(()=>{if(route==='reports'&&!document.hidden&&!document.activeElement?.matches?.('#page input,#page textarea,#page select'))loadReports()},30000);
 function bindReports(){
   const re=()=>{RPL.d=undefined;draw(true)};
+  $('#hc-reload')&&($('#hc-reload').onclick=()=>{HC.d=undefined;draw(true)});
   $('#rpl-reload')&&($('#rpl-reload').onclick=re);
   $('#rpl-more')&&($('#rpl-more').onclick=()=>{RPL.limit+=30;re()});
   $('#rpl-done')&&($('#rpl-done').onchange=e=>{RPL.showDone=e.target.checked;draw(true)});
