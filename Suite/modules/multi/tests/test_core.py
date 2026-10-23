@@ -1703,3 +1703,24 @@ def test_twitch_reconnect_does_not_resubscribe(monkeypatch):
     assert calls == ["tok"]
     aio.run(t.handle_frame(welcome, "tok"))                      # a later fresh session subscribes again
     assert calls == ["tok", "tok"]
+
+
+def test_goal_bar_fills_from_events_and_fires_once(tmp_path):
+    import goals
+    st = Store(str(tmp_path / "g.db"))
+    fired = []
+    g = goals.Goal(st, lambda ev: fired.append(ev))
+    g.set({"title": "100 followers", "target": 3, "kind": "follow"})
+    g.observe("sub")
+    assert g.state()["current"] == 0
+    g.observe("follow"); g.observe("follow")
+    assert g.state()["pct"] == 66 and not fired
+    g.observe("follow"); g.observe("follow")
+    assert len(fired) == 1 and fired[0]["type"] == "goal" and g.state()["pct"] == 100
+    assert goals.Goal(st, lambda ev: None).state()["current"] == 4          # survives a restart
+    g.set({"target": 50})                                                    # raising the target re-arms the alert
+    assert not g.cfg["done"]
+    g.set({"kind": "bits", "target": 10, "current": 0})
+    g.observe("cheer", 25)
+    assert len(fired) == 2
+    assert g.set({"target": "junk", "title": "x" * 500})["title"] == "x" * 80

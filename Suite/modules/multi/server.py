@@ -56,6 +56,7 @@ import viewers as viewers_mod
 import prestream
 import voice
 import intros as intros_mod
+import goals as goals_mod
 import scene_follow
 import stream_info
 import secrets_store
@@ -108,6 +109,8 @@ def _alert_from_message(m):
         meta["message"] = m.text
     if meta.get("sim") or meta.get("test"):
         return
+    if m.event in ("follow", "sub", "resub", "gift", "cheer") and hub.loop:
+        hub.loop.call_soon_threadsafe(goal.observe, m.event, m.amount)
     ev = dict(meta, platform=m.platform, id=m.id, type=m.event, user=m.user, display=m.display, amount=m.amount, first_time=bool(meta.get("first_time") or m.first_time),
               refollow="refollow" in m.flags, rank_colour=meta.get("rank_colour") or m.color)
     if hub.loop:
@@ -115,6 +118,7 @@ def _alert_from_message(m):
 
 
 pipeline.on_event = _alert_from_message
+goal = goals_mod.Goal(store, alert_engine.submit)
 pipeline.intros = intros_mod.Intros(store, alert_engine.submit, lambda: pipeline.ding.started)
 inbox = Inbox(pipeline)
 connectors = {}
@@ -539,11 +543,34 @@ def obs_hype():
     return _live_page()
 
 
+@app.get("/obs/goal")
+def obs_goal():
+    return _live_page()
+
+
+@app.get("/api/goal")
+def goal_get():
+    return goal.state()
+
+
+@app.post("/api/goal")
+async def goal_set(request: Request):
+    b = await request.json()
+    if b.get("reset"):
+        st = goal.reset()
+    elif isinstance(b.get("add"), (int, float)):
+        st = goal.set({"current": goal.cfg["current"] + int(b["add"])})
+    else:
+        st = goal.set(b)
+    hub.emit({"type": "goal.changed", "goal": st})
+    return st
+
+
 @app.get("/api/live-state")
 async def live_state():
     """Current poll / prediction / hype train from the Host (null when none or the Host is down)."""
     d = await host_feed.live_state()
-    return {"poll": d.get("poll"), "prediction": d.get("prediction"), "hype": d.get("hype")}
+    return {"poll": d.get("poll"), "prediction": d.get("prediction"), "hype": d.get("hype"), "goal": goal.state()}
 
 
 @app.get("/obs/{kind}")
