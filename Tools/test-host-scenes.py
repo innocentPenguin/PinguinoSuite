@@ -34,6 +34,8 @@ try:
     h1 = json.loads(get('/api/scene-layouts?profile=h')); v1 = json.loads(get('/api/scene-layouts?profile=v'))
     chk('h default is 1920x1080 and v 1080x1920', (h1['width'], h1['height'], v1['width'], v1['height']) == (1920, 1080, 1080, 1920), (h1['width'], v1['width']))
     chk('default layout exists and is active', h1['active'] == 'default' and h1['names'] == ['default'], h1['names'])
+    pv = [w for w in reg['widgets'] if w['id'] == 'players_vertical'][0]; pvl = wid(v1, 'players_vertical')
+    chk('players_vertical is the 1080x250 strip, sitting inside the v stage (not a full-height box)', (pv['designW'], pv['designH']) == (1080, 250) and pvl['y'] + pvl['h'] <= 1920 and pvl['h'] <= 300, (pv.get('designW'), pv.get('designH'), pvl['y'], pvl['h']))
     chk('h shows players, hides players_vertical; v the opposite', wid(h1, 'players')['visible'] and not wid(h1, 'players_vertical')['visible'] and wid(v1, 'players_vertical')['visible'] and not wid(v1, 'players')['visible'])
     al = wid(h1, 'alerts'); chk('alerts: Multi page on 8766, z 100, available', al['z'] == 100 and [w for w in reg['widgets'] if w['id'] == 'alerts'][0]['src'].startswith('http://127.0.0.1:8766/') and [w for w in reg['widgets'] if w['id'] == 'alerts'][0]['available'], al)
     chk('every widget is in the layout', len(h1['layout']['widgets']) == len(ids))

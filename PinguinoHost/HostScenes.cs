@@ -22,8 +22,8 @@ namespace PinguinoHost
         static readonly W[] Registry = {
             new W { Id = "players", Label = "Players (teams)", Src = "players.html", Dw = 1920, Dh = 1080, Help = "Team cards of the running match. Full canvas, best in h.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1920, 1080, 2, 1 } }, { "v", new[] { 0, 0, 1080, 608, 2, 0 } } } },
-            new W { Id = "players_vertical", Label = "Players (vertical)", Src = "players_vertical.html", Dw = 1080, Dh = 1920, Help = "Vertical team cards. Full canvas, best in v.",
-                Def = new Dictionary<string, int[]> { { "h", new[] { 1320, 0, 600, 1080, 2, 0 } }, { "v", new[] { 0, 0, 1080, 1920, 2, 1 } } } },
+            new W { Id = "players_vertical", Label = "Players (vertical)", Src = "players_vertical.html", Dw = 1080, Dh = 250, Help = "Vertical-scene team strip (the page is a 1080x250 strip sized from its height; a full-height box would blow it up into pillars). Default: bottom of the v stage.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 1320, 900, 600, 139, 2, 0 } }, { "v", new[] { 0, 1670, 1080, 250, 2, 1 } } } },
             new W { Id = "queue", Label = "Queue / leaderboards", Src = "queue.html", Dw = 560, Dh = 720, Help = "Queue card, then the idle leaderboards.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 40, 40, 560, 720, 3, 1 } }, { "v", new[] { 260, 1100, 560, 720, 3, 1 } } } },
             new W { Id = "subroll", Label = "Sub roll", Src = "subroll.html", Dw = 1920, Dh = 1080, Help = "Sub roll-call. Full canvas, only visible while a roll runs.",
