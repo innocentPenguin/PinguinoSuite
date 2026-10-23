@@ -562,7 +562,7 @@ public class CPHInline
 
     class Ctx
     {
-        public string Login, Display, UserId, Text;
+        public string Login, Display, UserId, Text, MsgId;   // MsgId: the Twitch message this run answers, captured at OnChat
         public bool Mod, Sub, Vip, Broadcaster, Random, FirstMessage, Defend;   // Defend: the viewer is attacking / calling out the bot itself
         public string Past = "", Lore = "", ChLore = "", Cards = "";   // filled before the prompt is built: log search hits for what the message refers to, and lore entries for its phrases
         public int AdvLevel;                  // romantic / sexual advances in the recent window (0-4), see AdvanceLevel
@@ -913,7 +913,7 @@ public class CPHInline
         if (SeenMessage()) return;                                   // the same chat message delivered twice (a replayed trigger): handled once
         var cx = new Ctx
         {
-            Login = login, Display = string.IsNullOrEmpty(display) ? login : display, UserId = userId ?? "", Text = text,
+            Login = login, Display = string.IsNullOrEmpty(display) ? login : display, UserId = userId ?? "", Text = text, MsgId = ArgMsgId(),
             Mod = isMod || role >= 3, Broadcaster = isCaster || role >= 4, Sub = isSub, Vip = isVip, FirstMessage = first
         };
 
@@ -4345,7 +4345,13 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
         catch (Exception) { }
     }
 
-    void Say(Ctx c, string msg) { PgSay("chat", "@" + c.Display + " " + msg); }
+    string ArgMsgId() { object o; return (CPH.TryGetArg("msgId", out o) && o != null) ? Convert.ToString(o) : ""; }
+    // the reply target is the message captured in cx: the shared send path reads msgId / userName from the arguments, so they are pinned to this viewer's message for the send
+    void Say(Ctx c, string msg)
+    {
+        try { if ((c.MsgId ?? "") != "") { CPH.SetArgument("msgId", c.MsgId); CPH.SetArgument("userName", c.Login); } } catch (Exception) { }
+        PgSay("chat", "@" + c.Display + " " + msg);
+    }
 
     // Called by name so a Streamer.bot build without it can't break the compile.
     bool Whisper(string user, string msg)
