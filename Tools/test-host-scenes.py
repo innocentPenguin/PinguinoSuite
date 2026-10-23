@@ -20,7 +20,12 @@ try:
     for _ in range(120):
         try: get('/api/status'); break
         except Exception: time.sleep(0.5)
-    reg = json.loads(get('/api/scene-widgets'))
+    reg = {}
+    for _ in range(20):
+        try: reg = json.loads(get('/api/scene-widgets'))
+        except Exception: reg = {}
+        if 'widgets' in reg: break
+        time.sleep(0.5)   # the Host answers /api/status a moment before the scene routes are ready
     ids = [w['id'] for w in reg['widgets']]
     chk('registry lists every overlay + alerts', {'queue', 'players', 'players_vertical', 'subroll', 'wheel', 'alerts'} <= set(ids), ids)
     hud = ['goal', 'latest', 'subfooter', 'chat', 'customs', 'nowplaying']
