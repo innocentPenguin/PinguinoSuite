@@ -51,7 +51,7 @@ namespace PinguinoHost
             var toks = new List<string>(); string t0 = (string)set["Token"] ?? ""; if (t0 != "") toks.Add(t0);
             foreach (var n in new[] { "PINGUINO_MODULE_TOKEN", "PINGUINO_API_TOKEN" }) { string v = Environment.GetEnvironmentVariable(n) ?? ""; if (v != "" && !toks.Contains(v)) toks.Add(v); }
             if (toks.Count == 0) toks.Add("");
-            string last = "";
+            string last = ""; bool timedOut = false;
             foreach (var tok in toks)
             {
                 try
@@ -65,9 +65,9 @@ namespace PinguinoHost
                     if (!r.IsSuccessStatusCode && j["text"] == null) j["text"] = (string)j["detail"] ?? ("Multi answered " + (int)r.StatusCode);
                     return j;
                 }
-                catch (Exception ex) { last = ex.InnerException != null ? ex.InnerException.Message : ex.Message; break; }
+                catch (Exception ex) { last = ex.InnerException != null ? ex.InnerException.Message : ex.Message; timedOut = ex is System.Threading.Tasks.TaskCanceledException || ex.InnerException is System.Threading.Tasks.TaskCanceledException || ex is TimeoutException; break; }
             }
-            return new JObject { { "ok", false }, { "text", "Multi is not reachable (" + Short(last) + ")" } };
+            var nr = new JObject { { "ok", false }, { "text", "Multi is not reachable (" + Short(last) + ")" } }; if (timedOut) nr["unknown"] = true; return nr;
         }
         static string Short(string s) { s = (s ?? "").Replace("\r", " ").Replace("\n", " "); return s.Length > 70 ? s.Substring(0, 70) : s; }
 
@@ -136,14 +136,17 @@ namespace PinguinoHost
         public static void FireAsync(string type, string login, string id, string field, long value, string message = "") { ThreadPool.QueueUserWorkItem(_ => { try { Fire(type, login, id, field, value, message); } catch (Exception ex) { Clog.Warn("alerts", "fire failed: " + ex.Message); } }); }
 
         /// <summary>a shoutout: the target's clip plays in the alerts source (Multi shows it after its own delay and draws the progress bar). Stable id per queued shoutout (target + clip + the time it was queued, so a retry is shown once); never for sim or test names. Returns true when Multi queued it.</summary>
-        public static bool FireShoutout(string login, string display, string clipId, string mediaUrl, string title, double durationS, long stamp, string message = "")
+        /// <summary>true = Multi queued it. unknown = the POST timed out, so Multi may have queued it: the caller must not add a Twitch card on top.</summary>
+        public static bool FireShoutout(string login, string display, string clipId, string mediaUrl, string title, double durationS, long stamp, string message = "") { bool u; return FireShoutout(login, display, clipId, mediaUrl, title, durationS, stamp, out u, message); }
+        public static bool FireShoutout(string login, string display, string clipId, string mediaUrl, string title, double durationS, long stamp, out bool unknown, string message = "")
         {
+            unknown = false;
             var set = Settings(); if ((bool?)set["Enabled"] == false || string.IsNullOrEmpty(login) || string.IsNullOrEmpty(mediaUrl) || Sim.IsSim(login)) return false;
             string id = "shoutout:" + login + ":" + clipId + ":" + stamp;
             lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return false; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
             var body = new JObject { { "type", "shoutout" }, { "user", login }, { "display", display }, { "id", id }, { "message", message }, { "clip", new JObject { { "url", mediaUrl }, { "title", title ?? "" }, { "duration_s", (int)Math.Ceiling(durationS) } } } };
             string av = AvatarOf(login); if (av != "") body["avatar"] = av;
-            var r = Post("/api/alerts/fire", body); bool ok = (bool?)r["ok"] == true;
+            var r = Post("/api/alerts/fire", body); bool ok = (bool?)r["ok"] == true; unknown = !ok && (bool?)r["unknown"] == true;
             Clog.Info("alerts", "shoutout " + login + " clip " + clipId + " -> " + (ok ? "queued" : "not queued: " + Short((string)r["text"])));
             return ok;
         }

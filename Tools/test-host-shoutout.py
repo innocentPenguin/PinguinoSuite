@@ -7,7 +7,7 @@ dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 
 PORT = 8985; HX = 8986; B = 'http://127.0.0.1:%d' % PORT
 posts = []; chats = []; fires = []; t0 = time.time()
 def clip(i, feat, views): return {'id': i, 'title': 't' + i, 'url': 'https://clips.twitch.tv/' + i, 'view_count': views, 'is_featured': feat, 'duration': 9.5, 'created_at': '2020-01-01T00:00:00Z', 'thumbnail_url': 'https://clips-media-assets2.twitch.tv/%s-preview-480x272.jpg' % i}
-CLIPS = {'id_alpha': [clip('M1', False, 100), clip('F1', True, 10), clip('M2', False, 50), clip('F2', True, 5), clip('M3', False, 40)], 'id_gamma': [clip('G1', False, 7)]}
+CLIPS = {'id_alpha': [clip('M1', False, 100), clip('F1', True, 10), clip('M2', False, 50), clip('F2', True, 5), clip('M3', False, 40)], 'id_gamma': [clip('G1', False, 7)], 'id_slow': [clip('S1', False, 7)]}
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _send(self, o, code=200):
@@ -33,6 +33,7 @@ class M(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
         n = int(self.headers.get('Content-Length', 0)); b = json.loads(self.rfile.read(n) or b'{}'); fires.append((self.path, b))
+        if b.get('user') == 'slow': time.sleep(8)   # Multi answers after the Host's 6 s timeout
         o = json.dumps({'ok': True, 'text': 'queued'}).encode(); self.send_response(200); self.send_header('Content-Length', str(len(o))); self.end_headers(); self.wfile.write(o)
 MP = 8988; threading.Thread(target=http.server.ThreadingHTTPServer(('127.0.0.1', MP), M).serve_forever, daemon=True).start()
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', HX), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -85,6 +86,15 @@ try:
     # 4. a target without clips falls back to the native Twitch card (and nothing is fired)
     n = len(fires); time.sleep(4.3); chk('queued beta', shout('beta') == 'queued'); time.sleep(4.5)
     chk('no clips: Twitch card sent as the fallback, nothing fired', len(posts) == 1 and posts[0][1] == 'id_beta' and len(fires) == n)
+    # 5. the no-clip shoutout above did not burn the cooldown; a hammering mod gets ONE cooldown line per window
+    chk('a no-clip shoutout does not burn the cooldown (gamma queued right after)', shout('gamma') == 'queued'); time.sleep(1.2)
+    c0 = len([x for x in says() if 'cooldown' in x.lower()])
+    r1 = [shout('zeta'), shout('eta'), shout('theta')]; time.sleep(0.5)
+    chk('inside the window: refused, one cooldown line only -> %s' % r1, r1 == ['cooldown'] * 3 and len([x for x in says() if 'cooldown' in x.lower()]) == c0 + 1)
+    # 6. Multi queued the clip but the POST timed out: no Twitch card on top
+    time.sleep(4.3); np = len(posts); shout('slow'); time.sleep(8.5); sl = [f for _, f in fires if f.get('user') == 'slow']
+    chk('timeout: the clip was sent once and NO Twitch card followed', len(sl) == 1 and len(posts) == np)
+    chk('timeout: the clip counts as sent (shared list)', json.load(open(os.path.join(d, 'clips_recent.json')))[-1]['id'] == 's1')
 finally:
     host.kill(); time.sleep(0.5); srv.shutdown(); shutil.rmtree(d, True)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)
