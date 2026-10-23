@@ -356,6 +356,7 @@ class Settings(BaseModel):
     red: float | None = None
     device: int | None = None
     bot_speech: str | None = None   # "drop" | "tag" | "off"
+    learn_from_notes: bool | None = None
 
 
 @app.post("/api/settings")
@@ -561,7 +562,11 @@ def segment_note(sid: int, b: Note):
         raise HTTPException(404)
     note = " ".join(b.note.split())[:1000]
     db.run("UPDATE segments SET note=? WHERE id=?", (note, sid))
-    return {"note": note}
+    try:
+        learned = learn.learn_from_note(sid, note)
+    except Exception:  # noqa: BLE001  (a note must always save, whatever it says)
+        learned = None
+    return {"note": note, "learned": learned}
 
 
 @app.post("/api/regrade")

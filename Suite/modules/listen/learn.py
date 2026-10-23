@@ -120,12 +120,84 @@ def finalize(raw_words: list, avg_logprob: float = 0.0) -> dict:
     }
 
 
+# ---------------------------------------------------------------- learning from review notes (setting learn_from_notes, default OFF)
+_ARROW = re.compile(r"\s*(?:->|→|=>)\s*")
+_VOCAB = re.compile(r"^(?:vocab|vocabulary|hotwords?|names?|terms?)\s*[:=]\s*(.+)$", re.I)
+_WRONG = re.compile(r"^(?:wrong|misheard|bad)\s*(?:words?)?\s*[:=]\s*(.+)$", re.I)
+_QUOTES = "\"'“”‘’`"
+
+
+def _clean(s: str) -> str:
+    return " ".join(w for w in (_strip_punct(t.strip(_QUOTES)) for t in s.split()) if w)
+
+
+def parse_note(note: str) -> dict:
+    """What a reviewer's note says, if it uses one of the markers: 'wrong -> right', 'vocab: A, B', 'wrong: word'. Anything else is ignored."""
+    out = {"rules": [], "vocab": [], "wrong": []}
+    for part in re.split(r"[;\n]+", note or ""):
+        part = part.strip()
+        if not part:
+            continue
+        m = _VOCAB.match(part)
+        if m:
+            out["vocab"] += [t for t in (_clean(x) for x in m.group(1).split(",")) if t and len(t.split()) <= 4]
+            continue
+        m = _WRONG.match(part)
+        if m:
+            out["wrong"] += [norm(t) for t in re.split(r"[,\s]+", m.group(1)) if norm(t)]
+            continue
+        bits = _ARROW.split(part)
+        if len(bits) == 2:
+            a, b = _clean(bits[0]), _clean(bits[1])
+            if a and b and len(a.split()) <= 4 and len(b.split()) <= 4 and norm(a.replace(" ", "")) != norm(b.replace(" ", "")):
+                out["rules"].append((" ".join(norm(w) for w in a.split()), b))
+    return out
+
+
+def learn_from_note(seg_id: int, note: str):
+    """Feed one saved note into the rules / vocabulary / wrong-word list. Returns what was learned, or None (setting off, nothing recognised, already learned)."""
+    if not cfg.settings().get("learn_from_notes"):
+        return None
+    note = " ".join((note or "").split())
+    done = db.one("SELECT note FROM note_learned WHERE seg_id=?", (seg_id,))
+    if done and done["note"] == note:
+        return None
+    p = parse_note(note)
+    for wrong, right in p["rules"]:
+        if wrong and wrong != right:
+            db.run("INSERT INTO rules(wrong,right,count) VALUES(?,?,1) ON CONFLICT(wrong) DO UPDATE SET "
+                   "right=excluded.right, count=CASE WHEN rules.right=excluded.right THEN rules.count+1 ELSE 1 END", (wrong, right))
+        for t in right.split():
+            t = _strip_punct(t)
+            if t and t.lower() not in common_words() and not t.isdigit():
+                add_vocab(t, "note")
+    for t in p["vocab"]:
+        add_vocab(t, "note")
+    db.run("INSERT INTO note_learned(seg_id,note,wrong) VALUES(?,?,?) ON CONFLICT(seg_id) DO UPDATE SET note=excluded.note, wrong=excluded.wrong", (seg_id, note, " ".join(p["wrong"])))
+    if not (p["rules"] or p["vocab"] or p["wrong"]):
+        return None
+    return {"rules": p["rules"], "vocab": p["vocab"], "wrong": p["wrong"]}
+
+
+NOTE_BOOST = 3.0   # a line the reviewer flagged "wrong: word" sorts like a very unsure line
+
+
 def regrade_unreviewed() -> int:
-    """Re-run current rules over every segment nobody has reviewed yet."""
+    """Re-run current rules over every segment nobody has reviewed yet. With learn_from_notes on, noted lines go first (their notes teach the rules
+    the rest of the pass uses) and a line whose note names a wrong word that is really in it is pushed up the review queue."""
     import json
+    on = bool(cfg.settings().get("learn_from_notes"))
     n = 0
-    for r in db.rows("SELECT id,raw_words FROM segments WHERE status='new'"):
+    sql = "SELECT id,raw_words,note FROM segments WHERE status='new'" + (" ORDER BY (COALESCE(note,'')!='') DESC, id" if on else "")
+    for r in db.rows(sql):
+        if on and r.get("note"):
+            learn_from_note(r["id"], r["note"])
         f = finalize(json.loads(r["raw_words"]))
+        if on and r.get("note"):
+            w = db.one("SELECT wrong FROM note_learned WHERE seg_id=?", (r["id"],))
+            bad = set((w["wrong"] if w else "").split())
+            if bad and any(norm(x["w"]) in bad for x in json.loads(r["raw_words"])):
+                f["unsure"] = round(f["unsure"] + NOTE_BOOST, 3)
         db.run("UPDATE segments SET words=?,text=?,unsure=? WHERE id=?", (json.dumps(f["words"]), f["text"], f["unsure"], r["id"]))
         n += 1
     return n

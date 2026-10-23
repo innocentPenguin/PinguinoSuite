@@ -28,6 +28,7 @@ DEFAULTS = {
     "device": None,            # legacy sounddevice index; indexes shift when devices come and go, so the NAME below wins
     "device_name": None,       # the chosen mic by name (+ host API), resolved to the current index at every start
     "device_hostapi": None,
+    "learn_from_notes": False,  # saved review notes feed learning: "wrong -> right" makes a rule + vocabulary, "vocab: A, B" adds hotwords, "wrong: word" pushes that line up the review queue
     "bot_speech": "drop",      # live lines that overlap the bot's own voice (Speak publishes when it talks): "drop" = not stored, "tag" = stored with status 'bot' (never offered for review), "off"
 }
 

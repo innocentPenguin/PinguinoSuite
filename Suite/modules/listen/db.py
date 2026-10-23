@@ -23,6 +23,7 @@ CREATE INDEX IF NOT EXISTS seg_review ON segments(status, unsure);
 CREATE INDEX IF NOT EXISTS seg_counts ON segments(session_id, status, unsure);
 CREATE TABLE IF NOT EXISTS vocab(term TEXT PRIMARY KEY, count INTEGER DEFAULT 1, source TEXT);
 CREATE TABLE IF NOT EXISTS rules(wrong TEXT PRIMARY KEY, right TEXT, count INTEGER DEFAULT 1);
+CREATE TABLE IF NOT EXISTS note_learned(seg_id INTEGER PRIMARY KEY, note TEXT, wrong TEXT);
 CREATE TABLE IF NOT EXISTS attempts(source_id TEXT PRIMARY KEY, n INTEGER DEFAULT 0, last REAL, err TEXT);
 """)
 for _col in ("note TEXT",):   # added later: the reviewer's description of what is wrong
