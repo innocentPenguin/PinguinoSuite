@@ -38,5 +38,5 @@ Last updated: 2026-10-23 05:30. Session id: local_ (this session; transcript bel
 ## 6. Things Ivan may be forgetting
 1. The 24 old `vod-*.mp4` files (about 21 GB) in Listen's sources are untouched and await your say-so; the duplicate-VOD cleanup is a list for you.
 2. Master switch and spoken control are both OFF; nothing speaks or obeys until you switch them on.
-3. `!speak`/`!tts` questions: final command name, price (a Host redeem, not Speak), minimum role (default mod), and whether a second virtual cable for the voice is OK.
+3. `!speak`: approved by Ivan (!speak, 100 points via redeem, anyone when redeemed, mod-only typed); still open: whether a second virtual cable for the voice is OK.
 4. Voice has never been tried on a real stream: do one supervised test with the master ON before relying on it.

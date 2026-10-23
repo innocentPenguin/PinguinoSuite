@@ -69,4 +69,4 @@ Apply: `Update-Module.bat voice -NoBuild`; the Host must re-read the manifest to
   1. Trigger: chat command `!speak` (alias `!tts`), permission "everyone" (Speak itself checks the role: mod when typed), user cooldown 20 s. Step: module_command, url `http://127.0.0.1:8772/api/chat-command`, command `speak`, as `core`.
   2. Trigger: channel-point redeem with the reward title Ivan picks, same step plus `"redeem": true`. A redeem lets anyone through (the points were the price); the Host passes the viewer's input as `args`.
 - Speak side is ready: `tts.enabled` (OFF) is the switch; the Host sends `role` as a number ("3" = mod, "4" = broadcaster), which `role_of()` in server.py now understands (before 53's fix a typed `!speak` from a mod was refused). The reply is always silent: nothing is posted to chat.
-- Defaults recommended to Ivan: name `!speak`, 100 channel points, anyone when redeemed, mod when typed. Name and price are his decision.
+- Approved by Ivan (2026-10-23): name `!speak`, 100 channel points via a Host redeem, anyone when redeemed, mod-only when typed.

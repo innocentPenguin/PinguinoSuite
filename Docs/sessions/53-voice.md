@@ -33,7 +33,7 @@ Also: read-only review of 51's Connect work (`53-connect-review.md` in 50's note
 | The 24 old `vod-*.mp4` files (~21 GB) in Listen's sources await Ivan's say-so | Ivan |
 
 ## Ivan's questions, with my defaults
-1. `!speak` command name: default `!speak` (alias `!tts` stays). 2. Price: a Host channel-point redeem, default 500 points, set in the Host, not Speak. 3. Minimum role without a redeem: default mod. 4. Is a second virtual cable for the voice OK: default yes, "Voicemeeter AUX Input" (fallback "CABLE In 16ch"), see VOICE_ROUTING.md. 5. Do one supervised test with the master ON before relying on it (never while live in OBS).
+1. Approved by Ivan: command `!speak` (alias `!tts` stays). 2. Approved by Ivan: price is a Host channel-point redeem of 100 points, anyone may use it once redeemed; typed in chat it is mod-only. (Set in the Host, not Speak.) 3. Is a second virtual cable for the voice OK: default yes, "Voicemeeter AUX Input" (fallback "CABLE In 16ch"), see VOICE_ROUTING.md. 4. Do one supervised test with the master ON before relying on it (never while live in OBS).
 
 ## Rules I follow
 Never go live in OBS; the module never posts to chat itself (only the Host `say` endpoint); no secrets read aloud or logged; no pushes; no restarts; never flip the master switch; tests never play real audio or touch the real Data\runtime\voice.
