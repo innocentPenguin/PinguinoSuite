@@ -181,7 +181,32 @@ namespace PinguinoHost
                     return _doc;
                 }
             }
-            static bool Allowed(string login) { return login != "" && !Boards.IsBot(login) && !Boards.IsAnon(login); }
+            static HashSet<string> _forget = new HashSet<string>(); static DateTime _forgetAt = DateTime.MinValue;
+            /// <summary>!forgetme people (Privacy "forget": no details kept) must not get graph-based lines either; Boards.IsAnon only covers "anon". Read from chat_memory.json, 20 s cache.</summary>
+            static bool Forgotten(string login)
+            {
+                lock (L)
+                {
+                    if ((DateTime.UtcNow - _forgetAt).TotalSeconds > 20)
+                    {
+                        var set = new HashSet<string>();
+                        try
+                        {
+                            string p = Path.Combine(HostApi.DataDir, "chat_memory.json");
+                            if (File.Exists(p)) foreach (var pr in JObject.Parse(File.ReadAllText(p)).Properties())
+                            {
+                                var v = pr.Value as JObject; if (v == null || !string.Equals((string)v["Privacy"], "forget", StringComparison.OrdinalIgnoreCase)) continue;
+                                set.Add(Norm(pr.Name)); string lg = Norm((string)v["Login"] ?? ""); if (lg != "") set.Add(lg);
+                                foreach (var al in (v["Aliases"] as JArray ?? new JArray())) set.Add(Norm((string)al));
+                            }
+                        }
+                        catch (Exception) { }
+                        _forget = set; _forgetAt = DateTime.UtcNow;
+                    }
+                    return _forget.Contains(Norm(login));
+                }
+            }
+            static bool Allowed(string login) { return login != "" && !Boards.IsBot(login) && !Boards.IsAnon(login) && !Forgotten(login); }
             /// <summary>"duo" (very close chat pair), "buddies" (regular chat), "acquainted" (a few exchanges), "crowd" (same regular group, no direct link) or "" (nothing known, opted out, or a bot).</summary>
             public static string Closeness(string a, string b)
             {

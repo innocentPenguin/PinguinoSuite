@@ -10,6 +10,7 @@ GRAPH = {'built': 'test', 'nodes': [], 'groups': [{'group': 1, 'size': 3, 'membe
                    {'a': 'carl', 'b': 'dora', 'aToB': 50, 'bToA': 40, 'mutual': 40, 'tags': ['chat friends'], 'example': ['2026-04-07', 'carl', SECRET]},
                    {'a': 'erin', 'b': 'finn', 'aToB': 9, 'bToA': 9, 'mutual': 9, 'tags': ['chat friends'], 'example': ['2026-04-07', 'erin', SECRET]},
                    {'a': 'optout1', 'b': 'bobby', 'aToB': 900, 'bToA': 800, 'mutual': 800, 'tags': ['chat friends'], 'example': ['x', 'y', SECRET]},
+                   {'a': 'forget1', 'b': 'bobby', 'aToB': 900, 'bToA': 800, 'mutual': 800, 'tags': ['chat friends'], 'example': ['x', 'y', SECRET]},
                    {'a': 'pinguinob0t', 'b': 'bobby', 'aToB': 900, 'bToA': 800, 'mutual': 800, 'tags': ['chat friends'], 'example': ['x', 'y', SECRET]}]}
 
 def free():
@@ -18,7 +19,7 @@ def free():
 def run(chat, redeems, extra=None):
     d = tempfile.mkdtemp(prefix='pgtg_')
     json.dump({'Channel': 'streamer1'}, open(os.path.join(d, 'host_secrets.json'), 'w'))
-    json.dump({'optout1': {'Privacy': 'anon'}}, open(os.path.join(d, 'chat_memory.json'), 'w'))
+    json.dump({'optout1': {'Privacy': 'anon'}, '555': {'Login': 'forget1', 'Privacy': 'forget'}}, open(os.path.join(d, 'chat_memory.json'), 'w'))
     g = os.path.join(d, 'graph.json'); json.dump(GRAPH, open(g, 'w'))
     env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
     env.update({'PINGUINO_COMPAT_WS_PORT': str(free()), 'PINGUINO_TIMEOUT_FAST': '1', 'PINGUINO_PEOPLE_GRAPH': g}); env.update(extra or {})
@@ -53,6 +54,10 @@ check('alice' in s[0] and 'bobby' in s[0] and 'has been timed out by' not in s[0
 check(all(n in s[1] for n in ('dora', 'carl')) and 'has been timed out by' not in s[1], 'buddies line names both: %s' % s)
 check(all(x.endswith('has been timed out by ' + w) for x, w in zip(s[2:], ['erin', 'gus', 'zed', 'alice'])), 'acquainted / crowd / unknown / opted-out get the normal line: %s' % s)
 check(not any(SECRET in l for l in out), 'private example text leaked into the output')
+# !forgetme (Privacy forget, keyed by twitch id with Login) is excluded from graph lines too, same as !optmeout
+out = run(ROSTER + ['forget1: x'], [('alice', 'forget1'), ('forget1', 'bobby')])
+check(lvl(out) == ['none', 'none'], 'forgotten person gets no graph lookup: %s' % lvl(out))
+check(not any('Friendship' in x or 'Friendly' in x or 'no hard feelings' in x or 'grudge' in x for x in says(out)), 'forgotten person got a friend line: %s' % says(out))
 # bot on one side never counts even with an edge
 out = run(ROSTER, [('zed', 'pinguinob0t')])
 check(lvl(out) == [] , 'bots are protected targets, no graph lookup: %s' % lvl(out))
