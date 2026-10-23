@@ -30,7 +30,7 @@ def default_http(method, url, key, body, timeout):
             return r.status, (json.loads(raw) if raw else {})
     except urllib.error.HTTPError as e:
         return e.code, {}
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+    except Exception as e:                      # URLError, timeouts, IncompleteRead (not an OSError), bad JSON...
         return 0, {"error": str(e)}
 
 
@@ -122,7 +122,7 @@ class Bridge:
         if st == 200:
             self._ok("push")
             self._pushed_version = self.e.version
-            v = (js or {}).get("blocklistVersion")
+            v = js.get("blocklistVersion") if isinstance(js, dict) else None
             if v is not None and v != self.blocklist_version:
                 self.pull_blocklist(v)
             return True
@@ -148,6 +148,7 @@ class Bridge:
                     self.push_once()
             except Exception as ex:
                 console_log.error("site", f"push loop: {type(ex).__name__}: {ex}", dedupe_s=60)
+                self._bad(f"push error: {type(ex).__name__}", "push")
             f = self.f["push"]
             self.sleep(0.5 if not f else min(30, 3 * (2 ** (f - 1))))
 
@@ -162,14 +163,18 @@ class Bridge:
             self._bad(f"poll HTTP {st}", "poll")
             return 0
         self._ok("poll")
-        events = (js or {}).get("events") or []
+        events = js.get("events") if isinstance(js, dict) else None
+        events = (events if isinstance(events, list) else [])[:50]
         results = []
         for ev in events:
+            if not isinstance(ev, dict):                  # a poison entry must not lose the batch or be redelivered forever
+                continue
+            eid = ev.get("id")
             try:
                 results.append(self.handle_event(ev))
             except Exception as ex:
-                console_log.error("site", f"event {ev.get('id')} failed: {type(ex).__name__}: {ex}", dedupe_s=30)
-                results.append({"id": ev.get("id"), "ok": False, "reason": "requests_closed"})
+                console_log.error("site", f"event {eid} failed: {type(ex).__name__}: {ex}", dedupe_s=30)
+                results.append({"id": eid, "ok": False, "reason": "requests_closed"})
         if results:
             self.http("POST", url + "/api/spotify/ack", key, {"v": 1, "results": results}, 10)
         return len(events)
@@ -187,6 +192,8 @@ class Bridge:
                     continue
             except Exception as ex:
                 console_log.error("site", f"poll loop: {type(ex).__name__}: {ex}", dedupe_s=60)
+                self._bad(f"poll error: {type(ex).__name__}", "poll")
+                self.sleep(1.0)                           # never a tight loop, whatever failed
             if self.f["poll"]:
                 self.sleep(min(30, 3 * (2 ** (self.f["poll"] - 1))))
 

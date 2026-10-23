@@ -574,6 +574,52 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(self.e.chat("troll", "!sr song 4", [])["code"], "user_blocked")
         self.assertNotIn("troll", json.dumps(self.e.public_state()["settings"]))
 
+    def test_poll_loop_survives_odd_answers_without_spinning(self):
+        sleeps = []
+
+        def sleep(s):
+            sleeps.append(s)
+            if len(sleeps) >= 3:
+                self.b.stop = True
+        self.b.sleep = sleep
+
+        def boom(*a):
+            raise RuntimeError("IncompleteRead")
+        self.b.http = boom
+        self.b.poll_loop()
+        self.assertTrue(sleeps and min(sleeps) >= 1.0, sleeps)
+        self.assertGreaterEqual(self.b.f["poll"], 1, "back-off counter must advance")
+
+    def test_push_loop_error_backs_off(self):
+        sleeps = []
+
+        def sleep(s):
+            sleeps.append(s)
+            self.b.stop = True
+        self.b.sleep = sleep
+        self.e.site_snapshot = lambda: (_ for _ in ()).throw(RuntimeError("x"))
+        self.b.push_loop()
+        self.assertGreaterEqual(self.b.f["push"], 1)
+        self.assertGreaterEqual(sleeps[0], 3)
+
+    def test_non_dict_json_answers_are_tolerated(self):
+        self.responses = {"/push": (200, ["not", "a", "dict"]), "/poll": (200, ["x"])}
+        self.assertTrue(self.b.push_once())
+        self.assertEqual(self.b.poll_once(), 0)
+
+    def test_poison_event_does_not_lose_the_batch(self):
+        self.api.track = lambda tid: self.api.tracks["t4"]
+        self.responses = {"/poll": (200, {"events": ["junk", None, 5,
+                                                     {"id": "e1", "type": "request", "user": "Ann", "trackId": "x"}]})}
+        self.b.poll_once()
+        ack = [s for s in self.sent if s[1].endswith("/ack")][0][3]["results"]
+        self.assertEqual([r["id"] for r in ack], ["e1"])
+        self.assertTrue(ack[0]["ok"])
+
+    def test_event_batch_is_capped(self):
+        self.responses = {"/poll": (200, {"events": [{"id": f"e{i}", "type": "nope"} for i in range(120)]})}
+        self.assertEqual(self.b.poll_once(), 50)
+
     def test_request_vote_events_and_ack(self):
         self.api.track = lambda tid: self.api.tracks["t4"]
         self.responses = {"/poll": (200, {"events": [
