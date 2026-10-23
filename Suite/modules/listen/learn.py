@@ -178,7 +178,15 @@ def _want(note: str) -> dict:
 
 def _undo(seg_id: int, produced: dict):
     """Take back what this segment's earlier note taught."""
+    flipped = {f["wrong"]: f for f in produced.get("flipped", [])}
     for wrong, right in produced.get("applied_rules", []):
+        f = flipped.get(wrong)
+        if f and db.one("SELECT 1 x FROM rules WHERE wrong=? AND right=?", (wrong, right)):   # this note flipped the rule: put the old answer back
+            db.run("UPDATE rules SET right=?, count=? WHERE wrong=?", (f["old_right"], f["old_count"], wrong))
+            for sid, rt in f["votes"]:    # the other notes that had voted for the new answer are pending again
+                if sid != seg_id:
+                    db.run("INSERT OR IGNORE INTO rule_pending(wrong,right,seg_id) VALUES(?,?,?)", (wrong, rt, sid))
+            continue
         db.run("UPDATE rules SET count=count-1 WHERE wrong=? AND right=?", (wrong, right))
     db.run("DELETE FROM rules WHERE count<=0")
     for t in produced.get("applied_vocab", []):
@@ -208,7 +216,7 @@ def learn_from_note(seg_id: int, note: str):
         return None
     if prev is not None:
         _undo(seg_id, old)
-    applied_rules, applied_vocab, conflicts = [], [], []
+    applied_rules, applied_vocab, conflicts, flipped = [], [], [], []
     for wrong, right in want["rules"]:
         cur = db.one("SELECT right FROM rules WHERE wrong=?", (wrong,))
         if cur is None:
@@ -222,6 +230,9 @@ def learn_from_note(seg_id: int, note: str):
             if db.one("SELECT COUNT(*) n FROM rule_pending WHERE wrong=? AND right=?", (wrong, right))["n"] < FLIP_NEEDS:
                 conflicts.append([wrong, cur["right"], right])
                 continue
+            old = db.one("SELECT right,count FROM rules WHERE wrong=?", (wrong,))
+            votes = [[v["seg_id"], v["right"]] for v in db.rows("SELECT seg_id,right FROM rule_pending WHERE wrong=?", (wrong,))]
+            flipped.append({"wrong": wrong, "old_right": old["right"], "old_count": old["count"], "votes": votes})    # kept so undoing this note restores the old rule
             db.run("UPDATE rules SET right=?, count=1 WHERE wrong=?", (right, wrong))
             db.run("DELETE FROM rule_pending WHERE wrong=?", (wrong,))
         applied_rules.append([wrong, right])
@@ -230,7 +241,7 @@ def learn_from_note(seg_id: int, note: str):
             continue
         add_vocab(t, "note")
         applied_vocab.append(t)
-    produced = {"want": want, "applied_rules": applied_rules, "applied_vocab": applied_vocab}
+    produced = {"want": want, "applied_rules": applied_rules, "applied_vocab": applied_vocab, "flipped": flipped}
     db.run("INSERT INTO note_learned(seg_id,note,wrong,produced) VALUES(?,?,?,?) ON CONFLICT(seg_id) DO UPDATE SET note=excluded.note, wrong=excluded.wrong, produced=excluded.produced",
            (seg_id, note, " ".join(want["wrong"]), json.dumps(produced)))
     if not (want["rules"] or want["vocab"] or want["wrong"] or conflicts):

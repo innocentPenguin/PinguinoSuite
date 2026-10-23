@@ -163,6 +163,19 @@ class Safety(unittest.TestCase):
         self.assertEqual(db.one("SELECT right FROM rules WHERE wrong='pingwin'")["right"], "Penguin")
         self.assertEqual(learn.note_conflicts(), [])
 
+    def test_undoing_the_note_that_flipped_a_rule_restores_the_old_rule(self):
+        import db
+        import learn
+        a, b, c = (seg(db, "x", sid="fl") for _ in range(3))
+        learn.learn_from_note(a, "pingwin -> Pinguino")
+        learn.learn_from_note(a2 := seg(db, "x", sid="fl"), "pingwin -> Pinguino")      # count 2
+        learn.learn_from_note(b, "pingwin -> Penguin")
+        learn.learn_from_note(c, "pingwin -> Penguin")                                   # second vote: flips
+        self.assertEqual(db.one("SELECT right,count FROM rules WHERE wrong='pingwin'"), {"right": "Penguin", "count": 1})
+        learn.learn_from_note(c, "")                                                     # c's note is deleted
+        self.assertEqual(db.one("SELECT right,count FROM rules WHERE wrong='pingwin'"), {"right": "Pinguino", "count": 2})
+        self.assertEqual(learn.note_conflicts(), [{"wrong": "pingwin", "kept": "Pinguino", "proposed": "Penguin", "votes": 1}])   # b's vote is pending again
+
     def test_caps(self):
         import db
         import learn
