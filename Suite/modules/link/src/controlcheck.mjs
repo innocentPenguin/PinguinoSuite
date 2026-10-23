@@ -1,7 +1,7 @@
 // Lite start/stop/restart checks with a fake Suite core (consumes control files) and a fake health. Run: node src/controlcheck.mjs
 process.env.PINGUINO_NEVER_REAL_OBS = '1';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
-import { createLite } from './lite.mjs';
+import { fileURLToPath } from 'node:url'; import { createLite } from './lite.mjs';
 const results = []; const check = (n, ok, x = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${ok ? '' : '  ' + x}`); };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'plink-ctl-')), mods = path.join(tmp, 'modules'), dir = path.join(tmp, 'lite'), control = path.join(tmp, 'control');
 const mk = (id, port) => { fs.mkdirSync(path.join(mods, id), { recursive: true }); fs.writeFileSync(path.join(mods, id, 'module.json'), JSON.stringify({ id, name: id, version: '1.0.0', ...(port ? { port } : {}) })); };
@@ -19,6 +19,13 @@ try {
   check('start on a running module does nothing', seen.length === 0);
   await req({ action: 'restart', id: 'aaa' });
   check('restart drops restart-aaa and ends running', seen.includes('restart-aaa') && rd('installed.json').modules.aaa.state === 'running');
+  // contract with the real core (suite.py process_control): "<action>-<id>", partition on the first '-', actions start|stop|restart, file deleted after consuming
+  const corePy = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'suite', 'suite.py');
+  if (fs.existsSync(corePy)) {
+    const py = fs.readFileSync(corePy, 'utf8');
+    check('core still consumes <action>-<id> in Data/runtime/control with the same actions', /CONTROL_DIR = Path\(DATA_DIR\) \/ "control"/.test(py) && /action not in \("start", "stop", "restart"\)/.test(py) && /action, _, mid = f\.name\.partition\("-"\)/.test(py) && /f\.unlink\(\)/.test(py));
+  }
+  check('names written match the core format', seen.length > 0 && seen.every(n => /^(start|stop|restart)-[a-z0-9_-]{1,40}$/.test(n)));
   await req({ action: 'stop', id: 'aaa' });
   check('stop drops stop-aaa and ends stopped', seen.includes('stop-aaa') && rd('installed.json').modules.aaa.state === 'stopped');
   seen = []; await req({ action: 'stop', id: 'link' });
