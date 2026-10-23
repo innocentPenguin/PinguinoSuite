@@ -544,7 +544,8 @@ def p_block(h, b):
 
 def p_mod_action(h, b):
     """Master view buttons: {action: like|skip|previous|ban_song|ban_artist}."""
-    return engine.mod_action(str(b.get("action", "")), str(b.get("user") or "streamer"))
+    v = b.get("value")
+    return engine.mod_action(str(b.get("action", "")), str(b.get("user") or "streamer"), v if isinstance(v, bool) else None)
 
 
 def p_blocklist_import(h, b):

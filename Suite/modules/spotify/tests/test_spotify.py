@@ -986,6 +986,34 @@ class PeriodBoardTests(unittest.TestCase):
         self.assertLessEqual(len(self.e.board["days"]), 400)
 
 
+class LyricsToggleTests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+
+    def test_toggle_alternates_without_a_song(self):
+        self.assertTrue(self.e.now_info()["lyrics_on"])
+        r = self.e.mod_action("lyrics_toggle")
+        self.assertEqual((r["ok"], r["code"], r["lyrics_on"]), (True, "lyrics_off", False))
+        self.assertFalse(self.e.now_info()["lyrics_on"])
+        self.assertEqual(self.e.mod_action("lyrics_toggle")["code"], "lyrics_on")
+
+    def test_explicit_value_is_idempotent_and_persisted(self):
+        self.e.mod_action("lyrics_toggle", value=False)
+        self.e.mod_action("lyrics_toggle", value=False)
+        self.assertFalse(self.e.settings["lyrics_on"])
+        self.assertFalse(store.load("config.json", {})["settings"]["lyrics_on"])
+
+    def test_now_info_reports_state_while_playing_and_unknown_action_raises(self):
+        self.api.playing = "spotify:track:t1"
+        self.e.tick()
+        self.assertIn("lyrics_on", self.e.now_info())
+        with self.assertRaises(QueueError):
+            self.e.mod_action("nope")
+
+
 class ManifestHelpTests(unittest.TestCase):
     def test_every_prestream_item_id_has_help(self):
         m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))
