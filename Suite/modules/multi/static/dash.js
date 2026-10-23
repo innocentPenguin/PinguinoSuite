@@ -56,6 +56,7 @@ async function renderDash() {
   $('#hdr').style.display = 'none';
   if (!$('#d-css')) { const s = document.createElement('style'); s.id = 'd-css'; s.textContent = D_CSS; document.head.appendChild(s); }
   const only = q.get('panel');
+  if (q.get('src') && !DASH._srcFromUrl) { DASH.src = q.get('src'); DASH._srcFromUrl = true; }   // pop-out opened for one platform starts filtered to it
   const nav = only ? '' : `<nav class="d-nav" id="d-nav"><a class="on" href="/" title="Chat and activity"><span>&#128172;</span>Chat</a><a href="/?type=alerts" title="Alert editor"><span>&#128039;</span>Alerts</a><a href="/?type=alerts&section=bars" title="Goal and hype train bars"><span>&#127919;</span>Goal</a><a href="/?type=launcher" title="Connections and setup"><span>&#9881;</span>Setup</a></nav>`;
   $('#body').innerHTML = `<div id="d-wrap">${nav}<div id="dash" class="${DASH.edit ? 'd-edit' : ''}">${only ? '' : `<div class="d-top" id="d-top"></div><div class="d-tabs" id="d-tabs"></div>`}<div id="d-panels"></div></div></div>`;
   if (!only) { dTop(); dTabs(); }
@@ -86,7 +87,8 @@ window.dashViewers = c => { if (c) DASH.viewers = c; if (W.type === 'dash') dVie
 function dTabs() {
   const el = $('#d-tabs'); if (!el) return;
   el.innerHTML = `<span class="d-btn ${DASH.src === 'all' ? 'on' : ''}" data-d="src" data-p="all" title="All sources">&#9638;</span>` + conns.map(c => `<span class="d-tab ${DASH.src === c.platform ? 'on' : ''}" data-d="src" data-p="${esc(c.platform)}">${dIcon(c.platform)}<span>${esc(c.channel || c.label)}</span><span class="d-viewers" data-vp="${esc(c.platform)}">${dViewTxt(c.platform)}</span>
-    <span class="d-dot ${esc(c.status)}" title="${esc(c.label)}: ${esc(c.status)} ${esc(c.detail || '')}${c.official ? '' : ' (UNOFFICIAL)'}${c.capabilities && !c.capabilities.send ? ' (read-only)' : ''}"></span><span class="d-kebab" data-d="tabmenu" data-p="${esc(c.platform)}">&#8942;</span></span>`).join(''); dFocusable();
+    <span class="d-dot ${esc(c.status)}" title="${esc(c.label)}: ${esc(c.status)} ${esc(c.detail || '')}${c.official ? '' : ' (UNOFFICIAL)'}${c.capabilities && !c.capabilities.send ? ' (read-only)' : ''}"></span><span class="d-kebab" data-d="tabmenu" data-p="${esc(c.platform)}">&#8942;</span></span>`).join('');
+ dFocusable();
 }
 function dPanels() {
   const only = q.get('panel'), list = only ? [only] : DASH.panels;
@@ -98,7 +100,8 @@ function dPanels() {
       <span class="d-ic2" data-d="settings" title="Settings">&#9881;</span>${only ? '' : `<span class="d-ic2" data-d="pop" data-p="${p}" title="Open in its own window">&#8599;</span>`}</div>
     ${p === 'activity' ? `<div class="d-alerts"><b>&#128039; Alerts</b><button class="d-btn" data-d="pause" title="Pause new rows (they queue up)">${DASH.paused ? '&#9654;' : '&#10074;&#10074;'}</button><button class="d-btn" data-d="next" title="Show the next queued row">&#9193;</button><button class="d-btn" data-d="skip" title="Skip (drop) the next queued row">&#10006;</button><button class="d-btn" data-d="all" title="Show everything queued">&#9197;</button><span class="mut" id="d-qn"></span></div>` : ''}
     ${p === 'chat' && DASH.split.on ? `<div class="d-halves ${DASH.split.dir === 'col' ? 'hcol' : 'hrow'}"><div class="d-list" id="d-l-chat-a"></div><div class="d-list" id="d-l-chat-b"></div></div>` : `<div class="d-list" id="d-l-${p}"></div>`}
-    ${p === 'chat' ? `<div class="d-box"><select id="d-plat">${conns.filter(c => c.capabilities && c.capabilities.send).map(c => `<option value="${esc(c.platform)}">${esc(c.label)}</option>`).join('')}</select><input id="d-txt" maxlength="500" placeholder="Message"><span class="d-ic2" data-d="emoji" title="Emoji">&#9786;</span><span class="d-ic2" data-d="send" title="Send to the chosen platform only">&#10148;</span></div>` : ''}</div>`).join(''); dFocusable();
+    ${p === 'chat' ? `<div class="d-box"><select id="d-plat">${conns.filter(c => c.capabilities && c.capabilities.send).map(c => `<option value="${esc(c.platform)}">${esc(c.label)}</option>`).join('')}</select><input id="d-txt" maxlength="500" placeholder="Message"><span class="d-ic2" data-d="emoji" title="Emoji">&#9786;</span><span class="d-ic2" data-d="send" title="Send to the chosen platform only">&#10148;</span></div>` : ''}</div>`).join('');
+ dFocusable();
 }
 function dRowActivity(m) {
   const pill = D_PILL[m.event] || [m.event, '#aaa', '#111'], chips = [];
@@ -191,7 +194,7 @@ document.addEventListener('click', async e => {
   if (a === 'src') { DASH.src = p; DASH.user = ''; dashSave(); renderDash(); }
   else if (a === 'psrc') return;
   else if (a === 'tabmenu') { e.stopPropagation(); const c = conns.find(x => x.platform === p) || {};
-    dMenu(r.left, r.bottom, [[`${c.label || p}: ${c.status || '?'}${c.detail ? ' - ' + c.detail : ''}`, () => {}], '-', ['Show only this source', () => { DASH.src = p; dashSave(); renderDash(); }], ['Connection settings', () => { location.href = '/'; }], ['Pop out its chat', () => popOut('dash-' + p, location.origin + '/?type=dash&panel=chat', c.label || p, {w: 520, h: 800})]]); }
+    dMenu(r.left, r.bottom, [[`${c.label || p}: ${c.status || '?'}${c.detail ? ' - ' + c.detail : ''}`, () => {}], '-', ['Show only this source', () => { DASH.src = p; dashSave(); renderDash(); }], ['Connection settings', () => { location.href = '/?type=launcher&conn=' + encodeURIComponent(p); }], ['Pop out its chat', async () => { const r = await popOut('dash-' + p, location.origin + '/?type=dash&panel=chat&src=' + encodeURIComponent(p), c.label || p, {w: 520, h: 800}); if (r === 'blocked') alert('The browser blocked the pop-up window. Allow pop-ups for this page and try again.'); }]]); }
   else if (a === 'rowmenu') { e.stopPropagation(); const u = t.dataset.u;
     dMenu(r.left - 150, r.bottom, [['Copy name', () => navigator.clipboard && navigator.clipboard.writeText(u)], ['Show only this person', () => { DASH.user = u; dFill(); }], ['Clear person filter', () => { DASH.user = ''; dFill(); }], ['Hide this person here', () => { DASH.ign.add(u); dFill(); }]]); }
   else if (a === 'settings') { if (typeof sideInit === 'function') sideInit(); sideToggle(true, 'text'); }

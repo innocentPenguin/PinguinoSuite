@@ -64,8 +64,9 @@ function plainCheck(c) {      // "HTTP 200" etc. means nothing to a streamer: sa
 function platformCard(c, setup) {
   const [cls, label] = STATE_TEXT[c.status] || ['off', c.status];
   const can = Object.entries(c.capabilities).filter(([, v]) => v).map(([k]) => k);
-  const open = c.status === 'needs_auth' || c.status === 'disabled';
-  return `<details class="pcard" ${open ? 'open' : ''}><summary><span class="dot ${c.status}"></span> <b>${esc(c.label)}</b>
+  const want = new URLSearchParams(location.search).get('conn');
+  const open = c.status === 'needs_auth' || c.status === 'disabled' || want === c.platform;
+  return `<details class="pcard" id="pc-${esc(c.platform)}" ${open ? 'open' : ''}><summary><span class="dot ${c.status}"></span> <b>${esc(c.label)}</b>
     <span class="st ${cls}">${esc(label)}</span> ${c.official ? '' : '<span class="tag">UNOFFICIAL</span>'}
     ${can.includes('send') ? '' : '<span class="tag">read-only</span>'}</summary>
     ${c.detail ? `<p class="detail">${esc(plainDetail(c))}</p>` : ''}${platformSetup(c, setup)}</details>`;
