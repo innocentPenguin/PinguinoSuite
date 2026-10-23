@@ -16,12 +16,13 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI",system-ui,sans-serif}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .app{display:grid;grid-template-columns:236px 1fr;height:100%}
-nav{background:var(--bg2);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+nav{overflow-wrap:anywhere;background:var(--bg2);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow:auto}
 .brand{display:flex;align-items:center;gap:10px;padding:6px 10px 14px}
 .brand img{width:36px;height:36px;border-radius:50%;display:block}
 .brand b{font-size:16px;letter-spacing:.2px}.brand b .accent{color:var(--accent)}.brand small{display:block;color:var(--faint);font-size:11px;margin-top:-3px}
 nav h6{margin:14px 12px 4px;font-size:10.5px;letter-spacing:1.2px;color:var(--faint);text-transform:uppercase;font-weight:600}
 .item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;color:var(--dim);cursor:pointer;border:1px solid transparent;user-select:none}
+.item:focus-visible{outline-offset:-2px}
 .item:hover{background:#ffffff08;color:var(--fg)}
 .item.on{background:linear-gradient(90deg,#ff990019,#ff990008);border-color:#ff990030;color:var(--fg)}
 .item .ic{width:20px;text-align:center}
@@ -29,7 +30,7 @@ nav h6{margin:14px 12px 4px;font-size:10.5px;letter-spacing:1.2px;color:var(--fa
 .tag{margin-left:auto;font-size:9.5px;padding:1px 7px;border-radius:8px;letter-spacing:.6px;text-transform:uppercase;font-weight:700;background:#e8d44d22;color:var(--warn)}
 nav .sp{flex:1}
 nav .ver{color:var(--faint);font-size:12px;padding:0 12px}
-main{overflow:auto;padding:24px 28px}
+main{overflow:auto;padding:24px 28px;overflow-wrap:anywhere}  /* long module names, 200-character paths and error texts wrap instead of widening the page */
 h1{margin:0 0 4px;font-size:22px}
 .sub{color:var(--dim);margin:0 0 20px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
@@ -44,15 +45,16 @@ h1{margin:0 0 4px;font-size:22px}
 .btn:hover{border-color:var(--accent-line)}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
 .btn.pri:hover{background:var(--accent-hover)}
-.btn[aria-disabled=true]{opacity:.45;cursor:default}
+.btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}  /* .btn uses all:unset, which would otherwise drop the focus ring */
+.btn:disabled,.btn[aria-disabled=true]{opacity:.45;cursor:default}.btn:disabled:hover{border-color:var(--line2)}.btn.pri:disabled:hover{background:var(--accent)}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:12px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px;border-bottom:1px solid var(--line)}
 td{padding:12px;border-bottom:1px solid var(--line);vertical-align:middle}
 td .d{color:var(--dim);font-size:13px}
 .empty{padding:36px;text-align:center;color:var(--dim)}
 .banner{border:1px solid var(--accent-line);background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;margin:0 0 16px;color:var(--fg)}
-.qm{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50}.qm.on{display:flex}.qm .box{background:var(--panel2);border:1px solid var(--accent-line);border-radius:14px;padding:22px 26px;max-width:360px}.qm h2{margin:0 0 6px;font-size:18px}.qm p{margin:0 0 16px;color:var(--faint)}.qm .row{margin:0;justify-content:flex-end}
-.toast{position:fixed;right:20px;bottom:20px;background:var(--panel2);border:1px solid var(--accent-line);border-radius:12px;padding:10px 16px;display:none}
+.qm{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50}.qm.on{display:flex}.qm .box{overflow-wrap:anywhere;background:var(--panel2);border:1px solid var(--accent-line);border-radius:14px;padding:22px 26px;max-width:360px}.qm h2{margin:0 0 6px;font-size:18px}.qm p{margin:0 0 16px;color:var(--faint)}.qm .row{margin:0;justify-content:flex-end}
+.toast{position:fixed;right:20px;bottom:20px;max-width:min(440px,calc(100vw - 40px));overflow-wrap:anywhere;background:var(--panel2);border:1px solid var(--accent-line);border-radius:12px;padding:10px 16px;display:none}
 .mono{font-family:Consolas,monospace}
 </style>
 </head>
@@ -61,7 +63,7 @@ td .d{color:var(--dim);font-size:13px}
   <nav id="nav"></nav>
   <main id="main"></main>
 </div>
-<div class="qm" id="qm"><div class="box"><h2>Quit PinguinoLite?</h2><p>This also stops the PinguinoLink that Lite started. Anything Lite did not start keeps running.</p><div class="row"><button class="btn" id="qm-cancel">Cancel</button><button class="btn" id="qm-keep" title="Lite closes; the Link it started keeps running and is reused next time">Quit, keep Link running</button><button class="btn pri" id="qm-ok">Quit</button></div></div></div>
+<div class="qm" id="qm"><div class="box" role="dialog" aria-modal="true" aria-labelledby="qm-h"><h2 id="qm-h">Quit PinguinoLite?</h2><p>This also stops the PinguinoLink that Lite started. Anything Lite did not start keeps running.</p><div class="row"><button class="btn" id="qm-cancel">Cancel</button><button class="btn" id="qm-keep" title="Lite closes; the Link it started keeps running and is reused next time">Quit, keep Link running</button><button class="btn pri" id="qm-ok">Quit</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script>
 // All native access goes through 5 Tauri commands (src-tauri/src/main.rs). Contract: Docs/LITE_APP.md.
@@ -82,12 +84,23 @@ let gh = null;   // last GitHub update check result {ok, update, latest, url, er
 try { gh = JSON.parse(localStorage.getItem('gh') || 'null'); } catch {}
 let ghBusy = false;
 let mods = null, vres = null;   // on-demand module files (install profile) and the last Verify result
+// Commands that are running right now: their buttons stay disabled across every re-render (the page redraws every 5 s), so a double click can never run one twice.
+const busy = { job: false, support: false, scan: false, acts: new Set() };
+const jobBusy = () => busy.job || !!(job && job.state === 'running');
+const JOBKEYS = ['part', 'modVerify', 'modEject', 'modInstall', 'partsRollback'];
+function applyBusy() {
+  document.querySelectorAll('#main button').forEach(b => {
+    const d = b.dataset;
+    if ((JOBKEYS.some(k => k in d) && jobBusy()) || ('support' in d && busy.support) || ('scan' in d && busy.scan) || ('act' in d && busy.acts.has(d.act + ':' + (d.id || '')))) b.disabled = true;
+  });
+}
+let scanMsg = '';   // last Scan now result, shown on the Replays page until the next scan
 let parts = null, job = null;   // per-part updates (shared Node updater): last check {supported, parts[], live, ...} and the running/finished job
 async function loadMods() { mods = await inv('parts_modules').catch(() => null); render(); }
 async function checkParts() { parts = await inv('parts_check').catch(e => ({ ok: false, supported: false, message: String(e) })); render(); }
 async function pollJob() {
   for (;;) {
-    job = await inv('parts_job').catch(() => null); render();
+    job = await inv('parts_job').catch(() => null); busy.job = false; render();
     if (!job || job.state !== 'running') break;
     await new Promise(r => setTimeout(r, 1500));
   }
@@ -98,7 +111,7 @@ async function pollJob() {
 }
 function partsCard() {
   if (!parts) return '';
-  const run = job && job.state === 'running';
+  const run = jobBusy();
   if (!parts.supported) return `<div class="card" style="margin-top:12px"><h3>Parts</h3><div class="note">${esc(parts.message || 'This copy does not update itself (development build).')}</div></div>`;
   const blocked = run || parts.live !== false;
   const list = (parts.parts || []).map(p => `<tr><td><b>${esc(p.name || p.id)}</b>${p.staged ? ' <span class="d">(applied at next start)</span>' : ''}</td>
@@ -107,13 +120,13 @@ function partsCard() {
   return `<div class="card" style="margin-top:12px"><h3>Parts${parts.version ? ` - release ${esc(parts.version)}` : ''}</h3>
    ${parts.ok ? (list ? `<table><tbody>${list}</tbody></table>` : '<div class="note">This release has no parts for Lite.</div>') : `<div class="note">${esc(parts.message || 'Could not check parts.')}</div>`}
    ${parts.live === true ? '<div class="note" style="color:var(--warn)">You are live: updates wait until the stream is over.</div>' : parts.live == null ? '<div class="note">Could not tell whether you are live; updates are held.</div>' : ''}
-   ${run ? `<div class="note">Updating ${esc((job.parts || []).join(', ') || '...')}: ${esc(job.message)}...</div>` : job && job.state === 'done' ? `<div class="note" style="color:var(${job.ok ? '--ok' : '--bad'})">${esc(job.message)}</div>` : ''}
+   ${run && job && job.state === 'running' ? `<div class="note">Updating ${esc((job.parts || []).join(', ') || '...')}: ${esc(job.message)}...</div>` : job && job.state === 'done' ? `<div class="note" style="color:var(${job.ok ? '--ok' : '--bad'})">${esc(job.message)}</div>` : ''}
    <div class="row"><button class="btn" data-parts-check="1">Check parts</button><button class="btn" data-parts-rollback="1"${blocked ? ' disabled' : ''} title="Put back the version kept before the last update">Roll back last update</button></div></div>`;
 }
 // Module files: which on-demand modules this install has (profile), Verify (hash check), Eject (files moved aside, reversible), Install (fetched only on click).
 function modCard() {
   if (!mods || !mods.supported) return '';
-  const run = job && job.state === 'running';
+  const run = jobBusy();
   const blocked = run || mods.live !== false;
   const vr = id => vres && vres.parts ? vres.parts.find(p => p.id === id) : null;
   const vpill = id => {
@@ -134,7 +147,7 @@ function modCard() {
    <table><tbody>${rowsM}</tbody></table>
    ${mods.live === true ? '<div class="note" style="color:var(--warn)">You are live: install, eject and repair wait until the stream is over.</div>' : mods.live == null ? '<div class="note">Could not tell whether you are live; changes are held.</div>' : ''}
    ${vres && !vres.ok ? `<div class="note" style="color:var(--bad)">${esc(vres.message || 'Verify failed')}</div>` : vres && vres.all_ok ? '<div class="note" style="color:var(--ok)">Everything checked matches the release.</div>' : ''}
-   ${run ? `<div class="note">${esc(job.kind)} ${esc((job.parts || []).join(', '))}: ${esc(job.message)}...</div>` : ''}
+   ${run && job && job.state === 'running' ? `<div class="note">${esc(job.kind)} ${esc((job.parts || []).join(', '))}: ${esc(job.message)}...</div>` : job && job.state === 'done' ? `<div class="note" style="color:var(${job.ok ? '--ok' : '--bad'})">${esc(job.message)}</div>` : ''}
    <div class="row"><button class="btn" data-mod-verify="all"${run ? ' disabled' : ''}>Verify all files</button></div></div>`;
 }
 // Lite's own update check (GitHub releases, via the shell). Quiet at startup at most once per 24 h; manual button any time.
@@ -176,6 +189,7 @@ function replaysPage() {
    <div class="card" style="padding:12px 16px;margin-top:12px"><h3 style="margin:0 0 6px">Check for new replays every <b id="ivl-v">${esc(r.interval || 3)}</b> s</h3>
      <input type="range" id="ivl" min="1" max="10" step="1" value="${esc(r.interval || 3)}" style="width:100%;accent-color:var(--accent)">
      <div class="note">1 = most responsive, 10 = lightest. Applied immediately and remembered.</div></div>
+   ${scanMsg ? `<p class="note" role="status">${esc(scanMsg)}</p>` : ''}
    <div class="row"><button class="btn pri" data-scan="1">Scan now</button><button class="btn" data-open="folder">Open Lite data folder</button></div>`;
 }
 
@@ -288,29 +302,54 @@ function renderNav() {
   const cls = st => st === 'running' ? 'running' : st === 'degraded' ? 'warn' : st === 'error' ? 'bad' : '';
   const inst = r.filter(x => x.installed);
   // Only things that exist in Lite: its two pages, the two services it talks to, and what is installed. Availability = probes at launch + every 5 s.
-  $('#nav').innerHTML = `<div class="brand"><img src="logo.png" alt=""><div><b>Pinguino<span class="accent">Lite</span></b><small>${info ? 'v' + esc(info.version) : ''}</small></div></div>
-   <div class="item${page === 'dashboard' ? ' on' : ''}" data-page="dashboard"><span class="ic">🏠</span>Dashboard${gh && gh.ok && gh.update ? `<span class="tag">update</span>` : ''}</div>
-   <div class="item${page === 'modules' ? ' on' : ''}" data-page="modules"><span class="ic">🧩</span>Modules${u ? `<span class="tag">${u} update${u > 1 ? 's' : ''}</span>` : ''}</div>
-   <div class="item${page === 'replays' ? ' on' : ''}" data-page="replays"><span class="ic">🎮</span>Replays${(state.replays && state.replays.items.length) ? `<span class="tag">${state.replays.items.length}</span>` : ''}</div>
+  setHtml($('#nav'), 'nav', `<div class="brand"><img src="logo.png" alt=""><div><b>Pinguino<span class="accent">Lite</span></b><small>${info ? 'v' + esc(info.version) : ''}</small></div></div>
+   <div tabindex="0" role="button" class="item${page === 'dashboard' ? ' on' : ''}" data-page="dashboard"><span class="ic">🏠</span>Dashboard${gh && gh.ok && gh.update ? `<span class="tag">update</span>` : ''}</div>
+   <div tabindex="0" role="button" class="item${page === 'modules' ? ' on' : ''}" data-page="modules"><span class="ic">🧩</span>Modules${u ? `<span class="tag">${u} update${u > 1 ? 's' : ''}</span>` : ''}</div>
+   <div tabindex="0" role="button" class="item${page === 'replays' ? ' on' : ''}" data-page="replays"><span class="ic">🎮</span>Replays${(state.replays && state.replays.items.length) ? `<span class="tag">${state.replays.items.length}</span>` : ''}</div>
    <h6>Services</h6>
-   <div class="item" data-page="dashboard"><span class="ic">🔗</span>Link${dot(ports['7777'])}</div>
-   <div class="item" data-page="dashboard"><span class="ic">🖥️</span>Host${dot(ports['8770'])}</div>
-   ${inst.length ? `<h6>Installed</h6>` + inst.map(m => `<div class="item" data-page="modules"><span class="ic">📦</span>${esc(m.name || m.id)}<span class="dot ${cls(m.conn && m.conn.state)}"></span></div>`).join('') : ''}`;
+   <div tabindex="0" role="button" class="item" data-page="dashboard"><span class="ic">🔗</span>Link${dot(ports['7777'])}</div>
+   <div tabindex="0" role="button" class="item" data-page="dashboard"><span class="ic">🖥️</span>Host${dot(ports['8770'])}</div>
+   ${inst.length ? `<h6>Installed</h6>` + inst.map(m => `<div tabindex="0" role="button" class="item" data-page="modules"><span class="ic">📦</span>${esc(m.name || m.id)}<span class="dot ${cls(m.conn && m.conn.state)}"></span></div>`).join('') : ''}`);
 }
 
+const lastHtml = { nav: '', main: '' };
+// The page redraws every few seconds: replace a container only when its HTML really changed, and give keyboard focus back to the same control afterwards.
+function setHtml(box, key, html) {
+  if (lastHtml[key] === html) return;
+  const act = document.activeElement, was = act && box.contains(act) ? { id: act.id, i: [...box.querySelectorAll('button,input,[tabindex]')].indexOf(act), tag: act.tagName } : null;
+  box.innerHTML = html; lastHtml[key] = html;
+  if (was) {
+    const el = was.id ? document.getElementById(was.id) : [...box.querySelectorAll('button,input,[tabindex]')][was.i];
+    if (el && el.tagName === was.tag && !el.disabled) el.focus({ preventScroll: true });
+  }
+}
 function render() {
   renderNav();
   if (document.activeElement && document.activeElement.id === 'ivl') return;   // don't rebuild the page under the slider while it is being dragged
-  $('#main').innerHTML = page === 'modules' ? modules() : page === 'replays' ? replaysPage() : dashboard();
+  setHtml($('#main'), 'main', page === 'modules' ? modules() : page === 'replays' ? replaysPage() : dashboard());
+  applyBusy();
 }
 
 // Alt+F4 / window close: the shell asks, we confirm in-page.
 const qm = () => $('#qm').classList.contains('on');
-$('#qm-cancel').onclick = () => $('#qm').classList.remove('on');
+let qmFrom = null;
+function openQm() { if (qm()) return; qmFrom = document.activeElement; $('#qm').classList.add('on'); $('#qm-ok').focus(); }
+function closeQm() { $('#qm').classList.remove('on'); if (qmFrom && qmFrom.isConnected) qmFrom.focus(); qmFrom = null; }
+$('#qm-cancel').onclick = closeQm;
 $('#qm-ok').onclick = () => inv('quit_app', { keepLink: false }).catch(() => {});
 $('#qm-keep').onclick = () => inv('quit_app', { keepLink: true }).catch(() => {});
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && qm()) $('#qm').classList.remove('on'); });
-try { window.__TAURI__.event.listen('confirm-quit', () => { $('#qm').classList.add('on'); $('#qm-ok').focus(); }); } catch {}
+$('#qm').addEventListener('click', e => { if (e.target === $('#qm')) closeQm(); });
+document.addEventListener('keydown', e => {
+  if (!qm()) return;
+  if (e.key === 'Escape') { e.preventDefault(); return closeQm(); }
+  if (e.key === 'Tab') {   // keep Tab inside the dialog
+    const f = [...$('#qm').querySelectorAll('button')], i = f.indexOf(document.activeElement);
+    if (e.shiftKey ? i <= 0 : i === f.length - 1) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); }
+  }
+});
+try { window.__TAURI__.event.listen('confirm-quit', openQm); } catch {}
+// nav entries are div role=button: Enter / Space press them
+document.addEventListener('keydown', e => { const t = e.target; if ((e.key === 'Enter' || e.key === ' ') && t && t.matches && t.matches('nav [data-page]')) { e.preventDefault(); t.click(); } });
 document.addEventListener('input', e => { if (e.target.id === 'ivl') $('#ivl-v').textContent = e.target.value; });
 document.addEventListener('change', async e => {
   if (e.target.id !== 'ivl') return;
@@ -320,32 +359,51 @@ document.addEventListener('change', async e => {
 document.addEventListener('click', async e => {
   const nav = e.target.closest('nav [data-page]');
   if (nav) { page = nav.dataset.page; try { localStorage.setItem('page', page); } catch {} return render(); }
-  if (e.target.closest('[data-gh]')) { checkParts(); return checkLite(true); }
+  if (e.target.closest('[data-gh]')) { if (ghBusy) return; checkParts(); return checkLite(true); }
   if (e.target.closest('[data-parts-check]')) return checkParts();
+  // update / verify / eject / install / rollback: one at a time, buttons stay disabled until the job has finished; a refused start stays on the page as text
+  const jobCmd = async (kind, cmd, args) => {
+    if (jobBusy()) return toast('Another update is still running');
+    busy.job = true; render();
+    const r = await inv(cmd, args).catch(err => ({ ok: false, message: String(err) }));
+    if (!r.ok) { busy.job = false; job = { state: 'done', kind, ok: false, message: r.message || 'Could not start' }; render(); return toast(r.message); }
+    return pollJob();
+  };
   const pb = e.target.closest('[data-part]');
-  if (pb) { const r = await inv('parts_apply', { ids: [pb.dataset.part], repair: pb.dataset.repair === '1' }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
+  if (pb) return jobCmd('apply', 'parts_apply', { ids: [pb.dataset.part], repair: pb.dataset.repair === '1' });
   const mv = e.target.closest('[data-mod-verify]');
-  if (mv) { const ids = mv.dataset.modVerify === 'all' ? ['link', 'lite'].concat((mods && mods.modules || []).filter(m => m.installed).map(m => m.id)) : [mv.dataset.modVerify]; const r = await inv('parts_verify', { ids }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
+  if (mv) { const ids = mv.dataset.modVerify === 'all' ? ['link', 'lite'].concat((mods && mods.modules || []).filter(m => m.installed).map(m => m.id)) : [mv.dataset.modVerify]; return jobCmd('verify', 'parts_verify', { ids }); }
   const me = e.target.closest('[data-mod-eject]');
-  if (me) { const r = await inv('parts_eject', { id: me.dataset.modEject }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
+  if (me) return jobCmd('eject', 'parts_eject', { id: me.dataset.modEject });
   const mi = e.target.closest('[data-mod-install]');
-  if (mi) { const r = await inv('parts_install', { id: mi.dataset.modInstall }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
-  if (e.target.closest('[data-parts-rollback]')) { const r = await inv('parts_rollback').catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
-  if (e.target.closest('[data-scan]')) { toast('Scanning...'); const s = await inv('replay_scan').catch(err => ({ error: String(err) })); toast(s.error ? 'Scan failed: ' + s.error : `Scan done: ${s.new} new, ${s.errors} unreadable`); return refresh(); }
+  if (mi) return jobCmd('install', 'parts_install', { id: mi.dataset.modInstall });
+  if (e.target.closest('[data-parts-rollback]')) return jobCmd('rollback', 'parts_rollback');
+  if (e.target.closest('[data-scan]')) {
+    if (busy.scan) return;
+    busy.scan = true; scanMsg = 'Scanning...'; render();
+    const r = await inv('replay_scan').catch(err => ({ error: String(err) }));
+    busy.scan = false;
+    scanMsg = r.error ? 'Scan failed: ' + r.error : `Scan done: ${r.new} new, ${r.errors} with errors, ${r.unreadable || 0} could not be read.`;
+    toast(scanMsg); return refresh();
+  }
   const sb = e.target.closest('[data-support]');
   if (sb) {
-    sb.disabled = true; toast('Making support bundle...');
+    if (busy.support) return;
+    busy.support = true; render(); toast('Making support bundle...');
     try { supportInfo = await inv('support_bundle'); toast(supportInfo.ok ? 'Support bundle ready' : 'Support bundle failed'); }
     catch (err) { supportInfo = { ok: false, message: String(err) }; }
-    render(); return;
+    busy.support = false; render(); return;
   }
   const o = e.target.closest('[data-open]');
   if (o) return inv('open_target', { target: o.dataset.open }).catch(err => toast(String(err)));
   const a = e.target.closest('[data-act]');
   if (a) {
+    const k = a.dataset.act + ':' + (a.dataset.id || '');
+    if (busy.acts.has(k)) return;   // the same request is already on its way
+    busy.acts.add(k); render();
     try { const r = await inv('send_request', { action: a.dataset.act, id: a.dataset.id || null }); toast('Request sent to PinguinoLink (' + r.file + ')'); }
     catch (err) { toast('Could not send request: ' + err); }
-    setTimeout(refresh, 1200);
+    setTimeout(() => { busy.acts.delete(k); render(); refresh(); }, 1200);
   }
 });
 
