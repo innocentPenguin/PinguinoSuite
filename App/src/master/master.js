@@ -156,18 +156,17 @@
   }
   function setOv(o) { const until = Date.now() + 5000; for (const k in o) if (o[k] != null) ui.ov[k] = { v: o[k], until }; schedule('customs'); setTimeout(() => schedule('customs'), 5100); }
   // 023's per-game overlay layouts: the activity decides the game (layouts are tagged by game name; '' = no game). Host: POST /api/scene-layouts setgame.
-  const gameOf = C.gameOf;
-  async function setOverlayGame(sub) {
-    const game = gameOf(sub); if (ui.sim || ui.lastGame === game) return;
+  async function setOverlayGame(sub, pre) {
+    const game = C.gameOf(sub, pre); if (ui.sim || ui.lastGame === game) return;
     const r = await api.post('/api/scene-layouts', { action: 'setgame', profile: '*', game });
     if (r.ok && !(r.json && r.json.ok === false)) { ui.lastGame = game; toast('Overlay layout game: ' + (game || 'none')); } else if (r.status !== 404) toast('Overlay game: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
   }
   async function sendCustom(action, value, btn, raw) {
     if (action === 'activity' && !ui.sim && !raw) {   // the Host's !activity does not set KOTH/team size/mode: send those too (defaults in master-core)
-      const sub = String(value || '').split(' ').pop(), c = S.get('customs') || {}, d = C.ACTIVITY_DEFAULTS[sub] || {};
+      const parts = String(value || '').split(' '), sub = parts.pop(), pre = parts.pop(), c = S.get('customs') || {}, d = C.ACTIVITY_DEFAULTS[sub] || {};
       const steps = C.activityPlan(sub, { koth: !!c.koth, format: c.format, mode: c.mode });
       setOv({ activity: sub === 'end' ? 'none' : sub, koth: d.koth == null ? null : d.koth ? 'on' : 'off', format: d.format, mode: d.mode });
-      const ok = await sendCustom(action, value, btn, true); if (ok) { for (const [a, v2] of steps) await sendCustom(a, v2, null, true); setOverlayGame(sub); } return ok;
+      const ok = await sendCustom(action, value, btn, true); if (ok) { for (const [a, v2] of steps) await sendCustom(a, v2, null, true); setOverlayGame(sub, pre); } return ok;
     }
     if (ui.sim) { flash(btn); const m = simApply(action, value); if (m) toast(m); return !/no empty slot|not waiting|No game/.test(m || ''); }
     const text = C.customsText(action, value); if (!text) { toast('Not allowed: ' + action, true); return false; }
@@ -347,7 +346,7 @@
       <div class="ctl free" id="cu-ctl"><span id="cu-who">In control: …</span><span class="sp"></span><span class="faint" id="cu-badge"></span><button class="sm" id="cu-sim" title="Play with fake players: nothing is sent to the Host">🧪 Simulator</button></div>
       <div id="cu-note" class="note" hidden></div>
       <div class="cgrid">
-        ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div><div class="btns" style="margin-top:6px"><span class="faint sm" title="Fortnite activities">Fortnite</span>${[['Box fights', 'boxfights'], ['Zone wars', 'zonewars'], ['Viewers', 'fnviewers']].map(([l, v]) => b(l, 'activity', 'fn ' + v, 'rd warn', 'activity:' + v)).join('')}</div>`, ' <span class="faint" id="cu-act"></span>')}
+        ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div><div class="btns" style="margin-top:6px"><span class="faint sm" title="Fortnite activities">Fortnite</span>${[['Box fights', 'boxfights'], ['Zone wars', 'zonewars'], ['Viewers', 'fnviewers']].map(([l, v]) => b(l, 'activity', 'fn ' + v, 'rd warn', 'activity:' + v)).join('')}${b('KOTH', 'activity', 'fn koth', 'rd warn', null, 'Fortnite King of the Hill: 1v1, winners stay')}</div>`, ' <span class="faint" id="cu-act"></span>')}
         <section class="cs c-ask" id="cu-ask" hidden><b id="cu-ask-t"></b><div class="faint sm" id="cu-ask-s"></div><div class="btns" style="margin-top:6px"><button class="sm rd" data-ask="remove" title="Cancel the game and take everyone out of the queue">Remove them</button><button class="sm pri" data-ask="back" title="Cancel the game; players go back to the front of the queue in their old order, ahead of anyone who joined later">Put back in queue</button><button class="sm" data-ask="keep" title="Change it and leave everyone as they are">Leave as is</button><button class="sm ghost" data-ask="cancel" title="Do not change anything">✕</button></div></section>
         <section class="cs c-st"><div class="row"><span class="faint sm">Streamer</span><div class="seg" style="flex:1">${b('In', 'streamer', 'in', '', 'streamer:in')}${b('Out', 'streamer', 'out', '', 'streamer:out')}</div></div></section>
         ${sec('c-q', 'Queue', `<div class="btns">${b('Open', 'queue-open', null, 'g', 'queue:open')}${b('Close', 'queue-close', null, 'rd', 'queue:close')}${b('Clear', 'queue-clear', null, 'og warn', 'queue:clear')}</div><ul class="qlist" id="cu-queue"></ul>`, ' <span class="faint" id="cu-qn"></span>')}

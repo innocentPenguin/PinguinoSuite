@@ -226,6 +226,13 @@ await t('teams: name/colour validation, sizes up to 16, tags and the TikTok bloc
   assert.equal(C.copyBlock({ title: 'T', description: 'D', tags: 'rocket league, fun' }), ['T', 'D', '#rocketleague #fun'].join('|').replace(/\|/g, String.fromCharCode(10, 10)));
 });
 
+await t('fortnite: sizes 1-16, KOTH works in any activity, fn koth routes to the Fortnite layout', () => {
+  for (const n of [1, 2, 3, 7, 16]) assert.equal(C.customsText('format', n + 'v' + n), '!format ' + n + 'v' + n);
+  assert.equal(C.customsText('format', '0v0'), null); assert.equal(C.customsText('koth', 'on'), '!koth on'); assert.equal(C.customsText('activity', 'fn koth'), '!activity fn koth'); assert.equal(C.customsText('activity', 'fn viewers'), '!activity fn viewers');
+  assert.equal(C.gameOf('koth', 'fn'), 'Fortnite'); assert.equal(C.gameOf('koth', 'rl'), 'Rocket League'); assert.equal(C.gameOf('koth'), 'Rocket League');
+  assert.deepEqual(C.activityPlan('koth', { koth: false, format: '3v3' }), [['koth', 'on']]);
+});
+
 await t('teams + stream info round trips on the mock', async () => {
   const r = await api.post('/api/customs/teams', { orange: { name: 'Pingus', color: '#ffb347' } }); assert.equal(r.json.teams.orange.name, 'Pingus'); assert.equal((await api.get('/api/customs/state')).json.teams.blue.name, 'Blue');
   assert.equal((await api.get('/api/channel/info')).json.game, 'Rocket League');
