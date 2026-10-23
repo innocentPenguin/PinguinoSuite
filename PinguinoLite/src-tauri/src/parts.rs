@@ -31,6 +31,28 @@ pub fn installed_parts(inst: &Value) -> Option<Vec<String>> {
 pub fn is_installed(parts: &Option<Vec<String>>, id: &str) -> bool {
     parts.as_ref().map(|p| p.iter().any(|x| x == id)).unwrap_or(true)
 }
+/// True when Link's status.json no longer reports the module as running (missing entry = stopped).
+pub fn module_stopped(status: &Value, id: &str) -> bool {
+    !matches!(status["modules"][id]["state"].as_str(), Some("running") | Some("degraded") | Some("starting") | Some("stopping"))
+}
+
+/// Wait until Link reports the module stopped. Link not answering (status.json older than 90 s or missing) means nothing is managing it, so nothing to wait for.
+fn wait_module_stopped(id: &str, secs: u64) -> bool {
+    let path = crate::lite_dir().join("status.json");
+    for _ in 0..secs {
+        let fresh = std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|e| e.as_secs() < 90).unwrap_or(false);
+        if !fresh {
+            return true;
+        }
+        let v: Value = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+        if module_stopped(&v, id) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    false
+}
+
 fn module_name(id: &str) -> &'static str {
     match id {
         "listen" => "Listen",
@@ -310,7 +332,10 @@ pub fn parts_eject(app: AppHandle, id: String) -> Value {
     }
     start_job("eject", &[id.clone()], move || {
         crate::request_module(app, "stop", &id); // best effort: Link stops the module before its files move
-        std::thread::sleep(Duration::from_secs(3));
+        if !wait_module_stopped(&id, 20) {
+            return json!({"ok": false, "message": format!("{} did not stop within 20 s, so nothing was moved. Stop it and try again.", module_name(&id))});
+        }
+        std::thread::sleep(Duration::from_secs(1)); // let Windows release the file locks
         run_updater(&["eject", "--part", &id])
     })
 }
@@ -326,6 +351,9 @@ pub fn parts_install(id: String) -> Value {
     }
     if let Err(m) = may_update(host_is_live()) {
         return json!({"ok": false, "message": m});
+    }
+    if read_install()["source"].is_null() && install_dir().map(|d| !d.join(".git").exists()).unwrap_or(true) {
+        return json!({"ok": false, "message": "No update source is set for this install, so there is nothing to download from. Reinstall with --github, --url or --update-from owner/name."});
     }
     start_job("install", &[id.clone()], move || run_updater(&["apply", "--only", &id]))
 }
@@ -373,6 +401,15 @@ mod tests {
         // not-installed modules never show up as updates
         let c = json!({"ok": true, "components": [{"id": "spotify", "optional": true, "installed": false, "changed": true}, {"id": "link", "changed": true}]});
         assert_eq!(lite_view(&c)["parts"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn module_stop_detection() {
+        let st = json!({"modules": {"spotify": {"state": "running"}, "multi": {"state": "stopped"}}});
+        assert!(!module_stopped(&st, "spotify"));
+        assert!(module_stopped(&st, "multi"));
+        assert!(module_stopped(&st, "listen"));
+        assert!(module_stopped(&Value::Null, "spotify"));
     }
 
     #[test]

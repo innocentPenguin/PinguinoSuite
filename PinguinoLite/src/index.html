@@ -61,7 +61,7 @@ td .d{color:var(--dim);font-size:13px}
   <nav id="nav"></nav>
   <main id="main"></main>
 </div>
-<div class="qm" id="qm"><div class="box"><h2>Quit PinguinoLite?</h2><p>This also stops the PinguinoLink that Lite started. Anything Lite did not start keeps running.</p><div class="row"><button class="btn" id="qm-cancel">Cancel</button><button class="btn pri" id="qm-ok">Quit</button></div></div></div>
+<div class="qm" id="qm"><div class="box"><h2>Quit PinguinoLite?</h2><p>This also stops the PinguinoLink that Lite started. Anything Lite did not start keeps running.</p><div class="row"><button class="btn" id="qm-cancel">Cancel</button><button class="btn" id="qm-keep" title="Lite closes; the Link it started keeps running and is reused next time">Quit, keep Link running</button><button class="btn pri" id="qm-ok">Quit</button></div></div></div>
 <div class="toast" id="toast" role="status"></div>
 <script>
 // All native access goes through 5 Tauri commands (src-tauri/src/main.rs). Contract: Docs/LITE_APP.md.
@@ -178,6 +178,15 @@ function replaysPage() {
    <div class="row"><button class="btn pri" data-scan="1">Scan now</button><button class="btn" data-open="folder">Open Lite data folder</button></div>`;
 }
 
+// Dashboard card: wins and the last match from the parsed replays (local files only).
+function replayCard() {
+  const it = ((state.replays || {}).items || []).filter(m => m.status === 'complete');
+  if (!it.length) return `<div class="card"><h3>Replays</h3><div class="big" style="font-size:20px"><span style="color:var(--faint)">none yet</span></div><div class="note">Save a replay in Rocket League and Lite reads it.</div></div>`;
+  const blue = it.filter(m => m.winner === 'blue').length, orange = it.filter(m => m.winner === 'orange').length, l = it[0];
+  return `<div class="card"><h3>Replays</h3><div class="big" style="font-size:20px">${it.length} match${it.length > 1 ? 'es' : ''}</div>
+     <div class="note">Blue won ${blue}, Orange won ${orange}. Last: <b>${esc(l.blue)} - ${esc(l.orange)}</b>${l.mvp ? ', MVP ' + esc(l.mvp) : ''} (${esc(ago(iso(l.played_at)))})</div></div>`;
+}
+
 // Merge catalog + installed -> rows. A module is "installed" only if installed.json says so; "update" if catalog version is newer.
 function rows() {
   const cat = state.catalog && state.catalog.data && Array.isArray(state.catalog.data.modules) ? state.catalog.data.modules : [];
@@ -210,6 +219,7 @@ function dashboard() {
      <div class="note">${us.last_check_at ? esc(us.result || '') + (us.error ? ' - ' + esc(us.error) : '') : 'PinguinoLink has not written update_status.json'}</div></div>
    <div class="card"><h3>PinguinoLink</h3><div class="big" style="font-size:20px">${writer ? esc(writer.name + ' ' + (writer.version || '')) : '<span style="color:var(--faint)">not connected</span>'}</div>
      <div class="note">${conn ? 'connector: ' + esc(conn.state) + (conn.detail ? ' - ' + esc(conn.detail) : '') : 'no status.json yet'}</div></div>
+   ${replayCard()}
   </div>
   ${partsCard()}
   <div class="row"><button class="btn" data-open="host">Open Host dashboard</button><button class="btn" data-open="folder">Open Lite data folder</button><button class="btn" data-act="check">Check modules for updates</button><button class="btn pri" data-gh="1"${ghBusy ? ' disabled' : ''}>Check Lite for updates</button></div>
@@ -266,7 +276,8 @@ function render() {
 // Alt+F4 / window close: the shell asks, we confirm in-page.
 const qm = () => $('#qm').classList.contains('on');
 $('#qm-cancel').onclick = () => $('#qm').classList.remove('on');
-$('#qm-ok').onclick = () => inv('quit_app').catch(() => {});
+$('#qm-ok').onclick = () => inv('quit_app', { keepLink: false }).catch(() => {});
+$('#qm-keep').onclick = () => inv('quit_app', { keepLink: true }).catch(() => {});
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && qm()) $('#qm').classList.remove('on'); });
 try { window.__TAURI__.event.listen('confirm-quit', () => { $('#qm').classList.add('on'); $('#qm-ok').focus(); }); } catch {}
 document.addEventListener('input', e => { if (e.target.id === 'ivl') $('#ivl-v').textContent = e.target.value; });

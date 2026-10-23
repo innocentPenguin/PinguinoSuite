@@ -295,6 +295,8 @@ fn open_target(target: String) -> Result<(), String> {
 
 /// True once a quit has begun, so the close handler stops asking and lets the window close.
 static QUITTING: AtomicBool = AtomicBool::new(false);
+/// Set by "Quit, keep Link running": the Link Lite started is left alive (the next Lite start reuses it).
+static KEEP_LINK: AtomicBool = AtomicBool::new(false);
 
 /// Full-screen state. While set, mainwin::save ignores the window (the full-screen rectangle must never become the remembered window).
 pub static FULLSCREEN: AtomicBool = AtomicBool::new(false);
@@ -346,7 +348,9 @@ fn quit_now(app: &AppHandle) {
     let a = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(6));
-        kill_owned_link(&a);
+        if !KEEP_LINK.load(Ordering::SeqCst) {
+            kill_owned_link(&a);
+        }
         std::process::exit(0);
     });
     app.exit(0);
@@ -354,7 +358,8 @@ fn quit_now(app: &AppHandle) {
 
 /// Called by the in-page "Quit" button after the user confirmed.
 #[tauri::command]
-fn quit_app(app: AppHandle) {
+fn quit_app(app: AppHandle, keep_link: Option<bool>) {
+    KEEP_LINK.store(keep_link.unwrap_or(false), Ordering::SeqCst);
     quit_now(&app);
 }
 
@@ -471,7 +476,9 @@ fn main() {
         .expect("error while building PinguinoLite");
     app.run(|handle, event| {
         if let tauri::RunEvent::Exit = event {
-            stop_link(handle);
+            if !KEEP_LINK.load(Ordering::SeqCst) {
+                stop_link(handle);
+            }
         }
     });
 }
