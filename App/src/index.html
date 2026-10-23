@@ -1274,7 +1274,7 @@ pages.economy=()=>{
   const types=['watch','entry','cheer','sub','gift','gift_recipient','tip','follow','raid_in','raid_out','match_play','match_win'];
   return `<div style="max-width:1100px"><div class="pnote">Every number below is a Host setting that reloads without a restart. Type a new value and the right-hand panel shows what it would pay; nothing changes until you press Save.</div>
   <div class="row wrap" style="margin:8px 0">${s.people!=null?`<span class="pill">${esc(s.people)} people</span><span class="pill">${esc(s.totalPoints)} ${esc(cur)} in circulation</span>`:''}<span class="sp"></span><button class="sm" id="eco-reload">Reload</button></div>
-  <div class="grid g2" style="align-items:start"><div>${ECO_GROUPS.filter(g=>g[1].some(k=>k in ECO.vals)).map(g=>`<div class="card"><h3>${esc(g[0])}</h3>${g[2]?`<div class="sm faint" style="margin-bottom:6px">${esc(g[2])}</div>`:''}${g[1].filter(k=>k in ECO.vals).map(ecoField).join('')}</div>`).join('')}
+  <div class="grid g2" style="align-items:start"><div>${ECO_GROUPS.filter(g=>g[1].some(k=>ECO.vals[k]!=null)).map(g=>`<div class="card"><h3>${esc(g[0])}</h3>${g[2]?`<div class="sm faint" style="margin-bottom:6px">${esc(g[2])}</div>`:''}${g[1].filter(k=>ECO.vals[k]!=null).map(ecoField).join('')}</div>`).join('')}
     <div class="row wrap"><button id="eco-save"${n&&!ECO.saving?'':' disabled'}>Save${n?' ('+n+' changed)':''}</button><button class="sm" id="eco-revert"${n?'':' disabled'}>Revert</button><span class="sm faint" id="eco-msg"></span></div></div>
    <div style="position:sticky;top:0"><div class="card"><h3>Live preview <span class="sm faint">with your unsaved numbers</span></h3><div id="eco-ex">${ecoExamples()}</div></div>
     <div class="card"><h3>Calculator <span class="sm faint">uses the saved numbers</span></h3><div class="row wrap"><select id="ec-type">${types.map(t=>`<option${t===ECO.calc.type?' selected':''}>${t}</option>`).join('')}</select>
@@ -1336,7 +1336,7 @@ function bindTimers(){
 /* ---- Overlay fit options (GET /api/overlay-options/schema, GET|POST /api/overlay-options) ---- */
 const OV={sch:undefined,raw:{},name:'*',err:''};
 async function loadOverlays(){
-  try{const s=await hostGet('/api/overlay-options/schema');if(!s.ok||!s.options)throw new Error(s.error||'no schema');OV.sch=s;const r=await hostGet('/api/overlay-options');OV.raw=(r&&typeof r==='object')?r:{};OV.err=''}
+  try{const s=await hostGet('/api/overlay-options/schema');if(!s.ok||!s.options)throw new Error(s.error||'no schema');OV.sch=s;const r=await hostGet('/api/overlay-options');OV.raw=(r&&r.options&&typeof r.options==='object')?r.options:{};OV.err=''}
   catch(e){OV.sch=null;OV.err=String(e&&e.message||e)}
   if(route==='overlays')draw(true)}
 const ovOwn=()=>{const o=OV.raw[OV.name];return o&&typeof o==='object'?o:{}};
@@ -1363,7 +1363,7 @@ function bindOverlays(){
   $$('[data-ovname]').forEach(b=>b.onclick=()=>{OV.name=b.dataset.ovname;draw(true)});
   const msg=t=>{const m=$('#ov-msg');if(m)m.textContent=t};
   const send=async(opts,after)=>{try{const r=await hostJ('/api/overlay-options',{name:OV.name,options:opts});if(r.ok===false)throw new Error(hostErr(r));
-      const all=await hostGet('/api/overlay-options');OV.raw=all&&typeof all==='object'?all:OV.raw;msg('Saved');if(after)after()}catch(e){msg('');toast('Overlay options: '+(e.message||e))}};
+      const all=await hostGet('/api/overlay-options');OV.raw=all&&all.options&&typeof all.options==='object'?all.options:OV.raw;msg('Saved');if(after)after()}catch(e){msg('');toast('Overlay options: '+(e.message||e))}};
   const sendSoon=debounce((k,v)=>send({[k]:v}),250);
   const opt=k=>(OV.sch.options||[]).find(o=>o.key===k);
   $$('[data-ov]').forEach(i=>{const k=i.dataset.ov,o=opt(k);i.oninput=i.onchange=()=>{let v;
