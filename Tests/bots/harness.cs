@@ -231,6 +231,11 @@ public static class Harness
         Check("no real message id: plain line, @name kept, no reply field", rp.Count == 1 && !rp[0].Contains("reply_parent") && rp[0].Contains("@viewer1 timer line"), string.Join("|", rp));
         rp.Clear(); Reset(); c.SayPublic("chat", "@viewer1 no args at all");
         Check("no arguments at all: plain line", rp.Count == 1 && !rp[0].Contains("reply_parent") && rp[0].Contains("@viewer1 no args at all"), string.Join("|", rp));
+        { int attempts = 0; typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, (Func<string, string, string, string>)((url, auth, body) => { attempts++; throw new Exception("The remote server returned an error: (400) Bad Request."); }));
+          Reset(); CPHProxy.Args["msgId"] = realId; CPHProxy.Args["userName"] = "viewer1"; CPHProxy.Args["user"] = "Viewer1"; c.SayPublic("chat", "@Viewer1 a late answer");
+          Check("a reply Twitch rejects (stale / deleted parent, 400) is dropped: one attempt, not resent without the reply, no fallback account", attempts == 1 && CPHProxy.Sent.Count == 0, attempts + " attempts, sent " + CPHProxy.Sent.Count);
+          attempts = 0; Reset(); CPHProxy.Args.Remove("msgId"); CPHProxy.Args.Remove("userName"); CPHProxy.Args.Remove("user"); c.SayPublic("chat", "@Viewer1 a timer line");
+          Check("a 400 on a line that is not a reply still falls back to the bot account", attempts >= 1 && CPHProxy.Sent.Count == 1, attempts + " attempts, sent " + CPHProxy.Sent.Count); }
         typeof(CPHInline).GetField("_pgTestHttp", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, null);
         File.Delete(Path.Combine(dir, "bots_secrets.json")); Registry("{}");
 

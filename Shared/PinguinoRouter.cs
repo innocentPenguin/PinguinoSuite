@@ -286,6 +286,7 @@ public class CPHInline
     // (a user access token with user:write:chat for that bot account). Returns false when anything is missing or fails, then the Streamer.bot account is used.
     bool PgHelixSend(string role, string text)
     {
+        string parent = "";
         try
         {
             string p = Path.Combine(PgDirPath(), "bots_secrets.json");
@@ -295,7 +296,7 @@ public class CPHInline
             string cid = (string)s["ClientId"] ?? "", tok = (string)s["UserToken"] ?? "", sid = (string)s["SenderId"] ?? "", bid = (string)s["BroadcasterId"] ?? "";
             if (tok == "") tok = CPH.GetGlobalVar<string>("pinguino.secret.token." + role, false) ?? "";   // the key vault (Host), when bots_secrets.json no longer holds it
             if (cid == "" || tok == "" || sid == "" || bid == "") return false;
-            string parent; string line = PgReplyParts(text, out parent);
+            string line = PgReplyParts(text, out parent);
             var bj = new Newtonsoft.Json.Linq.JObject { ["broadcaster_id"] = bid, ["sender_id"] = sid, ["message"] = line };
             if (parent != "") bj["reply_parent_message_id"] = parent;   // a native Twitch reply to the viewer's message
             string body = bj.ToString(Newtonsoft.Json.Formatting.None);
@@ -308,6 +309,8 @@ public class CPHInline
             using (var st = req.GetRequestStream()) st.Write(bytes, 0, bytes.Length);
             using (var resp = (System.Net.HttpWebResponse)req.GetResponse()) return (int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300;
         }
+        catch (Exception rex) when (parent != "" && (rex.Message ?? "").Contains("(400)"))   // Twitch refused the reply (the message it answers is gone / too old): NOT sent again without the reply, not on another bot account either
+        { PgLogW("[Bots] a reply to a stale or deleted message was rejected, so it is dropped (not resent without the reply)"); return true; }
         catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
         { PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
         catch (Exception ex) { PgLogW("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message); return false; }
