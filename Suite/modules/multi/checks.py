@@ -29,18 +29,19 @@ def run(tw, port=None):
         good = keyring.get_password(secrets_store.SERVICE, probe) == "1"
         keyring.delete_password(secrets_store.SERVICE, probe)
         out.append(_r("keyring", "Secure token storage", good, f"Windows Credential Manager ({backend})" if good else "read-back failed",
-                      "Tokens would only last until Multi restarts."))
+                      "Your sign-in would be forgotten each time Multi restarts. Windows Credential Manager needs to be working."))
     except Exception as e:
         out.append(_r("keyring", "Secure token storage", False, f"unavailable: {type(e).__name__}",
-                      "Tokens would only last until Multi restarts."))
+                      "Your sign-in would be forgotten each time Multi restarts. Windows Credential Manager needs to be working."))
 
     # 2 site reachable
     try:
         r = requests.get(site, timeout=8)
         out.append(_r("site", "Site reachable", r.status_code < 500, f"{site} -> HTTP {r.status_code}",
-                      "Check your internet or that the site is deployed."))
+                      "Check your internet connection. If it is fine, the Pinguino website may be down; try again in a few minutes."))
     except Exception as e:
-        out.append(_r("site", "Site reachable", False, f"{site}: {type(e).__name__}", "Check your internet or that the site is deployed."))
+        out.append(_r("site", "Site reachable", False, f"{site}: {type(e).__name__}",
+                      "Check your internet connection. If it is fine, the Pinguino website may be down; try again in a few minutes."))
 
     # 3 connect endpoint exists (does not follow into Twitch)
     url = site + "/auth/twitch/login?multi=1"
@@ -52,22 +53,22 @@ def run(tw, port=None):
         ok = r.status_code in (301, 302, 303, 307, 308) and bool(loc) and NEED <= sc
         out.append(_r("connect", "Connect link asks for chat permission", ok,
                       f"HTTP {r.status_code}; scopes asked: {', '.join(sorted(sc)) or 'none'}",
-                      "The live site has not deployed the Connect Multi flow (push/deploy the PinguinoSite commit)."))
+                      "The Pinguino website does not have the Twitch sign-in for Multi yet. Ask whoever runs the site to update it."))
     except Exception as e:
-        out.append(_r("connect", "Connect link works", False, type(e).__name__, "Site unreachable."))
+        out.append(_r("connect", "Connect link works", False, type(e).__name__, "Could not reach the Pinguino website. Check your internet connection."))
 
     # 4 refresh endpoint is deployed (no token sent: expect 400, not 404)
     try:
         r = requests.post(site + "/api/multi/refresh", json={}, timeout=8)
         out.append(_r("refresh", "Token refresh endpoint deployed", r.status_code in (400, 401, 403),
-                      f"HTTP {r.status_code}", "Deploy the site commit with /api/multi/refresh."))
+                      f"HTTP {r.status_code}", "The Pinguino website cannot renew Twitch sign-ins yet, so Twitch would disconnect after a few hours. Ask whoever runs the site to update it."))
     except Exception as e:
-        out.append(_r("refresh", "Token refresh endpoint deployed", False, type(e).__name__, "Site unreachable."))
+        out.append(_r("refresh", "Token refresh endpoint deployed", False, type(e).__name__, "Could not reach the Pinguino website. Check your internet connection."))
 
     # 5 token stored, 6 valid + scopes
     tok = secrets_store.get("twitch_tokens")
     out.append(_r("token", "Twitch token saved", bool(tok and tok.get("access_token")),
-                  "saved" if tok else "none yet", "Click Connect Twitch and approve."))
+                  "saved" if tok else "none yet", "Press Connect Twitch above, log in as the channel owner, and approve."))
     if tok and tok.get("access_token"):
         info = None
         try:
@@ -81,14 +82,14 @@ def run(tw, port=None):
             how = type(e).__name__
         scopes = set((info or {}).get("scopes", []))
         out.append(_r("valid", "Token accepted by Twitch", bool(info),
-                      f"{how} as {info['login']}" if info else how, "Reconnect Twitch."))
+                      f"{how} as {info['login']}" if info else how, "Twitch did not accept the saved sign-in. Press Disconnect, then Connect Twitch again."))
         miss = sorted(NEED - scopes)
         out.append(_r("scopes", "Chat read + send permission", bool(info) and not miss,
-                      "user:read:chat, user:write:chat" if not miss else "missing " + ", ".join(miss), "Reconnect Twitch and approve all permissions."))
+                      "user:read:chat, user:write:chat" if not miss else "missing " + ", ".join(miss), "Disconnect Twitch, press Connect Twitch again and approve every permission it lists."))
 
     # 7 connector state
     if tw is not None:
         st = tw.state
         out.append(_r("connector", "Chat connection", st["status"] in ("connected", "live", "ok"),
-                      f"{st['status']} {st.get('detail') or ''}".strip(), "Fix the failed checks above, then Restart connection."))
+                      f"{st['status']} {st.get('detail') or ''}".strip(), "Fix the problems listed above first. Multi retries by itself every few seconds."))
     return out

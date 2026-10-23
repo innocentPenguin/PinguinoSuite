@@ -162,3 +162,9 @@ Pages: `/obs/chat`, `/obs/activity`, `/obs/follow` (+ `?preview=1` test mode). S
 ## Launcher first-run walk (375 px and desktop, throwaway data dir)
 - Fixed: plain wording for connector details and "Test my setup" rows (no raw HTTP codes), YouTube/Kick text now says the sign-in box is *below the platform list* (that is where connect.js renders it, above "Test my setup"), Kick help line, header chips no longer overflow at 375 px, sign-in inputs labelled, empty "Save Discord" now says "Paste the Discord bot token first.", toast is sticky so feedback is visible from any button.
 - Not static (for 40/42): launcher takes several seconds to render (one of /api/windows, /api/profiles, /api/status, /api/setup, /api/ai is slow); checks.py "How to fix" text still uses developer wording; connector detail strings come from connectors and are only rephrased client-side; throwaway server shares the real vault, so a truly empty Twitch state was not seen.
+
+## Launcher speed + empty-vault walk
+- Timed with MULTI_NO_KEYRING=1 and an empty data dir: /api/windows, profiles, status, setup, ai each answer in under 100 ms (renderLauncher ran in ~190 ms); no slow route found. The only slow call is the "Test my setup" button (/api/checks, ~2.6 s: three site requests in a row, each with an 8 s timeout, already off the event loop). Earlier "several seconds" was the hidden browser pane throttling timers.
+- Launcher now draws even if windows/profiles/ai are slow or fail (4 s cap, empty fallback); only status + setup are required.
+- checks.py "How to fix" texts rewritten in plain language (no push/deploy/commit wording).
+- Empty-vault walk: Twitch/Discord/YouTube/TikTok/Kick cards all read "Not set up yet"/"Off" with a next step; no "undefined", "[object" or raw HTTP codes.

@@ -57,6 +57,7 @@ function plainDetail(c) {
 }
 
 function plainCheck(c) {      // "HTTP 200" etc. means nothing to a streamer: say what it means
+  if (c.id === 'connector') return String(c.detail || '').replace(/^needs_auth/, 'Not signed in:').replace(/^(connected|live|ok)/, 'Connected').replace(/^(error|down)/, 'Not working:');
   return String(c.detail || '').replace(/HTTP (\d+)/g, (m, n) => c.ok ? 'answered' : +n >= 500 ? 'the server had an error (' + n + ')' : +n >= 400 ? 'refused (' + n + ')' : 'answered, but not as expected (' + n + ')').replace('scopes asked', 'permissions asked');
 }
 
@@ -71,7 +72,9 @@ function platformCard(c, setup) {
 }
 
 async function renderLauncher() {
-  const [ws, pf, st, setup, ai] = await Promise.all([api('/api/windows'), api('/api/profiles'), api('/api/status'), api('/api/setup'), api('/api/ai')]);
+  // status + setup draw the platform cards, so they must succeed; the rest may be slow or fail without blocking the page
+  const soft = (p, fb) => Promise.race([api(p).catch(() => fb), new Promise(r => setTimeout(() => r(fb), 4000))]);
+  const [ws, pf, st, setup, ai] = await Promise.all([soft('/api/windows', []), soft('/api/profiles', {builtin: [], saved: []}), api('/api/status'), api('/api/setup'), soft('/api/ai', {})]);
   const s = setup.settings;
   const connected = st.connectors.filter(c => c.status === 'connected').length;
   const step = n => `<span class="n">${n}</span>`;
