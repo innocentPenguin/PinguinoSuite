@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-DATA = ROOT / "data"
+DATA = Path(os.environ["LISTEN_DATA_DIR"]) if os.environ.get("LISTEN_DATA_DIR") else ROOT / "data"
 AUDIO = DATA / "audio"
 LIVE_AUDIO = AUDIO / "live"
 SOURCES = DATA / "sources"

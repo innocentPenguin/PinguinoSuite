@@ -33,6 +33,8 @@ button.stop{background:var(--bad);border-color:var(--bad);color:#190808;font-wei
 .w-warn{background:var(--warn-bg);color:var(--warn);border-radius:4px;padding:0 2px}
 .w-bad{background:var(--bad-bg);color:var(--bad);border-radius:4px;padding:0 2px;font-weight:600}
 .w-fix{color:var(--fix);border-bottom:1px dashed var(--fix)}
+.w-now{outline:2px solid var(--acc);border-radius:4px;background:rgba(255,255,255,.12)}
+.pbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}.pbar input[type=range]{flex:1;min-width:140px}.pbar .tm{font-variant-numeric:tabular-nums;min-width:92px}
 .w-edit{color:var(--fix);font-weight:700;border-bottom:2px solid var(--fix)}
 #l-edit{outline:none;cursor:text;line-height:1.7}
 #l-edit:focus{box-shadow:0 0 0 1px var(--acc);border-radius:6px}
@@ -180,7 +182,8 @@ $$('nav button').forEach(b=>b.onclick=()=>{$$('nav button').forEach(x=>x.classLi
 
 // ---------- audio
 const player=new Audio();let stopAt=0;
-player.addEventListener('timeupdate',()=>{if(stopAt&&player.currentTime>=stopAt){player.pause();stopAt=0}});
+let loopOn=false,loopFrom=0;
+player.addEventListener('timeupdate',()=>{if(stopAt&&player.currentTime>=stopAt){if(loopOn&&cur){player.currentTime=loopFrom;return}player.pause();stopAt=0}});
 let playReq=0,curKey='';
 const clipKey=(u,a,b)=>u+'|'+a+'|'+b;
 // one button per clip: play, pause, resume (same clip), or start over once it finished
@@ -202,7 +205,7 @@ function play(url,start,end){if(!url)return;const me=++playReq;stopAt=0;player.p
 // ---------- segment rendering
 function wordsHtml(words){return words.map(w=>{const c=w.l==='warn'?'w-warn':w.l==='bad'?'w-bad':w.l==='fix'?'w-fix':'';
   const tip=w.l==='fix'?'auto-fixed (was: '+esc(w.was||'')+')':'confidence '+Math.round(w.p*100)+'%';
-  return `<span class="${c}" title="${tip}">${esc(w.w)}</span>`}).join(' ')}
+  return `<span class="${c}" data-s="${w.s??''}" data-e="${w.e??''}" title="${tip}">${esc(w.w)}</span>`}).join(' ')}
 function segEl(seg){
   const d=document.createElement('div');d.className='seg';d.dataset.id=seg.id;
   const render=()=>{d.innerHTML=`<span class="t">${fmt(seg.t)}</span><button class="play" title="play" data-k="${esc(clipKey(seg.audio,seg.start,seg.end))}">▶</button><div class="txt">${seg.status==='corrected'?esc(seg.text):wordsHtml(seg.words)}</div><span class="badge ${seg.status}">${seg.status==='new'?'':seg.status}</span>`;
@@ -252,9 +255,27 @@ async function next(){const q=new URLSearchParams({exclude:skipped.join(','),con
   if(!cur){c.innerHTML='<div class="dim" style="padding:30px;text-align:center">Nothing left to review here 🎉<br>Listen live, or add a VOD/clip, to get more.</div>';return}
   c.innerHTML=`<div class="dim">${fmt(cur.t)} · confidence worst-first</div><div class="card"><div id="l-edit" contenteditable="true" spellcheck="false" title="Click any word and type to fix it. Enter saves.">${wordsHtml(cur.words)}</div></div>
    <textarea id="l-ta" hidden></textarea>
-   <div class="row" style="margin-top:10px"><button class="b" id="l-play" data-k="${esc(clipKey(cur.audio,cur.start,cur.end))}">▶ Replay</button><button class="b pri" id="l-ok">Save ↵</button><button class="b" id="l-skip">Skip</button></div>`;
+   <div class="row" style="margin-top:10px"><button class="b" id="l-play" data-k="${esc(clipKey(cur.audio,cur.start,cur.end))}">▶ Replay</button><button class="b pri" id="l-ok">Save ↵</button><button class="b" id="l-skip">Skip</button></div>
+   <div class="pbar"><input type="range" id="l-seek" min="0" max="1000" value="0" title="Drag to move inside this clip"><span class="tm dim" id="l-time">0.0 / 0.0 s</span>
+     <label class="dim">Speed <select id="l-rate"><option>0.5</option><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select>×</label>
+     <label class="dim"><input type="checkbox" id="l-loop"> Loop clip</label></div>
+   <textarea id="l-note" rows="2" maxlength="1000" style="width:100%;margin-top:10px" placeholder="What is wrong with this transcription? (optional note, saved with the line)">${esc(cur.note||'')}</textarea>`;
   const ta=$('#l-ta');ta.value=cur.text;setupInlineEdit();curKey=clipKey(cur.audio,cur.start,cur.end);play(cur.audio,cur.start,cur.end);
-  $('#l-play').onclick=()=>toggle(cur.audio,cur.start,cur.end);$('#l-skip').onclick=skip;$('#l-ok').onclick=save}
+  $('#l-play').onclick=()=>toggle(cur.audio,cur.start,cur.end);$('#l-skip').onclick=skip;$('#l-ok').onclick=save;setupPlayerUi()}
+// follow-along: highlight the word being played, scrub bar, speed, loop (clip = cur.start-.15 .. cur.end+.15)
+let uiTimer=0;
+function setupPlayerUi(){const seek=$('#l-seek'),tm=$('#l-time'),rate=$('#l-rate'),lp=$('#l-loop');if(!seek)return;
+  const a=Math.max(0,cur.start-.15),b=cur.end+.15,len=b-a;loopFrom=a;rate.value=String(player.playbackRate||1);if(![...rate.options].some(o=>o.value===rate.value))rate.value='1';lp.checked=loopOn;
+  const spans=[...document.querySelectorAll('#l-edit span')];let last=null,drag=false;
+  const tick=()=>{if(!document.body.contains(seek)||!cur){clearInterval(uiTimer);uiTimer=0;return}
+    const t=Math.min(Math.max(player.currentTime,a),b),inClip=curKey===clipKey(cur.audio,cur.start,cur.end);
+    if(!drag)seek.value=Math.round((t-a)/len*1000);tm.textContent=(t-a).toFixed(1)+' / '+len.toFixed(1)+' s';
+    const w=inClip?spans.find(sp=>sp.dataset.s!==''&&t>=+sp.dataset.s&&t<+sp.dataset.e):null;if(w!==last){last&&last.classList.remove('w-now');w&&w.classList.add('w-now');last=w}
+  };
+  clearInterval(uiTimer);uiTimer=setInterval(tick,60);tick();
+  seek.onpointerdown=()=>{drag=true};seek.onchange=()=>{drag=false};
+  seek.oninput=()=>{const t=a+seek.value/1000*len,go=()=>{stopAt=b;player.currentTime=t};if(curKey!==clipKey(cur.audio,cur.start,cur.end)){curKey=clipKey(cur.audio,cur.start,cur.end);play(cur.audio,cur.start,cur.end);player.pause();setTimeout(go,150)}else go()};
+  rate.onchange=()=>{player.playbackRate=+rate.value};player.playbackRate=+rate.value;lp.onchange=()=>{loopOn=lp.checked}}
 // the highlighted paragraph itself is the editor: click a word and type; changed words turn green (hover shows the original)
 function setupInlineEdit(){const ed=$('#l-edit'),ta=$('#l-ta');if(!ed)return;
   ed.querySelectorAll('span').forEach((sp,i)=>{sp.dataset.orig=sp.textContent;sp.dataset.tip=sp.title||''});
@@ -266,9 +287,10 @@ function setupInlineEdit(){const ed=$('#l-edit'),ta=$('#l-ta');if(!ed)return;
   ed.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,(e.clipboardData.getData('text/plain')||'').replace(/\s+/g,' '))});
   ed.addEventListener('drop',e=>e.preventDefault());
   ed.focus();const r=document.createRange();r.selectNodeContents(ed);r.collapse(false);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}
-async function save(){if(!cur)return;try{const r=await api(`/api/segments/${cur.id}/correct`,{body:{text:$('#l-ta').value}});showLearned(r.learned);next()}catch(e){toast(e.message,1)}}
-function skip(){if(cur){skipped.push(cur.id);next()}}
+async function save(){if(!cur)return;try{const r=await api(`/api/segments/${cur.id}/correct`,{body:{text:$('#l-ta').value,note:$('#l-note')?$('#l-note').value:''}});showLearned(r.learned);next()}catch(e){toast(e.message,1)}}
+function skip(){if(cur){const n=$('#l-note');if(n&&n.value.trim()!==(cur.note||'').trim())api(`/api/segments/${cur.id}/note`,{body:{note:n.value}}).catch(()=>{});skipped.push(cur.id);next()}}
 document.addEventListener('keydown',e=>{if(!$('#tab-learn').classList.contains('on')||!cur)return;
+  if(e.target&&e.target.id==='l-note'&&e.key!=='Escape')return;
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}else if(e.key==='Escape')skip();else if(e.ctrlKey&&e.code==='Space'){e.preventDefault();toggle(cur.audio,cur.start,cur.end)}});
 
 // ---------- sources

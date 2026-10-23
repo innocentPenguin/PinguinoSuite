@@ -506,6 +506,11 @@ def review_next(session: str | None = None, exclude: str = "", confident: bool =
 
 class Correction(BaseModel):
     text: str
+    note: str = ""
+
+
+class Note(BaseModel):
+    note: str = ""
 
 
 @app.post("/api/segments/{sid}/correct")
@@ -520,10 +525,20 @@ def correct(sid: int, b: Correction):
     else:
         status = "corrected"
         learned = learn.learn_from_correction(json.loads(r["raw_words"]), text)
-    db.run("UPDATE segments SET status=?, corrected_text=? WHERE id=?", (status, text if status == "corrected" else None, sid))
+    note = " ".join(b.note.split())[:1000]
+    db.run("UPDATE segments SET status=?, corrected_text=?, note=? WHERE id=?", (status, text if status == "corrected" else None, note or r.get("note"), sid))
     with open(cfg.DATA / "gold.jsonl", "a", encoding="utf8") as f:  # (audio, text) pairs = future fine-tuning set
-        f.write(json.dumps({"audio": r["audio"], "start": r["start"], "end": r["end"], "raw": r["raw_text"], "text": text, "status": status}) + "\n")
+        f.write(json.dumps({"audio": r["audio"], "start": r["start"], "end": r["end"], "raw": r["raw_text"], "text": text, "status": status, "note": note}) + "\n")
     return {"status": status, "learned": learned}
+
+
+@app.post("/api/segments/{sid}/note")
+def segment_note(sid: int, b: Note):
+    if not db.one("SELECT id FROM segments WHERE id=?", (sid,)):
+        raise HTTPException(404)
+    note = " ".join(b.note.split())[:1000]
+    db.run("UPDATE segments SET note=? WHERE id=?", (note, sid))
+    return {"note": note}
 
 
 @app.post("/api/regrade")

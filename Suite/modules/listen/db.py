@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS vocab(term TEXT PRIMARY KEY, count INTEGER DEFAULT 1,
 CREATE TABLE IF NOT EXISTS rules(wrong TEXT PRIMARY KEY, right TEXT, count INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS attempts(source_id TEXT PRIMARY KEY, n INTEGER DEFAULT 0, last REAL, err TEXT);
 """)
+for _col in ("note TEXT",):   # added later: the reviewer's description of what is wrong
+    try: _c.execute("ALTER TABLE segments ADD COLUMN " + _col)
+    except sqlite3.OperationalError: pass
 _c.commit()
 
 
@@ -73,5 +76,5 @@ def seg_json(r: dict) -> dict:
         "id": r["id"], "session_id": r["session_id"], "t": r["t"], "start": r["start"], "end": r["end"],
         "text": r["corrected_text"] or r["text"], "raw_text": r["raw_text"],
         "words": json.loads(r["words"]), "unsure": r["unsure"], "status": r["status"],
-        "audio": "/media/" + r["audio"] if r["audio"] else None,
+        "audio": "/media/" + r["audio"] if r["audio"] else None, "note": r.get("note") or "",
     }
