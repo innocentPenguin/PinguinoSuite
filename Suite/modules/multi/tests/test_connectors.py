@@ -316,3 +316,12 @@ def test_kick_title_patch(monkeypatch):
     monkeypatch.setattr(stream_info.requests, "patch", lambda *a, **k: _R({"error": "no"}, 403))
     assert stream_info.kick_update(title="x")["ok"] is False
     assert stream_info.kick_update(title=None)["ok"] is False
+
+
+def test_community_gift_counts_once():
+    base = {"broadcaster_user_login": "c", "message_id": "m", "chatter_user_login": "g", "chatter_user_id": "1", "chatter_user_name": "G", "badges": []}
+    com = tw.normalize_notice(dict(base, notice_type="community_sub_gift", community_sub_gift={"id": "X", "total": 5}))
+    assert com.event == "gift" and com.amount == 5
+    assert tw.normalize_notice(dict(base, notice_type="sub_gift", sub_gift={"community_gift_id": "X", "recipient_user_login": "r"})) is None
+    single = tw.normalize_notice(dict(base, notice_type="sub_gift", sub_gift={"community_gift_id": None, "recipient_user_login": "r"}))
+    assert single.event == "gift"

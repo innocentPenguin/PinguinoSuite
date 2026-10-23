@@ -29,6 +29,8 @@ NOTICE_EVENT = {"sub": "sub", "resub": "resub", "sub_gift": "gift", "community_s
 def normalize_notice(ev):
     """Twitch channel.chat.notification event (sub, resub, gift, raid, announcement) -> ChatMessage with .event. Pure."""
     chan, nt = ev["broadcaster_user_login"], ev.get("notice_type", "")
+    if nt == "sub_gift" and (ev.get("sub_gift") or {}).get("community_gift_id"):
+        return None          # one per recipient of a community gift: the community_sub_gift notice already carries the total (counting both doubled gifts)
     amount = 0
     if nt == "raid":
         amount = int((ev.get("raid") or {}).get("viewer_count", 0))
@@ -164,8 +166,9 @@ class Twitch(Connector):
             self.inbox.put(msg)
         elif t == "notification" and meta.get("subscription_type") == "channel.chat.notification":
             msg = normalize_notice(payload["event"])
-            self.state["last_message"] = time.time()
-            self.inbox.put(msg)
+            if msg:
+                self.state["last_message"] = time.time()
+                self.inbox.put(msg)
         elif t == "revocation":
             self.set_status("needs_auth", "subscription revoked; reconnect Twitch")
         return None
