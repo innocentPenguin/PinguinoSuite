@@ -1,6 +1,7 @@
 import fs from 'fs';import {NOTES,LORE} from './notes.mjs';
 const BOT_RULES=["Never recount who said a lore term, who started it, or when; play along or stay silent.", "Lore is private background: no verbatim quotes of chat, no counts, no dates, no names of who is in a group.", "Do not comment on mod/VIP status, rank changes, favourites, relationships or anyone's private life.", "When someone says \"clanker\" or \"L bots\": one dry line, then move on; never escalate.", "Anyone who typed !optmeout or !forgetme is left out of every line."];
-const S=process.argv[2];const OUT='D:/PinguinoSuite/Data/lore';fs.mkdirSync(OUT+'/person_cards',{recursive:true});
+const S=process.argv[2];const OUT=process.env.LORE_OUT||'D:/PinguinoSuite/Data/lore'; // LORE_OUT = dry-run output dir (never touches the live lore files)
+fs.mkdirSync(OUT+'/person_cards',{recursive:true});
 const msgs=fs.readFileSync(S+'/msgs.jsonl','utf8').split('\n').map(l=>JSON.parse(l));
 const feat=JSON.parse(fs.readFileSync(S+'/feat.json','utf8'));
 const pairs=JSON.parse(fs.readFileSync(S+'/pairs.json','utf8'));
@@ -63,4 +64,7 @@ const groupsOut=clusters.slice(0,8).map((g,i)=>({group:i+1,size:g.length,members
 fs.writeFileSync(OUT+'/people_graph.json',JSON.stringify({built:new Date().toISOString(),source:'Data/chat_logs 2026-02-15..2026-10-20 (666,891 messages, 1,775 logins, aliases merged)',aliasesApplied:alias,nodes:people,edges,groups:groupsOut},null,1));
 fs.writeFileSync(OUT+'/channel_lore.json',JSON.stringify({built:new Date().toISOString(),botRules:BOT_RULES,items:LORE.map(x=>({...x,howBotsUse:(x.howBotsUse||'').replace(/\s+$/,'')+(x.howBotsUse&&x.howBotsUse.includes('recounting who said')?'':' Never explain this by recounting who said it or who started it: play along, or stay silent.')})),streamer:NOTES.streamer_note},null,1));
 fs.writeFileSync(S+'/cards.json',JSON.stringify(cards));
+import {execFileSync} from 'child_process';import {fileURLToPath} from 'url';
+// IDEAS: the Host and bots load the scrubbed copy; the originals (with verbatim excerpts) stay private next to it
+console.log(execFileSync('node',[fileURLToPath(new URL('./scrub-graph.mjs',import.meta.url)),OUT+'/people_graph.json',OUT+'/people_graph.public.json',OUT+'/person_cards',OUT+'/person_cards_public'],{encoding:'utf8'}).trim());
 console.log('cards',cards.length,'edges',edges.length,'groups',groupsOut.length);

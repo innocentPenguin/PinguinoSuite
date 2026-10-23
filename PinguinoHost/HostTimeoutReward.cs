@@ -171,7 +171,7 @@ namespace PinguinoHost
         public static class PeopleGraph
         {
             static JObject _doc; static DateTime _mt = DateTime.MinValue; static string _src = "";
-            static string PathF { get { string e = Environment.GetEnvironmentVariable("PINGUINO_PEOPLE_GRAPH"); return !string.IsNullOrEmpty(e) ? e : Path.Combine(Program.SuiteDir ?? "", "Data", "lore", "people_graph.json"); } }
+            static string PathF { get { string e = Environment.GetEnvironmentVariable("PINGUINO_PEOPLE_GRAPH"); if (!string.IsNullOrEmpty(e)) return e; string d = Path.Combine(Program.SuiteDir ?? "", "Data", "lore"); string pub = Path.Combine(d, "people_graph.public.json"); return File.Exists(pub) ? pub : Path.Combine(d, "people_graph.json"); } }   // prefers the scrubbed copy (no verbatim chat excerpts)
             static JObject Doc()
             {
                 lock (L)
