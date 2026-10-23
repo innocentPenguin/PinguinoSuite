@@ -138,14 +138,16 @@ namespace PinguinoHost
 
         // ================= awards =================
         /// <summary>pays one event once (unique id). Returns null when paid or already paid, else the refusal.</summary>
+        [ThreadStatic] static string _lastPay;   // what the last PayEvent on this thread did: "paid", "already paid" or the refusal (EventApi reports it)
         static string PayEvent(string sid, string login, long amount, string type, string label, string id)
         {
+            _lastPay = "nothing to pay";
             login = Canon(Boards.AliasMap(), login); if (login == "" || amount <= 0) return "nothing to pay";
-            if (Boards.IsBot(login) || login == Streamer() || IsPseudoUser(login)) return "not paid to bots, system accounts or the streamer";
-            if (!Sim.IsSim(login)) lock (L) if (Ledger()[id] != null) return null;
-            string err = Award(login, amount, type, label, id); if (err != null) return err;
+            if (Boards.IsBot(login) || login == Streamer() || IsPseudoUser(login)) return _lastPay = "not paid to bots, system accounts or the streamer";
+            if (!Sim.IsSim(login)) lock (L) if (Ledger()[id] != null) { _lastPay = "already paid"; return null; }
+            string err = Award(login, amount, type, label, id); if (err != null) return _lastPay = err;
             if (!Sim.IsSim(login)) lock (L) { PRow(sid, login, type, label, amount, id); Save(); }
-            return null;
+            _lastPay = "paid"; return null;
         }
 
         // test hooks
@@ -240,6 +242,7 @@ namespace PinguinoHost
             string type = ((string)b["type"] ?? "").ToLowerInvariant(), login = Norm((string)b["login"]); string id = (string)b["id"]; if (login == "") return new JObject { { "ok", false }, { "error", "login is required" } };
             if (string.IsNullOrEmpty(id)) return new JObject { { "ok", false }, { "error", "id is required (a unique id per event keeps a retry from paying twice)" } };
             var pv = Preview(b); if (pv["ok"] != null && !(bool)pv["ok"]) return pv; long pts = (long)pv["points"]; string sid = CurSid(); string err = null; double amt = D(b["amount"]);
+            _lastPay = null;
             if (type == "tip") { err = PayEvent(sid, login, pts, "tip", "Tip $" + amt.ToString("0.##", CultureInfo.InvariantCulture), "tip:" + id); if (err == null) { RecordTip(login, amt, id); AlertBridge.OnTipAsync(login, amt, (string)b["currency"] ?? "USD", id); } }
             else
             {
@@ -247,8 +250,11 @@ namespace PinguinoHost
                 a["eventType"] = type == "cheer" ? "TwitchCheer" : type == "sub" ? "TwitchSub" : type == "resub" ? "TwitchReSub" : type == "gift" ? "TwitchGiftBomb" : type == "gift_recipient" ? "TwitchGiftRecipient" : type == "follow" ? "TwitchFollow" : type == "raid_out" || type == "raid_leader" ? "TwitchRaid" : "";
                 if ((string)a["eventType"] == "") return new JObject { { "ok", false }, { "error", "this type is paid by the stream tick, not by an event" } };
                 PointsEvent(a, (bool?)b["refollow"] == true);
+                if (_lastPay == null || _lastPay == "paid" || _lastPay == "already paid") { } else err = _lastPay;   // refused (bot, system account, nothing to pay ...)
+                if (_lastPay == null) err = "nothing was paid for this event";
             }
-            return new JObject { { "ok", err == null }, { "type", type }, { "login", login }, { "points", pts }, { "id", id }, { "error", err } };
+            bool paid = err == null && _lastPay == "paid";
+            return new JObject { { "ok", err == null }, { "paid", paid }, { "already", _lastPay == "already paid" }, { "type", type }, { "login", login }, { "points", pts }, { "id", id }, { "error", err } };
         }
 
         // ---- helpers for the alert bridge ----
@@ -328,6 +334,28 @@ namespace PinguinoHost
             o["gift_recipient"] = PS("GiftRecipient"); o["follow"] = PS("FollowBonus");
             return o;
         }
+        /// <summary>the allowed range of every points setting (the same table is listed in Docs/ECONOMY_CONTRACT.md); bool keys take true/false, TipCurve a list of [usd, points] pairs with rising usd</summary>
+        public static readonly Dictionary<string, double[]> PointsRanges = new Dictionary<string, double[]> {
+            { "WatchIntervalMin", new[] { 1.0, 60 } }, { "WatchViewer", new[] { 0.0, 1000 } }, { "WatchSubT1", new[] { 0.0, 1000 } }, { "WatchSubT2", new[] { 0.0, 1000 } }, { "WatchSubT3", new[] { 0.0, 1000 } }, { "EntryBonus", new[] { 0.0, 100000 } },
+            { "CheerLow", new[] { 0.0, 1000 } }, { "CheerMid", new[] { 0.0, 1000 } }, { "CheerHigh", new[] { 0.0, 1000 } }, { "CheerMidFrom", new[] { 1.0, 1000000 } }, { "CheerHighFrom", new[] { 1.0, 1000000 } },
+            { "SubT1", new[] { 0.0, 1000000 } }, { "SubT2", new[] { 0.0, 1000000 } }, { "SubT3", new[] { 0.0, 1000000 } }, { "GiftRecipient", new[] { 0.0, 1000000 } }, { "TipFloorPerUsd", new[] { 0.0, 100000 } },
+            { "FollowBonus", new[] { 0.0, 1000000 } }, { "RaidArrival", new[] { 0.0, 1000000 } }, { "RaidLeader", new[] { 0.0, 1000000 } }, { "RaidLeaderMin", new[] { 1.0, 100000 } }, { "RaidWindowMin", new[] { 1.0, 120 } },
+            { "MatchMinutes", new[] { 1.0, 120 } }, { "MatchPlayMult", new[] { 0.0, 20 } }, { "MatchWinMult", new[] { 0.0, 20 } },
+            { "ActivityLinesPerPoint", new[] { 1.0, 100 } }, { "ActivityCapPer10Min", new[] { 0.0, 100 } } };
+        static string CheckPointsValue(string key, JToken v)
+        {
+            if (key == "WatchV2" || key == "ActivityBonus") return v.Type == JTokenType.Boolean ? null : key + " must be true or false";
+            if (key == "TipCurve")
+            {
+                var a = v as JArray; if (a == null || a.Count > 20) return "TipCurve must be a list of up to 20 [usd, points] pairs"; double last = 0;
+                foreach (var t in a) { var pr = t as JArray; if (pr == null || pr.Count != 2 || !(pr[0].Type == JTokenType.Integer || pr[0].Type == JTokenType.Float) || !(pr[1].Type == JTokenType.Integer || pr[1].Type == JTokenType.Float)) return "TipCurve entries are [usd, points]"; double u = (double)pr[0], pt = (double)pr[1]; if (u < 0.01 || u > 10000 || pt < 0 || pt > 10000000) return "TipCurve usd must be 0.01-10000 and points 0-10000000"; if (u <= last) return "TipCurve usd must rise"; last = u; }
+                return null;
+            }
+            double[] r; if (!PointsRanges.TryGetValue(key, out r)) return key + " is not a points setting";
+            if (v.Type != JTokenType.Integer && v.Type != JTokenType.Float) return key + " must be a number";
+            double d = (double)v; if (double.IsNaN(d) || d < r[0] || d > r[1]) return key + " must be between " + r[0].ToString(CultureInfo.InvariantCulture) + " and " + r[1].ToString(CultureInfo.InvariantCulture);
+            return null;
+        }
         /// <summary>GET /api/economy/points-settings: every knob, its value, and the examples. POST {values:{key:v}, dry:true} previews without saving; without dry it saves (hot reload, no restart).</summary>
         public static JObject PointsSettingsApi(JObject body, bool post)
         {
@@ -336,7 +364,7 @@ namespace PinguinoHost
             {
                 var bad = vals.Properties().Where(p => !PointsKeys.Contains(p.Name) && p.Name != "ActivityBonus" && p.Name != "ActivityLinesPerPoint" && p.Name != "ActivityCapPer10Min").Select(p => p.Name).ToList();
                 if (bad.Count > 0) return new JObject { { "ok", false }, { "error", "not a points setting: " + string.Join(", ", bad) } };
-                foreach (var p in vals.Properties()) if (p.Name != "TipCurve" && p.Name != "ActivityBonus" && p.Name != "WatchV2" && D(p.Value) < 0) return new JObject { { "ok", false }, { "error", p.Name + " cannot be negative" } };
+                foreach (var p in vals.Properties()) { string why = CheckPointsValue(p.Name, p.Value); if (why != null) return new JObject { { "ok", false }, { "error", why }, { "key", p.Name } }; }
                 bool dry = (bool?)body["dry"] == true; JObject before;
                 lock (L)
                 {

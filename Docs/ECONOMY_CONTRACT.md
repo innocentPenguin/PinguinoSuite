@@ -51,6 +51,34 @@ Rules the Host enforces (so the page can just show the reason): loans on, one op
 - `POST /api/economy/loan` `{action:"take"|"repay", login, amount, id?}` (id makes a retry apply once)
 - `GET/POST /api/economy` settings: `POST {settings:{DepreciationDryRun:false}}` switches depreciation from practice to real. Settings live in `Data\economy\settings.json`.
 
+### 3b. Points settings for the Suite settings page (20)
+
+`GET /api/economy/points-settings` -> `{ok, currency, values:{key:value}, examples:{watch, match, sub, cheer, tip, ...}}` (what each rule pays right now).
+`POST /api/economy/points-settings` `{values:{key:value,...}, dry?:true}` -> same shape. `dry:true` previews the `examples` for the new values and saves nothing; without `dry` it saves to `Data\economy\settings.json` and applies at once (no restart). One bad value rejects the whole call: `{ok:false, error, key}`. Same local write rules as every Host POST (loopback, Origin/token).
+
+| key | type | range |
+|---|---|---|
+| WatchV2 | bool | true/false (v2 = per-interval rates below; false = old per-minute) |
+| WatchIntervalMin | number | 1-60 (minutes per payout) |
+| WatchViewer, WatchSubT1, WatchSubT2, WatchSubT3 | number | 0-1000 (points per interval, viewer / sub tier) |
+| EntryBonus | number | 0-100000 |
+| CheerLow, CheerMid, CheerHigh | number | 0-1000 (points per bit) |
+| CheerMidFrom, CheerHighFrom | number | 1-1000000 (bits where the rate changes) |
+| SubT1, SubT2, SubT3 | number | 0-1000000 |
+| GiftRecipient | number | 0-1000000 |
+| TipFloorPerUsd | number | 0-100000 |
+| TipCurve | list of [usd, points] | up to 20 pairs, usd 0.01-10000 and rising, points 0-10000000 |
+| FollowBonus, RaidArrival, RaidLeader | number | 0-1000000 |
+| RaidLeaderMin | number | 1-100000 (viewers) |
+| RaidWindowMin | number | 1-120 |
+| MatchMinutes | number | 1-120 (a match = this many minutes of the player's own watch rate) |
+| MatchPlayMult, MatchWinMult | number | 0-20 (x for playing / for winning; defaults 7 min, x2, x3) |
+| ActivityBonus | bool | chat-activity bonus on/off |
+| ActivityLinesPerPoint | number | 1-100 |
+| ActivityCapPer10Min | number | 0-100 |
+
+`POST /api/economy/event {type, login, amount, tier, id}` answers `{ok, paid, already, points, error}`: `paid:true` only when points moved; the same id again is `ok:true, paid:false, already:true`; a bot / system account / zero payout is `ok:false` with the reason.
+
 ## 4. Depreciation, in one paragraph (for the page's explanation text)
 
 Once per stream, when the stream ends, anyone holding more than `DepreciationThreshold` (100,000) loses `DepreciationPct` (2.5%) of their balance (`basis:"total"`) or of the part above the threshold (`basis:"excess"`, never taking them below the threshold). Bots, the streamer and listed accounts are exempt. A viewer over the threshold gets one personal reminder line in chat per stream (not when they opted out of being named). It starts as a **practice run** (`dryRun:true`): the Host logs what it would take in `Data\economy\depreciation.log` and the Master View backend feed, and takes nothing, until Ivan switches `DepreciationDryRun` off.
