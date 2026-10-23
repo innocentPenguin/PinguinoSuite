@@ -170,6 +170,34 @@ class Twitch(Connector):
             self.set_status("needs_auth", "subscription revoked; reconnect Twitch")
         return None
 
+    async def _pump(self, ws, tok):
+        """Read frames until Twitch sends session_reconnect (returns the new URL). Any close/timeout raises."""
+        while True:
+            raw = await asyncio.wait_for(ws.recv(), timeout=30)   # keepalive is ~10 s
+            url = await self.handle_frame(json.loads(raw), tok)
+            if url:
+                return url
+
+    async def _session(self, tok):
+        """One EventSub session, following session_reconnect hops. The old socket stays open until the new one has
+        sent its welcome (Twitch docs). A fresh connect (first, or after any error) subscribes; a hop does not."""
+        self.reconnecting = False
+        ws = await websockets.connect(EVENTSUB_URL, max_size=2**20)
+        try:
+            while True:
+                url = await self._pump(ws, tok)
+                new = await websockets.connect(url, max_size=2**20)
+                try:
+                    raw = await asyncio.wait_for(new.recv(), timeout=30)
+                    await self.handle_frame(json.loads(raw), tok)   # welcome of the hopped socket
+                except BaseException:
+                    await new.close()
+                    raise
+                await ws.close()
+                ws = new
+        finally:
+            await ws.close()
+
     async def run(self):
         backoff = 1
         while not self.stop:
@@ -185,15 +213,7 @@ class Twitch(Connector):
                     await asyncio.sleep(30)
                     continue
                 self.set_status("connecting")
-                url = EVENTSUB_URL
-                while url and not self.stop:
-                    async with websockets.connect(url, max_size=2**20) as ws:
-                        backoff, url = 1, None
-                        while True:
-                            raw = await asyncio.wait_for(ws.recv(), timeout=30)   # keepalive is ~10 s
-                            url = await self.handle_frame(json.loads(raw), tok)
-                            if url:
-                                break
+                await self._session(tok)
             except Exception as e:
                 self.reconnecting = False                     # any failure (incl. close code 4007 "invalid reconnect") starts a clean session: full subscribe
                 self.state["reconnects"] += 1
