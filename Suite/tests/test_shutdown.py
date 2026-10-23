@@ -46,7 +46,7 @@ SCRIPT = textwrap.dedent("""
 """)
 
 
-class Shutdown(unittest.TestCase):
+class _Base(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.saved = dict(suite.modules)
@@ -81,6 +81,8 @@ class Shutdown(unittest.TestCase):
             time.sleep(0.2)
         self.assertTrue(all(port_open(p) for _, p, _ in self.mods), "fake modules did not come up")
 
+
+class Shutdown(_Base):
     def test_everything_is_gone_after_shutdown(self):
         self._up()
         children = [int(cf.read_text()) for _, _, cf in self.mods]
@@ -124,6 +126,54 @@ class Shutdown(unittest.TestCase):
             first.stop = real
         time.sleep(0.5)
         self.assertFalse(suite.pid_alive(pids[1]))      # the second module was still stopped
+
+
+class Races(_Base):
+    def test_shutdown_that_begins_during_the_spawn_kills_the_new_process(self):
+        m, port, _ = self.mods[0]
+        real = m._write_pid
+        seen = []
+
+        def write_then_shutdown(pid):
+            real(pid)
+            seen.append(pid)
+            suite.SHUTDOWN.set()           # shutdown_all() ran right after the Popen
+        m._write_pid = write_then_shutdown
+        try:
+            m.start()
+        finally:
+            m._write_pid = real
+        self.assertTrue(seen)
+        self.assertIsNone(m.proc)
+        self.assertFalse(m._pidfile().exists())
+        time.sleep(0.5)
+        self.assertFalse(suite.pid_alive(seen[0]))
+
+    def test_pack_archive_two_threads_never_truncate_or_leave_tmp(self):
+        import gzip
+        d = Path(tempfile.mkdtemp())
+        data = os.urandom(200) * 20000
+        for i in range(3):
+            (d / f"m-{i}.log").write_bytes(data)
+        res = []
+        ts = [threading.Thread(target=lambda: res.append(suite.pack_archive(d))) for _ in range(4)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        suite.pack_archive(d)       # a pass that lost the race leaves the rest for the next one
+        self.assertEqual(sorted(p.name for p in d.iterdir()), ["m-0.log.gz", "m-1.log.gz", "m-2.log.gz"])
+        for i in range(3):
+            self.assertEqual(gzip.open(d / f"m-{i}.log.gz").read(), data)
+
+    def test_bus_history_is_bounded_under_threads(self):
+        b = suite.Bus()
+        ts = [threading.Thread(target=lambda: [b.emit("t", n=k) for k in range(150)]) for _ in range(6)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        self.assertEqual(len(b.history), 200)
 
 
 class CorePid(unittest.TestCase):

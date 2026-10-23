@@ -233,8 +233,21 @@ def rotate_log(f, limit=LOG_MAX):
         return None
 
 
+_PACK_LOCK = threading.Lock()
+
+
 def pack_archive(folder=None):
-    """gzip every plain log in logs/Archive (82 MB of text becomes a few MB). Best effort, never deletes anything that did not compress."""
+    """gzip every plain log in logs/Archive (82 MB of text becomes a few MB). Best effort, never deletes anything that did not compress.
+    One pass at a time (it is started at core start and after every log rotation); each .gz is written as .tmp and renamed, so no reader ever sees a half file."""
+    if not _PACK_LOCK.acquire(blocking=False):
+        return 0     # another pass is already running; it will see this file too or the next one will
+    try:
+        return _pack_archive(folder)
+    finally:
+        _PACK_LOCK.release()
+
+
+def _pack_archive(folder):
     import gzip
     d = folder or (LOGS / "Archive")
     n = 0
@@ -244,14 +257,16 @@ def pack_archive(folder=None):
         return 0
     for p in files:
         gz = p.with_name(p.name + ".gz")
+        tmp = p.with_name(p.name + ".gz.tmp")
         try:
-            with open(p, "rb") as a, gzip.open(gz, "wb", compresslevel=6) as b:
+            with open(p, "rb") as a, gzip.open(tmp, "wb", compresslevel=6) as b:
                 shutil.copyfileobj(a, b)
+            os.replace(tmp, gz)
             p.unlink()
             n += 1
         except OSError:
             try:
-                gz.unlink()
+                tmp.unlink()
             except OSError:
                 pass
     return n
@@ -411,10 +426,12 @@ def _event_to_console(ev):
 class Bus:
     def __init__(self):
         self.clients, self.loop, self.history = set(), None, []
+        self._hlock = threading.Lock()
 
     def emit(self, type_, **data):
         ev = {"type": type_, "ts": time.time(), **data}
-        self.history = (self.history + [ev])[-200:]
+        with self._hlock:      # emit is called from many threads (health pass, API handlers): the read-modify-write must not lose events
+            self.history = (self.history + [ev])[-200:]
         _jsonl_log(ev)
         _event_to_console(ev)
         if self.loop:
@@ -620,6 +637,14 @@ class Module:
         finally:
             log.close()
         self._write_pid(self.proc.pid)
+        if SHUTDOWN.is_set():      # shutdown began between the check at the top and the spawn: this process must not outlive the core
+            kill_tree(self.proc)
+            self.proc = None
+            try:
+                self._pidfile().unlink()
+            except OSError:
+                pass
+            return
         self.last_ok, self.last_err = 0.0, ""    # a new process: the old one's "last OK" says nothing about it
         bus.emit("module", id=self.id, state="starting")
         if self.spec.get("on_start"):   # manifest hook fired once after launch (Listen: start the mic even when not live)
@@ -991,12 +1016,15 @@ def refresh_all():
 def health_loop():
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
     tick = 0
+    last_err = {}
     while not SHUTDOWN.is_set():
-        for step in (process_control, reconcile_devices, lambda: console_log.ingest(list(modules))):
+        for i, step in enumerate((process_control, reconcile_devices, lambda: console_log.ingest(list(modules)))):
             try:
                 step()
             except Exception as e:  # noqa: BLE001  (one failing step must not end the loop: modules would stay "starting" forever)
-                print(f"[Pinguino] health loop step failed: {e}", file=sys.stderr)
+                if time.time() - last_err.get(i, 0) >= 60:     # a persistent error must not write a line a second into the console log
+                    last_err[i] = time.time()
+                    print(f"[Pinguino] health loop step {i} failed: {e}", file=sys.stderr)
         if tick % 4 == 0:  # health every ~4s, control files every second
             refresh_all()
         if tick % 600 == 599:   # every ~10 min
@@ -1053,11 +1081,17 @@ def write_core_pid():
 def shutdown_all():
     """Stop every module (and its children) exactly once, even if one of them fails to stop; nothing is started afterwards."""
     SHUTDOWN.set()
-    for m in list(modules.values()):
+
+    def one(m):
         try:
             m.stop()
         except Exception as e:  # noqa: BLE001  (one stubborn module must not leave the others running)
             print(f"[Pinguino] stopping {m.id} failed: {e}", file=sys.stderr)
+    ts = [threading.Thread(target=one, args=(m,), daemon=True) for m in list(modules.values())]   # in parallel: each stop can wait seconds for taskkill
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(15)
 
 
 async def lifespan(app):
