@@ -83,6 +83,13 @@ namespace PinguinoHost
             AlertBridge.OnTip("tipper", 5, "usd", "tp-1"); AlertBridge.OnTip("tipper", 5, "usd", "tp-1");
             var tf = calls.Where(x => x.Key == "/api/alerts/fire").Select(x => x.Value).ToList();
             Check(tf.Count == 1 && (string)tf[0]["type"] == "tip" && (string)tf[0]["user"] == "tipper" && (long)tf[0]["amount"] == 5 && (string)tf[0]["currency"] == "USD" && (string)tf[0]["id"] == "tip:tp-1", "tip: amount + currency, stable id, once: " + tf.Count);
+            // tips without an id each fire (no shared "tip:" id); a train without an id keeps one id from begin to end
+            calls.Clear(); AlertBridge.OnTip("tipper", 3, "usd", ""); AlertBridge.OnTip("tipper", 4, "usd", "");
+            Check(calls.Count(x => x.Key == "/api/alerts/fire") == 2 && calls.Select(x => (string)x.Value["id"]).Distinct().Count() == 2, "id-less tips are not dropped as one id");
+            AlertBridge.TestResetHype(); calls.Clear(); Func<string, string, Dictionary<string, string>> hn = (st, lv) => { var d = hy(st, lv, ""); d.Remove("x.id"); return d; };
+            AlertBridge.OnHype(hn("begin", "1")); AlertBridge.OnHype(hn("progress", "2")); AlertBridge.OnHype(hn("progress", "2")); AlertBridge.OnHype(hn("end", "2"));
+            var hn2 = calls.Where(x => x.Key == "/api/alerts/fire").Select(x => (string)x.Value["id"]).ToList(); var tids = hn2.Select(i => i.Split(':')[1]).Distinct().ToList();
+            Check(hn2.Count == 3 && tids.Count == 1, "id-less hype train: one stable train id, each phase once: " + string.Join(",", hn2));
             // game / economy emits, names as agreed with Multi
             calls.Clear();
             AlertBridge.OnGameNow("slots", "jackpot", "winner", "Winner", 100, 1000, "", "", "g1"); AlertBridge.OnGameNow("slots", "jackpot", "winner", "Winner", 100, 1000, "", "", "g1");

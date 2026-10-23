@@ -153,7 +153,7 @@ namespace PinguinoHost
         }
 
         // ================= hype train + tips (settings EmitHypeTip, default ON: Multi gates what it shows) =================
-        static int _hypeLevel; static string _hypeId = "";
+        static int _hypeLevel; static string _hypeId = "", _hypeFallback = ""; static readonly object HL = new object();
         /// <summary>a Twitch hype train event (ctx = the EventSub context: state begin|progress|end, x.id, x.level, x.progress, x.goal, x.total). Fires type hype_start | hype_level | hype_end (phase set too); one level alert per new level. Never test or sim.</summary>
         public static void OnHype(Dictionary<string, string> ctx)
         {
@@ -162,12 +162,18 @@ namespace PinguinoHost
                 var set = Settings(); if ((bool?)set["Enabled"] == false || (bool?)set["EmitHypeTip"] != true) return;
                 Func<string, string> g = k => ctx.ContainsKey(k) ? ctx[k] : "";
                 if (g("sim") == "true" || g("test") == "true") return;
-                string st = g("state"), tid = g("x.id") != "" ? g("x.id") : DateTime.UtcNow.ToString("yyyyMMddHH"); int lv; int.TryParse(g("x.level"), out lv); if (lv < 1) lv = 1;
+                string st = g("state"); int lv; int.TryParse(g("x.level"), out lv); if (lv < 1) lv = 1;
                 string phase; string id;
-                if (st == "begin") { phase = "start"; _hypeLevel = lv; _hypeId = tid; id = "hype:" + tid + ":start"; }
-                else if (st == "progress") { if (_hypeId == tid && lv <= _hypeLevel) return; if (_hypeId != tid) { _hypeId = tid; _hypeLevel = 1; if (lv <= 1) return; } _hypeLevel = lv; phase = "level"; id = "hype:" + tid + ":level" + lv; }
-                else if (st == "end") { phase = "end"; id = "hype:" + tid + ":end"; }
-                else return;
+                lock (HL)   // events arrive on ThreadPool threads
+                {
+                    // no train id from Twitch: the train's first-seen time is its id, kept until the train ends (an hour-based id would re-fire a level across the hour)
+                    string tid = g("x.id");
+                    if (tid == "") { if (st == "begin" || _hypeFallback == "") _hypeFallback = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(); tid = _hypeFallback; }
+                    if (st == "begin") { phase = "start"; _hypeLevel = lv; _hypeId = tid; id = "hype:" + tid + ":start"; }
+                    else if (st == "progress") { if (_hypeId == tid && lv <= _hypeLevel) return; if (_hypeId != tid) { _hypeId = tid; _hypeLevel = 1; if (lv <= 1) return; } _hypeLevel = lv; phase = "level"; id = "hype:" + tid + ":level" + lv; }
+                    else if (st == "end") { phase = "end"; id = "hype:" + tid + ":end"; _hypeFallback = ""; }
+                    else return;
+                }
                 lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
                 var body = new JObject { { "type", "hype_" + phase }, { "phase", phase }, { "user", "Hype train" }, { "display", "Hype train" }, { "id", id }, { "level", lv }, { "amount", lv } };
                 foreach (var k in new[] { "progress", "goal", "total" }) { long v; if (long.TryParse(g("x." + k), out v)) body[k] = v; }
@@ -182,7 +188,7 @@ namespace PinguinoHost
             try
             {
                 var set = Settings(); if ((bool?)set["Enabled"] == false || (bool?)set["EmitHypeTip"] != true || string.IsNullOrEmpty(login) || Sim.IsSim(login) || amount <= 0) return;
-                string id = "tip:" + tipId; lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
+                string id = "tip:" + (string.IsNullOrEmpty(tipId) ? login.ToLowerInvariant() + ":" + (long)Math.Round(amount) + ":" + DateTimeOffset.UtcNow.ToUnixTimeSeconds() : tipId); lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
                 var body = new JObject { { "type", "tip" }, { "user", login }, { "display", Boards.DisplayName(login) }, { "id", id }, { "amount", (long)Math.Round(amount) }, { "currency", string.IsNullOrEmpty(currency) ? "USD" : currency.ToUpperInvariant() } };
                 string av = AvatarOf(login); if (av != "") body["avatar"] = av;
                 var r = Post("/api/alerts/fire", body); Clog.Info("alerts", "tip " + login + " " + amount + " -> " + ((bool?)r["ok"] == true ? "queued" : "not queued: " + Short((string)r["text"])));
@@ -221,7 +227,7 @@ namespace PinguinoHost
         {
             string l = lender, b = borrower; long a = amount; string id = "loan:" + loanId; ThreadPool.QueueUserWorkItem(_ => Emit("loan", id, l, Boards.DisplayName(l), a, Boards.DisplayName(b)));
         }
-        internal static void TestResetHype() { _hypeLevel = 0; _hypeId = ""; }
+        internal static void TestResetHype() { lock (HL) { _hypeLevel = 0; _hypeId = ""; _hypeFallback = ""; } }
 
         /// <summary>every watch-streak notification (viewer_milestone): Multi shows it once per id</summary>
         public static void OnStreak(string login, string notifId, long streak) { FireAsync("streak", login, "streak:" + (notifId != "" ? notifId : login + ":" + streak + ":" + DateTime.UtcNow.ToString("yyyyMMddHH")), "streak", streak); }
