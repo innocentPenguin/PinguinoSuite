@@ -269,6 +269,8 @@ def bot_speaking():
 
 def handle_segment(seg, log, emit):
     """Called for every live segment. Fires enabled commands (master switch on, confident line, cooldown respected); logs every match."""
+    if seg.get("status") == "bot":
+        return   # tagged as the bot's own voice (see botvoice.py): never a command
     d = load_cmds()
     text, unsure = seg.get("text") or "", seg.get("unsure") or 0
     speaking = bot_speaking()   # the mic can hear the bot's own voice: never let that trigger a command

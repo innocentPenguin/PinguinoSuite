@@ -9,9 +9,11 @@ import wave
 import numpy as np
 import sounddevice as sd
 
+import botvoice
 import config as cfg
 import db
 import learn
+import voice
 
 SR = 16000
 BLOCK_S = 0.032
@@ -280,9 +282,17 @@ class Live:
                 w.setframerate(SR)
                 w.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
             try:
+                mode = cfg.settings().get("bot_speech", "drop")
                 for s in self.asr.iter_segments(audio):
                     final = learn.finalize(s["words"], s["avg_logprob"])
-                    seg = db.add_segment(self.session_id, t + s["start"], s["start"], s["end"], rel, s["words"], final)
+                    status = "new"
+                    if mode in ("drop", "tag"):
+                        a = self._t0 + t + s["start"]
+                        if botvoice.is_bot(a, a + max(0.0, s["end"] - s["start"]), fallback=voice.bot_speaking):
+                            if mode == "drop":
+                                continue
+                            status = "bot"
+                    seg = db.add_segment(self.session_id, t + s["start"], s["start"], s["end"], rel, s["words"], final, status=status)
                     self.emit({"type": "segment", "segment": seg})
             except Exception as e:  # noqa: BLE001
                 self.emit({"type": "error", "message": f"transcribe failed: {e}"})

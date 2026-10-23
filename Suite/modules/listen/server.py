@@ -355,10 +355,13 @@ class Settings(BaseModel):
     yellow: float | None = None
     red: float | None = None
     device: int | None = None
+    bot_speech: str | None = None   # "drop" | "tag" | "off"
 
 
 @app.post("/api/settings")
 def set_settings(s: Settings):
+    if s.bot_speech is not None and s.bot_speech not in ("drop", "tag", "off"):
+        raise HTTPException(400, "bot_speech must be drop, tag or off")
     st = cfg.save_settings({k: v for k, v in s.model_dump().items() if v is not None})
     if s.autolearn:
         threading.Thread(target=lambda: _safe_sync(), daemon=True).start()
