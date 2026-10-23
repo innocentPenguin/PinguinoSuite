@@ -38,3 +38,14 @@ Session transcript: `C:\Users\ivanm\.claude\projects\D--PinguinoSuite\3c399816-4
 - Refunds for skipped/removed redeems depend on Host wiring (02) and the scope channel:manage:redemptions.
 - Module restart is pending for everything after the last 00 rebuild: 55bb711, 2289ff0, aa9e7ed, 33348b3, 2c1d20b.
 - Site /queue page is 05's to build; it needs Ivan's decision on whether week/month counts matter.
+
+## Hand-over (2026-10-23): player, go-librespot spike
+
+- Widevine: WebView2 has no EME, so the Web Playback SDK player (/player) only works in Edge/Chrome. The module's "Open player in my browser" button uses shell op `external`; the shell (App\src\index.html ~584) must allow loopback http (01 owns it). Until then the URL is copied.
+- Module restart pending for commits 55bb711, 2289ff0, aa9e7ed, 33348b3, 2c1d20b. Not verified live: channel playlist add, YouTube lookup, lyrics fetch, real-browser player.
+- go-librespot spike (Ivan: same song to two outputs with separate volumes; ToS risk accepted, own Premium only): BLOCKED.
+  - Files in Suite\modules\spotify\bin (gitignored): go-librespot.exe v0.10.5, README, dl\golibrespot.tar.gz, spike-cfg\config.yml (device_name PinguinoSuite, zeroconf off, interactive login, API 127.0.0.1:3678), spike.log.
+  - SHA-256 archive 5f5a28df9fca9cd6545ec4344d750d55167f15537370ce8cc3bc7c087f571d07; exe 3c6dfb087964120b27ec246e2f0b0cbebd391fa3e65a295c657435e99094f740.
+  - The exe needs MinGW DLLs (libogg, libvorbis, libvorbisenc, libFLAC, libmpg123, libwinpthread, libgcc). MSYS2 was installed with winget at C:\msys64 (Ivan approved). The pacman download and DLL copy were denied by auto mode, so no DLLs are in bin\ yet.
+  - Next steps: (1) pacman -S mingw-w64-x86_64-{libogg,libvorbis,flac,mpg123} in C:\msys64; (2) copy the DLLs from C:\msys64\mingw64\bin into bin\; (3) run go-librespot.exe -config_dir bin\spike-cfg, Ivan approves the browser login; (4) check "PinguinoSuite" in the Spotify device list and at 127.0.0.1:3678/status; (5) README shows no WASAPI device key (audio_device is ALSA-only), so likely route by setting the Windows default or per-app output to a virtual cable; confirm.
+  - Routing target: one instance -> virtual cable -> OBS captures it -> OBS monitoring to headphones with own volume. Keep the browser player as fallback.
