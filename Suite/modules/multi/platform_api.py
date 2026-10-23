@@ -1,8 +1,10 @@
 """Sign-in routes for Kick and YouTube (worker 42). Wire in server.py with ONE line:   app.include_router(platform_api.router)   (after `import platform_api`)
 Ivan opens the link from POST /auth/<p>/start himself and consents in his own browser; the callback only exchanges the code. No tokens are ever returned."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
+import config
+import secrets_store
 from connectors import kick_auth, youtube_auth
 
 router = APIRouter()
@@ -19,6 +21,20 @@ def auth_status(platform: str):
 def auth_start(platform: str):
     m = _MODS.get(platform)
     return m.start() if m else {"ok": False, "error": "unknown platform"}
+
+
+@router.post("/auth/{platform}/client")
+async def auth_client(platform: str, request: Request):
+    """{client_id?, client_secret?} typed by Ivan in the launcher: id -> settings, secret -> Credential Manager. Nothing is echoed back."""
+    if platform not in _MODS:
+        return {"ok": False, "error": "unknown platform"}
+    b = await request.json()
+    cid, sec = str(b.get("client_id") or "").strip()[:200], str(b.get("client_secret") or "").strip()[:300]
+    if cid:
+        config.save_settings({f"{platform}_client_id": cid})
+    if sec:
+        secrets_store.put(f"{platform}_client_secret", sec)
+    return _MODS[platform].status()
 
 
 @router.get("/auth/{platform}/callback", response_class=HTMLResponse)
