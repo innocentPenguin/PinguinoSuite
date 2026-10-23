@@ -6,6 +6,7 @@
 mod mainwin;
 mod replays;
 mod parts;
+mod support;
 mod updatecheck;
 
 use std::io::{Read, Write};
@@ -397,7 +398,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .manage(Link(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, quit_app, toggle_fullscreen, replays::replay_scan, replays::replay_index, replays::replay_set_interval, updatecheck::check_update, parts::parts_check, parts::parts_apply, parts::parts_rollback, parts::parts_job, parts::parts_modules, parts::parts_verify, parts::parts_eject, parts::parts_install])
+        .invoke_handler(tauri::generate_handler![lite_info, host_live, probe_ports, read_contract, send_request, open_target, quit_app, toggle_fullscreen, replays::replay_scan, support::support_bundle, replays::replay_index, replays::replay_set_interval, updatecheck::check_update, parts::parts_check, parts::parts_apply, parts::parts_rollback, parts::parts_job, parts::parts_modules, parts::parts_verify, parts::parts_eject, parts::parts_install])
         .setup(|app| {
             replays::start();
             // Splash (the lightning bolt) first; the main window is placed and shown when it closes.

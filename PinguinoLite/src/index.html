@@ -233,6 +233,7 @@ function dashboard() {
   </div>
   ${partsCard()}
   <div class="row"><button class="btn" data-open="host">Open Host dashboard</button><button class="btn" data-open="folder">Open Lite data folder</button><button class="btn" data-act="check">Check modules for updates</button><button class="btn pri" data-gh="1"${ghBusy ? ' disabled' : ''}>Check Lite for updates</button></div>
+  <div class="row"><button class="btn" data-support="1">Make support bundle</button><span class="d">Collects logs (secrets removed), install info and a parts check into <span class="mono">support</span> so you can send it to Ivan.</span></div>
   <p class="note">Contract folder: <span class="mono">${esc(info && info.lite_dir)}</span></p>`;
 }
 
@@ -311,6 +312,13 @@ document.addEventListener('click', async e => {
   if (mi) { const r = await inv('parts_install', { id: mi.dataset.modInstall }).catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
   if (e.target.closest('[data-parts-rollback]')) { const r = await inv('parts_rollback').catch(err => ({ ok: false, message: String(err) })); if (!r.ok) return toast(r.message); return pollJob(); }
   if (e.target.closest('[data-scan]')) { toast('Scanning...'); const s = await inv('replay_scan').catch(err => ({ error: String(err) })); toast(s.error ? 'Scan failed: ' + s.error : `Scan done: ${s.new} new, ${s.errors} unreadable`); return refresh(); }
+  const sb = e.target.closest('[data-support]');
+  if (sb) {
+    sb.disabled = true; toast('Making support bundle...');
+    try { const r = await inv('support_bundle'); toast(r.ok ? 'Support bundle ready: ' + (r.zip || r.folder) : 'Support bundle failed: ' + (r.message || 'unknown error')); }
+    catch (err) { toast(String(err)); }
+    sb.disabled = false; return;
+  }
   const o = e.target.closest('[data-open]');
   if (o) return inv('open_target', { target: o.dataset.open }).catch(err => toast(String(err)));
   const a = e.target.closest('[data-act]');

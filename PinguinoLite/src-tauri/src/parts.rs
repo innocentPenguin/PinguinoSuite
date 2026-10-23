@@ -150,7 +150,7 @@ pub fn may_update(live: Option<bool>) -> Result<(), &'static str> {
 // ---------- environment ----------
 
 /// A release install = a folder with install.json: env PINGUINO_LITE_INSTALL, else the suite root, else the folder of the exe.
-fn install_dir() -> Option<PathBuf> {
+pub fn install_dir() -> Option<PathBuf> {
     let mut c: Vec<PathBuf> = Vec::new();
     if let Ok(p) = std::env::var("PINGUINO_LITE_INSTALL") {
         c.push(PathBuf::from(p));
@@ -180,7 +180,7 @@ fn node_exe(install: &PathBuf) -> String {
     c.into_iter().find(|p| p.is_file()).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| "node".into())
 }
 
-fn run_updater(args: &[&str]) -> Value {
+pub fn run_updater(args: &[&str]) -> Value {
     let Some(install) = install_dir() else { return json!({"ok": false, "message": "This copy has no install.json (development build), so it does not update itself."}) };
     let Some(js) = updater_js(&install) else { return json!({"ok": false, "message": "The updater (updater.mjs) was not found next to this install."}) };
     let mut cmd = Command::new(node_exe(&install));
