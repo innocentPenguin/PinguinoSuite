@@ -773,7 +773,6 @@ public class CPHInline
                     ?? new Dictionary<string, MmrCacheEntry>();
         _settings = LoadJson<BvqSettings>("settings.json")
                     ?? new BvqSettings();
-
         // [FIX] The current lobby used to live only in memory, so a Streamer.bot
         // restart mid-match made !lobby / !reroll / !next blue forget the teams.
         _lastBalance = LoadJson<LastBalanceData>("current_match.json");
@@ -1898,12 +1897,28 @@ public class CPHInline
     // [NEW][OBS] OBS browser sources can't fetch a .json file from disk, but they
     // CAN load a .js file. So we also write the state as live_state.js next to the
     // overlay HTML files (settings.json -> OverlayDir). Skipped if that folder doesn't exist.
-    void WriteOverlayState(object state)
+    // A test / sim Host runs on its own data dir; its default OverlayDir must not be the REAL overlays folder (every sim run would overwrite the live live_state.js).
+    // Unless settings.json names OverlayDir itself, a data dir that is not the real one (Suite Data runtime or %AppData% BVQ) writes into <dataDir>\overlays. Nothing is saved to settings.json.
+    string EffectiveOverlayDir()
     {
-        if (string.IsNullOrEmpty(_settings.OverlayDir) || !Directory.Exists(_settings.OverlayDir)) return;
         try
         {
-            File.WriteAllText(Path.Combine(_settings.OverlayDir, "live_state.js"),
+            string dd = _dataDir.TrimEnd('\\', '/');
+            bool real = dd.EndsWith("\\Data\\runtime", StringComparison.OrdinalIgnoreCase) || dd.EndsWith("\\BVQ", StringComparison.OrdinalIgnoreCase);
+            // SaveSettings writes the default back into settings.json, so "named" means a value different from the built-in default
+            bool named = !string.IsNullOrEmpty(_settings.OverlayDir) && !string.Equals(_settings.OverlayDir.TrimEnd('\\'), new BvqSettings().OverlayDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+            if (!real && !named) { string o = Path.Combine(_dataDir, "overlays"); Directory.CreateDirectory(o); return o; }
+        }
+        catch (Exception) { }
+        return _settings.OverlayDir;
+    }
+    void WriteOverlayState(object state)
+    {
+        string od = EffectiveOverlayDir();
+        if (string.IsNullOrEmpty(od) || !Directory.Exists(od)) return;
+        try
+        {
+            File.WriteAllText(Path.Combine(od, "live_state.js"),
                 "window.LIVE_STATE = " + JsonConvert.SerializeObject(state) + ";");
         }
         catch (Exception ex)
