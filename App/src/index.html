@@ -2077,18 +2077,21 @@ function draw(force){if(!S)return;renderNav();
   if(route==='master'){$('#page').classList.add('flush');if(!$('#mif-master'))$('#page').innerHTML=pages.master();lastHtml='';return}
   const html=isMod(route)?pages.module(route):pages[route]();
   if(route==='console'&&!force&&html===lastHtml)return;
-  if(isMod(route)){const run=flushed(),mf=$('#mif');if(run&&mf)MODOK=Date.now();
+  if(isMod(route)){const run=flushed(),mf=$('#mif'),mm=modOf(route);if(run&&mf)MODOK=Date.now();
     // A module page that is already loaded is never rebuilt by a redraw (any poll, forced or not): that threw the user back to the module's home page.
     // It is reloaded only by mifReload() (the module went down and came back, or the user pressed Retry / the module's own nav item).
-    if(!run&&mf&&modOf(route)?.state==='starting'&&Date.now()-MODOK<30000)return;   // one missed health ping must not swap the page for a card
+    // "starting" (missed health pings: the module is only busy) NEVER replaces the frame, however long it lasts: a small chip says so instead.
+    // "stopped" keeps it for 20 s (a restart), then the Start card; coming back from a real stop reloads the frame once.
+    if(!run&&mf&&mm&&(mm.state==='starting'||(mm.state==='stopped'&&Date.now()-MODOK<20000))){modChip(mm.state==='starting'?'Not answering, waiting…':'Stopped, waiting…');if(mm.state==='stopped')MODSTOP=true;return}
+    if(run&&mf){modChip('');if(MODSTOP){MODSTOP=false;if(mf.dataset.src===modSrc(mm))mifReload()}}
     $('#page').classList.toggle('flush',run);
-    if(run&&mf&&mf.dataset.src===modSrc(modOf(route)))return;
+    if(run&&mf&&mf.dataset.src===modSrc(mm))return;
     if(!run&&!force&&html===lastHtml)return;
     $('#page').innerHTML=html;lastHtml=html;bind();return}
   if(route==='comm'&&!force){   // PenguinComm holds two module frames: a poll may refresh the headers but must not rebuild a frame that is already loaded
     const have=$$('#page iframe').map(f=>f.getAttribute('src')),want=[...html.matchAll(/<iframe src="([^"]*)"/g)].map(x=>x[1].replace(/&amp;/g,'&'));
     if(have.length){if(have.join()===want.join())return;
-      if(['listen','voice'].some(i=>commMod(i)?.state==='starting')&&Date.now()-COMMOK<30000)return}}
+      if(['listen','voice'].some(i=>commMod(i)?.state==='starting'))return}}   // a busy module never loses its frame
   if(route==='comm'&&$$('#page iframe').length)COMMOK=Date.now();
   if(!force&&html===lastHtml)return;
   const sc=$('#page').scrollTop,focus=document.activeElement?.id;
@@ -2153,7 +2156,10 @@ document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#fs
     try{const r=await post('/api/simulate',{live:true});toast(r.ok===false?(r.detail||'Not started'):'Simulating go-live (ends by itself in 15 min)…')}catch{toast('Could not start the test')}}}
 $('#simoff').onclick=()=>post('/api/simulate',{live:false}).then(r=>toast(r&&r.ok===false?(r.detail||'Not ended'):'Test ended')).catch(()=>toast('Could not end the test'));
 
-let MODOK=0,COMMOK=0;
+let MODOK=0,COMMOK=0,MODSTOP=false;
+function modChip(t){let c=$('#mod-chip');if(!t){if(c)c.remove();return}
+  if(!c){c=document.createElement('div');c.id='mod-chip';c.className='sm';c.style.cssText='position:fixed;right:14px;bottom:14px;z-index:30;background:var(--card,#222);color:var(--warn,#e8a33d);border:1px solid var(--line,#444);border-radius:999px;padding:4px 12px;pointer-events:none';document.body.appendChild(c)}
+  c.textContent=t}
 const CONN={fails:0,backoff:2000,hiddenAt:0,modDown:null,miss:0};
 function connShow(msg){const e=$('#connban');if(!e)return;e.style.display=msg?'flex':'none';if(msg)$('#connmsg').textContent=msg;document.body.classList.toggle('disconnected',!!CONN.fails)}
 function mifReload(){const f=$('#mif');if(f&&f.dataset.src){f.dataset.ok='';f.dataset.t=Date.now();f.src=f.dataset.src}}
