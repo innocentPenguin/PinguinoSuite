@@ -489,9 +489,10 @@ def segments(session: str, after: int = 0, limit: int = 300):
 
 
 @app.get("/api/review/next")
-def review_next(session: str | None = None, exclude: str = "", confident: bool = False):
+def review_next(session: str | None = None, exclude: str = "", confident: bool = False, notes_first: bool = False):
     ex = [int(x) for x in exclude.split(",") if x.strip().isdigit()]
-    where = "status='new'" + ("" if confident else " AND unsure>0")
+    # notes_first: lines the reviewer already described as wrong (skipped with a note) come before the rest, then worst confidence
+    where = "status='new'" + ("" if confident else (" AND (unsure>0 OR COALESCE(note,'')!='')" if notes_first else " AND unsure>0"))
     where += " AND (end-start)*40 >= length(text)"   # not speech: Whisper hallucinated a whole sentence into a ~0.3 s chunk (words with zero length) - nothing to listen to or correct
     args = []
     if session:
@@ -500,9 +501,27 @@ def review_next(session: str | None = None, exclude: str = "", confident: bool =
     if ex:
         where += f" AND id NOT IN ({','.join('?' * len(ex))})"
         args += ex
-    r = db.one(f"SELECT * FROM segments WHERE {where} ORDER BY unsure DESC, id LIMIT 1", args)
+    order = "(COALESCE(note,'')!='') DESC, " if notes_first else ""
+    r = db.one(f"SELECT * FROM segments WHERE {where} ORDER BY {order}unsure DESC, id LIMIT 1", args)
     left = db.one(f"SELECT COUNT(*) n FROM segments WHERE {where}", args)["n"]
     return {"segment": db.seg_json(r) if r else None, "left": left}
+
+
+@app.get("/api/segments/{sid}/peaks")
+def segment_peaks(sid: int, n: int = 120):
+    r = db.one("SELECT audio,start,end FROM segments WHERE id=?", (sid,))
+    if not r:
+        raise HTTPException(404)
+    if not r["audio"]:
+        return {"peaks": []}
+    p = cfg.DATA / r["audio"]
+    if not p.is_file():
+        return {"peaks": []}
+    import audioio
+    try:
+        return {"peaks": audioio.peaks(p, max(0.0, r["start"] - 0.15), r["end"] + 0.15, n)}
+    except Exception:
+        return {"peaks": []}
 
 
 class Correction(BaseModel):

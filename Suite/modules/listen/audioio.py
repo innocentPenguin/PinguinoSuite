@@ -34,3 +34,42 @@ def iter16k(path, chunk_s=900):
                     yield flush(per)
     if have:
         yield flush(have)
+
+
+def peaks(path, start, end, n=120):
+    """n loudness bars (0..1, relative to the loudest bar) for path between start and end seconds; decodes only that window."""
+    import av
+    import numpy as np
+    n = max(8, min(400, int(n)))
+    start = max(0.0, float(start))
+    end = max(start + 0.05, float(end))
+    chunks, t0 = [], None
+    with av.open(str(path)) as c:
+        st = next(s for s in c.streams if s.type == "audio")
+        if start > 1:
+            try:
+                c.seek(int((start - 0.5) * 1_000_000))
+            except Exception:
+                pass
+        rs = av.AudioResampler(format="s16", layout="mono", rate=16000)
+        for frame in c.decode(st):
+            ft = float(frame.time) if frame.time is not None else 0.0
+            if ft > end:
+                break
+            for f in rs.resample(frame):
+                a = f.to_ndarray().reshape(-1)
+                if t0 is None:
+                    t0 = ft
+                chunks.append(a)
+    if not chunks:
+        return [0.0] * n
+    x = np.abs(np.concatenate(chunks).astype(np.float32)) / 32768.0
+    i0 = max(0, int((start - t0) * 16000))
+    i1 = max(i0 + 1, int((end - t0) * 16000))
+    x = x[i0:i1]
+    if len(x) == 0:
+        return [0.0] * n
+    edges = np.linspace(0, len(x), n + 1).astype(int)
+    out = np.array([x[a:max(b, a + 1)].max() if a < len(x) else 0.0 for a, b in zip(edges[:-1], edges[1:])])
+    m = float(out.max())
+    return [round(float(v / m), 3) if m > 0 else 0.0 for v in out]
