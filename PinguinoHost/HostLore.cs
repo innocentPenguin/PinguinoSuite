@@ -185,7 +185,7 @@ namespace PinguinoHost
             {
                 if (Boards.IsBot(user)) return false;
                 var e = Match(text); if (e == null) return false;
-                long now = Now(), ecd = S("entryCooldownSec", 90), gcd = S("globalCooldownSec", 20), ucd = S("userCooldownSec", 45); string key = "x|" + (string)e["id"], uk = "u|" + user.ToLowerInvariant();
+                long now = Now(), ecd = S("entryCooldownSec", 600), gcd = S("globalCooldownSec", 20), ucd = S("userCooldownSec", 45); string key = "x|" + (string)e["id"], uk = "u|" + user.ToLowerInvariant();
                 lock (L)
                 {
                     long last;

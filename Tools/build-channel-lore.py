@@ -150,7 +150,7 @@ for cmd, text in parsed.items():
 for w in ('goodnight', 'hi', 'meow', 'w'):
     if w in parsed:
         out.append({'id': 'bare_' + w, 'kind': 'fun', 'triggers': [], 'aliases': [], 'response': parsed[w], 'variants': [], 'contextual': False, 'publicSafe': True, 'enabled': True, 'bare': w, 'patterns': [], 'anyShape': False, 'also': [], 'tags': ['keyword'], 'note': 'answers when a message is exactly "' + w + '" (like Nightbot did)', 'source': 'nightbot'})
-seed = {'version': 1, 'settings': {'channelName': 'InnocentPenguin', 'contextual': True, 'bareWords': True, 'entryCooldownSec': 90, 'globalCooldownSec': 20, 'commandCooldownSec': 5}, 'counters': {'owngoal': 0, 'whiff': 0}, 'entries': out}
+seed = {'version': 1, 'settings': {'channelName': 'InnocentPenguin', 'contextual': True, 'bareWords': True, 'entryCooldownSec': 600, 'globalCooldownSec': 20, 'commandCooldownSec': 5}, 'counters': {'owngoal': 0, 'whiff': 0}, 'entries': out}
 json.dump(seed, open(OUT, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 if '--report' in sys.argv or True:
     print('parsed', len(parsed), '| entries', len(out), '| skipped', len(skipped), '| alias-merged', len(merged), '| exact-command-only (publicSafe=false)', len(unsafe), '| contextual', sum(1 for e in out if e['contextual']))

@@ -4,7 +4,7 @@
   "channelName": "InnocentPenguin",
   "contextual": true,
   "bareWords": true,
-  "entryCooldownSec": 90,
+  "entryCooldownSec": 600,
   "globalCooldownSec": 20,
   "commandCooldownSec": 5
  },
