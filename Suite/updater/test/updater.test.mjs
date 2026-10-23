@@ -478,3 +478,39 @@ test('shortcuts: full and lite-minimal targets, written to a scratch folder (PIN
     assert.throws(() => makeShortcuts({ target: tmp('lnk-empty-'), ...shortcutSpec('lite-minimal') }), /not in this install/);
   } finally { if (old === undefined) delete process.env.PINGUINO_SHORTCUT_DIR; else process.env.PINGUINO_SHORTCUT_DIR = old; }
 });
+
+// ---- repair / uninstall (Installer/install.mjs --repair, --uninstall) ----
+import { repairInstall, uninstallInstall, damagedParts } from '../lib/maintain.mjs';
+const INSTALLER = path.join(path.dirname(UPD), '..', '..', 'Installer', 'install.mjs');
+const runInstaller = (...a) => JSON.parse(execFileSync('node', [INSTALLER, ...a], { stdio: 'pipe' }).toString());
+
+test('repair: only damaged parts are re-applied (backup kept), intact installs are left alone; CLI works', async () => {
+  const files = [['PinguinoLite/lite.txt', 'lite v1'], ['Suite/modules/link/link.txt', 'link v1'], ['README.txt', 'docs']];
+  const rel = makeCompRelease('1.0.0', files), inst = tmp('rep-');
+  assert.equal((await installRelease({ target: inst, source: { type: 'local', path: rel }, recordSource: { type: 'local', path: rel }, profile: 'lite-minimal' })).ok, true);
+  assert.deepEqual(damagedParts({ parts: [{ id: 'a', state: 'ok' }, { id: 'b', state: 'damaged' }] }), ['b']);
+  let r = await repairInstall({ installDir: inst, source: { type: 'local', path: rel } }); assert.equal(r.ok, true, JSON.stringify(r)); assert.deepEqual(r.repaired, []);
+  fs.writeFileSync(path.join(inst, 'Suite/modules/link/link.txt'), 'broken'); fs.unlinkSync(path.join(inst, 'PinguinoLite/lite.txt'));
+  const o = runInstaller('--target', inst, '--repair', '--source', rel); assert.equal(o.ok, true, JSON.stringify(o));
+  assert.deepEqual(o.repaired.sort(), ['link', 'lite']); assert.equal(read(inst, 'Suite/modules/link/link.txt'), 'link v1'); assert.equal(read(inst, 'PinguinoLite/lite.txt'), 'lite v1');
+  assert.equal((await repairInstall({ installDir: tmp('norep-'), source: { type: 'local', path: rel } })).ok, false);   // not an install
+});
+
+test('uninstall: dry run moves nothing; --yes MOVES everything but Data into Data/updates/ejected; --purge-data also moves Data; nothing is deleted', async () => {
+  const rel = makeCompRelease('1.0.0', [['PinguinoLite/lite.txt', 'lite'], ['Suite/modules/link/link.txt', 'link']]), inst = tmp('un-');
+  await installRelease({ target: inst, source: { type: 'local', path: rel }, profile: 'lite-minimal' });
+  fs.mkdirSync(path.join(inst, 'Data', 'runtime'), { recursive: true }); fs.writeFileSync(path.join(inst, 'Data', 'runtime', 'token.dpapi'), 'secret'); fs.writeFileSync(path.join(inst, 'Data', 'keep.txt'), 'mine');
+  let o = runInstaller('--target', inst, '--uninstall'); assert.equal(o.dryRun, true); assert.ok(o.items.includes('PinguinoLite')); assert.equal(read(inst, 'PinguinoLite/lite.txt'), 'lite');
+  o = runInstaller('--target', inst, '--uninstall', '--yes'); assert.equal(o.ok, true, JSON.stringify(o));
+  assert.equal(fs.existsSync(path.join(inst, 'install.json')), false); assert.equal(fs.existsSync(path.join(inst, 'PinguinoLite')), false);
+  assert.equal(read(inst, 'Data/keep.txt'), 'mine'); assert.equal(read(inst, 'Data/runtime/token.dpapi'), 'secret');   // Data stays
+  assert.equal(fs.readFileSync(path.join(o.dest, 'PinguinoLite', 'lite.txt'), 'utf8'), 'lite');   // moved, not deleted
+  assert.ok(fs.existsSync(path.join(o.dest, 'uninstalled.json'))); assert.equal(fs.existsSync(path.join(o.dest, 'install.json')), true);
+  // purge-data: Data is moved too (into the same dated folder), still not deleted
+  const inst2 = tmp('un2-'); await installRelease({ target: inst2, source: { type: 'local', path: rel }, profile: 'lite-minimal' });
+  fs.mkdirSync(path.join(inst2, 'Data', 'runtime'), { recursive: true }); fs.writeFileSync(path.join(inst2, 'Data', 'runtime', 'token.dpapi'), 'secret');
+  const p = uninstallInstall({ installDir: inst2, purgeData: true, apply: true, now: () => 'T1' });
+  assert.equal(p.ok, true, JSON.stringify(p)); assert.equal(fs.existsSync(path.join(inst2, 'Data', 'runtime')), false);
+  assert.equal(fs.readFileSync(path.join(inst2, 'Data', 'updates', 'ejected', 'uninstall-T1', 'Data', 'runtime', 'token.dpapi'), 'utf8'), 'secret');
+  assert.equal(uninstallInstall({ installDir: tmp('nope-'), apply: true }).ok, false);   // not an install: refuses
+});

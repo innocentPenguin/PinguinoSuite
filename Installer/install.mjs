@@ -11,13 +11,25 @@ import { fileURLToPath } from 'node:url';
 import { installRelease, makeShortcuts, shortcutSpec } from '../Suite/updater/lib/install.mjs';
 import { unseal, storeToken } from '../Suite/updater/lib/secret.mjs';
 import { setToken } from '../Suite/updater/lib/sources.mjs';
+import { repairInstall, uninstallInstall } from '../Suite/updater/lib/maintain.mjs';
 
 const args = process.argv.slice(2);
 const opt = n => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; };
 const has = n => args.includes('--' + n);
 const out = o => console.log(JSON.stringify(o));
+// --repair / --uninstall work on an existing install: node install.mjs --target <install> --repair [--source <folder|zip|https url>] | --uninstall [--yes] [--purge-data]
 const target = opt('target'), channel = opt('channel') || 'stable', profile = opt('profile') || 'full';   // full | lite-minimal (see Suite/updater/lib/profiles.mjs)
 if (!target) { out({ ok: false, message: 'usage: install.mjs --target <folder> [--repo <git url>] [--url <https manifest>] [--local <folder|zip>] [--shortcuts]' }); process.exit(2); }
+
+if (target && (has('repair') || has('uninstall'))) {
+  const root = path.resolve(target);
+  if (has('uninstall')) { out(uninstallInstall({ installDir: root, purgeData: has('purge-data'), apply: has('yes') })); }
+  else {
+    let inst = {}; try { inst = JSON.parse(fs.readFileSync(path.join(root, 'install.json'), 'utf8')); } catch {}
+    const s = opt('source'), source = s ? (/^https?:/i.test(s) ? { type: 'https', url: s } : { type: 'local', path: s }) : inst.source;
+    out(await repairInstall({ installDir: root, source, channel: inst.channel || 'stable', pubkey: opt('pubkey') || inst.pubkey || null }));
+  }
+}
 
 const sh = (cmd, a, cwd) => new Promise((res, rej) => execFile(cmd, a, { cwd, windowsHide: true, timeout: 600000 }, (e, o, er) => e ? rej(new Error((er || e.message).trim().slice(0, 300))) : res(o.trim())));
 
@@ -77,4 +89,4 @@ async function main() {
   out({ ok: false, message: 'every source failed; nothing was installed', tried });
   process.exitCode = 1;
 }
-main();
+if (!(target && (has('repair') || has('uninstall')))) main();

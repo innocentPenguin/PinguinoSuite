@@ -60,3 +60,9 @@ Read: `Installer/install.mjs`, `Install-PinguinoSuite.cmd`, `Build-Installer.bat
 | `Installer.hta` / `mshta` blocked (company policy) | Not fixable here: use the command line (`install.mjs`). The Rust setup shows "Setup is damaged" only when the hta is missing. |
 | Windows older than 10 1803 | `tar.exe` is missing: setup says so. |
 Not tested on a clean Windows install (no spare PC); the code paths above are covered by `Suite/updater/test` (42 tests) and by running the .cmd with and without Node on PATH.
+
+## Repair and uninstall (added 2026-10-23 by 21-Lite)
+Both work on an existing install folder and are tested on scratch copies (`Suite/updater/test`). Close the Suite/Lite first. Nothing is ever deleted.
+- **Repair** (a part is damaged or a file went missing): `node Installer\install.mjs --target <install folder> --repair [--source <release folder|zip|https manifest url>]`. It compares every installed part with the release, then re-applies only the damaged ones (backup first, hashes checked, signature checked if the install has a `pubkey`). The source defaults to the one in `install.json`; an install made with `--local` has none, so pass `--source`. Prints `repaired: [...]`. Lite's Parts card does the same per part with Verify / Repair.
+- **Uninstall**: `node Installer\install.mjs --target <install folder> --uninstall` only LISTS what would move. Add `--yes` to do it. Everything except `Data\` is MOVED into `<install>\Data\updates\ejected\uninstall-<time>\` (the install stops being an install: `install.json` goes last). Your settings, tokens and vault in `Data\` stay. `--purge-data` also moves `Data\` (except `Data\updates`) into the same dated folder. If a file is in use it is reported and the rest is moved; close the app and run it again.
+- To really free the disk space afterwards, delete the dated `uninstall-<time>` folder yourself once you are sure. Shortcuts made by `--shortcuts` stay until you delete them (Desktop and Start menu).
