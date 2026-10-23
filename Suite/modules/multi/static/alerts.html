@@ -67,7 +67,7 @@ function sound(s) {
   if (s.url) { try { const a = new Audio(s.url); a.volume = s.volume / 100; a.play().catch(() => chime(s.volume)); return; } catch (e) { /* fall back */ } }
   chime(s.volume);
 }
-function segs(list, acc) { return (list || []).map(([t, k]) => k === 'user' ? `<span class="u" style="--acc:${acc}">${esc(t)}</span>` : esc(t)).join(''); }
+function segs(list, acc) { if (typeof list === 'string') list = [[list, '']]; return (Array.isArray(list) ? list : []).filter(x => Array.isArray(x)).map(([t, k]) => k === 'user' ? `<span class="u" style="--acc:${acc}">${esc(t)}</span>` : esc(t)).join(''); }
 function build(a) {
   const st = a.style, acc = a.rank_colour || st.accent, el = document.createElement('div');
   const hasBox = st.layout !== 'center' && st.opacity > 0;
