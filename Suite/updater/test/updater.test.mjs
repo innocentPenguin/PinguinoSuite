@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { writeZip, readZip } from '../lib/zip.mjs';
-import { applyUpdate, sha256, dirs, rollbackLatest } from '../lib/apply.mjs';
+import { applyUpdate, sha256, dirs, rollbackLatest, recoverInterrupted } from '../lib/apply.mjs';
 import { safeRel } from '../lib/paths.mjs';
 import { ejectPart, verifyParts } from '../lib/parts.mjs';
 import { cmpVersion, parseManifest } from '../lib/manifest.mjs';
@@ -121,7 +121,7 @@ test('manual rollback restores the newest backup', async () => {
 
 test('a held lock stops a second run quietly', async () => {
   const inst = makeInstall(), rel = makeRelease('1.1.0', [['App/app.txt', 'new app']]);
-  fs.mkdirSync(dirs(inst).u, { recursive: true }); fs.writeFileSync(dirs(inst).lock, '1');
+  fs.mkdirSync(dirs(inst).u, { recursive: true }); fs.writeFileSync(dirs(inst).lock, String(process.pid));
   const r = await applyUpdate({ installDir: inst, source: { type: 'local', path: rel }, current: '1.0.0', liveCheck: notLive });
   assert.equal(r.skipped, true); assert.equal(read(inst, 'App/app.txt'), 'old app');
 });
@@ -513,4 +513,66 @@ test('uninstall: dry run moves nothing; --yes MOVES everything but Data into Dat
   assert.equal(p.ok, true, JSON.stringify(p)); assert.equal(fs.existsSync(path.join(inst2, 'Data', 'runtime')), false);
   assert.equal(fs.readFileSync(path.join(inst2, 'Data', 'updates', 'ejected', 'uninstall-T1', 'Data', 'runtime', 'token.dpapi'), 'utf8'), 'secret');
   assert.equal(uninstallInstall({ installDir: tmp('nope-'), apply: true }).ok, false);   // not an install: refuses
+});
+
+// ---- failure halfway through an update (2026-10-23): every way it can die ends on the old version, verified ----
+const bigRelease = (v, n = 6) => makeRelease(v, Array.from({ length: n }, (_, i) => [`App/f${i}.txt`, `new ${i}`]).concat([['App/extra.txt', 'extra']]));
+const bigInstall = (n = 6) => makeInstall('1.0.0', Object.fromEntries(Array.from({ length: n }, (_, i) => [`App/f${i}.txt`, `old ${i}`])));
+const allOld = (inst, n = 6) => { for (let i = 0; i < n; i++) assert.equal(read(inst, `App/f${i}.txt`), `old ${i}`); assert.ok(!fs.existsSync(path.join(inst, 'App/extra.txt'))); assert.equal(JSON.parse(read(inst, 'install.json')).version, '1.0.0'); assert.equal(read(inst, 'Data/keep.txt'), 'my data'); };
+const leftovers = inst => { const out = []; (function w(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) { if (e.name !== 'Data') w(f); } else if (f.endsWith('.pinguino-new')) out.push(f); } })(inst); return out; };
+
+test('file locked after several files were already swapped: all old again, no temp files, journal gone', async () => {
+  const inst = bigInstall(), rel = bigRelease('1.1.0');
+  fs.mkdirSync(path.join(inst, 'App', 'f4.txt.pinguino-new'), { recursive: true });   // the 5th file cannot be written
+  const r = await applyUpdate({ installDir: inst, source: { type: 'local', path: rel }, current: '1.0.0', liveCheck: notLive });
+  assert.equal(r.ok, false); assert.match(r.message, /old version was put back/);
+  fs.rmSync(path.join(inst, 'App', 'f4.txt.pinguino-new'), { recursive: true });
+  allOld(inst); assert.deepEqual(leftovers(inst), []); assert.ok(!fs.existsSync(dirs(inst).swapping));
+});
+
+test('disk full while backing up: nothing changed, no half backup left, rollback does not trip on it', async () => {
+  const inst = bigInstall(), rel = bigRelease('1.1.0');
+  fs.rmSync(path.join(inst, 'App', 'f3.txt')); fs.mkdirSync(path.join(inst, 'App', 'f3.txt'));   // cannot be copied to the backup
+  const r = await applyUpdate({ installDir: inst, source: { type: 'local', path: rel }, current: '1.0.0', liveCheck: notLive });
+  assert.equal(r.ok, false); assert.match(r.message, /nothing was changed/); assert.equal(read(inst, 'App/f0.txt'), 'old 0');
+  const bk = dirs(inst).backup; assert.deepEqual(fs.existsSync(bk) ? fs.readdirSync(bk) : [], []);
+  assert.equal(rollbackLatest(inst).ok, false);   // "no backup", not an exception
+});
+
+test('process killed halfway through the swap: next updater run undoes it (old version, verify-style byte check)', async () => {
+  const inst = bigInstall(), rel = bigRelease('1.1.0');
+  const script = path.join(tmp('kill-'), 'run.mjs');
+  const applyUrl = new URL('../lib/apply.mjs', import.meta.url).href;
+  fs.writeFileSync(script, `import fs from 'node:fs'; import { applyUpdate } from '${applyUrl}';
+let n = 0; const real = fs.renameSync; fs.renameSync = (a, b) => { if (String(a).endsWith('.pinguino-new') && ++n === 3) process.exit(137); return real(a, b); };
+await applyUpdate({ installDir: ${JSON.stringify(inst)}, source: { type: 'local', path: ${JSON.stringify(rel)} }, current: '1.0.0', liveCheck: async () => ({ live: false }) });`);
+  let code = 0; try { execFileSync(process.execPath, [script], { stdio: 'pipe' }); } catch (e) { code = e.status; }
+  assert.equal(code, 137);
+  assert.equal(read(inst, 'App/f0.txt'), 'new 0');   // really half-swapped
+  assert.ok(fs.existsSync(dirs(inst).swapping) && fs.existsSync(dirs(inst).lock));
+  const rec = recoverInterrupted(inst);   // dead owner's lock is taken over at once
+  assert.ok(rec && rec.recovered); allOld(inst); assert.deepEqual(leftovers(inst), []);
+  assert.ok(!fs.existsSync(dirs(inst).swapping) && !fs.existsSync(dirs(inst).lock));
+  assert.equal(recoverInterrupted(inst), null);
+  const again = await applyUpdate({ installDir: inst, source: { type: 'local', path: rel }, current: '1.0.0', liveCheck: notLive });   // and the update itself works afterwards
+  assert.equal(again.ok, true); assert.equal(read(inst, 'App/f5.txt'), 'new 5');
+});
+
+test('killed update: simply running apply again recovers first, then updates', async () => {
+  const inst = bigInstall(), rel = bigRelease('1.1.0');
+  const script = path.join(tmp('kill-'), 'run.mjs');
+  fs.writeFileSync(script, `import fs from 'node:fs'; import { applyUpdate } from '${new URL('../lib/apply.mjs', import.meta.url).href}';
+let n = 0; const real = fs.renameSync; fs.renameSync = (a, b) => { if (String(a).endsWith('.pinguino-new') && ++n === 2) process.exit(9); return real(a, b); };
+await applyUpdate({ installDir: ${JSON.stringify(inst)}, source: { type: 'local', path: ${JSON.stringify(rel)} }, current: '1.0.0', liveCheck: async () => ({ live: false }) });`);
+  try { execFileSync(process.execPath, [script], { stdio: 'pipe' }); } catch {}
+  const r = await applyUpdate({ installDir: inst, source: { type: 'local', path: rel }, current: '1.0.0', liveCheck: notLive });
+  assert.equal(r.ok, true); assert.equal(read(inst, 'App/f0.txt'), 'new 0'); assert.equal(JSON.parse(read(inst, 'install.json')).version, '1.1.0'); assert.deepEqual(leftovers(inst), []);
+});
+
+test('a lock left by a dead updater does not block for 30 minutes; a live one still does', async () => {
+  const inst = bigInstall(2), rel = bigRelease('1.1.0', 2);
+  const dead = require_dead_pid(); fs.mkdirSync(dirs(inst).u, { recursive: true }); fs.writeFileSync(dirs(inst).lock, String(dead));
+  const r = await applyUpdate({ installDir: inst, source: { type: 'local', path: rel }, current: '1.0.0', liveCheck: notLive });
+  assert.equal(r.ok, true);
+  function require_dead_pid() { const c = execFileSync(process.execPath, ['-e', 'console.log(process.pid)']); return parseInt(String(c).trim(), 10); }
 });

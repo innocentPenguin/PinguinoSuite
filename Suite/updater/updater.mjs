@@ -6,7 +6,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ejectPart, verifyParts } from './lib/parts.mjs';
-import { applyUpdate, checkUpdate, rollbackLatest, rollbackPlan, dirs, hostLiveCheck } from './lib/apply.mjs';
+import { applyUpdate, checkUpdate, rollbackLatest, rollbackPlan, recoverInterrupted, dirs, hostLiveCheck } from './lib/apply.mjs';
 import { COMPONENTS, COMPONENT_IDS } from './lib/components.mjs';
 import { gitStatus, gitUpdate, setToken } from './lib/sources.mjs';
 import { loadToken } from './lib/secret.mjs';
@@ -27,6 +27,7 @@ if (source && source.type === 'github') setToken(loadToken(installDir));   // DP
 const appRunning = port => new Promise(res => { const s = net.connect({ port, host: '127.0.0.1' }); const done = v => { s.destroy(); res(v); }; s.setTimeout(800, () => done(true)); s.on('connect', () => done(true)); s.on('error', e => done(e.code !== 'ECONNREFUSED')); });
 
 async function main() {
+  if (cmd !== 'status') { try { recoverInterrupted(installDir); } catch {} }   // an update killed halfway through its swap is undone first
   // launch hook: `launch` (or --apply-if-safe) = apply only when the setting allows it AND the Suite is not already running (never swap files under a running app)
   if (cmd === 'launch' || args.includes('--apply-if-safe')) {
     if (await appRunning(Number(opt('core-port')) || 8760)) return out({ ok: true, skipped: true, message: 'the Suite is already running; not updating under it' });

@@ -16,10 +16,10 @@ const stamp = () => iso().replace(/[-:T]/g, '').slice(0, 14);
 const writeJson = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(o, null, 2)); fs.renameSync(f + '.tmp', f); };
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 
-export const dirs = installDir => { const u = path.join(installDir, 'Data', 'updates'); return { u, staging: path.join(u, 'staging'), backup: path.join(u, 'backup'), lock: path.join(u, 'updater.lock'), result: path.join(u, 'update_result.json'), deferred: path.join(u, 'update_deferred.json'), pending: path.join(u, 'pending.json'), rollbackPending: path.join(u, 'rollback_pending.json'), install: path.join(installDir, 'install.json') }; };
+export const dirs = installDir => { const u = path.join(installDir, 'Data', 'updates'); return { u, staging: path.join(u, 'staging'), backup: path.join(u, 'backup'), lock: path.join(u, 'updater.lock'), result: path.join(u, 'update_result.json'), deferred: path.join(u, 'update_deferred.json'), pending: path.join(u, 'pending.json'), swapping: path.join(u, 'swap_in_progress.json'), rollbackPending: path.join(u, 'rollback_pending.json'), install: path.join(installDir, 'install.json') }; };
 
 /** Ask the Host whether the stream is live. Connection refused = the Host is not running = not live. Anything unclear = treat as live. */
-export async function hostLiveCheck(url = 'http://127.0.0.1:8770/api/live') {
+export async function hostLiveCheck(url = process.env.PINGUINO_LIVE_URL || 'http://127.0.0.1:8770/api/live') {   // env override only for the release self-test
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
     if (!r.ok) return { live: null, why: `Host answered ${r.status}` };
@@ -31,11 +31,18 @@ export async function hostLiveCheck(url = 'http://127.0.0.1:8770/api/live') {
   }
 }
 
+/** The lock file holds the pid of the updater that took it; a pid that no longer exists means that updater was killed (so its lock is stale at once, not after 30 minutes). */
+function ownerGone(file) {
+  const pid = parseInt(fs.readFileSync(file, 'utf8'), 10);
+  if (!pid || pid === process.pid) return false;
+  try { process.kill(pid, 0); return false; } catch (e) { return e.code === 'ESRCH'; }
+}
+
 function takeLock(file, staleMs = 30 * 60 * 1000) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   for (let i = 0; i < 2; i++) {
     try { const fd = fs.openSync(file, 'wx'); fs.writeSync(fd, String(process.pid)); fs.closeSync(fd); return () => { try { fs.unlinkSync(file); } catch {} }; }
-    catch (e) { if (e.code !== 'EEXIST') throw e; try { if (Date.now() - fs.statSync(file).mtimeMs > staleMs) fs.unlinkSync(file); else return null; } catch { return null; } }
+    catch (e) { if (e.code !== 'EEXIST') throw e; try { if (Date.now() - fs.statSync(file).mtimeMs > staleMs || ownerGone(file)) fs.unlinkSync(file); else return null; } catch { return null; } }
   }
   return null;
 }
@@ -74,6 +81,7 @@ export async function applyUpdate({ installDir, source, current, channel = 'stab
   if (!unlock) return { schema: 1, ok: true, message: 'another update is already running', skipped: true };
   let backupDir = null, started = false;
   try {
+    recoverLocked(installDir);   // an earlier updater killed halfway through a swap: put the old files back before anything else
     const chk = await checkUpdate({ source, current, channel, pubkey, installDir, also: only || [] });   // a part named in --only is installed even if the profile did not keep it yet
     if (only) {
       if (!chk.manifest.components) return res(false, 'this release has no per-part information; update everything instead', { to: chk.manifest.version });
@@ -124,6 +132,7 @@ export async function applyUpdate({ installDir, source, current, channel = 'stab
     }
     const prevInstall = readJson(D.install);
     writeJson(path.join(backupDir, 'backup.json'), { ...list, only: only || null, install: prevInstall });
+    writeJson(D.swapping, { schema: 1, at: iso(), from: current, to, backup: backupDir });   // removed when the swap is finished or undone; if the process dies in between, recoverInterrupted() undoes it
     started = true;
     // swap
     for (const p of keep) {
@@ -141,14 +150,37 @@ export async function applyUpdate({ installDir, source, current, channel = 'stab
     const allCurrent = !m.components || Object.keys(m.components).filter(id => wants(nowParts, id)).every(id => comps[id] && comps[id].hash === m.components[id].hash);
     writeJson(D.install, { ...(prevInstall || {}), schema: 1, version: allCurrent ? to : (prevInstall && prevInstall.version) || current, channel, updated_at: iso(), ...(nowParts ? { parts: nowParts } : {}), ...(m.components ? { components: comps } : {}) });
     if (postCheck && !(await postCheck({ installDir, version: to }))) throw new Error('the new version failed its post-check');
+    try { fs.unlinkSync(D.swapping); } catch {}
     try { fs.unlinkSync(D.deferred); } catch {}
     try { fs.unlinkSync(D.pending); } catch {}
     prune(D.backup, keepBackups);
     return res(true, only ? `updated ${only.join(', ')} to ${to}` : `updated ${current} -> ${to}`, { to, backup: backupDir, only: only || null });
   } catch (e) {
-    if (started) { try { restore(installDir, backupDir); } catch (e2) { return res(false, `update failed (${e.message}) and the restore had a problem: ${e2.message}`, { backup: backupDir }); } }
+    if (started) { try { restore(installDir, backupDir); try { fs.unlinkSync(D.swapping); } catch {} } catch (e2) { return res(false, `update failed (${e.message}) and the restore had a problem: ${e2.message}; run the updater again to retry the restore`, { backup: backupDir }); } }
+    else if (backupDir) { try { fs.rmSync(backupDir, { recursive: true, force: true }); } catch {} }   // a half-made backup (disk full while copying) must not become "the newest backup" that a rollback trips over
     return res(false, `update failed: ${String(e.message).slice(0, 200)}${started ? '; the old version was put back' : '; nothing was changed'}`, { backup: backupDir });
   } finally { unlock(); }
+}
+
+function recoverLocked(installDir) {
+  const D = dirs(installDir), j = readJson(D.swapping);
+  if (!j) return null;
+  const backup = j.backup && path.resolve(j.backup);
+  if (!backup || !backup.toLowerCase().startsWith(path.resolve(D.backup).toLowerCase())) { try { fs.unlinkSync(D.swapping); } catch {} return null; }
+  restore(installDir, backup);
+  try { fs.unlinkSync(D.swapping); } catch {}
+  const r = { schema: 1, at: iso(), ok: false, message: `an earlier update to ${j.to} was interrupted; the old version ${j.from} was put back`, from: j.from, to: j.to, recovered: true };
+  writeJson(D.result, r);
+  return r;
+}
+
+/** If an update was killed halfway through its swap (journal swap_in_progress.json), undo it from its backup. Returns the recovery record or null. */
+export function recoverInterrupted(installDir) {
+  const D = dirs(installDir);
+  if (!fs.existsSync(D.swapping)) return null;
+  const unlock = takeLock(D.lock);
+  if (!unlock) return null;   // a live updater is working right now
+  try { return recoverLocked(installDir); } finally { unlock(); }
 }
 
 /** Put every backed-up file back and remove files the release created. */
