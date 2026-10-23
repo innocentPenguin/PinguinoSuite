@@ -52,6 +52,29 @@ class Store:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA)
+        self.fts = self._init_fts()
+
+    def _init_fts(self):
+        """FTS5 trigram index over text+user (substring search like LIKE, but indexed). Any failure -> False and search() falls back to LIKE."""
+        try:
+            with self.lock:
+                self.db.executescript("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS msg_fts USING fts5(text, user, content='messages', content_rowid='rowid', tokenize='trigram');
+                CREATE TRIGGER IF NOT EXISTS msg_fts_ai AFTER INSERT ON messages BEGIN
+                  INSERT INTO msg_fts(rowid, text, user) VALUES (new.rowid, new.text, new.user); END;
+                CREATE TRIGGER IF NOT EXISTS msg_fts_ad AFTER DELETE ON messages BEGIN
+                  INSERT INTO msg_fts(msg_fts, rowid, text, user) VALUES ('delete', old.rowid, old.text, old.user); END;
+                CREATE TRIGGER IF NOT EXISTS msg_fts_au AFTER UPDATE OF text, user ON messages BEGIN
+                  INSERT INTO msg_fts(msg_fts, rowid, text, user) VALUES ('delete', old.rowid, old.text, old.user);
+                  INSERT INTO msg_fts(rowid, text, user) VALUES (new.rowid, new.text, new.user); END;
+                """)
+                if self.db.execute("SELECT v FROM kv WHERE k='fts_built'").fetchone() is None:     # first start: index the existing rows
+                    self.db.execute("INSERT INTO msg_fts(msg_fts) VALUES('rebuild')")
+                    self.db.execute("INSERT OR REPLACE INTO kv VALUES('fts_built','1')")
+                    self.db.commit()
+            return True
+        except sqlite3.Error:
+            return False
 
     # messages -------------------------------------------------------
     def add_message(self, m, decision):
@@ -109,6 +132,16 @@ class Store:
         return [dict(r) for r in per], {r["m"]: r["n"] for r in mins}
 
     def search(self, term, limit=100):
+        term = str(term)
+        if self.fts and len(term.strip()) >= 3:                    # trigram index needs 3+ characters; shorter terms use LIKE
+            try:
+                with self.lock:
+                    rows = self.db.execute(
+                        "SELECT m.json,m.score,m.tier FROM messages m WHERE m.rowid IN (SELECT rowid FROM msg_fts WHERE msg_fts MATCH ?) "
+                        "ORDER BY m.ts DESC LIMIT ?", ('"' + term.replace('"', '""') + '"', _limit(limit, 100))).fetchall()
+                return [_msg(r) for r in rows]
+            except sqlite3.Error:
+                pass
         with self.lock:
             rows = self.db.execute(
                 "SELECT json,score,tier FROM messages WHERE text LIKE ? ESCAPE '\\' OR user LIKE ? ESCAPE '\\' ORDER BY ts DESC LIMIT ?",
