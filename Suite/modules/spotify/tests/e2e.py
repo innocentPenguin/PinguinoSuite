@@ -107,7 +107,8 @@ def qnames():
 def start_server():
     global proc
     env = {**os.environ, "SPOTIFY_CONNECT_BIN": os.path.join(HERE, "fake_librespot.py"), "PINGUINO_DATA_DIR": DATA, "SPOTIFY_PORT": str(PORT), "SPOTIFY_TICK_S": "0.2", "SPOTIFY_NO_BROWSER": "1",
-           "SPOTIFY_API_BASE": f"http://127.0.0.1:{SP_PORT}/v1", "SPOTIFY_ACCOUNTS_BASE": f"http://127.0.0.1:{SP_PORT}"}
+           "SPOTIFY_API_BASE": f"http://127.0.0.1:{SP_PORT}/v1", "SPOTIFY_ACCOUNTS_BASE": f"http://127.0.0.1:{SP_PORT}",
+           "SPOTIFY_YT_OEMBED": f"http://127.0.0.1:{SP_PORT}/oembed", "SPOTIFY_LRCLIB": f"http://127.0.0.1:{SP_PORT}/lrclib/get"}
     env.pop("PINGUINO_API_TOKEN", None)
     proc = subprocess.Popen([sys.executable, "server.py"], cwd=MOD, env=env, stdout=open(os.path.join(DATA, "out.log"), "ab"), stderr=subprocess.STDOUT)
     ok = wait(lambda: get("/api/status")[0] == 200, 10)
@@ -365,7 +366,7 @@ def main():
 
     # ---------------- Spotify error states
     sim("clearqueue")
-    post("/api/queue/add", {"query": "Song 21", "where": "end"})
+    post("/api/queue/add", {"query": "Song 37", "where": "end"})
     state_ = state()
     sim("fault", path="/me/player/queue", status=404, reason="NO_ACTIVE_DEVICE", n=1)
     cur_t = sim("state")["current"]
@@ -400,7 +401,7 @@ def main():
     sp.current, sp.playing = None, False
     time.sleep(0.8)
     post("/api/queue/clear", {})
-    post("/api/queue/add", {"query": "Song 22", "where": "end"})
+    post("/api/queue/add", {"query": "Song 38", "where": "end"})
     T("start button state: nothing playing, queue has items", state()["playback"] is None and state()["queue"]["items"])
     head_name = state()["queue"]["items"][0]["name"]
     post("/api/queue/start")
@@ -470,7 +471,7 @@ def main():
     post("/api/settings", {"requests_open": True, "per_user_limit": 0})
     T("custom reply used in real chat", chat("tmpl", "!sr song 36")["reply"].startswith("* tmpl got Song 36"))
     post("/api/settings", {"cmd_aliases": {"sr": "tune"}})
-    T("custom command word works", chat("tmpl", "!tune song 37")["ok"] is True)
+    T("custom command word works", chat("tmpl", "!tune song 28")["ok"] is True)
     T("host contract follows custom aliases", cmd("tune", "song 38", "tmpl")["ok"] is True)
     post("/api/preset", {"name": "strict"})
     T("preset applied", state()["settings"]["per_user_limit"] == 1 and state()["settings"]["block_explicit"] is True)
@@ -577,8 +578,10 @@ def main():
     calls = call("GET", "/_calls", base=cbase)[1]
     T("connect: config has name, output, no secrets", 'device_name: "PinguinoSuite"' in calls["cfg"] and "CABLE Input" in calls["cfg"] and "credentials" in calls["cfg"] and "SITEKEY" not in calls["cfg"], calls["cfg"])
     T("connect: output applied through the API", any(c[0] == "/player/output" and "CABLE" in c[1].get("device", "") for c in calls["calls"]), calls["calls"])
+    sim("play", t="t4")
     sim("adddevice", id="libre1", name="PinguinoSuite")
     T("connect: engine selects the device", wait(lambda: any(d["id"] == "libre1" and d["is_active"] for d in get("/api/devices")[1]["devices"]), 15))
+    T("connect: playback moved to the PinguinoSuite device and keeps playing", wait(lambda: sim("state")["playing"] is True))
     T("connect: player info says active", wait(lambda: get("/api/player")[1].get("active") is True, 10), get("/api/player")[1])
     post("/api/control", {"action": "volume", "value": 44})
     T("connect: volume reaches go-librespot", wait(lambda: any(c[0] == "/player/volume" and c[1].get("volume") == 44 for c in call("GET", "/_calls", base=cbase)[1]["calls"])), call("GET", "/_calls", base=cbase)[1]["calls"])
@@ -588,6 +591,67 @@ def main():
     post("/api/connect/stop", {})
     T("connect: stop ends the child", wait(lambda: get("/api/connect")[1]["state"] == "off", 8) and wait(lambda: not _alive(cbase), 6))
     T("connect: stop saved connect_on=false", state()["settings"]["connect_on"] is False)
+
+    # ---------------- flows Ivan would otherwise test by hand: channel playlist, YouTube links, lyrics toggle
+    URI = lambda n: "spotify:track:id%d" % n + "x" * (20 - len(str(n)))      # the fake Spotify ids its tracks idN...
+
+    def play_and_wait(tid, title):
+        sim("play", t=tid)
+        return wait(lambda: get("/api/now")[1].get("title") == title, 8)
+
+    r = post("/api/channel-playlist/add", {"user": "mod1"})[1]
+    T("playlist: add without a channel playlist = no_playlist", r.get("code") == "no_playlist", r)
+    PL = "Hype" + "x" * 18
+    post("/api/channel-playlist", {"id": PL, "name": "Livestream Hype Mix"})
+    T("playlist: bad id refused", post("/api/channel-playlist", {"id": "nope"})[0] == 400)
+    post("/api/channel-playlist", {"id": PL, "name": "Livestream Hype Mix"})
+    T("playlist: now playing = Song 5", play_and_wait("t5", "Song 5"))
+    r = post("/api/channel-playlist/add", {"user": "mod1"})[1]
+    T("playlist: adds the playing song to Livestream Hype Mix", r.get("code") == "added" and r.get("playlist") == "Livestream Hype Mix" and r.get("title") == "Song 5", r)
+    T("playlist: Spotify got exactly that uri", sim("state")["adds"] == [URI(5)], sim("state")["adds"])
+    r = post("/api/channel-playlist/add", {"user": "mod1"})[1]
+    T("playlist: second add of the same song = duplicate", r.get("code") == "duplicate" and len(sim("state")["adds"]) == 1, r)
+    T("playlist: bad track id = none", post("/api/channel-playlist/add", {"user": "mod1", "track": "x y"})[1].get("code") == "none")
+    T("playlist: now playing = Song 6", play_and_wait("t6", "Song 6"))
+    sim("fault", path="/playlists/", status=500, n=9)
+    r = post("/api/channel-playlist/add", {"user": "mod1"})[1]
+    T("playlist: Spotify error = error, nothing recorded", r.get("code") == "error" and len(sim("state")["adds"]) == 1, r)
+    sim("fault", path="/playlists/", status=500, n=0)
+    r = post("/api/channel-playlist/add", {"user": "mod1"})[1]
+    T("playlist: works again after the error", r.get("code") == "added" and URI(6) in sim("state")["adds"], r)
+    T("playlist: now playing = Song 7", play_and_wait("t7", "Song 7"))
+    post("/api/site", {"key": "SITEKEY", "enabled": True})
+    site_sim("event", {"id": "pl-e1", "type": "mod", "action": "playlist_add", "user": "modbob"})
+    T("playlist: site mod button adds and is acked", wait(lambda: any(a.get("id") == "pl-e1" and a.get("ok") for a in site_sim("dump")["acks"]), 10) and URI(7) in sim("state")["adds"], site_sim("dump")["acks"][-2:])
+
+    sim("yt", id="aaaaaaaaaaa", title="Artist - Song 35 (Official Video)", channel="ArtistVEVO")
+    sim("yt", id="bbbbbbbbbbb", title="Zed - 1", channel="Zed")
+    post("/api/settings", {"requests_open": True, "per_user_limit": 0, "yt_links": True, "allow_links": True, "dup_cooldown_min": 0, "cooldown_s": 0})
+    r = chat("yt1", "!sr https://youtu.be/aaaaaaaaaaa")
+    T("youtube: link title is cleaned, matched on Spotify and queued", r.get("ok") is True and "Song 35" in qnames(), (r, qnames()[-3:]))
+    r = chat("yt2", "!sr https://www.youtube.com/watch?v=aaaaaaaaaaa&t=5s")
+    T("youtube: the same video again = duplicate in the queue", r.get("ok") is False and r.get("code") == "dup_queue", r)
+    r = chat("yt3", "!sr https://youtu.be/bbbbbbbbbbb")
+    T("youtube: low score match is refused", r.get("ok") is False and r.get("code") == "none" and "Song 1" not in qnames()[-2:], r)
+    r = chat("yt4", "!sr https://youtu.be/ccccccccccc")
+    T("youtube: video the oEmbed does not know = refused", r.get("ok") is False and r.get("code") == "none", r)
+    oe = [c for c in sim("state")["calls"] if "/oembed" in c]
+    T("youtube: one oEmbed call per video (cached)", len(oe) == 3, oe)
+    post("/api/settings", {"yt_links": False})
+    sim("yt", id="ddddddddddd", title="Artist - Song 34", channel="Artist")
+    r = chat("yt5", "!sr https://youtu.be/ddddddddddd")
+    T("youtube: switched off = nothing queued", r.get("ok") is False and "Song 34" not in qnames(), r)
+    post("/api/settings", {"yt_links": True})
+
+    T("lyrics: now playing = Song 5", play_and_wait("t5", "Song 5"))
+    ly = get("/api/lyrics")[1]
+    T("lyrics: found with synced lines", ly.get("found") and len(ly.get("synced", [])) == 2 and ly["synced"][0]["text"] == "hello penguin", ly)
+    T("lyrics: /api/now says lyrics_on", get("/api/now")[1].get("lyrics_on") is True)
+    post("/api/mod-action", {"action": "lyrics_toggle"})
+    T("lyrics: toggle turns them off", get("/api/now")[1].get("lyrics_on") is False and get("/api/lyrics")[1].get("enabled") is False)
+    post("/api/mod-action", {"action": "lyrics_toggle", "value": True})
+    post("/api/mod-action", {"action": "lyrics_toggle", "value": True})
+    T("lyrics: value=true is idempotent and shows them again", get("/api/now")[1].get("lyrics_on") is True and get("/api/lyrics")[1].get("found") is True)
 
     # ---------------- persistence across restart
     post("/api/settings", {"requests_open": True, "blocklist": ["artist nobody"]})

@@ -1,6 +1,7 @@
 """YouTube links as a *data source only*: read the title/channel (oEmbed), clean it, and score Spotify search results against it. Nothing is played from YouTube."""
 import difflib
 import json
+import os
 import re
 import time
 import urllib.parse
@@ -24,6 +25,7 @@ def _http(url):
         return json.loads(r.read(1_000_000).decode("utf8"))
 
 
+OEMBED = os.environ.get("SPOTIFY_YT_OEMBED") or "https://www.youtube.com/oembed"      # e2e points this at a fake
 _meta = {}                 # vid -> (expires, result): five viewers posting one link cost one oEmbed call
 
 
@@ -42,7 +44,7 @@ def fetch_meta(vid, http=None, now=time.time):
 def _fetch_meta(vid, http=None):
     watch = "https://www.youtube.com/watch?v=" + vid
     try:
-        d = (http or _http)("https://www.youtube.com/oembed?" + urllib.parse.urlencode({"url": watch, "format": "json"}))
+        d = (http or _http)(OEMBED + "?" + urllib.parse.urlencode({"url": watch, "format": "json"}))
     except Exception:
         return None
     if not isinstance(d, dict) or not d.get("title"):

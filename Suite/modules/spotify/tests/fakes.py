@@ -102,6 +102,14 @@ class _H(BaseHTTPRequestHandler):
                 return self._send(200, {"access_token": at, "refresh_token": rt, "expires_in": 3600, "scope": "streaming user-read-private"})
             if path.startswith("/_sim/"):
                 return self._sim(path[6:], q, raw)
+            if path == "/oembed":                                   # YouTube oEmbed stand-in: title/channel by video id
+                vid = urllib.parse.parse_qs(urllib.parse.urlparse(q.get("url", "")).query).get("v", [""])[0]
+                yt = getattr(S, "yt", {}).get(vid)
+                return self._send(200, {"title": yt[0], "author_name": yt[1]}) if yt else self._send(404, {})
+            if path == "/lrclib/get":                               # LRCLIB stand-in: lyrics only for "Song 5"
+                if q.get("track_name") == "Song 5":
+                    return self._send(200, {"syncedLyrics": "[00:01.00] hello penguin\n[00:05.00] second line", "plainLyrics": "hello penguin\nsecond line"})
+                return self._send(404, {})
             if not path.startswith("/v1/"):
                 return self._send(404, {})
             tok = self.headers.get("Authorization", "").removeprefix("Bearer ")
@@ -194,13 +202,16 @@ class _H(BaseHTTPRequestHandler):
                 d["is_active"] = False
         elif what == "adddevice":
             S.devices.append({"id": q["id"], "name": q.get("name", "PinguinoSuite"), "is_active": False, "volume_percent": 50})
+        elif what == "yt":
+            S.yt = getattr(S, "yt", {})
+            S.yt[q["id"]] = (q["title"], q.get("channel", ""))
         elif what == "clearqueue":
             S.queue.clear()
         elif what == "expire":
             S.expire_next = True
         elif what == "state":
             return self._send(200, {"current": S.current, "queue": S.queue, "playing": S.playing, "progress": S.progress, "volume": S.volume,
-                                    "calls": [c[0] + " " + c[1] for c in S.log]})
+                                    "adds": getattr(S, "playlist_adds", []), "calls": [c[0] + " " + c[1] for c in S.log]})
         return self._send(200, {"ok": True})
 
     def do_GET(self):

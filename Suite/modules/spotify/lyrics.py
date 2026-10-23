@@ -1,5 +1,6 @@
 """Lyrics lookup via LRCLIB (free, no key). Only artist/title/duration are sent; results are cached (also "no lyrics")."""
 import json
+import os
 import re
 import threading
 import time
@@ -7,6 +8,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+LRCLIB = os.environ.get("SPOTIFY_LRCLIB") or "https://lrclib.net/api/get"      # e2e points this at a fake
 _cache = {}                 # key -> (expires_at or 0 = forever, result)
 _lock = threading.Lock()
 RETRY_S = 60                # after a network failure: no new lookup for this long
@@ -58,7 +60,7 @@ def lookup(artist, title, duration_ms=0, http=None):
         if duration_ms:
             q["duration"] = round(duration_ms / 1000)
         try:
-            d = (http or _http)("https://lrclib.net/api/get?" + urllib.parse.urlencode(q))
+            d = (http or _http)(LRCLIB + "?" + urllib.parse.urlencode(q))
             if isinstance(d, dict):
                 res = {"found": bool(d.get("syncedLyrics") or d.get("plainLyrics")), "synced": parse_lrc(d.get("syncedLyrics")),
                        "plain": d.get("plainLyrics") or ""}
