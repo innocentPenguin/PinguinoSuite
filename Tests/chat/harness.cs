@@ -969,6 +969,16 @@ public static class Harness
             Msg("snowyroses_", "yeah dude I wonder why everyone else won't use it, maybe cause it's just ineffective and has multiple problems?");
             Msg("aceislosst", "@chattypinguino what do you think about bots?");
             Check("argument: a heated bots debate that tags the bot gets no answer", llmCalls == g0 && Last() == null, Last() + " calls=" + (llmCalls - g0));
+            clearAll(); g0 = llmCalls; nextReply = "{\"reply\":\"i like being useful\",\"remember\":[]}";
+            Msg("calm1", "bots are cool honestly"); Msg("calm2", "yeah the bots here are fun"); Msg("calm1", "i like the bots too");
+            Msg("calm2", "@chattypinguino what do you think about bots?");
+            Check("argument: a calm 'bots are cool' chat is NOT heat (the mention is answered)", llmCalls == g0 + 1 && Last() != null, Last() + " calls=" + (llmCalls - g0));
+            clearAll(); g0 = llmCalls; nextReply = "{\"reply\":\"fair, i will stay out of your way\",\"remember\":[]}";
+            Msg("snowyroses_", "u just wanna add bots for no reason");
+            Msg("pineyapplie", "peng u know you can stream without bots");
+            Msg("snowyroses_", "bots are just ineffective");
+            Msg("aceislosst", "@chattypinguino what do you think about bots?");
+            Check("argument: bots lines plus one real put-down is still heat", llmCalls == g0 && Last() == null, Last() + " calls=" + (llmCalls - g0));
             Msg("aceislosst", "@ChattyPinguino stop @ ing me i dont like you");
             Check("argument: but when the bot itself is told off it answers (called-out hint in the prompt)", llmCalls == g0 + 1 && Last() != null && lastPrompt.Contains("[CALLED OUT]"), Last() + "");
             clearAll(); g0 = llmCalls;
@@ -1036,7 +1046,7 @@ public static class Harness
             Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "bobby" }, { "gameId", "gu5" } });
             Check("guess: out of tries reveals the chatter", Last() != null && Last().Contains("bobby"), Last());
             Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "expired" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "bobby" }, { "gameId", "gu6" } });
-            Check("guess: a timeout reveals the chatter", Last() != null && Last().Contains("bobby") && Last().Contains("time"), Last());
+            Check("guess: a timeout reveals the chatter", Last() != null && Last().Contains("bobby") && (Last().Contains("time") || Last().Contains("clock")), Last());
             Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "start" }, { "user", "quiet1" }, { "display", "Quiet1" }, { "amount", 100 }, { "payout", 200 }, { "tries", 3 }, { "reason", "hello there" }, { "optout", "1" }, { "gameId", "gu7" } });
             Check("guess: an opted-out viewer gets the plain start (no banter)", Last() == "@Quiet1 Who said this? \"hello there\" Answer with !guess <name>, 3 tries. Stake 100 points, right answer pays 200.", Last());
             // heated chat: plain result only

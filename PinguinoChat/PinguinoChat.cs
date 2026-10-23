@@ -978,7 +978,7 @@ public class CPHInline
                 { string ca = CapabilityAnswer(login, text); if (ca != null) { if (ca != "") Say(cx, ca); return; } }   // "can you make commands / change the title": a short true answer, no AI
                 { string bc = BareCallAck(login, text); if (bc != null) { if (bc != "") Say(cx, bc); return; } }   // just the name ("CHATTY", "ask chatty pinguino!"): one playful line, once in a while   // never a timeout / ban / rank change from the bot: "ask a mod"
                 bool quiet = Hushed(login) || Flooding(login);                    // told to be quiet / a real flood: stays ignored on purpose
-                bool atBot = RxAtBot.IsMatch(text), question = text.Contains("?") && !RxHeat.IsMatch(text);
+                bool atBot = RxAtBot.IsMatch(text), question = text.Contains("?") && !RxHeat.IsMatch(text) && !(RxBotWord.IsMatch(text) && IsHeated());
                 if (atBot && !quiet) cx.Defend = true;                            // attacked or called out: it may answer, briefly and kindly
                 if (!quiet && !atBot && !question && IsHeated()) quiet = true;    // a heated exchange that only happens to tag the bot: it stays out
                 if (!quiet && !atBot && !question && RepliedRecently(login)) quiet = true;   // already answered them a moment ago: no second reply to the next tag
@@ -1138,15 +1138,17 @@ public class CPHInline
     }
 
     // ARGUMENTS: the bot never jumps into a heated exchange and never snarks at someone who is arguing. Heat = in the last 90 s at least 3 lines from 2+ people with insults / swearing / put-downs / the bots debate.
-    static readonly Regex RxHeat = new Regex(@"\b(stfu|shut ?up|shut your|idiot|dumb|stupid|moron|trash|garbage|liar|liars|loser|bozo|clown|cringe|pathetic|useless|annoying|hate you|hate this|you suck|u suck|ur bad|youre bad|you're bad|fuck\w*|wtf|bullshit|bs|bots?|ineffective|dependent|delusional|shut)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex RxHeat = new Regex(@"\b(stfu|shut ?up|shut your|idiot|dumb|stupid|moron|trash|garbage|liar|liars|loser|bozo|clown|cringe|pathetic|useless|annoying|hate you|hate this|you suck|u suck|ur bad|youre bad|you're bad|fuck\w*|wtf|bullshit|bs|ineffective|dependent|delusional|shut)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // "bot"/"bots" alone is a soft signal: it counts towards the 3 lines only when at least one line has a real put-down (so a calm "bots are cool" chat is not heat)
+    static readonly Regex RxBotWord = new Regex(@"\bbots?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // aimed at the bot itself: asked to stop, told off, insulted, told it is not liked
     static readonly Regex RxAtBot = new Regex(@"\b(stop (@ ?ing|tagging|pinging|replying|answering|talking|responding)|(dont|don't|do not|never) (do that|reply|respond|answer|talk|tag|ping|@)|(i )?(dont|don't|do not) like (you|u|the bot|this bot)|shut ?up|stfu|(you|u|ur|youre|you're|youre) ?(suck|bad|trash|garbage|annoying|useless|dumb|stupid|cringe|a bot)|annoying|hate (you|u|this bot|the bot)|go away|get lost|leave me alone|(stupid|dumb|trash|useless|annoying) bot|nobody asked)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     bool IsHeated()
     {
         if (!_cfg.StayOutOfArguments) return false;
         long now = Now();
-        var hot = _buf.Where(x => !x.FromBot && !x.Command && now - x.At <= 90 && RxHeat.IsMatch(x.Text ?? "")).ToList();
-        return hot.Count >= 3 && hot.Select(x => x.Login).Distinct().Count() >= 2;
+        var hot = _buf.Where(x => !x.FromBot && !x.Command && now - x.At <= 90 && (RxHeat.IsMatch(x.Text ?? "") || RxBotWord.IsMatch(x.Text ?? ""))).ToList();
+        return hot.Count >= 3 && hot.Select(x => x.Login).Distinct().Count() >= 2 && hot.Any(x => RxHeat.IsMatch(x.Text ?? ""));
     }
     // the bot answered this viewer less than ReplyGapSec ago and they are not in a live conversation with it
     bool RepliedRecently(string login)
