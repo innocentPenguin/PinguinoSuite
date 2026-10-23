@@ -31,18 +31,33 @@ export async function hostLiveCheck(url = process.env.PINGUINO_LIVE_URL || 'http
   }
 }
 
-/** The lock file holds the pid of the updater that took it; a pid that no longer exists means that updater was killed (so its lock is stale at once, not after 30 minutes). */
-function ownerGone(file) {
-  const pid = parseInt(fs.readFileSync(file, 'utf8'), 10);
-  if (!pid || pid === process.pid) return false;
-  try { process.kill(pid, 0); return false; } catch (e) { return e.code === 'ESRCH'; }
+/** The lock file holds the pid of the updater that took it. Stale = that pid no longer exists (killed), or the file is empty / unreadable and older than 5 s (an updater died between creating and writing it).
+ *  A lock whose owner is still alive is NEVER taken over, however old: a slow download is not a dead updater. */
+const EMPTY_LOCK_MS = 5000;
+function lockIsStale(file, staleMs) {
+  let st, txt;
+  try { st = fs.statSync(file); txt = fs.readFileSync(file, 'utf8'); } catch { return false; }
+  const pid = parseInt(txt, 10), age = Date.now() - st.mtimeMs;
+  if (!pid) return age > EMPTY_LOCK_MS;
+  if (pid === process.pid) return false;
+  try { process.kill(pid, 0); return false; } catch (e) { if (e.code === 'ESRCH') return true; return age > staleMs; }   // EPERM = alive but not ours: alive
 }
 
 function takeLock(file, staleMs = 30 * 60 * 1000) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  for (let i = 0; i < 2; i++) {
-    try { const fd = fs.openSync(file, 'wx'); fs.writeSync(fd, String(process.pid)); fs.closeSync(fd); return () => { try { fs.unlinkSync(file); } catch {} }; }
-    catch (e) { if (e.code !== 'EEXIST') throw e; try { if (Date.now() - fs.statSync(file).mtimeMs > staleMs || ownerGone(file)) fs.unlinkSync(file); else return null; } catch { return null; } }
+  const release = () => { try { if (parseInt(fs.readFileSync(file, 'utf8'), 10) === process.pid) fs.unlinkSync(file); } catch {} };   // never remove a lock somebody else took after ours was judged stale
+  for (let i = 0; i < 3; i++) {
+    try { const fd = fs.openSync(file, 'wx'); fs.writeSync(fd, String(process.pid)); fs.closeSync(fd); return release; }
+    catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      if (!lockIsStale(file, staleMs)) return null;
+      // Remove the stale lock by renaming it to a name only we use: of two updaters that both judged it stale, exactly one rename succeeds. Then re-check what we got.
+      const mine = `${file}.stale-${process.pid}-${crypto.randomBytes(3).toString('hex')}`;
+      try { fs.renameSync(file, mine); } catch { continue; }
+      const stillStale = (() => { try { const pid = parseInt(fs.readFileSync(mine, 'utf8'), 10); if (!pid) return true; if (pid === process.pid) return false; try { process.kill(pid, 0); return false; } catch (e2) { return e2.code === 'ESRCH'; } } catch { return true; } })();
+      if (!stillStale) { try { fs.linkSync(mine, file); } catch {} try { fs.unlinkSync(mine); } catch {} return null; }   // we grabbed a live lock that was created in between: put it back
+      try { fs.unlinkSync(mine); } catch {}
+    }
   }
   return null;
 }
@@ -123,15 +138,18 @@ export async function applyUpdate({ installDir, source, current, channel = 'stab
       return res(true, `update ${to} is ready; it is applied the next time the Suite starts`, { to, staged: true });
     }
     // back up what will be overwritten
-    backupDir = path.join(D.backup, `${current}-${stamp()}`);
+    prune(D.backup, Infinity);   // junk from a killed earlier run (we hold the lock, so nothing else is building one)
+    let name = `${stamp()}-${current}`, n = 1; while (fs.existsSync(path.join(D.backup, name)) || fs.existsSync(path.join(D.backup, name + '.partial'))) name = `${stamp()}-${current}-${++n}`;
+    backupDir = path.join(D.backup, name); const building = backupDir + '.partial';   // built under .partial and renamed once backup.json is written: a killed updater never leaves a folder that looks like a backup
     const list = { from: current, to, at: iso(), files: [], created: [] };
     for (const p of keep) {
       const dst = within(installDir, p.rel);
-      if (fs.existsSync(dst)) { const b = path.join(backupDir, 'files', p.rel); fs.mkdirSync(path.dirname(b), { recursive: true }); fs.copyFileSync(dst, b); list.files.push(p.rel); }
+      if (fs.existsSync(dst)) { const b = path.join(building, 'files', p.rel); fs.mkdirSync(path.dirname(b), { recursive: true }); fs.copyFileSync(dst, b); list.files.push(p.rel); }
       else list.created.push(p.rel);
     }
     const prevInstall = readJson(D.install);
-    writeJson(path.join(backupDir, 'backup.json'), { ...list, only: only || null, install: prevInstall });
+    writeJson(path.join(building, 'backup.json'), { ...list, only: only || null, install: prevInstall });
+    fs.renameSync(building, backupDir);
     writeJson(D.swapping, { schema: 1, at: iso(), from: current, to, backup: backupDir });   // removed when the swap is finished or undone; if the process dies in between, recoverInterrupted() undoes it
     started = true;
     // swap
@@ -157,16 +175,32 @@ export async function applyUpdate({ installDir, source, current, channel = 'stab
     return res(true, only ? `updated ${only.join(', ')} to ${to}` : `updated ${current} -> ${to}`, { to, backup: backupDir, only: only || null });
   } catch (e) {
     if (started) { try { restore(installDir, backupDir); try { fs.unlinkSync(D.swapping); } catch {} } catch (e2) { return res(false, `update failed (${e.message}) and the restore had a problem: ${e2.message}; run the updater again to retry the restore`, { backup: backupDir }); } }
-    else if (backupDir) { try { fs.rmSync(backupDir, { recursive: true, force: true }); } catch {} }   // a half-made backup (disk full while copying) must not become "the newest backup" that a rollback trips over
+    else if (backupDir) { for (const d of [backupDir, backupDir + '.partial']) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} } }   // a half-made backup (disk full while copying) must not become "the newest backup" that a rollback trips over
     return res(false, `update failed: ${String(e.message).slice(0, 200)}${started ? '; the old version was put back' : '; nothing was changed'}`, { backup: backupDir });
   } finally { unlock(); }
 }
 
+const JOURNAL_SLACK_MS = 10 * 60 * 1000;   // install.json is rewritten seconds after the journal inside one swap; a newer install than this is a LATER install
+function dropJournal(D, message, extra = {}) {
+  try { fs.unlinkSync(D.swapping); } catch {}
+  const r = { schema: 1, at: iso(), ok: false, message, discarded: true, ...extra };
+  writeJson(D.result, r);
+  return r;
+}
 function recoverLocked(installDir) {
-  const D = dirs(installDir), j = readJson(D.swapping);
-  if (!j) return null;
-  const backup = j.backup && path.resolve(j.backup);
-  if (!backup || !backup.toLowerCase().startsWith(path.resolve(D.backup).toLowerCase())) { try { fs.unlinkSync(D.swapping); } catch {} return null; }
+  const D = dirs(installDir);
+  if (!fs.existsSync(D.swapping)) return null;
+  const j = readJson(D.swapping);
+  if (!j || typeof j !== 'object') return dropJournal(D, 'the update journal was unreadable and was removed; if something looks wrong, run Repair');
+  const backup = typeof j.backup === 'string' && j.backup ? path.resolve(j.backup) : null;
+  const rel = backup ? path.relative(path.resolve(D.backup), backup) : '..';
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || rel.includes(path.sep)) return dropJournal(D, 'the update journal pointed outside the backup folder and was removed; if something looks wrong, run Repair', { from: j.from, to: j.to });
+  // A journal that does not belong to the install as it is now must never roll it back (that would DOWNGRADE a newer install).
+  const inst = readJson(D.install), cur = inst && inst.version != null ? String(inst.version) : null;
+  if (cur !== null && cur !== String(j.from) && cur !== String(j.to)) return dropJournal(D, `an old update journal (${j.from} -> ${j.to}) does not match the installed version ${cur}; it was removed and nothing was changed`, { from: j.from, to: j.to });
+  const newest = inst ? Math.max(Date.parse(inst.updated_at) || 0, Date.parse(inst.installed_at) || 0) : 0, jat = Date.parse(j.at) || 0;
+  if (jat && newest > jat + JOURNAL_SLACK_MS) return dropJournal(D, `an old update journal (${j.from} -> ${j.to}) is older than the current install; it was removed and nothing was changed`, { from: j.from, to: j.to });
+  if (!readJson(path.join(backup, 'backup.json'))) return dropJournal(D, `an earlier update to ${j.to} was interrupted and its backup is gone, so it could not be undone; run Repair to check and fix the install`, { from: j.from, to: j.to });
   restore(installDir, backup);
   try { fs.unlinkSync(D.swapping); } catch {}
   const r = { schema: 1, at: iso(), ok: false, message: `an earlier update to ${j.to} was interrupted; the old version ${j.from} was put back`, from: j.from, to: j.to, recovered: true };
@@ -195,21 +229,44 @@ export function restore(installDir, backupDir) {
 
 /** What the newest backup would put back: {from, to, at, components:[ids]} or null. */
 export function rollbackPlan(installDir) {
-  const D = dirs(installDir), list = fs.existsSync(D.backup) ? fs.readdirSync(D.backup).sort() : [];
-  if (!list.length) return null;
-  const b = readJson(path.join(D.backup, list[list.length - 1], 'backup.json')); if (!b) return null;
+  const { valid } = listBackups(dirs(installDir).backup);
+  if (!valid.length) return null;
+  const b = valid[valid.length - 1].b;
   const comps = [...new Set([...(b.files || []), ...(b.created || [])].map(componentOf))];
   return { from: b.to, to: b.from, at: b.at, components: comps };
 }
 
-/** Restore the newest backup on request. */
+/** Restore the newest backup on request (under the same lock as an update, so it cannot run while one is swapping). */
 export function rollbackLatest(installDir) {
-  const D = dirs(installDir);
-  const list = fs.existsSync(D.backup) ? fs.readdirSync(D.backup).sort() : [];
-  if (!list.length) return { ok: false, message: 'there is no backup to restore' };
-  const b = restore(installDir, path.join(D.backup, list[list.length - 1]));
-  writeJson(D.result, { schema: 1, at: iso(), ok: true, message: `rolled back to ${b.from}`, from: b.to, to: b.from });
-  return { ok: true, message: `rolled back to ${b.from}` };
+  const D = dirs(installDir), unlock = takeLock(D.lock);
+  if (!unlock) return { ok: false, message: 'an update is running right now; try the rollback again in a minute' };
+  try {
+    const { valid } = listBackups(D.backup);
+    if (!valid.length) return { ok: false, message: 'there is no backup to restore' };
+    const b = restore(installDir, valid[valid.length - 1].dir);
+    try { fs.unlinkSync(D.swapping); } catch {}   // a leftover journal would otherwise undo this rollback on the next start
+    writeJson(D.result, { schema: 1, at: iso(), ok: true, message: `rolled back to ${b.from}`, from: b.to, to: b.from });
+    return { ok: true, message: `rolled back to ${b.from}` };
+  } finally { unlock(); }
 }
 
-function prune(dir, keep) { try { const l = fs.readdirSync(dir).sort(); for (const d of l.slice(0, Math.max(0, l.length - keep))) fs.rmSync(path.join(dir, d), { recursive: true, force: true }); } catch {} }
+/** Usable backups, oldest first, ordered by the `at` inside backup.json (NOT by folder name: versions do not sort as text, 1.10.0 < 1.9.0). Folders still being built (.partial) or without backup.json are `junk`. */
+export function listBackups(dir) {
+  let names = [];
+  try { names = fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name); } catch { return { valid: [], junk: [] }; }
+  const valid = [], junk = [];
+  for (const name of names) {
+    const b = name.endsWith('.partial') ? null : readJson(path.join(dir, name, 'backup.json'));
+    if (b) valid.push({ name, dir: path.join(dir, name), at: Date.parse(b.at) || 0, b }); else junk.push(path.join(dir, name));
+  }
+  valid.sort((x, y) => x.at - y.at || (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+  return { valid, junk };
+}
+/** Only called with the update lock held: keeps the newest `keep` backups and removes junk (half-built folders left by a killed updater). */
+function prune(dir, keep) {
+  try {
+    const { valid, junk } = listBackups(dir);
+    for (const d of junk) fs.rmSync(d, { recursive: true, force: true });
+    for (const v of valid.slice(0, Math.max(0, valid.length - keep))) fs.rmSync(v.dir, { recursive: true, force: true });
+  } catch {}
+}

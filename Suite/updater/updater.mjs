@@ -27,7 +27,8 @@ if (source && source.type === 'github') setToken(loadToken(installDir));   // DP
 const appRunning = port => new Promise(res => { const s = net.connect({ port, host: '127.0.0.1' }); const done = v => { s.destroy(); res(v); }; s.setTimeout(800, () => done(true)); s.on('connect', () => done(true)); s.on('error', e => done(e.code !== 'ECONNREFUSED')); });
 
 async function main() {
-  if (cmd !== 'status') { try { recoverInterrupted(installDir); } catch {} }   // an update killed halfway through its swap is undone first
+  // an update killed halfway through its swap is undone first, but never under a running Suite (its files are in use and the journal may belong to a live updater)
+  if (cmd !== 'status' && !(await appRunning(Number(opt('core-port')) || 8760))) { try { recoverInterrupted(installDir); } catch {} }
   // launch hook: `launch` (or --apply-if-safe) = apply only when the setting allows it AND the Suite is not already running (never swap files under a running app)
   if (cmd === 'launch' || args.includes('--apply-if-safe')) {
     if (await appRunning(Number(opt('core-port')) || 8760)) return out({ ok: true, skipped: true, message: 'the Suite is already running; not updating under it' });

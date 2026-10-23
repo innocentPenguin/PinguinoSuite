@@ -591,3 +591,106 @@ test('release notes: grouped, plain, no secrets or addresses, docs-only left out
   assert.ok(many.text.length < 2000 && /and \d+ more change/.test(many.text));
   assert.doesNotMatch(buildNotes([{ subject: 'x ghp_abcdefghijklmnopqrstuvwxyz0123', files: ['Suite/a'] }]).text, /ghp_/);
 });
+
+// ---- backups and the swap journal: review fixes (22's scratch experiments) ----
+import { spawn } from 'node:child_process';
+import { listBackups, rollbackPlan } from '../lib/apply.mjs';
+const apply1 = (inst, rel, current, extra = {}) => applyUpdate({ installDir: inst, source: { type: 'local', path: rel }, current, liveCheck: notLive, ...extra });
+const sleeper = () => spawn(process.execPath, ['-e', 'setTimeout(()=>{}, 60000)'], { stdio: 'ignore' });
+const oldLock = (inst, pid, ageMs) => { const f = dirs(inst).lock; fs.mkdirSync(dirs(inst).u, { recursive: true }); fs.writeFileSync(f, pid === null ? '' : String(pid)); const t = new Date(Date.now() - ageMs); fs.utimesSync(f, t, t); };
+
+test('backups are ordered by time, not by folder name: 1.9.0 -> 1.10.0 -> 1.11.0 rolls back to 1.10.0 and prune keeps the newest', async () => {
+  const inst = makeInstall('1.9.0', { 'App/a.txt': 'v1.9' });
+  assert.equal((await apply1(inst, makeRelease('1.10.0', [['App/a.txt', 'v1.10']]), '1.9.0', { keepBackups: 1 })).ok, true);
+  await new Promise(r => setTimeout(r, 1100));   // the stamp has second resolution
+  assert.equal((await apply1(inst, makeRelease('1.11.0', [['App/a.txt', 'v1.11']]), '1.10.0', { keepBackups: 1 })).ok, true);
+  const { valid } = listBackups(dirs(inst).backup);
+  assert.equal(valid.length, 1); assert.equal(valid[0].b.from, '1.10.0'); assert.match(valid[0].name, /^\d{14}-1\.10\.0$/);
+  assert.equal(rollbackPlan(inst).to, '1.10.0');
+  assert.equal(rollbackLatest(inst).ok, true); assert.equal(read(inst, 'App/a.txt'), 'v1.10');
+  // old-style names ("<version>-<stamp>") are still read, and the `at` inside decides
+  const bk = dirs(inst).backup, mk = (name, from, at, txt) => { const d = path.join(bk, name); fs.mkdirSync(path.join(d, 'files', 'App'), { recursive: true }); fs.writeFileSync(path.join(d, 'files', 'App', 'a.txt'), txt); fs.writeFileSync(path.join(d, 'backup.json'), JSON.stringify({ from, to: 'x', at, files: ['App/a.txt'], created: [], install: { schema: 1, version: from } })); };
+  fs.rmSync(bk, { recursive: true, force: true });
+  mk('1.9.0-20261001000000', '1.9.0', '2026-10-01T00:00:00.000Z', 'nine'); mk('1.10.0-20261002000000', '1.10.0', '2026-10-02T00:00:00.000Z', 'ten');
+  assert.equal(listBackups(bk).valid.map(v => v.b.from).join(), '1.9.0,1.10.0'); assert.equal(rollbackLatest(inst).ok, true); assert.equal(read(inst, 'App/a.txt'), 'ten');
+});
+
+test('killed mid-backup: half-built (.partial) and list-less folders are not backups; rollback skips them and the next update clears them', async () => {
+  const inst = bigInstall(), bk = dirs(inst).backup;
+  fs.mkdirSync(path.join(bk, '20261001000000-1.0.0.partial', 'files'), { recursive: true }); fs.mkdirSync(path.join(bk, '20261002000000-1.0.0', 'files'), { recursive: true });
+  assert.equal(rollbackPlan(inst), null); assert.deepEqual(rollbackLatest(inst), { ok: false, message: 'there is no backup to restore' });
+  const r = await apply1(inst, bigRelease('1.1.0'), '1.0.0'); assert.equal(r.ok, true);
+  assert.deepEqual(fs.readdirSync(bk).filter(n => n.endsWith('.partial')), []); assert.equal(fs.readdirSync(bk).length, 1);
+  assert.ok(fs.existsSync(path.join(r.backup, 'backup.json')));
+  assert.equal(rollbackLatest(inst).ok, true); allOld(inst);
+});
+
+function journalFor(inst, backup, extra = {}) { fs.mkdirSync(dirs(inst).u, { recursive: true }); fs.writeFileSync(dirs(inst).swapping, JSON.stringify({ schema: 1, at: new Date().toISOString(), from: '1.0.0', to: '1.1.0', backup, ...extra })); }
+const newState = inst => { for (let i = 0; i < 6; i++) assert.equal(read(inst, `App/f${i}.txt`), `new ${i}`); };
+
+test('a stale journal never downgrades a newer install (version must be the journal from or to; not older than the install)', async () => {
+  const inst = bigInstall(), r = await apply1(inst, bigRelease('1.1.0'), '1.0.0'); assert.equal(r.ok, true);
+  // later the install moved on to 2.0.0 (files kept as they are) but an old journal was left behind
+  fs.writeFileSync(dirs(inst).install, JSON.stringify({ schema: 1, version: '2.0.0', channel: 'stable' }));
+  journalFor(inst, r.backup);
+  const rec = recoverInterrupted(inst); assert.ok(rec && rec.discarded && !rec.recovered && /2\.0\.0/.test(rec.message), JSON.stringify(rec));
+  newState(inst); assert.equal(JSON.parse(read(inst, 'install.json')).version, '2.0.0'); assert.ok(!fs.existsSync(dirs(inst).swapping));
+  // right version, but the install was written long after the journal: also a later install
+  fs.writeFileSync(dirs(inst).install, JSON.stringify({ schema: 1, version: '1.1.0', channel: 'stable', updated_at: new Date().toISOString() }));
+  journalFor(inst, r.backup, { at: new Date(Date.now() - 3600e3).toISOString() });
+  const rec2 = recoverInterrupted(inst); assert.ok(rec2 && rec2.discarded && /older than the current install/.test(rec2.message)); newState(inst);
+  // the real thing still recovers (version = to, journal just written)
+  fs.writeFileSync(dirs(inst).install, JSON.stringify({ schema: 1, version: '1.1.0', channel: 'stable', updated_at: new Date().toISOString() }));
+  journalFor(inst, r.backup);
+  const rec3 = recoverInterrupted(inst); assert.ok(rec3 && rec3.recovered); allOld(inst);
+});
+
+test('journal path check: a sibling folder named like the backup folder, the backup folder itself, and escapes are refused', async () => {
+  const inst = bigInstall(), r = await apply1(inst, bigRelease('1.1.0'), '1.0.0'), D = dirs(inst);
+  const evil = path.join(D.u, 'backup-evil'); fs.cpSync(r.backup, evil, { recursive: true });
+  for (const b of [evil, D.backup, path.join(D.backup, '..'), path.join(r.backup, 'files'), '', 42, null]) {
+    journalFor(inst, b); const rec = recoverInterrupted(inst);
+    assert.ok(rec && rec.discarded && /outside the backup folder/.test(rec.message), String(b) + ' -> ' + JSON.stringify(rec)); newState(inst); assert.ok(!fs.existsSync(D.swapping));
+  }
+});
+
+test('journal whose backup is gone is dropped (with "run Repair") and does not wedge the next update; a corrupt journal says so', async () => {
+  const inst = bigInstall(), D = dirs(inst);
+  journalFor(inst, path.join(D.backup, '20261001000000-1.0.0'));
+  const rec = recoverInterrupted(inst); assert.ok(rec && rec.discarded && /Repair/.test(rec.message)); assert.ok(!fs.existsSync(D.swapping));
+  fs.writeFileSync(D.swapping, '{not json');
+  const bad = recoverInterrupted(inst); assert.ok(bad && /journal was unreadable/.test(bad.message) && bad.ok === false); assert.ok(!fs.existsSync(D.swapping));
+  assert.equal(recoverInterrupted(inst), null);
+  assert.equal((await apply1(inst, bigRelease('1.1.0'), '1.0.0')).ok, true);
+});
+
+test('lock: an empty lock file blocks for 5 s then counts as stale; an old lock of a LIVE owner is never stolen; a dead owner is taken over', async () => {
+  const inst = bigInstall(2), rel = bigRelease('1.1.0', 2);
+  oldLock(inst, null, 0); const fresh = await apply1(inst, rel, '1.0.0'); assert.equal(fresh.skipped, true);
+  oldLock(inst, null, 10_000); assert.equal((await apply1(inst, rel, '1.0.0')).ok, true);
+  const child = sleeper();
+  try {
+    const inst2 = bigInstall(2); oldLock(inst2, child.pid, 3 * 3600e3);   // 3 hours old, owner alive
+    assert.equal((await apply1(inst2, rel, '1.0.0')).skipped, true); assert.equal(fs.readFileSync(dirs(inst2).lock, 'utf8'), String(child.pid));
+    const rb = rollbackLatest(inst2); assert.equal(rb.ok, false); assert.match(rb.message, /update is running/);
+  } finally { child.kill(); }
+  await new Promise(r => child.once('exit', r));
+  const inst3 = bigInstall(2); oldLock(inst3, child.pid, 0);   // its pid is gone now
+  assert.equal((await apply1(inst3, rel, '1.0.0')).ok, true);
+});
+
+test('lock: two updaters that both find a dead updater lock cannot both run; the lock file is gone afterwards', async () => {
+  const inst = bigInstall(2), rel = bigRelease('1.1.0', 2), child = sleeper(); child.kill(); await new Promise(r => child.once('exit', r));
+  oldLock(inst, child.pid, 0);
+  const [a, b] = await Promise.all([apply1(inst, rel, '1.0.0'), apply1(inst, rel, '1.0.0')]);
+  assert.equal([a, b].filter(x => x.ok && !x.skipped).length, 1); assert.equal([a, b].filter(x => x.skipped).length, 1);
+  assert.ok(!fs.existsSync(dirs(inst).lock)); assert.deepEqual(fs.readdirSync(dirs(inst).u).filter(n => n.includes('.stale-')), []);
+});
+
+test('rollback takes the update lock: it cannot run while an update swaps, and leaves no lock behind', async () => {
+  const inst = bigInstall(), r = await apply1(inst, bigRelease('1.1.0'), '1.0.0'); assert.equal(r.ok, true);
+  fs.writeFileSync(dirs(inst).lock, String(process.pid));   // an updater of this very process is "running"
+  assert.equal(rollbackLatest(inst).ok, false); newState(inst);
+  fs.unlinkSync(dirs(inst).lock);
+  assert.equal(rollbackLatest(inst).ok, true); allOld(inst); assert.ok(!fs.existsSync(dirs(inst).lock));
+});
