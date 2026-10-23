@@ -53,7 +53,7 @@ const Q = new URLSearchParams(location.search), stage = document.getElementById(
 }
 if (Q.get('bg')) document.body.classList.add('bg');
 const FONTS = {nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: 'Roboto,Arial,sans-serif'};
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 let cur = null, ctx = null;
 function chime(vol) {
   try {

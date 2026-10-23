@@ -127,7 +127,7 @@
     if (info && info.last_seen) stat.push('last seen ' + ago(info.last_seen));
     if (info && info.messages) stat.push(info.messages + ' msgs');
     if (info && info.first_seen && !stat.length) stat.push('here since ' + new Date(info.first_seen * 1000).toLocaleDateString());
-    const esc2 = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const esc2 = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const card = document.createElement('div'); card.className = 'cux-card';
     card.innerHTML = `<span class="k">${re ? 'welcome back' : 'followed'}</span><br><b style="color:${/^#[0-9a-f]{3,8}$/i.test(col) ? col : '#ff8a1f'}">${esc2(m.display || m.user)}</b>${stat.length ? `<br><span class="s">${esc2(stat.join(' · '))}</span>` : ''}`;
     document.body.appendChild(card);
