@@ -23,10 +23,13 @@ try:
     w = get('/api/wheel/public'); chk('lobby', w['status'] == 'open' and sorted(w['names']) == ['ana', 'bo', 'cy', 'dee'] and w['draw'] is None and w['signedUp'] == 4, w)
     feed('#ivan: !wheel spin', 1.5); w = get('/api/wheel/public'); st = w['draw']['steps']
     chk('one pick, still in pool while spinning', w['status'] == 'drawing' and len(st) == 1 and st[0]['name'] in w['pool'] and w['manual']['revealed'] == 1 and w['manual']['total'] == 4 and not w['manual']['last'], w)
+    chk('look fields', w['manual']['tail'] == 50 and w['manual']['nearMiss'] is True, w['manual'])
     chk('no mmr leaks', 'avg' not in json.dumps(w) and 'seed' not in json.dumps(w))
     time.sleep(10); w = get('/api/wheel/public'); chk('pick leaves the pool after the spin', st[0]['name'] not in w['pool'] and len(w['pool']) == 3, w['pool'])
+    req = urllib.request.Request(B + '/api/tune', data=json.dumps({'area': 'wheel', 'values': {'spinTail': 80, 'nearMiss': False}}).encode(), headers={'Content-Type': 'application/json'}); ap = json.load(urllib.request.urlopen(req, timeout=10))
+    w = get('/api/wheel/public'); chk('tail setting reaches the overlay', ap.get('ok') and w['manual']['tail'] == 80 and w['manual']['nearMiss'] is False, (ap, w['manual']))
     page = urllib.request.urlopen(B + '/wheel.html', timeout=10).read().decode('utf-8')
-    chk('original overlay page', 'Tournament Wheel Overlay' in page and '/api/wheel/public' in page and 'penguin-anim.gif' in page and '%%PENGUIN%%' not in page)
+    chk('original overlay page', 'Tournament Wheel Overlay' in page and '/api/wheel/public' in page and 'penguin-anim.gif' in page and 'qpulse' in page and 'body.vertical' in page and '%%PENGUIN%%' not in page)
     r = urllib.request.urlopen(B + '/penguin-anim.gif', timeout=10); chk('hub asset served as gif', r.headers['Content-Type'] == 'image/gif' and len(r.read()) > 100000)
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)

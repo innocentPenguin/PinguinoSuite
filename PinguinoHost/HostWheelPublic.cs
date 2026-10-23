@@ -10,6 +10,18 @@ namespace PinguinoHost
     /// picked, the pick being spun included), teams (only finished ones), teamSizes, names. The join/leave feed fields (signedUp, feed, feedMs, showSignedUp) ride along.</summary>
     public static class WheelPublic
     {
+        /// <summary>how the spin ends, set in the Suite (Tune > Tournament wheel): tail 0..100 (how long and slow the last part of the spin is), nearMiss (the pointer lands close to a slice edge). File Data/runtime/wheel_look.json.</summary>
+        static string LookP { get { return System.IO.Path.Combine(HostApi.DataDir, "runtime", "wheel_look.json"); } }
+        public static JObject Look()
+        {
+            JObject j = null; try { if (System.IO.File.Exists(LookP)) j = JObject.Parse(System.IO.File.ReadAllText(LookP)); } catch (Exception) { }
+            j = j ?? new JObject(); double tail = j["spinTail"] == null ? 50 : Math.Max(0, Math.Min(100, (double)j["spinTail"]));
+            return new JObject { { "spinTail", tail }, { "nearMiss", (bool?)j["nearMiss"] ?? true } };
+        }
+        public static void SetLook(string key, JToken v)
+        {
+            var j = Look(); j[key] = v; System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(LookP)); System.IO.File.WriteAllText(LookP, j.ToString(), new System.Text.UTF8Encoding(false));
+        }
         public static JObject Adapt(JObject j)
         {
             string st = (string)j["status"] ?? "none";
@@ -36,7 +48,7 @@ namespace PinguinoHost
                 { "mode", j["mode"] }, { "teamSize", size }, { "names", new JArray(names) }, { "entrantCount", names.Count },
                 { "pool", new JArray(queue.OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase)) },
                 { "teams", teams }, { "teamSizes", sizes }, { "waitlist", fin ? j["waitlist"] ?? new JArray() : new JArray() },
-                { "manual", new JObject { { "on", true }, { "revealed", R }, { "total", total }, { "last", fin }, { "spunAt", spunAt }, { "spinMs", spinMs } } },
+                { "manual", new JObject { { "on", true }, { "revealed", R }, { "total", total }, { "last", fin }, { "spunAt", spunAt }, { "spinMs", spinMs }, { "tail", Look()["spinTail"] }, { "nearMiss", Look()["nearMiss"] } } },
                 { "practice", j["practice"] ?? false }, { "label", (string)j["mode"] == "balanced" ? "Rigged / Balanced by MMR" : "True random" },
                 { "serverNow", now }, { "botOnline", true },
                 { "signedUp", j["signedUp"] ?? 0 }, { "feed", j["feed"] ?? new JArray() }, { "feedMs", j["feedMs"] ?? 2000 }, { "showSignedUp", j["showSignedUp"] ?? true }

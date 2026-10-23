@@ -46,6 +46,8 @@ namespace PinguinoHost
         // ---- the areas ----
         static List<TF> WheelFields() { return new List<TF> {
             Num("spinSpeed", "Spin length", 1500, 30000, 500, "ms", 8500, "How long one spin of the wheel takes."),
+            Num("spinTail", "Slow-down at the end", 0, 100, 5, "%", 50, "How long and slow the last part of the spin is (0 = quick stop, 100 = a long creep over the last names). The pick itself stays random."),
+            Bool("nearMiss", "Near-miss landing", true, "The pointer settles close to the edge of the picked name, so it looks like it nearly missed."),
             Sel("mode", "Team mode", "random", "True random, or balanced by MMR (labelled rigged on screen).", "random", "balanced"),
             Num("teamSize", "Team size", 1, 4, 1, "players", 2, "Players per team."),
             Sel("oddPolicy", "Odd player out", "waitlist", "What happens when the players do not divide evenly.", "waitlist", "trio", "partial", "hold", "mod"),
@@ -57,7 +59,7 @@ namespace PinguinoHost
         static JObject WheelValues()
         {
             var pf = ReadState("wheel_public.json")["prefs"] as JObject ?? new JObject();
-            return new JObject { { "spinSpeed", Pick(pf["spinMs"], 8500) }, { "mode", Pick(pf["mode"], "random") }, { "teamSize", Pick(pf["teamSize"], 2) }, { "oddPolicy", Pick(pf["oddPolicy"], "waitlist") }, { "eligibility", Pick(pf["eligibility"], "all") },
+            return new JObject { { "spinSpeed", Pick(pf["spinMs"], 8500) }, { "spinTail", WheelPublic.Look()["spinTail"] }, { "nearMiss", WheelPublic.Look()["nearMiss"] }, { "mode", Pick(pf["mode"], "random") }, { "teamSize", Pick(pf["teamSize"], 2) }, { "oddPolicy", Pick(pf["oddPolicy"], "waitlist") }, { "eligibility", Pick(pf["eligibility"], "all") },
                 { "autoReopen", Pick(pf["autoNew"], true) }, { "holdTimeSec", Pick(pf["holdSec"], 40) }, { "joinFeedSec", Pick(pf["feedSec"], 2) }, { "showSignedUp", Pick(pf["showSignedUp"], true) } };
         }
         static List<TF> QueueFields() { return new List<TF> {
@@ -163,7 +165,7 @@ namespace PinguinoHost
                 var cmd = new Dictionary<string, Func<JToken, string>> {
                     { "spinSpeed", v => "!tune wheel speed " + (long)v }, { "mode", v => "!tune wheel mode " + (string)v }, { "teamSize", v => "!tune wheel size " + (long)v }, { "oddPolicy", v => "!tune wheel odd " + (string)v }, { "eligibility", v => "!tune wheel eligibility " + (string)v },
                     { "autoReopen", v => "!tune wheel auto " + ((bool)v ? "on" : "off") }, { "holdTimeSec", v => "!tune wheel hold " + (long)v }, { "joinFeedSec", v => "!tune wheel feed " + Inv((double)v) }, { "showSignedUp", v => "!tune wheel signed " + ((bool)v ? "on" : "off") } };
-                foreach (var kv in clean) { RunAsStreamer(cmd[kv.Key](kv.Value)); applied[kv.Key] = kv.Value; }
+                foreach (var kv in clean) { if (kv.Key == "spinTail" || kv.Key == "nearMiss") WheelPublic.SetLook(kv.Key, kv.Value); else RunAsStreamer(cmd[kv.Key](kv.Value)); applied[kv.Key] = kv.Value; }
             }
             else if (area == "queue")
             {
