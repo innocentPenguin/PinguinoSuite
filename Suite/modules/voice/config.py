@@ -31,7 +31,7 @@ def path(name):
 REVIEW_CHECKS = ["talk_over", "complaints", "pronounce", "repeats", "drops", "silent_master", "console", "control"]
 COMPLAINTS = ["too loud", "shut up", "stop talking", "turn it down", "be quiet", "so annoying", "annoying", "stop that", "mute it", "mute the bot", "too much", "too quiet", "can't hear", "cant hear", "wrong", "stop it", "turn that off"]
 PRAISE = ["love that", "love the voice", "that was funny", "that was good", "nice one", "good one", "perfect", "i like that", "so good", "haha the bot", "lol the bot"]
-EVENTS = ["follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "command", "chat", "voice_cmd", "stream_online", "stream_offline", "test"]
+EVENTS = ["follow", "sub", "resub", "gift", "cheer", "raid", "redeem", "command", "chat", "voice_cmd", "stream_online", "stream_offline", "mic_alert", "test"]
 ROLES = ["broadcaster", "mod", "vip", "sub", "viewer"]
 PLATFORMS = ["twitch", "youtube", "tiktok", "kick", "discord", "other"]
 EFFECTS = ["echo", "reverb", "robot", "radio", "distortion", "tremolo"]
@@ -233,6 +233,7 @@ DEFAULT_EVENT_TEMPLATES = {
     "voice_cmd": ["Done: {what}."],
     "stream_online": ["We are live. Let's go!"],
     "stream_offline": ["Stream is over. Thanks for hanging out."],
+    "mic_alert": ["Heads up. The microphone is not being recorded. Check it."],
     "test": ["This is a test of the {persona} voice. {catch}"],
 }
 EVENT_DEFAULTS = {
@@ -248,6 +249,7 @@ EVENT_DEFAULTS = {
     "voice_cmd": dict(enabled=False, priority=2, cooldown_s=3, min_amount=0, read_message=False),
     "stream_online": dict(enabled=False, priority=5, cooldown_s=60, min_amount=0, read_message=False),
     "stream_offline": dict(enabled=False, priority=5, cooldown_s=60, min_amount=0, read_message=False),
+    "mic_alert": dict(enabled=False, priority=8, cooldown_s=300, min_amount=0, read_message=False),
     "test": dict(enabled=True, priority=5, cooldown_s=0, min_amount=0, read_message=False),
 }
 

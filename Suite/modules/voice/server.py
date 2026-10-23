@@ -91,6 +91,22 @@ def review_loop():
         time.sleep(30)
 
 
+def mic_loop(sleep=time.sleep, stop=lambda: False):
+    """Speaks ONE fixed line when Listen reports a microphone problem (event 'mic_alert', OFF by default; the master switch still decides). Never reads Listen's message aloud."""
+    last = None
+    while not stop():
+        try:
+            with urllib.request.urlopen(LISTEN_URL + "/api/status", timeout=3) as r:
+                a = json.loads(r.read()).get("mic_alert")
+            key = (a.get("kind"), a.get("message")) if isinstance(a, dict) else None
+            if key and key != last:
+                brain.handle({"kind": "mic_alert", "user": "", "manual": False, "message": ""})
+            last = key
+        except Exception:
+            pass
+        sleep(10)
+
+
 KIND_MAP = {"follow": "follow", "sub": "sub", "resub": "resub", "gift": "gift", "cheer": "cheer", "raid": "raid", "redeem": "redeem"}
 
 
@@ -608,6 +624,7 @@ def main():
     threading.Thread(target=poll_loop, daemon=True).start()
     threading.Thread(target=voicectl.read_loop, args=(ctl, LISTEN_URL), daemon=True).start()
     threading.Thread(target=review_loop, daemon=True).start()
+    threading.Thread(target=mic_loop, daemon=True).start()
     Server(("127.0.0.1", PORT), H).serve_forever()
 
 
