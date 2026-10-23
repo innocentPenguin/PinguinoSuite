@@ -12,6 +12,7 @@ import urllib.request
 
 import config
 import console_log
+from connectors.base import send_disabled
 from models import ChatMessage
 
 HOST = os.environ.get("MULTI_HOST_URL") or "http://127.0.0.1:8770"
@@ -97,6 +98,8 @@ def _get(path):
 
 
 def _say_sync(text):
+    if send_disabled():
+        return {"ok": False, "via": "sending is switched off (MULTI_NO_SEND)"}
     tok = os.environ.get("PINGUINO_MODULE_TOKEN") or os.environ.get("PINGUINO_API_TOKEN") or ""
     req = urllib.request.Request(HOST + "/api/say", data=json.dumps({"text": text, "bot": "core"}).encode(), method="POST",
                                  headers={"content-type": "application/json", "Authorization": "Bearer " + tok})
@@ -104,6 +107,8 @@ def _say_sync(text):
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
+        if e.code >= 500:                                # the Host may have processed it before failing: never repeated
+            return {"ok": True, "via": f"Host error {e.code} (may have gone out, not repeated)"}
         return {"ok": False, "via": f"Host refused ({e.code})"}
     except urllib.error.URLError as e:
         if isinstance(e.reason, ConnectionRefusedError):

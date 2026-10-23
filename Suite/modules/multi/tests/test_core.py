@@ -1146,7 +1146,8 @@ def test_send_drops_duplicates_and_allows_retry_after_failure(tmp_path, monkeypa
         async def send(self, text, reply_to=None):
             calls.append(text)
             if Fake.fail:
-                raise RuntimeError("nope")
+                from connectors.base import SendRejected
+                raise SendRejected("nope")
             return "discord:x:1"
     monkeypatch.setitem(server.connectors, "discord", Fake())
     c = TestClient(server.app, base_url="http://127.0.0.1:8766")

@@ -220,7 +220,7 @@ def test_server_retry_after_timeout_cannot_double_send(tmp_path, monkeypatch):
     monkeypatch.setitem(server.connectors, "discord", dc)
     assert c.post("/api/send", json={"platform": "discord", "text": "gg"}, headers=h).status_code == 502
     for _ in range(3):
-        assert c.post("/api/send", json={"platform": "discord", "text": "gg"}, headers=h).status_code == 502
+        assert c.post("/api/send", json={"platform": "discord", "text": "gg"}, headers=h).json()["duplicate"] is True
     assert len(net.calls) == 1
 
 
@@ -295,3 +295,45 @@ def test_sim_and_test_events_never_send(tmp_path, monkeypatch):
                               {"user": "e", "text": "first time here", "platform": "youtube"}]):
         r = c.post("/api/dev/inject", json=dict(body, id=f"sim:{i}"), headers=h)
         assert r.status_code == 200, r.text
+
+
+# ---- Host fallback and server key (applied in host_feed.py / server.py) ----------------------------------------------
+def test_host_say_maps_5xx_to_may_have_gone_out_and_honours_no_send(monkeypatch):
+    import io
+    import urllib.error
+    import host_feed
+
+    def raising(code):
+        def f(req, timeout=0):
+            raise urllib.error.HTTPError("u", code, "x", {}, io.BytesIO(b""))
+        return f
+    monkeypatch.setattr(host_feed.urllib.request, "urlopen", raising(502))
+    r = host_feed._say_sync("hi")
+    assert r["ok"] is True and "may have gone out" in r["via"]                    # not freed -> never repeated
+    monkeypatch.setattr(host_feed.urllib.request, "urlopen", raising(403))
+    assert host_feed._say_sync("hi")["ok"] is False                               # definite refusal
+    monkeypatch.setenv("MULTI_NO_SEND", "1")
+    monkeypatch.setattr(host_feed.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sent")))
+    assert host_feed._say_sync("hi")["ok"] is False
+
+
+def test_server_keeps_key_after_unknown_outcome_but_frees_it_after_refusal(tmp_path, monkeypatch):
+    server, c, h = server_client(tmp_path, monkeypatch)
+    calls = []
+
+    class Fake:
+        capabilities = {"send": True, "reply": False}
+        user = None
+        errs = [requests.Timeout("slow"), base.SendRejected("no"), None]
+
+        async def send(self, text, reply_to=None):
+            calls.append(text)
+            e = Fake.errs.pop(0)
+            if e:
+                raise e
+            return "discord:x:1"
+    monkeypatch.setitem(server.connectors, "discord", Fake())
+    post = lambda t: c.post("/api/send", json={"platform": "discord", "text": t}, headers=h)
+    assert post("a").status_code == 502
+    assert post("a").json()["duplicate"] is True and len(calls) == 1             # timeout: the server itself refuses the retry too
+    assert post("b").status_code == 502 and post("b").json()["ok"] is True       # refusal: retry allowed

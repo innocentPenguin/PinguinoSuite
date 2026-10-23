@@ -67,6 +67,7 @@ from connectors.kick import Kick
 from connectors.tiktok import TikTok
 from connectors.twitch import Twitch
 from connectors.youtube import YouTube
+from connectors.base import SendRejected
 from models import ChatMessage
 from pipeline import Inbox, Pipeline
 from priority import rules as prio
@@ -913,7 +914,9 @@ async def send(request: Request):
     try:
         mid = await conn.send(text, reply_to)
     except Exception as e:
-        _RECENT_SENDS.pop(key, None)                     # the platform rejected it (not a timeout): allow a retry
+        if isinstance(e, SendRejected):
+            _RECENT_SENDS.pop(key, None)                 # definitely refused before sending: allow a retry
+        # anything else (timeout, reset, 5xx, duplicate) may have gone out: keep the 30 s key so no repeat
         raise HTTPException(502, str(e))
     me = conn.user["login"] if getattr(conn, "user", None) else "me"
     own = ChatMessage(id=mid, platform=platform, channel=config.settings()["channel"],
@@ -1624,7 +1627,7 @@ async def dev_inject(request: Request):
     n = int(time.time() * 1000)
     m = ChatMessage(id=b.get("id") or f"twitch:dev:{n}", platform=b.get("platform", "twitch"), channel="dev",
                     user_id=b.get("user_id") or b.get("user", "viewer"), user=b.get("user", "viewer"),
-                    display=b.get("user", "viewer"), text=b["text"], ts=time.time(), badges=b.get("badges", []),
+                    display=b.get("user", "viewer"), text=str(b.get("text", "")), ts=time.time(), badges=b.get("badges", []),
                     first_time=b.get("first_time", False), reply_to=b.get("reply_to", ""),
                     reply_to_user=b.get("reply_to_user", ""), color=b.get("color", ""), emotes=b.get("emotes", []),
                     event=b.get("event", ""), amount=int(b.get("amount", 0)))
