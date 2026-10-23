@@ -66,6 +66,8 @@ namespace PinguinoHost
                 led[id] = new JObject { { "login", login }, { "delta", delta }, { "reason", note != "" ? note : source }, { "source", source }, { "note", note }, { "balance", before + delta }, { "at", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 Save();
             }
+            if (source == "loan" || source == "loan_repay" || source.StartsWith("p2p_"))   // loans show in the per-stream ledger too (what the person saw happen to their points this stream)
+                try { if (!Sim.IsSim(login)) lock (L) { PRow(CurSid(), login, source.StartsWith("p2p_") ? "loan" : source == "loan_repay" ? "repay" : "loan", string.IsNullOrEmpty(note) ? source : note, delta, id); Save(); } } catch (Exception) { }
             if (source != "loan" && source != "loan_repay" && source != "depreciation" && !source.StartsWith("p2p_")) Periods.Add(login, delta < 0 ? "points_spent" : (source == "backpay" || source == "grant") ? "points_backpay" : "points", Math.Abs((double)delta), 0, "ap:" + id);
             return null;
         }
@@ -239,7 +241,7 @@ namespace PinguinoHost
             {
                 long loss = DepreciationFor(h.Value, set); if (loss <= 0) continue;
                 lines.Add(new JObject { { "login", h.Key }, { "balance", h.Value }, { "loss", loss } });
-                if (!dry && Award(h.Key, -loss, "depreciation", "Depreciation on points over " + Num(D(set["DepreciationThreshold"])) + (HasTiers(set) ? "" : " (" + D(set["DepreciationPct"]).ToString("0.##", CultureInfo.InvariantCulture) + "%)"), "depr:" + sid + ":" + h.Key) == null) { total += loss; taken++; }
+                if (!dry && Award(h.Key, -loss, "depreciation", "Depreciation on points over " + Num(D(set["DepreciationThreshold"])) + (HasTiers(set) ? "" : " (" + D(set["DepreciationPct"]).ToString("0.##", CultureInfo.InvariantCulture) + "%)"), "depr:" + sid + ":" + h.Key) == null) { total += loss; taken++; try { if (!Sim.IsSim(h.Key)) lock (L) { PRow(sid, Canon(Boards.AliasMap(), h.Key), "depreciation", "Depreciation (end of stream)", -loss, "depr:" + sid + ":" + h.Key); Save(); } } catch (Exception) { } }
                 else if (dry) total += loss;
             }
             string line = DateTime.UtcNow.ToString("o") + "\t" + sid + "\t" + (dry ? "DRYRUN would take" : "took") + " " + total + " from " + lines.Count + " people: " + string.Join(", ", lines.Take(10).Select(x => (string)x["login"] + " -" + (long)x["loss"]));

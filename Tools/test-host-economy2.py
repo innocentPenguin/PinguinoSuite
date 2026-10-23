@@ -24,6 +24,7 @@ fails = []
 def chk(n, ok, x=''):
     if not ok: fails.append('%s %s' % (n, x))
 def get(p): return json.load(urllib.request.urlopen(B + p, timeout=10))
+def srows(u): return [r for st in get('/api/economy/streams?login=' + u)['streams'] for r in st['rows']]
 def post(p, o):
     rq = urllib.request.Request(B + p, json.dumps(o).encode(), {'Content-Type': 'application/json', 'Origin': B})
     try: return json.load(urllib.request.urlopen(rq, timeout=10))
@@ -78,6 +79,7 @@ try:
     chk('depreciation taken once', bal('ann') == 150035 - 3750, bal('ann'))
     dl = [r for r in me('ann')['ledger'] if r['source'] == 'depreciation']
     chk('depreciation ledger line', len(dl) == 1 and dl[0]['delta'] == -3750 and dl[0]['balance'] == 146285, dl)
+    chk('depreciation shows in the per-stream ledger', ('depreciation', -3750) in [(r['type'], r['delta']) for r in srows('ann')], srows('ann'))
     chk('streamer and bots exempt', bal('streamer1') == 500000 and bal('nightbot') == 500000, (bal('streamer1'), bal('nightbot')))
     live(False); live(False); chk('end of the same stream again changes nothing', bal('ann') == 146285, bal('ann'))
     post('/api/economy', {'settings': {'DepreciationBasis': 'excess', 'DepreciationPct': 10}})
@@ -93,6 +95,7 @@ try:
     feed('zed: !repay 200', 1.5); chk('partial repay', bal('zed') == 300 and me('zed')['loans']['owed'] == 300, (bal('zed'), me('zed')['loans']))
     live(True); live(False)
     chk('interest per stream (5% of 500 = 25)', me('zed')['loans']['owed'] == 325, me('zed')['loans'])
+    chk('loan and repayments show in the per-stream ledger', ('loan', 500) in [(r['type'], r['delta']) for r in srows('zed')] and ('repay', -200) in [(r['type'], r['delta']) for r in srows('zed')], srows('zed'))
     feed('zed: !bank'); chk('!bank line', '@zed you have 300' in said() and 'loan owed 325' in said(), said()[-300:])
     feed('zed: !repay all', 1.5); chk('repay limited by balance', bal('zed') == 0 and me('zed')['loans']['owed'] == 25, (bal('zed'), me('zed')['loans']))
     r = post('/api/economy/loan', {'action': 'take', 'login': 'yan', 'amount': 10, 'id': 'r1'}); chk('no history = no loan', r['ok'] is False and 'watch time' in r['error'], r)
