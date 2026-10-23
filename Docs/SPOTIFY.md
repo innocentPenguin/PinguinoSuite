@@ -130,3 +130,7 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 - `POST /api/channel-playlist/add {user, track?}` adds the playing song (or a track id) -> `{ok, code: added|duplicate|no_playlist|none|rate|error, title, playlist}`. Dedupes against the playlist, rate limit 10/min overall and 4/min per user, Logs entry (source `playlist`).
 - Site: push `status.channelPlaylist = {name}|null` (name only, never the id); mod event `{type:"mod", action:"playlist_add", value:<track id, 10-30 alnum, optional>}`; ack `{ok, reason}` with reason added|duplicate|no_playlist|rate_limited|error.
 - Logs tab: `GET /api/logs?since=`. Vote skip: `/api/chat-command` takes `activeChatters` and `skipNeed`.
+
+## YouTube links in requests
+
+`!sr <youtube link>` (youtu.be, youtube.com/watch, music.youtube.com, shorts, live, embed; `&list=` ignored, single video only) reads the title/channel via YouTube oEmbed (data only, nothing plays from YouTube), cleans it ("Official Video", "(Lyrics)", "ft." ...), searches Spotify and queues the best match only if its score (title 65%, artist 35%) reaches `yt_min_score` (default 70); otherwise "no song found". Settings: `yt_links` (on/off), `yt_min_score`. Each lookup and score is logged in the Logs tab (source `youtube`). The matched track then goes through the normal approval/blocklist/rate rules.

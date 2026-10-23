@@ -459,6 +459,20 @@ class Engine:
         return [dict(t) for t in out]
 
     def _resolve(self, q, limit=5):
+        import ytlink
+        vid = None if rules.track_id_from(q) else ytlink.video_id(q)
+        if vid:
+            s = self.settings
+            if not s.get("yt_links", True):
+                return []
+            meta = ytlink.fetch_meta(vid, getattr(self, "yt_http", None))
+            if not meta:
+                console_log.info("youtube", f"{vid}: could not read the video info")
+                return []
+            song, artist = ytlink.clean(meta["title"], meta["channel"])
+            t, sc, qq = ytlink.best_match(song, artist, lambda x: [r for r in self.api.search(x, 8) if r], int(s.get("yt_min_score", 70)))
+            console_log.info("youtube", f"{vid} '{meta['title']}' -> '{song}' / '{artist}': " + (f"matched '{t['name']} - {', '.join(t['artists'])}' score {sc}" if t else f"no match (best {sc}, need {s.get('yt_min_score', 70)})"))
+            return [t] if t else []
         tid = rules.track_id_from(q)
         if tid:
             t = self.api.track(tid)
@@ -507,7 +521,8 @@ class Engine:
         if not self.auth.connected():
             return self._r(False, "offline", user=user)
         if query and not track and not rules.is_staff(roles):
-            has_link = bool(rules.track_id_from(query))
+            import ytlink
+            has_link = bool(rules.track_id_from(query) or ytlink.video_id(query))
             if has_link and not s["allow_links"]:
                 return self._r(False, "no_links", user=user)
             if not has_link and not s["allow_search"]:

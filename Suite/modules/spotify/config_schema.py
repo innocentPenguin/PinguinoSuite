@@ -170,6 +170,8 @@ SCHEMA = [
         ("lyrics_on", "bool", True, "Show lyrics", "Lyrics overlay (/overlay/lyrics) fetches lines for the playing song from LRCLIB. Off = the overlay stays blank."),
         ("channel_playlist_id", "str", "", "Channel playlist ID", "Chosen with the picker on the Setup tab. Mods can add the playing song to it from the site."),
         ("channel_playlist_name", "str", "", "Channel playlist name", ""),
+        ("yt_links", "bool", True, "Accept YouTube links", "A YouTube link in !sr is only used to read the title, then the matching song is found on Spotify. Nothing plays from YouTube."),
+        ("yt_min_score", "int", 70, "YouTube match threshold (0-100)", "Lower = more forgiving, higher = stricter. Below this the request says song not found."),
         ("fallback_only_open", "bool", True, "Only while requests are open", "Safety: no surprise music when you are not streaming."),
     ]},
     {"id": "player", "title": "Playback & text files", "items": [

@@ -307,6 +307,28 @@ class SongifyTests(unittest.TestCase):
         self.assertEqual(self.e.playlist_add("spam", "idzzzzzzzzzzzzzzzzzzzz"[:22].ljust(22, "z"))["code"], "rate")
         self.assertEqual(self.e.site_snapshot()["status"]["channelPlaylist"], {"name": "Stream faves"})
 
+    def test_youtube_link_request(self):
+        import ytlink
+        from fakes import trk
+        self.e.yt_http = lambda url: {"title": "Artist - Song 3 (Official Video) [4K]", "author_name": "ArtistVEVO"}
+        good = trk(3)
+        good["name"], good["artists"] = "Song 3", ["Artist"]
+        self.api.search = lambda q, limit=8: [{"id": good["id"], "uri": good["uri"], "name": "Song 3", "artists": ["Artist"], "duration_ms": 200000, "explicit": False, "album": "A", "art": ""}]
+        url = "https://youtu.be/dQw4w9WgXcQ?si=abc"
+        got = self.e.resolve(url)
+        self.assertEqual(got and got[0]["name"], "Song 3")
+        self.e.yt_http = lambda url: {"title": "Totally Different Thing", "author_name": "Someone Else"}
+        self.e._search_cache.clear()
+        self.assertEqual(self.e.resolve("https://www.youtube.com/watch?v=aaaaaaaaaaa&list=PLx"), [])         # below threshold: not found
+        self.e.yt_http = lambda url: None
+        self.e._search_cache.clear()
+        self.assertEqual(self.e.resolve("https://music.youtube.com/watch?v=bbbbbbbbbbb"), [])
+        self.e.cfg.setdefault("settings", {})["yt_links"] = False
+        self.e.yt_http = lambda url: {"title": "Artist - Song 3", "author_name": "x"}
+        self.e._search_cache.clear()
+        self.assertEqual(self.e.resolve(url), [])                                                            # switched off
+        self.assertIsNone(ytlink.video_id("https://notyoutube.com/watch?v=dQw4w9WgXcQ"))
+
     def test_leaderboard(self):
         self.sr("ann", 3)
         self.play(3)
