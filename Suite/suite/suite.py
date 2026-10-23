@@ -207,6 +207,7 @@ import prefs as prefslib  # noqa: E402
 import sounds as soundslib  # noqa: E402
 import templates as tplib  # noqa: E402
 import updates as updateslib  # noqa: E402
+import feedback as feedbacklib  # noqa: E402
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (bundled sidecar): the Suite data/modules folder is passed in by the shell.
@@ -1008,6 +1009,44 @@ def read_update_status(folder=None):
     except (OSError, ValueError):
         pass
     return out
+
+
+FEEDBACK_DIR = Path(os.environ.get("PINGUINO_FEEDBACK_DIR") or (Path(DATA_DIR).parent / "feedback"))   # Data\feedback: 'Report a problem' notes, read by 00 / the engines
+
+
+class Report(BaseModel):
+    note: str = ""
+    page: str = ""
+    route: str = ""
+    url: str = ""
+    images: list[dict] = []
+
+
+@app.post("/api/feedback")
+def feedback_save(b: Report, request: Request):
+    if int(request.headers.get("content-length") or 0) > 60 * 1024 * 1024:
+        raise HTTPException(413, "too large")
+    try:
+        meta = feedbacklib.save(FEEDBACK_DIR, b.note, b.page, b.route, b.url, read_update_status().get("version") or "", b.images)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    console_log.log("info", "feedback", "problem report saved: " + meta["id"])
+    return {"ok": True, "id": meta["id"], "dir": str(FEEDBACK_DIR)}
+
+
+@app.get("/api/feedback")
+def feedback_list():
+    return {"dir": str(FEEDBACK_DIR), "items": feedbacklib.recent(FEEDBACK_DIR)}
+
+
+@app.post("/api/feedback/open")
+def feedback_open():
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        os.startfile(str(FEEDBACK_DIR))   # type: ignore[attr-defined]  (Windows only, like the rest of the Suite)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    return {"ok": True}
 
 
 @app.get("/api/update/status")
