@@ -36,7 +36,7 @@
   const ui = {
     wq: ls.get('wq') || null, teamsOv: {}, si: Object.assign({ title: '', description: '', tags: '', game: '', plat: { twitch: true, youtube: true, kick: false }, at: '', privacy: 'public' }, ls.get('si') || {}), ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
-    itemsBy: {}, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
+    itemsBy: {}, heads: {}, modsOk: null, tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
   };
   const saveCache = () => ls.set('cache', { tree: S.get('tree'), customs: S.get('customs') });
 
@@ -649,7 +649,7 @@
 
   /* ---------- feed ---------- */
   function mkFeed() {
-    $('#tab-feed').innerHTML = '<div class="row sm" style="margin-bottom:6px;gap:4px" id="feed-chips">' + [['all', 'All'], ['chat', 'Chat'], ['players', 'Players'], ['backend', 'Backend'], ['events', 'Events']].map(([k, l]) => `<button class="sm chip" data-lc="${k}">${l}</button>`).join('') + '</div><div class="faint sm" id="feed-note" style="margin-bottom:6px"></div><div id="feedlist"></div>';
+    $('#tab-feed').innerHTML = '<div class="row sm" style="margin-bottom:6px;gap:4px" id="feed-chips">' + [['all', 'All'], ['chat', 'Chat'], ['players', 'Players'], ['backend', 'Backend'], ['events', 'Events'], ['mods', 'Mods']].map(([k, l]) => `<button class="sm chip" data-lc="${k}">${l}</button>`).join('') + '</div><div class="row sm" id="feed-heads" style="gap:6px;margin-bottom:6px" hidden></div><div class="faint sm" id="feed-note" style="margin-bottom:6px"></div><div id="feedlist"></div>';
   }
   const fmtT = ts => new Date(ts * 1000).toTimeString().slice(0, 5);
   function renderFeed() {
@@ -671,6 +671,17 @@
     if (ui.logsOk === false && (ui.logCat === 'backend' || ui.logCat === 'all')) n.push('Backend log (bot + overlay actions) needs the Host /api/eventlog: not connected yet. Players log is built here from queue changes (no history before this window opened).');
     if (ui.logsOk === true && !rows.length) n.push('Nothing in this log yet.');
     $('#feed-note').textContent = n.join(' ');
+  }
+  // Mods activity (Host /api/modaudit) and the status strip (shoutouts, intro queue, scene health): read only, polled only while the Feed tab is open
+  function renderHeads() {
+    const box = $('#feed-heads'), v = C.headsView(ui.heads.shout, ui.heads.intro, ui.heads.health);
+    C.reconcile(box, v.map(x => Object.assign(x, { sg: x.k + '|' + x.text + '|' + x.warn + '|' + (x.tip || '') })), x => x.k, () => h('span', 'hd'),
+      (d, x) => { d.textContent = x.text; d.className = 'hd' + (x.warn ? ' warn' : ''); d.title = x.tip || ''; });
+    box.hidden = !v.length;
+  }
+  function addMods(list) {
+    const add = (list || []).filter(e => e && e.id != null).map(C.normMod);
+    if (C.mergeFeed(ui.feed, add, x => x.k, 1500)) { ui.feed.sort((a, b) => a.ts - b.ts); schedule('feed'); }
   }
   function addActivity(list) {
     const add = (list || []).map(a => ({ k: 'a' + a.seq, t: 'e', ts: a.ts, user: a.user || '', type: a.kind, text: C.activityLine(a) }));
@@ -778,6 +789,11 @@
       if (got.every(r => r.status === 404)) { if (ui.logsOk !== false) { ui.logsOk = false; schedule('feed'); } return; }
       if (got.some(r => r.ok)) { if (ui.logsOk !== true) { ui.logsOk = true; schedule('feed'); } got.forEach(r => r.ok && addLogs(r.json.events)); }
     }),
+    mods: P(() => (ui.modsOk === false ? 60000 : 8000), async () => { const r = await api.get('/api/modaudit?limit=60'); if (r.status === 404) { ui.modsOk = false; return; } if (r.ok) { ui.modsOk = true; addMods(r.json.entries); } }, () => visible() && ui.tab === 'feed'),
+    heads: P(10000, async () => {
+      const [a, b, c] = await Promise.all([api.get('/api/shoutouts'), api.get('/api/intros?status=pending'), api.get('/api/scene-health')]);
+      ui.heads = { shout: a.ok ? a.json : null, intro: b.ok ? b.json : null, health: c.json && Array.isArray(c.json.problems) ? c.json : null }; renderHeads();
+    }, () => visible() && ui.tab === 'feed'),
     music: P(() => (document.hidden ? 8000 : 2500), async () => {
       const [a, b] = await Promise.all([mapi.get('/api/now'), mapi.get('/api/state')]);
       if (a.ok || b.ok) S.set({ now: a.ok ? a.json : S.get('now'), mstate: b.ok ? b.json : null, nowOk: true }); else S.set({ nowOk: false });
@@ -893,7 +909,7 @@
   function setTab(t) {
     ui.tab = t; ls.set('tab', t); $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabbody').forEach(d => d.hidden = d.id !== 'tab-' + t);
     if (t === 'stream') siLoad();
-    if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') renderFeed();
+    if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') { pollers.mods.kick(); pollers.heads.kick(); renderFeed(); }
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
   { const sel = $('#b-scale'), apply = v => { document.documentElement.style.zoom = v === 100 ? '' : String(v / 100); };   // zoom on this page's root only; the Suite shell is a different document

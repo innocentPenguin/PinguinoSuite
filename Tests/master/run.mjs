@@ -261,6 +261,16 @@ await t('UI scale: only 90/100/115/130 are accepted, junk falls back to 100; sel
   const html = fs.readFileSync(new URL('../../App/src/master/master.html', import.meta.url), 'utf8'); assert.ok(/id="b-scale"/.test(html));
   const js = fs.readFileSync(new URL('../../App/src/master/master.js', import.meta.url), 'utf8'); assert.ok(js.includes('documentElement.style.zoom') && js.includes("ls.set('scale'"));
 });
+await t('Host extras: Mods feed items and the Feed status strip (shoutouts, intro queue, scene health) from the mock', async () => {
+  const m = (await api.get('/api/modaudit?limit=60')).json.entries.map(C.normMod);
+  assert.equal(m[0].t, 'm'); assert.equal(m[0].k, 'Mh-2'); assert.equal(m[0].text, 'modsam: timeout troll [– → 600s]'); assert.equal(m[1].text, 'viewerx (viewer): intro submitted twitch:1 [– → hello]');
+  const feed = m.concat([{ k: 'x', t: 'c', ts: 1, user: 'a', text: 'hi' }]);
+  assert.equal(C.logRows(feed, 'all', '', null, 50).length, 1, 'Mods are not mixed into All'); assert.equal(C.logRows(feed, 'mods', '', null, 50).length, 2);
+  const v = C.headsView((await api.get('/api/shoutouts')).json, (await api.get('/api/intros?status=pending')).json, (await api.get('/api/scene-health')).json);
+  assert.deepEqual(v.map(x => x.k), ['shout', 'intro', 'scenes']); assert.equal(v[0].text, 'Shoutout: now kira · 1 queued · last ann 7 min ago'); assert.equal(v[1].text, 'Intros waiting: 3'); assert.equal(v[1].warn, true); assert.equal(v[2].text, 'Scenes: 1 problem'); assert.match(v[2].tip, /no visible widget/);
+  assert.deepEqual(C.headsView(null, { ok: true, pending: 0 }, { ok: true, problems: [] }).map(x => x.k), ['intro']); assert.equal(C.headsView(null, null, null).length, 0);
+  assert.equal(C.headsView({ ok: true, current: '', pending: [], recent: [] }, null, null)[0].text, 'Shoutout: idle');
+});
 await t('last stream card: recapView shapes the Host recap, only https clips link; mock preview round trip', async () => {
   const v = C.recapView((await api.get('/api/recap/preview')).json); assert.equal(v.text, 'Recap text'); assert.equal(v.clipUrl, 'https://clips.twitch.tv/x'); assert.equal(v.views, 12); assert.equal(v.hasClip, true);
   assert.equal(C.recapView({ line: 'L', clip: { url: 'javascript:alert(1)', title: 'x' } }).hasClip, false); assert.equal(C.recapView({ line: 'L', clip: null }).text, 'L'); assert.equal(C.recapView(null).text, '');

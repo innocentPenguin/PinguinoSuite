@@ -292,7 +292,7 @@
 
   /* ---------- logs: Chat / Players / Backend (+ Twitch events) ---------- */
   // item: {k, t:'c'|'e'|'p'|'b', ts(sec), type, user, text, group, matchId, blue[], orange[], by, reason}
-  const LOG_CATS = { all: null, chat: 'c', events: 'e', players: 'p', backend: 'b' };
+  const LOG_CATS = { all: null, chat: 'c', events: 'e', players: 'p', backend: 'b', mods: 'm' };
   function logText(x) {
     if (x.text) return x.text;
     const u = x.user || '?', by = x.by ? ' by ' + x.by : '', why = x.reason ? ' (' + x.reason + ')' : '';
@@ -318,7 +318,7 @@
   // Turns the merged item list into display rows: filters by category + search, and folds runs of same-group removals ("6 players", click to open).
   function logRows(items, cat, q, open, cap) {
     const want = LOG_CATS[cat || 'all'], needle = (q || '').toLowerCase(), out = [];
-    const list = items.filter(x => (!want || x.t === want) && (!needle || ((x.user || '') + ' ' + logText(x)).toLowerCase().includes(needle))).slice(-(cap || 400));
+    const list = items.filter(x => (want ? x.t === want : x.t !== 'm') && (!needle || ((x.user || '') + ' ' + logText(x)).toLowerCase().includes(needle))).slice(-(cap || 400));
     for (let i = 0; i < list.length; i++) {
       const x = list[i];
       if (x.group && x.t === 'p' && (x.type === 'leave' || x.type === 'removed' || x.type === 'match_clear')) {
@@ -333,6 +333,17 @@
       }
       out.push({ key: x.k, kind: x.type === 'teams' ? 'teams' : 'line', t: x.t, lvl: x.level || '', ts: x.ts, user: x.user || '', type: x.type || '', text: x.type === 'teams' ? ('Match' + (x.matchId != null ? ' #' + x.matchId : '') + ' teams') : logText(x), blue: x.blue || [], orange: x.orange || [] });
     }
+    return out;
+  }
+  // Host /api/modaudit entry {id, at(unix s), who, role, action, target, before, after} -> feed item (category Mods; not shown under All)
+  const modText = e => { const w = e.who || '?', r = e.role && e.role !== 'mod' ? ' (' + e.role + ')' : '', t = e.target ? ' ' + e.target : '', ch = e.before || e.after ? ' [' + (e.before || '–') + ' → ' + (e.after || '–') + ']' : ''; return w + r + ': ' + (e.action || 'action') + t + ch; };
+  const normMod = e => ({ k: 'M' + e.id, t: 'm', ts: +e.at || 0, type: 'mod', user: e.who || '', text: modText(e) });
+  // Status strip for the Feed tab from the Host's /api/shoutouts, /api/intros?status=pending and /api/scene-health answers (any may be null = not available)
+  function headsView(sh, intro, health) {
+    const out = [];
+    if (sh && sh.ok !== false) { const cur = sh.current, pend = (sh.pending || []).length, last = (sh.recent || [])[0]; out.push({ k: 'shout', warn: false, text: 'Shoutout: ' + (cur ? 'now ' + cur : 'idle') + (pend ? ' · ' + pend + ' queued' : '') + (last ? ' · last ' + last.user + ' ' + (last.minAgo < 1 ? 'just now' : last.minAgo + ' min ago') : '') }); }
+    if (intro && intro.ok !== false && typeof intro.pending === 'number') out.push({ k: 'intro', warn: intro.pending > 0, text: 'Intros waiting: ' + intro.pending });
+    if (health && health.ok === false && Array.isArray(health.problems) && health.problems.length) out.push({ k: 'scenes', warn: true, text: 'Scenes: ' + health.problems.length + ' problem' + (health.problems.length > 1 ? 's' : ''), tip: health.problems.join('\n') });
     return out;
   }
   // 02's /api/eventlog event {id, ts(ms), kind, type, user, text, group, detail} -> feed item
@@ -372,5 +383,5 @@
     }
   }
 
-  return { UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });
