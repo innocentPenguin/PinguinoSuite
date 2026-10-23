@@ -46,6 +46,9 @@ def _t(text, sub="", prio=5, dur=6, confetti=None, **kw):
     return d
 
 
+# shoutout clip settings (match Teklynk's twitch-shoutout): Multi plays; the Host (02) owns who may trigger, the cooldown, the raid rule and the clip pick, and reads these from /api/alerts
+CLIP_DEFAULT = {"enabled": True, "muted": False, "volume": 80, "max_s": 20, "delay_s": 10, "progress_bar": True, "show_text": False, "show_msg": False, "show_image": False,
+                "raid_auto": True, "raid_min": 3, "mods_only": True, "vips_only": False, "cooldown_s": 60, "command": "so", "prefer_featured": True, "date_range_days": 0}
 DEFAULT_TYPES = {
     "follow": _t("{user} followed!", "welcome to the colony", 3, 5),
     "refollow": _t("{user} is back!", "welcome back", 2, 4, silent=True),
@@ -62,7 +65,7 @@ DEFAULT_TYPES = {
     "anniversary": _t("{user}: {years} year(s) watching!", "happy colony-versary", 7, 8, exact=True, milestones=_ms([1, 2, 3, 4, 5], "years")),
     "comeback": _t("{user} is back for the first stream in a while!", "welcome back", 4, 5),
     "intro": _t("{user} has arrived", "{message}", 5, 6),
-    "shoutout": _t("Go check out {user}!", "{message}", 6, 18, clip={"enabled": True, "muted": False, "volume": 80, "max_s": 15}),
+    "shoutout": _t("Go check out {user}!", "{message}", 6, 18, clip=dict(CLIP_DEFAULT)),
     "raid_out": _t("Raiding {user} with {amount} viewers!", "go go go", 8, 7),
     "hype_start": _t("HYPE TRAIN!", "all aboard", 8, 7),
     "hype_level": _t("Hype train level {level}!", "", 7, 5),
@@ -148,12 +151,14 @@ def sanitize_type(c, base):
     cl = c.get("clip")
     if isinstance(cl, dict) and isinstance(out.get("clip"), dict):
         o = out["clip"]
-        for k in ("enabled", "muted"):
-            if k in cl:
+        for k in ("enabled", "muted", "progress_bar", "show_text", "show_msg", "show_image", "raid_auto", "mods_only", "vips_only", "prefer_featured"):
+            if k in cl and k in o:
                 o[k] = bool(cl[k])
-        for k, lo, hi in (("volume", 0, 100), ("max_s", 3, 60)):
-            if k in cl:
+        for k, lo, hi in (("volume", 0, 100), ("max_s", 3, 60), ("delay_s", 0, 120), ("raid_min", 1, 1000), ("cooldown_s", 0, 3600), ("date_range_days", 0, 3650)):
+            if k in cl and k in o:
                 o[k] = int(_num(cl[k], lo, hi, o[k]))
+        if "command" in cl and re.fullmatch(r"[a-z0-9]{1,20}", str(cl["command"]).lstrip("!").lower()):
+            o["command"] = str(cl["command"]).lstrip("!").lower()
     cd = c.get("conditions")
     if isinstance(cd, dict):
         if "first_time_only" in cd:
@@ -483,13 +488,17 @@ class Engine:
         su = str(ev.get("sound_url") or "")
         if re.fullmatch(r"/alert-media/[A-Za-z0-9._-]{1,80}", su) and so["enabled"] and not c["silent"]:
             url = su                                    # the sound a viewer picked for their intro (media library only)
-        clip, dur = self._clip(c, ev), c["duration"]
+        clip, dur, cc = self._clip(c, ev), c["duration"], c.get("clip") or {}
+        text, sub, avatar = render(c["text"], ev), render(c["subtext"], ev), _url(ev.get("avatar"))
         if clip:
             dur = max(dur, int(min(clip["max_s"], clip["duration_s"] or clip["max_s"]) + 2))
+            text = text if cc.get("show_text") else []
+            sub = [[str(ev.get("message") or ""), ""]] if cc.get("show_msg") and ev.get("message") else (sub if cc.get("show_text") else [])
+            avatar = avatar if cc.get("show_image") else ""
         return {"id": ev["id"], "type": ev["type"], "label": LABEL[ev["type"]], "priority": c["priority"], "duration": dur, "test": test, "clip": clip,
-                "text": render(c["text"], ev), "subtext": render(c["subtext"], ev), "style": c["style"], "media": c["media"] if c["media"]["url"] else None,
+                "text": text, "subtext": sub, "style": c["style"], "media": c["media"] if c["media"]["url"] else None,
                 "sound": {"on": bool(so["enabled"] and not c["silent"]), "url": url, "volume": so["volume"]},
-                "delay_ms": c.get("delay_ms", 0), "platform": str(ev.get("platform") or ""), "rank_colour": _color(str(ev.get("rank_colour") or ""), ""), "avatar": _url(ev.get("avatar")), "user": ev["user"]}
+                "delay_ms": c.get("delay_ms", 0), "platform": str(ev.get("platform") or ""), "rank_colour": _color(str(ev.get("rank_colour") or ""), ""), "avatar": avatar, "user": ev["user"], "pre_ms": (int(cc.get("delay_s", 0)) * 1000 if clip and not test else 0)}
 
     @staticmethod
     def _clip(c, ev):
@@ -501,7 +510,7 @@ class Engine:
         if not CLIP_URL.fullmatch(u):
             return None
         return {"url": u, "title": str(cl.get("title") or "")[:100], "duration_s": max(0, min(120, _int(cl.get("duration_s")))), "muted": bool(cc["muted"]),
-                "volume": cc["volume"], "max_s": cc["max_s"]}
+                "volume": cc["volume"], "max_s": cc["max_s"], "progress": bool(cc["progress_bar"])}
 
     def preview(self, t, ev=None):
         """Resolved payload without queueing (editor preview)."""
@@ -530,6 +539,13 @@ class Engine:
             self.current = p
             self.skip_ev = asyncio.Event()
             try:
+                if p.get("pre_ms"):                      # shoutout "delay before it plays"; a skip during the wait drops it
+                    try:
+                        await asyncio.wait_for(self.skip_ev.wait(), p["pre_ms"] / 1000)
+                        self.current = None
+                        continue
+                    except asyncio.TimeoutError:
+                        pass
                 self.emit({"type": "alert.show", "alert": p})
                 self._note(p, "fired", "test" if p["test"] else "live")
                 self._state()

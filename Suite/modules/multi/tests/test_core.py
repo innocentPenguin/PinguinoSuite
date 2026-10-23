@@ -1660,7 +1660,7 @@ def test_new_alert_types_and_shoutout_clip(tmp_path):
     ev = {"id": "so:x:1", "type": "shoutout", "user": "bob", "message": "bob", "clip": {"url": ok, "title": "t", "duration_s": 12}}
     assert eng.submit(ev)[0]
     p = eng.heap[0][2]
-    assert p["clip"]["url"] == ok and p["clip"]["max_s"] == 15 and p["duration"] >= 14
+    assert p["clip"]["url"] == ok and p["clip"]["max_s"] == 20 and p["duration"] >= 14
     eng.heap.clear()
     ev2 = dict(ev, id="so:x:2", user="eve", clip={"url": "https://evil.example/x.mp4"})
     assert eng.submit(ev2)[0] and eng.heap[0][2]["clip"] is None             # foreign clip hosts never play, the name card still does
@@ -1669,3 +1669,19 @@ def test_new_alert_types_and_shoutout_clip(tmp_path):
     cfg = eng.cfg
     cfg["profiles"]["Penguin"]["types"]["shoutout"]["clip"].update(muted=True, max_s=999)
     assert eng.save(cfg)["profiles"]["Penguin"]["types"]["shoutout"]["clip"]["max_s"] == 60
+
+
+def test_shoutout_clip_defaults_clip_only_with_delay(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    cl = eng.type_cfg("shoutout")["clip"]
+    assert (cl["show_text"], cl["show_msg"], cl["progress_bar"], cl["delay_s"], cl["raid_min"], cl["cooldown_s"], cl["mods_only"], cl["command"], cl["date_range_days"]) == \
+        (False, False, True, 10, 3, 60, True, "so", 0)
+    ev = {"id": "so:a:1", "type": "shoutout", "user": "bob", "message": "hi", "avatar": "https://x/y.png",
+          "clip": {"url": "https://clips-media-assets2.twitch.tv/a.mp4", "duration_s": 9}}
+    assert eng.submit(ev)[0]
+    p = eng.heap[0][2]
+    assert p["text"] == [] and p["subtext"] == [] and p["avatar"] == "" and p["pre_ms"] == 10000 and p["clip"]["progress"]
+    eng.heap.clear()
+    assert eng.submit(dict(ev, id="so:a:2", user="amy", clip=None))[0]          # no clip: the normal name card shows, no delay
+    q = eng.heap[0][2]
+    assert q["text"] and q["pre_ms"] == 0

@@ -13,6 +13,8 @@ body.bg{background:repeating-conic-gradient(#1b1b1b 0 25%,#262626 0 50%) 0 0/24p
 .al.layout-banner{top:auto;bottom:40px;width:740px;flex-direction:row;justify-content:flex-start;text-align:left}
 .al.layout-center{background:none!important;border:none!important;flex-direction:column}
 .al.clip{max-height:calc(var(--H) - 20px)}.al video.clipv{width:min(640px,calc(var(--W) - 120px));max-height:calc(var(--H) - 170px);border-radius:10px;background:#000;object-fit:contain;transition:opacity .4s}
+.al .pb{align-self:stretch;height:4px;border-radius:3px;background:#ffffff26;overflow:hidden}.al .pb i{display:block;height:100%;width:100%;background:var(--acc);transform-origin:left;animation:pbar linear forwards}
+@keyframes pbar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 .al .t1{font-weight:800}.al .t2{opacity:.85;font-size:.62em;margin-top:4px}
 .al .u{color:var(--acc)}
 .al img.m,.al video.m{border-radius:10px;object-fit:contain;max-width:100%}
@@ -68,7 +70,7 @@ function build(a) {
   const m = a.media;
   const media = m ? (m.kind === 'video' ? `<video class="m" src="${esc(m.url)}" autoplay muted loop playsinline style="height:${m.size}px"></video>` : `<img class="m" src="${esc(m.url)}" style="height:${m.size}px" alt="">`) : '';
   const av = !m && a.avatar && st.layout !== 'center' ? `<img class="m" src="${esc(a.avatar)}" style="height:${Math.round(st.size * 2.2)}px;border-radius:50%" alt="">` : '';
-  el.innerHTML = `${a.test ? '<span class="tag">TEST</span>' : ''}${a.platform && a.platform !== 'twitch' ? `<span class="pt">${esc(a.platform)}</span>` : ''}${m && m.position !== 'bg' ? media : m ? media : av}<div class="tx"><div class="t1">${segs(a.text, acc)}</div>${a.subtext && a.subtext.length ? `<div class="t2">${segs(a.subtext, acc)}</div>` : ''}</div>`;
+  el.innerHTML = `${a.test ? '<span class="tag">TEST</span>' : ''}${a.platform && a.platform !== 'twitch' ? `<span class="pt">${esc(a.platform)}</span>` : ''}${m && m.position !== 'bg' ? media : m ? media : av}<div class="tx"${a.clip && !(a.text && a.text.length) && !(a.subtext && a.subtext.length) ? ' hidden' : ''}><div class="t1">${segs(a.text, acc)}</div>${a.subtext && a.subtext.length ? `<div class="t2">${segs(a.subtext, acc)}</div>` : ''}</div>`;
   if (a.clip) {                       // shoutout clip: video above the name card, capped at max_s, ends cleanly
     const v = document.createElement('video'), c = a.clip;
     v.className = 'clipv'; v.src = c.url; v.playsInline = true; v.muted = !!c.muted; v.volume = Math.max(0, Math.min(1, c.volume / 100));
@@ -77,6 +79,11 @@ function build(a) {
     const go = () => v.play().catch(() => { v.muted = true; v.play().catch(() => { v.remove(); }); });
     setTimeout(go, 60); setTimeout(stop, c.max_s * 1000);
     el.prepend(v);
+    if (c.progress) {                    // thin bar: remaining clip time (starts when the video really plays)
+      const pb = document.createElement('div'); pb.className = 'pb'; pb.innerHTML = '<i></i>'; v.after(pb);
+      v.addEventListener('playing', () => { const sec = Math.min(c.max_s, (v.duration && isFinite(v.duration)) ? v.duration : c.max_s); pb.firstChild.style.animationDuration = sec + 's'; }, {once: true});
+      pb.firstChild.style.animationDuration = c.max_s + 's';
+    }
     el.classList.remove('layout-stack', 'layout-banner'); el.classList.add('layout-card');
   }
   return el;

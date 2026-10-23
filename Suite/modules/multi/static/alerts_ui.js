@@ -97,7 +97,10 @@ function alDraw() {
         ${f('style.confetti', 'Confetti', 'chk')}${msBox}
         <b>Sound</b>${f('sound.enabled', 'Play a sound', 'chk')}${f('sound.url', 'Sound file address (empty = built-in chime). http(s):// or /', 'txt')}${f('sound.volume', 'Volume', 'num', {lo: 0, hi: 100, unit: '%'})}
         ${['1', '2', '3'].map(t => f('sound.tier_urls.' + t, 'Tier ' + t + ' sound (optional)', 'txt')).join('')}
-        ${e.clip ? `<b>Shoutout clip</b>${f('clip.enabled', 'Play the streamer\'s clip', 'chk')}${f('clip.muted', 'Mute the clip', 'chk')}${f('clip.volume', 'Clip volume', 'num', {lo: 0, hi: 100, unit: '%'})}${f('clip.max_s', 'Longest clip (seconds)', 'num', {lo: 3, hi: 60, unit: ' s'})}` : ''}
+        ${e.clip ? `<b>Shoutout clip</b>${f('clip.enabled', 'Play the streamer\'s clip', 'chk')}${f('clip.muted', 'Mute the clip', 'chk')}${f('clip.volume', 'Clip volume', 'num', {lo: 0, hi: 100, unit: '%'})}${f('clip.max_s', 'Longest clip (seconds)', 'num', {lo: 3, hi: 60, unit: ' s'})}${f('clip.delay_s', 'Delay before it plays', 'num', {lo: 0, hi: 120, unit: ' s'})}${f('clip.progress_bar', 'Progress bar (remaining clip time)', 'chk')}
+        ${f('clip.show_text', 'Show the name text on the card', 'chk')}${f('clip.show_msg', 'Show the shoutout message', 'chk')}${f('clip.show_image', 'Show the streamer picture', 'chk')}
+        <b>Shoutout rules (the Host applies these)</b>${f('clip.command', 'Chat command (without !)', 'txt')}${f('clip.mods_only', 'Mods only', 'chk')}${f('clip.vips_only', 'VIPs too', 'chk')}${f('clip.cooldown_s', 'Cooldown per streamer', 'num', {lo: 0, hi: 3600, unit: ' s'})}
+        ${f('clip.raid_auto', 'Shout out a raider automatically', 'chk')}${f('clip.raid_min', 'Only for raids of at least', 'num', {lo: 1, hi: 1000, unit: ' viewers'})}${f('clip.prefer_featured', 'Featured clips first', 'chk')}${f('clip.date_range_days', 'Clip age limit (0 = all time)', 'num', {lo: 0, hi: 3650, unit: ' days'})}` : ''}
         <b>Image / GIF / video</b>${f('media.url', 'Media address (png, gif, webm, mp4). http(s):// or /', 'txt')}${f('media.kind', 'Type', 'sel', {opts: ['image', 'video']})}
         ${f('media.position', 'Position', 'sel', {opts: ['above', 'left', 'bg']})}${f('media.size', 'Size', 'num', {lo: 40, hi: 600, unit: ' px'})}
       </div></div></div></div>`;
