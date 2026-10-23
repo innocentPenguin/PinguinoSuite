@@ -103,3 +103,18 @@ Real server process on a throwaway port with a throwaway data folder; nothing au
 | Dashboard `/` | PASS as the default window (activity feed + chat, Alerts button). No left nav yet (backlog). |
 | Not yet looked at | `?w=1920&h=1080&scale=1.5` and vertical 1080x1920, chat page Sounds section, launcher `/?type=launcher`, scene follow against Link, intros against the real Host. |
 Host contract finding: `GET http://127.0.0.1:8770/api/intro` already exists and is the Host's OLD sub-intro video system (returns settings/queue). Viewer intros moved to `GET /api/intro/viewer` (commit 157bdd9); 10 - Bots must implement that path.
+
+## Browser pass 2026-10-23 (worker 41, built-in browser, throwaway server on 8786)
+
+Checked by eye / DOM against the current on-disk code:
+- /obs/alerts at 800x600, 1920x1080 scale 1.5 and 1080x1920: cards centred (DOM rect checked), no overflow.
+- Cards looked at: hype_start/level/end, goal_progress, poll, prediction, first_chatter, tip, gamble_win, shop, guess, milestone, streak, shoutout (no clip). returning_chatter, loan, give are OFF by default (test says "type disabled").
+- /obs/goal: bar fills (63/100 = 63%); /api/goal POST works.
+- Editor /?type=alerts: all types listed, shoutout clip + rules fields, queue rules, export -> import round trip (new profile "Penguin 2"), media upload (+ rejects .exe), no console errors from the page itself.
+- Dashboard / (Activity Feed + Chat, no left nav yet), /?type=launcher, chat Sounds section: render, no errors.
+
+Bugs fixed:
+- Tip alert read "tipped 5 !" when no currency: render() now drops the stray space; test tips carry currency USD.
+- Test events for goal_progress / poll / prediction / milestone / shop / guess showed "hello colony" and "0": test_event now has realistic text and amounts per type.
+
+Not covered: shoutout clip playback (needs a Twitch clip host, see item 4), audio.

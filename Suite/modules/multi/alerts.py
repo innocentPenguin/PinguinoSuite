@@ -296,6 +296,11 @@ def render(text, ev):
         pos = m.end()
     if pos < len(text or ""):
         out.append([text[pos:], ""])
+    for i, seg in enumerate(out):           # an empty variable must not leave "tipped 5 !" or a double space behind
+        if seg[0] == "" and 0 < i < len(out) - 1 and out[i - 1][0].endswith(" ") and out[i - 1][1] == "" and out[i + 1][1] == "":
+            nxt = out[i + 1][0]
+            if nxt[:1] in ("!", ".", ",", "?", ":", ";", " "):
+                out[i - 1][0] = out[i - 1][0][:-1]
     return [s for s in out if s[0] != ""]
 
 
@@ -608,6 +613,11 @@ VARIANTS = {"tier1": {"tier": "1"}, "tier2": {"tier": "2"}, "tier3": {"tier": "3
             "unicode": {"display": "Pinguïno_ペンギン"}, "small": {}, "mid": {}, "big": {}, "huge": {}, "msg": {"message": "This is a long resub message that wraps over several lines to check the layout holds up nicely."}}
 
 
+TEST_TEXT = {"goal_progress": ("Follower goal", 42), "goal": ("Follower goal", 0), "poll": ("Which game next?", None), "prediction": ("Will we win this run?", None),
+             "milestone": ("1,000 followers", 1000), "shop": ("a Penguin Hat", None), "guess": ("it was Bob!", None), "tip": ("thanks for the stream!", 5),
+             "gamble_win": ("jackpot!", 500), "redeem": ("Hydrate", None)}
+
+
 def test_event(t, user="penguin", amount=None, variants=(), **kw):
     ev = {"type": t, "user": user or "penguin", "display": user or "Penguin", "amount": 0, "tier": "1", "months": 6, "message": "hello colony", "level": 3,
           "test": True, "source": kw.get("source", "ui"), "avatar": "", "rank_colour": kw.get("rank_colour", "")}
@@ -616,6 +626,12 @@ def test_event(t, user="penguin", amount=None, variants=(), **kw):
         ev["amount"] = 5 if t != "cheer" else 100
     if t in MILESTONE_TEST:
         ev["amount"] = MILESTONE_TEST[t][1]
+    if t in TEST_TEXT:
+        ev["message"], amt = TEST_TEXT[t]
+        if amt is not None:
+            ev["amount"] = amt
+    if t == "tip":
+        ev["currency"] = "USD"
     for v in variants or ():
         v = str(v).lower()
         if t in MILESTONE_TEST and v in ("small", "mid", "big", "huge"):

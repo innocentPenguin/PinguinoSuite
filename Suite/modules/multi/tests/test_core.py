@@ -1730,3 +1730,22 @@ def test_goal_bar_fills_from_events_and_fires_once(tmp_path):
     g.observe("cheer", 25)
     assert len(fired) == 2
     assert g.set({"target": "junk", "title": "x" * 500})["title"] == "x" * 80
+
+
+def test_empty_variable_leaves_no_stray_space():
+    import alerts as al
+    ev = {"user": "bob", "amount": 5, "currency": ""}
+    txt = "".join(s for s, _ in al.render("{user} tipped {amount} {currency}!", ev))
+    assert txt == "bob tipped 5!"
+    ev["currency"] = "USD"
+    assert "".join(s for s, _ in al.render("{user} tipped {amount} {currency}!", ev)) == "bob tipped 5 USD!"
+
+
+def test_test_events_carry_realistic_text():
+    import alerts as al
+    tip = al.test_event("tip")
+    assert tip["currency"] == "USD" and tip["amount"] == 5
+    gp = al.test_event("goal_progress")
+    assert gp["amount"] == 42 and gp["message"] != "hello colony"
+    assert al.test_event("tip", amount=9)["amount"] == 9
+    assert al.test_event("poll")["message"].endswith("?")
