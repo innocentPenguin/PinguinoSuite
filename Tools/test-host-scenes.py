@@ -23,6 +23,8 @@ try:
     reg = json.loads(get('/api/scene-widgets'))
     ids = [w['id'] for w in reg['widgets']]
     chk('registry lists every overlay + alerts', {'queue', 'players', 'players_vertical', 'subroll', 'wheel', 'alerts'} <= set(ids), ids)
+    hud = ['goal', 'latest', 'subfooter', 'chat', 'customs', 'nowplaying']
+    chk('HUD widgets registered and available', set(hud) <= set(ids) and all(w['available'] for w in reg['widgets'] if w['id'] in hud), [(w['id'], w['available']) for w in reg['widgets']])
     chk('registry says which pages exist on disk (queue yes)', [w['available'] for w in reg['widgets'] if w['id'] == 'queue'] == [True], reg)
     h1 = json.loads(get('/api/scene-layouts?profile=h')); v1 = json.loads(get('/api/scene-layouts?profile=v'))
     chk('h default is 1920x1080 and v 1080x1920', (h1['width'], h1['height'], v1['width'], v1['height']) == (1920, 1080, 1080, 1920), (h1['width'], v1['width']))
@@ -68,6 +70,9 @@ try:
     chk('a game without a layout falls back to active', post('/api/scene-layouts', {'action': 'setgame', 'profile': '*', 'game': 'Minecraft'}).get('ok') and json.loads(get('/api/scene-layouts?profile=h'))['resolvedBy'] == 'active')
     chk('explicit ?layout= still wins', json.loads(get('/api/scene-layouts?profile=h&layout=' + (first + ' - Fortnite').replace(' ', '%20')))['resolvedBy'] == 'layout')
     r = post('/api/scene-layouts', {'action': 'tag', 'profile': 'h', 'name': first, 'game': 'Just Chatting'}); chk('tag a layout', r['tags'][first] == 'Just Chatting' and 'Just Chatting' in r['games'], r)
+    chk('HUD widgets are off by default (both profiles)', all(not wid(h1, i)['visible'] and not wid(v1, i)['visible'] for i in hud))
+    chk('wheel keeps takeover, others do not', wid(h1, 'wheel')['takeover'] is True and wid(h1, 'chat')['takeover'] is False)
+    chk('chat.html and customs.html exist with the options tag', all(os.path.exists(os.path.join(suite, 'PinguinoB0t', 'overlays', n)) and 'overlay-options.js' in open(os.path.join(suite, 'PinguinoB0t', 'overlays', n), encoding='utf-8').read() for n in ('chat.html', 'customs.html')))
     chk('alerts are off by default (they stay a standalone source)', not wid(h1, 'alerts')['visible'])
     chk('profiles are independent (v untouched)', json.loads(get('/api/scene-layouts?profile=v'))['names'] == ['default'])
     chk('unknown action refused', post('/api/scene-layouts', {'action': 'zap', 'profile': 'h'}).get('ok') is False)

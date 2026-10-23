@@ -13,12 +13,15 @@
   URL: profile=h|v (default: by window shape) | layout=name (instead of the active one) | host=http://127.0.0.1:8770 | preview=1 (dashed outline + name on every widget, dark backdrop) | grid=1 (preview + 100px grid)
   Widget {id, x, y, w, h, scale, z, visible, opacity, takeover, params, style:{radius, rotate, brightness, saturate, hue, blur, shadow, bg}}:
    the box is x,y,w,h on the stage; the overlay page keeps its design size (e.g. 1920x1080) and is scaled to fit the box (contain, centred) times "scale".
+   takeover: a widget with takeover=true (the wheel) hides every other widget (except pinned ones, i.e. alerts) while it has something to show:
+   the stage polls /api/wheel/public (status other than none) and also obeys postMessage {pgTakeover:true|false} from the widget page.
    params are added to the widget page's query string (the same names the standalone page takes, e.g. layout=sprinkled); the page also gets scene=1.
 -->
 <style>
   html, body { margin:0; padding:0; background:transparent; overflow:hidden; width:100%; height:100%; }
   #stage { position:absolute; left:0; top:0; transform-origin:0 0; overflow:hidden; }
-  .w { position:absolute; overflow:hidden; box-sizing:border-box; }
+  .w { position:absolute; overflow:hidden; box-sizing:border-box; transition:opacity .6s; }
+  .w.away { opacity:0 !important; pointer-events:none; }
   .w iframe { position:absolute; left:0; top:0; border:0; background:transparent; transform-origin:0 0; }
   body.preview { background:#12141a; }
   body.preview #stage { outline:2px dashed #ff3b30; }
@@ -77,13 +80,29 @@
     f.style.width = dw + "px"; f.style.height = dh + "px"; f.style.transform = "translate(" + ox + "px," + oy + "px) scale(" + s.toFixed(5) + ")";
     if (node.tag) node.tag.textContent = w.id + "  " + Math.round(bw) + "x" + Math.round(bh) + " @" + Math.round(num(w.x, 0)) + "," + Math.round(num(w.y, 0)) + "  z" + num(w.z, 1);
   }
+  var tkIds = {}, tkActive = false, tkMsg = null, wheelBusy = false;   // takeover: widgets that take over / whether one is active now
+  function applyTakeover() {
+    var on = tkMsg !== null ? tkMsg : tkActive;
+    Object.keys(nodes).forEach(function (id) { var n = nodes[id]; var away = on && !tkIds[id] && !n.pinned; n.div.classList.toggle("away", !!away); });
+  }
+  window.addEventListener("message", function (e) { var d = e.data; if (d && typeof d.pgTakeover === "boolean") { tkMsg = d.pgTakeover; applyTakeover(); } });
+  function pollWheel() {
+    if (wheelBusy || !Object.keys(tkIds).length) { if (!Object.keys(tkIds).length) { tkActive = false; applyTakeover(); } return; }
+    wheelBusy = true;
+    fetch(HOST + "/api/wheel/public", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (j) {
+      tkActive = !!(j && j.status && j.status !== "none" && j.status !== "idle" && j.status !== "closed"); applyTakeover();
+    }).catch(function () {}).then(function () { wheelBusy = false; });
+  }
+  setInterval(pollWheel, 2000);
   function render(j) {
+    tkIds = {};
     var reg = {}; (j.registry || []).forEach(function (r) { reg[r.id] = r; });
     var seen = {};
     ((j.layout && j.layout.widgets) || []).forEach(function (w) {
       var id = w.id, r = reg[id]; seen[id] = 1;
       if (w.visible === false) { if (nodes[id]) { nodes[id].div.remove(); delete nodes[id]; } return; }   // hidden widgets are not loaded at all
       var url = srcOf(w, r); if (!url) return;
+      if (w.takeover) tkIds[id] = 1;
       var n = nodes[id];
       if (n && n.url !== url) { n.div.remove(); delete nodes[id]; n = null; }   // other page / params: reload this one widget only
       if (!n) {
@@ -91,10 +110,12 @@
         var fr = document.createElement("iframe"); fr.setAttribute("allowtransparency", "true"); fr.setAttribute("scrolling", "no"); fr.setAttribute("allow", "autoplay"); fr.src = url; div.appendChild(fr);
         var tag = null; if (PREVIEW) { tag = document.createElement("div"); tag.className = "tag"; div.appendChild(tag); }
         stage.appendChild(div); n = nodes[id] = { div: div, frame: fr, tag: tag, url: url };
+      n.pinned = !!(r && r.pinned);
       }
       place(n, w, r);
     });
     Object.keys(nodes).forEach(function (id) { if (!seen[id]) { nodes[id].div.remove(); delete nodes[id]; } });
+    applyTakeover(); pollWheel();
   }
   function load() {
     if (fetching) return; fetching = true;

@@ -24,15 +24,15 @@ Ivan's own words this stretch were few: "yes to all" (approving: keep gifted sub
 ## 3. Hand-off gotchas, test and restart steps
 - Build for tests: copy PinguinoHost (excluding bin/obj) to a temp dir, `dotnet build -c Release -o <out>`, then `python Tools/test-host-<x>.py <out>/PinguinoHost.dll`. Tests: subroll, queueidle, overlayopts, scenes (queueidle/subroll sleep 61 s: the config cache is 60 s). The scenes test occasionally hits a slow Host start; re-run once.
 - Not a bug: `wheel.html` shows an idle wheel when the sim Host has no session.
-- Restart needed (coordinator only) for: scenes API, per-game layouts, new-subs card + config v3, health check, idle delay 10 s default (the live `queue_idle.json` was edited to 10; it is gitignored). Host rebuilt 05:01 includes phase 1 (4b7720a) but NOT f641606/d6ee73b host changes (per-game, alerts): needs another rebuild.
+- Restart needed (coordinator only) for: HUD widget registry (phase 3), scenes API, per-game layouts, new-subs card + config v3, health check, idle delay 10 s default (the live `queue_idle.json` was edited to 10; it is gitignored). Host rebuilt 05:01 includes phase 1 (4b7720a) but NOT f641606/d6ee73b host changes (per-game, alerts): needs another rebuild.
 - Layouts live in `Data\runtime\scene_layouts.json` (gitignored); the stage re-reads every 5 s.
 - API paths: `GET /api/scene-layouts?profile=h[&layout=][&js=1]`, `POST /api/scene-layouts {action,...}`, `GET /api/scene-widgets` (NOT `/api/scenes/layouts`).
 - Pages: `http://127.0.0.1:8770/scene.html?profile=h&preview=1`, `/scene-editor.html`.
 
 ## 4. Future plans (priority order)
 1. Wire `setgame` (`POST /api/scene-layouts {action:"setgame",profile:"*",game}`): primary = Master View activity selector (013/01); also the Host's Twitch category change if seen.
-2. Phase 3 widgets/parts: `?part=` modes agreed with 02 AFTER their wheel/team-box change (double-width box, ??? pulse, vertical); HUD widgets for game stats, now playing, customs/queue, goals, chat (need pages from their owners).
-3. Takeover behaviour (wheel over the scene while it has something to show): flag stored, not acted on.
+2. `?part=` modes agreed with 02 AFTER their wheel/team-box change (double-width box, ??? pulse, vertical). DONE in phase 3 (needs the restart-free static files only; registry needs a Host rebuild): HUD widgets goal/latest/subfooter/chat/customs/nowplaying (all off by default) and takeover (stage polls /api/wheel/public, hides non-pinned widgets; postMessage pgTakeover overrides). Game-stats HUD not built: no data source yet (ask Ivan what he wants shown).
+3. (done, see 2)
 4. `!layout name` chat command (mods) and a Suite panel embedding the editor + layout picker (01).
 5. Optional postMessage bus so the stage fetches data once for all widgets.
 

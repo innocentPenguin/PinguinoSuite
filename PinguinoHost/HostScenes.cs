@@ -18,7 +18,7 @@ namespace PinguinoHost
         static string P { get { return Path.Combine(HostApi.DataDir, "scene_layouts.json"); } }
         public static readonly Dictionary<string, int[]> Profiles = new Dictionary<string, int[]> { { "h", new[] { 1920, 1080 } }, { "v", new[] { 1080, 1920 } } };
 
-        class W { public string Id, Label, Src, Help; public int Dw, Dh; public bool Takeover, Pinned; public Dictionary<string, int[]> Def; /* profile -> x,y,w,h,z,visible */ }
+        class W { public string Id, Label, Src, Help; public int Dw, Dh; public bool Takeover, Pinned, Host; public Dictionary<string, int[]> Def; /* profile -> x,y,w,h,z,visible */ }
         static readonly W[] Registry = {
             new W { Id = "players", Label = "Players (teams)", Src = "players.html", Dw = 1920, Dh = 1080, Help = "Team cards of the running match. Full canvas, best in h.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1920, 1080, 2, 1 } }, { "v", new[] { 0, 0, 1080, 608, 2, 0 } } } },
@@ -32,6 +32,19 @@ namespace PinguinoHost
                 Def = new Dictionary<string, int[]> { { "h", new[] { 0, 0, 1920, 1080, 6, 1 } }, { "v", new[] { 0, 656, 1080, 608, 6, 1 } } } },
             new W { Id = "alerts", Label = "Alerts", Src = "http://127.0.0.1:8766/obs/alerts", Dw = 800, Dh = 600, Pinned = true, Help = "The 800x600 alerts overlay (PinguinoMulti, port 8766; it only draws while an alert plays). OFF by default (alerts stay a standalone source that moves per game); when switched on it is always on top (z 100). Its sound plays inside the scene source, so keep audio on for the scene source in OBS, and REMOVE the standalone alerts source while it is framed here or every alert plays twice.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 560, 240, 800, 600, 100, 0 } }, { "v", new[] { 140, 660, 800, 600, 100, 0 } } } },
+            // ---- HUD widgets (phase 3): all OFF by default, switch on in the editor ----
+            new W { Id = "goal", Label = "Goal bar", Src = "overlay/goal", Host = true, Dw = 900, Dh = 80, Help = "Follower / sub goal bar (Host page /overlay/goal). params: id=followers (the goal id), color, size, font.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 510, 960, 900, 80, 8, 0 } }, { "v", new[] { 90, 1780, 900, 80, 8, 0 } } } },
+            new W { Id = "latest", Label = "Latest follower / sub / cheer / raid", Src = "overlay/latest", Host = true, Dw = 600, Dh = 300, Help = "Newest follower, sub, cheer and raid (Host page /overlay/latest).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 1300, 40, 600, 300, 8, 0 } }, { "v", new[] { 240, 60, 600, 300, 8, 0 } } } },
+            new W { Id = "subfooter", Label = "Sub footer", Src = "overlay/subfooter", Host = true, Dw = 1920, Dh = 120, Help = "Scrolling sub names strip (Host page /overlay/subfooter).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 0, 960, 1920, 120, 8, 0 } }, { "v", new[] { 0, 1800, 1080, 120, 8, 0 } } } },
+            new W { Id = "chat", Label = "Chat feed", Src = "chat.html", Dw = 460, Dh = 520, Help = "Last chat messages (Host /api/chat/recent). params: max=8 (messages shown), fade=0 (seconds before a line fades, 0 = never).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 40, 780, 460, 260, 8, 0 } }, { "v", new[] { 40, 1240, 460, 520, 8, 0 } } } },
+            new W { Id = "customs", Label = "Customs HUD", Src = "customs.html", Dw = 420, Dh = 160, Help = "Customs status: queue open/closed, how many are waiting, mode/format, activity (Host /api/customs/state).",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 40, 780, 420, 160, 8, 0 } }, { "v", new[] { 330, 1000, 420, 160, 8, 0 } } } },
+            new W { Id = "nowplaying", Label = "Now playing", Src = "http://127.0.0.1:8771/overlay", Dw = 640, Dh = 200, Help = "The Spotify module's own now-playing overlay (port 8771, themes via its settings; ?next=0 hides up-next). Blank when the module is not running.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 40, 860, 640, 200, 8, 0 } }, { "v", new[] { 220, 1700, 640, 200, 8, 0 } } } },
         };
         static W Find(string id) { return Registry.FirstOrDefault(w => w.Id == id); }
 
@@ -111,7 +124,7 @@ namespace PinguinoHost
         public static JObject Widgets()
         {
             return new JObject { { "ok", true }, { "profiles", new JObject { { "h", new JArray(1920, 1080) }, { "v", new JArray(1080, 1920) } } },
-                { "widgets", new JArray(Registry.Select(w => new JObject { { "id", w.Id }, { "label", w.Label }, { "src", w.Src }, { "designW", w.Dw }, { "designH", w.Dh }, { "takeover", w.Takeover }, { "available", w.Src.StartsWith("http") || File.Exists(Path.Combine(OverlayFiles.Root ?? "", w.Src)) }, { "pinned", w.Pinned }, { "help", w.Help } })) },
+                { "widgets", new JArray(Registry.Select(w => new JObject { { "id", w.Id }, { "label", w.Label }, { "src", w.Src }, { "designW", w.Dw }, { "designH", w.Dh }, { "takeover", w.Takeover }, { "available", w.Host || w.Src.StartsWith("http") || File.Exists(Path.Combine(OverlayFiles.Root ?? "", w.Src)) }, { "pinned", w.Pinned }, { "help", w.Help } })) },
                 { "style", new JArray("radius (px)", "rotate (deg)", "brightness (0-3)", "saturate (0-3)", "hue (deg)", "blur (px)", "shadow (bool)", "bg (css colour)") },
                 { "params", "free query-string pairs passed to the widget page, e.g. {\"layout\":\"sprinkled\",\"scale\":\"1.2\"} (same names the standalone page takes)" } };
         }

@@ -1,0 +1,33 @@
+<!doctype html>
+<!--
+  PinguinoB0t - CUSTOMS HUD widget (scene HUD). Small status card: queue open/closed, players waiting, mode / format, activity, match running.
+  Data: Host GET /api/customs/state (polled every 3 s). Params: host=http://127.0.0.1:8770 | preview=1 (sample, no Host needed). Design size 420 x 160.
+-->
+<html><head><meta charset="utf-8"><title>Customs HUD</title>
+<style>
+  html,body{margin:0;width:420px;height:160px;overflow:hidden;background:transparent;font-family:Rubik,"Segoe UI",Arial,sans-serif}
+  #c{position:absolute;left:6px;top:6px;width:408px;height:148px;background:rgba(18,16,14,.86);border:2px solid #ff7a00;border-radius:14px;box-shadow:0 0 14px #ff7a0066;padding:10px 16px;color:#f4efe8;box-sizing:border-box}
+  #t{font-weight:800;font-size:24px;color:#ff9d3c;letter-spacing:.5px}
+  #s{margin-top:2px;font-size:30px;font-weight:800}
+  #s.open{color:#6dff8a}#s.closed{color:#ff6b5c}
+  #d{margin-top:2px;font-size:19px;color:#cfc6bb}
+</style></head><body>
+<div id="c"><div id="t">CUSTOMS</div><div id="s" class="closed">QUEUE CLOSED</div><div id="d">&nbsp;</div></div>
+<script>
+(function(){
+  var Q=new URLSearchParams(location.search), HOST=Q.get("host")||(location.protocol.indexOf("http")===0?location.origin:"http://127.0.0.1:8770");
+  var t=document.getElementById("t"), s=document.getElementById("s"), d=document.getElementById("d");
+  function show(j){
+    var n=(j.queue||[]).length, open=!!j.open, live=j.match&&j.match.status!==undefined&&j.match.status!=="done";
+    t.textContent=(j.activity||"CUSTOMS").toString().toUpperCase();
+    s.className=open?"open":"closed"; s.textContent=live?"MATCH IN PROGRESS":(open?"QUEUE OPEN":"QUEUE CLOSED");
+    var bits=[n+" waiting"]; if(j.gameMode) bits.push(j.gameMode); if(j.format) bits.push(j.format); if(j.mode) bits.push(j.mode);
+    d.textContent=bits.join(" · ");
+  }
+  function poll(){fetch(HOST+"/api/customs/state").then(function(r){return r.json();}).then(function(j){if(j&&j.ok!==false)show(j);}).catch(function(){});}
+  if(Q.get("preview")==="1") show({open:true,activity:"Competitive Customs",queue:[1,2,3,4,5],format:"3v3",gameMode:"Soccar"});
+  else{poll();setInterval(poll,3000);}
+})();
+</script>
+<script src="overlay-options.js"></script>
+</body></html>

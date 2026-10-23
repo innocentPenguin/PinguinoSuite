@@ -1,0 +1,36 @@
+<!doctype html>
+<!--
+  PinguinoB0t - CHAT FEED widget (scene HUD). Last chat lines, newest at the bottom. Data: Host GET /api/chat/recent (polled every 2 s).
+  Params: max=8 (lines shown) | fade=0 (seconds until a line fades out, 0 = never) | host=http://127.0.0.1:8770 | preview=1 (sample lines, no Host needed)
+  Design size 460 x 520. Orange/dark Penguino look.
+-->
+<html><head><meta charset="utf-8"><title>Chat Feed</title>
+<style>
+  html,body{margin:0;width:460px;height:520px;overflow:hidden;background:transparent;font-family:Rubik,"Segoe UI",Arial,sans-serif}
+  #box{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:6px}
+  .m{background:rgba(18,16,14,.82);border-left:4px solid #ff7a00;border-radius:8px;padding:6px 10px;color:#f4efe8;font-size:20px;line-height:1.25;word-wrap:break-word;overflow-wrap:anywhere;transition:opacity .8s}
+  .m b{color:#ff9d3c;font-weight:800;margin-right:6px}
+  .m.out{opacity:0}
+</style></head><body><div id="box"></div>
+<script>
+(function(){
+  var Q=new URLSearchParams(location.search), MAX=Math.max(1,Math.min(20,+Q.get("max")||8)), FADE=Math.max(0,+Q.get("fade")||0);
+  var HOST=Q.get("host")||(location.protocol.indexOf("http")===0?location.origin:"http://127.0.0.1:8770"), box=document.getElementById("box"), seq=0;
+  function add(m){
+    var d=document.createElement("div"); d.className="m"; if(m.color&&/^#[0-9a-f]{6}$/i.test(m.color)) d.style.borderLeftColor=m.color;
+    var b=document.createElement("b"); b.textContent=m.display||m.user||"?"; d.appendChild(b); d.appendChild(document.createTextNode(m.text||""));
+    box.appendChild(d); while(box.children.length>MAX) box.removeChild(box.firstChild);
+    if(FADE>0) setTimeout(function(){d.classList.add("out");setTimeout(function(){if(d.parentNode)d.parentNode.removeChild(d);},900);},FADE*1000);
+  }
+  function poll(){
+    fetch(HOST+"/api/chat/recent?since="+seq+"&limit="+MAX).then(function(r){return r.json();}).then(function(j){
+      if(!j||!j.messages)return; var first=seq===0; var ms=j.messages; if(first) ms=ms.slice(-MAX);
+      ms.forEach(function(m){add(m);}); if(j.seq!==undefined) seq=j.seq;
+    }).catch(function(){});
+  }
+  if(Q.get("preview")==="1"){["hello chat!","!join","nice one","gg","who is up next?"].forEach(function(t,i){add({display:"Viewer"+(i+1),text:t});});}
+  else{poll();setInterval(poll,2000);}
+})();
+</script>
+<script src="overlay-options.js"></script>
+</body></html>
