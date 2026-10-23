@@ -10,6 +10,7 @@ connectors/{twitch,kick,discord,youtube,tiktok}.py, static/{index.html,dash.js,o
 import asyncio
 import hmac
 import json
+import math
 import os
 import copy
 import sqlite3
@@ -1226,38 +1227,101 @@ def ding_info():
     return pipeline.ding.info()
 
 
+def _ding_path(v):
+    path = str(v).strip().strip('"')
+    if path and not (path.lower().endswith((".mp3", ".wav")) and os.path.isfile(path)):
+        raise HTTPException(400, "choose an existing .mp3 or .wav file")
+    return path
+
+
+def _ding_flag(v):
+    if isinstance(v, str):
+        return v.strip().lower() in ("1", "true", "yes", "on")
+    return bool(v)
+
+
+def _ding_vol(v):
+    if not math.isfinite(float(v)):
+        raise HTTPException(400, "volume must be a number")
+    return max(0, min(100, int(v)))
+
+
 @app.post("/api/ding/settings")
 async def ding_settings(request: Request):
     b = await request.json()
+    if not isinstance(b, dict):
+        raise HTTPException(400, "send a JSON object")
+    cur = config.settings().get("ding_rows")
+    saved = copy.deepcopy(cur) if isinstance(cur, dict) else {}
     patch = {}
+
+    def through(row, field, val):                       # an old key also updates the row field when that field was saved
+        if isinstance(saved.get(row), dict) and field in saved[row]:
+            saved[row][field] = val
     if "platforms" in b:
         patch["ding_platforms"] = [p for p in b["platforms"] if p in ("twitch", "youtube")]
+        through("first", "on", bool(patch["ding_platforms"]))
     if "first_ever" in b:
         patch["ding_first_ever"] = bool(b["first_ever"])
     if "returning" in b:
         patch["ding_returning"] = bool(b["returning"])
-    for key, name in (("sound", "ding_sound"), ("first_sound", "ding_first_sound"), ("returning_sound", "ding_returning_sound")):
+        through("new_stream", "on", patch["ding_returning"])
+    for key, name, row in (("sound", "ding_sound", "first"), ("first_sound", "ding_first_sound", "first"),
+                           ("returning_sound", "ding_returning_sound", "new_stream")):
         if key in b:
-            path = str(b[key]).strip().strip('"')
-            if path and not (path.lower().endswith((".mp3", ".wav")) and os.path.isfile(path)):
-                raise HTTPException(400, "choose an existing .mp3 or .wav file")
-            patch[name] = path
+            patch[name] = _ding_path(b[key])
+            through(row, "sound", patch[name])
     if b.get("scope") in ("stream", "ever"):
         patch["ding_scope"] = b["scope"]
-    for key, name in (("volume", "ding_volume"), ("returning_volume", "ding_returning_volume"), ("master_volume", "ding_master_volume")):
+    for key, name, row in (("volume", "ding_volume", "first"), ("returning_volume", "ding_returning_volume", "new_stream"),
+                           ("master_volume", "ding_master_volume", None)):
         if key in b:
-            patch[name] = max(0, min(100, int(b[key])))
+            patch[name] = _ding_vol(b[key])
+            if row:
+                through(row, "volume", patch[name])
     if "cooldown_s" in b:
         patch["ding_cooldown_s"] = max(0.2, min(30.0, float(b["cooldown_s"])))
+    if "gap_h" in b:
+        g = float(b["gap_h"])
+        if not math.isfinite(g):
+            raise HTTPException(400, "gap_h must be a number")
+        patch["ding_session_gap_h"] = max(0.1, min(720.0, g))
+    if "rows" in b:
+        if not isinstance(b["rows"], dict):
+            raise HTTPException(400, "rows must be an object")
+        for name, rp in b["rows"].items():
+            if name not in config.DING_ROWS or not isinstance(rp, dict):
+                raise HTTPException(400, "rows: first, new_stream, returning, each an object")
+            r = saved.setdefault(name, {})
+            if not isinstance(r, dict):
+                r = saved[name] = {}
+            if "on" in rp:
+                r["on"] = _ding_flag(rp["on"])
+            if "notify" in rp:
+                r["notify"] = _ding_flag(rp["notify"])
+            if "sound" in rp:
+                r["sound"] = _ding_path(rp["sound"])
+            if "volume" in rp:
+                r["volume"] = _ding_vol(rp["volume"])
+    if saved != (cur if isinstance(cur, dict) else {}):
+        patch["ding_rows"] = saved
     config.save_settings(patch)
     console_log.info("ding", "settings changed: on for " + (", ".join(config.settings()["ding_platforms"]) or "nothing"))
     return pipeline.ding.info()
 
 
+_DING_KINDS = {"first": "first", "new_stream": "new_stream", "returning": "returning", "new": "first"}   # "new" is the old name of "first"
+
+
 @app.post("/api/ding/test")
 async def ding_test(request: Request):
     b = await request.json() if request.headers.get("content-length", "0") != "0" else {}
-    pipeline.ding.test(b.get("kind", "new"))
+    if not isinstance(b, dict):
+        raise HTTPException(400, "send a JSON object")
+    kind = _DING_KINDS.get(b.get("kind", "first")) if isinstance(b.get("kind", "first"), str) else None
+    if not kind:
+        raise HTTPException(400, "kind: first, new_stream or returning")
+    pipeline.ding.test(kind)
     return {"ok": True}
 
 

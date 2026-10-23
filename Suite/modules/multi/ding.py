@@ -1,9 +1,10 @@
 """New-chatter / returning-chatter ding: plays a sound on a chatter's first message, locally, never into chat.
 
-kinds:  "new"       never seen before                    -> ding_sound,           ding_volume
-        "returning" known from an earlier stream, first message this stream -> ding_returning_sound, ding_returning_volume
-        "first"     Twitch 'first message ever' flag (optional, own sound)  -> ding_first_sound
-Final volume = kind volume * ding_master_volume / 100. All settings live in Multi's settings.json (survive restarts).
+Three rows (config.ding_rows), exactly one fires per message, priority 1>2>3:
+        "first"      never seen by Multi, or Twitch's first-message flag
+        "new_stream" known from an earlier stream, first message this stream
+        "returning"  already counted this stream, but the message carries the pipeline flag "returning" (silent >= gap_h)
+Final volume = row volume * ding_master_volume / 100. All settings live in Multi's settings.json (survive restarts).
 Plays only on the master device, one ding per ding_cooldown_s (short queue, extras dropped). Off by default."""
 import json
 import os
@@ -106,24 +107,20 @@ class Ding:
             self.last = now
             key = f"{m.platform}:{m.user_id}"
             if key in self.users:
-                return False
-            self.users.add(key)
-            known = key in self.known
-            self.known.add(key)
-            self._save()
-            if known:
-                if st["ding_returning"]:
-                    kind = "returning"
-                elif st["ding_scope"] == "ever":
-                    return False                                  # 'ever' scope: known people never ding
-                else:
-                    kind = "new"
-            elif st["ding_first_ever"] and m.platform == "twitch" and m.first_time:
-                kind = "first"
+                kind = "returning" if "returning" in (m.flags or []) else None     # row 3 only for someone already counted this stream
+                if not kind:
+                    return False
             else:
-                kind = "new"
-            self.recent.append({"ts": now, "platform": m.platform, "user": m.user, "display": m.display, "kind": kind})
-            return kind if self._enqueue(kind) else False
+                self.users.add(key)
+                known = key in self.known
+                self.known.add(key)
+                self._save()
+                kind = "first" if (not known or (m.platform == "twitch" and m.first_time)) else "new_stream"
+            row = config.ding_rows(st)[kind]
+            if not (row["on"] or row["notify"]):
+                return False
+            self.recent.append({"ts": now, "platform": m.platform, "user": m.user, "display": m.display, "kind": kind, "notify": bool(row["notify"])})
+            return kind if row["on"] and self._enqueue(kind) else False
         except Exception as e:
             console_log.error("ding", f"observe failed: {e}", dedupe_s=60)
             return False
@@ -138,19 +135,18 @@ class Ding:
             self.stats["dropped"] += 1
             return False
 
-    def test(self, kind="new"):
-        if kind in ("new", "returning", "first") and not self.q.full():
+    def test(self, kind="first"):
+        if kind in config.DING_ROWS and not self.q.full():
             self.q.put_nowait(kind)
 
     # playback ---------------------------------------------------------
     def sound_for(self, kind):
         st = config.settings()
-        own = {"first": st["ding_first_sound"], "returning": st["ding_returning_sound"]}.get(kind, "")
-        return own or st["ding_sound"]
+        return config.ding_rows(st).get(kind, {}).get("sound") or st["ding_sound"]
 
     def volume_for(self, kind):
         st = config.settings()
-        base = st["ding_returning_volume"] if kind == "returning" else st["ding_volume"]
+        base = config.ding_rows(st).get(kind, {}).get("volume", st["ding_volume"])
         return max(0, min(100, base * st["ding_master_volume"] / 100))
 
     def play_one(self, kind):
@@ -182,7 +178,8 @@ class Ding:
     def info(self):
         st = config.settings()
         exists = lambda p: bool(p) and os.path.isfile(p)
-        return {"enabled": bool(st["ding_platforms"]), "platforms": st["ding_platforms"], "scope": st["ding_scope"],
+        rows = {n: dict(r, sound_exists=exists(r["sound"] or st["ding_sound"])) for n, r in config.ding_rows(st).items()}
+        return {"enabled": bool(st["ding_platforms"]), "rows": rows, "gap_h": st["ding_session_gap_h"], "platforms": st["ding_platforms"], "scope": st["ding_scope"],
                 "first_ever": st["ding_first_ever"], "returning": st["ding_returning"],
                 "sound": st["ding_sound"], "sound_exists": exists(st["ding_sound"]),
                 "first_sound": st["ding_first_sound"], "returning_sound": st["ding_returning_sound"],

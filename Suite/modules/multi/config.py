@@ -41,7 +41,8 @@ DEFAULTS = {
     "ding_volume": 24,                # Streamer.bot used 0.24
     "ding_scope": "stream",           # stream = once per person per stream; ever = once per person, forever (Streamer.bot bell)
     "ding_cooldown_s": 1.5,
-    "ding_session_gap_h": 6,
+    "ding_session_gap_h": 6,          # = gap_h: silent this long = a new stream, and a chatter silent this long gets the "returning" flag
+    "ding_rows": None,                # saved per-row overrides {first|new_stream|returning: {on,sound,volume,notify}}; None/missing fields derive from the old keys
     "pop_platforms": [],             # chat pop (a sound on every message): platforms it is ON for; empty = off
     "pop_sound": r"D:\PinguinoSuite\Data\sounds\chat-pop.mp3",   # = Streamer.bot "chat" / "chat (yt louder)"
     "pop_volume": {"twitch": 50, "youtube": 76, "discord": 50},   # Streamer.bot: 0.5 Twitch, 0.76 YouTube
@@ -82,3 +83,23 @@ def save_settings(patch):
     s.update({k: v for k, v in patch.items() if k in DEFAULTS})
     SETTINGS_FILE.write_text(json.dumps(s, indent=2), "utf-8")
     return s
+
+
+DING_ROWS = ("first", "new_stream", "returning")
+
+
+def ding_rows(s=None):
+    """The three chatter-sound rows. A row (or field) that was never saved is derived from the old ding_* keys, so nothing resets."""
+    s = s if s is not None else settings()
+    first_snd = s["ding_first_sound"] if s.get("ding_first_ever") and s.get("ding_first_sound") else s["ding_sound"]
+    ret_snd = s.get("ding_returning_sound") or s["ding_sound"]
+    rows = {"first": {"on": bool(s.get("ding_platforms")), "sound": first_snd, "volume": s["ding_volume"], "notify": True},
+            "new_stream": {"on": bool(s.get("ding_returning")), "sound": ret_snd, "volume": s["ding_returning_volume"], "notify": False},
+            "returning": {"on": True, "sound": ret_snd, "volume": 50, "notify": False}}
+    saved = s.get("ding_rows")
+    if isinstance(saved, dict):
+        for name, row in rows.items():
+            sv = saved.get(name)
+            if isinstance(sv, dict):
+                row.update({k: v for k, v in sv.items() if k in row})
+    return rows

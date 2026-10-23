@@ -1,0 +1,146 @@
+"""The three chatter-sound rows (first / new_stream / returning): priority, migration from old keys, endpoints."""
+import time
+
+from fastapi.testclient import TestClient
+
+import config
+import ding
+import server
+from models import ChatMessage
+from store import Store
+
+
+class Clock:
+    def __init__(self):
+        self.t = 1_000_000.0
+
+    def __call__(self):
+        return self.t
+
+
+class Player:
+    def __init__(self):
+        self.played = []
+
+    def play(self, path, vol):
+        self.played.append((path, vol))
+
+
+def _ding(tmp_path, monkeypatch, **cfg):
+    snd = tmp_path / "d.wav"
+    snd.write_bytes(b"x")
+    s = dict(config.DEFAULTS, ding_platforms=["twitch", "youtube"], ding_sound=str(snd), **cfg)
+    monkeypatch.setattr(config, "settings", lambda: s)
+    d = ding.Ding(Store(tmp_path / "g.db"), player=Player(), clock=Clock(), master=lambda: True, start_worker=False)
+    return d, s
+
+
+def _m(user, platform="twitch", n=0, **kw):
+    return ChatMessage(id=f"{platform}:c:{user}{n}", platform=platform, channel="c", user_id=user, user=user, display=user,
+                       text="hi", ts=time.time(), **kw)
+
+
+def test_rows_priority_sounds_volumes_and_recent_list(tmp_path, monkeypatch):
+    d, s = _ding(tmp_path, monkeypatch, ding_returning=True, ding_returning_volume=50, ding_master_volume=50, ding_volume=80)
+    ret = tmp_path / "ret.wav"
+    ret.write_bytes(b"r")
+    s["ding_returning_sound"] = str(ret)
+    assert d.observe(_m("amy")) == "first"
+    d.new_stream("test")                                          # next stream: amy is now known
+    assert d.observe(_m("amy", n=1)) == "new_stream" and d.observe(_m("zed")) == "first"
+    assert d.sound_for("new_stream") == str(ret) and d.sound_for("returning") == str(ret) and d.sound_for("first") == s["ding_first_sound"]
+    assert d.volume_for("first") == 40 and d.volume_for("new_stream") == 25 and d.volume_for("returning") == 25
+    assert [x["kind"] for x in d.recent] == ["first", "new_stream", "first"]
+    assert d.recent[0]["notify"] is True and d.recent[1]["notify"] is False
+    s["ding_returning"] = False
+    d.new_stream("again")
+    assert d.observe(_m("amy", n=2)) is False                    # new_stream row off: silent, never a lower row
+    s["ding_returning"] = True
+    d.new_stream("third")
+    assert d.observe(_m("amy", n=3)) == "new_stream"
+    s["ding_scope"] = "ever"
+    s["ding_returning"] = False
+    assert d.observe(_m("amy", n=4)) is False                    # 'ever' + row off: known people stay quiet
+
+
+def test_exactly_one_row_fires_and_flagged_returning(tmp_path, monkeypatch):
+    d, s = _ding(tmp_path, monkeypatch)
+    assert d.observe(_m("amy", flags=["returning"])) == "first"             # not counted yet: row 1 wins over the flag
+    assert d.q.qsize() == 1
+    assert d.observe(_m("amy", n=1)) is False                                # counted, no flag: silent
+    assert d.observe(_m("amy", n=2, flags=["returning"])) == "returning"     # counted + flag: row 3
+    assert d.observe(_m("tw", first_time=True)) == "first"
+    assert d.q.qsize() == 3
+    d.new_stream("x")
+    assert d.observe(_m("amy", n=3, flags=["returning"])) == "new_stream"   # known + flag, not yet counted this stream: row 2 only
+    assert d.observe(_m("tw", n=1, first_time=True)) == "first"             # twitch first-message flag beats 'known'
+    assert d.q.qsize() == 5
+    s["ding_rows"] = {"returning": {"on": False, "notify": True}}
+    assert d.observe(_m("amy", n=4, flags=["returning"])) is False
+    assert d.recent[-1]["kind"] == "returning" and d.recent[-1]["notify"] is True    # off but notify: shown, silent
+
+
+def test_rows_derive_from_old_keys_without_reset(tmp_path, monkeypatch):
+    d, s = _ding(tmp_path, monkeypatch, ding_volume=33, ding_returning=False, ding_returning_volume=61, ding_first_ever=False)
+    s["ding_returning_sound"] = ""
+    r = config.ding_rows(s)
+    assert r["first"] == {"on": True, "sound": s["ding_sound"], "volume": 33, "notify": True}     # first_ever off -> ding_sound
+    assert r["new_stream"] == {"on": False, "sound": s["ding_sound"], "volume": 61, "notify": False}
+    assert r["returning"] == {"on": True, "sound": s["ding_sound"], "volume": 50, "notify": False}
+    s["ding_first_ever"] = True
+    assert config.ding_rows(s)["first"]["sound"] == s["ding_first_sound"]
+    s["ding_platforms"] = []
+    assert config.ding_rows(s)["first"]["on"] is False
+    s["ding_rows"] = {"first": {"volume": 7, "bogus": 1}, "new_stream": "junk"}
+    r = config.ding_rows(s)
+    assert r["first"]["volume"] == 7 and "bogus" not in r["first"] and r["new_stream"]["volume"] == 61
+    info = d.info()
+    assert set(info["rows"]) == {"first", "new_stream", "returning"} and info["gap_h"] == 6 and info["rows"]["first"]["sound_exists"]
+    assert info["volume"] == 33 and "returning_sound" in info and "platforms" in info          # old keys unchanged
+
+
+def _client(monkeypatch):
+    store = {"v": dict(config.DEFAULTS)}
+    monkeypatch.setattr(config, "settings", lambda: dict(store["v"]))
+    monkeypatch.setattr(config, "save_settings", lambda p: store["v"].update(p) or p)
+    monkeypatch.delenv("PINGUINO_API_TOKEN", raising=False)
+    h = {"origin": "http://127.0.0.1:8766"}
+    return TestClient(server.app, base_url="http://127.0.0.1:8766", raise_server_exceptions=False), store, h
+
+
+def test_settings_endpoint_partial_patches_write_through_and_validation(tmp_path, monkeypatch):
+    c, st, h = _client(monkeypatch)
+    snd = tmp_path / "a.wav"
+    snd.write_bytes(b"x")
+    r = c.post("/api/ding/settings", json={"rows": {"first": {"volume": 150, "notify": False}}, "gap_h": 3}, headers=h)
+    assert r.status_code == 200 and r.json()["rows"]["first"]["volume"] == 100 and r.json()["rows"]["first"]["notify"] is False
+    assert st["v"]["ding_session_gap_h"] == 3 and r.json()["gap_h"] == 3
+    assert st["v"]["ding_rows"] == {"first": {"volume": 100, "notify": False}}               # only patched fields saved
+    r = c.post("/api/ding/settings", json={"rows": {"returning": {"sound": str(snd), "on": False}}}, headers=h)
+    assert r.json()["rows"]["returning"]["sound"] == str(snd) and r.json()["rows"]["returning"]["on"] is False
+    assert r.json()["rows"]["first"]["volume"] == 100                                        # other rows untouched
+    r = c.post("/api/ding/settings", json={"volume": 20, "returning": False}, headers=h)    # old keys write through to saved fields
+    assert r.json()["rows"]["first"]["volume"] == 20 and r.json()["rows"]["new_stream"]["on"] is False and r.json()["volume"] == 20
+    for bad in ({"rows": []}, {"rows": {"nope": {}}}, {"rows": {"first": 5}}, {"rows": {"first": {"volume": "x"}}},
+                {"rows": {"first": {"sound": str(tmp_path / "missing.mp3")}}}, {"gap_h": "x"}, {"gap_h": [1]}, [], "x"):
+        assert c.post("/api/ding/settings", json=bad, headers=h).status_code == 400, bad
+    hj = dict(h, **{"content-type": "application/json"})
+    for raw in (b'{"gap_h": NaN}', b'{"gap_h": Infinity}', b'{"rows": {"first": {"volume": Infinity}}}', b"{"):
+        assert c.post("/api/ding/settings", content=raw, headers=hj).status_code == 400, raw
+
+
+def test_test_endpoint_kinds_and_newchatter_kinds(monkeypatch):
+    c, st, h = _client(monkeypatch)
+    sent = []
+    monkeypatch.setattr(server.pipeline.ding, "test", lambda k: sent.append(k))
+    for given, want in (("first", "first"), ("new_stream", "new_stream"), ("returning", "returning"), ("new", "first")):
+        assert c.post("/api/ding/test", json={"kind": given}, headers=h).status_code == 200
+        assert sent[-1] == want
+    assert c.post("/api/ding/test", headers=h).status_code == 200 and sent[-1] == "first"
+    for bad in ({"kind": "bogus"}, {"kind": []}, {"kind": 5}, [1]):
+        assert c.post("/api/ding/test", json=bad, headers=h).status_code == 400, bad
+    server.pipeline.ding.recent.append({"ts": time.time() + 1, "platform": "twitch", "user": "u", "display": "u", "kind": "new_stream", "notify": False})
+    try:
+        assert any(x["kind"] == "new_stream" for x in c.get("/api/newchatters?since=0").json()["items"])
+    finally:
+        server.pipeline.ding.recent.pop()
