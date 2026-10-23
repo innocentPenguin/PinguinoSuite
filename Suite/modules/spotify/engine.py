@@ -89,6 +89,7 @@ class Engine:
         self.idle_since = None
         self._ann = []                 # announcements for the Host to post: {seq, ts, text}
         self._ann_seq = int(clock())      # same: monotonic across restarts, so a Host polling with since=N still sees new lines
+        self._ann_sent_ts = 0.0           # when the Host last took a track line (burst guard)
         self._search_cache = {}
         self.artist_genres = {}
         self.alert = None
@@ -410,8 +411,13 @@ class Engine:
         text = self.say(key, tier=v.get("tier_name", tier), **{k: x for k, x in v.items() if k != "tier_name"})
         if text:
             now = self.clock()
+            text = re.sub("[" + chr(0) + "-" + chr(31) + chr(127) + "]", " ", text).strip()
+            while text[:1] in ("/", ".", "!", "\\"):             # a title must never turn the bot's line into a chat command
+                text = text[1:].lstrip()
             if kind == "track":                        # skipping through songs: keep only the newest line, never a burst in chat
                 gap = self.settings["announce_min_gap_s"]
+                if now - self._ann_sent_ts < gap:      # a fast poller already took a track line: this one would be a burst
+                    return
                 self._ann[:] = [a for a in self._ann if not (a.get("kind") == "track" and now - a["ts"] < gap)]
             self._ann_seq += 1
             line = {"seq": self._ann_seq, "ts": now, "text": text}
@@ -423,7 +429,10 @@ class Engine:
     def announcements(self, since=0):
         """The Host polls this and posts the lines to chat (we have no chat connection of our own)."""
         with self.lock:
-            return {"seq": self._ann_seq, "lines": [a for a in self._ann if a["seq"] > since and self.clock() - a["ts"] < 120]}
+            lines = [a for a in self._ann if a["seq"] > since and self.clock() - a["ts"] < 120]
+            if any(a.get("kind") == "track" for a in lines):
+                self._ann_sent_ts = self.clock()
+            return {"seq": self._ann_seq, "lines": lines}
 
     def _write_np(self, cur):
         s = self.settings
@@ -713,7 +722,11 @@ class Engine:
         name = names[idx]
         own = self._own_settings()
         if len(ids) == len(names):                                   # ids line up with the names (a local file has none)
-            aid = ids[idx]
+            aid = str(ids[idx] or "")
+            if not _ARTIST_ID.fullmatch(aid):                          # no usable id for this credit: word ban instead of a silent no-op
+                if name.lower() not in [str(x).lower() for x in own["blocklist"]]:
+                    self.save_settings({"blocklist": own["blocklist"] + [name]})
+                return False
             if aid not in [e.partition("|")[0] for e in own["blocked_artists"]]:
                 patch = {"blocked_artists": own["blocked_artists"] + [f"{aid}|{name}"]}
             else:
@@ -958,7 +971,10 @@ class Engine:
                 return self._r(False, "none", "unblock_none", user=user, prefix=s["prefix"])
             self.save_settings({"blocklist": keep, "blocked_artists": keep_a} if cmd == "unbanartist" else {"blocklist": keep})
             self._bump()
-            return self._r(True, cmd, "unblock_ok", user=user, target=label)
+            r = self._r(True, cmd, "unblock_ok", user=user, target=label)
+            if cmd == "unbanartist" and self.site_block.get("artists") and r.get("reply"):
+                r["reply"] += " (bans set on the site stay until removed there)"
+            return r
         if cmd == "blocksong" and staff:
             t = self.pb["track"] if self.pb and self.pb["track"] else None
             if not t:

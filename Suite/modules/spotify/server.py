@@ -598,8 +598,8 @@ def main():
         pass
     try:
         connect.cleanup_stale()
-    except Exception:
-        pass
+    except Exception as e:
+        console_log.warn("connect", f"stale cleanup failed: {type(e).__name__}: {e}")
     threading.Thread(target=loop, daemon=True).start()
     bridge.start()
     try:

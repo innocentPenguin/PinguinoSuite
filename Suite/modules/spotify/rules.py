@@ -66,6 +66,8 @@ def merged(saved):
         elif _type_ok(DEFAULTS[k], v):
             if isinstance(v, list):
                 v = [x[:200] for x in v if isinstance(x, str)][:500]       # a number/null in a list must not crash the rules
+                if k == "blocked_artists":                                  # a typo'd id would silently never match: keep only real ones
+                    v = [x for x in v if re.fullmatch(r"[A-Za-z0-9]{22}", x.partition("|")[0].strip())]
             elif isinstance(v, str):
                 v = v[:2000]
             s[k] = v

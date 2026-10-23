@@ -1707,3 +1707,52 @@ class Audit2MiscTests(unittest.TestCase):
         ytlink.fetch_meta("zzzzzzzzzzz", http, lambda: t[0])
         self.assertEqual(len(calls), 2)
         ytlink._meta.clear()
+
+
+class Review53Tests(AnnounceTierTests):
+    def test_fast_poller_gets_no_burst(self):
+        self._play(1, V(1, "a", 0))
+        self.assertEqual(len(self.e.announcements(0)["lines"]), 1)       # the Host took it
+        self.clock.t += 5
+        self._play(2, V(2, "b", 0))
+        self.assertEqual(len(self.e.announcements(0)["lines"]), 1)       # still only the first: second is inside the gap
+        self.clock.t += 60
+        self._play(3, V(3, "c", 0))
+        self.assertIn("Song 3", self.e.announcements(0)["lines"][-1]["text"])
+
+    def test_announce_never_starts_with_a_command_char(self):
+        self.e.save_settings({"msgs": {"announce_track_default": "/ban {song}"}, "reply_prefix": ""})
+        self._play(1, V(1, "a", 0))
+        for l in self.e.announcements(0)["lines"]:
+            self.assertNotIn(l["text"][:1], "/.!")
+
+    def test_idless_credit_becomes_word_ban_and_bad_ids_are_dropped(self):
+        t = dict(T(1), artists=["Queen"], artist_ids=[""])
+        self.assertFalse(self.e._ban_artist(t))
+        self.assertEqual(self.e.settings["blocked_artists"], [])
+        self.assertIn("Queen", self.e.settings["blocklist"])
+        m = rules.merged({"blocked_artists": ["short|X", "1dfeR4HaWDbWqFHLkxsg1d|Queen", "|Name"]})
+        self.assertEqual(m["blocked_artists"], ["1dfeR4HaWDbWqFHLkxsg1d|Queen"])
+
+    def test_local_day_dst_boundaries(self):
+        import datetime
+        from engine import local_day
+        u = lambda *a: datetime.datetime(*a, tzinfo=datetime.timezone.utc).timestamp()
+        self.assertEqual(local_day(u(2026, 3, 8, 5, 59)), "2026-03-07")      # 23:59 CST the evening before the switch
+        self.assertEqual(local_day(u(2026, 3, 8, 6, 0)), "2026-03-08")       # midnight CST
+        self.assertEqual(local_day(u(2026, 3, 9, 4, 59)), "2026-03-08")      # after the switch midnight moves to 05:00 UTC
+        self.assertEqual(local_day(u(2026, 3, 9, 5, 0)), "2026-03-09")
+        self.assertEqual(local_day(u(2026, 11, 1, 4, 59)), "2026-10-31")     # last CDT midnight is 05:00 UTC
+        self.assertEqual(local_day(u(2026, 11, 1, 5, 0)), "2026-11-01")
+        self.assertEqual(local_day(u(2026, 11, 2, 5, 59)), "2026-11-01")     # then CST: midnight is 06:00 UTC
+        self.assertEqual(local_day(u(2026, 11, 2, 6, 0)), "2026-11-02")
+
+    def test_bad_copies_are_pruned(self):
+        d = store.folder()
+        for i in range(8):
+            (d / f"junk.json.bad-{1000 + i}").write_text("x")
+        (d / "junk.json").write_text("{not json")
+        store.load("junk.json", {})
+        self.assertLessEqual(len(list(d.glob("junk.json.bad-*"))), 5)
+        for f in d.glob("junk.json*"):
+            f.unlink()

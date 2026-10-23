@@ -32,6 +32,8 @@ def load(name, default):
         except ValueError:
             try:
                 shutil.copyfile(p, p.with_name(f"{name}.bad-{int(time.time())}"))
+                for old in sorted(p.parent.glob(name + ".bad-*"))[:-5]:          # keep the newest 5
+                    old.unlink(missing_ok=True)
                 console_log.warn("store", f"{name} was unreadable; kept a copy as {name}.bad-*", dedupe_s=60)
             except OSError:
                 pass
