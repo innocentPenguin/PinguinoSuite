@@ -62,6 +62,12 @@ try:
     # a source that is not open: its intros are skipped, not stuck
     post('/api/intro/reset'); time.sleep(16); say('$3t3guy: hi'); get('/api/intro/poll?slot=t1')
     chk('an intro for a browser source that is not open is skipped (no blocking)', play('t1') is None and get('/api/intro')['current'] is None)
+    def code(path):
+        try: urllib.request.urlopen(B + path, timeout=10); return 200
+        except urllib.error.HTTPError as e: return e.code
+    chk('/api/intro/viewer with no approved intro is 404 (same shape as before)', code('/api/intro/viewer?platform=twitch&user_id=nobody') == 404)
+    chk('/api/intro with a user_id still answers as the viewer route (404 when none)', code('/api/intro?platform=twitch&user_id=nobody') == 404)
+    chk('plain /api/intro (no user_id) is the old sub-clip Intro.Api again', 'queue' in get('/api/intro'))
 finally:
     host.kill()
 for n, ok in res: print('PASS' if ok else 'FAIL', n)

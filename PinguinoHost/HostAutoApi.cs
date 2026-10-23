@@ -210,6 +210,18 @@ namespace PinguinoHost
                 if (m == "GET") { Write(c, CannedEditor.List().ToString(), "application/json"); return true; }
                 if (m == "POST") { Write(c, CannedEditor.Handle(Body(c)).ToString(), "application/json"); return true; }
             }
+            if (p == "/api/clips-pick" && m == "GET")
+            {   // a clip for a bot to post (own channel: featured, last 2 weeks, not one of the last 3 sent). Read only: the sender calls POST /api/clips-sent after posting.
+                if (!System.Net.IPAddress.IsLoopback(c.Request.RemoteEndPoint.Address)) { c.Response.StatusCode = 403; return true; }
+                var pk = ClipPick.PickOwn(); Write(c, new JObject { { "ok", true }, { "clip", pk == null ? null : new JObject { { "id", pk["id"] }, { "url", pk["url"] }, { "title", pk["title"] }, { "views", pk["view_count"] }, { "created_at", pk["created_at"] } } }, { "recent", new JArray(ClipPick.Recent()) } }.ToString(), "application/json"); return true;
+            }
+            if (p == "/api/clips-sent" && m == "POST")
+            {   // a bot posted this clip: remember it in the shared last-clips list (idempotent: marking the clip that was marked last changes nothing)
+                if (!System.Net.IPAddress.IsLoopback(c.Request.RemoteEndPoint.Address)) { c.Response.StatusCode = 403; return true; }
+                var cb = Body(c); string cu = (string)cb["url"] ?? (string)cb["id"] ?? ""; if (ClipPick.IdOf(cu) == "") { c.Response.StatusCode = 400; Write(c, "{\"ok\":false,\"error\":\"url required\"}", "application/json"); return true; }
+                bool already = ClipPick.Recent(1).LastOrDefault() == ClipPick.IdOf(cu); if (!already) ClipPick.Mark(cu, (string)cb["by"] ?? "bot");
+                Write(c, new JObject { { "ok", true }, { "already", already } }.ToString(), "application/json"); return true;
+            }
             if (p == "/api/clips-dump" && m == "GET") { Write(c, ClipsDump.Run().ToString(), "application/json"); return true; }
             if (p == "/api/helix-ids" && m == "GET")
             {   // reads Data\namehistory\lookups.json {ids:[...]}, asks Helix /users by id (batches of 100) with the Host's own streamer credentials, saves Data\namehistory\helix_ids.json {data:[{id,login}]}; credentials never leave the Host
@@ -247,7 +259,7 @@ namespace PinguinoHost
             if (p == "/api/teach/decide" && m == "POST") { Write(c, Teach.Decide(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/links" && m == "GET") { var lj = Links.Doc(); lj["mismatches"] = Links.Audit(ChannelLore.AllEntries()); Write(c, lj.ToString(), "application/json"); return true; }
             if (p == "/api/links" && m == "POST") { var lb = Body(c); lock (typeof(Links)) { var ld = Links.Doc(); var lk = (JObject)ld["links"]; if (lb["links"] is JObject nl) foreach (var pr in nl.Properties()) lk[pr.Name.ToLowerInvariant()] = pr.Value; System.IO.File.WriteAllText(System.IO.Path.Combine(HostApi.DataDir, "links.json"), ld.ToString(), new UTF8Encoding(false)); } Write(c, "{\"ok\":true}", "application/json"); return true; }
-            if (p == "/api/intro" && m == "GET")   // Multi: the approved intro of one viewer, else 404
+            if ((p == "/api/intro/viewer" || (p == "/api/intro" && c.Request.QueryString["user_id"] != null)) && m == "GET")   // Multi (/api/intro/viewer; plain /api/intro with user_id still works): the approved intro of one viewer, else 404
             { var ij = ViewerIntro.Approved(c.Request.QueryString["platform"], c.Request.QueryString["user_id"]); if (ij == null) { c.Response.StatusCode = 404; Write(c, "{\"ok\":false,\"error\":\"no approved intro\"}", "application/json"); } else Write(c, ij.ToString(), "application/json"); return true; }
             if (p == "/api/intros" && m == "GET") { var q = c.Request.QueryString; Write(c, (q["user_id"] != null ? ViewerIntro.Mine(q["platform"], q["user_id"]) : ViewerIntro.List(q["status"])).ToString(), "application/json"); return true; }
             if (p == "/api/intros" && m == "POST") { var ib = Body(c); Write(c, ViewerIntro.Act((string)ib["action"], ib).ToString(), "application/json"); return true; }

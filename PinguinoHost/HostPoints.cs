@@ -293,6 +293,8 @@ namespace PinguinoHost
 
         static void MatchRow(string login, string type, string label, long delta, string id) { try { if (Sim.IsSim(login)) return; lock (L) { PRow(CurSid(), login, type, label, delta, id); Save(); } } catch (Exception) { } }
         /// <summary>One-time back-pay: 40% of what the current cheer curve pays, for every chat cheer in the logs. Dry run by default; apply backs up points.json first. Idempotent per cheer (backfill:bits:...).</summary>
+        /// <summary>system / pseudo accounts that appear in event logs but are not people (Twitch itself, anonymous gifters ...): they never earn points</summary>
+        public static bool IsPseudoUser(string login) { switch ((login ?? "").Trim().ToLowerInvariant()) { case "twitch": case "anonymous": case "ananonymousgifter": case "system": case "tmi": case "jtv": case "unknown": return true; } return false; }
         public static JObject BackPay(bool apply, double pct = 0.4)
         {
             var ev = Boards.CheerEvents(); var per = new SortedDictionary<string, long[]>(); long bits = 0, pts = 0, skipped = 0, already = 0; string backup = null;
@@ -300,7 +302,7 @@ namespace PinguinoHost
             foreach (var e in ev)
             {
                 string login = Canon(Boards.AliasMap(), (string)e["user"]); long n = (long)e["amount"], at = (long)e["at"];
-                if (login == "" || Boards.IsBot(login) || login == Streamer() || Sim.IsSim(login)) { skipped++; continue; }
+                if (login == "" || IsPseudoUser(login) || Boards.IsBot(login) || login == Streamer() || Sim.IsSim(login)) { skipped++; continue; }
                 long amt = (long)Math.Round(CheerPoints(n) * pct); if (amt <= 0) { skipped++; continue; }
                 string id = "backfill:bits:cheer:" + (string)e["user"] + "::" + at;
                 bool done; lock (L) done = Ledger()[id] != null;

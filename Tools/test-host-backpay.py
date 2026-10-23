@@ -6,7 +6,9 @@ d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, 'boards'))
 ev = [{"at": 1771467408, "type": "cheer", "user": "alice", "amount": 100, "to": ""},
       {"at": 1771472218, "type": "cheer", "user": "alice", "amount": 500, "to": ""},
       {"at": 1772508541, "type": "cheer", "user": "bob", "amount": 1000, "to": ""},
-      {"at": 1772508999, "type": "gift", "user": "bob", "amount": 5, "to": ""}]
+      {"at": 1772508999, "type": "gift", "user": "bob", "amount": 5, "to": ""},
+      {"at": 1772509999, "type": "cheer", "user": "twitch", "amount": 250, "to": ""},
+      {"at": 1772509998, "type": "cheer", "user": "Anonymous", "amount": 250, "to": ""}]
 json.dump(ev, open(os.path.join(d, 'boards', 'events.json'), 'w'))
 p = subprocess.run(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], input="backpay-dry\nbackpay-apply\nbackpay-apply\nquit\n", capture_output=True, text=True, encoding='utf-8', timeout=120)
 rs = [json.loads(l.split('[backpay] ', 1)[1]) for l in p.stdout.splitlines() if l.startswith('[backpay] {')]
@@ -16,5 +18,5 @@ assert not dry['applied'] and dry['people'] == 2 and dry['bits'] == 1600 and dry
 assert ap['applied'] and ap['points'] == 8600 and ap['people'] == 2, ap
 assert again['people'] == 0 and again['points'] == 0 and again['already_paid_events'] == 3, again
 pts = json.load(open(os.path.join(d, 'economy', 'points.json'), encoding='utf-8-sig'))
-assert pts['adjust']['alice'] == 2600 and pts['adjust']['bob'] == 6000, pts['adjust']
+assert pts['adjust']['alice'] == 2600 and pts['adjust']['bob'] == 6000 and 'twitch' not in pts['adjust'] and 'anonymous' not in pts['adjust'], pts['adjust']   # pseudo-users such as twitch never earn back-pay
 print('PASS backpay')
