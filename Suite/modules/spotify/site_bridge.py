@@ -3,6 +3,7 @@ push: state mirror every 3 s while playing / 10 s idle / at once on change.  pol
 Site down = we back off (3 s -> 30 s) and keep working locally. The API key never leaves config.json."""
 import json
 import os
+import re
 import threading
 import time
 import urllib.error
@@ -47,6 +48,14 @@ def fetch_vault(name):
     return None
 
 
+_CTRL = re.compile("[" + chr(0) + "-" + chr(31) + chr(127) + "]")
+
+
+def clean(s, n):
+    """Text from the site: no control characters, bounded."""
+    return _CTRL.sub("", str(s))[:n].strip()
+
+
 class Bridge:
     def __init__(self, engine, http=default_http, sleep=time.sleep, vault=None):
         self.e, self.http, self.sleep = engine, http, sleep
@@ -60,6 +69,8 @@ class Bridge:
         self.blocklist_version = None
         self._pushed_version = -1
         self._last_push = 0.0
+        self._seen = {}                # event id -> result: a redelivered event (failed ack) is answered again, not run twice
+        self._started = False
         self.f = {"push": 0, "poll": 0}      # consecutive failures per loop (independent back-off)
 
     # ---- config
@@ -134,8 +145,8 @@ class Bridge:
         url, key = self.conf()
         st, js = self.http("GET", url + "/api/spotify/blocklist", key, None, 10)
         if st == 200 and isinstance(js, dict):
-            self.e.site_block = {k: [str(x) for x in js.get(k, [])] for k in ("tracks", "artists", "users")}
-            self.blocklist_version = js.get("version", version)
+            self.blocklist_version = js.get("version", version)         # first: a bad list must not make us re-pull every push
+            self.e.site_block = {k: [str(x)[:200] for x in (js.get(k) if isinstance(js.get(k), list) else [])[:5000]] for k in ("tracks", "artists", "users")}
             console_log.info("site", f"blocklist v{self.blocklist_version} applied")
 
     def push_loop(self):
@@ -170,13 +181,23 @@ class Bridge:
             if not isinstance(ev, dict):                  # a poison entry must not lose the batch or be redelivered forever
                 continue
             eid = ev.get("id")
+            if eid is not None and str(eid) in self._seen:
+                results.append(self._seen[str(eid)])
+                continue
             try:
-                results.append(self.handle_event(ev))
+                res = self.handle_event(ev)
             except Exception as ex:
                 console_log.error("site", f"event {eid} failed: {type(ex).__name__}: {ex}", dedupe_s=30)
-                results.append({"id": eid, "ok": False, "reason": "requests_closed"})
+                res = {"id": eid, "ok": False, "reason": "requests_closed"}
+            results.append(res)
+            if eid is not None:
+                self._seen[str(eid)] = res
+                while len(self._seen) > 500:
+                    self._seen.pop(next(iter(self._seen)))
         if results:
-            self.http("POST", url + "/api/spotify/ack", key, {"v": 1, "results": results}, 10)
+            st2, _ = self.http("POST", url + "/api/spotify/ack", key, {"v": 1, "results": results}, 10)
+            if st2 != 200:                                # once more; if it still fails the site redelivers and _seen answers
+                self.http("POST", url + "/api/spotify/ack", key, {"v": 1, "results": results}, 10)
         return len(events)
 
     def poll_loop(self):
@@ -199,7 +220,7 @@ class Bridge:
 
     def handle_event(self, ev):
         eid, typ = ev.get("id"), ev.get("type")
-        user = str(ev.get("user") or ev.get("login") or "viewer")
+        user = clean(ev.get("user") or ev.get("login") or "viewer", 40) or "viewer"
         if typ == "request":
             track = None
             try:
@@ -217,10 +238,10 @@ class Bridge:
             if ev.get("kind") == "skip":
                 r = self.e.vote_skip(user, False)
                 return {"id": eid, "ok": r["ok"], **({} if r["ok"] else {"reason": "unknown_request"})}
-            err = self.e.upvote(str(ev.get("rid", "")), str(ev.get("login") or user))
+            err = self.e.upvote(clean(ev.get("rid", ""), 60), clean(ev.get("login") or user, 40))
             return {"id": eid, "ok": err is None, **({"reason": err} if err else {})}
         if typ == "mod":
-            return self.handle_mod(eid, str(ev.get("action", "")), str(ev.get("value") or ""), user)
+            return self.handle_mod(eid, str(ev.get("action", "")), clean(ev.get("value") or "", 120), user)
         return {"id": eid, "ok": False, "reason": "unknown_request"}
 
     def handle_mod(self, eid, action, value, user):
@@ -247,7 +268,7 @@ class Bridge:
                 return {"id": eid, "ok": False, "reason": "unknown_request"}
         except (QueueError, ApiError) as ex:
             console_log.warn("site", f"mod {action} by {user} failed: {ex}", dedupe_s=10)
-            return {"id": eid, "ok": False, "reason": "unknown_request"}
+            return {"id": eid, "ok": False, "reason": "rate_limited" if getattr(ex, "status", 0) == 429 else "error"}
         console_log.info("site", f"mod action {action} by {user}")
         return {"id": eid, "ok": True}
 
@@ -266,5 +287,8 @@ class Bridge:
         console_log.warn("site", f"{msg}; backing off", dedupe_s=60)
 
     def start(self):
+        if self._started:
+            return
+        self._started = True
         for fn in (self.push_loop, self.poll_loop):
             threading.Thread(target=fn, daemon=True).start()

@@ -1613,3 +1613,97 @@ class PlayerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Audit2RestTests(BridgeTests):
+    def test_redelivered_event_is_not_run_twice(self):
+        self.api.track = lambda tid: self.api.tracks["t4"]
+        self.responses = {"/poll": (200, {"events": [{"id": "e1", "type": "request", "user": "Ann", "trackId": "x"}]}), "/ack": (500, {})}
+        self.b.poll_once()
+        n = len(self.e.queue.items)
+        self.b.poll_once()                                         # the site redelivers e1 because the ack failed
+        self.assertEqual(len(self.e.queue.items), n)
+        acks = [s for s in self.sent if s[1].endswith("/ack")]
+        self.assertEqual(len(acks), 4)                             # each poll acks twice (one retry)
+        self.assertEqual(acks[0][3]["results"], acks[2][3]["results"])
+
+    def test_site_text_is_cleaned_and_capped(self):
+        from site_bridge import clean
+        self.assertEqual(clean("Ann" + chr(7) + chr(10) + "X" * 100, 10), "AnnXXXXXXX")
+
+    def test_null_blocklist_keys_do_not_break_pull(self):
+        self.responses = {"/push": (200, {"blocklistVersion": 7}), "/blocklist": (200, {"version": 7, "tracks": None, "users": ["a"]})}
+        self.b.push_once()
+        self.assertEqual(self.b.blocklist_version, 7)
+        self.assertEqual(self.e.site_block["users"], ["a"])
+        self.assertEqual(self.e.site_block["tracks"], [])
+
+    def test_start_twice_starts_one_pair_of_threads(self):
+        import threading
+        n = threading.active_count()
+        self.b.stop = True
+        self.b.start()
+        self.b.start()
+        time.sleep(0.2)
+        self.assertLessEqual(threading.active_count() - n, 2)
+
+    def test_mod_failure_reasons(self):
+        from spotify_api import ApiError
+        self.e.skip = lambda force=False: (_ for _ in ()).throw(ApiError(429, "slow"))
+        self.assertEqual(self.b.handle_mod("m1", "skip", "", "mod")["reason"], "rate_limited")
+        self.e.skip = lambda force=False: (_ for _ in ()).throw(ApiError(500, "boom"))
+        self.assertEqual(self.b.handle_mod("m2", "skip", "", "mod")["reason"], "error")
+
+
+class Audit2RuleTests(unittest.TestCase):
+    def setUp(self):
+        self.s = rules.merged({"requests_open": True, "blocklist": ["a", "xx", "Bad Band"]})
+        self.q = Queue()
+
+    def test_short_blocklist_entries_match_whole_words_only(self):
+        self.assertTrue(rules.evaluate(self.s, T(1), "v", (), self.q, None)[0])          # "a" in "Song 1"/"Artist 1" must not block
+        t = dict(T(2), name="Hello a friend")
+        self.assertEqual(rules.evaluate(self.s, t, "v", (), self.q, None)[1], "blocked")
+        t = dict(T(3), artists=["The Bad Band"])
+        self.assertEqual(rules.evaluate(self.s, t, "v", (), self.q, None)[1], "blocked")
+
+    def test_none_user_and_null_duration(self):
+        t = dict(T(1), duration_ms=None)
+        self.assertTrue(rules.evaluate(self.s, t, None, (), self.q, None)[0])
+
+    def test_parse_splits_on_any_whitespace(self):
+        self.assertEqual(rules.parse("!sr" + chr(9) + "name")[1], "name")
+        self.assertEqual(rules.parse("!sr" + chr(160) + "name")[1], "name")
+        self.assertEqual(rules.parse("!lastsong")[1], "")
+
+
+class Audit2MiscTests(unittest.TestCase):
+    def test_oembed_cached(self):
+        import ytlink
+        ytlink._meta.clear()
+        calls = []
+
+        def http(url):
+            calls.append(url)
+            return {"title": "A - B", "author_name": "C"}
+        for _ in range(5):
+            self.assertEqual(ytlink.fetch_meta("abcdefghijk", http)["title"], "A - B")
+        self.assertEqual(len(calls), 1)
+        ytlink._meta.clear()
+
+    def test_oembed_failure_cached_briefly(self):
+        import ytlink
+        ytlink._meta.clear()
+        calls = []
+
+        def http(url):
+            calls.append(1)
+            raise OSError("down")
+        t = [1000.0]
+        for _ in range(3):
+            self.assertIsNone(ytlink.fetch_meta("zzzzzzzzzzz", http, lambda: t[0]))
+        self.assertEqual(len(calls), 1)
+        t[0] += 130
+        ytlink.fetch_meta("zzzzzzzzzzz", http, lambda: t[0])
+        self.assertEqual(len(calls), 2)
+        ytlink._meta.clear()

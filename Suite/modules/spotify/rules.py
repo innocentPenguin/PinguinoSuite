@@ -125,7 +125,14 @@ def blocked_reason(settings, track):
     for b in settings["blocklist"]:
         tid = _norm(track_id_from(b) or "")
         b = _norm(b)
-        if b and (b in ids or b in hay or (tid and tid in ids)):
+        if not b:
+            continue
+        if b in ids or (tid and tid in ids):
+            return b
+        if len(b) >= 3:
+            if b in hay:
+                return b
+        elif b in re.split(r"[^a-z0-9]+", hay):     # 1-2 letter entries match whole words only (a typo "a" must not block everything)
             return b
     return None
 
@@ -166,7 +173,7 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
     if "broadcaster" in roles:
         return True, "ok", ctx
     staff = is_staff(roles)
-    low = user.lower()
+    low = _norm(user or "")
     if low in {_norm(u) for u in settings["blocked_users"]}:
         return False, "user_blocked", ctx
     if not settings["requests_open"] and not staff:
@@ -181,7 +188,7 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
         return False, "genre", {**ctx, "genre": track["_genre"]}
     if (settings["block_explicit"] or settings["stream_safe"]) and track.get("explicit"):
         return False, "explicit", ctx
-    dur = track.get("duration_ms", 0)
+    dur = track.get("duration_ms") or 0
     max_s = settings["max_length_s"]
     if is_sub(roles) and settings["max_length_sub_s"]:
         max_s = settings["max_length_sub_s"]
@@ -281,7 +288,8 @@ def parse(text, settings=None):
     p = settings["prefix"]
     if not t.startswith(p):
         return None, ""
-    head, _, rest = t[len(p):].partition(" ")
+    parts = t[len(p):].split(None, 1)               # any whitespace, tab and nbsp included
+    head, rest = (parts[0], parts[1] if len(parts) > 1 else "") if parts else ("", "")
     cmd = command_map(settings).get(head.lower())
     return (cmd, rest.strip()) if cmd else (None, "")
 

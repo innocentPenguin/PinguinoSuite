@@ -173,6 +173,10 @@ class H(BaseHTTPRequestHandler):
             self._send(409, {"ok": False, "error": "not connected to Spotify", "code": "NOT_CONNECTED"})
         except QueueError as e:
             self._send(400, {"ok": False, "error": str(e)})
+        except (ValueError, OverflowError) as e:
+            if method != "GET":
+                raise
+            self._send(400, {"ok": False, "error": "bad number in the query"})      # ?limit=abc
         except ApiError as e:
             self._send(502 if e.status != 429 else 429, {"ok": False, "error": friendly(e), "code": e.reason or str(e.status)})
         except Exception as e:     # never take the server down

@@ -142,6 +142,7 @@ def main():
     T("index page served", "PinguinoSpotify" in get("/")[1])
     T("overlay page served", "Now playing" in get("/overlay")[1])
     T("unknown route 404", get("/nope")[0] == 404)
+    T("?limit=abc is a 400, not a 500", call("GET", "/api/leaderboard?limit=abc")[0] == 400)
     T("bad Host rejected", call("GET", "/api/state", headers={"Host": "evil.com"})[0] == 403)
     T("foreign Origin rejected on POST", post("/api/settings", {}, headers={"Origin": "http://evil.com"})[0] == 403)
     T("OPTIONS preflight from the app origin answers", call("OPTIONS", "/api/mod-action", headers={"Origin": "http://tauri.localhost"})[0] == 204)

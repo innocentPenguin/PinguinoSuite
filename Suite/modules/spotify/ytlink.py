@@ -2,6 +2,7 @@
 import difflib
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 
@@ -20,11 +21,25 @@ def video_id(text):
 def _http(url):
     req = urllib.request.Request(url, headers={"User-Agent": "PinguinoSuite-Spotify/1.0"})
     with urllib.request.urlopen(req, timeout=6) as r:
-        return json.loads(r.read().decode("utf8"))
+        return json.loads(r.read(1_000_000).decode("utf8"))
 
 
-def fetch_meta(vid, http=None):
+_meta = {}                 # vid -> (expires, result): five viewers posting one link cost one oEmbed call
+
+
+def fetch_meta(vid, http=None, now=time.time):
     """-> {title, channel} or None. Only ever requests YouTube's oEmbed for this one video id."""
+    hit = _meta.get(vid)
+    if hit and hit[0] > now():
+        return dict(hit[1]) if hit[1] else None
+    res = _fetch_meta(vid, http)
+    if len(_meta) >= 100:
+        _meta.clear()
+    _meta[vid] = (now() + (600 if res else 120), res)
+    return dict(res) if res else None
+
+
+def _fetch_meta(vid, http=None):
     watch = "https://www.youtube.com/watch?v=" + vid
     try:
         d = (http or _http)("https://www.youtube.com/oembed?" + urllib.parse.urlencode({"url": watch, "format": "json"}))
