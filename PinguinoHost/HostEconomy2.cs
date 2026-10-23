@@ -330,7 +330,7 @@ namespace PinguinoHost
             if (max <= 0) return no("you need " + D(set["LoanMinWatchHours"]).ToString("0.##", CultureInfo.InvariantCulture) + " hours of watch time before the bank lends to you (your history sets the limit)");
             if (amount <= 0) return no("how much? You can borrow up to " + Num(max) + " " + cur);
             if (amount > max) return no("your limit is " + Num(max) + " " + cur + " for now");
-            lock (L) { Loans()[login] = new JObject { { "principal", amount }, { "owed", amount }, { "takenAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "streams", 0 }, { "defaulted", false } }; Save(); }
+            lock (L) { if (Loans()[login] != null) return no("you still owe a loan: use !repay first"); Loans()[login] = new JObject { { "principal", amount }, { "owed", amount }, { "takenAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "streams", 0 }, { "defaulted", false } }; Save(); }
             string err = Apply(id, login, amount, "loan", "Loan taken"); if (err != null) { lock (L) { Loans().Remove(login); Save(); } return no(err); }
             Back(login + " took a loan of " + amount, new JObject { { "login", login }, { "amount", amount } });
             return new JObject { { "ok", true }, { "message", "borrowed " + Num(amount) + " " + cur + "; interest " + D(set["LoanInterestPct"]).ToString("0.##", CultureInfo.InvariantCulture) + "% each stream. Pay it back with !repay" }, { "owed", amount } };
@@ -344,13 +344,18 @@ namespace PinguinoHost
             JObject ln; lock (L) ln = Loans()[login] as JObject; if (ln == null) return no("you have no loan");
             string id = string.IsNullOrEmpty(reqId) ? "repay:" + login + ":" + Guid.NewGuid().ToString("N") : "repay-" + reqId;
             if (!string.IsNullOrEmpty(reqId) && Applied(id)) return new JObject { { "ok", true }, { "message", "already applied" } };
+            lock (L)   // one repay at a time per bank: two at once must not both pay the same debt
+            {
+            ln = Loans()[login] as JObject; if (ln == null) return no("you have no loan");
             long owed = (long)Math.Ceiling(D(ln["owed"])); long pay = amount > 0 ? Math.Min(amount, owed) : owed; long bal = Balance(login);
             if (bal <= 0) return no("you have no " + cur + " to repay with");
             pay = Math.Min(pay, bal);
             string err = Apply(id, login, -pay, "loan_repay", "Loan repayment"); if (err != null) return no(err);
             long left;
             lock (L) { double o = D(ln["owed"]) - pay; if (o <= 0.5) { Loans().Remove(login); left = 0; } else { ln["owed"] = o; left = (long)Math.Ceiling(o); } Save(); }
+
             return new JObject { { "ok", true }, { "paid", pay }, { "owed", left }, { "message", left == 0 ? "paid " + Num(pay) + " " + cur + ": the loan is fully repaid. Thank you!" : "paid " + Num(pay) + " " + cur + ", you still owe " + Num(left) + "." } };
+            }
         }
 
         static void LoanInterest(string sid)
@@ -388,7 +393,7 @@ namespace PinguinoHost
             }
             if (cmd == "!repay")
             {
-                long n = 0; if (args.Length > 0 && args[0].ToLowerInvariant() != "all" && !long.TryParse(args[0].Replace(",", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) { say(at + "usage: !repay <amount|all>"); return; }
+                long n = 0; if (args.Length > 0 && args[0].ToLowerInvariant() != "all" && (!long.TryParse(args[0].Replace(",", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out n) || n < 0)) { say(at + "usage: !repay <amount|all>"); return; }
                 var r = LoanRepay(me, n); say(at + ((bool?)r["ok"] == true ? (string)r["message"] : (string)r["error"]) + ((bool?)r["ok"] == true ? "" : "."));
                 return;
             }
