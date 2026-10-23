@@ -155,12 +155,19 @@
     schedule('customs'); return msg;
   }
   function setOv(o) { const until = Date.now() + 5000; for (const k in o) if (o[k] != null) ui.ov[k] = { v: o[k], until }; schedule('customs'); setTimeout(() => schedule('customs'), 5100); }
+  // 023's per-game overlay layouts: the activity decides the game (layouts are tagged by game name; '' = no game). Host: POST /api/scene-layouts setgame.
+  const gameOf = sub => (sub === 'end' ? '' : /^(boxfights|zonewars|fnviewers)$/.test(sub) ? 'Fortnite' : 'Rocket League');
+  async function setOverlayGame(sub) {
+    const game = gameOf(sub); if (ui.sim || ui.lastGame === game) return;
+    const r = await api.post('/api/scene-layouts', { action: 'setgame', profile: '*', game });
+    if (r.ok && !(r.json && r.json.ok === false)) { ui.lastGame = game; toast('Overlay layout game: ' + (game || 'none')); } else if (r.status !== 404) toast('Overlay game: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
+  }
   async function sendCustom(action, value, btn, raw) {
     if (action === 'activity' && !ui.sim && !raw) {   // the Host's !activity does not set KOTH/team size/mode: send those too (defaults in master-core)
       const sub = String(value || '').split(' ').pop(), c = S.get('customs') || {}, d = C.ACTIVITY_DEFAULTS[sub] || {};
       const steps = C.activityPlan(sub, { koth: !!c.koth, format: c.format, mode: c.mode });
       setOv({ activity: sub === 'end' ? 'none' : sub, koth: d.koth == null ? null : d.koth ? 'on' : 'off', format: d.format, mode: d.mode });
-      const ok = await sendCustom(action, value, btn, true); if (ok) for (const [a, v2] of steps) await sendCustom(a, v2, null, true); return ok;
+      const ok = await sendCustom(action, value, btn, true); if (ok) { for (const [a, v2] of steps) await sendCustom(a, v2, null, true); setOverlayGame(sub); } return ok;
     }
     if (ui.sim) { flash(btn); const m = simApply(action, value); if (m) toast(m); return !/no empty slot|not waiting|No game/.test(m || ''); }
     const text = C.customsText(action, value); if (!text) { toast('Not allowed: ' + action, true); return false; }
