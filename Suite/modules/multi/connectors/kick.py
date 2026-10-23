@@ -14,11 +14,14 @@ import requests
 import websockets
 
 import config
+import secrets_store
 import xplat
+from connectors import kick_auth
 from connectors.base import Connector
 
 PUSHER = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false"
 PUBKEY_URL = "https://api.kick.com/public/v1/public-key"
+API = "https://api.kick.com/public/v1"
 
 
 class Kick(Connector):
@@ -30,6 +33,51 @@ class Kick(Connector):
         self.stop = False
         self._key, self._key_ts = None, 0
         self.state["webhooks"] = 0
+        self.broadcaster_id = None
+        self.sent_ids = set()
+
+    # sending (official API, off until a token with chat:write exists) --------------------------
+    def refresh_caps(self):
+        """Send is offered only when the stored Kick token was granted chat:write. Cheap; called from the run loop and before each send."""
+        rec = secrets_store.get("kick_oauth")
+        scopes = str((rec or {}).get("scope", "") if isinstance(rec, dict) else "").replace(",", " ").split()
+        ok = bool(secrets_store.get("kick_token")) and "chat:write" in scopes
+        self.capabilities = dict(self.capabilities, send=ok, reply=ok)
+        return ok
+
+    def describe(self):
+        self.refresh_caps()
+        return super().describe()
+
+    def _headers(self):
+        return {"Authorization": f"Bearer {kick_auth.access_token()}"}
+
+    def _my_id(self):
+        if self.broadcaster_id is None:
+            r = requests.get(f"{API}/channels", headers=self._headers(), timeout=10)
+            if r.status_code != 200:
+                raise RuntimeError(f"Kick channel lookup failed {r.status_code}: {r.text[:120]}")
+            self.broadcaster_id = int(((r.json().get("data") or [{}])[0]).get("broadcaster_user_id"))
+        return self.broadcaster_id
+
+    def _send_sync(self, text, reply_to):
+        body = {"content": str(text)[:500], "type": "user", "broadcaster_user_id": self._my_id()}
+        if reply_to:
+            body["reply_to_message_id"] = str(reply_to).split(":")[-1]
+        r = requests.post(f"{API}/chat", json=body, headers=self._headers(), timeout=10)
+        if r.status_code != 200:
+            raise RuntimeError(f"Kick send failed {r.status_code}: {r.text[:160]}")
+        d = r.json().get("data") or {}
+        if not d.get("is_sent"):
+            raise RuntimeError("Kick did not send the message")
+        return d.get("message_id", "")
+
+    async def send(self, text, reply_to=None):
+        if not self.refresh_caps():
+            raise RuntimeError("Kick send is not authorised (sign in to Kick with the chat:write scope)")
+        mid = await asyncio.to_thread(self._send_sync, text, reply_to)
+        self.sent_ids.add(mid)
+        return f"kick:{config.settings().get('kick_channel') or 'kick'}:{mid}"
 
     # official webhook path ---------------------------------------------------------------------
     def _public_key(self, force=False):
@@ -84,6 +132,7 @@ class Kick(Connector):
     # unofficial chat feed ----------------------------------------------------------------------
     async def run(self):
         while not self.stop:
+            self.refresh_caps()
             s = config.settings()
             room, chan = str(s.get("kick_chatroom_id") or "").strip(), str(s.get("kick_channel") or "").strip().lower()
             if not (s.get("kick_enabled") and room.isdigit()):

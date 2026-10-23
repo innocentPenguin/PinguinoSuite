@@ -254,3 +254,65 @@ def test_config_defaults_for_platform_auth():
     assert d["youtube_min_poll_s"] == 10 and d["tiktok_sign_url"] == "" and d["kick_client_id"] == "" and d["youtube_client_id"] == ""
     assert d["kick_redirect_uri"].endswith("/auth/kick/callback") and "chat:write" in d["kick_scopes"]
     assert d["youtube_redirect_uri"].endswith("/auth/youtube/callback")
+
+
+# ---- item B: Kick send + title (mocked HTTP) ----
+class _R:
+    def __init__(self, d=None, code=200):
+        self.d, self.status_code, self.text, self.ok = d or {}, code, "x", code < 400
+    def json(self):
+        return self.d
+
+
+def _kick(monkeypatch, store):
+    from connectors import kick as kk
+    monkeypatch.setattr(kk.secrets_store, "get", lambda k, d=None: store.get(k, d))
+    monkeypatch.setattr(kk.kick_auth, "access_token", lambda: "TOK")
+    return kk, kk.Kick(None, lambda e: None)
+
+
+def test_kick_send_off_without_chat_write(monkeypatch):
+    kk, k = _kick(monkeypatch, {})
+    assert k.refresh_caps() is False and k.describe()["capabilities"]["send"] is False
+    with pytest.raises(RuntimeError):
+        asyncio.run(k.send("hi"))
+    kk2, k2 = _kick(monkeypatch, {"kick_token": "t", "kick_oauth": {"scope": "user:read channel:read"}})
+    assert k2.refresh_caps() is False
+
+
+def test_kick_send_posts_to_chat_with_user_type(monkeypatch):
+    kk, k = _kick(monkeypatch, {"kick_token": "t", "kick_oauth": {"scope": "user:read chat:write"}})
+    calls = []
+    monkeypatch.setattr(kk.requests, "get", lambda url, **kw: _R({"data": [{"broadcaster_user_id": 77}]}))
+    monkeypatch.setattr(kk.requests, "post", lambda url, json=None, **kw: calls.append((url, json, kw["headers"])) or _R({"data": {"is_sent": True, "message_id": "uuid-1"}}))
+    assert k.describe()["capabilities"]["send"] is True
+    mid = asyncio.run(k.send("x" * 600, reply_to="kick:chan:abc-123"))
+    url, body, hdr = calls[0]
+    assert url == "https://api.kick.com/public/v1/chat" and hdr["Authorization"] == "Bearer TOK"
+    assert body == {"content": "x" * 500, "type": "user", "broadcaster_user_id": 77, "reply_to_message_id": "abc-123"}
+    assert mid.endswith(":uuid-1") and "uuid-1" in k.sent_ids
+
+
+def test_kick_send_failure_and_not_sent(monkeypatch):
+    kk, k = _kick(monkeypatch, {"kick_token": "t", "kick_oauth": {"scope": "chat:write"}})
+    monkeypatch.setattr(kk.requests, "get", lambda url, **kw: _R({"data": [{"broadcaster_user_id": 1}]}))
+    monkeypatch.setattr(kk.requests, "post", lambda url, **kw: _R({}, 403))
+    with pytest.raises(RuntimeError, match="403"):
+        asyncio.run(k.send("hi"))
+    monkeypatch.setattr(kk.requests, "post", lambda url, **kw: _R({"data": {"is_sent": False}}))
+    with pytest.raises(RuntimeError):
+        asyncio.run(k.send("hi"))
+
+
+def test_kick_title_patch(monkeypatch):
+    import stream_info
+    calls = []
+    monkeypatch.setattr(stream_info.secrets_store, "get", lambda k, d=None: "t" if k == "kick_token" else None)
+    monkeypatch.setattr(stream_info.kick_auth, "access_token", lambda: "TOK")
+    monkeypatch.setattr(stream_info.requests, "patch", lambda url, json=None, headers=None, timeout=0: calls.append((url, json, headers)) or _R({}, 204))
+    assert stream_info.kick_update(title="New title") == {"ok": True}
+    assert calls[0][0] == "https://api.kick.com/public/v1/channels" and calls[0][1] == {"stream_title": "New title"}
+    assert calls[0][2]["Authorization"] == "Bearer TOK"
+    monkeypatch.setattr(stream_info.requests, "patch", lambda *a, **k: _R({"error": "no"}, 403))
+    assert stream_info.kick_update(title="x")["ok"] is False
+    assert stream_info.kick_update(title=None)["ok"] is False
