@@ -75,7 +75,7 @@ pub(crate) fn spawn_link(version: &str) -> Option<Child> {
 }
 
 pub(crate) fn stop_link(app: &AppHandle) {
-    if let Some(mut c) = app.state::<Link>().0.lock().unwrap().take() {
+    if let Some(mut c) = app.state::<Link>().0.lock().unwrap_or_else(|e| e.into_inner()).take() {
         let _ = c.kill();
         let _ = c.wait();
     }
@@ -212,13 +212,13 @@ fn read_contract(name: String) -> Value {
 fn send_request(app: AppHandle, action: String, id: Option<String>) -> Result<Value, String> {
     if action == "restart-link" {
         // handled here, not by Link (it cannot restart itself while swapping its own files)
-        if app.state::<Link>().0.lock().unwrap().is_none() {
+        if app.state::<Link>().0.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
             return Ok(json!({"restarted": false, "reason": "Link is not owned by Lite (external or absent); not touched"}));
         }
         stop_link(&app);
         let child = spawn_link(&app.package_info().version.to_string());
         let started = child.is_some();
-        *app.state::<Link>().0.lock().unwrap() = child;
+        *app.state::<Link>().0.lock().unwrap_or_else(|e| e.into_inner()) = child;
         return Ok(json!({"restarted": started}));
     }
     if !ACTIONS.contains(&action.as_str()) {
@@ -312,7 +312,7 @@ fn set_fs(app: &AppHandle, on: bool) {
     if on {
         mainwin::save(&w, true);
         if let (Ok(p), Ok(s), Ok(m)) = (w.outer_position(), w.outer_size(), w.is_maximized()) {
-            *FS_PREV.lock().unwrap() = Some((p, s, m));
+            *FS_PREV.lock().unwrap_or_else(|e| e.into_inner()) = Some((p, s, m));
         }
         FULLSCREEN.store(true, Ordering::SeqCst);
         let _ = w.show();
@@ -321,7 +321,7 @@ fn set_fs(app: &AppHandle, on: bool) {
     } else {
         let _ = w.set_fullscreen(false);
         FULLSCREEN.store(false, Ordering::SeqCst);
-        if let Some((p, s, m)) = FS_PREV.lock().unwrap().take() {
+        if let Some((p, s, m)) = FS_PREV.lock().unwrap_or_else(|e| e.into_inner()).take() {
             if m {
                 let _ = w.maximize();
             } else {
@@ -446,7 +446,7 @@ fn main() {
                 })
                 .build(app)?;
             let child = spawn_link(&app.package_info().version.to_string()); // None = no Link bundled here (dev without Link): Lite still opens
-            *app.state::<Link>().0.lock().unwrap() = child;
+            *app.state::<Link>().0.lock().unwrap_or_else(|e| e.into_inner()) = child;
             Ok(())
         })
         .on_window_event(|window, event| {

@@ -10,7 +10,7 @@ const html = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.ur
 const cmpLine = html.split('\n').find(l => l.startsWith('const cmpVer'));
 const block = html.slice(html.indexOf('// ROWS-BEGIN'), html.indexOf('// ROWS-END'));
 assert.ok(cmpLine && block, 'markers present');
-const ctx = {}; vm.createContext(ctx); vm.runInContext(`${cmpLine}\n${block}\nthis.mergeRows = mergeRows;`, ctx);
+const ctx = {}; vm.createContext(ctx); vm.runInContext(`${cmpLine}\n${block}\nthis.mergeRows = mergeRows; this.normReplays = normReplays;`, ctx);
 const merge = (...a) => JSON.parse(JSON.stringify(ctx.mergeRows(...a)));
 
 const catalog = { data: { modules: [{ id: 'link', name: 'Link', version: '2.0' }, { id: 'spotify', name: 'Spotify', version: '1.2' }, { id: 'multi', name: 'Multi', version: '1.0' }, { id: 'voice', version: '1' }] } };
@@ -65,4 +65,13 @@ test('Link up but catalog missing; folder present but empty; all fine = no hints
   const ok = hints({ ports: { 7777: true }, parts: { supported: true }, catalog: { exists: true }, status: { exists: true }, replays: { dirs: [{ exists: true }], items: [{}] } });
   assert.deepEqual(Object.values(ok), ['', '', '', '']);
   assert.match(hints({ ports: {}, status: { exists: true }, catalog: { exists: true }, replays: { dirs: [], items: [] } }).link, /not answering/);
+});
+
+test('normReplays: any reply shape gives items[] and dirs[], so a bad reply cannot blank the page', () => {
+  const n = x => JSON.parse(JSON.stringify(ctx.normReplays(x)));
+  for (const bad of [null, undefined, 'error: no folder', 42, [], { items: null }, { items: 'x', dirs: 5 }, { error: 'boom' }]) {
+    const r = n(bad); assert.ok(Array.isArray(r.items) && Array.isArray(r.dirs), JSON.stringify(bad));
+  }
+  const good = n({ interval: 4, items: [{ status: 'complete' }, null, 7], dirs: [{ name: 'Demos', exists: true }, null] });
+  assert.equal(good.interval, 4); assert.equal(good.items.length, 1); assert.equal(good.dirs.length, 1);
 });

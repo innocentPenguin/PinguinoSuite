@@ -94,11 +94,18 @@ function applyBusy() {
     if ((JOBKEYS.some(k => k in d) && jobBusy()) || ('support' in d && busy.support) || ('scan' in d && busy.scan) || ('act' in d && busy.acts.has(d.act + ':' + (d.id || '')))) b.disabled = true;
   });
 }
+let sliding = false;   // pointer is down on the replay interval slider: do not rebuild the page under it
 let scanMsg = '';   // last Scan now result, shown on the Replays page until the next scan
 let parts = null, job = null;   // per-part updates (shared Node updater): last check {supported, parts[], live, ...} and the running/finished job
 async function loadMods() { mods = await inv('parts_modules').catch(() => null); render(); }
 async function checkParts() { parts = await inv('parts_check').catch(e => ({ ok: false, supported: false, message: String(e) })); render(); }
+let polling = false;
 async function pollJob() {
+  if (polling) return;
+  polling = true;
+  try { await pollJobLoop(); } finally { polling = false; }
+}
+async function pollJobLoop() {
   for (;;) {
     job = await inv('parts_job').catch(() => null); busy.job = false; render();
     if (!job || job.state !== 'running') break;
@@ -164,11 +171,15 @@ async function checkLite(manual) {
 function toast(t) { const e = $('#toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', 3500); }
 
 let supportInfo = null;
+let refreshGen = 0;   // refresh() runs every 5 s and after Scan / jobs: only the newest call may write state
 async function refresh() {
+  const gen = ++refreshGen;
   const rd = n => inv('read_contract', { name: n }).catch(() => ({ exists: false }));
-  ports = await inv('probe_ports').catch(() => ({}));
+  const p = await inv('probe_ports').catch(() => ({}));
   const [host, catalog, installed, upd, status, manifest] = await Promise.all([inv('host_live').catch(() => ({ reachable: false })), rd('modules_catalog'), rd('installed'), rd('update_status'), rd('status'), rd('update_manifest')]);
-  const replays = await inv('replay_index').catch(() => ({ items: [], dirs: [] }));
+  const replays = normReplays(await inv('replay_index').catch(() => null));
+  if (gen !== refreshGen) return;   // a newer refresh started meanwhile: its answer is fresher
+  ports = p;
   state = { host, catalog, installed, upd, status, manifest, replays };
   render();
 }
@@ -221,6 +232,11 @@ function hints(x) {
 }
 // HINTS-END
 // ROWS-BEGIN
+/** Whatever replay_index answers (an error string, null, {items:null}): always {items:[], dirs:[]}-shaped so a bad reply can never blank the page. */
+function normReplays(r) {
+  const o = r && typeof r === 'object' && !Array.isArray(r) ? r : {};
+  return { ...o, items: Array.isArray(o.items) ? o.items.filter(m => m && typeof m === 'object') : [], dirs: Array.isArray(o.dirs) ? o.dirs.filter(d => d && typeof d === 'object') : [] };
+}
 function mergeRows(catalog, installed, status, mods, hidden) {
   const cat = catalog && catalog.data && Array.isArray(catalog.data.modules) ? catalog.data.modules : [];
   const inst = installed && installed.data && installed.data.modules || {};
@@ -312,20 +328,22 @@ function renderNav() {
    ${inst.length ? `<h6>Installed</h6>` + inst.map(m => `<div tabindex="0" role="button" class="item" data-page="modules"><span class="ic">📦</span>${esc(m.name || m.id)}<span class="dot ${cls(m.conn && m.conn.state)}"></span></div>`).join('') : ''}`);
 }
 
+// A control is found again after a redraw by what it is (id, or its data-* attributes), never by its position: the list may have changed meanwhile.
+const focusKey = el => el.tagName + '|' + (el.id || [...el.attributes].filter(a => a.name.startsWith('data-')).map(a => a.name + '=' + a.value).join('&'));
 const lastHtml = { nav: '', main: '' };
 // The page redraws every few seconds: replace a container only when its HTML really changed, and give keyboard focus back to the same control afterwards.
 function setHtml(box, key, html) {
   if (lastHtml[key] === html) return;
-  const act = document.activeElement, was = act && box.contains(act) ? { id: act.id, i: [...box.querySelectorAll('button,input,[tabindex]')].indexOf(act), tag: act.tagName } : null;
+  const act = document.activeElement, was = act && box.contains(act) ? focusKey(act) : null;
   box.innerHTML = html; lastHtml[key] = html;
   if (was) {
-    const el = was.id ? document.getElementById(was.id) : [...box.querySelectorAll('button,input,[tabindex]')][was.i];
-    if (el && el.tagName === was.tag && !el.disabled) el.focus({ preventScroll: true });
+    const el = [...box.querySelectorAll('button,input,[tabindex]')].find(x => focusKey(x) === was);
+    if (el && !el.disabled) el.focus({ preventScroll: true });
   }
 }
 function render() {
   renderNav();
-  if (document.activeElement && document.activeElement.id === 'ivl') return;   // don't rebuild the page under the slider while it is being dragged
+  if (sliding) return;
   setHtml($('#main'), 'main', page === 'modules' ? modules() : page === 'replays' ? replaysPage() : dashboard());
   applyBusy();
 }
@@ -350,9 +368,13 @@ document.addEventListener('keydown', e => {
 try { window.__TAURI__.event.listen('confirm-quit', openQm); } catch {}
 // nav entries are div role=button: Enter / Space press them
 document.addEventListener('keydown', e => { const t = e.target; if ((e.key === 'Enter' || e.key === ' ') && t && t.matches && t.matches('nav [data-page]')) { e.preventDefault(); t.click(); } });
+document.addEventListener('pointerdown', e => { if (e.target.id === 'ivl') sliding = true; });
+const endSlide = () => { if (sliding) { sliding = false; render(); } };
+document.addEventListener('pointerup', endSlide); document.addEventListener('pointercancel', endSlide); window.addEventListener('blur', endSlide);
 document.addEventListener('input', e => { if (e.target.id === 'ivl') $('#ivl-v').textContent = e.target.value; });
 document.addEventListener('change', async e => {
   if (e.target.id !== 'ivl') return;
+  endSlide();
   const n = await inv('replay_set_interval', { secs: +e.target.value }).catch(() => null);
   if (n) { state.replays = { ...(state.replays || {}), interval: n }; toast(`Checking for replays every ${n} s`); }
 });
@@ -414,6 +436,7 @@ document.addEventListener('keydown', e => { if (e.key === 'F11') { e.preventDefa
   info = await inv('lite_info').catch(() => null);
   await refresh();
   loadMods();
+  inv('parts_job').then(j => { if (j && j.state === 'running') pollJob(); }).catch(() => {});   // an update started before this window opened is still shown and guarded
   if (!gh || !gh.at || Date.now() - gh.at > 864e5) { checkLite(false); checkParts(); }   // quiet daily check
   setInterval(refresh, 5000);   // cheap: 1 loopback probe + up to 5 tiny local files
 })();

@@ -244,7 +244,7 @@ fn set_job(v: Value) {
 
 /// Stop the Link Lite owns (returns true when there was one), so its files can be swapped.
 fn pause_link(app: &AppHandle) -> bool {
-    let had = app.state::<crate::Link>().0.lock().unwrap().is_some();
+    let had = app.state::<crate::Link>().0.lock().unwrap_or_else(|e| e.into_inner()).is_some();
     if had {
         crate::stop_link(app);
         std::thread::sleep(Duration::from_secs(2)); // let Windows release file locks
@@ -254,7 +254,7 @@ fn pause_link(app: &AppHandle) -> bool {
 
 fn resume_link(app: &AppHandle, had: bool) {
     if had {
-        *app.state::<crate::Link>().0.lock().unwrap() = crate::spawn_link(&app.package_info().version.to_string());
+        *app.state::<crate::Link>().0.lock().unwrap_or_else(|e| e.into_inner()) = crate::spawn_link(&app.package_info().version.to_string());
     }
 }
 
@@ -285,7 +285,7 @@ pub fn parts_apply(app: AppHandle, ids: Vec<String>, repair: Option<bool>) -> Va
         return json!({"ok": false, "message": m});
     }
     // Link run by the Suite (not started by Lite) is the Suite's to update: Lite never stops what it did not start
-    if parts.iter().any(|p| p == "link") && app.state::<crate::Link>().0.lock().unwrap().is_none() {
+    if parts.iter().any(|p| p == "link") && app.state::<crate::Link>().0.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
         return json!({"ok": false, "message": "PinguinoLink is being run by the Suite, not by Lite. Update it from the Suite."});
     }
     let ps = parts.clone();
@@ -317,7 +317,7 @@ pub fn parts_rollback(app: AppHandle) -> Value {
         return json!({"ok": false, "message": plan["message"]});
     }
     let touches_link = plan["components"].as_array().map(|a| a.iter().any(|c| c == "link")).unwrap_or(false);
-    if touches_link && app.state::<crate::Link>().0.lock().unwrap().is_none() {
+    if touches_link && app.state::<crate::Link>().0.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
         return json!({"ok": false, "message": "The last update included PinguinoLink, which the Suite runs. Roll back from the Suite."});
     }
     start_job("rollback", &[], move || {
