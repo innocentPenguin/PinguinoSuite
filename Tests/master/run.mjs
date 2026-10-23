@@ -247,6 +247,13 @@ await t('setgame: activity -> game name, Host contract on the mock; teams POST u
   const tm = await api.post('/api/customs/teams', { blue: { name: 'Frost', color: '#5aaeff' } }); assert.equal(tm.json.teams.blue.color, '#5aaeff');
 });
 
+await t('stream info: description + tags reach Multi, schedule body carries startsAt/privacy, Kick reports its error', async () => {
+  const u = await api.post('/api/stream/info', { title: 'T', description: 'D', tags: ['a', 'b'], platforms: ['youtube', 'kick'] });
+  assert.equal(u.json.results.youtube.ok, true); assert.match(u.json.results.kick.error, /Kick/);
+  const s = await api.post('/api/stream/schedule', { platform: 'youtube', title: 'T', description: 'D', tags: ['a'], startsAt: '2030-01-01T00:00:00.000Z', privacy: 'unlisted' }); assert.equal(s.json.ok, true); assert.match(s.json.url, /watch\?v=/);
+  assert.equal((await api.get('/api/channel/info')).json.ok, true);
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);
