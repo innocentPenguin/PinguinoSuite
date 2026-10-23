@@ -294,3 +294,49 @@ class SlowModule(unittest.TestCase):
         finally:
             suite.modules.clear()
             suite.modules.update(saved)
+
+
+class SelfCheck(unittest.TestCase):
+    def test_endpoint_needs_token_and_leaks_none(self):
+        import os
+        import sqlite3
+        import tempfile
+        from fastapi.testclient import TestClient
+        d = tempfile.mkdtemp()
+        os.environ["LISTEN_DATA_DIR"] = d
+        try:
+            c = TestClient(suite.app, base_url="http://127.0.0.1:8760")
+            self.assertEqual(c.get("/api/selfcheck").status_code, 401)
+            h = {"Authorization": "Bearer " + suite.TOKEN}
+            r = c.get("/api/selfcheck", headers=h).json()
+            self.assertFalse(r["listen_db"]["exists"])
+            self.assertEqual({m["id"] for m in r["modules"]}, set(suite.modules))
+            self.assertTrue(r["token_present"])
+            self.assertIn("free_gb", r["disks"][0])
+            self.assertNotIn(suite.TOKEN, c.get("/api/selfcheck", headers=h).text)
+            con = sqlite3.connect(os.path.join(d, "ears.db"))
+            con.execute("CREATE TABLE segments(id INTEGER)")
+            con.commit()
+            r = c.get("/api/selfcheck", headers=h).json()
+            self.assertTrue(r["listen_db"]["opens"])
+            self.assertFalse(r["listen_db"]["busy"])
+            con.execute("BEGIN EXCLUSIVE")        # a writer holding the database
+            r = c.get("/api/selfcheck", headers=h).json()
+            self.assertFalse(r["listen_db"]["opens"])
+            self.assertTrue(r["listen_db"]["busy"])
+            self.assertIn("ears.db is locked", r["problems"])
+            con.rollback()
+            con.close()
+        finally:
+            os.environ.pop("LISTEN_DATA_DIR", None)
+
+    def test_problem_reported_for_wanted_module_not_running(self):
+        m = next(iter(suite.modules.values()))
+        was = (m.wanted, m.healthy)
+        m.wanted, m.healthy = True, False
+        try:
+            r = suite.selfcheck()
+            self.assertFalse(r["ok"])
+            self.assertTrue(any(m.id in p for p in r["problems"]))
+        finally:
+            m.wanted, m.healthy = was

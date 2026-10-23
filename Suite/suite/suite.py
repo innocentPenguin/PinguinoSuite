@@ -1236,6 +1236,71 @@ def modules_diag():
     return {"now": time.time(), "modules": [m.diag() for m in modules.values()]}
 
 
+def _listen_db_path():
+    d = os.environ.get("LISTEN_DATA_DIR")
+    return Path(d) / "ears.db" if d else ROOT / "modules" / "listen" / "data" / "ears.db"
+
+
+def selfcheck():
+    """Read-only health summary for the Problem-reports page: module states, data dir, Listen's database, disk space, token. No secrets in the output."""
+    import sqlite3
+    out, problems = {"ts": time.time()}, []
+    out["modules"] = []
+    for m in modules.values():
+        d = m.diag()
+        out["modules"].append({"id": d["id"], "state": d["state"], "wanted": d["wanted"], "failed": d["failed"], "miss": d["miss"], "last_ok_age": d["last_ok_age"],
+                               "last_error": d["last_error"], "last_change": d["last_change"]})
+        if d["wanted"] and d["state"] != "running":
+            problems.append(f"{d['id']} is {d['state']}" + (f" ({d['last_error']})" if d["last_error"] else ""))
+        if d["failed"]:
+            problems.append(f"{d['id']} gave up restarting")
+    dd = Path(DATA_DIR)
+    out["data_dir"] = {"exists": dd.is_dir(), "writable": bool(dd.is_dir() and os.access(dd, os.W_OK))}
+    if not out["data_dir"]["writable"]:
+        problems.append("the data folder is missing or not writable")
+    db = _listen_db_path()
+    ldb = {"exists": db.is_file(), "opens": False, "busy": False, "size_mb": round(db.stat().st_size / 1048576, 1) if db.is_file() else None}
+    if db.is_file():
+        try:
+            c = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True, timeout=0.5)
+            try:
+                c.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()
+                ldb["opens"] = True
+            finally:
+                c.close()
+        except sqlite3.OperationalError as e:
+            ldb["busy"] = "locked" in str(e).lower() or "busy" in str(e).lower()
+            ldb["error"] = _scrub_err(e)
+        except Exception as e:  # noqa: BLE001
+            ldb["error"] = _scrub_err(e)
+        if not ldb["opens"]:
+            problems.append("ears.db is " + ("locked" if ldb["busy"] else "not opening"))
+    out["listen_db"] = ldb
+    disks, seen = [], set()
+    for label, path in (("data", dd), ("logs", LOGS), ("app", ROOT)):
+        try:
+            anchor = Path(path).resolve().anchor or str(Path(path).resolve())
+            if anchor in seen:
+                continue
+            seen.add(anchor)
+            u = shutil.disk_usage(path if Path(path).exists() else anchor)
+            free_gb = round(u.free / 1073741824, 1)
+            disks.append({"drive": anchor, "for": label, "free_gb": free_gb, "free_pct": round(100 * u.free / u.total, 1)})
+            if free_gb < 5:
+                problems.append(f"drive {anchor} has only {free_gb} GB free")
+        except OSError:
+            pass
+    out["disks"] = disks
+    out["token_present"] = bool(TOKEN) and len(TOKEN) >= 16
+    out["ok"], out["problems"] = not problems, problems
+    return out
+
+
+@app.get("/api/selfcheck")
+def api_selfcheck():
+    return selfcheck()
+
+
 @app.get("/api/modules/{mid}/probe")
 def module_probe(mid: str):
     """The module's own health/status JSON, fetched by the core so the UI needs no cross-origin call to the module."""
