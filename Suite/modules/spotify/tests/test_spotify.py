@@ -746,6 +746,38 @@ class LyricsCacheTests(unittest.TestCase):
         self.assertEqual(len(self.ly.lookup("A", "T", 0, lambda u: d)["synced"]), 1)
 
 
+class StoreSafetyTests(unittest.TestCase):
+    def test_corrupt_file_is_kept_and_default_returned(self):
+        store.save("sx.json", {"a": 1})
+        (store.folder() / "sx.json").write_text("{not json", encoding="utf-8")
+        self.assertEqual(store.load("sx.json", {}), {})
+        self.assertTrue(list(store.folder().glob("sx.json.bad-*")))
+
+    def test_wrong_type_returns_default(self):
+        (store.folder() / "sy.json").write_text("null", encoding="utf-8")
+        self.assertEqual(store.load("sy.json", {"k": 1}), {"k": 1})
+        (store.folder() / "sy.json").write_text("[1]", encoding="utf-8")
+        self.assertEqual(store.load("sy.json", {}), {})
+
+    def test_save_survives_unserialisable_data_and_leaves_old_file(self):
+        store.save("sz.json", {"ok": 1})
+        store.save("sz.json", {"bad": object()})
+        self.assertEqual(store.load("sz.json", {}), {"ok": 1})
+        self.assertFalse((store.folder() / "sz.json.tmp").exists())
+
+    def test_save_retries_a_dict_changed_during_dump(self):
+        class Flaky(dict):
+            n = 0
+
+            def items(self):
+                Flaky.n += 1
+                if Flaky.n == 1:
+                    raise RuntimeError("dictionary changed size during iteration")
+                return super().items()
+        store.save("sw.json", Flaky(a=1))
+        self.assertEqual(store.load("sw.json", {}), {"a": 1})
+
+
 class ManifestHelpTests(unittest.TestCase):
     def test_every_prestream_item_id_has_help(self):
         m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))
