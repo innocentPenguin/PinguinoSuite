@@ -106,12 +106,19 @@ def qnames():
 
 def start_server():
     global proc
-    env = {**os.environ, "PINGUINO_DATA_DIR": DATA, "SPOTIFY_PORT": str(PORT), "SPOTIFY_TICK_S": "0.2", "SPOTIFY_NO_BROWSER": "1",
+    env = {**os.environ, "SPOTIFY_CONNECT_BIN": os.path.join(HERE, "fake_librespot.py"), "PINGUINO_DATA_DIR": DATA, "SPOTIFY_PORT": str(PORT), "SPOTIFY_TICK_S": "0.2", "SPOTIFY_NO_BROWSER": "1",
            "SPOTIFY_API_BASE": f"http://127.0.0.1:{SP_PORT}/v1", "SPOTIFY_ACCOUNTS_BASE": f"http://127.0.0.1:{SP_PORT}"}
     env.pop("PINGUINO_API_TOKEN", None)
     proc = subprocess.Popen([sys.executable, "server.py"], cwd=MOD, env=env, stdout=open(os.path.join(DATA, "out.log"), "ab"), stderr=subprocess.STDOUT)
     ok = wait(lambda: get("/api/status")[0] == 200, 10)
     return bool(ok)
+
+
+def _alive(base):
+    try:
+        return call("GET", "/_calls", base=base)[0] == 200
+    except Exception:
+        return False
 
 
 def stop_server():
@@ -552,6 +559,34 @@ def main():
     post("/api/control", {"action": "transfer", "value": "dev1"})
     time.sleep(7)
     T("manual device choice is not overridden", any(d["id"] == "dev1" and d["is_active"] for d in get("/api/devices")[1]["devices"]))
+
+    # ---------------- PinguinoSuite Connect device (go-librespot replaced by tests/fake_librespot.py)
+    ci = get("/api/connect")[1]
+    T("connect: off by default, binary found", ci["enabled"] is False and ci["state"] == "off" and ci["installed"] is True, ci)
+    T("connect: outputs endpoint answers", isinstance(get("/api/connect/outputs")[1].get("outputs"), list))
+    T("connect: start needs a same-origin/token POST", post("/api/connect/start", {}, headers={"Origin": "http://evil.com"})[0] == 403)
+    post("/api/connect/output", {"name": "CABLE Input (VB-Audio Virtual Cable)"})
+    post("/api/connect/start", {})
+    T("connect: waits for login and shows the pairing code", wait(lambda: get("/api/connect")[1]["state"] == "waiting_login", 12) and get("/api/connect")[1]["code"] == "ABCD-1234", get("/api/connect")[1])
+    T("connect: prestream says waiting for login", any(i["id"] == "connect" and "spotify.com/pair" in i.get("detail", "") for i in get("/api/prestream")[1]["items"]))
+    cport = get("/api/connect")[1]["port"]
+    cbase = f"http://127.0.0.1:{cport}"
+    call("POST", "/_pair", {}, base=cbase)
+    T("connect: ready after pairing", wait(lambda: get("/api/connect")[1]["state"] == "ready", 12) and get("/api/connect")[1]["device_id"] == "libre1", get("/api/connect")[1])
+    calls = call("GET", "/_calls", base=cbase)[1]
+    T("connect: config has name, output, no secrets", 'device_name: "PinguinoSuite"' in calls["cfg"] and "CABLE Input" in calls["cfg"] and "credentials" in calls["cfg"] and "SITEKEY" not in calls["cfg"], calls["cfg"])
+    T("connect: output applied through the API", any(c[0] == "/player/output" and "CABLE" in c[1].get("device", "") for c in calls["calls"]), calls["calls"])
+    sim("adddevice", id="libre1", name="PinguinoSuite")
+    T("connect: engine selects the device", wait(lambda: any(d["id"] == "libre1" and d["is_active"] for d in get("/api/devices")[1]["devices"]), 15))
+    T("connect: player info says active", wait(lambda: get("/api/player")[1].get("active") is True, 10), get("/api/player")[1])
+    post("/api/control", {"action": "volume", "value": 44})
+    T("connect: volume reaches go-librespot", wait(lambda: any(c[0] == "/player/volume" and c[1].get("volume") == 44 for c in call("GET", "/_calls", base=cbase)[1]["calls"])), call("GET", "/_calls", base=cbase)[1]["calls"])
+    T("connect: volume stored as player volume", get("/api/player")[1]["volume"] == 44)
+    T("connect: prestream passes", any(i["id"] == "connect" and i["status"] == "pass" for i in get("/api/prestream")[1]["items"]), get("/api/prestream")[1]["items"])
+    T("connect: info has no tokens", "A-" not in json.dumps(get("/api/connect")[1]) and "R-1" not in json.dumps(get("/api/connect")[1]))
+    post("/api/connect/stop", {})
+    T("connect: stop ends the child", wait(lambda: get("/api/connect")[1]["state"] == "off", 8) and wait(lambda: not _alive(cbase), 6))
+    T("connect: stop saved connect_on=false", state()["settings"]["connect_on"] is False)
 
     # ---------------- persistence across restart
     post("/api/settings", {"requests_open": True, "blocklist": ["artist nobody"]})

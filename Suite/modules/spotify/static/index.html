@@ -132,6 +132,16 @@ input[type=color]{width:46px;height:30px;padding:0;background:none;border:1px so
       <span>Volume <input type="number" id="plvol" min="0" max="100" style="width:70px"> %</span><button id="bplvol">Set</button></div>
     <div id="plfallback" hidden class="small" style="margin-top:6px">Window did not open? <a href="/player" target="_blank" rel="noopener" style="color:var(--accent)">Open player in browser</a></div>
     <div class="small dim" id="pldetail" style="margin-top:6px"></div></div>
+  <div class="card"><h3 style="margin-top:0">PinguinoSuite device (Spotify Connect) <span id="cnstat" class="small dim"></span></h3>
+    <div class="small dim" style="margin-bottom:8px">The Suite runs its own Spotify player (go-librespot) and shows up in Spotify as the device <b>PinguinoSuite</b>. Pick where it plays (a virtual cable for OBS, or your headphones) and OBS can hear it while you keep your own volume. Needs Premium. Works on Windows and Mac.</div>
+    <div class="ctl"><label><input type="checkbox" id="cnon"> use the PinguinoSuite device</label>
+      <label>Output <select id="cnout" style="max-width:300px"><option value="">System default</option></select></label><button id="cnreload" title="Look for audio devices again">Reload devices</button>
+      <button id="cnstart">Start</button><button id="cnstop">Stop</button><button id="cnrestart">Restart</button></div>
+    <div id="cnlogin" hidden class="small" style="margin-top:8px">Spotify needs you to log this device in once. Go to <b>spotify.com/pair</b>, enter the code <b id="cncode" style="font-size:1.4em;letter-spacing:.1em"></b> and approve.
+      <button id="cnopen" class="pri">Open spotify.com/pair</button>
+      <div id="cnwarn" hidden class="small" style="margin-top:6px;color:var(--warn)">This login uses the fallback sign-in link, which asks for broad Spotify permissions (email, birthdate, library and playlist changes). Only approve it on your own account.</div></div>
+    <div class="small dim" id="cndetail" style="margin-top:6px"></div>
+    <div class="small dim" id="cnlog" style="margin-top:4px;font-family:Consolas,monospace;white-space:pre-wrap"></div></div>
   <div class="card"><h3 style="margin-top:0">Connect Spotify <span id="constat"></span></h3>
     <div class="step"><b>1</b><div>Open the <a id="dashlink" href="#" target="_blank" style="color:var(--accent)">Spotify developer dashboard</a> (log in with the Spotify account you stream with) and press <i>Create app</i>. Any name. Choose <i>Web API</i>.</div></div>
     <div class="step"><b>2</b><div>Under <i>Redirect URIs</i> add exactly this and save: <code id="redir"></code> <button id="bcopyredir">Copy</button><br><span class="small dim">Spotify wants the literal 127.0.0.1, not "localhost".</span></div></div>
@@ -347,7 +357,24 @@ $('bplcopy').onclick=()=>copyText(location.origin+'/player');
 $('plon').onchange=async()=>{await act('/api/settings',{player_native:$('plon').checked},'Saved');loadPlayer()};
 $('bplvol').onclick=()=>busy($('bplvol'),async()=>{await api('/api/control',{action:'volume',value:+$('plvol').value});toast('Volume set to '+$('plvol').value+'%');loadPlayer()});
 setInterval(()=>{if(tab==='setup')loadPlayer()},4000);
-async function loadSetup(){loadSite();loadPlayer();try{setup=await api('/api/setup');$('redir').textContent=setup.redirect_uri;$('ovurl').textContent=setup.overlay_url;$('npfile').textContent=setup.nowplaying_file;
+async function loadConnect(){try{const c=await api('/api/connect');
+  const st={off:'off',starting:'starting…',waiting_login:'waiting for login',ready:'ready',error:'problem'}[c.state]||c.state;
+  $('cnstat').textContent='- '+(c.installed?st:'not installed');$('cnstat').style.color=c.state==='ready'?'var(--ok)':'var(--warn)';
+  if(document.activeElement!==$('cnon'))$('cnon').checked=c.enabled;
+  $('cnlogin').hidden=c.state!=='waiting_login';$('cnwarn').hidden=c.login_flow!=='interactive';$('cncode').textContent=c.code||'(code shows here in a moment)';$('cnopen').dataset.url=c.code_url||'https://www.spotify.com/pair';
+  $('cndetail').textContent=(c.last_error||'')+(c.output_note?' '+c.output_note:'')+(c.state==='ready'&&c.output_applied?' Playing to: '+c.output_applied+'.':'')+(c.installed?'':' go-librespot was not found in the module bin folder; the browser player above still works.');
+  $('cnlog').textContent=(c.log||[]).join('\n')}catch(e){}}
+async function loadConnectOutputs(){try{const o=await api('/api/connect/outputs');const sel=$('cnout');const cur=o.current||'';
+  sel.innerHTML='<option value="">System default</option>'+o.outputs.concat(cur&&!o.outputs.includes(cur)?[cur]:[]).map(n=>'<option>'+esc(n)+'</option>').join('');sel.value=cur}catch(e){}}
+$('cnon').onchange=async()=>{await api($('cnon').checked?'/api/connect/start':'/api/connect/stop',{});loadConnect()};
+$('cnstart').onclick=()=>busy($('cnstart'),async()=>{await api('/api/connect/start',{});loadConnect()});
+$('cnstop').onclick=()=>busy($('cnstop'),async()=>{await api('/api/connect/stop',{});loadConnect()});
+$('cnrestart').onclick=()=>busy($('cnrestart'),async()=>{await api('/api/connect/restart',{});loadConnect()});
+$('cnout').onchange=async()=>{await api('/api/connect/output',{name:$('cnout').value});toast('Output saved');loadConnect()};
+$('cnreload').onclick=()=>loadConnectOutputs();
+$('cnopen').onclick=()=>{const u=$('cnopen').dataset.url;if(window.parent&&window.parent!==window){window.parent.postMessage({pinguino:'window',op:'external',url:u},'*');copyText(u)}else window.open(u,'_blank','noopener')};
+setInterval(()=>{if(tab==='setup')loadConnect()},3000);
+async function loadSetup(){loadSite();loadPlayer();loadConnect();loadConnectOutputs();try{setup=await api('/api/setup');$('redir').textContent=setup.redirect_uri;$('ovurl').textContent=setup.overlay_url;$('npfile').textContent=setup.nowplaying_file;
   $('dashlink').href=setup.dashboard;if(document.activeElement!==$('cid'))$('cid').value=setup.client_id;
   $('constat').innerHTML=setup.connected?'<span class="pill ok">connected</span>':'<span class="pill bad">not connected</span>'}catch(e){}}
 const copy=t=>navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy failed: select the text manually',true));

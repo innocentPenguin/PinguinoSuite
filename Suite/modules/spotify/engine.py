@@ -95,6 +95,8 @@ class Engine:
         self._player_try = 0.0
         self._manual_until = 0.0
         self.site_block = {}           # blocklist pulled from the site (tracks/artists/users)
+        self._connect_seen = ""
+        self.connect = None            # connect.Connect (go-librespot child process), set by server.py; None = browser player only
 
     # ---- settings
     @property
@@ -178,7 +180,23 @@ class Engine:
         del self.log[:-LOG_MAX]
 
     # ---- polling
+    def connect_tick(self):
+        """Drive the go-librespot child (start/stop on connect_on, health, restarts). Never raises."""
+        c = self.connect
+        if c is None:
+            return
+        try:
+            c.apply(self._own_settings())
+            c.tick()
+            dev = c.ready_device()
+            if dev and dev != self._connect_seen:       # (re)appeared: select it on the next tick, like a newly reporting browser player
+                self._player_try, self._manual_until = 0.0, 0.0
+            self._connect_seen = dev
+        except Exception as e:
+            console_log.error("connect", f"connect tick: {type(e).__name__}: {e}", dedupe_s=30)
+
     def tick(self):
+        self.connect_tick()
         if not self.auth.connected():
             with self.lock:
                 self.pb = None
@@ -1084,6 +1102,10 @@ class Engine:
     # ---- built-in player (Spotify Web Playback SDK in the /player page)
     def player_live(self):
         """Device id of the PinguinoSuite player while its page is open and ready, else ''."""
+        if self.connect is not None:
+            dev = self.connect.ready_device()
+            if dev:
+                return dev
         p = self.player
         if self.settings["player_native"] and p["device_id"] and p["state"] != "not_ready" and self.clock() - p["at"] < PLAYER_STALE_S:
             return p["device_id"]
@@ -1128,9 +1150,12 @@ class Engine:
     def _set_volume(self, v):
         console_log.info("volume", f"volume set to {v}")
         """Volume for the active device. With the built-in player live and active (or idle) it is stored as player_volume, which the page applies via setVolume."""
-        own = self.player_live() and ((self.pb or {}).get("device") or {}).get("id") in (None, self.player["device_id"])
+        live = self.player_live()
+        own = live and ((self.pb or {}).get("device") or {}).get("id") in (None, live, self.player["device_id"])
         if own:
             self.save_settings({"player_volume": v})
+            if self.connect is not None and live == self.connect.ready_device() and self.connect.set_volume(v):
+                return                              # go-librespot took it directly
         try:
             self.api.volume(v)
         except ApiError:
@@ -1143,7 +1168,7 @@ class Engine:
         scope = (getattr(self.auth, "tokens", None) or {}).get("scope", "")
         live = self.player_live()
         cur = ((self.pb or {}).get("device") or {})
-        return {"native": s["player_native"], "name": PLAYER_NAME, "volume": s["player_volume"], "sink": s["player_sink"], "sink_label": s["player_sink_label"],
+        return {"connect": self.connect.info() if self.connect is not None else None, "native": s["player_native"], "name": PLAYER_NAME, "volume": s["player_volume"], "sink": s["player_sink"], "sink_label": s["player_sink_label"],
                 "state": p["state"] if live else ("closed" if p["device_id"] else ""), "error": p["error"], "device_id": p["device_id"], "live": bool(live),
                 "active": bool(live and cur.get("id") == live), "active_device": cur.get("name", ""), "sink_ok": p["sink_ok"], "sink_note": p["sink_note"],
                 "needs_reauth": bool(self.auth.connected() and scope and "streaming" not in scope.split()), "premium": (self.me or {}).get("product") == "premium"}
@@ -1402,10 +1427,30 @@ class Engine:
                           "detail": act[0]["name"] if act else ("open Spotify on the streaming PC and press play once" if not devs else "devices idle: " + ", ".join(d["name"] for d in devs)[:100])})
         except ApiError as e:
             items.append({"id": "api", "label": "Spotify API reachable", "status": "warn", "detail": str(e)[:120]})
+        if self.connect is not None:
+            ci = _connect_item(self.connect.info(), any(d.get("id") == self.connect.ready_device() for d in self.devices) if self.connect.ready_device() else None)
+            if ci:
+                items.append(ci)
         opened = self._own_settings()["requests_open"]
         items.append({"id": "requests", "label": "Song requests", "status": "pass",
                       "detail": "open to viewers" if opened else "closed (default): a mod opens them with !sr open"})
         return items
+
+
+def _connect_item(info, visible):
+    """Pre-stream line for the PinguinoSuite Connect device (None when the feature is off)."""
+    if not info or not info["enabled"]:
+        return None
+    st, label = info["state"], "PinguinoSuite Spotify device"
+    if not info["installed"]:
+        return {"id": "connect", "label": label, "status": "warn", "detail": "go-librespot is not installed on this PC; the browser player is used"}
+    if st == "ready":
+        ok = visible is not False
+        return {"id": "connect", "label": label, "status": "pass" if ok else "warn",
+                "detail": "ready" + ("" if ok else ", but Spotify does not list it yet") + (", output: " + info["output"] if info["output"] else ", output: system default")}
+    if st == "waiting_login":
+        return {"id": "connect", "label": label, "status": "warn", "detail": "waiting for login: enter " + (info["code"] or "the code") + " at spotify.com/pair"}
+    return {"id": "connect", "label": label, "status": "warn" if st in ("starting", "off") else "fail", "detail": (info["last_error"] or st)[:120]}
 
 
 def _hhmm(t):

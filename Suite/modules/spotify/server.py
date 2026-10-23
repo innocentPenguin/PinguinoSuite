@@ -22,6 +22,7 @@ from pathlib import Path
 
 import console_log
 import store
+from connect import Connect
 from engine import Engine
 from site_bridge import Bridge
 from queue_core import QueueError
@@ -40,6 +41,8 @@ PAGES = {"/": "static/index.html", "/overlay": "static/overlay.html",
 auth = Auth()
 engine = Engine(Client(auth), auth)
 bridge = Bridge(engine)
+connect = Connect()
+engine.connect = connect
 
 
 def host_ok(host):
@@ -211,6 +214,14 @@ def g_search(h, q):
     return {"tracks": engine.resolve(s, 10) if s else []}
 
 
+def g_connect(h, q):
+    return connect.info()
+
+
+def g_connect_outputs(h, q):
+    return {"outputs": connect.outputs(), "current": engine._own_settings()["connect_output"]}
+
+
 def g_devices(h, q):
     engine.devices = engine.api.devices()
     return {"devices": engine.devices}
@@ -278,7 +289,7 @@ def g_queue_public(h, q):
 
 
 GET = {"/api/queue.json": g_queue_public, "/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
-       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/playlists": lambda h, q: {"playlists": engine.playlists(), "channel": engine.channel_playlist()}, "/api/logs": lambda h, q: {"entries": console_log.tail(float(q.get("since") or 0), min(int(q.get("limit") or 300), 1000))}, "/api/lyrics": lambda h, q: engine.lyrics(), "/api/leaderboard": lambda h, q: engine.leaderboard(int(q.get("limit") or 10)), "/api/song-log": lambda h, q: engine.song_log(int(q.get("limit") or 50), int(q.get("minutes") or 60)), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/refunds": lambda h, q: engine.pending_refunds(int(q.get("since") or 0)), "/api/setup": g_setup, "/api/player": lambda h, q: engine.player_info(), "/api/player-token": g_player_token, "/callback": g_callback, "/auth/login": g_login}
+       "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/playlists": lambda h, q: {"playlists": engine.playlists(), "channel": engine.channel_playlist()}, "/api/logs": lambda h, q: {"entries": console_log.tail(float(q.get("since") or 0), min(int(q.get("limit") or 300), 1000))}, "/api/lyrics": lambda h, q: engine.lyrics(), "/api/leaderboard": lambda h, q: engine.leaderboard(int(q.get("limit") or 10)), "/api/song-log": lambda h, q: engine.song_log(int(q.get("limit") or 50), int(q.get("minutes") or 60)), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/refunds": lambda h, q: engine.pending_refunds(int(q.get("since") or 0)), "/api/setup": g_setup, "/api/player": lambda h, q: engine.player_info(), "/api/connect": g_connect, "/api/connect/outputs": g_connect_outputs, "/api/player-token": g_player_token, "/callback": g_callback, "/auth/login": g_login}
 
 
 # ---- POST routes
@@ -305,6 +316,28 @@ def p_disconnect(h, b):
 def p_player_status(h, b):
     engine.player_report(b)
     return {"ok": True, "player": engine.player_info()}
+
+
+def p_connect(h, b, action):
+    if action == "start":
+        engine.save_settings({"connect_on": True})
+        connect.apply(engine._own_settings())
+        connect.restart() if connect.proc is None or connect.state == "error" else None
+    elif action == "stop":
+        engine.save_settings({"connect_on": False})
+        connect.apply(engine._own_settings())
+    elif action == "restart":
+        engine.save_settings({"connect_on": True})
+        connect.apply(engine._own_settings())
+        connect.restart()
+    elif action == "output":
+        name = str(b.get("name") or "")[:200]
+        engine.save_settings({"connect_output": name})
+        connect.set_output(name)
+    else:
+        raise QueueError("unknown action")
+    engine._bump()
+    return {"ok": True, "connect": connect.info()}
 
 
 def p_settings(h, b):
@@ -521,7 +554,9 @@ def p_blocklist_import(h, b):
     return {"ok": True, **engine.import_blocklist(text[:200000])}
 
 
-POST = {"/api/player/status": p_player_status, "/api/blocklist/import": p_blocklist_import, "/api/mod-action": p_mod_action, "/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
+POST = {"/api/connect/start": lambda h, b: p_connect(h, b, "start"), "/api/connect/stop": lambda h, b: p_connect(h, b, "stop"),
+        "/api/connect/restart": lambda h, b: p_connect(h, b, "restart"), "/api/connect/output": lambda h, b: p_connect(h, b, "output"),
+        "/api/player/status": p_player_status, "/api/blocklist/import": p_blocklist_import, "/api/mod-action": p_mod_action, "/api/setup": p_setup, "/api/auth/start": p_auth_start, "/api/disconnect": p_disconnect, "/api/settings": p_settings,
         "/api/queue/add": p_add, "/api/queue/remove": p_remove, "/api/queue/move": p_move, "/api/queue/play_next": p_play_next,
         "/api/queue/play_now": p_play_now, "/api/queue/clear": p_clear, "/api/queue/shuffle": p_shuffle, "/api/queue/add_context": p_add_context, "/api/presets/save": p_user_preset, "/api/presets/delete": p_user_preset_del, "/api/queue/remove_user": p_remove_user, "/api/queue/undo": p_undo, "/api/queue/start": p_start,
         "/api/channel-playlist": lambda h, b: engine.set_channel_playlist(b.get("id"), b.get("name")) or {"ok": True}, "/api/channel-playlist/add": lambda h, b: engine.playlist_add(str(b.get("user") or "streamer"), b.get("track") or None), "/api/control": p_control, "/api/live/auto": p_live_auto, "/api/live/stop": p_live_stop, "/api/chat": p_chat, "/api/preset": p_preset, "/api/settings/reset": p_reset, "/api/msgs/preview": p_msg_preview, "/api/chat-command": p_chat_command, "/api/site": p_site, "/api/test-key": p_test_key, "/api/blocklist": p_block}
@@ -559,6 +594,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        connect.stop()
         engine.persist()
         console_log.info("server", "PinguinoSpotify stopped")
 
