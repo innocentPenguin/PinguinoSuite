@@ -30,3 +30,6 @@ Sound / image / gif / video fields in the editor have **Upload file...**, **Pick
 
 ## Other platforms (Kick, YouTube, TikTok)
 Events from the other platforms enter the same queue (see Docs/MULTISTREAM_PLAN.md): Super Chat / KICKs / TikTok gifts arrive as `cheer` (amount = whole currency units / KICKs / coins), memberships as `sub`/`resub`/`gift`, follows as `follow`. Extra variables `{platform}` (Kick, Youtube, Tiktok...) and `{currency}` (USD, KICKs, coins). Cards from a non-Twitch platform get a small platform tag; the dedupe key includes the platform so the same name on two platforms is not merged.
+
+## Viewer intros: Host contract (2026-10-23, 40 - Multi)
+The Host's plain `GET /api/intro` is its old sub-intro video system (returns settings, queue, slots). Viewer intros therefore use **`GET http://127.0.0.1:8770/api/intro/viewer?platform=&user_id=`** (Origin `http://127.0.0.1:8766` + Bearer module token) -> `{text, sound_id, status: "approved"}`. Multi plays only answers whose `status` is exactly `"approved"` and that carry a `text` field; anything else (404, pending, the old settings blob) counts as "no intro" and is cached for 60 s. Code: `intros.py` (`VIEWER_PATH`).

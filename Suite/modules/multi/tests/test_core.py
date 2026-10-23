@@ -1627,7 +1627,9 @@ def test_intros_play_approved_once_per_stream(tmp_path, monkeypatch):
     def fetch(platform, uid):
         calls.append(uid)
         return {"u1": {"text": "hi I am Bob", "sound_id": "x.mp3", "status": "approved"}, "u2": {"text": "visit evil.com", "status": "approved"},
-                "u3": {"text": "pending one", "status": "pending"}}.get(uid)
+                "u3": {"text": "pending one", "status": "pending"},
+                "u6": {"ok": True, "settings": {"Enabled": True}, "queue": [], "live": False},   # the Host's OLD /api/intro answer: never an intro
+                "u7": {"text": "no status given"}}.get(uid)
 
     it = intros.Intros(st, lambda ev: (got.append(ev) or (True, "queued")), lambda: ep[0], fetch=fetch)
 
@@ -1642,11 +1644,14 @@ def test_intros_play_approved_once_per_stream(tmp_path, monkeypatch):
         assert not await it.observe(msg("u3", flags=["new"])) and calls.count("u3") == 1   # miss cached
         assert not await it.observe(msg("u4"))                                # not first/returning
         assert not await it.observe(msg("u5", flags=["new"], is_bot=True))
+        assert not await it.observe(msg("u6", flags=["new"]))                 # Host settings blob, not an intro
+        assert not await it.observe(msg("u7", flags=["new"]))                 # status must be explicit
         ep[0] = 2                                                             # new stream
         assert await it.observe(msg("u1", flags=["returning"]))
     asyncio.run(go())
     assert got[0]["type"] == "intro" and got[0]["message"] == "hi I am Bob" and len(got) == 2
     assert intros.clean_text("x" * 141) == "" and intros.clean_text("hello  there ") == "hello there"
+    assert intros.VIEWER_PATH == "/api/intro/viewer"                          # contract with the Host (plain /api/intro is its old system)
 
 
 def test_new_alert_types_and_shoutout_clip(tmp_path):

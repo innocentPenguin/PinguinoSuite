@@ -14,6 +14,10 @@ import config
 import console_log
 
 HOST = "http://127.0.0.1:8770"
+# The Host's plain GET /api/intro is its OLD sub-intro video system (returns its settings and queue), so viewer intros live
+# on their own path. The Host must answer {text, sound_id, status: "approved"} there; anything without an explicit
+# status "approved" is treated as "no intro".
+VIEWER_PATH = "/api/intro/viewer"
 MAX_LEN = 140
 _LINK = re.compile(r"(https?:|www\.|\b[\w-]+\.(com|net|org|tv|gg|io|me|co|xyz|ly)\b|@everyone)", re.I)
 
@@ -28,7 +32,7 @@ def clean_text(text):
 
 def fetch_host(platform, user_id):
     """-> {text, sound_id, status?} or None. Origin-gated Host API; sends Multi's own origin and module token."""
-    url = f"{HOST}/api/intro?platform={urllib.parse.quote(platform)}&user_id={urllib.parse.quote(str(user_id))}"
+    url = f"{HOST}{VIEWER_PATH}?platform={urllib.parse.quote(platform)}&user_id={urllib.parse.quote(str(user_id))}"
     h = {"Origin": "http://127.0.0.1:8766"}
     tok = os.environ.get("PINGUINO_API_TOKEN")
     if tok:
@@ -72,7 +76,7 @@ class Intros:
             if key in self.played or now - self.miss.get(key, 0) < 60:
                 return False
             d = await asyncio.to_thread(self.fetch, m.platform, m.user_id)
-            if not d or d.get("status", "approved") != "approved" or not d.get("approved", True):
+            if not d or d.get("status") != "approved" or not d.get("approved", True) or "text" not in d:
                 self.miss[key] = now
                 self.stats["none"] += 1
                 if len(self.miss) > 5000:
