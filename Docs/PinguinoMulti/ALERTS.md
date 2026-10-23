@@ -10,7 +10,7 @@ One engine, one queue, one OBS source. Replaces the scattered follow widget, Hos
 - Per type: enabled, silent, priority 1-9, duration, min amount, per-viewer cooldown, max per minute, first-time-only, tiers, layout (card/banner/center/stack), animation in/out, font, colours, opacity/radius/border, sound (file, volume, per-tier file), image/gif/video (above/left/background).
 
 ## How events flow
-Host feed / `POST /api/events` -> pipeline (stored, shown in chat) -> engine (`alerts.py`, hook `Pipeline.on_event`). Direct real alerts without a chat row: `POST /api/alerts/fire` (intro, goal). Dedupe: event id (kept across restarts, last 500) and same type+viewer+amount within 10 s. Queue: highest priority first, one at a time, gap 0.6 s, max 50. Sim/test-flagged Host items never fire real alerts.
+Host feed / `POST /api/events` -> pipeline (stored, shown in chat) -> engine (`alerts.py`, hook `Pipeline.on_event`). Direct real alerts without a chat row: `POST /api/alerts/fire` (intro, goal). Dedupe: an event with a real id (not blank) dedupes by that id alone, kept across restarts (last 500), so two separate cheers of the same size within 10 s both show; only events WITHOUT an id also use the 10 s type+platform+viewer+amount key. Queue: highest priority first, one at a time, gap 0.6 s, max 50. Sim/test-flagged Host items never fire real alerts.
 
 ## Testing (never touches credits, stats, points or chat)
 - API: `POST /api/alerts/test {type,user,amount,tier,months,message,variant[],source}` (module token). Variants: tier1 tier2 tier3 prime first refollow noavatar long unicode msg.
@@ -41,3 +41,15 @@ A progress bar like the goal bar, separate from the hype alert cards (`/obs/hype
 - Stays visible `show_after_s` seconds (default 30) after the train ends, showing COMPLETE.
 - `GET /api/hypebar` = state + look; `POST /api/hypebar {label,c1,c2,bg,fg,show_after_s,show_level,show_numbers}` saves the look (kv `hypebar:cfg`). Edit it in the alerts editor under "Bars", which also has Test start / level up / end buttons.
 - `?bg=1` shows a checker background in a normal browser; `?fixture=1` draws sample data.
+
+## Goal bar (/obs/goal) and goal editor
+- Editor: alerts editor > "Bars" > Goal bar (title, unit, target, kind, current, +1 / +10 / +100 / Reset). Kinds: by hand (default), new followers and subs (every platform counts; sub gifts count their amount), bits cheered (**Twitch only**: TikTok gifts and YouTube Super Chats are not bits).
+- `GET /api/goal`, `POST /api/goal {reset:true}` / `{add:n}` / `{title,unit,target,kind,current,...}`. `add` must be a finite number (bool, strings, infinity answer 400).
+- Real events count even when their alert type is switched off (the goal counts before the alert engine decides to show it). Tests and sim events never count.
+
+## Dashboard and editor state
+- `GET /api/host-status` -> `{up, url, last_ok, error}`: whether the bot Host answered its last poll (`up:null` = not tried yet). The alerts editor shows a red "Bot Host not reachable" banner while `up` is false; tests and previews still work.
+- Every one of the 33 alert types has Enabled, Silent, a sound slot (+ per-tier sounds), a Queue test button and per-viewer overrides. Defaults: `loan`, `give` and `returning_chatter` are OFF, everything else is ON. A test of an OFF type answers "type disabled - tick Enabled to test it".
+
+## Host contract for hype trains (summary)
+`POST /api/alerts/fire` with the Host token: `{type: "hype_start"|"hype_level"|"hype_end", level, progress, goal, total}` (numbers; strings are sanitised). The same fields in a Host feed `hype` row (phase start/end) or in the Host `/api/live-state` `hype` object also drive `/obs/hypebar`. Viewer intros: see the section above (`/api/intro/viewer`).

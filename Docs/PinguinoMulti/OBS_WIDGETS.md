@@ -68,3 +68,12 @@ One alert at a time (queued), Synchra-style options: size, canvas scale, font, c
 - **AUTO pill** (bottom-right of every chat feed, classic + dashboard): orange = autoscroll on, dim = paused. Click it or press **Alt+S** (works while typing). Right-click the pill to pick a different hotkey. Scrolling up by hand still pauses; scrolling back to the bottom resumes. State is remembered per browser (`multi-auto`, `multi-autokey`).
 - **▲ ▼ buttons**: tap = one step, hold = continuous scroll (~600 px/s), tap-tap-hold = sprint (eases up to 3.5x). Release stops. Mouse and touch.
 - **Follow / welcome-back card**: a short top-centre card (name in their colour, "followed" or "welcome back", last seen + message count from `/api/chatter`). Shown ~5 s, queued (max 6), 1.2 s gap between cards, never plays a sound. Turn off with `localStorage['multi-followcard']='0'`.
+
+## Other overlay pages served by Multi (2026-10-23)
+| Address | What |
+|---|---|
+| `/obs/alerts` | Central alert overlay (`?w=&h=&scale=`), see ALERTS.md |
+| `/obs/goal` (`?hide=idle`), `/obs/poll`, `/obs/predict`, `/obs/hype` | Goal / Host poll / prediction / hype train cards (live-state from the Host, goal from `/api/goal`) |
+| `/obs/hypebar` | Hype train progress bar: `GET /api/hypebar` (state + look), fed by `hype_*` events; looks and test buttons under the alerts editor "Bars" |
+
+All of them accept `?bg=1` (checker background for a normal browser) and `?fixture=1` (sample data). Dashboard navigation: a left bar on desktop (Chat / Alerts / Goal / Setup), a bottom bar with stacked panels at phone width (<= 720 px); the gear (or Esc to close) opens the settings panel.
