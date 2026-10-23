@@ -43,7 +43,7 @@ A progress bar like the goal bar, separate from the hype alert cards (`/obs/hype
 - `?bg=1` shows a checker background in a normal browser; `?fixture=1` draws sample data.
 
 ## Goal bar (/obs/goal) and goal editor
-- Editor: alerts editor > "Bars" > Goal bar (title, unit, target, kind, current, +1 / +10 / +100 / Reset). Kinds: by hand (default), new followers and subs (every platform counts; sub gifts count their amount), bits cheered (**Twitch only**: TikTok gifts and YouTube Super Chats are not bits).
+- Editor: alerts editor > "Bars" > Goal bar (title, unit, target, kind, current, +1 / +10 / Reset). Kinds: by hand (default), new followers and subs (every platform counts; sub gifts count their amount), bits cheered (**Twitch only**: TikTok gifts and YouTube Super Chats are not bits).
 - `GET /api/goal`, `POST /api/goal {reset:true}` / `{add:n}` / `{title,unit,target,kind,current,...}`. `add` must be a finite number (bool, strings, infinity answer 400).
 - Real events count even when their alert type is switched off (the goal counts before the alert engine decides to show it). Tests and sim events never count.
 
