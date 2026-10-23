@@ -83,6 +83,7 @@ namespace PinguinoHost
                 JObject r;
                 if (!RxLogin.IsMatch(login)) r = new JObject { { "ok", false }, { "error", "bad user" } };
                 else if (act == "give") r = SiteGive(login, s, id);
+                else if (act.StartsWith("intro_")) r = ViewerIntro.Act(act, s);
                 else if (act == "page_hide") r = Economy.SetHidden(login, (bool?)s["hide"] == true);
                 else if (act == "loan_take") r = Economy.LoanTake(login, amount, "site-" + id);
                 else if (act == "loan_repay" && !string.IsNullOrEmpty((string)s["loanId"])) r = LoansP2P.Handle(login, act, s, "site-" + id);   // a loanId means a loan from another viewer
