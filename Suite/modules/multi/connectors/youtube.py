@@ -9,6 +9,7 @@ import time
 
 import requests
 
+import config
 import secrets_store
 from connectors import youtube_auth
 import xplat
@@ -65,7 +66,7 @@ class YouTube(Connector):
         r.raise_for_status()
         j = r.json()
         self.page = j.get("nextPageToken")
-        return j.get("items", []), max(5.0, j.get("pollingIntervalMillis", 6000) / 1000)
+        return j.get("items", []), max(float(config.settings().get("youtube_min_poll_s", 10)), j.get("pollingIntervalMillis", 6000) / 1000)   # 5 quota units per poll of 10,000/day
 
     async def run(self):
         while not self.stop:

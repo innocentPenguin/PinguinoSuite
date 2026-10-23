@@ -216,3 +216,33 @@ def test_tiktok_attach_skips_missing_classes_and_counts_likes():
     asyncio.run(c.l[CommentEvent](NS(user=_u(), comment="yo", msg_id="z")))
     asyncio.run(c.l[SubNotifyEvent](NS(user=_u())))
     assert st["likes"] == 7 and [m.event for m in got] == ["", "sub"]
+
+
+# ---- item 4: no token / retry loops stay quiet ----
+def test_set_status_repeats_are_throttled():
+    from connectors.base import Connector
+    out = []
+    c = Connector(None, out.append)
+    for _ in range(5):
+        c.set_status("needs_auth", "no token")
+    assert len(out) == 1
+    c.set_status("connected", "ok")
+    c.set_status("needs_auth", "no token")
+    assert len(out) == 3
+
+
+def test_viewers_without_tokens_return_none_and_do_not_raise(monkeypatch):
+    import viewers
+    monkeypatch.setattr(viewers.youtube_auth, "access_token", lambda: None)
+    assert viewers._youtube(NS(video_id="v")) is None
+    assert viewers._youtube(NS()) is None
+    assert viewers._tiktok(NS(state={})) is None
+    assert viewers._twitch(NS(tokens=lambda: None)) is None
+
+
+def test_stream_info_without_tokens_is_a_clean_error(monkeypatch):
+    import stream_info
+    monkeypatch.setattr(stream_info.secrets_store, "get", lambda k, d=None: None)
+    assert stream_info.youtube_get()["connected"] is False
+    assert stream_info.kick_get()["connected"] is False
+    assert stream_info.kick_update(title="x")["ok"] is False

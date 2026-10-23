@@ -61,3 +61,21 @@ Sources: https://github.com/isaackogan/TikTokLive , https://pypi.org/project/Tik
 | 5 | **YouTube quota decision** | 10,000 units/day = ~3 h of 6 s polling | poll >= 10 s while live (~5.5 h/day); request a quota extension only if streams run longer |
 | 6 | Click **consent** himself for Kick and YouTube (I only build the URLs) | hard rule | launcher buttons |
 | 7 | Public URL for Kick webhooks (site relay or tunnel) | follows / subs / gifts / KICKs from Kick | site relay |
+
+## Config fields per platform (for the launcher UI; item 4, 2026-10-23)
+Settings live in `config.DEFAULTS` / `config.save_settings` (flat keys, only keys present in DEFAULTS are saved) and in the server.py settings allowlist. Keys marked NEW must be added to both by whoever owns them (the connectors already read them with safe defaults). Secrets are never settings: they go to Credential Manager (service `PinguinoMulti`, `secrets_store.put`) and the UI only shows set / not set.
+
+| Platform | Settings keys (type, default) | Secrets (Credential Manager names) | Written by sign-in |
+|---|---|---|---|
+| Twitch | `channel` (str), `twitch_client_id` (str) - existing | `twitch_tokens` (site "Connect Multi") | - |
+| Kick | existing: `kick_enabled` (bool, false), `kick_channel` (slug), `kick_chatroom_id` (digits). NEW: `kick_client_id` (str ""), `kick_redirect_uri` (str "http://127.0.0.1:8766/auth/kick/callback"), `kick_scopes` (str, default "user:read channel:read channel:write chat:write events:subscribe") | `kick_client_secret` (Ivan enters) | `kick_token`, `kick_oauth` |
+| YouTube | NEW: `youtube_client_id` (str ""), `youtube_redirect_uri` (str "http://127.0.0.1:8766/auth/youtube/callback"), `youtube_min_poll_s` (number, 10; quota guard, 5 units per poll) | `youtube_client_secret` (Ivan enters) | `youtube_token`, `youtube_oauth` |
+| TikTok | existing: `tiktok_enabled` (bool, false), `tiktok_user` (@handle, with or without @). NEW (optional): `tiktok_sign_url` (str "" = default Euler Stream sign server) | - | - |
+| Discord | existing: `discord_channels` (list of ids) | bot token | - |
+
+Routes for the launcher (file `platform_api.py`; one line in server.py: `import platform_api` + `app.include_router(platform_api.router)`): `GET /auth/{kick|youtube}/status` -> `{client_id_set, client_secret_set, signed_in, can_refresh, expires_at, scope, redirect_uri}`; `POST /auth/{p}/start` -> `{ok, url}` (UI opens `url` in the browser; Ivan clicks consent himself) or `{ok:false, error}`; `GET /auth/{p}/callback` is where the platform redirects (returns a small "signed in" page). Redirect URIs must match the ones registered in the Kick app / Google Desktop client exactly (Google accepts any 127.0.0.1 port for Desktop clients).
+
+### Behaviour with no token (audit)
+- `viewers.py`: no token -> that platform simply has no count (dash in UI), no HTTP call, no log. A failing call now logs one warn line per 30 min per platform (before: swallowed silently).
+- `stream_info.py`: no token -> `{"connected": false, "error": "..."}` with no network call, no log.
+- `connectors/*`: retry loops (`needs_auth` every 10-30 s) used to emit a `conn.status` event on every pass; `Connector.set_status` now suppresses identical repeats (heartbeat every 30 s) and still logs only on a change.

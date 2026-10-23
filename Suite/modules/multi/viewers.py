@@ -7,6 +7,7 @@ import time
 import requests
 
 import config
+import console_log
 import secrets_store
 from connectors import youtube_auth
 
@@ -48,8 +49,9 @@ async def run(connectors, emit):
                 continue
             try:
                 r = await asyncio.to_thread(fn, connectors[p])
-            except Exception:
+            except Exception as e:
                 r = None
+                console_log.warn("viewers", f"{p} viewer count failed: {str(e)[:100]}", dedupe_s=1800)      # one line per half hour, never per poll
             if r is None:
                 counts.pop(p, None)
             else:

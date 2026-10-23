@@ -1,5 +1,7 @@
 """Connector contract. Each platform declares capabilities so the UI never offers what it cannot do."""
 
+import time
+
 import console_log
 
 _LVL = {"connected": "info", "reconnecting": "warn", "needs_auth": "warn", "error": "error"}
@@ -18,6 +20,11 @@ class Connector:
     def set_status(self, status, detail=""):
         prev = self.state.get("status")
         self.state.update(status=status, detail=detail)
+        sig = (status, detail, self.state.get("reconnects"))
+        now = time.time()
+        if sig == getattr(self, "_sig", None) and now - getattr(self, "_sig_ts", 0) < 30:      # retry loops call this every 10-30 s: repeat only as a slow heartbeat
+            return
+        self._sig, self._sig_ts = sig, now
         if status in _LVL and (status != prev or status == "error"):
             console_log.log(_LVL[status], self.platform, f"{status}: {detail}", dedupe_s=300)
         elif prev in ("connected",) and status in ("disconnected", "disabled"):
