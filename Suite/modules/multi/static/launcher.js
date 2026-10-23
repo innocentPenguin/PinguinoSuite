@@ -72,6 +72,40 @@ function platformCard(c, setup) {
     ${c.detail ? `<p class="detail">${esc(plainDetail(c))}</p>` : ''}${platformSetup(c, setup)}</details>`;
 }
 
+// The launcher is redrawn after every action and on layout.changed. Never throw away what Ivan is typing: the new page is built off-screen and only the
+// blocks that really changed are swapped in. A block is left alone while a field inside it has focus or was edited and not saved yet; every open <details>
+// and the scroll position survive. A block whose button was just pressed is always refreshed (its fields now show what was saved).
+const LFORCE = new Set();
+const lStrip = h => h.replace(/ open=""/g, '');
+function lDirty(el) {
+  if (el.contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return true;
+  return [...el.querySelectorAll('input,select,textarea')].some(f => f.type === 'checkbox' || f.type === 'radio' ? f.checked !== f.defaultChecked
+    : f.tagName === 'SELECT' ? [...f.options].some(o => o.selected !== o.defaultSelected) : f.type !== 'button' && f.value !== f.defaultValue);
+}
+function lBlock(t) { const l = document.querySelector('#body .launch'); let b = t.closest && t.closest('#body .launch > *'); return l && b && l.contains(b) ? b : null; }
+function launcherSet(html) {
+  const body = $('#body'), scrollers = [body, document.scrollingElement].filter(Boolean), tops = scrollers.map(s => s.scrollTop);
+  const restore = () => scrollers.forEach((s, i) => { s.scrollTop = tops[i]; });
+  const old = body.querySelector('.launch'), tpl = document.createElement('div'); tpl.innerHTML = html;
+  const fresh = tpl.firstElementChild, force = new Set(LFORCE); LFORCE.clear();
+  const oldKids = old ? [...old.children].filter(k => !k.classList.contains('conn42-wrap')) : [], newKids = fresh ? [...fresh.children] : [];
+  if (!old || !fresh || oldKids.length !== newKids.length) {      // first draw (or the page shape changed): draw it all, keeping what is open
+    const open = [...body.querySelectorAll('details')].map(d => d.open);
+    body.innerHTML = html;
+    const ds = [...body.querySelectorAll('details')]; if (ds.length === open.length) ds.forEach((d, i) => { d.open = open[i]; });
+    restore(); return;
+  }
+  newKids.forEach((n, i) => {
+    const o = oldKids[i];
+    for (const e of [n, ...n.querySelectorAll('[id]')]) { if (!e.id) continue; if (!e.children.length && !e.textContent.trim()) { const oe = o.querySelector('#' + CSS.escape(e.id)) || (o.id === e.id ? o : null); if (oe && oe.innerHTML) e.innerHTML = oe.innerHTML; } }   // result areas filled by buttons (#checks, #recap, #learn)
+    if (!force.has(o) && (lStrip(o.outerHTML) === lStrip(n.outerHTML) || lDirty(o))) return;
+    const od = [...o.querySelectorAll('details')].map(d => d.open), nd = [...n.querySelectorAll('details')];
+    if (o.tagName === 'DETAILS' && n.tagName === 'DETAILS') n.open = o.open;
+    if (nd.length === od.length) nd.forEach((d, j) => { d.open = od[j]; });
+    o.replaceWith(n);
+  });
+  restore();
+}
 async function renderLauncher() {
   // status + setup draw the platform cards, so they must succeed; the rest may be slow or fail without blocking the page
   const soft = (p, fb) => Promise.race([api(p).catch(() => fb), new Promise(r => setTimeout(() => r(fb), 4000))]);
@@ -79,7 +113,7 @@ async function renderLauncher() {
   const s = setup.settings;
   const connected = st.connectors.filter(c => c.status === 'connected').length;
   const step = n => `<span class="n">${n}</span>`;
-  $('#body').innerHTML = `<div class="launch">
+  launcherSet(`<div class="launch">
   <div class="intro"><h2>PinguinoMulti</h2>
     <p>One place for all your live chats. It highlights messages that need an answer, tells you <i>why</i>, and remembers what you replied to. A reply always goes to <b>one</b> platform you choose, never to all of them.</p>
     <p class="mut">${connected ? `${connected} platform${connected > 1 ? 's' : ''} connected.` : 'No platform is connected yet - start with step 1.'} Hover the <span class="hlp">?</span> marks for help.</p></div>
@@ -136,7 +170,7 @@ async function renderLauncher() {
   <div class="act"><button data-act="recap">Show messages I never answered</button></div><div id="recap"></div>
 
   <p class="mut keys">Shortcuts in a card window: <b>A</b> answered, <b>D</b> dismiss, <b>S</b> snooze. Hotkey URLs for Stream Deck: /api/hotkey/answer, /dismiss, /snooze.</p>
-  </div>`;
+  </div>`);
 }
 
 let lastToast = null;
@@ -155,6 +189,7 @@ async function saveSecret(path, body, okMsg) {
 
 document.addEventListener('click', async e => {
   const t = e.target.closest('button'); if (!t || !(W.type === 'launcher' || t.closest('#sidep'))) return;
+  { const b = lBlock(t); if (b) { LFORCE.add(b); setTimeout(() => LFORCE.delete(b), 2500); } }
   const v = id => ($('#' + id) || {}).value || '';
   const a = t.dataset.act;
   try {
@@ -167,6 +202,7 @@ document.addEventListener('click', async e => {
     else if (a === 'save-discord') {
       const chans = v('dc-chans').split(/[,\s]+/).filter(Boolean);
       const body = {channels: chans}; if (v('dc-token').trim()) body.token = v('dc-token').trim();
+      if (body.token && body.token.length < 21) { toast('That does not look like a full Discord bot token (too short). Copy it again from the Discord developer page.', false); return; }
       if (!body.token && !(($('#dc-token') || {}).placeholder || '').startsWith('leave empty')) { toast('Paste the Discord bot token first.', false); return; }
       if (!await saveSecret('/api/secrets/discord', body, 'Discord saved. It connects in a few seconds.')) return;
     }

@@ -32,7 +32,7 @@
   async function inject() {
     const body = document.getElementById('body');
     if (!body || !body.querySelector('.launch') || body.querySelector('.conn42-wrap')) return;
-    const anchor = body.querySelector('.act');
+    const anchor = body.querySelector('.launch > .act');     // the "Test my setup" row, not a button inside a platform card
     if (!anchor) return;
     const wrap = document.createElement('div');
     wrap.className = 'conn42-wrap';
