@@ -362,7 +362,7 @@ async function loadConnect(){try{const c=await api('/api/connect');
   $('cnstat').textContent='- '+(c.installed?st:'not installed');$('cnstat').style.color=c.state==='ready'?'var(--ok)':'var(--warn)';
   if(document.activeElement!==$('cnon'))$('cnon').checked=c.enabled;
   $('cnlogin').hidden=c.state!=='waiting_login';$('cnwarn').hidden=c.login_flow!=='interactive';$('cncode').textContent=c.code||'(code shows here in a moment)';$('cnopen').dataset.url=c.code_url||'https://www.spotify.com/pair';
-  $('cndetail').textContent=(c.last_error||'')+(c.output_note?' '+c.output_note:'')+(c.state==='ready'&&c.output_applied?' Playing to: '+c.output_applied+'.':'')+(c.installed?'':' go-librespot was not found in the module bin folder; the browser player above still works.');
+  $('cndetail').textContent=(c.last_error||'')+(c.output_note?' '+c.output_note:'')+(c.output_missing?' The chosen output is not plugged in right now.':'')+(c.state==='ready'&&c.output_applied?' Playing to: '+c.output_applied+'.':'')+(c.installed?'':' go-librespot was not found in the module bin folder; the browser player above still works.');
   $('cnlog').textContent=(c.log||[]).join('\n')}catch(e){}}
 async function loadConnectOutputs(){try{const o=await api('/api/connect/outputs');const sel=$('cnout');const cur=o.current||'';
   sel.innerHTML='<option value="">System default</option>'+o.outputs.concat(cur&&!o.outputs.includes(cur)?[cur]:[]).map(n=>'<option>'+esc(n)+'</option>').join('');sel.value=cur}catch(e){}}

@@ -13,6 +13,8 @@ import hmac
 import html
 import json
 import os
+import signal
+import sys
 import threading
 import time
 import urllib.parse
@@ -334,6 +336,10 @@ def p_connect(h, b, action):
         name = str(b.get("name") or "")[:200]
         engine.save_settings({"connect_output": name})
         connect.set_output(name)
+        known = connect.outputs()
+        if name and known and name not in known:
+            engine._bump()
+            return {"ok": True, "connect": connect.info(), "warning": name + " is not plugged in right now"}
     else:
         raise QueueError("unknown action")
     engine._bump()
@@ -582,6 +588,14 @@ def loop():
 
 def main():
     console_log.info("server", f"PinguinoSpotify starting on 127.0.0.1:{PORT}")
+    try:
+        signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))      # so finally/atexit stop go-librespot on a polite kill
+    except (ValueError, OSError):
+        pass
+    try:
+        connect.cleanup_stale()
+    except Exception:
+        pass
     threading.Thread(target=loop, daemon=True).start()
     bridge.start()
     try:

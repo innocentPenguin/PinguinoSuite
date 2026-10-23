@@ -48,10 +48,13 @@ Mac later: same steps with BlackHole (2ch) in place of VB-Cable; the Suite picks
 
 ### As built, differences from sections 1-5 (53 review of 015b0cf, 2026-10-23)
 - Health: the engine tick drives `Connect.tick()` (no thread of its own); it polls `GET /status` and, until ready, `GET /auth/code` every 3 s (not `GET /` every 5 s and `/status` every 10 s).
-- `set_output` posts to go-librespot only while ready; otherwise the next start writes the device into config.yml. An empty name (system default) is not applied live, it needs a Restart (known issue: today it posts an empty device and shows the Windows-mixer hint).
-- The stale-process kill at start matches the process name `go-librespot` only (known issue: a reused pid with that name could be hit).
-- "Never restart while waiting_login" holds for crashes only; changing port, bitrate or normalisation while waiting restarts the process and shows a new code.
-- A hard kill of the module (taskkill, SIGTERM) can leave go-librespot running until the next module start (no Job Object yet). Use Stop in the Suite before restarting the module. All of these are listed with fixes in the 53 review (`53-connect-review.md`, 50's notes folder).
+- `set_output` posts to go-librespot only while ready; otherwise the next start writes the device into config.yml. An empty name (system default) is not posted: config.yml is rewritten and the card says to Restart. A name that is not in the device list is saved but flagged (`output_missing`, API `warning`).
+- The pre-stream line for the device is a warning (not a pass) when the chosen output was not applied or is not plugged in.
+- Stale process: the pid file holds `pid`, start time and binary path; at module start (even with Connect off) a leftover is killed only if the process at that pid is that binary and started at that time. On Windows the child is also in a Job Object (KILL_ON_JOB_CLOSE), so it dies with the module however the module dies; Linux uses PDEATHSIG, and the server handles SIGTERM.
+- No network I/O or waiting happens under the lock, so `info()` never stalls. Ready drops to starting only after 3 failed polls in a row; a failed spawn backs off like a crash (2, 5, 15, 60, 60 s, then it gives up until Restart).
+- `waiting_login`: changing port, bitrate or normalisation does not restart (applied at the next start), so the pairing code is kept. The login link (`code_url`) is only in `info()` while waiting_login; the user name in go-librespot's log lines is masked.
+- If the binary rejects `device_auth`, the card shows a login LINK instead of a code: open it in the same browser on this PC. Stop in the Suite turns Connect off persistently (`connect_on` false); Start turns it on. Auto-select of the device needs Spotify connected first.
+- Mac: there is no bundled binary. Download the darwin build into `bin/mac/`, `chmod +x` it and run `xattr -d com.apple.quarantine <file>`; the error text says so.
 - Not yet proven live: that `audio_device` / `POST /player/output` accept the WASAPI name `CABLE Input (VB-Audio Virtual Cable)`; if not, set the app's output in Windows Settings > Sound > Volume mixer.
 
 ## 9. To verify in the spike before coding (51 review 2026-10-23 06:00)

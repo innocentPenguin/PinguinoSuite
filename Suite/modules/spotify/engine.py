@@ -1540,6 +1540,11 @@ def _connect_item(info, visible):
     if not info["installed"]:
         return {"id": "connect", "label": label, "status": "warn", "detail": "go-librespot is not installed on this PC; the browser player is used"}
     if st == "ready":
+        if info.get("output") and info.get("output_applied") != info["output"]:
+            return {"id": "connect", "label": label, "status": "warn",
+                    "detail": ("output " + info["output"] + " not applied: " + (info.get("output_note") or "check the Volume mixer"))[:160]}
+        if info.get("output_missing"):
+            return {"id": "connect", "label": label, "status": "warn", "detail": "output " + info["output"] + " is not plugged in right now"}
         ok = visible is not False
         return {"id": "connect", "label": label, "status": "pass" if ok else "warn",
                 "detail": "ready" + ("" if ok else ", but Spotify does not list it yet") + (", output: " + info["output"] if info["output"] else ", output: system default")}
