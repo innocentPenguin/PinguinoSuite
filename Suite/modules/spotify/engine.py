@@ -323,9 +323,11 @@ class Engine:
             console_log.info("player", f"now playing: {cur['name']} - {', '.join(cur['artists'])}" +
                              (f" (requested by {self.now_item['requester']})" if self.now_item and self.now_item["requester"] else ""))
         self._write_np(cur)
-        if cur and self.settings["announce_track_on"]:
+        if cur and self.settings["announce_track_on"] and self._announce_tier() in self.settings["announce_tiers"]:
             who = (self.now_item or {}).get("requester")
-            self._announce("announce_track", song=f"{cur['name']} - {', '.join(cur['artists'])}", title=cur["name"], artist=", ".join(cur["artists"]),
+            tier = self._announce_tier()
+            key = "announce_track_" + tier if tier in ("sub", "redeem") and self.settings["msgs"].get("announce_track_" + tier) else "announce_track"
+            self._announce(key, kind="track", tier=tier, uri=cur["uri"], tier_name=tier, song=f"{cur['name']} - {', '.join(cur['artists'])}", title=cur["name"], artist=", ".join(cur["artists"]),
                            by=f" (requested by {who})" if who else "", requester=who or "", link=f"https://open.spotify.com/track/{cur['id']}")
         self.persist()
         if self.now_item and self.now_item["skip_on_play"]:
@@ -345,11 +347,27 @@ class Engine:
         except ApiError as e:
             console_log.warn("api", f"{getattr(fn, '__name__', 'call')} failed: {e}", dedupe_s=10)
 
-    def _announce(self, key, **v):
-        text = self.say(key, **v)
+    def _announce_tier(self):
+        it = self.now_item
+        if not it:
+            return "fallback"
+        if it.get("source") != "viewer":
+            return "streamer"
+        t = it.get("tier") or 0
+        return "redeem" if t >= 2 else "sub" if t >= 1 else "normal"
+
+    def _announce(self, key, kind="", tier="", uri="", **v):
+        text = self.say(key, tier=v.get("tier_name", tier), **{k: x for k, x in v.items() if k != "tier_name"})
         if text:
+            now = self.clock()
+            if kind == "track":                        # skipping through songs: keep only the newest line, never a burst in chat
+                gap = self.settings["announce_min_gap_s"]
+                self._ann[:] = [a for a in self._ann if not (a.get("kind") == "track" and now - a["ts"] < gap)]
             self._ann_seq += 1
-            self._ann.append({"seq": self._ann_seq, "ts": self.clock(), "text": text})
+            line = {"seq": self._ann_seq, "ts": now, "text": text}
+            if kind:
+                line.update({"kind": kind, "tier": tier, "requester": v.get("requester", ""), "uri": uri})
+            self._ann.append(line)
             del self._ann[:-30]
 
     def announcements(self, since=0):

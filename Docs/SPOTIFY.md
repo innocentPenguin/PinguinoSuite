@@ -134,3 +134,7 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 ## YouTube links in requests
 
 `!sr <youtube link>` (youtu.be, youtube.com/watch, music.youtube.com, shorts, live, embed; `&list=` ignored, single video only) reads the title/channel via YouTube oEmbed (data only, nothing plays from YouTube), cleans it ("Official Video", "(Lyrics)", "ft." ...), searches Spotify and queues the best match only if its score (title 65%, artist 35%) reaches `yt_min_score` (default 70); otherwise "no song found". Settings: `yt_links` (on/off), `yt_min_score`. Each lookup and score is logged in the Logs tab (source `youtube`). The matched track then goes through the normal approval/blocklist/rate rules.
+
+
+### Announce per tier (51)
+`announce_tiers` (default normal, sub, redeem; also streamer, fallback) decides which songs get a now-playing line; `announce_track_sub` / `announce_track_redeem` are optional templates (empty = the normal line; extra placeholder `{tier}`); `announce_min_gap_s` (20) keeps only the newest track line when songs change faster. `/api/announcements` lines now also carry `kind` ("track"), `tier`, `requester`, `uri` (additive; the Host just posts `text`).

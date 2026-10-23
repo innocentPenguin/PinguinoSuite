@@ -878,6 +878,61 @@ class ArtistIdBanTests(unittest.TestCase):
         self.assertTrue(rules.blocked_reason(s, {**T(7), "artist_ids": [self.OTHER]}))
 
 
+class AnnounceTierTests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True, "announce_track_on": True})
+
+    def _play(self, n, item=None):
+        if item:
+            self.e.queue.items.insert(0, item)
+        self.api.playing = f"spotify:track:t{n}"
+        self.e.tick()
+
+    def test_default_skips_fallback_and_streamer_songs(self):
+        self._play(1)
+        self.assertEqual(self.e.announcements(0)["lines"], [])
+        self._play(2, new_item(T(2), "boss", "streamer"))
+        self.assertEqual(self.e.announcements(0)["lines"], [])
+
+    def test_viewer_tiers_announced_with_fields(self):
+        self._play(1, V(1, "ann", 0))
+        self.clock.t += 30
+        self._play(2, V(2, "sue", 1))
+        self.clock.t += 30
+        self._play(3, V(3, "rob", 2))
+        lines = self.e.announcements(0)["lines"]
+        self.assertEqual([(l["tier"], l["requester"]) for l in lines], [("normal", "ann"), ("sub", "sue"), ("redeem", "rob")])
+        self.assertEqual(lines[0]["kind"], "track")
+        self.assertEqual(lines[2]["uri"], "spotify:track:t3")
+        self.assertEqual([l["seq"] for l in lines], sorted(l["seq"] for l in lines))
+
+    def test_tier_template_with_fallback_to_default(self):
+        self.e.save_settings({"msgs": {"announce_track_sub": "Sub pick ({tier}): {song}"}})
+        self._play(1, V(1, "sue", 1))
+        self.clock.t += 30
+        self._play(2, V(2, "ann", 0))
+        texts = [l["text"] for l in self.e.announcements(0)["lines"]]
+        self.assertTrue(texts[0].endswith("Sub pick (sub): Song 1 - Artist"), texts)
+        self.assertIn("Now playing: Song 2", texts[1])
+
+    def test_fast_changes_keep_only_newest_line(self):
+        self._play(1, V(1, "a", 0))
+        self.clock.t += 5
+        self._play(2, V(2, "b", 0))
+        lines = self.e.announcements(0)["lines"]
+        self.assertEqual(len(lines), 1)
+        self.assertIn("Song 2", lines[0]["text"])
+
+    def test_tiers_filter_can_include_fallback(self):
+        self.e.save_settings({"announce_tiers": ["fallback"]})
+        self._play(1)
+        self.assertEqual(len(self.e.announcements(0)["lines"]), 1)
+
+
 class ManifestHelpTests(unittest.TestCase):
     def test_every_prestream_item_id_has_help(self):
         m = json.load(open(os.path.join(os.path.dirname(HERE), "module.json"), encoding="utf8"))
@@ -1334,7 +1389,7 @@ class Cycle2Tests(unittest.TestCase):
         self.assertFalse(self.e.settings["stream_safe"])
 
     def test_announcements_feed(self):
-        self.e.save_settings({"announce_track_on": True, "announce_request_on": True})
+        self.e.save_settings({"announce_track_on": True, "announce_request_on": True, "announce_tiers": ["fallback", "normal"]})
         self.e.chat("ann", "!sr song 5", [])
         self.api.playing = "spotify:track:t1"
         self.e.tick()
