@@ -48,3 +48,6 @@ Installer/dist/
 **/host_secrets.json
 **/bots_secrets.json
 PinguinoB0t/overlays/live_state.js
+
+Suite/modules/*/data/
+PinguinoB0t/channel_lore_seed.json
