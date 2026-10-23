@@ -1,6 +1,6 @@
 """Gambling: !gamble/!slots/!duel/!accept/!give move points through the ledger, config is live-read, no max bet by default, cooldown, lore does not answer.
 Usage: python Tools/test-host-gamble.py [dll]"""
-import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
+import re, json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 PORT = 8995; B = 'http://127.0.0.1:%d' % PORT
@@ -36,6 +36,10 @@ try:
     r = ask('bob: !gamble 100'); chk('max bet optional setting', 'maximum bet is 50' in r[0] and bal('bob') == 500, r)
     setcfg(gambleWinChance=1.0, gamblePayout=3.0, slotsSymbols=['x','x'], slotsTriplePayout=4.0, slotsJackpotSymbol='x', slotsJackpotPayout=6.0); time.sleep(1.2)
     r = ask('bob: !slots 10'); chk('slots jackpot', 'won 60' in r[0] and bal('bob') == 550, (r, bal('bob')))
+    setcfg(gambleWinChance=1.0); time.sleep(1.2)   # no slotsSymbols in the file: the built-in defaults are real emoji, intact through the send path
+    r = ask('bob: !slots 1'); allowed = set(['🍒', '🐟', '⭐', '⚽', '🐧'])
+    sym = re.findall(r'\[(.*?)\]', r[0]) if r else []
+    chk('slots default reels are real emoji (cherry, fish, star, soccer ball, penguin)', len(r) == 1 and sym and all(x.strip() in allowed for x in sym[0].split('|')) and len(sym[0].split('|')) == 3, r)
     r = ask('carl: !give @dina 50'); chk('give moves points', bal('carl') == 250 and bal('dina') == 250 and 'gave 50' in r[0], (r, bal('carl'), bal('dina')))
     r = ask('carl: !give @carl 5'); chk('no self give', 'someone else' in r[0], r)
     r = ask('carl: !give @dina 9999'); chk('give over balance', 'only have' in r[0] and bal('carl') == 250, r)

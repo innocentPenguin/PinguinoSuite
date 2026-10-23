@@ -20,7 +20,7 @@ namespace PinguinoHost
         {
             return new JObject { { "enabled", true }, { "cooldownSec", 15 }, { "minBet", 1 }, { "maxBet", 0 },
                 { "gambleWinChance", 0.45 }, { "gamblePayout", 2.0 },
-                { "slotsEnabled", true }, { "slotsSymbols", new JArray("cherry", "lemon", "bell", "star", "penguin") }, { "slotsPairPayout", 1.5 }, { "slotsTriplePayout", 5.0 }, { "slotsJackpotSymbol", "penguin" }, { "slotsJackpotPayout", 10.0 },
+                { "slotsEnabled", true }, { "slotsSymbols", new JArray("🍒", "🐟", "⭐", "⚽", "🐧") }, { "slotsPairPayout", 1.5 }, { "slotsTriplePayout", 5.0 }, { "slotsJackpotSymbol", "🐧" }, { "slotsJackpotPayout", 10.0 },
                 { "duelEnabled", true }, { "duelTimeoutSec", 60 }, { "duelHouseCutPercent", 0 },
                 { "giveEnabled", true }, { "giveMin", 1 } };
         }
