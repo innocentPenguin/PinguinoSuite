@@ -75,9 +75,22 @@ def to_message(item, channel):
                        text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or item.get("count") or 0), flags=flags, meta=meta)
 
 
+STATE = {"up": None, "last_ok": 0.0, "error": ""}      # reachability of the Host as last seen by any GET (None = not tried yet)
+
+
+def status():
+    return {"up": STATE["up"], "url": HOST, "last_ok": STATE["last_ok"], "error": STATE["error"]}
+
+
 def _get(path):
-    with urllib.request.urlopen(HOST + path, timeout=3) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(HOST + path, timeout=3) as r:
+            d = json.loads(r.read())
+    except Exception as e:
+        STATE.update(up=False, error=type(e).__name__)
+        raise
+    STATE.update(up=True, last_ok=time.time(), error="")
+    return d
 
 
 def _say_sync(text):

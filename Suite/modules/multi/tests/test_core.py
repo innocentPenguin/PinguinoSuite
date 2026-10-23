@@ -1616,6 +1616,18 @@ def test_alert_queue_merge_overflow_remove(tmp_path):
     assert e.cfg["profiles"]["Penguin"]["types"]["raid"]["delay_ms"] == 30000
 
 
+def test_host_status_reports_unreachable_host(monkeypatch):
+    import pytest
+    from fastapi.testclient import TestClient
+    import host_feed
+    import server
+    monkeypatch.setattr(host_feed, "HOST", "http://127.0.0.1:1")
+    with pytest.raises(Exception):
+        host_feed._get("/api/live-state")
+    j = TestClient(server.app, base_url="http://127.0.0.1:8766").get("/api/host-status").json()
+    assert j["up"] is False and j["url"] == "http://127.0.0.1:1" and j["error"]
+
+
 def test_dedupe_by_real_id_only_when_there_is_one(tmp_path):
     alerts, eng, out = _engine(tmp_path)
     cheer = lambda **k: eng.submit(dict({"type": "cheer", "user": "fan", "amount": 100, "platform": "twitch"}, **k))

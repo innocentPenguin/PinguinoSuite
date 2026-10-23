@@ -24,7 +24,17 @@ async function renderAlertsEditor() {
   AL.d = await fetch('/api/alerts').then(r => r.json());
   AL.media = (await fetch('/api/alerts/media').then(r => r.json())).files;
   alDraw();
-  clearInterval(AL.logT); AL.logT = setInterval(alLog, 2000);
+  alHost();
+  clearInterval(AL.logT); AL.logT = setInterval(() => { alLog(); alHost(); }, 2000);
+}
+// Banner while the bot Host is unreachable: real alerts come from it, so say so instead of leaving a quiet, empty editor
+async function alHost() {
+  if (W.type !== 'alerts') return;
+  let h = null; try { h = await fetch('/api/host-status').then(r => r.json()); } catch (e) { h = {up: false, url: 'Multi', error: 'Multi itself is not answering'}; }
+  let el = $('#al-host'); const body = $('#body'); if (!body) return;
+  if (!h || h.up !== false) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'al-host'; el.setAttribute('role', 'alert'); el.style.cssText = 'margin:6px;padding:8px 12px;border:1px solid #ff4d4d;border-radius:8px;background:#ff4d4d22'; body.insertBefore(el, body.firstChild); }
+  el.innerHTML = `<b>Bot Host not reachable</b> (${esc(h.url)}${h.error ? ', ' + esc(h.error) : ''}). Follows, subs, raids and hype trains from the Host will not show until it is back. Tests and previews here still work.`;
 }
 function alUrl() { return location.origin + '/obs/alerts'; }
 function alDraw() {
@@ -135,7 +145,12 @@ async function alLog() {
   const qi = (d.status.items || []).map(x => `<div>${x.priority} <b>${esc(x.type)}</b> ${esc(x.user)} <span class="mut">${esc(x.text)}</span> <button class="chip2" data-qrm="${esc(x.id)}">Remove</button></div>`).join('');
   el.innerHTML = `<div class="mut">queued: ${d.status.queued}${d.status.paused ? ' (PAUSED)' : ''}</div>${qi ? '<div style="border-bottom:1px solid var(--line);margin-bottom:4px">' + qi + '</div>' : ''}` + d.log.slice(0, 40).map(l => `<div>${new Date(l.ts * 1000).toLocaleTimeString()} <b>${esc(l.type || '?')}</b> ${esc(l.user || '')} ${l.amount ? esc(l.amount) : ''} - ${esc(l.status)} <span class="mut">${esc(l.why || '')}${l.test ? ' [test]' : ''}</span></div>`).join('');
 }
-async function alPost(u, b) { return fetch(u, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b || {})}).then(r => r.json()); }
+async function alPost(u, b) {
+  try {
+    const r = await fetch(u, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b || {})}), j = await r.json().catch(() => ({}));
+    return r.ok ? j : {ok: false, text: j.detail || j.text || 'Multi said ' + r.status, rows: []};
+  } catch (e) { return {ok: false, text: 'Multi did not answer (' + e.message + ')', rows: []}; }
+}
 document.addEventListener('change', e => {
   if (W.type !== 'alerts') return; const t = e.target;
   if (t.id === 'al-g-gap' || t.id === 'al-g-max' || t.id === 'al-g-ovf') {
@@ -206,7 +221,7 @@ document.addEventListener('click', async e => {
   }
   else if (a === 'impfile') $('#al-pfile').click();
   else if (a === 'pv') alPreview();
-  else if (a === 'test') { const r = await alPost('/api/alerts/test', {type: AL.sel, user, amount: amt === '' ? null : +amt, variant: vars}); alState(r.text); alLog(); }
+  else if (a === 'test') { const r = await alPost('/api/alerts/test', {type: AL.sel, user, amount: amt === '' ? null : +amt, variant: vars}); alState(r.ok === false && /type disabled/.test(r.text || '') ? r.text + ' - tick Enabled to test it' : r.text); alLog(); }
   else if (a === 'testall') { const r = await alPost('/api/alerts/testall'); alState(r.text); alLog(); }
   else if (a === 'stress') { const r = await alPost('/api/alerts/stress', {n: 30}); alState(r.text); alLog(); }
   else if (a === 'skip' || a === 'clear') { await alPost('/api/alerts/control', {action: a}); alLog(); }

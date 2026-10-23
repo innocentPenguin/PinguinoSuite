@@ -22,6 +22,9 @@ const D_CSS = `
 #d-wrap{display:flex;height:100vh}.d-nav{flex:0 0 58px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;background:var(--panel,#1a1814);border-right:1px solid var(--line,#3a2f22);box-sizing:border-box}
 .d-nav a{display:flex;flex-direction:column;align-items:center;width:50px;padding:6px 0;border-radius:8px;color:inherit;text-decoration:none;font-size:10px;opacity:.75}.d-nav a span{font-size:20px;line-height:1.2}.d-nav a:hover{opacity:1;background:#ff8a1f20}.d-nav a.on{opacity:1;background:#ff8a1f30;color:var(--accent,#ff8a1f)}
 #d-wrap #dash{flex:1;min-width:0}
+.d-nav a:focus-visible,.d-btn:focus-visible,.d-tab:focus-visible,.d-ic2:focus-visible,.d-kebab:focus-visible{outline:2px solid var(--accent,#ff8a1f);outline-offset:2px}
+@media (max-width:720px){#d-wrap{flex-direction:column-reverse}.d-nav{flex:0 0 auto;flex-direction:row;justify-content:space-around;border-right:0;border-top:1px solid var(--line,#3a2f22);padding:4px}
+#d-wrap #dash{height:auto;flex:1;min-height:0}#d-panels{flex-direction:column}.d-div{display:none}.d-top{flex-wrap:wrap}.d-search{min-width:0;flex:1}.d-search kbd{display:none}.d-top .grow{display:none}}
 #dash{display:flex;flex-direction:column;height:100vh;box-sizing:border-box;padding:6px;gap:6px;background:var(--bg)}
 .d-top,.d-tabs{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--panel,#1a1814)}
 .d-top .grow{flex:1}.d-btn{background:transparent;border:1px solid var(--line);color:inherit;border-radius:6px;padding:3px 10px;cursor:pointer;font:inherit}.d-btn:hover{border-color:var(--accent)}.d-btn.on{background:var(--accent);color:#111}
@@ -56,7 +59,7 @@ async function renderDash() {
   const nav = only ? '' : `<nav class="d-nav" id="d-nav"><a class="on" href="/" title="Chat and activity"><span>&#128172;</span>Chat</a><a href="/?type=alerts" title="Alert editor"><span>&#128039;</span>Alerts</a><a href="/?type=alerts&section=bars" title="Goal and hype train bars"><span>&#127919;</span>Goal</a><a href="/?type=launcher" title="Connections and setup"><span>&#9881;</span>Setup</a></nav>`;
   $('#body').innerHTML = `<div id="d-wrap">${nav}<div id="dash" class="${DASH.edit ? 'd-edit' : ''}">${only ? '' : `<div class="d-top" id="d-top"></div><div class="d-tabs" id="d-tabs"></div>`}<div id="d-panels"></div></div></div>`;
   if (!only) { dTop(); dTabs(); }
-  dPanels(); dFill(); dViewRefresh();
+  dPanels(); dFill(); dViewRefresh(); dFocusable();
   fetch('/api/viewers').then(r => r.json()).then(c => window.dashViewers(c.counts)).catch(() => {});
 }
 function dTop() {
@@ -83,7 +86,7 @@ window.dashViewers = c => { if (c) DASH.viewers = c; if (W.type === 'dash') dVie
 function dTabs() {
   const el = $('#d-tabs'); if (!el) return;
   el.innerHTML = `<span class="d-btn ${DASH.src === 'all' ? 'on' : ''}" data-d="src" data-p="all" title="All sources">&#9638;</span>` + conns.map(c => `<span class="d-tab ${DASH.src === c.platform ? 'on' : ''}" data-d="src" data-p="${esc(c.platform)}">${dIcon(c.platform)}<span>${esc(c.channel || c.label)}</span><span class="d-viewers" data-vp="${esc(c.platform)}">${dViewTxt(c.platform)}</span>
-    <span class="d-dot ${esc(c.status)}" title="${esc(c.label)}: ${esc(c.status)} ${esc(c.detail || '')}${c.official ? '' : ' (UNOFFICIAL)'}${c.capabilities && !c.capabilities.send ? ' (read-only)' : ''}"></span><span class="d-kebab" data-d="tabmenu" data-p="${esc(c.platform)}">&#8942;</span></span>`).join('');
+    <span class="d-dot ${esc(c.status)}" title="${esc(c.label)}: ${esc(c.status)} ${esc(c.detail || '')}${c.official ? '' : ' (UNOFFICIAL)'}${c.capabilities && !c.capabilities.send ? ' (read-only)' : ''}"></span><span class="d-kebab" data-d="tabmenu" data-p="${esc(c.platform)}">&#8942;</span></span>`).join(''); dFocusable();
 }
 function dPanels() {
   const only = q.get('panel'), list = only ? [only] : DASH.panels;
@@ -95,7 +98,7 @@ function dPanels() {
       <span class="d-ic2" data-d="settings" title="Settings">&#9881;</span>${only ? '' : `<span class="d-ic2" data-d="pop" data-p="${p}" title="Open in its own window">&#8599;</span>`}</div>
     ${p === 'activity' ? `<div class="d-alerts"><b>&#128039; Alerts</b><button class="d-btn" data-d="pause" title="Pause new rows (they queue up)">${DASH.paused ? '&#9654;' : '&#10074;&#10074;'}</button><button class="d-btn" data-d="next" title="Show the next queued row">&#9193;</button><button class="d-btn" data-d="skip" title="Skip (drop) the next queued row">&#10006;</button><button class="d-btn" data-d="all" title="Show everything queued">&#9197;</button><span class="mut" id="d-qn"></span></div>` : ''}
     ${p === 'chat' && DASH.split.on ? `<div class="d-halves ${DASH.split.dir === 'col' ? 'hcol' : 'hrow'}"><div class="d-list" id="d-l-chat-a"></div><div class="d-list" id="d-l-chat-b"></div></div>` : `<div class="d-list" id="d-l-${p}"></div>`}
-    ${p === 'chat' ? `<div class="d-box"><select id="d-plat">${conns.filter(c => c.capabilities && c.capabilities.send).map(c => `<option value="${esc(c.platform)}">${esc(c.label)}</option>`).join('')}</select><input id="d-txt" maxlength="500" placeholder="Message"><span class="d-ic2" data-d="emoji" title="Emoji">&#9786;</span><span class="d-ic2" data-d="send" title="Send to the chosen platform only">&#10148;</span></div>` : ''}</div>`).join('');
+    ${p === 'chat' ? `<div class="d-box"><select id="d-plat">${conns.filter(c => c.capabilities && c.capabilities.send).map(c => `<option value="${esc(c.platform)}">${esc(c.label)}</option>`).join('')}</select><input id="d-txt" maxlength="500" placeholder="Message"><span class="d-ic2" data-d="emoji" title="Emoji">&#9786;</span><span class="d-ic2" data-d="send" title="Send to the chosen platform only">&#10148;</span></div>` : ''}</div>`).join(''); dFocusable();
 }
 function dRowActivity(m) {
   const pill = D_PILL[m.event] || [m.event, '#aaa', '#111'], chips = [];
@@ -171,7 +174,10 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (!$('#d-sr')) dSearch(); }
   else if (e.key === 'Escape') { const s = $('#d-sr'); if (s) s.remove(); dMenuClose(); }
   else if (e.key === 'Enter' && e.target.id === 'd-txt') dSend();
+  else if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-d][tabindex]') && !e.target.matches('button,a,select,input')) { e.preventDefault(); e.target.click(); }
 });
+// span-based controls (source tabs, panel icons, kebabs) are reachable and operable from the keyboard
+function dFocusable() { document.querySelectorAll('#dash [data-d]:not(button):not(a):not(select):not(input)').forEach(e => { e.tabIndex = 0; e.setAttribute('role', 'button'); }); }
 async function dSend() {
   const t = $('#d-txt'), p = $('#d-plat'); if (!t || !p || !t.value.trim()) return;
   const r = await fetch('/api/send', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({platform: p.value, text: t.value.trim()})}).then(r => r.json());

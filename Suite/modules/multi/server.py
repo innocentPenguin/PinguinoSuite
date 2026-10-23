@@ -318,6 +318,12 @@ def obs_alerts():
     return FileResponse(STATIC / "alerts.html", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/host-status")
+def host_status():
+    """is the bot Host reachable (as last seen by the activity feed / live-state polls)"""
+    return host_feed.status()
+
+
 @app.get("/api/alerts")
 def alerts_get():
     return {"config": alert_engine.cfg, "types": alerts_mod.TYPES, "labels": alerts_mod.LABEL, "anims": alerts_mod.ANIMS, "layouts": alerts_mod.LAYOUTS,
