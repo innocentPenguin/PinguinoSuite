@@ -1,6 +1,15 @@
 # Session notes: UNIT 01 (Suite Core / shell lead + Listen module owner)
 
-Last updated 2026-10-23 (final hand-over to the new supervisor "20 - Suite"; 01 has stopped coding). Session id `9e804717-c369-472f-8998-483f8aefd7a3`.
+Last updated 2026-10-23 (section 0 is the current hand-over by worker 23; the rest is 01's earlier hand-over). Session id `9e804717-c369-472f-8998-483f8aefd7a3`.
+
+## 0. HAND-OVER (worker 23 "Listen/Core" under supervisor 120, 2026-10-23)
+**State:** all queue items 10-22 done and committed, nothing pushed, nothing launched. Suites run 3x each on the merged tree: Suite core 129 tests OK x3 (1 skipped: the pyflakes test, pyflakes is not in the venv), Listen 56 OK x3, updater 52 OK x3.
+**My commits (newest first):** 683913f read-only dupe report (Suite/tools/dupe_report.py) | d159946 + b67094a opt-in Listen core watchdog and Data/pids/core.json | 86c8db1 static lint test (Suite/tests/test_lint.py) | eeaa687 shell + Listen UI: no native confirm(), in-flight guard on POST buttons, wrapping | 6931550 log caps (gzip archives, running-log warning, 2 GB feedback cap) and clean shutdown | 7c52e2b item 15 + 22's 13 findings | 7244e83 item 12 | 5a25c2b item 14 | ee7921f item 11.
+**What each needs:** core rebuild = 6931550, d159946/b67094a, ee7921f, 5a25c2b, 7244e83 (module recovery, selfcheck, log caps, shutdown, core.json); shell rebuild = eeaa687, 7c52e2b (and earlier shell commits listed below); Listen restart = eeaa687 (Listen UI) and d159946 (corewatch import). The Listen watchdog does nothing until PINGUINO_LISTEN_WATCHDOG=1 is set in Listen's environment (decision for 120).
+**Open decisions:** archived logs are only compressed, never deleted; 22 GB of duplicate VODs (report in the shared notes 20-dupes.md; 26 identical copies of one VOD; check DB rows before deleting any); chat-latency warn is the Host's (clock skew, 120 routed it to 100).
+**Known zombie risk:** a hard-killed core leaves modules running (Listen holds mic/GPU/port 8765) until the next core start adopts them; the watchdog above is the fix when enabled.
+**Tools kept out of the repo:** the mock server (scratchpad) used to test shell pages in the browser pane; the lint test uses pyflakes only when installed.
+**Unverified in the real app:** see the list at the end of section 3 (kept current; nothing from this hand-over has been seen in the live window).
 
 ## 1. What I built or changed, and why
 Requests come from 00 (relaying Ivan). Main work, newest first (commit hashes in git):
