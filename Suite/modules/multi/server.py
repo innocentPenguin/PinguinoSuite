@@ -55,6 +55,7 @@ import host_feed
 import viewers as viewers_mod
 import prestream
 import voice
+import intros as intros_mod
 import scene_follow
 import stream_info
 import secrets_store
@@ -112,6 +113,7 @@ def _alert_from_message(m):
 
 
 pipeline.on_event = _alert_from_message
+pipeline.intros = intros_mod.Intros(store, alert_engine.submit, lambda: pipeline.ding.started)
 inbox = Inbox(pipeline)
 connectors = {}
 shell = win.EdgeShell(f"http://127.0.0.1:{config.PORT}")

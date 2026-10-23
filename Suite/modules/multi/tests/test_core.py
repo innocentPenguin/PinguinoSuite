@@ -1614,3 +1614,36 @@ def test_alert_queue_merge_overflow_remove(tmp_path):
     c["profiles"]["Penguin"]["types"]["raid"]["delay_ms"] = 999999
     e.save(c)
     assert e.cfg["profiles"]["Penguin"]["types"]["raid"]["delay_ms"] == 30000
+
+
+def test_intros_play_approved_once_per_stream(tmp_path, monkeypatch):
+    import asyncio
+    import intros
+    from models import ChatMessage
+    st = Store(str(tmp_path / "i.db"))
+    got, calls = [], []
+    ep = [1]
+
+    def fetch(platform, uid):
+        calls.append(uid)
+        return {"u1": {"text": "hi I am Bob", "sound_id": "x.mp3", "status": "approved"}, "u2": {"text": "visit evil.com", "status": "approved"},
+                "u3": {"text": "pending one", "status": "pending"}}.get(uid)
+
+    it = intros.Intros(st, lambda ev: (got.append(ev) or (True, "queued")), lambda: ep[0], fetch=fetch)
+
+    def msg(uid, **kw):
+        return ChatMessage(id="m" + uid, platform="twitch", channel="c", user_id=uid, user="user" + uid, display="U" + uid, text="hello", ts=1.0, **kw)
+
+    async def go():
+        assert await it.observe(msg("u1", flags=["new"]))
+        assert not await it.observe(msg("u1", flags=["returning"]))           # one per stream
+        assert not await it.observe(msg("u2", flags=["new"]))                 # link: never plays
+        assert not await it.observe(msg("u3", flags=["new"]))                 # not approved
+        assert not await it.observe(msg("u3", flags=["new"])) and calls.count("u3") == 1   # miss cached
+        assert not await it.observe(msg("u4"))                                # not first/returning
+        assert not await it.observe(msg("u5", flags=["new"], is_bot=True))
+        ep[0] = 2                                                             # new stream
+        assert await it.observe(msg("u1", flags=["returning"]))
+    asyncio.run(go())
+    assert got[0]["type"] == "intro" and got[0]["message"] == "hi I am Bob" and len(got) == 2
+    assert intros.clean_text("x" * 141) == "" and intros.clean_text("hello  there ") == "hello there"

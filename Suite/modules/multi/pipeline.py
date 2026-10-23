@@ -28,6 +28,7 @@ class Pipeline:
         self.assist = assist_mod.Assist(store, self.advisor)
         self.ding = ding_mod.Ding(store)
         self.pop = pop_mod.Pop()
+        self.intros = None                           # set by the server (intros.Intros)
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
         self.stats = {"in": 0, "dupes": 0, "dropped": 0}
         self.on_event = None         # set by the server: called once for every stored stream event (alert engine)
@@ -77,6 +78,11 @@ class Pipeline:
             return None
         self.stats["in"] += 1
         self.ding.observe(m)
+        if self.intros:
+            try:
+                asyncio.get_running_loop().create_task(self.intros.observe(m))
+            except RuntimeError:
+                pass                                     # no running loop (sync tests): intros are skipped
         self.pop.observe(m)
         key = (m.platform, m.user_id)
         hist = self.recent_by_user.setdefault(key, [])

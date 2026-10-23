@@ -440,6 +440,9 @@ class Engine:
     def _payload(self, c, ev, test):
         so = c["sound"]
         url = (so["tier_urls"].get(str(ev.get("tier") or ""), "") or so["url"]) if so["enabled"] and not c["silent"] else ""
+        su = str(ev.get("sound_url") or "")
+        if re.fullmatch(r"/alert-media/[A-Za-z0-9._-]{1,80}", su) and so["enabled"] and not c["silent"]:
+            url = su                                    # the sound a viewer picked for their intro (media library only)
         return {"id": ev["id"], "type": ev["type"], "label": LABEL[ev["type"]], "priority": c["priority"], "duration": c["duration"], "test": test,
                 "text": render(c["text"], ev), "subtext": render(c["subtext"], ev), "style": c["style"], "media": c["media"] if c["media"]["url"] else None,
                 "sound": {"on": bool(so["enabled"] and not c["silent"]), "url": url, "volume": so["volume"]},
