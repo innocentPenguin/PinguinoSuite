@@ -83,6 +83,7 @@ input::placeholder,textarea::placeholder{color:var(--faint);opacity:1}
 input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
 select option{background:#2a2a2e;color:#eee}
 input:disabled,select:disabled,textarea:disabled{opacity:.55}
+button.fly{opacity:.55;cursor:progress}
 .dim{color:var(--dim)}.faint{color:var(--faint)}.sm{font-size:12.5px}
 .row{display:flex;align-items:center;gap:10px}.sp{margin-left:auto}.wrap{flex-wrap:wrap}
 /* sidebar */
@@ -440,8 +441,8 @@ function bindVault(){
   $('#v-add')&&($('#v-add').onclick=()=>{const n=$('#v-addname').value.trim();if(!/^[A-Za-z0-9_.-]{1,80}$/.test(n)){toast('Use letters, digits, _ . - only');return}
     if(!VT.keys.keys.some(k=>k.name===n))VT.keys.keys.push({name:n,label:n,set:false,declared_by:[],testable:false,required:false});VT.edit=n;draw(true);$('#v-new')&&$('#v-new').focus()});
   $('#v-import')&&($('#v-import').onclick=()=>vaultAct(async()=>{const r=await post('/api/vault/import-plaintext');toast(`Imported ${r.imported} key(s). The files are unchanged.`)}));
-  $$('[data-vscrub]').forEach(b=>b.onclick=()=>{if(!confirm('Remove the plaintext copy from '+b.dataset.vscrub+'? Only do this after the module that uses these keys has been verified to read them from the vault.'))return;
-    vaultAct(async()=>{const r=await post('/api/vault/scrub',{file:b.dataset.vscrub,confirm:true});toast(`Blanked ${r.blanked} plaintext key(s)`)})});
+  $$('[data-vscrub]').forEach(b=>b.onclick=()=>armBtn(b,'Click again: blank the plaintext copy',()=>{
+    vaultAct(async()=>{const r=await post('/api/vault/scrub',{file:b.dataset.vscrub,confirm:true});toast(`Blanked ${r.blanked} plaintext key(s)`)})}));
   $('#v-export')&&($('#v-export').onclick=async()=>{const r=await fetch('/api/vault/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({passphrase:$('#v-bpass').value})});
     if(!r.ok){toast((await r.json().catch(()=>({}))).detail||'Backup failed');return}saveBlob(await r.blob(),'pinguino-vault-backup.pgb');toast('Encrypted backup saved')});
   $('#v-restore')&&($('#v-restore').onchange=e=>{const f=e.target.files[0];if(!f)return;vaultAct(async()=>{const r=await fetch('/api/vault/restore',{method:'POST',headers:{'X-Passphrase':$('#v-bpass').value},body:await f.arrayBuffer()});const j=await r.json();if(!r.ok)throw new Error(j.detail);toast(`Restored ${j.restored} key(s)`)})})}
@@ -780,7 +781,7 @@ function bindPersonalize(){
   $('#pf-undo')&&($('#pf-undo').onclick=()=>{if(pfHist.length){PF=pfHist.pop();commit();toast('Undone')}});
   $('#pf-export')&&($('#pf-export').onclick=()=>saveBlob(new Blob([JSON.stringify(PF,null,1)],{type:'application/json'}),'pinguino-look.json'));
   $('#pf-import')&&($('#pf-import').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());pfHist.push(clone(PF));PF=merge(PF_DEFAULT,j);commit();toast('Look imported')}catch{toast('That file is not a Pinguino look')}});
-  $('#pf-reset')&&($('#pf-reset').onclick=()=>{if(!confirm('Reset theme, layout, dashboard, sounds and saved looks to the defaults?'))return;pfHist.push(clone(PF));PF=clone(PF_DEFAULT);commit();fetch('/api/prefs/reset',{method:'POST'});toast('Back to defaults')})}
+  $('#pf-reset')&&($('#pf-reset').onclick=()=>armBtn($('#pf-reset'),'Click again: reset everything',()=>{pfHist.push(clone(PF));PF=clone(PF_DEFAULT);commit();fetch('/api/prefs/reset',{method:'POST'});toast('Back to defaults')}))}
 function moveItem(kind,id,d){pfHist.push(clone(PF));
   if(kind==='nav'){const cur=navCatalog().map(c=>c.id),i=cur.indexOf(id),j=i+d;if(j<0||j>=cur.length)return;[cur[i],cur[j]]=[cur[j],cur[i]];PF.layout.nav_order=cur}
   else{const k=kind.split('.')[1],a=PF.dash[k],i=a.indexOf(id),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]]}
@@ -862,7 +863,7 @@ function updateComm(){const sum=$('#comm-sum');if(!sum||route!=='comm')return;
   head('speak',v,'The bot voice: what the bots say out loud (text to speech).','');
   $$('#comm-sum [data-ctab]').forEach(c=>c.onclick=()=>{COMM.tab=c.dataset.ctab;try{localStorage.setItem('commTab',COMM.tab)}catch{}draw(true)});
   $$('#cs-listen [data-go],#cs-speak [data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
-  $$('#cs-listen [data-act],#cs-speak [data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
+  $$('#cs-listen [data-act],#cs-speak [data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');try{await post(`/api/modules/${a}/${c}`)}catch{toast(`Could not ${c} ${a}: the core did not answer`)}setTimeout(load,900)});
   bindSwitches()}
 const redrawSw=()=>route==='comm'?updateComm():draw(true);
 function bindSwitches(){
@@ -911,7 +912,7 @@ function bindQuick(){
   $$('[data-qrun]').forEach(b=>b.onclick=()=>runAction(...b.dataset.qrun.split('|')));
   $$('[data-qtab]').forEach(c=>c.onclick=()=>{Q.tab=c.dataset.qtab;Q.data={};draw(true)});
   $$('[data-qen]').forEach(i=>i.onchange=async()=>{await hostJ('/api/automations/enable',{id:i.dataset.qen,on:i.checked});await loadQuick()});
-  $$('[data-qgrp]').forEach(b=>b.onclick=async()=>{if(!confirm((b.dataset.qgrp==='1'?'Enable':'Disable')+' every action in "'+Q.group+'"?'))return;await hostJ('/api/automations/enable',{group:Q.group,on:b.dataset.qgrp==='1'});await loadQuick()});
+  $$('[data-qgrp]').forEach(b=>b.onclick=()=>armBtn(b,'Click again: '+(b.dataset.qgrp==='1'?'enable':'disable')+' all in "'+Q.group.slice(0,24)+'"',()=>busy(b,async()=>{const r=await hostJ('/api/automations/enable',{group:Q.group,on:b.dataset.qgrp==='1'});if(r&&r.ok===false)toast('Could not change the group: '+(r.error||'HTTP '+(r._status||'?')));await loadQuick()})));
   $('#q-export')&&($('#q-export').onclick=async()=>{try{saveBlob(new Blob([JSON.stringify(await hostGet('/api/automations/export'),null,1)],{type:'application/json'}),'pinguino-actions.json')}catch{toast('Export failed')}});
   qBind()}
 const hostJ=async(p,b)=>{const r=await hostPost(p,b);let j={};if(r&&r.json&&typeof r.json==='object')j=r.json;else try{j=JSON.parse(r.detail)}catch{}return {...j,_ok:r.ok,_status:r.status,_detail:r.detail}};
@@ -941,7 +942,7 @@ function qBind(){
   $('#q-q2')&&($('#q-q2').oninput=e=>{Q.q=e.target.value;const p=e.target.selectionStart;draw(true);const n=$('#q-q2');n.focus();n.setSelectionRange(p,p)});
   $$('[data-vval]').forEach(i=>i.onchange=async()=>{const per=document.querySelector(`[data-vper="${CSS.escape(i.dataset.vval)}"]`);await hostJ('/api/vars',{name:i.dataset.vval,value:i.value,persist:!!(per&&per.checked)});toast('Saved '+i.dataset.vval)});
   $$('[data-vper]').forEach(i=>i.onchange=async()=>{const v=document.querySelector(`[data-vval="${CSS.escape(i.dataset.vper)}"]`);await hostJ('/api/vars',{name:i.dataset.vper,value:v?v.value:'',persist:i.checked});toast('Saved '+i.dataset.vper)});
-  $$('[data-vdelx]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete variable '+b.dataset.vdelx+'?'))return;await hostJ('/api/vars/delete',{name:b.dataset.vdelx});Q.data={};draw(true)});
+  $$('[data-vdelx]').forEach(b=>b.onclick=()=>armBtn(b,'Click again: delete',()=>busy(b,async()=>{const r=await hostJ('/api/vars/delete',{name:b.dataset.vdelx});if(r&&r.ok===false)toast('Could not delete the variable: '+(r.error||'HTTP '+(r._status||'?')));Q.data={};draw(true)})));
   $('#vn-add')&&($('#vn-add').onclick=async()=>{const n=$('#vn-name').value.trim();if(!n){toast('Give the variable a name');return}await hostJ('/api/vars',{name:n,value:$('#vn-val').value,persist:$('#vn-per').checked});Q.data={};draw(true)});
   $$('[data-qq]').forEach(b=>b.onclick=async()=>{await hostJ('/api/queues/'+b.dataset.qq,{});Q.data={};draw(true)});
   $$('[data-hkfire]').forEach(b=>b.onclick=async()=>{const r=await hostJ('/api/automations/fire',{hotkey:b.dataset.hkfire});toast(r.ok?'Fired '+b.dataset.hkfire:'Could not fire: '+(r.error||''))});
@@ -1034,8 +1035,8 @@ function bindAccounts(){
       ACC.wait=Date.now();const t0=Date.now(),was=JSON.stringify((ACC.st&&ACC.st.scopes)||[]);
       const poll=async()=>{if(Date.now()-t0>90000||route!=='accounts'){ACC.wait=0;return}try{const n=await hostGet('/api/account/streamer');if(JSON.stringify(n.scopes||[])!==was||(!ACC.st.signedIn&&n.signedIn)){ACC.st=n;ACC.wait=0;toast('Twitch sign-in updated');ACC.restartHint=true;draw(true);return}}catch{}setTimeout(poll,3000)};poll();draw(true)}
     catch(e){toast('Could not start the sign-in: '+(e&&e.message?e.message:e))}});
-  $('#ac-restart')&&($('#ac-restart').onclick=async()=>{if(!confirm('Restart PinguinoHost now? Chat commands and alerts pause for a few seconds. Do not do this mid-stream unless you must.'))return;await post('/api/modules/host/restart');ACC.restartHint=false;toast('Restarting the Host…');draw(true)});
-  $('#ac-signout')&&($('#ac-signout').onclick=async()=>{if(!confirm('Sign the streamer account out? Redeems, ads and clips stop until you sign in again.'))return;await hostJ('/api/account/streamer/signout',{});ACC.st=undefined;draw(true)})}
+  $('#ac-restart')&&($('#ac-restart').onclick=()=>armBtn($('#ac-restart'),'Click again: restart the Host (chat pauses a few s)',()=>busy($('#ac-restart'),async()=>{try{await post('/api/modules/host/restart');ACC.restartHint=false;toast('Restarting the Host…')}catch(e){toast('Restart failed: '+(e&&e.message?e.message:e))}draw(true)})));
+  $('#ac-signout')&&($('#ac-signout').onclick=()=>armBtn($('#ac-signout'),'Click again: sign out (redeems, ads, clips stop)',()=>busy($('#ac-signout'),async()=>{const r=await hostJ('/api/account/streamer/signout',{});if(r&&r.ok===false)toast('Sign-out failed: '+(r.error||'HTTP '+(r._status||'?')));ACC.st=undefined;draw(true)})))}
 const openExternal=(u,sys)=>{
   if(!window.__TAURI__)return window.open(u,'_blank');
   // sys: a module asked for the user's real browser even for a local page (e.g. the Spotify player needs Widevine, which WebView2 lacks)
@@ -1224,7 +1225,7 @@ function bindApprovals(){
   $$('[data-ap]').forEach(b=>b.onclick=async()=>{const c=b.closest('[data-id]'),id=c.dataset.id,a=b.dataset.ap;
     if(a==='startedit'){APR.edit=id;draw(true);return}
     if(a==='cancel'){APR.edit=null;draw(true);return}
-    if(a==='undo'&&!confirm('Take this note back out of the bots?'))return;
+    if(a==='undo'){if(!b.dataset.armed){b.dataset.armed='1';b.dataset.lbl=b.textContent;b.textContent='Click again: take it back out';setTimeout(()=>{delete b.dataset.armed;if(b.isConnected)b.textContent=b.dataset.lbl},4000);return}delete b.dataset.armed;b.textContent=b.dataset.lbl}
     const body={id,action:a==='startedit'?'edit':a};const tg=c.querySelector('.ap-target');if(tg)body.target=tg.value;
     if(a==='edit')body.text=c.querySelector('.ap-text').value;
     b.disabled=true;
@@ -1301,6 +1302,16 @@ function bindEconomy(){
 /* Two-click armed button (confirm() is blocked in the webview): the first click changes the label, a second click within 4 s runs fn. */
 function armBtn(b,label,fn){if(b.dataset.arm){clearTimeout(+b.dataset.arm);b.dataset.arm='';b.textContent=b.dataset.lbl;return fn()}
   b.dataset.lbl=b.textContent;b.textContent=label;b.dataset.arm=String(setTimeout(()=>{b.dataset.arm='';if(b.isConnected)b.textContent=b.dataset.lbl},4000))}
+/* Every page button whose handler returns a promise (a POST) ignores further clicks until it settles, whatever page it is on.
+   Handlers that already guard themselves keep working: this uses its own flag, not .disabled. Runs after every bind(). */
+function flyGuard(root){(root||document).querySelectorAll('#page button,#page .btn,#mod-cards button').forEach(b=>{
+  const f=b.onclick;if(!f||f._fly)return;
+  const w=function(e){if(b._fly)return;const r=f.call(this,e);
+    if(r&&typeof r.then==='function'){b._fly=1;b.classList.add('fly');const done=()=>{b._fly=0;b.classList.remove('fly')};r.then(done,done)}
+    return r};
+  w._fly=1;b.onclick=w})}
+/* in-flight guard: the button is dead while its request runs, and comes back even when the request throws */
+async function busy(b,fn){if(!b||b.disabled)return;b.disabled=true;try{return await fn()}finally{if(b.isConnected)b.disabled=false}}
 /* ---- Timers (GET|POST /api/timers) ---- */
 const TM={d:undefined,err:'',open:{},draft:{},pend:{},last:{}};   // draft: unsaved edits per timer card, kept across redraws
 async function loadTimers(force){try{const r=await hostGet('/api/timers');if(r.ok===false||!r.timers)throw new Error(r.error||'no timers list');TM.d=r;TM.err=''}catch(e){TM.d=null;TM.err=String(e&&e.message||e)}if(route==='timers'&&(force||(!document.activeElement?.matches?.('#page input,#page textarea,#page select')&&!Object.keys(TM.draft).length)))draw(true)}
@@ -1738,17 +1749,18 @@ function bindWheel(){
       if(r.ok===false||r._ok===false&&!WG.mock)throw new Error(r.error||(r.errors&&Object.values(r.errors)[0])||('HTTP '+(r._status||'?')));
       a.fields.forEach(f=>{if(f.key in vals)f.value=vals[f.key]});WG.edit[a.id]={};WG.msg=WG.mock&&a.id!=='economy'?'Kept for this preview only (the Host has no /api/tune yet).':'Saved.';toast('Saved '+a.title)}
     catch(e){WG.msg='Could not save: '+(e&&e.message?e.message:e);toast(WG.msg)}draw(true)});
-  $$('[data-wgact]').forEach(b=>b.onclick=async()=>{const act=b.dataset.wgact;if(act==='reset'&&!confirm('Reset the wheel? Entrants and the current round are cleared.'))return;
+  $$('[data-wgact]').forEach(b=>b.onclick=()=>{const act=b.dataset.wgact,run=()=>busy(b,async()=>{
     try{const r=await hostJ('/api/wheel/'+act,{});if(r.ok===false||(!r._ok&&!r.ok))throw new Error(r.error||('HTTP '+(r._status||'?')));toast({spin:'Spinning',new:'New round started',reset:'Wheel reset'}[act])}
-    catch(e){toast('Wheel '+act+' failed: '+(e&&e.message?e.message:e)+(WG.mock?' (the Host has no wheel endpoints yet)':''))}});
-  $('#gv-go')&&($('#gv-go').onclick=async()=>{const who=$('#gv-who').value,login=$('#gv-login').value.trim().toLowerCase().replace(/^@/,''),amt=Number($('#gv-amt').value),why=$('#gv-why').value.trim();
+    catch(e){toast('Wheel '+act+' failed: '+(e&&e.message?e.message:e)+(WG.mock?' (the Host has no wheel endpoints yet)':''))}});if(act==='reset')armBtn(b,'Click again: clear entrants and round',run);else run()});
+  $('#gv-go')&&($('#gv-go').onclick=()=>{const gb=$('#gv-go'),who=$('#gv-who').value,login=$('#gv-login').value.trim().toLowerCase().replace(/^@/,''),amt=Number($('#gv-amt').value),why=$('#gv-why').value.trim();
     if(!amt||(who==='user'&&!login)){WG.gmsg='Enter a login and an amount.';draw(true);return}
-    if(who==='everyone'&&!confirm('Give '+amt+' points to EVERYONE? This cannot be taken back in one click.'))return;
+    const go=()=>busy(gb,async()=>{
     try{let r=await hostJ('/api/economy/grant',{target:who,login,amount:amt,reason:why,silent:true});
       if(!r.ok&&who==='user'&&(r._status===404||!r._ok&&!r.error))r=await hostJ('/api/economy',{adjust:login,delta:amt,by:why||'suite'});
       if(!r.ok)throw new Error(r.error||(who==='everyone'?'the Host has no silent grant for everyone yet':'HTTP '+(r._status||'?')));
       WG.gmsg=r.message||('Done: '+amt+' points '+(who==='everyone'?'to everyone':'to '+login)+'.');toast('Points given')}
     catch(e){WG.gmsg='Could not give points: '+(e&&e.message?e.message:e)}draw(true)});
+    if(who==='everyone')armBtn(gb,'Click again: give '+amt+' points to EVERYONE',go);else go()});
   $('#sm-run')&&($('#sm-run').onclick=async()=>{const g=$('#sm-game').value,bet=+$('#sm-bet').value||1,n=Math.min(1000,Math.max(1,+$('#sm-n').value||1));
     try{const r=await hostJ('/api/gamble/simulate',{game:g,bet,rounds:n});if(!r.ok)throw 0;WG.sim=r}catch{WG.sim=wgSimLocal(g,bet,n)}draw(true)})}
 pages.integrations=()=>{
@@ -2085,8 +2097,8 @@ function bind(){
   if(route==='integrations')bindIntegrations();
   if(route==='settings')bindPortable();
   $$('[data-go]').forEach(e=>e.onclick=()=>{if(e.dataset.commtab){COMM.tab=e.dataset.commtab;try{localStorage.setItem('commTab',COMM.tab)}catch{}}go(e.dataset.go)});
-  $$('[data-dev]').forEach(b=>b.onclick=async()=>{D=await post('/api/device/'+b.dataset.dev);toast(b.dataset.dev==='take'?'This device is now in control':'Control released');draw(true)});
-  $$('[data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');await post(`/api/modules/${a}/${c}`);setTimeout(load,900)});
+  $$('[data-dev]').forEach(b=>b.onclick=async()=>{try{D=await post('/api/device/'+b.dataset.dev);toast(b.dataset.dev==='take'?'This device is now in control':'Control released')}catch{toast('Could not change control: the core did not answer')}draw(true)});
+  $$('[data-act]').forEach(b=>b.onclick=async()=>{const[a,c]=b.dataset.act.split(':');try{const r=await post(`/api/modules/${a}/${c}`);if(r&&r.ok===false)toast(`Could not ${c} ${a}: `+(r.detail||r.error||'refused'))}catch(e){toast(`Could not ${c} ${a}: the core did not answer`)}setTimeout(load,900)});
   $('#d-prerun')&&($('#d-prerun').onclick=async()=>{$('#d-prerun').disabled=true;try{C.pr=await post('/api/prestream/run');toast('Pre-stream check done')}catch{toast('Check failed to run')}draw(true)});
   $('#d-listen')&&($('#d-listen').onclick=async()=>{try{await fetch(LISTEN+'/api/live/auto',{method:'POST'});toast('Listening started');loadListen()}catch{toast('Listen is not running')}});
   $('#s-chan')&&($('#s-chan').onchange=async e=>{await post('/api/channel',{channel:e.target.value});toast('Channel saved')});
@@ -2094,6 +2106,7 @@ function bind(){
   bindPopout();bindSched();bindBackup();bindUpd();bindSnd();
   bindSwitches();
   $$('[data-mlog]').forEach(b=>b.onclick=()=>showLogs(b.dataset.mlog));
+  flyGuard();
   $$('[data-mod]').forEach(i=>i.onchange=()=>post(`/api/modules/${i.dataset.mod}/options`,{[i.dataset.opt]:i.checked}));
 }
 $$('nav .item[data-r]').forEach(i=>i.onclick=()=>go(i.dataset.r));
