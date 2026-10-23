@@ -159,13 +159,26 @@ function reportGeom(label) {      // remembers where this pop-out window sits so
     if (j !== last && g.w > 100) { last = j; api('/api/geom/' + label, {b: g}).catch(() => {}); }
   }, 3000);
 }
+let helloSeen = false;
 function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onmessage = e => on(JSON.parse(e.data));
   ws.onclose = () => setTimeout(connect, 2000);
 }
 function on(ev) {
-  if (ev.type === 'hello') { conns = ev.connectors; cards = ev.cards; render(); if (window.dashViewers) window.dashViewers(ev.viewers); }
+  if (ev.type === 'hello') {
+    conns = ev.connectors; cards = ev.cards;
+    if (!helloSeen) { helloSeen = true; render(); }
+    else {                                        // reconnect: refresh the data only; never rebuild the page (it would drop the view, open cards, scroll and typed text)
+      renderHeader();
+      if (['priority', 'missed'].includes(W.type)) renderCards();
+      else if (W.type === 'launcher') renderLauncher();      // patches changed blocks only
+      else if (W.type === 'status') renderStatus();
+      else if (W.type === 'chat') { if (typeof chatBar === 'function') chatBar(); }
+      else if (W.type === 'dash' && window.dashConn) window.dashConn();
+    }
+    if (window.dashViewers) window.dashViewers(ev.viewers);
+  }
   else if (ev.type === 'viewers') { if (window.dashViewers) window.dashViewers(ev.counts); }
   else if (ev.type === 'conn.status') { conns = conns.filter(c => c.platform !== ev.platform).concat(ev); renderHeader(); if (window.dashConn) window.dashConn(); if (W.type === 'status') renderStatus(); if (W.type === 'chat') { chatBar(); chatCompose(); } }
   else if (ev.type === 'message') {

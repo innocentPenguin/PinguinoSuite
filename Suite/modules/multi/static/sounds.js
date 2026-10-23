@@ -70,7 +70,7 @@ setInterval(async () => {
   try {
     const r = await fetch('/api/newchatters?since=' + c.since); if (!r.ok) return;
     const j = await r.json(); if (j.ts) c.since = j.ts;
-    for (const x of j.items || []) { const row = c.rows[x.kind]; if (row && row.notify) sndNotify(CS_LABEL[x.kind] || 'Chatter', (x.display || x.user || x.name || '') + (x.platform ? ' (' + x.platform + ')' : '')); }
+    for (const x of j.items || []) { const row = c.rows[x.kind]; if (row && (x.notify == null ? row.notify : x.notify)) sndNotify(CS_LABEL[x.kind] || 'Chatter', (x.display || x.user || x.name || '') + (x.platform ? ' (' + x.platform + ')' : '')); }
   } catch (e) { /* try again in 3 s */ }
 }, 3000);
 function sndSave() {
