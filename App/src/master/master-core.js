@@ -135,6 +135,8 @@
     return steps;
   }
   // Overlay-layout game for an activity (Host layouts are tagged with Twitch category names; '' = none). Sent as POST /api/scene-layouts {action:'setgame',profile:'*',game}.
+  const UI_SCALES = [90, 100, 115, 130];
+  const normScale = v => { const n = Math.round(Number(v)); return UI_SCALES.includes(n) ? n : 100; };   // anything else (old or hand-edited storage) falls back to 100
   const gameOf = (sub, game) => (sub === 'end' ? '' : game === 'fn' || /^(boxfights|zonewars|fnviewers)$/.test(sub) ? 'Fortnite' : 'Rocket League');   // game: 'fn'/'rl' prefix of '!activity fn koth'
   // Recap card: {text|line, clip:{title,url,views}} from the Host -> what the header card and the Stream tab show. clip.url only https.
   function recapView(j) {
@@ -370,5 +372,5 @@
     }
   }
 
-  return { createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
+  return { UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, fmtAgo, activityLine, sig };
 });

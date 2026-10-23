@@ -896,6 +896,9 @@
     if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') renderFeed();
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
+  { const sel = $('#b-scale'), apply = v => { document.documentElement.style.zoom = v === 100 ? '' : String(v / 100); };   // zoom on this page's root only; the Suite shell is a different document
+    sel.innerHTML = C.UI_SCALES.map(v => `<option value="${v}">${v} %</option>`).join(''); const cur = C.normScale(ls.get('scale', 100)); sel.value = String(cur); apply(cur);
+    sel.onchange = () => { const v = C.normScale(sel.value); ls.set('scale', v); apply(v); }; }
   $('#b-help').onclick = () => { $('#help').hidden = false; }; $('#help-close').onclick = () => { $('#help').hidden = true; };
   $('#help').addEventListener('click', e => { if (e.target.id === 'help') $('#help').hidden = true; });
   ['scenes', 'sources'].forEach(p => $('#' + p).addEventListener('focus', () => { ui.pane = p; p === 'scenes' ? renderScenes() : renderSources(); }));

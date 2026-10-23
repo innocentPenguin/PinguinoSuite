@@ -255,6 +255,12 @@ await t('stream info: description + tags reach Multi, schedule body carries star
   assert.equal((await api.get('/api/channel/info')).json.ok, true);
 });
 
+await t('UI scale: only 90/100/115/130 are accepted, junk falls back to 100; select and apply wired in the page', async () => {
+  assert.deepEqual(C.UI_SCALES, [90, 100, 115, 130]); assert.equal(C.normScale(115), 115); assert.equal(C.normScale('130'), 130);
+  for (const bad of [null, undefined, 'x', 0, 500, 99, -100, NaN]) assert.equal(C.normScale(bad), 100);
+  const html = fs.readFileSync(new URL('../../App/src/master/master.html', import.meta.url), 'utf8'); assert.ok(/id="b-scale"/.test(html));
+  const js = fs.readFileSync(new URL('../../App/src/master/master.js', import.meta.url), 'utf8'); assert.ok(js.includes('documentElement.style.zoom') && js.includes("ls.set('scale'"));
+});
 await t('last stream card: recapView shapes the Host recap, only https clips link; mock preview round trip', async () => {
   const v = C.recapView((await api.get('/api/recap/preview')).json); assert.equal(v.text, 'Recap text'); assert.equal(v.clipUrl, 'https://clips.twitch.tv/x'); assert.equal(v.views, 12); assert.equal(v.hasClip, true);
   assert.equal(C.recapView({ line: 'L', clip: { url: 'javascript:alert(1)', title: 'x' } }).hasClip, false); assert.equal(C.recapView({ line: 'L', clip: null }).text, 'L'); assert.equal(C.recapView(null).text, '');
