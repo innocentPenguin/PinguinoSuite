@@ -57,7 +57,7 @@
       "nav": "Chat",
       "icon": "💬",
       "section": "Modules",
-      "path": "/?type=chat",
+      "path": "/",
       "order": 20,
       "replaces": "chat"
     },
