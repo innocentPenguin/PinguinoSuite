@@ -14,7 +14,7 @@ import config
 import console_log
 from models import ChatMessage
 
-HOST = "http://127.0.0.1:8770"
+HOST = os.environ.get("MULTI_HOST_URL") or "http://127.0.0.1:8770"
 ALWAYS = ("follow", "redeem", "ban", "unban", "unmod", "mod", "shoutout", "raid_out", "poll", "prediction", "hype", "streak")                 # not available through the Twitch chat connection
 FALLBACK = ("sub", "resub", "gift", "cheer", "raid")
 MODWORDS = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "modded"}

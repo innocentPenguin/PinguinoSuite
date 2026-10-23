@@ -1798,3 +1798,14 @@ def test_goal_defaults_to_manual_and_counts_only_its_kind():
     g.set({"kind": "follow"})
     g.observe("follow")
     assert g.state()["current"] == 1
+
+
+def test_clip_hosts_are_twitch_only_unless_rehearsal_env(monkeypatch):
+    import alerts as al
+    c = {"clip": dict(al.CLIP_DEFAULT)}
+    ev = lambda u: {"clip": {"url": u, "duration_s": 5}}
+    assert al.Engine._clip(c, ev("http://127.0.0.1:8785/clip.webm")) is None
+    assert al.Engine._clip(c, ev("https://evil.example/x.mp4")) is None
+    monkeypatch.setattr(al, "_EXTRA", ["127.0.0.1:8785"])
+    assert al.Engine._clip(c, ev("http://127.0.0.1:8785/clip.webm"))["url"].endswith("clip.webm")
+    assert al.Engine._clip(c, ev("http://127.0.0.1:9999/clip.webm")) is None

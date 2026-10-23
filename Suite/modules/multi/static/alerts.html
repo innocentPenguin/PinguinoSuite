@@ -81,7 +81,7 @@ function build(a) {
   if (a.clip) {                       // shoutout clip: video above the name card, capped at max_s, ends cleanly
     const v = document.createElement('video'), c = a.clip;
     v.className = 'clipv'; v.src = c.url; v.playsInline = true; v.muted = !!c.muted; v.volume = Math.max(0, Math.min(1, c.volume / 100));
-    const stop = () => { v.pause(); v.style.opacity = 0; };
+    const stop = () => { v.pause(); v.style.opacity = 0; const tx = el.querySelector('.tx'); if (tx && tx.hidden) { el.style.transition = 'opacity .5s'; el.style.opacity = 0; } };   // a clip-only card leaves with its clip instead of lingering empty
     const fail = () => {               // clip cannot load/play: never leave an empty box, show the name card instead
       v.remove(); const pb = el.querySelector('.pb'); if (pb) pb.remove();
       const tx = el.querySelector('.tx'), fb = c.fallback || {};

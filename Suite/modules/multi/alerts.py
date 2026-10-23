@@ -274,6 +274,7 @@ _VAR = re.compile(r"\{(user|amount|tier|months|message|level|recipient|streak|ho
 
 
 CLIP_URL = re.compile(r"https://(clips-media-assets2\.twitch\.tv|production\.assets\.clips\.twitchcdn\.net|clips\.twitch\.tv)/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]{1,300}")
+_EXTRA = [h.strip() for h in __import__("os").environ.get("MULTI_CLIP_EXTRA_HOSTS", "").split(",") if h.strip()]   # rehearsal only (scripts/fake_host.py): extra http clip hosts
 DEFAULT_MERGE = "{n} new viewers: {names}"
 VALUE_OF = {"streak": "streak", "watchtime": "hours", "anniversary": "years"}
 
@@ -513,7 +514,7 @@ class Engine:
         if not cc or not cc.get("enabled") or not isinstance(cl, dict):
             return None
         u = str(cl.get("url") or "")
-        if not CLIP_URL.fullmatch(u):
+        if not CLIP_URL.fullmatch(u) and not any(re.fullmatch(r"http://" + re.escape(h) + r"/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]{1,300}", u) for h in _EXTRA):
             return None
         return {"url": u, "title": str(cl.get("title") or "")[:100], "duration_s": max(0, min(120, _int(cl.get("duration_s")))), "muted": bool(cc["muted"]),
                 "volume": cc["volume"], "max_s": cc["max_s"], "progress": bool(cc["progress_bar"])}

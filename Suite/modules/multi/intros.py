@@ -13,7 +13,7 @@ import alert_media
 import config
 import console_log
 
-HOST = "http://127.0.0.1:8770"
+HOST = os.environ.get("MULTI_HOST_URL") or "http://127.0.0.1:8770"
 # The Host's plain GET /api/intro is its OLD sub-intro video system (returns its settings and queue), so viewer intros live
 # on their own path. The Host must answer {text, sound_id, status: "approved"} there; anything without an explicit
 # status "approved" is treated as "no intro".

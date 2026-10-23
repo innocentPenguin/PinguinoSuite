@@ -118,3 +118,9 @@ Bugs fixed:
 - Test events for goal_progress / poll / prediction / milestone / shop / guess showed "hello colony" and "0": test_event now has realistic text and amounts per type.
 
 Not covered: shoutout clip playback (needs a Twitch clip host, see item 4), audio.
+
+## Intro + shoutout rehearsal without the Host (2026-10-23, worker 41)
+
+`Suite/modules/multi/scripts/fake_host.py` is a stand-in Host: `serve` answers GET /api/intro/viewer (and /api/intro) with `{text, sound_id, status:"approved"}` and serves a test clip; `shoutout` fires a shoutout with that clip through POST /api/alerts/fire. Run Multi with `MULTI_HOST_URL=http://127.0.0.1:<fake port>` and `MULTI_CLIP_EXTRA_HOSTS=127.0.0.1:<fake port>` (both rehearsal-only; production clip hosts stay Twitch-only).
+Result in the browser: a first-time chatter message -> "NewPenguin has arrived / Hi chat, ..." intro card; the shoutout card plays the clip after the 10 s delay with the progress bar, then the clip-only card now fades out with the clip (it used to linger empty).
+Finding: Multi asks the Host for `/api/intro/viewer`, NOT `/api/intro` (the plain path is the Host's old sub-intro video system and answers 200 with its settings/queue; that 200 was not a viewer intro). The Host must answer `/api/intro/viewer?platform=&user_id=` with status "approved" for intros to play.
