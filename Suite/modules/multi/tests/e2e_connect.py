@@ -1,4 +1,4 @@
-"""Real-server check of the Kick/YouTube sign-in routes through the origin/token middleware (throwaway port 8797, temp data dir, no network).
+r"""Real-server check of the Kick/YouTube sign-in routes through the origin/token middleware (throwaway port 8797, temp data dir, no network).
 Run:  ..\..\.venv\Scripts\python.exe tests\e2e_connect.py"""
 import json
 import pathlib
