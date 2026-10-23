@@ -119,6 +119,16 @@ kbd{background:#232326;border:1px solid var(--line);border-radius:4px;padding:0 
       <label style="margin-left:auto"><input type="checkbox" id="s-auto"> Auto-learn from new VODs &amp; clips</label>
     </div>
   </div>
+  <div class="panel"><b>Settings</b>
+    <div class="row" style="margin-top:8px">
+      <label title="Off by default. A note on a line can teach the rules and vocabulary."><input type="checkbox" id="s-notes"> Learn from my notes</label>
+      <span class="dim">Note formats: <code>wrong -&gt; right</code>, <code>vocab: A, B</code> (also <code>wrong: word</code> to push a line up the queue). Separate with ; or new lines.</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label>Bot speech <select id="s-bot"><option value="drop">drop (ignore the bot's own voice)</option><option value="tag">tag (keep, marked as bot)</option><option value="off">off (no filter)</option></select></label>
+      <span class="dim">What to do with lines that overlap the stream bot talking.</span>
+    </div>
+  </div>
   <div class="panel"><b>Add audio</b>
     <div class="row" style="margin-top:8px">
       <input type="text" id="s-url" placeholder="Twitch VOD / clip / YouTube URL" style="flex:1;min-width:240px">
@@ -240,7 +250,7 @@ function setLive(on){listening=on;const b=$('#go');b.textContent=on?'■ Stop':'
 (async()=>{const [devs,st]=await Promise.all([api('/api/devices'),api('/api/status')]);
   $('#dev').innerHTML='<option value="">System default mic</option>'+devs.map(d=>`<option value="${d.index}">${esc(d.name)} (${esc(d.api)})</option>`).join('');
   {const s=st.settings,d=devs.find(x=>s.device_name&&x.name===s.device_name&&(!s.device_hostapi||x.api===s.device_hostapi))||devs.find(x=>s.device_name&&x.name===s.device_name)||(!s.device_name&&devs.find(x=>x.index===s.device));if(d)$('#dev').value=d.index}setLive(st.listening);showAlert(st.mic_alert);
-  $('#s-chan').value=st.settings.channel;$('#s-auto').checked=st.settings.autolearn;
+  $('#s-chan').value=st.settings.channel;$('#s-auto').checked=st.settings.autolearn;$('#s-notes').checked=!!st.settings.learn_from_notes;$('#s-bot').value=st.settings.bot_speech||'drop';
   if(st.live_session)for(const s of await api('/api/segments?session='+st.live_session))$('#feed').append(segEl(s))})();
 $('#go').onclick=async()=>{try{if(listening){await api('/api/live/stop',{method:'POST'});setLive(false)}else{
   const v=$('#dev').value;await api('/api/live/start',{body:{device:v===''?null:+v}});setLive(true);$('#feed').innerHTML=''}}catch(e){toast(e.message,1)}};
@@ -319,6 +329,8 @@ $('#s-refresh').onclick=async()=>{$('#tw').textContent='Loading…';try{await ap
   window._tw=items;$('#tw').innerHTML=items.map((i,n)=>`<div class="item"><span class="badge">${i.kind}</span><span class="ti" title="${esc(i.title)}">${esc(i.title)}</span><span class="dim">${fmt(i.duration)} · ${i.created.slice(0,10)}</span>
    ${i.session?`<span class="badge ${i.session.status==='done'?'corrected':''}">${i.session.status}</span>`:`<button class="b" data-n="${n}">Learn from this</button>`}</div>`).join('')||'Nothing found.';
   $$('#tw button').forEach(b=>b.onclick=async()=>{const i=window._tw[b.dataset.n];await api('/api/queue',{body:{kind:i.kind,title:i.title,source_id:i.source_id,url:i.url}});b.replaceWith('queued');loadJobs()})}catch(e){$('#tw').textContent='';toast(e.message,1)}};
+$('#s-notes').onchange=async e=>{try{await api('/api/settings',{body:{learn_from_notes:e.target.checked}});toast(e.target.checked?'Learning from notes on':'Learning from notes off')}catch(x){toast(x.message,1)}};
+$('#s-bot').onchange=async e=>{try{await api('/api/settings',{body:{bot_speech:e.target.value}});toast('Bot speech: '+e.target.value)}catch(x){toast(x.message,1)}};
 $('#s-auto').onchange=async e=>{await api('/api/settings',{body:{autolearn:e.target.checked}});toast(e.target.checked?'Auto-learn on — checking Twitch…':'Auto-learn off')};
 $('#s-url-go').onclick=async()=>{const u=$('#s-url').value.trim();if(!u)return;try{await api('/api/ingest-url',{body:{url:u}});$('#s-url').value='';loadJobs()}catch(e){toast(e.message,1)}};
 $('#s-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;const fd=new FormData();fd.append('file',f);try{await api('/api/upload',{method:'POST',body:fd});toast('Uploaded — transcribing');loadJobs()}catch(x){toast(x.message,1)}e.target.value=''};
