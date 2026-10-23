@@ -35,7 +35,7 @@
   /* One name at a time: the stream name and the Epic name crossfade (html.alt = showing the Epic name). Timing: ALT_SECONDS / FADE_MS below. */
   :root { --fade:.4s; }
   .nm { position:relative; flex:1 1 auto; min-width:0; display:block; overflow:hidden; white-space:nowrap; }
-  .nm > span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:opacity var(--fade) ease, transform var(--fade) ease; }
+  .nm > span { display:block; unicode-bidi:plaintext; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:opacity var(--fade) ease, transform var(--fade) ease; }
   .nm .n2 { position:absolute; left:0; right:0; top:0; opacity:0; transform:translateY(40%); }
   html.alt .nm:not(.one) .n1 { opacity:0; transform:translateY(-40%); }
   html.alt .nm .n2 { opacity:1; transform:none; }

@@ -23,7 +23,7 @@ body.clear{background:transparent}
 #cv{width:100%;height:100%;display:block}
 #wheelbox.landed #cv{animation:glow .9s ease-out}
 #hub{position:absolute;left:50%;top:50%;width:min(calc(var(--wd) * .216),220px);height:min(calc(var(--wd) * .216),220px);transform:translate(-50%,-50%);border-radius:50%;object-fit:cover;border:calc(var(--wd) * .008) solid #ff9900;background:#22252b;pointer-events:none;image-rendering:auto;will-change:transform;backface-visibility:hidden}
-#pick{z-index:2;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;text-align:center;font-weight:900;color:#fff;background:#141414e6;border:.9vmin solid var(--accent);border-radius:50vmin;padding:1.6vmin 4vmin;font-size:calc(var(--wd) * .1);-webkit-text-stroke:.6vmin #000;paint-order:stroke fill;box-shadow:0 0 0 .6vmin #000,0 0 6vmin #000e,0 0 5vmin #ff9900aa;overflow-wrap:anywhere;animation:slam .6s cubic-bezier(.2,1.7,.4,1)}
+#pick{overflow-wrap:anywhere;z-index:2;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;text-align:center;font-weight:900;color:#fff;background:#141414e6;border:.9vmin solid var(--accent);border-radius:50vmin;padding:1.6vmin 4vmin;font-size:calc(var(--wd) * .1);-webkit-text-stroke:.6vmin #000;paint-order:stroke fill;box-shadow:0 0 0 .6vmin #000,0 0 6vmin #000e,0 0 5vmin #ff9900aa;overflow-wrap:anywhere;animation:slam .6s cubic-bezier(.2,1.7,.4,1)}
 #pick[hidden]{display:none}
 #teams{width:100%}
 #teams:empty{display:none}
@@ -42,7 +42,7 @@ body.clear{background:transparent}
 #big:empty{display:none}
 #final{display:none!important;font-size:2.6vmin;font-weight:700;text-align:center;max-width:100%;overflow-wrap:anywhere;line-height:1.35;background:var(--card);border:.3vmin solid #ff990066;border-radius:1.8vmin;padding:1.2vmin 2vmin}
 #final:empty{display:none}
-#wait{font-size:2.1vmin;opacity:.8;text-align:center}
+#wait{max-width:100%;overflow-wrap:anywhere;font-size:2.1vmin;opacity:.8;text-align:center}
 /* portrait source (layout=vertical, or auto when the source is clearly taller than wide): wheel on top, team box below, camera zone ignored */
 body.vertical{--l:0vw!important;--r:0vw!important}
 body.vertical #stage{bottom:34vh;left:1vw;right:1vw;padding:1vmin 1vw 0}
