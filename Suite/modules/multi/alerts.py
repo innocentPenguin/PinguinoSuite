@@ -388,6 +388,7 @@ class Engine:
             if k in ev:
                 ev[k] = str(ev[k] if ev[k] is not None else "")[:n]
         ev["display"] = ev.get("display") or ev["user"]
+        real_id = bool(str(ev.get("id") or "").strip())               # a stable id from the source dedupes by id alone; only id-less events use the 10 s key
         eid = str(ev.get("id") or f"a:{time.time_ns()}")
         ev["id"] = eid
         now = time.time()
@@ -395,7 +396,7 @@ class Engine:
             if eid in self.seen:
                 return self._note(ev, "duplicate", "already fired (replay)")
             key = (t, str(ev.get("platform") or "") + ":" + ev["user"].lower(), value(ev, VALUE_OF[t]) if t in VALUE_OF else int(ev.get("amount") or 0))
-            if now - self.recent.get(key, 0) < self.cfg["global"]["dedupe_s"]:
+            if not real_id and now - self.recent.get(key, 0) < self.cfg["global"]["dedupe_s"]:
                 return self._note(ev, "duplicate", "same event just fired")
             self.seen.append(eid)
             self.store.kv_set("alerts:seen", list(self.seen))

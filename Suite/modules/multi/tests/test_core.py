@@ -1218,7 +1218,7 @@ def test_alert_queue_priority_and_dedupe(tmp_path):
     eng.submit({"id": "2", "type": "raid", "user": "b", "amount": 30})
     eng.submit({"id": "3", "type": "sub", "user": "c", "tier": "3"})
     assert eng.submit({"id": "1", "type": "follow", "user": "a"})[0] is False            # replay of the same id
-    assert eng.submit({"id": "9", "type": "follow", "user": "a"})[0] is False            # same thing again within 10 s
+    assert eng.submit({"type": "follow", "user": "a"})[0] is False                       # same thing again within 10 s, no id to tell them apart
     import heapq
     order = [heapq.heappop(eng.heap)[2]["type"] for _ in range(len(eng.heap))]
     assert order == ["raid", "sub", "follow"]                                           # highest priority first, one queue
@@ -1614,6 +1614,15 @@ def test_alert_queue_merge_overflow_remove(tmp_path):
     c["profiles"]["Penguin"]["types"]["raid"]["delay_ms"] = 999999
     e.save(c)
     assert e.cfg["profiles"]["Penguin"]["types"]["raid"]["delay_ms"] == 30000
+
+
+def test_dedupe_by_real_id_only_when_there_is_one(tmp_path):
+    alerts, eng, out = _engine(tmp_path)
+    cheer = lambda **k: eng.submit(dict({"type": "cheer", "user": "fan", "amount": 100, "platform": "twitch"}, **k))
+    assert cheer(id="c1")[0] and cheer(id="c2")[0]            # two real cheers of one size within 10 s: two alerts
+    assert cheer(id="c1")[0] is False                         # the same id twice: one
+    assert cheer(id="  ", user="other")[0] and cheer(user="other")[0] is False   # blank id counts as no id: 10 s key applies
+    assert len(eng.heap) == 3
 
 
 def test_loan_give_returning_chatter_are_off_by_default(tmp_path):
