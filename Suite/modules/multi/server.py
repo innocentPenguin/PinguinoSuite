@@ -1388,6 +1388,17 @@ async def pop_settings(request: Request):
     return pipeline.pop.info()
 
 
+@app.get("/api/sounds/files")
+def sounds_files():
+    """The .mp3/.wav files in the shared sounds folder, for the sound pick-list."""
+    d = config.ROOT.parents[2] / "Data" / "sounds"
+    try:
+        files = sorted((f for f in d.iterdir() if f.is_file() and f.suffix.lower() in (".mp3", ".wav")), key=lambda f: f.name.lower())
+    except OSError:
+        files = []
+    return {"dir": d.as_posix(), "files": [{"name": f.name, "path": str(f)} for f in files]}
+
+
 @app.post("/api/sounds/reset")
 def sounds_reset():
     """Put every ding and chat-pop setting back to its default (the sound files themselves are not touched)."""

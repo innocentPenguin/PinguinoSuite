@@ -144,3 +144,11 @@ def test_test_endpoint_kinds_and_newchatter_kinds(monkeypatch):
         assert any(x["kind"] == "new_stream" for x in c.get("/api/newchatters?since=0").json()["items"])
     finally:
         server.pipeline.ding.recent.pop()
+
+
+def test_sounds_files_lists_only_audio(monkeypatch, tmp_path):
+    c, st, h = _client(monkeypatch)
+    r = c.get("/api/sounds/files", headers=h)
+    assert r.status_code == 200 and r.json()["dir"].endswith("Data/sounds")
+    names = [f["name"] for f in r.json()["files"]]
+    assert names == sorted(names, key=str.lower) and all(n.lower().endswith((".mp3", ".wav")) for n in names)
