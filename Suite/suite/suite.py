@@ -1042,7 +1042,7 @@ def set_autostart(on):
 # ------------------------------------------------------------------ app
 @asynccontextmanager
 def write_core_pid():
-    """Data\pids\core.json: lets a module tell "my core was restarted" (new pid) from "my core is dead" (see Listen's corewatch, opt-in)."""
+    """Data/pids/core.json: lets a module tell "my core was restarted" (new pid) from "my core is dead" (see Listen corewatch, opt-in)."""
     try:
         PIDS.mkdir(parents=True, exist_ok=True)
         (PIDS / "core.json").write_text(json.dumps({"pid": os.getpid(), "started": time.time()}), "utf8")
