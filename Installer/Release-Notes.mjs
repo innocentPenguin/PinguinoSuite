@@ -27,7 +27,7 @@ export function groupOf(files) {
 export function plain(subject) {
   let s = String(subject || '').replace(SECRET, '[removed]').replace(EMAIL, '[removed]').trim();
   s = s.replace(/^(\w[\w /-]{0,24}):\s+/, '');   // "Updater: undo ..." -> "undo ..."
-  s = s.replace(/\s*\(#?\d+\)\s*$/, '').replace(/[.\s]+$/, '');
+  s = s.replace(/[.\s]+$/, '').replace(/\s*\(#?\d+\)$/, '').replace(/[.\s]+$/, '');
   if (!s) return '';
   if (s.length > 110) s = s.slice(0, 107).replace(/\s+\S*$/, '') + '...';
   return s[0].toUpperCase() + s.slice(1);
