@@ -1,5 +1,6 @@
 // INDEX Build-Release.mjs: packs the CURRENT built Suite into a release folder (suite-<ver>.zip + manifest.json [+ manifest.sig]) for the Installer / Updater / GitHub release.
-// node Installer/Build-Release.mjs [--version 1.2.3] [--out Installer/dist/release] [--sign-key <ed25519 private key b64 file>]
+// node Installer/Build-Release.mjs [--version 1.2.3] [--out Installer/dist/release] [--sign-key <ed25519 private key b64 file>] [--notes-file <text file, e.g. from Release-Notes.mjs>] [--root <tree>]
+// --root packs another tree with the same layout (the release self-test uses a tiny fake one); default is this repo.
 // Read-only on the tree: never launches, stops or builds anything. Whitelist only; a deny-scan aborts if anything secret-looking would ship.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,8 +9,8 @@ import { writeZip } from '../Suite/updater/lib/zip.mjs';
 import { sha256 } from '../Suite/updater/lib/apply.mjs';
 import { hashComponents, SKIP_DIR, SKIP_FILE } from '../Suite/updater/lib/components.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2), opt = n => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; };
+const ROOT = opt('root') ? path.resolve(opt('root')) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const d = new Date(), p2 = n => String(n).padStart(2, '0');
 const version = opt('version') || `1.${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}.${p2(d.getHours())}${p2(d.getMinutes())}`;
 const outDir = path.resolve(opt('out') || path.join(ROOT, 'Installer', 'dist', 'release'));
@@ -50,7 +51,7 @@ const components = hashComponents(entries.map(e => ({ rel: e.name, data: e.data 
 fs.mkdirSync(outDir, { recursive: true });
 const zname = `suite-${version}.zip`;
 fs.writeFileSync(path.join(outDir, zname), zip);
-const manifestObj = { schema: 1, channel: 'stable', version, released: d.toISOString(), notes: `${files.length} files`, components, files: [{ name: zname, size: zip.length, sha256: sha256(zip), url: zname }] };
+const manifestObj = { schema: 1, channel: 'stable', version, released: d.toISOString(), notes: (opt('notes-file') ? fs.readFileSync(path.resolve(opt('notes-file')), 'utf8').trim().slice(0, 2000) : '') || `${files.length} files`, components, files: [{ name: zname, size: zip.length, sha256: sha256(zip), url: zname }] };
 const manifest = JSON.stringify(manifestObj, null, 2);
 fs.writeFileSync(path.join(outDir, 'manifest.json'), manifest);
 if (opt('sign-key')) {

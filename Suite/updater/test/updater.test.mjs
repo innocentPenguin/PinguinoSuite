@@ -576,3 +576,18 @@ test('a lock left by a dead updater does not block for 30 minutes; a live one st
   assert.equal(r.ok, true);
   function require_dead_pid() { const c = execFileSync(process.execPath, ['-e', 'console.log(process.pid)']); return parseInt(String(c).trim(), 10); }
 });
+
+// ---- release notes (Installer/Release-Notes.mjs) ----
+import { buildNotes, groupOf, plain, parseLog } from '../../../Installer/Release-Notes.mjs';
+test('release notes: grouped, plain, no secrets or addresses, docs-only left out, capped', () => {
+  assert.equal(groupOf(['PinguinoLite/src/index.html', 'Docs/x.md']), 'Lite'); assert.equal(groupOf(['App/src/master/master.js']), 'Master');
+  assert.equal(groupOf(['Suite/suite/core.py']), 'Core'); assert.equal(groupOf(['Installer/install.mjs']), 'Suite'); assert.equal(groupOf(['Docs/a.md', 'README.md']), null);
+  assert.equal(plain('Updater: undo an update (#12).'), 'Undo an update');
+  assert.equal(plain('fix login token=abcdef123456 for ivan@example.com'), 'Fix login [removed] for [removed]');
+  const raw = '\x1eLite: show hints\n\nPinguinoLite/src/index.html\n\x1eDocs: words\n\nDocs/a.md\n\x1eWIP thing\n\nSuite/x.py\n\x1eShow hints\n\nPinguinoLite/a\n';
+  const r = buildNotes(parseLog(raw));
+  assert.equal(r.text, 'Lite:\n- Show hints'); assert.equal(r.count, 1);
+  const many = buildNotes(Array.from({ length: 200 }, (_, i) => ({ subject: `Change number ${i} with a fairly long description here`, files: ['Suite/x.py'] })));
+  assert.ok(many.text.length < 2000 && /and \d+ more change/.test(many.text));
+  assert.doesNotMatch(buildNotes([{ subject: 'x ghp_abcdefghijklmnopqrstuvwxyz0123', files: ['Suite/a'] }]).text, /ghp_/);
+});
