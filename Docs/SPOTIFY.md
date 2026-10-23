@@ -128,5 +128,5 @@ Mods and the streamer: `!srban <user>` stops that viewer from requesting (reply:
 
 - Ivan picks it on the Spotify page, Setup tab (settings `channel_playlist_id` / `channel_playlist_name`). `GET /api/playlists` lists his playlists, `POST /api/channel-playlist {id,name}` sets it (empty id clears).
 - `POST /api/channel-playlist/add {user, track?}` adds the playing song (or a track id) -> `{ok, code: added|duplicate|no_playlist|none|rate|error, title, playlist}`. Dedupes against the playlist, rate limit 10/min overall and 4/min per user, Logs entry (source `playlist`).
-- Site: push `status.channelPlaylist = {id,name}|null`; mod event `{type:"mod", action:"playlist-add", value:<optional 22-char track id>}`; ack reasons `duplicate`, `no_playlist`, `rate_limited`.
+- Site: push `status.channelPlaylist = {name}|null` (name only, never the id); mod event `{type:"mod", action:"playlist_add", value:<track id, 10-30 alnum, optional>}`; ack `{ok, reason}` with reason added|duplicate|no_playlist|rate_limited|error.
 - Logs tab: `GET /api/logs?since=`. Vote skip: `/api/chat-command` takes `activeChatters` and `skipNeed`.

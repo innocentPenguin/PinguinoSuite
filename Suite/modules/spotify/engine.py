@@ -916,7 +916,7 @@ class Engine:
             return {"ok": False, "code": "no_playlist", "error": "no channel playlist chosen (Setup tab)"}
         t = self.pb["track"] if self.pb and self.pb["track"] else None
         if track_id:
-            if not re.fullmatch(r"[A-Za-z0-9]{22}", str(track_id)):
+            if not re.fullmatch(r"[A-Za-z0-9]{10,30}", str(track_id)):
                 return {"ok": False, "code": "none", "error": "bad track id"}
             tid, title = str(track_id), ""
         elif t:
@@ -1180,7 +1180,7 @@ class Engine:
                       "requestedBy": (self.now_item or {}).get("requester") or None, "progressAt": int(self.pb_at * 1000)}
             return {"v": 1, "updatedAt": ms,
                     "status": {"requestsOpen": bool(s["requests_open"]), "paused": bool(pb and not pb["is_playing"]), "maxQueue": s["queue_max"],
-                               "channelPlaylist": ({"id": s["channel_playlist_id"], "name": s["channel_playlist_name"]} if s.get("channel_playlist_id") else None)},
+                               "channelPlaylist": ({"name": s["channel_playlist_name"] or "Stream playlist"} if s.get("channel_playlist_id") else None)},
                     "nowPlaying": np,
                     "queue": [{"rid": i["id"], "id": i["track_id"], "title": i["name"], "artists": i["artists"], "art": i["art"],
                                "durationMs": i["duration_ms"], "requestedBy": i["requester"] or "", "votes": len(i.get("voters", []))}

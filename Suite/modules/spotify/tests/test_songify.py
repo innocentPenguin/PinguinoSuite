@@ -305,7 +305,7 @@ class SongifyTests(unittest.TestCase):
         for n in range(4, 9):
             self.e.playlist_add("spam", ("id%d" % n).ljust(22, "x"))
         self.assertEqual(self.e.playlist_add("spam", "idzzzzzzzzzzzzzzzzzzzz"[:22].ljust(22, "z"))["code"], "rate")
-        self.assertEqual(self.e.site_snapshot()["status"]["channelPlaylist"]["name"], "Stream faves")
+        self.assertEqual(self.e.site_snapshot()["status"]["channelPlaylist"], {"name": "Stream faves"})
 
     def test_leaderboard(self):
         self.sr("ann", 3)
