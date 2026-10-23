@@ -64,7 +64,9 @@ function dTop() {
     <button class="d-btn" data-d="add">+ Add</button><button class="d-btn" data-d="lock" title="${DASH.lock ? 'Layout locked' : 'Layout unlocked'}">${DASH.lock ? '&#128274;' : '&#128275;'}</button><span class="grow"></span><span class="d-viewers" id="d-gifts" title="Gift subs this session and the top gifter"></span><span class="d-viewers" id="d-vtot" title="People watching live right now"></span>
     <button class="d-btn d-search" data-d="search">&#128269; Search <kbd>Ctrl + K</kbd></button><button class="d-btn" data-d="settings" title="Text, highlights, sounds, split chat">&#9881;</button><a class="d-btn" href="/?type=obs&widget=chat" title="OBS widgets">OBS</a><a class="d-btn" href="/?type=launcher" title="Setup and connections">?</a>`;
 }
-const dViewTxt = p => { const n = DASH.viewers[p]; return n == null ? '' : '&#128065; ' + Number(n).toLocaleString(); };
+// counts arrive as {n, live, ts} per platform (older builds sent plain numbers); only a real number is shown
+const dViewN = p => { const v = DASH.viewers[p], n = v && typeof v === 'object' ? v.n : v; return typeof n === 'number' && isFinite(n) ? n : null; };
+const dViewTxt = p => { const n = dViewN(p); return n == null ? '' : '&#128065; ' + n.toLocaleString(); };
 function dGifts() {
   const g = $('#d-gifts'); if (!g) return; const by = {}; let tot = 0;
   msgs.filter(m => m.event === 'gift').forEach(m => { const n = m.amount || 1; tot += n; const u = dName(m); by[u] = (by[u] || 0) + n; });
@@ -74,7 +76,7 @@ function dGifts() {
 function dViewRefresh() {
   dGifts();
   document.querySelectorAll('[data-vp]').forEach(e => { e.innerHTML = dViewTxt(e.dataset.vp); });
-  const t = $('#d-vtot'); if (!t) return; const v = Object.values(DASH.viewers).filter(x => x != null);
+  const t = $('#d-vtot'); if (!t) return; const v = Object.keys(DASH.viewers).map(dViewN).filter(x => x != null);
   t.innerHTML = v.length ? '&#128065; ' + v.reduce((a, b) => a + b, 0).toLocaleString() + ' watching' : '';
 }
 window.dashViewers = c => { if (c) DASH.viewers = c; if (W.type === 'dash') dViewRefresh(); };
@@ -106,7 +108,7 @@ function dRowActivity(m) {
 function dRowChat(m) {
   const col = colourOf(m) || (m.platform === 'twitch' ? '#a970ff' : '#ff8a1f');
   if (m.event) return `<div class="d-row notice" data-id="${esc(m.id)}">${dIcon(m.platform)}<span><b>${esc(dName(m))}</b> ${dLink(esc(dRest(m) || m.text))}</span></div>`;
-  return `<div class="d-row ${isBot(m) ? 'bot' : ''}" data-id="${esc(m.id)}">${dIcon(m.platform)}<span>${badgeHtml(m)}<b style="color:${col}">${esc(dName(m))}</b>: ${dLink(bodyHtml(m))}</span></div>`;
+  return `<div class="d-row ${isBot(m) ? 'bot' : ''}" data-id="${esc(m.id)}">${dIcon(m.platform)}<span>${badgeHtml(m)}<b style="color:${col}">${esc(dName(m))}</b>: ${bodyHtml(m, dLink)}</span></div>`;
 }
 function dFill() {
   const a = $('#d-l-activity'), c = $('#d-l-chat');
@@ -186,7 +188,7 @@ document.addEventListener('click', async e => {
     dMenu(r.left, r.bottom, [[`${c.label || p}: ${c.status || '?'}${c.detail ? ' - ' + c.detail : ''}`, () => {}], '-', ['Show only this source', () => { DASH.src = p; dashSave(); renderDash(); }], ['Connection settings', () => { location.href = '/'; }], ['Pop out its chat', () => popOut('dash-' + p, location.origin + '/?type=dash&panel=chat', c.label || p, {w: 520, h: 800})]]); }
   else if (a === 'rowmenu') { e.stopPropagation(); const u = t.dataset.u;
     dMenu(r.left - 150, r.bottom, [['Copy name', () => navigator.clipboard && navigator.clipboard.writeText(u)], ['Show only this person', () => { DASH.user = u; dFill(); }], ['Clear person filter', () => { DASH.user = ''; dFill(); }], ['Hide this person here', () => { DASH.ign.add(u); dFill(); }]]); }
-  else if (a === 'settings') sideToggle(true, 'text');
+  else if (a === 'settings') { if (typeof sideInit === 'function') sideInit(); sideToggle(true, 'text'); }
   else if (a === 'fsm' || a === 'fsp') { DASH.fs[p] = Math.min(40, Math.max(10, (DASH.fs[p] || 14) + (a === 'fsp' ? 1 : -1))); const el = document.querySelector(`.d-panel[data-panel="${p}"]`); if (el) el.style.fontSize = DASH.fs[p] + 'px'; if (DASH.split.on) dFlow(); dashSave(); }
   else if (a === 'split') {
     const sp = DASH.split, on = o => { Object.assign(sp, o, {on: true}); dashSave(); renderDash(); };

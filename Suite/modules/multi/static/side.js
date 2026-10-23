@@ -45,6 +45,7 @@ function sideInit() {
     const d = document.createElement('div'); d.id = 'sidep';
     d.innerHTML = `<div class="sidehd"><b>&#9881; Settings</b><input id="side-q" type="search" placeholder="Search settings (font, sound, split...)"><button class="lnk" data-side="close" title="Close">&#10005;</button></div><div id="sidebody"></div>`;
     document.body.appendChild(d);
+    if (W.type !== 'chat') { $('#side-q').addEventListener('input', e => { SIDE.q = e.target.value.trim().toLowerCase(); sideFilter(); }); sideApply(); return; }   // dash opens it from its own gear buttons
     const b = document.createElement('button'); b.id = 'sidebtn'; b.dataset.side = 'toggle'; b.title = 'Text, highlights, sounds, split chat and pop-out'; b.innerHTML = '&#9881; Settings';
     document.body.appendChild(b);
     $('#side-q').addEventListener('input', e => { SIDE.q = e.target.value.trim().toLowerCase(); sideFilter(); });
@@ -101,4 +102,4 @@ document.addEventListener('click', e => {
   else if (b.dataset.side === 'close') sideToggle(false);
   else if (b.dataset.sideReset) sideReset(b.dataset.sideReset);
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && SIDE.open && W.type === 'chat') sideToggle(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && SIDE.open && (W.type === 'chat' || W.type === 'dash')) sideToggle(false); });

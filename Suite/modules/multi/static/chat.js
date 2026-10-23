@@ -23,10 +23,13 @@ const BADGES = {broadcaster: ['HOST', '#e0455b'], moderator: ['MOD', '#2fa84f'],
   founder: ['SUB', '#b36b00'], partner: ['✓', '#b36b00'], staff: ['STAFF', '#999'], 'sub-gifter': ['GIFT', '#b36b00'], 'bits': ['BITS', '#b58900']};
 const badgeHtml = m => (m.badges || []).filter(b => BADGES[b]).slice(0, 4).map(b => `<span class="bd" style="background:${BADGES[b][1]}" title="${esc(b)}">${BADGES[b][0]}</span>`).join('');
 const emoteUrl = id => `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(id)}/default/dark/2.0`;
-function bodyHtml(m) {
-  const map = {}; (m.emotes || []).forEach(e => { if (e.text) map[e.text] = e.id; });
-  const parts = String(m.text || '').split(/(\s+)/).map(tok => map[tok] ? `<img class="emo" alt="${esc(tok)}" title="${esc(tok)}" src="${emoteUrl(map[tok])}" onerror="this.replaceWith(document.createTextNode(this.alt))">` : esc(tok)).join('');
-  return parts;
+// Message text -> safe HTML. Emotes come only from the structured m.emotes list (id must look like an id); `link` (optional) turns URLs in
+// the plain-text pieces into links, and never sees the emote <img> markup.
+function bodyHtml(m, link) {
+  const map = new Map(); (m.emotes || []).forEach(e => { if (e && typeof e.text === 'string' && /^[\w-]{1,64}$/.test(String(e.id))) map.set(e.text, String(e.id)); });
+  return String(m.text || '').split(/(\s+)/).map(tok => map.has(tok)
+    ? `<img class="emo" alt="${esc(tok)}" title="${esc(tok)}" src="${emoteUrl(map.get(tok))}" onerror="this.replaceWith(document.createTextNode(this.alt))">`
+    : link ? link(esc(tok)) : esc(tok)).join('');
 }
 const mentionsMe = m => { const t = (m.text || '').toLowerCase(); return !isBot(m) && [...MYNAMES].some(n => t.includes(n)); };
 const colourOf = m => /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '';
