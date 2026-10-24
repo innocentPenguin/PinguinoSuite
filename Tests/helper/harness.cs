@@ -279,6 +279,35 @@ public static class Harness
         T.GetField("_pgTestHttp", bf).SetValue(null, (Func<string, string, string, string>)((u, a, b) => u.Contains("8771") ? "{\"title\":\"Song X\",\"artist\":\"Band\",\"requestedBy\":\"\"}" : null));
         Msg("S1", "what song is this?"); Check("what's playing comes from the Spotify module", Last() != null && Last().Contains("Song X") && Last().Contains("Band"), Last());
         T.GetField("_pgTestHttp", bf).SetValue(null, null);
+        {   // music (Ivan 2026-10-24): the helper is the only bot that answers !song !vol !songqueue !voteskip !skip; the module writes the line, the helper says ONE line
+            var mbodies = new List<Newtonsoft.Json.Linq.JObject>(); bool modDown = false; string modSay = null;
+            T.GetField("_pgTestHttp", bf).SetValue(null, (Func<string, string, string, string>)((u, a, b) =>
+            {
+                if (!u.StartsWith("POST ") || !u.Contains("8771/api/chat-command")) return null;
+                if (modDown) throw new Exception("connection refused");
+                var jb = Newtonsoft.Json.Linq.JObject.Parse(b); mbodies.Add(jb); string c = (string)jb["command"];
+                string say = modSay ?? (c == "song" ? "Now playing: Song X - Band (requested by zed)." : c == "queue" ? "Up next: 1. A - B | 2. C - D" : c == "volume" ? "Volume is 60%." : "Skip vote 1/2.");
+                return "{\"ok\":true,\"say\":" + Newtonsoft.Json.JsonConvert.SerializeObject(say) + "}";
+            }));
+            Msg("Mu1", "!song"); Check("music: !song says the module's line, one line", Last() == "Now playing: Song X - Band (requested by zed)." && CoreRun() == null && !Forwarded() || Last() != null && Last().Contains("Song X"), Last());
+            Check("music: !song asked the module for song as the viewer", mbodies.Count == 1 && (string)mbodies[0]["command"] == "song" && (string)mbodies[0]["user"] == "mu1", mbodies.Count + "");
+            Msg("Mu2", "!np"); Check("music: !np is !song", Last() != null && Last().Contains("Song X") && (string)mbodies[mbodies.Count - 1]["command"] == "song", Last());
+            Msg("Mu3", "!currentsong"); Check("music: !currentsong is !song", Last() != null && Last().Contains("Song X"), Last());
+            Msg("Mu4", "!songqueue"); Check("music: !songqueue", Last() != null && Last().StartsWith("Up next") && (string)mbodies[mbodies.Count - 1]["command"] == "queue", Last());
+            Msg("Mu5", "!srqueue"); Check("music: !srqueue is !songqueue", Last() != null && Last().StartsWith("Up next"), Last());
+            Msg("Mu6", "!vol"); Check("music: !vol", Last() == "Volume is 60%." && (string)mbodies[mbodies.Count - 1]["command"] == "volume" && (string)mbodies[mbodies.Count - 1]["args"] == "", Last());
+            Msg("Mu7", "!volume 30", true); Check("music: a mod's !volume 30 passes the number and the mod role", (string)mbodies[mbodies.Count - 1]["args"] == "30" && (bool)mbodies[mbodies.Count - 1]["isMod"], mbodies[mbodies.Count - 1].ToString());
+            Msg("Mu8", "!voteskip"); Check("music: !voteskip is a vote", Last() == "Skip vote 1/2." && (string)mbodies[mbodies.Count - 1]["command"] == "skip", Last());
+            Msg("Mu9", "!skip"); Check("music: !skip is the same vote for a viewer", Last() == "Skip vote 1/2." && (string)mbodies[mbodies.Count - 1]["command"] == "skip", Last());
+            Msg("Mu10", "!skip", true); var skb = mbodies[mbodies.Count - 1];
+            Check("music: a mod's !skip is only a vote (no mod rights sent, no hard skip)", (string)skb["command"] == "skip" && !(bool)skb["isMod"] && (string)skb["role"] == "viewer", skb.ToString());
+            Check("music: the vote carries the chatters counted lately and the votes needed", skb["activeChatters"] != null && (int)skb["skipNeed"] >= 2 && (int)skb["skipNeed"] <= (int)skb["activeChatters"], skb.ToString());
+            int before = mbodies.Count; Msg("Mu10", "!skip", true); Check("music: the same viewer typing it again at once is ignored (no second line)", Last() == null && mbodies.Count == before, Last());
+            modSay = "line one" + "\n" + "line two"; Msg("Mu11", "!song"); Check("music: a multi-line module answer becomes ONE line", Last() == "line one line two", Last());
+            modSay = ""; Msg("Mu12", "!song"); Check("music: module replies off -> nothing said, nobody else answers", Last() == null && !Forwarded(), Last());
+            modSay = null; modDown = true; Msg("Mu13", "!song"); Check("music: module not running -> one plain line", Last() != null && Last().Contains("music player") && Last().IndexOf('\n') < 0, Last());
+            modDown = false; before = mbodies.Count; Msg("Mu14", "!songs"); Check("music: !songs (not a music command) is not sent to the module", mbodies.Count == before, Last());
+        }
         Msg("M1", "what's my mmr"); Check("MMR question points at !mmr", Last() != null && Last().Contains("!mmr"), Last());
 
         // context gate (2026-10-19/20 chat log): passing mentions, talk between viewers and already-answered questions get no helper reply

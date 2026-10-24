@@ -514,6 +514,7 @@ public class CPHInline
         public int JoinGuardSec { get; set; } = 120;                  // after the helper added someone to the queue, a second "add me" within this many seconds is answered with "already added" (no core call)
         public int NegativeMuteSec { get; set; } = 300;               // "wasn't talking to you" / "wrong context": silent for that viewer this long, and the review log marks it as negative feedback
         public bool AskOn { get; set; } = true;                       // !helper / !ask / !pinguino <question>: a short answer from the knowledge pack (Data\helper\knowledge.json)
+        public bool MusicOn { get; set; } = true;                     // !song !vol !songqueue !voteskip (!skip): the helper is the only bot that answers music (it asks the Spotify module on this PC)
         public int AskUserCooldownSec { get; set; } = 30;            // per viewer (mods are exempt)
         public int AskGlobalCooldownSec { get; set; } = 10;          // and for chat as a whole
         public int AskMaxChars { get; set; } = 200;
@@ -774,6 +775,7 @@ public class CPHInline
                 var lcm = Regex.Match(text, @"^!(lobbyname|lobbypass|lobbypassword)(?:\s+(?<v>.*))?$", RegexOptions.IgnoreCase);
                 if (lcm.Success) return LobbyCommand(lcm.Groups[1].Value.ToLower(), lcm.Groups["v"].Value, display);
                 if (RxDiscordCmd.IsMatch(text)) return Respond(login, display, "discord", "");
+                var musm = RxMusicCmd.Match(text); if (_cfg.MusicOn && musm.Success) return MusicCommand(login, display, musm.Groups["c"].Value.ToLowerInvariant(), musm.Groups["a"].Value.Trim());
                 var hpm = Regex.Match(text, @"^!helperpack(?:\s+(?<v>\w+))?\s*$", RegexOptions.IgnoreCase);
                 if (hpm.Success) return HelperPackCommand(display, hpm.Groups["v"].Value);
                 var bm = RxBadReg.Match(text);
@@ -1838,6 +1840,38 @@ public class CPHInline
     // ══════════════════════════════════════════════════════════════
     //  TEXT BUILDING
     // ══════════════════════════════════════════════════════════════
+    // ── music (Ivan 2026-10-24: ONE bot answers music, the helper). !song/!currentsong/!np, !vol/!volume, !songqueue/!srqueue, !voteskip/!skip (!skip is the same vote for everyone, mods included: no hard skip from chat).
+    //    The Spotify module on this PC writes the line (its own wording and on/off switch); the helper only asks it and says it, ONE line. ──
+    static readonly Regex RxMusicCmd = new Regex(@"^!(?<c>song|currentsong|np|vol|volume|songqueue|srqueue|voteskip|skip)(?:\s+(?<a>.*))?$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    bool MusicCommand(string login, string display, string c, string args)
+    {
+        string cmd = (c == "song" || c == "currentsong" || c == "np") ? "song" : (c == "vol" || c == "volume") ? "volume" : (c == "songqueue" || c == "srqueue") ? "queue" : "skip";
+        long now = Now(), last; string key = login + "|music|" + cmd;
+        if (_userCd.TryGetValue(key, out last) && now - last < (cmd == "skip" ? 2 : 5)) return true;   // quiet while it cools down (the chat does not need the same line twice)
+        _userCd[key] = now;
+        int roleN = 0; bool mod = ArgB("isModerator") || ArgB("isBroadcaster") || (int.TryParse(ArgS("role"), out roleN) && roleN >= 3);
+        bool vote = cmd == "skip"; if (vote) { mod = false; roleN = 1; }   // everyone votes, nobody force-skips from chat
+        var body = new JObject { { "command", cmd }, { "args", cmd == "volume" ? args : "" }, { "user", login }, { "display", display }, { "role", mod ? "mod" : "viewer" }, { "isMod", mod }, { "isSub", !vote && ArgB("isSubscriber") }, { "source", "chat" } };
+        if (vote)
+        {   // ~40% of the people who chatted in the last 5 minutes, at least 2 (the Host's skipvote.json settings when present)
+            var sv = ReadJson("skipvote.json"); int pct = Math.Max(1, Math.Min(100, (int?)sv?["percent"] ?? 40)), floor = Math.Max(1, (int?)sv?["floor"] ?? 2), win = Math.Max(1, Math.Min(60, (int?)sv?["windowMin"] ?? 5));
+            int active; lock (_recent) active = _recent.Where(l => l.At >= now - win * 60 && !PgIsBotAccount(l.Login) && !IsOtherBot(l.Login)).Select(l => l.Login).Distinct().Count();
+            if (active >= 1) { body["activeChatters"] = active; body["skipNeed"] = Math.Max(floor, (int)Math.Ceiling(active * pct / 100.0 - 1e-9)); }
+        }
+        string say = "";
+        try
+        {
+            string url = "http://127.0.0.1:8771/api/chat-command";
+            string resp = _pgTestHttp != null ? _pgTestHttp("POST " + url, "", body.ToString(Formatting.None)) : HttpPost(url, new Dictionary<string, string>(), body.ToString(Formatting.None));
+            say = ((string)JObject.Parse(resp)["say"] ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+        }
+        catch (Exception) { say = "The music player isn't running right now."; }
+        if (say == "") return true;   // the module has chat replies off (or nothing to say): nothing is said, and no other bot answers either
+        if (say.Length > 220) say = say.Substring(0, 217).TrimEnd() + "...";
+        _revIntent = "music_" + cmd;
+        Say(say); return true;
+    }
+
     // what is playing right now, from the Spotify module on this PC
     string SongLine()
     {

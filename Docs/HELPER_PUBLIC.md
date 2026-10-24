@@ -47,6 +47,9 @@ Points come from watching the stream live (subs earn more), chatting, playing th
 ## Song requests
 Redeem the "Song Request" channel point reward and type the song name or a Spotify/YouTube link as your message. If the song cannot be played, your channel points are refunded.
 
+## Music commands
+The helper answers all the music commands, one short line each: !song (also !currentsong, !np) shows what is playing and who requested it, !songqueue (!srqueue) shows what is next, !vol (!volume) shows the volume (mods can set it, for example !vol 60), and !voteskip (also !skip) is a vote to skip the song. Everyone gets one vote, mods included, and when enough chatters vote the song skips.
+
 ## Joined players who played a game (the recycler)
 Players without a strike can stay in the queue and are put back in line after they play. !queue shows the line.
 

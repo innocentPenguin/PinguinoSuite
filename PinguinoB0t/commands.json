@@ -1730,6 +1730,72 @@
       ],
       "section": "Fun",
       "importance": 3
+    },
+    {
+      "command": "!song",
+      "aliases": [
+        "!currentsong",
+        "!np"
+      ],
+      "action": "PinguinoHelper",
+      "category": "Music",
+      "who": "everyone",
+      "usage": "!song",
+      "description": "Shows the song that is playing now and who requested it, if known.",
+      "examples": [
+        "!song"
+      ],
+      "section": "Music",
+      "importance": 2
+    },
+    {
+      "command": "!songqueue",
+      "aliases": [
+        "!srqueue"
+      ],
+      "action": "PinguinoHelper",
+      "category": "Music",
+      "who": "everyone",
+      "usage": "!songqueue",
+      "description": "Shows the next songs in the request queue.",
+      "examples": [
+        "!songqueue"
+      ],
+      "section": "Music",
+      "importance": 3
+    },
+    {
+      "command": "!vol",
+      "aliases": [
+        "!volume"
+      ],
+      "action": "PinguinoHelper",
+      "category": "Music",
+      "who": "everyone",
+      "usage": "!vol",
+      "description": "Shows the music volume. Mods can set it with !vol 60.",
+      "examples": [
+        "!vol",
+        "!vol 60"
+      ],
+      "section": "Music",
+      "importance": 4
+    },
+    {
+      "command": "!voteskip",
+      "aliases": [
+        "!skip"
+      ],
+      "action": "PinguinoHelper",
+      "category": "Music",
+      "who": "everyone",
+      "usage": "!voteskip",
+      "description": "Vote to skip the current song. When enough chatters vote, it skips. Everyone, mods included, only gets one vote.",
+      "examples": [
+        "!voteskip"
+      ],
+      "section": "Music",
+      "importance": 2
     }
   ]
 }

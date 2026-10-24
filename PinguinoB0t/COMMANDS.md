@@ -63,6 +63,15 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!gifted` | `!gifted [user]` | How many subs you (or someone) gifted in total, and the rank on the gifters board. |
 | `!bits` | `!bits [user]` | Total bits cheered, the bits badge tier and the rank on the bits board. |
 
+### Music
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!song` | `!song` | Shows the song that is playing now and who requested it, if known. |
+| `!songqueue` | `!songqueue` | Shows the next songs in the request queue. |
+| `!vol` | `!vol` | Shows the music volume. Mods can set it with !vol 60. |
+| `!voteskip` | `!voteskip` | Vote to skip the current song. When enough chatters vote, it skips. Everyone, mods included, only gets one vote. |
+
 ### Points
 
 | Command | Usage | What it does |
@@ -84,6 +93,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 |---|---|---|
 | `!uptime` | `!uptime` | How long the stream has been live. |
 | `!downtime` | `!downtime` | How long ago the last stream ended. |
+| `!vanish` | `!vanish` | Poof! Times you out for 1 second, which clears your messages from chat. Free, once every 10 seconds, and it does not work on mods or the broadcaster. |
 
 ### Subscribers
 
@@ -181,10 +191,19 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!gamemode` | `!gamemode standard\|dropshot\|rumble` | Rocket League game mode for stats. |
 | `!setsr` | `!setsr @user <0-5000>` | Set a Fortnite skill rating. |
 | `!matchwin` | `!matchwin <id> blue\|orange` | Fix the winner of a past match (stats are corrected). |
+| `!teamname` | `!teamname <orange\|blue> <#rrggbb\|-> [name]` | Rename a customs team and set its colour. |
 | `!matchdel` | `!matchdel <id>` | Remove a past match and take its wins back. |
 | `!move` | `!move <user> <position>` | Move someone in the queue. |
 | `!out` | `!out <user>` | Take a player out of the current match. |
 | `!in` | `!in <user> <blue\|orange>` | Put a player into a team. |
+
+### Economy (mods)
+
+| Command | Usage | What it does |
+|---|---|---|
+| `!subowed` | `!subowed` | Lists the viewers who bought Get a sub with points and are still waiting for you to gift them a sub. |
+| `!subdone` | `!subdone <user>` | Marks a bought sub as gifted (you gifted it on Twitch). |
+| `!subrefund` | `!subrefund <user>` | Cancels a bought sub and gives the points back. |
 
 ### Helper
 
