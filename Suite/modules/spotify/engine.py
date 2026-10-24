@@ -147,6 +147,9 @@ class Engine:
 
     def apply_preset(self, name):
         import config_schema as cs
+        if name in cs.HIDDEN_PRESETS:                  # the shell's Songify button posts these: same path as /api/songify, so earlier values are kept
+            self.songify(name == "songify")
+            return self._own_settings()
         if name not in cs.PRESETS:
             return self.apply_user_preset(name)
         return self.save_settings(dict(cs.PRESETS[name][2]))

@@ -1863,3 +1863,23 @@ class UnlimitedQueueTests(unittest.TestCase):
         self.e.add_track(T(2), "end", "a", "viewer")
         self.e.add_track(T(3), "end", "b", "viewer")
         self.assertEqual(self.e.request("c", "song 4", [])["code"], "full")
+
+
+class SongifyPresetRouteTests(unittest.TestCase):
+    def test_shell_preset_post_keeps_and_restores_previous_values(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        e = Engine(FakeApi(), FakeAuth(), Clock())
+        e.save_settings({"requests_open": True, "chat_requests": False, "announce_track_on": True})
+        e.apply_preset("songify")
+        self.assertTrue(e.songify_active())
+        e.apply_preset("takeback")
+        s = e.settings
+        self.assertTrue(s["requests_open"] and s["announce_track_on"])
+        self.assertFalse(s["chat_requests"])
+
+    def test_handoff_only_touches_spotify_settings(self):
+        import config_schema as cs
+        known = {k for g in cs.SCHEMA for (k, *_r) in g["items"]}
+        self.assertTrue(set(cs.PRESETS["songify"][2]) <= known)
+        self.assertTrue(set(cs.PRESETS["takeback"][2]) <= known)
