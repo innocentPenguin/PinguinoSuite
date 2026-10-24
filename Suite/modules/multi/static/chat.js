@@ -61,7 +61,7 @@ function chatMsg(m, opts = {}) {
     <button data-pin="${esc(m.id)}" title="Pin to the top">&#128204;</button>
     ${caps.mod_timeout ? `<button data-mod="timeout" data-id="${esc(m.id)}" title="Timeout 10 min">&#9201;</button><button data-mod="ban" data-id="${esc(m.id)}" title="Ban">&#9940;</button>` : ''}
     ${caps.mod_delete ? `<button data-mod="delete" data-id="${esc(m.id)}" title="Delete this message">&#128465;</button>` : ''}</span>`;
-  return `<div class="msg tier-${esc(m.tier)} ${styleClasses(m)}${bot ? ' bot' : ''}${CF.bots === 'dim' ? '' : ' nodim'}${mine ? ' self' : ''}${mod ? ' modmsg' : ''}" data-mid="${esc(m.id)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
+  return `<div class="msg tier-${esc(m.tier)} ${styleClasses(m)}${bot ? ' bot' : ''}${CF.bots === 'dim' ? '' : ' nodim'}${mine ? ' self' : ''}${mod ? ' modmsg' : ''}${m.cleared ? ' cleared' : ''}" data-mid="${esc(m.id)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
     <span class="t">${hhmm(m.ts)}</span>${markerHtml(m.platform)}${badgeHtml(m)}<span class="u" ${col ? `style="color:${col}"` : ''} ${opts.plain || !m.user_id ? '' : `data-chatter="${esc(m.platform)}|${esc(m.user_id)}|${esc(m.id)}" title="Who is this?"`}>${esc(m.display || m.user)}</span>${flag}${eventLabel(m)}${rep}${bodyHtml(m)}${tools}</div>`;
 }
 function chatAdd(m) {
@@ -69,12 +69,12 @@ function chatAdd(m) {
   const f = $('#cfeed'); if (!f || !chatVisible(m)) return;
   const atEnd = f.scrollTop + f.clientHeight >= f.scrollHeight - 40;
   f.insertAdjacentHTML('beforeend', chatMsg(m));
-  while (f.children.length > 500) f.firstChild.remove();
+  while (f.children.length > HIST.cap + 1) f.querySelector('.msg').remove();
   if (W.scroll !== 'manual' && window.AUTO !== false && atEnd) f.scrollTop = f.scrollHeight;
 }
 function chatFeed() {
   const f = $('#cfeed'); if (!f) return;
-  f.innerHTML = msgs.filter(chatVisible).slice(-300).map(m => chatMsg(m)).join('') || '<div class="empty">No messages yet. When a connected platform gets chat, it shows up here.</div>';
+  f.innerHTML = (HIST.done.chat ? '' : '<button class="lnk hist-more" data-hist="chat">Load older messages</button>') + msgs.filter(chatVisible).slice(-HIST.cap).map(m => chatMsg(m)).join('') || '<div class="empty">No messages yet. When a connected platform gets chat, it shows up here.</div>';
   f.scrollTop = f.scrollHeight;
 }
 function chatPins() {
@@ -184,7 +184,7 @@ function popVisible(m) {
   if (MUTED.has((m.user || '').toLowerCase()) || m.raw_type === 'dev') return false;
   return true;
 }
-const popMsg = m => { const col = colourOf(m); return `<div class="pm msg ${styleClasses(m)}">${badgeHtml(m)}<b class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</b>${eventLabel(m)}${bodyHtml(m)}</div>`; };
+const popMsg = m => { const col = colourOf(m); return `<div class="pm msg ${styleClasses(m)}${m.cleared ? ' cleared' : ''}" data-mid="${esc(m.id)}">${badgeHtml(m)}<b class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</b>${eventLabel(m)}${bodyHtml(m)}</div>`; };
 function renderPopout() {
   const p = new URLSearchParams(location.search), max = Math.min(parseInt(p.get('max')) || 30, 100);
   document.body.classList.add('popout'); document.documentElement.style.setProperty('--fs', (parseInt(p.get('size')) || 20) + 'px');
@@ -206,6 +206,7 @@ document.addEventListener('click', async e => {
     const label = {timeout: 'Timeout 10 minutes', ban: 'BAN permanently', delete: 'Delete this message'}[d.mod];
     if (!confirm(`${label}: ${m.display || m.user} on ${m.platform}?\n"${(m.text || '').slice(0, 80)}"`)) return;
     const r = await fetch('/api/mod/' + d.mod, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({message_id: d.id, seconds: 600})}).then(r => r.json());
+    if (r.ok) markCleared(d.mod === 'delete' ? {ids: [d.id], reason: 'deleted'} : {scope: 'user', user_id: m.user_id, reason: d.mod === 'ban' ? 'ban' : 'timeout'});
     chatNotice(r.ok ? `${d.mod} done: ${m.display || m.user}` : `${d.mod} failed: ${r.detail || 'error'}`); return;
   }
   if (d.ca) {

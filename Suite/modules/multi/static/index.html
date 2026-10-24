@@ -55,6 +55,7 @@ body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:h
 .box label{display:flex;flex-direction:column;gap:3px;font-size:.9em}.box details{margin:4px 0}
 .launch #toast{position:sticky;top:0;z-index:6}.tok,.tbad{padding:6px 10px;border-radius:6px;margin:8px 0}.tok{background:#12301f;color:#8de0b5}.tbad{background:#3a1717;color:#ffb0b0}
 .chk-row{padding:4px 0}.keys{margin-top:18px;font-size:.85em}
+.cleared{opacity:.55}.clr{font-size:.7em;color:var(--mut);margin-left:6px;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-style:normal;font-weight:400;white-space:nowrap}.hist-more{display:block;margin:4px auto}
 .msg.bot{opacity:.65}.msg.bot .u{font-style:italic}
 .cbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:5px 8px;border-bottom:1px solid var(--line)}.grow{flex:1}
 .chip2{display:inline-flex;gap:5px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:.78em}a.chip2{color:var(--fg);text-decoration:none}.chip2.off{opacity:.4;text-decoration:line-through}.chip2.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
@@ -116,6 +117,72 @@ let W = {type: location.pathname === '/popout' ? 'popout' : (q.get('type') || 'd
 if (HALF && W.type === 'chat') { W.type = 'unified'; W.link_group = 'chat-split'; W.link_order = (HALF === 'top' || HALF === 'left') ? 1 : 0; }   // one chat spread over two windows: older rows in the top/left one
 const TIERS = {none: 0, low: 1, medium: 2, high: 3};
 let conns = [], cards = {open: [], answered: [], missed: []}, msgs = [], target = null;
+
+// History: every list is built from `msgs`, which is only ever added to (loaded history + live tail), never cut below what was loaded.
+// Chat and events load separately so a busy chat can never push the activity feed out; "Load older" goes further back on demand.
+const HIST = {ids: new Set(), done: {chat: false, events: false}, kindOk: null, busy: {}, cap: 3000};   // cap = rows drawn per list; the DOM only trims past it
+const clrTag = m => m.cleared ? '<span class="clr" title="Removed from the platform chat (kept here)">cleared</span>' : '';
+function histMerge(rows) {
+  let n = 0;
+  for (const m of Array.isArray(rows) ? rows : []) { if (!m || !m.id || HIST.ids.has(m.id)) continue; HIST.ids.add(m.id); msgs.push(m); n++; }
+  if (n) msgs.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  return n;
+}
+async function histGet(qs) { try { const r = await fetch('/api/messages?' + qs); return r.ok ? await r.json() : []; } catch (e) { return []; } }
+async function histInit() {
+  const [c, e] = await Promise.all([histGet('kind=chat&limit=500'), histGet('kind=events&limit=500')]);
+  HIST.kindOk = !(e.some(m => !m.event) || c.some(m => m.event));     // an old backend ignores kind= and sends the same mixed rows for both
+  histMerge(c); histMerge(e);
+  if (!HIST.kindOk) histMerge(await histGet('limit=1000'));
+  HIST.done.chat = HIST.kindOk ? c.length < 500 : msgs.length < 1000;
+  HIST.done.events = HIST.kindOk ? e.length < 500 : HIST.done.chat;
+}
+async function histOlder(kind) {
+  if (HIST.done[kind] || HIST.busy[kind]) return 0;
+  HIST.busy[kind] = true;
+  try {
+    const mine = msgs.filter(m => kind === 'events' ? m.event : !m.event), lim = HIST.kindOk ? 500 : 1000;
+    const rows = await histGet((HIST.kindOk ? 'kind=' + kind + '&' : '') + 'before=' + (mine.length ? mine[0].ts : Date.now() / 1000) + '&limit=' + lim);
+    const n = histMerge(rows);
+    if (rows.length < lim || !n) { HIST.done[kind] = true; if (!HIST.kindOk) HIST.done.chat = HIST.done.events = true; }
+    HIST.cap += n;
+    return n;
+  } finally { HIST.busy[kind] = false; }
+}
+function histRedraw() {
+  if (W.type === 'chat') chatFeed(); else if (W.type === 'dash') dFill();
+  else if (['unified', 'platform', 'first'].includes(W.type) && typeof renderFeed === 'function') renderFeed();
+}
+async function histMore(kind) {
+  const lists = [...document.querySelectorAll('.cfeed,.d-list')], was = lists.map(l => [l, l.scrollHeight, l.scrollTop]);
+  if (!await histOlder(kind)) { document.querySelectorAll('[data-hist="' + kind + '"]').forEach(b => b.remove()); return; }
+  histRedraw();
+  for (const [l, h, t] of was) l.scrollTop = l.id === 'd-l-activity' ? t : t + (l.scrollHeight - h);     // keep what the viewer was reading
+}
+async function histRefresh() {       // after a reconnect: fill the gap, keep everything already shown
+  if (histMerge(await histGet('limit=200'))) histRedraw();
+}
+function markCleared(ev) {
+  const ids = new Set(ev.ids || []), hit = [], all = ev.scope === 'all' || ev.scope === 'chat';
+  for (const m of msgs) {
+    if (m.cleared || (m.event && !ids.has(m.id))) continue;
+    if (ids.has(m.id) || all || (ev.scope === 'user' && ev.user_id && m.user_id === ev.user_id)) { m.cleared = ev.reason || true; hit.push(m.id); }
+  }
+  for (const id of hit) clearedDom(id);
+}
+function clearedDom(id) {
+  const q = String(id).replace(/["\\]/g, '\\$&');
+  document.querySelectorAll('[data-mid="' + q + '"],[data-id="' + q + '"]').forEach(el => {
+    el.classList.add('cleared');
+    if (!el.querySelector('.clr')) { const host = el.querySelector('.d-main') || el.querySelector('span:not(.d-ic):not(.d-age):not(.t)') || el; host.insertAdjacentHTML('beforeend', clrTag({cleared: true})); }
+  });
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-hist]'); if (b) histMore(b.dataset.hist); });
+document.addEventListener('scroll', e => {
+  const el = e.target; if (!el || !el.id) return;
+  if (el.id === 'cfeed' || el.id.startsWith('d-l-chat')) { if (el.scrollTop < 60) histMore('chat'); }
+  else if (el.id === 'd-l-activity' && el.scrollTop + el.clientHeight >= el.scrollHeight - 60) histMore('events');
+}, true);
 const $ = (s, e = document) => e.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const api = (p, o) => fetch(p, o && {method: o.m || 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(o.b || {})}).then(r => r.json());
@@ -139,7 +206,7 @@ async function init() {
   if (W.font_size && W.font_size !== 14) document.documentElement.style.setProperty('--fs', W.font_size + 'px');   // a window's own size wins over the chat look
   if (W.spacing && W.spacing !== 4) document.documentElement.style.setProperty('--sp', W.spacing + 'px');
   document.body.style.opacity = W.opacity || 1;
-  if (!['launcher', 'status', 'style', 'obs', 'alerts'].includes(W.type)) msgs = await api('/api/messages?limit=200');
+  if (!['launcher', 'status', 'style', 'obs', 'alerts'].includes(W.type)) await histInit();
   cards = await api('/api/cards');
   connect(); render(); setInterval(() => { api('/api/cards').then(c => { cards = c; renderCards(); }); }, 5000);
   if (WID) savePosition();
@@ -169,7 +236,8 @@ function on(ev) {
   if (ev.type === 'hello') {
     conns = ev.connectors; cards = ev.cards;
     if (!helloSeen) { helloSeen = true; render(); }
-    else {                                        // reconnect: refresh the data only; never rebuild the page (it would drop the view, open cards, scroll and typed text)
+    else {
+      histRefresh();                                        // reconnect: refresh the data only; never rebuild the page (it would drop the view, open cards, scroll and typed text)
       renderHeader();
       if (['priority', 'missed'].includes(W.type)) renderCards();
       else if (W.type === 'launcher') renderLauncher();      // patches changed blocks only
@@ -179,10 +247,13 @@ function on(ev) {
     }
     if (window.dashViewers) window.dashViewers(ev.viewers);
   }
+  else if (ev.type === 'message.cleared') markCleared(ev);
   else if (ev.type === 'viewers') { if (window.dashViewers) window.dashViewers(ev.counts); }
   else if (ev.type === 'conn.status') { conns = conns.filter(c => c.platform !== ev.platform).concat(ev); renderHeader(); if (window.dashConn) window.dashConn(); if (W.type === 'status') renderStatus(); if (W.type === 'chat') { chatBar(); chatCompose(); } }
   else if (ev.type === 'message') {
-    msgs.push(ev.message); if (msgs.length > 500) msgs.shift(); addMsg(ev.message);
+    if (HIST.ids.has(ev.message.id)) return;                   // already loaded (reconnect gap fill)
+    if (ev.message.id) HIST.ids.add(ev.message.id);
+    msgs.push(ev.message); addMsg(ev.message);
     if (window.soundMsg) window.soundMsg(ev.message);
     if (ev.message.event === 'follow' && window.cardFollow && ['chat', 'dash'].includes(W.type)) window.cardFollow(ev.message);
     if (W.type === 'popout' && window.popAdd) window.popAdd(ev.message);
@@ -211,8 +282,8 @@ function pass(m) {
 }
 function msgHtml(m) {
   const reasons = (m.reasons || []).map(r => `${r.rule} ${r.points > 0 ? '+' : ''}${r.points}`).join(', ');
-  return `<div class="msg tier-${esc(m.tier)}${m.is_self ? ' self' : ''}${isBot(m) ? ' bot' : ''} ${styleClasses(m)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
-  <span class="t">${hhmm(m.ts)}</span>${markerHtml(m.platform)}<span class="u">${esc(m.display || m.user)}</span>${esc(m.text)}</div>`;
+  return `<div class="msg tier-${esc(m.tier)}${m.cleared ? ' cleared' : ''}${m.is_self ? ' self' : ''}${isBot(m) ? ' bot' : ''} ${styleClasses(m)}" title="${esc(reasons ? 'score ' + m.score + ': ' + reasons : '')}">
+  <span class="t">${hhmm(m.ts)}</span>${markerHtml(m.platform)}<span class="u">${esc(m.display || m.user)}</span>${esc(m.text)}${clrTag(m)}</div>`;
 }
 function addMsg(m) {
   if (!['unified', 'platform', 'first', 'chat'].includes(W.type) || !pass(m)) return;
@@ -222,7 +293,7 @@ function addMsg(m) {
   if (chan) { renderLinked(); return; }
   const atEnd = f.scrollTop + f.clientHeight >= f.scrollHeight - 30;
   f.insertAdjacentHTML('beforeend', msgHtml(m));
-  while (f.children.length > 500) f.firstChild.remove();
+  while (f.children.length > HIST.cap) f.firstChild.remove();
   if (W.scroll !== 'manual' && window.AUTO !== false && atEnd) f.scrollTop = f.scrollHeight;
 }
 function renderHeader() {

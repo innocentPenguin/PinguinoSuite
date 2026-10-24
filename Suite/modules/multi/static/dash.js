@@ -41,7 +41,7 @@ const D_CSS = `
 .d-list{flex:1;overflow-y:auto;min-height:0}.d-row{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--line);position:relative}
 .d-age{opacity:.65;min-width:2.4em;padding-top:2px}.d-main{flex:1;min-width:0;word-break:break-word}.d-pill{display:inline-block;border-radius:6px;padding:1px 9px;font-weight:700;margin:0 8px 0 10px}
 .d-user{font-weight:700}.d-chip{display:inline-block;background:#ffffff1c;border-radius:6px;padding:1px 9px;margin-left:8px}.d-link{display:block;margin-top:3px}.d-link a{color:#8ab4ff}
-.d-chat .d-row{padding:7px 12px;gap:6px;align-items:baseline;flex-wrap:wrap}.d-chat .d-row.notice{opacity:.6;font-size:.95em}.d-date{text-align:center;color:var(--mut);font-size:.8em;padding:6px;border-bottom:1px solid var(--line)}
+.d-chat .d-row{padding:7px 12px;gap:6px;align-items:flex-start}.d-chat .d-row>span:not(.d-ic){flex:1;min-width:0;overflow-wrap:anywhere}.d-chat .d-row>.d-ic{margin-top:1px}.d-chat .d-row.notice{opacity:.6;font-size:.95em}.d-date{text-align:center;color:var(--mut);font-size:.8em;padding:6px;border-bottom:1px solid var(--line)}
 .d-chat .d-row .bd{margin-right:3px}.d-chat img.emo{height:1.6em;vertical-align:middle}
 .d-menu{position:fixed;z-index:80;background:var(--panel,#1a1814);border:1px solid var(--accent);border-radius:8px;padding:4px;min-width:190px;box-shadow:0 6px 20px #000a}.d-menu div{padding:6px 10px;cursor:pointer;border-radius:5px}.d-menu div:hover{background:#ff8a1f30}.d-menu hr{border:0;border-top:1px solid var(--line);margin:3px 0}
 .d-box{display:flex;gap:6px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}.d-box input{flex:1;background:transparent;border:0;color:inherit;font:inherit;outline:0}.d-box select{background:transparent;color:inherit;border:1px solid var(--line);border-radius:6px;padding:3px}
@@ -109,32 +109,32 @@ function dRowActivity(m) {
   const rest = dRest(m), links = (rest.match(/https?:\/\/\S+/g) || []), txt = rest.replace(/https?:\/\/\S+/g, '').trim();
   if (txt) chips.push(txt.slice(0, 80));
   if ((m.flags || []).includes('refollow')) chips.push('refollow');
-  return `<div class="d-row" data-id="${esc(m.id)}"><span class="d-age" data-ts="${m.ts}">${dAge(m.ts)}</span>${dIcon(m.platform)}<div class="d-main"><span class="d-pill" style="background:${pill[1]};color:${pill[2]};margin-left:0">${esc(pill[0])}</span><span class="d-user">${esc(dName(m))}</span>${chips.map(c => `<span class="d-chip" ${c === 'refollow' ? 'style="font-size:.8em;opacity:.8"' : ''}>${esc(c)}</span>`).join('')}${links.map(l => `<span class="d-link">${dLink(esc(l))}</span>`).join('')}</div><span class="d-kebab" data-d="rowmenu" data-u="${esc((m.user || '').toLowerCase())}" data-id="${esc(m.id)}">&#8942;</span></div>`;
+  return `<div class="d-row${m.cleared ? ' cleared' : ''}" data-id="${esc(m.id)}"><span class="d-age" data-ts="${m.ts}">${dAge(m.ts)}</span>${dIcon(m.platform)}<div class="d-main"><span class="d-pill" style="background:${pill[1]};color:${pill[2]};margin-left:0">${esc(pill[0])}</span><span class="d-user">${esc(dName(m))}</span>${clrTag(m)}${chips.map(c => `<span class="d-chip" ${c === 'refollow' ? 'style="font-size:.8em;opacity:.8"' : ''}>${esc(c)}</span>`).join('')}${links.map(l => `<span class="d-link">${dLink(esc(l))}</span>`).join('')}</div><span class="d-kebab" data-d="rowmenu" data-u="${esc((m.user || '').toLowerCase())}" data-id="${esc(m.id)}">&#8942;</span></div>`;
 }
 function dRowChat(m) {
   const col = colourOf(m) || (m.platform === 'twitch' ? '#a970ff' : '#ff8a1f');
-  if (m.event) return `<div class="d-row notice" data-id="${esc(m.id)}">${dIcon(m.platform)}<span><b>${esc(dName(m))}</b> ${dLink(esc(dRest(m) || m.text))}</span></div>`;
-  return `<div class="d-row ${isBot(m) ? 'bot' : ''}" data-id="${esc(m.id)}">${dIcon(m.platform)}<span>${badgeHtml(m)}<b style="color:${col}">${esc(dName(m))}</b>: ${bodyHtml(m, dLink)}</span></div>`;
+  if (m.event) return `<div class="d-row notice${m.cleared ? ' cleared' : ''}" data-id="${esc(m.id)}">${dIcon(m.platform)}<span><b>${esc(dName(m))}</b> ${dLink(esc(dRest(m) || m.text))}${clrTag(m)}</span></div>`;
+  return `<div class="d-row ${isBot(m) ? 'bot' : ''}${m.cleared ? ' cleared' : ''}" data-id="${esc(m.id)}">${dIcon(m.platform)}<span>${badgeHtml(m)}<b style="color:${col}">${esc(dName(m))}</b>: ${bodyHtml(m, dLink)}${clrTag(m)}</span></div>`;
 }
 function dFill() {
   const a = $('#d-l-activity'), c = $('#d-l-chat');
-  if (a) { a.innerHTML = msgs.filter(m => m.event && dOk(m)).slice(-100).reverse().map(dRowActivity).join('') || '<div class="empty">No activity yet. Follows, redeems, subs, gifts, cheers and raids show here.</div>'; }
+  if (a) { a.innerHTML = msgs.filter(m => m.event && dOk(m)).slice(-HIST.cap).reverse().map(dRowActivity).join('') + (HIST.done.events ? '' : '<button class="d-btn hist-more" data-hist="events">Load older activity</button>') || '<div class="empty">No activity yet. Follows, redeems, subs, gifts, cheers and raids show here.</div>'; }
   const ca = $('#d-l-chat-a'), cb = $('#d-l-chat-b');
   if (ca && cb) {
     const all = msgs.filter(m => dOk(m)), k = DASH.split.kind;
     const fa = k === 'events' ? all.filter(m => !m.event) : all.filter(m => DASH.split.a === 'all' || m.platform === DASH.split.a);
     const fb = k === 'events' ? all.filter(m => m.event) : all.filter(m => DASH.split.b === 'all' || m.platform === DASH.split.b);
-    if (k === 'flow') { cb.innerHTML = all.slice(-60).map(dRowChat).join(''); ca.innerHTML = ''; dFlow(); }
-    else { ca.innerHTML = fa.slice(-150).map(dRowChat).join(''); cb.innerHTML = fb.slice(-150).map(dRowChat).join(''); ca.scrollTop = ca.scrollHeight; cb.scrollTop = cb.scrollHeight; }
+    if (k === 'flow') { cb.innerHTML = all.slice(-HIST.cap).map(dRowChat).join(''); ca.innerHTML = ''; dFlow(); }
+    else { ca.innerHTML = fa.slice(-HIST.cap).map(dRowChat).join(''); cb.innerHTML = fb.slice(-HIST.cap).map(dRowChat).join(''); ca.scrollTop = ca.scrollHeight; cb.scrollTop = cb.scrollHeight; }
   }
-  if (c) { c.innerHTML = `<div class="d-date">${new Date().toLocaleDateString(undefined, {year: 'numeric', month: 'long', day: 'numeric'})}</div>` + msgs.filter(dOk).slice(-200).map(dRowChat).join(''); c.scrollTop = c.scrollHeight; }
+  if (c) { c.innerHTML = `<div class="d-date">${new Date().toLocaleDateString(undefined, {year: 'numeric', month: 'long', day: 'numeric'})}${HIST.done.chat ? '' : '<button class="d-btn hist-more" data-hist="chat">Load older messages</button>'}</div>` + msgs.filter(dOk).slice(-HIST.cap).map(dRowChat).join(''); c.scrollTop = c.scrollHeight; }
   const n = $('#d-qn'); if (n) n.textContent = DASH.queue.length ? DASH.queue.length + ' waiting' : '';
 }
 function dFlow() {      // newest rows live in B; whatever no longer fits in B continues at the bottom of A
   const a = $('#d-l-chat-a'), b = $('#d-l-chat-b'); if (!a || !b) return;
   b.style.overflow = 'hidden';
   while (b.scrollHeight > b.clientHeight + 1 && b.children.length > 1) a.appendChild(b.children[0]);
-  while (a.children.length > 200) a.children[0].remove();
+  while (a.children.length > HIST.cap) a.children[0].remove();
   a.scrollTop = a.scrollHeight;
 }
 window.dashAdd = m => {
@@ -142,13 +142,13 @@ window.dashAdd = m => {
   if (m.event === 'gift') dGifts();
   const ca = $('#d-l-chat-a'), cb = $('#d-l-chat-b');
   if (ca && cb) {
-    const k = DASH.split.kind, add = (el, ok) => { if (!ok) return; const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; el.insertAdjacentHTML('beforeend', dRowChat(m)); while (el.children.length > 250) el.children[0].remove(); if (end && window.AUTO !== false) el.scrollTop = el.scrollHeight; };
+    const k = DASH.split.kind, add = (el, ok) => { if (!ok) return; const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; el.insertAdjacentHTML('beforeend', dRowChat(m)); while (el.children.length > HIST.cap) el.children[0].remove(); if (end && window.AUTO !== false) el.scrollTop = el.scrollHeight; };
     if (k === 'flow') { cb.insertAdjacentHTML('beforeend', dRowChat(m)); dFlow(); }
     else if (k === 'events') add(m.event ? cb : ca, true);
     else { add(ca, DASH.split.a === 'all' || m.platform === DASH.split.a); add(cb, DASH.split.b === 'all' || m.platform === DASH.split.b); }
   }
   const c = $('#d-l-chat'), a = $('#d-l-activity');
-  if (c) { const end = c.scrollTop + c.clientHeight >= c.scrollHeight - 40; c.insertAdjacentHTML('beforeend', dRowChat(m)); while (c.children.length > 300) c.children[1].remove(); if (end && window.AUTO !== false) c.scrollTop = c.scrollHeight; }
+  if (c) { const end = c.scrollTop + c.clientHeight >= c.scrollHeight - 40; c.insertAdjacentHTML('beforeend', dRowChat(m)); while (c.children.length > HIST.cap) c.children[1].remove(); if (end && window.AUTO !== false) c.scrollTop = c.scrollHeight; }
   if (a && m.event) { if (DASH.paused) { DASH.queue.push(m); dFill(); } else { const e = a.querySelector('.empty'); if (e) e.remove(); a.insertAdjacentHTML('afterbegin', dRowActivity(m)); } }
 };
 window.dashConn = () => { if (W.type === 'dash') { dTabs(); const s = $('#d-plat'); if (s) { const v = s.value; dPanels(); dFill(); } } };
