@@ -446,6 +446,15 @@ public static class Harness
             setKnown(); Msg("Ana", "!zzzzzz"); Check("an unknown word near nothing is left alone", Last() == null && Forwarded(), Last());
             setKnown(); Msg("Ana", "!fake3"); Check("a real command is never 'corrected'", Last() == null && Forwarded(), Last());
             setKnown(); Msg("Ana", "!ban"); Check("short words are never guessed", Last() == null && Forwarded(), Last());
+            {   // !vanish / !disappear (Host-run, from commands.json): the Helper must know them, never "correct" them, and the shipped command list must carry both
+                known.Add("!vanish"); known.Add("!disappear");
+                setKnown(); Msg("Ana", "!vanish"); Check("!vanish is a real command: the Helper stays out of its way", Last() == null && CoreRun() == null && Forwarded(), Last());
+                setKnown(); Msg("Ana", "!disappear"); Check("!disappear (alias) is left alone too", Last() == null && CoreRun() == null && Forwarded(), Last());
+                string cj = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "PinguinoB0t", "commands.json")); if (!File.Exists(cj)) cj = @"D:\PinguinoSuite\PinguinoB0t\commands.json";
+                string cs = File.ReadAllText(cj);
+                Check("commands.json (feeds /help#commands and the Helper) lists !vanish with the !disappear alias", cs.Contains("\"!vanish\"") && cs.Contains("\"!disappear\""));
+                known.Remove("!vanish"); known.Remove("!disappear");
+            }
             setKnown(); Msg("Ana", "!jion"); Msg("Ana", "!jion"); Check("typo nudges are rate-limited per viewer", Last() == null, Last());
             setKnown(); Msg("Eva", "!jion"); Check("a Spanish viewer gets the typo question in Spanish", Last() != null && Last().Contains("¿Quisiste decir !join?"), Last());
             Msg("Eva", "sí"); run = CoreRun(); Check("Spanish 'sí' confirms", run != null && (string)run["command"] == "!join", run == null ? "no run" : (string)run["command"]);
