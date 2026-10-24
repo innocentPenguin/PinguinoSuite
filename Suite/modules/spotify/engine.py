@@ -21,7 +21,7 @@ import console_log
 import rules
 import store
 from queue_core import Queue, QueueError, new_item
-from spotify_api import ApiError, NotConnected, RateLimited, norm_playback
+from spotify_api import ApiError, NotConnected, RateLimited, norm_playback, norm_track
 
 _ARTIST_ID = re.compile(r"[A-Za-z0-9]{22}")
 def local_day(ts):
@@ -35,6 +35,7 @@ def local_day(ts):
 
 
 VERIFY_EVERY_S = 20
+MAX_REPUSH = 2                   # a song that vanishes from Spotify's queue is pushed again twice, then given up
 NO_REFUND = {"blocked", "user_blocked", "dup_recent", "dup_skipped"}   # troll codes: never refunded
 SKIP_EARLY_MS = 20000     # cut off with more than this left = counted as skipped
 IDLE_UNPUSH_S = 8
@@ -89,6 +90,7 @@ class Engine:
         self.idle_since = None
         self._ann = []                 # announcements for the Host to post: {seq, ts, text}
         self._ann_seq = int(clock())      # same: monotonic across restarts, so a Host polling with since=N still sees new lines
+        self._repush = {}                 # queue item id -> times it vanished from Spotify's queue
         self._ann_sent_ts = 0.0           # when the Host last took a track line (burst guard)
         self._search_cache = {}
         self.artist_genres = {}
@@ -400,7 +402,7 @@ class Engine:
                                     "art": prev_track["art"], "requester": self.now_item["requester"] if self.now_item else "",
                                     "source": self.now_item["source"] if self.now_item else "spotify", "played_at": self.clock()})
         self.skip_votes.clear()
-        self.now_item = self.queue.pop_playing(cur["uri"]) if cur else None
+        self.now_item = self.queue.pop_playing(cur["uri"], cur) if cur else None
         if cur:
             console_log.info("player", f"now playing: {cur['name']} - {', '.join(cur['artists'])}" +
                              (f" (requested by {self.now_item['requester']})" if self.now_item and self.now_item["requester"] else ""))
@@ -513,14 +515,27 @@ class Engine:
     def _verify_pushed(self, head):
         q = self.api.queue() or {}
         lst = q.get("queue") or []
-        if any(t and t.get("uri") == head["uri"] for t in lst) or len(lst) >= 20:
+        if any(self.queue.same_song(head, norm_track(t)) for t in lst if t) or len(lst) >= 20:
             return
-        if (q.get("currently_playing") or {}).get("uri") == head["uri"]:
+        if self.queue.same_song(head, norm_track(q.get("currently_playing"))):
             return
         with self.lock:
             if self.queue.items and self.queue.items[0]["id"] == head["id"]:
+                n = self._repush.get(head["id"], 0) + 1
+                self._repush[head["id"]] = n
+                if n > MAX_REPUSH:                     # Spotify keeps dropping it (unavailable in the market?): stop looping
+                    self.queue.items.pop(0)
+                    self._repush.pop(head["id"], None)
+                    self._reject(head, head["requester"], "unplayable")
+                    self.refund_item(head, head, "unplayable")
+                    self._event("reject", head["requester"], f"{head['name']}: unplayable", False)
+                    console_log.warn("queue", f"'{head['name']}' keeps vanishing from Spotify's queue; giving up on it")
+                    self.persist()
+                    self._announce("announce_unplayable", user=head["requester"], title=head["name"], song=head["name"])
+                    self._bump()
+                    return
                 head["pushed"] = False
-                console_log.warn("queue", f"'{head['name']}' vanished from Spotify's queue; will push again")
+                console_log.warn("queue", f"'{head['name']}' vanished from Spotify's queue; will push again ({n}/{MAX_REPUSH})")
                 self._bump()
 
     def _push(self, item):

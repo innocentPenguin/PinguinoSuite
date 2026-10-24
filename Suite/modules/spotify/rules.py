@@ -198,11 +198,13 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
         return False, "too_long", {**ctx, "max_min": max(1, max_s // 60)}
     if settings["min_length_s"] and dur < settings["min_length_s"] * 1000:
         return False, "too_short", {**ctx, "min_s": settings["min_length_s"]}
+    full_ctx = lambda extra_ms=0: {**ctx, "count": len(queue.items), "mins": round(queue.total_ms() / 60000),
+                                    "retry": max(1, round((extra_ms + queue.total_ms() / max(1, len(queue.items))) / 60000))}
     if len(queue.items) >= settings["queue_max"] and not staff:
-        return False, "full", ctx
+        return False, "full", full_ctx()
     mm = settings["queue_max_minutes"]
     if mm and not staff and queue.total_ms() >= mm * 60000:
-        return False, "full", ctx
+        return False, "full", full_ctx(queue.total_ms() - mm * 60000)
     uri = track.get("uri")
     if queue.contains_uri(uri) or uri == now_uri:
         return False, "dup_queue", ctx

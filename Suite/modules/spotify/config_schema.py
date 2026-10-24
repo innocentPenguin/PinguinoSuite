@@ -5,7 +5,7 @@ The Settings tab is generated from SCHEMA, rules.DEFAULTS is derived from it."""
 VARS = {"user": "Ann", "song": "Song 1 - Artist", "title": "Song 1", "artist": "Artist", "pos": 3, "eta": ", plays in ~8 min", "by": " (requested by Ann)", "limit": 2,
         "max_min": 10, "min_s": 30, "votes": 1, "need": 3, "link": "https://open.spotify.com/track/abc", "requester": "Ann",
         "count": 5, "next": "1. Song 2 - Artist | 2. Song 3 - Artist", "cooldown": 60, "cmds": "!sr !song !queue !skip !oops",
-        "last": "Song 0 - Artist", "genre": "death metal", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120, "mins": 8, "target": "troll42", "prefix": "!", "for": "10m"}
+        "last": "Song 0 - Artist", "genre": "death metal", "vol": 40, "volmax": 80, "mine": "Song 4 - Artist, Song 7 - Artist", "wait": 120, "mins": 8, "retry": 3, "target": "troll42", "prefix": "!", "for": "10m"}
 
 MSGS = {
     "added": ("Song added", "@{user} added '{song}' (#{pos} in queue{eta}).", "Viewer request accepted."),
@@ -17,7 +17,8 @@ MSGS = {
     "explicit": ("Explicit", "@{user} explicit songs aren't allowed right now.", "Explicit songs refused."),
     "too_long": ("Too long", "@{user} that song is too long (max {max_min} min).", "Over the length limit."),
     "too_short": ("Too short", "@{user} that song is too short (min {min_s} s).", "Under the minimum length."),
-    "full": ("Queue full", "The queue is full.", "Queue at its maximum."),
+    "full": ("Queue full", "@{user} the queue is full ({count} songs, ~{mins} min). Try again in about {retry} min.", "Queue at its maximum."),
+    "announce_unplayable": ("Announce: song could not be queued", "@{user} sorry, {title} would not stay in Spotify's queue (maybe not available here). Pick another song!", "Line the Host can post once when a requested song is dropped after repeated tries."),
     "dup_queue": ("Already queued", "@{user} that song is already queued or playing.", "Duplicate protection."),
     "dup_skipped": ("Skipped recently", "@{user} that song was skipped recently, try another one.", "Skipped-song cooldown."),
     "dup_recent": ("Played recently", "@{user} that song was played recently.", "Replay cooldown."),

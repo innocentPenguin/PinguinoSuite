@@ -184,13 +184,24 @@ class Queue:
             self.items = extra + snap
             self.items.sort(key=lambda it: 0 if it["pushed"] else 1)   # stable: a pushed item is always the head
 
-    def pop_playing(self, uri):
-        """Spotify started `uri`: if it is our pushed head, take it out of the queue and return it."""
+    @staticmethod
+    def same_song(it, track):
+        """Spotify may play a relinked copy of a track (other uri, same song): linked_from, or same title + artists + length."""
+        if not track:
+            return False
+        if it["uri"] == track.get("uri") or (track.get("alt_uri") and it["uri"] == track["alt_uri"]):
+            return True
+        return (it["name"].strip().lower() == track.get("name", "").strip().lower() and [a.lower() for a in it["artists"]] == [a.lower() for a in track.get("artists", [])]
+                and abs(it["duration_ms"] - track.get("duration_ms", 0)) <= 3000)
+
+    def pop_playing(self, uri, track=None):
+        """Spotify started `uri` (or `track`, a relinked copy): if it is our pushed head, take it out of the queue and return it."""
+        track = track or {"uri": uri}
         with self.lock:
             for i, it in enumerate(self.items):
-                if it["uri"] == uri and it["pushed"]:
+                if self.same_song(it, track) and it["pushed"]:
                     return self.items.pop(i)
-            if self.items and self.items[0]["uri"] == uri:      # head started although we had un-flagged it (verify raced the change)
+            if self.items and self.same_song(self.items[0], track):      # head started although we had un-flagged it (verify raced the change)
                 return self.items.pop(0)
             return None
 

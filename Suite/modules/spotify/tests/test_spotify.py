@@ -1788,3 +1788,58 @@ class SongifyHandoffTests(AnnounceTierTests):
         self.assertIn("takeback", cs.PRESETS)
         for k in cs.PRESETS["songify"][2]:
             self.assertIn(k, rules.DEFAULTS if hasattr(rules, "DEFAULTS") else rules.merged({}))
+
+
+class VanishLoopTests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.api, self.clock = FakeApi(), Clock()
+        self.e = Engine(self.api, FakeAuth(), self.clock)
+        self.e.save_settings({"requests_open": True})
+
+    def _vanish_round(self):
+        self.api.real_queue = []                       # Spotify drops it
+        self.clock.t += 30
+        self.e.tick()                                  # verify notices
+        self.e.tick()                                  # pushes again (or not)
+
+    def test_gives_up_after_two_repushes_refunds_and_says_it_once(self):
+        self.e.add_track(T(2), "end", "bob", "viewer")
+        self.e.queue.items[0]["redeem"] = True
+        self.api.playing, self.api.progress = "spotify:track:t1", 190000
+        self.e.tick()
+        for _ in range(2):
+            self._vanish_round()
+            self.assertEqual(len(self.e.queue.items), 1)
+        pushes = len([c for c in self.api.calls if c[0] == "queue"])
+        self.assertEqual(pushes, 3)                    # first push + 2 re-pushes
+        self._vanish_round()
+        self.assertEqual(self.e.queue.items, [], "given up")
+        for _ in range(3):
+            self._vanish_round()
+        self.assertEqual(len([c for c in self.api.calls if c[0] == "queue"]), pushes, "no loop")
+        self.assertEqual(self.e.pending_refunds(0)["refunds"][0]["why"], "unplayable")
+        lines = [l["text"] for l in self.e.announcements(0)["lines"] if "bob" in l["text"]]
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(self.e.rejects[-1]["reason"], "unplayable")
+
+    def test_relinked_track_is_not_a_vanish_and_leaves_the_queue_when_it_plays(self):
+        self.e.add_track(T(2), "end", "bob", "viewer")
+        it = self.e.queue.items[0]
+        relinked = dict(T(2), uri="spotify:track:other", id="other")
+        self.assertTrue(self.e.queue.same_song(it, relinked))
+        self.assertTrue(self.e.queue.same_song(it, dict(relinked, name="x", alt_uri=it["uri"])))
+        self.assertFalse(self.e.queue.same_song(it, dict(relinked, name="other song")))
+        it["pushed"] = True
+        self.assertIs(self.e.queue.pop_playing("spotify:track:other", relinked), it)
+        self.assertEqual(self.e.queue.items, [])
+
+    def test_full_reply_names_length_and_retry_time(self):
+        self.e.save_settings({"queue_max": 2, "per_user_limit": 0})
+        self.e.add_track(T(2), "end", "a", "viewer")
+        self.e.add_track(T(3), "end", "b", "viewer")
+        r = self.e.request("carl", "song 4", [])
+        self.assertEqual(r["code"], "full")
+        self.assertIn("2 songs", r["reply"])
+        self.assertRegex(r["reply"], r"about \d+ min")

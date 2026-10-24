@@ -284,7 +284,7 @@ def norm_track(t):
     return {"id": t.get("id", ""), "uri": t["uri"], "name": t.get("name", ""), "artists": [a.get("name", "") for a in t.get("artists", [])],
             "artist_ids": [a.get("id", "") for a in t.get("artists", []) if a.get("id")],
             "album": (t.get("album") or {}).get("name", ""), "art": art, "duration_ms": int(t.get("duration_ms") or 0),
-            "explicit": bool(t.get("explicit"))}
+            "explicit": bool(t.get("explicit")), "alt_uri": (t.get("linked_from") or {}).get("uri", "")}
 
 
 def norm_playback(j):
