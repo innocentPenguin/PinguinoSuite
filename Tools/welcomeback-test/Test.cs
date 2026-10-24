@@ -8,6 +8,13 @@ static class T { static int bad = 0;
   C(WelcomeBack.Standing(g, "duob") == "core", "duob core"); C(WelcomeBack.Standing(g, "acq") == "known", "known edge");
   C(WelcomeBack.Standing(g, "grp1") == "known", "known group"); C(WelcomeBack.Standing(g, "nobody") == "", "unknown"); C(WelcomeBack.Standing(null, "x") == "", "no graph");
   var r = new Random(1);
+  C(WelcomeBack.IsSpamLogin("succeedingsteelbqdzvkxr") && WelcomeBack.IsSpamLogin("dramaticlacencjhwz") && WelcomeBack.IsSpamLogin("auxiliarygamblingmtkxvs") && WelcomeBack.IsSpamLogin("goddambalance2g3l2"), "viewbot logins are spam");
+  foreach (var ok in new[] { "lvlmarshmello", "snowyroses_", "spongefredcircleshorts", "t1cklem0n3ter324", "nxghtmare_rl_", "penguinslittlebro", "im_just_a_pineapple", "carteriscool898", "imnotmelloiswarghhh" }) C(!WelcomeBack.IsSpamLogin(ok), "real login is not spam: " + ok);
+  C(WelcomeBack.Pick("succeedingsteelbqdzvkxr", 10, "core", null, r) == "", "no welcome-back line for a spam login");
+  C(WelcomeBack.IsSpamText("Ai viewers stre𝓪mboo .com") && WelcomeBack.IsSpamText("Cheapest Viewers boosttask.ru"), "fancy letters / other domains");
+  C(!WelcomeBack.IsSpamText("who tf is streamboo", true) && !WelcomeBack.IsSpamText("how do i get viewers like you bro?", true) && !WelcomeBack.IsSpamText("https://open.spotify.com/track/abc", true), "talk about spam is not spam");
+  C(WelcomeBack.IsSpamText("Best viewers with viewers streamboo .org") && WelcomeBack.IsSpamText("Ai vIewers streamboo . Com") && WelcomeBack.IsSpamText("cheap followers at foo.xyz") && WelcomeBack.IsSpamText("hi check bar.com", true), "spam texts");
+  C(!WelcomeBack.IsSpamText("check google.com for the rank") && !WelcomeBack.IsSpamText("hi chat how are the viewers today") && !WelcomeBack.IsSpamText("yo peng", true) && !WelcomeBack.IsSpamText("https://clips.twitch.tv/x", true), "normal texts are not spam");
   C(WelcomeBack.Pick("Zed", 1, "core", null, r) == "", "too recent -> no line");
   foreach (int d in new[] { 3, 10, 45, 200 }) foreach (var s in new[] { "", "known", "regular", "core" }) for (int i = 0; i < 40; i++) {
     string l = WelcomeBack.Pick("Zed", d, s, null, r); C(l.Contains("Zed") && !l.Contains("{") && !l.Any(char.IsDigit), "line ok d=" + d + " s=" + s + ": " + l); }

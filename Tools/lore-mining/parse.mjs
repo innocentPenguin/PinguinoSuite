@@ -1,5 +1,5 @@
 import fs from 'fs'; import path from 'path';
-const root='D:/PinguinoSuite/Data/chat_logs/2026'; const out=[]; const notices=[];
+const root='D:/PinguinoSuite/Data/chat_logs/2026'; let out=[]; const notices=[];
 for(const m of fs.readdirSync(root).sort()) for(const f of fs.readdirSync(path.join(root,m)).sort()){
   const day=f.slice(0,10);
   for(const line of fs.readFileSync(path.join(root,m,f),'utf8').split(/\r?\n/)){
@@ -8,7 +8,11 @@ for(const m of fs.readdirSync(root).sort()) for(const f of fs.readdirSync(path.j
     r=/^\[(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)\] #\S+ \* (.*)$/.exec(line);
     if(r) notices.push({d:r[1],t:r[2],x:r[3]});
   }}
+import {filterSpam} from './spam.mjs';
 const S=process.argv[2];
+// spam/viewbot accounts never enter lore, cards or the graph
+const fs_=filterSpam(out); const nIn=out.length; out=fs_.rows;
+console.log('spam accounts dropped:',fs_.users.size,'| spam messages dropped:',fs_.droppedMessages,'| rows',nIn,'->',out.length);
 fs.writeFileSync(S+'/msgs.jsonl',out.map(o=>JSON.stringify(o)).join('\n'));
 fs.writeFileSync(S+'/notices.jsonl',notices.map(o=>JSON.stringify(o)).join('\n'));
 console.log(out.length,notices.length);

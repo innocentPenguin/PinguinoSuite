@@ -41,10 +41,33 @@ namespace PinguinoHost
             return "";
         }
 
+        // Spam / viewbot accounts ("Best viewers with viewers streamboo .org"): never welcomed, never lore. Same rules as Tools/lore-mining/spam.mjs.
+        static readonly System.Text.RegularExpressions.Regex DomainLike = new System.Text.RegularExpressions.Regex(@"(https?://|www\.|\b[a-z0-9][a-z0-9-]{2,}\s?\.\s?(org|com|net|xyz|ru|shop|site|club|ly|cc)\b)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        static readonly System.Text.RegularExpressions.Regex NormalLinks = new System.Text.RegularExpressions.Regex(@"(https?://)?([a-z0-9-]+\.)*(twitch\.tv|youtube\.com|youtu\.be|discord\.gg|discord\.com|spotify\.com)\S*", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        static readonly System.Text.RegularExpressions.Regex PromoWord = new System.Text.RegularExpressions.Regex(@"\b(viewers?|followers?|views|subs|promo|cheap|boost|streamboo|bigfollows)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        /// <summary>Link/domain-like text that sells viewers or followers (or any link in a first message).</summary>
+        public static bool IsSpamText(string text, bool firstMessage = false)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            text = new string(text.Normalize(System.Text.NormalizationForm.FormKD).Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray()); // fancy letters fold to plain
+            if (text.IndexOf("best viewers with viewers", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            string t = NormalLinks.Replace(text, " "); // twitch / youtube / discord links are normal chat
+            bool dom = DomainLike.IsMatch(t);
+            return dom && (firstMessage || PromoWord.IsMatch(t));
+        }
+        /// <summary>Auto-generated viewbot logins: 16+ letters/digits that end in a random-looking tail (6+ consonants in a row, or digit-letter-digit in the last 6 characters).</summary>
+        public static bool IsSpamLogin(string login)
+        {
+            string l = System.Text.RegularExpressions.Regex.Replace((login ?? "").ToLowerInvariant().TrimStart('@'), "[^a-z0-9]", "");
+            if (l.Length < 16) return false;
+            if (System.Text.RegularExpressions.Regex.IsMatch(l.Substring(l.Length - 6), "[0-9][a-z][0-9]")) return true;
+            return System.Text.RegularExpressions.Regex.IsMatch(l, "[bcdfghjklmnpqrstvwxz]{6,}$");
+        }
+
         /// <summary>One welcome-back line, or "" when the person has not been away long enough. seen(line) says whether it was used recently (it is avoided while a fresh one is left).</summary>
         public static string Pick(string name, int daysAway, string standing, Func<string, bool> seen, Random rnd, JObject extra = null)
         {
-            string band = Band(daysAway); if (band == "" || string.IsNullOrWhiteSpace(name)) return "";
+            string band = Band(daysAway); if (band == "" || string.IsNullOrWhiteSpace(name) || IsSpamLogin(name)) return "";
             var pool = new List<string>(Pools[band]); AddExtra(pool, extra, band);
             if (standing == "core" || standing == "regular") { pool.AddRange(Pools["warm"]); AddExtra(pool, extra, "warm"); }
             var all = pool.Select(t => t.Replace("{u}", name)).Distinct().ToList();

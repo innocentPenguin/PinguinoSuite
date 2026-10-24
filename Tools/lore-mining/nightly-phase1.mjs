@@ -22,6 +22,8 @@ if (!fs.existsSync(logf)) { fs.mkdirSync(path.dirname(out), { recursive: true })
 const raw = fs.readFileSync(logf, 'utf8');
 const rows = [];
 for (const l of raw.split(/\r?\n/)) { const r = /^\[(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)\] #\S+ (\S+?): (.*)$/.exec(l); if (r) rows.push({ t: r[2], u: r[3].toLowerCase(), x: r[4] }); }
+import { filterSpam } from './spam.mjs';
+{ const f = filterSpam(rows); for (let i = rows.length - 1; i >= 0; i--) if (f.users.has(rows[i].u)) rows.splice(i, 1); } // viewbots never become terms, people or pairs
 const mem = rj(path.join(SUITE, 'Data', 'runtime', 'chat_memory.json'), rj(path.join(SUITE, 'Data', 'chat_memory.json'), {}));
 const optout = new Set();
 for (const [u, v] of Object.entries(mem.Users || mem)) if (v && typeof v === 'object' && /^(anon|forget)$/i.test(String(v.Privacy || ''))) { optout.add(u.toLowerCase()); if (v.Login) optout.add(String(v.Login).toLowerCase()); for (const x of v.Aliases || []) optout.add(String(x).toLowerCase()); }

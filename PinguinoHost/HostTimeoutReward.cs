@@ -235,7 +235,7 @@ namespace PinguinoHost
             /// <summary>IDEAS #36: a welcome-back line for someone away daysAway days, or "" (not away long enough, bot, or opted out). Extra lines: Data\lore\welcome_lines.json.</summary>
             public static string WelcomeLine(string login, string display, int daysAway, Func<string, bool> seen)
             {
-                login = Norm(login); if (!Allowed(login)) return "";
+                login = Norm(login); if (!Allowed(login) || WelcomeBack.IsSpamLogin(login)) return "";
                 JObject extra = null;
                 try { string f = Path.Combine(Program.SuiteDir ?? "", "Data", "lore", "welcome_lines.json"); if (File.Exists(f)) extra = JObject.Parse(File.ReadAllText(f, Encoding.UTF8)); } catch { }
                 return WelcomeBack.Pick(display, daysAway, Standing(login), seen, Rnd, extra);
