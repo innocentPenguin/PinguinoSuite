@@ -4,11 +4,13 @@ import http.server, json, os, shutil, subprocess, sys, tempfile, threading, time
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 PORT, HX, MOD = 8975, 8976, 8977
-patches = []; state = {'refunds': [], 'reject': set()}
+patches = []; state = {'refunds': [], 'reject': set(), 'deny': False}
 class Hx(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_PATCH(self):
         n = int(self.headers.get('Content-Length', 0)); b = json.loads(self.rfile.read(n) or b'{}'); patches.append((self.path, b))
+        if state['deny']:
+            o = b'{"error":"Forbidden","status":403,"message":"The ID in the Client-Id header must match the client ID used to create the custom reward"}'; self.send_response(403); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(o))); self.end_headers(); self.wfile.write(o); return
         o = b'{"data":[{}]}'; self.send_response(200); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(o))); self.end_headers(); self.wfile.write(o)
 class Mod(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -53,6 +55,13 @@ try:
     time.sleep(2)
     chk('no double refund', len(patches) == 2, patches)
     st = json.load(open(os.path.join(d, 'refund_state.json'))); chk('lastSeq persisted', st.get('lastSeq') == 2, st)
+    # a refund that Twitch refuses (403): chat hears it once, in plain words
+    def said(): return open(out, encoding='utf-8', errors='replace').read().count('could not refund, a mod will sort it')
+    state['deny'] = True; s0 = said()
+    feed('event TwitchRedeem dave bad_song_two', 2.5)
+    chk('refund 403: one plain line to chat', said() == s0 + 1, (s0, said()))
+    feed('event TwitchRedeem erin bad_song_three', 2.5)
+    chk('a second 403 does not repeat the line', said() == s0 + 1, (s0, said()))
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS refunds'); sys.exit(1 if fails else 0)

@@ -35,10 +35,17 @@ namespace PinguinoHost
             string code = TwitchApi.Call(new HttpMethod("PATCH"), "/channel_points/custom_rewards/redemptions?id=" + Uri.EscapeDataString(redemptionId) + "&broadcaster_id={bid}&reward_id=" + Uri.EscapeDataString(rewardId), new JObject { { "status", status } }, out d, out err);
             if (code.StartsWith("2")) { Clog.Info("refund", (status == "CANCELED" ? "refunded" : "completed") + " redemption " + redemptionId); try { EventLog.Backend("refund", "refunded a channel-point redemption", new JObject { { "redemption", redemptionId } }); } catch (Exception) { } return status == "CANCELED" ? "refunded" : "completed"; }
             string why = code == "401" || code == "403" ? " (the streamer account needs channel:manage:redemptions: sign in again on the Host setup page; Twitch also only lets the app that created a reward refund it)" : code == "404" ? " (already fulfilled, cancelled or older than Twitch keeps it)" : "";
-            if (code == "403") Rewards.NoteNotOwned(rewardId, err);
+            if (code == "403") { Rewards.NoteNotOwned(rewardId, err); SayRefundFailedOnce(); }
             Clog.Warn("refund", "could not refund redemption (HTTP " + code + "): " + err + why);
             try { EventLog.Backend("refund", "could not refund a redemption: HTTP " + code + why, new JObject { { "redemption", redemptionId } }, "warn"); } catch (Exception) { }
             return "failed " + code + " " + err;
+        }
+        static bool _refundSaid;
+        /// <summary>Ivan 10-24: when a refund 403s, chat hears it once (per Host run), in plain words; other refund texts are unchanged</summary>
+        static void SayRefundFailedOnce()
+        {
+            lock (L) { if (_refundSaid) return; _refundSaid = true; }
+            try { const string line = "could not refund, a mod will sort it"; if (HostApi.SimMode) Console.WriteLine("[say] " + line); else { string via; HostApi.SendAs("core", line, out via); } } catch (Exception) { }
         }
         /// <summary>newest still-unrefunded redemption of that user, within the last 3 hours</summary>
         static Rec Take(string user)
