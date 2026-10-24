@@ -22,7 +22,8 @@ const SIDE_SECTIONS = [
   {id: 'sound', title: 'Sounds (server ding / chat pop)', help: 'sound audio ding pop volume new chatter returning mute notification', body: () => !SIDE.dg ? '<div class="empty">Loading...</div>' :
     `<h4>${SIDE.dg.rows ? 'Chatter sounds' : 'New-chatter ding'}</h4>${dingBox(SIDE.dg)}<h4>Chat pop</h4>${popBox(SIDE.pp)}`},
   {id: 'bots', title: 'Bot accounts', help: 'bot bots accounts hide dim skip chatty pinguino nightbot', show: () => !!SIDE.bots, body: () => !SIDE.bots ? '' :
-    `<label class="cf">Accounts (comma separated)<input id="bots-in" value="${esc((SIDE.bots.accounts || []).join(', '))}" placeholder="mybot, otherbot" style="flex:1"></label>
+    `${W.type === 'chat' ? `<label class="chk"><input type="checkbox" id="bots-show" ${SHOWBOTS ? 'checked' : ''}> Show bots and !commands in this chat window</label>` : ''}
+    <label class="cf">Accounts (comma separated)<input id="bots-in" value="${esc((SIDE.bots.accounts || []).join(', '))}" placeholder="mybot, otherbot" style="flex:1"></label>
     <div class="act"><button class="p" data-side-bots="save">Save</button> <span id="bots-msg"></span></div>
     <small class="mut">Always treated as bots: ${esc((SIDE.bots.builtin || []).join(', '))}, plus any name ending in bot / b0t. Bots are dimmed in chat and skipped by the reading cursor and the new-chatter sounds.</small>`},
   {id: 'split', title: 'Split chat and pop-out', help: 'split pop out window monitor half top bottom always on top', body: () => SIDE.pn ? splitBox(SIDE.pn) : '<div class="empty">Loading...</div>'},
@@ -116,4 +117,10 @@ async function sideBotsSave() {
   SIDE.bots = j; if (typeof botsLoad === 'function') botsLoad(j);
   histRedraw(); say('Saved (' + (j.accounts || []).length + ' account' + ((j.accounts || []).length === 1 ? '' : 's') + ')', true);
 }
+document.addEventListener('change', e => {
+  if (!e.target || e.target.id !== 'bots-show') return;
+  SHOWBOTS = e.target.checked;
+  try { localStorage.setItem('multi-showbots', SHOWBOTS ? '1' : '0'); } catch (err) { /* ignore */ }
+  if (typeof chatFeed === 'function') chatFeed();
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && SIDE.open && (W.type === 'chat' || W.type === 'dash')) sideToggle(false); });

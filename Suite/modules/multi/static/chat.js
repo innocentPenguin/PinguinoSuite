@@ -41,7 +41,13 @@ const MSGC = new Map();
 const foreignText = t => { const l = [...String(t)].filter(c => /\p{L}/u.test(c)); return l.length >= 4 && l.filter(c => c.charCodeAt(0) > 127).length / l.length > 0.3; };
 const msgById = id => MSGC.get(id) || msgs.find(m => m.id === id) || null;
 const isQuestionForMe = m => (m.reasons || []).some(r => ['question', 'mention', 'reply_to_me'].includes(r.rule)) || (/\?/.test(m.text || '') && mentionsMe(m)) || m.event === 'cheer';
+// The multistream chat window hides bot accounts and !commands unless "show bots and commands" is on (same bot rule as the server's ding.is_bot).
+let SHOWBOTS = false;
+try { SHOWBOTS = localStorage.getItem('multi-showbots') === '1'; } catch (e) { /* storage may be blocked */ }
+const botLine = m => !m.is_self && !!(m.is_bot || BOTS.has((m.user || '').toLowerCase()) || /(bot|b0t)$/i.test(m.user || ''));
+const cmdLine = m => !m.event && /^\s*!/.test(m.text || '');
 function chatVisible(m) {
+  if (!SHOWBOTS && W.type === 'chat' && (botLine(m) || cmdLine(m))) return false;
   if (CF.off.includes(m.platform) || !pass(m)) return false;
   if (CF.bots === 'hide' && isBot(m)) return false;
   if (CF.q && !isBot(m) && !isQuestionForMe(m)) return false;
