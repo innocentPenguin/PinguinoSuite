@@ -128,6 +128,7 @@ namespace PinguinoHost
                     if (test) return "(dry run) would queue a shoutout for " + who;
                     return "shoutout " + Shout.Enqueue(who, x("by"), (bool?)st["auto"] == true) + ": " + who;
                 }
+                case "popup_hold": return PopupHold.Run(test);   // show, stay up until the end time (later alerts push it out), hide
                 case "alert_settings":   // sets {popup.scene}, {popup.source}, {popup.ms} from alerts_settings.json
                 {
                     var al = AlertCfg.Settings(); ctx["popup.scene"] = (string)al["PopupScene"]; ctx["popup.source"] = (string)al["PopupSource"]; ctx["popup.ms"] = ((int)(((double?)al["PopupSeconds"] ?? 10) * 1000)).ToString();
@@ -259,6 +260,7 @@ namespace PinguinoHost
         public static void SeedStreamerBotPresets()
         {
             MigrateRaidStart(); MigrateRaidOutNoWait();
+            try { MakePopupHold(); } catch (Exception ex) { Clog.Warn("automation", "popup hold migration failed: " + ex.Message); }
             try { MakePopupAsync(); } catch (Exception ex) { Clog.Warn("automation", "popup migration failed: " + ex.Message); }
             try { AddAlertSoundSteps(); } catch (Exception ex) { Clog.Warn("automation", "alert sound migration failed: " + ex.Message); }
             try
@@ -270,7 +272,7 @@ namespace PinguinoHost
                 string disc = Links.Get("discord") ?? "https://discord.gg/fktz5sq4b8";   // the live invite (the old be6bus4GKh one is expired)
                 var list = new List<JObject> {
                     Act("sb-latest-popup", "Alerts: show Latest Group", "preset: shows the 'Latest Group' for some seconds after each alert, like the old 'latest' action. Scene, source and seconds: Data\\runtime\\alerts_settings.json.", true, new JArray { Tr("manual") },
-                        Step("alert_settings"), Step("obs_source", "scene", "{popup.scene}", "source", "{popup.source}", "visible", "true"), Step("delay", "ms", "{popup.ms}"), Step("obs_source", "scene", "{popup.scene}", "source", "{popup.source}", "visible", "false")),
+                        Step("alert_settings"), Step("popup_hold")),
                     Act("sb-session-cmd", "Command: !session", "new: this stream's numbers (follows, subs, bits, raids). Wording in session_settings.json.", true, new JArray { Tr("command", "names", new JArray("!session", "!streamstats"), "cooldownSec", 20) }, Step("session_say"), SayStep("{session.line}")),
                     Act("sb-goal-cmd", "Command: !goal", "new: progress of the goals in session_settings.json (the OBS bar is /overlay/goal?id=followers).", true, new JArray { Tr("command", "names", new JArray("!goal", "!goals"), "cooldownSec", 20) }, Step("goal_say", "id", "{arg1}"), SayStep("{goal.line}")),
                     Act("sb-recap", "Stream recap", "new: the stream's numbers when you go offline (use instead of or after 'Stream offline').", false, new JArray { Tr("stream_offline") }, Step("session_say"), SayStep("Thanks for tuning in! {session.line}{session.clip}")),

@@ -81,11 +81,19 @@ namespace PinguinoHost
             }
         }
         /// <summary>What the Suite needs to draw the sliders page: every option with type, range, step, default and a one-line help. GET /api/overlay-options/schema</summary>
+        /// <summary>the "Latest Group" popup after an alert is not a page option: its length is PopupSeconds in alerts_settings.json (GET/POST /api/alerts-settings, 1 to 120 s)</summary>
+        static JObject AlertPopupInfo()
+        {
+            double cur = 10; try { cur = (double?)AlertCfg.Settings()["PopupSeconds"] ?? 10; } catch (Exception) { }
+            return new JObject { { "key", "PopupSeconds" }, { "label", "Alert popup length (s)" }, { "type", "number" }, { "min", 1 }, { "max", 120 }, { "step", 1 }, { "default", 10 }, { "current", cur }, { "api", "/api/alerts-settings" }, { "help", "How long the Latest Group popup stays up after an alert. Alerts close together keep it up until the last one has had this long." } };
+        }
+
         public static JObject Schema()
         {
             Func<string, string, double, double, double, double, string, JObject> num = (k, label, lo, hi, step, def, help) => new JObject { { "key", k }, { "label", label }, { "type", "number" }, { "min", lo }, { "max", hi }, { "step", step }, { "default", def }, { "help", help } };
             Func<string, string, string[], string, string, JObject> en = (k, label, vals, def, help) => new JObject { { "key", k }, { "label", label }, { "type", "enum" }, { "values", new JArray(vals) }, { "default", def }, { "help", help } };
             return new JObject { { "ok", true }, { "overlays", new JArray("queue", "players", "players_vertical", "wheel", "subroll") }, { "global", "*" },
+                { "alertPopup", AlertPopupInfo() },
                 { "profiles", new JArray(SourceProfiles) }, { "profileHelp", "Save options for one source size as name@profile (queue@vertical, *@1440p). The page picks its profile from its size: portrait = vertical, 1300+ px tall = 1440p, 2000+ = 4k, else 1080p. Merge order: *, *@profile, name, name@profile." },
                 { "presetPads", new JObject { { "1080p", new JObject { { "safe", 54 }, { "tv", 108 } } }, { "1440p", new JObject { { "safe", 72 }, { "tv", 144 } } }, { "4k", new JObject { { "safe", 108 }, { "tv", 216 } } }, { "vertical", new JObject { { "safe", 54 }, { "tv", 108 } } } } },
                 { "options", new JArray {
