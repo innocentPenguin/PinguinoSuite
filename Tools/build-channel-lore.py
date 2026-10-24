@@ -48,7 +48,7 @@ INTENT = {
     '!specs': dict(p=[r'\bspecs?\b', r'\b(?:what|which)\b.*\b(?:pc|computer|gpu|cpu|graphics card|processor|ram|rig)\b', r'\b(?:pc|computer|rig)\b.*\b(?:have|use|using|run|play on)\b', r'\bhow much ram\b'], also=['!streamingpc'], not_=NOT_BUYING, pr=5),
     '!streamingpc': dict(p=[r'\bstream(?:ing)? (?:pc|computer|setup|rig)\b', r'\b(?:pc|computer) (?:he|you|penguin|peng) stream(?:s)? (?:on|with)\b'], pr=6),
     '!controller': dict(p=[r'\b(?:what|which) controller\b', r'\bcontroller\b.*\b(?:he|you|penguin|peng) (?:use|play|have)\b'], pr=4),
-    '!schedule': dict(p=[r'\bwhen\b.*\b(?:stream|live|go live|start|on)\b', r'\b(?:stream|streaming) (?:schedule|times?|hours)\b', r'\bwhat time\b.*\b(?:stream|live|start|on)\b', r'\bschedule\b'], also=['!streamtime'], pr=5),
+    '!schedule': dict(p=[r'\bwhen\b.*\b(?:stream|live|go live|start|on)\b', r'\b(?:stream|streaming) (?:schedule|times?|hours)\b', r'\bwhat time\b.*\b(?:stream|live|start|on)\b', r'\bschedule\b'], pr=5),
     '!streamtime': dict(p=[r'\bstream ?time\b'], pr=4),
     '!server': dict(p=[r'\b(?:which|what|how many) (?:minecraft )?servers?\b', r'\bis there (?:a )?(?:minecraft|mc) server\b'], also=['!ip'], pr=4),
     '!ip': dict(p=[r'\b(?:server|smp|mc|minecraft)\b.*\b(?:ip|address)\b', r'\b(?:what|whats)(?:\'s| is)? the ip\b', r'\bip (?:for|of) the (?:server|smp|minecraft)\b'], pr=5),
@@ -100,6 +100,9 @@ COUNTERS = {'!owngoal': 'owngoal', '!whiff': 'whiff'}
 OVERRIDE = {
     '!discord': ('{link:discord}', 'the export had no text for !discord/!dc; the link comes from Data/runtime/links.json (Links.Expand), so the invite lives in ONE place'),
     '!popcorn': (' '.join(['PopCorn'] * 26), ''),
+    # Ivan 2026-10-24: short form, once; !schedule and !streamtime give the same line (no also= between them)
+    '!schedule': ('5pm Central | 11pm UK', ''),
+    '!streamtime': ('5pm Central | 11pm UK', ''),
     '!attack': None, '!goat': None,
 }
 
