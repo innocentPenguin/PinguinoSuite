@@ -5,6 +5,7 @@ const suite = 'D:/PinguinoSuite';
 const rj = f => JSON.parse(fs.readFileSync(path.join(L, f), 'utf8'));
 const G = rj('people_graph.json'), P = rj('people_graph.public.json');
 const al = JSON.parse(fs.readFileSync(path.join(suite, 'Data/boards/aliases.json'), 'utf8')).aliases;
+Object.assign(al, JSON.parse(fs.readFileSync(new URL('./lore-aliases.json', import.meta.url), 'utf8')).aliases); // lore-only aliases
 const ids = new Set(G.nodes.map(n => n.login));
 const names = d => new Set(fs.readdirSync(path.join(L, d)).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)));
 const cards = names('person_cards'), pc = names('person_cards_public');

@@ -7,6 +7,7 @@ const feat=JSON.parse(fs.readFileSync(S+'/feat.json','utf8'));
 const pairs=JSON.parse(fs.readFileSync(S+'/pairs.json','utf8'));
 const clusters=JSON.parse(fs.readFileSync(S+'/clusters.json','utf8'));
 const alias=JSON.parse(fs.readFileSync('D:/PinguinoSuite/Data/boards/aliases.json','utf8')).aliases;
+Object.assign(alias,JSON.parse(fs.readFileSync(new URL('./lore-aliases.json',import.meta.url),'utf8')).aliases); // lore-only aliases
 const mem=JSON.parse(fs.readFileSync('D:/PinguinoSuite/Data/runtime/chat_memory.json','utf8'));
 const optOut=new Set();for(const v of Object.values(mem))if(v&&(v.Privacy==='anon'||v.Privacy==='forget')){optOut.add(String(v.Login).toLowerCase());for(const a of v.Aliases||[])optOut.add(String(a).toLowerCase())}
 const readJ=p=>{try{return JSON.parse(fs.readFileSync(p,'utf8'))}catch{return null}};

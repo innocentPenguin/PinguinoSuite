@@ -1,0 +1,5 @@
+{
+ "note": "Lore/people-graph only aliases (alias login -> main login), added to Data/boards/aliases.json by merge-aliases.mjs, build.mjs and verify-apply.mjs. NOT used by boards or economy.",
+ "aliases": { "adday_rl": "addayofficial" },
+ "why": { "adday_rl": "Ivan 2026-10-24: adday_rl and addayofficial are one person (adday_rl until 2026-09-21, addayofficial after)." }
+}
