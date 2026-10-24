@@ -376,7 +376,7 @@
   },
   {
    "name": "grindr",
-   "text": "Join the Discord: https://discord.gg/fktz5sq4b8"
+   "text": "Join the Discord: $(link:discord)"
   },
   {
    "name": "goon",
@@ -390,11 +390,11 @@
   },
   {
    "name": "feetfinder",
-   "text": "Join the Discord: https://discord.gg/fktz5sq4b8"
+   "text": "Join the Discord: $(link:discord)"
   },
   {
    "name": "onlyfans",
-   "text": "Join the Discord: https://discord.gg/fktz5sq4b8"
+   "text": "Join the Discord: $(link:discord)"
   },
   {
    "name": "games",
