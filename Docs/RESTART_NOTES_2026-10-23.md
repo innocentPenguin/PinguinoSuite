@@ -48,6 +48,17 @@ Rules while verifying: **never go live in OBS, no real chat messages.** Static o
 | Customs overlay fades out when the Host is unreachable (d4aab26); CSS guards for names (9c4afd9); wheel look, `?part=` modes, safe-area profiles (static, already live). | open `customs.html`, `players.html?demo`, `wheel.html` in a plain browser tab | none |
 | Live-check + operator pages. | `Docs\OVERLAYS_LIVE_CHECKLIST.md`, `Docs\OVERLAYS_OPERATOR.md` | none |
 
+## 5b. Lore / people graph (14)
+| What changes | Verify | Switch |
+|---|---|---|
+| Welcome-back line is a pure function with tests (ec539eb, IDEAS #36), 10 new channel-voice lines. | `python Tools	est-welcomeback.py` prints PASS welcomeback. | none |
+| The Host and bots read the scrubbed people graph (a18f2be): no verbatim excerpts in `people_graph.public.json` / `person_cards_public`; `scrub-graph.mjs` runs inside `build.mjs`. | `node Tools\lore-miningerify-apply.mjs`: every line OK. | none |
+| Timeout and welcome graph lines skip people with `!forgetme` / anon (ee0fad9). | `python Tools	est-host-timeoutgraph.py` prints PASS. | none |
+| Spam/viewbot accounts never get a welcome-back line (login pattern guard in `WelcomeBack.IsSpamLogin`, `PeopleGraph.WelcomeLine`) and never enter lore mining (`Tools\lore-mining\spam.mjs`) (7e36eb3). Needs the Host build for the welcome guard; the mining filter is live in the tools already. | `python Tools	est-welcomeback.py` and `node Tools\lore-mining	est-spam.mjs` print PASS. | none |
+| Live lore was rebuilt 2026-10-23 22:32 (196 cards, 217 edges, 6 groups, 5 stale alias cards gone, spam filtered); no restart needed for the graph (reloads on file change). Backups in `Data\lore-workackup-*`. | `verify-apply.mjs` all OK. | Keep one backup, delete the rest after a quiet day. |
+| NOT applied, waiting for Ivan: ace/ziu/peng + `ssl` entries, `squishy`, fnaf/fortnite words (`Docs
+ightlyeports\lore-ivan-decisions.md`, `phase1-proposals-2026-10-2[23].md`). | n/a | Add to `LORE` in `notes.mjs`, backup, `build.mjs`, `verify-apply.mjs`. |
+
 ## 6. Known gaps (not in this restart)
 - Shared 400 retry dropped on purpose: a reply with a stale parent is lost, not re-sent plain (284e5ba). Viewers can miss one line.
 - Intros push items are still coming (the pull `/api/intro` works; push to Multi is pending).
