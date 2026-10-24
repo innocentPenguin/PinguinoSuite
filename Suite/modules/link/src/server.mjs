@@ -86,6 +86,18 @@ export function logDenied(req, now = Date.now()) {
   log('warn', 'http', `unauthorized ${req.method} ${path} (401) from ${ua}, token ${req.headers['x-link-token'] || req.headers.authorization ? 'sent but wrong' : 'missing'}${n > 1 ? `; ${n} such requests in the last minute` : ''}`);
   return true;
 }
+/** Same idea for any repeated client error line (bad Host, foreign Origin, 4xx from the mesh API): one line a minute per message. */
+const limitedSeen = new Map();
+export function warnLimited(src, msg, now = Date.now()) {
+  const key = src + ' ' + msg;
+  const e = limitedSeen.get(key) || { at: 0, n: 0 };
+  e.n++;
+  if (now - e.at < 60000) { limitedSeen.set(key, e); return false; }
+  const n = e.n; limitedSeen.set(key, { at: now, n: 0 });
+  if (limitedSeen.size > 200) limitedSeen.clear();
+  log('warn', src, msg + (n > 1 ? `; ${n} times in the last minute` : ''));
+  return true;
+}
 const LOOP = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const eq = (a, b) => {
   const x = crypto.createHash('sha256').update(String(a ?? '')).digest();
@@ -143,14 +155,14 @@ export async function serve(cfg) {
     const local = LOOP.has(req.socket.remoteAddress || '');
     const json = (code, body) => { res.writeHead(code, { 'content-type': 'application/json', ...HARDEN }); res.end(JSON.stringify(body)); };
     try {
-      if (!hostOk(req.headers.host, selfName)) { log('warn', 'http', 'rejected request: bad Host header (421)'); return json(421, { error: 'bad host' }); }
+      if (!hostOk(req.headers.host, selfName)) { warnLimited('http', 'rejected request: bad Host header (421)'); return json(421, { error: 'bad host' }); }
       // Liveness probe for the Suite core: no secrets, no Tailscale call.
       if (req.method === 'GET' && req.url === '/api/health') return json(200, { ok: true, role: cfg.role });
       const origin = req.headers.origin;
       if (origin) {
         let same = false;
         try { same = new URL(origin).host === req.headers.host || TAURI.has(origin); } catch {}
-        if (!same) { log('warn', 'http', 'rejected request: foreign Origin (403)'); return json(403, { error: 'foreign origin' }); }
+        if (!same) { warnLimited('http', 'rejected request: foreign Origin (403)'); return json(403, { error: 'foreign origin' }); }
       }
       // Peer routes authenticate themselves (pairing code / per-peer token), not with the module token.
       const peer = [req.headers['x-link-peer'], req.headers['x-link-token']];
@@ -280,7 +292,7 @@ export async function serve(cfg) {
       }
       json(404, { error: 'not found' });
     } catch (e) {
-      if (e.status && e.status < 500) { if (e.status !== 404) log('warn', 'http', `${req.method} ${String(req.url).split('?')[0]}: ${e.message} (${e.status})`); return json(e.status, { error: e.message, ...(e.extra || {}) }); }
+      if (e.status && e.status < 500) { if (e.status !== 404) warnLimited('http', `${req.method} ${String(req.url).split('?')[0]}: ${e.message} (${e.status})`); return json(e.status, { error: e.message, ...(e.extra || {}) }); }
       log('error', 'http', `${req.method} ${String(req.url).split('?')[0]}: ${e.message}`); json(e.status || 500, { error: e.status ? e.message : 'internal error (see the Link log)' });   // raw Node errors carry file paths
     }
   };

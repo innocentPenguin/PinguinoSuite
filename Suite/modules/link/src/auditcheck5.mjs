@@ -67,6 +67,10 @@ let more = 0; for (let i = 1; i < 300; i++) if (logDenied(dreq('python-requests/
 check('300 rejected polls inside a minute write one log line', first === true && more === 0, `more=${more}`);
 check('the next minute logs again, other callers and paths have their own line', logDenied(dreq('python-requests/2'), t0 + 61000) === true && logDenied(dreq('curl/8'), t0 + 100) === true && logDenied(dreq('python-requests/2', '/api/status'), t0 + 100) === true);
 
+const { warnLimited } = await import('./server.mjs');
+let wl = 0; for (let i = 0; i < 100; i++) if (warnLimited('http', 'POST /api/peer/broadcast: bad peer token (401)', t0 + i * 500)) wl++;
+check('repeated client-error lines (mesh 401, bad Host, foreign Origin) are limited too', wl === 1, String(wl));
+
 // 5. spawned Link: token page behind a proxy, prestream, headers
 const dir = path.join(tmp, 'run'); fs.mkdirSync(path.join(dir, 'link'), { recursive: true });
 const port = 9200 + Math.floor(Math.random() * 90), TOKEN = 'module-token-5-module-token-0005';

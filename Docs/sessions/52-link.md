@@ -51,3 +51,5 @@ Owns Suite\modules\link. Supervisor 50 (local_0e1e5827-e0dc-4136-863e-75f19f8825
 - 2026-10-23 Voice cross-review written to notes (52-voice-review.md), 53 told; Mac Lite design added to Docs/PinguinoLink/OBS_PORT_AND_MACOS.md section 3. No code changed.
 
 - 2026-10-23 /api/obs 401 spam: only caller found is Multi scene_follow.py:25 (polls every 3 s with module:link token from module_secret). Link now logs a rejected request once a minute per caller+path with the caller name and "token missing/wrong" (server.mjs logDenied, auditcheck5). Root cause of the 401 itself not proven (not allowed to derive tokens here).
+
+- 2026-10-24 Link 401 follow-up: peer/broadcast and /api/integrations 401s ended Oct 22 (core token vs adopted Link, fixed by module_secret); only /api/obs from Multi scene_follow.py:38 (empty host_token -> no header) remained, quiet since 1792814336. Added warnLimited() for bad Host/Origin/4xx lines. link.jsonl already rotates (2 MB x 3), Suite/logs/link.log by suite.py rotate_log.
