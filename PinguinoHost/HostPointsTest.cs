@@ -89,6 +89,12 @@ namespace PinguinoHost
             var bad = Economy.PointsSettingsApi(JObject.FromObject(new { values = new { Exclude = 1 } }), true); Check((bool)bad["ok"] == false, "keys outside the points settings are refused");
             var neg = Economy.PointsSettingsApi(JObject.FromObject(new { values = new { EntryBonus = -5 } }), true); Check((bool)neg["ok"] == false, "negative values are refused");
             var g = Economy.PointsSettingsApi(new JObject(), false); Check((bool)g["ok"] && g["values"]["MatchMinutes"] != null && g["examples"]["watch"]["viewer"]["per_hour"] != null, "GET lists values + examples (watch per hour = " + g["examples"]["watch"]["viewer"]["per_hour"] + ")");
+            // 8b. ActivityBonus stays minor: gifts + watch time stay far ahead of chat-line points (Ivan 10-22)
+            var gv = (JObject)g["values"]; double capHr = (double)gv["ActivityCapPer10Min"] * 6, perHr = 60.0 / (double)gv["WatchIntervalMin"];
+            long watchHrViewer = Economy.WatchRate(0) * (long)perHr, watchHrSub = Economy.WatchRate(1) * (long)perHr;
+            Console.WriteLine("[numbers] chat bonus max " + capHr + "/h; watch " + watchHrViewer + "/h viewer, " + watchHrSub + "/h sub T1; sub gift " + Pre("sub", 1, 1) + "; cheer 100 bits " + Economy.CheerPoints(100) + "; match play/win viewer " + Economy.MatchPoints(0, false) + "/" + Economy.MatchPoints(0, true));
+            Check(capHr > 0 && capHr * 5 <= watchHrViewer, "chat-line bonus tops out at " + capHr + "/h, at most a fifth of an hour of watching (" + watchHrViewer + "/h)");
+            Check(Economy.SubPoints(1) > capHr * 100 && Economy.CheerPoints(100) > capHr, "a sub (" + Economy.SubPoints(1) + ") and 100 bits (" + Economy.CheerPoints(100) + ") dwarf the chat bonus");
             // 9. the pushed summary groups points by category with exact totals
             Economy.EventApi(new JObject { { "type", "cheer" }, { "login", "catuser" }, { "amount", 100 }, { "id", "cat-c1" } });
             Economy.EventApi(new JObject { { "type", "follow" }, { "login", "catuser" }, { "id", "cat-f1" } });
