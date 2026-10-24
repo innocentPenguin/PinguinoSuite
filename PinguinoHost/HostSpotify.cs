@@ -16,15 +16,16 @@ namespace PinguinoHost
 
         public static JObject Settings()
         {
-            var d = new JObject { { "Enabled", false }, { "As", "core" }, { "Prefix", "" }, { "MaxPerMinute", 4 }, { "Url", "http://127.0.0.1:8771" }, { "PollSec", 5 } };
+            var d = new JObject { { "Enabled", false }, { "As", "helper" }, { "Prefix", "" }, { "MaxPerMinute", 4 }, { "Url", "http://127.0.0.1:8771" }, { "PollSec", 5 } };
             try { if (File.Exists(Cfg)) foreach (var p in JObject.Parse(File.ReadAllText(Cfg))) d[p.Key] = p.Value; else File.WriteAllText(Cfg, d.ToString()); } catch (Exception) { }
+            d["As"] = "helper";   // Ivan 10-24: music is said by PinguinoHelper, whatever an old file says
             return d;
         }
         public static JObject Save(JObject b)
         {
             var d = Settings();
             foreach (var k in new[] { "Enabled", "As", "Prefix", "MaxPerMinute", "Url", "PollSec" }) if (b[k] != null) d[k] = b[k];
-            string a = ((string)d["As"] ?? "core").ToLowerInvariant(); if (a != "core" && a != "chat" && a != "helper") a = "core"; d["As"] = a;
+            string a = ((string)d["As"] ?? "helper").ToLowerInvariant(); a = "helper"; d["As"] = a;   // Ivan 10-24: everything about music is said by PinguinoHelper
             File.WriteAllText(Cfg, d.ToString()); return new JObject { { "ok", true }, { "settings", d }, { "status", _last } };
         }
         public static JObject Api() { return new JObject { { "ok", true }, { "settings", Settings() }, { "status", _last }, { "since", _since } }; }
@@ -52,10 +53,30 @@ namespace PinguinoHost
                     string t = ((string)l["text"] ?? "").Trim(); _since = Math.Max(_since, sq); if (t == "") continue;
                     while (_sent.Count > 0 && (DateTime.UtcNow - _sent.Peek()).TotalSeconds > 60) _sent.Dequeue();
                     if (_sent.Count >= Math.Max(1, (int?)s["MaxPerMinute"] ?? 4)) continue;
-                    string via; HostApi.SendAs((string)s["As"] ?? "core", ((string)s["Prefix"] ?? "") + t, out via); _sent.Enqueue(DateTime.UtcNow); sent++;
+                    string via; HostApi.SendAs("helper", ((string)s["Prefix"] ?? "") + t, out via); _sent.Enqueue(DateTime.UtcNow); sent++;
                 }
                 _since = Math.Max(_since, top); _last = "on (" + sent + " posted, up to #" + _since + ")";
             }
+        }
+    }
+}
+
+namespace PinguinoHost
+{
+    /// <summary>Ivan 10-24: everything about music is said by PinguinoHelper. Module-command replies (the Spotify module's commands) never go out as core/chat.</summary>
+    public static class SongSender
+    {
+        public static readonly string[] SongCommands = { "sr", "request", "songrequest", "oops", "blocksong", "srclear", "skip", "voteskip", "song", "queue", "volume", "vol", "last", "pos" };
+        /// <summary>the sender for a module-command reply: always helper (song commands only; other module commands keep their configured sender)</summary>
+        public static string Role(string cmd, string configured) { return System.Array.IndexOf(SongCommands, (cmd ?? "").ToLowerInvariant()) >= 0 ? "helper" : (configured ?? "core"); }
+        /// <summary>sets "as":"helper" on every module_command step of the song presets; returns how many steps changed</summary>
+        public static int MoveToHelper(Newtonsoft.Json.Linq.JArray actions)
+        {
+            int n = 0;
+            foreach (var a in actions.OfType<Newtonsoft.Json.Linq.JObject>())
+                foreach (var st in ((a["steps"] as Newtonsoft.Json.Linq.JArray) ?? new Newtonsoft.Json.Linq.JArray()).OfType<Newtonsoft.Json.Linq.JObject>())
+                    if ((string)st["type"] == "module_command" && System.Array.IndexOf(SongCommands, ((string)st["command"] ?? "").ToLowerInvariant()) >= 0 && ((string)st["as"] ?? "core") != "helper") { st["as"] = "helper"; n++; }
+            return n;
         }
     }
 }

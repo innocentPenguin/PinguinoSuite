@@ -45,7 +45,7 @@ namespace PinguinoHost
         static void SayRefundFailedOnce()
         {
             lock (L) { if (_refundSaid) return; _refundSaid = true; }
-            try { const string line = "could not refund, a mod will sort it"; if (HostApi.SimMode) Console.WriteLine("[say] " + line); else { string via; HostApi.SendAs("core", line, out via); } } catch (Exception) { }
+            try { const string line = "could not refund, a mod will sort it"; if (HostApi.SimMode) Console.WriteLine("[say] " + line); else { string via; HostApi.SendAs("helper", line, out via); } } catch (Exception) { }
         }
         /// <summary>newest still-unrefunded redemption of that user, within the last 3 hours</summary>
         static Rec Take(string user)
