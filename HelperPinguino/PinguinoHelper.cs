@@ -1940,7 +1940,7 @@ public class CPHInline
     static string NonRlLine(string cat, bool es)
     {
         if (es) return cat == "fn" ? "\u00a1Las customs de FN siempre est\u00e1n abiertas! !epic" : cat == "rb" ? "\u00a1Claro! !roblox" : "No estoy seguro de qu\u00e9 estamos jugando ahora, mira !discord para unirte.";
-        return cat == "fn" ? "FN customs are always open! !epic" : cat == "rb" ? "Of course! !roblox" : cat == "other" ? "Joining depends on the game, the details are in !discord" : "Not sure what we're playing right now, check !discord to join in!";
+        return cat == "fn" ? "FN customs are always open! !epic" : cat == "rb" ? "Of course! !roblox" : "Ask in !discord, that's where the join info lives!";
     }
 
     string HowJoinText(string registered)
