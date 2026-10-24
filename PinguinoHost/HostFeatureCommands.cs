@@ -50,6 +50,23 @@ namespace PinguinoHost
         }
         static string Num(long n) { return n.ToString("N0", CultureInfo.InvariantCulture); }
 
+        /// <summary>!points / !point: the Host no longer replies. It publishes pinguino.points.&lt;login&gt; = "points|rank|of|unixSeconds" just before the line goes on to Chatty (see PinguinoChat PointsCommand).</summary>
+        internal static void PublishPoints(string user, string[] args)
+        {
+            try
+            {
+                string me = user.ToLowerInvariant(), arg = args.Length > 0 ? args[0].TrimStart('@').ToLowerInvariant() : "";
+                if (arg != "" && !Regex.IsMatch(arg, @"^[a-z0-9_]{1,25}$")) arg = "";
+                foreach (string t in arg == "" || arg == me ? new[] { me } : new[] { me, arg })
+                {
+                    var u = Economy.User(t); long of = (long)(int)u["of"], rank = (long)(int)u["pointsRank"]; if (rank < 1) { of++; rank = of; }   // not on the board yet: last place
+                    string v = ((long)Math.Floor((double)u["points"])).ToString(CultureInfo.InvariantCulture) + "|" + rank + "|" + of + "|" + DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Program.SetGlobal("pinguino.points." + t, v);
+                    if (HostApi.SimMode) Console.WriteLine("[points-lookup] " + t + " = " + v);
+                }
+            }
+            catch (Exception ex) { Clog.Warn("points", "lookup for Chatty failed: " + ex.Message); }
+        }
+
         public static bool Handle(string user, string text, int role, Action<string> say)
         {
             var parts = (text ?? "").Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries); if (parts.Length == 0 || !parts[0].StartsWith("!")) return false;
@@ -61,6 +78,7 @@ namespace PinguinoHost
             if (Teach.IsCommand(cmd)) { Teach.Handle(user, cmd, args, role, say); return true; }
             if (Vanish.IsCommand(cmd)) { Vanish.Handle(user, role, say); return true; }   // !vanish / !disappear: a 1 s "poof" timeout for whoever typed it
             if (CannedEditor.IsCustomCommand(cmd)) { if (role >= 3) CannedEditor.CustomHandle(user, cmd, args, role, say); return role >= 3; }   // mod-made plain commands; everyone else: not ours
+            if (cmd == "!points" || cmd == "!point") { PublishPoints(user, args); return false; }   // Chatty answers the one short line; the Host only hands it the numbers (it owns the economy)
             if (cmd == "!guess") { SiteShop.HandleGuess(user, args, say); return true; }
             if (cmd == "!shop") { if (args.Length > 0 || !Cooling("u|!shop|" + me, 10)) SiteShop.HandleShop(user, args, say); return true; }   // the chat shop: lists the items, starts Guess the Chatter
             if (SubTickets.IsModCommand(cmd)) { if (!mod) return false; ModAudit.Log(user, "mod", cmd, string.Join(" ", args)); SubTickets.HandleMod(user, cmd, args, say); return true; }

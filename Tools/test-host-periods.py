@@ -1,7 +1,7 @@
 """Period leaderboards: append-only event log -> day/ISO-week/month/year/all buckets in America/Chicago.
 Checks midnight / week / month / year rollover, the DST edges (fall back 2026-11-01, spring forward 2027-03-14), same id applies once, reload/backfill idempotency,
 bots left out, level (value + pct), keys newest-first, me, and the bucket files being rebuildable.  Usage: python Tools/test-host-periods.py [dll]"""
-import calendar, json, os, shutil, socket, subprocess, sys, tempfile, time, urllib.request
+import calendar, json, re, os, shutil, socket, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 def _free():
@@ -99,7 +99,7 @@ try:
     txt = open(out, 'rb').read().decode('utf-8', 'replace')
     chk('!top says the day board once', txt.count('Most chat messages today: 1. amy') == 1, txt[-600:])
     chk('!watchtime shows today / week / month', 'today 1h 30m, this week 1h 30m, this month 1h 30m' in txt, txt[-600:])
-    chk('!points shows earned today / week / month', 'earned today 250, this week 250, this month 250' in txt, txt[-600:])
+    chk('!points: Host says nothing (Chatty answers the short line), no "earned today" tail anywhere', 'earned today' not in txt and len(re.findall(r'amy has \d+ points \(#1 of \d+\)', txt)) == 1, txt[-600:])
     # ---- Tools/rebuild-buckets.py: backfill from the old stores, twice, then a reload
     os.makedirs(os.path.join(d, 'boards'), exist_ok=True); os.makedirs(os.path.join(d, 'profiles'), exist_ok=True)
     json.dump([{'at': U(2025, 3, 3, 18), 'type': 'gift', 'user': 'fay', 'amount': 5, 'to': ''}, {'at': U(2025, 3, 4, 18), 'type': 'cheer', 'user': 'fay', 'amount': 300, 'to': ''}], open(os.path.join(d, 'boards', 'events.json'), 'w'))
