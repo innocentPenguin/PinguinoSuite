@@ -671,10 +671,16 @@ public class CPHInline
     static long _paceNext;                                                                         // unix ms: when the next bot message may go out
     static readonly Dictionary<string, List<long>> _replyLog = new Dictionary<string, List<long>>();   // login -> times we answered them (fairness)
     static readonly string[] WelcomeLines = {
-        "welcome to the stream! 🐧 Glad you stopped by. Say hi, and ask me or HelperPinguino if you need anything.",
-        "welcome in, first time here? 🐧 Make yourself at home! Ask HelperPinguino how to join the games or the Minecraft server.",
-        "hey, welcome to the chat! 🐧 Hang out, ask questions anytime, and say !discord if you want the community.",
-        "welcome to the igloo! 🐧 Great to see a new face. Type anything, we don't bite." };
+        "hey, welcome in! 🐧",
+        "first time here? make yourself at home",
+        "oh a new face, hi! say anything, we don't bite",
+        "welcome! chat's friendly, ask away",
+        "hi and welcome, glad you stopped by 🐧",
+        "welcome to the igloo, grab a seat",
+        "new here? say hi, ask me or HelperPinguino if you need anything",
+        "hey, welcome! say !discord if you want the community 🐧" };
+    // the Firsts race words ("first", "2nd", "third", "#4"): the Host's Firsts line already answers them, so no welcome next to it
+    static readonly Regex RxFirstsRace = new Regex(@"^\s*[#@]?(?:first|1st|1|second|2nd|2|third|3rd|3|fourth|4th|4|fifth|5th|5)[\s!.?,]*(?:\p{So}|\p{Cs}|\s|!)*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     static readonly Dictionary<string, long> _focusSeq = new Dictionary<string, long>();         // login -> running number of when they last joined / answered (tie-break for _focus)
     static long _focusN;
     static readonly Dictionary<string, long> _focus = new Dictionary<string, long>();          // login -> when the bot last replied: its current conversations
@@ -934,15 +940,22 @@ public class CPHInline
     {
         if (!_cfg.RecapOnStreamEnd) return null;
         long since = _streamStart > 0 ? _streamStart : Now() - 8 * 3600;
+        bool shortStream = _streamStart > 0 && Now() - _streamStart < 20 * 60;   // a few minutes: no numbers ("0 follows" style lines)
+        string when = DateTimeOffset.FromUnixTimeSeconds(Now()).ToLocalTime().Hour >= 17 ? "tonight" : "today";
         var ev = Events().Where(e => e.At >= since).ToList();
         int follows = ev.Count(e => e.Type == "follow"), subs = ev.Count(e => e.Type == "sub" || e.Type == "resub"), gifts = ev.Where(e => e.Type == "gift").Sum(e => Math.Max(1, e.Amount)), raids = ev.Count(e => e.Type == "raidin");
         long bits = ev.Where(e => e.Type == "cheer").Sum(e => (long)e.Amount);
         var parts = new List<string>();
         if (follows > 0) parts.Add(follows + " new follow" + (follows == 1 ? "" : "s"));
-        if (subs + gifts > 0) parts.Add((subs + gifts) + " sub" + (subs + gifts == 1 ? "" : "s"));
+        if (subs > 0) parts.Add(subs + " sub" + (subs == 1 ? "" : "s"));
+        if (gifts > 0) parts.Add(gifts + " gifted");
         if (bits > 0) parts.Add(bits + " bits");
         if (raids > 0) parts.Add(raids + " raid" + (raids == 1 ? "" : "s"));
-        return parts.Count == 0 ? "thanks for hanging out tonight, everyone! 🐧 See you next stream." : "thanks for hanging out tonight, everyone! 🐧 Tonight: " + string.Join(", ", parts) + ". See you next stream.";
+        string[] plain = { "thanks for hanging out " + when + ", everyone! 🐧 See you next stream.", "that's the stream, thank you all for being here " + when + ". See you next time!", "thanks everyone for " + when + ", it was a good one 🐧" };
+        if (parts.Count == 0 || shortStream) return plain[_rng.Next(plain.Length)];
+        string sum = string.Join(", ", parts);
+        string[] withNum = { "thanks for hanging out " + when + ", everyone! 🐧 " + (when == "tonight" ? "Tonight" : "Today") + ": " + sum + ". See you next stream.", "that's the stream! " + sum + ". Thank you all, see you next time.", "thanks everyone for " + when + "! " + sum + " 🐧" };
+        return withNum[_rng.Next(withNum.Length)];
     }
     void ReactSay(string kind, string line)
     {
@@ -1015,8 +1028,8 @@ public class CPHInline
 
     // ── DAILY GREETING (IDEAS #40): a regular's first message of the local day, plus the "first seen here N year(s) ago" anniversary. Name only, nothing remembered is quoted. ──
     static readonly string[] DailyLines = {
-        "hey {n}, good to see you again today! 🐧", "{n} is here! 🐧 Welcome back to the igloo.", "morning, afternoon or night, hi {n}! 🐧",
-        "oh hi {n}! 🐧 Glad you dropped in.", "{n}, there you are! 🐧 Make yourself comfy.", "hi {n}! 🐧 Chat is better with you in it.", "look who showed up: {n}! 🐧" };
+        "hey {n}, good to see you again today! 🐧", "{n} is here! welcome back to the igloo", "morning, afternoon or night, hi {n}!",
+        "oh hi {n}, glad you dropped in", "{n}, there you are! make yourself comfy", "hey {n} 🐧", "{n} is back!", "o/ {n}", "good to see you, {n}" };
     static string _dailyDay = ""; static int _dailyCount; static readonly HashSet<string> _dailyDone = new HashSet<string>();
     static string LocalDay(long unix) { return DateTimeOffset.FromUnixTimeSeconds(unix).ToLocalTime().ToString("yyyy-MM-dd"); }
     /// <summary>null = nothing to say. Called under _lock, once per message of a regular who is not opted out; prevSeen = the last time we saw them before this line.</summary>
@@ -1168,7 +1181,7 @@ public class CPHInline
             // A lobby / join / register question belongs to the helper: when the router has the helper next in line, hand it over without answering.
             if (mention && PgRouted() && PgNextHas("helper") && !PgNoDefer() && PgHelperTopic(text)) { _pgDefer = true; return; }
             if (mention && PgHelperTopic(text) && !text.Contains("!") && !ToneJoke.IsMatch(text)) { _pgPass = true; return; }   // "how do I join" and other things the helper / the website already answer: never the chatter (a failing !command is still fair game)
-            if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !GreetBlocked(login, text) && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
+            if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !RxFirstsRace.IsMatch(text ?? "") && !GreetBlocked(login, text) && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { welcome = true; _lastWelcome = Now(); }
             if (!welcome && !mention && !second && !optedOut && !cx.Broadcaster && !GreetBlocked(login, text) && _cfg.WelcomeBack && prevSeen > 0 && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { back = WelcomeBackLine(login, prevSeen, cx.Display); if (back != null) _lastWelcome = Now(); }

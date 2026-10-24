@@ -950,8 +950,18 @@ public static class Harness
           Check("recap: off by default, says nothing", Last() == null, Last());
           SetCfgB("RecapOnStreamEnd", true); ReactReset(); Ev("StreamOnline", "innocentpenguin_", 0);
           { var A = CPHProxy.Args; A.Clear(); A["eventType"] = "TwitchCheer"; A["userName"] = "bitsy2"; A["bits"] = 300; new CPHInline().Execute(); }
+          SF("_streamStart").SetValue(null, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3600);   // a real-length stream, not a few minutes
           CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("StreamOffline", "innocentpenguin_", 0);
-          Check("recap: when switched on, one closing line with the stream's bits", Last() != null && Last().Contains(" bits") && Last().Contains("See you"), Last());
+          Check("recap: when switched on, one closing line with the stream's bits", Last() != null && Last().Contains(" bits"), Last());
+          // tone pass (Ivan 10-24): short stream = no numbers; gifted subs are listed apart from subs
+          ReactReset(); CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Sent.Clear(); Ev("StreamOnline", "innocentpenguin_", 0);
+          { var A = CPHProxy.Args; A.Clear(); A["eventType"] = "TwitchCheer"; A["userName"] = "bitsy3"; A["bits"] = 500; new CPHInline().Execute(); }
+          CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("StreamOffline", "innocentpenguin_", 0);
+          Check("recap: a stream of a few minutes names no numbers", Last() != null && !Last().Contains("bits") && !System.Text.RegularExpressions.Regex.IsMatch(Last(), "[0-9]"), Last());
+          ReactReset(); CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Sent.Clear(); Ev("StreamOnline", "innocentpenguin_", 0);
+          { var A = CPHProxy.Args; A.Clear(); A["eventType"] = "TwitchGiftSub"; A["userName"] = "gifty"; A["gifts"] = 5; A["total"] = 5; new CPHInline().Execute(); }
+          SF("_streamStart").SetValue(null, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3600); CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("StreamOffline", "innocentpenguin_", 0);
+          Check("recap: gifted subs are listed apart (\"N gifted\"), not summed into subs", Last() != null && Last().Contains("gifted"), Last());
           SetCfgB("RecapOnStreamEnd", false);
 
           // welcome back: a regular away for 10 days, by name only, once; opted-out viewers never
@@ -1281,18 +1291,26 @@ public static class Harness
         // ── welcome new viewers (Twitch first-message flag), no AI ──
         Live(true); Extra.Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); int llm0 = llmCalls;
         Extra["firstMessage"] = true; Msg("Brandnew", "hello everyone");
-        Check("first message ever: welcomed by name, no AI call", Last() != null && Last().Contains("@Brandnew") && Last().Contains("🐧") && llmCalls == llm0, Last());
+        Check("first message ever: welcomed by name, no AI call", Last() != null && Last().Contains("@Brandnew") && llmCalls == llm0, Last());
         Extra.Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Brandnew", "second message");
         Check("second message: no welcome", Last() == null, Last());
         Extra["firstMessage"] = true; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Brandnew2", "what's up");
         Check("a second new viewer inside the gap is not welcomed (raid flood guard)", Last() == null, Last());
+        // Firsts race words: the Host's Firsts line answers them, no welcome beside it
+        foreach (var fw in new[] { "first", "Second", "1st", "third!", "4th", "#5" })
+        { Extra["firstMessage"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Racer" + fw.Trim('#', '!'), fw);
+          Check("welcome: no welcome for the Firsts race word \"" + fw + "\"", Last() == null, Last()); }
+        Extra.Clear();
+        { var wl = (string[])SF("WelcomeLines").GetValue(null); var dl = (string[])SF("DailyLines").GetValue(null);
+          Check("tone: 8 welcome variants, at most 3 end in the penguin, none has the old double ask", wl.Length >= 8 && System.Linq.Enumerable.Count(wl, x => x.EndsWith("🐧")) <= 3, "" + wl.Length);
+          Check("tone: the two sugary daily lines are gone", !System.Linq.Enumerable.Any(dl, x => x.Contains("better with you") || x.Contains("look who showed")), ""); }
         // spam / ad accounts get no greeting of any kind
         foreach (var spm in new[] { new[] { "succeedingsteelbqdzvkxr", "Best viewers with viewers streamboo .org" }, new[] { "dramaticlacencjhwz", "Best viewers with viewers streamboo .org" }, new[] { "Okayguy", "check my stuff at cool-shop dot com" }, new[] { "Okayguy2", "free stuff https://x.example/y" }, new[] { "Okayguy3", "buy followers cheap" } })
         { Extra["firstMessage"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg(spm[0], spm[1]);
-          Check("spam: no welcome for " + spm[0] + " / " + spm[1], Last() == null || !Last().Contains("🐧"), Last()); }
+          Check("spam: no welcome for " + spm[0] + " / " + spm[1], Last() == null || Last().IndexOf("@" + spm[0], StringComparison.OrdinalIgnoreCase) < 0, Last()); }
         Extra.Clear();
         Extra["firstMessage"] = true; Extra["spamCandidate"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Hostflagged", "hello there friends");
-        Check("spam: the Host's spamCandidate flag stops the welcome", Last() == null || !Last().Contains("🐧"), Last()); Extra.Remove("spamCandidate");
+        Check("spam: the Host's spamCandidate flag stops the welcome", Last() == null || !Last().Contains("@Hostflagged"), Last()); Extra.Remove("spamCandidate");
         Extra["firstMessage"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Plainfriend", "hi all, first time here");
         Check("spam guard: a normal new viewer is still welcomed", Last() != null && Last().Contains("@Plainfriend"), Last());
         Extra.Clear();

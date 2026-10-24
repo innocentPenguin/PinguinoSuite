@@ -1,4 +1,4 @@
-# Chatty tone review: welcome, welcome-back, daily, anniversary, recap (proposals only, nothing applied)
+# Chatty tone review: welcome, welcome-back, daily, anniversary, recap
 
 Reviewed 2026-10-23 (late evening). **Limit of this review:** Chatty's own lines are not in `chat_logs` (bot accounts are not logged there) and the bot-send log (commit 973d733) only starts writing after the next Host restart. So this compares the fixed line pools in `PinguinoChat.cs` with how chat actually talks tonight (2,692 lines in `chat_logs/2026-10-23.jsonl`). Redo it from `Data\logs\bot-sends-*.log` after the restart to judge what really went out.
 
@@ -19,3 +19,12 @@ Short and loud: "PINGUUUUU haiii:>", "first", "Second", "back from ads wasduppp 
 
 ## Not proposed
 No change to games lines, canned commands, or AI replies in this pass.
+
+## Status (2026-10-24): APPLIED, Ivan said yes to all (needs the Host restart to load)
+- 1 Welcome: 8 short variants (3 end in the penguin, one in four points to !discord); no welcome when the first message is a Firsts race word (first / 2nd / third! / #4 ...).
+- 2 Daily: "better with you in it" and "look who showed up" dropped; short lines added ("{n} is back!", "o/ {n}", "good to see you, {n}", "hey {n} 🐧").
+- 3 Welcome-back: untouched (Host pool, 14).  4 Anniversary: kept.
+- 5 Recap: "today" before 17:00 local, "tonight" after; gifted subs listed apart ("5 gifted"); 3 wordings each way; streams under 20 min name no numbers.
+- 6 Penguin endings: welcome and daily and recap pools now mix lines with and without it.
+- RxHeat swearing change: kept. Tests: chat 406/406 (10 new), run four times because the variants are random.
+
