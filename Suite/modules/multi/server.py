@@ -131,6 +131,11 @@ async def tick_loop():
         await asyncio.sleep(1)
         cards.tick()
         n += 1
+        if n % 60 == 0:
+            try:
+                console_log.info("pops", pipeline.heartbeat_line(any(c.describe()["status"] == "connected" for c in connectors.values())))
+            except Exception as e:
+                console_log.error("pops", f"heartbeat failed: {e}", dedupe_s=300)
         if n % 3600 == 0:
             store.prune(config.settings()["retention_days"])
 

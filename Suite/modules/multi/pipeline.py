@@ -28,6 +28,7 @@ class Pipeline:
         self.assist = assist_mod.Assist(store, self.advisor)
         self.ding = ding_mod.Ding(store)
         self.pop = pop_mod.Pop()
+        self.last_in = 0.0
         self.intros = None                           # set by the server (intros.Intros)
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
         self.stats = {"in": 0, "dupes": 0, "dropped": 0}
@@ -44,6 +45,15 @@ class Pipeline:
                        for c in list(self.cards.cards.values()))
         return prio.Context(recent_by_user=hist, user_count=self.store.user_count(m.platform, m.user_id),
                             answered_recently=answered, learned=self.store.kv_get("learned", {}))
+
+    def heartbeat_line(self, connected):
+        """One line for the console log, once a minute: are the pops (and chatter dings) still firing and is chat still arriving?"""
+        hm = lambda t: time.strftime("%H:%M", time.localtime(t)) if t else "never"
+        on = ", ".join(config.settings()["pop_platforms"]) or "off"
+        src = "ok" if connected and self.last_in and time.time() - self.last_in < 600 else ("down" if not connected else "quiet")
+        ps = self.pop.stats
+        return (f"pops: {ps['played']} played, last at {hm(self.pop.last_at)}, source {src} (pop on: {on}; dropped {ps['dropped']}, errors {ps['errors']}; "
+                f"last chat {hm(self.last_in)}; dings {self.ding.stats['played']} played)")
 
     def ingest(self, m: ChatMessage):
         """Process one normalized message. Returns the stored message dict or None for duplicates."""
@@ -77,6 +87,7 @@ class Pipeline:
             self.stats["dupes"] += 1
             return None
         self.stats["in"] += 1
+        self.last_in = time.time()
         self.ding.observe(m)
         if self.intros:
             try:

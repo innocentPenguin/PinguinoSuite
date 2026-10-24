@@ -32,6 +32,7 @@ class Pop:
         self.player, self.clock, self.master = player or ding.Mci(), clock, master
         self.q = queue.Queue(maxsize=3)
         self.stats = {"played": 0, "dropped": 0, "errors": 0}
+        self.last_at = 0.0                          # when the last pop played (for the once-a-minute heartbeat)
         self._master = (0.0, True)
         if start_worker:
             threading.Thread(target=self._worker, daemon=True).start()
@@ -86,6 +87,7 @@ class Pop:
         try:
             self.player.play(path, self.volume_for(platform))
             self.stats["played"] += 1
+            self.last_at = time.time()
             if self.stats["played"] in (1, 100) or self.stats["played"] % 1000 == 0:
                 console_log.info("pop", f"{self.stats['played']} chat pops played since Multi started")
             return True

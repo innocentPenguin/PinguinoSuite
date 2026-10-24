@@ -62,6 +62,9 @@ async function csProbe() {
     SND.cs = j && j.rows && typeof j.rows === 'object' ? {rows: j.rows, since: SND.cs ? SND.cs.since : Date.now() / 1000} : null;
     if (!!SND.cs !== was && typeof sideRender === 'function') sideRender();
   } catch (e) { /* old or unreachable backend: keep the old behaviour */ }
+  try {
+    const r = await fetch('/api/pop'); if (r.ok) { const j = await r.json(); SND.srvPop = !!(j && j.enabled && j.sound_exists && j.master); }
+  } catch (e) { /* keep the page pop */ }
 }
 setInterval(csProbe, 30000);
 setInterval(async () => {
@@ -110,12 +113,12 @@ setInterval(() => { SND.lead = sndLeader(); }, 1000);
 function sndNotify(title, body) {
   try { if ('Notification' in window && Notification.permission === 'granted') new Notification(title, {body: String(body || '').slice(0, 140), silent: true}); } catch (e) { /* ignore */ }
 }
-function sndFire(key, m) {
+function sndFire(key, m, quiet) {
   const e = SND.cfg.ev[key]; if (!e || !e.on && !e.notify) return false;
   const now = Date.now(), gap = (['person', 'first', 'returning'].includes(key) ? SND.cfg.gap : .4) * 1000;
   if (gap && now - (SND.last[key] || 0) < gap) return false;
   SND.last[key] = now;
-  if (e.on) sndPlay(e.tone, e.vol);
+  if (e.on && !quiet) sndPlay(e.tone, e.vol);
   if (e.notify) sndNotify(({first: 'First-time chatter', returning: 'Returning chatter', mention: 'Mention', question: 'For you', sent: 'Sent', person: 'Chat', follow: 'New follow', sub: 'New sub', raid: 'Raid'})[key], (m.display || m.user || '') + (m.text ? ': ' + m.text : ''));
   return true;
 }
@@ -140,7 +143,7 @@ window.soundMsg = function (m) {
   else if (fl.includes('returning') && sndFire('returning', m)) return;
   if (mentionsMe(m) && sndFire('mention', m)) return;
   if ((isQuestionForMe(m) || m.tier === 'high') && sndFire('question', m)) return;
-  sndFire('person', m);
+  sndFire('person', m, SND.srvPop);                 // server chat pop (the Streamer.bot 'chat' sound) on: it plays the pop, this page only notifies
 };
 function sndBanner() {
   const b = $('#snd-lock'); if (b) b.style.display = sndLocked() ? '' : 'none';

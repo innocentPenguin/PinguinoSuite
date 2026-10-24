@@ -157,3 +157,15 @@ def test_sounds_files_lists_only_audio(monkeypatch, tmp_path):
     assert r.status_code == 200 and r.json()["dir"].endswith("Data/sounds")
     names = [f["name"] for f in r.json()["files"]]
     assert names == sorted(names, key=str.lower) and all(n.lower().endswith((".mp3", ".wav")) for n in names)
+
+
+def test_heartbeat_line_reports_pops_and_source(tmp_path, monkeypatch):
+    import pipeline as pl
+    p = pl.Pipeline.__new__(pl.Pipeline)
+    import pop as pop_mod
+    p.pop = pop_mod.Pop(player=object(), start_worker=False)
+    class D: stats = {"played": 3}
+    p.ding, p.last_in = D(), 0.0
+    line = p.heartbeat_line(True)
+    assert line.startswith("pops: 0 played, last at never, source ") and "dings 3 played" in line
+    assert "source down" in p.heartbeat_line(False)
