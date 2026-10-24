@@ -991,7 +991,7 @@ public static class Harness
             Check("daily greeting: the wording varies", seen.Count >= 3, "" + seen.Count);
             SetCfg("DailyGreetingMax", 2); reset(); int got = 0; for (int i = 0; i < 6; i++) { mkViewer("Cap" + i, 2); SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Cap" + i, "hey cap " + i); if (Last() != null) got++; }
             Check("daily greeting: capped per day", got == 2, "" + got); SetCfg("DailyGreetingMax", 6);
-            var av = mkViewer("Annie", 2); av.GetType().GetProperty("FirstSeen").SetValue(av, DateTimeOffset.UtcNow.AddYears(-2).AddHours(-1).ToUnixTimeSeconds(), null); SetCfg("DailyGreetingChance", 0); reset(); Msg("Annie", "hi from annie");
+            var av = mkViewer("Annie", 2); av.GetType().GetProperty("FirstSeen").SetValue(av, DateTimeOffset.Now.AddYears(-2).ToUnixTimeSeconds(), null); SetCfg("DailyGreetingChance", 0); reset(); Msg("Annie", "hi from annie");
             Check("anniversary: two years to the day gets its line even when plain hellos are off", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), "2 years"), Last());
             SF("_dailyDay").SetValue(null, ""); SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); av.GetType().GetProperty("LastSeen").SetValue(av, DateTimeOffset.UtcNow.AddDays(-2).ToUnixTimeSeconds(), null); Msg("Annie", "hi again");
             Check("anniversary: said once per year number", Last() == null || !Last().Contains("2 years"), Last());
