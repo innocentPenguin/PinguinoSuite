@@ -200,7 +200,7 @@ def evaluate(settings, track, user, roles, queue, now_uri, now=None, last_ts=Non
         return False, "too_short", {**ctx, "min_s": settings["min_length_s"]}
     full_ctx = lambda extra_ms=0: {**ctx, "count": len(queue.items), "mins": round(queue.total_ms() / 60000),
                                     "retry": max(1, round((extra_ms + queue.total_ms() / max(1, len(queue.items))) / 60000))}
-    if len(queue.items) >= settings["queue_max"] and not staff:
+    if settings["queue_max"] and len(queue.items) >= settings["queue_max"] and not staff:
         return False, "full", full_ctx()
     mm = settings["queue_max_minutes"]
     if mm and not staff and queue.total_ms() >= mm * 60000:

@@ -1375,7 +1375,7 @@ class Engine:
                       "durationMs": t["duration_ms"], "progressMs": pb["progress_ms"], "isPlaying": pb["is_playing"],
                       "requestedBy": (self.now_item or {}).get("requester") or None, "progressAt": int(self.pb_at * 1000)}
             return {"v": 1, "updatedAt": ms,
-                    "status": {"requestsOpen": bool(s["requests_open"]), "paused": bool(pb and not pb["is_playing"]), "maxQueue": s["queue_max"],
+                    "status": {"requestsOpen": bool(s["requests_open"]), "paused": bool(pb and not pb["is_playing"]), "maxQueue": s["queue_max"] or 9999,
                                "channelPlaylist": ({"name": s["channel_playlist_name"] or "Stream playlist"} if s.get("channel_playlist_id") else None)},
                     "nowPlaying": np,
                     "queue": [{"rid": i["id"], "id": i["track_id"], "title": i["name"], "artists": i["artists"], "art": i["art"],

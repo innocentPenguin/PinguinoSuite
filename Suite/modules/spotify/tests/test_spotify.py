@@ -1843,3 +1843,23 @@ class VanishLoopTests(unittest.TestCase):
         self.assertEqual(r["code"], "full")
         self.assertIn("2 songs", r["reply"])
         self.assertRegex(r["reply"], r"about \d+ min")
+
+
+class UnlimitedQueueTests(unittest.TestCase):
+    def setUp(self):
+        store.save("state.json", {})
+        store.save("config.json", {})
+        self.e = Engine(FakeApi(), FakeAuth(), Clock())
+
+    def test_queue_max_zero_means_no_global_cap(self):
+        self.e.save_settings({"requests_open": True, "queue_max": 0, "per_user_limit": 0, "cooldown_s": 0})
+        for n in range(1, 26):
+            self.e.add_track(T(n), "end", f"u{n}", "viewer")
+        r = self.e.request("late", "song 26", [])
+        self.assertTrue(r["ok"], r)
+
+    def test_queue_max_still_caps_when_set(self):
+        self.e.save_settings({"requests_open": True, "queue_max": 2, "per_user_limit": 0})
+        self.e.add_track(T(2), "end", "a", "viewer")
+        self.e.add_track(T(3), "end", "b", "viewer")
+        self.assertEqual(self.e.request("c", "song 4", [])["code"], "full")
