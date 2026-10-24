@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Static guard: every ?part= widget registered in PinguinoHost/HostScenes.cs points at a page that really has a matching `.part-<name>` CSS mode plus the script that sets the class,
-and every part mode a page defines is registered as a scene widget (so none is dead or unreachable). No Host needed. Usage: python Tools/test-overlay-parts.py"""
+and every part mode a page defines is registered as a scene widget (so none is dead or unreachable). No Host needed. Usage: python Tools/test-host-overlayparts.py"""
 import os, re, sys
 suite = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ov = os.path.join(suite, 'PinguinoB0t', 'overlays')
