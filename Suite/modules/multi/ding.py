@@ -23,7 +23,7 @@ KNOWN_MAX = 100000
 
 
 BOT_NAMES = {"pinguinob0t", "pinguinobot", "chattypinguino", "pinguinohelper", "soundalerts", "sery_bot", "nightbot", "streamelements", "streamlabs",
-             "moobot", "fossabot", "wizebot"}
+             "moobot", "fossabot", "wizebot", "synchra", "synchrabot", "synchra_chat", "synchrachat"}
 BOT_RE = re.compile(r"b[o0]t$")             # anything ending in bot / b0t
 
 

@@ -12,6 +12,7 @@ import hmac
 import json
 import math
 import os
+import re
 import copy
 import sqlite3
 import time
@@ -26,6 +27,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import cards as cards_mod
+import ding
 import checks
 import config
 import learning
@@ -982,6 +984,36 @@ async def pins_set(request: Request):
     store.kv_set("pins", pins)
     hub.emit({"type": "pins.changed", "pins": pins})
     return {"pins": pins}
+
+
+# bot accounts: never get chatter dings / chat pops / person sounds, editable without a code change -------
+@app.get("/api/bots")
+def bots_get():
+    return {"accounts": list(config.settings()["bot_accounts"]), "builtin": sorted(ding.BOT_NAMES), "pattern": "any name ending in bot or b0t"}
+
+
+@app.post("/api/bots")
+async def bots_set(request: Request):
+    b = await request.json()
+    raw = b.get("accounts") if isinstance(b, dict) else None
+    if isinstance(raw, str):
+        raw = re.split(r"[,\s;]+", raw)
+    if not isinstance(raw, list):
+        raise HTTPException(400, "accounts: a comma list of logins")
+    out = []
+    for x in raw:
+        x = str(x).strip().lstrip("@").lower()
+        if not x:
+            continue
+        if not re.fullmatch(r"[a-z0-9_]{1,40}", x):
+            raise HTTPException(400, f"not a login: {x[:40]}")
+        if x not in out:
+            out.append(x)
+    if len(out) > 300:
+        raise HTTPException(400, "at most 300 accounts")
+    config.save_settings({"bot_accounts": out})
+    console_log.info("bots", f"bot list saved ({len(out)} accounts)")
+    return {"accounts": out, "builtin": sorted(ding.BOT_NAMES)}
 
 
 # dashboard tile numbers for the Suite (chat rate + top chatters) ----------

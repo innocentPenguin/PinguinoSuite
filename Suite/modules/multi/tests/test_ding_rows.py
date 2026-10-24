@@ -192,3 +192,17 @@ def test_ding_and_pop_skip_bots(monkeypatch):
     p = pop.Pop(player=object(), start_worker=False)
     assert p.observe(m) is False
     assert p.q.qsize() == 0
+
+
+def test_bots_endpoint_edits_the_list(monkeypatch, tmp_path):
+    import config, server
+    from fastapi.testclient import TestClient
+    saved = {}
+    monkeypatch.setattr(config, "save_settings", lambda p: saved.update(p))
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766", headers={"origin": "http://127.0.0.1:8766"})
+    r = c.post("/api/bots", json={"accounts": "@Foo_Bot, bar  baz;Foo_Bot"})
+    assert r.status_code == 200 and saved["bot_accounts"] == ["foo_bot", "bar", "baz"]
+    assert c.post("/api/bots", json={"accounts": "bad name!"}).status_code == 400
+    assert c.post("/api/bots", json={"accounts": 5}).status_code == 400
+    g = c.get("/api/bots").json()
+    assert "synchrabot" in g["builtin"] and "chattypinguino" in g["builtin"]
