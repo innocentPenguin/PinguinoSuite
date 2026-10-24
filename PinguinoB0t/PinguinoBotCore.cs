@@ -672,7 +672,7 @@ public class CPHInline
         // Set with !casual group|teams (mods) or the Master View.
         public string CasualStyle { get; set; } = "teams";   // [CHANGE] always "teams" now
 
-        // ── OBS control (through Streamer.bot's OBS connection) [NEW][OBS] ──
+        // ── OBS control (the Host talks to OBS directly over obs-websocket) [NEW][OBS] ──
         // ObsScenes: label shown on the website / used in !scene  ->  the exact scene name in OBS.
         // ObsSources: switches for the website / !source. Scene "" = apply to every scene in ObsScenes.
         // ObsGameScenes: Twitch category (game) name -> scene label, used by the auto switch.
@@ -3592,7 +3592,7 @@ public class CPHInline
     }
 
     // ── OBS CONTROL  [NEW][OBS] ────────────────────────────────────
-    // Streamer.bot is connected to OBS, and this code runs inside Streamer.bot, so it can switch scenes and show / hide sources.
+    // The Host is connected to OBS (obs-websocket) and hands these methods to this code, so it can switch scenes and show / hide sources.
     // The OBS methods are called by NAME (reflection) so this file still compiles on a Streamer.bot version where one of them is missing.
     // They are: ObsIsConnected, ObsSetScene(scene), ObsShowSource(scene, source), ObsHideSource(scene, source).
     static string _obsScene = "";                       // label of the scene we switched to last
@@ -3680,7 +3680,7 @@ public class CPHInline
         return true;
     }
 
-    // [NEW] Sets the Twitch category through Streamer.bot (called by name, so a missing method can't break the compile).
+    // [NEW] Sets the Twitch category through the Host (Twitch Helix; called by name, so a missing method can't break the compile).
     bool SetTwitchGame(string name)
     {
         object r;
@@ -3701,12 +3701,12 @@ public class CPHInline
         string label;
         if (_settings.ObsEnabled && _settings.ObsGameScenes.TryGetValue(name, out label) && _settings.ObsScenes.ContainsKey(label) && _obsScene != label)
         {
-            if (!SwitchObsScene(label)) ReportProblem("OBS: could not switch to the " + label + " scene for " + name + " (is OBS connected in Streamer.bot?)");
+            if (!SwitchObsScene(label)) ReportProblem("OBS: could not switch to the " + label + " scene for " + name + " (is OBS open with its WebSocket server on and the Host connected to it?)");
         }
         if (_settings.ActivitySetsGame && _twitchGame != name)
         {
             if (SetTwitchGame(name)) Say("Twitch category set to " + name + ".");
-            else ReportProblem("Could not set the Twitch category to \"" + name + "\" (Streamer.bot needs the SetChannelGame action / Twitch permission)");
+            else ReportProblem("Could not set the Twitch category to \"" + name + "\" (the Host sets it through Twitch; needs the streamer sign-in with channel:manage:broadcast, and the exact category name)");
         }
         PublishState("obs", "game " + name);
     }
@@ -3755,7 +3755,7 @@ public class CPHInline
         string label = ObsFindLabel(_settings.ObsScenes.Keys, input);
         if (label == null) { Say("@" + user + " Usage: !scene <" + string.Join(" | ", _settings.ObsScenes.Keys) + ">"); return true; }
         if (SwitchObsScene(label)) Say("OBS scene: " + label + ".");
-        else { Say("@" + user + " Could not switch OBS to " + label + ". Is OBS connected in Streamer.bot?"); ReportProblem("OBS: could not switch to \"" + label + "\" (is OBS connected in Streamer.bot, and does the scene name match?)"); }
+        else { Say("@" + user + " Could not switch OBS to " + label + ". Is OBS open with its WebSocket on?"); ReportProblem("OBS: could not switch to \"" + label + "\" (is OBS open with its WebSocket on, and does the scene name match?)"); }
         return true;
     }
 
@@ -4198,7 +4198,7 @@ public class CPHInline
         var issues = new List<string>();
         if (string.IsNullOrEmpty(_settings.WebSyncKey) || string.IsNullOrEmpty(_settings.WebSyncUrl)) issues.Add("the website link is not set up (WebSyncKey / WebSyncUrl)");
         else if ((DateTime.UtcNow - _lastWebOk).TotalSeconds > 90) issues.Add("the website has not answered in the last 90 seconds");
-        if (_settings.ObsEnabled && !ObsIsConnected()) issues.Add("OBS is not connected in Streamer.bot");
+        if (_settings.ObsEnabled && !ObsIsConnected()) issues.Add("OBS is not connected to the Host (is OBS open with its WebSocket on?)");
         if (!string.IsNullOrEmpty(_settings.OverlayDir) && !Directory.Exists(_settings.OverlayDir)) issues.Add("the overlay folder does not exist: " + _settings.OverlayDir);
         foreach (var g in _queue.GroupBy(e => e.Username).Where(g => g.Count() > 1)) issues.Add(g.Key + " is in the queue more than once");
         foreach (var e in _queue.Where(e => !_players.ContainsKey(e.Username))) issues.Add(e.Username + " is in the queue but not registered");
