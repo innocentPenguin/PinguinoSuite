@@ -1524,15 +1524,15 @@
       "importance": 48
     },
     {
-      "command": "!rules",
+      "command": "!pmrules",
       "aliases": [],
       "action": "PinguinoHost",
       "category": "Community Games",
       "who": "everyone",
-      "usage": "!rules",
+      "usage": "!pmrules",
       "description": "The private match rules (also posted once whenever the customs queue opens). 30 second cooldown.",
       "examples": [
-        "!rules"
+        "!pmrules"
       ],
       "section": "Essentials",
       "importance": 6

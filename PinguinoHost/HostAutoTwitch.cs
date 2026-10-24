@@ -189,20 +189,27 @@ namespace PinguinoHost
 
         /// <summary>Streamer.bot replacement actions (Docs\STREAMERBOT_REPLACEMENT.md). The ones Ivan asked to be live are created ENABLED, the rest disabled.
         /// Remembered in "seeded", so deleting or editing one sticks.</summary>
-        /// <summary>Ivan 10-24: "!rules" (everyone, 30 s global cooldown) and the same line once whenever the customs queue opens. One preset, marker "rules1" so deleting or editing it sticks. Speaks as PinguinoB0t (core) through the normal send path (duplicate guard applies).</summary>
+        /// <summary>Ivan 10-24: "!pmrules" (everyone, 30 s global cooldown) and the same line once whenever the customs queue opens. One preset, marker "rules1" so deleting or editing it sticks. Speaks as PinguinoB0t (core) through the normal send path (duplicate guard applies).</summary>
         public const string RulesLine = "📖 Private match rules! 1. No toxicity 2. No arguments or drama 3. Only join when you are supposed to 🐧 Breaking these rules can get you banned!";
         static void SeedRules()
         {
             var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
-            if (seeded.Any(v => (string)v == "rules1")) return;
+            if (seeded.Any(v => (string)v == "rules1"))
+            {
+                if (seeded.Any(v => (string)v == "rules2")) return;   // Ivan 10-24 05:30: the command is !pmrules, not !rules (a Host that already seeded !rules gets renamed once; an edited trigger is left alone)
+                var ex = ((JArray)doc["actions"]).OfType<JObject>().FirstOrDefault(x => (string)x["id"] == "rules");
+                var nm = ex?["triggers"]?.OfType<JObject>().FirstOrDefault(t => (string)t["type"] == "command")?["names"] as JArray;
+                if (nm != null && nm.Count == 1 && (string)nm[0] == "!rules") { nm[0] = "!pmrules"; ex["name"] = "Rules: !pmrules and when customs open"; }
+                seeded.Add("rules2"); doc["seeded"] = seeded; Save(doc); return;
+            }
             var acts = (JArray)doc["actions"];
             if (!acts.OfType<JObject>().Any(x => (string)x["id"] == "rules"))
             {
-                var a = Act("rules", "Rules: !rules and when customs open", "Ivan 10-24: the private match rules. Chat command for everyone (30 s cooldown) and once each time the queue opens.", true,
-                    new JArray { new JObject { { "type", "command" }, { "names", new JArray("!rules") }, { "permission", "everyone" }, { "cooldownSec", 30 }, { "userCooldownSec", 0 }, { "consume", true } }, new JObject { { "type", "queue_open" } } }, SayStep(RulesLine, "core"));
+                var a = Act("rules", "Rules: !pmrules and when customs open", "Ivan 10-24: the private match rules. Chat command for everyone (30 s cooldown) and once each time the queue opens.", true,
+                    new JArray { new JObject { { "type", "command" }, { "names", new JArray("!pmrules") }, { "permission", "everyone" }, { "cooldownSec", 30 }, { "userCooldownSec", 0 }, { "consume", true } }, new JObject { { "type", "queue_open" } } }, SayStep(RulesLine, "core"));
                 a["group"] = "Customs"; acts.Add(a);
             }
-            seeded.Add("rules1"); doc["seeded"] = seeded; Save(doc);
+            seeded.Add("rules1"); seeded.Add("rules2"); doc["seeded"] = seeded; Save(doc);
         }
         /// <summary>one-time (marker "popupasync1"): the saved alert actions waited the 10 s of the "Latest Group" popup inline (every follow/sub/cheer took 10.2 s and the next alert of the same kind queued behind it).
         /// The popup step becomes a background run (wait:false). Popups still run one after another on the popup action's own lock, so they never hide each other early.</summary>

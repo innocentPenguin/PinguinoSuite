@@ -1,5 +1,5 @@
-"""!rules: seeded preset (everyone, 30 s global cooldown, speaks as core the exact private-match-rules line), fired once per customs queue opening (closed -> open edge of live_state.json),
-no repeat while it stays open, none when a restarted Host finds the queue already open; !rules is listed in commands.json for the Helper.
+"""!pmrules: seeded preset (everyone, 30 s global cooldown, speaks as core the exact private-match-rules line), fired once per customs queue opening (closed -> open edge of live_state.json),
+no repeat while it stays open, none when a restarted Host finds the queue already open; !pmrules is listed in commands.json for the Helper.
 Usage: python Tools/test-host-rules.py [dll]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
@@ -34,10 +34,10 @@ try:
     s = says()[n0:]; chk('queue opened: the rules line once, exact text', [x[1] for x in s] == [LINE] and 'queue_open' in s[0][0], s)
     time.sleep(4); chk('still open: no repeat', [x[1] for x in says()[n0:]] == [LINE], says()[n0:])
     state(True); time.sleep(3); chk('state rewritten (re-announce) while open: no repeat', [x[1] for x in says()[n0:]] == [LINE])
-    # !rules command
-    feed('viewer1: !rules', 1.5); s = says()[n0:]
-    chk('!rules: runs and carries the exact line (right after the auto line the duplicate guard holds it back, as it should)', len(s) == 2 and sorted(x[0] for x in s) == ['chat:!rules', 'queue_open'] and all(x[1].endswith(LINE) for x in s), s)
-    n1 = len(says()); feed('viewer2: !rules', 1.5); chk('30 s global cooldown: second viewer gets nothing', len(says()) == n1, says()[n1:])
+    # !pmrules command
+    feed('viewer1: !pmRules', 1.5); s = says()[n0:]
+    chk('!pmrules: runs and carries the exact line (right after the auto line the duplicate guard holds it back, as it should)', len(s) == 2 and sorted(x[0].lower() for x in s) == ['chat:!pmrules', 'queue_open'] and all(x[1].endswith(LINE) for x in s), s)
+    n1 = len(says()); feed('viewer2: !pmrules', 1.5); chk('30 s global cooldown: second viewer gets nothing', len(says()) == n1, says()[n1:])
     # closing and reopening fires again (a new opening)
     state(False); time.sleep(3); n2 = len(says()); state(True); time.sleep(4)
     chk('closed then opened again: fires again (or dup guard holds the identical line)', len(says()) in (n2, n2 + 1), says()[n2:])
@@ -45,7 +45,7 @@ try:
     # restart with the queue already open: no edge, no line
     host = start('ab'); up(); time.sleep(6); chk('restart with the queue open: nothing said', not says()[k:], says()[k:])
     cmds = json.load(open(os.path.join(suite, 'PinguinoB0t', 'commands.json'), encoding='utf-8-sig'))['commands']
-    c = [x for x in cmds if x['command'] == '!rules']; chk('commands.json lists !rules (Host-owned, everyone)', c and c[0]['action'] == 'PinguinoHost' and c[0]['who'] == 'everyone', c)
+    c = [x for x in cmds if x['command'] == '!pmrules']; chk('commands.json lists !pmrules (Host-owned, everyone)', c and c[0]['action'] == 'PinguinoHost' and c[0]['who'] == 'everyone', c)
     chk('canned !customrules / !customs lines untouched', any('!customrules' in open(os.path.join(suite, 'PinguinoB0t', 'channel_lore_seed.json'), encoding='utf-8').read() for _ in [0]))
 finally:
     host.kill(); time.sleep(0.5); print(open(outp, 'rb').read().decode('utf-8', 'replace')[-1200:]) if fails else None; shutil.rmtree(d, True)
