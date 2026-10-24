@@ -330,7 +330,7 @@ public class CPHInline
                 string dir = _pgSendLogDir ?? Path.Combine(Path.GetDirectoryName(PgDirPath().TrimEnd((char)92, (char)47)) ?? PgDirPath(), "logs");
                 string f = Path.Combine(dir, "bot-sends-" + day + ".log");
                 if (day != _pgSendLogDay) { _pgSendLogDay = day; _pgSendLogBytes = File.Exists(f) ? new FileInfo(f).Length : 0; }
-                if (_pgSendLogBytes > PgSendLogMaxBytes) return;
+                if (File.Exists(f) && new FileInfo(f).Length > PgSendLogMaxBytes) return;   // the real size on disk each time: Host, Chatty, Helper, B0t and the Router all append to the same file, so one cap holds for all of them
                 Directory.CreateDirectory(dir);
                 File.AppendAllText(f, line + Environment.NewLine, new System.Text.UTF8Encoding(false)); _pgSendLogBytes += line.Length + 2;
             }
@@ -562,7 +562,7 @@ public class CPHInline
         {
             string role = order[i];
             var bot = PgBotOf(role);
-            if (bot == null || !bot.Enabled) { CPH.LogInfo("[Router] " + PgTitle(role) + " is switched off, next."); RLog(id, role, "skip", "switched off", 0); continue; }
+            if (bot == null || !bot.Enabled) { string why = bot == null ? "missing from bots.json" : "Enabled=false in " + Path.Combine(PgDirPath(), "bots.json"); CPH.LogInfo("[Router] " + PgTitle(role) + " is switched off (" + why + "), next."); RLog(id, role, "skip", bot == null ? "switched off (missing from bots.json)" : "switched off (Enabled=false)", 0); continue; }
             if (!PgActionExists(bot.Action)) { CPH.LogWarn("[Router] Streamer.bot has no action '" + bot.Action + "' for " + PgTitle(role) + ", next."); RLog(id, role, "skip", "no action " + bot.Action, 0); continue; }
             PgSetResult("");
             var sw = System.Diagnostics.Stopwatch.StartNew();

@@ -349,7 +349,7 @@ public class CPHInline
                 string dir = _pgSendLogDir ?? Path.Combine(Path.GetDirectoryName(PgDirPath().TrimEnd((char)92, (char)47)) ?? PgDirPath(), "logs");
                 string f = Path.Combine(dir, "bot-sends-" + day + ".log");
                 if (day != _pgSendLogDay) { _pgSendLogDay = day; _pgSendLogBytes = File.Exists(f) ? new FileInfo(f).Length : 0; }
-                if (_pgSendLogBytes > PgSendLogMaxBytes) return;
+                if (File.Exists(f) && new FileInfo(f).Length > PgSendLogMaxBytes) return;   // the real size on disk each time: Host, Chatty, Helper, B0t and the Router all append to the same file, so one cap holds for all of them
                 Directory.CreateDirectory(dir);
                 File.AppendAllText(f, line + Environment.NewLine, new System.Text.UTF8Encoding(false)); _pgSendLogBytes += line.Length + 2;
             }
@@ -985,8 +985,32 @@ public class CPHInline
         foreach (var ph in (_cfg.SpamPhrases ?? "").Split(','))
         { string q = ph.Trim().ToLowerInvariant(); if (q.Length >= 4 && low.Contains(q)) return true; }
         string n = (login ?? "").ToLowerInvariant();
-        if (n.Length >= 16 && Regex.IsMatch(n, "^[a-z]+$") && Regex.IsMatch(n.Substring(n.Length - 9), "[^aeiouy]{5}")) return true;   // e.g. "succeedingsteelbqdzvkxr": real words, then a vowel-less tail
-        return false;
+        bool hostSays;
+        if (HostSpamLogin(n, out hostSays)) return hostSays;   // ONE detector: the Host's WelcomeBack.IsSpamLogin (the same one the welcome-back / people-graph lines use)
+        return n.Length >= 16 && Regex.IsMatch(n, "^[a-z]+$") && Regex.IsMatch(n.Substring(n.Length - 9), "[^aeiouy]{5}");   // only when there is no Host (standalone / tests): e.g. "succeedingsteelbqdzvkxr"
+    }
+    static bool _hostSpamLooked; static System.Reflection.MethodInfo _hostSpam;
+    static bool HostSpamLogin(string login, out bool spam)
+    {
+        spam = false;
+        try
+        {
+            if (!_hostSpamLooked)
+            {
+                _hostSpamLooked = true;
+                foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    Type t = null; try { t = a.GetType("PinguinoHost.WelcomeBack", false); } catch (Exception) { }
+                    if (t == null) continue;
+                    _hostSpam = t.GetMethod("IsSpamLogin", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static, null, new[] { typeof(string) }, null);
+                    if (_hostSpam != null) break;
+                }
+            }
+            if (_hostSpam == null) return false;
+            spam = (bool)_hostSpam.Invoke(null, new object[] { login });
+            return true;
+        }
+        catch (Exception) { return false; }
     }
 
     // ── DAILY GREETING (IDEAS #40): a regular's first message of the local day, plus the "first seen here N year(s) ago" anniversary. Name only, nothing remembered is quoted. ──

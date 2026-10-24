@@ -348,7 +348,7 @@ public class CPHInline
                 string dir = _pgSendLogDir ?? Path.Combine(Path.GetDirectoryName(PgDirPath().TrimEnd((char)92, (char)47)) ?? PgDirPath(), "logs");
                 string f = Path.Combine(dir, "bot-sends-" + day + ".log");
                 if (day != _pgSendLogDay) { _pgSendLogDay = day; _pgSendLogBytes = File.Exists(f) ? new FileInfo(f).Length : 0; }
-                if (_pgSendLogBytes > PgSendLogMaxBytes) return;
+                if (File.Exists(f) && new FileInfo(f).Length > PgSendLogMaxBytes) return;   // the real size on disk each time: Host, Chatty, Helper, B0t and the Router all append to the same file, so one cap holds for all of them
                 Directory.CreateDirectory(dir);
                 File.AppendAllText(f, line + Environment.NewLine, new System.Text.UTF8Encoding(false)); _pgSendLogBytes += line.Length + 2;
             }

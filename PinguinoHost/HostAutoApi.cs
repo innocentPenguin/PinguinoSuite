@@ -33,7 +33,7 @@ namespace PinguinoHost
                     string dir = SendLogDir ?? System.IO.Path.Combine(System.IO.Path.GetDirectoryName((DataDir ?? "").TrimEnd((char)92, (char)47)) ?? DataDir, "logs");
                     string f = System.IO.Path.Combine(dir, "bot-sends-" + day + ".log");
                     if (day != _sendLogDay) { _sendLogDay = day; _sendLogBytes = System.IO.File.Exists(f) ? new System.IO.FileInfo(f).Length : 0; }
-                    if (_sendLogBytes > 5L * 1024 * 1024) return;
+                    if (System.IO.File.Exists(f) && new System.IO.FileInfo(f).Length > 5L * 1024 * 1024) return;   // real size on disk: the bot copies append to the same file
                     System.IO.Directory.CreateDirectory(dir);
                     System.IO.File.AppendAllText(f, line + Environment.NewLine, new System.Text.UTF8Encoding(false)); _sendLogBytes += line.Length + 2;
                 }
@@ -63,7 +63,8 @@ namespace PinguinoHost
                     using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) })
                     {
                         var rq = new HttpRequestMessage(HttpMethod.Post, Helix + "/chat/messages"); rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("Client-Id", cid);
-                        rq.Content = new StringContent(ReplyCtx.Body(bid, sid, text).ToString(), Encoding.UTF8, "application/json");
+                        string sentJson = ReplyCtx.Body(bid, sid, text).ToString();   // kept as a string: the request content may be disposed once it was sent
+                        rq.Content = new StringContent(sentJson, Encoding.UTF8, "application/json");
                         var resp = http.SendAsync(rq).Result;
                         if (resp.IsSuccessStatusCode) { via = (string)bot["Account"] ?? r; return true; }
                         int code = (int)resp.StatusCode; string why = "";
@@ -72,7 +73,7 @@ namespace PinguinoHost
                         if (code == 400)
                         {
                             // a reply whose parent message was deleted / is too old is refused: say the line ONCE as a plain line (it was refused, so nothing went out); a 400 for the text itself fails here again and stops
-                            if (rq.Content != null && rq.Content.ReadAsStringAsync().Result.Contains("reply_parent_message_id"))
+                            if (sentJson.Contains("reply_parent_message_id"))
                             {
                                 Clog.Warn("automation", "chat send as " + r + ": the reply parent was refused, saying the line once as a plain line");
                                 var rq2 = new HttpRequestMessage(HttpMethod.Post, Helix + "/chat/messages"); rq2.Headers.Add("Authorization", "Bearer " + tok); rq2.Headers.Add("Client-Id", cid);

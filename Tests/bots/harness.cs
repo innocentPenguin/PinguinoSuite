@@ -149,6 +149,7 @@ public static class Harness
         Reset(); CPHProxy.Behaviors["PinguinoChat"] = () => "handled"; CPHProxy.Behaviors["PinguinoHelper"] = () => "handled";
         Chat("viewer1", "@pinguinob0t hi");
         Check("a switched-off chatbot is skipped: the helper takes it", Runs() == "PinguinoHelper", Runs());
+        { string rl = File.ReadAllText(Path.Combine(dir, "routing.log")); Check("the skip says WHY: Enabled=false, not a vague switched off", rl.Contains("	chat	skip	switched off (Enabled=false)	"), rl.Length > 300 ? rl.Substring(rl.Length - 300) : rl); }
 
         // ── who speaks (PgSay) ──
         Registry("{}");   // defaults: only the core has an account
