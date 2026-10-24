@@ -69,7 +69,11 @@ namespace PinguinoHost
             if (n == "") return "No private match is set right now. Ask a mod.";
             return "Private match -> Name: " + n + ".";
         }
-        static JObject LoadFile(string name) { try { var f = Path.Combine(DataDir, name); return File.Exists(f) ? JObject.Parse(File.ReadAllText(f)) : new JObject(); } catch (Exception) { return new JObject(); } }
+        public static JObject BotsRegistry() { return LoadFile("bots.json"); }
+        static JObject LoadFile(string name) { try { var f = Path.Combine(DataDir, name); return File.Exists(f) ? JObject.Parse(File.ReadAllText(f)) : new JObject(); } catch (Exception ex) { if (name == "bots.json") WarnBotsFile(ex.Message); return new JObject(); } }
+        static string _botsWarn = "";
+        /// <summary>an unreadable bots.json makes the bots look switched off or default: say so once per distinct problem (host.jsonl)</summary>
+        static void WarnBotsFile(string why) { if (why == _botsWarn) return; _botsWarn = why; Clog.Warn("bots", "bots.json could not be read (" + why + "): the bots fall back to their last/default settings"); }
         static void SaveFile(string name, JObject o)
         { var f = Path.Combine(DataDir, name); var tmp = f + ".tmp"; File.WriteAllText(tmp, o.ToString()); if (File.Exists(f)) File.Replace(tmp, f, null); else File.Move(tmp, f); }
 
