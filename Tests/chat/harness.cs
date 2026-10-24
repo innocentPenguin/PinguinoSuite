@@ -1154,7 +1154,7 @@ public static class Harness
             Game(new Dictionary<string, object> { { "kind", "duel" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "Bobby" }, { "amount", 30 }, { "payout", 60 }, { "gameId", "g6" } });
             Check("games: a duel result names both players", Last() != null && Last().Contains("Stefan") && Last().Contains("Bobby") && Last().Contains("60"), Last());
             Game(new Dictionary<string, object> { { "kind", "give" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "Bobby" }, { "amount", 15 }, { "gameId", "g7" } });
-            Check("games: a gift is thanked", Last() != null && Last().Contains("15") && Last().Contains("Bobby") && System.Text.RegularExpressions.Regex.IsMatch(Last(), "thank"), Last());
+            Check("games: a gift is one short line (no thank-you fluff, Ivan 10-24)", Last() != null && Last().Contains("15") && Last().Contains("Bobby") && Last().Length < 60, Last());
             Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "broke" }, { "user", "stefan" }, { "display", "Stefan" }, { "gameId", "g8" } });
             Check("games: no balance says 'you have no points'", Last() != null && Last().Contains("you have no points"), Last());
             Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "invalid" }, { "user", "stefan" }, { "display", "Stefan" }, { "reason", "the minimum is 5 points." }, { "gameId", "g9" } });

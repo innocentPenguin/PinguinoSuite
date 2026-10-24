@@ -859,7 +859,7 @@ public class CPHInline
     string GameLine(string kind, string outcome, string d, long amt, long pay, long bal, string opp, string reel, string reason, string cur, int timeout, bool plain, int tries = 0)
     {
         string at = "@" + d + " "; long net = pay - amt; string sr = reel != "" ? reel + " " : "";
-        if (outcome == "broke") return at + (plain ? "you have no " + cur + "." : Pick("you have no " + cur + " right now. Hang out in chat and you will earn some \U0001F427", "you have no " + cur + " at the moment. Chat a bit and come back for a spin!"));
+        if (outcome == "broke") return at + (plain ? "you have no " + cur + "." : Pick("you have no " + cur + " right now \U0001F427", "you have no " + cur + " at the moment."));
         if (outcome == "invalid" || (outcome == "expired" && kind != "guess") || outcome == "declined")
         {
             if (outcome == "declined") return opp != "" ? "@" + opp + " " + d + " passed on the duel." + (plain ? "" : " Next time!") : null;
@@ -868,19 +868,19 @@ public class CPHInline
         }
         if (kind == "gamble")
         {
-            if (outcome == "win") return at + (plain ? "you won " + net + " " + cur + "! You now have " + bal + "." : Pick("YES! +" + net + " " + cur + "! \U0001F389 You now have " + bal + ", keep it rolling!", "winner winner! +" + net + " " + cur + " \U0001F427\U0001F389 Balance: " + bal + ".", "nice one! +" + net + " " + cur + ", you are on fire! You have " + bal + " now."));
-            return at + (plain ? "you lost " + amt + " " + cur + ". Now at " + bal + "." : Pick("ouch, " + amt + " " + cur + " gone \U0001F62C You are at " + bal + ", the next one is yours!", "not this time, " + amt + " " + cur + " lost. " + bal + " left, chin up! \U0001F427", "so close! Lost " + amt + " " + cur + ", " + bal + " left. Shake it off!"));
+            if (outcome == "win") return at + (plain ? "you won " + net + " " + cur + "! You now have " + bal + "." : Pick("YES! +" + net + " " + cur + " \U0001F389 Balance: " + bal + ".", "winner winner! +" + net + " " + cur + " \U0001F427\U0001F389 Balance: " + bal + ".", "nice one! +" + net + " " + cur + ", you have " + bal + " now."));
+            return at + (plain ? "you lost " + amt + " " + cur + ". Now at " + bal + "." : Pick("ouch, " + amt + " " + cur + " gone \U0001F62C " + bal + " left.", "not this time, " + amt + " " + cur + " lost. " + bal + " left \U0001F427", "so close! Lost " + amt + " " + cur + ", " + bal + " left."));
         }
         if (kind == "slots")
         {
-            if (outcome == "jackpot") return at + sr + (plain ? "JACKPOT, you won " + pay + " " + cur + "! You now have " + bal + "." : "JACKPOT!!! \U0001F3B0\U0001F389\U0001F427 +" + pay + " " + cur + "! You now have " + bal + ", unreal!");
+            if (outcome == "jackpot") return at + sr + (plain ? "JACKPOT, you won " + pay + " " + cur + "! You now have " + bal + "." : "JACKPOT!!! \U0001F3B0\U0001F389\U0001F427 +" + pay + " " + cur + "! You now have " + bal + ".");
             if (outcome == "win") return at + sr + (plain ? "you won " + pay + " " + cur + "! You now have " + bal + "." : Pick("winner! +" + pay + " " + cur + " \U0001F389 You have " + bal + " now.", "ka-ching! +" + pay + " " + cur + ", balance " + bal + " \U0001F3B0", "the reels like you! +" + pay + " " + cur + ", you are at " + bal + "."));
-            return at + sr + (plain ? "no luck, lost " + amt + " " + cur + ". Now at " + bal + "." : Pick("so close... lost " + amt + " " + cur + ", " + bal + " left. Spin again! \U0001F3B0", "no match this time, " + amt + " " + cur + " lost. You have " + bal + " left, chin up! \U0001F427", "the reels said no. Lost " + amt + " " + cur + ", " + bal + " left."));
+            return at + sr + (plain ? "no luck, lost " + amt + " " + cur + ". Now at " + bal + "." : Pick("so close... lost " + amt + " " + cur + ", " + bal + " left \U0001F3B0", "no match this time, " + amt + " " + cur + " lost. " + bal + " left \U0001F427", "the reels said no. Lost " + amt + " " + cur + ", " + bal + " left."));
         }
         if (kind == "duel")
         {
-            if (outcome == "challenge") return "@" + opp + " " + d + " challenges you to a duel for " + amt + " " + cur + "!" + (plain ? " Type !accept" : " \u2694\uFE0F Brave enough? Type !accept") + (timeout > 0 ? " within " + timeout + "s." : ".");
-            return plain ? d + " wins the duel against " + opp + " and takes " + pay + " " + cur + "! GG." : Pick(d + " takes down " + opp + " and walks off with " + pay + " " + cur + "! \U0001F94A GG to both.", d + " wins the duel against " + opp + "! +" + pay + " " + cur + " \U0001F3C6 Great fight, " + opp + "!", "the dust settles... " + d + " beats " + opp + " and takes " + pay + " " + cur + "! GG \U0001F427");
+            if (outcome == "challenge") return "@" + opp + " " + d + " challenges you to a duel for " + amt + " " + cur + "!" + (plain ? " Type !accept" : " \u2694\uFE0F Type !accept") + (timeout > 0 ? " within " + timeout + "s." : ".");
+            return plain ? d + " wins the duel against " + opp + " and takes " + pay + " " + cur + "! GG." : Pick(d + " takes down " + opp + " and walks off with " + pay + " " + cur + "! \U0001F94A", d + " wins the duel against " + opp + "! +" + pay + " " + cur + " \U0001F3C6", "the dust settles... " + d + " beats " + opp + " and takes " + pay + " " + cur + "! GG \U0001F427");
         }
         if (kind == "shop")
         {
@@ -890,14 +890,14 @@ public class CPHInline
         if (kind == "guess")
         {
             string ans = opp;
-            if (outcome == "start") return reason != "" ? at + "Who said this? \"" + reason + "\" Answer with !guess <name>, " + Math.Max(1, tries) + " tries." + (plain ? " Stake " + amt + " " + cur + ", right answer pays " + pay + "." : " Stake " + amt + " " + cur + ", right answer pays " + pay + ". Good luck! 🕵️") : null;
+            if (outcome == "start") return reason != "" ? at + "Who said this? \"" + reason + "\" Answer with !guess <name>, " + Math.Max(1, tries) + " tries." + (plain ? " Stake " + amt + " " + cur + ", right answer pays " + pay + "." : " Stake " + amt + " " + cur + ", right answer pays " + pay + ". 🕵️") : null;
             if (outcome == "win") return at + (plain ? "Correct! It was " + ans + ". You win " + pay + " " + cur + "!" : Pick("Correct! 🎉 It was " + ans + ". You win " + pay + " " + cur + "! You have " + bal + " now.", "got it! 🕵️ It was " + ans + ", +" + pay + " " + cur + " for you!", "spot on, it was " + ans + "! +" + pay + " " + cur + " 🐧"));
             if (outcome == "retry") return at + (plain ? "Nope, " + tries + (tries == 1 ? " try" : " tries") + " left." : Pick("nope, " + tries + (tries == 1 ? " try" : " tries") + " left!", "not them! " + tries + (tries == 1 ? " try" : " tries") + " left 🤔", "close, but no. " + tries + (tries == 1 ? " try" : " tries") + " left."));
-            if (outcome == "lose") return at + (plain ? "No luck, it was " + ans + "." : Pick("no luck, it was " + ans + "! Better luck next time 🐧", "so close! It was " + ans + ". Try again later!"));
-            if (outcome == "expired") return at + (plain ? "time is up, it was " + ans + ". Better luck next time!" : Pick("time is up! It was " + ans + ". Better luck next time 🐧", "the clock ran out, it was " + ans + "!"));
+            if (outcome == "lose") return at + (plain ? "No luck, it was " + ans + "." : Pick("no luck, it was " + ans + " 🐧", "so close! It was " + ans + "."));
+            if (outcome == "expired") return at + (plain ? "time is up, it was " + ans + "." : Pick("time is up! It was " + ans + " 🐧", "the clock ran out, it was " + ans + "!"));
             return reason != "" ? at + reason : null;
         }
-        if (kind == "give") return at + "gave " + amt + " " + cur + " to " + opp + "." + (plain ? " Thank you for sharing!" : Pick(" So generous, thank you! \U0001F49B", " That is so kind, thank you for sharing! \U0001F427", " What a legend, thank you! \U0001F49B"));
+        if (kind == "give") return at + "gave " + amt + " " + cur + " to " + opp + "." + (plain ? "" : Pick(" \U0001F49B", " \U0001F427", " thank you! \U0001F49B"));
         return reason != "" ? at + reason : null;
     }
     // !games: the games that exist and are switched on (the Host's gambling.json), plus Guess the Chatter (started through !shop)
@@ -923,9 +923,9 @@ public class CPHInline
     string RaidReaction(string raider, int viewers)
     {
         if (!_cfg.ReactRaids || viewers < Math.Max(1, _cfg.RaidMinViewers) || !Regex.IsMatch(raider ?? "", @"^[a-z0-9_]{3,25}$")) return null;
-        string[] v = { "{r} raiders, grab a seat 🐧 I'm Chatty: ask me anything, or ask HelperPinguino how to join the games. !commands lists the rest.",
-                       "welcome in, raiders from {r}! 🐧 Pull up a chair, say hi, and tell us what you were just watching.",
-                       "raid crew from {r}, you made it! 🐧 Chat moves fast here, so jump in whenever you like, and ask me if you get lost." };
+        string[] v = { "{r} raiders, welcome! 🐧 I'm Chatty, ask me anything.",
+                       "welcome in, raiders from {r}! 🐧 Say hi.",
+                       "raid crew from {r}, you made it! 🐧 Jump in anytime." };
         return v[_rng.Next(v.Length)].Replace("{r}", raider);
     }
     string HypeReaction(string state, int level)
@@ -982,10 +982,10 @@ public class CPHInline
         if (gifts > 0) parts.Add(gifts + " gifted");
         if (bits > 0) parts.Add(bits + " bits");
         if (raids > 0) parts.Add(raids + " raid" + (raids == 1 ? "" : "s"));
-        string[] plain = { "thanks for hanging out " + when + ", everyone! 🐧 See you next stream.", "that's the stream, thank you all for being here " + when + ". See you next time!", "thanks everyone for " + when + ", it was a good one 🐧" };
+        string[] plain = { "thanks for hanging out " + when + ", everyone! 🐧", "that's the stream, thanks for being here " + when + "!", "thanks everyone for " + when + ", it was a good one 🐧" };
         if (parts.Count == 0 || shortStream) return plain[_rng.Next(plain.Length)];
         string sum = string.Join(", ", parts);
-        string[] withNum = { "thanks for hanging out " + when + ", everyone! 🐧 " + (when == "tonight" ? "Tonight" : "Today") + ": " + sum + ". See you next stream.", "that's the stream! " + sum + ". Thank you all, see you next time.", "thanks everyone for " + when + "! " + sum + " 🐧" };
+        string[] withNum = { "thanks for hanging out " + when + ", everyone! 🐧 " + (when == "tonight" ? "Tonight" : "Today") + ": " + sum + ".", "that's the stream! " + sum + ". Thank you all.", "thanks everyone for " + when + "! " + sum + " 🐧" };
         return withNum[_rng.Next(withNum.Length)];
     }
     void ReactSay(string kind, string line)
@@ -1004,8 +1004,8 @@ public class CPHInline
         long now = Now(); if (now - prevSeen < Math.Max(1, _cfg.WelcomeBackDays) * 86400L || now - _lastBack < 60) return null;
         bool supporter; lock (_lock) { supporter = Events().Any(e => e.User == login && e.Type != "follow" && e.Type != "raidin" && e.At >= prevSeen - 3 * 86400L && e.At <= prevSeen + 3600); }
         string[] v = supporter
-            ? new[] { "welcome back! 🐧 Thank you again for the support, it really means a lot here.", "look who's back! 🐧 Your support last time was awesome, glad you're here." }
-            : new[] { "welcome back, it's been a while! 🐧 Good to see you again.", "hey, long time no see! 🐧 Glad you stopped by again.", "you're back! 🐧 We missed you, pull up a chair." };
+            ? new[] { "welcome back! 🐧 Thanks again for the support.", "look who's back! 🐧 Thanks for the support." }
+            : new[] { "welcome back, it's been a while! 🐧", "hey, long time no see! 🐧", "you're back! 🐧 We missed you." };
         if (!supporter)
         {
             // the Host's people-graph lines (IDEAS #36, TimeoutReward.PeopleGraph.WelcomeLine): banded by days away, warmer for chat regulars, "" for bots / opted-out viewers.

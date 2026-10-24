@@ -139,13 +139,13 @@
   },
   {
    "name": "tuck",
-   "text": "$(user) tucks $(touser) in nice and snug. Sweet dreams, and thank you for hanging out tonight! 🛏️🐧"
+   "text": "$(user) tucks $(touser) in. Sweet dreams 🛏️🐧"
   },
   {
    "name": "raid",
    "_note": "text only: the raid-call line viewers copy. Real raids stay Ivan-only (!raid <channel> + !confirm raid in the Host). Edit the text here.",
    "skipBroadcaster": true,
-   "text": "🐧 PENGUIN RAID 🐧 Thank you all for hanging out with InnocentPenguin tonight, you are awesome! Waddle on over and say hi!"
+   "text": "🐧 PENGUIN RAID 🐧 Thanks for hanging out with InnocentPenguin tonight! Waddle on over and say hi!"
   },
   {
    "name": "intro",
@@ -165,7 +165,7 @@
   },
   {
    "name": "lurk",
-   "text": "Thanks for lurking, $(user)! We hope to see you back soon!"
+   "text": "Enjoy the lurk, $(user)!"
   },
   {
    "name": "marsh",
@@ -399,7 +399,7 @@
   {
    "name": "games",
    "aliases": ["game"],
-   "text": "🎰 Games you can play in chat: $(games). Only bet what you can lose, and have fun! 🐧"
+   "text": "🎰 Games in chat: $(games). Bet only what you can lose 🐧"
   }
  ]
 }
