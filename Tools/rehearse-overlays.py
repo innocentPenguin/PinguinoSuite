@@ -3,6 +3,7 @@ Replays a scripted evening: idle -> queue open -> joins -> match + team picks ->
 subroll -> queue close, and after EVERY step asserts that each overlay's data endpoint still answers with a sane payload
 (live_state.js, /api/queue-idle, /api/customs/state, /api/wheel/public, /api/subroll, /overlay/latest|goal|subfooter, /api/scene-layouts, /api/scene-health)
 and that no overlay page is missing. Usage: python Tools/rehearse-overlays.py [dll] [--keep] [--hold SECONDS]   (the dll is a Release build of PinguinoHost, run from a temp copy, never from bin\\Release of the live app).
+Then a RAID rehearsal on a second sim Host (mock Helix + mock Multi): goodnight with no raid fires at once; raid_start = shoutout (the clip goes to Multi once), "Prepare your emotes", Discord line, in that order within seconds; the same raid never starts twice; stream.offline with a raid pending is held; raid_out (10 s after the signal in the test) says Discord once, then stop-stream, and releases the held goodnight; overlays stay sane after every step.
 Exit 0 = every step sane. Registered for run-all-tests through Tools/test-host-rehearsal.py."""
 import json, os, re, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
@@ -167,4 +168,106 @@ try:
 finally:
     h.kill(); time.sleep(0.5)
     if '--keep' not in sys.argv: shutil.rmtree(d, True)
+# ---- raid rehearsal: a second sim Host with a mock Helix + mock Multi (the shoutout clip goes to Multi's alerts source), same sanity checks around every step ----
+def raid_rehearsal():
+    import http.server, threading, urllib.parse
+    global B, h
+    HX, MP = freeport(), freeport(); RP, RW = freeport(), freeport()
+    chats = []; fires = []; t0 = time.time()
+    def clip(i): return {'id': i, 'title': 't' + i, 'url': 'https://clips.twitch.tv/' + i, 'view_count': 50, 'is_featured': True, 'duration': 9.5, 'created_at': '2020-01-01T00:00:00Z', 'thumbnail_url': 'https://x/y-preview-480x272.jpg'}
+    class HX_(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def _send(self, o, code=200):
+            b = json.dumps(o).encode() if o is not None else b''
+            self.send_response(code); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b)
+        def do_GET(self):
+            u = urllib.parse.urlparse(self.path); q = urllib.parse.parse_qs(u.query)
+            if u.path.endswith('/users'): lg = q.get('login', [''])[0]; self._send({'data': [{'id': 'id_' + lg, 'login': lg}]})
+            elif u.path.endswith('/channels'): bid = q.get('broadcaster_id', [''])[0]; lg = bid[3:]; self._send({'data': [{'broadcaster_login': lg, 'broadcaster_name': lg.capitalize(), 'game_name': 'Rocket League'}]})
+            elif u.path.endswith('/clips'): self._send({'data': [clip('RC1')]})
+            else: self._send({'data': []})
+        def do_POST(self):
+            u = urllib.parse.urlparse(self.path)
+            if u.path.endswith('/chat/messages'):
+                n = int(self.headers.get('Content-Length', 0)); b = json.loads(self.rfile.read(n) or b'{}'); chats.append((time.time() - t0, b.get('message', ''))); self._send({'data': [{'is_sent': True}]})
+            else: self._send(None, 204)
+    class MU(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_POST(self):
+            n = int(self.headers.get('Content-Length', 0)); b = json.loads(self.rfile.read(n) or b'{}'); fires.append((time.time() - t0, self.path, b))
+            o = json.dumps({'ok': True, 'text': 'queued'}).encode(); self.send_response(200); self.send_header('Content-Length', str(len(o))); self.end_headers(); self.wfile.write(o)
+    sm = http.server.ThreadingHTTPServer(('127.0.0.1', MP), MU); sh_ = http.server.ThreadingHTTPServer(('127.0.0.1', HX), HX_)
+    for sv in (sm, sh_): threading.Thread(target=sv.serve_forever, daemon=True).start()
+    rd = tempfile.mkdtemp(prefix='pgrhr_'); rout = os.path.join(rd, 'out.txt')
+    json.dump({'Channel': 'trial', 'OverlayPort': RP, 'UserToken': 'tok', 'ClientId': 'cid', 'BroadcasterId': 'streamer1'}, open(os.path.join(rd, 'host_secrets.json'), 'w'))
+    rod = os.path.join(rd, 'overlays_out'); os.makedirs(rod); json.dump({'OverlayDir': rod}, open(os.path.join(rd, 'settings.json'), 'w'))
+    json.dump({'RaidStartDelaySec': 0}, open(os.path.join(rd, 'latest_settings.json'), 'w'))   # the raid lands 10 s after Twitch's signal instead of 90 s
+    json.dump({'CooldownSec': 1, 'ManualDedupeMinutes': 0}, open(os.path.join(rd, 'shout_settings.json'), 'w'))
+    json.dump({'Enabled': True, 'Url': 'http://127.0.0.1:%d' % MP, 'Token': ''}, open(os.path.join(rd, 'alert_bridge.json'), 'w'))
+    json.dump({'Bots': {'core': {'Enabled': True, 'Sender': 'helix', 'Account': 'PinguinoB0t'}}}, open(os.path.join(rd, 'bots.json'), 'w'))
+    json.dump({'core': {'UserToken': 't', 'ClientId': 'c', 'SenderId': 'bot1', 'BroadcasterId': 'streamer1'}}, open(os.path.join(rd, 'bots_secrets.json'), 'w'))
+    e2 = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; e2.update({'PINGUINO_COMPAT_WS_PORT': str(RW), 'PINGUINO_HELIX_BASE': 'http://127.0.0.1:%d' % HX})
+    h2 = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', rd, '--suite', suite], env=e2, stdin=subprocess.PIPE, stdout=open(rout, 'ab'), stderr=subprocess.STDOUT)
+    oh, ob = h, B; h = h2; B = 'http://127.0.0.1:%d' % RP
+    def post(p, o): return json.load(urllib.request.urlopen(urllib.request.Request(B + p, data=json.dumps(o).encode(), headers={'Content-Type': 'application/json'}), timeout=15))
+    def runs(i): return [r for r in get('/api/automations/log?n=100').get('runs', []) if r['id'] == i]
+    def texts(): return [m for _, m in chats]
+    try:
+        for _ in range(240):
+            try: raw('/api/status'); break
+            except Exception: time.sleep(0.5)
+        time.sleep(2)
+        for i in ('sb-raidstart', 'sb-raidout', 'sb-offline'): post('/api/automations/enable', {'id': i, 'on': True})
+
+        step[0] = 'raid: goodnight with no raid fires at once'
+        ev('stream.offline', {'broadcaster_user_login': 'trial'}); time.sleep(1.5)
+        chk('no raid pending: the goodnight ran', len(runs('sb-offline')) == 1, [r['id'] for r in get('/api/automations/log?n=20').get('runs', [])])
+        sane()
+
+        step[0] = 'raid_start'
+        tp = time.time() - t0
+        r = post('/api/raid/prep', {'target': 'raidtarget'}); chk('raid prep accepted, first signal fires', r.get('fired') is True, r)
+        time.sleep(4)
+        rs = runs('sb-raidstart'); chk('raid start ran once', len(rs) == 1 and rs[0]['ok'], rs)
+        if rs:
+            o = rs[0]['output']
+            chk('order: shoutout first, then the emotes line, then the Discord line', len(o) >= 3 and 'shoutout' in o[0].lower() and 'Prepare your emotes' in o[1] and 'iscord' in o[-1], o)
+            chk('raid start finished within a few seconds', rs[0]['ms'] < 5000, rs[0]['ms'])
+        want = [m for m in texts() if 'Prepare your emotes' in m or 'ommunity Discord' in m]
+        chk('chat got the emotes line before the Discord line', len(want) == 2 and 'Prepare your emotes' in want[0] and 'Discord' in want[1], texts())
+        chk('the shoutout clip went to Multi once, for the target', len(fires) == 1 and fires[0][2].get('user') == 'raidtarget', fires)
+        if fires: chk('clip fired within seconds of the countdown', fires[0][0] - tp < 6, (fires[0][0], tp))
+        sane()
+        r2 = post('/api/raid/prep', {'target': 'raidtarget'}); chk('the same raid does not start twice', r2.get('fired') is False, r2)
+
+        step[0] = 'raid: goodnight held while the raid is pending'
+        ev('stream.offline', {'broadcaster_user_login': 'trial'}); time.sleep(2)
+        chk('goodnight held (not said yet)', len(runs('sb-offline')) == 1, len(runs('sb-offline')))
+        sane()
+
+        step[0] = 'raid_out'
+        feed('event TwitchRaidOut raidtarget 40', 0.5)
+        time.sleep(3); chk('raid_out waits for the raid to land (not at the signal)', len(runs('sb-raidout')) == 0)
+        for _ in range(20):
+            if runs('sb-raidout'): break
+            time.sleep(1)
+        ro = runs('sb-raidout'); chk('raid out ran once after the delay', len(ro) == 1, len(ro))
+        if ro:
+            o = ro[0]['output']; chk('Discord line once, then the stop-stream step last', sum(1 for x in o if 'iscord' in x) == 1 and 'iscord' in o[0] and 'OBS' in o[-1], o)
+        time.sleep(1.5)
+        chk('the held goodnight was said after the raid landed', len(runs('sb-offline')) == 2, len(runs('sb-offline')))
+        chk('only one shoutout clip for the whole raid', len(fires) == 1, len(fires))
+        sane()
+
+        step[0] = 'raid: host log'
+        bad = [l for l in open(rout, errors='replace').read().splitlines() if re.search(r'Unhandled|Exception|\bERROR\b', l)][:3]
+        chk('no exceptions in the raid Host output', not bad, bad); chk('raid Host still alive', h.poll() is None)
+    finally:
+        h.kill(); time.sleep(0.5); h, B = oh, ob
+        for sv in (sm, sh_):
+            try: sv.shutdown()
+            except Exception: pass
+        if '--keep' not in sys.argv: shutil.rmtree(rd, True)
+try: raid_rehearsal()
+except Exception as e: fails.append('[raid] rehearsal error %r' % (e,))
 print('FAIL ' + '; '.join(fails) if fails else 'PASS rehearse-overlays'); sys.exit(1 if fails else 0)
