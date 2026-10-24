@@ -69,6 +69,13 @@ try:
         except Exception as e: chk('page ' + q, False, e)
 
     step[0] = 'idle (nothing running)'
+    # the Host serves OverlayDir first, then the suite overlays folder (which can hold a stale live_state.js from an earlier run, or none: 404). Wait until the bot core has written ITS state into our temp OverlayDir; nudge it with a harmless close if it has not yet.
+    lsf = os.path.join(od, 'live_state.js')
+    for i in range(40):
+        if os.path.exists(lsf): break
+        if i == 6: feed('#ivan: !queue close', 0.3)
+        time.sleep(0.5)
+    chk('the sim bot core wrote live_state.js into its own OverlayDir', os.path.exists(lsf))
     sane(lambda ls, cs, qi, wp, sr: chk('idle: queue closed and empty, no match', ls['queueOpen'] is False and not ls.get('currentMatch') and wp['status'] == 'none' and sr['running'] is False, (ls['queueOpen'], len(ls['queue']))))
 
     step[0] = 'queue open'
@@ -218,6 +225,10 @@ def raid_rehearsal():
             except Exception: time.sleep(0.5)
         time.sleep(2)
         for i in ('sb-raidstart', 'sb-raidout', 'sb-offline'): post('/api/automations/enable', {'id': i, 'on': True})
+        for i in range(40):   # same as the main run: wait for this Host's own live_state.js (else the suite folder's stale copy or a 404 is served)
+            if os.path.exists(os.path.join(rod, 'live_state.js')): break
+            if i == 6: feed('#ivan: !queue close', 0.3)
+            time.sleep(0.5)
 
         step[0] = 'raid: goodnight with no raid fires at once'
         ev('stream.offline', {'broadcaster_user_login': 'trial'}); time.sleep(1.5)
