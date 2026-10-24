@@ -933,6 +933,8 @@ public static class Harness
           Check("react: the same raid event twice stays one line (cooldown)", CPHProxy.Sent.Count == nr);
           ReactReset(); SetCfgB("ReactRaids", false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("TwitchRaid", "otherraider", 50);
           Check("react: raid reactions can be switched off", Last() == null, Last()); SetCfgB("ReactRaids", true);
+          ReactReset(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Ev("TwitchRaidOut", "targetchan", 80); Ev("TwitchRaidStart", "targetchan", 80);
+          Check("react: OUR outgoing raid (start / out) adds no Chatty line next to the Host's raid lines", CPHProxy.Sent.Count == 0, Last());
           Live(false); SF("_liveChecked").SetValue(null, DateTime.MinValue); ReactReset(); Ev("TwitchRaid", "offraider", 50);
           Check("react: nothing while offline", Last() == null, Last()); Live(true); SF("_liveChecked").SetValue(null, DateTime.MinValue);
           ReactReset(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");

@@ -803,6 +803,7 @@ public class CPHInline
             if (t.Contains("resub")) { AddEvent("resub", user, Math.Max(1, TierOf(ArgS("tier"))), ""); return true; }
             if (t.Contains("sub")) { AddEvent("sub", user, Math.Max(1, TierOf(ArgS("tier"))), ""); return true; }
             if (t.Contains("cheer")) { int bits = ArgI("bits", "amount"); if (bits > 0) AddEvent("cheer", user, bits, ""); return true; }
+            if (t.Contains("raidout") || t.Contains("raidstart") || t.Contains("raidgo")) return true;   // OUR raid leaving (countdown / landed elsewhere): the Host says the shoutout + goodbye lines, Chatty adds nothing and records no raid-in
             if (t.Contains("raid")) { int rv = ArgI("viewers", "fromViewerCount", "raidViewers"); AddEvent("raidin", user, rv, ""); react = RaidReaction(user, rv); goto done; }
             if (t.Contains("follow")) { AddEvent("follow", user, 0, ""); return true; }
         }
