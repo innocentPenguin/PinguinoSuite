@@ -25,6 +25,9 @@ namespace PinguinoHost
     {
         static HostCPH cph;
         public static string GetGlobal(string n) { return cph?.GetGlobalVar<string>(n, true); }
+        static DateTime _botsAt = DateTime.MinValue;
+        /// <summary>the bot logins (known list, bots.json, flagged profiles) as the global "pinguino.botlogins" for the game scripts, which have no access to the Host; at most once a minute</summary>
+        public static void PublishBots() { try { if (cph == null || HostApi.DataDir == "" || (DateTime.UtcNow - _botsAt).TotalSeconds < 5) return; _botsAt = DateTime.UtcNow; cph.SetGlobalVar("pinguino.botlogins", "," + string.Join(",", Boards.AllBots()) + ",", false); } catch (Exception) { } }
         public static void SetGlobal(string n, string v) { cph?.SetGlobalVar(n, v, true); }
         public static bool HasAction(string n) { return cph != null && cph.ActionExists(n); }
         public static bool SayShared(string m) { try { return cph != null && cph.Say != null && cph.Say(m); } catch (Exception) { return false; } }
@@ -130,19 +133,22 @@ namespace PinguinoHost
                 try
                 {
                     var req = JObject.Parse(c.GetGlobalVar<string>("pinguino.grant.request", false) ?? "{}");
+                    string who = ((string)req["login"] ?? "").ToLowerInvariant();
+                    if (Boards.IsBot(who) || Boards.AllBots().Contains(who)) { Clog.Warn("firsts", "payout refused: " + who + " is a bot account (" + (string)req["reason"] + ")"); return false; }   // bots never get paid, whatever the game script decided
                     var r = Economy.Grant(new JObject { { "target", "user" }, { "login", (string)req["login"] }, { "amount", req["amount"] }, { "mode", "add" }, { "id", (string)req["id"] }, { "reason", (string)req["reason"] }, { "by", "firsts" } });
                     Clog.Info("firsts", "payout " + (string)req["login"] + ": " + (string)(r["message"] ?? r["error"]));
                     return (bool?)r["ok"] != false;
                 }
                 catch (Exception ex) { Clog.Warn("firsts", "payout failed: " + ex.Message); return false; }
             };
+            PublishBots();
             return ok;
         }
 
         /// <summary>every few seconds: lets ChattyPinguino run its time-based jobs (pre-stream countdown) even when nobody is chatting.</summary>
         public static void StartChatTicker(bool sim)
         {
-            Task.Run(async () => { await Task.Delay(8000); while (true) { try { if (Lease.MayRun && (sim || HostApi.IrcConnected)) ChatTick(); } catch (Exception) { } await Task.Delay(sim ? 1000 : 5000); } });
+            PublishBots(); Task.Run(async () => { await Task.Delay(8000); while (true) { try { PublishBots(); if (Lease.MayRun && (sim || HostApi.IrcConnected)) ChatTick(); } catch (Exception) { } await Task.Delay(sim ? 1000 : 5000); } });
         }
         public static void ChatTick()
         {

@@ -50,6 +50,14 @@ public class CPHInline
 
     static readonly string[] IgnoredBots = { "sery_bot", "soundalerts", "pinguinob0t", "streamelements", "nightbot" };
 
+    // Bots never take a place (chattypinguino was paid 10500 as 2nd): the static names, anything ending in bot/b0t, and the Host's full list (known bots, bots.json, flagged profiles) in "pinguino.botlogins"
+    bool IsBotLogin(string login)
+    {
+        string l = (login ?? "").ToLowerInvariant();
+        if (Array.IndexOf(IgnoredBots, l) >= 0 || l.EndsWith("bot") || l.EndsWith("b0t") || l == "chattypinguino" || l == "pinguinohelper") return true;
+        try { string list = CPH.GetGlobalVar<string>("pinguino.botlogins", false) ?? ""; return list.Contains("," + l + ","); } catch (Exception) { return false; }
+    }
+
     // Global var names, in place order (1st..5th). Unchanged from the old actions, so existing stats carry over.
     static readonly string[] PlaceStatVars =
         { "firstPlaceStats", "secondPlaceStats", "thirdPlaceStats", "fourthPlaceStats", "fifthPlaceStats" };
@@ -132,7 +140,7 @@ public class CPHInline
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(userId))
             return true;
 
-        if (IgnoredBots.Contains(username.ToLower()))
+        if (IsBotLogin(username))
             return true;
 
         // 0 = game not running; 1..5 = next place to hand out
