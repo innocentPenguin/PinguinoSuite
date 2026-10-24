@@ -1714,6 +1714,22 @@
       "examples": [],
       "section": "Stream info",
       "importance": 3
+    },
+    {
+      "command": "!vanish",
+      "aliases": [
+        "!disappear"
+      ],
+      "action": "PinguinoHost",
+      "category": "Stream",
+      "who": "everyone",
+      "usage": "!vanish",
+      "description": "Poof! Times you out for 1 second, which clears your messages from chat. Free, once every 10 seconds, and it does not work on mods or the broadcaster.",
+      "examples": [
+        "!vanish"
+      ],
+      "section": "Fun",
+      "importance": 3
     }
   ]
 }
