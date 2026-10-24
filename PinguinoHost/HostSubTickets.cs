@@ -18,12 +18,25 @@ namespace PinguinoHost
         static string P { get { return Path.Combine(HostApi.DataDir, "economy", "sub_tickets.json"); } }
         static long Now() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
 
-        static JObject Defaults() { return new JObject { { "enabled", false }, { "price", 0 }, { "maxPendingPerUser", 1 }, { "monthlyCapUser", 1 }, { "monthlyCapGlobal", 10 }, { "cooldownHours", 72 } }; }
+        /// <summary>Ivan 10-24: Get a sub costs 2,500,000 points (the earlier 100,000 was a placeholder)</summary>
+        const long DefaultPrice = 2500000;
+        static JObject Defaults() { return new JObject { { "enabled", false }, { "price", DefaultPrice }, { "maxPendingPerUser", 1 }, { "monthlyCapUser", 1 }, { "monthlyCapGlobal", 10 }, { "cooldownHours", 72 } }; }
         static JObject Doc()
         {
             var d = SiteHttp.ReadJ(P); var s = Defaults();
             if (d["settings"] is JObject o) foreach (var p in o.Properties()) s[p.Name] = p.Value;
-            d["settings"] = s; if (!(d["tickets"] is JArray)) d["tickets"] = new JArray(); return d;
+            d["settings"] = s; if (!(d["tickets"] is JArray)) d["tickets"] = new JArray();
+            if ((bool?)d["priceMigrated"] != true)   // once: a stored 0 / placeholder 100,000 price becomes Ivan's 2,500,000 (dated backup first); a price Ivan set himself is kept
+            {
+                long cur = N(s, "price");
+                if (File.Exists(P) && (cur == 0 || cur == 100000))
+                {
+                    try { File.Copy(P, P + ".before-price-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak", true); } catch (Exception) { }
+                    s["price"] = DefaultPrice; Clog.Info("economy", "Get a sub price set to " + DefaultPrice + " (was " + cur + ")");
+                }
+                d["priceMigrated"] = true;
+            }
+            return d;
         }
         static void Save(JObject d) { Directory.CreateDirectory(Path.GetDirectoryName(P)); SiteHttp.WriteJ(P, d); }
         static long N(JObject s, string k) { return (long?)s[k] ?? 0; }

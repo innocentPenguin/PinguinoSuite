@@ -6,7 +6,8 @@ dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 
 PORT = 8984; B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pgst_'); outf = os.path.join(d, 'out.txt'); eco = os.path.join(d, 'economy'); os.makedirs(eco)
 json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
-json.dump({'adjust': {'alice': 5000, 'bob': 5000, 'carl': 5000, 'dina': 100}}, open(os.path.join(eco, 'points.json'), 'w'))
+json.dump({'adjust': {'alice': 5000, 'bob': 5000, 'carl': 5000, 'dina': 100, 'rich': 3000000}}, open(os.path.join(eco, 'points.json'), 'w'))
+json.dump({'settings': {'enabled': False, 'price': 100000}}, open(os.path.join(eco, 'sub_tickets.json'), 'w'))   # an old file with the placeholder price
 json.dump({'Earning': False, 'WelcomeBonus': 0}, open(os.path.join(eco, 'settings.json'), 'w'))
 json.dump({'Enabled': True, 'ChatReplies': True, 'GameVoice': False}, open(os.path.join(d, 'chat_settings.json'), 'w'))   # Chatty voices game lines when GameVoice is on; this test reads the Host's plain line
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8985'})
@@ -25,10 +26,14 @@ try:
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
     r = ask('alice: !shop sub'); chk('off by default', 'not open' in ' '.join(r) and bal('alice') == 5000, r)
-    st = get('/api/subtickets'); chk('shipped disabled', st['settings']['enabled'] is False and st['settings']['price'] == 0, st)
-    post('/api/subtickets', {'action': 'settings', 'enabled': True, 'price': 2000, 'monthlyCapGlobal': 2})
-    r = ask('alice: !shop'); chk('listed in !shop', 'Get a sub' in ' '.join(r) and '2,000' in ' '.join(r), r)
-    r = ask('dina: !shop sub'); chk('not enough points', bal('dina') == 100 and len(get('/api/subtickets')['tickets']) == 0, r)
+    st = get('/api/subtickets'); chk('shipped disabled', st['settings']['enabled'] is False and st['settings']['price'] == 2500000 and [f for f in os.listdir(eco) if f.startswith('sub_tickets.json.before-price-')], st)   # the 100,000 placeholder was migrated, with a backup
+    post('/api/subtickets', {'action': 'settings', 'enabled': True, 'monthlyCapGlobal': 2})
+    r = ask('alice: !shop'); chk('listed in !shop at the new price', 'Get a sub (2,500,000' in ' '.join(r), r)
+    r = ask('alice: !shop sub'); chk('affordability: 5000 < 2,500,000 refused, no charge', bal('alice') == 5000 and get('/api/subtickets')['pending'] == 0, (r, bal('alice')))
+    r = ask('rich: !shop sub'); chk('3,000,000 buys it for 2,500,000', bal('rich') == 500000 and get('/api/subtickets')['pending'] == 1, (r, bal('rich')))
+    post('/api/subtickets', {'action': 'refund', 'login': 'rich', 'by': 'suite'}); chk('refund gives the full 2,500,000 back', bal('rich') == 3000000, bal('rich'))
+    post('/api/subtickets', {'action': 'settings', 'price': 2000})   # the original flow below runs at a small test price
+    r = ask('dina: !shop sub'); chk('not enough points', bal('dina') == 100 and get('/api/subtickets')['pending'] == 0, r)
     r = ask('alice: !shop sub'); chk('bought', bal('alice') == 3000 and get('/api/subtickets')['pending'] == 1, (r, bal('alice')))
     chk('ping ivan', any('alice bought a sub' in x for x in says()), says())
     r = ask('alice: !shop sub'); chk('one pending per user', 'waiting' in ' '.join(r) and bal('alice') == 3000, r)
