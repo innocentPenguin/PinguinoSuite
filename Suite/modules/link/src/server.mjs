@@ -72,6 +72,20 @@ async function readJson(req) {
   return v;
 }
 const CORE_URL = (process.env.PINGUINO_CORE_URL || 'http://127.0.0.1:8760').replace(/[/]$/, '');
+/** Log a rejected request at most once a minute per caller+path (a page or module that polls with a stale token would otherwise write one line every few seconds). Names the caller; never the token. */
+const deniedSeen = new Map();
+export function logDenied(req, now = Date.now()) {
+  const path = String(req.url || '').split('?')[0].slice(0, 80);
+  const ua = String(req.headers['user-agent'] || 'no user-agent').replace(/[^\x20-\x7e]/g, '?').slice(0, 60);
+  const key = req.method + ' ' + path + ' ' + ua;
+  const e = deniedSeen.get(key) || { at: 0, n: 0 };
+  e.n++;
+  if (now - e.at < 60000) { deniedSeen.set(key, e); return false; }
+  const n = e.n; deniedSeen.set(key, { at: now, n: 0 });
+  if (deniedSeen.size > 200) deniedSeen.clear();
+  log('warn', 'http', `unauthorized ${req.method} ${path} (401) from ${ua}, token ${req.headers['x-link-token'] || req.headers.authorization ? 'sent but wrong' : 'missing'}${n > 1 ? `; ${n} such requests in the last minute` : ''}`);
+  return true;
+}
 const LOOP = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const eq = (a, b) => {
   const x = crypto.createHash('sha256').update(String(a ?? '')).digest();
@@ -176,11 +190,11 @@ export async function serve(cfg) {
       if (req.method === 'GET' && req.url === '/api/prestream') {
         let ok = (local && !proxied) || tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization);
         if (!ok) { try { mesh.peerAuth(...peer); ok = true; } catch {} }                 // the hub-readiness check of a paired client
-        if (!ok) { log('warn', 'http', 'unauthorized GET /api/prestream (401)'); return json(401, { error: 'bad token' }); }
+        if (!ok) { logDenied(req); return json(401, { error: 'bad token' }); }
         return json(200, { items: await allItems() });
       }
       // Everything else needs the token, loopback included.
-      if (!tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization)) { log('warn', 'http', `unauthorized ${req.method} ${req.url.split('?')[0]} (401)`); return json(401, { error: 'bad token' }); }
+      if (!tokenOk(cfg, req.headers['x-link-token'] || req.headers.authorization)) { logDenied(req); return json(401, { error: 'bad token' }); }
       if (req.method === 'GET' && req.url === '/api/morning') return json(200, morning(cfg, { items: await allItems(), mesh: mesh.status(), probe: cfg.role === 'hub' ? await probeObsPort(cfg.obs?.port || 4455) : null }));   // read-only, plain language
       if (req.method === 'GET' && req.url === '/api/status') {
         const t = await ts.status();

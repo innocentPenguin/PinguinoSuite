@@ -58,6 +58,15 @@ process.env.PINGUINO_LITE_TEST = 'yes'; check('only the exact value 1 counts', t
 delete process.env.PINGUINO_LITE_TEST;
 for (const [k, v] of [['PINGUINO_API_TOKEN', keep[0]], ['PINGUINO_DATA_DIR', keep[1]]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
 
+// 4b. rejected-request log is rate-limited per caller and path
+const { logDenied } = await import('./server.mjs');
+const dreq = (ua, u = '/api/obs?x=1') => ({ method: 'GET', url: u, headers: ua ? { 'user-agent': ua } : {} });
+const t0 = 1_000_000;
+const first = logDenied(dreq('python-requests/2'), t0);
+let more = 0; for (let i = 1; i < 300; i++) if (logDenied(dreq('python-requests/2'), t0 + i * 3000 % 59000)) more++;
+check('300 rejected polls inside a minute write one log line', first === true && more === 0, `more=${more}`);
+check('the next minute logs again, other callers and paths have their own line', logDenied(dreq('python-requests/2'), t0 + 61000) === true && logDenied(dreq('curl/8'), t0 + 100) === true && logDenied(dreq('python-requests/2', '/api/status'), t0 + 100) === true);
+
 // 5. spawned Link: token page behind a proxy, prestream, headers
 const dir = path.join(tmp, 'run'); fs.mkdirSync(path.join(dir, 'link'), { recursive: true });
 const port = 9200 + Math.floor(Math.random() * 90), TOKEN = 'module-token-5-module-token-0005';

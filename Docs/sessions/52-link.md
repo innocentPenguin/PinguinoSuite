@@ -49,3 +49,5 @@ Owns Suite\modules\link. Supervisor 50 (local_0e1e5827-e0dc-4136-863e-75f19f8825
 - Morning check button: card at the top of the Link page ("Run the morning check") calls /api/morning with the page token and shows verdict + plain lines (read-only). Tests in auditcheck5 (button present, script parses, endpoint shape, token required).
 
 - 2026-10-23 Voice cross-review written to notes (52-voice-review.md), 53 told; Mac Lite design added to Docs/PinguinoLink/OBS_PORT_AND_MACOS.md section 3. No code changed.
+
+- 2026-10-23 /api/obs 401 spam: only caller found is Multi scene_follow.py:25 (polls every 3 s with module:link token from module_secret). Link now logs a rejected request once a minute per caller+path with the caller name and "token missing/wrong" (server.mjs logDenied, auditcheck5). Root cause of the 401 itself not proven (not allowed to derive tokens here).
