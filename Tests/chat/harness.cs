@@ -785,6 +785,8 @@ public static class Harness
         Check("!shadow is answered by the chat bot with the old Nightbot text", Last() != null && Last().Contains("plays way too many extra modes"), Last());
         int cn = CPHProxy.Sent.Count; Msg("Canny2", "!shadow", null, false);
         Check("the same canned command a moment later stays quiet (cooldown + duplicate guard)", CPHProxy.Sent.Count == cn);
+        _cannedReset(true); CPHProxy.SentPin.Clear(); Extra["msgId"] = "11111111-2222-3333-4444-555555555555"; Msg("Canny", "!hug @Bobby", null, false); Extra.Remove("msgId");
+        Check("a canned reply is pinned to the viewer's own message", CPHProxy.SentPin.Count >= 1 && CPHProxy.SentPin[0] == "11111111-2222-3333-4444-555555555555", string.Join("|", CPHProxy.SentPin));
         _cannedReset(true); Msg("Canny", "!hug @Bobby", null, false);
         Check("$(user) and $(touser) are filled in", Last() != null && Last().Contains("Canny wraps their arms around Bobby"), Last());
         _cannedReset(true); Msg("Canny", "!luck", null, false);
@@ -1241,6 +1243,13 @@ public static class Harness
         Check("second message: no welcome", Last() == null, Last());
         Extra["firstMessage"] = true; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Brandnew2", "what's up");
         Check("a second new viewer inside the gap is not welcomed (raid flood guard)", Last() == null, Last());
+        // spam / ad accounts get no greeting of any kind
+        foreach (var spm in new[] { new[] { "succeedingsteelbqdzvkxr", "Best viewers with viewers streamboo .org" }, new[] { "dramaticlacencjhwz", "Best viewers with viewers streamboo .org" }, new[] { "Okayguy", "check my stuff at cool-shop dot com" }, new[] { "Okayguy2", "free stuff https://x.example/y" }, new[] { "Okayguy3", "buy followers cheap" } })
+        { Extra["firstMessage"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg(spm[0], spm[1]);
+          Check("spam: no welcome for " + spm[0] + " / " + spm[1], Last() == null || !Last().Contains("🐧"), Last()); }
+        Extra.Clear();
+        Extra["firstMessage"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Plainfriend", "hi all, first time here");
+        Check("spam guard: a normal new viewer is still welcomed", Last() != null && Last().Contains("@Plainfriend"), Last());
         Extra.Clear();
 
         Console.WriteLine(fails == 0 ? "ALL " + passes + " CHAT CHECKS PASSED" : fails + " FAILED / " + passes + " passed");

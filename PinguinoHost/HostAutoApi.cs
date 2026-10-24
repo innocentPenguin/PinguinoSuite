@@ -40,7 +40,18 @@ namespace PinguinoHost
                         int code = (int)resp.StatusCode; string why = "";
                         try { why = resp.Content.ReadAsStringAsync().Result ?? ""; if (why.Length > 160) why = why.Substring(0, 160); } catch (Exception) { }
                         Clog.Warn("automation", "chat send as " + r + " refused (HTTP " + code + ")" + (code == 400 ? ": " + why + " | line (" + text.Length + " chars): " + (text.Length > 120 ? text.Substring(0, 120) + "..." : text) : ""));
-                        if (code == 400) { via = "refused by Twitch (HTTP 400): the line itself is not accepted, not tried on other accounts"; return false; }   // the same text is refused for every account: do not spray it
+                        if (code == 400)
+                        {
+                            // a reply whose parent message was deleted / is too old is refused: say the line ONCE as a plain line (it was refused, so nothing went out); a 400 for the text itself fails here again and stops
+                            if (rq.Content != null && rq.Content.ReadAsStringAsync().Result.Contains("reply_parent_message_id"))
+                            {
+                                Clog.Warn("automation", "chat send as " + r + ": the reply parent was refused, saying the line once as a plain line");
+                                var rq2 = new HttpRequestMessage(HttpMethod.Post, Helix + "/chat/messages"); rq2.Headers.Add("Authorization", "Bearer " + tok); rq2.Headers.Add("Client-Id", cid);
+                                rq2.Content = new StringContent(new JObject { { "broadcaster_id", bid }, { "sender_id", sid }, { "message", text } }.ToString(), Encoding.UTF8, "application/json");
+                                if (http.SendAsync(rq2).Result.IsSuccessStatusCode) { via = ((string)bot["Account"] ?? r) + " (plain, reply parent refused)"; return true; }
+                            }
+                            via = "refused by Twitch (HTTP 400): the line itself is not accepted, not tried on other accounts"; return false;   // the same text is refused for every account: do not spray it
+                        }
                     }
                 }
                 catch (Exception ex)

@@ -358,8 +358,12 @@ public class CPHInline
             using (var st = req.GetRequestStream()) st.Write(bytes, 0, bytes.Length);
             using (var resp = (System.Net.HttpWebResponse)req.GetResponse()) return (int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300;
         }
-        catch (Exception rex) when (parent != "" && (rex.Message ?? "").Contains("(400)"))   // Twitch refused the reply (the message it answers is gone / too old): NOT sent again without the reply, not on another bot account either
-        { PgLogW("[Bots] a reply to a stale or deleted message was rejected, so it is dropped (not resent without the reply)"); return true; }
+        catch (Exception rex) when (parent != "" && (rex.Message ?? "").Contains("(400)"))   // Twitch refused the reply (the message it answers is gone / too old, e.g. a mod deleted it): it was refused, so nothing went out. Say it ONCE as a plain line (never on another bot account)
+        {
+            PgLogW("[Bots] a reply to a stale or deleted message was rejected, saying the line once as a plain line");
+            using (PgReplyTo("", "")) PgHelixSend(role, text);   // no parent this time, so this cannot loop; if that is refused too the line is dropped (never on another account)
+            return true;
+        }
         catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
         { PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
         catch (Exception ex)
@@ -548,6 +552,7 @@ public class CPHInline
         public bool ReactHype { get; set; } = true;                // one cheer per hype-train level-up (level 2 and up; the Host already announces the start and the end)
         public bool WelcomeBack { get; set; } = true;              // a light "good to see you again" for a regular who has been away for WelcomeBackDays (private: only the name, never a remembered fact)
         public int WelcomeBackDays { get; set; } = 7;
+        public string SpamPhrases { get; set; } = "viewers streamboo,streamboo,buy followers,buy viewers,cheap viewers,best viewers,free followers,get followers,promo ";   // comma list: a message with one of these never gets a welcome / welcome-back / daily line (links and random-looking names are caught separately)
         public bool DailyGreeting { get; set; } = true;            // a regular's first message of the day (they were last here on an earlier day, but not long enough for welcome-back): a varied one-line hello, and on the day they first showed up a year(s) ago, a "chat anniversary" line. Private, name only, once per chatter per day, opt-outs never
         public int DailyGreetingChance { get; set; } = 40;         // percent of first-of-the-day regulars who get the plain hello (anniversaries always get their line)
         public int DailyGreetingMax { get; set; } = 6;             // plain hellos per local day, so a busy day stays calm
@@ -918,6 +923,20 @@ public class CPHInline
         }
         _lastBack = now; return v[_rng.Next(v.Length)];
     }
+    static readonly Regex RxGreetLink = new Regex(@"https?:|www\.|\b[a-z0-9-]{2,}\s*(?:\.|\(dot\)|\[dot\]|\bdot\b)\s*(?:com|org|net|io|gg|tv|ly|me|co|xyz|live|shop|site|online|info|ru|cc|top)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Greetings are for people, not for ads: no welcome / welcome-back / daily line for a message with a link or a domain (also "name .org", "name dot com"), a known spam phrase, or an account whose name looks machine-made.
+    bool GreetBlocked(string login, string text)
+    {
+        string t = text ?? "";
+        if (RxGreetLink.IsMatch(t)) return true;
+        string low = t.ToLowerInvariant();
+        foreach (var ph in (_cfg.SpamPhrases ?? "").Split(','))
+        { string q = ph.Trim().ToLowerInvariant(); if (q.Length >= 4 && low.Contains(q)) return true; }
+        string n = (login ?? "").ToLowerInvariant();
+        if (n.Length >= 16 && Regex.IsMatch(n, "^[a-z]+$") && Regex.IsMatch(n.Substring(n.Length - 9), "[^aeiouy]{5}")) return true;   // e.g. "succeedingsteelbqdzvkxr": real words, then a vowel-less tail
+        return false;
+    }
+
     // ── DAILY GREETING (IDEAS #40): a regular's first message of the local day, plus the "first seen here N year(s) ago" anniversary. Name only, nothing remembered is quoted. ──
     static readonly string[] DailyLines = {
         "hey {n}, good to see you again today! 🐧", "{n} is here! 🐧 Welcome back to the igloo.", "morning, afternoon or night, hi {n}! 🐧",
@@ -1073,11 +1092,11 @@ public class CPHInline
             // A lobby / join / register question belongs to the helper: when the router has the helper next in line, hand it over without answering.
             if (mention && PgRouted() && PgNextHas("helper") && !PgNoDefer() && PgHelperTopic(text)) { _pgDefer = true; return; }
             if (mention && PgHelperTopic(text) && !text.Contains("!") && !ToneJoke.IsMatch(text)) { _pgPass = true; return; }   // "how do I join" and other things the helper / the website already answer: never the chatter (a failing !command is still fair game)
-            if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
+            if (first && !second && _cfg.WelcomeNewViewers && !optedOut && !GreetBlocked(login, text) && !cx.Broadcaster && !mention && !PgHelperTopic(text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { welcome = true; _lastWelcome = Now(); }
-            if (!welcome && !mention && !second && !optedOut && !cx.Broadcaster && _cfg.WelcomeBack && prevSeen > 0 && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
+            if (!welcome && !mention && !second && !optedOut && !cx.Broadcaster && !GreetBlocked(login, text) && _cfg.WelcomeBack && prevSeen > 0 && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { back = WelcomeBackLine(login, prevSeen, cx.Display); if (back != null) _lastWelcome = Now(); }
-            if (!welcome && back == null && !mention && !second && !optedOut && !cx.Broadcaster && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
+            if (!welcome && back == null && !mention && !second && !optedOut && !cx.Broadcaster && !GreetBlocked(login, text) && Now() - _lastWelcome >= _cfg.WelcomeGapSec)
             { back = DailyGreetingLine(v, prevSeen, cx.Display); if (back != null) _lastWelcome = Now(); }
             if (mention)
             {
@@ -2926,7 +2945,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         string arg = text.Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim() : "";
         string to = arg.Split(' ')[0].TrimStart('@'); if (!Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$")) to = c.Display;   // a name only: never a link, a /command or a pasted line
         reply = reply.Replace("$(user)", c.Display).Replace("$(touser)", to).Replace("$(luck)", (_rng.Next(50) + 1).ToString()).Replace("$(games)", GamesList());
-        _cannedAt[ck] = now; _cannedAt["u|" + c.Login] = now; _cannedAny = now; PgSay("chat", reply);
+        _cannedAt[ck] = now; _cannedAt["u|" + c.Login] = now; _cannedAny = now; using (PgReplyTo(c.MsgId ?? "", c.Login)) PgSay("chat", reply);
         if (_cannedAt.Count > 600) { var old = _cannedAt.Where(kv => now - kv.Value > 600).Select(kv => kv.Key).ToList(); foreach (var k in old) _cannedAt.Remove(k); }
         return true;
     }

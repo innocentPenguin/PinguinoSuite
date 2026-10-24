@@ -357,8 +357,12 @@ public class CPHInline
             using (var st = req.GetRequestStream()) st.Write(bytes, 0, bytes.Length);
             using (var resp = (System.Net.HttpWebResponse)req.GetResponse()) return (int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300;
         }
-        catch (Exception rex) when (parent != "" && (rex.Message ?? "").Contains("(400)"))   // Twitch refused the reply (the message it answers is gone / too old): NOT sent again without the reply, not on another bot account either
-        { PgLogW("[Bots] a reply to a stale or deleted message was rejected, so it is dropped (not resent without the reply)"); return true; }
+        catch (Exception rex) when (parent != "" && (rex.Message ?? "").Contains("(400)"))   // Twitch refused the reply (the message it answers is gone / too old, e.g. a mod deleted it): it was refused, so nothing went out. Say it ONCE as a plain line (never on another bot account)
+        {
+            PgLogW("[Bots] a reply to a stale or deleted message was rejected, saying the line once as a plain line");
+            using (PgReplyTo("", "")) PgHelixSend(role, text);   // no parent this time, so this cannot loop; if that is refused too the line is dropped (never on another account)
+            return true;
+        }
         catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
         { PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
         catch (Exception ex)
