@@ -175,7 +175,7 @@ namespace PinguinoHost
             var subs = new[] {
                 new[] { "channel.subscribe", "1", "broadcaster_user_id" }, new[] { "channel.subscription.message", "1", "broadcaster_user_id" },
                 new[] { "channel.subscription.gift", "1", "broadcaster_user_id" }, new[] { "channel.cheer", "1", "broadcaster_user_id" },
-                new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" }, new[] { "channel.follow", "2", "broadcaster_user_id" },
+                new[] { "channel.raid", "1", "to_broadcaster_user_id" }, new[] { "channel.follow", "2", "broadcaster_user_id" },
                 new[] { "stream.online", "1", "broadcaster_user_id", "opt" }, new[] { "stream.offline", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.channel_points_custom_reward_redemption.add", "1", "broadcaster_user_id", "opt" },
                 new[] { "channel.ban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.unban", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.add", "1", "broadcaster_user_id", "opt" }, new[] { "channel.moderator.remove", "1", "broadcaster_user_id", "opt" }, new[] { "channel.raid", "1", "from_broadcaster_user_id", "opt" },
@@ -194,6 +194,7 @@ namespace PinguinoHost
         }
         static string _bid = "";
         /// <summary>sim mode: "eventsub channel.poll.end {json event}" runs the same mapping as a real EventSub notification</summary>
+                if ((int)resp.StatusCode == 409) continue;   // 409 = this subscription already exists on the session: that is what we wanted, not a refusal
         public static void Simulate(string type, string json, Action<Dictionary<string, object>> raise)
         {
             var m = new JObject { { "metadata", new JObject { { "subscription_type", type }, { "sim", true } } }, { "payload", new JObject { { "event", JObject.Parse(json) } } } }; Handle(m, raise);

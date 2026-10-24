@@ -243,7 +243,7 @@ namespace PinguinoHost
             string overlayDir = null;
             try { var f = Path.Combine(dataDir, "settings.json"); if (File.Exists(f)) overlayDir = JObject.Parse(File.ReadAllText(f)).Value<string>("OverlayDir"); } catch (Exception) { }
             OverlayServer.Start(HostApi.Port, overlayDir, Path.Combine(suite, "PinguinoB0t", "overlays"), dataDir);
-            if (!sim) Task.Run(() => EventSub.RunForever(s, a => DispatchEvent(a)));
+            if (!sim || Environment.GetEnvironmentVariable("PINGUINO_EVENTSUB_URL") != null) Task.Run(() => EventSub.RunForever(s, a => DispatchEvent(a)));
         }
 
         // After a data-folder move the AI key can be blank in the new chat_settings.json while the legacy %AppData%\BVQ copy still has it: copy it across once (never logged).
