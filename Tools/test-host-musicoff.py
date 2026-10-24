@@ -1,6 +1,6 @@
-"""Music commands have one voice: the Host's Spotify presets for !song / !songqueue / !vol / !skip speak as the helper account (one-time migration, fresh seed too),
-and !skip / !voteskip reach the module as a plain vote from everyone, mods included (no instant skip). Fake Spotify module + sim Host.
-Usage: python Tools/test-host-musicvoice.py [dll]"""
+"""The Helper owns the music replies: the Host's Spotify presets for !song / !songqueue / !vol / !skip are removed (one-time migration of a saved automations.json with a dated backup,
+a marker so they are never re-added; a fresh seed never creates them). Dispatching those commands gives zero Host replies and no module call; !sr / !oops / !blocksong / !srclear stay.
+Fake Spotify module + sim Host. Usage: python Tools/test-host-musicoff.py [dll]"""
 import http.server, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
@@ -29,18 +29,24 @@ try:
         try: urllib.request.urlopen('http://127.0.0.1:%d/api/status' % PORT, timeout=3); break
         except Exception: time.sleep(0.5)
     time.sleep(2)
-    acts = {a['id']: a for a in json.load(open(os.path.join(d, 'automations.json'), encoding='utf-8'))['actions']}
-    voice = lambda i: acts[i]['steps'][0]['as']
-    chk('song / queue / vol / skip speak as helper', all(voice('spotify-' + i) == 'helper' for i in ('song', 'queue', 'vol', 'skip')), {i: voice('spotify-' + i) for i in ('song', 'queue', 'vol', 'skip')})
-    chk('oops keeps its voice (not a duplicate)', voice('spotify-oops') == 'core')
-    n = len(bodies); feed('*modguy: !skip', 1.5); b = bodies[n:]
-    chk('mod !skip is a plain vote', len(b) == 1 and b[0]['command'] == 'skip' and b[0]['isMod'] is False and str(b[0]['role']) == '1', b)
-    n = len(bodies); feed('*modguy: !voteskip', 1.5); b = bodies[n:]
-    chk('mod !voteskip is the same plain vote', len(b) == 1 and b[0]['command'] == 'skip' and b[0]['isMod'] is False, b)
-    n = len(bodies); feed('viewer1: !skip', 1.5); b = bodies[n:]
-    chk('viewer !skip reaches the module the same way', len(b) == 1 and b[0]['command'] == 'skip' and b[0]['isMod'] is False, b)
-    n = len(bodies); feed('*modguy: !song', 1.5); b = bodies[n:]
-    chk('other commands still carry the mod flag', len(b) == 1 and b[0]['isMod'] is True, b)
+    def load(): return json.load(open(os.path.join(d, 'automations.json'), encoding='utf-8'))
+    ids = [a['id'] for a in load()['actions']]
+    chk('song / queue / vol / skip presets removed', not [i for i in ids if i in ('spotify-song', 'spotify-queue', 'spotify-vol', 'spotify-skip')], ids)
+    chk('oops stays', 'spotify-oops' in ids, ids)
+    chk('marker set, dated backup written', 'musicoff1' in load()['seeded'] and [f for f in os.listdir(d) if f.startswith('automations.json.before-musicoff-')], os.listdir(d))
+    n = len(bodies); o0 = open(outp, 'rb').read().count(b'[say] ')
+    for line in ('viewer1: !song', 'viewer1: !np', 'viewer1: !currentsong', 'viewer1: !songqueue', 'viewer1: !srqueue', 'viewer1: !vol', 'viewer1: !volume', 'viewer1: !skip', '*modguy: !skip', 'viewer1: !voteskip'):
+        feed(line, 0.8)
+    chk('the Host calls the module for none of them', len(bodies) == n, bodies[n:])
+    chk('and says nothing', open(outp, 'rb').read().count(b'[say] ') == o0, open(outp, 'rb').read().decode('utf-8', 'replace')[-400:])
+    n = len(bodies); feed('viewer1: !oops', 1.5)
+    chk('!oops still goes to the module', len(bodies) == n + 1 and bodies[-1]['command'] == 'oops', bodies[n:])
+    host.kill(); time.sleep(0.5); ids0 = ids
+    host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(outp, 'ab'), stderr=subprocess.STDOUT)
+    for _ in range(60):
+        try: urllib.request.urlopen('http://127.0.0.1:%d/api/status' % PORT, timeout=3); break
+        except Exception: time.sleep(0.5)
+    time.sleep(3); chk('after a restart they are not added back', [a['id'] for a in load()['actions']] == ids0, [a['id'] for a in load()['actions']])
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
-print('FAIL ' + '; '.join(fails) if fails else 'PASS musicvoice'); sys.exit(1 if fails else 0)
+print('FAIL ' + '; '.join(fails) if fails else 'PASS musicoff'); sys.exit(1 if fails else 0)
