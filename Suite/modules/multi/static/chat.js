@@ -3,9 +3,11 @@
 let BOTS = new Set(), MYNAMES = new Set(), MUTED = new Set(), PINS = [];
 const isBot = m => !!(m.is_bot || m.is_self || BOTS.has((m.user || '').toLowerCase()));
 fetch('/api/setup').then(r => r.json()).then(s => {
-  BOTS = new Set((s.settings.bot_accounts || []).map(x => x.toLowerCase()));
+  BOTS = new Set([...BOTS, ...(s.settings.bot_accounts || []).map(x => x.toLowerCase())]);
   MYNAMES = new Set((s.settings.my_names || []).map(x => x.toLowerCase()));
 }).catch(() => {});
+function botsLoad(j) { BOTS = new Set([...(j.builtin || []), ...(j.accounts || [])].map(x => String(x).toLowerCase())); }     // built-in bot names + the editable list
+fetch('/api/bots').then(r => r.ok ? r.json() : null).then(j => { if (j) botsLoad(j); }).catch(() => {});      // old backend: no /api/bots, the setup list above is used
 fetch('/api/rules').then(r => r.json()).then(r => { MUTED = new Set(((r.rules || {}).muted || []).map(x => x.toLowerCase())); }).catch(() => {});
 fetch('/api/pins').then(r => r.json()).then(r => { PINS = r.pins || []; }).catch(() => {});
 

@@ -21,6 +21,10 @@ const SIDE_SECTIONS = [
   {id: 'mysound', title: 'Sounds for me (this page, not in OBS)', help: 'sound audio volume master first time chatter mention question sent message notification mute ding', body: () => soundsBox()},
   {id: 'sound', title: 'Sounds (server ding / chat pop)', help: 'sound audio ding pop volume new chatter returning mute notification', body: () => !SIDE.dg ? '<div class="empty">Loading...</div>' :
     `<h4>${SIDE.dg.rows ? 'Chatter sounds' : 'New-chatter ding'}</h4>${dingBox(SIDE.dg)}<h4>Chat pop</h4>${popBox(SIDE.pp)}`},
+  {id: 'bots', title: 'Bot accounts', help: 'bot bots accounts hide dim skip chatty pinguino nightbot', show: () => !!SIDE.bots, body: () => !SIDE.bots ? '' :
+    `<label class="cf">Accounts (comma separated)<input id="bots-in" value="${esc((SIDE.bots.accounts || []).join(', '))}" placeholder="mybot, otherbot" style="flex:1"></label>
+    <div class="act"><button class="p" data-side-bots="save">Save</button> <span id="bots-msg"></span></div>
+    <small class="mut">Always treated as bots: ${esc((SIDE.bots.builtin || []).join(', '))}, plus any name ending in bot / b0t. Bots are dimmed in chat and skipped by the reading cursor and the new-chatter sounds.</small>`},
   {id: 'split', title: 'Split chat and pop-out', help: 'split pop out window monitor half top bottom always on top', body: () => SIDE.pn ? splitBox(SIDE.pn) : '<div class="empty">Loading...</div>'},
   {id: 'more', title: 'Connections and more', help: 'setup connect twitch youtube discord editor look presets', body: () => `<div class="act"><a href="/?type=launcher"><button type="button">Setup (connections)</button></a> <a href="/?type=style"><button type="button">Full look editor and presets</button></a> <a href="/?type=dash"><button type="button">Dashboard</button></a> <a href="/?type=obs&widget=chat"><button type="button">OBS chat widget</button></a> <a href="/?type=obs&widget=activity"><button type="button">OBS activity widget</button></a> <a href="/?type=obs&widget=follow"><button type="button">OBS follow alert</button></a></div>`},
 ];
@@ -68,13 +72,14 @@ async function sideRender() {
   const seq = ++sideSeq;
   sideDraw();                                   // draw at once; the sound and split data fill in when they arrive
   try { [SIDE.dg, SIDE.pp, SIDE.pn] = await Promise.all([api('/api/ding'), api('/api/pop'), api('/api/panes')]); } catch (e) { return; }
+  try { const r = await fetch('/api/bots'); SIDE.bots = r.ok ? await r.json() : null; } catch (e) { SIDE.bots = null; }     // hidden on a backend without /api/bots
   if (seq === sideSeq && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#sidebody'))) sideDraw();
 }
 function sideDraw() {
   const body = $('#sidebody'); if (!body) return;
   const keep = body.scrollTop;
-  body.innerHTML = SIDE_SECTIONS.map(s => `<details class="sec" data-sec="${s.id}" ${SIDE.secs[s.id] ? 'open' : ''}><summary><b>${s.title}</b></summary><div class="sbody">${s.body()}</div>
-    ${['more'].includes(s.id) ? '' : `<div class="act"><button class="chip2" data-side-reset="${s.id}">Reset this section</button></div>`}</details>`).join('');
+  body.innerHTML = SIDE_SECTIONS.filter(s => !s.show || s.show()).map(s => `<details class="sec" data-sec="${s.id}" ${SIDE.secs[s.id] ? 'open' : ''}><summary><b>${s.title}</b></summary><div class="sbody">${s.body()}</div>
+    ${['more', 'bots'].includes(s.id) ? '' : `<div class="act"><button class="chip2" data-side-reset="${s.id}">Reset this section</button></div>`}</details>`).join('');
   body.scrollTop = keep;
   body.querySelectorAll('details.sec').forEach(d => d.addEventListener('toggle', () => { SIDE.secs[d.dataset.sec] = d.open; sideSave(); }));
   sideFilter();
@@ -101,5 +106,14 @@ document.addEventListener('click', e => {
   if (b.dataset.side === 'toggle') sideToggle();
   else if (b.dataset.side === 'close') sideToggle(false);
   else if (b.dataset.sideReset) sideReset(b.dataset.sideReset);
+  else if (b.dataset.sideBots) sideBotsSave();
 });
+async function sideBotsSave() {
+  const r = await fetch('/api/bots', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({accounts: ($('#bots-in').value || '')})});
+  const j = await r.json().catch(() => ({}));
+  const say = (t, ok) => { const m = $('#bots-msg'); if (m) m.innerHTML = `<b class="${ok ? 'tok' : 'tbad'}">${esc(t)}</b>`; };
+  if (!r.ok) { say(j.detail || 'Could not save the bot list', false); return; }
+  SIDE.bots = j; if (typeof botsLoad === 'function') botsLoad(j);
+  histRedraw(); say('Saved (' + (j.accounts || []).length + ' account' + ((j.accounts || []).length === 1 ? '' : 's') + ')', true);
+}
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && SIDE.open && (W.type === 'chat' || W.type === 'dash')) sideToggle(false); });
