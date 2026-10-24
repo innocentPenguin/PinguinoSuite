@@ -77,6 +77,7 @@ namespace PinguinoHost
         /// <summary>Chatty can post when chat_settings.json has Enabled, ChatReplies and GameVoice on (a missing key means on, as in Chatty).</summary>
         public static bool ChattyCanPost()
         {
+            try { if ((bool?)HostApi.BotsRegistry()["Bots"]?["chat"]?["Enabled"] == false) return false; } catch (Exception) { }   // switched off in the router (dashboard, !pg chat off, hand-off button): the Host answers, as B0t
             try
             {
                 string p = Path.Combine(HostApi.DataDir, "chat_settings.json"); long st = File.Exists(p) ? new FileInfo(p).LastWriteTimeUtc.Ticks : 0;
@@ -102,15 +103,19 @@ namespace PinguinoHost
         {
             try { AlertBridge.OnGame(kind, outcome, (user ?? "").ToLowerInvariant(), user, amount, payout, opponent, item, gameId); } catch (Exception) { }   // Multi alert (off by EmitHypeTip=false), whatever the chat voice does
             if (!ChattyCanPost()) { say(plain); return; }
+            string gid = string.IsNullOrEmpty(gameId) ? Guid.NewGuid().ToString("N") : gameId;
+            string rid = "", rlogin = ""; bool threaded = (kind == "gamble" || kind == "slots" || kind == "give" || kind == "guess") && outcome != "expired" && ReplyCtx.Current(out rid, out rlogin);   // the answer to the command is a reply to it
+            if (!threaded) { rid = ""; rlogin = ""; }
             string login = (user ?? "").ToLowerInvariant();
             bool opt = false; try { opt = SiteShop.OptedOutNow(login); } catch (Exception) { }
             var a = new Dictionary<string, object> {
                 { "eventType", "PgGame" }, { "kind", kind }, { "outcome", outcome }, { "user", login }, { "display", user ?? "" }, { "amount", amount.ToString(CultureInfo.InvariantCulture) }, { "payout", payout.ToString(CultureInfo.InvariantCulture) },
                 { "balance", balance.ToString(CultureInfo.InvariantCulture) }, { "opponent", opponent ?? "" }, { "reel", reel ?? "" }, { "reason", reason ?? "" }, { "currency", Economy.CurrencyName },
-                { "timeoutSec", timeoutSec.ToString(CultureInfo.InvariantCulture) }, { "item", item ?? "" }, { "tries", tries.ToString(CultureInfo.InvariantCulture) }, { "optout", opt ? "1" : "" }, { "gameId", string.IsNullOrEmpty(gameId) ? Guid.NewGuid().ToString("N") : gameId } };
+                { "timeoutSec", timeoutSec.ToString(CultureInfo.InvariantCulture) }, { "item", item ?? "" }, { "tries", tries.ToString(CultureInfo.InvariantCulture) }, { "optout", opt ? "1" : "" }, { "gameId", gid }, { "msgId", rid ?? "" }, { "msgUser", rlogin ?? "" } };
             lock (Sent) { var o = new JObject(); foreach (var kv in a) o[kv.Key] = Convert.ToString(kv.Value, CultureInfo.InvariantCulture); Sent.Add(o); if (Sent.Count > 50) Sent.RemoveAt(0); }
             if (HostApi.SimMode) { Console.WriteLine("[pggame] " + Newtonsoft.Json.JsonConvert.SerializeObject(a, Newtonsoft.Json.Formatting.None)); return; }
-            System.Threading.Tasks.Task.Run(() => { try { Program.DispatchEvent(a); } catch (Exception ex) { Clog.Warn("gamble", "PgGame event failed, plain line sent: " + ex.Message); try { say(plain); } catch (Exception) { } } });
+            System.Threading.Tasks.Task.Run(() => { bool spoke = false; try { Program.DispatchEvent(a); spoke = !string.IsNullOrEmpty(Program.GetGlobal("pinguino.game.done." + gid)); } catch (Exception ex) { Clog.Warn("gamble", "PgGame event failed, plain line sent: " + ex.Message); }
+                if (!spoke) { Clog.Warn("gamble", "Chatty did not answer the game event (" + kind + "/" + outcome + "), plain line sent"); try { say(plain); } catch (Exception) { } } else Program.SetGlobal("pinguino.game.done." + gid, ""); });
         }
         static string Reel(string[] r) { return string.Join(" ", r); }
 

@@ -21,6 +21,8 @@ namespace PinguinoHost
         public static void Begin(string msgId, string login) { Cur.Value = Real(msgId) ? new C { Id = msgId, Login = (login ?? "").TrimStart('@'), At = DateTime.UtcNow } : null; }
         public static void End() { Cur.Value = null; }
         /// <summary>true while a reply context is active on this flow (the next line will be sent as a reply)</summary>
+        /// <summary>the live reply context (message id + login), false when none or older than 90 s</summary>
+        public static bool Current(out string id, out string login) { var c = Cur.Value; if (c == null || (DateTime.UtcNow - c.At).TotalSeconds > 90) { id = ""; login = ""; return false; } id = c.Id; login = c.Login; return true; }
         public static bool IsReply { get { var c = Cur.Value; return c != null && (DateTime.UtcNow - c.At).TotalSeconds <= 90; } }
         /// <summary>event / timer work (alerts, raid lines, stream online ...): never a reply, whatever chat message this thread last handled; restores the context when disposed. Tasks and timers started inside inherit "no reply".</summary>
         public static IDisposable Plain() { var old = Cur.Value; Cur.Value = null; return new Restore(old); }

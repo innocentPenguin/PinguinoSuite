@@ -1146,6 +1146,26 @@ public static class Harness
             SetCfgB("ChatReplies", false); Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 5 }, { "gameId", "g13" } });
             Check("games: with chatting off Chatty posts nothing", Last() == null, Last()); SetCfgB("ChatReplies", true);
 
+            // games voice: done-mark (the Host says the plain line only when it is missing), reply pin, refusal phrasing
+            CPHProxy.Globals.Clear(); CPHProxy.Sent.Clear(); CPHProxy.SentPin.Clear(); ((System.Collections.IList)SF("_buf").GetValue(null)).Clear();
+            Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 5 }, { "payout", 10 }, { "balance", 15 }, { "gameId", "gd1" }, { "msgId", "m-77" }, { "msgUser", "stefan" } });
+            Check("games: a spoken line sets the done-mark", CPHProxy.Globals.ContainsKey("pinguino.game.done.gd1"), "");
+            Check("games: the answer to the command is pinned to it", CPHProxy.SentPin.Count == 1 && CPHProxy.SentPin[0] == "m-77", string.Join("|", CPHProxy.SentPin));
+            CPHProxy.Globals.Clear(); Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 5 }, { "payout", 10 }, { "balance", 15 }, { "gameId", "gd1" } });
+            Check("games: a repeated event posts nothing but is still marked done", CPHProxy.Sent.Count == 0 && CPHProxy.Globals.ContainsKey("pinguino.game.done.gd1"), CPHProxy.Sent.Count.ToString());
+            CPHProxy.Sent.Clear(); CPHProxy.SentPin.Clear(); CPHProxy.Globals.Clear();
+            Game(new Dictionary<string, object> { { "kind", "duel" }, { "outcome", "challenge" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "bob" }, { "amount", 5 }, { "timeoutSec", 60 }, { "gameId", "gd2" } });
+            Check("games: a duel line without msgId is not a reply", CPHProxy.SentPin.Count == 1 && CPHProxy.SentPin[0] == "", string.Join("|", CPHProxy.SentPin));
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Clear();
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "invalid" }, { "user", "stefan" }, { "display", "Stefan" }, { "reason", "the game is cooling down, try again soon." }, { "gameId", "gd3" } });
+            Check("games: a refusal keeps its facts and addresses the viewer", Last() != null && Last().StartsWith("@Stefan ") && (Last().Contains("cooling down") || Last().Contains("catching its breath")) && Last().Contains("soon"), Last());
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Clear();
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "invalid" }, { "user", "stefan" }, { "display", "Stefan" }, { "reason", "the stake must be 10 to 100 points." }, { "optout", "1" }, { "gameId", "gd4" } });
+            Check("games: opted-out refusal keeps the exact sentence", Last() == "@Stefan the stake must be 10 to 100 points.", Last());
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Clear(); SetCfgB("GameVoice", false);
+            Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "gameId", "gd5" } });
+            Check("games: switched off sets no done-mark (the Host speaks)", !CPHProxy.Globals.ContainsKey("pinguino.game.done.gd5"), ""); SetCfgB("GameVoice", true);
+
             // !games
             string gf = Path.Combine(Path.GetTempPath(), "pg_gambling_" + Guid.NewGuid().ToString("N") + ".json");
             File.WriteAllText(gf, "{\"enabled\":true,\"slotsEnabled\":true,\"duelEnabled\":false,\"giveEnabled\":true}"); SetCfgS("GamblingFile", gf);

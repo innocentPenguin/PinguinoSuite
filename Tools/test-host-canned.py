@@ -1,7 +1,7 @@
 """Canned-command editor API (/api/canned): list, set text, enable/disable, aliases, add, validation, test line, cooldown, backup, delete, export and the write gate.
 Usage: python Tools/test-host-canned.py [dll]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
-here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
+here = os.path.dirname(os.path.abspath(__file__)); suite = os.environ.get('PGSUITE') or os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 PORT = 8992; B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pgcanned_'); outf = os.path.join(d, 'out.txt'); cf = os.path.join(d, 'canned.json')

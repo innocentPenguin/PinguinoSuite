@@ -820,20 +820,34 @@ public class CPHInline
     static readonly Dictionary<string, long> _gameSeen = new Dictionary<string, long>();
     void GameEvent(string login)
     {
-        if (!_cfg.GameVoice || !_cfg.Enabled || !_cfg.ChatReplies) return;
         string id = ArgS("gameId");
+        if (!_cfg.GameVoice || !_cfg.Enabled || !_cfg.ChatReplies) return;   // no done-mark: the Host sees silence and says the plain line itself
         lock (_gameSeen)
         {
             long now = Now(); foreach (string k in _gameSeen.Where(kv => now - kv.Value > 300).Select(kv => kv.Key).ToList()) _gameSeen.Remove(k);
-            if (id != "") { if (_gameSeen.ContainsKey(id)) return; _gameSeen[id] = now; }
+            if (id != "") { if (_gameSeen.ContainsKey(id)) { GameDone(id); return; } _gameSeen[id] = now; }
         }
         string disp = ArgS("display") != "" ? ArgS("display") : login;
         bool plain = ArgS("optout") == "1" || ArgS("optout").ToLower() == "true";
         lock (_lock) { if (!plain && IsHeated()) plain = true; }
         string line = GameLine(ArgS("kind").ToLower(), ArgS("outcome").ToLower(), disp, ArgL("amount"), ArgL("payout"), ArgL("balance"), ArgS("opponent"), ArgS("reel"), ArgS("reason"), ArgS("currency") != "" ? ArgS("currency") : "points", (int)ArgL("timeoutSec"), plain, (int)ArgL("tries"));
-        if (!string.IsNullOrWhiteSpace(line)) using (PgReplyTo("", "")) PgSay("chat", line);
+        if (!string.IsNullOrWhiteSpace(line)) { string mid = ArgS("msgId"), mu = ArgS("msgUser"); using (PgReplyTo(mid, mu != "" ? mu : login)) PgSay("chat", line); }   // an answer to the viewer's command is a reply to it (the Host leaves msgId empty for duel / expiry lines)
+        GameDone(id);
     }
+    // tells the Host this event was handled (spoken or deliberately skipped); without it the Host says the plain line itself
+    void GameDone(string id) { if (id == "") return; try { CPH.SetGlobalVar("pinguino.game.done." + id, "1", false); } catch (Exception) { } }
     long ArgL(string k) { CPH.TryGetArg(k, out object o); long r; return o != null && long.TryParse(Convert.ToString(o, System.Globalization.CultureInfo.InvariantCulture), out r) ? r : 0; }
+    // refusals the Host words flatly (cooldowns, busy round, stake range, closed item): same fact, a little more personality. Anything unknown keeps the exact sentence.
+    string Refusal(string r)
+    {
+        string l = r.ToLowerInvariant();
+        if (l.StartsWith("the game is cooling down")) return Pick(r + " 🐧", "the game is catching its breath, try again soon 🐧");
+        if (l.StartsWith("you played a moment ago")) return Pick(r + " 🐧", "easy there, " + r.Substring("you played a moment ago, ".Length));
+        if (l.StartsWith("a round is already running")) return Pick(r, "hold on, a round is already running, wait for it to finish 🐧");
+        if (l.StartsWith("that one is not open yet")) return "that one is not open yet, check back soon 🐧";
+        if (l.StartsWith("the stake must be")) return Pick(r, "the stake has to fit: " + r.Substring("the stake must be ".Length));
+        return r;
+    }
     string Pick(params string[] v) { return v[_rng.Next(v.Length)]; }
     string GameLine(string kind, string outcome, string d, long amt, long pay, long bal, string opp, string reel, string reason, string cur, int timeout, bool plain, int tries = 0)
     {
@@ -842,7 +856,8 @@ public class CPHInline
         if (outcome == "invalid" || (outcome == "expired" && kind != "guess") || outcome == "declined")
         {
             if (outcome == "declined") return opp != "" ? "@" + opp + " " + d + " passed on the duel." + (plain ? "" : " Next time!") : null;
-            return reason != "" ? at + reason : null;
+            if (reason == "") return null;
+            return at + (plain ? reason : Refusal(reason));
         }
         if (kind == "gamble")
         {

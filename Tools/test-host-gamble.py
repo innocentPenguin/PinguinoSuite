@@ -1,7 +1,7 @@
 """Gambling: !gamble/!slots/!duel/!accept/!give move points through the ledger, config is live-read, no max bet by default, cooldown, lore does not answer.
 Usage: python Tools/test-host-gamble.py [dll]"""
 import re, json, os, shutil, subprocess, sys, tempfile, time, urllib.request
-here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
+here = os.path.dirname(os.path.abspath(__file__)); suite = os.environ.get('PGSUITE') or os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 PORT = int(os.environ.get('PGTEST_PORT', 8995)); B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pggm_'); outf = os.path.join(d, 'out.txt'); eco = os.path.join(d, 'economy'); os.makedirs(eco)
@@ -106,6 +106,14 @@ try:
     chatty(False); time.sleep(2.0)
     n5 = len(events()); r = ask('carl: !shop guess 100')
     chk('guess: Chatty off -> the plain Host line, no event', len(r) >= 1 and len(events()) == n5, (r, len(events()) - n5))
+    chatty(True); time.sleep(2.0)
+    n6 = len(events()); r = ask('bob: !shop nonsense_item'); e = events()[n6:]
+    chk('guess refusals: unknown item -> kind=guess invalid event, no direct plain line', not [x for x in r if x.startswith('@bob')] and len(e) == 1 and e[0]['kind'] == 'guess' and e[0]['outcome'] == 'invalid' and 'no such item' in e[0]['reason'], (r, e))
+    n7 = len(events()); r = ask('bob: !shop guess'); e = events()[n7:]
+    chk('guess refusals: usage line -> invalid event', len(e) == 1 and e[0]['outcome'] == 'invalid' and 'Stake' in e[0]['reason'], (r, e))
+    chatty(False); time.sleep(2.0)
+    n8 = len(events()); r = ask('bob: !shop nonsense_item')
+    chk('guess refusals: Chatty off -> the plain Host line, no event', len(r) == 1 and r[0].startswith('@bob') and 'no such item' in r[0] and len(events()) == n8, (r, len(events()) - n8))
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS gamble'); sys.exit(1 if fails else 0)

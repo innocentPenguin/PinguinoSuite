@@ -309,11 +309,11 @@ namespace PinguinoHost
             }
             string item = NormItem(args[0]);
             if (item == "get_sub") { SubTickets.HandleBuy(user, say); return; }
-            if (item != "guess_chatter") { say("@" + user + " " + (item == "buy_chatty" || (c["ChatItems"] as JObject)?[item] != null ? "that one is not open yet." : "no such item. Type !shop to see what is for sale.")); return; }
-            if (!ChatOn(c, "guess_chatter")) { say("@" + user + " that one is not open yet."); return; }
+            if (item != "guess_chatter") { string m0 = (item == "buy_chatty" || (c["ChatItems"] as JObject)?[item] != null ? "that one is not open yet." : "no such item. Type !shop to see what is for sale."); Gamble.GameOut(say, "@" + user + " " + m0, "guess", "invalid", user, 0, 0, Economy.Balance(me), "", "", m0, "", 0, "", 0); return; }
+            if (!ChatOn(c, "guess_chatter")) { Gamble.GameOut(say, "@" + user + " " + "that one is not open yet.", "guess", "invalid", user, 0, 0, Economy.Balance(me), "", "", "that one is not open yet.", "", 0, "", 0); return; }
             long stake; string sa = args.Length > 1 ? args[1].Replace(",", "").Trim().ToLowerInvariant() : "";
             if (sa == "all") stake = Math.Min(max, Economy.Balance(me));
-            else if (!long.TryParse(sa, out stake)) { say("@" + user + " " + ChatName(c, "guess_chatter", "Guess the Chatter") + ": I show an old chat line and you name who said it with !guess <name> (" + tries + " tries, " + I(c, "GuessSeconds") + "s). Stake " + min + "-" + max + " " + cur + ", right answer pays 2x. Start: !shop guess <stake>"); return; }
+            else if (!long.TryParse(sa, out stake)) { string um = ChatName(c, "guess_chatter", "Guess the Chatter") + ": I show an old chat line and you name who said it with !guess <name> (" + tries + " tries, " + I(c, "GuessSeconds") + "s). Stake " + min + "-" + max + " " + cur + ", right answer pays 2x. Start: !shop guess <stake>"; Gamble.GameOut(say, "@" + user + " " + um, "guess", "invalid", user, 0, 0, Economy.Balance(me), "", "", um, "", 0, "", 0); return; }
             string msg; bool started = false; string startLine = "", gid = ""; long bal0 = 0;
             lock (L)
             {
@@ -330,7 +330,7 @@ namespace PinguinoHost
                     if (line == null) msg = "no suitable chat line to use right now.";
                     else
                     {
-                        string err = Economy.Spend("shop-" + id, me, stake, "shop guess_chatter"); if (err != null) { say("@" + user + " " + err + "."); return; }
+                        string err = Economy.Spend("shop-" + id, me, stake, "shop guess_chatter"); if (err != null) { Gamble.GameOut(say, "@" + user + " " + err + ".", "guess", "invalid", user, 0, 0, Economy.Balance(me), "", "", err + ".", "", 0, "", 0); return; }
                         d["userLast"][me] = now; d["globalLast"] = now;
                         d["game"] = new JObject { { "id", id }, { "login", me }, { "stake", stake }, { "line", line }, { "answer", who }, { "at", now }, { "guesses", 0 } };
                         Record(d, id, me, "guess_chatter", "accepted", 0, "chat round", false); ((JObject)d["processed"])[id]["posted"] = true; Save(d);

@@ -1,7 +1,7 @@
 """Get a sub: buying spends points and makes a pending ticket; limits (one pending, monthly caps, cooldown); mods fulfil (!subdone) or refund (!subrefund / API); ships OFF.
 Usage: python Tools/test-host-subtickets.py [dll]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
-here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
+here = os.path.dirname(os.path.abspath(__file__)); suite = os.environ.get('PGSUITE') or os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 PORT = 8984; B = 'http://127.0.0.1:%d' % PORT
 d = tempfile.mkdtemp(prefix='pgst_'); outf = os.path.join(d, 'out.txt'); eco = os.path.join(d, 'economy'); os.makedirs(eco)
