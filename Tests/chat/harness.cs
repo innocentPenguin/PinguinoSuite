@@ -1343,6 +1343,43 @@ public static class Harness
         Check("spam guard: a normal new viewer is still welcomed", Last() != null && Last().Contains("@Plainfriend"), Last());
         Extra.Clear();
 
+        // ── category-aware join answers + !points ──
+        {
+            Action<string> cat = g => File.WriteAllText(Path.Combine(dir, "live_state.json"), "{\"activity\":\"competitive\",\"queueOpen\":true,\"queue\":[],\"obs\":{\"twitchGame\":\"" + g + "\"},\"currentMatch\":null}");
+            string longRl = "{\"reply\":\"Sure! Register with !register YourEpicName then join the queue in Rocket League when it opens and wait for a private match lobby\",\"remember\":[]}";
+            string[,] want = { { "Rocket League", "!register YourEpicName, then !join when the queue is open!" }, { "Fortnite", "FN customs are always open! !epic" }, { "Roblox", "Of course! !roblox" }, { "Just Chatting", "Ask in !discord, that's where the join info lives!" }, { "", "Ask in !discord, that's where the join info lives!" } };
+            for (int i = 0; i < want.GetLength(0); i++)
+            {
+                cat(want[i, 0]); nextReply = longRl; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+                Msg("Joiner" + i, "@ChattyPinguino can i play with you lol", null, false);
+                Check("join answer for '" + want[i, 0] + "' is the one short line", Last() == want[i, 1] || (Last() != null && Last().EndsWith(want[i, 1])), Last());
+                Check("join answer for '" + want[i, 0] + "' is short", Last() != null && Last().Length < 80, Last());
+            }
+            cat("Fortnite"); nextReply = longRl; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("Leaky1", "@ChattyPinguino pineapple on pizza, yes or no lol", null, false);
+            Check("outside Rocket League an AI reply with queue / RL text is never sent", Last() == null || !System.Text.RegularExpressions.Regex.IsMatch(Last(), "queue|Rocket|register|lobby", System.Text.RegularExpressions.RegexOptions.IgnoreCase), Last());
+            cat("Rocket League"); nextReply = "{\"reply\":\"pineapple belongs on pizza\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("Leaky2", "@ChattyPinguino pineapple on pizza, yes or no lol", null, false);
+            Check("control: ordinary answers still go out in Rocket League", Last() != null && Last().Contains("pineapple"), Last());
+            nextReply = "{\"reply\":\"hey there!\",\"remember\":[]}";
+            cat("Rocket League");
+        }
+        {
+            long ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            CPHProxy.Globals["pinguino.points.pointsguy"] = "3654|12|400|" + ts;
+            SF("_cannedAt").GetValue(null).GetType().GetMethod("Clear").Invoke(SF("_cannedAt").GetValue(null), null);
+            CPHProxy.Sent.Clear(); Msg("PointsGuy", "!points", null, false);
+            Check("!points: exact one-line answer, thousands formatted", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@PointsGuy you have 3,654 points (#12 of 400)", string.Join("|", CPHProxy.Sent));
+            CPHProxy.Sent.Clear(); Msg("PointsGuy", "!point", null, false);
+            Check("!point inside the user cooldown: still one reply total, none duplicated", CPHProxy.Sent.Count == 0, string.Join("|", CPHProxy.Sent));
+            SF("_cannedAt").GetValue(null).GetType().GetMethod("Clear").Invoke(SF("_cannedAt").GetValue(null), null);
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("PointsGuy", "!point", null, false);
+            Check("!point is answered the same way", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@PointsGuy you have 3,654 points (#12 of 400)", string.Join("|", CPHProxy.Sent));
+            CPHProxy.Globals["pinguino.points.oldguy"] = "5|1|2|" + (ts - 120);
+            CPHProxy.Sent.Clear(); Msg("OldGuy", "!points", null, false);
+            Check("!points with a stale or missing Host lookup says nothing", CPHProxy.Sent.Count == 0, string.Join("|", CPHProxy.Sent));
+        }
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " CHAT CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;

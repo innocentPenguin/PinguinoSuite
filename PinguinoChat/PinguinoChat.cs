@@ -1179,6 +1179,7 @@ public class CPHInline
             if (cmd == "!8ball") { if (_cfg.EightBallOn) EightBallCommand(cx, text.Length > 6 ? text.Substring(6).Trim() : ""); return; }
             RecordEvent(login, text);                                // gifted subs, resubs, bits, follows, raids (announced by the bots / the raiders)
             if (login == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(login) || IsBot(login)) return;
+            if (cmd != "" && PointsCommand(cx, cmd, text)) return;   // !points / !point: the one-line points answer (Host lookup)
             if (cmd != "" && _cfg.CannedOn && CannedCommand(cx, cmd, text)) return;   // the old Nightbot fun / lore commands (!shadow, !hug ...): same texts, answered by this bot
             if (cmd == "" && !PgNoDefer()) GateCount();                           // counts the line for the activity gate (once, not again when the router hands it back)
             if (!IsLive()) { SleepingReply(cx, cmd, replyTo); return; }   // offline: no recording, no AI; only a short "come back when live" when pinged
@@ -2042,6 +2043,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             timeoutNote = TryTimeout(c, (int)o["timeout"], (string)o["reason"]);
         if (timeoutNote != null) PgLogI("[Chat] " + timeoutNote);
 
+        reply = JoinGuard(reply, c.Text);   // join questions: one line for the current category; no Rocket League text outside Rocket League
+        if (string.IsNullOrEmpty(reply)) return;
         reply = PolishReply(reply, c);   // names capitalized; proper sentences when the tone is serious / helpful
         if (orderFail != null) reply += orderFail;
 
@@ -2515,6 +2518,42 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     static readonly Regex ReplyBlock = new Regex(
         @"\b(minor|minors|underage|under\s*-?(13|18)|menor\s+de\s+edad)\b",
         RegexOptions.IgnoreCase);
+
+    // ══════════════════════════════════════════════════════════════
+    //  CURRENT CATEGORY + JOIN ANSWERS: every join-intent answer from Chatty is ONE short line that fits the Twitch category being streamed.
+    //  The category is read from live_state.json (obs.twitchGame, written by the game manager from Twitch itself; "game" is the fallback).
+    // ══════════════════════════════════════════════════════════════
+    static string GameKeyOf(string twitchGame, string gameField)
+    {
+        string g = (twitchGame ?? "").ToLowerInvariant();
+        if (g == "") g = (gameField ?? "").ToLowerInvariant().Replace("-", " ");
+        if (g.Contains("rocket league")) return "rl";
+        if (g.Contains("fortnite")) return "fortnite";
+        if (g.Contains("roblox")) return "roblox";
+        return "";
+    }
+    string GameKey()
+    {
+        try { var j = ReadJson("live_state.json"); if (j == null) return ""; return GameKeyOf((string)j["obs"]?["twitchGame"], (string)j["game"]); }
+        catch (Exception) { return ""; }
+    }
+    static string JoinLineFor(string key)
+    {
+        if (key == "rl") return "!register YourEpicName, then !join when the queue is open!";
+        if (key == "fortnite") return "FN customs are always open! !epic";
+        if (key == "roblox") return "Of course! !roblox";
+        return "Ask in !discord, that's where the join info lives!";
+    }
+    static readonly Regex RxJoinAsk = new Regex(@"\b(how|can|could|may|where)\b.{0,25}\b(join|play\s+with|get\s+in)\b|\b(can|could|may)\s+(i|we)\s+play\b|\b(wanna|want\s+to|like\s+to|let\s+me)\s+(join|play\s+with)\b|\bjoin\s+(the\s+|your\s+|a\s+)?(game|games|lobby|queue|custom|customs|match|stream)\b|\bplay\s+with\s+(you|u|y'?all|the\s+(stream|streamer|viewers))\b", RegexOptions.IgnoreCase);
+    static readonly Regex RxRlText = new Regex(@"rocket\s*league|\bqueue\b|!join\b|!register\b|!pos\b|private\s+(match|lobby)|\bepic\s+name\b|\blobby\b", RegexOptions.IgnoreCase);
+    /// <summary>a join question gets exactly the one-line answer for the current category; outside Rocket League no RL text goes out at all (null = say nothing)</summary>
+    string JoinGuard(string reply, string viewerText)
+    {
+        string key = GameKey();
+        if (RxJoinAsk.IsMatch(viewerText ?? "") || PgHelperTopic(viewerText)) return JoinLineFor(key);
+        if (key != "rl" && RxRlText.IsMatch(reply ?? "")) return null;
+        return reply;
+    }
 
     // Makes sure the AI's text is safe to post: one or two short lines, no commands, no links, no age talk.
     string CleanReply(string r)
@@ -3053,6 +3092,28 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         catch (Exception ex) { Warn("canned", "canned_commands.json: " + ex.Message); return _canned ?? new Dictionary<string, JObject>(); }
     }
     static int _cannedSec = 20; static long _cannedAny;
+    // !points / !point: ONE reply, "@user you have 3,654 points (#12 of 400)". No AI, no tail. The numbers come from the Host (it owns the economy): just before
+    // the line is routed it publishes pinguino.points.<login> = "points|rank|of|unixSeconds"; an answer older than 30 s or missing means no line at all.
+    bool PointsCommand(Ctx c, string cmd, string text)
+    {
+        if (cmd != "!points" && cmd != "!point") return false;
+        long now = Now(); long lu, lg;
+        if (_cannedAt.TryGetValue("u|!points|" + c.Login, out lu) && now - lu < 20) return true;
+        if (_cannedAt.TryGetValue("g|!points", out lg) && now - lg < 8) return true;
+        string arg = (text ?? "").Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim().Split(' ')[0].TrimStart('@') : "";
+        bool self = arg == "" || !Regex.IsMatch(arg, @"^[A-Za-z0-9_]{1,25}$") || arg.ToLower() == c.Login;
+        string target = self ? c.Login : arg.ToLower();
+        string raw = ""; try { raw = CPH.GetGlobalVar<string>("pinguino.points." + target, false) ?? ""; } catch (Exception) { }
+        var p = raw.Split('|'); long pts, rank, of, ts;
+        if (p.Length < 4 || !long.TryParse(p[0], out pts) || !long.TryParse(p[1], out rank) || !long.TryParse(p[2], out of) || !long.TryParse(p[3], out ts) || now - ts > 30)
+        { CPH.LogWarn("[Chatty] !points: no fresh Host lookup for " + target); return true; }
+        string num = pts.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        string line = (self ? "@" + c.Display + " you have " : (arg) + " has ") + num + " points (#" + rank + " of " + of + ")";
+        _cannedAt["u|!points|" + c.Login] = now; _cannedAt["g|!points"] = now;
+        using (PgReplyTo(c.MsgId ?? "", c.Login)) PgSay("chat", line);
+        return true;
+    }
+
     bool CannedCommand(Ctx c, string cmd, string text)
     {
         JObject o; if (!CannedMap().TryGetValue(cmd, out o)) return false;
@@ -3671,6 +3732,9 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             var j = ReadJson("live_state.json");
             if (j == null) return "(no state available)";
             var sb = new StringBuilder();
+            string tg0 = (string)j["obs"]?["twitchGame"];
+            if (GameKeyOf(tg0, (string)j["game"]) != "rl")
+                return "streaming: " + (string.IsNullOrEmpty(tg0) ? "unknown category" : tg0) + ". This is NOT Rocket League: never mention the queue, !join, !register, lobbies or Rocket League. A joining question is answered by code, not by you.";
             sb.Append("activity: " + (string)j["activity"] + ", format: " + (string)j["format"] + ", game mode: " + (string)j["gameMode"] + ", queue " + ((bool?)j["queueOpen"] == true ? "OPEN" : "CLOSED"));
             var q = j["queue"] as JArray;
             if (q != null) sb.Append(", waiting: " + q.Count + (q.Count > 0 ? " (" + string.Join(", ", q.Take(8).Select(x => (string)x["user"])) + ")" : ""));
