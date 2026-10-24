@@ -8,6 +8,7 @@ dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file_
 PORT = 8891; rows = []; out = []; lock = threading.Lock()
 d = tempfile.mkdtemp(prefix='pgtrial_')
 json.dump({'Channel': 'trial', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
+json.dump({'CooldownSec': 0}, open(os.path.join(d, 'shout_settings.json'), 'w'))   # manual shoutouts share a 60 s cooldown; the dedupe case needs it off
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env['PINGUINO_COMPAT_WS_PORT'] = '8896'
 host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 def reader():
