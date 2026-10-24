@@ -100,6 +100,7 @@ from pydantic import BaseModel
 import asr as asr_mod
 import config as cfg
 import corewatch
+import loopguard
 import db
 import ingest
 import learn
@@ -222,6 +223,7 @@ def _core_gone():
 @asynccontextmanager
 async def lifespan(app):
     hub.loop = asyncio.get_running_loop()
+    hub.loop.set_exception_handler(loopguard.handler)   # a client closing its socket (10054) is not an error
     threading.Thread(target=asr.load, daemon=True).start()
     threading.Thread(target=autolearn_loop, daemon=True).start()
     threading.Thread(target=lambda: oggfix.repair_all(cfg.DATA / "audio", log=lambda m: print(m, flush=True)), daemon=True).start()   # VOD audio made before the 62 s timeline fix
