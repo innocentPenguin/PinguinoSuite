@@ -804,6 +804,7 @@ public static class Harness
         Check("$(user) and $(touser) are filled in", Last() != null && Last().Contains("Canny wraps their arms around Bobby"), Last());
         _cannedReset(true); Msg("Canny", "!luck", null, false);
         Check("!luck rolls a number", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), @"You got \d+% luck"), Last());
+        foreach (var sc in new[] { "!song", "!vol 50", "!songqueue", "!voteskip", "!skip" }) { cn = CPHProxy.Sent.Count; Msg("Canny", sc, null, false); Check("the helper owns " + sc.Split(' ')[0] + ": Chatty says nothing", CPHProxy.Sent.Count == cn, Last()); }
         cn = CPHProxy.Sent.Count; Msg("Canny", "!goon", null, false);
         Check("a command held with enabled:false says nothing", CPHProxy.Sent.Count == cn);
         CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Globals["pinguino.links"] = "{\"discord\":\"https://discord.gg/fktz5sq4b8\"}"; _cannedReset(true); Msg("Canny2", "!onlyfans", null, false);
@@ -1171,6 +1172,8 @@ public static class Harness
             Check("guess: a wrong answer says how many tries are left", Last() != null && Last().StartsWith("@Stefan") && Last().Contains("2 tries"), Last());
             Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "retry" }, { "user", "stefan" }, { "display", "Stefan" }, { "tries", 1 }, { "gameId", "gu3" } });
             Check("guess: singular 'try' for the last one", Last() != null && Last().Contains("1 try") && !Last().Contains("1 tries"), Last());
+            Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "retry" }, { "user", "stefan" }, { "display", "Stefan" }, { "tries", 1 }, { "reason", "mondays are only bearable with coffee" }, { "gameId", "gu3b" } });
+            Check("guess: the first wrong answer shows the second clue from the same chatter, one line", CPHProxy.Sent.Count == 1 && Last().Contains("\"mondays are only bearable with coffee\"") && Last().Contains("1 try") && Last().StartsWith("@Stefan"), Last());
             Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 100 }, { "payout", 200 }, { "balance", 340 }, { "opponent", "bobby" }, { "gameId", "gu4" } });
             Check("guess: a right answer names the chatter and the winnings", Last() != null && Last().Contains("bobby") && Last().Contains("200"), Last());
             Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "bobby" }, { "gameId", "gu5" } });

@@ -80,7 +80,10 @@ def shopitem(i, login, item, stake=0): S['shop'][i] = {'id': i, 'login': login, 
 # chat history for the guess game: one eligible author, one opted out, one with a link
 os.makedirs(os.path.join(d, 'chat_logs', 'live'), exist_ok=True)
 day = time.strftime('%Y-%m-%d', time.gmtime())
-lines = [{'t': 1, 'u': 'chattera', 'i': '11', 'm': 'honestly the new update makes the whole lobby feel so much smoother', 'c': 0},
+GOOD = ['honestly the new update makes the whole lobby feel so much smoother', 'i never thought a penguin could be this funny on a monday morning', 'my cat just knocked the whole coffee over, what a start to the day']
+BAD = ['lol yeah', 'haha lol yeah that was so funny xd', 'chattera is the best name ever honestly', '!wheel spin now please everyone', 'ok', 'one thing. two things. three things. four things here', 'PogChamp Kappa LUL KEKW OMEGALUL']
+lines = [{'t': 1, 'u': 'chattera', 'i': '11', 'm': GOOD[0], 'c': 0}, {'t': 1, 'u': 'chattera', 'i': '11', 'm': GOOD[1], 'c': 0}, {'t': 1, 'u': 'chattera', 'i': '11', 'm': GOOD[2], 'c': 0},
+         {'t': 1, 'u': 'solo', 'i': '14', 'm': 'only one usable line from this person so never picked', 'c': 0}] + [{'t': 1, 'u': 'chattera', 'i': '11', 'm': b, 'c': 0} for b in BAD] + [
          {'t': 2, 'u': 'optedout', 'i': '12', 'm': 'this secret opted out line must never be picked here', 'c': 0},
          {'t': 3, 'u': 'linkguy', 'i': '13', 'm': 'check out https://evil.example.com for the best deals around', 'c': 0}]
 open(os.path.join(d, 'chat_logs', 'live', day + '.jsonl'), 'w').write('\n'.join(json.dumps(x) for x in lines) + '\n')
@@ -137,20 +140,22 @@ try:
     chk('s4 stake below the minimum rejected', wait(lambda: S['shop']['s4']['status'] == 'rejected'))
     g = rj('site_shop.json')['game']
     chk('the line is anonymised and from an eligible author', g['answer'] == 'chattera' and 'chattera' not in g['line'].lower() and 'secret' not in g['line'] and 'evil' not in g['line'], g)
+    chk('two clues stored in the round: both good, distinct, same chatter, no name in either', g['line'] in GOOD and g.get('line2') in GOOD and g['line'] != g['line2'] and 'chattera' not in g['line2'].lower(), g)
     chk('an unrelated viewer typing !guess gets nothing', ask(host, 'someone: !guess chattera') == [])
-    r = ask(host, 'gambler: !guess nobody'); chk('a wrong guess says tries left', r and 'Nope' in r[0], r)
+    r = ask(host, 'gambler: !guess nobody'); chk('a wrong guess says tries left and shows the second clue', r and len(r) == 1 and 'Nope' in r[0] and '1 try' in r[0] and g['line2'] in r[0], r)
     # restart in the middle: no double deduct
     host.kill(); time.sleep(1.0); S['shop']['s1']['status'] = 'pending'; host = start(); time.sleep(4)
     chk('restart: the same id re-listed is not charged again', bal('gambler') == b0 - 500, bal('gambler'))
     chk('restart: the round survived', rj('site_shop.json')['game']['id'] == 's1')
-    r = ask(host, 'gambler: !guess chattera'); chk('right guess wins 2x stake', r and 'Correct' in r[0] and '1000' in r[0], r)
+    r = ask(host, 'gambler: !guess chattera'); chk('wrong then right: the right guess wins 2x stake, no clue after a win', r and 'Correct' in r[0] and '1000' in r[0] and 'Same chatter' not in r[0], r)
     chk('won is posted with payout exactly 2x', wait(lambda: any(b['id'] == 's1' and b['status'] == 'won' and b['payout'] == 1000 for b in posts('/api/bot/shop/status'))), posts('/api/bot/shop/status'))
     chk('balance = start + stake (net)', bal('gambler') == b0 + 500, bal('gambler'))
     time.sleep(4.5)
     shopitem('s5', 'gambler', 'guess_chatter', 200)
     chk('s5 round two after cooldowns', wait(lambda: S['shop']['s5']['status'] == 'accepted'), S['shop']['s5'])
-    for _ in range(3): ask(host, 'gambler: !guess wrongname')
-    chk('three wrong guesses lose, payout 0', wait(lambda: any(b['id'] == 's5' and b['status'] == 'lost' and b['payout'] == 0 for b in posts('/api/bot/shop/status'))) and bal('gambler') == b0 + 300, bal('gambler'))
+    r1 = ask(host, 'gambler: !guess wrongname'); r2 = ask(host, 'gambler: !guess wrongname2'); r3 = ask(host, 'gambler: !guess wrongname3')
+    chk('first wrong shows a clue, second wrong ends the round (no clue), a third guess is ignored', r1 and 'Same chatter' in r1[0] and r2 and 'No luck' in r2[0] and 'Same chatter' not in r2[0] and r3 == [], (r1, r2, r3))
+    chk('two wrong guesses lose, payout 0', wait(lambda: any(b['id'] == 's5' and b['status'] == 'lost' and b['payout'] == 0 for b in posts('/api/bot/shop/status'))) and bal('gambler') == b0 + 300, bal('gambler'))
     shopitem('s6', 'gambler', 'buy_chatty')
     chk('buy_chatty accepted, deducted, unlock file written', wait(lambda: S['shop']['s6']['status'] == 'accepted') and bal('gambler') == b0 + 300 - 5000 and rj('chatty_unlock.json')['unlocked'] is True, bal('gambler'))
     shopitem('s7', 'gambler', 'buy_chatty')
@@ -173,6 +178,19 @@ try:
     r = ask(host, 'gambler: !guess chattera'); chk('right guess pays 2x', len(r) == 1 and 'Correct' in r[0] and bal('gambler') == b1 + 200, (r, bal('gambler')))
     time.sleep(5)
     r = ask(host, 'gambler: !shop guess 100'); chk('user cooldown applies to chat starts too (or a new round when it has passed)', len(r) == 1 and ('Who said this' in r[0] or 'wait' in r[0] or 'cooling' in r[0]), r)
+    ask(host, 'gambler: !guess chattera')   # ends the round the line above may have started
+    time.sleep(4.5)
+    api('/api/economy', {'adjust': 'otherguy', 'delta': 1000})
+    r = ask(host, 'gambler: !shop guess 100'); chk('chat round starts after the cooldowns', len(r) == 1 and 'Who said this' in r[0], r)
+    r = ask(host, 'gambler: !guess chattera'); chk('right on the first guess: wins, no clue', len(r) == 1 and 'Correct' in r[0] and 'Same chatter' not in r[0], r)
+    r = ask(host, 'otherguy: !shop guess 100'); chk('global cooldown line says minutes, one short sentence', len(r) == 1 and 'cooling down' in r[0] and '1 min' in r[0] and r[0].count('.') == 1, r)
+    r = ask(host, 'gambler: !shop guess 100'); chk('personal cooldown line says minutes, one short sentence', len(r) == 1 and 'wait 1 min' in r[0] and r[0].count('.') == 1, r)
+    time.sleep(2.5)
+    json.dump({'GuessSeconds': 2}, open(os.path.join(d, 'site_shop_settings.json'), 'w'))
+    r = ask(host, 'otherguy: !shop guess 100'); chk('a round for the expiry check', len(r) == 1 and 'Who said this' in r[0], r)
+    time.sleep(4)
+    chk('expiry: the round is gone and counts as lost', rj('site_shop.json').get('game') is None and ask(host, 'otherguy: !guess chattera') == [], rj('site_shop.json').get('game'))
+    os.remove(os.path.join(d, 'site_shop_settings.json'))
 finally:
     host.kill(); time.sleep(0.5); srv.shutdown(); shutil.rmtree(d, True)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)

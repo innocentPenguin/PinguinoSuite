@@ -145,11 +145,12 @@ namespace PinguinoHost
         // ---- settings (defaults; Data\runtime\site_shop_settings.json overrides) ----
         public static JObject Cfg()
         {
-            var d = new JObject { { "BuyChattyPrice", 5000 }, { "MinStake", 100 }, { "MaxStake", 2000 }, { "UserCooldownSec", 1800 }, { "GlobalCooldownSec", 600 }, { "GuessSeconds", 300 }, { "MaxGuesses", 3 }, { "HistoryDays", 14 }, { "ShopOpen", true },
+            var d = new JObject { { "BuyChattyPrice", 5000 }, { "MinStake", 100 }, { "MaxStake", 2000 }, { "UserCooldownSec", 600 }, { "GlobalCooldownSec", 300 }, { "GuessSeconds", 300 }, { "MaxGuesses", 2 }, { "HistoryDays", 14 }, { "ShopOpen", true },
                 { "ChatItems", new JObject {   // what !shop shows (edit in Data\runtime\site_shop_settings.json); enabled=false lists it as "soon"
                     { "guess_chatter", new JObject { { "name", "Guess the Chatter" }, { "enabled", true } } },
                     { "buy_chatty", new JObject { { "name", "Unlock ChattyPinguino" }, { "enabled", false } } } } } };
             foreach (var p in SiteHttp.ReadJ(Path.Combine(HostApi.DataDir, "site_shop_settings.json")).Properties()) d[p.Name] = p.Value;
+            if ((long?)d["UserCooldownSec"] == 1800) d["UserCooldownSec"] = 600; if ((long?)d["GlobalCooldownSec"] == 600) d["GlobalCooldownSec"] = 300; if ((long?)d["MaxGuesses"] == 3) d["MaxGuesses"] = 2;   // the old defaults moved (10-24); a value set to anything else stays
             int u, g; if (int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_SHOP_USER_CD_SEC"), out u)) d["UserCooldownSec"] = u; if (int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_SHOP_GLOBAL_CD_SEC"), out g)) d["GlobalCooldownSec"] = g;
             return d;
         }
@@ -251,15 +252,15 @@ namespace PinguinoHost
                     if (stake < I(c, "MinStake") || stake > I(c, "MaxStake")) { no("stake must be " + I(c, "MinStake") + " to " + I(c, "MaxStake")); return; }
                     if (!already)
                     {
-                        long ul = (long?)d["userLast"][login] ?? 0; if (now - ul < I(c, "UserCooldownSec")) { no("you played a moment ago, wait a little"); return; }
-                        long gl = (long?)d["globalLast"] ?? 0; if (now - gl < I(c, "GlobalCooldownSec")) { no("the game is cooling down, try again soon"); return; }
+                        long ul = (long?)d["userLast"][login] ?? 0; if (now - ul < I(c, "UserCooldownSec")) { no("you played recently, wait " + MinLeft(ul, I(c, "UserCooldownSec"), now) + " min"); return; }
+                        long gl = (long?)d["globalLast"] ?? 0; if (now - gl < I(c, "GlobalCooldownSec")) { no("the game is cooling down, try again in " + MinLeft(gl, I(c, "GlobalCooldownSec"), now) + " min"); return; }
                         if (d["game"] != null && d["game"].Type != JTokenType.Null) { no("a round is already running"); return; }
                         if (Economy.Balance(login) < stake) { no("not enough " + Economy.CurrencyName); return; }
                     }
-                    string who; string line = PickLine(login, out who); if (line == null) { no("no suitable chat line to use right now"); return; }
+                    string who, line2; string line = PickClues(login, out who, out line2); if (line == null) { no("no suitable chat line to use right now"); return; }
                     if (!already) { string err = Economy.Spend(sid, login, stake, "shop guess_chatter"); if (err != null) { no(err); return; } }
                     d["userLast"][login] = now; d["globalLast"] = now;
-                    d["game"] = new JObject { { "id", id }, { "login", login }, { "stake", stake }, { "line", line }, { "answer", who }, { "at", now }, { "guesses", 0 } };
+                    d["game"] = new JObject { { "id", id }, { "login", login }, { "stake", stake }, { "line", line }, { "line2", line2 }, { "answer", who }, { "at", now }, { "guesses", 0 } };
                     Record(d, id, login, item, "accepted", 0, "Who said this? \"" + (line.Length > 110 ? line.Substring(0, 110) : line) + "\" Answer in chat with !guess <name>, " + I(c, "MaxGuesses") + " tries.", false); Save(d); return;
                 }
                 if (item == "get_sub")
@@ -322,17 +323,17 @@ namespace PinguinoHost
                 else if (stake < min || stake > max) msg = "the stake must be " + min + " to " + max + " " + cur + ".";
                 else if (Economy.Balance(me) < stake) msg = "not enough " + cur + " (you have " + Economy.Balance(me) + ").";
                 else if (d["game"] != null && d["game"].Type != JTokenType.Null) msg = "a round is already running, wait for it to finish.";
-                else if (now - ((long?)d["userLast"][me] ?? 0) < I(c, "UserCooldownSec")) msg = "you played a moment ago, wait a little (" + Math.Max(1, (I(c, "UserCooldownSec") - (now - (long)d["userLast"][me])) / 60) + " min).";
-                else if (now - ((long?)d["globalLast"] ?? 0) < I(c, "GlobalCooldownSec")) msg = "the game is cooling down, try again soon.";
+                else if (now - ((long?)d["userLast"][me] ?? 0) < I(c, "UserCooldownSec")) msg = "you played recently, wait " + MinLeft((long)d["userLast"][me], I(c, "UserCooldownSec"), now) + " min.";
+                else if (now - ((long?)d["globalLast"] ?? 0) < I(c, "GlobalCooldownSec")) msg = "the game is cooling down, try again in " + MinLeft((long)d["globalLast"], I(c, "GlobalCooldownSec"), now) + " min.";
                 else
                 {
-                    string who; string line = PickLine(me, out who);
+                    string who, line2; string line = PickClues(me, out who, out line2);
                     if (line == null) msg = "no suitable chat line to use right now.";
                     else
                     {
                         string err = Economy.Spend("shop-" + id, me, stake, "shop guess_chatter"); if (err != null) { Gamble.GameOut(say, "@" + user + " " + err + ".", "guess", "invalid", user, 0, 0, Economy.Balance(me), "", "", err + ".", "", 0, "", 0); return; }
                         d["userLast"][me] = now; d["globalLast"] = now;
-                        d["game"] = new JObject { { "id", id }, { "login", me }, { "stake", stake }, { "line", line }, { "answer", who }, { "at", now }, { "guesses", 0 } };
+                        d["game"] = new JObject { { "id", id }, { "login", me }, { "stake", stake }, { "line", line }, { "line2", line2 }, { "answer", who }, { "at", now }, { "guesses", 0 } };
                         Record(d, id, me, "guess_chatter", "accepted", 0, "chat round", false); ((JObject)d["processed"])[id]["posted"] = true; Save(d);
                         msg = "Who said this? \"" + line + "\" Answer with !guess <name>, " + tries + " tries. Stake " + stake + " " + cur + ", right answer pays " + stake * 2 + ".";
                         started = true; startLine = line; gid = id; bal0 = Economy.Balance(me);
@@ -345,7 +346,7 @@ namespace PinguinoHost
         /// <summary>!guess &lt;name&gt; from chat. Only the player of the running round gets an answer; everyone else gets nothing (the shop is hidden).</summary>
         public static bool HandleGuess(string user, string[] args, Action<string> say)
         {
-            string msg = null; string oc = "", ans = "", gid = ""; long stk = 0, pay2 = 0; int left2 = 0;
+            string msg = null; string oc = "", ans = "", gid = "", clue = ""; long stk = 0, pay2 = 0; int left2 = 0;
             lock (L)
             {
                 var d = Doc(); var g = d["game"] as JObject; string me = (user ?? "").ToLowerInvariant();
@@ -356,10 +357,10 @@ namespace PinguinoHost
                 {
                     int n = (int)g["guesses"] + 1; g["guesses"] = n; int left = (int)I(Cfg(), "MaxGuesses") - n;
                     if (left <= 0) { Finish(d, g, false, "out of tries, it was " + (string)g["answer"]); oc = "lose"; ans = (string)g["answer"]; stk = (long)g["stake"]; gid = (string)g["id"] + "#lose"; msg = "@" + user + " No luck, it was " + (string)g["answer"] + "."; }
-                    else { Save(d); oc = "retry"; left2 = left; gid = (string)g["id"] + "#try" + n; msg = "@" + user + " Nope, " + left + " " + (left == 1 ? "try" : "tries") + " left."; }
+                    else { Save(d); oc = "retry"; left2 = left; gid = (string)g["id"] + "#try" + n; clue = (string)g["line2"] ?? ""; msg = "@" + user + " Nope, " + left + " " + (left == 1 ? "try" : "tries") + " left." + (clue != "" ? " Same chatter: \"" + clue + "\"" : ""); }
                 }
             }
-            if (msg != null) Gamble.GameOut(say, msg, "guess", oc, user, stk, pay2, Economy.Balance((user ?? "").ToLowerInvariant()), ans, "", "", gid, 0, "", left2);
+            if (msg != null) Gamble.GameOut(say, msg, "guess", oc, user, stk, pay2, Economy.Balance((user ?? "").ToLowerInvariant()), ans, "", clue, gid, 0, "", left2);
             return true;
         }
 
@@ -381,14 +382,52 @@ namespace PinguinoHost
             catch (Exception) { }
             return set;
         }
-        /// <summary>a random eligible line (anonymised: links, @mentions and the author's own name removed) and its author's login</summary>
-        public static string PickLine(string exceptLogin, out string author)
+        static long MinLeft(long last, long cd, long now) { return Math.Max(1, (cd - (now - last) + 59) / 60); }
+        static readonly Regex Filler = new Regex(@"^(lol|lmao|lmfao|rofl|haha+|hehe+|xd+|yeah|yea|yep|yes|nah|nope|ok|okay|omg|wow|pog+|kek|true|same|fr|ngl|bruh|idk|hi|hey|hello|gg|wtf|ye|ya)$", RegexOptions.IgnoreCase);
+        static readonly Regex Spacer = new Regex(@"[^\p{L}\p{N}' ]+");
+        /// <summary>the cleaned line when it can stand alone as a clue (1-2 sentences, real words, no name of the author in it), else null</summary>
+        public static string ClueText(string m, string login, ICollection<string> names)
         {
-            author = null; var cands = new List<KeyValuePair<string, string>>();
+            if (m == null) return null;
+            m = m.Trim(); if (m.StartsWith("!") || m.StartsWith("/") || m.StartsWith("@") || m.IndexOf("pinguinob0t", StringComparison.OrdinalIgnoreCase) >= 0 || Sensitive.IsMatch(m)) return null;
+            bool stripped; string c = Teach.Clean(m, out stripped); if (stripped || c == null) return null;   // had a link or an @mention: not used
+            c = Regex.Replace(c, @"\s+", " ").Trim();
+            if (c.Length < 25 || c.Length > 140 || c.Count(ch => char.IsLetter(ch)) < 15) return null;
+            if (Regex.Matches(c, @"[.!?]+(\s+|$)").Cast<Match>().Count(x => x.Index + x.Length < c.Length) > 1) return null;   // more than two sentences
+            string lo = c.ToLowerInvariant();
+            foreach (var n in names) if (n != null && n.Length >= 3 && lo.Contains(n)) return null;   // login, display name, alias or nickname in the text
+            string bare = Regex.Replace(login ?? "", @"[\d_]+", ""); if (bare.Length >= 4 && lo.Contains(bare.ToLowerInvariant())) return null;
+            var words = Spacer.Replace(c, " ").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Where(w => w.Any(char.IsLetter)).ToList();
+            if (words.Count < 4 || words.Count(w => !Filler.IsMatch(w)) < 4) return null;   // single words, emote-only, "lol yeah" style
+            return c;
+        }
+        static int ClueScore(string c) { int sc = Math.Min(c.Length, 100) / 4; if (c.Contains("?") || c.Contains("!")) sc += 6; if (Regex.IsMatch(c, @"\b(i|i'm|im|my|me|we|you|never|always|honestly|literally)\b", RegexOptions.IgnoreCase)) sc += 6; if (c.Contains(",")) sc += 3; return sc; }
+        static bool Distinct(string a, string b)
+        {
+            Func<string, HashSet<string>> ws = t => new HashSet<string>(Spacer.Replace(t.ToLowerInvariant(), " ").Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+            var x = ws(a); var y = ws(b); if (x.Count == 0 || y.Count == 0) return false;
+            int common = x.Count(w => y.Contains(w)); return common * 100 / Math.Min(x.Count, y.Count) < 60;
+        }
+        /// <summary>one anonymous chatter and two distinct lines from them (first clue, second clue); null when nobody has two</summary>
+        public static string PickClues(string exceptLogin, out string author, out string second)
+        {
+            author = null; second = null; var by = new Dictionary<string, List<string>>();
             try
             {
                 var out_ = OptedOut(); string dir = LiveLog.LiveDir; if (!Directory.Exists(dir)) return null;
                 try { foreach (var hp in (SiteHttp.ReadJ(Path.Combine(Path.GetDirectoryName(dir), "hidden_sources.json"))["users"] as JObject ?? new JObject()).Properties()) out_.Add(hp.Name.ToLowerInvariant()); } catch (Exception) { }   // people who opted out of the public logs are out too
+                var aliases = new Dictionary<string, List<string>>();
+                try
+                {
+                    foreach (var p in SiteHttp.ReadJ(Path.Combine(HostApi.DataDir, "chat_memory.json")).Properties())
+                    {
+                        var v = p.Value as JObject; if (v == null) continue; var l = new List<string>(); string lg = ((string)v["Login"] ?? p.Name).ToLowerInvariant(); l.Add(lg);
+                        foreach (var k in new[] { "Display", "DisplayName", "Nick", "Nickname" }) if (!string.IsNullOrEmpty((string)v[k])) l.Add(((string)v[k]).ToLowerInvariant());
+                        foreach (var a in v["Aliases"] as JArray ?? new JArray()) if (!string.IsNullOrEmpty((string)a)) l.Add(((string)a).ToLowerInvariant());
+                        aliases[lg] = l;
+                    }
+                }
+                catch (Exception) { }
                 var files = Directory.GetFiles(dir, "*.jsonl").OrderByDescending(f => f).Take((int)I(Cfg(), "HistoryDays")).ToList();
                 foreach (var f in files)
                     foreach (var ln in File.ReadLines(f, Encoding.UTF8))
@@ -396,17 +435,26 @@ namespace PinguinoHost
                         JObject o; try { o = JObject.Parse(ln.TrimStart('﻿')); } catch (Exception) { continue; }
                         string u = ((string)o["u"] ?? "").ToLowerInvariant(), i = (string)o["i"] ?? "", m = (string)o["m"] ?? "";
                         if ((int?)o["c"] == 1 || u == "" || u == exceptLogin || Boards.IsBot(u) || out_.Contains(u) || out_.Contains(i)) continue;
-                        if (m.StartsWith("!") || m.StartsWith("/") || m.IndexOf("pinguinob0t", StringComparison.OrdinalIgnoreCase) >= 0 || Sensitive.IsMatch(m)) continue;
-                        bool stripped; string c = Teach.Clean(m, out stripped); if (stripped) continue;   // had a link or an @mention: not used
-                        c = Regex.Replace(c, Regex.Escape(u), "someone", RegexOptions.IgnoreCase);
-                        if (c.Length < 20 || c.Length > 140 || c.Count(ch => char.IsLetter(ch)) < 12) continue;
-                        cands.Add(new KeyValuePair<string, string>(c, u));
+                        var names = new List<string> { u }; List<string> al; if (aliases.TryGetValue(u, out al)) names.AddRange(al); if (!string.IsNullOrEmpty((string)o["d"])) names.Add(((string)o["d"]).ToLowerInvariant());
+                        string c = ClueText(m, u, names); if (c == null) continue;
+                        List<string> list; if (!by.TryGetValue(u, out list)) by[u] = list = new List<string>();
+                        if (!list.Any(x => string.Equals(x, c, StringComparison.OrdinalIgnoreCase))) list.Add(c);
                     }
             }
             catch (Exception ex) { Clog.Warn("shop", "reading chat history: " + ex.Message); return null; }
-            if (cands.Count == 0) return null;
-            var pick = cands[Rng.Next(cands.Count)]; author = pick.Value; return pick.Key;
+            var pairs = new List<KeyValuePair<string, string[]>>();
+            foreach (var kv in by)
+            {
+                if (kv.Value.Count < 2) continue;
+                var ranked = kv.Value.OrderByDescending(x => ClueScore(x) + Rng.Next(12)).ToList(); string a = ranked[0]; string b = null;
+                foreach (var x in ranked.Skip(1)) if (Distinct(a, x)) { b = x; break; }
+                if (b != null) pairs.Add(new KeyValuePair<string, string[]>(kv.Key, new[] { a, b }));
+            }
+            if (pairs.Count == 0) return null;
+            var pick = pairs[Rng.Next(pairs.Count)]; author = pick.Key; second = pick.Value[1]; return pick.Value[0];
         }
+        /// <summary>kept for callers that want a single line</summary>
+        public static string PickLine(string exceptLogin, out string author) { string s2; return PickClues(exceptLogin, out author, out s2); }
 
         // ---- telling the site ----
         static int Flush(string key)

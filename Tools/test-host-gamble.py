@@ -99,10 +99,10 @@ try:
     # ---- Guess the Chatter (kind=guess): with no chat log in the sim there is no line, so the refusal is an invalid event; a started round is exercised when a line exists ----
     chatty(True); time.sleep(2.0)
     n4 = len(events()); r = ask('bob: !shop guess 100'); e = events()[n4:]
-    chk('guess: !shop guess -> exactly one PgGame kind=guess (start or invalid), no plain line to the player', not [x for x in r if x.startswith('@bob')] and len(e) == 1 and e[0]['kind'] == 'guess' and e[0]['outcome'] in ('start', 'invalid') and (e[0]['outcome'] != 'invalid' or e[0]['reason']) and (e[0]['outcome'] != 'start' or (e[0]['payout'] == '200' and e[0]['tries'] == '3' and e[0]['reason'])), (r, e))
+    chk('guess: !shop guess -> exactly one PgGame kind=guess (start or invalid), no plain line to the player', not [x for x in r if x.startswith('@bob')] and len(e) == 1 and e[0]['kind'] == 'guess' and e[0]['outcome'] in ('start', 'invalid') and (e[0]['outcome'] != 'invalid' or e[0]['reason']) and (e[0]['outcome'] != 'start' or (e[0]['payout'] == '200' and e[0]['tries'] == '2' and e[0]['reason'])), (r, e))
     if e and e[0]['outcome'] == 'start':
         r = ask('bob: !guess nobody_here'); e2 = events()[n4 + 1:]
-        chk('guess: a wrong answer -> kind=guess retry with the tries left', not [x for x in r if x.startswith('@bob')] and len(e2) == 1 and e2[0]['outcome'] == 'retry' and e2[0]['tries'] == '2', (r, e2))
+        chk('guess: a wrong answer -> kind=guess retry with the tries left', not [x for x in r if x.startswith('@bob')] and len(e2) == 1 and e2[0]['outcome'] == 'retry' and e2[0]['tries'] == '1', (r, e2))
     chatty(False); time.sleep(2.0)
     n5 = len(events()); r = ask('carl: !shop guess 100')
     chk('guess: Chatty off -> the plain Host line, no event', len(r) >= 1 and len(events()) == n5, (r, len(events()) - n5))
