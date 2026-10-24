@@ -98,7 +98,7 @@ NOTES = {'!sydney': 'running joke: "brick wall Sydney"', '!marshmallow': 'long-r
 DYNAMIC = {'!time': 'time', '!luck': 'luck'}
 COUNTERS = {'!owngoal': 'owngoal', '!whiff': 'whiff'}
 OVERRIDE = {
-    '!discord': ('https://discord.gg/fktz5sq4b8', 'the export had no text for !discord/!dc; this is the invite the website uses - confirm'),
+    '!discord': ('{link:discord}', 'the export had no text for !discord/!dc; the link comes from Data/runtime/links.json (Links.Expand), so the invite lives in ONE place'),
     '!popcorn': (' '.join(['PopCorn'] * 26), ''),
     '!attack': None, '!goat': None,
 }
