@@ -34,19 +34,22 @@ def handle(settings):
 
 
 def _user(ev):
+    """-> (stable id, @handle, nickname). TikTokLive 7: user.id is the stable number, user.unique_id is a property over display_id (6.x had user_id)."""
     u = getattr(ev, "user", None)
-    return str(getattr(u, "user_id", "") or getattr(u, "unique_id", "")), (getattr(u, "unique_id", "") or ""), getattr(u, "nickname", "") or getattr(u, "unique_id", "")
+    handle_ = str(getattr(u, "unique_id", "") or getattr(u, "display_id", "") or "")
+    return str(getattr(u, "id", "") or getattr(u, "user_id", "") or handle_), handle_, str(getattr(u, "nickname", "") or handle_)
 
 
 def map_event(kind, ev, handle_):
     """TikTokLive event-like object -> ChatMessage | None. kind: comment | gift | follow | share | like | subscribe. Pure."""
     uid, login, nick = _user(ev)
     if kind == "comment":
-        text = getattr(ev, "comment", "") or ""
-        if not (uid or login) or not text:
+        text = str(getattr(ev, "content", "") or getattr(ev, "comment", "") or "")
+        if not (uid or login) or not text.strip():
             return None
-        return ChatMessage(id=f"tiktok:{handle_}:{getattr(ev, 'msg_id', '') or uid + str(int(time.time() * 1000))}", platform="tiktok", channel=handle_,
-                           user_id=uid, user=login.lower(), display=nick, text=text, ts=time.time(), badges=[], raw_type="text")
+        badges = ["subscriber"] if getattr(ev, "user_is_super_fan", False) is True else []
+        return ChatMessage(id=f"tiktok:{handle_}:{xplat._msg_id(ev) or uid + str(int(time.time() * 1000))}", platform="tiktok", channel=handle_,
+                           user_id=uid, user=login.lower(), display=nick, text=text[:500], ts=time.time(), badges=badges, raw_type="text", is_self=bool(login) and login.lower() == str(handle_).lower())
     if kind == "share":
         if not (uid or login):
             return None

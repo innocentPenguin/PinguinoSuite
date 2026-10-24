@@ -73,12 +73,13 @@ HELP = {
     },
     "conn-tiktok": {
         "title": "TikTok connection (unofficial, read-only)",
-        "summary": "Optional and OFF by default. TikTok has no official chat API; this uses a third-party package that can break or conflict with TikTok's rules. You can read TikTok chat but not reply.",
+        "summary": "Reads your TikTok LIVE chat, gifts and follows so they show up (and ding) like Twitch's. TikTok has no official chat API, so this uses a third-party package that can break or conflict with TikTok's rules. You can read TikTok but not reply.",
         "steps": [
-            "Only turn this on if you accept that risk.",
-            "Install the optional 'TikTokLive' Python package for Multi (status says so if it is missing).",
-            "In Multi setup tick 'Read my TikTok LIVE chat', enter your TikTok username, Save TikTok.",
-            "Gray 'disabled' is the normal state and does not affect the stream.",
+            "In the TikTok card tick 'Read my TikTok LIVE chat', type the @handle you stream from, press Save TikTok. No password or key is needed.",
+            "'NOT SET' means the handle is empty. 'Waiting: not live yet' is normal before you go live: Multi checks every 30-60 seconds and connects by itself.",
+            "Connected shows '@handle (unofficial)'. Gifts count once when a streak ends (coins = diamonds x count); follows and shares show in the feed; joins and likes make no alerts.",
+            "TikTok chatters get the first-time/returning dings and chat pops automatically while TikTok is enabled.",
+            "If TikTok's signing server is down or rate-limited, only TikTok waits and retries (up to every 5 minutes); every other platform is unaffected.",
         ],
         "fix": SETUP,
     },

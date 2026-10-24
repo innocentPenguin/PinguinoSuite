@@ -111,7 +111,7 @@ class Ding:
         """Called for every new stored message. Never blocks and never raises. Returns the ding kind queued, or False."""
         try:
             st = config.settings()
-            if m.platform not in st["ding_platforms"] or m.is_self or m.is_bot or not m.user_id:
+            if m.platform not in config.platforms_for(st, "ding_platforms") or m.is_self or m.is_bot or not m.user_id:
                 return False
             who = (m.user or "").lower()
             if is_bot(m, st) or who in {n.lower() for n in st["my_names"]}:
@@ -196,7 +196,7 @@ class Ding:
         st = config.settings()
         exists = lambda p: bool(p) and os.path.isfile(p)
         rows = {n: dict(r, sound_exists=exists(r["sound"] or st["ding_sound"])) for n, r in config.ding_rows(st).items()}
-        return {"enabled": bool(st["ding_platforms"]), "rows": rows, "gap_h": st["ding_session_gap_h"], "platforms": st["ding_platforms"], "scope": st["ding_scope"],
+        return {"enabled": bool(config.platforms_for(st, "ding_platforms")), "rows": rows, "gap_h": st["ding_session_gap_h"], "platforms": config.platforms_for(st, "ding_platforms"), "scope": st["ding_scope"],
                 "first_ever": st["ding_first_ever"], "returning": st["ding_returning"],
                 "sound": st["ding_sound"], "sound_exists": exists(st["ding_sound"]),
                 "first_sound": st["ding_first_sound"], "returning_sound": st["ding_returning_sound"],

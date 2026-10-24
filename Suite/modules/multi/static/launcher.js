@@ -4,6 +4,8 @@ const STATE_TEXT = {
   connecting: ['wait', 'Connecting...'],
   reconnecting: ['wait', 'Lost the connection, retrying automatically'],
   needs_auth: ['todo', 'Not set up yet'],
+  needs_setup: ['todo', 'Not set up yet'],
+  waiting: ['wait', 'Waiting - not live yet'],
   disabled: ['off', 'Turned off'],
   disconnected: ['off', 'Not connected'],
   error: ['bad', 'Problem - see details'],
@@ -52,6 +54,8 @@ function plainDetail(c) {
   if (c.platform === 'discord' && c.status === 'needs_auth') return 'Not set up yet: paste the bot token and channel IDs below, then press Save Discord.';
   if (c.platform === 'youtube' && c.status === 'needs_auth') return 'Not set up yet: use the YouTube sign-in box below the platform list.';
   if (c.platform === 'tiktok' && c.status === 'disabled') return 'Off. Tick the box below and type the TikTok username to read its chat.';
+  if (c.platform === 'tiktok' && c.status === 'needs_setup') return 'NOT SET: set the TikTok @handle you stream from (box below), then Save TikTok.';
+  if (c.platform === 'youtube' && c.status === 'needs_setup') return 'Not set up yet: set youtube_channel (your @handle) in Multi settings, or sign in to YouTube.';
   if (c.platform === 'kick' && c.status === 'disabled') return 'Off. Use the Kick sign-in box below the platform list.';
   return d.replace(/(kick_enabled|kick_chatroom_id)/g, 'the Kick settings');
 }

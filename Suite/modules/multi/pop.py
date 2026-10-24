@@ -53,7 +53,7 @@ class Pop:
         """Called for every new message. Never blocks, never raises."""
         try:
             st = config.settings()
-            if m.platform not in st["pop_platforms"]:
+            if m.platform not in config.platforms_for(st, "pop_platforms"):
                 return False
             who = (m.user or "").lower()
             if ding.is_bot(m, st):
@@ -106,7 +106,7 @@ class Pop:
 
     def info(self):
         st = config.settings()
-        return {"enabled": bool(st["pop_platforms"]), "platforms": st["pop_platforms"], "sound": st["pop_sound"],
+        return {"enabled": bool(config.platforms_for(st, "pop_platforms")), "platforms": config.platforms_for(st, "pop_platforms"), "sound": st["pop_sound"],
                 "sound_exists": bool(st["pop_sound"]) and os.path.isfile(st["pop_sound"]), "volume": st["pop_volume"],
                 "master_volume": st["ding_master_volume"], "cooldown_s": st["pop_cooldown_s"], "own": st["pop_own"], "roles": st.get("pop_roles", []),
                 "master": self._master_cached(), **self.stats}

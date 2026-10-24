@@ -82,6 +82,14 @@ def settings():
     return s
 
 
+def platforms_for(st, key):
+    """ding_platforms / pop_platforms with tiktok added automatically while tiktok_enabled (so its chatters ding like Twitch's)."""
+    out = list(st.get(key) or [])
+    if st.get("tiktok_enabled") and "tiktok" not in out:
+        out.append("tiktok")
+    return out
+
+
 def save_settings(patch):
     s = settings()
     s.update({k: v for k, v in patch.items() if k in DEFAULTS})

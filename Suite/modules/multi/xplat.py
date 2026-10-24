@@ -143,11 +143,15 @@ def youtube_event(it, chat_id):
 
 
 # TikTok -----------------------------------------------------------------------------------------
+def _msg_id(ev):
+    return getattr(ev, "msg_id", "") or getattr(getattr(ev, "common", None), "msg_id", "") or ""
+
+
 def tiktok_event(kind, ev, unique_id):
     """TikTokLive event-like object (duck-typed so tests use a fake) -> event ChatMessage | None. kind: follow | gift | subscribe"""
     u = getattr(ev, "user", None)
-    uid = _s(getattr(u, "user_id", "") or getattr(u, "unique_id", ""), 40)
-    login = _s(getattr(u, "unique_id", ""), 60)
+    uid = _s(getattr(u, "id", "") or getattr(u, "user_id", "") or getattr(u, "unique_id", ""), 40)     # TikTokLive 7: user.id (stable number), handle in display_id/unique_id
+    login = _s(getattr(u, "unique_id", "") or getattr(u, "display_id", ""), 60)
     nick = _s(getattr(u, "nickname", "") or login, 60)
     now = time.time()
     if not uid and not login:
@@ -163,7 +167,7 @@ def tiktok_event(kind, ev, unique_id):
         diamonds = _int(getattr(g, "diamond_count", 0))
         count = max(1, _int(getattr(ev, "repeat_count", 1), 1))
         name = _s(getattr(g, "name", "gift"), 40)
-        gid = _s(getattr(ev, "group_id", "") or getattr(ev, "msg_id", ""), 60) or uid + str(int(now * 1000))
+        gid = _s(getattr(ev, "group_id", "") or _msg_id(ev), 60) or uid + str(int(now * 1000))
         return _event("tiktok", unique_id, "cheer", uid, login, nick, f"{nick} sent {count}x {name}", now, amount=diamonds * count,
                       native=f"gift:{gid}", gift_name=name, count=count, currency="coins")
     return None

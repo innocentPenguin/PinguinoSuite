@@ -57,9 +57,10 @@ Permissions Multi asks for (the default list, no need to change it): `user:read 
 
 ## 3. TikTok
 
-TikTok has no official chat API. It is read-only, off by default, and **waiting on you**:
-- **Needed from Ivan:** (a) your TikTok **@handle**; (b) a yes to installing the third-party `TikTokLive` package into Multi's Python (not installed yet; Multi shows "TikTokLive is not installed (optional package; ask to install)").
-- **Then:** in the launcher's TikTok card tick "Read my TikTok LIVE chat", type the username (no @ needed) and click **Save TikTok**.
+TikTok has no official chat API. It is read-only and unofficial. TikTokLive **7.0.1** is installed in the Suite venv.
+- **What you do:** in the launcher's TikTok card tick "Read my TikTok LIVE chat", type the @handle you stream from (no @ needed) and click **Save TikTok**. No password, no key. Until the handle is set the card says NOT SET; before you go live it says "Waiting: not live yet" (checked every 30-60 s); once live: "connected: @handle (unofficial)".
+- **What you get:** chat lines, gifts (counted once when the streak ends; coins = diamonds x count, shown like Twitch bits), follows, shares. Joins and likes make no alerts. TikTok chatters also get the first-time/returning dings and chat pops automatically while TikTok is enabled.
+- **If the sign server is down:** TikTok shows "reconnecting" and retries (10 s doubling to 5 min). Nothing else is affected.
 - **Risk:** it reverse-engineers TikTok and sends requests through a **third-party signing server** (Euler Stream by default; the setting `tiktok_sign_url` swaps it). That server sees your @handle and request metadata, it can break any day, and it may go against TikTok's rules. It never sends chat and uses no password. Euler's paid API is the proper route if this matters.
 
 ---
