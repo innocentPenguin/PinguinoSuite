@@ -25,8 +25,9 @@ try:
     for _ in range(120):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
-    r = ask('alice: !shop sub'); chk('off by default', 'not open' in ' '.join(r) and bal('alice') == 5000, r)
-    st = get('/api/subtickets'); chk('shipped disabled', st['settings']['enabled'] is False and st['settings']['price'] == 2500000 and [f for f in os.listdir(eco) if f.startswith('sub_tickets.json.before-price-')], st)   # the 100,000 placeholder was migrated, with a backup
+    st = get('/api/subtickets'); chk('shipped ON at 2,500,000: old file (enabled false, 100,000) migrated once with backups', st['settings']['enabled'] is True and st['settings']['price'] == 2500000 and [f for f in os.listdir(eco) if f.startswith('sub_tickets.json.before-price-')] and [f for f in os.listdir(eco) if f.startswith('sub_tickets.json.before-enable-')], st)
+    post('/api/subtickets', {'action': 'settings', 'enabled': False})
+    r = ask('alice: !shop sub'); chk('turned off later: refused, and the migration does not turn it back on', 'not open' in ' '.join(r) and bal('alice') == 5000 and get('/api/subtickets')['settings']['enabled'] is False, r)
     post('/api/subtickets', {'action': 'settings', 'enabled': True, 'monthlyCapGlobal': 2})
     r = ask('alice: !shop'); chk('listed in !shop at the new price', 'Get a sub (2,500,000' in ' '.join(r), r)
     r = ask('alice: !shop sub'); chk('affordability: 5000 < 2,500,000 refused, no charge', bal('alice') == 5000 and get('/api/subtickets')['pending'] == 0, (r, bal('alice')))

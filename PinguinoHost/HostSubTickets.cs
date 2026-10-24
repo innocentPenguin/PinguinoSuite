@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 namespace PinguinoHost
 {
     /// <summary>"Get a sub": Twitch has no API to gift a sub, so buying this spends points and creates a "sub owed" ticket that a mod fulfils by hand (gift the sub on Twitch, then mark it done).
-    /// Ticket {id, buyer, at, status pending|fulfilled|refunded, price, by?, doneAt?, note?}. Shipped OFF (enabled=false, price=0). Settings + tickets: Data\economy\sub_tickets.json.
+    /// Ticket {id, buyer, at, status pending|fulfilled|refunded, price, by?, doneAt?, note?}. Ivan 10-24: shipped ON at 2,500,000 (a stored enabled=false is switched on once, see enabledMigrated). Settings + tickets: Data\economy\sub_tickets.json.
     /// Buy: chat "!shop sub" or the site shop item "get_sub". Mods: "!subowed" (list), "!subdone &lt;user&gt;" (fulfilled), "!subrefund &lt;user&gt;" (cancel + points back); API GET /api/subtickets, POST /api/subtickets {action: fulfil|refund|settings, id|login, by}.
     /// Limits: one pending per buyer, a per-buyer and a global monthly cap, a per-buyer cooldown. Ledger label "Bought: Get a sub" (refund "Refund: Get a sub"). Every purchase and refund uses a unique ledger id, so a retry never charges twice.</summary>
     public static class SubTickets
@@ -20,7 +20,7 @@ namespace PinguinoHost
 
         /// <summary>Ivan 10-24: Get a sub costs 2,500,000 points (the earlier 100,000 was a placeholder)</summary>
         const long DefaultPrice = 2500000;
-        static JObject Defaults() { return new JObject { { "enabled", false }, { "price", DefaultPrice }, { "maxPendingPerUser", 1 }, { "monthlyCapUser", 1 }, { "monthlyCapGlobal", 10 }, { "cooldownHours", 72 } }; }
+        static JObject Defaults() { return new JObject { { "enabled", true }, { "price", DefaultPrice }, { "maxPendingPerUser", 1 }, { "monthlyCapUser", 1 }, { "monthlyCapGlobal", 10 }, { "cooldownHours", 72 } }; }
         static JObject Doc()
         {
             var d = SiteHttp.ReadJ(P); var s = Defaults();
@@ -35,6 +35,15 @@ namespace PinguinoHost
                     s["price"] = DefaultPrice; Clog.Info("economy", "Get a sub price set to " + DefaultPrice + " (was " + cur + ")");
                 }
                 d["priceMigrated"] = true;
+            }
+            if ((bool?)d["enabledMigrated"] != true)   // once: Ivan 10-24 turned Get a sub on; a stored enabled=false (the old shipped default) becomes true (dated backup first). Turning it off later sticks.
+            {
+                if (File.Exists(P) && (bool?)s["enabled"] != true)
+                {
+                    try { File.Copy(P, P + ".before-enable-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak", true); } catch (Exception) { }
+                    s["enabled"] = true; Clog.Info("economy", "Get a sub switched on (was off)");
+                }
+                d["enabledMigrated"] = true; if (File.Exists(P)) { try { Save(d); } catch (Exception) { } }
             }
             return d;
         }

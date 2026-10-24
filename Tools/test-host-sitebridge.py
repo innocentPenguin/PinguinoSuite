@@ -129,7 +129,7 @@ try:
     chk('shop config pushed with limits, cooldowns and 2x', wait(lambda: S['cfg'] is not None) and S['cfg']['items']['guess']['min'] == 100 and S['cfg']['items']['guess']['max'] == 2000 and S['cfg']['items']['guess']['payoutMultiplier'] == 2 and S['cfg']['items']['guess']['cooldownGlobal'] == 2 and S['cfg']['items']['chatty']['price'] == 5000 and S['cfg']['currency'], S['cfg'])
     api('/api/economy', {'adjust': 'gambler', 'delta': 6000}); api('/api/economy', {'adjust': 'poorguy', 'delta': 50})
     b0 = bal('gambler'); chk('test balance exists', b0 >= 6000, b0)
-    chk('shop config pushes the Get a sub price 2,500,000 (off until Ivan turns it on)', S['cfg']['items']['getsub'] == {'enabled': False, 'price': 2500000}, S['cfg']['items'].get('getsub'))
+    chk('shop config pushes the Get a sub price 2,500,000 (enabled by default)', S['cfg']['items']['getsub'] == {'enabled': True, 'price': 2500000}, S['cfg']['items'].get('getsub'))
     shopitem('s1', 'gambler', 'guess_chatter', 500)
     chk('s1 accepted and points taken', wait(lambda: S['shop']['s1']['status'] == 'accepted') and bal('gambler') == b0 - 500, (S['shop']['s1'], bal('gambler')))
     shopitem('s2', 'gambler', 'guess_chatter', 500)

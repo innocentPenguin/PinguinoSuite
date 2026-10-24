@@ -35,3 +35,16 @@ Speak and timeout rewards: if one shows `owned:false`, do the same steps for it 
   copies cost/prompt from a same-titled reward when it is the Host's, points the `spotify-redeem` automation (or the one named in `automation`) at it. Never runs on its own.
 * Redeem triggers can carry a `rewardId`; when present it must match (title is then ignored).
 * Refund/complete for a reward Twitch said belongs to another app: one warning, no repeated 403s.
+
+## Picker (one click instead of the steps above)
+
+Host page > Automations > an action with a "Channel point reward" trigger > **Load my channel point rewards**. Pick a reward, then:
+
+* **Use this reward**: for a reward the Host owns (refunds work). Points the action at it. Works for any reward-driven action, not only songs.
+* **Take over** (shown for rewards made by Streamer.bot / Songify): the Host creates its own copy (same title, cost, prompt, colour, cooldowns, limits) and points the action at it.
+  Twitch only lets the app that made a reward edit it, so the Host's attempt to rename the old one to `<title> (old)` and disable it is normally refused (one try, never retried).
+  Then the copy is called `<title> (Host)` and the message says **turn the old one off in the Twitch dashboard** (you can rename the copy back afterwards). If the rename is allowed the copy keeps the exact title.
+* API: `POST /api/rewards/use {rewardId, automation?}` and `POST /api/rewards/takeover {rewardId, automation?}` (automation defaults to `spotify-redeem`). Answers carry `needsTakeover`, `oldRenamed`, `manualStep`, `message`.
+* Needs `channel:manage:redemptions`. Without it both answer `needsScope:true` and "sign in as streamer again on the Host setup page" instead of a raw HTTP error.
+
+The manual steps above stay valid as the fallback.

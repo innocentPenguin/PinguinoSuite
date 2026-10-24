@@ -136,6 +136,26 @@ function render(){
  $('list').innerHTML=h||'<p class="sub">No actions yet.</p>';
  $('list').querySelectorAll('.item').forEach(e=>e.onclick=()=>{SEL=+e.dataset.i;render()});
  renderEditor()}
+let REW=null;
+function rewardPicker(t,a,i){
+ const rows=(REW&&REW.rewards)||[];
+ const cur=rows.find(r=>r.id==t.rewardId);
+ let h=`<div class="sub" style="margin-top:8px"><b>Pick the reward</b> (any reward-driven action, not only songs). `;
+ if(!REW)h+=`<button class="ghost sm" data-rw="load">Load my channel point rewards</button>`;
+ else if(REW.ok===false)h+=`<span style="color:#ff9a3c">${esc(REW.error||'could not load rewards')}</span> <button class="ghost sm" data-rw="load">Try again</button>`;
+ else{h+=`<select data-rwsel="${i}"><option value="">- choose a reward -</option>${rows.map(r=>`<option value="${esc(r.id)}" ${r.id==t.rewardId?'selected':''}>${esc(r.title)} (${r.cost}) ${r.owned?'':' - made by another app'}</option>`).join('')}</select> <button class="ghost sm" data-rw="use" data-i="${i}">Use this reward</button>`;
+  if(cur&&!cur.owned)h+=` <button class="sm" data-rw="take" data-i="${i}">Take over</button><br>This reward was made by another app (Streamer.bot / Songify). Twitch only lets the app that made a reward refund or complete it, so refunds would fail. <b>Take over</b> makes the Host's own copy (same title, cost, prompt, colour, cooldowns, limits) and points this action at it. Twitch does not let the Host rename or disable the old one, so you will be told to turn it off in the Twitch dashboard.`;
+  else if(cur)h+=` <span class="pill">Host-owned: refunds work</span>`;
+  else if(t.rewardId)h+=` <span class="sub">(current reward id ${esc(t.rewardId)} is not in the list)</span>`}
+ return h+'</div>'}
+async function rewardAct(act,a,i,btn){
+ const t=a.triggers[i];
+ if(act=='load'){REW=await j('/api/rewards');renderEditor();return}
+ const sel=document.querySelector(`[data-rwsel="${i}"]`);const id=sel&&sel.value;if(!id){toast('Choose a reward first');return}
+ await save(true);const r=await j(act=='take'?'/api/rewards/takeover':'/api/rewards/use',{method:'POST',body:JSON.stringify({rewardId:id,automation:a.id})});
+ if(r.needsTakeover){REW=await j('/api/rewards');toast('That reward belongs to another app: press Take over',6000);renderEditor();return}
+ if(!r.ok){toast(r.error||'Twitch refused',9000);return}
+ toast((r.message||'Done')+(r.manualStep?' ('+r.manualStep+')':''),12000);await load(true);REW=await j('/api/rewards');renderEditor()}
 function renderEditor(){
  const a=DOC.actions[SEL];if(!a){$('editor').innerHTML='<p class="sub">Pick an action on the left, or create a new one. Triggers decide <b>when</b>, steps decide <b>what</b> happens.</p>';return}
  a.triggers=a.triggers||[];a.steps=a.steps||[];a.conditions=a.conditions||[];
@@ -143,7 +163,7 @@ function renderEditor(){
   <div style="flex:0 0 auto"><div class="chk"><input type="checkbox" id="aen" ${a.enabled!==false?'checked':''}> Enabled</div></div></div>`;
  if(a.importNotes)h+=`<p class="sub">Imported from Streamer.bot: ${esc(a.importNotes)}. Review the steps, then enable it.</p>`;
  h+='<h2>Triggers (any of these starts it)</h2>';
- a.triggers.forEach((t,i)=>{const d=TRIGGERS[t.type]||{label:t.type,f:[]};const p='triggers.'+i;h+=`<div class="blk"><div class="hd"><b>${esc(d.label)}</b><button class="danger sm" data-act="del" data-p="${p}">Remove</button></div><div class="row">${d.f.map(f=>fieldHtml(f,t,p)).join('')}</div></div>`});
+ a.triggers.forEach((t,i)=>{const d=TRIGGERS[t.type]||{label:t.type,f:[]};const p='triggers.'+i;h+=`<div class="blk"><div class="hd"><b>${esc(d.label)}</b><button class="danger sm" data-act="del" data-p="${p}">Remove</button></div><div class="row">${d.f.map(f=>fieldHtml(f,t,p)).join('')}</div>${t.type=='redeem'?rewardPicker(t,a,i):''}</div>`});
  h+=`<div class="row"><div><select id="addtrig"><option value="">+ add a trigger…</option>${Object.keys(TRIGGERS).map(k=>`<option value="${k}">${esc(TRIGGERS[k].label)}</option>`).join('')}</select></div></div>`;
  h+='<h2>Only if (optional conditions, all must be true)</h2>';
  a.conditions.forEach((c,i)=>{const p='conditions.'+i;h+=`<div class="blk"><div class="row">${fieldHtml(['left','Value','text'],c,p)}${fieldHtml(['op','Condition','sel',STEPS.if.f[1][3]],c,p)}${fieldHtml(['right','Compare with','text'],c,p)}<div style="flex:0 0 auto"><button class="danger sm" data-act="del" data-p="${p}">Remove</button></div></div></div>`});
@@ -160,6 +180,7 @@ function bindEditor(a){
    else if(kind=='lines')o[k]=el.value.split('\n').map(s=>s.trim()).filter(Boolean);else if(kind=='json'){try{o[k]=el.value.trim()?JSON.parse(el.value):undefined;el.style.borderColor=''}catch(e){el.style.borderColor='var(--live)';return}}else o[k]=el.value;dirty()}});
  ed.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const [par,k]=parentOf(a,b.dataset.p);const i=+k;if(b.dataset.act=='del')par.splice(i,1);else if(b.dataset.act=='up'&&i>0)[par[i-1],par[i]]=[par[i],par[i-1]];else if(b.dataset.act=='down'&&i<par.length-1)[par[i+1],par[i]]=[par[i],par[i+1]];dirty();renderEditor()});
  ed.querySelectorAll('[data-addstep]').forEach(s=>s.onchange=()=>{if(!s.value)return;let arr=getPath(a,s.dataset.addstep);if(!arr){const [par,k]=parentOf(a,s.dataset.addstep);par[k]=arr=[]}const n={type:s.value};if(s.value=='say'||s.value=='random_say')n.as='core';if(s.value=='delay')n.ms=1000;if(s.value=='if'){n.op='==';n.then=[];n.else=[]}arr.push(n);dirty();renderEditor()});
+ ed.querySelectorAll('[data-rw]').forEach(b=>b.onclick=()=>rewardAct(b.dataset.rw,a,+b.dataset.i||0,b));
  $('addtrig').onchange=e=>{if(!e.target.value)return;const n={type:e.target.value};if(n.type=='command'){n.names=['!mycommand'];n.permission='everyone'}if(n.type=='timer')n.everySec=600;a.triggers.push(n);dirty();renderEditor()};
  $('addcond').onclick=()=>{a.conditions.push({left:'',op:'==',right:''});dirty();renderEditor()};
  $('bTest').onclick=()=>runTest(a,true);$('bReal').onclick=()=>{if(confirm('Run "'+a.name+'" for real? Messages will be sent to chat and OBS will change.'))runTest(a,false)};
