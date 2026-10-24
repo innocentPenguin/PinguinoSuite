@@ -241,7 +241,7 @@ namespace PinguinoHost
                 var blueNow = MatchNames(match == null ? null : match["blue"]); var orangeNow = MatchNames(match == null ? null : match["orange"]);
                 if (_pq != null)
                 {
-                    if (_pOpen.HasValue && open != _pOpen.Value) { var c = Recent(x => x.Cmd1 == "!queue" && x.Role >= 3); Add(Ev(now, "players", open ? "queue_open" : "queue_close", c == null ? "" : c.User, "Queue " + (open ? "opened" : "closed") + (c == null ? "" : " by " + c.User))); }
+                    if (_pOpen.HasValue && open != _pOpen.Value) { var c = Recent(x => x.Cmd1 == "!queue" && x.Role >= 3); Add(Ev(now, "players", open ? "queue_open" : "queue_close", c == null ? "" : c.User, "Queue " + (open ? "opened" : "closed") + (c == null ? "" : " by " + c.User)));  if (open) { try { Auto.OnQueueOpen(); } catch (Exception) { } } }
                     if (mid != null && mid != _pMatch)
                     {
                         var tl = new List<JObject>(); TeamEvents(tl, now, mid, (string)st["format"], (string)st["mode"], blueNow, orangeNow, null, null); foreach (var e in tl) Add(e);

@@ -96,7 +96,7 @@ namespace PinguinoHost
                     if (!acts0.OfType<JObject>().Any(x => (string)x["id"] == "spotify-redeem"))
                         acts0.Add(new JObject { { "id", "spotify-redeem" }, { "name", "Spotify: channel point song request" }, { "group", "Spotify" }, { "enabled", false }, { "importNotes", "preset: set the reward title, enable when the spotify module runs" },
                             { "triggers", new JArray { new JObject { { "type", "redeem" }, { "title", "Song Request" } } } }, { "conditions", new JArray() },
-                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", "http://127.0.0.1:8771/api/chat-command" }, { "command", "sr" }, { "redeem", true }, { "as", "core" } } } } });
+                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", "http://127.0.0.1:8771/api/chat-command" }, { "command", "sr" }, { "redeem", true }, { "as", "helper" } } } } });
                     seeded.Add("spotify-redeem"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
                 }
                 if (seeded.Any(x => (string)x == "spotify") && !seeded.Any(x => (string)x == "spotify2"))
@@ -122,12 +122,24 @@ namespace PinguinoHost
                     if (gone > 0) Clog.Info("automation", "music presets removed (the Helper answers them): " + gone);
                     seeded.Add("musicoff1"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
                 }
+                if (seeded.Any(x => (string)x == "spotify") && !seeded.Any(x => (string)x == "songhelper1"))
+                {
+                    // one-time (Ivan 10-24): every song reply is said by PinguinoHelper: !sr, !blocksong, !srclear presets move to helper (dated backup first), and the "Skip Song" channel-point reward gets its preset
+                    try { File.Copy(Path.Combine(HostApi.DataDir, "automations.json"), Path.Combine(HostApi.DataDir, "automations.json.before-songhelper-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak"), true); } catch (Exception) { }
+                    var acts5 = (JArray)doc["actions"]; int moved = SongSender.MoveToHelper(acts5);
+                    if (!acts5.OfType<JObject>().Any(x => (string)x["id"] == "spotify-skip-redeem"))
+                        acts5.Add(new JObject { { "id", "spotify-skip-redeem" }, { "name", "Spotify: channel point skip song" }, { "group", "Spotify" }, { "enabled", true }, { "importNotes", "preset: the Skip Song reward skips the song now (the points were the price); the Helper says it" },
+                            { "triggers", new JArray { new JObject { { "type", "redeem" }, { "title", "Skip Song" } } } }, { "conditions", new JArray() },
+                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", "http://127.0.0.1:8771/api/chat-command" }, { "command", "skip" }, { "redeem", true }, { "as", "helper" } } } } });
+                    Clog.Info("automation", "song presets now say as helper: " + moved);
+                    seeded.Add("songhelper1"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
+                }
                 if (seeded.Any(x => (string)x == "spotify")) return;
                 const string url = "http://127.0.0.1:8771/api/chat-command";
                 Func<string, string, string[], string, int, int, JObject> mk = (id, cmd, names, perm, cd, ucd) => new JObject {
                     { "id", "spotify-" + id }, { "name", "Spotify: !" + names[0].TrimStart('!') }, { "group", "Spotify" }, { "enabled", false }, { "importNotes", "preset: enable when the spotify module runs" },
                     { "triggers", new JArray { new JObject { { "type", "command" }, { "names", new JArray(names) }, { "permission", perm }, { "cooldownSec", cd }, { "userCooldownSec", ucd }, { "consume", true } } } },
-                    { "conditions", new JArray() }, { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", url }, { "command", cmd }, { "as", "core" } } } } };
+                    { "conditions", new JArray() }, { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", url }, { "command", cmd }, { "as", "helper" } } } } };
                 var acts = (JArray)doc["actions"];
                 foreach (var a in new[] {
                     mk("sr", "sr", new[] { "!sr", "!songrequest" }, "everyone", 0, 10), 
@@ -344,6 +356,8 @@ namespace PinguinoHost
             catch (Exception ex) { Clog.Warn("automation", "held goodnight not recovered: " + ex.Message); return false; }
         }
         static void FireRaidStart(string target) { RaidStartFires++; Fire("raid_start", new Dictionary<string, string> { { "channel", Channel() }, { "target", target ?? "" }, { "event", "raid_start" } }); }
+        /// <summary>customs queue went from closed to open (HostEventLog sees the edge once per opening; a Host restart with the queue already open is no edge). Runs the "queue_open" trigger actions, e.g. the !rules line.</summary>
+        public static void OnQueueOpen() { Fire("queue_open", new Dictionary<string, string> { { "channel", Channel() }, { "event", "queue_open" } }); }
         public static void OnStream(bool online) { if (!online) CancelRaidStart(); if (online) Program.ResetFirsts(); Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }
 
         public static JObject Hotkey(string key)
@@ -534,7 +548,7 @@ namespace PinguinoHost
                         else if ((bool?)j["ok"] != false) Redeems.Record(ctx.ContainsKey("userName") ? ctx["userName"] : "", rid, rw, ctx.ContainsKey("title") ? ctx["title"] : "");
                     }
                     string say = (string)j["say"] ?? ""; if (say == "" && (bool?)j["ok"] == false) say = (string)j["error"] != null && (bool?)st["sayErrors"] == true ? (string)j["error"] : "";
-                    return "module " + cmd + " -> " + (int)r.StatusCode + (say != "" ? " | " + Say((string)st["as"] ?? "core", say, false) : "");
+                    return "module " + cmd + " -> " + (int)r.StatusCode + (say != "" ? " | " + Say(SongSender.Role((string)cmd, (string)st["as"]), say, false) : "");
                 }
             }
             catch (Exception ex) { return "module command failed: " + ex.Message; }
