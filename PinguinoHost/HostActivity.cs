@@ -15,31 +15,33 @@ namespace PinguinoHost
         public static string AwardP2p(string login, long amount, string source, string note, string id) { if (amount == 0) return "nothing to move"; return Apply(id, login, amount, source, note); }
         public static bool HouseDefaulted(string login) { lock (L) { var ln = Loans()[Canon(Boards.AliasMap(), login)] as JObject; return ln != null && (bool?)ln["defaulted"] == true; } }
 
-        // ---- "hide my page": a viewer can keep their points page private; the lore opt-out list is respected too ----
+        // ---- "hide my page" was removed (2026-10-23): every points page is public again. Only the lore opt-out list still keeps a page private. ----
         static string HideP { get { return System.IO.Path.Combine(Dir, "hidden_pages.json"); } }
-        static HashSet<string> HiddenSet()
+        /// <summary>one-time clean-up at start: the old per-viewer hidden flags are dated-backed-up and dropped. Returns how many flags were cleared.</summary>
+        public static int ClearHiddenFlags()
         {
-            var h = new HashSet<string>(); try { if (System.IO.File.Exists(HideP)) foreach (var t in JArray.Parse(System.IO.File.ReadAllText(HideP, System.Text.Encoding.UTF8))) h.Add(((string)t ?? "").ToLowerInvariant()); } catch (Exception) { }
-            return h;
+            try
+            {
+                if (!System.IO.File.Exists(HideP)) return 0;
+                int n = 0; try { n = JArray.Parse(System.IO.File.ReadAllText(HideP, System.Text.Encoding.UTF8)).Count; } catch (Exception) { }
+                string bak = HideP + ".before-unhide-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".bak";
+                System.IO.File.Move(HideP, bak);
+                Clog.Info("economy", "hide my page removed: " + n + " hidden flag(s) cleared (backup " + System.IO.Path.GetFileName(bak) + ")");
+                return n;
+            }
+            catch (Exception ex) { Clog.Warn("economy", "could not clear hidden flags: " + ex.Message); return 0; }
         }
         public static bool PageHidden(string login)
         {
-            string c = Canon(Boards.AliasMap(), login); bool opt = false; try { opt = SiteShop.OptedOutNow(c); } catch (Exception) { }
-            lock (L) return opt || HiddenSet().Contains(c);
-        }
-        public static JObject SetHidden(string login, bool hide)
-        {
-            string c = Canon(Boards.AliasMap(), login);
-            lock (L) { var h = HiddenSet(); if (hide) h.Add(c); else h.Remove(c); try { System.IO.File.WriteAllText(HideP, new JArray(h.OrderBy(x => x)).ToString(), new System.Text.UTF8Encoding(false)); } catch (Exception) { } }
-            return new JObject { { "ok", true }, { "message", hide ? "your points page is now private." : "your points page is public again." }, { "data", new JObject { { "hidden", hide } } } };
+            string c = Canon(Boards.AliasMap(), login); try { return SiteShop.OptedOutNow(c); } catch (Exception) { return false; }
         }
         /// <summary>what anyone may see of another person's points page (balance, rank, categories, activity); nothing when they hid it or opted out. No loans, depreciation or limits.</summary>
         public static JObject PublicView(string login)
         {
             string c = Canon(Boards.AliasMap(), login);
-            if (PageHidden(c)) return new JObject { { "ok", false }, { "hidden", true }, { "login", c }, { "error", "this page is private" } };
+            if (PageHidden(c)) return new JObject { { "ok", false }, { "login", c }, { "error", "this page is private" } };
             var v = Me2(c, 30); foreach (var k in new[] { "loans", "p2p", "depreciation", "giveToday", "giveLimit", "ledger", "sub", "tipped" }) v.Remove(k);
-            v["hidden"] = false; return v;
+            return v;
         }
 
         static readonly Regex RxVs = new Regex(@"vs ([A-Za-z0-9_]+)", RegexOptions.IgnoreCase);

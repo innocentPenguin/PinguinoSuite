@@ -83,10 +83,9 @@ try:
     chk('own projection only, no band table', w['perStream'] == 2500 and abs(w['effectivePct'] - 0.83) < 0.02 and 'tiers' not in w, w)
     # public pages
     pv = get('/api/economy/public?login=bob'); chk('public view has balance and activity, no loans', pv['ok'] and pv['balance'] == 700 and pv['activity'] and 'loans' not in pv and 'p2p' not in pv, list(pv.keys()))
-    q('h1', 'bob', 'page_hide', hide=True); chk('hide my page', ans('h1').get('status') == 'done', ans('h1'))
-    pv = get('/api/economy/public?login=bob'); chk('hidden page shows nothing', pv.get('hidden') is True and pv.get('ok') is False and 'activity' not in pv, pv)
-    chk('own view says hidden', get('/api/economy/me?login=bob')['hidden'] is True)
-    q('h2', 'bob', 'page_hide', hide=False); ans('h2'); chk('and public again', get('/api/economy/public?login=bob')['ok'] is True)
+    q('h1', 'bob', 'page_hide', hide=True); ans('h1')   # the hide feature was removed: the request is ignored and the page stays public
+    pv = get('/api/economy/public?login=bob'); chk('hide request ignored: page still public', pv.get('ok') is True and 'hidden' not in pv, pv)
+    chk('own view has no hidden field', 'hidden' not in get('/api/economy/me?login=bob'))
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS givedep'); sys.exit(1 if fails else 0)

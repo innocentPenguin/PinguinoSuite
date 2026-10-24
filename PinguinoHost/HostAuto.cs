@@ -146,6 +146,8 @@ namespace PinguinoHost
             {
                 string k = m.Groups[1].Value; string v;
                 if (k.StartsWith("var:")) return GetVar(k.Substring(4));
+                if (k.StartsWith("link:")) return Links.Get(k.Substring(5)) ?? "";   // {link:discord}: the site's canonical links (see Links)
+                if (k == "discord" && !ctx.ContainsKey("discord")) return Links.Get("discord") ?? "";
                 if (k.StartsWith("random:")) { var mm = Regex.Match(k, @"^random:(-?\d+)-(-?\d+)$"); if (mm.Success) { int a = int.Parse(mm.Groups[1].Value), b = int.Parse(mm.Groups[2].Value); if (b < a) { var x = a; a = b; b = x; } return Rnd.Next(a, b + 1).ToString(); } return m.Value; }
                 if (k.StartsWith("now:")) { try { return DateTime.Now.ToString(k.Substring(4)); } catch (Exception) { return ""; } }
                 if (ctx.TryGetValue(k, out v)) return v ?? "";
@@ -244,6 +246,7 @@ namespace PinguinoHost
             if (kind == "stream_online") { try { Program.ResetFirsts(); Session.Begin(); Roster.Reset(); } catch (Exception) { } }
             try { Latest.Record(kind, ctx); } catch (Exception ex) { Clog.Warn("latest", "could not record the event: " + ex.Message); }
             try { Economy.PointsEvent(args, kind == "follow" && Latest.LastRefollow); } catch (Exception) { }
+            if (kind == "stream_offline") { if (HoldOffline(ctx)) return; OfflineFires++; }   // a raid is on its way: the goodnight waits for it (see HoldOffline)
             if (kind == "raid_out") { ScheduleRaidOut(ctx); return; }   // Twitch sends this when the countdown starts: the 20 s stop-stream step must run after the raid has landed
             Fire(kind, ctx);
         }
@@ -253,7 +256,7 @@ namespace PinguinoHost
         static void ScheduleRaidOut(Dictionary<string, string> ctx)
         {
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidOutAt).TotalMinutes < 3) return; _raidOutAt = DateTime.UtcNow; }
-            Action go = () => { lock (typeof(Auto)) _raidOutTimer = null; RaidOutFires++; Fire("raid_out", ctx); };
+            Action go = () => { lock (typeof(Auto)) _raidOutTimer = null; RaidOutFires++; Fire("raid_out", ctx); ReleaseOffline(); };
             int delay = RaidDelaySec() + (RaidDelayOverrideSec >= 0 ? 0 : 10); if (delay == 0) { go(); return; }   // +10 s: the raid lands ~90 s after the signal, the stream stops right then
             lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => go(), null, delay * 1000, System.Threading.Timeout.Infinite); }
         }
@@ -284,16 +287,36 @@ namespace PinguinoHost
         public static bool OnRaidScheduled(string target, bool now = false)
         {
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidStartAt).TotalMinutes < 3) return false; _raidStartAt = DateTime.UtcNow; }
-            // Twitch announces the raid when its countdown STARTS (up to 90 s before it goes), so the line waits until just before the raid lands (RaidStartDelaySec, default 80); "now" fires at once
-            int delay = now ? 0 : RaidDelaySec();
-            if (delay == 0) { FireRaidStart(target); return true; }
-            lock (typeof(Auto)) { if (_raidTimer != null) _raidTimer.Dispose(); _raidTimer = new System.Threading.Timer(_ => { lock (typeof(Auto)) { _raidTimer = null; } FireRaidStart(target); }, null, delay * 1000, System.Threading.Timeout.Infinite); }
-            return true;
+            // Ivan, like Streamer.bot had it: the moment the raid is picked (Twitch's countdown starts) the shoutout, the emotes line and the Discord line go out at once; no hold any more
+            lock (typeof(Auto)) { _raidPendingAt = DateTime.UtcNow; }
+            FireRaidStart(target); return true;
         }
         static System.Threading.Timer _raidTimer; internal static int RaidDelayOverrideSec = -1; internal static int RaidStartFires;
         /// <summary>!unraid or the stream going offline before the line was due: nothing is said and a new raid can start the line again</summary>
-        public static void CancelRaidStart() { lock (typeof(Auto)) { if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; _raidStartAt = DateTime.MinValue; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; _raidOutAt = DateTime.MinValue; } } }
-        internal static void ResetRaidStart() { lock (typeof(Auto)) { _raidStartAt = DateTime.MinValue; _raidOutAt = DateTime.MinValue; if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; } } }
+        public static void CancelRaidStart() { ClearPending(); ReleaseOffline(); lock (typeof(Auto)) { if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; _raidStartAt = DateTime.MinValue; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; _raidOutAt = DateTime.MinValue; } } }
+        internal static void ResetRaidStart() { ClearPending(); _heldOffline = null; lock (typeof(Auto)) { _raidStartAt = DateTime.MinValue; _raidOutAt = DateTime.MinValue; if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; } } }
+        // ---- a goodnight must not be said while the raid is still on its way ----
+        static DateTime _raidPendingAt = DateTime.MinValue; static Dictionary<string, string> _heldOffline; static System.Threading.Timer _heldTimer; internal static int HoldMaxSec = 180; internal static int OfflineFires;
+        static void ClearPending() { lock (typeof(Auto)) _raidPendingAt = DateTime.MinValue; }
+        static bool RaidPending() { lock (typeof(Auto)) return _raidPendingAt != DateTime.MinValue && (DateTime.UtcNow - _raidPendingAt).TotalSeconds < HoldMaxSec; }
+        /// <summary>stream_offline while a raid is pending (raid_start seen, raid_out / cancel not yet): hold it, at most HoldMaxSec (~3 min). true = held (the caller must not fire it).</summary>
+        static bool HoldOffline(Dictionary<string, string> ctx)
+        {
+            lock (typeof(Auto))
+            {
+                if (!RaidPending()) return false;
+                _heldOffline = ctx; if (_heldTimer != null) _heldTimer.Dispose();
+                int left = (int)Math.Max(1, HoldMaxSec - (DateTime.UtcNow - _raidPendingAt).TotalSeconds);
+                _heldTimer = new System.Threading.Timer(_ => { ClearPending(); ReleaseOffline(); }, null, left * 1000, System.Threading.Timeout.Infinite);
+            }
+            Clog.Info("automation", "stream offline held: a raid is on its way"); return true;
+        }
+        /// <summary>the raid landed or was cancelled (or the hold ran out): the held goodnight runs now</summary>
+        static void ReleaseOffline()
+        {
+            Dictionary<string, string> c; lock (typeof(Auto)) { _raidPendingAt = DateTime.MinValue; c = _heldOffline; _heldOffline = null; if (_heldTimer != null) { _heldTimer.Dispose(); _heldTimer = null; } }
+            if (c != null) { OfflineFires++; Fire("stream_offline", c); }
+        }
         static void FireRaidStart(string target) { RaidStartFires++; Fire("raid_start", new Dictionary<string, string> { { "channel", Channel() }, { "target", target ?? "" }, { "event", "raid_start" } }); }
         public static void OnStream(bool online) { if (!online) CancelRaidStart(); if (online) Program.ResetFirsts(); Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }
 

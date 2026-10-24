@@ -97,7 +97,7 @@ namespace PinguinoHost
                 if (!RxLogin.IsMatch(login)) r = new JObject { { "ok", false }, { "error", "bad user" } };
                 else if (act == "give") r = SiteGive(login, s, id);
                 else if (act.StartsWith("intro_")) { r = ViewerIntro.Act(act, s); IntroData(r, act); }
-                else if (act == "page_hide") r = Economy.SetHidden(login, (bool?)s["hide"] == true);
+                else if (act == "page_hide") r = new JObject { { "ok", true }, { "message", "hiding points pages was removed: every page is public." } };   // ignored: the feature is gone
                 else if (act == "loan_take") r = Economy.LoanTake(login, amount, "site-" + id);
                 else if (act == "loan_repay" && !string.IsNullOrEmpty((string)s["loanId"])) r = LoansP2P.Handle(login, act, s, "site-" + id);   // a loanId means a loan from another viewer
                 else if (act == "loan_repay") r = Economy.LoanRepay(login, amount, "site-" + id);

@@ -40,6 +40,40 @@ namespace PinguinoHost
         static string Norm(string u) { u = Regex.Replace((u ?? "").Trim().TrimEnd('/', '.', ',', ')', '!'), @"^https?://(www\.)?", "", RegexOptions.IgnoreCase); return u.ToLowerInvariant(); }
         static string Host(string n) { int i = n.IndexOf('/'); return i < 0 ? n : n.Substring(0, i); }
         static int Segs(string n) { int i = n.IndexOf('/'); return i < 0 ? 0 : n.Substring(i + 1).Split('/').Count(x => x != ""); }
+        // ---- the site is the canonical source: GET innocentpenguin.com/api/links every ~5 min; the last good copy is kept in links.json, the built-in defaults are the final fallback ----
+        static System.Net.Http.HttpClient _http; static bool _started; static DateTime _lastFetch = DateTime.MinValue;
+        public static string RemoteUrl { get { return Environment.GetEnvironmentVariable("PINGUINO_LINKS_URL") ?? "https://innocentpenguin.com/api/links"; } }
+        /// <summary>starts the refresh loop (no network in --sim unless a test sets PINGUINO_LINKS_URL)</summary>
+        public static void Start(bool sim)
+        {
+            if (_started) return; _started = true;
+            if (sim && Environment.GetEnvironmentVariable("PINGUINO_LINKS_URL") == null) return;
+            System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(3000); while (true) { try { Refresh(); } catch (Exception) { } await System.Threading.Tasks.Task.Delay(Environment.GetEnvironmentVariable("PINGUINO_LINKS_URL") != null ? 1500 : 300000); } });
+        }
+        /// <summary>fetches the site's links and merges them into links.json. false = site unreachable or unusable (nothing changes, the last good copy stays).</summary>
+        public static bool Refresh()
+        {
+            try
+            {
+                if (_http == null) _http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                string body = _http.GetStringAsync(RemoteUrl).GetAwaiter().GetResult();
+                var j = JObject.Parse(body); var src = (j["links"] as JObject) ?? j; bool changed = false;
+                lock (L)
+                {
+                    var d = Doc(); var cur = (JObject)d["links"];
+                    foreach (var pr in src.Properties())
+                    {
+                        string v = pr.Value.Type == JTokenType.String ? ((string)pr.Value).Trim() : ""; string k = pr.Name.ToLowerInvariant();
+                        if (v == "" || !Regex.IsMatch(v, @"^https?://\S+$", RegexOptions.IgnoreCase) || !Regex.IsMatch(k, "^[a-z0-9_]{1,32}$")) continue;
+                        if ((string)cur[k] != v) { cur[k] = v; changed = true; }
+                    }
+                    if (changed) { try { File.WriteAllText(P, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { } }
+                }
+                _lastFetch = DateTime.UtcNow; if (changed) Clog.Info("links", "links updated from " + RemoteUrl);
+                return true;
+            }
+            catch (Exception ex) { Clog.Warn("links", "site links not read (" + ex.Message + "); keeping the last good copy"); return false; }
+        }
         /// <summary>Lore answers (and helper facts) that hold a hard-coded link to the same site as a current link but a different address.</summary>
         public static JArray Audit(IEnumerable<JObject> entries)
         {

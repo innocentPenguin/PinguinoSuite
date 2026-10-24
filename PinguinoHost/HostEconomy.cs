@@ -203,6 +203,7 @@ namespace PinguinoHost
         public static void Start()
         {
             if (_started) return; _started = true;
+            ClearHiddenFlags();
             var th = new Thread(() =>
             {
                 Thread.Sleep(MinuteSec < 60 ? 500 : 30000);

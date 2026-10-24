@@ -512,7 +512,7 @@ namespace PinguinoHost
                 { "loans", LoanView(c, set, minutes) },
                 { "earnings", new JArray(groups.Values.OrderByDescending(g => (double)g["earned"] + (double)g["spent"])) },
                 { "ledger", new JArray(Enumerable.Reverse(rows).Take(Math.Max(1, Math.Min(500, ledgerLimit))).Select(x => { var y = (JObject)x.DeepClone(); y["label"] = Label((string)y["source"]); return y; })) },
-                { "hidden", PageHidden(c) }, { "giveToday", Gamble.GiveToday(c) }, { "giveLimit", Gamble.GiveLimit(c) }, { "givenThisStream", Gamble.GiveToday(c) }, { "givePct", Gamble.GivePct() }, { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) }, { "tipped", TippedView(c) }, { "sub", SubRoll.ViewOf(c) } };
+                { "giveToday", Gamble.GiveToday(c) }, { "giveLimit", Gamble.GiveLimit(c) }, { "givenThisStream", Gamble.GiveToday(c) }, { "givePct", Gamble.GivePct() }, { "players", cx.Of }, { "earned", PageEarned(groups, rows) }, { "streams", StreamsView(c) }, { "tipped", TippedView(c) }, { "sub", SubRoll.ViewOf(c) } };
             res["categories"] = Categories(rows, watched, imported, (JArray)res["streams"]);
             int actTotal; res["activity"] = Activity(c, rows, bal, 300, out actTotal); res["activityTotal"] = actTotal;   // the checkbook: newest first, running balance
             try { res["p2p"] = LoansP2P.ViewOf(c); } catch (Exception ex) { Clog.Warn("p2p", "view failed: " + ex.Message); }
