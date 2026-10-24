@@ -167,6 +167,7 @@ async def lifespan(app):
     dc = Discord(inbox, hub.emit)
     connectors["discord"] = dc
     yt = YouTube(inbox, hub.emit)
+    yt.on_cleared = mark_cleared
     connectors["youtube"] = yt
     tt = TikTok(inbox, hub.emit)
     connectors["tiktok"] = tt

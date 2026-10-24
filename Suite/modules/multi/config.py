@@ -27,7 +27,11 @@ DEFAULTS = {
     "kick_scopes": "user:read channel:read channel:write chat:write events:subscribe",
     "youtube_client_id": "",          # Google OAuth Desktop-app client id (secret: Credential Manager youtube_client_secret)
     "youtube_redirect_uri": "http://127.0.0.1:8766/auth/youtube/callback",
-    "youtube_min_poll_s": 10,         # liveChat poll floor: 5 quota units per poll of 10,000/day
+    "youtube_min_poll_s": 10,         # liveChat poll floor (api mode only): 5 quota units per poll of 10,000/day
+    "youtube_read_mode": "innertube", # "innertube" = unofficial live-chat endpoint, 1-3 s, no OAuth; "api" = official Data API (>= 10 s, quota)
+    "youtube_channel": "",            # your channel for innertube mode: @handle, UC... id or a youtube URL ("" = use the signed-in account)
+    "youtube_video_id": "",           # optional: pin one live video id / watch URL instead of looking up the channel's live stream
+    "youtube_innertube_fallback_min": 5,   # innertube failing this many minutes AND a YouTube token present -> read through the official API meanwhile
     "tiktok_sign_url": "",            # optional own sign server for TikTokLive ("" = library default)
     "kick_chatroom_id": "",           # numeric chatroom id (kick.com/api/v2/channels/<slug> -> chatroom.id; pasted once)
     "ding_platforms": [],            # new-chatter ding: platforms it is ON for (twitch, youtube); empty = off

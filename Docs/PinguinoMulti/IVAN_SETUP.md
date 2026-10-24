@@ -1,5 +1,8 @@
 # Setting up Kick, YouTube and TikTok in Multi (for Ivan)
 
+## YouTube fast reading (new, no sign-in needed)
+Multi now reads YouTube chat through YouTube's own live-chat feed (the one the website uses): about **1-3 seconds** behind, no Google project, no quota. To switch it on put your channel in Multi's settings: `youtube_channel` = `@YourHandle` (or a `UC...` id or channel link), or pin one stream with `youtube_video_id` (id or watch link). If you already signed in with Google and leave both empty, Multi uses the stream your account is broadcasting. It is **unofficial**: YouTube can change it without notice. Settings: `youtube_read_mode` (`innertube` = fast, default; `api` = official, 10 s or slower), `youtube_innertube_fallback_min` (5): if fast mode keeps failing that long and a Google sign-in exists, Multi reads through the official API until fast mode works again. Sending messages and moderation still need the Google sign-in below.
+
 ## YouTube in 5 lines (do this once, then it renews itself)
 
 1. console.cloud.google.com: create a project, then **APIs & Services -> Library -> YouTube Data API v3 -> Enable**.
@@ -50,7 +53,7 @@ Permissions Multi asks for (the default list, no need to change it): `user:read 
 6. In Multi's **YouTube sign-in** box paste both, click **Save**, then **Sign in to YouTube**. Approve in the Google tab (permission: YouTube `youtube.force-ssl`, needed to read and send live chat).
 7. Reopen the launcher. Status: "Signed in (renews itself)". Multi finds your active live broadcast by itself.
 
-**Quota maths:** Google gives 10,000 units a day. Each chat read costs 5 units. Multi reads at most every 10 s (setting `youtube_min_poll_s`, and never faster than YouTube suggests): 6 reads a minute = 30 units a minute = **about 5.5 hours of live chat per day**. Past that Google answers "quota", Multi backs off 10 to 60 minutes and the card shows "Lost the connection, retrying automatically". To stretch it, raise `youtube_min_poll_s` (20 s doubles it to about 11 hours).
+**Quota maths (only matters in `api` mode or while the fallback is active):** Google gives 10,000 units a day. Each chat read costs 5 units. Multi reads at most every 10 s (setting `youtube_min_poll_s`, and never faster than YouTube suggests): 6 reads a minute = 30 units a minute = **about 5.5 hours of live chat per day**. Past that Google answers "quota", Multi backs off 10 to 60 minutes and the card shows "Lost the connection, retrying automatically". To stretch it, raise `youtube_min_poll_s` (20 s doubles it to about 11 hours).
 
 ## 3. TikTok
 
@@ -83,6 +86,6 @@ Status words come from the platform list on the launcher (the dot and label next
 | Tab: `Sign-in failed: unknown or expired sign-in (start again)` | Multi restarted, or too long passed after clicking Sign in. | Click Sign in again and finish in one go. |
 | Tab: `Sign-in failed: ... token endpoint ...` | Usually a wrong client secret. | Paste the secret again, Save, Sign in. |
 | YouTube asks to sign in every week | Consent screen still in "Testing". | Publish it to **Production** (section 2, step 4), sign in once more. |
-| YouTube "no active YouTube broadcast" (waiting) | You are not live on YouTube yet. | Nothing; it finds the stream when you go live. |
+| YouTube "no active YouTube broadcast" (waiting) | You are not live on YouTube yet. | Nothing; it finds the stream when you go live. (Fast mode shows "not live on YouTube right now".) |
 
 Never paste real tokens into any chat, issue or document. If something stays stuck, tell 100 the exact label and detail line you see.

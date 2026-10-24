@@ -398,6 +398,7 @@ def test_youtube_run_survives_network_down_and_bad_json(monkeypatch):
     from connectors import youtube as yt
     monkeypatch.setattr(yt.secrets_store, "get", lambda k, d=None: "t")
     monkeypatch.setattr(yt.youtube_auth, "access_token", lambda: "T")
+    monkeypatch.setattr(yt.config, "settings", lambda: dict(yt.config.DEFAULTS, youtube_read_mode="api"))
     y = yt.YouTube(None, lambda e: None)
     sleeps = []
 

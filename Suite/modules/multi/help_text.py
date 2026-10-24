@@ -49,11 +49,12 @@ HELP = {
     },
     "conn-youtube": {
         "title": "YouTube connection",
-        "summary": "Optional. Multi reads the chat of your active YouTube live broadcast. Sign in once with Google and Multi renews the access by itself.",
+        "summary": "Optional. Multi reads your YouTube live chat in about 1-3 seconds (fast mode, no Google sign-in needed). Signing in with Google is only needed to SEND messages and for the slow fallback.",
         "steps": [
-            "Set it up once: follow the 5-line checklist at the top of Docs/PinguinoMulti/IVAN_SETUP.md (Google Cloud project, YouTube Data API v3, consent screen published to production, Desktop OAuth client).",
-            "Then paste the client id and secret in the YouTube sign-in box on the Multi launcher, press Save, then 'Sign in to YouTube'. Multi renews the access by itself, so there is nothing to paste again.",
-            "'waiting: no active broadcast' means you are not live on YouTube yet; it connects by itself once you are.",
+            "Fast mode (default): type your channel (like @YourName) or a live video link into the YouTube channel setting (youtube_channel / youtube_video_id). Nothing else. Multi finds your stream when you go live.",
+            "It uses YouTube's unofficial live-chat feed, so it may break if YouTube changes it. Setting youtube_read_mode = api switches to the official (slower, 10 s+) reader; with a Google sign-in saved Multi also falls back to it by itself after 5 minutes of trouble.",
+            "To send messages from Multi (and for the fallback) sign in once with Google: follow the checklist at the top of Docs/PinguinoMulti/IVAN_SETUP.md, paste the client id and secret in the YouTube sign-in box, Save, 'Sign in to YouTube'.",
+            "'waiting: not live on YouTube right now' means you are not live yet; it connects by itself once you are.",
             "YouTube has no reply threads, so replies are plain messages.",
         ],
         "scopes": ["https://www.googleapis.com/auth/youtube.force-ssl"],

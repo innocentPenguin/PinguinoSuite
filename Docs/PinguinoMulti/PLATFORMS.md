@@ -5,7 +5,7 @@ Status: Twitch implemented; others are researched from prior knowledge and **mus
 | Platform | Read | Send/reply | Auth | Label |
 |---|---|---|---|---|
 | Twitch | EventSub WS `channel.chat.message` (`user:read:chat`) | Helix `POST /chat/messages`, `reply_parent_message_id` (`user:write:chat`) | OAuth + refresh via site | Official — **built** (untested with a live token) |
-| YouTube | `liveChat.messages` polling/stream, quota-heavy | `liveChatMessages.insert`, no threads | Google OAuth (sensitive scopes) | Official, M3 |
+| YouTube | InnerTube live-chat feed (unofficial, ~1-3 s, no OAuth) by default; `liveChat.messages` polling (official, quota-heavy, >= 10 s) as `youtube_read_mode=api` / fallback | `liveChatMessages.insert`, no threads | Google OAuth (sensitive scopes) | Official, M3 |
 | Kick | Official API + webhooks (needs public URL) or Pusher WS | chat send via OAuth | Kick OAuth PKCE | Official/UNOFFICIAL fallback, M3 |
 | Discord | Gateway bot, MESSAGE_CONTENT intent | send/reply | bot token | Official, M3 |
 | TikTok | no official LIVE chat API | none | n/a | UNOFFICIAL, read-only, off by default, M4 |
@@ -57,6 +57,9 @@ Sources: https://docs.kick.com/getting-started/generating-tokens-oauth2-flow , /
 - **Signature**: headers `Kick-Event-Signature` (base64), `Kick-Event-Message-Id`, `Kick-Event-Message-Timestamp`, plus `Kick-Event-Type` / `Kick-Event-Version`. Signed string = `<message-id>.<timestamp>.<raw body>`; RSA PKCS#1 v1.5 + SHA-256; fetch the PEM at runtime from `https://api.kick.com/public/v1/public-key` (it can rotate). `connectors/kick.py verify()` already does exactly this.
 - **Public URL**: required. The webhook URL goes into the app's "Enable Webhooks" box (Developer tab). Localhost does not work; Kick suggests Cloudflare Tunnel or ngrok. Retry / auto-unsubscribe on failure: not documented (our endpoint answers 200 for ignored events on purpose).
 - **Works without a public URL**: (a) the unofficial Pusher read feed in kick.py (chat only, no login); (b) outgoing REST calls: send chat, set title, list subscriptions. Follows, subs, gifts and KICKs need the webhook, i.e. the site relay (`/hook/kick` forwarded to Multi) or a tunnel.
+
+## YouTube fast read (InnerTube, unofficial)
+Default read path (`connectors/youtube_innertube.py`, setting `youtube_read_mode=innertube`). Flow: live video id (`youtube_video_id`, else channel `/live` page from `youtube_channel`, else the signed-in account's active broadcast) -> `youtube.com/live_chat?v=ID` yields the api key, client version and first continuation -> repeated `POST youtubei/v1/live_chat/get_live_chat` with the continuation; each answer carries the next one and `timeoutMs` (clamped 0.5-5 s). Parsed: text, Super Chat/Sticker (cheer), new member/milestone (sub/resub), gift memberships (gift), deletions (`message.cleared`). Latency ~1-3 s versus >= 10 s for the API; no quota. Risks: unofficial and undocumented, so any renderer change can break parsing (unknown items are skipped, never fatal); continuation expiry triggers a re-fetch; if it fails for `youtube_innertube_fallback_min` (5) minutes and an OAuth token exists, the official API reader runs until it recovers. Sending/moderation always use the official API. **Not yet verified against a live stream** (tests use hand-made payloads).
 
 ## YouTube Data API v3 live chat
 Sources: https://developers.google.com/youtube/v3/live/docs/liveChatMessages/list , .../insert , https://developers.google.com/youtube/v3/determine_quota_cost , https://developers.google.com/identity/protocols/oauth2/native-app , https://developers.google.com/identity/protocols/oauth2#expiration
