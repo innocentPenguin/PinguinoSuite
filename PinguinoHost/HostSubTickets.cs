@@ -147,7 +147,7 @@ namespace PinguinoHost
         public static void HandleBuy(string user, Action<string> say)
         {
             string id; string err = Buy(user, null, out id);
-            string plain = "@" + user + " " + (err == null ? "done! " + Economy.CurrencyName + " taken, a mod will gift you a sub on Twitch soon." : err + ".");
+            string plain = "@" + user + " " + (err == null ? "done! " + Price() + " " + Economy.CurrencyName + " taken, a mod will gift you a sub soon 🎁" : err + ".");
             long bal = 0, price = 0; try { bal = Economy.Balance((user ?? "").Trim().TrimStart('@').ToLowerInvariant()); price = Price(); } catch (Exception) { }
             Gamble.GameOut(say, plain, "shop", err == null ? "bought" : "invalid", user, err == null ? price : 0, 0, bal, "", "", err == null ? "" : err + ".", err == null ? id : "", 0, "get_sub");
         }

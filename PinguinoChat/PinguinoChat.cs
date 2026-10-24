@@ -884,7 +884,7 @@ public class CPHInline
         }
         if (kind == "shop")
         {
-            if (outcome == "bought") return at + (plain ? "done! " + amt + " " + cur + " taken, a mod will gift you a sub on Twitch soon." : Pick("done! " + amt + " " + cur + " well spent 🎁 A mod will gift you a sub on Twitch soon, hang tight!", "sub on its way! 🐧 " + amt + " " + cur + " taken, a mod will gift it to you on Twitch soon."));
+            if (outcome == "bought") return at + "done! " + amt + " " + cur + " taken, a mod will gift you a sub soon 🎁";
             return reason != "" ? at + reason : null;
         }
         if (kind == "guess")
