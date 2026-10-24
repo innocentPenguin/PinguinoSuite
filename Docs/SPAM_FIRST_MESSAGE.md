@@ -1,6 +1,6 @@
 # Spam in the first message: survey and proposed design
 
-Written by 11 on 2026-10-23 for 10. Design only; nothing is implemented. Toggle must ship OFF until Ivan says.
+Written by 11 on 2026-10-23 for 10. IMPLEMENTED (HostSpamFirst.cs, hook at the top of Program.Dispatch, test Tools/test-host-spamfirst.py). Ships OFF: Data\config\spam_first.json {"enabled":false,"dryRun":true}. Differences from the plan below: no delete call (scope not granted); "no chat memory" = Twitch first-msg flag and never welcomed before (Roster is per stream); the Host sets the argument spamCandidate on every spam-looking first message (even when the feature is off) so Chatty can skip its greeting; the welcome bonus is skipped when Twitch says the account is banned/timed out after the 45 s delay (Helix /moderation/banned, fails open).
 
 ## 1. What happened tonight (from Data\chat_logs and Data\boards)
 

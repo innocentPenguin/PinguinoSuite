@@ -158,6 +158,7 @@ namespace PinguinoHost
         {
             if (!Lease.MayRun) return;
             ReplyCtx.Begin(msgId, user);   // every reply made while handling this message is a native Twitch reply to it
+            bool spamCand = false; try { if (SpamFirst.OnChat(user, text, role, isSub, subTier, firstMsg, out spamCand)) return; } catch (Exception ex) { Clog.Warn("spam", "first-message check failed: " + ex.Message); }   // link spam in a brand-new chatter's first line: dropped before any bot or bonus (off by default, Data\config\spam_first.json)
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
             try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
@@ -181,7 +182,7 @@ namespace PinguinoHost
                 cph.Args["user"] = user; cph.Args["userName"] = login; cph.Args["userId"] = userId ?? "";
                 cph.Args["message"] = text; cph.Args["rawInput"] = text; cph.Args["msgId"] = msgId ?? Guid.NewGuid().ToString("N");
                 cph.Args["role"] = role; cph.Args["isModerator"] = role >= 3; cph.Args["isBroadcaster"] = role >= 4; cph.Args["isVip"] = role == 2;
-                cph.Args["firstMessage"] = firstMsg;
+                cph.Args["firstMessage"] = firstMsg; cph.Args["spamCandidate"] = spamCand;
                 if (!string.IsNullOrEmpty(replyTo)) { cph.Args["reply.userName"] = replyTo; cph.Args["reply.userLogin"] = replyTo; }
                 try
                 {

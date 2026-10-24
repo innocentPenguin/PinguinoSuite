@@ -24,6 +24,7 @@ namespace PinguinoHost
                 try
                 {
                     await Task.Delay(delay * 1000);
+                    if (SpamFirst.BannedNow(login)) { Clog.Info("welcome", login + " was banned or timed out during the delay: no welcome bonus"); return; }
                     if (!Economy.Credit(id, login, amount, "welcome bonus")) return;
                     say("@" + user + " here's " + amount + " " + Economy.CurrencyName + ": you can gamble them, buy stuff from !shop, and compete!");
                 }
