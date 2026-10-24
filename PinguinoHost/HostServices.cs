@@ -34,8 +34,10 @@ namespace PinguinoHost
         /// <summary>true while OBS is recording (a paused recording counts); false when OBS is not connected</summary>
         public bool Recording { get { return Connected && _rec; } }
         volatile bool _rec;
+        /// <summary>why the last connect did not end up identified: "" = fine or not tried yet, "closed" = nothing answered / OBS quit (OBS closed or its WebSocket server is off), "auth" = OBS answered but closed on us before we were identified (wrong or missing WebSocket password)</summary>
+        public volatile string FailKind = "";
         public void SetRec(bool on) { if (_rec == on) return; _rec = on; LiveState.OnRecording(on); }
-        public ObsClient(string host, int port, string pw) { url = "ws://" + host + ":" + port; password = pw ?? ""; }
+        public ObsClient(string host, int port, string pw) { url = "ws://" + host + ":" + port; password = pw ?? ""; HostApi.ObsFailKind = () => FailKind; }
 
         public async Task RunForever()
         {
@@ -43,6 +45,7 @@ namespace PinguinoHost
             while (true)
             {
                 while (!Lease.MayRun) await Task.Delay(1500);
+                bool hello = false;
                 try
                 {
                     identified = false; ws = new ClientWebSocket();
@@ -55,6 +58,7 @@ namespace PinguinoHost
                         if (op == 5 && d != null) { try { Events.OnObsEvent((string)d["eventType"]); } catch (Exception) { } }   // Master View: scene / item / output change -> push at once
                         if (op == 0)   // Hello -> Identify
                         {
+                            hello = true;
                             var id = new JObject { { "rpcVersion", 1 } };
                             var auth = d["authentication"] as JObject;
                             if (auth != null && password != "")
@@ -64,7 +68,7 @@ namespace PinguinoHost
                             }
                             await Send(new JObject { { "op", 1 }, { "d", id } });
                         }
-                        else if (op == 2) { identified = true; backoff = 3; Console.WriteLine("OBS connected"); Clog.Info("obs", "OBS connected"); Task.Run(() => { try { var rs = Data("GetRecordStatus", null); if (rs != null) SetRec((bool?)rs["outputActive"] == true); } catch (Exception) { } }); ReplayBuf.Ensure(this, "OBS connected"); }
+                        else if (op == 2) { identified = true; FailKind = ""; backoff = 3; Console.WriteLine("OBS connected"); Clog.Info("obs", "OBS connected"); Task.Run(() => { try { var rs = Data("GetRecordStatus", null); if (rs != null) SetRec((bool?)rs["outputActive"] == true); } catch (Exception) { } }); ReplayBuf.Ensure(this, "OBS connected"); }
                         else if (op == 5 && d != null && (string)d["eventType"] == "StreamStateChanged")
                         { var ed = d["eventData"] as JObject; if (ed != null && (bool?)ed["outputActive"] == true) ReplayBuf.Ensure(this, "stream started"); }
                         else if (op == 5 && d != null && (string)d["eventType"] == "ReplayBufferStateChanged")
@@ -80,6 +84,7 @@ namespace PinguinoHost
                     }
                 }
                 catch (Exception) { }
+                FailKind = identified || !hello ? "closed" : "auth";
                 if (identified) Clog.Warn("obs", "OBS connection lost");
                 identified = false; SetRec(false); ReplayBuf.OnDisconnect();
                 await Task.Delay(backoff * 1000); backoff = Math.Min(backoff * 2, 30);
@@ -189,12 +194,12 @@ namespace PinguinoHost
                 var cond = new JObject { { s[2], bid } }; if (s[0] == "channel.follow" || s[0].StartsWith("automod.")) cond["moderator_user_id"] = bid;
                 var body = new JObject { { "type", s[0] }, { "version", s[1] }, { "condition", cond }, { "transport", new JObject { { "method", "websocket" }, { "session_id", session } } } };
                 var resp = await http.PostAsync(HostApi.Helix + "/eventsub/subscriptions", new StringContent(body.ToString(), Encoding.UTF8, "application/json"));
+                if ((int)resp.StatusCode == 409) continue;   // 409 = this subscription already exists on the session: that is what we wanted, not a refusal
                 if (!resp.IsSuccessStatusCode) { if (s.Length < 4) HostApi.EventSubRefused++; Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes"); Clog.Warn("eventsub", "subscription " + s[0] + " refused (HTTP " + (int)resp.StatusCode + (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : ", check token scopes") + ")"); }
             }
         }
         static string _bid = "";
         /// <summary>sim mode: "eventsub channel.poll.end {json event}" runs the same mapping as a real EventSub notification</summary>
-                if ((int)resp.StatusCode == 409) continue;   // 409 = this subscription already exists on the session: that is what we wanted, not a refusal
         public static void Simulate(string type, string json, Action<Dictionary<string, object>> raise)
         {
             var m = new JObject { { "metadata", new JObject { { "subscription_type", type }, { "sim", true } } }, { "payload", new JObject { { "event", JObject.Parse(json) } } } }; Handle(m, raise);

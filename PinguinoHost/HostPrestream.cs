@@ -13,6 +13,16 @@ namespace PinguinoHost
     {
         static readonly string IdBase = Environment.GetEnvironmentVariable("PINGUINO_ID_BASE") ?? "https://id.twitch.tv";
 
+        /// <summary>why OBS is not connected: "closed" (nothing answered), "auth" (OBS answered but refused the WebSocket password), "" = unknown</summary>
+        public static Func<string> ObsFailKind = () => "";
+        public static string ObsFailText()
+        {
+            string k = ""; try { k = ObsFailKind() ?? ""; } catch (Exception) { }
+            if (k == "auth") return "OBS is open but refused the WebSocket password (wrong or missing password: check the OBS password in the Host)";
+            if (k == "closed") return "OBS is closed or not running (nothing answers on the WebSocket port; open OBS and turn its WebSocket server on)";
+            return "OBS is closed or not running, or its WebSocket is off (not connected yet)";
+        }
+
         static JObject Item(string id, string label, string status, string detail)
         { return new JObject { { "id", id }, { "label", label }, { "status", status }, { "detail", detail ?? "" } }; }
 
@@ -109,7 +119,7 @@ namespace PinguinoHost
             var missing = new[] { "PinguinoBot", "PinguinoChat", "PinguinoHelper", "PinguinoRouter" }.Where(a => !Program.HasAction(a)).ToList();
             items.Add(Item("modules", "Bot modules loaded (core, chat, helper, router)", missing.Count == 0 ? "pass" : "fail", missing.Count == 0 ? "" : "missing: " + string.Join(", ", missing)));
             bool obsCfg = !string.IsNullOrEmpty((string)s["ObsPassword"]) || !string.IsNullOrEmpty((string)s["ObsHost"]);
-            items.Add(Item("obs", "OBS connected", ObsConnected() ? "pass" : obsCfg ? "fail" : "warn", ObsConnected() ? "" : obsCfg ? "OBS WebSocket not reachable (is OBS open, WebSocket on?)" : "OBS is not set up in the Host (overlays/scenes need it)"));
+            items.Add(Item("obs", "OBS connected", ObsConnected() ? "pass" : obsCfg ? "fail" : "warn", ObsConnected() ? "" : obsCfg ? ObsFailText() : "OBS is not set up in the Host (overlays/scenes need it)"));
             { var oh = OverlayOptions.Health(); var om = (oh["missing"] as JArray ?? new JArray()).Select(x => (string)x).ToList(); bool jsOk = (bool?)oh["scriptPresent"] == true;
               items.Add(Item("overlays", "Overlay pages carry the fit-options script", jsOk && om.Count == 0 ? "pass" : "fail", jsOk ? (om.Count == 0 ? "" : "missing overlay-options.js tag: " + string.Join(", ", om)) : "overlay-options.js not found in the overlay folder")); }
             { var scs = Scenes.Health(); var scp = (scs["problems"] as JArray ?? new JArray()).Select(x => (string)x).ToList();
