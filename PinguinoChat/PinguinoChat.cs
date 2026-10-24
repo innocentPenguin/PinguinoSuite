@@ -228,8 +228,33 @@ public class CPHInline
     }
 
     // Say something AS a bot. If that bot has no voice yet, its fallback speaks (with [Title] in front when TagWhenShared is on).
+    // What Twitch accepts as a chat line: no control characters, one line, at most 500 characters (cut at a sentence / word end). A line that had to change is logged once.
+    static readonly HashSet<string> _pgCleanLogged = new HashSet<string>();
+    string PgCleanLine(string text)
+    {
+        string t = text ?? "";
+        var sb = new System.Text.StringBuilder(t.Length); foreach (char ch in t) sb.Append(char.IsControl(ch) || ch == '\u2028' || ch == '\u2029' ? ' ' : ch);
+        string c = sb.ToString();
+        c = System.Text.RegularExpressions.Regex.Replace(c, " {2,}", " ").Trim();
+        if (c.Length > 500)
+        {
+            string head = c.Substring(0, 500); int cut = -1;
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(head, @"[.!?](\s|$)")) cut = m.Index + 1;
+            if (cut < 250) cut = head.LastIndexOf(' ');
+            if (cut < 250) cut = 497;
+            c = c.Substring(0, cut).TrimEnd();
+        }
+        if (c != t.Trim() || (c == "" && t != ""))
+        {
+            string key = t.Length > 80 ? t.Substring(0, 80) : t; bool first;
+            lock (_pgCleanLogged) { first = _pgCleanLogged.Add(key); if (_pgCleanLogged.Count > 200) _pgCleanLogged.Clear(); }
+            if (first) PgLogW("[Bots] a chat line was " + (c == "" ? "empty (dropped)" : t.Trim().Length > 500 ? "over 500 characters (cut)" : "cleaned of control characters") + ": " + (t.Length > 120 ? t.Substring(0, 120) + "..." : t).Replace("\r", " ").Replace("\n", " "));
+        }
+        return c;
+    }
     void PgSay(string role, string text)
     {
+        text = PgCleanLine(text);
         if (string.IsNullOrEmpty(text)) return;
         var reg = PgReg();
         string speaker = PgSpeaker(role);
@@ -337,7 +362,12 @@ public class CPHInline
         { PgLogW("[Bots] a reply to a stale or deleted message was rejected, so it is dropped (not resent without the reply)"); return true; }
         catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
         { PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
-        catch (Exception ex) { PgLogW("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message); return false; }
+        catch (Exception ex)
+        {
+            string tl = text ?? "";   // a 400 for the line itself: name the text once so the cause can be found (the line was already cleaned of control characters / over-long text)
+            PgLogW("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message + ((ex.Message ?? "").Contains("(400)") ? " | line (" + tl.Length + " chars): " + (tl.Length > 120 ? tl.Substring(0, 120) + "..." : tl) : ""));
+            return false;
+        }
     }
 
     // ── what a module tells the router: "handled" (done, or deliberately silent) or "pass" (not mine / can't: next one please) ──
@@ -761,7 +791,7 @@ public class CPHInline
         bool plain = ArgS("optout") == "1" || ArgS("optout").ToLower() == "true";
         lock (_lock) { if (!plain && IsHeated()) plain = true; }
         string line = GameLine(ArgS("kind").ToLower(), ArgS("outcome").ToLower(), disp, ArgL("amount"), ArgL("payout"), ArgL("balance"), ArgS("opponent"), ArgS("reel"), ArgS("reason"), ArgS("currency") != "" ? ArgS("currency") : "points", (int)ArgL("timeoutSec"), plain, (int)ArgL("tries"));
-        if (!string.IsNullOrWhiteSpace(line)) PgSay("chat", line);
+        if (!string.IsNullOrWhiteSpace(line)) using (PgReplyTo("", "")) PgSay("chat", line);
     }
     long ArgL(string k) { CPH.TryGetArg(k, out object o); long r; return o != null && long.TryParse(Convert.ToString(o, System.Globalization.CultureInfo.InvariantCulture), out r) ? r : 0; }
     string Pick(params string[] v) { return v[_rng.Next(v.Length)]; }
@@ -863,8 +893,8 @@ public class CPHInline
         if (string.IsNullOrWhiteSpace(line) || !_cfg.Enabled || !_cfg.ChatReplies || !IsLive()) return;
         long now = Now(), last; int cool = kind == "raid" ? 120 : kind == "hype" ? 60 : 600;
         lock (_reactAt) { if (_reactAt.TryGetValue(kind, out last) && now - last < cool) return; _reactAt[kind] = now; }
-        if (ReactDelayMs <= 0) { PgSay("chat", line); return; }
-        var t = new Thread(() => { try { Thread.Sleep(ReactDelayMs); PgSay("chat", line); } catch (Exception) { } }); t.IsBackground = true; t.Start();
+        if (ReactDelayMs <= 0) { using (PgReplyTo("", "")) PgSay("chat", line); return; }   // event lines are never replies
+        var t = new Thread(() => { try { Thread.Sleep(ReactDelayMs); using (PgReplyTo("", "")) PgSay("chat", line); } catch (Exception) { } }); t.IsBackground = true; t.Start();
     }
     // ── WELCOME BACK: a regular (4+ earlier messages) who has been away for WelcomeBackDays. Private by design: a fixed pool, only their name, never a remembered fact; a recent
     //    sub / gift / bits event of theirs just changes the thanks to a generic one. Opted-out viewers never get it (the caller checks). ──
@@ -883,7 +913,7 @@ public class CPHInline
             string hl; if (HostWelcomeLine(login, string.IsNullOrWhiteSpace(display) ? login : display, (int)((now - prevSeen) / 86400L), out hl))
             {
                 if (string.IsNullOrWhiteSpace(hl)) return null;   // the Host says no (opted out, bot, or not away long enough)
-                _lastBack = now; _backSeen.Add(hl); while (_backSeen.Count > 12) _backSeen.RemoveAt(0); return hl;
+                _lastBack = now; lock (_backSeen) { _backSeen.Add(hl); while (_backSeen.Count > 12) _backSeen.RemoveAt(0); } return hl;
             }
         }
         _lastBack = now; return v[_rng.Next(v.Length)];
@@ -2288,6 +2318,26 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         return t.Trim();
     }
 
+    // An answer that hit the token cap even after the retry: keep what was said up to its last full sentence (never a half sentence). Works on the {"reply": "..."} JSON the chat prompt asks for
+    // (unfinished, no closing quote) and on plain text; any other cut JSON (studies, opinions) and anything with under ~30 characters of finished text is dropped (null).
+    static string CutAtSentence(string raw)
+    {
+        string r = (raw ?? "").Trim(); if (r == "") return null;
+        string body; bool json = r.StartsWith("{") || r.Contains("\"reply\"");
+        if (json)
+        {
+            var m = Regex.Match(r, "\"reply\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            if (!m.Success) return null;
+            body = m.Groups[1].Value.Replace("\\\"", "\"").Replace("\\n", " ");
+        }
+        else body = r;
+        int cut = -1;
+        foreach (Match q in Regex.Matches(body, "[.!?…]+[\"')\\]]*(?=\\s|$)")) cut = q.Index + q.Length;
+        if (cut < 30) return null;
+        string kept = body.Substring(0, cut).Trim();
+        return new JObject { ["reply"] = kept, ["remember"] = new JArray() }.ToString(Formatting.None);
+    }
+
     // Builds {"reply","remember"} from broken JSON (stray quotes inside the reply, missing brace, code fences...).
     // A reply that was cut off (no closing quote) is NEVER posted.
     static JObject SalvageReply(string raw)
@@ -3040,7 +3090,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             rest = rest.Substring(cut).Trim();
         }
         if (rest.Length > 0) parts.Add(rest.Length > limit ? rest.Substring(0, limit) : rest);
-        for (int i = 0; i < parts.Count; i++) PgSay("chat", (i == 0 ? prefix : "") + parts[i]);
+        using (PgReplyTo(c.MsgId ?? "", c.Login))   // pinned here: PaceTurn above can sleep for seconds while the Host refills the shared args with the next chat message
+            for (int i = 0; i < parts.Count; i++) PgSay("chat", (i == 0 ? prefix : "") + parts[i]);
     }
 
     // Mods: !chatbot status
@@ -3207,7 +3258,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             lock (_gateLock) { if (_cdDone.Contains(key)) continue; _cdDone.Add(key); }
             if (late > _cfg.CountdownMaxLateSec) continue;       // missed (Host was down): never send a stale countdown
             string line = o == 0 ? _cfg.CountdownLineNow : (_cfg.CountdownLine ?? "").Replace("{left}", CdLeft(o)).Replace("{time}", target.Value.ToString("h:mm tt"));
-            if (!string.IsNullOrWhiteSpace(line)) PgSay("chat", line);
+            if (!string.IsNullOrWhiteSpace(line)) using (PgReplyTo("", "")) PgSay("chat", line);
         }
     }
     void GoLiveCommand(Ctx c, string arg)
@@ -3812,7 +3863,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
                 string text = ClaudeText(r);
                 if ((string)r["stop_reason"] == "max_tokens")      // ran out of room (some models "think" first): never post a cut-off answer
                 {
-                    if (maxTokens >= 2400) { Warn("tokens", "AI answer was cut off even at " + maxTokens + " tokens"); return null; }
+                    if (maxTokens >= 2400) { string kept = CutAtSentence(text); Warn("tokens", "AI answer was cut off even at " + maxTokens + " tokens" + (kept != null ? ", kept up to its last full sentence" : ", dropped")); return kept; }
                     return Ask(system, user, maxTokens * 3, web);
                 }
                 return text;
@@ -3832,7 +3883,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
                 var r = JObject.Parse(HttpPost(url, h, body.ToString(Formatting.None)));
                 if ((string)r["choices"]?[0]?["finish_reason"] == "length")
                 {
-                    if (maxTokens >= 2400) { Warn("tokens", "AI answer was cut off even at " + maxTokens + " tokens"); return null; }
+                    if (maxTokens >= 2400) { string kept = CutAtSentence((string)r["choices"]?[0]?["message"]?["content"]); Warn("tokens", "AI answer was cut off even at " + maxTokens + " tokens" + (kept != null ? ", kept up to its last full sentence" : ", dropped")); return kept; }
                     return Ask(system, user, maxTokens * 3);
                 }
                 return (string)r["choices"]?[0]?["message"]?["content"];

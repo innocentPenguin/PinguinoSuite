@@ -16,6 +16,8 @@ namespace PinguinoHost
         {
             via = "";
             if (!Lease.MayRun) { via = "this Host is not the master"; return false; }
+            text = CleanLine(text, "chat send as " + role);
+            if (text == "") { via = "nothing to say (empty line)"; return false; }
             if (SaidRecently(text)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent, same line said moments ago: " + (text.Length > 60 ? text.Substring(0, 60) : text)); return true; }
             role = string.IsNullOrWhiteSpace(role) ? "core" : role.Trim().ToLowerInvariant();
             var reg = LoadFile("bots.json"); var sec = BotSecretsV();
@@ -35,7 +37,10 @@ namespace PinguinoHost
                         rq.Content = new StringContent(ReplyCtx.Body(bid, sid, text).ToString(), Encoding.UTF8, "application/json");
                         var resp = http.SendAsync(rq).Result;
                         if (resp.IsSuccessStatusCode) { via = (string)bot["Account"] ?? r; return true; }
-                        Clog.Warn("automation", "chat send as " + r + " refused (HTTP " + (int)resp.StatusCode + ")");
+                        int code = (int)resp.StatusCode; string why = "";
+                        try { why = resp.Content.ReadAsStringAsync().Result ?? ""; if (why.Length > 160) why = why.Substring(0, 160); } catch (Exception) { }
+                        Clog.Warn("automation", "chat send as " + r + " refused (HTTP " + code + ")" + (code == 400 ? ": " + why + " | line (" + text.Length + " chars): " + (text.Length > 120 ? text.Substring(0, 120) + "..." : text) : ""));
+                        if (code == 400) { via = "refused by Twitch (HTTP 400): the line itself is not accepted, not tried on other accounts"; return false; }   // the same text is refused for every account: do not spray it
                     }
                 }
                 catch (Exception ex)
@@ -48,6 +53,29 @@ namespace PinguinoHost
             if (Program.SayShared(text)) { via = "shared account"; return true; }
             via = "no account could send (not signed in, or sim mode)"; return false;
         }
+
+        /// <summary>what Twitch accepts as a chat line: no control characters, one line, at most 500 characters (cut at a sentence / word end). Empty stays empty. The first time a line had to be changed it is logged (once per distinct text).</summary>
+        public static string CleanLine(string text, string who)
+        {
+            string t = text ?? "";
+            string c = System.Text.RegularExpressions.Regex.Replace(t, @"[\u0000-\u001F\u007F\u0080-\u009F\u2028\u2029]+", " ");
+            c = System.Text.RegularExpressions.Regex.Replace(c, @" {2,}", " ").Trim();
+            if (c.Length > 500)
+            {
+                string head = c.Substring(0, 500); int cut = -1;
+                foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(head, @"[.!?](\s|$)")) cut = m.Index + 1;
+                if (cut < 250) cut = head.LastIndexOf(' '); if (cut < 250) cut = 497;
+                c = c.Substring(0, cut).TrimEnd();
+            }
+            if (c != t.Trim() || c == "")
+            {
+                string key = t.Length > 80 ? t.Substring(0, 80) : t;
+                bool first; lock (_cleanLogged) { first = _cleanLogged.Add(key); if (_cleanLogged.Count > 200) _cleanLogged.Clear(); }
+                if (first) Clog.Warn("automation", who + ": the line was " + (c == "" ? "empty (dropped)" : t.Trim().Length > 500 ? "over 500 characters (cut)" : "changed (control characters)") + ": " + (t.Length > 120 ? t.Substring(0, 120) + "..." : t).Replace("\r", " ").Replace("\n", " "));
+            }
+            return c;
+        }
+        static readonly System.Collections.Generic.HashSet<string> _cleanLogged = new System.Collections.Generic.HashSet<string>();
 
         // NEVER SAY THE SAME LINE TWICE: every chat send (timers, reminders, commands, shoutouts...) passes here. Same text (case/spacing ignored) inside the window is dropped.
         static readonly System.Collections.Generic.Dictionary<string, DateTime> _said = new System.Collections.Generic.Dictionary<string, DateTime>();

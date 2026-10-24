@@ -28,6 +28,17 @@ namespace PinguinoHost
             Check(seen == id, "tasks started from the handler keep the reply");
             ReplyCtx.End(); ReplyCtx.Prepare("x", out p); Check(p == "", "ended: no reply");
             b = ReplyCtx.Body("b1", "s1", "@bob yo"); Check(!b.ContainsKey("reply_parent_message_id") && (string)b["message"] == "@bob yo", "no context: body is plain");
+            // event / timer work is never a reply, even on a thread that just handled a chat message; the context comes back afterwards
+            ReplyCtx.Begin(id, "Bob");
+            using (ReplyCtx.Plain()) { t = ReplyCtx.Prepare("@Bob event", out p); Check(p == "" && t == "@Bob event", "Plain(): an event line is not a reply"); string inner = null; Task.Run(() => { string q; ReplyCtx.Prepare("x", out q); inner = q; }).Wait(); Check(inner == "", "Plain(): tasks started inside stay plain"); }
+            ReplyCtx.Prepare("x", out p); Check(p == id, "Plain(): the chat context is back after the scope"); ReplyCtx.End();
+            // CleanLine: what Twitch would refuse (control characters, over 500, empty) never goes out as is
+            Check(HostApi.CleanLine("hi" + (char)7 + "there" + (char)10 + "you", "t") == "hi there you", "CleanLine: control characters become spaces");
+            Check(HostApi.CleanLine("   ", "t") == "" && HostApi.CleanLine(null, "t") == "", "CleanLine: empty stays empty");
+            string longs = ""; for (int i = 0; i < 60; i++) longs += "Sentence number " + i + ". ";
+            string cl = HostApi.CleanLine(longs, "t"); Check(cl.Length <= 500 && cl.EndsWith(".") && cl.Length > 250, "CleanLine: over 500 is cut at a sentence end (" + cl.Length + ")");
+            Check(HostApi.CleanLine(new string('x', 800), "t").Length <= 500, "CleanLine: unbroken over-500 is cut");
+            Check(HostApi.CleanLine("{user} cheered 100 bits!", "t") == "{user} cheered 100 bits!" && HostApi.CleanLine("normal line", "t") == "normal line", "CleanLine: a normal line is untouched");
             Console.WriteLine(fails == 0 ? "[replytest] ALL PASS" : "[replytest] " + fails + " FAIL");
         }
     }

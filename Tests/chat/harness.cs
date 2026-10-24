@@ -939,6 +939,7 @@ public static class Harness
 
           // welcome back: a regular away for 10 days, by name only, once; opted-out viewers never
           Func<string, int, object> mkViewer = (nm, days) => { for (int i = 0; i < 5; i++) Msg(nm, "hanging out " + i); var vs = (System.Collections.IDictionary)SF("_viewers").GetValue(null); foreach (System.Collections.DictionaryEntry de in vs) { var vo = de.Value; if ((string)vo.GetType().GetProperty("Login").GetValue(vo, null) == nm.ToLower()) { vo.GetType().GetProperty("LastSeen").SetValue(vo, DateTimeOffset.UtcNow.ToUnixTimeSeconds() - days * 86400L, null); return vo; } } return null; };
+          SetCfgB("DailyGreeting", false);   // the welcome-back checks below must not be disturbed by the (random) daily hello
           var oldv = mkViewer("Oldtimer", 10); SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
           Msg("Oldtimer", "hey all");
           Check("welcome back: a regular away for 10 days is greeted by name", Last() != null && Last().Contains("@Oldtimer") && System.Text.RegularExpressions.Regex.IsMatch(Last(), "back|long time"), Last());
@@ -963,7 +964,7 @@ public static class Harness
           // daily greeting (IDEAS #40): first message of the day for a regular who was last here 2 days ago: one varied hello; anniversary on the day; once per day; opt-outs never
           {
             Action reset = () => { SF("_lastWelcome").SetValue(null, 0L); SF("_lastBack").SetValue(null, 0L); SF("_dailyDay").SetValue(null, ""); SF("_dailyCount").SetValue(null, 0); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); };
-            SetCfg("DailyGreetingChance", 100); SetCfg("DailyGreetingMax", 6);
+            SetCfgB("DailyGreeting", true); SetCfg("DailyGreetingChance", 100); SetCfg("DailyGreetingMax", 6);
             var dv = mkViewer("Dailyone", 2); reset(); Msg("Dailyone", "morning everyone");
             Check("daily greeting: a regular's first message of the day gets one hello by name", Last() != null && Last().Contains("Dailyone") && !System.Text.RegularExpressions.Regex.IsMatch(Last(), "since you first|ago today"), Last());
             int n1 = CPHProxy.Sent.Count; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Dailyone", "and another thing");
@@ -981,6 +982,52 @@ public static class Harness
             Check("daily greeting: opted-out viewers get nothing", Last() == null, Last());
             SetCfgB("DailyGreeting", false); mkViewer("Offd", 2); reset(); Msg("Offd", "hello"); Check("daily greeting: off switch", Last() == null, Last()); SetCfgB("DailyGreeting", true);
             reset();
+          }
+
+          // reply pin: the main answer path pins its own message id, event / timer lines are pinned to "no reply", whatever the shared args hold by then
+          {
+            string idMine = "aaaaaaaa-1111-4222-8333-444444444444", idNext = "bbbbbbbb-1111-4222-8333-444444444444";
+            Type ctxT = null; foreach (var tt in typeof(CPHInline).Assembly.GetTypes()) if (tt.Name == "Ctx") ctxT = tt;
+            Check("pin test: found the Ctx type", ctxT != null, "no Ctx");
+            if (ctxT != null)
+            {
+              var cxo = Activator.CreateInstance(ctxT); ctxT.GetField("Login").SetValue(cxo, "pinuser"); ctxT.GetField("Display").SetValue(cxo, "PinUser"); ctxT.GetField("MsgId").SetValue(cxo, idMine);
+              CPHProxy.Args["msgId"] = idNext; CPHProxy.Args["userName"] = "other";   // the NEXT chat message already refilled the args
+              CPHProxy.Sent.Clear(); CPHProxy.SentPin.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+              var inst = new CPHInline();
+              var sr = typeof(CPHInline).GetMethod("SendReply", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+              Check("pin test: found SendReply", sr != null, "no SendReply");
+              if (sr != null) sr.Invoke(inst, new object[] { cxo, "here is the answer" });
+              Check("SendReply pins its own message id, not the one in the shared args", CPHProxy.SentPin.Count >= 1 && CPHProxy.SentPin[0] == idMine, string.Join("|", CPHProxy.SentPin));
+              CPHProxy.Sent.Clear(); CPHProxy.SentPin.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+              typeof(CPHInline).GetMethod("ReactSay", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(inst, new object[] { "pintest" + Guid.NewGuid().ToString("N"), "event line for everyone" });
+              for (int i = 0; i < 60 && CPHProxy.SentPin.Count == 0; i++) System.Threading.Thread.Sleep(50);
+              Check("an event line is pinned to no reply, never the args' message", CPHProxy.SentPin.Count == 1 && CPHProxy.SentPin[0] == "", string.Join("|", CPHProxy.SentPin));
+            }
+            CPHProxy.Args.Remove("msgId"); CPHProxy.Args.Remove("userName"); CPHProxy.Sent.Clear(); CPHProxy.SentPin.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+          }
+          // chat lines Twitch would refuse (PgCleanLine): control characters out, 500 characters at most, empty dropped
+          {
+            var inst2 = new CPHInline(); var say = typeof(CPHInline).GetMethod("PgSay", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Action<string> go = t => { CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); say.Invoke(inst2, new object[] { "chat", t }); };
+            go("hello" + (char)7 + " there" + (char)10 + "friend " + (char)0 + "ok"); Check("control characters become spaces", Last() == "hello there friend ok", Last());
+            go("   "); Check("an empty line is not sent", CPHProxy.Sent.Count == 0, "" + CPHProxy.Sent.Count);
+            string longs = ""; for (int i = 0; i < 60; i++) longs += "This is sentence number " + i + ". ";
+            go(longs); Check("an over-500 line is cut at a sentence end", Last() != null && Last().Length <= 500 && Last().EndsWith(".") && Last().Length > 250, Last() == null ? "null" : Last().Length + " " + Last().Substring(Math.Max(0, Last().Length - 30)));
+            go(new string('x', 700)); Check("an unbroken over-500 line is still cut", Last() != null && Last().Length <= 500, Last() == null ? "null" : "" + Last().Length);
+            go("plain line"); Check("a normal line is untouched", Last() == "plain line", Last());
+          }
+          // an answer that hit the token cap even after the retry: kept up to its last full sentence, never half a sentence
+          {
+            var cut = typeof(CPHInline).GetMethod("CutAtSentence", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Func<string, string> cs = t => (string)cut.Invoke(null, new object[] { t });
+            string k1 = cs("{\"reply\": \"That is a great question about the game. The second part goes like this and then it just stops mid sen");
+            Check("cut JSON reply keeps the last full sentence", k1 != null && k1.Contains("That is a great question about the game.") && !k1.Contains("mid sen"), k1);
+            Check("cut JSON with no full sentence is dropped", cs("{\"reply\": \"This answer never reaches a full stop and") == null, "");
+            Check("cut JSON of another shape (no reply) is dropped", cs("{\"opinions\": [\"one thing. two things.") == null, "");
+            string k2 = cs("This is plain text that was cut off. And here it is half wri");
+            Check("plain text is cut at the sentence end", k2 != null && k2.Contains("cut off.") && !k2.Contains("half wri"), k2);
+            Check("empty is dropped", cs("") == null && cs(null) == null, "");
           }
 
           Live(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); SF("_liveChecked").SetValue(null, DateTime.MinValue);

@@ -260,6 +260,10 @@ namespace PinguinoHost
 
         static void Fire(string kind, Dictionary<string, string> ctx)
         {
+            using (ReplyCtx.Plain()) FireCore(kind, ctx);   // an event's lines are never replies to the last chat message this thread handled (a stale parent is refused by Twitch)
+        }
+        static void FireCore(string kind, Dictionary<string, string> ctx)
+        {
             int num(string k) { int v; return ctx.ContainsKey(k) && int.TryParse(ctx[k], out v) ? v : 0; }
             foreach (var a in Actions())
                 foreach (var t in (a["triggers"] as JArray ?? new JArray()).OfType<JObject>())

@@ -7,7 +7,14 @@ public class CPHProxy
     public static List<string> Whispers = new List<string>();
     public static bool WhisperOk = true;
     public static Dictionary<string, object> Args = new Dictionary<string, object>();
-    public void SendMessage(string m, bool useBot = true) { Sent.Add(m); }
+    public static List<string> SentPin = new List<string>();   // the thread-pinned reply target (PgReplyTo) when each line was sent; "<none>" = not pinned
+    public void SendMessage(string m, bool useBot = true)
+    {
+        Sent.Add(m);
+        string pin = "<none>";
+        try { var f = typeof(CPHInline).GetField("_pgReplyId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static); var v = f == null ? null : (string)f.GetValue(null); if (v != null) pin = v; } catch (Exception) { }
+        SentPin.Add(pin);
+    }
     public bool SendWhisper(string user, string m, bool useBot = true) { if (WhisperOk) Whispers.Add(user + ": " + m); return WhisperOk; }
     public static List<string> Timeouts = new List<string>();
     public bool TwitchTimeoutUser(string user, int secs, string reason, bool useBot = false) { Timeouts.Add(user + "|" + secs + "|" + useBot); return true; }

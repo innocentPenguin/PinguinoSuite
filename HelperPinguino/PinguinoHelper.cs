@@ -238,8 +238,33 @@ public class CPHInline
     }
 
     // Say something AS a bot. If that bot has no voice yet, its fallback speaks (with [Title] in front when TagWhenShared is on).
+    // What Twitch accepts as a chat line: no control characters, one line, at most 500 characters (cut at a sentence / word end). A line that had to change is logged once.
+    static readonly HashSet<string> _pgCleanLogged = new HashSet<string>();
+    string PgCleanLine(string text)
+    {
+        string t = text ?? "";
+        var sb = new System.Text.StringBuilder(t.Length); foreach (char ch in t) sb.Append(char.IsControl(ch) || ch == '\u2028' || ch == '\u2029' ? ' ' : ch);
+        string c = sb.ToString();
+        c = System.Text.RegularExpressions.Regex.Replace(c, " {2,}", " ").Trim();
+        if (c.Length > 500)
+        {
+            string head = c.Substring(0, 500); int cut = -1;
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(head, @"[.!?](\s|$)")) cut = m.Index + 1;
+            if (cut < 250) cut = head.LastIndexOf(' ');
+            if (cut < 250) cut = 497;
+            c = c.Substring(0, cut).TrimEnd();
+        }
+        if (c != t.Trim() || (c == "" && t != ""))
+        {
+            string key = t.Length > 80 ? t.Substring(0, 80) : t; bool first;
+            lock (_pgCleanLogged) { first = _pgCleanLogged.Add(key); if (_pgCleanLogged.Count > 200) _pgCleanLogged.Clear(); }
+            if (first) PgLogW("[Bots] a chat line was " + (c == "" ? "empty (dropped)" : t.Trim().Length > 500 ? "over 500 characters (cut)" : "cleaned of control characters") + ": " + (t.Length > 120 ? t.Substring(0, 120) + "..." : t).Replace("\r", " ").Replace("\n", " "));
+        }
+        return c;
+    }
     void PgSay(string role, string text)
     {
+        text = PgCleanLine(text);
         if (string.IsNullOrEmpty(text)) return;
         var reg = PgReg();
         string speaker = PgSpeaker(role);
@@ -347,7 +372,12 @@ public class CPHInline
         { PgLogW("[Bots] a reply to a stale or deleted message was rejected, so it is dropped (not resent without the reply)"); return true; }
         catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
         { PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
-        catch (Exception ex) { PgLogW("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message); return false; }
+        catch (Exception ex)
+        {
+            string tl = text ?? "";   // a 400 for the line itself: name the text once so the cause can be found (the line was already cleaned of control characters / over-long text)
+            PgLogW("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message + ((ex.Message ?? "").Contains("(400)") ? " | line (" + tl.Length + " chars): " + (tl.Length > 120 ? tl.Substring(0, 120) + "..." : tl) : ""));
+            return false;
+        }
     }
 
     // ── what a module tells the router: "handled" (done, or deliberately silent) or "pass" (not mine / can't: next one please) ──
