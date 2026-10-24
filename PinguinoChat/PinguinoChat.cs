@@ -2995,6 +2995,13 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         if (string.IsNullOrWhiteSpace(reply)) return true;
         string arg = text.Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim() : "";
         string to = arg.Split(' ')[0].TrimStart('@'); if (!Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$")) to = c.Display;   // a name only: never a link, a /command or a pasted line
+        if (reply.IndexOf("$(link:", StringComparison.Ordinal) >= 0)
+        {   // the Host publishes the site links as a global; a link we cannot resolve means no line at all (never a half-filled placeholder in chat)
+            JObject lk = null; try { string lj = CPH.GetGlobalVar<string>("pinguino.links", true); if (!string.IsNullOrEmpty(lj)) lk = JObject.Parse(lj); } catch (Exception) { }
+            bool miss = false;
+            reply = Regex.Replace(reply, @"\$\(link:([a-z0-9_]+)\)", m => { string u = lk != null ? (string)lk[m.Groups[1].Value.ToLower()] : null; if (string.IsNullOrEmpty(u)) { miss = true; return m.Value; } return u; }, RegexOptions.IgnoreCase);
+            if (miss) { CPH.LogWarn("[Chatty] canned reply skipped, a $(link:...) could not be resolved: " + cmd); return true; }
+        }
         reply = reply.Replace("$(user)", c.Display).Replace("$(touser)", to).Replace("$(luck)", (_rng.Next(50) + 1).ToString()).Replace("$(games)", GamesList());
         _cannedAt[ck] = now; _cannedAt["u|" + c.Login] = now; _cannedAny = now; using (PgReplyTo(c.MsgId ?? "", c.Login)) PgSay("chat", reply);
         if (_cannedAt.Count > 600) { var old = _cannedAt.Where(kv => now - kv.Value > 600).Select(kv => kv.Key).ToList(); foreach (var k in old) _cannedAt.Remove(k); }

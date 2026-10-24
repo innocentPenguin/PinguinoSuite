@@ -63,6 +63,7 @@ public static class Harness
         var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
         cfg.GetType().GetProperty(prop).SetValue(cfg, v, null);
     }
+    static string _cfgGet(string prop) { var cfg = typeof(CPHInline).GetField("_cfg", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null); return (string)cfg.GetType().GetProperty(prop).GetValue(cfg, null); }
     static string Last() { return CPHProxy.Sent.Count == 0 ? null : CPHProxy.Sent[CPHProxy.Sent.Count - 1]; }
     static JObject Memory() { return JObject.Parse(File.ReadAllText(Path.Combine(dir, "chat_memory.json"))); }
 
@@ -787,6 +788,18 @@ public static class Harness
         Check("the same canned command a moment later stays quiet (cooldown + duplicate guard)", CPHProxy.Sent.Count == cn);
         _cannedReset(true); CPHProxy.SentPin.Clear(); Extra["msgId"] = "11111111-2222-3333-4444-555555555555"; Msg("Canny", "!hug @Bobby", null, false); Extra.Remove("msgId");
         Check("a canned reply is pinned to the viewer's own message", CPHProxy.SentPin.Count >= 1 && CPHProxy.SentPin[0] == "11111111-2222-3333-4444-555555555555", string.Join("|", CPHProxy.SentPin));
+        {   // $(link:<key>): the Host publishes the site links as a global, Chatty expands them; unresolvable = no line
+            string oldCf = _cfgGet("CannedFile"), cf2 = Path.Combine(dir, "canned_link.json");
+            File.WriteAllText(cf2, "{\"cooldownSec\":0,\"commands\":[{\"name\":\"dc\",\"text\":\"Join us: $(link:discord) ok $(user)\"},{\"name\":\"zz\",\"text\":\"see $(link:nowhere)\"}]}");
+            SetCfgS("CannedFile", cf2); CPHProxy.Globals["pinguino.links"] = "{\"discord\":\"https://discord.gg/newinvite\"}";
+            _cannedReset(true); CPHProxy.Sent.Clear(); Msg("Canny", "!dc", null, false);
+            Check("$(link:discord) is replaced from the Host's links", Last() == "Join us: https://discord.gg/newinvite ok Canny", Last());
+            _cannedReset(true); CPHProxy.Sent.Clear(); Msg("Canny", "!zz", null, false);
+            Check("an unknown $(link:...) posts no line", CPHProxy.Sent.Count == 0, Last());
+            CPHProxy.Globals.Remove("pinguino.links"); _cannedReset(true); CPHProxy.Sent.Clear(); Msg("Canny", "!dc", null, false);
+            Check("no links published yet: no half-filled line", CPHProxy.Sent.Count == 0, Last());
+            SetCfgS("CannedFile", oldCf); _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent");
+        }
         _cannedReset(true); Msg("Canny", "!hug @Bobby", null, false);
         Check("$(user) and $(touser) are filled in", Last() != null && Last().Contains("Canny wraps their arms around Bobby"), Last());
         _cannedReset(true); Msg("Canny", "!luck", null, false);

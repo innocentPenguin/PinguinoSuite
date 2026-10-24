@@ -26,9 +26,13 @@ namespace PinguinoHost
                 if (!(d["links"] is JObject)) { d["links"] = new JObject(); dirty = true; }
                 foreach (var kv in Defaults) if (d["links"][kv[0]] == null) { d["links"][kv[0]] = kv[1]; dirty = true; }
                 if (dirty) { try { Directory.CreateDirectory(HostApi.DataDir); File.WriteAllText(P, d.ToString(), new UTF8Encoding(false)); } catch (Exception) { } }
+                Publish(d);
                 return d;
             }
         }
+        static string _pub;
+        /// <summary>Chatty (same process) expands $(link:name) in canned replies from this global, so it never reads the file itself</summary>
+        static void Publish(JObject d) { try { string j = d["links"].ToString(Newtonsoft.Json.Formatting.None); if (j != _pub) { _pub = j; Program.SetGlobal("pinguino.links", j); } } catch (Exception) { } }
         public static string Get(string key) { var t = Doc()["links"][(key ?? "").ToLowerInvariant()]; return t == null ? null : (string)t; }
         /// <summary>{link:key} -> the current link (unknown keys stay as written, so a typo is visible).</summary>
         public static string Expand(string s)
@@ -36,10 +40,6 @@ namespace PinguinoHost
             if (string.IsNullOrEmpty(s) || s.IndexOf("{link:", StringComparison.Ordinal) < 0) return s;
             return Regex.Replace(s, @"\{link:([a-z0-9_]+)\}", m => Get(m.Groups[1].Value) ?? m.Value, RegexOptions.IgnoreCase);
         }
-        static readonly Regex RxUrl = new Regex(@"https?://[^\s]+", RegexOptions.IgnoreCase);
-        static string Norm(string u) { u = Regex.Replace((u ?? "").Trim().TrimEnd('/', '.', ',', ')', '!'), @"^https?://(www\.)?", "", RegexOptions.IgnoreCase); return u.ToLowerInvariant(); }
-        static string Host(string n) { int i = n.IndexOf('/'); return i < 0 ? n : n.Substring(0, i); }
-        static int Segs(string n) { int i = n.IndexOf('/'); return i < 0 ? 0 : n.Substring(i + 1).Split('/').Count(x => x != ""); }
         // ---- the site is the canonical source: GET innocentpenguin.com/api/links every ~5 min; the last good copy is kept in links.json, the built-in defaults are the final fallback ----
         static System.Net.Http.HttpClient _http; static bool _started; static DateTime _lastFetch = DateTime.MinValue;
         public static string RemoteUrl { get { return Environment.GetEnvironmentVariable("PINGUINO_LINKS_URL") ?? "https://innocentpenguin.com/api/links"; } }
@@ -74,6 +74,10 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("links", "site links not read (" + ex.Message + "); keeping the last good copy"); return false; }
         }
+        static readonly Regex RxUrl = new Regex(@"https?://[^\s]+", RegexOptions.IgnoreCase);
+        static string Norm(string u) { u = Regex.Replace((u ?? "").Trim().TrimEnd('/', '.', ',', ')', '!'), @"^https?://(www\.)?", "", RegexOptions.IgnoreCase); return u.ToLowerInvariant(); }
+        static string Host(string n) { int i = n.IndexOf('/'); return i < 0 ? n : n.Substring(0, i); }
+        static int Segs(string n) { int i = n.IndexOf('/'); return i < 0 ? 0 : n.Substring(i + 1).Split('/').Count(x => x != ""); }
         /// <summary>Lore answers (and helper facts) that hold a hard-coded link to the same site as a current link but a different address.</summary>
         public static JArray Audit(IEnumerable<JObject> entries)
         {

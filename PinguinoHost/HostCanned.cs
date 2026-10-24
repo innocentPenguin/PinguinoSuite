@@ -55,7 +55,7 @@ namespace PinguinoHost
                 {
                     var r = Read();
                     return new JObject { { "ok", true }, { "version", 1 }, { "exportedAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 },
-                        { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)") },
+                        { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)", "$(link:<name>)") },
                         { "rules", new JObject { { "name", "1-24 letters, digits or _" }, { "maxTextLength", 400 }, { "oneLine", true }, { "noControlCharacters", true }, { "reservedNames", new JArray(Reserved.OrderBy(x => x)) } } },
                         { "commands", new JArray(r["commands"].OfType<JObject>().Select(c => (JToken)c.DeepClone())) } };
                 }
@@ -75,7 +75,8 @@ namespace PinguinoHost
             if (t.Any(ch => char.IsControl(ch))) return "the text cannot contain control characters";
             string s = t.TrimStart();
             if (s.StartsWith("/") || s.StartsWith(".") || s.StartsWith("!")) return "the text cannot start with / . or ! (that would run a Twitch or bot command)";
-            if (Regex.IsMatch(t, @"\$\((?!user\)|touser\)|luck\)|games\))")) return "only $(user), $(touser), $(luck) and $(games) can be used";
+            foreach (Match lm in Regex.Matches(t, @"\$\(link:([^)]*)\)")) if (!Regex.IsMatch(lm.Groups[1].Value, "^[a-z0-9_]+$") || Links.Get(lm.Groups[1].Value) == null) return "$(link:" + lm.Groups[1].Value + ") is not a known link (known: " + string.Join(", ", ((JObject)Links.Doc()["links"]).Properties().Select(x => x.Name)) + ")";
+            if (Regex.IsMatch(Regex.Replace(t, @"\$\(link:[a-z0-9_]+\)", ""), @"\$\((?!user\)|touser\)|luck\)|games\))")) return "only $(user), $(touser), $(luck), $(games) and $(link:name) can be used";
             return null;
         }
 
@@ -91,7 +92,7 @@ namespace PinguinoHost
                 try
                 {
                     var r = Read();
-                    return new JObject { { "ok", true }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 }, { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)") }, { "file", PathOf() }, { "commands", new JArray(r["commands"].OfType<JObject>().Select(View)) } };
+                    return new JObject { { "ok", true }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 }, { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)", "$(link:<name>)") }, { "file", PathOf() }, { "commands", new JArray(r["commands"].OfType<JObject>().Select(View)) } };
                 }
                 catch (Exception ex) { return Err("could not read the canned commands: " + ex.Message); }
             }
@@ -102,7 +103,8 @@ namespace PinguinoHost
         {
             user = string.IsNullOrWhiteSpace(user) ? "Someone" : user.Trim();
             string to = (touser ?? "").Trim().TrimStart('@'); if (!Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$")) to = user;
-            return (text ?? "").Replace("$(user)", user).Replace("$(touser)", to).Replace("$(luck)", (Rng.Next(50) + 1).ToString()).Replace("$(games)", "!gamble <amount>, !slots <amount> and Guess the Chatter (start it through !shop)");
+            string r = (text ?? "").Replace("$(user)", user).Replace("$(touser)", to).Replace("$(luck)", (Rng.Next(50) + 1).ToString()).Replace("$(games)", "!gamble <amount>, !slots <amount> and Guess the Chatter (start it through !shop)");
+            return Regex.Replace(r, @"\$\(link:([a-z0-9_]+)\)", m => Links.Get(m.Groups[1].Value) ?? m.Value);   // the same expansion Chatty does at serve time
         }
 
         /// <summary>body: { action: set|add|delete|test|cooldown, name, text?, choices?, aliases?, enabled?, user?, touser?, seconds? }</summary>
