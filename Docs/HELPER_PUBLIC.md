@@ -41,6 +41,12 @@ Type !leave to take yourself out of the queue, and !pos to see your spot.
 ## Your points
 Type !points to see your points. The leaderboards are at https://innocentpenguin.com/leaderboards.
 
+## How to earn points (and reach 100k)
+Points come from watching the stream live (subs earn more), chatting, playing the viewer matches, following, cheers and gifts. Reaching 100,000 takes a long time of watching and playing, or big sub, cheer and gift boosts. Type !points to see your total.
+
+## Song requests
+Redeem the "Song Request" channel point reward and type the song name or a Spotify/YouTube link as your message. If the song cannot be played, your channel points are refunded.
+
 ## Joined players who played a game (the recycler)
 Players without a strike can stay in the queue and are put back in line after they play. !queue shows the line.
 

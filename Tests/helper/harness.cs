@@ -327,6 +327,15 @@ public static class Harness
             Check("should answer: " + c[0], Last() != null && Last().Contains("https://innocentpenguin.com" + c[1]), Last());
             Check("short: one line under 160 characters with a link: " + c[0], Last() != null && Last().IndexOf('\n') < 0 && Last().Length < 160 && Last().Contains("https://"), Last());
         }
+        {   // nightly 2026-10-24: "how do i have 100k" and "how do I song request again" went unanswered
+            Msg("Pts1", "how do i have 100k"); Check("points: how do i have 100k gets the earning answer", Last() != null && Last().Contains("watching live") && Last().Contains("!points") && Last().Contains("100k"), Last());
+            Msg("Pts2", "how can i earn points?"); Check("points: how can i earn points", Last() != null && Last().Contains("watching live"), Last());
+            Msg("Sr1", "how do I song request again peng?"); Check("song request: the reward steps", Last() != null && Last().Contains("Song Request") && Last().Contains("Spotify") && Last().Contains("points back"), Last());
+            Msg("Sr2", "where do i request a song?"); Check("song request: where do i request a song", Last() != null && Last().Contains("Song Request"), Last());
+            foreach (var q in new[] { "that song request was fire lol", "i got 100k points last stream", "he played my song earlier" }) { Msg("PQ" + Math.Abs(q.GetHashCode() % 9999), q); Check("points/song: stays silent on a statement: " + q, Last() == null, Last()); }
+            Msg("Pts3", "como consigo puntos?"); Check("points (es): como consigo puntos", Last() != null && Last().Contains("puntos"), Last());
+            Msg("Sr3", "como pido una cancion?"); Check("song request (es)", Last() != null && Last().Contains("Song Request"), Last());
+        }
         foreach (var q in new[] { "lol the commands in this game are crazy", "i love the leaderboards on this site", "gg that was a good round", "ay did you see that clutch", "my commands are broken on my keyboard haha", "the rules of rocket league are weird" })
         {
             Msg("Quiet9", q);

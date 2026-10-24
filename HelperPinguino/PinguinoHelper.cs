@@ -981,6 +981,8 @@ public class CPHInline
     static readonly Regex RxEsBoards = new Regex(@"clasificaci[o\u00f3]n|tabla\s+de|ranking|mejores\s+(jugadores|donadores)|tops?\s+de", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     static readonly Regex RxEsProfile = new Regex(@"mi\s+perfil|mis\s+estad[i\u00ed]sticas|mis\s+puntos", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     static readonly Regex RxEsFaq = new Regex(@"reglas|preguntas\s+frecuentes|qu[e\u00e9]\s+est[a\u00e1]\s+permitido", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    static readonly Regex RxEsPts = new Regex(@"c[o\u00f3]mo\b.{0,20}\b(consigo|gano|obtengo|junto|saco|hago)\b.{0,22}\b(puntos|\d{2,3}\s?k)\b|formas?\s+de\s+(ganar|conseguir)\s+puntos", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    static readonly Regex RxEsSong = new Regex(@"(c[o\u00f3]mo|d[o\u00f3]nde)\b.{0,25}\b(pido|pedir|pongo|poner|solicito)\b.{0,15}\b(canci[o\u00f3]n|m[u\u00fa]sica)|petici[o\u00f3]n\s+de\s+canci", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     static readonly Regex RxEsEmotes = new Regex(@"\bemotes?\b|7tv|stickers", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     static readonly Regex RxEsMmr = new Regex(@"mi\s+(mmr|rango|nivel)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     static readonly Regex RxYesEs = new Regex(@"^\s*(?:@\S+\s+)?(s[i\u00ed]|sip|claro|dale|va|sale|simon|sim\u00f3n|ok|okey|\u00f3rale|orale|por\s+favor|adelante|confirmo)\s*[.!]*\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -996,6 +998,8 @@ public class CPHInline
         if (RxEsPos.IsMatch(t)) return "position";
         if (RxEsSchedule.IsMatch(t)) return "schedule";
         if (RxEsMmr.IsMatch(t)) return "mmr_info";
+        if (RxEsPts.IsMatch(t)) return "points_earn";
+        if (RxEsSong.IsMatch(t)) return "song_request";
         if (RxEsReg.IsMatch(t)) return "how_register";
         if (RxEsJoin.IsMatch(t)) return "how_join";
         if (RxEsCmds.IsMatch(t)) return "site_commands";
@@ -1045,6 +1049,8 @@ public class CPHInline
             case "position": Say(who + "\u00a1Con gusto! Escribe !pos para ver tu lugar en la cola, y !queue para ver la fila completa."); return true;
             case "schedule": Say(who + "Ivan transmite todos los d\u00edas a las 5:00 PM (hora del centro de EE. UU.). Primero Rocket League con la banda un par de horas y luego otros juegos. El horario completo: " + "https://twitch.tv/innocentpenguin_/schedule"); return true;
             case "mmr_info": Say(who + "Escribe !mmr para ver tu MMR, o !stats para tus victorias y puntos."); return true;
+            case "points_earn": Say(who + "Los puntos vienen de ver el stream en vivo (los subs ganan m\u00e1s), chatear, jugar partidas, seguir, cheers y regalos, as\u00ed que llegar a 100k toma tiempo. !points muestra los tuyos: " + SiteUrl("/help")); return true;
+            case "song_request": Say(who + "Canjea la recompensa de puntos de canal Song Request y escribe el nombre de la canci\u00f3n o un link de Spotify/YouTube. Si no se puede poner, te devuelven tus puntos."); return true;
             case "site_commands": Say(who + "Todos los comandos del chat, con buscador: " + SiteUrl("/help#commands")); return true;
             case "site_leaderboards": Say(who + "Los que m\u00e1s regalan, bitean y hablan, y las rachas, de siempre o por mes: " + SiteUrl("/leaderboards")); return true;
             case "site_profile": Say(who + "Tu perfil y tus estad\u00edsticas: " + SiteUrl("/members")); return true;
@@ -1486,6 +1492,10 @@ public class CPHInline
     static readonly Regex RxSiteBoards = new Regex(@"\b(leader\s*boards?|top\s+(gifters?|bitters?|yappers?|streaks?)|who\s+(has\s+)?(gifted|cheered|yapped)\s+the\s+most|most\s+gifted|watch\s*streak\s+(board|record|leaders?)|where\b.{0,12}\b(see|find|check)\b.{0,12}\b(my\s+)?(rank|ranking))\b", RX);
     static readonly Regex RxSiteProfile = new Regex(@"\b(my\s+profile|members?\s+page|where\b.{0,14}\b(see|find|check)\b.{0,16}\b(profile|my\s+stats|my\s+strikes|my\s+points)|what\s+does\s+(the\s+)?(bot|pinguino\w*)\s+know\s+about\s+me)\b", RX);
     static readonly Regex RxSiteFaq = new Regex(@"\b(the\s+rules|what\s+are\s+the\s+rules|chat\s+rules|faq|what\s+is\s+a\s+strike|what\s+are\s+strikes|how\s+do\s+strikes\s+work)\b", RX);
+    // "how do I get 100k" / "how do I song request again": plain answers (2026-10-24 nightly: both went unanswered)
+    static readonly Regex RxPtsEarn = new Regex(@"\bhow\b.{0,20}\b(get|earn|make|gain|farm|have|reach|hit|collect|win)\b.{0,22}\b(points?|pts|\d{2,3}\s?k|\d{2,3}[,.]\d{3})\b|\bways?\s+to\s+(get|earn)\s+points?\b|\bhow\s+(do|does)\s+(points?|you\s+earn)\b", RX);
+    static readonly Regex RxSongReq = new Regex(@"\b(song\s*requests?|request\s+(a\s+|the\s+|my\s+)?(song|music|track)s?|(add|queue|play|put)\s+(a\s+|my\s+|the\s+)?(song|track)s?\b.{0,12}\b(queue|stream|list)?)\b", RX);
+    static readonly Regex RxAskCue = new Regex(@"\?|\b(how|where|what|can\s+i|could\s+i|again|do\s+i|do\s+you|is\s+there)\b", RX);
     static readonly Regex RxSiteEmotes = new Regex(@"\b(7tv|seventv|emote\s+(list|search)|what\s+emotes?\s+(are|does)|which\s+emotes?|where\b.{0,12}\bemotes?)\b", RX);
 
     // Approved "Taught" notes (helper_facts.json "Taught": [{id,text,taughtBy,...}], written by the Host's teach inbox only after Ivan approved them).
@@ -1565,6 +1575,8 @@ public class CPHInline
         if (m.Success) { intent = "do_register"; epic = m.Groups["n"].Value.Trim(); return; }
         if (IsMcQuestion(text)) { intent = "mc_info"; return; }
         if (RxSong.IsMatch(text)) { intent = "song"; return; }
+        if (RxPtsEarn.IsMatch(text) && !Regex.IsMatch(text, @"\b(refund|refunded|back|lost|stolen|missing|gone|removed|taken|fix|bug)\b", RX)) { intent = "points_earn"; return; }
+        if (RxSongReq.IsMatch(text) && RxAskCue.IsMatch(text)) { intent = "song_request"; return; }
         if (RxMyMmr.IsMatch(text)) { intent = "mmr_info"; return; }
         if (RxDoLeave.IsMatch(text)) { intent = "do_leave"; return; }
         if (RxPos.IsMatch(text)) { intent = "position"; return; }
@@ -1585,7 +1597,7 @@ public class CPHInline
     // ══════════════════════════════════════════════════════════════
     //  AI (only to pick an intent from a fixed list; it never writes the reply)
     // ══════════════════════════════════════════════════════════════
-    static readonly string[] Intents = { "lobby_info", "how_join", "how_register", "do_register", "do_join", "do_leave", "position", "site_commands", "site_leaderboards", "site_profile", "site_faq", "site_emotes", "none" };
+    static readonly string[] Intents = { "lobby_info", "how_join", "how_register", "do_register", "do_join", "do_leave", "position", "site_commands", "site_leaderboards", "site_profile", "site_faq", "site_emotes", "points_earn", "song_request", "none" };
     static bool IsSite(string i) { return i != null && i.StartsWith("site_"); }
 
     void AskAi(string text, out string intent, out string epic)
@@ -1599,6 +1611,7 @@ public class CPHInline
             "lobby_info (asks for the private match / lobby name, code or password), how_join (asks how to join or play with the streamer), how_register (asks how to register / link their Epic name), " +
             "do_register (asks to be registered; put the Epic name they gave in epic), do_join (asks to be put in the queue), do_leave (asks to leave the queue), position (asks where they are in the queue), " +
             "site_commands (asks what commands exist / how to use commands), site_leaderboards (asks about the leaderboards, top gifters, rankings), site_profile (asks where to see their profile / stats / what the bot knows about them), site_faq (asks about the rules, strikes, common questions), site_emotes (asks about the 7TV emotes), " +
+            "points_earn (asks how to get / earn points or reach an amount like 100k), song_request (asks how to request a song), " +
             "none (anything else: chatting, jokes, talking to someone else, other topics). When unsure, answer none. Never invent an Epic name.";
         string reply;
         try { reply = Ask(system, text); } catch (Exception ex) { CPH.LogWarn("[Helper] AI failed: " + ex.Message); return; }
@@ -1682,7 +1695,7 @@ public class CPHInline
         }
         string cdKey = login + "|" + intent;
         long last;
-        bool info = intent == "schedule" || intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "song" || intent == "mmr_info" || IsSite(intent);
+        bool info = intent == "schedule" || intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "song" || intent == "mmr_info" || intent == "points_earn" || intent == "song_request" || IsSite(intent);
         if (_userCd.TryGetValue(cdKey, out last) && now - last < _cfg.UserCooldownSec) { _gateWhy = "cooldown: told this viewer the same a moment ago"; return true; }   // already told them a moment ago: stay quiet, and keep the chatbot out of it
         if (info && now - _infoCd < _cfg.InfoCooldownSec) { _gateWhy = "cooldown: another info answer just went out"; return true; }
         _userCd[cdKey] = now;
@@ -1735,6 +1748,8 @@ public class CPHInline
             case "site_faq": Say(who + "Rules and answers to common questions: " + SiteUrl("/faq")); return true;
             case "site_emotes": Say(who + "The channel's 7TV emotes, searchable: " + SiteUrl("/emotes")); return true;
             case "mmr_info": Say(who + "Type !mmr to see your MMR, or !stats for your wins and points."); return true;
+            case "points_earn": Say(who + "Points come from watching live (subs earn more), chatting, playing matches, follows, cheers and gifts, so 100k is a long grind. !points shows yours: " + SiteUrl("/help")); return true;
+            case "song_request": Say(who + "Redeem the Song Request channel point reward and type the song name or a Spotify/YouTube link. If it can't be played you get your points back."); return true;
             case "do_leave":
                 if (Regex.IsMatch(_curText ?? "", @"\bwheel\b", RegexOptions.IgnoreCase)) Say(who + "Thanks for asking! Type !notme to take yourself off the wheel. (!leave is only for the custom queue.)");
                 else Say(who + "Thanks for asking! Type !leave and you are out of the queue.");   // read-only: the viewer types the command themselves
