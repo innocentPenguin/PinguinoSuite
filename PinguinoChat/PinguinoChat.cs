@@ -3058,7 +3058,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         JObject o; if (!CannedMap().TryGetValue(cmd, out o)) return false;
         if ((bool?)o["skipBroadcaster"] == true && c.Broadcaster && (text ?? "").Trim().IndexOf(' ') > 0) return false;   // !raid <channel> from the streamer belongs to the Host; a bare !raid still gets the raid-call line
         long now = Now(); long last; string ck = ((string)o["name"] ?? cmd).ToLower();   // the cooldown belongs to the command, so an alias does not get around it
-        if (_cannedAt.TryGetValue(ck, out last) && now - last < _cannedSec) return true;   // answered a moment ago: stay quiet, but the command is still handled here
+        long cdSec = (long?)o["cooldownSec"] ?? _cannedSec; if (cdSec < 1 || cdSec > 600) cdSec = _cannedSec;   // a mod-made command carries its own cooldown (10 s)
+        if (_cannedAt.TryGetValue(ck, out last) && now - last < cdSec) return true;   // answered a moment ago: stay quiet, but the command is still handled here
         long lu; if (_cannedAt.TryGetValue("u|" + c.Login, out lu) && now - lu < 6) return true;   // one canned line per person per 6 s (cycling through the list is not a way to spam)
         if (now - _cannedAny < 2) return true;                                                      // and one per 2 s for the whole chat
         string reply = (string)o["text"];
@@ -3072,6 +3073,12 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             bool miss = false;
             reply = Regex.Replace(reply, @"\$\(link:([a-z0-9_]+)\)", m => { string u = lk != null ? (string)lk[m.Groups[1].Value.ToLower()] : null; if (string.IsNullOrEmpty(u)) { miss = true; return m.Value; } return u; }, RegexOptions.IgnoreCase);
             if (miss) { CPH.LogWarn("[Chatty] canned reply skipped, a $(link:...) could not be resolved: " + cmd); return true; }
+        }
+        if (reply.IndexOf("$(count)", StringComparison.Ordinal) >= 0)
+        {   // how many times this command has been used (kept in a persisted global, not in the JSON the Host edits)
+            long n = 0; try { long.TryParse(CPH.GetGlobalVar<string>("pinguino.cc." + ck, true) ?? "0", out n); } catch (Exception) { }
+            n++; try { CPH.SetGlobalVar("pinguino.cc." + ck, n.ToString(), true); } catch (Exception) { }
+            reply = reply.Replace("$(count)", n.ToString());
         }
         reply = reply.Replace("$(user)", c.Display).Replace("$(touser)", to).Replace("$(luck)", (_rng.Next(50) + 1).ToString()).Replace("$(games)", GamesList());
         _cannedAt[ck] = now; _cannedAt["u|" + c.Login] = now; _cannedAny = now; using (PgReplyTo(c.MsgId ?? "", c.Login)) PgSay("chat", reply);

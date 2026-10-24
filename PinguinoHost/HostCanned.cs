@@ -55,7 +55,7 @@ namespace PinguinoHost
                 {
                     var r = Read();
                     return new JObject { { "ok", true }, { "version", 1 }, { "exportedAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 },
-                        { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)", "$(link:<name>)") },
+                        { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)", "$(count)", "$(link:<name>)") },
                         { "rules", new JObject { { "name", "1-24 letters, digits or _" }, { "maxTextLength", 400 }, { "oneLine", true }, { "noControlCharacters", true }, { "reservedNames", new JArray(Reserved.OrderBy(x => x)) } } },
                         { "commands", new JArray(r["commands"].OfType<JObject>().Select(c => (JToken)c.DeepClone())) } };
                 }
@@ -76,8 +76,104 @@ namespace PinguinoHost
             string s = t.TrimStart();
             if (s.StartsWith("/") || s.StartsWith(".") || s.StartsWith("!")) return "the text cannot start with / . or ! (that would run a Twitch or bot command)";
             foreach (Match lm in Regex.Matches(t, @"\$\(link:([^)]*)\)")) if (!Regex.IsMatch(lm.Groups[1].Value, "^[a-z0-9_]+$") || Links.Get(lm.Groups[1].Value) == null) return "$(link:" + lm.Groups[1].Value + ") is not a known link (known: " + string.Join(", ", ((JObject)Links.Doc()["links"]).Properties().Select(x => x.Name)) + ")";
-            if (Regex.IsMatch(Regex.Replace(t, @"\$\(link:[a-z0-9_]+\)", ""), @"\$\((?!user\)|touser\)|luck\)|games\))")) return "only $(user), $(touser), $(luck), $(games) and $(link:name) can be used";
+            if (Regex.IsMatch(Regex.Replace(t, @"\$\(link:[a-z0-9_]+\)", ""), @"\$\((?!user\)|touser\)|luck\)|games\)|count\))")) return "only $(user), $(touser), $(luck), $(games), $(count) and $(link:name) can be used";
             return null;
+        }
+
+                // ---- mod-made plain commands (!addcom / !editcom / !delcom): stored in the SAME canned_commands.json as entries with "custom": true, served by Chatty's canned path ----
+        static readonly HashSet<string> CustomExtraReserved = new HashSet<string> { "addcom", "editcom", "delcom", "song", "vol", "songqueue", "voteskip", "skip", "help", "helper", "emote", "topemotes", "remindme", "reminders", "notme", "alias", "boards", "lookup", "names", "streaks", "subs",
+            "leaderboards", "leaderboard", "gifted", "bits", "sub", "founders", "pm", "pmrules", "lore", "rules", "discord", "guess", "confirm", "raid", "vanish", "disappear", "countdown", "stopwatch", "timer", "timers", "remind", "alert", "alerts", "top", "leaders", "watchtime", "tip" };
+        public static bool IsCustomCommand(string cmd) { return cmd == "!addcom" || cmd == "!editcom" || cmd == "!delcom"; }
+        /// <summary>true when a real command already answers to this name: the fixed lists, the Host's modules, every non-canned entry of the command registry (built-ins, Helper, Host)</summary>
+        static bool CustomCollides(string n)
+        {
+            if (HostOwns(n) || CustomExtraReserved.Contains(n)) return true;
+            string b = "!" + n;
+            try { if (Economy.IsViewerCommand(b) || Economy.IsModCommand(b) || Economy.IsBankCommand(b) || Economy.IsHiddenCommand(b) || Timers.IsCommand(b) || StreamTimers.IsCommand(b) || Teach.IsCommand(b) || Vanish.IsCommand(b) || SubTickets.IsModCommand(b) || Reminders.IsCommand(b) || Rank.IsCommand(b)) return true; } catch (Exception) { }
+            try { if (ChannelLore.IsCommand(b) && !ChannelLore.ChattyOwns(b)) return true; } catch (Exception) { }
+            try
+            {
+                foreach (var x in (CmdProfiles.All()["commands"] as JArray ?? new JArray()).OfType<JObject>())
+                {
+                    if ((string)x["source"] == "canned") continue;
+                    if (string.Equals(((string)x["id"] ?? "").TrimStart('!'), n, StringComparison.OrdinalIgnoreCase)) return true;
+                    foreach (var al in x["aliases"] as JArray ?? new JArray()) if (string.Equals(((string)al ?? "").TrimStart('!'), n, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            }
+            catch (Exception) { }
+            return false;
+        }
+        /// <summary>null = fine; only $(user) $(touser) $(count) $(link:key) are allowed in a mod-made command</summary>
+        static string CustomBadText(string t)
+        {
+            string bad = BadText(t); if (bad != null) return bad;
+            if (Regex.IsMatch(Regex.Replace(t, @"\$\(link:[a-z0-9_]+\)", ""), @"\$\((?!user\)|touser\)|count\))")) return "only $(user), $(touser), $(count) and $(link:name) can be used";
+            return null;
+        }
+        /// <summary>!addcom !name text / !editcom !name new text / !delcom !name. Mods and the broadcaster only (everyone else: nothing). One reply line to the mod.</summary>
+        public static void CustomHandle(string user, string cmd, string[] args, int role, Action<string> say)
+        {
+            if (role < 3) return;
+            string at = "@" + user + " ";
+            string name = args != null && args.Length > 0 ? CleanName(args[0]) : "";
+            string text = args != null && args.Length > 1 ? string.Join(" ", args.Skip(1)).Trim() : "";
+            string usage = cmd == "!addcom" ? "use: !addcom !name text" : cmd == "!editcom" ? "use: !editcom !name new text" : "use: !delcom !name";
+            if (name == "") { say(at + (args != null && args.Length > 0 ? "the name must be 1-24 letters, digits or _." : usage + ".")); return; }
+            string line;
+            lock (L)
+            {
+                try
+                {
+                    var root = Read(); var arr = (JArray)root["commands"];
+                    Func<string, JObject> find = n => arr.OfType<JObject>().FirstOrDefault(x => ((string)x["name"] ?? "").ToLowerInvariant() == n || (x["aliases"] as JArray ?? new JArray()).Any(z => ((string)z ?? "").ToLowerInvariant().TrimStart('!') == n));
+                    var cur = find(name); string who = role >= 4 ? "broadcaster" : "mod";
+                    if (cmd == "!addcom")
+                    {
+                        if (text == "") { line = usage + "."; }
+                        else if (cur != null && (bool?)cur["custom"] == true) line = "!" + name + " already exists, use !editcom.";
+                        else if (cur != null || CustomCollides(name)) line = "!" + name + " is taken by a real command.";
+                        else if (arr.OfType<JObject>().Count(x => (bool?)x["custom"] == true) >= 200) line = "that is too many custom commands (200).";
+                        else
+                        {
+                            string bad = CustomBadText(text);
+                            if (bad != null) line = bad + ".";
+                            else
+                            {
+                                arr.Add(new JObject { { "name", name }, { "text", text }, { "custom", true }, { "cooldownSec", 10 }, { "addedBy", user.ToLowerInvariant() }, { "addedAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } });
+                                Write(root); ModAudit.Log(user, who, "!addcom", "!" + name, "", text); line = "added !" + name + ".";
+                            }
+                        }
+                    }
+                    else if (cur == null || (bool?)cur["custom"] != true) line = "!" + name + " is not a custom command.";
+                    else if (cmd == "!delcom") { string before = (string)cur["text"] ?? ""; arr.Remove(cur); Write(root); ModAudit.Log(user, who, "!delcom", "!" + name, before, ""); line = "deleted !" + name + "."; }
+                    else if (text == "") line = usage + ".";
+                    else
+                    {
+                        string bad = CustomBadText(text);
+                        if (bad != null) line = bad + ".";
+                        else { string before = (string)cur["text"] ?? ""; cur["text"] = text; cur["editedBy"] = user.ToLowerInvariant(); cur["editedAt"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Write(root); ModAudit.Log(user, who, "!editcom", "!" + name, before, text); line = "updated !" + name + "."; }
+                    }
+                }
+                catch (Exception ex) { line = "could not save: " + ex.Message; }
+            }
+            say(at + line);
+        }
+        /// <summary>" Custom: !a !b ..." for !commands (empty when there are none), capped so the line stays short</summary>
+        public static string CustomListLine()
+        {
+            try
+            {
+                lock (L)
+                {
+                    var names = Read()["commands"].OfType<JObject>().Where(x => (bool?)x["custom"] == true && (bool?)x["enabled"] != false).Select(x => "!" + (string)x["name"]).OrderBy(x => x).ToList();
+                    if (names.Count == 0) return "";
+                    var sb = new StringBuilder(" Custom: "); int shown = 0;
+                    foreach (var n in names) { if (sb.Length + n.Length > 190) break; if (shown > 0) sb.Append(' '); sb.Append(n); shown++; }
+                    if (shown < names.Count) sb.Append(" +" + (names.Count - shown) + " more");
+                    return sb.ToString();
+                }
+            }
+            catch (Exception) { return ""; }
         }
 
         static JObject View(JObject c)
@@ -92,7 +188,7 @@ namespace PinguinoHost
                 try
                 {
                     var r = Read();
-                    return new JObject { { "ok", true }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 }, { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)", "$(link:<name>)") }, { "file", PathOf() }, { "commands", new JArray(r["commands"].OfType<JObject>().Select(View)) } };
+                    return new JObject { { "ok", true }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 }, { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)", "$(count)", "$(link:<name>)") }, { "file", PathOf() }, { "commands", new JArray(r["commands"].OfType<JObject>().Select(View)) } };
                 }
                 catch (Exception ex) { return Err("could not read the canned commands: " + ex.Message); }
             }
@@ -103,7 +199,7 @@ namespace PinguinoHost
         {
             user = string.IsNullOrWhiteSpace(user) ? "Someone" : user.Trim();
             string to = (touser ?? "").Trim().TrimStart('@'); if (!Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$")) to = user;
-            string r = (text ?? "").Replace("$(user)", user).Replace("$(touser)", to).Replace("$(luck)", (Rng.Next(50) + 1).ToString()).Replace("$(games)", "!gamble <amount>, !slots <amount> and Guess the Chatter (start it through !shop)");
+            string r = (text ?? "").Replace("$(user)", user).Replace("$(touser)", to).Replace("$(count)", "1").Replace("$(luck)", (Rng.Next(50) + 1).ToString()).Replace("$(games)", "!gamble <amount>, !slots <amount> and Guess the Chatter (start it through !shop)");
             return Regex.Replace(r, @"\$\(link:([a-z0-9_]+)\)", m => Links.Get(m.Groups[1].Value) ?? m.Value);   // the same expansion Chatty does at serve time
         }
 

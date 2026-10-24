@@ -60,6 +60,7 @@ namespace PinguinoHost
             if (Control.IsCommand(cmd)) { Control.Handle(user, cmd, args, role, say); return true; }
             if (Teach.IsCommand(cmd)) { Teach.Handle(user, cmd, args, role, say); return true; }
             if (Vanish.IsCommand(cmd)) { Vanish.Handle(user, role, say); return true; }   // !vanish / !disappear: a 1 s "poof" timeout for whoever typed it
+            if (CannedEditor.IsCustomCommand(cmd)) { if (role >= 3) CannedEditor.CustomHandle(user, cmd, args, role, say); return role >= 3; }   // mod-made plain commands; everyone else: not ours
             if (cmd == "!guess") { SiteShop.HandleGuess(user, args, say); return true; }
             if (cmd == "!shop") { if (args.Length > 0 || !Cooling("u|!shop|" + me, 10)) SiteShop.HandleShop(user, args, say); return true; }   // the chat shop: lists the items, starts Guess the Chatter
             if (SubTickets.IsModCommand(cmd)) { if (!mod) return false; ModAudit.Log(user, "mod", cmd, string.Join(" ", args)); SubTickets.HandleMod(user, cmd, args, say); return true; }
@@ -90,7 +91,7 @@ namespace PinguinoHost
                 switch (cmd)
                 {
                     case "!pm": say(HostApi.PrivateMatchLine()); return true;
-                    case "!commands": case "!command": case "!cmds": case "!cmd": say("All my commands, by category and importance: https://innocentpenguin.com/commands"); return true;
+                    case "!commands": case "!command": case "!cmds": case "!cmd": say("All my commands, by category and importance: https://innocentpenguin.com/commands" + CannedEditor.CustomListLine()); return true;
                     case "!leaderboards": case "!leaderboard": say("Leaderboards (top gifters, bitters, yappers and watch streaks, all time or by month): " + Link); return true;
                     case "!gifted": Mine("gifters", me, args, say, user); return true;
                     case "!bits": Mine("bits", me, args, say, user); return true;

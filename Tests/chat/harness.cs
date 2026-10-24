@@ -796,6 +796,13 @@ public static class Harness
             Check("$(link:discord) is replaced from the Host's links", Last() == "Join us: https://discord.gg/newinvite ok Canny", Last());
             _cannedReset(true); CPHProxy.Sent.Clear(); Msg("Canny", "!zz", null, false);
             Check("an unknown $(link:...) posts no line", CPHProxy.Sent.Count == 0, Last());
+            File.WriteAllText(cf2, "{\"cooldownSec\":0,\"commands\":[{\"name\":\"hi\",\"text\":\"hello $(user) ($(count))\",\"custom\":true,\"cooldownSec\":10}]}");
+            CPHProxy.Globals.Remove("pinguino.cc.hi"); _cannedReset(true); CPHProxy.Sent.Clear(); Msg("Canny", "!hi", null, false);
+            Check("custom command: plain text with $(user) and $(count) = 1", Last() == "hello Canny (1)", Last());
+            _cannedReset(true); Msg("Canny", "!hi", null, false); cn = CPHProxy.Sent.Count;
+            Check("custom command: its own cooldown (10 s) keeps a repeat quiet", cn == 1, cn.ToString());
+            CPHProxy.Globals["pinguino.cc.hi"] = "41"; _cannedReset(false); CPHProxy.Sent.Clear(); Msg("Canny2", "!hi", null, false);
+            Check("custom command: the count continues from the stored value", Last() == "hello Canny2 (42)", Last());
             CPHProxy.Globals.Remove("pinguino.links"); _cannedReset(true); CPHProxy.Sent.Clear(); Msg("Canny", "!dc", null, false);
             Check("no links published yet: no half-filled line", CPHProxy.Sent.Count == 0, Last());
             SetCfgS("CannedFile", oldCf); _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent");
