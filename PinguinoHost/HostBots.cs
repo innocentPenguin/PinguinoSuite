@@ -145,10 +145,11 @@ namespace PinguinoHost
                       : new JObject { { "ok", false }, { "error", "No account could speak. Sign in first." } };
         }
 
-        public static JObject SetBotEnabled(string id, bool on) { return SaveBot(new JObject { { "id", id }, { "enabled", on } }); }
+        public static JObject SetBotEnabled(string id, bool on) { return SaveBot(new JObject { { "id", id }, { "enabled", on } }, "!pg chat command"); }
         public static JObject BotsSnapshot() { return Bots(); }
         public static JObject StatusSnapshot() { return Status(); }
-        static JObject SaveBot(JObject b)
+        static JObject SaveBot(JObject b) { return SaveBot(b, "api (POST /api/bots)"); }
+        static JObject SaveBot(JObject b, string source)
         {
             string id = (string)b["id"]; int i = Array.IndexOf(BotIds, id);
             if (i < 0) return new JObject { { "ok", false }, { "error", "unknown bot" } };
@@ -156,7 +157,8 @@ namespace PinguinoHost
             {
                 bool on = (bool)b["enabled"]; var reg = LoadFile("bots.json");
                 if (reg["Bots"]?[id] == null) return new JObject { { "ok", false }, { "error", "bots.json has no entry for " + id } };
-                reg["Bots"][id]["Enabled"] = on; SaveFile("bots.json", reg);
+                bool was = (bool?)reg["Bots"][id]["Enabled"] != false; reg["Bots"][id]["Enabled"] = on; SaveFile("bots.json", reg);
+                if (was != on) Clog.Info("bots", id + " switched " + (on ? "ON" : "OFF") + " (was " + (was ? "on" : "off") + ") by " + source);   // the only place a bot's Enabled changes: who and when are in host.jsonl
                 if (OwnFile[i] != null) { var f = LoadFile(OwnFile[i]); f["Enabled"] = on; SaveFile(OwnFile[i], f); }
             }
             var st = b["settings"] as JObject;
