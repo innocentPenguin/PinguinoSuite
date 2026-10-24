@@ -325,6 +325,7 @@ namespace PinguinoHost
         {
             try
             {
+                if (_heldOffline != null) return false;   // this run already holds one: the marker is its own, not a leftover
                 if (!File.Exists(HeldP)) return false;
                 JObject j; using (var rd = new Newtonsoft.Json.JsonTextReader(new StringReader(File.ReadAllText(HeldP))) { DateParseHandling = Newtonsoft.Json.DateParseHandling.None }) j = JObject.Load(rd); File.Delete(HeldP);
                 DateTime at; if (!DateTime.TryParse((string)j["at"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out at) || (DateTime.UtcNow - at.ToUniversalTime()).TotalMinutes > 15) return false;

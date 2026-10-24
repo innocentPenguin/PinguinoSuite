@@ -86,6 +86,8 @@ lines = [{'t': 1, 'u': 'chattera', 'i': '11', 'm': 'honestly the new update make
 open(os.path.join(d, 'chat_logs', 'live', day + '.jsonl'), 'w').write('\n'.join(json.dumps(x) for x in lines) + '\n')
 json.dump({'12': {'Login': 'optedout', 'Privacy': 'optout'}}, open(os.path.join(d, 'chat_memory.json'), 'w'))
 
+# games are voiced by Chatty when GameVoice is on (12ed7ea); this test checks the plain Host lines, so Chatty's game voice is off
+json.dump({'Enabled': True, 'ChatReplies': True, 'GameVoice': False}, open(os.path.join(d, 'chat_settings.json'), 'w'))
 host = start()
 try:
     ask(host, '*modguy: hello chat')   # the Host sees modguy as a mod
