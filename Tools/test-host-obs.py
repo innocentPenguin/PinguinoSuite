@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from obs_probe import Obs
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
 dll = args[0] if args else os.path.join(os.path.dirname(__file__), '..', 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
+if os.environ.get('PINGUINO_OBS_TEST') != '1': print('SKIP host-obs: drives the REAL OBS with the real OBS password; set PINGUINO_OBS_TEST=1 to run it on purpose'); sys.exit(0)
 live = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Data', 'runtime', 'host_secrets.json'), encoding='utf-8-sig'))
 import socket
 try: socket.create_connection((live.get('ObsHost') or '127.0.0.1', int(live.get('ObsPort') or 4455)), timeout=2).close()

@@ -27,8 +27,8 @@ srv = ThreadingHTTPServer(('127.0.0.1', 8841), H); threading.Thread(target=srv.s
 
 def host(port):
     d = tempfile.mkdtemp(prefix='pglease_')
-    json.dump({'Channel': 'pglease_test', 'OverlayPort': port}, open(os.path.join(d, 'host_secrets.json'), 'w'))
-    env = dict(os.environ, PINGUINO_LEASE_URL='http://127.0.0.1:8841', PINGUINO_API_TOKEN='testtoken', PINGUINO_LEASE_POLL='2', PINGUINO_LEASE_GRACE='6', PINGUINO_DATA_DIR=d)
+    json.dump({'Channel': 'pglease_test', 'OverlayPort': port, 'ObsEnabled': False}, open(os.path.join(d, 'host_secrets.json'), 'w'))
+    env = dict(os.environ, PINGUINO_LEASE_URL='http://127.0.0.1:8841', PINGUINO_API_TOKEN='testtoken', PINGUINO_LEASE_POLL='2', PINGUINO_LEASE_GRACE='6', PINGUINO_DATA_DIR=d, PINGUINO_COMPAT_WS_PORT=str(port + 100))   # own compat WS port per Host, never the live 8080
     return subprocess.Popen(['dotnet', dll, '--no-sync', '--data', d], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def get(port, path):
