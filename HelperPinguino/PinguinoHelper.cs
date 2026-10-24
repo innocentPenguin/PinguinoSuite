@@ -1320,6 +1320,8 @@ public class CPHInline
             try { File.WriteAllText(Path.Combine(_dir, "helper_facts.json"), f.ToString()); } catch (Exception) { }
         }
         var merged = (JObject)f.DeepClone();
+        // the channel's links (links.json, the Host's one source of truth for {link:...}) beat the literal copy in helper_facts.json; the website below still wins over both
+        try { var lk = ReadJson("links.json"); var dl = (string)lk?["links"]?["discord"]; if (!string.IsNullOrWhiteSpace(dl)) merged["Discord"] = dl.Trim(); var wl = (string)lk?["links"]?["website"]; if (!string.IsNullOrWhiteSpace(wl)) merged["Website"] = wl.Trim(); } catch (Exception) { }
         var site = SiteFacts();
         if (site != null) foreach (var kv in site) if (!string.IsNullOrWhiteSpace((string)kv.Value)) merged[kv.Key] = kv.Value;
         _facts = merged; _factsAt = DateTime.UtcNow; return merged;

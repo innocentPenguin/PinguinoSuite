@@ -238,6 +238,15 @@ public static class Harness
         Msg("Mc7", "!discord");
         Check("!discord answers with the invite", Last() != null && Last().Contains("discord.gg/"), Last());
         Check("facts file was seeded for 05/Ivan to check", File.Exists(Path.Combine(dir, "helper_facts.json")));
+        {   // links.json (the Host's one source for {link:...}) beats the literal in helper_facts.json, and a change shows up in the answer
+            var bf0 = BindingFlags.NonPublic | BindingFlags.Static; var T0 = typeof(CPHInline);
+            T0.GetField("_site", bf0).SetValue(null, new Newtonsoft.Json.Linq.JObject()); T0.GetField("_siteAt", bf0).SetValue(null, DateTime.UtcNow);   // no website answer in this block (the site would win)
+            File.WriteAllText(Path.Combine(dir, "links.json"), "{\"links\":{\"discord\":\"https://discord.gg/linkone\"}}"); T0.GetField("_factsAt", bf0).SetValue(null, DateTime.MinValue);
+            Msg("Mc7a", "!discord"); Check("links.json discord is the answer", Last() != null && Last().Contains("discord.gg/linkone") && !Last().Contains("fktz5sq4b8"), Last());
+            File.WriteAllText(Path.Combine(dir, "links.json"), "{\"links\":{\"discord\":\"https://discord.gg/linktwo\"}}"); T0.GetField("_factsAt", bf0).SetValue(null, DateTime.MinValue);
+            Msg("Mc7b", "!discord"); Check("a changed links.json changes the answer", Last() != null && Last().Contains("discord.gg/linktwo"), Last());
+            File.Delete(Path.Combine(dir, "links.json")); T0.GetField("_factsAt", bf0).SetValue(null, DateTime.MinValue); T0.GetField("_site", bf0).SetValue(null, null); T0.GetField("_siteAt", bf0).SetValue(null, DateTime.MinValue);
+        }
 
         // the website's /api/faq overrides the seed
         var bf = BindingFlags.NonPublic | BindingFlags.Static; var T = typeof(CPHInline);
