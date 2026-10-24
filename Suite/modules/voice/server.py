@@ -628,6 +628,18 @@ PAGES = {"/": "static/index.html"}
 OPEN_POST = {"/api/chat-command"}      # local bots (Host) with no Origin may call this one: it has its own role checks and is silent in chat
 
 
+_drops = {"n": 0, "last": 0.0}
+
+
+def note_drop(exc):
+    """A client hung up or was reset mid-request (Listen's short polls, a page that was closed): normal. One short line per minute, with a count."""
+    _drops["n"] += 1
+    now = time.time()
+    if now - _drops["last"] >= 60:
+        n, _drops["n"], _drops["last"] = _drops["n"], 0, now
+        print(f"client dropped: {type(exc).__name__}" + (f" ({n} since the last note)" if n > 1 else ""), flush=True)
+
+
 class Server(ThreadingHTTPServer):
     """A client that hangs up mid-request is normal; log one line, not a traceback."""
     daemon_threads = True
@@ -635,7 +647,7 @@ class Server(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
         exc = sys.exc_info()[1]
         if isinstance(exc, (ConnectionError, TimeoutError, BrokenPipeError)):
-            print("client dropped:", type(exc).__name__, flush=True)
+            note_drop(exc)
             return
         super().handle_error(request, client_address)
 
@@ -654,6 +666,12 @@ class H(BaseHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
+
+    def handle(self):
+        try:
+            super().handle()
+        except (ConnectionError, TimeoutError, BrokenPipeError) as e:       # reset while reading the request line or writing the answer
+            note_drop(e)
 
     def _send(self, code, body, ctype="application/json", extra=None):
         if not isinstance(body, (bytes, bytearray)):
