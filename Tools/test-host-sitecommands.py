@@ -6,11 +6,13 @@ here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
 PORT, SITE = 8963, 8964; B = 'http://127.0.0.1:%d' % PORT; KEY = 'site-KEY-cmds'
 d = tempfile.mkdtemp(prefix='pgsc_'); json.dump({'Channel': 'x', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w')); json.dump({'WebSyncKey': KEY}, open(os.path.join(d, 'settings.json'), 'w'))
-got = []
+got = []; attempts = []
 class S(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
-        b = json.loads(self.rfile.read(int(self.headers['Content-Length']))); got.append((self.path, self.headers.get('Authorization'), b)); self.send_response(200); self.send_header('Content-Length', '2'); self.end_headers(); self.wfile.write(b'{}')
+        b = json.loads(self.rfile.read(int(self.headers['Content-Length']))); attempts.append(time.time())
+        if len(attempts) == 1: self.send_response(502); self.send_header('Content-Length', '2'); self.end_headers(); self.wfile.write(b'{}'); return   # the site is mid-redeploy for the first push
+        got.append((self.path, self.headers.get('Authorization'), b)); self.send_response(200); self.send_header('Content-Length', '2'); self.end_headers(); self.wfile.write(b'{}')
 threading.Thread(target=ThreadingHTTPServer(('127.0.0.1', SITE), S).serve_forever, daemon=True).start()
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8965', 'PINGUINO_SITE_BASE': 'http://127.0.0.1:%d' % SITE})
 host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -28,7 +30,7 @@ try:
     for _ in range(60):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
-    chk('pushed at start', wait(1), len(got)); g = mine()[0] if mine() else ('', '', {})
+    chk('pushed at start', wait(1, 12), len(got)); chk('a 502 is retried once within seconds (not after the long back-off): attempts %d' % len(attempts), len(attempts) == 2 and attempts[1] - attempts[0] < 10, attempts); g = mine()[0] if mine() else ('', '', {})
     cs = g[2].get('commands', []); chk('bot key + shape', g[1] == 'Bearer ' + KEY and len(cs) > 20 and all(k in cs[0] for k in ['id', 'name', 'permission', 'enabled', 'archived', 'uses']) and 'createdBy' not in cs[0], cs[:1])
     time.sleep(12); chk('not pushed again without a change', len(mine()) == 1, len(mine()))
     post('/api/commands/profile', {'id': '!mmr', 'enabled': False, 'by': 'test'}); post('/api/commands/archive', {'id': '!mmr', 'by': 'test'})
