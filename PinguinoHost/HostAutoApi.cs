@@ -284,7 +284,9 @@ namespace PinguinoHost
             if (p == "/api/canned")
             {   // Chatty's canned commands: list / edit / add / test (this computer only)
                 if (!System.Net.IPAddress.IsLoopback(c.Request.RemoteEndPoint.Address)) { c.Response.StatusCode = 403; return true; }
+                if (m == "GET" && c.Request.QueryString["export"] == "1") { Write(c, CannedEditor.Export().ToString(), "application/json"); return true; }
                 if (m == "GET") { Write(c, CannedEditor.List().ToString(), "application/json"); return true; }
+                if (m == "POST" && !WriteOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"token required\"}", "application/json"); return true; }
                 if (m == "POST") { Write(c, CannedEditor.Handle(Body(c)).ToString(), "application/json"); return true; }
             }
             if (p == "/api/clips-pick" && m == "GET")

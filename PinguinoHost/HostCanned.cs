@@ -10,7 +10,7 @@ namespace PinguinoHost
 {
     /// <summary>Editor backend for ChattyPinguino's canned commands (PinguinoChat\canned_commands.json, the same file Chatty reloads when it changes): list, change the text / choices /
     /// aliases, turn one on or off, add a new one, and a test line that renders $(user) $(touser) $(luck) without sending anything to chat. Loopback only (the routes refuse anything else).
-    /// There is no delete on purpose: turning a command off keeps it, and every save keeps the previous file as canned_commands.json.bak.</summary>
+    /// Delete is allowed (Ivan asked for it); every save, delete included, keeps the previous file as canned_commands.json.bak.</summary>
     public static class CannedEditor
     {
         static readonly object L = new object();
@@ -38,6 +38,31 @@ namespace PinguinoHost
             File.Copy(tmp, p, true); File.Delete(tmp);   // Chatty and the Host notice the new write time on their next look (about 4 s)
         }
 
+        /// <summary>true when the name is taken by a real command: the fixed list above or anything the Host's own modules answer to (control, emotes, alerts, gambling)</summary>
+        static bool HostOwns(string n)
+        {
+            if (Reserved.Contains(n)) return true;
+            string b = "!" + n;
+            try { return Control.IsCommand(b) || Emotes.IsCommand(b) || AlertBridge.IsCommand(b) || Gamble.IsCommand(b); } catch (Exception) { return false; }
+        }
+
+        /// <summary>everything the Suite page needs to build its editor in one read: the commands as stored (name, aliases, text, choices, enabled), the cooldown, the allowed variables and the rules</summary>
+        public static JObject Export()
+        {
+            lock (L)
+            {
+                try
+                {
+                    var r = Read();
+                    return new JObject { { "ok", true }, { "version", 1 }, { "exportedAt", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }, { "cooldownSec", (int?)r["cooldownSec"] ?? 20 },
+                        { "variables", new JArray("$(user)", "$(touser)", "$(luck)", "$(games)") },
+                        { "rules", new JObject { { "name", "1-24 letters, digits or _" }, { "maxTextLength", 400 }, { "oneLine", true }, { "noControlCharacters", true }, { "reservedNames", new JArray(Reserved.OrderBy(x => x)) } } },
+                        { "commands", new JArray(r["commands"].OfType<JObject>().Select(c => (JToken)c.DeepClone())) } };
+                }
+                catch (Exception ex) { return Err("could not read the canned commands: " + ex.Message); }
+            }
+        }
+
         static JObject Err(string e) { return new JObject { { "ok", false }, { "error", e } }; }
         static string CleanName(string n) { n = (n ?? "").Trim().TrimStart('!').ToLowerInvariant(); return Regex.IsMatch(n, "^[a-z0-9_]{1,24}$") ? n : ""; }
 
@@ -47,6 +72,7 @@ namespace PinguinoHost
             if (string.IsNullOrWhiteSpace(t)) return "the text is empty";
             if (t.Length > 400) return "the text is longer than 400 characters (Twitch chat limit is 500 with the name)";
             if (t.IndexOfAny(new[] { '\r', '\n' }) >= 0) return "the text must be one line";
+            if (t.Any(ch => char.IsControl(ch))) return "the text cannot contain control characters";
             string s = t.TrimStart();
             if (s.StartsWith("/") || s.StartsWith(".") || s.StartsWith("!")) return "the text cannot start with / . or ! (that would run a Twitch or bot command)";
             if (Regex.IsMatch(t, @"\$\((?!user\)|touser\)|luck\)|games\))")) return "only $(user), $(touser), $(luck) and $(games) can be used";
@@ -79,7 +105,7 @@ namespace PinguinoHost
             return (text ?? "").Replace("$(user)", user).Replace("$(touser)", to).Replace("$(luck)", (Rng.Next(50) + 1).ToString()).Replace("$(games)", "!gamble <amount>, !slots <amount> and Guess the Chatter (start it through !shop)");
         }
 
-        /// <summary>body: { action: set|add|test|cooldown, name, text?, choices?, aliases?, enabled?, user?, touser?, seconds? }</summary>
+        /// <summary>body: { action: set|add|delete|test|cooldown, name, text?, choices?, aliases?, enabled?, user?, touser?, seconds? }</summary>
         public static JObject Handle(JObject b)
         {
             string action = ((string)b["action"] ?? "").ToLowerInvariant();
@@ -116,7 +142,7 @@ namespace PinguinoHost
                         foreach (var a0 in (JArray)b["aliases"])
                         {
                             string a = CleanName((string)a0); if (a == "") return Err("an alias must be 1-24 letters, digits or _");
-                            if (Reserved.Contains(a)) return Err("!" + a + " belongs to a real command");
+                            if (HostOwns(a)) return Err("!" + a + " belongs to a real command");
                             bool mine = cmd != null && (cmd["aliases"] as JArray ?? new JArray()).Any(z => ((string)z ?? "").ToLowerInvariant().TrimStart('!') == a);
                             if (taken.Contains(a) && !mine && a != name) return Err("!" + a + " is already used");
                             if (!newAliases.Any(z => (string)z == a) && a != name) newAliases.Add(a);
@@ -125,12 +151,18 @@ namespace PinguinoHost
                     if (action == "add")
                     {
                         if (cmd != null) return Err("!" + name + " already exists, use set");
-                        if (Reserved.Contains(name) || taken.Contains(name)) return Err("!" + name + " is already used by a command");
+                        if (HostOwns(name) || taken.Contains(name)) return Err("!" + name + " is already used by a command");
                         string text = (string)b["text"]; var ch = b["choices"] as JArray; string bad = ch != null && ch.Count > 0 ? ch.Select(x => BadText((string)x)).FirstOrDefault(x => x != null) : BadText(text); if (bad != null) return Err(bad);
                         cmd = new JObject { { "name", name } }; if (newAliases != null && newAliases.Count > 0) cmd["aliases"] = newAliases;
                         if (ch != null && ch.Count > 0) cmd["choices"] = new JArray(ch.Select(x => ((string)x).Trim())); else cmd["text"] = text.Trim();
                         if (b["enabled"] != null && (bool)b["enabled"] == false) cmd["enabled"] = false;
                         arr.Add(cmd); Write(root); return new JObject { { "ok", true }, { "command", View(cmd) } };
+                    }
+                    if (action == "delete")
+                    {
+                        if (cmd == null) return Err("no command called !" + name);
+                        arr.Remove(cmd); Write(root);   // the previous file stays as canned_commands.json.bak
+                        return new JObject { { "ok", true }, { "deleted", name } };
                     }
                     if (action != "set") return Err("unknown action");
                     if (cmd == null) return Err("no command called !" + name);

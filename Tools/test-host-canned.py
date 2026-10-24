@@ -1,4 +1,4 @@
-"""Canned-command editor API (/api/canned): list, set text, enable/disable, aliases, add, validation, test line, cooldown, backup, and that nothing is deleted.
+"""Canned-command editor API (/api/canned): list, set text, enable/disable, aliases, add, validation, test line, cooldown, backup, delete, export and the write gate.
 Usage: python Tools/test-host-canned.py [dll]"""
 import json, os, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
@@ -52,7 +52,22 @@ try:
     r = post(action='cooldown', seconds=3); chk('cooldown out of range refused', not r['ok'], r)
     r = post(action='cooldown', seconds=45); chk('cooldown set', r['ok'] and json.load(open(cf))['cooldownSec'] == 45, r)
     r = post(action='bogus'); chk('unknown action refused', not r['ok'], r)
-    chk('nothing was ever deleted', {c['name'] for c in json.load(open(cf))['commands']} >= {'hug', 'luck', 'old', 'tuck2'})
+    chk('nothing is deleted by the other actions', {c['name'] for c in json.load(open(cf))['commands']} >= {'hug', 'luck', 'old', 'tuck2'})
+    r = post(action='set', name='hug', text='tab' + chr(9) + 'here'); chk('control character in the text refused', not r['ok'], r)
+    r = post(action='add', name='ctl', text='bell' + chr(7)); chk('control character on add refused', not r['ok'], r)
+    for hostcmd in ('gamble', 'slots', 'duel', 'emote', 'alert'):
+        r = post(action='add', name=hostcmd, text='nope'); chk('a Host command name cannot be taken: ' + hostcmd, not r['ok'], r)
+    r = post(action='set', name='luck', aliases=['lucky', 'bet']); chk('an alias of a Host command is refused', not r['ok'], r)
+    r = api('/api/canned?export=1'); chk('export: ok, version, rules, variables and every command as stored', r['ok'] and r['version'] == 1 and r['rules']['maxTextLength'] == 400 and '$(user)' in r['variables'] and {c['name'] for c in r['commands']} >= {'hug', 'luck', 'old', 'tuck2'} and 'ban' in r['rules']['reservedNames'], r)
+    chk('export keeps stored fields (aliases / enabled false)', any(c['name'] == 'old' and c.get('enabled') is False for c in r['commands']))
+    r = post(action='delete', name='tuck2'); chk('delete removes the command', r['ok'] and r['deleted'] == 'tuck2' and 'tuck2' not in {c['name'] for c in json.load(open(cf))['commands']}, r)
+    chk('delete keeps the previous file as .bak', 'tuck2' in {c['name'] for c in json.load(open(cf + '.bak'))['commands']})
+    r = post(action='delete', name='tuck2'); chk('deleting an unknown command is refused', not r['ok'], r)
+    r = post(action='delete', name='Bad Name'); chk('delete with a bad name is refused', not r['ok'], r)
+    chk('other entries survive a delete', {c['name'] for c in json.load(open(cf))['commands']} >= {'hug', 'luck', 'old'})
+    try:
+        urllib.request.urlopen(urllib.request.Request(B + '/api/canned', data=json.dumps({'action': 'cooldown', 'seconds': 30}).encode(), headers={'Content-Type': 'application/json', 'Origin': 'tauri://localhost'}), timeout=30); chk('a write from the shell without the token is refused', False)
+    except urllib.error.HTTPError as e: chk('a write from the shell without the token is refused', e.code == 401, e.code)
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 bad = [n for n, ok in res if not ok]
