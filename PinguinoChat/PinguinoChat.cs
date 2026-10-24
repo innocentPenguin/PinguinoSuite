@@ -936,6 +936,37 @@ public class CPHInline
         string[] v = { "hype train level " + level + "! 🚂🐧 Keep it rolling!", "level " + level + " already?! 🚂 You all are unstoppable 🐧", "choo choo, level " + level + "! 🚂 Penguins love a hype train 🐧" };
         return v[_rng.Next(v.Length)];
     }
+    // ── CLOCK: "what time is it in London / the UK / Tokyo" is answered from the system clock and the time-zone database, never by the AI (it has no clock and made one up). ──
+    static Func<DateTime> _utcNow = () => DateTime.UtcNow;   // the tests move the clock
+    static readonly Regex RxTimeAsk = new Regex(@"\bwhat\s*(?:'s|s|is)?\s+(?:the\s+)?(?:current\s+)?time\b|\btime\s+(?:is\s+it\s+)?(?:in|for)\b|\bwhat\s+time\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly string[][] TimePlaces = {
+        new[] { @"\b(?:london|u\.?k\.?|british|britain|england|united kingdom|scotland|wales)\b", "the UK", "GMT Standard Time", "Europe/London" },
+        new[] { @"\b(?:new york|nyc|east coast|eastern|florida|miami|boston|atlanta)\b", "New York", "Eastern Standard Time", "America/New_York" },
+        new[] { @"\b(?:chicago|central|texas|dallas|houston)\b", "Chicago", "Central Standard Time", "America/Chicago" },
+        new[] { @"\b(?:denver|mountain|colorado|utah)\b", "Denver", "Mountain Standard Time", "America/Denver" },
+        new[] { @"\b(?:la|l\.a\.|los angeles|california|west coast|pacific|seattle|vegas)\b", "Los Angeles", "Pacific Standard Time", "America/Los_Angeles" },
+        new[] { @"\b(?:paris|france|germany|berlin|spain|madrid|italy|rome|netherlands|amsterdam|europe|sweden|poland)\b", "central Europe", "W. Europe Standard Time", "Europe/Paris" },
+        new[] { @"\b(?:tokyo|japan)\b", "Tokyo", "Tokyo Standard Time", "Asia/Tokyo" },
+        new[] { @"\b(?:sydney|australia|melbourne)\b", "Sydney", "AUS Eastern Standard Time", "Australia/Sydney" },
+        new[] { @"\b(?:india|delhi|mumbai)\b", "India", "India Standard Time", "Asia/Kolkata" },
+        new[] { @"\b(?:brazil|sao paulo)\b", "Brazil", "E. South America Standard Time", "America/Sao_Paulo" },
+        new[] { @"\b(?:utc|gmt)\b", "UTC", "UTC", "UTC" } };
+    string TimeAnswer(string text)
+    {
+        string t = text ?? ""; if (!RxTimeAsk.IsMatch(t)) return null;
+        foreach (var pl in TimePlaces)
+        {
+            if (!Regex.IsMatch(t, pl[0], RegexOptions.IgnoreCase)) continue;
+            TimeZoneInfo tz = null;
+            try { tz = TimeZoneInfo.FindSystemTimeZoneById(pl[2]); } catch (Exception) { try { tz = TimeZoneInfo.FindSystemTimeZoneById(pl[3]); } catch (Exception) { } }
+            if (tz == null) return null;
+            DateTime local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(_utcNow(), DateTimeKind.Utc), tz);
+            string clock = local.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+            string[] v = { "it's " + clock + " in " + pl[1] + " right now", "right now it's " + clock + " in " + pl[1], pl[1] + " is at " + clock + " right now 🐧" };
+            return v[_rng.Next(v.Length)];
+        }
+        return null;
+    }
     string RecapLine()
     {
         if (!_cfg.RecapOnStreamEnd) return null;
@@ -1190,6 +1221,7 @@ public class CPHInline
             if (mention)
             {
                 if (!cx.Broadcaster && ModActionAsk(text)) { string mr = ModRefusal(login, text); if (mr != "") Say(cx, mr); return; }
+                { string ta = TimeAnswer(text); if (ta != null) { Say(cx, ta); return; } }   // "what time is it in the UK": the real clock, never an AI guess (it said 7:46am for London at 1:46am)
                 { string ca = CapabilityAnswer(login, text); if (ca != null) { if (ca != "") Say(cx, ca); return; } }   // "can you make commands / change the title": a short true answer, no AI
                 { string bc = BareCallAck(login, text); if (bc != null) { if (bc != "") Say(cx, bc); return; } }   // just the name ("CHATTY", "ask chatty pinguino!"): one playful line, once in a while   // never a timeout / ban / rank change from the bot: "ask a mod"
                 bool quiet = Hushed(login) || Flooding(login);                    // told to be quiet / a real flood: stays ignored on purpose
@@ -1357,7 +1389,7 @@ public class CPHInline
     // "bot"/"bots" alone is a soft signal: it counts towards the 3 lines only when at least one line has a real put-down (so a calm "bots are cool" chat is not heat)
     static readonly Regex RxBotWord = new Regex(@"\bbots?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // aimed at the bot itself: asked to stop, told off, insulted, told it is not liked
-    static readonly Regex RxAtBot = new Regex(@"\b(stop (@ ?ing|tagging|pinging|replying|answering|talking|responding)|(dont|don't|do not|never) (do that|reply|respond|answer|talk|tag|ping|@)|(i )?(dont|don't|do not) like (you|u|the bot|this bot)|shut ?up|stfu|(you|u|ur|youre|you're|youre) ?(suck|bad|trash|garbage|annoying|useless|dumb|stupid|cringe|a bot)|annoying|hate (you|u|this bot|the bot)|go away|get lost|leave me alone|(stupid|dumb|trash|useless|annoying) bot|nobody asked)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex RxAtBot = new Regex(@"\b(stop (@ ?ing|tagging|pinging|replying|answering|talking|responding)|(dont|don't|do not|never) (do that|reply|respond|answer|talk|tag|ping|@)|(i )?(dont|don't|do not) like (you|u|the bot|this bot)|shut ?up|stfu|(you|u|ur|youre|you're|youre) ?(suck|bad|trash|garbage|annoying|useless|dumb|stupid|cringe|a bot)|annoying|hate (you|u|this bot|the bot)|go away|get lost|leave me alone|(stupid|dumb|trash|useless|annoying) bot|nobody asked|clanker|be this (dumb|stupid)|holy (dumb|stupid)|(dumb|stupid|dumbass|retarded|idiot|moron) (dumb|fuck|fuckin|ass|bot)|(you|u|ur|youre|you're) (are |so |actually |literally |really |just )*(dumb|stupid|blind|wrong|an idiot|a moron|retarded))\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     bool IsHeated()
     {
         if (!_cfg.StayOutOfArguments) return false;
@@ -3978,7 +4010,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
                 string text = ClaudeText(r);
                 if ((string)r["stop_reason"] == "max_tokens")      // ran out of room (some models "think" first): never post a cut-off answer
                 {
-                    if (maxTokens >= 2400) { string kept = CutAtSentence(text); Warn("tokens", "AI answer was cut off even at " + maxTokens + " tokens" + (kept != null ? ", kept up to its last full sentence" : ", dropped")); return kept; }
+                    if (maxTokens >= 2400) { string kept = CutAtSentence(text); Warn("tokens", "AI answer was cut off even at " + maxTokens + " tokens (" + Short(system, 40) + ")" + (kept != null ? ", kept up to its last full sentence" : ", dropped")); return kept; }
                     return Ask(system, user, maxTokens * 3, web);
                 }
                 return text;
@@ -3998,7 +4030,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
                 var r = JObject.Parse(HttpPost(url, h, body.ToString(Formatting.None)));
                 if ((string)r["choices"]?[0]?["finish_reason"] == "length")
                 {
-                    if (maxTokens >= 2400) { string kept = CutAtSentence((string)r["choices"]?[0]?["message"]?["content"]); Warn("tokens", "AI answer was cut off even at " + maxTokens + " tokens" + (kept != null ? ", kept up to its last full sentence" : ", dropped")); return kept; }
+                    if (maxTokens >= 2400) { string kept = CutAtSentence((string)r["choices"]?[0]?["message"]?["content"]); Warn("tokens", "AI answer was cut off even at " + maxTokens + " tokens (" + Short(system, 40) + ")" + (kept != null ? ", kept up to its last full sentence" : ", dropped")); return kept; }
                     return Ask(system, user, maxTokens * 3);
                 }
                 return (string)r["choices"]?[0]?["message"]?["content"];
@@ -4512,7 +4544,7 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
                     "\n\nOld note on how the community writes:\n" + (string.IsNullOrEmpty(_study.Style) ? "(none yet)" : _study.Style) +
                     "\n\nNew style observations:\n- " + string.Join("\n- ", styleObs) +
                     "\n\nWrite (1) \"community\": ONE paragraph under 700 characters: culture, recurring games/topics, inside jokes, vibe; (2) \"style\": ONE paragraph under 700 characters telling a bot how to write like this chat: typical length, casing, slang, emotes, how they tease. Keep what is still true, drop what is stale, no private details about individuals, no ages. OUTPUT ONLY JSON: {\"community\":\"...\",\"style\":\"...\"}";
-                string raw = Ask("You maintain PinguinoBot's notes about a Twitch community. Output only JSON.", merge, 900);
+                string raw = Ask("You maintain PinguinoBot's notes about a Twitch community. Output only JSON.", merge, 1400);   // 900 was cut off twice on 10-23 (x3 retry = 2700): the merge call, not a chat answer
                 JObject o = raw == null ? null : ParseReply(raw);
                 string c = o == null ? null : (string)o["community"];
                 string st = o == null ? null : (string)o["style"];

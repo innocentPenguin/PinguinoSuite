@@ -1099,6 +1099,24 @@ public static class Harness
             Msg("ziubat", "your a bot");
             Msg("aceislosst", "dont do that again pinguinobot");
             Check("argument: 'dont do that again pinguinobot' is answered, short and humble", llmCalls == g0 + 1 && lastPrompt.Contains("[CALLED OUT]"), Last() + "");
+            // 10-24 nightly: put-downs the old pattern missed ("holy dumb fuck", "ur so dumb", "clanker") are called-out, not banter
+            foreach (var pd in new[] { "@ChattyPinguino holy dumb fuck", "@chattypinguino it's 1:45am in the uk dumb dumb", "@chattypinguino u actually be this dumb", "@chattypinguino ok clanker" })
+            { clearAll(); g0 = llmCalls; CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Sent.Clear(); ((System.Collections.IDictionary)SF("_focus").GetValue(null)).Clear(); SetCfg("ReplyGapSec", 0);
+              Msg("shadowrlttv", pd); Check("called-out: \"" + pd + "\" gets the humble hint", llmCalls == g0 + 1 && lastPrompt.Contains("[CALLED OUT]"), "calls=" + (llmCalls - g0));
+              SetCfg("ReplyGapSec", 240); }
+            clearAll(); g0 = llmCalls; CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Sent.Clear(); ((System.Collections.IDictionary)SF("_focus").GetValue(null)).Clear();
+            Msg("shadowrlttv", "@chattypinguino that map was dumb, who made it?");
+            Check("called-out: a plain \"dumb\" about a thing is not a put-down of the bot", !lastPrompt.Contains("[CALLED OUT]") || llmCalls == g0, "calls=" + (llmCalls - g0));
+            // clock: answered from the real clock, no AI
+            { var utcF = SF("_utcNow");
+              Func<DateTime> old = (Func<DateTime>)utcF.GetValue(null); utcF.SetValue(null, (Func<DateTime>)(() => new DateTime(2026, 10, 24, 0, 46, 0, DateTimeKind.Utc)));
+              foreach (var q in new[] { "@chattypinguino what time is it in the big city of the uk", "@chattypinguino what's the time in london?" })
+              { clearAll(); g0 = llmCalls; CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Sent.Clear(); ((System.Collections.IDictionary)SF("_focus").GetValue(null)).Clear(); SetCfg("ReplyGapSec", 0);
+                Msg("shadowrlttv", q);
+                Check("clock: \"" + q + "\" says 1:46 AM for the UK (BST), no AI call", llmCalls == g0 && Last() != null && Last().Contains("1:46 AM") && !Last().Contains("7:46"), Last() + " calls=" + (llmCalls - g0)); SetCfg("ReplyGapSec", 240); }
+              clearAll(); g0 = llmCalls; CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Sent.Clear(); ((System.Collections.IDictionary)SF("_focus").GetValue(null)).Clear(); SetCfg("ReplyGapSec", 0);
+              Msg("shadowrlttv", "@chattypinguino what time is it in tokyo"); Check("clock: Tokyo is 9:46 AM", Last() != null && Last().Contains("9:46 AM"), Last() + ""); SetCfg("ReplyGapSec", 240);
+              utcF.SetValue(null, old); }
             clearAll(); g0 = llmCalls;
             Msg("synther_rl", "i went to the state fair today");
             Msg("lvlmarshmello", "@chattypinguino hey chatty good evening");
