@@ -30,7 +30,11 @@ try:
     for _ in range(80):
         try: get('/api/status'); break
         except Exception: time.sleep(0.5)
-    time.sleep(2)
+    for _ in range(40):   # the players backfill runs a moment after the API is up; wait for it instead of a fixed 2 s
+        try:
+            if get('/api/eventlog?kind=players&limit=10')['events']: break
+        except Exception: pass
+        time.sleep(0.5)
     # ---- backfill
     r = get('/api/eventlog?kind=players&limit=1000'); ev = r['events']
     chk('players shape', r['ok'] and all(k in ev[0] for k in ['id', 'ts', 'kind', 'type', 'user', 'text', 'group', 'detail']), ev[:1])

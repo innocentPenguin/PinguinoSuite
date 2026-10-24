@@ -3,7 +3,7 @@
 import base64, glob, hashlib, http.server, json, os, shutil, socket, struct, subprocess, sys, tempfile, threading, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
-PORT, HX, WS = 8991, 8992, 8993
+PORT, HX, WS = 9051, 9052, 9053
 seen = set(); posted = []
 class Hx(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -33,7 +33,7 @@ threading.Thread(target=ws_server, daemon=True).start()
 d = tempfile.mkdtemp(prefix='pges_')
 json.dump({'Channel': 'trial', 'OverlayPort': PORT, 'UserToken': 'tok', 'ClientId': 'cid', 'BroadcasterId': 'b1'}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
-env.update({'PINGUINO_HELIX_BASE': 'http://127.0.0.1:%d' % HX, 'PINGUINO_EVENTSUB_URL': 'ws://127.0.0.1:%d/ws' % WS, 'PINGUINO_COMPAT_WS_PORT': '8994'})
+env.update({'PINGUINO_HELIX_BASE': 'http://127.0.0.1:%d' % HX, 'PINGUINO_EVENTSUB_URL': 'ws://127.0.0.1:%d/ws' % WS, 'PINGUINO_COMPAT_WS_PORT': '9054'})
 host = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 fails = []
 def chk(n, ok, x=''):
