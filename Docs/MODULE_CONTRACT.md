@@ -67,6 +67,13 @@ Modules are separate programs. Closing or restarting the app shell or the core d
 It talks to the core through a file-drop folder, so no API token is needed: the core polls `Data\runtime\control\` every second and consumes files named `start-<id>`, `stop-<id>` or `restart-<id>` (only registered module ids). Anyone who can write to `Data\runtime` can do this, which is the same trust level as the data itself. Needs a core that includes this feature (after the next core rebuild).
 Manifest field: `"build": ["cmd", "arg", ...]`, run in the module's `cwd`.
 
+### Hold: replacing a module's files without the core relaunching it
+The health loop relaunches a wanted module that dies within ~2 s, which beats a manual binary copy. A **hold** stops that for one module:
+- API (token): `POST /api/modules/<id>/hold {"minutes": N}` (default 10, max 30; nothing is stopped), `POST /api/modules/<id>/release`, and `POST /api/modules/<id>/stop {"hold": true | minutes}` stops and holds in one call. An explicit `start`/`restart` also ends the hold, and so does a core restart (holds are in memory only).
+- File drop (no token): `Data\runtime\control\hold-<id>` (file text = minutes, optional) and `release-<id>`. The core confirms by writing `Data\runtime\holds.json` (`{"holds": {id: unix end time}}`).
+- Visible: `/api/state` modules have `held` (minutes left, 0 = none; `state` keeps running/starting/stopped), `/api/modules/diag` has `held_s`, and `/api/selfcheck` lists a held module as a problem so a forgotten hold shows up.
+- Script: `App\Update-Module.ps1 <id> -StopOnly` (stop + hold), `-Start` (release + start), `-InstallFrom <dir>` (stop + hold, copy a prebuilt `bin\Release\net8.0` folder into the module's own folder with a lock check and retries, verify size/SHA-256/timestamp of every file, then release + start; on failure the hold is released and the module stays stopped). `-HoldMinutes N` sets the length. With an older core the hold is not confirmed: the script warns and falls back to stop + immediate copy. The hold itself needs the next core rebuild.
+
 ## Console logging (any module, no token)
 The app has a **Console** page showing one live stream from the core and every module. A module logs by appending JSON lines to a file; the core tails it (same idea as the control folder).
 

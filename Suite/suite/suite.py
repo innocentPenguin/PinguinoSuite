@@ -547,6 +547,7 @@ class Module:
         self.slow_until = 0.0  # a recent slow answer or timeout: ping with the longer timeout until then
         self.last_change = None   # latest state transition: {"state","reason","ts"}
         self._rlock = threading.Lock()
+        self.hold_until = 0.0  # >now: an operator is replacing this module's files; the health loop must not relaunch it (in memory only: a core restart clears it)
         self.adopted = False  # already running when this core started (or started by an older core): we supervise it but hold no process handle
         self.adopt_pid = 0
 
@@ -598,7 +599,38 @@ class Module:
         self.adopt_pid = owner or (pid if pid and pid_alive(pid) else 0)
         bus.emit("module", id=self.id, state="running")
 
+    HOLD_DEFAULT, HOLD_MAX = 10, 30   # minutes
+
+    def hold(self, minutes=None):
+        """Stop the health loop from relaunching this module for `minutes` (default 10, 1..30), e.g. while its binaries are being replaced."""
+        try:
+            mins = self.HOLD_DEFAULT if minutes is None or isinstance(minutes, bool) or minutes == "" else float(minutes)
+        except (TypeError, ValueError):
+            mins = self.HOLD_DEFAULT
+        mins = max(1.0, min(float(self.HOLD_MAX), mins))
+        self.hold_until = time.time() + mins * 60
+        write_holds()
+        bus.emit("module", id=self.id, state="held", minutes=round(mins, 1))
+        console_log.log("info", "supervisor", f"{self.id}: held for {mins:g} min (no automatic relaunch)", module=self.id)
+        return mins
+
+    def release(self):
+        was = self.held_left() > 0
+        self.hold_until = 0.0
+        write_holds()
+        if was:
+            bus.emit("module", id=self.id, state="released")
+            console_log.log("info", "supervisor", f"{self.id}: hold released", module=self.id)
+        return was
+
+    def held_left(self):
+        """Seconds of hold left (0 = not held; a hold ends by itself)."""
+        return max(0.0, self.hold_until - time.time())
+
     def start(self):
+        if self.hold_until:
+            self.hold_until = 0.0    # an explicit start (or the health loop, which never calls this while held) ends a hold
+            write_holds()
         if self.running or SHUTDOWN.is_set():    # a health pass that was already in flight must not spawn a module after shutdown began
             return
         if self._ping():
@@ -695,13 +727,13 @@ class Module:
         """What the supervisor knows about this module right now (GET /api/modules/diag): the first thing to read when a row looks stuck."""
         now = time.time()
         return {"id": self.id, "state": self.public()["state"], "healthy": self.healthy, "wanted": self.wanted, "failed": self.failed, "deferred": self.deferred, "adopted": self.adopted,
-                "miss": self._miss, "last_ok_age": round(now - self.last_ok, 1) if self.last_ok else None, "last_error": self.last_err,
+                "held_s": round(self.held_left()), "miss": self._miss, "last_ok_age": round(now - self.last_ok, 1) if self.last_ok else None, "last_error": self.last_err,
                 "pid": (self.proc.pid if self.proc is not None else self.adopt_pid) or None, "alive": self.running, "crashes_5min": len([t for t in self.crashes if now - t < 300]),
                 "url": self.spec["url"] + self.spec.get("health", "/"), "last_ms": self.last_ms, "ping_timeout": self.ping_timeout(), "last_change": self.last_change}
 
     def supervise(self):
         """Restart a wanted module that exited on its own: backoff 2/5/15/30/60s, give up after 5 crashes in 5 min."""
-        if not self.wanted or self.failed or self.proc is None or self.proc.poll() is None:
+        if not self.wanted or self.failed or self.proc is None or self.proc.poll() is None or self.held_left() > 0:
             return
         now = time.time()
         if not self.retry_at:
@@ -718,7 +750,7 @@ class Module:
 
     def refresh(self):
         self.supervise()
-        if self.wanted and not self.failed and self.proc is None and not self.deferred and time.time() - self.last_try > 15 and not self._ping():
+        if self.wanted and not self.failed and self.proc is None and not self.deferred and not self.held_left() and time.time() - self.last_try > 15 and not self._ping():
             self.last_try = time.time()      # wanted but nothing running (e.g. start was skipped because a hung copy held the port, or an adopted module died): try again
             if self.adopted:
                 self.adopted, self.adopt_pid = False, 0
@@ -761,7 +793,8 @@ class Module:
 
     def public(self):
         st = "running" if self.healthy else "starting" if self.running else "stopped"
-        return {"id": self.id, "name": self.spec["name"], "desc": self.spec.get("desc", ""), "url": self.spec["url"], "ui": self.spec.get("ui"), "state": st, "options": self.opts()}
+        return {"id": self.id, "name": self.spec["name"], "desc": self.spec.get("desc", ""), "url": self.spec["url"], "ui": self.spec.get("ui"), "state": st, "options": self.opts(),
+                "held": -(-int(self.held_left()) // 60)}    # minutes of hold left (rounded up), 0 = none; "state" keeps its three values so pages that read it do not break
 
 
 def discover_specs():
@@ -850,6 +883,17 @@ def twitch_loop():
 CONTROL_DIR = Path(DATA_DIR) / "control"
 
 
+def write_holds():
+    """Data/runtime/holds.json {module id: unix time the hold ends}: lets Update-Module.ps1 (no API token) see that the core accepted a hold."""
+    try:
+        h = {m.id: round(m.hold_until) for m in modules.values() if m.hold_until > time.time()}
+        tmp = Path(DATA_DIR) / "holds.json.tmp"
+        tmp.write_text(json.dumps({"ts": round(time.time()), "holds": h}), "utf8")
+        os.replace(tmp, Path(DATA_DIR) / "holds.json")
+    except OSError:
+        pass
+
+
 def process_control():
     """File-drop trigger so a script can restart ONE module without the per-launch API token:
     create Data/runtime/control/<start|stop|restart>-<module id>. The core consumes (deletes) the file and acts.
@@ -862,8 +906,19 @@ def process_control():
         action, _, mid = f.name.partition("-")
         m = modules.get(mid)
         try:
+            txt = f.read_text("utf8", errors="replace")[:20] if action == "hold" else ""
             f.unlink()
         except OSError:
+            continue
+        if action in ("hold", "release") and m:   # Update-Module.ps1: hold-<id> (file text = minutes, optional) / release-<id>
+            if action == "hold":
+                try:
+                    mins = txt.strip() or None
+                except Exception:  # noqa: BLE001
+                    mins = None
+                m.hold(mins)
+            else:
+                m.release()
             continue
         if f.name == "prestream-run":  # run the pre-stream checks now; the result lands in console/prestream-last.json
             console_log.log("info", "prestream", "manual run requested (control file)")
@@ -949,7 +1004,7 @@ def reconcile_devices():
     for m in modules.values():
         if not m.singleton:
             continue
-        if st["is_master"] and m.deferred and not m.running:
+        if st["is_master"] and m.deferred and not m.running and not m.held_left():
             o = m.opts()
             if o.get("enabled") and o.get("start_with_suite"):
                 m.start()
@@ -1367,9 +1422,11 @@ def selfcheck():
     out["modules"] = []
     for m in modules.values():
         d = m.diag()
-        out["modules"].append({"id": d["id"], "state": d["state"], "wanted": d["wanted"], "failed": d["failed"], "miss": d["miss"], "last_ok_age": d["last_ok_age"],
+        out["modules"].append({"id": d["id"], "state": d["state"], "wanted": d["wanted"], "failed": d["failed"], "held_s": d["held_s"], "miss": d["miss"], "last_ok_age": d["last_ok_age"],
                                "last_error": d["last_error"], "last_change": d["last_change"]})
-        if d["wanted"] and d["state"] != "running":
+        if d["held_s"]:
+            problems.append(f"{d['id']} is held for {-(-d['held_s'] // 60)} more min (no automatic relaunch)")
+        elif d["wanted"] and d["state"] != "running":
             problems.append(f"{d['id']} is {d['state']}" + (f" ({d['last_error']})" if d["last_error"] else ""))
         if d["failed"]:
             problems.append(f"{d['id']} gave up restarting")
@@ -2195,13 +2252,38 @@ def module_options(mid: str, b: Opt):
     return {"ok": True}
 
 
+class Hold(BaseModel):
+    minutes: float | None = None
+    hold: bool | float | None = None   # on a stop: true (default minutes) or a number of minutes -> stop AND hold in one call
+
+
+@app.post("/api/modules/{mid}/hold")
+def module_hold(mid: str, b: Hold | None = None):
+    """No automatic relaunch of this module for `minutes` (default 10, max 30). Ends by itself, on /release, or on a start/restart. Nothing is stopped."""
+    m = modules.get(mid)
+    if not m:
+        raise HTTPException(404)
+    mins = m.hold(b.minutes if b else None)
+    return {"ok": True, "minutes": mins}
+
+
+@app.post("/api/modules/{mid}/release")
+def module_release(mid: str):
+    m = modules.get(mid)
+    if not m:
+        raise HTTPException(404)
+    return {"ok": True, "was_held": m.release()}
+
+
 @app.post("/api/modules/{mid}/{action}")
-def module_action(mid: str, action: str):
+def module_action(mid: str, action: str, b: Hold | None = None):
     m = modules.get(mid)
     if not m or action not in ("start", "stop", "restart"):
         raise HTTPException(404)
     if action in ("stop", "restart"):
         m.stop()
+        if action == "stop" and b and b.hold not in (None, False):
+            m.hold(None if b.hold is True else b.hold)
     if action in ("start", "restart"):
         m.start()
     return {"ok": True}
