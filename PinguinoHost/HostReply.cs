@@ -20,6 +20,8 @@ namespace PinguinoHost
         /// <summary>start a context for this message; dispose (or Clear) when the handler is done</summary>
         public static void Begin(string msgId, string login) { Cur.Value = Real(msgId) ? new C { Id = msgId, Login = (login ?? "").TrimStart('@'), At = DateTime.UtcNow } : null; }
         public static void End() { Cur.Value = null; }
+        /// <summary>true while a reply context is active on this flow (the next line will be sent as a reply)</summary>
+        public static bool IsReply { get { var c = Cur.Value; return c != null && (DateTime.UtcNow - c.At).TotalSeconds <= 90; } }
         /// <summary>event / timer work (alerts, raid lines, stream online ...): never a reply, whatever chat message this thread last handled; restores the context when disposed. Tasks and timers started inside inherit "no reply".</summary>
         public static IDisposable Plain() { var old = Cur.Value; Cur.Value = null; return new Restore(old); }
         sealed class Restore : IDisposable { readonly C _old; public Restore(C old) { _old = old; } public void Dispose() { Cur.Value = _old; } }

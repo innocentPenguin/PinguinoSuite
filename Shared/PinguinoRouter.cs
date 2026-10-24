@@ -314,18 +314,51 @@ public class CPHInline
 
     // Sends as one bot's OWN Twitch account with Twitch's "send chat message" API. Needs bots_secrets.json: { "<role>": { "ClientId", "UserToken", "SenderId", "BroadcasterId" } }
     // (a user access token with user:write:chat for that bot account). Returns false when anything is missing or fails, then the Streamer.bot account is used.
+    [ThreadStatic] static string _pgSendNote;
+    static string _pgSendLogDir; static string _pgSendLogDay = ""; static long _pgSendLogBytes; static readonly object _pgSendLogLock = new object();
+    const long PgSendLogMaxBytes = 5L * 1024 * 1024;   // per day; past it nothing more is written
+    // One line per send to Twitch: time, account, reply y/n, first 160 chars, result. Daily file bot-sends-YYYY-MM-DD.log in the Suite's logs folder, capped at 5 MB a day. No tokens, no secrets.
+    void PgSendLog(string account, bool reply, string text, string result)
+    {
+        try
+        {
+            string t = System.Text.RegularExpressions.Regex.Replace(text ?? "", @"[\u0000-\u001f]+", " "); if (t.Length > 160) t = t.Substring(0, 160) + "...";
+            string line = DateTime.UtcNow.ToString("HH:mm:ss.fff") + "Z\t" + account + "\t" + (reply ? "reply" : "plain") + "\t" + result + "\t" + t;
+            lock (_pgSendLogLock)
+            {
+                string day = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                string dir = _pgSendLogDir ?? Path.Combine(Path.GetDirectoryName(PgDirPath().TrimEnd((char)92, (char)47)) ?? PgDirPath(), "logs");
+                string f = Path.Combine(dir, "bot-sends-" + day + ".log");
+                if (day != _pgSendLogDay) { _pgSendLogDay = day; _pgSendLogBytes = File.Exists(f) ? new FileInfo(f).Length : 0; }
+                if (_pgSendLogBytes > PgSendLogMaxBytes) return;
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(f, line + Environment.NewLine, new System.Text.UTF8Encoding(false)); _pgSendLogBytes += line.Length + 2;
+            }
+        }
+        catch (Exception) { }
+    }
     bool PgHelixSend(string role, string text)
+    {
+        _pgSendNote = null; bool ok = false;
+        try { ok = PgHelixSendCore(role, text); return ok; }
+        finally
+        {
+            string pid; try { object o; string id = _pgReplyId != null ? _pgReplyId : (CPH.TryGetArg("msgId", out o) && o != null) ? Convert.ToString(o) : ""; pid = PgRxMsgId.IsMatch(id) ? id : ""; } catch (Exception) { pid = ""; }
+            if (_pgSendNote != "skip") PgSendLog(role, pid != "", text, _pgSendNote ?? (ok ? "ok" : "failed"));
+        }
+    }
+    bool PgHelixSendCore(string role, string text)
     {
         string parent = "";
         try
         {
             string p = Path.Combine(PgDirPath(), "bots_secrets.json");
-            if (!File.Exists(p)) return false;
+            if (!File.Exists(p)) { _pgSendNote = "skip"; return false; }
             var s = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(p))[role] as Newtonsoft.Json.Linq.JObject;
-            if (s == null) return false;
+            if (s == null) { _pgSendNote = "skip"; return false; }
             string cid = (string)s["ClientId"] ?? "", tok = (string)s["UserToken"] ?? "", sid = (string)s["SenderId"] ?? "", bid = (string)s["BroadcasterId"] ?? "";
             if (tok == "") tok = CPH.GetGlobalVar<string>("pinguino.secret.token." + role, false) ?? "";   // the key vault (Host), when bots_secrets.json no longer holds it
-            if (cid == "" || tok == "" || sid == "" || bid == "") return false;
+            if (cid == "" || tok == "" || sid == "" || bid == "") { _pgSendNote = "skip"; return false; }
             string line = PgReplyParts(text, out parent);
             var bj = new Newtonsoft.Json.Linq.JObject { ["broadcaster_id"] = bid, ["sender_id"] = sid, ["message"] = line };
             if (parent != "") bj["reply_parent_message_id"] = parent;   // a native Twitch reply to the viewer's message
@@ -342,13 +375,15 @@ public class CPHInline
         catch (Exception rex) when (parent != "" && (rex.Message ?? "").Contains("(400)"))   // Twitch refused the reply (the message it answers is gone / too old, e.g. a mod deleted it): it was refused, so nothing went out. Say it ONCE as a plain line (never on another bot account)
         {
             PgLogW("[Bots] a reply to a stale or deleted message was rejected, saying the line once as a plain line");
-            using (PgReplyTo("", "")) PgHelixSend(role, text);   // no parent this time, so this cannot loop; if that is refused too the line is dropped (never on another account)
+            using (PgReplyTo("", "")) PgHelixSend(role, text);   // (logs its own line)
+            _pgSendNote = "400 reply parent refused, resent plain";   // no parent this time, so this cannot loop; if that is refused too the line is dropped (never on another account)
             return true;
         }
         catch (System.Net.WebException wex) when (wex.Status == System.Net.WebExceptionStatus.Timeout)
-        { PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
+        { _pgSendNote = "timeout (not resent)"; PgLogW("[Bots] sending as " + role + " timed out; it may have gone out, so it is NOT sent again"); return true; }
         catch (Exception ex)
         {
+            string em = ex.Message ?? ""; _pgSendNote = "failed: " + (em.Length > 80 ? em.Substring(0, 80) : em);
             string tl = text ?? "";   // a 400 for the line itself: name the text once so the cause can be found (the line was already cleaned of control characters / over-long text)
             PgLogW("[Bots] sending as " + role + " failed, using the bot account: " + ex.Message + ((ex.Message ?? "").Contains("(400)") ? " | line (" + tl.Length + " chars): " + (tl.Length > 120 ? tl.Substring(0, 120) + "..." : tl) : ""));
             return false;

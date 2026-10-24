@@ -32,6 +32,12 @@ namespace PinguinoHost
             ReplyCtx.Begin(id, "Bob");
             using (ReplyCtx.Plain()) { t = ReplyCtx.Prepare("@Bob event", out p); Check(p == "" && t == "@Bob event", "Plain(): an event line is not a reply"); string inner = null; Task.Run(() => { string q; ReplyCtx.Prepare("x", out q); inner = q; }).Wait(); Check(inner == "", "Plain(): tasks started inside stay plain"); }
             ReplyCtx.Prepare("x", out p); Check(p == id, "Plain(): the chat context is back after the scope"); ReplyCtx.End();
+            // bot send log: every SendAs leaves one line (account, reply/plain, result, text cut at 160)
+            { string ld = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pgsendlog-" + Guid.NewGuid().ToString("N")); HostApi.SendLogDir = ld; string via;
+              HostApi.SendAs("chat", "send log probe " + new string((char)120, 300), out via);
+              string lf = System.IO.Path.Combine(ld, "bot-sends-" + DateTime.UtcNow.ToString("yyyy-MM-dd") + ".log"); string lt = System.IO.File.Exists(lf) ? System.IO.File.ReadAllText(lf) : "";
+              Check(lt.Contains("send log probe") && lt.Contains("...") && lt.Contains("chat") && lt.Split((char)10).Length == 2 && lt.Length < 260, "bot send log: one capped line per SendAs: " + lt.Replace((char)9, (char)124));
+              HostApi.SendLogDir = null; try { System.IO.Directory.Delete(ld, true); } catch (Exception) { } }
             // CleanLine: what Twitch would refuse (control characters, over 500, empty) never goes out as is
             Check(HostApi.CleanLine("hi" + (char)7 + "there" + (char)10 + "you", "t") == "hi there you", "CleanLine: control characters become spaces");
             Check(HostApi.CleanLine("   ", "t") == "" && HostApi.CleanLine(null, "t") == "", "CleanLine: empty stays empty");

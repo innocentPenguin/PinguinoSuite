@@ -14,6 +14,35 @@ namespace PinguinoHost
         /// <summary>Say a line in chat as one of the bots (own Twitch login first, then PinguinoB0t, then the rest of its fallback chain, then the shared account).</summary>
         public static bool SendAs(string role, string text, out string via)
         {
+            string raw = text; bool reply = ReplyCtx.IsReply; bool ok = SendAsCore(role, text, out via);
+            BotSendLog(role, reply, raw, ok ? "ok" : "no: " + via, via); return ok;
+        }
+
+        static string _sendLogDay = ""; static long _sendLogBytes; static readonly object _sendLogLock = new object();
+        /// <summary>one line per chat send: time, account, reply/plain, result, first 160 chars. Data/../logs/bot-sends-YYYY-MM-DD.log, at most 5 MB a day. No secrets.</summary>
+        public static string SendLogDir;   // tests may point this elsewhere
+        static void BotSendLog(string role, bool reply, string text, string result, string via)
+        {
+            try
+            {
+                string t = System.Text.RegularExpressions.Regex.Replace(text ?? "", "[\u0000-\u001f]+", " "); if (t.Length > 160) t = t.Substring(0, 160) + "...";
+                string line = DateTime.UtcNow.ToString("HH:mm:ss.fff") + "Z\t" + role + "\t" + (reply ? "reply" : "plain") + "\t" + (result.Length > 90 ? result.Substring(0, 90) : result) + "\t" + t;
+                lock (_sendLogLock)
+                {
+                    string day = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                    string dir = SendLogDir ?? System.IO.Path.Combine(System.IO.Path.GetDirectoryName((DataDir ?? "").TrimEnd((char)92, (char)47)) ?? DataDir, "logs");
+                    string f = System.IO.Path.Combine(dir, "bot-sends-" + day + ".log");
+                    if (day != _sendLogDay) { _sendLogDay = day; _sendLogBytes = System.IO.File.Exists(f) ? new System.IO.FileInfo(f).Length : 0; }
+                    if (_sendLogBytes > 5L * 1024 * 1024) return;
+                    System.IO.Directory.CreateDirectory(dir);
+                    System.IO.File.AppendAllText(f, line + Environment.NewLine, new System.Text.UTF8Encoding(false)); _sendLogBytes += line.Length + 2;
+                }
+            }
+            catch (Exception) { }
+        }
+
+        static bool SendAsCore(string role, string text, out string via)
+        {
             via = "";
             if (!Lease.MayRun) { via = "this Host is not the master"; return false; }
             text = CleanLine(text, "chat send as " + role);
