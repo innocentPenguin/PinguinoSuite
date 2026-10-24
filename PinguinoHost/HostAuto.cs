@@ -309,13 +309,29 @@ namespace PinguinoHost
                 int left = (int)Math.Max(1, HoldMaxSec - (DateTime.UtcNow - _raidPendingAt).TotalSeconds);
                 _heldTimer = new System.Threading.Timer(_ => { ClearPending(); ReleaseOffline(); }, null, left * 1000, System.Threading.Timeout.Infinite);
             }
+            try { File.WriteAllText(HeldP, new JObject { { "at", DateTime.UtcNow.ToString("o") }, { "ctx", JObject.FromObject(ctx) } }.ToString()); } catch (Exception) { }   // survives a crash / restart during the hold
             Clog.Info("automation", "stream offline held: a raid is on its way"); return true;
         }
         /// <summary>the raid landed or was cancelled (or the hold ran out): the held goodnight runs now</summary>
         static void ReleaseOffline()
         {
             Dictionary<string, string> c; lock (typeof(Auto)) { _raidPendingAt = DateTime.MinValue; c = _heldOffline; _heldOffline = null; if (_heldTimer != null) { _heldTimer.Dispose(); _heldTimer = null; } }
+            try { if (File.Exists(HeldP)) File.Delete(HeldP); } catch (Exception) { }
             if (c != null) { OfflineFires++; Fire("stream_offline", c); }
+        }
+        static string HeldP { get { return Path.Combine(HostApi.DataDir, "held_offline.json"); } }
+        /// <summary>at Host start: a goodnight that was held when the Host stopped (crash / restart during a raid) is not lost: it runs now when it is under 15 minutes old. Returns whether it ran.</summary>
+        public static bool RecoverHeldOffline()
+        {
+            try
+            {
+                if (!File.Exists(HeldP)) return false;
+                JObject j; using (var rd = new Newtonsoft.Json.JsonTextReader(new StringReader(File.ReadAllText(HeldP))) { DateParseHandling = Newtonsoft.Json.DateParseHandling.None }) j = JObject.Load(rd); File.Delete(HeldP);
+                DateTime at; if (!DateTime.TryParse((string)j["at"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out at) || (DateTime.UtcNow - at.ToUniversalTime()).TotalMinutes > 15) return false;
+                var c = new Dictionary<string, string>(); foreach (var pr in ((JObject)j["ctx"]).Properties()) c[pr.Name] = (string)pr.Value ?? "";
+                Clog.Info("automation", "held goodnight recovered after a restart"); OfflineFires++; Fire("stream_offline", c); return true;
+            }
+            catch (Exception ex) { Clog.Warn("automation", "held goodnight not recovered: " + ex.Message); return false; }
         }
         static void FireRaidStart(string target) { RaidStartFires++; Fire("raid_start", new Dictionary<string, string> { { "channel", Channel() }, { "target", target ?? "" }, { "event", "raid_start" } }); }
         public static void OnStream(bool online) { if (!online) CancelRaidStart(); if (online) Program.ResetFirsts(); Fire(online ? "stream_online" : "stream_offline", new Dictionary<string, string> { { "channel", Channel() } }); }

@@ -17,6 +17,8 @@ OLD = 'https://discord.gg/be6bus4GKh'
 json.dump({'seeded': [], 'actions': [{'id': 'mine', 'name': 'mine', 'enabled': True, 'triggers': [{'type': 'command', 'command': '!x'}], 'steps': [{'type': 'say', 'as': 'core', 'text': 'join ' + OLD}]}]}, open(os.path.join(d, 'automations.json'), 'w'))
 os.makedirs(os.path.join(d, 'economy'), exist_ok=True)
 json.dump(['bob', 'Carol'], open(os.path.join(d, 'economy', 'hidden_pages.json'), 'w'))
+import datetime
+json.dump({'at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'ctx': {'channel': 'innocentpenguin_'}}, open(os.path.join(d, 'held_offline.json'), 'w'))   # a goodnight held when the Host went down
 state = {'up': True, 'discord': 'https://discord.gg/fromsite1'}
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -61,6 +63,8 @@ try:
     chk('raid out: discord line once, then stop stream', ro[0]['text'].endswith('{link:discord}') and ro[-1].get('request') == 'StopStream', ro)
     chk('hidden flags cleared with a dated backup', not os.path.exists(os.path.join(d, 'economy', 'hidden_pages.json')) and glob.glob(os.path.join(d, 'economy', 'hidden_pages.json.before-unhide-*.bak')))
     bk = glob.glob(os.path.join(d, 'economy', 'hidden_pages.json.before-unhide-*.bak')); chk('the backup holds the 2 cleared flags', bk and len(json.load(open(bk[0]))) == 2, bk)
+    def recovered(): return not os.path.exists(os.path.join(d, 'held_offline.json')) and any('held goodnight recovered' in open(f, encoding='utf-8', errors='replace').read() for f in glob.glob(os.path.join(d, '**', 'host.jsonl'), recursive=True))
+    chk('a goodnight held before a restart is run at start and the marker removed', waitfor(recovered, 30))
     h.stdin.write(b'alerttest\n'); h.stdin.flush()
     chk('self-test finished', waitfor(lambda: '[alerttest] ' in out(), 60))
     bad = [l for l in out().splitlines() if 'FAIL' in l and 'alerttest' in l.lower() or l.strip().startswith('[alerttest] FAIL')]
