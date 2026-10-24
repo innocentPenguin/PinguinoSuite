@@ -2534,7 +2534,12 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     }
     string GameKey()
     {
-        try { var j = ReadJson("live_state.json"); if (j == null) return ""; return GameKeyOf((string)j["obs"]?["twitchGame"], (string)j["game"]); }
+        try
+        {   // the shared source (Host StreamCategory, twitch_category.json): fresh = ok and written within 300 s, else UNKNOWN. Until that file exists, live_state.json is used.
+            var tc = ReadJson("twitch_category.json");
+            if (tc != null) return (bool?)tc["ok"] == true && Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - ((long?)tc["at"] ?? 0)) <= 300 ? GameKeyOf((string)tc["game"], "") : "";
+            var j = ReadJson("live_state.json"); if (j == null) return ""; return GameKeyOf((string)j["obs"]?["twitchGame"], (string)j["game"]);
+        }
         catch (Exception) { return ""; }
     }
     static string JoinLineFor(string key)
@@ -3733,7 +3738,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             if (j == null) return "(no state available)";
             var sb = new StringBuilder();
             string tg0 = (string)j["obs"]?["twitchGame"];
-            if (GameKeyOf(tg0, (string)j["game"]) != "rl")
+            if (GameKey() != "rl")
                 return "streaming: " + (string.IsNullOrEmpty(tg0) ? "unknown category" : tg0) + ". This is NOT Rocket League: never mention the queue, !join, !register, lobbies or Rocket League. A joining question is answered by code, not by you.";
             sb.Append("activity: " + (string)j["activity"] + ", format: " + (string)j["format"] + ", game mode: " + (string)j["gameMode"] + ", queue " + ((bool?)j["queueOpen"] == true ? "OPEN" : "CLOSED"));
             var q = j["queue"] as JArray;

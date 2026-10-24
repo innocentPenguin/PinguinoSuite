@@ -1362,6 +1362,18 @@ public static class Harness
             Msg("Leaky2", "@ChattyPinguino pineapple on pizza, yes or no lol", null, false);
             Check("control: ordinary answers still go out in Rocket League", Last() != null && Last().Contains("pineapple"), Last());
             nextReply = "{\"reply\":\"hey there!\",\"remember\":[]}";
+            string tcp = Path.Combine(dir, "twitch_category.json"); long nowU = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            Action<string, bool, long> tcw = (g, ok, at) => File.WriteAllText(tcp, "{\"game\":\"" + g + "\",\"at\":" + at + ",\"ok\":" + (ok ? "true" : "false") + "}");
+            string[,] tw = { { "Fortnite", "t", "FN customs are always open! !epic" }, { "Roblox", "t", "Of course! !roblox" }, { "Rocket League", "t", "!register YourEpicName, then !join when the queue is open!" }, { "Fortnite", "stale", "Ask in !discord, that's where the join info lives!" }, { "", "bad", "Ask in !discord, that's where the join info lives!" } };
+            for (int i = 0; i < tw.GetLength(0); i++)
+            {
+                cat("Rocket League");   // live_state says RL: the shared file wins
+                tcw(tw[i, 0], tw[i, 1] != "bad", tw[i, 1] == "stale" ? nowU - 400 : nowU);
+                nextReply = longRl; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+                Msg("Shared" + i, "@ChattyPinguino can i play with you lol", null, false);
+                Check("shared category file: " + tw[i, 0] + "/" + tw[i, 1], Last() != null && Last().EndsWith(tw[i, 2]), Last());
+            }
+            File.Delete(tcp);
             cat("Rocket League");
         }
         {
