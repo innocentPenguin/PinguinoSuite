@@ -34,8 +34,13 @@ async def run(engine, interval=3):
         s = config.settings()
         url = str(s.get("link_url") or "http://127.0.0.1:7777").strip()
         if _local(url):
+            token = alerts.host_token(os.environ.get("PINGUINO_DATA_DIR"), "link")
+            if not token:                            # no module_secret in this process's data dir (a throwaway / test run): never knock on Link without a token (a wall of 401s)
+                console_log.warn("scene_follow", "no Link token (PINGUINO_DATA_DIR unset or module_secret unreadable): scene following is off", dedupe_s=3600)
+                await asyncio.sleep(30)
+                continue
             try:
-                scene = await asyncio.to_thread(_fetch, url, alerts.host_token(os.environ.get("PINGUINO_DATA_DIR"), "link"))
+                scene = await asyncio.to_thread(_fetch, url, token)
                 fails = 0
                 if scene and scene != last:
                     engine.on_scene(scene)

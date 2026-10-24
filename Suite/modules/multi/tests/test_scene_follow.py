@@ -117,3 +117,22 @@ def test_bad_config_values(monkeypatch):
     assert calls == ["A"]
     calls, _ = _drive(monkeypatch, ["A"], cfg={"link_url": 12345})         # nonsense -> not loopback -> off
     assert calls == []
+
+
+def test_no_token_never_polls_link(monkeypatch):
+    fetched = []
+    monkeypatch.setattr(sf, "_fetch", lambda url, token: fetched.append(token) or "A")
+    monkeypatch.setattr(sf.config, "settings", lambda: {"link_url": "http://127.0.0.1:7777"})
+    monkeypatch.setattr(sf.alerts, "host_token", lambda *a: "")
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+        if len(sleeps) >= 3:
+            raise asyncio.CancelledError
+    monkeypatch.setattr(sf.asyncio, "sleep", fake_sleep)
+    try:
+        asyncio.run(sf.run(object()))
+    except asyncio.CancelledError:
+        pass
+    assert fetched == [] and sleeps == [30, 30, 30]
