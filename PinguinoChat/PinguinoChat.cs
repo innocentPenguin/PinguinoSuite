@@ -1340,7 +1340,7 @@ public class CPHInline
     }
 
     // ARGUMENTS: the bot never jumps into a heated exchange and never snarks at someone who is arguing. Heat = in the last 90 s at least 3 lines from 2+ people with insults / swearing / put-downs / the bots debate.
-    static readonly Regex RxHeat = new Regex(@"\b(stfu|shut ?up|shut your|idiot|dumb|stupid|moron|trash|garbage|liar|liars|loser|bozo|clown|cringe|pathetic|useless|annoying|hate you|hate this|you suck|u suck|ur bad|youre bad|you're bad|fuck\w*|wtf|bullshit|bs|ineffective|dependent|delusional|shut)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex RxHeat = new Regex(@"\b(stfu|shut ?up|shut your|idiot|dumb|stupid|moron|trash|garbage|liar|liars|loser|bozo|clown|cringe|pathetic|useless|annoying|hate you|hate this|you suck|u suck|ur bad|youre bad|you're bad|(?:fuck|screw|f) (?:you|u|off|ur|yourself)|fuck (?:this|that) (?:bot|guy|dude)|bullshit|ineffective|dependent|delusional)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);   // swearing as emphasis ("that was fucking insane", "this bs", "shut the door") is gaming chat, not an argument: only aimed forms count (checked against 4 days of chat: heat episodes 19 -> 9; wtf, bs and a bare "shut" no longer count)
     // "bot"/"bots" alone is a soft signal: it counts towards the 3 lines only when at least one line has a real put-down (so a calm "bots are cool" chat is not heat)
     static readonly Regex RxBotWord = new Regex(@"\bbots?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // aimed at the bot itself: asked to stop, told off, insulted, told it is not liked

@@ -806,7 +806,7 @@ public static class Harness
         Check("!luck rolls a number", Last() != null && System.Text.RegularExpressions.Regex.IsMatch(Last(), @"You got \d+% luck"), Last());
         cn = CPHProxy.Sent.Count; Msg("Canny", "!goon", null, false);
         Check("a command held with enabled:false says nothing", CPHProxy.Sent.Count == cn);
-        CPHProxy.Globals.Remove("pinguino.said.recent"); _cannedReset(true); Msg("Canny2", "!onlyfans", null, false);
+        CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Globals["pinguino.links"] = "{\"discord\":\"https://discord.gg/fktz5sq4b8\"}"; _cannedReset(true); Msg("Canny2", "!onlyfans", null, false);
         Check("!onlyfans points to the Discord", Last() != null && Last().Contains("Join the Discord: https://discord.gg/"), Last());
         cn = CPHProxy.Sent.Count; Msg("Canny3", "!trapaccount", null, false);
         Check("!trapaccount is gone, says nothing", CPHProxy.Sent.Count == cn);
@@ -1151,6 +1151,14 @@ public static class Harness
             Check("guess: a timeout reveals the chatter", Last() != null && Last().Contains("bobby") && (Last().Contains("time") || Last().Contains("clock")), Last());
             Game(new Dictionary<string, object> { { "kind", "guess" }, { "outcome", "start" }, { "user", "quiet1" }, { "display", "Quiet1" }, { "amount", 100 }, { "payout", 200 }, { "tries", 3 }, { "reason", "hello there" }, { "optout", "1" }, { "gameId", "gu7" } });
             Check("guess: an opted-out viewer gets the plain start (no banter)", Last() == "@Quiet1 Who said this? \"hello there\" Answer with !guess <name>, 3 tries. Stake 100 points, right answer pays 200.", Last());
+            // heat is about arguments, not swearing as emphasis (4 days of chat: fuck* was 57 of the hits)
+            ((System.Collections.IList)SF("_buf").GetValue(null)).Clear();
+            Msg("a1", "that clutch was fucking insane"); Msg("b2", "wtf how did he survive that"); Msg("a1", "this bs song again lol, bots are fun");
+            Check("heat: emphatic swearing in a hype moment is not an argument", !(bool)typeof(CPHInline).GetMethod("IsHeated", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(new CPHInline(), null), "");
+            ((System.Collections.IList)SF("_buf").GetValue(null)).Clear();
+            Msg("a1", "fuck you bot"); Msg("b2", "yeah shut up already"); Msg("a1", "you are so dumb honestly");
+            Check("heat: aimed insults still make it heated", (bool)typeof(CPHInline).GetMethod("IsHeated", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(new CPHInline(), null), "");
+            ((System.Collections.IList)SF("_buf").GetValue(null)).Clear();
             // heated chat: plain result only
             Msg("a1", "stfu you are trash"); Msg("b2", "lol shut up clown"); Msg("a1", "you are so dumb honestly");
             Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 5 }, { "payout", 0 }, { "balance", 5 }, { "gameId", "g11" } });
