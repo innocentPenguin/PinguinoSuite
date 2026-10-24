@@ -1883,3 +1883,17 @@ class SongifyPresetRouteTests(unittest.TestCase):
         known = {k for g in cs.SCHEMA for (k, *_r) in g["items"]}
         self.assertTrue(set(cs.PRESETS["songify"][2]) <= known)
         self.assertTrue(set(cs.PRESETS["takeback"][2]) <= known)
+
+
+class QuietDisconnectTests(unittest.TestCase):
+    def test_reset_connection_is_one_short_line_not_a_traceback(self):
+        import io, contextlib, server
+        srv = server.Quiet.__new__(server.Quiet)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            try:
+                raise ConnectionResetError(10054, "An existing connection was forcibly closed by the remote host")
+            except ConnectionResetError:
+                srv.handle_error(None, ("127.0.0.1", 1))
+                srv.handle_error(None, ("127.0.0.1", 2))
+        self.assertEqual(err.getvalue(), "")

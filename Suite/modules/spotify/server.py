@@ -72,6 +72,7 @@ class Quiet(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
         import sys
         if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError, BrokenPipeError)):
+            console_log.info("server", "a client closed its connection (normal)", dedupe_s=600)
             return
         console_log.warn("server", f"request handler error: {sys.exc_info()[1]!r}", dedupe_s=60)
 
