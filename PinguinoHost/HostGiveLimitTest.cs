@@ -17,7 +17,7 @@ namespace PinguinoHost
             Check(Gamble.GiveLimit("gla") == 10000, "10% of 100,000 = 10,000: " + Gamble.GiveLimit("gla"));
             var r = Gamble.Give("gla", "glb", 10000, "t1"); Check((bool)r["ok"], "give exactly the limit works");
             Check(Gamble.GiveLimit("gla") == 9000 && Gamble.GiveToday("gla") == 10000, "balance went down: limit 9,000, counter stays 10,000");
-            r = Gamble.Give("gla", "glb", 1, "t2"); Check(!(bool)r["ok"] && ((string)r["error"]).Contains("this stream"), "over the limit is refused with given/limit: " + (string)r["error"]);
+            r = Gamble.Give("gla", "glb", 1, "t2"); Check(!(bool)r["ok"] && (string)r["error"] == "You can only give 10% of your points per stream, you have 0 points left", "over the limit: the exact sentence with N left (0): " + (string)r["error"]);
             Economy.Credit("glt-c", "gla", 200000, "test");
             Check(Gamble.GiveLimit("gla") == 29000, "balance up: limit follows live (29,000)");
             r = Gamble.Give("gla", "glb", 19000, "t3"); Check((bool)r["ok"], "balance up lets them give more in the same stream (total 29,000)");
@@ -34,6 +34,9 @@ namespace PinguinoHost
             Gamble.SaveConfig(new JObject { { "giveDailyMax", 0 } });
             // site and chat share one counter (both go through Give)
             long before = Gamble.GiveToday("gla"); Gamble.Give("gla", "glb", 10, "t6"); Check(Gamble.GiveToday("gla") == before + 10, "one counter for the door");
+            Economy.TestSid = "s3"; Economy.Credit("glt-p", "glp", 100000, "test"); Economy.Credit("glt-q", "glq", 0, "test");
+            r = Gamble.Give("glp", "glq", 4000, "t7"); Check((bool)r["ok"], "partial give 4,000 of a 10,000 limit");
+            r = Gamble.Give("glp", "glq", 7000, "t8"); Check(!(bool)r["ok"] && (string)r["error"] == "You can only give 10% of your points per stream, you have 5,600 points left", "after a partial give N is what is still allowed (10% of 96,000 = 9,600 minus 4,000 = 5,600): " + (string)r["error"]);
             Economy.TestSid = null;
             Console.WriteLine(fails == 0 ? "[givelimittest] ALL PASS" : "[givelimittest] " + fails + " FAIL");
         }

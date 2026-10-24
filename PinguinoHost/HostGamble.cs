@@ -153,7 +153,7 @@ namespace PinguinoHost
             lock (L)
             {
                 long lim = GiveLimit(me), given = GiveToday(me);
-                if (given + amount > lim) return no(given >= lim ? "you have given " + given.ToString("N0", CultureInfo.InvariantCulture) + " this stream and the limit is " + lim.ToString("N0", CultureInfo.InvariantCulture) + " " + cur + " (" + GivePct().ToString("0.##", CultureInfo.InvariantCulture) + "% of what you have), try again next stream." : "you can give " + lim.ToString("N0", CultureInfo.InvariantCulture) + " " + cur + " per stream (" + GivePct().ToString("0.##", CultureInfo.InvariantCulture) + "% of what you have), you have given " + given.ToString("N0", CultureInfo.InvariantCulture) + " so " + (lim - given).ToString("N0", CultureInfo.InvariantCulture) + " is left.");
+                if (given + amount > lim) return no("You can only give " + GivePct().ToString("0.##", CultureInfo.InvariantCulture) + "% of your points per stream, you have " + Math.Max(0, lim - given).ToString("N0", CultureInfo.InvariantCulture) + " points left");   // Ivan 10-24: this exact sentence everywhere the limit is enforced (chat, Chatty's voice passes it through, site)
                 string id = reqId != null ? "give-" + reqId : Id("give", me);
                 string err = Economy.Spend(id, me, amount, "give to " + tl); if (err != null) return no(err + ".");
                 Economy.Credit(id + "-in", tl, amount, "given by " + me);

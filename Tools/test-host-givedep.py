@@ -1,6 +1,6 @@
 """Give limit (chat and site), tiered depreciation preview, public points pages and hide flag.  (Player-to-player loans through the site queue (request / offer / accept / decline / cancel / repay / default), limits, ledger rows for both sides, the checkbook activity view and the market push.
 A fake innocentpenguin.com runs locally.  Usage: python Tools/test-host-givedep.py [dll]"""
-import json, os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
+import re, json, os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
@@ -58,9 +58,9 @@ try:
     q('g1', 'bob', 'give', toLogin='zed', amount=100, note='thanks'); a = ans('g1')
     chk('site give works', a.get('status') == 'done' and a['data']['givenToday'] == 100 and a['data']['limit'] == 300 and bal('bob') == 900 and bal('zed') == 140, (a, bal('bob'), bal('zed')))
     q('g2', 'bob', 'give', toLogin='bob', amount=5); chk('no giving to yourself', ans('g2').get('status') == 'rejected', ans('g2'))
-    q('g3', 'bob', 'give', toLogin='zed', amount=250); a = ans('g3'); chk('over the daily limit is refused with a clear reply', a.get('status') == 'rejected' and 'per stream' in a['message'] and '200' in a['message'], a)
+    q('g3', 'bob', 'give', toLogin='zed', amount=250); a = ans('g3'); chk('over the daily limit is refused with a clear reply', a.get('status') == 'rejected' and re.fullmatch(r'You can only give \d+% of your points per stream, you have 200 points left', a['message']), a)
     q('g4', 'bob', 'give', toLogin='zed', amount=200); chk('up to the limit is fine', ans('g4').get('status') == 'done' and bal('bob') == 700, ans('g4'))
-    q('g5', 'bob', 'give', toLogin='zed', amount=1); a = ans('g5'); chk('then nothing more this stream', a.get('status') == 'rejected' and 'next stream' in a['message'], a)
+    q('g5', 'bob', 'give', toLogin='zed', amount=1); a = ans('g5'); chk('then nothing more this stream', a.get('status') == 'rejected' and re.fullmatch(r'You can only give \d+% of your points per stream, you have 0 points left', a['message']), a)
     q('g6', 'amy', 'give', toLogin='zed', amount=50); chk('no giving more than you have', ans('g6').get('status') == 'rejected', ans('g6'))
     q('g7', 'zed', 'give', toLogin='cat', amount=0); chk('minimum 1', ans('g7').get('status') == 'rejected', ans('g7'))
     time.sleep(2)
