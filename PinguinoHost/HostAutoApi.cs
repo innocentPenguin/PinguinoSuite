@@ -138,6 +138,8 @@ namespace PinguinoHost
                 var b = Body(c); string tg = ((string)b["target"] ?? "").Trim().TrimStart('@').ToLowerInvariant(); bool fired = Auto.OnRaidScheduled(tg, (bool?)b["now"] == true);
                 ChannelControl.Audit("app", "raid/prep", "target=" + tg + " fired=" + fired); Write(c, new JObject { { "ok", true }, { "fired", fired }, { "duplicate", !fired } }.ToString(), "application/json"); return true;
             }
+            if (p == "/api/rewards" && m == "GET") { Write(c, Rewards.List().ToString(), "application/json"); return true; }   // every channel point reward and whether the Host owns it (refunds only work on those)
+            if (p == "/api/rewards/create" && m == "POST") { Write(c, Rewards.Create(Body(c)).ToString(), "application/json"); return true; }   // {title:"Song Request",cost,prompt,inputRequired,automation:"spotify-redeem"}: makes the Host's OWN reward and points the automation at it
             if (p == "/api/channel/info" && m == "GET") { Write(c, ChannelControl.Info().ToString(), "application/json"); return true; }
             if ((p == "/api/channel/update" || p == "/api/mod/timeout") && m == "POST")   // Speak module: module token required for timeouts; the channel editor in the Suite app passes the same write gate as /api/customs/mod (own origin or the app token). Every call is audit-logged
             {

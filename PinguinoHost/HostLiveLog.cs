@@ -26,9 +26,30 @@ namespace PinguinoHost
                 if (string.IsNullOrEmpty(user) || text == null) return;
                 long t = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 string line = new JObject { { "t", t }, { "u", user.ToLowerInvariant() }, { "i", userId ?? "" }, { "m", text.Length > 500 ? text.Substring(0, 500) : text }, { "c", command ? 1 : 0 } }.ToString(Newtonsoft.Json.Formatting.None) + "\n";
-                lock (L) { Directory.CreateDirectory(LiveDir); File.AppendAllText(Path.Combine(LiveDir, DateTime.UtcNow.ToString("yyyy-MM-dd") + ".jsonl"), line, new UTF8Encoding(false)); }
+                lock (L) { Directory.CreateDirectory(LiveDir); Append(Path.Combine(LiveDir, DateTime.UtcNow.ToString("yyyy-MM-dd") + ".jsonl"), line); }
             }
             catch (Exception ex) { Clog.Warn("livelog", "could not record chat: " + ex.Message); }
+        }
+
+        /// <summary>lines of a day file without locking out the writer (File.ReadLines opens with FileShare.Read, which makes the next chat line fail with "being used by another process")</summary>
+        internal static IEnumerable<string> ReadShared(string path)
+        {
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var sr = new StreamReader(fs, Encoding.UTF8)) { string l; while ((l = sr.ReadLine()) != null) yield return l; }
+        }
+        /// <summary>append that tolerates readers (lore, Listen, profile sync read the day file while chat is live): shared read/write/delete, one retry after a short wait</summary>
+        internal static void Append(string path, string line)
+        {
+            for (int tries = 0; ; tries++)
+            {
+                try
+                {
+                    using (var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+                    { var b = new UTF8Encoding(false).GetBytes(line); fs.Write(b, 0, b.Length); }
+                    return;
+                }
+                catch (IOException) when (tries < 2) { System.Threading.Thread.Sleep(60); }
+            }
         }
 
         static JObject Hidden()
@@ -64,7 +85,7 @@ namespace PinguinoHost
             {
                 if (!Directory.Exists(LiveDir)) return res;
                 foreach (var f in Directory.EnumerateFiles(LiveDir, "*.jsonl").OrderBy(x => x))
-                    foreach (var line in File.ReadLines(f, Encoding.UTF8))
+                    foreach (var line in ReadShared(f))
                     {
                         if (line.Length < 10 || line.IndexOf("\"u\"", StringComparison.Ordinal) < 0) continue;
                         try
@@ -99,7 +120,7 @@ namespace PinguinoHost
                 string fday = Path.GetFileNameWithoutExtension(fi.Name); if (fday.Length != 10) continue;
                 try
                 {
-                    foreach (var line in File.ReadLines(fi.FullName, Encoding.UTF8))
+                    foreach (var line in ReadShared(fi.FullName))
                     {   // [2026-02-15 03:52:29] #channel user: text   (system lines are "* text")
                         int h = line.IndexOf("] #", StringComparison.Ordinal); if (h < 0) continue;
                         string day = line.Length > 11 && line[0] == '[' && line[11] == ' ' ? line.Substring(1, 10) : fday;
@@ -143,7 +164,7 @@ namespace PinguinoHost
                 }
                 if (Directory.Exists(LiveDir))
                     foreach (var f in Directory.EnumerateFiles(LiveDir, "*.jsonl"))
-                        foreach (var line in File.ReadLines(f, Encoding.UTF8))
+                        foreach (var line in ReadShared(f))
                         {
                             if (line.Length < 10 || line.IndexOf("\"u\"", StringComparison.Ordinal) < 0) continue;
                             try { var j = JObject.Parse(line.TrimStart('﻿')); string u = ((string)j["u"] ?? "").ToLowerInvariant(); if (u == "") continue; long t = (long?)j["t"] ?? 0; add(hoD, canon(u), DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime.ToString("yyyy-MM-dd"), 1); }
@@ -189,7 +210,7 @@ namespace PinguinoHost
         /// <summary>GET /api/livelog: what the recording holds, the opted-out users and a rough "estimated missing" note (report only, never added to the boards).</summary>
         public static JObject Api()
         {
-            int files = 0; long lines = 0; string first = ""; try { if (Directory.Exists(LiveDir)) { var fs = Directory.EnumerateFiles(LiveDir, "*.jsonl").OrderBy(x => x).ToList(); files = fs.Count; if (fs.Count > 0) first = Path.GetFileNameWithoutExtension(fs[0]); foreach (var f in fs) lines += File.ReadLines(f).Count(); } } catch (Exception) { }
+            int files = 0; long lines = 0; string first = ""; try { if (Directory.Exists(LiveDir)) { var fs = Directory.EnumerateFiles(LiveDir, "*.jsonl").OrderBy(x => x).ToList(); files = fs.Count; if (fs.Count > 0) first = Path.GetFileNameWithoutExtension(fs[0]); foreach (var f in fs) lines += ReadShared(f).Count(); } } catch (Exception) { }
             var users = new JObject(); var hid = (Hidden()["users"] as JObject) ?? new JObject(); var ov = Overlay();
             foreach (var p in hid.Properties())
             {
@@ -197,7 +218,7 @@ namespace PinguinoHost
                 var u = new JObject { { "since", p.Value["since"] }, { "recorded", t.Total }, { "perMonth", JObject.FromObject(t.PerMonth) }, { "lastAt", t.LastAt } };
                 if (t.PerMonth.Count > 0 && first != "")
                 {   // days with chat between 'since' and the first recorded day x the average per recorded day
-                    int recDays = t.PerMonth.Count > 0 ? Math.Max(1, Directory.EnumerateFiles(LiveDir, "*.jsonl").Count(f => File.ReadLines(f).Any(l => l.Contains("\"u\":\"" + p.Name.ToLowerInvariant() + "\"")))) : 1;
+                    int recDays = t.PerMonth.Count > 0 ? Math.Max(1, Directory.EnumerateFiles(LiveDir, "*.jsonl").Count(f => ReadShared(f).Any(l => l.Contains("\"u\":\"" + p.Name.ToLowerInvariant() + "\"")))) : 1;
                     string root = Path.Combine(Root, "chat_logs"); int gap = 0; DateTime s0, f0;
                     if (DateTime.TryParse((string)p.Value["since"], out s0) && DateTime.TryParse(first, out f0)) for (var d = s0.AddDays(1); d < f0; d = d.AddDays(1)) { string fp = Path.Combine(root, d.ToString("yyyy"), d.ToString("MM"), d.ToString("yyyy-MM-dd") + ".txt"); if (File.Exists(fp) && new FileInfo(fp).Length > 20000) gap++; }
                     u["estimatedMissing"] = new JObject { { "note", "rough, report only, NOT on the boards" }, { "chatDaysInGap", gap }, { "avgPerRecordedDay", t.Total / recDays }, { "roughMessages", gap * (t.Total / recDays) } };
@@ -218,16 +239,16 @@ namespace PinguinoHost
                 var have = new HashSet<string>(); lock (L)
                 {
                     Directory.CreateDirectory(LiveDir);
-                    if (Directory.Exists(LiveDir)) foreach (var f in Directory.EnumerateFiles(LiveDir, "*.jsonl")) foreach (var l in File.ReadLines(f, Encoding.UTF8)) { try { var j = JObject.Parse(l.TrimStart('﻿')); have.Add(j["t"] + "|" + j["u"]); } catch (Exception) { } }
+                    if (Directory.Exists(LiveDir)) foreach (var f in Directory.EnumerateFiles(LiveDir, "*.jsonl")) foreach (var l in ReadShared(f)) { try { var j = JObject.Parse(l.TrimStart('﻿')); have.Add(j["t"] + "|" + j["u"]); } catch (Exception) { } }
                     foreach (var f in Directory.EnumerateFiles(src, "*.jsonl"))
-                        foreach (var l in File.ReadLines(f, Encoding.UTF8))
+                        foreach (var l in ReadShared(f))
                         {
                             try
                             {
                                 var j = JObject.Parse(l.TrimStart('﻿')); string u = ((string)j["u"] ?? "").ToLowerInvariant(); if (!hid.Contains(u)) continue;
                                 string key = j["t"] + "|" + u; if (!have.Add(key)) continue;
                                 long t = (long)j["t"]; string day = DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime.ToString("yyyy-MM-dd");
-                                File.AppendAllText(Path.Combine(LiveDir, day + ".jsonl"), new JObject { { "t", t }, { "u", u }, { "i", j["i"] ?? "" }, { "m", j["m"] ?? "" }, { "c", j["c"] ?? 0 } }.ToString(Newtonsoft.Json.Formatting.None) + "\n", new UTF8Encoding(false)); added++;
+                                Append(Path.Combine(LiveDir, day + ".jsonl"), new JObject { { "t", t }, { "u", u }, { "i", j["i"] ?? "" }, { "m", j["m"] ?? "" }, { "c", j["c"] ?? 0 } }.ToString(Newtonsoft.Json.Formatting.None) + "\n"); added++;
                             }
                             catch (Exception) { }
                         }

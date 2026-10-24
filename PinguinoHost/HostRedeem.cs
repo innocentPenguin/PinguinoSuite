@@ -30,10 +30,12 @@ namespace PinguinoHost
         static string SetStatus(string redemptionId, string rewardId, string status)
         {
             if (string.IsNullOrEmpty(redemptionId) || string.IsNullOrEmpty(rewardId)) return "no redemption id";
+            if (Rewards.KnownForeign(rewardId)) { Rewards.WarnOnce(rewardId); return "not our reward (created by another app)"; }   // Twitch said so once: no more 403s
             JToken d; string err;
             string code = TwitchApi.Call(new HttpMethod("PATCH"), "/channel_points/custom_rewards/redemptions?id=" + Uri.EscapeDataString(redemptionId) + "&broadcaster_id={bid}&reward_id=" + Uri.EscapeDataString(rewardId), new JObject { { "status", status } }, out d, out err);
             if (code.StartsWith("2")) { Clog.Info("refund", (status == "CANCELED" ? "refunded" : "completed") + " redemption " + redemptionId); try { EventLog.Backend("refund", "refunded a channel-point redemption", new JObject { { "redemption", redemptionId } }); } catch (Exception) { } return status == "CANCELED" ? "refunded" : "completed"; }
             string why = code == "401" || code == "403" ? " (the streamer account needs channel:manage:redemptions: sign in again on the Host setup page; Twitch also only lets the app that created a reward refund it)" : code == "404" ? " (already fulfilled, cancelled or older than Twitch keeps it)" : "";
+            if (code == "403") Rewards.NoteNotOwned(rewardId, err);
             Clog.Warn("refund", "could not refund redemption (HTTP " + code + "): " + err + why);
             try { EventLog.Backend("refund", "could not refund a redemption: HTTP " + code + why, new JObject { { "redemption", redemptionId } }, "warn"); } catch (Exception) { }
             return "failed " + code + " " + err;

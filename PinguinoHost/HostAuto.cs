@@ -273,7 +273,7 @@ namespace PinguinoHost
                     int min = (int?)t["min"] ?? -1, max = (int?)t["max"] ?? -1;
                     if (min >= 0 && amount < min) continue; if (max >= 0 && amount > max) continue;
                     string tier = (string)t["tier"]; if (!string.IsNullOrEmpty(tier) && tier != "any" && ctx.ContainsKey("tier") && ctx["tier"] != tier) continue;
-                    if (kind == "redeem") { string title = (string)t["title"]; if (!string.IsNullOrEmpty(title) && title != "*" && !string.Equals(title, ctx.ContainsKey("title") ? ctx["title"] : "", StringComparison.OrdinalIgnoreCase)) continue; }
+                    if (kind == "redeem") { string title = (string)t["title"], rwId = (string)t["rewardId"]; if (!string.IsNullOrEmpty(rwId)) { if (rwId != (ctx.ContainsKey("rewardId") ? ctx["rewardId"] : "")) continue; } else if (!string.IsNullOrEmpty(title) && title != "*" && !string.Equals(title, ctx.ContainsKey("title") ? ctx["title"] : "", StringComparison.OrdinalIgnoreCase)) continue; }
                     if (!CooldownOk(a, t, ctx.ContainsKey("userName") ? ctx["userName"] : "", 0)) continue;
                     Run(a, kind, new Dictionary<string, string>(ctx));
                 }
@@ -407,7 +407,7 @@ namespace PinguinoHost
                     case "inc_var": { double cur; double.TryParse(GetVar(x("name")), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out cur); double by = (double?)st["by"] ?? 1; cur += by; SetVar(x("name"), cur.ToString(System.Globalization.CultureInfo.InvariantCulture), (bool?)st["persist"] == true); ctx["count"] = cur.ToString(System.Globalization.CultureInfo.InvariantCulture); outp.Add("var " + x("name") + " = " + ctx["count"]); break; }
                     case "log": outp.Add("log: " + x("text")); Clog.Info("automation", x("text")); break;
                     case "if": { bool ok = Compare(x("left"), (string)st["op"], x("right")); Exec((ok ? st["then"] : st["else"]) as JArray, ctx, outp, ref budget, test, depth + 1); break; }
-                    case "run_action": { var other = FindAction(x("name")); if (other == null) outp.Add("run_action: no action named " + x("name")); else { outp.Add("-> " + (string)other["name"]); Exec(other["steps"] as JArray, ctx, outp, ref budget, test, depth + 1); } break; }
+                    case "run_action": { var other = FindAction(x("name")); if (other == null) outp.Add("run_action: no action named " + x("name")); else if ((bool?)st["wait"] == false && !test) { outp.Add("-> " + (string)other["name"] + " (in the background)"); var oc = new Dictionary<string, string>(ctx); var oa = other; Task.Run(() => { try { RunNow(oa, "run_action from " + "another action", oc, false); } catch (Exception ex) { Clog.Error("automation", (string)oa["name"] + ": " + ex.Message); } }); } else { outp.Add("-> " + (string)other["name"]); Exec(other["steps"] as JArray, ctx, outp, ref budget, test, depth + 1); } break; }
                     case "comment": break;
                     case "stop": throw new StopAction();
                     default: { string extra = ExtraStep(type, st, ctx, test, x); outp.Add(extra ?? "unknown step '" + type + "' skipped"); break; }

@@ -14,6 +14,16 @@ namespace PinguinoHost
         static readonly Dictionary<string, JObject> _varMeta = new Dictionary<string, JObject>();
         public static bool Paused { get { return _paused; } }
         public static bool Has(string idOrName) { return FindAction(idOrName) != null; }
+        /// <summary>points the first redeem trigger of an action at one reward (title and id), e.g. after the Host made its own Song Request reward</summary>
+        public static bool SetRedeemReward(string actionId, string title, string rewardId)
+        {
+            lock (L)
+            {
+                var doc = Doc(); var a = ((JArray)doc["actions"]).OfType<JObject>().FirstOrDefault(x => (string)x["id"] == actionId); if (a == null) return false;
+                var t = (a["triggers"] as JArray ?? new JArray()).OfType<JObject>().FirstOrDefault(x => (string)x["type"] == "redeem"); if (t == null) return false;
+                t["title"] = title; t["rewardId"] = rewardId; Save(doc); return true;
+            }
+        }
 
         static void NoteFire(string id) { lock (L) { long n; _fires.TryGetValue(id, out n); _fires[id] = n + 1; _last[id] = DateTime.UtcNow; } }
 

@@ -183,11 +183,21 @@ namespace PinguinoHost
         static JObject SayStep(string text, string as_ = "core") { return new JObject { { "type", "say" }, { "as", as_ }, { "text", text } }; }
         static JObject Tr(string type, params object[] kv) { var o = new JObject { { "type", type } }; for (int i = 0; i + 1 < kv.Length; i += 2) o[(string)kv[i]] = JToken.FromObject(kv[i + 1]); return o; }
         static JObject Step(string type, params object[] kv) { return Tr(type, kv); }
-        static JObject Popup() { return Step("run_action", "name", "Alerts: show Latest Group"); }
+        static JObject Popup() { return Step("run_action", "name", "Alerts: show Latest Group", "wait", false); }   // in the background on its own lock: the 10 s the popup stays up must not hold the alert (a second cheer waited 10 s for the first one's chat line and sound)
         const string BanDir = "C:\\Users\\ivanm\\Documents\\amongusban\\";
 
         /// <summary>Streamer.bot replacement actions (Docs\STREAMERBOT_REPLACEMENT.md). The ones Ivan asked to be live are created ENABLED, the rest disabled.
         /// Remembered in "seeded", so deleting or editing one sticks.</summary>
+        /// <summary>one-time (marker "popupasync1"): the saved alert actions waited the 10 s of the "Latest Group" popup inline (every follow/sub/cheer took 10.2 s and the next alert of the same kind queued behind it).
+        /// The popup step becomes a background run (wait:false). Popups still run one after another on the popup action's own lock, so they never hide each other early.</summary>
+        internal static void MakePopupAsync()
+        {
+            var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
+            if (seeded.Any(v => (string)v == "popupasync1")) return;
+            foreach (var s in ((JArray)doc["actions"]).Descendants().OfType<JObject>())
+                if ((string)s["type"] == "run_action" && (string)s["name"] == "Alerts: show Latest Group" && s["wait"] == null) s["wait"] = false;
+            seeded.Add("popupasync1"); doc["seeded"] = seeded; Save(doc);
+        }
         /// <summary>one-time (marker "alertsound1"): the seeded follow/sub/resub/gift/cheer/raid actions saved before the alert_sound step existed get it, placed before the popup step.
         /// Sounds come from alerts_settings.json, so a kind with no file stays silent.</summary>
         static void AddAlertSoundSteps()
@@ -249,6 +259,7 @@ namespace PinguinoHost
         public static void SeedStreamerBotPresets()
         {
             MigrateRaidStart(); MigrateRaidOutNoWait();
+            try { MakePopupAsync(); } catch (Exception ex) { Clog.Warn("automation", "popup migration failed: " + ex.Message); }
             try { AddAlertSoundSteps(); } catch (Exception ex) { Clog.Warn("automation", "alert sound migration failed: " + ex.Message); }
             try
             {
