@@ -108,17 +108,24 @@ namespace PinguinoHost
                     {
                         var v = new JObject { { "id", "spotify-vol" }, { "name", "Spotify: !vol" }, { "group", "Spotify" }, { "enabled", sk != null && (bool?)sk["enabled"] == true }, { "importNotes", "preset: !vol shows the volume, mods can set it (!vol 60 or !vol60)" },
                             { "triggers", new JArray { new JObject { { "type", "command" }, { "names", new JArray("!vol", "!volume") }, { "permission", "everyone" }, { "cooldownSec", 5 }, { "userCooldownSec", 0 }, { "consume", true } } } }, { "conditions", new JArray() },
-                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", "http://127.0.0.1:8771/api/chat-command" }, { "command", "volume" }, { "as", "core" } } } } };
+                            { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", "http://127.0.0.1:8771/api/chat-command" }, { "command", "volume" }, { "as", "helper" } } } } };
                         acts2.Add(v);
                     }
                     seeded.Add("spotify2"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
+                }
+                if (seeded.Any(x => (string)x == "spotify") && !seeded.Any(x => (string)x == "musichelper1"))
+                {
+                    // one-time (Ivan 10-24): music answers have ONE voice, the Helper account. The Host still runs the module (votes, queue, volume) but speaks the answer as helper, not core.
+                    foreach (var a3 in ((JArray)doc["actions"]).OfType<JObject>().Where(x => new[] { "spotify-song", "spotify-queue", "spotify-vol", "spotify-skip" }.Contains((string)x["id"])))
+                        foreach (var st3 in ((JArray)a3["steps"]).OfType<JObject>().Where(x => (string)x["type"] == "module_command")) st3["as"] = "helper";
+                    seeded.Add("musichelper1"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
                 }
                 if (seeded.Any(x => (string)x == "spotify")) return;
                 const string url = "http://127.0.0.1:8771/api/chat-command";
                 Func<string, string, string[], string, int, int, JObject> mk = (id, cmd, names, perm, cd, ucd) => new JObject {
                     { "id", "spotify-" + id }, { "name", "Spotify: !" + names[0].TrimStart('!') }, { "group", "Spotify" }, { "enabled", false }, { "importNotes", "preset: enable when the spotify module runs" },
                     { "triggers", new JArray { new JObject { { "type", "command" }, { "names", new JArray(names) }, { "permission", perm }, { "cooldownSec", cd }, { "userCooldownSec", ucd }, { "consume", true } } } },
-                    { "conditions", new JArray() }, { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", url }, { "command", cmd }, { "as", "core" } } } } };
+                    { "conditions", new JArray() }, { "steps", new JArray { new JObject { { "type", "module_command" }, { "url", url }, { "command", cmd }, { "as", cmd == "song" || cmd == "queue" || cmd == "volume" || cmd == "skip" ? "helper" : "core" } } } } };
                 var acts = (JArray)doc["actions"];
                 foreach (var a in new[] {
                     mk("sr", "sr", new[] { "!sr", "!songrequest" }, "everyone", 0, 10), mk("skip", "skip", new[] { "!skip", "!voteskip" }, "everyone", 0, 0), mk("vol", "volume", new[] { "!vol", "!volume" }, "everyone", 5, 0),
@@ -515,7 +522,7 @@ namespace PinguinoHost
                 {
                     var body = new JObject { { "command", cmd }, { "args", ctx.ContainsKey("args") && ctx["args"] != "" ? ctx["args"] : ctx.ContainsKey("input") ? ctx["input"] : "" }, { "redeem", (bool?)st["redeem"] == true }, { "user", ctx.ContainsKey("userName") ? ctx["userName"] : "" }, { "display", ctx.ContainsKey("display") ? ctx["display"] : "" },
                         { "role", ctx.ContainsKey("role") ? ctx["role"] : "1" }, { "isMod", ctx.ContainsKey("isMod") && ctx["isMod"] == "true" }, { "isSub", ctx.ContainsKey("isSub") && ctx["isSub"] == "true" }, { "isVip", ctx.ContainsKey("isVip") && ctx["isVip"] == "true" }, { "subTier", ctx.ContainsKey("subTier") && int.TryParse(ctx["subTier"], out var stv) ? stv : 0 }, { "msgId", ctx.ContainsKey("msgId") ? ctx["msgId"] : "" } };
-                    if (cmd == "skip" || cmd == "voteskip") { try { SkipVote.Fill(body); } catch (Exception) { } }   // vote threshold from the people chatting lately
+                    if (cmd == "skip" || cmd == "voteskip") { body["role"] = "1"; body["isMod"] = false; try { SkipVote.Fill(body); } catch (Exception) { } }   // !skip = !voteskip for EVERYONE, mods included: one vote, no instant skip (a mod skip lives on the Spotify page / Master View)   // vote threshold from the people chatting lately
                     var rq = new HttpRequestMessage(HttpMethod.Post, u) { Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json") };
                     string tok = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? ""; if (tok != "" && ((IPAddress.TryParse(u.Host, out var ip) && IPAddress.IsLoopback(ip)) || u.Host == "localhost")) rq.Headers.Add("Authorization", "Bearer " + tok);
                     var r = h.SendAsync(rq).Result; var j = JObject.Parse(r.Content.ReadAsStringAsync().Result);
