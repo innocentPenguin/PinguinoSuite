@@ -9,6 +9,7 @@ Plays only on the master device, one ding per ding_cooldown_s (short queue, extr
 import json
 import os
 import queue
+import re
 import threading
 import time
 import urllib.request
@@ -21,16 +22,32 @@ SEEN_MAX = 20000
 KNOWN_MAX = 100000
 
 
+BOT_NAMES = {"pinguinob0t", "pinguinobot", "chattypinguino", "pinguinohelper", "soundalerts", "sery_bot", "nightbot", "streamelements", "streamlabs",
+             "moobot", "fossabot", "wizebot"}
+BOT_RE = re.compile(r"b[o0]t$")             # anything ending in bot / b0t
+
+
+def is_bot(m, st=None):
+    """ONE bot test for every local sound (chatter dings, chat pop): flagged bot, built-in bot names, *bot / *b0t names, the settings' bot list."""
+    st = st or config.settings()
+    who = (getattr(m, "user", "") or "").lower()
+    return bool(getattr(m, "is_bot", False) or who in BOT_NAMES or BOT_RE.search(who) or who in {b.lower() for b in st.get("bot_accounts", [])})
+
+
 class Mci:
-    """Windows MCI player (mp3/wav, with volume). Replaceable in tests."""
+    """Windows MCI player (mp3/wav, with volume). Replaceable in tests. Thread-safe: every sound uses its own alias, so sounds can overlap."""
     def __init__(self):
         self.n = 0
+        self._lk = threading.Lock()
 
     def play(self, path, volume):
         import ctypes
         mci = ctypes.windll.winmm.mciSendStringW
-        self.n += 1
-        alias = f"pgding{self.n}"
+        if path.lower().endswith(".mp3") and os.path.isfile(path[:-4] + ".wav"):
+            path = path[:-4] + ".wav"              # a trimmed .wav twin (no leading/trailing silence, opens instantly) wins over the mp3
+        with self._lk:
+            self.n += 1
+            alias = f"pgding{self.n}"
         kind = "waveaudio" if path.lower().endswith(".wav") else "mpegvideo"
         buf = ctypes.create_unicode_buffer(255)
         if mci(f'open "{path}" type {kind} alias {alias}', buf, 254, 0):
@@ -97,7 +114,7 @@ class Ding:
             if m.platform not in st["ding_platforms"] or m.is_self or m.is_bot or not m.user_id:
                 return False
             who = (m.user or "").lower()
-            if who in {b.lower() for b in st["bot_accounts"]} or who in {n.lower() for n in st["my_names"]}:
+            if is_bot(m, st) or who in {n.lower() for n in st["my_names"]}:
                 return False                                     # bots and the streamer never ding
             now = self.clock()
             if not self.started:
@@ -170,7 +187,7 @@ class Ding:
         while True:
             kind = self.q.get()
             t0 = time.time()
-            self.play_one(kind)
+            threading.Thread(target=self.play_one, args=(kind,), daemon=True).start()     # never wait for a sound to end: the next one may overlap
             gap = max(0.2, float(config.settings()["ding_cooldown_s"]))
             time.sleep(max(0, gap - (time.time() - t0)))
 

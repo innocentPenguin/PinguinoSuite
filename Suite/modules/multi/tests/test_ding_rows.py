@@ -169,3 +169,26 @@ def test_heartbeat_line_reports_pops_and_source(tmp_path, monkeypatch):
     line = p.heartbeat_line(True)
     assert line.startswith("pops: 0 played, last at never, source ") and "dings 3 played" in line
     assert "source down" in p.heartbeat_line(False)
+
+
+def test_is_bot_covers_every_bot_name_and_flag():
+    import ding
+
+    class M:
+        def __init__(self, user, is_bot=False): self.user, self.is_bot = user, is_bot
+    st = {"bot_accounts": ["somebot2"]}
+    for n in ("PinguinoB0t", "ChattyPinguino", "PinguinoHelper", "SoundAlerts", "sery_bot", "StreamElements", "Nightbot", "Moobot", "xyz_b0t", "somebot2"):
+        assert ding.is_bot(M(n), st), n
+    assert ding.is_bot(M("anyone", True), st)
+    assert not ding.is_bot(M("viewer1"), st)
+
+
+def test_ding_and_pop_skip_bots(monkeypatch):
+    import ding, pop, config
+    from models import ChatMessage
+    st = dict(config.settings(), ding_platforms=["twitch"], pop_platforms=["twitch"])
+    monkeypatch.setattr(config, "settings", lambda: st)
+    m = _m("ChattyPinguino")
+    p = pop.Pop(player=object(), start_worker=False)
+    assert p.observe(m) is False
+    assert p.q.qsize() == 0

@@ -56,7 +56,7 @@ class Pop:
             if m.platform not in st["pop_platforms"]:
                 return False
             who = (m.user or "").lower()
-            if m.is_bot or who in {b.lower() for b in st["bot_accounts"]}:
+            if ding.is_bot(m, st):
                 return False
             if (m.is_self or who in {n.lower() for n in st["my_names"]}) and not st["pop_own"]:
                 return False
@@ -100,7 +100,7 @@ class Pop:
         while True:
             platform = self.q.get()
             t0 = time.time()
-            self.play_one(platform)
+            threading.Thread(target=self.play_one, args=(platform,), daemon=True).start()     # overlap instead of waiting for the previous pop to end
             gap = max(0.1, float(config.settings()["pop_cooldown_s"]))
             time.sleep(max(0, gap - (time.time() - t0)))
 
