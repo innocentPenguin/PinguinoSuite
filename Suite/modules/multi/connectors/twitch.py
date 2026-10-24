@@ -117,6 +117,10 @@ def normalize_event(ev, ts=None):
                 if f.get("type") == "emote" and f.get("emote")])
 
 
+CHAT_SUB = "channel.chat.message"
+EXTRA_SUBS = ("channel.chat.notification", "channel.chat.message_delete", "channel.chat.clear_user_messages", "channel.chat.clear")
+
+
 class Twitch(Connector):
     platform, label, official = "twitch", "Twitch", True
     capabilities = {"read": True, "send": True, "reply": True, "badges": True, "history": False}
@@ -128,6 +132,8 @@ class Twitch(Connector):
         self.broadcaster_id = None
         self.sent_ids = set()       # messages Multi sent itself (tagged, so bots/loops can ignore them)
         self.stop = False
+        self.on_cleared = None      # callback(scope, reason, ids=, platform=, channel=, user_id=) set by the server: tags history + tells the pages
+        self.recent_bans = {}       # user_id -> ts of a ban we issued (a clear_user_messages event does not say timeout or ban)
         self._frames = OrderedDict()   # EventSub metadata.message_id already handled: Twitch may redeliver frames around a reconnect
         self._checked = time.time()
 
@@ -227,21 +233,21 @@ class Twitch(Connector):
     # reading ---------------------------------------------------------
     def _subscribe(self, tok):
         cond = {"broadcaster_user_id": self.broadcaster_id, "user_id": self.user["user_id"]}
-        for typ in ("channel.chat.message", "channel.chat.notification"):
+        for typ in (CHAT_SUB,) + EXTRA_SUBS:
             body = {"type": typ, "version": "1", "condition": cond,
                     "transport": {"method": "websocket", "session_id": self.session_id}}
             try:
                 r = self._call("post", f"{HELIX}/eventsub/subscriptions", tok=tok, json=body)
             except (TwitchAuthError, TwitchBusy):
-                if typ == "channel.chat.message":
+                if typ == CHAT_SUB:
                     raise
                 continue
             if r.status_code not in (200, 202, 409):          # 409 = already subscribed on this session (a reconnect keeps its subscriptions)
-                if typ == "channel.chat.message":
+                if typ == CHAT_SUB:
                     if r.status_code in (400, 403):
                         raise TwitchAuthError(f"Twitch refused the chat subscription ({r.status_code}): reconnect Twitch with chat permissions")
                     raise RuntimeError(f"subscribe failed {r.status_code}: {r.text[:200]}")
-                console_log.warn("twitch", f"could not subscribe to stream events ({r.status_code}); chat still works", dedupe_s=600)
+                console_log.warn("twitch", f"could not subscribe to {typ} ({r.status_code}); chat still works", dedupe_s=600)
 
     async def handle_frame(self, frame, tok):
         """Process one EventSub frame. Returns a reconnect URL when Twitch asks for it."""
@@ -273,13 +279,33 @@ class Twitch(Connector):
             if msg:
                 self.state["last_message"] = time.time()
                 self.inbox.put(msg)
+        elif t == "notification" and meta.get("subscription_type") in EXTRA_SUBS[1:]:
+            self._cleared(meta["subscription_type"], payload.get("event") or {})
         elif t == "revocation":
             sub = payload.get("subscription") or {}
-            if sub.get("type") == "channel.chat.notification":          # only the stream-event feed is gone: chat keeps working
-                console_log.warn("twitch", f"stream-event subscription ended ({sub.get('status', '')})", dedupe_s=600)
+            if sub.get("type") in EXTRA_SUBS:                           # only an optional feed is gone: chat keeps working
+                console_log.warn("twitch", f"{sub.get('type')} subscription ended ({sub.get('status', '')})", dedupe_s=600)
             else:                                                       # chat itself is gone: end the session so the run loop re-validates the token
                 raise TwitchAuthError(f"subscription revoked ({str(sub.get('status', 'unknown'))[:40]}): reconnect Twitch")
         return None
+
+    def _cleared(self, typ, ev):
+        """Message deleted / user timed out or banned / chat cleared: the lines stay in Multi, tagged `cleared`."""
+        try:
+            chan = ev.get("broadcaster_user_login") or ""
+            if typ == "channel.chat.message_delete":
+                scope, reason, kw = "message", "delete", {"ids": [f"twitch:{chan}:{ev['message_id']}"]}
+            elif typ == "channel.chat.clear_user_messages":
+                uid = str(ev["target_user_id"])
+                scope, reason, kw = "user", ("ban" if time.time() - self.recent_bans.get(uid, 0) < 60 else "timeout"), {"user_id": uid}
+            else:
+                scope, reason, kw = "all", "clear", {}
+            if self.on_cleared:
+                self.on_cleared(scope, reason, platform="twitch", channel=chan, **kw)
+            else:
+                self.emit({"type": "message.cleared", "ids": kw.get("ids", []), "scope": scope, "user_id": kw.get("user_id", ""), "reason": reason})
+        except Exception as e:                                          # a malformed frame must never end the chat session
+            console_log.warn("twitch", f"could not process {typ}: {str(e)[:80]}", dedupe_s=300)
 
     async def _pump(self, ws, tok):
         """Read frames until Twitch sends session_reconnect (returns the new URL). Any close/timeout raises."""
@@ -365,6 +391,8 @@ class Twitch(Connector):
     def _mod_sync(self, action, user_id="", message_id="", seconds=600, reason=""):
         tok = self.tokens()
         base = {"broadcaster_id": self.broadcaster_id, "moderator_id": self.user["user_id"]}
+        if action == "ban" and user_id:
+            self.recent_bans[str(user_id)] = time.time()
         if action == "delete":
             r = self._call("delete", f"{HELIX}/moderation/chat", tok=tok, params=dict(base, message_id=message_id))
         else:

@@ -160,6 +160,7 @@ async def lifespan(app):
     store.prune(config.settings()["retention_days"])
     _seed_defaults()
     tw = Twitch(inbox, hub.emit)
+    tw.on_cleared = mark_cleared
     connectors["twitch"] = tw
     dc = Discord(inbox, hub.emit)
     connectors["discord"] = dc
@@ -789,8 +790,22 @@ def help_all():
 
 
 @app.get("/api/messages")
-def messages(limit: int = 200, platform: str = "", min_tier: str = "", before: float = 0):
-    return store.recent(min(limit, 1000), platform or None, min_tier or None, before or None)
+def messages(limit: int = 200, platform: str = "", min_tier: str = "", before: float = 0, kind: str = "all"):
+    """kind: chat (no stream events) | events (subs, raids, follows, redeems, cheers, notices) | all (default, mixed as before)."""
+    return store.recent(min(limit, 1000), platform or None, min_tier or None, before or None, kind if kind in ("chat", "events") else "all")
+
+
+def mark_cleared(scope, reason, ids=None, platform="twitch", channel="", user_id=""):
+    """A line was deleted/timed out/banned/cleared on the platform: tag it in history (never remove) and tell the pages."""
+    if scope == "message":
+        found = store.mark_cleared(ids, reason)
+    elif scope == "user":
+        found = store.mark_cleared_user(platform, channel, user_id, reason)
+    else:
+        found = store.mark_cleared_all(platform, channel, reason)
+    if found:
+        hub.emit({"type": "message.cleared", "ids": found, "scope": scope, "user_id": str(user_id or ""), "reason": reason})
+    return found
 
 
 @app.get("/api/search")
@@ -940,6 +955,10 @@ async def mod_action(action: str, request: Request):
         console_log.warn("mod", f"{action} on {m['user']} failed: {e}")
         raise HTTPException(502, str(e))
     store.log_event("mod", {"action": action, "user": m["user"], "message_id": m["id"], "seconds": b.get("seconds")})
+    if action == "delete":
+        mark_cleared("message", "delete", ids=[m["id"]])
+    else:
+        mark_cleared("user", action, platform=m["platform"], channel=m["channel"], user_id=m["user_id"])
     console_log.info("mod", f"{action} {m['user']} ({m['platform']})")
     return {"ok": True}
 

@@ -137,7 +137,7 @@ def test_subscribe_errors(monkeypatch):
     posted = []
     monkeypatch.setattr(tw.requests, "post", lambda url, **k: posted.append(k["json"]["type"]) or (R(202) if len(posted) == 1 else R(403)))
     t._subscribe(tok)                                             # stream-event feed refused: chat still works
-    assert posted == ["channel.chat.message", "channel.chat.notification"]
+    assert posted == ["channel.chat.message"] + list(tw.EXTRA_SUBS)
 
 
 # ---- revocation --------------------------------------------------------------------------------------------

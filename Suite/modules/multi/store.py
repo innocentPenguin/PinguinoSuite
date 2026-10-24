@@ -6,12 +6,17 @@ import time
 
 import config
 
+# a stream event row (sub, raid, follow, redeem, cheer, notice...) as opposed to chat; the same text is the expression index, so queries use it
+EV_EXPR = ("COALESCE(json_extract(json,'$.event'),'') NOT IN ('','highlighted') "
+           "OR COALESCE(json_extract(json,'$.meta.notice'),0) NOT IN (0,'')")
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS messages(
   id TEXT PRIMARY KEY, platform TEXT, channel TEXT, user_id TEXT, user TEXT, display TEXT,
   text TEXT, ts REAL, json TEXT, score REAL, tier TEXT);
 CREATE INDEX IF NOT EXISTS ix_msg_ts ON messages(ts);
 CREATE INDEX IF NOT EXISTS ix_msg_user ON messages(platform, user_id, ts);
+CREATE INDEX IF NOT EXISTS ix_msg_ev ON messages((%s), ts);
 CREATE TABLE IF NOT EXISTS cards(
   id TEXT PRIMARY KEY, message_id TEXT, state TEXT, created REAL, updated REAL, json TEXT);
 CREATE TABLE IF NOT EXISTS windows(id TEXT PRIMARY KEY, json TEXT, updated REAL);
@@ -51,7 +56,7 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
-        self.db.executescript(SCHEMA)
+        self.db.executescript(SCHEMA % EV_EXPR)
         self.fts = self._init_fts()
 
     def _init_fts(self):
@@ -106,8 +111,12 @@ class Store:
             r = self.db.execute("SELECT json,score,tier FROM messages WHERE id=?", (mid,)).fetchone()
         return _msg(r) if r else None
 
-    def recent(self, limit=200, platform=None, min_tier=None, before=None):
+    def recent(self, limit=200, platform=None, min_tier=None, before=None, kind="all"):
         q, a = "SELECT json,score,tier FROM messages WHERE 1=1", []
+        if kind == "chat":
+            q += " AND (%s) = 0" % EV_EXPR
+        elif kind == "events":
+            q += " AND (%s) = 1" % EV_EXPR
         if platform:
             q += " AND platform=?"
             a.append(platform)
@@ -122,6 +131,42 @@ class Store:
         with self.lock:
             rows = self.db.execute(q, a).fetchall()
         return [_msg(r) for r in reversed(rows)]
+
+    # moderation: lines removed on the platform stay in history, tagged ---------
+    def _tag_cleared(self, rows, reason):
+        out = []
+        for r in rows:
+            d = json.loads(r["json"])
+            if not d.get("cleared"):
+                d["cleared"], d["cleared_reason"] = True, reason
+                self.db.execute("UPDATE messages SET json=? WHERE id=?", (json.dumps(d), d["id"]))
+            out.append(d["id"])
+        self.db.commit()
+        return out
+
+    def mark_cleared(self, ids, reason="delete"):
+        """Tag stored messages as cleared (never deleted). Returns the ids that exist."""
+        ids = [str(i) for i in (ids or [])][:1000]
+        if not ids:
+            return []
+        with self.lock:
+            rows = self.db.execute("SELECT json FROM messages WHERE id IN (%s)" % ",".join("?" * len(ids)), ids).fetchall()
+            return self._tag_cleared(rows, reason)
+
+    def mark_cleared_user(self, platform, channel, user_id, reason="timeout", since=None):
+        """Tag a chatter's recent chat lines in one channel (a timeout/ban clears what is on screen). Events are left alone."""
+        since = time.time() - 7200 if since is None else since
+        with self.lock:
+            rows = self.db.execute("SELECT json FROM messages WHERE platform=? AND channel=? AND user_id=? AND ts>? AND (%s) = 0" % EV_EXPR,
+                                   (platform, channel, str(user_id), since)).fetchall()
+            return self._tag_cleared(rows, reason)
+
+    def mark_cleared_all(self, platform, channel, reason="clear", limit=500):
+        """Tag the newest `limit` chat lines of a channel (the streamer/mod ran /clear)."""
+        with self.lock:
+            rows = self.db.execute("SELECT json FROM messages WHERE platform=? AND channel=? AND (%s) = 0 ORDER BY ts DESC LIMIT ?" % EV_EXPR,
+                                   (platform, channel, _limit(limit, 500, 2000))).fetchall()
+            return self._tag_cleared(rows, reason)
 
     def stats_since(self, since):
         """Per-minute counts and per-chatter counts of messages newer than `since` (epoch)."""
