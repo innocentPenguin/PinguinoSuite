@@ -64,6 +64,12 @@ namespace PinguinoHost
         public static bool Handle(string user, string cmd, string[] args, int role, Action<string> say)
         {
             bool mod = role >= 3, owner = role >= 4;
+            if (cmd == "!title" && args.Length == 0)                  // everyone: the current stream title (changing it below is mods only)
+            {
+                if (Cooling("c|!title-read", CoolSec() * 5)) return true;
+                var inf = ChannelControl.Info(); string cur = (bool?)inf["ok"] == true ? (string)inf["title"] : null;
+                say(string.IsNullOrWhiteSpace(cur) ? "I could not read the stream title right now." : "Stream title: " + Clip(cur, 140)); return true;
+            }
             if (!mod) return true;                                   // viewers get nothing (the word may belong to another bot)
             if (!Enabled) { say("Channel control is switched off (Data\\config\\control.json)."); return true; }
             if (Cooling("c|" + cmd, CoolSec())) return true;

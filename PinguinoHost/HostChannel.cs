@@ -31,9 +31,18 @@ namespace PinguinoHost
             var list = (d as JArray) ?? new JArray(); if (err != "") { error = err; return ""; }
             if (list.Count == 0) { error = "no category found for '" + name + "'"; return ""; }
             var exact = list.Where(x => string.Equals((string)x["name"], name, StringComparison.OrdinalIgnoreCase)).ToList();
-            JToken pick = exact.Count == 1 ? exact[0] : list.Count == 1 ? list[0] : null;
+            JToken pick = exact.Count == 1 ? exact[0] : list.Count == 1 ? list[0] : PreferRocketLeague(name, list);
             if (pick == null) { error = "ambiguous category '" + name + "': " + string.Join(", ", list.Take(5).Select(x => (string)x["name"])); return ""; }
             gameName = (string)pick["name"]; return (string)pick["id"];
+        }
+
+        /// <summary>Ivan 10-24: for a loose !game text, Rocket League always wins over Rocket League Sideswipe unless the text itself says "sideswipe"; null when this rule does not decide it</summary>
+        public static JToken PreferRocketLeague(string typed, JArray list)
+        {
+            string t = (typed ?? "").Trim().ToLowerInvariant(); if (t.Contains("sideswipe")) { return list.FirstOrDefault(x => ((string)x["name"] ?? "").ToLowerInvariant().Contains("sideswipe")); }
+            bool rl = t == "rl" || t.Length >= 2 && "rocket league".StartsWith(t) || t.Length >= 3 && "rocket league".Contains(t);
+            if (!rl) return null;
+            return list.FirstOrDefault(x => string.Equals((string)x["name"], "Rocket League", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>GET /api/channel/info: the live title, category and tags (so the editor can load them)</summary>

@@ -10,7 +10,9 @@ class H(BaseHTTPRequestHandler):
     def _do(self):
         n = int(self.headers.get('Content-Length') or 0); body = json.loads(self.rfile.read(n) or b'{}') if n else {}
         (None if (self.path.startswith('/api/') or self.command == 'GET' and not self.path.startswith(('/predictions', '/users?login=patfromearth'))) else reqs.append((self.command, self.path, body))); code, out = 200, {'data': []}
-        if self.path.startswith('/games'): out = {'data': [{'id': 'g1', 'name': 'Rocket League'}]}
+        if self.path.startswith('/games'): out = {'data': [] if ('name=rocket&' in self.path + '&' or 'sideswipe' in self.path) else [{'id': 'g1', 'name': 'Rocket League'}]}   # loose texts fall through to the category search
+        elif self.path.startswith('/search/categories'): out = {'data': [{'id': 'g2', 'name': 'Rocket League Sideswipe'}, {'id': 'g1', 'name': 'Rocket League'}]}
+        elif self.path.startswith('/channels?broadcaster_id') and self.command == 'GET': out = {'data': [{'title': 'Ranked grind with chat', 'game_name': 'Rocket League', 'tags': []}]}
         elif self.path.startswith('/users'): out = {'data': [{'id': '777', 'login': 'patfromearth'}]}
         elif self.path.startswith('/predictions') and self.command == 'GET': out = {'data': [{'id': 'pr1', 'status': 'ACTIVE', 'outcomes': [{'id': 'o1', 'title': 'Yes'}, {'id': 'o2', 'title': 'No'}]}]}
         elif self.command in ('PATCH', 'DELETE') or self.path.startswith('/chat/settings'): code = 204
@@ -63,7 +65,12 @@ try:
     r = say('*modguy: !title New PM system tonight'); chk('mod !title', last()[0] == 'PATCH' and last()[1].startswith('/channels?broadcaster_id=111') and last()[2] == {'title': 'New PM system tonight'} and 'Title changed' in r, (last(), r))
     r = say('*modguy: !game rocket league'); chk('mod !game', last()[0] == 'PATCH' and last()[2] == {'game_id': 'g1'} and 'Rocket League' in r, (last(), r))
     n0 = len(reqs); r = say('viewer1: !title hacked'); chk('viewer !title does nothing', len(reqs) == n0 and not r, r)
-    r = say('*modguy: !title'); chk('!title usage', len(reqs) == n0 and 'Use: !title' in r, r)
+    r = say('*modguy: !title'); chk('!title with no text replies the current title, changes nothing', len(reqs) == n0 and r == 'Stream title: Ranked grind with chat', (r, reqs[n0:]))
+    r = say('viewer1: !title'); chk('a viewer can read the title too', len(reqs) == n0 and r == 'Stream title: Ranked grind with chat', (r, reqs[n0:]))
+    r = say('viewer1: !title hacked'); chk('a viewer cannot change it', len(reqs) == n0 and not r, r)
+    r = say('*modguy: !game rocket'); chk('!game rocket -> Rocket League, not Sideswipe', last()[0] == 'PATCH' and last()[2] == {'game_id': 'g1'}, (last(), r))
+    r = say('*modguy: !game rocket sideswipe'); chk('text with sideswipe -> Sideswipe', last()[0] == 'PATCH' and last()[2] == {'game_id': 'g2'}, (last(), r))
+    r = say('*modguy: !game rl'); chk('!game rl -> Rocket League', last()[2] == {'game_id': 'g1'}, (last(), r))
     r = say('*modguy: !allow'); chk('allow with nothing held', 'No message is being held' in r, r)
     h.stdin.write(('eventsub automod.message.hold ' + json.dumps({'message_id': 'hm1', 'user_login': 'leo', 'message': {'text': 'my clip https://x'}}) + chr(10)).encode()); h.stdin.flush(); time.sleep(0.8)
     r = say('*modguy: !allow leo'); chk('allow releases the held message', last()[1] == '/moderation/automod/message' and last()[2] == {'user_id': '111', 'msg_id': 'hm1', 'action': 'ALLOW'} and "Released leo" in r, (last(), r))
