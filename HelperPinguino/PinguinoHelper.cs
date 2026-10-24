@@ -872,6 +872,7 @@ public class CPHInline
         bool es = IsSpanish(q) || (_esUsers.ContainsKey(login) && IsSpanish(q + " hola"));
         if (es) _esUsers[login] = now;
         string qn = NormalizeAsk(es ? EsToEnglishWords(q) : q);                                                   // bot names ("pinguino", "pinguinos", typos) are dropped, Ivan's nicknames ("penguin", "peng", "peg", typos) become "ivan"
+        if ((RxHowJoin.IsMatch(qn) || RxDoJoin.IsMatch(qn)) && Category() != "rl") { Say(who + NonRlLine(Category(), es)); return true; }   // a join ask on any other game gets the short line, not the Rocket League queue text
         var qw = TaughtWords(qn);
         var qx = AskSynonyms(qw);                                                      // words that mean the same thing as a word in the question (small fixed groups)
         string qLow = " " + string.Join(" ", Regex.Matches(qn.ToLowerInvariant(), "[a-z0-9']+").Cast<Match>().Select(m => m.Value)) + " ";
@@ -1706,6 +1707,8 @@ public class CPHInline
         JObject me = Player(login);
         string registered = me == null ? "" : ((string)me["GameId"] ?? "");
         string who = "@" + display + " ";
+        // Ivan 10-24: the queue / lobby / register text is Rocket League only; on any other game (or an unknown category) one short line instead
+        if (QueueIntent(intent)) { string cat = Category(); if (cat != "rl") { Say(who + NonRlLine(cat, _es)); return true; } }
         if (_es) return RespondEs(who, intent, registered);
 
         switch (intent)
@@ -1916,6 +1919,28 @@ public class CPHInline
     {
         if (registered == "") return "To get a spot: register with !register YourEpicName, or tell me \"register me as YourEpicName\".";
         return QueueOpen() ? "You're registered, say \"add me to the queue\" to join." : "The queue is closed right now.";
+    }
+
+    static bool QueueIntent(string intent) { return intent == "how_join" || intent == "how_register" || intent == "do_register" || intent == "do_join" || intent == "do_leave" || intent == "position" || intent == "lobby_info"; }
+
+    /// <summary>"rl", "fn", "rb", "other" or "unknown" from Data/twitch_category.json (written by the Host: {"game","at","ok"}); stale (over 300 s), missing or a failed lookup = unknown</summary>
+    string Category()
+    {
+        try
+        {
+            var j = ReadJson("twitch_category.json"); if (j == null || (bool?)j["ok"] != true) return "unknown";
+            long at = (long?)j["at"] ?? 0; if (Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - at) > 300) return "unknown";
+            string g = ((string)j["game"] ?? "").Trim().ToLowerInvariant(); if (g == "") return "unknown";
+            if (g.Contains("rocket league")) return "rl"; if (g.Contains("fortnite")) return "fn"; if (g.Contains("roblox")) return "rb";
+            return "other";
+        }
+        catch (Exception) { return "unknown"; }
+    }
+
+    static string NonRlLine(string cat, bool es)
+    {
+        if (es) return cat == "fn" ? "\u00a1Las customs de FN siempre est\u00e1n abiertas! !epic" : cat == "rb" ? "\u00a1Claro! !roblox" : "No estoy seguro de qu\u00e9 estamos jugando ahora, mira !discord para unirte.";
+        return cat == "fn" ? "FN customs are always open! !epic" : cat == "rb" ? "Of course! !roblox" : cat == "other" ? "Joining depends on the game, the details are in !discord" : "Not sure what we're playing right now, check !discord to join in!";
     }
 
     string HowJoinText(string registered)

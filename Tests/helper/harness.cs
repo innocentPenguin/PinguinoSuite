@@ -18,6 +18,13 @@ public static class Harness
         if (ok) passes++; else { fails++; Console.WriteLine("FAIL: " + name + (extra == "" ? "" : "  -> " + extra)); }
     }
 
+    static string catGame = "Rocket League"; static bool catOk = true, catMissing = false; static int catAge = 0;   // the Host's Data/twitch_category.json, rewritten fresh before every message
+    static void WriteCategory()
+    {
+        string f = Path.Combine(dir, "twitch_category.json");
+        if (catMissing) { try { File.Delete(f); } catch (Exception) { } return; }
+        File.WriteAllText(f, "{\"game\":\"" + (catOk ? catGame : "") + "\",\"at\":" + (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - catAge) + ",\"ok\":" + (catOk ? "true" : "false") + "}");
+    }
     static bool Routed;   // behave as if the router started the helper
     static void Msg(string user, string text, bool mod = false, string reply = null)
     {
@@ -25,6 +32,7 @@ public static class Harness
         a["message"] = text; a["userName"] = user.ToLower(); a["user"] = user; a["userId"] = "id_" + user.ToLower();
         a["isModerator"] = mod; a["role"] = mod ? 3 : 1; a["isBroadcaster"] = false; a["rawInput"] = "orig raw";
         if (Routed) a["pinguinoRouted"] = true;
+        WriteCategory();
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Runs.Clear(); CPHProxy.Globals.Remove("pinguino.result");
         new CPHInline().Execute();
     }
@@ -649,6 +657,26 @@ public static class Harness
                 Check("the real public pack (Data\\helper\\knowledge.json) has no secret-like text", !rs.IsMatch(rp), rs.Match(rp).Success ? "match at " + rs.Match(rp).Index : "");
             }
             aiReply = "{\"intent\":\"none\",\"epic\":\"\"}";
+        }
+
+        // 9. join answers follow the current Twitch category (Ivan 10-24): RL = the queue text, FN / Roblox / other / unknown = one short line, no Rocket League text
+        {
+            Func<string, bool> noRl = t => t != null && !t.Contains("Rocket League") && !t.Contains("!register") && !t.Contains("queue") && !t.Contains("peng3") && t.Length < 90;
+            catGame = "Rocket League"; Msg("Cat1", "how do I join?"); Check("category: Rocket League keeps the queue text", Last() != null && Last().Contains("!register YourEpicName"), Last());
+            catGame = "Fortnite"; Msg("Cat2", "how do I join?"); Check("category: Fortnite -> customs line", Last() == "@Cat2 FN customs are always open! !epic", Last());
+            Msg("Cat3", "can i play with you guys"); Check("category: Fortnite, another phrasing", Last() != null && Last().Contains("!epic") && noRl(Last()), Last());
+            Msg("Cat3b", "add me to the queue"); Check("category: Fortnite, add me -> same short line, nobody is queued", Last() != null && Last().Contains("!epic") && !Last().Contains("Say yes"), Last());
+            Msg("Cat3c", "whats the lobby code"); Check("category: Fortnite, lobby ask -> no RL lobby text", noRl(Last()), Last());
+            catGame = "Roblox"; Msg("Cat4", "how do I join?"); Check("category: Roblox -> of course", Last() == "@Cat4 Of course! !roblox", Last());
+            catGame = "Minecraft"; Msg("Cat5", "how do I join?"); Check("category: another game -> short discord line", noRl(Last()) && Last().Contains("!discord"), Last());
+            catGame = "Just Chatting"; Msg("Cat5b", "how do I join?"); Check("category: Just Chatting -> short discord line", noRl(Last()) && Last().Contains("!discord"), Last());
+            catGame = "Rocket League"; catMissing = true; Msg("Cat6", "how do I join?"); Check("category: file missing -> unknown, short discord line, no RL text", noRl(Last()) && Last().Contains("!discord"), Last());
+            catMissing = false; catOk = false; Msg("Cat7", "how do I join?"); Check("category: lookup failed -> unknown, short discord line", noRl(Last()) && Last().Contains("!discord"), Last());
+            catOk = true; catAge = 900; Msg("Cat8", "how do I join?"); Check("category: stale file -> unknown", noRl(Last()) && Last().Contains("!discord"), Last());
+            catAge = 0; catGame = "Fortnite"; Msg("Cat9", "¿Cómo me uno a la cola?"); Check("category: Spanish ask on Fortnite -> short Spanish line", Last() != null && Last().Contains("!epic") && !Last().Contains("Rocket"), Last());
+            Msg("Cat10", "!helper how do i join the queue?"); Check("category: !helper join ask on Fortnite -> short line, no AI text", Last() == "@Cat10 FN customs are always open! !epic", Last());
+            catGame = "Rocket League"; Msg("Cat11", "!helper how do i join the queue?"); Check("category: !helper join ask on RL still goes through the pack", Last() != null && !Last().Contains("FN customs"), Last());
+            catGame = "Rocket League";
         }
 
         Console.WriteLine(fails == 0 ? "ALL " + passes + " HELPER CHECKS PASSED" : fails + " FAILED / " + passes + " passed");

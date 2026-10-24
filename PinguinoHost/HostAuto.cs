@@ -72,6 +72,7 @@ namespace PinguinoHost
         /// (POST /api/chat-command on port 8771); enable them on the page when that module is running and Nightbot/StreamElements stop answering !sr.</summary>
         public static void SeedDefaults()
         {
+            try { StreamCategory.EnsureStarted(); } catch (Exception) { }
             try
             {
                 var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
