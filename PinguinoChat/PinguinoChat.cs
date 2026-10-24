@@ -962,6 +962,7 @@ public class CPHInline
     // Greetings are for people, not for ads: no welcome / welcome-back / daily line for a message with a link or a domain (also "name .org", "name dot com"), a known spam phrase, or an account whose name looks machine-made.
     bool GreetBlocked(string login, string text)
     {
+        bool hostSpam; if (CPH.TryGetArg("spamCandidate", out hostSpam) && hostSpam) return true;   // the Host's own verdict (new chatter, first message with a link / spam phrase)
         string t = text ?? "";
         if (RxGreetLink.IsMatch(t)) return true;
         string low = t.ToLowerInvariant();

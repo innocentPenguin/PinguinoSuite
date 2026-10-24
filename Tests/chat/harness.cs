@@ -1248,6 +1248,8 @@ public static class Harness
         { Extra["firstMessage"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg(spm[0], spm[1]);
           Check("spam: no welcome for " + spm[0] + " / " + spm[1], Last() == null || !Last().Contains("🐧"), Last()); }
         Extra.Clear();
+        Extra["firstMessage"] = true; Extra["spamCandidate"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Hostflagged", "hello there friends");
+        Check("spam: the Host's spamCandidate flag stops the welcome", Last() == null || !Last().Contains("🐧"), Last()); Extra.Remove("spamCandidate");
         Extra["firstMessage"] = true; SF("_lastWelcome").SetValue(null, 0L); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Plainfriend", "hi all, first time here");
         Check("spam guard: a normal new viewer is still welcomed", Last() != null && Last().Contains("@Plainfriend"), Last());
         Extra.Clear();
