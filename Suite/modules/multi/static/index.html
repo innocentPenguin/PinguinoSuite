@@ -55,7 +55,7 @@ body.linked #feed{overflow:hidden}body.linked .msg{white-space:nowrap;overflow:h
 .box label{display:flex;flex-direction:column;gap:3px;font-size:.9em}.box details{margin:4px 0}
 .launch #toast{position:sticky;top:0;z-index:6}.tok,.tbad{padding:6px 10px;border-radius:6px;margin:8px 0}.tok{background:#12301f;color:#8de0b5}.tbad{background:#3a1717;color:#ffb0b0}
 .chk-row{padding:4px 0}.keys{margin-top:18px;font-size:.85em}
-.cleared{opacity:.55}.clr{font-size:.7em;color:var(--mut);margin-left:6px;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-style:normal;font-weight:400;white-space:nowrap}.hist-more{display:block;margin:4px auto}
+.rcur{box-shadow:inset 0 0 0 2px var(--accent);border-radius:4px;opacity:1!important}.cleared{opacity:.55}.clr{font-size:.7em;color:var(--mut);margin-left:6px;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-style:normal;font-weight:400;white-space:nowrap}.hist-more{display:block;margin:4px auto}
 .msg.bot{opacity:.65}.msg.bot .u{font-style:italic}
 .cbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:5px 8px;border-bottom:1px solid var(--line)}.grow{flex:1}
 .chip2{display:inline-flex;gap:5px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:2px 9px;font-size:.78em}a.chip2{color:var(--fg);text-decoration:none}.chip2.off{opacity:.4;text-decoration:line-through}.chip2.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
@@ -177,6 +177,60 @@ function clearedDom(id) {
     if (!el.querySelector('.clr')) { const host = el.querySelector('.d-main') || el.querySelector('span:not(.d-ic):not(.d-age):not(.t)') || el; host.insertAdjacentHTML('beforeend', clrTag({cleared: true})); }
   });
 }
+
+// Reading cursor ("finger on the screen"): keyboard-moved highlight in the chat lists. It keeps its message id, so new lines arrive below it
+// without moving the view; End/Esc returns to the live tail.
+const CUR = {id: null, list: null};
+const CUR_BOT = /^(pinguinob0t|pinguinobot|chattypinguino|pinguinohelper|soundalerts|sery_bot)$/i;
+const curLists = () => [...document.querySelectorAll('#cfeed,#d-l-chat,#d-l-chat-a,#d-l-chat-b')];
+const curRows = l => [...l.children].filter(el => el.dataset.id || el.dataset.mid);
+const curRid = el => el.dataset.id || el.dataset.mid;
+function curBotSet() {
+  const s = new Set(); for (const m of msgs) if (isBot(m) || CUR_BOT.test(m.user || '') || (typeof SND_BOTS !== 'undefined' && SND_BOTS.test((m.user || '').toLowerCase()))) s.add(m.id);
+  return s;
+}
+function curApply() {
+  document.querySelectorAll('.rcur').forEach(e => e.classList.remove('rcur'));
+  if (!CUR.id) return;
+  const q = String(CUR.id).replace(/["\\]/g, '\\$&'), el = document.querySelector('[data-id="' + q + '"],[data-mid="' + q + '"]');
+  if (el && el.closest('.d-list,.cfeed')) el.classList.add('rcur');
+}
+function curShow(el, l) {
+  const a = el.getBoundingClientRect(), b = l.getBoundingClientRect();
+  if (a.top < b.top) l.scrollTop -= b.top - a.top + 4; else if (a.bottom > b.bottom) l.scrollTop += a.bottom - b.bottom + 4;
+}
+function curClear(toTail) {
+  CUR.id = null; curApply();
+  if (toTail && CUR.list) CUR.list.scrollTop = CUR.list.scrollHeight;
+}
+async function curMove(l, dir, n, bots, again) {
+  const rows = curRows(l), skip = bots ? new Set() : curBotSet();
+  let i = CUR.id ? rows.findIndex(e => curRid(e) === CUR.id) : -1;
+  if (i < 0) { if (dir > 0) return; i = rows.length; }       // no cursor yet: Up starts from the newest line
+  let moved = 0, at = i;
+  for (let j = i + dir; j >= 0 && j < rows.length && moved < n; j += dir) { if (skip.has(curRid(rows[j]))) continue; at = j; moved++; }
+  if (at === i || (dir < 0 && moved < n && !HIST.done.chat && !again)) {
+    if (dir < 0 && !HIST.done.chat && !again) { await histMore('chat'); return curMove(l, dir, n, bots, true); }   // at the oldest loaded line: fetch older, then continue
+    if (at === i) return;
+  }
+  CUR.id = curRid(rows[at]); CUR.list = l; curApply(); curShow(rows[at], l);
+}
+function curKey(e) {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  const t = e.target, tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  if (!['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', 'Escape'].includes(e.key)) return;
+  const l = curLists().find(x => x.matches(':hover')) || (CUR.id && CUR.list && document.contains(CUR.list) ? CUR.list : null);
+  if (!l) return;
+  const k = e.key;
+  if (k === 'Escape') { if (!CUR.id) return; e.preventDefault(); curClear(true); return; }
+  e.preventDefault();
+  if (k === 'End') { curClear(true); return; }
+  if (k === 'Home') { const r = curRows(l)[0]; if (r) { CUR.id = curRid(r); CUR.list = l; curApply(); l.scrollTop = 0; } return; }
+  const dir = k === 'ArrowUp' || k === 'PageUp' ? -1 : 1, n = k.startsWith('Page') ? 10 : 1;
+  curMove(l, dir, n, e.shiftKey && !k.startsWith('Page'));
+}
+document.addEventListener('keydown', curKey);
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-hist]'); if (b) histMore(b.dataset.hist); });
 document.addEventListener('scroll', e => {
   const el = e.target; if (!el || !el.id) return;

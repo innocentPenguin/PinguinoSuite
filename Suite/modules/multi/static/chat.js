@@ -70,11 +70,12 @@ function chatAdd(m) {
   const atEnd = f.scrollTop + f.clientHeight >= f.scrollHeight - 40;
   f.insertAdjacentHTML('beforeend', chatMsg(m));
   while (f.children.length > HIST.cap + 1) f.querySelector('.msg').remove();
-  if (W.scroll !== 'manual' && window.AUTO !== false && atEnd) f.scrollTop = f.scrollHeight;
+  if (W.scroll !== 'manual' && window.AUTO !== false && !CUR.id && atEnd) f.scrollTop = f.scrollHeight;
 }
 function chatFeed() {
   const f = $('#cfeed'); if (!f) return;
   f.innerHTML = (HIST.done.chat ? '' : '<button class="lnk hist-more" data-hist="chat">Load older messages</button>') + msgs.filter(chatVisible).slice(-HIST.cap).map(m => chatMsg(m)).join('') || '<div class="empty">No messages yet. When a connected platform gets chat, it shows up here.</div>';
+  if (CUR.id) { curApply(); return; }
   f.scrollTop = f.scrollHeight;
 }
 function chatPins() {

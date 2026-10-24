@@ -117,6 +117,7 @@ function dRowChat(m) {
   return `<div class="d-row ${isBot(m) ? 'bot' : ''}${m.cleared ? ' cleared' : ''}" data-id="${esc(m.id)}">${dIcon(m.platform)}<span>${badgeHtml(m)}<b style="color:${col}">${esc(dName(m))}</b>: ${bodyHtml(m, dLink)}${clrTag(m)}</span></div>`;
 }
 function dFill() {
+  const keep = CUR.id ? curLists().map(l => [l, l.scrollTop]) : null;
   const a = $('#d-l-activity'), c = $('#d-l-chat');
   if (a) { a.innerHTML = msgs.filter(m => m.event && dOk(m)).slice(-HIST.cap).reverse().map(dRowActivity).join('') + (HIST.done.events ? '' : '<button class="d-btn hist-more" data-hist="events">Load older activity</button>') || '<div class="empty">No activity yet. Follows, redeems, subs, gifts, cheers and raids show here.</div>'; }
   const ca = $('#d-l-chat-a'), cb = $('#d-l-chat-b');
@@ -129,6 +130,7 @@ function dFill() {
   }
   if (c) { c.innerHTML = `<div class="d-date">${new Date().toLocaleDateString(undefined, {year: 'numeric', month: 'long', day: 'numeric'})}${HIST.done.chat ? '' : '<button class="d-btn hist-more" data-hist="chat">Load older messages</button>'}</div>` + msgs.filter(dOk).slice(-HIST.cap).map(dRowChat).join(''); c.scrollTop = c.scrollHeight; }
   const n = $('#d-qn'); if (n) n.textContent = DASH.queue.length ? DASH.queue.length + ' waiting' : '';
+  if (keep) { keep.forEach(([l, t]) => { l.scrollTop = t; }); curApply(); }     // a rebuild keeps the reading cursor and the scroll position
 }
 function dFlow() {      // newest rows live in B; whatever no longer fits in B continues at the bottom of A
   const a = $('#d-l-chat-a'), b = $('#d-l-chat-b'); if (!a || !b) return;
@@ -142,13 +144,13 @@ window.dashAdd = m => {
   if (m.event === 'gift') dGifts();
   const ca = $('#d-l-chat-a'), cb = $('#d-l-chat-b');
   if (ca && cb) {
-    const k = DASH.split.kind, add = (el, ok) => { if (!ok) return; const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; el.insertAdjacentHTML('beforeend', dRowChat(m)); while (el.children.length > HIST.cap) el.children[0].remove(); if (end && window.AUTO !== false) el.scrollTop = el.scrollHeight; };
+    const k = DASH.split.kind, add = (el, ok) => { if (!ok) return; const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; el.insertAdjacentHTML('beforeend', dRowChat(m)); while (el.children.length > HIST.cap) el.children[0].remove(); if (end && window.AUTO !== false && !CUR.id) el.scrollTop = el.scrollHeight; };
     if (k === 'flow') { cb.insertAdjacentHTML('beforeend', dRowChat(m)); dFlow(); }
     else if (k === 'events') add(m.event ? cb : ca, true);
     else { add(ca, DASH.split.a === 'all' || m.platform === DASH.split.a); add(cb, DASH.split.b === 'all' || m.platform === DASH.split.b); }
   }
   const c = $('#d-l-chat'), a = $('#d-l-activity');
-  if (c) { const end = c.scrollTop + c.clientHeight >= c.scrollHeight - 40; c.insertAdjacentHTML('beforeend', dRowChat(m)); while (c.children.length > HIST.cap) c.children[1].remove(); if (end && window.AUTO !== false) c.scrollTop = c.scrollHeight; }
+  if (c) { const end = c.scrollTop + c.clientHeight >= c.scrollHeight - 40; c.insertAdjacentHTML('beforeend', dRowChat(m)); while (c.children.length > HIST.cap) c.children[1].remove(); if (end && window.AUTO !== false && !CUR.id) c.scrollTop = c.scrollHeight; }
   if (a && m.event) { if (DASH.paused) { DASH.queue.push(m); dFill(); } else { const e = a.querySelector('.empty'); if (e) e.remove(); a.insertAdjacentHTML('afterbegin', dRowActivity(m)); } }
 };
 window.dashConn = () => { if (W.type === 'dash') { dTabs(); const s = $('#d-plat'); if (s) { const v = s.value; dPanels(); dFill(); } } };
