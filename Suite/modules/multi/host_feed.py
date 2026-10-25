@@ -184,7 +184,7 @@ def chat_in_body(m, own_bot):
     b = {str(x).lower() for x in (m.badges or [])}
     role = _role(m)
     return {"platform": "youtube", "user": m.display or m.user, "userId": m.user_id, "text": m.text, "msgId": m.id, "role": role,
-            "isSub": role == "sub" or bool(b & {"member", "sponsor", "subscriber"}), "ownBot": bool(own_bot)}
+            "isSub": role == "sub" or bool(b & {"member", "sponsor", "subscriber"}), "ownBot": bool(own_bot), "isBot": bool(own_bot)}
 
 
 def _chat_in_url():

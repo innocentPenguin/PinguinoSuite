@@ -46,7 +46,7 @@ def test_body_exact_and_roles():
     assert offer(c, clock, i=5)
     while c.step():
         pass
-    assert sent[0] == {"platform": "youtube", "user": "Boss", "userId": "uid1", "text": "hi", "msgId": "youtube:1", "role": "broadcaster", "isSub": False, "ownBot": False}
+    assert sent[0] == {"platform": "youtube", "user": "Boss", "userId": "uid1", "text": "hi", "msgId": "youtube:1", "role": "broadcaster", "isSub": False, "ownBot": False, "isBot": False}
     assert [(b["role"], b["isSub"]) for b in sent[1:]] == [("mod", True), ("sub", True), ("sub", True), ("viewer", False)]
 
 
@@ -59,6 +59,7 @@ def test_own_bot_flags():
     while c.step():
         pass
     assert [b["ownBot"] for b in sent] == [True, True, True, False]
+    assert [b["isBot"] for b in sent] == [b["ownBot"] for b in sent]
 
 
 def test_not_youtube_events_empty_or_switched_off(monkeypatch):
