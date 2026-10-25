@@ -11,7 +11,7 @@ namespace PinguinoHost
     /// The duplicate-line guard (HostApi.SaidRecently) still sees the original text, so the same line is never said twice.</summary>
     public static class ReplyCtx
     {
-        sealed class C { public string Id, Login; public DateTime At; }
+        sealed class C { public string Id, Login, Platform = "twitch"; public DateTime At; }
         static readonly AsyncLocal<C> Cur = new AsyncLocal<C>();
         static readonly Regex RxId = new Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", RegexOptions.Compiled);
         internal static bool AllowAnyId;   // test switch: accept simulated ids too
@@ -20,6 +20,10 @@ namespace PinguinoHost
         /// <summary>start a context for this message; dispose (or Clear) when the handler is done</summary>
         public static void Begin(string msgId, string login) { Cur.Value = Real(msgId) ? new C { Id = msgId, Login = (login ?? "").TrimStart('@'), At = DateTime.UtcNow } : null; }
         public static void End() { Cur.Value = null; }
+        /// <summary>chat that came from another platform (YouTube ...): replies to it go to THAT platform only, never to Twitch. msgId = the platform's own message id (may be empty), login = the namespaced viewer ("yt:name")</summary>
+        public static void BeginForeign(string platform, string msgId, string login) { Cur.Value = new C { Id = msgId ?? "", Login = (login ?? "").TrimStart('@'), Platform = (platform ?? "twitch").ToLowerInvariant(), At = DateTime.UtcNow }; }
+        /// <summary>"twitch" unless the live context came from another platform (events, timers and Twitch chat are all "twitch")</summary>
+        public static string Platform { get { var c = Cur.Value; return c != null && (DateTime.UtcNow - c.At).TotalSeconds <= 90 ? c.Platform : "twitch"; } }
         /// <summary>true while a reply context is active on this flow (the next line will be sent as a reply)</summary>
         /// <summary>the live reply context (message id + login), false when none or older than 90 s</summary>
         public static bool Current(out string id, out string login) { var c = Cur.Value; if (c == null || (DateTime.UtcNow - c.At).TotalSeconds > 90) { id = ""; login = ""; return false; } id = c.Id; login = c.Login; return true; }

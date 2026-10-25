@@ -47,6 +47,7 @@ namespace PinguinoHost
             if (!Lease.MayRun) { via = "this Host is not the master"; return false; }
             text = CleanLine(text, "chat send as " + role);
             if (text == "") { via = "nothing to say (empty line)"; return false; }
+            { string pf = ReplyCtx.Platform; if (pf != "twitch") return SendForeign(pf, text, out via); }   // chat from YouTube etc.: the answer goes to that platform only, through Multi, never to Twitch
             if (SaidRecently(text)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent, same line said moments ago: " + (text.Length > 60 ? text.Substring(0, 60) : text)); return true; }
             role = string.IsNullOrWhiteSpace(role) ? "core" : role.Trim().ToLowerInvariant();
             var reg = LoadFile("bots.json"); var sec = BotSecretsV();
@@ -128,10 +129,40 @@ namespace PinguinoHost
             if (!string.IsNullOrEmpty(c.Request.Headers["Origin"])) return false;
             string h = c.Request.Headers["Host"] ?? ""; return h.StartsWith("127.0.0.1:") || h.StartsWith("localhost:") || h.StartsWith("[::1]:");
         }
-        public static bool SaidRecently(string text)
+        /// <summary>a reply to chat from another platform: one explicit platform through Multi /api/send (reply_to = that platform's message id), NO Twitch fallback; tiktok is read-only: logged and skipped quietly</summary>
+        public static Func<string, JObject, JObject> TestMultiSend;   // test hook (path, body) -> Multi answer
+        static bool SendForeign(string pf, string text, out string via)
+        {
+            string parent, login; ReplyCtx.Current(out parent, out login);
+            string line = ReplyCtx.Prepare(text, out parent);
+            if (login != "" && login.IndexOf(':') > 0) line = System.Text.RegularExpressions.Regex.Replace(line, System.Text.RegularExpressions.Regex.Escape(login), login.Substring(login.IndexOf(':') + 1), System.Text.RegularExpressions.RegexOptions.IgnoreCase);   // "yt:name" is only our internal key
+            if (pf == "tiktok") { via = "tiktok is read-only"; Clog.Info("chat", "tiktok chat is read-only: reply skipped"); return true; }
+            if (SaidRecently(pf, line)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent to " + pf + ", same line said moments ago"); return true; }
+            var body = new JObject { { "platform", pf }, { "text", line } }; if (!string.IsNullOrEmpty(parent)) body["reply_to"] = parent;
+            JObject r = TestMultiSend != null ? TestMultiSend("/api/send", body) : AlertBridge.Post("/api/send", body);
+            bool ok = r != null && (bool?)r["ok"] == true;
+            via = ok ? "multi:" + pf : "multi refused " + pf + ": " + (((string)r?["text"]) ?? ((string)r?["detail"]) ?? "no answer");
+            if (!ok) Clog.Warn("chat", "send to " + pf + " failed (no Twitch fallback): " + via);
+            return ok;
+        }
+        /// <summary>true when this name is one of our own bot sender accounts or the channel itself (loop guard for chat-in)</summary>
+        public static bool IsOwnBotName(string name)
+        {
+            try
+            {
+                string n = (name ?? "").Trim().TrimStart('@').ToLowerInvariant(); if (n == "") return false;
+                var reg = LoadFile("bots.json");
+                if (reg["Bots"] is JObject bots) foreach (var p in bots.Properties()) { if (p.Name.ToLowerInvariant() == n) return true; if (p.Value is JObject o) foreach (var f in new[] { "Account", "Login", "Name" }) if (((string)o[f] ?? "").Trim().TrimStart('@').ToLowerInvariant() == n) return true; }
+                foreach (var x in new[] { "pinguinob0t", "pinguinohelper", "chattypinguino" }) if (n == x) return true;
+            }
+            catch (Exception) { }
+            return false;
+        }
+        public static bool SaidRecently(string text) { return SaidRecently("twitch", text); }
+        public static bool SaidRecently(string platform, string text)
         {
             string k = System.Text.RegularExpressions.Regex.Replace((text ?? "").ToLowerInvariant(), "[​‍️]", "");
-            k = System.Text.RegularExpressions.Regex.Replace(k, @"\s+", " ").Trim(); int win = DupSeconds;
+            k = System.Text.RegularExpressions.Regex.Replace(k, @"\s+", " ").Trim(); int win = DupSeconds; if (!string.IsNullOrEmpty(platform) && platform != "twitch") k = platform + "|" + k;
             if (k == "" || win <= 0) return false;
             lock (_said)
             {
@@ -192,12 +223,20 @@ namespace PinguinoHost
                 else { res = ChannelControl.Timeout((string)b["user"], (int?)b["seconds"] ?? 0, (string)b["reason"]); ChannelControl.Audit(who, "mod/timeout", "user=" + (string)b["user"] + " seconds=" + (int?)b["seconds"] + " reason=" + (string)b["reason"] + " -> " + (bool?)res["ok"] + " " + (string)res["error"]); }
                 Write(c, res.ToString(), "application/json"); return true;
             }
+            if (p == "/api/chat-in" && m == "POST")   // Multi: one chat line from another platform {platform,user,userId,text,msgId,isBot}. Namespaced, viewer role only, Actions & Events commands only: no economy, no moderation, no points
+            {
+                if (!HostApi.StrictTokenOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
+                var b = Body(c); var res = Program.DispatchExternal(((string)b["platform"] ?? "").Trim().ToLowerInvariant(), ((string)b["user"] ?? "").Trim(), ((string)b["userId"] ?? "").Trim(), (string)b["text"] ?? "", (string)b["msgId"] ?? "", (bool?)b["isBot"] == true);
+                Write(c, res.ToString(), "application/json"); return true;
+            }
             if (p == "/api/say" && m == "POST")   // modules (Multi, Speak): say one line in chat through the Host, so the 30 s duplicate guard and the no-retry-on-timeout rule apply
             {
                 if (!HostApi.StrictTokenOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
                 var b = Body(c); string text = ((string)b["text"] ?? "").Trim();
                 if (text == "" || text.Length > 500) { Write(c, "{\"ok\":false,\"error\":\"text required (max 500 characters)\"}", "application/json"); return true; }
-                string via; bool ok = SendAs((string)b["bot"], text, out via);
+                string via; bool ok; string plat = ((string)b["platform"] ?? "").Trim().ToLowerInvariant();
+                if (plat != "" && plat != "twitch") { string who = ((string)b["user"] ?? "").Trim(); ReplyCtx.BeginForeign(plat, (string)b["reply_to"], who == "" ? "" : "x:" + who); try { ok = SendAs((string)b["bot"], text, out via); } finally { ReplyCtx.End(); } }   // Chatty / Helper answering a YouTube viewer: {platform,reply_to,user}
+                else ok = SendAs((string)b["bot"], text, out via);
                 Write(c, new JObject { { "ok", ok }, { "duplicate", via.StartsWith("duplicate") }, { "via", via } }.ToString(), "application/json"); return true;
             }
             if (p == "/api/obs/status" && m == "GET")

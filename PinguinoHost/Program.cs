@@ -159,6 +159,28 @@ namespace PinguinoHost
             }
         }
 
+        /// <summary>chat from another platform (Multi -> POST /api/chat-in). Identity is namespaced ("yt:name") so it can never collide with a Twitch viewer; viewer role only; only the Actions &amp; Events commands run (no economy, points, strikes, firsts, moderation). Replies go back to that platform only (ReplyCtx.Platform).</summary>
+        static readonly HashSet<string> ChatPlatforms = new HashSet<string> { "youtube", "tiktok", "kick", "facebook" };
+        static string PlatformPrefix(string pf) { return pf == "youtube" ? "yt" : pf == "tiktok" ? "tt" : pf == "kick" ? "kk" : "fb"; }
+        public static JObject DispatchExternal(string platform, string user, string userId, string text, string msgId, bool isBot)
+        {
+            if (!Lease.MayRun) return new JObject { { "ok", false }, { "ignored", "not the master Host" } };
+            if (!ChatPlatforms.Contains(platform)) return new JObject { { "ok", false }, { "error", "platform must be one of: " + string.Join(", ", ChatPlatforms) } };
+            user = (user ?? "").Trim().TrimStart('@'); text = (text ?? "").Trim();
+            if (user == "" || text == "") return new JObject { { "ok", false }, { "error", "user and text required" } };
+            if (isBot || HostApi.IsOwnBotName(user)) return new JObject { { "ok", true }, { "ignored", "own bot account" } };   // loop guard: the bots never answer themselves
+            string login = PlatformPrefix(platform) + ":" + user.ToLowerInvariant();
+            ReplyCtx.BeginForeign(platform, msgId, login);
+            try
+            {
+                Console.WriteLine("[chat-in " + platform + "] " + user + ": " + (text.Length > 80 ? text.Substring(0, 80) : text));
+                bool consumed = Auto.OnChat(login, text, 1, false, false, msgId, null);
+                return new JObject { { "ok", true }, { "consumed", consumed } };
+            }
+            catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); return new JObject { { "ok", false }, { "error", "failed" } }; }
+            finally { ReplyCtx.End(); }
+        }
+
         // ---------------- dispatch: exactly the Streamer.bot trigger ownership in Docs\TRIGGERS.md ----------------
         public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false, int subTier = 0)
         {

@@ -44,7 +44,7 @@ namespace PinguinoHost
         public static void Flush() { lock (L) { if (!_dirty || _state == null) return; try { File.WriteAllText(StateP, _state.ToString(Newtonsoft.Json.Formatting.None), new UTF8Encoding(false)); _dirty = false; _saved = DateTime.UtcNow; } catch (Exception) { } } }
 
         // ================= HTTP to Multi =================
-        static JObject Post(string path, JObject body)
+        internal static JObject Post(string path, JObject body)
         {
             if (TestPost != null) return TestPost(path, body);
             var set = Settings(); string url = ((string)set["Url"] ?? "http://127.0.0.1:8766").TrimEnd('/');
