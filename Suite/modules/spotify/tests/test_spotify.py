@@ -1780,6 +1780,16 @@ class SongifyHandoffTests(AnnounceTierTests):
         self.assertFalse(s["chat_replies"])
         self.assertNotIn("songify_prev", store.load("config.json", {}))
 
+    def test_sr_and_redeem_are_ignored_during_hand_off(self):
+        self.e.songify(True)
+        for redeem in (False, True):
+            r = self.e.chat("viewer", "!sr song 5", [], redeem=redeem)
+            self.assertEqual((r["ok"], r["code"], r["reply"], r.get("refund")), (False, "songify", "", False))
+        self.assertEqual(len(self.e.queue.items), 0)
+        self.assertEqual(self.e.public_state()["songify"], True)
+        self.e.songify(False)
+        self.assertNotEqual(self.e.chat("viewer", "!sr song 5", [], redeem=True)["code"], "songify")
+
     def test_take_back_without_saved_values_uses_the_normal_preset(self):
         self.e.apply_preset("songify")
         self.assertTrue(self.e.songify_active())

@@ -899,6 +899,10 @@ class Engine:
                 return self._r(True, "toggle", "safe_on" if on else "safe_off", user=user)
             if staff and low == "clear":
                 return self._chat_cmd("clear", "", user, roles, staff, False)
+            if self.songify_active():        # Songify runs the music: no queueing, no refund (Songify keeps the redeem), no reply
+                if redeem:
+                    console_log.info("chat", f"redeem !sr from {user} ignored: Songify hand-off")
+                return {"ok": False, "code": "songify", "reply": "", "refund": False}
             return self.request(user, arg, roles, redeem)
         if cmd == "song":
             return self.song_reply(user)
