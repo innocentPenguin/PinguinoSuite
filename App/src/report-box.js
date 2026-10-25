@@ -6,8 +6,8 @@ function initReport(){
   const KEY='pinguino.reportbox.open';
   const mem=v=>{try{if(v===undefined)return localStorage.getItem(KEY)==='1';localStorage.setItem(KEY,v?'1':'0')}catch{return false}};
   const st=document.createElement('style');st.textContent=`
-  #rp-fab{position:fixed;right:12px;bottom:12px;z-index:60;opacity:.6;padding:2px 9px;font-size:11px;line-height:18px;border-radius:999px;width:auto;height:auto;min-height:0}#rp-fab:hover,#rp-fab:focus-visible{opacity:1}
-  #rp-box{position:fixed;right:12px;bottom:40px;z-index:61;box-sizing:border-box;width:min(420px,calc(100vw - 24px));max-height:calc(100vh - 64px);overflow:auto;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,.45);display:none}
+  #rp-fab{opacity:.6}#rp-fab:hover,#rp-fab:focus-visible{opacity:1}
+  #rp-box{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,.45)}
   #rp-box textarea{width:100%;box-sizing:border-box;min-height:84px;max-height:30vh;margin:6px 0}#rp-box .th{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}#rp-box .th span{position:relative}#rp-box .th img{height:46px;border-radius:6px;border:1px solid var(--line2)}#rp-box .th b{position:absolute;top:-6px;right:-6px;cursor:pointer;background:#000a;border-radius:50%;width:16px;height:16px;text-align:center;font-size:11px;line-height:16px}`;
   document.head.append(st);
   const fab=document.createElement('button');fab.id='rp-fab';fab.className='sm';fab.textContent='⚑ Report';fab.title='Report a problem on this page. Saved on this PC only.';fab.setAttribute('aria-haspopup','dialog');fab.setAttribute('aria-expanded','false');
@@ -15,7 +15,13 @@ function initReport(){
   box.innerHTML=`<b>Report a problem</b> <span class="sm faint" id="rp-where"></span><textarea id="rp-note" maxlength="8000" placeholder="What is wrong, or what did you expect? You can paste a screenshot here (Ctrl+V) or attach one."></textarea>
    <div class="th" id="rp-th"></div><div class="row wrap" style="gap:8px"><label class="sm" style="cursor:pointer"><input type="file" id="rp-file" accept="image/*" multiple hidden><span class="pill">📎 Attach screenshot</span></label><span class="sp"></span><button class="sm" id="rp-close">Close</button><button class="pri sm" id="rp-send">Send</button></div>
    <div class="sm" id="rp-msg" style="margin-top:6px"></div><div class="sm faint" style="margin-top:4px">Saved in Data\feedback on this PC (nothing is sent anywhere). <a href="#" id="rp-open">Open folder</a></div>`;
-  document.body.append(fab,box);
+  // Critical geometry is inline + !important and both elements hang off <html>, never inside body (a flex row) or any layout container,
+  // so no stylesheet rule can turn the button into a strip that takes space beside the content.
+  const FIX='position:fixed!important;z-index:2147483000!important;margin:0!important;box-sizing:border-box!important;';
+  fab.style.cssText=FIX+'right:10px!important;bottom:10px!important;left:auto!important;top:auto!important;width:92px!important;height:26px!important;min-width:0!important;min-height:0!important;max-width:92px!important;max-height:26px!important;padding:0!important;display:block!important;writing-mode:horizontal-tb!important;white-space:nowrap!important;overflow:hidden!important;line-height:24px!important;font-size:12px!important;text-align:center!important;border-radius:999px!important;flex:none!important;transform:none!important';
+  box.dataset.fix=FIX;
+  document.documentElement.append(fab,box);
+  box.style.cssText=FIX+'right:10px;bottom:44px;left:auto;top:auto;width:min(420px,calc(100vw - 16px));max-width:calc(100vw - 16px);max-height:calc(100vh - 64px);overflow:auto;display:none';
   const isOpen=()=>box.style.display==='block';
   const msg=t=>{$('#rp-msg').textContent=t},th=()=>{$('#rp-th').innerHTML=RP.imgs.map((m,i)=>`<span><img src="${m.data}" alt=""><b data-i="${i}" title="remove">×</b></span>`).join('');$$('#rp-th b').forEach(b=>b.onclick=()=>{RP.imgs.splice(+b.dataset.i,1);th()})};
   const add=files=>{for(const f of files){if(!/^image\//.test(f.type))continue;if(RP.imgs.length>=6){msg('At most 6 screenshots');break}if(f.size>8*1024*1024){msg('That image is over 8 MB');continue}
