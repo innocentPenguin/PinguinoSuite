@@ -301,6 +301,7 @@ namespace PinguinoHost
                     string tier = (string)t["tier"]; if (!string.IsNullOrEmpty(tier) && tier != "any" && ctx.ContainsKey("tier") && ctx["tier"] != tier) continue;
                     if (kind == "redeem") { string title = (string)t["title"], rwId = (string)t["rewardId"]; if (!string.IsNullOrEmpty(rwId)) { if (rwId != (ctx.ContainsKey("rewardId") ? ctx["rewardId"] : "")) continue; } else if (!string.IsNullOrEmpty(title) && title != "*" && !string.Equals(title, ctx.ContainsKey("title") ? ctx["title"] : "", StringComparison.OrdinalIgnoreCase)) continue; }
                     if (!CooldownOk(a, t, ctx.ContainsKey("userName") ? ctx["userName"] : "", 0)) continue;
+                    if (kind == "redeem" && (string)a["id"] == "spotify-redeem" && SongifyOwns()) { Clog.Info("automation", "song request redeem left to Songify (the module reports songify:true)"); continue; }
                     Run(a, kind, new Dictionary<string, string>(ctx));
                 }
         }
@@ -533,6 +534,26 @@ namespace PinguinoHost
         }
         // POST {command,args,user,display,role,isMod,isSub,msgId} to a module's /api/chat-command; it answers {ok, say}; Host says it (the module token goes only to loopback)
         /// <summary>The Spotify module reopens song requests at go-live (/api/live/auto, only when its own offline close closed them) and closes them when the stream ends (/api/live/stop). Fire and forget, loopback only, module token from PINGUINO_API_TOKEN (never logged). Never from a sim Host.</summary>
+        /// <summary>Songify owns the song-request redeems while the Spotify module's GET /api/state says "songify": true: the Host does nothing for them (no module call, no refund, no reply). Cached 10 s; a failed call or a missing key = false (as before). Loopback only, never from a sim Host.</summary>
+        internal static Func<bool?> SongifyTest; static bool _sgVal; static DateTime _sgAt = DateTime.MinValue;
+        static bool SongifyOwns()
+        {
+            if (SongifyTest != null) return SongifyTest() == true;
+            if (HostApi.SimMode) return false;
+            lock (typeof(Auto)) { if ((DateTime.UtcNow - _sgAt).TotalSeconds < 10) return _sgVal; _sgAt = DateTime.UtcNow; _sgVal = false; }
+            bool v = false;
+            try
+            {
+                using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(3) })
+                {
+                    var rq = new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1:8771/api/state");
+                    string tok = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? ""; if (tok != "") { rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("X-Pinguino-Token", tok); }
+                    var r = h.SendAsync(rq).Result; if (r.IsSuccessStatusCode) v = (bool?)JObject.Parse(r.Content.ReadAsStringAsync().Result)["songify"] == true;
+                }
+            }
+            catch (Exception) { v = false; }
+            lock (typeof(Auto)) _sgVal = v; return v;
+        }
         internal static Action<string> ModuleLiveTest;
         static void SpotifyLive(bool online)
         {

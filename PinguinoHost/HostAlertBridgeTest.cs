@@ -147,6 +147,15 @@ namespace PinguinoHost
             { var mp = new List<string>(); Auto.ModuleLiveTest = pth => mp.Add(pth); Auto.ResetRaidStart();
               Auto.OnEvent(new Dictionary<string, object> { { "eventType", "StreamOnline" } }); Auto.OnRaidScheduled("t5"); Auto.OnEvent(off); Auto.CancelRaidStart();
               Check(mp.SequenceEqual(new[] { "/api/live/auto", "/api/live/stop" }), "spotify module: /api/live/auto on stream online, /api/live/stop on offline (" + string.Join(",", mp) + ")"); Auto.ModuleLiveTest = null; Auto.ResetRaidStart(); }
+            // Songify owns the song-request redeems while the module says songify:true: the preset does not run at all; false / failed call = runs as before
+            { var od = Auto.Doc(); var oa = (JArray)od["actions"]; foreach (var x in oa.OfType<JObject>().Where(x => (string)x["id"] == "spotify-redeem").ToList()) oa.Remove(x);
+              oa.Add(new JObject { { "id", "spotify-redeem" }, { "name", "t-sr" }, { "enabled", true }, { "triggers", new JArray(new JObject { { "type", "redeem" }, { "title", "*" } }) }, { "steps", new JArray(new JObject { { "type", "log" }, { "text", "t-sr" } }) } }); Auto.Save(od);
+              var rd = new Dictionary<string, object> { { "eventType", "TwitchRedeem" }, { "userName", "v1" }, { "title", "Song Request" } };
+              Func<int> runs = () => Auto.Log(200).OfType<JObject>().Count(e => (string)e["id"] == "spotify-redeem");
+              int s0 = runs(); Auto.SongifyTest = () => true; Auto.OnEvent(rd); System.Threading.Thread.Sleep(600); Check(runs() == s0, "songify true: the song request redeem does nothing");
+              Auto.SongifyTest = () => false; Auto.OnEvent(rd); System.Threading.Thread.Sleep(600); Check(runs() == s0 + 1, "songify false: runs as before");
+              Auto.SongifyTest = () => null; Auto.OnEvent(rd); System.Threading.Thread.Sleep(600); Check(runs() == s0 + 2, "songify unknown (call failed / key missing): runs as before"); Auto.SongifyTest = null;
+              od = Auto.Doc(); oa = (JArray)od["actions"]; foreach (var x in oa.OfType<JObject>().Where(x => (string)x["id"] == "spotify-redeem").ToList()) oa.Remove(x); Auto.Save(od); }
             // an incoming raid too small for a shoutout does not wait the 12 s before the (skipped) shoutout; an older saved action gets the flag once
             { var od = Auto.Doc(); var sr = ((JArray)od["actions"]).OfType<JObject>().First(x => (string)x["id"] == "sb-raid"); foreach (var st in ((JArray)sr["steps"]).OfType<JObject>()) st.Remove("skipSmallRaid");
               foreach (var t in ((JArray)od["seeded"]).Where(x => (string)x == "raidshout1").ToList()) ((JArray)od["seeded"]).Remove(t); sr["enabled"] = true; Auto.Save(od); Auto.SkipSmallRaidWait();
