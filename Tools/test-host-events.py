@@ -70,6 +70,9 @@ try:
     n0 = len(s.of('chat')); feed('bob: live line for the feed', 1.5)
     ch = s.of('chat')[n0:]; chk('chat event', ch and ch[-1]['data']['user'] == 'bob' and ch[-1]['data']['text'] == 'live line for the feed' and 'seq' in ch[-1]['data'], ch)
     chk('event ids increase', all(s.events[i]['id'] < s.events[i + 1]['id'] for i in range(len(s.events) - 1) if 'id' in s.events[i] and 'id' in s.events[i + 1]))
+    chk('customs state carries streamer (default in) and the snapshot too', cs.get('streamer') == 'in' and sd['customs'].get('streamer') == 'in', (cs.get('streamer'), sd['customs'].get('streamer')))
+    r = post('/api/customs/mod', {'action': 'streamer', 'value': 'out'}); time.sleep(1); chk('streamer out: state says out, and it is saved in live_state.json', r['ok'] and get('/api/customs/state').get('streamer') == 'out' and [json.load(open(p, encoding='utf-8-sig')).get('streamerPlaying') for p in [os.path.join(d, 'live_state.json'), os.path.join(d, 'runtime', 'live_state.json')] if os.path.exists(p)][:1] == [False], r)
+    post('/api/customs/mod', {'action': 'streamer', 'value': 'in'}); time.sleep(1); chk('streamer in again', get('/api/customs/state').get('streamer') == 'in')
     # ---- customs change pushes an event; mod endpoint returns the new state
     n1 = len(s.of('customs')); r = post('/api/customs/mod', {'action': 'queue', 'value': 'close'}); chk('mod returns state', r['ok'] and r['ran'] == '!queue close' and r['customs']['open'] is False, r)
     chk('customs event pushed', waitfor(lambda: len(s.of('customs')) > n1 and s.of('customs')[-1]['data']['open'] is False), 5)

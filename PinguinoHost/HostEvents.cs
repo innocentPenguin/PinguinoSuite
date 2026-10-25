@@ -28,7 +28,7 @@ namespace PinguinoHost
     /// <summary>The customs queue as the Master View needs it (read from Core's live_state.json) + one mod-action endpoint that runs the chat command as the streamer and answers with the new state.</summary>
     public static class CustomsView
     {
-        static readonly Dictionary<string, string> Actions = new Dictionary<string, string> { { "queue", "!queue" }, { "next", "!next" }, { "match", "!match" }, { "win", "!win" }, { "finish", "!finish" }, { "balance", "!balance" }, { "reroll", "!reroll" }, { "kick", "!kick" }, { "mode", "!mode" }, { "format", "!format" }, { "koth", "!koth" }, { "casual", "!casual" } };
+        static readonly Dictionary<string, string> Actions = new Dictionary<string, string> { { "queue", "!queue" }, { "next", "!next" }, { "match", "!match" }, { "win", "!win" }, { "finish", "!finish" }, { "balance", "!balance" }, { "reroll", "!reroll" }, { "kick", "!kick" }, { "mode", "!mode" }, { "format", "!format" }, { "koth", "!koth" }, { "casual", "!casual" }, { "streamer", "!streamer" } };
         static string StateFile()
         {
             foreach (var f in new[] { Path.Combine(HostApi.DataDir, "live_state.json"), Path.Combine(HostApi.DataDir, "runtime", "live_state.json") }) if (File.Exists(f)) return f;
@@ -37,7 +37,7 @@ namespace PinguinoHost
         public static JObject State()
         {
             JObject s = null; try { var f = StateFile(); if (f != null) s = JObject.Parse(File.ReadAllText(f).TrimStart((char)0xFEFF)); } catch (Exception) { }
-            if (s == null) return new JObject { { "ok", false }, { "open", false }, { "queue", new JArray() }, { "match", null } };
+            if (s == null) return new JObject { { "ok", false }, { "streamer", "in" }, { "open", false }, { "queue", new JArray() }, { "match", null } };
             var q = new JArray(); foreach (var e in (s["queue"] as JArray ?? new JArray()).OfType<JObject>())
             { var o = new JObject { { "username", (string)e["user"] ?? "" }, { "display", (string)e["epic"] ?? (string)e["user"] ?? "" }, { "mmr", e["mmr"] ?? 0 }, { "joinedAt", e["joinedAt"] ?? 0 } }; if ((bool?)e["practice"] == true) o["practice"] = true; if ((bool?)e["sim"] == true) o["sim"] = true; q.Add(o); }
             JObject match = null; var cm = s["liveMatch"] as JObject ?? s["currentMatch"] as JObject;
@@ -48,7 +48,7 @@ namespace PinguinoHost
                 foreach (var n in blue) pl.Add(new JObject { { "username", n }, { "team", "blue" } }); foreach (var n in orange) pl.Add(new JObject { { "username", n }, { "team", "orange" } });
                 match = new JObject { { "id", cm["id"] }, { "players", pl }, { "orange", orange }, { "blue", blue }, { "status", cm["status"] } };
             }
-            return new JObject { { "ok", true }, { "open", (bool?)s["queueOpen"] ?? false }, { "activity", s["activity"] }, { "mode", s["mode"] }, { "gameMode", s["gameMode"] }, { "format", s["format"] }, { "koth", (bool?)s["koth"] ?? false }, { "casualStyle", s["casualStyle"] },
+            return new JObject { { "ok", true }, { "streamer", ((bool?)s["streamerPlaying"] ?? true) ? "in" : "out" }, { "open", (bool?)s["queueOpen"] ?? false }, { "activity", s["activity"] }, { "mode", s["mode"] }, { "gameMode", s["gameMode"] }, { "format", s["format"] }, { "koth", (bool?)s["koth"] ?? false }, { "casualStyle", s["casualStyle"] },
  { "teams", Teams(s) }, { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 }, { "strikeGame", s["strikeGame"] ?? "rl" },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
         }
         static readonly System.Text.RegularExpressions.Regex Hex = new System.Text.RegularExpressions.Regex("^#[0-9a-fA-F]{6}$");
