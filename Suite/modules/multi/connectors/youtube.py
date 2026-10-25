@@ -50,6 +50,7 @@ class YouTube(Connector):
         self.send_id = self.send_title = ""            # the signed-in (SEND) account; reading never depends on it
         self._id_tok = None
         self._id_try = 0.0
+        self._sent = []                               # [(normalized text, ts)] of lines we sent: their read-back echo is dropped (server.send already shows them once)
         self._send_chat = (None, None)                # (video id, liveChatId) of the read side's live video
 
     def _h(self):
@@ -105,6 +106,19 @@ class YouTube(Connector):
                                "user_id": ident if scope == "user" else "", "reason": "delete" if scope == "message" else "ban"})
             except Exception:
                 pass
+
+    def _put(self, m):
+        """inbox.put, except the read-back of a line WE just sent (send account, same text, <= 30 s): the sender already ingested it,
+        and YouTube's API id differs from the reader's id so the pipeline dedupe cannot catch it."""
+        now = time.time()
+        self._sent = [(t, ts) for t, ts in self._sent if now - ts <= 30]
+        if m.is_bot or (self.send_id and m.user_id == self.send_id):
+            key = " ".join(str(m.text).lower().split())
+            for i, (t, ts) in enumerate(self._sent):
+                if t == key:
+                    del self._sent[i]
+                    return
+        self.inbox.put(m)
 
     def _mine(self):
         """Own accounts for self-echo marking: the streamer (owner badge / read channel id) and the send account."""
@@ -202,7 +216,7 @@ class YouTube(Connector):
                 m = normalize_item(it, self.chat_id, self.me) or xplat.youtube_event(it, self.chat_id)
                 if m:
                     self.state["last_message"] = time.time()
-                    self.inbox.put(m)
+                    self._put(m)
             await asyncio.sleep(wait)
         except Exception as e:
             self.state["reconnects"] += 1
@@ -222,7 +236,7 @@ class YouTube(Connector):
                 rd = youtube_innertube.Reader(video, self._mine())
                 for m in (await asyncio.to_thread(rd.fetch))[0]:
                     self.state["last_message"] = time.time()
-                    self.inbox.put(m)
+                    self._put(m)
                 self.reader, self.fail_since = rd, None
                 self.set_status("connected", f"live chat {video} (fast mode)")
                 await asyncio.sleep(rd.wait)
@@ -230,7 +244,7 @@ class YouTube(Connector):
             msgs, cleared = await asyncio.to_thread(self.reader.poll)
             for m in msgs:
                 self.state["last_message"] = time.time()
-                self.inbox.put(m)
+                self._put(m)
             if cleared:
                 self._cleared(self.reader.video, cleared)
             self.fail_since = None
@@ -276,7 +290,9 @@ class YouTube(Connector):
             if r.status_code in (403, 404):
                 self._send_chat = (None, None)
             raise refused(r.status_code, f"send failed {r.status_code}: {r.text[:160]}")
-        return f"youtube:{chat}:{r.json()['id']}"
+        self._sent.append((" ".join(text.lower().split()), time.time()))
+        vid = self._send_chat[0] if self._send_chat[1] == chat else None       # same id prefix as the reader's lines (video id) where known
+        return f"youtube:{vid or chat}:{r.json()['id']}"
 
     async def send(self, text, reply_to=None):
         if not secrets_store.get("youtube_token"):

@@ -304,7 +304,7 @@ def test_send_uses_read_videos_chat_with_send_token_and_no_own_broadcast(monkeyp
         return _R({"id": "m1"})
     monkeypatch.setattr(yt.requests, "get", get)
     monkeypatch.setattr(yt.requests, "post", post)
-    assert asyncio.run(c.send("hi")) == "youtube:CHAT1:m1"
+    assert asyncio.run(c.send("hi")) == "youtube:abcdefghijk:m1"      # reader-style prefix (video id)
     assert calls[0] == ("videos", {"part": "liveStreamingDetails", "id": "abcdefghijk"})
     assert calls[1][1]["snippet"]["liveChatId"] == "CHAT1"
 
@@ -344,3 +344,21 @@ def test_bot_lines_read_back_are_marked_self_and_bot():
     r2 = dict(r, authorExternalChannelId="UCx", authorName={"simpleText": "Amy"})
     m2 = it.parse_item({"liveChatTextMessageRenderer": r2}, "V", mine)
     assert not m2.is_self and not m2.is_bot
+
+
+def test_echo_of_our_own_send_is_dropped_once_but_others_pass(monkeypatch):
+    c, ev = _conn(monkeypatch, _youtube_token="tok", youtube_video_id="abcdefghijk")
+    monkeypatch.setattr(c, "_h", lambda: {})
+    c.send_id, c.send_title = "UCbot", "PinguinoB0t"
+    monkeypatch.setattr(yt.requests, "get", lambda *a, **k: _R({"items": [{"liveStreamingDetails": {"activeLiveChatId": "CHAT1"}}]}))
+    monkeypatch.setattr(yt.requests, "post", lambda *a, **k: _R({"id": "m1"}))
+    asyncio.run(c.send("Hello  There"))
+
+    def line(i, uid, text):
+        r = {"id": i, "authorExternalChannelId": uid, "authorName": {"simpleText": "PinguinoB0t" if uid == "UCbot" else "Amy"}, "message": {"runs": [{"text": text}]}, "timestampUsec": "1"}
+        return it.parse_item({"liveChatTextMessageRenderer": r}, "abcdefghijk", c._mine())
+    c._put(line("a", "UCbot", "hello there"))            # echo of what we sent: dropped (already shown by /api/send)
+    c._put(line("b", "UCbot", "hello there"))            # a second identical bot line is a different message: shown (marked bot)
+    c._put(line("c", "UCamy", "Hello  There"))           # a viewer saying the same words is never dropped
+    got = c.inbox.items
+    assert [m.id for m in got] == ["youtube:abcdefghijk:b", "youtube:abcdefghijk:c"] and got[0].is_self and got[0].is_bot and not got[1].is_self
