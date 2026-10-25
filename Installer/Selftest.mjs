@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPair } from '../Suite/updater/lib/sign.mjs';
 import { plan as rebuildPlan, steps as rebuildSteps } from './Rebuild-Plan.mjs';
+import { install as safeOut } from '../Suite/tools/safe_print.mjs'; safeOut();
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(HERE, '..');
 const args = process.argv.slice(2), opt = n => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; }, has = n => args.includes('--' + n);

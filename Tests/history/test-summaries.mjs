@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { install as safeOut } from '../../Suite/tools/safe_print.mjs'; safeOut();
 
 const script = 'D:\\PinguinoSuite\\Pipeline\\build-summaries.mjs';
 const root = mkdtempSync(join(tmpdir(), 'hist-'));

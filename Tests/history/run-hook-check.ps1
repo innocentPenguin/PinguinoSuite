@@ -6,5 +6,5 @@ $snippet = Get-Content -Raw -Encoding UTF8 "$here\..\..\PinguinoChat\HistoryHook
 $wrapper = Get-Content -Raw -Encoding UTF8 "$hook\wrapper.cs.in"
 $wrapper.Replace('//SNIPPET', $snippet) | Set-Content -Encoding UTF8 "$hook\build\hook.cs"
 Push-Location $hook
-dotnet run -c Release --nologo 2>&1
+dotnet run -c Release --nologo 2>&1 | ForEach-Object { $_ -replace '[\x00-\x08\x0b\x0c\x0e-\x1f]', '?' }
 Pop-Location

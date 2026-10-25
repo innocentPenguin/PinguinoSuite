@@ -5,5 +5,5 @@ New-Item -ItemType Directory -Force "$here\build" | Out-Null
 (Get-Content -Raw -Encoding UTF8 "$here\..\..\PinguinoChat\PinguinoChat.cs") -replace '(?m)^public class CPHInline\s*$', 'public class CPHInline : CPHStubBase' |
   Set-Content -Encoding UTF8 "$here\build\chat.cs"
 Push-Location $here
-dotnet run -c Release --nologo 2>&1 | Where-Object { $_ -notmatch '^INFO' }
+dotnet run -c Release --nologo 2>&1 | Where-Object { $_ -notmatch '^INFO' } | ForEach-Object { $_ -replace '[\x00-\x08\x0b\x0c\x0e-\x1f]', '?' }
 Pop-Location

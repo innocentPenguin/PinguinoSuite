@@ -3225,7 +3225,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
                 string lg = ((string)c["login"] ?? "").ToLowerInvariant(); if (lg != "") d[lg] = c;
                 foreach (var al in c["aliasesMerged"] as JArray ?? new JArray()) { string a = ((string)al ?? "").ToLowerInvariant(); if (a != "" && !d.ContainsKey(a)) d[a] = c; }
             }
-            // Boardsliases.json: an alias login and its main login are one person (merged card: unions of likes/dislikes/nicknames, summed messages)
+            // Boards/aliases.json: an alias login and its main login are one person (merged card: unions of likes/dislikes/nicknames, summed messages)
             foreach (var pr in OpinionAliases())
             {
                 JObject ca, cm; d.TryGetValue(pr.Key, out ca); d.TryGetValue(pr.Value, out cm);
