@@ -51,7 +51,7 @@ try:
     chk('role is forced to viewer: mod-only command stays silent even if the body claims mod', len(sends) == n, sends[n:])
     post('/api/chat-in', {'platform': 'youtube', 'user': 'Mod', 'text': '!modonly', 'msgId': 'x', 'role': 4, 'isMod': True}); time.sleep(1.5)
     chk('body role/isMod ignored', len(sends) == n, sends[n:])
-    cin('PinguinoB0t', '!hi', mid='yt-msg-5'); cin('Anyone', '!hi', mid='yt-msg-6', isBot=True); time.sleep(1.5)
+    cin('PinguinoB0t', '!hi', mid='yt-msg-5'); cin('Anyone', '!hi', mid='yt-msg-6', isBot=True); cin('Anyone2', '!hi', mid='yt-msg-6b', ownBot=True, role=1, isSub=False); time.sleep(1.5)
     chk('own bot account / isBot: ignored, no reply (loop guard)', len(sends) == n, sends[n:])
     c, j = cin('Viewer', '!hi', plat='tiktok', mid='tt-1'); time.sleep(1.5)
     chk('tiktok: accepted, nothing sent', c == 200 and len(sends) == n, (j, sends[n:]))

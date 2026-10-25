@@ -226,7 +226,7 @@ namespace PinguinoHost
             if (p == "/api/chat-in" && m == "POST")   // Multi: one chat line from another platform {platform,user,userId,text,msgId,isBot}. Namespaced, viewer role only, Actions & Events commands only: no economy, no moderation, no points
             {
                 if (!HostApi.StrictTokenOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
-                var b = Body(c); var res = Program.DispatchExternal(((string)b["platform"] ?? "").Trim().ToLowerInvariant(), ((string)b["user"] ?? "").Trim(), ((string)b["userId"] ?? "").Trim(), (string)b["text"] ?? "", (string)b["msgId"] ?? "", (bool?)b["isBot"] == true);
+                var b = Body(c); var res = Program.DispatchExternal(((string)b["platform"] ?? "").Trim().ToLowerInvariant(), ((string)b["user"] ?? "").Trim(), ((string)b["userId"] ?? "").Trim(), (string)b["text"] ?? "", (string)b["msgId"] ?? "", ((bool?)b["isBot"] == true || (bool?)b["ownBot"] == true));
                 Write(c, res.ToString(), "application/json"); return true;
             }
             if (p == "/api/say" && m == "POST")   // modules (Multi, Speak): say one line in chat through the Host, so the 30 s duplicate guard and the no-retry-on-timeout rule apply
