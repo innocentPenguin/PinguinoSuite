@@ -11,7 +11,7 @@ namespace PinguinoHost
     /// The duplicate-line guard (HostApi.SaidRecently) still sees the original text, so the same line is never said twice.</summary>
     public static class ReplyCtx
     {
-        sealed class C { public string Id, Login, Platform = "twitch"; public DateTime At; }
+        sealed class C { public string Id, Login, Platform = "twitch", FirstSilent; public int Silent; public DateTime At; }
         static readonly AsyncLocal<C> Cur = new AsyncLocal<C>();
         static readonly Regex RxId = new Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", RegexOptions.Compiled);
         internal static bool AllowAnyId;   // test switch: accept simulated ids too
@@ -22,6 +22,14 @@ namespace PinguinoHost
         public static void End() { Cur.Value = null; }
         /// <summary>chat that came from another platform (YouTube ...): replies to it go to THAT platform only, never to Twitch. msgId = the platform's own message id (may be empty), login = the namespaced viewer ("yt:name")</summary>
         public static void BeginForeign(string platform, string msgId, string login) { Cur.Value = new C { Id = msgId ?? "", Login = (login ?? "").TrimStart('@'), Platform = (platform ?? "twitch").ToLowerInvariant(), At = DateTime.UtcNow }; }
+        /// <summary>a reply that cannot be sent (TikTok is read-only): counted on the context; ONE log line per handled command comes from LogSilent</summary>
+        public static void NoteSilent(string text) { var c = Cur.Value; if (c == null) return; c.Silent++; if (c.FirstSilent == null) c.FirstSilent = text; }
+        public static void LogSilent(string user, string cmd)
+        {
+            var c = Cur.Value; if (c == null || c.Silent == 0) return;
+            string t = c.FirstSilent ?? ""; if (t.Length > 80) t = t.Substring(0, 80); string k = (cmd ?? ""); if (k.Length > 40) k = k.Substring(0, 40);
+            Clog.Info("chat", c.Platform + " " + user + " ran \"" + k + "\": reply not sent (" + c.Platform + " chat is read-only), " + c.Silent + " line(s), first: " + t); c.Silent = 0; c.FirstSilent = null;
+        }
         /// <summary>"twitch" unless the live context came from another platform (events, timers and Twitch chat are all "twitch")</summary>
         public static string Platform { get { var c = Cur.Value; return c != null && (DateTime.UtcNow - c.At).TotalSeconds <= 90 ? c.Platform : "twitch"; } }
         /// <summary>true while a reply context is active on this flow (the next line will be sent as a reply)</summary>

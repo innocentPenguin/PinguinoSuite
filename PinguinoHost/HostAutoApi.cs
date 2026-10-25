@@ -135,8 +135,8 @@ namespace PinguinoHost
         {
             string parent, login; ReplyCtx.Current(out parent, out login);
             string line = ReplyCtx.Prepare(text, out parent);
-            if (login != "" && login.IndexOf(':') > 0) line = System.Text.RegularExpressions.Regex.Replace(line, System.Text.RegularExpressions.Regex.Escape(login), login.Substring(login.IndexOf(':') + 1), System.Text.RegularExpressions.RegexOptions.IgnoreCase);   // "yt:name" is only our internal key
-            if (pf == "tiktok") { via = "tiktok is read-only"; Clog.Info("chat", "tiktok chat is read-only: reply skipped"); return true; }
+            if (login != "" && login.IndexOf(':') > 0) { string shown = PlatformUsers.Display(login); line = System.Text.RegularExpressions.Regex.Replace(line, System.Text.RegularExpressions.Regex.Escape(login), m => shown, System.Text.RegularExpressions.RegexOptions.IgnoreCase); }   // "yt:id" is only our internal key: say the display name
+            if (pf == "tiktok") { via = "tiktok is read-only"; ReplyCtx.NoteSilent(line); return true; }   // no reply anywhere (never Twitch, never Multi); one log line per handled command from ReplyCtx.LogSilent
             if (SaidRecently(pf, line)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent to " + pf + ", same line said moments ago"); return true; }
             var body = new JObject { { "platform", pf }, { "text", line } }; if (!string.IsNullOrEmpty(parent)) body["reply_to"] = parent;
             JObject r = TestMultiSend != null ? TestMultiSend("/api/send", body) : AlertBridge.Post("/api/send", body);

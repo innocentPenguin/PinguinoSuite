@@ -169,13 +169,14 @@ namespace PinguinoHost
             user = (user ?? "").Trim().TrimStart('@'); text = (text ?? "").Trim();
             if (user == "" || text == "") return new JObject { { "ok", false }, { "error", "user and text required" } };
             if (isBot || HostApi.IsOwnBotName(user)) return new JObject { { "ok", true }, { "ignored", "own bot account" } };   // loop guard: the bots never answer themselves
-            string login = PlatformPrefix(platform) + ":" + user.ToLowerInvariant();
+            string login = PlatformUsers.Key(PlatformPrefix(platform), userId, user);   // the platform's stable id when Multi sends one (names change); the display name is kept beside it
+            PlatformUsers.Remember(login, platform, user, userId);
             try
             {
                 HostApi.Messages++;
                 Console.WriteLine("[chat-in " + platform + "] " + user + ": " + (text.Length > 80 ? text.Substring(0, 80) : text));
-                string uid = string.IsNullOrEmpty(userId) ? login : PlatformPrefix(platform) + ":" + userId;
-                Task.Run(() => { try { Dispatch(login, text, msgId, 1, uid, false, null, false, 0, platform); } catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); } finally { ReplyCtx.End(); } });
+                string uid = login;
+                Task.Run(() => { try { Dispatch(login, text, msgId, 1, uid, false, null, false, 0, platform); if (platform == "tiktok") ReplyCtx.LogSilent(user, text); } catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); } finally { ReplyCtx.End(); } });
                 return new JObject { { "ok", true } };
             }
             catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); return new JObject { { "ok", false }, { "error", "failed" } }; }

@@ -55,6 +55,22 @@ try:
     chk('own bot account / isBot: ignored, no reply (loop guard)', len(sends) == n, sends[n:])
     c, j = cin('Viewer', '!hi', plat='tiktok', mid='tt-1'); time.sleep(1.5)
     chk('tiktok: accepted, nothing sent', c == 200 and len(sends) == n, (j, sends[n:]))
+    # TikTok / YouTube viewers register and join customs through the Host: namespaced by the platform id, display name kept, tiktok never answered anywhere
+    def cstate(): return json.load(urllib.request.urlopen('http://127.0.0.1:%d/api/customs/state' % PORT, timeout=10))
+    host.stdin.write(b'#trial: !queue open' + bytes([10])); host.stdin.flush(); time.sleep(2.5)
+    n = len(sends); o0 = len(open(outp, 'rb').read())
+    cin('Tik Toker', '!register TikEpic', plat='tiktok', mid='tt-r', userId='7001'); time.sleep(1.5); cin('Tik Toker', '!join', plat='tiktok', mid='tt-j', userId='7001'); time.sleep(2.5)
+    q = [e for e in cstate().get('queue', []) if e.get('platform') == 'tiktok']
+    chk('tiktok !register + !join: one queue entry tt:7001 with platform tiktok and the display name', len(q) == 1 and q[0]['username'] == 'tt:7001' and q[0]['name'] == 'Tik Toker', cstate().get('queue'))
+    chk('tiktok: nothing sent to Multi or Twitch', len(sends) == n, sends[n:])
+    printed = open(outp, 'rb').read().decode('utf-8', 'replace')[o0:]
+    clog = open(os.path.join(d, 'console', 'host.jsonl'), 'rb').read().decode('utf-8', 'replace')
+    chk('tiktok: exactly one log line per handled command, nothing printed as a Twitch say', clog.count('tiktok Tik Toker ran') == 2 and '[say]' not in printed.replace('[say] The queue', ''), (clog[-500:], printed[-300:]))
+    cin('Yt Fan', '!register YtEpic', userId='UCabc-1_x', mid='yt-r'); time.sleep(1.5); cin('Yt Fan', '!join', userId='UCabc-1_x', mid='yt-j'); time.sleep(2.5)
+    q = [e for e in cstate().get('queue', []) if e.get('platform') == 'youtube']
+    chk('youtube viewer joins with the channel id as key, display name kept', len(q) == 1 and q[0]['username'] == 'yt:ucabc-1_x' and q[0]['name'] == 'Yt Fan', cstate().get('queue'))
+    chk('youtube replies go to youtube only, with the display name and no yt: key', sends[n:] and all(x[1]['platform'] == 'youtube' and 'yt:' not in x[1]['text'] for x in sends[n:]), sends[n:])
+    chk('twitch queue entries carry platform twitch too', all(e.get('platform') for e in cstate().get('queue', [])), cstate().get('queue'))
     c, j = cin('Viewer', '!hi', plat='nonsense'); chk('unknown platform refused', j.get('ok') is False, j)
     # Chatty / Helper / B0t answer YouTube viewers too, on YouTube only
     n = len(sends); o0 = len(open(outp, 'rb').read()); cin('Pointsy', '!points', mid='yt-msg-20'); time.sleep(4)

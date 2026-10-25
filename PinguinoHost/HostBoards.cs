@@ -376,7 +376,7 @@ namespace PinguinoHost
                 // names for gifters / bitters without a profile come from the ledger user itself (already the login)
                 var extra = ExtraBots(); string ch = Channel();
                 var keep = users.Where(kv => !BotName.IsMatch(kv.Key) && !KnownBots.Contains(kv.Key) && !extra.Contains(kv.Key) && ((int)kv.Value["gifts"] > 0 || (int)kv.Value["bits"] > 0 || (int)kv.Value["messages"] > 0 || (int)kv.Value["streakBest"] > 0 || (int)kv.Value["points"] > 0 || (int)kv.Value["watchMinutes"] > 0)).ToList();
-                var map = new JObject(); foreach (var kv in keep.OrderBy(k => k.Key, StringComparer.Ordinal)) { if (ch != "" && kv.Key == ch) kv.Value["streamer"] = true; map[kv.Key] = kv.Value; }
+                var map = new JObject(); foreach (var kv in keep.OrderBy(k => k.Key, StringComparer.Ordinal)) { if (ch != "" && kv.Key == ch) kv.Value["streamer"] = true; if (PlatformUsers.IsForeign(kv.Key)) { kv.Value["platform"] = PlatformUsers.PlatformOf(kv.Key); kv.Value["name"] = PlatformUsers.Display(kv.Key); } map[kv.Key] = kv.Value; }
                 Func<string, JArray> top = field => new JArray(keep.Where(kv => kv.Key != ch && (int)kv.Value[field] > 0).OrderByDescending(kv => (int)kv.Value[field]).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(500).Select(kv => new JObject { { "login", kv.Key }, { "name", kv.Value["name"] }, { "value", kv.Value[field] } }));
                 // per-month boards (UTC months, Feb 2026 on): same people rules as the all-time board (no bots, streamer left out, aliases folded)
                 var months = new JObject(); var keepSet = new HashSet<string>(keep.Select(k => k.Key));
