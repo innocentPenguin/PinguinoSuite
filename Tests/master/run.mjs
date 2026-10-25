@@ -210,6 +210,13 @@ await t('activity defaults: one table, ordered Host steps', () => {
   assert.deepEqual(C.activityPlan('casual', { koth: true, format: '1v1' }), [['koth', 'off']]); assert.deepEqual(C.activityPlan('nope', {}), []);
 });
 
+await t('bootstrap.js: a core_config invoke that never settles ends in an error, not a hung fetch (Report box, every shell call)', async () => {
+  const vm = await import('node:vm'); const code = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'bootstrap.js'), 'utf8');
+  const calls = []; const ctx = { __TAURI__: { core: { invoke: () => new Promise(() => { }) } }, document: { querySelector: () => null }, location: { origin: 'http://t' }, console, Promise, Error, setTimeout: (f, ms) => setTimeout(f, ms / 200), clearTimeout, JSON, Object, WebSocket: function () { }, URL };
+  ctx.window = ctx; ctx.fetch = u => { calls.push(u); return Promise.resolve({ status: 200 }); }; vm.createContext(ctx); vm.runInContext(code, ctx);
+  const out = await Promise.race([ctx.fetch('/api/feedback').then(() => 'resolved', e => 'rejected: ' + e.message), new Promise(r => setTimeout(() => r('HUNG'), 2000))]);
+  assert.match(out, /^rejected/, 'fetch must settle: ' + out);
+});
 await t('wheel admin: !wheel commands are whitelisted and validated', () => {
   assert.equal(C.wheelCmd('close'), '!wheel close'); assert.equal(C.wheelCmd('undo'), '!wheel undo'); assert.equal(C.wheelCmd('end'), '!wheel end');
   assert.equal(C.wheelCmd('mode', 'balanced'), '!wheel mode balanced'); assert.equal(C.wheelCmd('mode', 'chaos'), null); assert.equal(C.wheelCmd('size', '3'), '!wheel size 3'); assert.equal(C.wheelCmd('size', '5'), null);

@@ -6,7 +6,8 @@
   const readCfg = async () => {
     const T = window.__TAURI__;
     if (T && T.core) {
-      cfg = await T.core.invoke('core_config');           // {base, token}
+      // never wait forever: an invoke that does not settle (e.g. called from a frame) would hang every fetch and the Report box; after 8 s it rejects and callers retry via reconfig()
+      cfg = await Promise.race([T.core.invoke('core_config'), new Promise((_, rej) => setTimeout(() => rej(new Error('The app did not answer (core_config)')), 8000))]);           // {base, token}
     } else {
       const m = document.querySelector('meta[name="pinguino-token"]');
       cfg = { base: location.origin, token: m ? m.content : '' };
