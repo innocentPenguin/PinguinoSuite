@@ -28,7 +28,7 @@ try:
     for c in ('!commands', '!command', '!cmds', '!cmd'):
         r = say('viewer: ' + c); chk(c + ' alias', r == 'All my commands, by category and importance: https://innocentpenguin.com/commands', r)
     doc = json.load(urllib.request.urlopen(B + '/api/commands-doc', timeout=10))
-    vs = {'Essentials', 'Stream info', 'Chat history', 'Fun', 'Your settings'}; ms = {'Chat commands', 'Stream', 'Viewers'}
+    vs = {'Essentials', 'Stream info', 'Chat history', 'Fun', 'Your settings', 'Music'}; ms = {'Chat commands', 'Stream', 'Viewers'}
     chk('every viewer row has section + importance', all(c.get('section') in vs and isinstance(c.get('importance'), int) for c in doc['viewer']), [c['command'] for c in doc['viewer'] if c.get('section') not in vs][:5])
     chk('every mod row has section + importance', all(c.get('section') in ms and isinstance(c.get('importance'), int) for c in doc['mod']), [c['command'] for c in doc['mod'] if c.get('section') not in ms][:5])
     chk('!queue sits in Essentials for viewers and Stream for mods', any(c['command'] == '!queue' and c['section'] == 'Essentials' for c in doc['viewer']) and any(c['command'] == '!queue' and c['section'] == 'Stream' for c in doc['mod']))
