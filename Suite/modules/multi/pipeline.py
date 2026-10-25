@@ -12,6 +12,7 @@ import assist as assist_mod
 import ding as ding_mod
 import pop as pop_mod
 import dedupe
+import host_feed
 from priority import rules as prio
 from models import ChatMessage
 
@@ -33,6 +34,12 @@ class Pipeline:
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
         self.stats = {"in": 0, "dupes": 0, "dropped": 0}
         self.on_event = None         # set by the server: called once for every stored stream event (alert engine)
+
+    def _to_host(self, m):
+        try:
+            host_feed.CHAT_IN.offer(m)                 # YouTube chat for the Host: best effort, never blocks or breaks ingestion
+        except Exception as e:
+            console_log.warn("host-chat-in", f"not queued: {type(e).__name__}", dedupe_s=600)
 
     def reload_rules(self):
         self.rules = prio.load_rules()
@@ -75,6 +82,7 @@ class Pipeline:
             self.store.add_message(m, prio.Decision(0, "none", []))
             self.emit({"type": "message", "message": dict(m.to_dict(), score=0, tier="none", reasons=[])})
             self.cards.on_own_message(m)
+            self._to_host(m)
             return m.to_dict()
         if not m.is_bot and m.user_id:
             prev = self.store.last_ts(m.platform, m.user_id)
@@ -95,6 +103,7 @@ class Pipeline:
             except RuntimeError:
                 pass                                     # no running loop (sync tests): intros are skipped
         self.pop.observe(m)
+        self._to_host(m)
         key = (m.platform, m.user_id)
         hist = self.recent_by_user.setdefault(key, [])
         hist.append((m.ts, m.text, prio.mentions_me(m.text, st["my_names"])))
