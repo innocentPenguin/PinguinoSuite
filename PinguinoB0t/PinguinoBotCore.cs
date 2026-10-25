@@ -3491,7 +3491,7 @@ public class CPHInline
             case "open":
                 _settings.QueueOpen = true; _settings.TimedOut = false; _lastCustomsActivity = NowMs(); _autoFirstDone = false;
                 SaveSettings();
-                Say("The queue is now OPEN! Type !join to enter.");
+                Say("Starting customs! The queue is open!");   // the rules line follows from the Host (queue_open automation), as its own message
                 PublishState("queue_open", null);
                 break;
 
@@ -4000,8 +4000,11 @@ public class CPHInline
         SaveSettings();
         EnsureStreamerQueued();            // the streamer plays every match unless he's sitting out
         if (sub == "koth" && _settings.AutoNextMatch) { _autoNextPending = true; _autoNextTold = false; _autoNextSince = DateTime.UtcNow; }
-        if (sub == "koth")
-            Say("👑 NOW PLAYING: KING OF THE HILL! The queue is OPEN to everyone: type !join. It CLOSES as soon as the first game is picked. Winners stay on, losers are out, and the leaderboard counts WINS.");
+        if (sub == "koth" || sub == "competitive" || sub == "casual" || sub == "viewers")
+        {
+            Say("Starting customs! The queue is open!");   // Ivan 10-25: one fixed first line; the private match rules follow from the Host (queue_open automation) as the second message
+            if (sub == "koth") System.Threading.Tasks.Task.Run(() => { System.Threading.Thread.Sleep(4000); Say("👑 KING OF THE HILL: the queue is OPEN to everyone, type !join. It CLOSES as soon as the first game is picked. Winners stay on, losers are out, and the leaderboard counts WINS."); });   // its own line, after the rules
+        }
         else
             Say("NOW PLAYING: " + label + (ActivityCounts(sub) ? " (balanced teams, stats count)" : " (random teams, no stats)") + ". The queue is OPEN! Type !join to enter.");
         if (game != "") SwitchToGame(game);   // [NEW] an explicit game prefix always moves the OBS scene and the Twitch category
@@ -4620,7 +4623,7 @@ public class CPHInline
         if (!_autoNextTold)
         {
             _autoNextTold = true;
-            Say("Waiting for players: need " + slots + " for " + format + ", have " + have + ". The next game starts by itself when the queue is full.");
+            // no "waiting for players" line any more (Ivan 10-25); the next game still starts by itself when the queue is full
         }
     }
 
