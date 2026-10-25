@@ -139,11 +139,43 @@ class Engine:
                 elif rules.merged({k: v})[k] == v:                                           # invalid values keep the old setting
                     cur[k] = v
             self.cfg["settings"] = rules.merged(cur)
+            if isinstance(patch, dict) and "requests_open" in patch:
+                self._forget_offline_close()               # anyone else changing open/closed ends "the stream-end close"
             if self.cfg["settings"]["requests_open"] and not was_open:
                 self.session_counts.clear()
             self._save_cfg()
             self._bump()
             return self._own_settings()
+
+    def _forget_offline_close(self):
+        if self.cfg.pop("closed_by_offline", None) is not None:
+            disk = store.load("config.json", {})
+            disk.pop("closed_by_offline", None)
+            store.save("config.json", disk)
+
+    def close_for_offline(self):
+        """Stream ended: close requests if open and remember that WE closed them (so the next go-live may reopen them)."""
+        with self.lock:
+            if not (self._own_settings()["requests_open"] and self._own_settings()["close_on_offline"]):
+                return False
+            self.save_settings({"requests_open": False})
+            self.cfg["closed_by_offline"] = True
+            self._save_cfg()
+            return True
+
+    def reopen_after_offline(self):
+        """Stream start: reopen requests only when close_on_offline was what closed them (not a mod, the schedule or the Songify hand-off).
+        One announcement line per reopen: the flag is gone afterwards. -> True when reopened."""
+        with self.lock:
+            if not self.cfg.get("closed_by_offline"):
+                return False
+            if self._own_settings()["requests_open"] or self.songify_active():
+                self._forget_offline_close()
+                return False
+            self.save_settings({"requests_open": True})            # also drops the flag
+            self._announce("toggle_open")
+            self._bump()
+            return True
 
     def apply_preset(self, name):
         import config_schema as cs

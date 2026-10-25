@@ -1795,6 +1795,58 @@ class SongifyHandoffTests(AnnounceTierTests):
             self.assertIn(k, rules.DEFAULTS if hasattr(rules, "DEFAULTS") else rules.merged({}))
 
 
+class OfflineReopenTests(AnnounceTierTests):
+    def _lines(self):
+        return [l["text"] for l in self.e.announcements(0)["lines"]]
+
+    def test_stream_end_close_is_reopened_once_at_go_live(self):
+        self.assertTrue(self.e.close_for_offline())
+        self.assertFalse(self.e.settings["requests_open"])
+        self.assertTrue(self.e.reopen_after_offline())
+        self.assertTrue(self.e.settings["requests_open"])
+        self.assertEqual(len(self._lines()), 1)
+        self.assertFalse(self.e.reopen_after_offline())               # second go-live call: nothing, no second line
+        self.assertEqual(len(self._lines()), 1)
+        self.assertNotIn("closed_by_offline", store.load("config.json", {}))
+
+    def test_flag_survives_a_restart(self):
+        self.e.close_for_offline()
+        e2 = Engine(self.api, FakeAuth(), self.clock)
+        self.assertTrue(e2.reopen_after_offline())
+
+    def test_a_mod_close_or_other_change_is_never_reopened(self):
+        self.e.save_settings({"requests_open": False})                 # a mod / the page closed them
+        self.assertFalse(self.e.reopen_after_offline())
+        self.assertFalse(self.e.settings["requests_open"])
+        self.e.save_settings({"requests_open": True})
+        self.e.close_for_offline()
+        self.e.save_settings({"requests_open": True})                  # a mod reopened, then closed by hand
+        self.e.save_settings({"requests_open": False})
+        self.assertFalse(self.e.reopen_after_offline())
+        self.assertFalse(self.e.settings["requests_open"])
+
+    def test_songify_hand_off_stays_closed(self):
+        self.e.close_for_offline()
+        self.e.songify(True)
+        self.assertFalse(self.e.reopen_after_offline())
+        self.assertFalse(self.e.settings["requests_open"])
+        self.assertEqual(self._lines(), [])
+
+    def test_close_for_offline_respects_the_setting(self):
+        self.e.save_settings({"close_on_offline": False})
+        self.assertFalse(self.e.close_for_offline())
+        self.assertTrue(self.e.settings["requests_open"])
+
+    def test_redeem_while_closed_is_refused_and_refunded(self):
+        self.e.save_settings({"requests_open": False, "chat_requests": True})
+        r = self.e.chat("viewer", "!sr song 5", [], redeem=True)
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["code"], "closed")
+        self.assertTrue(r["refund"])
+        self.assertTrue(r["reply"])
+        self.assertEqual(len(self.e.queue.items), 0)
+
+
 class VanishLoopTests(unittest.TestCase):
     def setUp(self):
         store.save("state.json", {})

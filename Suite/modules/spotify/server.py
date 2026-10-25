@@ -501,12 +501,14 @@ def p_site(h, b):
 
 
 def p_live_auto(h, b):
-    return {"ok": True, "requests_open": engine.settings["requests_open"]}      # going live never opens requests by itself
+    reopened = engine.reopen_after_offline()                 # only when the stream-end close was ours; Songify hand-off / mod closes stay closed
+    if reopened:
+        console_log.info("server", "stream started: song requests reopened (they were closed when the stream ended)")
+    return {"ok": True, "requests_open": engine.settings["requests_open"], "reopened": reopened}
 
 
 def p_live_stop(h, b):
-    if engine.settings["requests_open"] and engine.settings["close_on_offline"]:
-        engine.save_settings({"requests_open": False})
+    if engine.close_for_offline():
         console_log.info("server", "stream ended: song requests closed")
     if engine.settings["clear_on_offline"]:
         engine.queue.clear(only_viewers=True)
