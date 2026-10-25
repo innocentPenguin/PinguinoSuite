@@ -111,8 +111,9 @@ function dRowActivity(m) {
   if ((m.flags || []).includes('refollow')) chips.push('refollow');
   return `<div class="d-row${m.cleared ? ' cleared' : ''}" data-id="${esc(m.id)}"><span class="d-age" data-ts="${m.ts}">${dAge(m.ts)}</span>${dIcon(m.platform)}<div class="d-main"><span class="d-pill" style="background:${pill[1]};color:${pill[2]};margin-left:0">${esc(pill[0])}</span><span class="d-user">${esc(dName(m))}</span>${clrTag(m)}${chips.map(c => `<span class="d-chip" ${c === 'refollow' ? 'style="font-size:.8em;opacity:.8"' : ''}>${esc(c)}</span>`).join('')}${links.map(l => `<span class="d-link">${dLink(esc(l))}</span>`).join('')}</div><span class="d-kebab" data-d="rowmenu" data-u="${esc((m.user || '').toLowerCase())}" data-id="${esc(m.id)}">&#8942;</span></div>`;
 }
+const D_PCOL = {twitch: '#a970ff', youtube: '#ff6b61', tiktok: '#ff4d79', kick: '#53fc18', discord: '#7983f5'};     // name colour when the platform sends none
 function dRowChat(m) {
-  const col = colourOf(m) || (m.platform === 'twitch' ? '#a970ff' : '#ff8a1f');
+  const col = colourOf(m) || D_PCOL[m.platform] || '#ff8a1f';
   if (m.event) return `<div class="d-row notice${m.cleared ? ' cleared' : ''}" data-id="${esc(m.id)}">${dIcon(m.platform)}<span><b>${esc(dName(m))}</b> ${dLink(esc(dRest(m) || m.text))}${clrTag(m)}</span></div>`;
   return `<div class="d-row ${isBot(m) ? 'bot' : ''}${m.cleared ? ' cleared' : ''}" data-id="${esc(m.id)}">${dIcon(m.platform)}<span>${badgeHtml(m)}<b style="color:${col}">${esc(dName(m))}</b>: ${bodyHtml(m, dLink)}${clrTag(m)}</span></div>`;
 }

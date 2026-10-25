@@ -22,15 +22,17 @@ let chatTarget = null, searchTerm = '', searchSeq = 0;
 
 // --- rendering helpers ---------------------------------------------------------------
 const BADGES = {broadcaster: ['HOST', '#e0455b'], moderator: ['MOD', '#2fa84f'], vip: ['VIP', '#d94fa0'], subscriber: ['SUB', '#b36b00'],
-  founder: ['SUB', '#b36b00'], partner: ['✓', '#b36b00'], staff: ['STAFF', '#999'], 'sub-gifter': ['GIFT', '#b36b00'], 'bits': ['BITS', '#b58900']};
+  founder: ['SUB', '#b36b00'], owner: ['HOST', '#e0455b'], member: ['MEM', '#2ba640'], sponsor: ['MEM', '#2ba640'], superfan: ['SF', '#ff2d55'], 'super_fan': ['SF', '#ff2d55'], partner: ['✓', '#b36b00'], staff: ['STAFF', '#999'], 'sub-gifter': ['GIFT', '#b36b00'], 'bits': ['BITS', '#b58900']};
 const badgeHtml = m => (m.badges || []).filter(b => Object.hasOwn(BADGES, b)).slice(0, 4).map(b => `<span class="bd" style="background:${BADGES[b][1]}" title="${esc(b)}">${BADGES[b][0]}</span>`).join('');
+// An emote image: the connector's own https url (YouTube custom emotes) wins, else the Twitch id form. Anything else stays plain text.
+const emoteSrc = e => { const u = String(e.url || e.image || ''); return /^https:\/\/[^\s"'<>]{4,300}$/.test(u) ? u : /^[\w-]{1,64}$/.test(String(e.id)) ? emoteUrl(e.id) : ''; };
 const emoteUrl = id => `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(id)}/default/dark/2.0`;
 // Message text -> safe HTML. Emotes come only from the structured m.emotes list (id must look like an id); `link` (optional) turns URLs in
 // the plain-text pieces into links, and never sees the emote <img> markup.
 function bodyHtml(m, link) {
-  const map = new Map(); (m.emotes || []).forEach(e => { if (e && typeof e.text === 'string' && /^[\w-]{1,64}$/.test(String(e.id))) map.set(e.text, String(e.id)); });
+  const map = new Map(); (m.emotes || []).forEach(e => { const s = e && typeof e.text === 'string' && e.text ? emoteSrc(e) : ''; if (s) map.set(e.text, s); });
   return String(m.text || '').split(/(\s+)/).map(tok => map.has(tok)
-    ? `<img class="emo" alt="${esc(tok)}" title="${esc(tok)}" src="${emoteUrl(map.get(tok))}" onerror="this.replaceWith(document.createTextNode(this.alt))">`
+    ? `<img class="emo" alt="${esc(tok)}" title="${esc(tok)}" src="${esc(map.get(tok))}" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">`
     : link ? link(esc(tok)) : esc(tok)).join('');
 }
 const mentionsMe = m => { const t = (m.text || '').toLowerCase(); return !isBot(m) && [...MYNAMES].some(n => t.includes(n)); };
@@ -193,7 +195,7 @@ function popVisible(m) {
   if (MUTED.has((m.user || '').toLowerCase()) || m.raw_type === 'dev') return false;
   return true;
 }
-const popMsg = m => { const col = colourOf(m); return `<div class="pm msg ${styleClasses(m)}${m.cleared ? ' cleared' : ''}" data-mid="${esc(m.id)}">${badgeHtml(m)}<b class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</b>${eventLabel(m)}${bodyHtml(m)}</div>`; };
+const popMsg = m => { const col = colourOf(m); return `<div class="pm msg ${styleClasses(m)}${m.cleared ? ' cleared' : ''}" data-mid="${esc(m.id)}">${markerHtml(m.platform)}${badgeHtml(m)}<b class="u" ${col ? `style="color:${col}"` : ''}>${esc(m.display || m.user)}</b>${eventLabel(m)}${bodyHtml(m)}</div>`; };
 function renderPopout() {
   const p = new URLSearchParams(location.search), max = Math.min(parseInt(p.get('max')) || 30, 100);
   document.body.classList.add('popout'); document.documentElement.style.setProperty('--fs', (parseInt(p.get('size')) || 20) + 'px');
