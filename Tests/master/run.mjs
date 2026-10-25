@@ -217,6 +217,17 @@ await t('bootstrap.js: a core_config invoke that never settles ends in an error,
   const out = await Promise.race([ctx.fetch('/api/feedback').then(() => 'resolved', e => 'rejected: ' + e.message), new Promise(r => setTimeout(() => r('HUNG'), 2000))]);
   assert.match(out, /^rejected/, 'fetch must settle: ' + out);
 });
+await t('layout: colours sit in a <details> that is closed by default, the chip shows the current colour; the player precedes the tabs and the grid in the DOM', () => {
+  const dir = path.join(here, '..', '..', 'App', 'src', 'master'), js = fs.readFileSync(path.join(dir, 'master.js'), 'utf8'), html = fs.readFileSync(path.join(dir, 'master.html'), 'utf8'), css = fs.readFileSync(path.join(dir, 'master.css'), 'utf8');
+  const det = js.match(/<details class="tn-det"[^>]*>/); assert.ok(det, 'colour swatches live in a details'); assert.ok(!/\bopen\b/.test(det[0]), 'closed by default');
+  const a = js.indexOf('<details class="tn-det"'), b = js.indexOf('</details>', a); assert.ok(js.slice(a, b).includes('tn-chip') && js.slice(a, b).includes('class="tn-sw"') && js.slice(a, b).includes('class="swc"'), 'summary has the chip, the swatches are inside');
+  assert.ok(js.slice(0, a).lastIndexOf('tn-name') > js.slice(0, a).lastIndexOf('class="tn" data-side'), 'name field stays outside the details');
+  assert.ok(/ch\.style\.background = t\[k\]\.color/.test(js), 'chip is painted with the current team colour');
+  assert.ok(/data-sa|swc/.test(js) && /classList\.contains\('swc'\)/.test(js), 'swatch click handler is still delegated');
+  const p = html.indexOf('id="player"'), g = html.indexOf('id="grid"'), tb = html.indexOf('id="tabs"'); assert.ok(p > 0 && p < g && g < tb, 'player before the grid and the tabs');
+  assert.ok(/#player\{position:relative/.test(css) && !/#player\{position:fixed/.test(css), 'player is in the flow, not floating');
+  for (const id of ['pl-title', 'pl-play', 'pl-vol', 'pl-menu']) assert.ok(html.includes('id="' + id + '"'), id + ' kept'); assert.ok(js.includes('sg-btn'), 'Songify button still there');
+});
 await t('wheel admin: !wheel commands are whitelisted and validated', () => {
   assert.equal(C.wheelCmd('close'), '!wheel close'); assert.equal(C.wheelCmd('undo'), '!wheel undo'); assert.equal(C.wheelCmd('end'), '!wheel end');
   assert.equal(C.wheelCmd('mode', 'balanced'), '!wheel mode balanced'); assert.equal(C.wheelCmd('mode', 'chaos'), null); assert.equal(C.wheelCmd('size', '3'), '!wheel size 3'); assert.equal(C.wheelCmd('size', '5'), null);

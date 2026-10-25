@@ -27,6 +27,45 @@
   <div id="precard" class="banner lastcard" hidden></div>
   <div id="lastcard" class="banner lastcard" hidden><b>Last stream</b> <span id="lc-text" class="faint">…</span> <span id="lc-clip"></span> <button id="lc-refresh" class="sm ghost" title="Read it again">⟳</button></div>
   <div id="offline" class="banner" hidden></div>
+  <aside id="player" hidden>
+    <div class="pl-top">
+      <div class="pl-art" id="pl-art"><span>♪</span></div>
+      <div class="pl-meta">
+        <div class="pl-title ell" id="pl-title">Spotify…</div>
+        <div class="pl-sub ell" id="pl-artist"></div>
+        <div class="pl-sub faint ell" id="pl-album"></div>
+      </div>
+      <button class="sm pl-min" id="pl-min" title="Shrink / expand the player">–</button>
+    </div>
+    <div class="pl-bar" id="pl-bar"><i id="pl-prog"></i></div>
+    <div class="pl-row">
+      <button class="sm g" data-mu="like" title="Like this song on Spotify">👍</button>
+      <span class="sp"></span>
+      <button class="sm" data-mu="previous" title="Back to the previous song">⏮</button>
+      <button class="sm pl-play" data-pl="toggle" id="pl-play" title="Play / pause">▶</button>
+      <button class="sm" data-mu="skip" title="Skip this song">⏭</button>
+      <span class="sp"></span>
+      <button class="sm" id="pl-vol" title="Volume and audio devices">🔊</button>
+    </div>
+    <div class="pl-row pl-ban">
+      <button class="sm rd warn" data-mu="ban_song" title="Ban this song (it will never be requested again) and skip">🚫 Ban song</button>
+      <button class="sm rd warn" data-mu="ban_artist" title="Ban this artist (all their songs) and skip">🚫 Ban artist</button>
+      <span class="sp"></span><span class="faint sm ell" id="pl-req"></span>
+    </div>
+    <div class="pl-menu" id="pl-menu" hidden>
+      <div class="vrow">
+        <b>Me</b><input type="range" id="pl-vme" min="0" max="100" value="0" disabled>
+        <button class="sm" id="pl-dme" disabled title="Needs OBS per-source monitoring">Device</button>
+      </div>
+      <div class="faint sm">Your own listening output is not available yet: the Spotify app has a single output (a second one needs OBS per-source monitoring, not built).</div>
+      <div class="vrow">
+        <b>Stream</b><input type="range" id="pl-vst" min="0" max="100" value="0">
+        <button class="sm" id="pl-dst" title="Pick the Spotify device that plays">Device</button>
+        <span class="faint sm" id="pl-vn">–</span>
+      </div>
+      <div id="pl-devs" class="pl-devs" hidden></div>
+    </div>
+  </aside>
   <main id="grid">
     <div id="col-obs">
     <section class="pane" id="pane-scenes" data-pane="scenes">
@@ -78,45 +117,6 @@
   </div>
 </div>
 <script src="master-core.js"></script>
-  <aside id="player" hidden>
-    <div class="pl-top">
-      <div class="pl-art" id="pl-art"><span>♪</span></div>
-      <div class="pl-meta">
-        <div class="pl-title ell" id="pl-title">Spotify…</div>
-        <div class="pl-sub ell" id="pl-artist"></div>
-        <div class="pl-sub faint ell" id="pl-album"></div>
-      </div>
-      <button class="sm pl-min" id="pl-min" title="Shrink / expand the player">–</button>
-    </div>
-    <div class="pl-bar" id="pl-bar"><i id="pl-prog"></i></div>
-    <div class="pl-row">
-      <button class="sm g" data-mu="like" title="Like this song on Spotify">👍</button>
-      <span class="sp"></span>
-      <button class="sm" data-mu="previous" title="Back to the previous song">⏮</button>
-      <button class="sm pl-play" data-pl="toggle" id="pl-play" title="Play / pause">▶</button>
-      <button class="sm" data-mu="skip" title="Skip this song">⏭</button>
-      <span class="sp"></span>
-      <button class="sm" id="pl-vol" title="Volume and audio devices">🔊</button>
-    </div>
-    <div class="pl-row pl-ban">
-      <button class="sm rd warn" data-mu="ban_song" title="Ban this song (it will never be requested again) and skip">🚫 Ban song</button>
-      <button class="sm rd warn" data-mu="ban_artist" title="Ban this artist (all their songs) and skip">🚫 Ban artist</button>
-      <span class="sp"></span><span class="faint sm ell" id="pl-req"></span>
-    </div>
-    <div class="pl-menu" id="pl-menu" hidden>
-      <div class="vrow">
-        <b>Me</b><input type="range" id="pl-vme" min="0" max="100" value="0" disabled>
-        <button class="sm" id="pl-dme" disabled title="Needs OBS per-source monitoring">Device</button>
-      </div>
-      <div class="faint sm">Your own listening output is not available yet: the Spotify app has a single output (a second one needs OBS per-source monitoring, not built).</div>
-      <div class="vrow">
-        <b>Stream</b><input type="range" id="pl-vst" min="0" max="100" value="0">
-        <button class="sm" id="pl-dst" title="Pick the Spotify device that plays">Device</button>
-        <span class="faint sm" id="pl-vn">–</span>
-      </div>
-      <div id="pl-devs" class="pl-devs" hidden></div>
-    </div>
-  </aside>
 <script src="master.js"></script>
 </body>
 </html>
