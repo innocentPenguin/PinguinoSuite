@@ -79,6 +79,58 @@
     });
   }
 
-  new MutationObserver(() => { inject().catch(() => {}); }).observe(document.documentElement, {childList: true, subtree: true});
-  document.addEventListener('DOMContentLoaded', () => inject().catch(() => {}));
+  // Pre-live check: one line per platform from the live connector status. Read-only, feature-detected (an old backend shows nothing).
+  const PRE = ['twitch', 'tiktok', 'youtube'], PRE_NAME = {twitch: 'Twitch', tiktok: 'TikTok', youtube: 'YouTube'};
+  const short = t => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 70);
+  function preLine(p, c, cfg) {
+    const st = c ? c.status : '', d = short(c && c.detail);
+    if (!c) return ['off', 'off'];
+    if (st === 'disabled') return ['off', 'off'];
+    const noHandle = p === 'tiktok' && cfg && cfg.tiktok_enabled && !String(cfg.tiktok_user || '').trim();
+    const noYt = p === 'youtube' && cfg && 'youtube_channel' in cfg && !String(cfg.youtube_channel || '').trim() && !String(cfg.youtube_video_id || '').trim();
+    if (p === 'tiktok' && (st === 'needs_setup' || noHandle)) return ['todo', 'not set (needs @handle)'];
+    if (p === 'youtube' && (st === 'needs_setup' || (noYt && st !== 'connected'))) return ['todo', 'not set (needs channel or video id)'];
+    if (st === 'connected') return ['ok', 'chat reading: ok'];
+    if (st === 'waiting') return ['wait', 'waiting for live'];
+    if (st === 'needs_auth') return ['todo', 'not set (' + (d || 'sign in needed') + ')'];
+    if (st === 'connecting') return ['wait', 'connecting...'];
+    return ['bad', 'reconnecting / problem' + (d ? ': ' + d : '')];
+  }
+  async function preHtml() {
+    const [stat, cfg] = await Promise.all([j('/api/status').catch(() => null), j('/api/settings').catch(() => null)]);
+    const list = stat && stat.connectors;
+    if (!Array.isArray(list)) return '';
+    const rows = PRE.map(p => {
+      const c = list.find(x => x.platform === p), [k, t] = preLine(p, c, cfg);
+      const mark = {ok: '&#10003;', wait: '&#8230;', todo: '!', bad: '&#10007;', off: '&ndash;'}[k];
+      return `<li class="pre42-${k}"><span class="pre42-m" aria-hidden="true">${mark}</span><b>${PRE_NAME[p]}</b> <span>${esc(t)}</span></li>`;
+    }).join('');
+    return '<b>Before you go live</b> <small class="mut">updates by itself</small><ul class="pre42-l">' + rows + '</ul>';
+  }
+  function preStyle() {
+    if (document.getElementById('pre42-css')) return;
+    const st = document.createElement('style'); st.id = 'pre42-css';
+    st.textContent = '.pre42{border:1px solid var(--line,#444);border-radius:8px;padding:8px 12px;margin:0 0 10px}.pre42-l{list-style:none;margin:6px 0 0;padding:0}.pre42-l li{padding:2px 0}'
+      + '.pre42-m{display:inline-block;width:1.4em;font-weight:700}.pre42-ok .pre42-m{color:#3fb950}.pre42-wait .pre42-m{color:#d29922}.pre42-todo .pre42-m{color:#f0883e}.pre42-bad .pre42-m{color:#f85149}.pre42-off{opacity:.6}';
+    document.head.appendChild(st);
+  }
+  async function preInject() {
+    const body = document.getElementById('body');
+    const root = body && body.querySelector('.launch');
+    if (!root || root.querySelector('.pre42')) return;
+    const h = await preHtml();
+    if (!h || root.querySelector('.pre42')) return;
+    preStyle();
+    const box = document.createElement('div'); box.className = 'pre42'; box.setAttribute('aria-live', 'polite'); box.innerHTML = h;
+    root.insertBefore(box, root.firstChild);
+  }
+  setInterval(async () => {
+    const box = document.querySelector('#body .pre42');
+    if (!box || document.hidden) return;
+    try { const h = await preHtml(); if (h && box.isConnected && box.innerHTML !== h) box.innerHTML = h; } catch (e) { /* keep the last lines */ }
+  }, 3000);
+  window.__pre42 = {preLine};
+
+  new MutationObserver(() => { inject().catch(() => {}); preInject().catch(() => {}); }).observe(document.documentElement, {childList: true, subtree: true});
+  document.addEventListener('DOMContentLoaded', () => { inject().catch(() => {}); preInject().catch(() => {}); });
 })();

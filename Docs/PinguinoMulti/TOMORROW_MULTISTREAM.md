@@ -23,6 +23,8 @@ Sending the video to three platforms (OBS multistream) is your side and is not c
 6. Open the unified chat window (`/?type=chat`). It keeps its history through restarts, and hides bots and `!` commands (side panel toggle "Show bots and !commands" if you want them).
 
 ### B. Check each platform's chat reaches the dashboard BEFORE going live
+
+**Quick look first:** the launcher (Setup) now opens with a "Before you go live" box, one line per platform (Twitch, TikTok, YouTube): `chat reading: ok` / `waiting for live` / `not set (needs @handle or channel)` / `reconnecting / problem: <reason>` / `off`. It updates by itself every 3 s. Needs the Multi restart to appear.
 Do these one at a time, in the priority order, and only once that platform is actually live (or in its own pre-live/preview state if it has one). You must NOT start a real public stream just for this.
 - **Twitch**: post a line from another account. It should appear in the Multi chat window within about 1-2 seconds, tagged Twitch.
 - **TikTok**: the card must turn `connected: @handle (unofficial)` within about 1 minute of your TikTok LIVE starting. Post a comment from another account: it appears tagged TikTok. A first-time chatter should trigger the first-time ding.
