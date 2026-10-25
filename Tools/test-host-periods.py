@@ -92,7 +92,8 @@ try:
     f = os.path.join(d, 'boards', 'metric_events.jsonl'); txt = open(f).read(); open(f, 'a').write(txt); post('/api/boards/reload', {})
     chk('duplicate lines (re-run backfill) change nothing', snap() == before)
     # ---- chat: !top and the one-liners
-    now = int(time.time()); ev('amy', 'messages', 4, now, 'c1'); ev('zed', 'messages', 2, now, 'c2'); ev('amy', 'watchtime', 90, now, 'c3'); ev('amy', 'points', 250, now, 'c4')
+    now = int(time.time()); ev('amy', 'messages', 4000, now, 'c1')   # big enough to lead whatever the fixed test dates add to "today" when the real clock reaches them
+    ev('zed', 'messages', 2, now, 'c2'); ev('amy', 'watchtime', 90, now, 'c3'); ev('amy', 'points', 250, now, 'c4')
     def say(t):
         host.stdin.write((t + chr(10)).encode()); host.stdin.flush(); time.sleep(2.5)
     say('viewer1: !top messages day'); say('viewer2: !watchtime amy'); say('viewer3: !points amy')

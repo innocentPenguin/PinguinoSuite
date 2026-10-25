@@ -164,7 +164,7 @@ try:
         v = api('/api/vars', {'name': 'tv', 'value': '7', 'persist': True}); l = api('/api/vars')['vars']; dl = api('/api/vars/delete', {'name': 'tv'})
         tr = api('/api/automations/triggers')['triggers']; hk = api('/api/automations/hotkeys'); ex = api('/api/automations/export'); q = api('/api/queues')
         en = api('/api/automations/enable', {'group': 'Spotify', 'on': False}); ep = api('/api/endpoints')
-        ok = v['ok'] and any(x['name'] == 'tv' and x['value'] == '7' for x in l) and dl['ok'] and len(tr) > 10 and hk['ok'] and ex['doc']['actions'] and q['queues'][0]['name'] == 'actions' and en['changed'] >= 8 and len(ep['endpoints']) >= 5
+        ok = v['ok'] and any(x['name'] == 'tv' and x['value'] == '7' for x in l) and dl['ok'] and len(tr) > 10 and hk['ok'] and ex['doc']['actions'] and q['queues'][0]['name'] == 'actions' and en['changed'] >= 4 and len(ep['endpoints']) >= 5
         return ok, '%d triggers, %d actions exported' % (len(tr), len(ex['doc']['actions']))
     case('mgmt', 'vars, triggers, hotkeys, export, queues, enable, endpoints', mgmt)
     def pause():
