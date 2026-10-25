@@ -66,3 +66,80 @@ def test_host_feed_raid_out_names_the_target():
     assert m.event == "raid_out" and m.user == "targetchan" and m.display == "TargetChan" and m.text == "Raiding TargetChan with 12 viewers" and m.amount == 12
     m2 = host_feed.to_message({"seq": 6, "type": "raid_out", "user": "tgt", "amount": 4}, "me")            # no target field: user is taken as the target
     assert m2.user == "tgt"
+
+
+# ---- one raid from two sources (Twitch EventSub + Host feed) --------------------------------------------------------------------------
+import time as _time
+
+from cards import CardManager
+from models import ChatMessage
+from pipeline import Pipeline
+
+
+def _pl(tmp_path):
+    st = Store(str(tmp_path / "p.db"))
+    ev = []
+    pl = Pipeline(st, CardManager(st, ev.append), ev.append)
+    stored = []
+    pl.on_event = stored.append
+    return pl, stored
+
+
+def _raid(mid, user="Raider", amount=40, ts=None):
+    return ChatMessage(id=mid, platform="twitch", channel="me", user_id=user.lower(), user=user.lower(), display=user, text=f"{user} is raiding",
+                       ts=ts or _time.time(), event="raid", amount=amount)
+
+
+def test_host_only_and_eventsub_only(tmp_path):
+    pl, got = _pl(tmp_path)
+    assert pl.ingest(_raid("host:1")) is not None
+    pl, got = _pl(tmp_path)
+    assert pl.ingest(_raid("eventsub-abc")) is not None and len(got) == 1
+
+
+def test_both_sources_either_order_alert_once(tmp_path):
+    for first, second in (("eventsub-1", "host:7"), ("host:7", "eventsub-1")):
+        d = tmp_path / first.replace(":", "_")
+        d.mkdir()
+        pl, got = _pl(d)
+        assert pl.ingest(_raid(first, amount=40)) is not None
+        assert pl.ingest(_raid(second, amount=41)) is None             # copy: dropped, first one (and its amount) wins
+        assert len(got) == 1 and got[0].id == first
+
+
+def test_replay_same_id_and_two_raiders_kept(tmp_path):
+    pl, got = _pl(tmp_path)
+    assert pl.ingest(_raid("host:1", "A")) is not None
+    assert pl.ingest(_raid("host:1", "A")) is None                    # replay
+    assert pl.ingest(_raid("host:2", "B")) is not None                # another raider in the same minute
+    assert [m.user for m in got] == ["a", "b"]
+
+
+def test_same_raider_again_after_the_window(tmp_path):
+    clock = [1000.0]
+    w = host_feed.RaidWindow(now=lambda: clock[0])
+    assert not w.dup("R", "h:1")
+    assert w.dup("r", "e:9")                                           # case-insensitive raider
+    clock[0] += 61
+    assert not w.dup("R", "h:2")                                       # a new raid by the same person later is a new raid
+    assert w.dup("R", "h:3")
+
+
+def test_engine_collapses_fire_and_eventsub_copy(tmp_path):
+    eng = _eng(tmp_path)
+    assert eng.submit({"id": "eventsub-1", "type": "raid", "user": "Raider", "amount": 40})[0]
+    ok, why = eng.submit({"id": "host:7", "type": "raid", "user": "raider", "amount": 41})
+    assert not ok and eng.log[0]["status"] == "duplicate" and len(eng.heap) == 1
+    assert eng.submit({"id": "host:8", "type": "raid", "user": "Other", "amount": 5})[0] and len(eng.heap) == 2
+    assert eng.submit({"id": "t1", "type": "raid", "user": "Raider", "amount": 40, "test": True})[0]      # tests are never swallowed
+
+
+def test_engine_skipped_raid_is_not_recorded(tmp_path):
+    eng = _eng(tmp_path)
+    cfg = eng.cfg
+    cfg["profiles"][cfg["active"]]["types"]["raid"]["min_amount"] = 50
+    eng.save(cfg)
+    assert not eng.submit({"id": "a", "type": "raid", "user": "Raider", "amount": 10})[0]
+    cfg["profiles"][cfg["active"]]["types"]["raid"]["min_amount"] = 0
+    eng.save(cfg)
+    assert eng.submit({"id": "b", "type": "raid", "user": "Raider", "amount": 10})[0]                      # the blocked copy did not use up the raid

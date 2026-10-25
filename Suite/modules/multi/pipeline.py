@@ -30,6 +30,7 @@ class Pipeline:
         self.ding = ding_mod.Ding(store)
         self.pop = pop_mod.Pop()
         self.last_in = 0.0
+        self.raids = host_feed.RaidWindow()          # a raid reported by both EventSub and the Host shows once
         self.intros = None                           # set by the server (intros.Intros)
         self.recent_by_user = {}     # (platform,user_id) -> [(ts,text,mention)] small bounded history
         self.stats = {"in": 0, "dupes": 0, "dropped": 0}
@@ -68,6 +69,9 @@ class Pipeline:
             self.stats["dupes"] += 1
             return None
         st = config.settings()
+        if m.event == "raid" and not (m.meta or {}).get("test") and not (m.meta or {}).get("sim") and self.raids.dup(m.user, m.id):
+            self.stats["dupes"] += 1
+            return None
         if m.event in NOTICES or (m.meta or {}).get("notice"):                       # stream events (sub, raid, follow...) are shown, never ranked or dinged
             if not self.store.add_message(m, prio.Decision(0, "none", [])):
                 self.stats["dupes"] += 1

@@ -9,6 +9,7 @@ import re
 import time
 from collections import deque
 
+import host_feed
 from obs import FONTS, _color, _num
 
 TYPES = ["follow", "refollow", "sub", "resub", "gift", "cheer", "raid", "hype", "goal", "redeem", "streak", "watchtime", "anniversary", "comeback", "intro",
@@ -340,6 +341,7 @@ class Engine:
         self.recent = {}                      # (type,user,amount) -> ts, short dedupe of the same thing arriving twice
         self.user_last, self.type_hits = {}, {}
         self.log = deque(maxlen=300)
+        self.raids = host_feed.RaidWindow()    # the same raid from EventSub, the Host feed or /api/alerts/fire alerts once
         self.wake, self.task, self.skip_ev = None, None, None
 
     # -- config
@@ -396,6 +398,8 @@ class Engine:
             if eid in self.seen:
                 return self._note(ev, "duplicate", "already fired (replay)")
             key = (t, str(ev.get("platform") or "") + ":" + ev["user"].lower(), value(ev, VALUE_OF[t]) if t in VALUE_OF else int(ev.get("amount") or 0))
+            if t == "raid" and self.raids.seen(ev["user"], eid if real_id else ""):
+                return self._note(ev, "duplicate", "same raid just fired")
             if not real_id and now - self.recent.get(key, 0) < self.cfg["global"]["dedupe_s"]:
                 return self._note(ev, "duplicate", "same event just fired")
             self.seen.append(eid)
@@ -407,6 +411,8 @@ class Engine:
         if why:
             return self._note(ev, "skipped", why)
         if not test:
+            if t == "raid":
+                self.raids.add(ev["user"], eid if real_id else "")
             self.recent[key] = now                      # only an event that is really shown counts as "just fired"
             if len(self.recent) > 500:
                 self.recent = {k: v for k, v in self.recent.items() if now - v < 120}

@@ -17,7 +17,8 @@ from models import ChatMessage
 
 HOST = os.environ.get("MULTI_HOST_URL") or "http://127.0.0.1:8770"
 ALWAYS = ("follow", "redeem", "ban", "unban", "unmod", "mod", "shoutout", "raid_out", "poll", "prediction", "hype", "streak")                 # not available through the Twitch chat connection
-FALLBACK = ("sub", "resub", "gift", "cheer", "raid")
+FALLBACK = ("sub", "resub", "gift", "cheer")                                                                                                  # only while Twitch is not connected in Multi
+ALWAYS_RAID = "raid"                                       # Host raids are always taken; RaidWindow collapses them with Multi's own EventSub raid
 MODWORDS = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "modded"}
 MODPASSIVE = {"ban": "banned", "timeout": "timed out", "unban": "unbanned", "unmod": "unmodded", "mod": "made a moderator"}
 WORDS = {"shoutout": "{u} was given a shoutout", "follow": "{u} followed", "redeem": "{u} redeemed {d}", "sub": "{u} subscribed", "resub": "{u} resubscribed",
@@ -74,6 +75,41 @@ def to_message(item, channel):
     meta["message"] = str(item.get("message") or (detail if t == "redeem" else ""))[:200]
     return ChatMessage(id=f"host:{item['seq']}", platform="twitch", channel=channel, user_id=user.lower(), user=user.lower(), display=user,
                        text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or item.get("count") or 0), flags=flags, meta=meta)
+
+
+class RaidWindow:
+    """One raid arrives from two places (Multi's Twitch EventSub and the Host feed / fire). Same stable id = same raid; otherwise the same raider within
+    `window` seconds is the same raid, whichever source came first (the first one wins, amounts may differ). Two different raiders are always both kept.
+    seen() answers "is this a copy?" without recording; add() records a raid that is really being shown."""
+
+    def __init__(self, window=60.0, now=time.time):
+        self.window, self.now, self.by_user, self.ids = window, now, {}, {}
+
+    def _gc(self, t):
+        for d in (self.by_user, self.ids):
+            for k in [k for k, v in d.items() if t - v >= max(self.window, 120)]:
+                del d[k]
+
+    def seen(self, user, rid=""):
+        t = self.now()
+        return (bool(rid) and rid in self.ids) or t - self.by_user.get(str(user or "").lower(), -1e9) < self.window
+
+    def add(self, user, rid=""):
+        t = self.now()
+        self._gc(t)
+        u = str(user or "").lower()
+        if t - self.by_user.get(u, -1e9) >= self.window:        # the first copy keeps its time, a later raid by the same user starts a new window
+            self.by_user[u] = t
+        if rid:
+            self.ids[rid] = t
+
+    def dup(self, user, rid=""):
+        """check + record in one step; True = a copy of a raid already seen (log it once, no secrets)"""
+        if self.seen(user, rid):
+            console_log.info("raid", "second copy of the same raid ignored (EventSub and Host both reported it)", dedupe_s=60)
+            return True
+        self.add(user, rid)
+        return False
 
 
 STATE = {"up": None, "last_ok": 0.0, "error": ""}      # reachability of the Host as last seen by any GET (None = not tried yet)
@@ -146,7 +182,7 @@ async def run(inbox, twitch_connected, base=None):
             if seq is None:                               # start from "now": never replay the Host's history
                 seq = int((await asyncio.to_thread(_get, "/api/activity?since=999999999&limit=1")).get("seq", 0))
             data = await asyncio.to_thread(_get, f"/api/activity?since={seq}&limit=100")
-            types = set(ALWAYS) | (set() if twitch_connected() else set(FALLBACK))
+            types = set(ALWAYS) | {ALWAYS_RAID} | (set() if twitch_connected() else set(FALLBACK))
             for item in data.get("items", []):
                 seq = max(seq, int(item.get("seq", seq)))
                 if item.get("type") in types:
