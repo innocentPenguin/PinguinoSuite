@@ -624,7 +624,7 @@ def test_event(t, user="penguin", amount=None, variants=(), **kw):
     ev = {"type": t, "user": user or "penguin", "display": user or "Penguin", "amount": 0, "tier": "1", "months": 6, "message": "hello colony", "level": 3,
           "test": True, "source": kw.get("source", "ui"), "avatar": "", "rank_colour": kw.get("rank_colour", "")}
     ev["id"] = f"test:{time.time_ns()}"
-    if t in ("gift", "raid", "cheer"):
+    if t in ("gift", "raid", "raid_out", "cheer"):          # raid_out too: its text reads "Raiding {user} with {amount} viewers!"
         ev["amount"] = 5 if t != "cheer" else 100
     if t in MILESTONE_TEST:
         ev["amount"] = MILESTONE_TEST[t][1]

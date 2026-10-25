@@ -49,7 +49,7 @@ def to_message(item, channel):
     t = item.get("type")
     if t in ("raid_out", "poll", "prediction", "hype"):
         text = _live_text(t, item)
-        user = str(item.get("user") or channel or "channel")[:60]
+        user = str((item.get("target") if t == "raid_out" else None) or item.get("user") or channel or "channel")[:60]     # raid_out: the alert and the row name the TARGET channel
         return ChatMessage(id=f"host:{item['seq']}", platform="twitch", channel=channel, user_id=user.lower(), user=user.lower(), display=user,
                            text=text[:300], ts=float(item.get("ts") or time.time()), raw_type=t, event=t, amount=int(item.get("amount") or 0)) if text else None
     if t not in WORDS and t not in MODWORDS:
