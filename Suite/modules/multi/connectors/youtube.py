@@ -47,6 +47,10 @@ class YouTube(Connector):
         self.fail_since = None
         self.video_id = None
         self.on_cleared = None
+        self.send_id = self.send_title = ""            # the signed-in (SEND) account; reading never depends on it
+        self._id_tok = None
+        self._id_try = 0.0
+        self._send_chat = (None, None)                # (video id, liveChatId) of the read side's live video
 
     def _h(self):
         return {"Authorization": f"Bearer {youtube_auth.access_token()}"}
@@ -102,16 +106,80 @@ class YouTube(Connector):
             except Exception:
                 pass
 
+    def _mine(self):
+        """Own accounts for self-echo marking: the streamer (owner badge / read channel id) and the send account."""
+        return {"read": [], "send": [self.send_id] if self.send_id else [], "send_names": [self.send_title.lower()] if self.send_title else []}
+
+    def _identity_sync(self):
+        r = requests.get(f"{API}/channels", params={"part": "snippet", "mine": "true"}, headers=self._h(), timeout=10)
+        r.raise_for_status()
+        items = r.json().get("items", [])
+        if not items:
+            return "", ""
+        return str(items[0].get("id", "")), str((items[0].get("snippet") or {}).get("title", ""))
+
+    async def _identity(self):
+        """Who the saved sign-in is ("sending as ..."). Throttled; never raises; cleared when the sign-in is removed."""
+        tok = secrets_store.get("youtube_token")
+        if not tok:
+            if self.send_id or self.state.get("send_as"):
+                self.send_id = self.send_title = ""
+                self.state["send_as"] = ""
+                self._id_tok = None
+            return
+        if tok == self._id_tok and self.send_id:
+            return
+        if time.time() - self._id_try < 60:
+            return
+        self._id_try = time.time()
+        try:
+            self.send_id, self.send_title = await asyncio.to_thread(self._identity_sync)
+            self._id_tok = tok
+            self.state["send_as"] = self.send_title
+            if self.reader:
+                self.reader.my_channel = self._mine()
+        except Exception:
+            pass
+
+    def _live_chat_for(self, video):
+        r = requests.get(f"{API}/videos", params={"part": "liveStreamingDetails", "id": video}, headers=self._h(), timeout=10)
+        r.raise_for_status()
+        items = r.json().get("items", [])
+        return ((items[0].get("liveStreamingDetails") or {}).get("activeLiveChatId") if items else None) or None
+
+    def _read_video(self):
+        """The live video the READ side watches (None if unknown): the running reader, else the pinned video id."""
+        if self.reader:
+            return self.reader.video
+        vid = str(config.settings().get("youtube_video_id") or "").strip()
+        return youtube_innertube.watch_target(vid)[0] or vid or None
+
+    def _send_chat_id(self):
+        """liveChatId to send into. Fast read mode: the read video's chat, looked up with the SEND account's token (public data, any live video).
+        Falls back to the send account's own broadcast only when no read-side video is known."""
+        if str(config.settings().get("youtube_read_mode", "innertube")).lower() != "api":
+            vid = self._read_video()
+            if not vid and str(config.settings().get("youtube_channel") or "").strip():
+                try:
+                    vid = youtube_innertube.Reader.resolve(config.settings().get("youtube_channel"))
+                except Exception:
+                    vid = None
+            if vid:
+                if self._send_chat[0] != vid:
+                    self._send_chat = (vid, self._live_chat_for(vid))
+                return self._send_chat[1]
+        if self.chat_id:
+            return self.chat_id
+        self.chat_id, self.me = self._find_chat()
+        return self.chat_id
+
     def _video_source(self):
-        """Which live video to read in innertube mode: setting video id > setting channel's /live page > the signed-in account's active broadcast."""
+        """Which live video to read in innertube mode: setting video id > setting channel's /live page. The signed-in account is the SEND account and never decides what is read."""
         s = config.settings()
         vid = str(s.get("youtube_video_id") or "").strip()
         ch = str(s.get("youtube_channel") or "").strip()
         if vid or ch:
             return youtube_innertube.Reader.resolve(ch, vid)
-        if secrets_store.get("youtube_token"):
-            self.chat_id, self.me = self._find_chat()
-            return getattr(self, "video_id", None) if self.chat_id else None
         raise LookupError("setup")
 
     async def _api_step(self):
@@ -151,7 +219,7 @@ class YouTube(Connector):
                     self.set_status("waiting", "not live on YouTube right now")
                     await asyncio.sleep(20)
                     return
-                rd = youtube_innertube.Reader(video, self.me or "")
+                rd = youtube_innertube.Reader(video, self._mine())
                 for m in (await asyncio.to_thread(rd.fetch))[0]:
                     self.state["last_message"] = time.time()
                     self.inbox.put(m)
@@ -192,25 +260,25 @@ class YouTube(Connector):
 
     async def run(self):
         while not self.stop:
+            await self._identity()
             if str(config.settings().get("youtube_read_mode", "innertube")).lower() == "api":
                 await self._api_step()
             else:
                 await self._innertube_step()
 
     def _send_sync(self, text):
+        chat = self._send_chat_id()
+        if not chat:
+            raise SendRejected("YouTube has no live chat to send to yet (is the stream live?)")
         r = requests.post(f"{API}/liveChat/messages?part=snippet", headers=self._h(), timeout=10,
-                          json={"snippet": {"liveChatId": self.chat_id, "type": "textMessageEvent",
-                                            "textMessageDetails": {"messageText": text}}})
+                          json={"snippet": {"liveChatId": chat, "type": "textMessageEvent", "textMessageDetails": {"messageText": text}}})
         if r.status_code != 200:
+            if r.status_code in (403, 404):
+                self._send_chat = (None, None)
             raise refused(r.status_code, f"send failed {r.status_code}: {r.text[:160]}")
-        return f"youtube:{self.chat_id}:{r.json()['id']}"
+        return f"youtube:{chat}:{r.json()['id']}"
 
     async def send(self, text, reply_to=None):
-        if not self.chat_id and secrets_store.get("youtube_token"):            # fast read mode never looked up the chat id: do it once for sending
-            try:
-                self.chat_id, self.me = await asyncio.to_thread(self._find_chat)
-            except Exception:
-                self.chat_id = None
-        if not self.chat_id:
-            raise SendRejected("YouTube is not connected to a live chat (sending needs a YouTube sign-in)")
+        if not secrets_store.get("youtube_token"):
+            raise SendRejected("YouTube send account not signed in")
         return await self.send_once(text, reply_to, lambda: asyncio.to_thread(self._send_sync, text))

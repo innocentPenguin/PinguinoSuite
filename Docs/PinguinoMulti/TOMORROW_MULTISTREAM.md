@@ -10,7 +10,7 @@ Sending the video to three platforms (OBS multistream) is your side and is not c
 |---|---|---|---|
 | Twitch | already connected | official, about 1 s | nothing else is affected |
 | TikTok | your `@handle`, "Read my TikTok LIVE chat" ticked | unofficial (TikTokLive 7.0.1, Euler Stream sign server) | only TikTok chat/gifts are missing |
-| YouTube | your `@handle` in `youtube_channel` (no sign-in to read) | unofficial fast feed, 1-3 s | falls back to the official API (about 10 s) if you signed in with Google |
+| YouTube | your `@handle` in `youtube_channel` (no sign-in to read) | unofficial fast feed, 1-3 s | falls back to the official API (about 10 s) if a Google sign-in (the bot) exists |
 
 ## Steps, in order
 
@@ -19,7 +19,7 @@ Sending the video to three platforms (OBS multistream) is your side and is not c
 2. **Twitch**: check the Twitch card says connected. Nothing to do.
 3. **TikTok**: in the launcher TikTok card tick **Read my TikTok LIVE chat**, type your **@handle** (the one you stream from), press **Save**. Status should read `@handle is not live yet` (waiting). If it says `Set the TikTok @handle you stream from`, the handle is empty.
 4. **YouTube**: in the YouTube card fill **channel** with your `@handle` (or `UC...` id or channel link). Optional: **live video** to pin one stream. Status reads "not live on YouTube right now" until you are live: that is correct.
-5. **YouTube sign-in is optional**. Only do it (docs/IVAN_SETUP.md, section 2: Google project, OAuth client, consent screen set to Production) if you want Multi to send messages, moderate, or have the official fallback. Reading chat does not need it.
+5. **YouTube sign-in is optional and is the BOT's account.** Reading your chat needs none. To let Multi send as **PinguinoB0t**: (a) have a second Google account whose YouTube channel is named PinguinoB0t; (b) create the OAuth client (docs/IVAN_SETUP.md, section 2) or reuse it; if its consent screen is in Testing add the bot account as a Test user, or publish to Production; (c) open the launcher in an incognito window, press **Sign in the account that will SEND (use the bot)** while logged in as the BOT account; (d) check it says **sending as: PinguinoB0t**. A brand new channel may be rate limited or blocked from chatting at first: post once from it by hand beforehand. Without this step sending answers "YouTube send account not signed in".
 6. Open the unified chat window (`/?type=chat`). It keeps its history through restarts, and hides bots and `!` commands (side panel toggle "Show bots and !commands" if you want them).
 
 ### B. Check each platform's chat reaches the dashboard BEFORE going live

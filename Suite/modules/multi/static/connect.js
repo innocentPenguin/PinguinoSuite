@@ -5,7 +5,7 @@
   const NAMES = {kick: 'Kick', youtube: 'YouTube'};
   const HELP = {
     kick: 'kick.com &rarr; Settings &rarr; Developer: create an app, set its redirect address to the one below, paste its client id and secret here. Lets Multi send chat, set the title and (later) receive Kick events.',
-    youtube: 'Google Cloud: enable "YouTube Data API v3", publish the consent screen to <b>production</b> (otherwise the sign-in expires after 7 days), create an OAuth client of type <b>Desktop app</b>, paste its client id and secret here. <b>Reading chat needs no sign-in:</b> once the channel above is set, messages arrive in about 1-3 seconds. Signing in is only for sending chat and moderating (the official API), or as a fallback if the fast read stops working.'
+    youtube: 'Google Cloud: enable "YouTube Data API v3", publish the consent screen to <b>production</b> (otherwise the sign-in expires after 7 days), create an OAuth client of type <b>Desktop app</b>, paste its client id and secret here. <b>Reading chat needs no sign-in:</b> once the channel below is set, messages arrive in about 1-3 seconds. <b>The sign-in is the account that SENDS</b> (replies, moderation): sign in with the bot account (PinguinoB0t, a second Google account), not your own. It never changes which channel is read. Tip: do it in a private/incognito window while logged in as the bot.'
   };
   const j = (u, o) => fetch(u, o).then(r => r.json());
   const post = (u, b) => j(u, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(b || {})});
@@ -33,6 +33,13 @@
     } catch (e) { return ''; }
   }
 
+  async function sendAs() {
+    try {
+      const stat = await j('/api/status'), c = ((stat && stat.connectors) || []).find(x => x.platform === 'youtube');
+      return c && c.send_as ? 'sending as: ' + c.send_as : 'sending as: nobody yet (not signed in)';
+    } catch (e) { return 'sending as: unknown'; }
+  }
+
   async function card(p) {
     const st = await j('/auth/' + p + '/status');
     const yt = p === 'youtube' ? await ytRead() : '';
@@ -40,7 +47,8 @@
       <details><summary class="mut">How to set it up</summary><small class="mut">${HELP[p]}<br>Redirect address (saved when you click Save): <code>${esc(redirectFor(p))}</code>${st.redirect_uri && st.redirect_uri !== redirectFor(p) ? ' <b>currently set to ' + esc(st.redirect_uri) + '</b>' : ''}</small></details>
       <div><input class="c42-id" aria-label="${NAMES[p]} client id" placeholder="client id" autocomplete="off" size="26"> <input class="c42-sec" type="password" aria-label="${NAMES[p]} client secret" placeholder="client secret" autocomplete="new-password" size="20">
         <button type="button" class="c42-save">Save</button>
-        <button type="button" class="c42-go p"${ready(st) ? '' : ' disabled title="Save the client id and secret first"'}>Sign in to ${NAMES[p]}</button></div>
+        <button type="button" class="c42-go p"${ready(st) ? '' : ' disabled title="Save the client id and secret first"'}>${p === 'youtube' ? 'Sign in the account that will SEND (use the bot)' : 'Sign in to ' + NAMES[p]}</button></div>
+      ${p === 'youtube' ? '<div class="c42-sendas mut" aria-live="polite">' + esc(await sendAs()) + '</div>' : ''}
       <div class="c42-msg mut"></div>${yt}</div>`;
   }
 
@@ -125,6 +133,8 @@
     root.insertBefore(box, root.firstChild);
   }
   setInterval(async () => {
+    const sa = document.querySelector('#body .c42-sendas');
+    if (sa && !document.hidden) { try { const t = await sendAs(); if (sa.textContent !== t) sa.textContent = t; } catch (e) { /* keep */ } }
     const box = document.querySelector('#body .pre42');
     if (!box || document.hidden) return;
     try { const h = await preHtml(); if (h && box.isConnected && box.innerHTML !== h) box.innerHTML = h; } catch (e) { /* keep the last lines */ }

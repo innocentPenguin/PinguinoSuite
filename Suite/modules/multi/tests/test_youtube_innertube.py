@@ -276,11 +276,71 @@ def test_run_dispatches_on_read_mode(monkeypatch):
         assert called == [want]
 
 
-def test_send_looks_up_chat_id_lazily(monkeypatch):
-    c, ev = _conn(monkeypatch, _youtube_token="tok")
-    monkeypatch.setattr(c, "_find_chat", lambda: ("LC", "UCme"))
-    monkeypatch.setattr(c, "_send_sync", lambda t: "youtube:LC:1")
-    assert asyncio.run(c.send("hi")) == "youtube:LC:1" and c.chat_id == "LC"
+def test_send_without_token_is_a_clear_error(monkeypatch):
     c, ev = _conn(monkeypatch)
-    with pytest.raises(yt.SendRejected):
+    with pytest.raises(yt.SendRejected, match="YouTube send account not signed in"):
         asyncio.run(c.send("hi"))
+
+
+class _R:
+    def __init__(self, js, code=200): self.js, self.status_code, self.text = js, code, ""
+    def json(self): return self.js
+    def raise_for_status(self): pass
+
+
+def test_send_uses_read_videos_chat_with_send_token_and_no_own_broadcast(monkeypatch):
+    c, ev = _conn(monkeypatch, _youtube_token="tok", youtube_video_id="abcdefghijk")
+    monkeypatch.setattr(c, "_h", lambda: {})
+    calls = []
+
+    def get(url, params=None, **k):
+        calls.append((url.rsplit("/", 1)[-1], dict(params or {})))
+        if url.endswith("/videos"):
+            return _R({"items": [{"liveStreamingDetails": {"activeLiveChatId": "CHAT1"}}]})
+        raise AssertionError("own-broadcast lookup must not happen: " + url)
+
+    def post(url, json=None, **k):
+        calls.append(("post", json))
+        return _R({"id": "m1"})
+    monkeypatch.setattr(yt.requests, "get", get)
+    monkeypatch.setattr(yt.requests, "post", post)
+    assert asyncio.run(c.send("hi")) == "youtube:CHAT1:m1"
+    assert calls[0] == ("videos", {"part": "liveStreamingDetails", "id": "abcdefghijk"})
+    assert calls[1][1]["snippet"]["liveChatId"] == "CHAT1"
+
+
+def test_send_not_live_is_a_clear_error(monkeypatch):
+    c, ev = _conn(monkeypatch, _youtube_token="tok", youtube_video_id="abcdefghijk")
+    monkeypatch.setattr(c, "_h", lambda: {})
+    monkeypatch.setattr(yt.requests, "get", lambda *a, **k: _R({"items": [{"liveStreamingDetails": {}}]}))
+    with pytest.raises(yt.SendRejected, match="no live chat"):
+        asyncio.run(c.send("hi"))
+
+
+def test_identity_sets_sending_as_and_clears_with_token(monkeypatch):
+    c, ev = _conn(monkeypatch, _youtube_token="tok")
+    monkeypatch.setattr(c, "_h", lambda: {})
+    monkeypatch.setattr(yt.requests, "get", lambda *a, **k: _R({"items": [{"id": "UCbot", "snippet": {"title": "PinguinoB0t"}}]}))
+    asyncio.run(c._identity())
+    assert c.state["send_as"] == "PinguinoB0t" and c.send_id == "UCbot"
+    assert c._mine() == {"read": [], "send": ["UCbot"], "send_names": ["pinguinob0t"]}
+    monkeypatch.setattr(yt.secrets_store, "get", lambda k, *a: None)
+    asyncio.run(c._identity())
+    assert c.state["send_as"] == "" and c.send_id == ""
+
+
+def test_reading_never_uses_the_signed_in_account(monkeypatch):
+    c, ev = _conn(monkeypatch, _youtube_token="tok")
+    monkeypatch.setattr(c, "_find_chat", lambda: (_ for _ in ()).throw(AssertionError("no")))
+    with pytest.raises(LookupError):
+        c._video_source()
+
+
+def test_bot_lines_read_back_are_marked_self_and_bot():
+    mine = {"read": [], "send": ["UCbot"], "send_names": ["pinguinob0t"]}
+    r = {"id": "1", "authorExternalChannelId": "UCbot", "authorName": {"simpleText": "PinguinoB0t"}, "message": {"runs": [{"text": "yo"}]}, "timestampUsec": "1"}
+    m = it.parse_item({"liveChatTextMessageRenderer": r}, "V", mine)
+    assert m.is_self and m.is_bot
+    r2 = dict(r, authorExternalChannelId="UCx", authorName={"simpleText": "Amy"})
+    m2 = it.parse_item({"liveChatTextMessageRenderer": r2}, "V", mine)
+    assert not m2.is_self and not m2.is_bot

@@ -107,6 +107,20 @@ def parse_amount(text):
     return max(1, min(v, 10**7)), (t[:m.start()] + t[m.end():]).strip()[:5]
 
 
+def _own(uid, name, mine):
+    """-> set of {"own", "send"}: which of OUR accounts wrote this. `mine` = str channel id (the streamer) or a dict {"read": [ids], "send": [ids], "send_names": [lowercase titles]}."""
+    out = set()
+    if isinstance(mine, str):
+        if mine and uid == mine:
+            out.add("own")
+    elif isinstance(mine, dict):
+        if uid in (mine.get("read") or ()):
+            out.add("own")
+        if uid in (mine.get("send") or ()) or (name and name.lower() in (mine.get("send_names") or ())):
+            out |= {"own", "send"}
+    return out
+
+
 def _text_message(r, video, my_channel):
     uid = str(r.get("authorExternalChannelId") or "")
     name = _txt(r.get("authorName"))
@@ -114,9 +128,10 @@ def _text_message(r, video, my_channel):
         return None
     text, emotes = _runs(r.get("message"))
     badges = _badges(r)
+    own = _own(uid, name, my_channel)
     return ChatMessage(id=f"youtube:{video}:{r['id']}", platform="youtube", channel=video, user_id=uid, user=name.lower(), display=name,
                        text=text, ts=_ts(r.get("timestampUsec")), badges=badges, emotes=emotes,
-                       is_self="owner" in badges or (bool(my_channel) and uid == my_channel))
+                       is_self="owner" in badges or "own" in own, is_bot=bool(own and "send" in own))
 
 
 def _paid(r, video, kind):

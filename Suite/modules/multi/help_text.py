@@ -49,11 +49,11 @@ HELP = {
     },
     "conn-youtube": {
         "title": "YouTube connection",
-        "summary": "Optional. Multi reads your YouTube live chat in about 1-3 seconds (fast mode, no Google sign-in needed). Signing in with Google is only needed to SEND messages and for the slow fallback.",
+        "summary": "Optional. Multi reads your YouTube live chat in about 1-3 seconds (fast mode, no Google sign-in needed). The Google sign-in is the account that SENDS (use the PinguinoB0t account, not yours) and powers the slow fallback.",
         "steps": [
             "Fast mode (default): type your channel (like @YourName) or a live video link into the YouTube channel setting (youtube_channel / youtube_video_id). Nothing else. Multi finds your stream when you go live.",
             "It uses YouTube's unofficial live-chat feed, so it may break if YouTube changes it. Setting youtube_read_mode = api switches to the official (slower, 10 s+) reader; with a Google sign-in saved Multi also falls back to it by itself after 5 minutes of trouble.",
-            "To send messages from Multi (and for the fallback) sign in once with Google: follow the checklist at the top of Docs/PinguinoMulti/IVAN_SETUP.md, paste the client id and secret in the YouTube sign-in box, Save, 'Sign in to YouTube'.",
+            "To send as the bot: follow 'YouTube: bot sends, you read' in Docs/PinguinoMulti/IVAN_SETUP.md, paste the client id and secret in the YouTube sign-in box, Save, then press 'Sign in the account that will SEND' while logged in as the BOT Google account. The line 'sending as: PinguinoB0t' confirms it.",
             "'waiting: not live on YouTube right now' means you are not live yet; it connects by itself once you are.",
             "YouTube has no reply threads, so replies are plain messages.",
         ],

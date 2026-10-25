@@ -54,6 +54,7 @@ def make(kind, monkeypatch, net):
     else:
         c = youtube.YouTube(None, lambda e: None)
         c.chat_id = "chat"
+        monkeypatch.setattr(youtube.secrets_store, "get", lambda k, *a: "tok" if k == "youtube_token" else None)
         monkeypatch.setattr(c, "_h", lambda: {})
         monkeypatch.setattr(youtube.requests, "post", net)
     return c

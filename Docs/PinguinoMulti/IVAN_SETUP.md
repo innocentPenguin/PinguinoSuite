@@ -1,7 +1,7 @@
 # Setting up Kick, YouTube and TikTok in Multi (for Ivan)
 
 ## YouTube fast reading (new, no sign-in needed)
-Multi now reads YouTube chat through YouTube's own live-chat feed (the one the website uses): about **1-3 seconds** behind, no Google project, no quota. To switch it on put your channel in Multi's settings: `youtube_channel` = `@YourHandle` (or a `UC...` id or channel link), or pin one stream with `youtube_video_id` (id or watch link). If you already signed in with Google and leave both empty, Multi uses the stream your account is broadcasting. It is **unofficial**: YouTube can change it without notice. Settings: `youtube_read_mode` (`innertube` = fast, default; `api` = official, 10 s or slower), `youtube_innertube_fallback_min` (5): if fast mode keeps failing that long and a Google sign-in exists, Multi reads through the official API until fast mode works again. Sending messages and moderation still need the Google sign-in below.
+Multi now reads YouTube chat through YouTube's own live-chat feed (the one the website uses): about **1-3 seconds** behind, no Google project, no quota. To switch it on put your channel in Multi's settings: `youtube_channel` = `@YourHandle` (or a `UC...` id or channel link), or pin one stream with `youtube_video_id` (id or watch link). Leave both empty and Multi has nothing to read (the Google sign-in never decides what is read). It is **unofficial**: YouTube can change it without notice. Settings: `youtube_read_mode` (`innertube` = fast, default; `api` = official, 10 s or slower), `youtube_innertube_fallback_min` (5): if fast mode keeps failing that long and a Google sign-in exists, Multi reads through the official API until fast mode works again. Sending messages and moderation need the Google sign-in below, which is the **SEND account** (the bot), see the next section.
 
 ## YouTube in 5 lines (do this once, then it renews itself)
 
@@ -42,6 +42,15 @@ Permissions Multi asks for (the default list, no need to change it): `user:read 
 - Webhook URL to paste in the Kick app's **Enable Webhooks** box: `https://innocentpenguin.com/api/kick/webhook`
 - The Site stores each signed event. **The Host pulls them** (`GET /api/bot/kick/events?since=...`, with the bot key) and hands them to Multi, which re-checks Kick's signature itself, so the Site is never trusted.
 - Until the Host (or a Multi poller) is running this pull, webhook events wait on the Site and do not show in Multi. Ask 100 or 40 whether it is switched on.
+
+## YouTube: bot sends, you read (PinguinoB0t)
+Reading and sending are two different accounts on purpose: **you** are read through the fast feed (your `@handle`, no sign-in), the **bot** is the Google account you sign in with, so replies come from PinguinoB0t instead of from you. Signing in never changes which channel is read.
+1. Use or create a second Google account and give it a YouTube channel named **PinguinoB0t** (youtube.com while logged in as that account -> create channel).
+2. Create the OAuth client below (section 2), or reuse the one you already have. If the consent screen is in **Testing**, add the bot account's email under **Audience -> Test users** (or publish the screen to **Production**).
+3. Open Multi's launcher in a **private/incognito window**, log in to Google as the **bot account** when asked, and press **Sign in the account that will SEND (use the bot)** in the YouTube box. Approve.
+4. Check the line under the buttons: it must read **sending as: PinguinoB0t**. If it shows your own channel name, you signed in with the wrong Google account: sign in again as the bot.
+5. When you are live, Multi finds the stream's chat from the channel/video you are reading and sends into it as the bot. Without a sign-in a send answers "YouTube send account not signed in".
+Notes: the bot's own lines read back are marked as bot/self, so no ding, pop or card for them. A brand new channel may be rate limited or blocked from chatting for a while (YouTube can require the channel to exist for some time, or ask to verify it): chat once from it by hand in a normal browser before the stream. Duplicate protection still blocks the same text twice within 30 s.
 
 ## 2. YouTube
 
