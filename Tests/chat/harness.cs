@@ -1411,6 +1411,25 @@ public static class Harness
             nextReply = "{\"reply\":\"hey there!\",\"remember\":[]}";
         }
 
+        // ── pre-stream countdown lines: varied pool, no food/comfy lines ──
+        {
+            var cdm = typeof(CPHInline).GetMethod("CountdownText", BindingFlags.NonPublic | BindingFlags.Instance); var cdi = new CPHInline();
+            var banned = new System.Text.RegularExpressions.Regex("snack|comfy|cozy|cosy|settle in|grab a ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            string prev = null; bool consec = false, bad = false, within = false; var seen = new HashSet<string>(); var all = new HashSet<string>();
+            for (int i = 0; i < 50; i++)
+            {
+                string tag = "t" + (i / 5);   // 5 offsets per countdown
+                if (i % 5 == 0) seen.Clear();
+                string l = (string)cdm.Invoke(cdi, new object[] { tag, "5 minutes", "8:00 PM" });
+                if (l == prev) consec = true; if (banned.IsMatch(l) || l.Contains("{")) bad = true; if (!seen.Add(l)) within = true; all.Add(l); prev = l;
+            }
+            Check("countdown: 50 draws, never the same line twice in a row", !consec);
+            Check("countdown: nothing repeats inside one countdown", !within);
+            Check("countdown: no snack / comfy / cozy lines, no raw placeholders", !bad);
+            Check("countdown: the pool is varied (12+ distinct lines seen)", all.Count >= 12, all.Count.ToString());
+            Check("countdown: the old default text is no longer in the file", !File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "PinguinoChat", "PinguinoChat.cs")).Contains("Grab a snack"));
+        }
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " CHAT CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;

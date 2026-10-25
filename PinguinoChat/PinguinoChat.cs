@@ -538,7 +538,7 @@ public class CPHInline
         public string CountdownGoLiveAt { get; set; } = "";       // daily go-live time, local PC time, HH:MM ("" = no countdown)
         public string CountdownOverrideAt { get; set; } = "";     // one-off: "HH:MM" or "yyyy-MM-dd HH:mm" (used instead of the daily time until it has passed; mods can set it with !golive)
         public string CountdownTimes { get; set; } = "15m,10m,5m,1m,30s";   // when to post, before the start (m = minutes, s = seconds)
-        public string CountdownLine { get; set; } = "Stream starts in {left}! Grab a snack and get comfy.";
+        public string CountdownLine { get; set; } = "";               // "" = a random line from the built-in pool (varied, no food/comfy lines); a custom text here is used as written
         public string CountdownLineNow { get; set; } = "";        // posted at the start time ("" = nothing)
         public int CountdownMaxLateSec { get; set; } = 20;        // a message more than this late (restart, Host down) is skipped, not sent
 
@@ -681,7 +681,7 @@ public class CPHInline
         "oh a new face, hi! say anything, we don't bite",
         "welcome! chat's friendly, ask away",
         "hi and welcome, glad you stopped by 🐧",
-        "welcome to the igloo, grab a seat",
+        "welcome to the igloo, the door is always open",
         "new here? say hi, ask me or HelperPinguino if you need anything",
         "hey, welcome! say !discord if you want the community 🐧" };
     // the Firsts race words ("first", "2nd", "third", "#4"): the Host's Firsts line already answers them, so no welcome next to it
@@ -1066,7 +1066,7 @@ public class CPHInline
     // ── DAILY GREETING (IDEAS #40): a regular's first message of the local day, plus the "first seen here N year(s) ago" anniversary. Name only, nothing remembered is quoted. ──
     static readonly string[] DailyLines = {
         "hey {n}, good to see you again today! 🐧", "{n} is here! welcome back to the igloo", "morning, afternoon or night, hi {n}!",
-        "oh hi {n}, glad you dropped in", "{n}, there you are! make yourself comfy", "hey {n} 🐧", "{n} is back!", "o/ {n}", "good to see you, {n}" };
+        "oh hi {n}, glad you dropped in", "{n}, there you are! good to have you", "hey {n} 🐧", "{n} is back!", "o/ {n}", "good to see you, {n}" };
     static string _dailyDay = ""; static int _dailyCount; static readonly HashSet<string> _dailyDone = new HashSet<string>();
     static string LocalDay(long unix) { return DateTimeOffset.FromUnixTimeSeconds(unix).ToLocalTime().ToString("yyyy-MM-dd"); }
     /// <summary>null = nothing to say. Called under _lock, once per message of a regular who is not opted out; prevSeen = the last time we saw them before this line.</summary>
@@ -3036,7 +3036,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             if (_modAsked.TryGetValue(login, out last) && now - last < 60) return "";
             _modAsked[login] = now;
         }
-        if (RxTimeoutAsk.IsMatch(text ?? "")) { string[] tv = { "I can't time people out on request, but a mod can. Give them a nudge \U0001F427", "timeouts are a mod thing, so I'll leave that to them \U0001F427", "that's up to the mods, I just keep the chat cozy \U0001F427" }; return tv[_rng.Next(tv.Length)]; }
+        if (RxTimeoutAsk.IsMatch(text ?? "")) { string[] tv = { "I can't time people out on request, but a mod can. Give them a nudge \U0001F427", "timeouts are a mod thing, so I'll leave that to them \U0001F427", "that's up to the mods, I just keep the chat friendly \U0001F427" }; return tv[_rng.Next(tv.Length)]; }
         if (RxModRankAsk.IsMatch(text ?? "")) { string u = (_cfg.ModApplyUrl ?? "").Trim(); return u == "" ? "Mod spots are not handed out in chat. Ask a mod." : "Want to be a mod? Apply here: " + u; }
         string[] v = { "Timeouts, bans and ranks are for the mods, so ask one of them \U0001F427", "That one is for a mod, not me. Any mod can help you out \U0001F427", "I don't do mod stuff, sorry! A mod can sort that one out \U0001F427" };
         return v[_rng.Next(v.Length)];
@@ -3465,6 +3465,27 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         return t.EndsWith("s") ? v : t.EndsWith("m") ? v * 60 : -1;
     }
     static string CdLeft(int sec) { return sec >= 60 && sec % 60 == 0 ? (sec / 60) + (sec == 60 ? " minute" : " minutes") : sec + " seconds"; }
+    static readonly string[] CdPool = {
+        "Stream starts in {left}! 🐧", "{left} until we go live, see you in there", "Heads up, going live in {left}", "Almost showtime: {left} to go",
+        "The penguin is warming up the mic, {left} left", "Go time in {left}, bring your good vibes", "{left} and we're live, tell a friend 🐧",
+        "Countdown: {left}. Chat is already looking good", "Waddling over to the stream, live in {left}", "Only {left} before we start, say hi while you wait",
+        "Stream kicks off in {left}!", "{left} to go, the igloo doors open soon", "Get ready, we start in {left}", "Starting in {left}, you're early, nice 🐧" };
+    static readonly Regex CdBanned = new Regex(@"snack|comfy|cozy|cosy|settle in|grab a ", RegexOptions.IgnoreCase);
+    static readonly HashSet<int> _cdUsed = new HashSet<int>(); static string _cdUsedTag = ""; static int _cdLastIdx = -1;
+    /// <summary>the pre-stream line: a random one from the pool (never the same twice in a row, none repeated within one countdown); a custom CountdownLine without banned words is used as written</summary>
+    string CountdownText(string tag, string left, string time)
+    {
+        string cl = (_cfg.CountdownLine ?? "").Trim(); string tpl;
+        if (cl != "" && !CdBanned.IsMatch(cl)) tpl = cl;
+        else lock (_cdUsed)
+        {
+            if (_cdUsedTag != tag) { _cdUsed.Clear(); _cdUsedTag = tag; }
+            var free = Enumerable.Range(0, CdPool.Length).Where(i => !_cdUsed.Contains(i) && i != _cdLastIdx).ToList();
+            if (free.Count == 0) { _cdUsed.Clear(); free = Enumerable.Range(0, CdPool.Length).Where(i => i != _cdLastIdx).ToList(); }
+            int k = free[_rng.Next(free.Count)]; _cdUsed.Add(k); _cdLastIdx = k; tpl = CdPool[k];
+        }
+        return tpl.Replace("{left}", left).Replace("{time}", time);
+    }
     void CountdownTick()
     {
         bool liveNow = false; try { var jl = ReadJson("settings.json"); liveNow = jl != null && jl["WasLive"] != null && (bool)jl["WasLive"]; } catch (Exception) { }
@@ -3485,7 +3506,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
             if (late < 0) continue;
             lock (_gateLock) { if (_cdDone.Contains(key)) continue; _cdDone.Add(key); }
             if (late > _cfg.CountdownMaxLateSec) continue;       // missed (Host was down): never send a stale countdown
-            string line = o == 0 ? _cfg.CountdownLineNow : (_cfg.CountdownLine ?? "").Replace("{left}", CdLeft(o)).Replace("{time}", target.Value.ToString("h:mm tt"));
+            string line = o == 0 ? _cfg.CountdownLineNow : CountdownText(tag, CdLeft(o), target.Value.ToString("h:mm tt"));
             if (!string.IsNullOrWhiteSpace(line)) using (PgReplyTo("", "")) PgSay("chat", line);
         }
     }
