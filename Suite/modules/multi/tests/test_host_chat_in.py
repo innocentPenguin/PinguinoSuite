@@ -1,4 +1,4 @@
-"""YouTube chat -> Host (POST /api/chat-in): body, role, ownBot, back-off, drop-oldest, dedupe, age, switch (worker 41). Fake Host, no network."""
+"""YouTube + TikTok chat -> Host (POST /api/chat-in): body, role, ownBot, back-off, drop-oldest, dedupe, age, switch (worker 41). Fake Host, no network."""
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -62,9 +62,9 @@ def test_own_bot_flags():
     assert [b["isBot"] for b in sent] == [b["ownBot"] for b in sent]
 
 
-def test_not_youtube_events_empty_or_switched_off(monkeypatch):
+def test_not_other_platforms_events_empty_or_switched_off(monkeypatch):
     c, sent, clock = mk()
-    assert not offer(c, clock, i=1, platform="tiktok")
+    assert not offer(c, clock, i=1, platform="kick")
     assert not offer(c, clock, i=2, platform="twitch")
     assert not offer(c, clock, i=3, event="cheer")
     assert not offer(c, clock, i=4, text="  ")
@@ -155,3 +155,37 @@ def test_worker_thread_sends_in_background(monkeypatch):
     c = hf.ChatIn(post=lambda b: (sent.append(b), ev.set())[1] or 200)
     assert c.offer(msg(i=9))
     assert ev.wait(3) and sent[0]["msgId"] == "youtube:9"
+
+
+def test_tiktok_body_roles_and_bot_filter(monkeypatch):
+    c, sent, clock = mk()
+    assert offer(c, clock, i=1, platform="tiktok", user="Fan_One")
+    assert offer(c, clock, i=2, platform="tiktok", badges=["super_fan"])
+    assert offer(c, clock, i=3, platform="tiktok", badges=["subscriber"])
+    assert offer(c, clock, i=4, platform="tiktok", is_self=True)
+    assert offer(c, clock, i=5, platform="tiktok", user="Nightbot")
+    assert not offer(c, clock, i=6, platform="tiktok", event="gift")
+    while c.step():
+        pass
+    assert sent[0] == {"platform": "tiktok", "user": "Fan_One", "userId": "uid1", "text": "hi", "msgId": "tiktok:1", "role": "viewer", "isSub": False, "ownBot": False, "isBot": False}
+    assert [(b["role"], b["isSub"]) for b in sent[1:3]] == [("sub", True), ("sub", True)]
+    assert [b["ownBot"] for b in sent[3:]] == [True, True]
+    monkeypatch.setattr(hf.config, "settings", lambda: {"host_chat_in": False, "bot_accounts": []})
+    assert not offer(c, clock, i=7, platform="tiktok")
+
+
+def test_tiktok_has_no_reply_path(monkeypatch):
+    import server
+    from connectors.tiktok import TikTok
+    from fastapi.testclient import TestClient
+    assert TikTok.capabilities["send"] is False and TikTok.capabilities["reply"] is False
+
+    class Fake:
+        capabilities = TikTok.capabilities
+
+        async def send(self, text, reply_to=None):
+            raise AssertionError("TikTok must never be sent to")
+    monkeypatch.setitem(server.connectors, "tiktok", Fake())
+    c = TestClient(server.app, base_url="http://127.0.0.1:8766")
+    r = c.post("/api/send", json={"platform": "tiktok", "text": "hi"}, headers={"origin": "http://127.0.0.1:8766"})
+    assert r.status_code == 400 and "read-only" in r.text

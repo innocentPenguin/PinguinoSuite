@@ -205,13 +205,17 @@ CHAT_IN_MAX_AGE = 30.0                                  # older lines are histor
 CHAT_IN_BACKOFF = 60.0
 
 
+SUB_BADGES = {"member", "sponsor", "subscriber", "superfan", "super_fan"}       # YouTube members, TikTok super fans / subscribers
+CHAT_IN_PLATFORMS = ("youtube", "tiktok")                                          # chat lines only; TikTok is read-only, the Host never replies there
+
+
 def _role(m):
     b = {str(x).lower() for x in (m.badges or [])}
     if b & {"owner", "broadcaster"}:
         return "broadcaster"
     if "moderator" in b:
         return "mod"
-    if b & {"member", "sponsor", "subscriber"}:
+    if b & SUB_BADGES:
         return "sub"
     return "viewer"
 
@@ -219,8 +223,8 @@ def _role(m):
 def chat_in_body(m, own_bot):
     b = {str(x).lower() for x in (m.badges or [])}
     role = _role(m)
-    return {"platform": "youtube", "user": m.display or m.user, "userId": m.user_id, "text": m.text, "msgId": m.id, "role": role,
-            "isSub": role == "sub" or bool(b & {"member", "sponsor", "subscriber"}), "ownBot": bool(own_bot), "isBot": bool(own_bot)}
+    return {"platform": m.platform, "user": m.display or m.user, "userId": m.user_id, "text": m.text, "msgId": m.id, "role": role,
+            "isSub": role == "sub" or bool(b & SUB_BADGES), "ownBot": bool(own_bot), "isBot": bool(own_bot)}
 
 
 def _chat_in_url():
@@ -264,7 +268,7 @@ class ChatIn:
     def offer(self, m):
         """Queue one stored message if it qualifies. Returns True when queued."""
         import ding
-        if m.platform != "youtube" or m.event or (m.meta or {}).get("notice") or not (m.text or "").strip():
+        if m.platform not in CHAT_IN_PLATFORMS or m.event or (m.meta or {}).get("notice") or not (m.text or "").strip():
             return False
         st = config.settings()
         if not st.get("host_chat_in", True) or send_disabled():
