@@ -380,7 +380,11 @@ class EngineTests(unittest.TestCase):
         self.api.playing = "spotify:track:t1"
         self.api.real_queue = ["spotify:track:t2"]
         self.e.tick()
-        self.assertEqual(self.e.chat("m", "!skip", ["mod"])["code"], "skipped")
+        r = self.e.chat("m", "!skip", ["mod"])
+        self.assertEqual(r["code"], "vote", "default: a mod's !skip is only a vote")
+        self.assertEqual(self.api.playing, "spotify:track:t1")
+        self.e.save_settings({"skip_mod_instant": True})
+        self.assertEqual(self.e.chat("m2", "!skip", ["mod"])["code"], "skipped")
         self.e.chat("m", "!sr close", ["mod"])
         self.assertEqual(self.e.chat("v", "!sr song 4", [])["code"], "closed")
         self.e.chat("m", "!sr open", ["mod"])
@@ -1035,6 +1039,7 @@ class ClosedByDefaultTests(unittest.TestCase):
         api.real_queue = ["spotify:track:t2"]
         server.engine = Engine(api, FakeAuth(), Clock())
         e = server.engine
+        e.save_settings({"skip_mod_instant": True})          # voice skip is an instant skip only when the streamer turns this on
         self.assertFalse(e.settings["requests_open"])
         e.tick()
         self.assertEqual(e.chat("v", "!sr song 4", [])["code"], "closed")

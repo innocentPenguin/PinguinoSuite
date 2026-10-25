@@ -53,6 +53,7 @@ class SongifyTests(unittest.TestCase):
         self.play(3, 0)                                      # ran to the end
         self.assertEqual(self.e.queue.history[0]["outcome"], "played")
         self.play(3, 10000)
+        self.e.save_settings({"skip_mod_instant": True})
         self.e.chat("mod", "!skip", ("mod",))                # skipped through chat
         self.e._prev_pb = None
         self.play(4, 0)

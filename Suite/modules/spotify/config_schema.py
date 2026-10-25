@@ -151,7 +151,7 @@ SCHEMA = [
     ]},
     {"id": "skip", "title": "Skipping", "items": [
         ("skip_votes", "int", 3, "Votes to skip", "Different viewers needed for !skip to pass."),
-        ("skip_mod_instant", "bool", True, "Mods skip instantly", "Mod/broadcaster !skip skips without a vote."),
+        ("skip_mod_instant", "bool", False, "Mods skip instantly in chat", "Off (normal): mods vote like everyone; use the Spotify page or Master View to hard-skip. On: a mod/broadcaster !skip in chat skips at once without a vote."),
     ]},
     {"id": "chat", "title": "Chat wording", "items": [
         ("chat_replies", "bool", True, "Reply in chat", "Off = commands work silently."),

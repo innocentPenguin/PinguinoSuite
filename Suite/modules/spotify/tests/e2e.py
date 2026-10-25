@@ -322,12 +322,15 @@ def main():
     sl = get("/api/song-log")[1]
     T("song-log shape", {"now", "recent", "lastHour", "skipped", "withdrawn"} <= set(sl) and all("outcome" in r for r in sl["recent"]))
     chat("mod1", "!sr close", ["mod"])
+    T("skip_mod_instant is off by default", state()["settings"]["skip_mod_instant"] is False)
+    post("/api/settings", {"skip_mod_instant": True})
     cur = state()["playback"]["track"]["name"]
     r = cmd("skip", "", "ivan", "broadcaster", isMod=True, silent=True)
     T("voice skip works while requests closed, silent", r["ok"] and r["say"] == "" and wait(lambda: state()["playback"]["track"]["name"] != cur), r)
     time.sleep(0.3)
     log = open(os.path.join(DATA, "console", "spotify.jsonl"), encoding="utf8").read()
     T("voice skip logged with source voice", '"source": "voice"' in log)
+    post("/api/settings", {"skip_mod_instant": False})
     T("viewer redeem priority ranks first in round", True)
     chat("mod1", "!sr open", ["mod"])
     r = chat("zed", "!sr song 15", [], redeem=True)
