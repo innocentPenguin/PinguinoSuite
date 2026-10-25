@@ -143,3 +143,63 @@ def test_engine_skipped_raid_is_not_recorded(tmp_path):
     cfg["profiles"][cfg["active"]]["types"]["raid"]["min_amount"] = 0
     eng.save(cfg)
     assert eng.submit({"id": "b", "type": "raid", "user": "Raider", "amount": 10})[0]                      # the blocked copy did not use up the raid
+
+
+# ---- three sources: Host fire (raid:<id>), Host feed item (host:<seq>), Twitch EventSub (twitch:...) -------------------------------------
+import itertools
+
+
+def _three(tmp_path, order, kind="raid", who="Raider"):
+    """feed item + EventSub go through the pipeline into the engine, fire goes straight to the engine; returns how many alerts queued"""
+    eng = _eng(tmp_path)
+    pl, _ = _pl(tmp_path)
+    pl.on_event = lambda m: eng.submit({"id": m.id, "type": m.event, "user": m.user, "amount": m.amount, "platform": m.platform})
+    src = {"fire": lambda: eng.submit({"id": f"{kind}:EV1", "type": kind, "user": who, "amount": 2, "platform": "twitch", "viewers": 2}),
+           "feed": lambda: pl.ingest(_rd("host:12", kind, who, 3)),
+           "eventsub": lambda: pl.ingest(_rd("twitch:abc", kind, who, 2))}
+    for s in order:
+        src[s]()
+    return eng
+
+
+def _rd(mid, kind, who, amount):
+    m = _raid(mid, who, amount)
+    m.event = kind
+    return m
+
+
+def test_three_sources_any_order_one_alert(tmp_path):
+    for kind in ("raid", "raid_out"):
+        for i, order in enumerate(itertools.permutations(["fire", "feed", "eventsub"])):
+            if kind == "raid_out" and "eventsub" in order:
+                continue                                                # raid_out never comes from EventSub
+            d = tmp_path / f"{kind}{i}"
+            d.mkdir()
+            assert len(_three(d, order, kind).heap) == 1, (kind, order)
+        for order in (("fire", "feed"), ("feed", "fire")):
+            d = tmp_path / f"{kind}-{'-'.join(order)}"
+            d.mkdir()
+            assert len(_three(d, order, kind).heap) == 1
+
+
+def test_three_sources_two_targets_or_raiders_kept(tmp_path):
+    for kind in ("raid", "raid_out"):
+        eng = _eng(tmp_path / kind) if (tmp_path / kind).mkdir() is None else None
+        assert eng.submit({"id": f"{kind}:1", "type": kind, "user": "One"})[0]
+        assert eng.submit({"id": f"{kind}:2", "type": kind, "user": "Two"})[0]
+        assert not eng.submit({"id": f"{kind}:1", "type": kind, "user": "One"})[0]                    # replay of the same id
+        assert len(eng.heap) == 2
+
+
+def test_raid_and_raid_out_do_not_collide(tmp_path):
+    eng = _eng(tmp_path)
+    assert eng.submit({"id": "raid:1", "type": "raid", "user": "Same"})[0] and eng.submit({"id": "raid_out:1", "type": "raid_out", "user": "Same"})[0]
+
+
+def test_every_default_profile_has_raids_on_with_chime():
+    c = alerts.sanitize_config(None)
+    assert c["active"] == "Penguin"
+    for p in c["profiles"].values():
+        for t in ("raid", "raid_out"):
+            d = p["types"][t]
+            assert d["enabled"] and not d["silent"] and d["sound"]["enabled"] and d["sound"]["url"] == ""      # empty url = the page's built-in chime
