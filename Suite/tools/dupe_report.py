@@ -79,4 +79,7 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "suite"))
+    import safetext  # a bell character in a file name or chat line must not beep the console
+    safetext.install()
     sys.exit(main())

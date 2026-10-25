@@ -198,6 +198,7 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).parent))
 import livedetect  # noqa: E402
 import consolelog  # noqa: E402
+import safetext  # noqa: E402
 import prestream  # noqa: E402
 import device  # noqa: E402
 import portable  # noqa: E402
@@ -2390,6 +2391,7 @@ def already_running():
 if __name__ == "__main__":
     if sys.stdout is None or sys.stderr is None:  # pythonw has no console: send output to a log
         sys.stdout = sys.stderr = open(LOGS / "suite.log", "a", buffering=1, encoding="utf8")
+    safetext.install()  # no bell or other control character ever reaches a console (chat text can contain one)
     headless = "--headless" in sys.argv  # launched by the Tauri shell: no tray/browser, the shell owns the window
     if already_running():
         if not headless:
