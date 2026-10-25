@@ -85,7 +85,7 @@ function badges(m) {
   if (m.is_bot) b.push('bot');
   return b.length ? `<span class="chat-badges">${b.map(x => `<span class="chat-badge b-${x}">${{broadcaster: 'LIVE', moderator: 'MOD', vip: 'VIP', subscriber: 'SUB', member: 'MEM', superfan: 'SF', bot: 'BOT'}[x]}</span>`).join('')}</span>` : '';
 }
-function logo(m) { return S.provider_logo || m.platform !== 'twitch' ? `<span class="chat-provider p-${esc(m.platform)}" title="${esc(m.platform)}">${PLET[m.platform] || '?'}</span>` : ''; }
+function logo(m) { return S.provider_logo ? `<span class="chat-provider p-${esc(m.platform)}" title="${esc(m.platform)}">${PLET[m.platform] || '?'}</span>` : ''; }
 function chatHtml(m) {
   const name = esc(m.display || m.user);
   const own = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '', col = S.name_color_mode === 'none' ? S.text_color : own || (S.name_color_mode === 'own' ? S.text_color : PCOL[m.platform] || '#ff8a1f');
