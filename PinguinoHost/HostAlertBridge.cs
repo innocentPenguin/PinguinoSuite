@@ -196,6 +196,25 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("alerts", "hype emit failed: " + ex.Message); }
         }
+        /// <summary>raids always alert in Multi, whatever the shoutout threshold (RaidMinViewers) says: incoming = {type raid, user = raider, amount = viewers}, outgoing = {type raid_out, user = TARGET, amount = viewers}. Stable id (the activity id), never sim/test.</summary>
+        public static void OnRaidAsync(string kind, string raider, string target, int viewers, string id, bool simOrTest)
+        {
+            if (simOrTest || (kind != "raid" && kind != "raid_out")) return;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    var set = Settings(); string who = kind == "raid_out" ? target : raider;
+                    if ((bool?)set["Enabled"] == false || string.IsNullOrEmpty(who) || Sim.IsSim(who) || string.IsNullOrEmpty(id)) return;
+                    lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
+                    var body = new JObject { { "type", kind }, { "user", who }, { "display", Boards.DisplayName(who) }, { "id", id }, { "amount", viewers }, { "viewers", viewers } };
+                    if (kind == "raid_out") body["target"] = who; else body["raider"] = who;
+                    string av = AvatarOf(who); if (av != "") body["avatar"] = av;
+                    var r = Post("/api/alerts/fire", body); Clog.Info("alerts", kind + " " + who + " " + viewers + " -> " + ((bool?)r["ok"] == true ? "queued" : "not queued: " + Short((string)r["text"])));
+                }
+                catch (Exception ex) { Clog.Warn("alerts", kind + " alert failed: " + ex.Message); }
+            });
+        }
         public static void OnHypeAsync(Dictionary<string, string> ctx) { var c = new Dictionary<string, string>(ctx); ThreadPool.QueueUserWorkItem(_ => OnHype(c)); }
         /// <summary>a tip (!tip / POST /api/economy/event): type "tip" with amount + currency, stable id from the tip id. Never sim/test names.</summary>
         public static void OnTip(string login, double amount, string currency, string tipId)

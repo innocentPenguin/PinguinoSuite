@@ -95,6 +95,7 @@ namespace PinguinoHost
                 string av = ""; try { av = AlertBridge.AvatarOf((who ?? "").ToLowerInvariant()); } catch (Exception) { } if (av != "") e["avatar"] = av;
             }
             if (amount > 0) e["amount"] = amount; if (message != "") e["message"] = message;
+            if (kind == "raid" || kind == "raid_out") AlertBridge.OnRaidAsync(kind, who, g("target"), amount, (string)e["id"], g("sim") == "true" || g("test") == "true");   // Multi raid alert (always, independent of the shoutout threshold)
             if (g("moderator") != "" && (kind == "ban" || kind == "unban" || kind == "mod" || kind == "unmod")) e["moderator"] = g("moderator");
             lock (L)
             {

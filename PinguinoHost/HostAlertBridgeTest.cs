@@ -47,6 +47,19 @@ namespace PinguinoHost
             Check(fo != null && (bool?)fo["first_time"] == true && (bool?)fo["sim"] == true, "follow item: first_time true, sim flag");
             Check(Economy.TBal("resubber") == 0 && Economy.TBal("newfollower") == 0, "simulated events pay nothing");
 
+            // 3b. raids always alert (a 2-viewer raid is below RaidMinViewers 3 and still alerts); outgoing names the TARGET; sim/test and replays never fire
+            AlertBridge.TestReset(); calls.Clear();
+            Latest.Record("raid", new Dictionary<string, string> { { "userName", "aaronpryan" }, { "viewers", "2" }, { "eventId", "rd-1" } });
+            Latest.Record("raid", new Dictionary<string, string> { { "userName", "aaronpryan" }, { "viewers", "2" }, { "eventId", "rd-1" } });
+            Latest.Record("raid_out", new Dictionary<string, string> { { "userName", "pinguino" }, { "target", "evuto_" }, { "viewers", "12" }, { "eventId", "ro-1" } });
+            Latest.Record("raid", new Dictionary<string, string> { { "userName", "simraider" }, { "viewers", "9" }, { "eventId", "rd-2" }, { "sim", "true" } });
+            Thread.Sleep(500);
+            var rf = calls.Where(x => x.Key == "/api/alerts/fire").Select(x => x.Value).ToList();
+            var rin = rf.FirstOrDefault(f => (string)f["type"] == "raid"); var rout = rf.FirstOrDefault(f => (string)f["type"] == "raid_out");
+            Check(rf.Count == 2, "raid + raid_out fire once each (replay and sim dropped): " + rf.Count);
+            Check(rin != null && (string)rin["user"] == "aaronpryan" && (int)rin["amount"] == 2 && (string)rin["id"] == "raid:rd-1", "2-viewer incoming raid alerts: raider + viewers + stable id: " + rin);
+            Check(rout != null && (string)rout["user"] == "evuto_" && (string)rout["target"] == "evuto_" && (int)rout["amount"] == 12 && (string)rout["id"] == "raid_out:ro-1", "outgoing raid alerts with the target + viewers: " + rout);
+
             // 4. real watch celebrations: streak, watchtime, anniversary, comeback; stable ids, never sim
             AlertBridge.TestReset(); calls.Clear();
             AlertBridge.OnStreak("streaker", "notif-1", 10); AlertBridge.OnStreak("streaker", "notif-1", 10); AlertBridge.OnStreak("streaker", "notif-2", 11); Thread.Sleep(400);
