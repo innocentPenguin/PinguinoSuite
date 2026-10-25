@@ -170,39 +170,43 @@ namespace PinguinoHost
             if (user == "" || text == "") return new JObject { { "ok", false }, { "error", "user and text required" } };
             if (isBot || HostApi.IsOwnBotName(user)) return new JObject { { "ok", true }, { "ignored", "own bot account" } };   // loop guard: the bots never answer themselves
             string login = PlatformPrefix(platform) + ":" + user.ToLowerInvariant();
-            ReplyCtx.BeginForeign(platform, msgId, login);
             try
             {
+                HostApi.Messages++;
                 Console.WriteLine("[chat-in " + platform + "] " + user + ": " + (text.Length > 80 ? text.Substring(0, 80) : text));
-                bool consumed = Auto.OnChat(login, text, 1, false, false, msgId, null);
-                return new JObject { { "ok", true }, { "consumed", consumed } };
+                string uid = string.IsNullOrEmpty(userId) ? login : PlatformPrefix(platform) + ":" + userId;
+                Task.Run(() => { try { Dispatch(login, text, msgId, 1, uid, false, null, false, 0, platform); } catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); } finally { ReplyCtx.End(); } });
+                return new JObject { { "ok", true } };
             }
             catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); return new JObject { { "ok", false }, { "error", "failed" } }; }
-            finally { ReplyCtx.End(); }
         }
 
         // ---------------- dispatch: exactly the Streamer.bot trigger ownership in Docs\TRIGGERS.md ----------------
-        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false, int subTier = 0)
+        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false, int subTier = 0, string platform = "twitch")
         {
             if (!Lease.MayRun) return;
-            ReplyCtx.Begin(msgId, user);   // every reply made while handling this message is a native Twitch reply to it
-            bool spamCand = false; try { if (SpamFirst.OnChat(user, text, role, isSub, subTier, firstMsg, out spamCand)) return; } catch (Exception ex) { Clog.Warn("spam", "first-message check failed: " + ex.Message); }   // link spam in a brand-new chatter's first line: dropped before any bot or bonus (off by default, Data\config\spam_first.json)
+            bool fx = platform != "twitch";   // chat from YouTube etc. (HostApi /api/chat-in): own namespaced identity, viewer role, answers go to that platform only; Twitch-only machinery below is skipped
+            if (fx) ReplyCtx.BeginForeign(platform, msgId, user); else ReplyCtx.Begin(msgId, user);   // every reply made while handling this message is a native Twitch reply to it
+            bool spamCand = false;
+            if (!fx) {
+            try { if (SpamFirst.OnChat(user, text, role, isSub, subTier, firstMsg, out spamCand)) return; } catch (Exception ex) { Clog.Warn("spam", "first-message check failed: " + ex.Message); }   // link spam in a brand-new chatter's first line: dropped before any bot or bonus (off by default, Data\config\spam_first.json)
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
             try { Roster.Note(user, role, isSub); } catch (Exception) { }
-            try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
+            try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
             try { Economy.OnChat(user, text, s => ChannelLore.Say(s)); } catch (Exception) { }
             try { if (!Control.Synthetic) { Periods.AddBuffered(user, "messages", 1); if (text.TrimStart().StartsWith("!")) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
             try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier); } catch (Exception) { }
             try { EventLog.OnChat(user, text, role); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
             try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
+            }
             try { if (CmdProfiles.Gate(user, text, role, isSub, subTier)) return; } catch (Exception ex) { Clog.Warn("cmdprofiles", "command gate failed: " + ex.Message); }   // edited tier / disabled / archived / cooldown: silent
-            try { bool swallowed; text = CmdFix.Fix(user, text, m => { if (HostApi.SimMode) Console.WriteLine("[say] " + m); else { string via; HostApi.SendAs("core", m, out via); } }, out swallowed); if (swallowed) return; } catch (Exception ex) { Clog.Warn("cmdfix", "typo check failed: " + ex.Message); }   // "! join", "!jon", "!rejoin" -> !join; near misses answer once
-            try { if (FeatureCommands.Handle(user, text, role, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("commands", "leaderboard command failed: " + ex.Message); }
-            try { if (Streaks.Handle(user, text, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("streaks", "streak command failed: " + ex.Message); }
-            try { if (PgCommand.Handle(user, text, role)) return; } catch (Exception ex) { Clog.Warn("pg", "!pg failed: " + ex.Message); }
+            try { bool swallowed; text = CmdFix.Fix(user, text, m => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + m); else { string via; HostApi.SendAs("core", m, out via); } }, out swallowed); if (swallowed) return; } catch (Exception ex) { Clog.Warn("cmdfix", "typo check failed: " + ex.Message); }   // "! join", "!jon", "!rejoin" -> !join; near misses answer once
+            try { if (FeatureCommands.Handle(user, text, role, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("commands", "leaderboard command failed: " + ex.Message); }
+            try { if (!fx && Streaks.Handle(user, text, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("streaks", "streak command failed: " + ex.Message); }
+            try { if (!fx && PgCommand.Handle(user, text, role)) return; } catch (Exception ex) { Clog.Warn("pg", "!pg failed: " + ex.Message); }
             try { if (Auto.OnChat(user, text, role, isSub, firstMsg, msgId, replyTo, subTier)) return; } catch (Exception ex) { Clog.Warn("automation", "chat trigger failed: " + ex.Message); }   // an Actions & Events command took it
             try { if (ChannelLore.OnChat(user, text, role, ChannelLore.Say)) return; } catch (Exception ex) { Clog.Warn("lore", "channel lore failed: " + ex.Message); }   // a clear question the channel's own commands answer
-            try { if (BotMention.OnChat(user, text, role, s => { if (HostApi.SimMode) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("mention", "mention reply failed: " + ex.Message); }   // @PinguinoB0t about the stream or a moderation situation
+            try { if (BotMention.OnChat(user, text, role, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("mention", "mention reply failed: " + ex.Message); }   // @PinguinoB0t about the stream or a moderation situation
             lock (dispatchLock)   // one message at a time: arguments are shared state, so no two chats can mix
             {
                 cph.Args.Clear();
@@ -210,7 +214,7 @@ namespace PinguinoHost
                 cph.Args["user"] = user; cph.Args["userName"] = login; cph.Args["userId"] = userId ?? "";
                 cph.Args["message"] = text; cph.Args["rawInput"] = text; cph.Args["msgId"] = msgId ?? Guid.NewGuid().ToString("N");
                 cph.Args["role"] = role; cph.Args["isModerator"] = role >= 3; cph.Args["isBroadcaster"] = role >= 4; cph.Args["isVip"] = role == 2;
-                cph.Args["firstMessage"] = firstMsg; cph.Args["spamCandidate"] = spamCand;
+                cph.Args["firstMessage"] = firstMsg; cph.Args["spamCandidate"] = spamCand; cph.Args["platform"] = platform;
                 if (!string.IsNullOrEmpty(replyTo)) { cph.Args["reply.userName"] = replyTo; cph.Args["reply.userLogin"] = replyTo; }
                 try
                 {
@@ -385,6 +389,7 @@ namespace PinguinoHost
             };
             cph.Timeout = (user, secs, why) =>
             {
+                if (ReplyCtx.Platform != "twitch") return false;   // moderation stays Twitch-only
                 var g = http.SendAsync(Req(HttpMethod.Get, HostApi.Helix + "/users?login=" + Uri.EscapeDataString(user), null)).Result;
                 var first = (JObject.Parse(g.Content.ReadAsStringAsync().Result)["data"] as JArray)?.FirstOrDefault();
                 string uid = first == null ? null : (string)first["id"]; if (uid == null) return false;

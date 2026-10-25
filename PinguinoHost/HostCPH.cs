@@ -34,7 +34,8 @@ namespace PinguinoHost
         void Persist() { try { File.WriteAllText(_persistPath, new JObject(_g.Where(k => !k.Key.StartsWith("pinguino.result") && !k.Key.StartsWith("pinguino.secret.") && (k.Value is string || k.Value is int || k.Value is long || k.Value is double || k.Value is bool)).Select(k => new JProperty(k.Key, k.Value))).ToString()); } catch (Exception) { } }
 
         // ---- chat ----
-        public void SendMessage(string m, bool useBot = true) { Sent.Add(m); Console.WriteLine("[say] " + m); try { if (Say != null) Say(m); } catch (Exception e) { LogWarn("send failed: " + e.Message); } }
+        public void SendMessage(string m, bool useBot = true) { Sent.Add(m); if (ReplyCtx.Platform != "twitch") { string v; HostApi.SendAs("core", m, out v); return; }   // answering YouTube etc.: that platform only, through the Host (Multi), never the Twitch account
+             Console.WriteLine("[say] " + m); try { if (Say != null) Say(m); } catch (Exception e) { LogWarn("send failed: " + e.Message); } }
         public bool TwitchTimeoutUser(string user, int secs, string reason, bool useBot = false) { Console.WriteLine("[timeout] " + user + " " + secs + "s " + reason); try { return Timeout != null && Timeout(user, secs, reason); } catch (Exception) { return false; } }
 
         // ---- actions ----

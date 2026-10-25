@@ -40,7 +40,7 @@ try:
     c, j = cin('Viewer', '!hi', tok=None) if False else (post('/api/chat-in', {'platform': 'youtube', 'user': 'x', 'text': '!hi'}, None))
     chk('no token -> 401', c == 401, c)
     c, j = cin('Viewer', '!hi'); time.sleep(2.5)
-    chk('chat-in ok + consumed', c == 200 and j.get('ok') and j.get('consumed'), j)
+    chk('chat-in ok', c == 200 and j.get('ok'), j)
     chk('exactly one send, to youtube, with reply_to, @sender dropped, no yt: key leaked', len(sends) == 1 and sends[0][0] == '/api/send' and sends[0][1] == {'platform': 'youtube', 'text': 'hello from the Host', 'reply_to': 'yt-msg-1'}, sends)
     chk('Multi called with the bearer token', sends and sends[0][2] == 'Bearer multi-test', sends[:1])
     n = len(sends); cin('Viewer2', '!hi', mid='yt-msg-2'); time.sleep(2)
@@ -56,6 +56,15 @@ try:
     c, j = cin('Viewer', '!hi', plat='tiktok', mid='tt-1'); time.sleep(1.5)
     chk('tiktok: accepted, nothing sent', c == 200 and len(sends) == n, (j, sends[n:]))
     c, j = cin('Viewer', '!hi', plat='nonsense'); chk('unknown platform refused', j.get('ok') is False, j)
+    # Chatty / Helper / B0t answer YouTube viewers too, on YouTube only
+    n = len(sends); o0 = len(open(outp, 'rb').read()); cin('Pointsy', '!points', mid='yt-msg-20'); time.sleep(4)
+    new = sends[n:]; printed = open(outp, 'rb').read().decode('utf-8', 'replace')[o0:]
+    chk('!points from YouTube: Chatty answers once through Multi youtube (no yt: key in the text), reply_to the message', len(new) == 1 and new[0][1]['platform'] == 'youtube' and new[0][1].get('reply_to') == 'yt-msg-20' and 'yt:' not in new[0][1]['text'] and 'points' in new[0][1]['text'].lower(), new)
+    chk('...and nothing printed/sent as a Twitch say', '[say]' not in printed, printed[-300:])
+    # a Twitch viewer asking the same thing: Twitch only, nothing to Multi
+    n = len(sends); o0 = len(open(outp, 'rb').read()); host.stdin.write(b'twviewer: !points\n'); host.stdin.flush(); time.sleep(4)
+    printed = open(outp, 'rb').read().decode('utf-8', 'replace')[o0:]
+    chk('Twitch !points: answered as a Twitch say, nothing sent to Multi', len(sends) == n and 'points' in printed.lower(), (sends[n:], printed[-300:]))
     # Multi refuses: 502 -> logged, not retried, no twitch
     mode['code'] = 502; n = len(sends); cin('Viewer9', '!bc', mid='yt-msg-9'); time.sleep(2)
     chk('Multi 502: one attempt only (no retry)', len(sends) == n + 1, sends[n:])
