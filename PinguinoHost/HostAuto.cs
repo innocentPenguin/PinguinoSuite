@@ -265,6 +265,7 @@ namespace PinguinoHost
                 case "TwitchCheer": kind = "cheer"; break; case "TwitchRaid": kind = "raid"; break; case "TwitchRaidOut": kind = "raid_out"; break; case "TwitchRaidStart": kind = "raid_start"; break; case "TwitchPoll": kind = "poll"; break; case "TwitchPrediction": kind = "prediction"; break; case "TwitchHype": kind = "hype"; break; case "TwitchBan": kind = "ban"; break; case "TwitchUnban": kind = "unban"; break; case "TwitchMod": kind = "mod"; break; case "TwitchUnmod": kind = "unmod"; break; case "TwitchRedeem": kind = "redeem"; break; case "StreamOnline": kind = "stream_online"; break; case "StreamOffline": kind = "stream_offline"; break; default: return; }
             var ctx = new Dictionary<string, string>(); foreach (var kv in args) ctx[kv.Key] = Convert.ToString(kv.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
             string u = ctx.ContainsKey("userName") ? ctx["userName"] : ""; ctx["user"] = u; ctx["display"] = u; ctx["raider"] = u; ctx["channel"] = Channel(); ctx["event"] = kind;
+            if (kind == "stream_online" || kind == "stream_offline") SpotifyLive(kind == "stream_online");
             if (kind == "stream_online") { try { Program.ResetFirsts(); Session.Begin(); Roster.Reset(); } catch (Exception) { } }
             try { Latest.Record(kind, ctx); } catch (Exception ex) { Clog.Warn("latest", "could not record the event: " + ex.Message); }
             try { Economy.PointsEvent(args, kind == "follow" && Latest.LastRefollow); } catch (Exception) { }
@@ -531,6 +532,27 @@ namespace PinguinoHost
             catch (Exception ex) { return "http failed: " + ex.Message; }
         }
         // POST {command,args,user,display,role,isMod,isSub,msgId} to a module's /api/chat-command; it answers {ok, say}; Host says it (the module token goes only to loopback)
+        /// <summary>The Spotify module reopens song requests at go-live (/api/live/auto, only when its own offline close closed them) and closes them when the stream ends (/api/live/stop). Fire and forget, loopback only, module token from PINGUINO_API_TOKEN (never logged). Never from a sim Host.</summary>
+        internal static Action<string> ModuleLiveTest;
+        static void SpotifyLive(bool online)
+        {
+            string path = online ? "/api/live/auto" : "/api/live/stop";
+            if (ModuleLiveTest != null) { ModuleLiveTest(path); return; }
+            if (HostApi.SimMode || !Lease.MayRun) return;
+            Task.Run(() =>
+            {
+                try
+                {
+                    using (var h = new HttpClient { Timeout = TimeSpan.FromSeconds(8) })
+                    {
+                        var rq = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:8771" + path) { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+                        string tok = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? ""; if (tok != "") { rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("X-Pinguino-Token", tok); }
+                        var r = h.SendAsync(rq).Result; Clog.Info("automation", "spotify module " + path + " -> " + (int)r.StatusCode);
+                    }
+                }
+                catch (Exception ex) { Clog.Warn("automation", "spotify module " + path + " not reached: " + (ex.InnerException != null ? ex.InnerException.Message : ex.Message)); }
+            });
+        }
         static string ModuleCommand(JObject st, Dictionary<string, string> ctx, bool dry)
         {
             string url = Expand((string)st["url"], ctx); Uri u; if (!Uri.TryCreate(url, UriKind.Absolute, out u) || !UrlAllowed(u)) return "module command blocked: " + url;

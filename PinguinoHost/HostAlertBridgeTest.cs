@@ -143,6 +143,10 @@ namespace PinguinoHost
             { JObject lro = null, lgn = null; foreach (JObject e in Auto.Log(50)) { if ((string)e["id"] == "t-ro" && lro == null) lro = e; if ((string)e["id"] == "t-gn" && lgn == null) lgn = e; }
               Check(lro != null && lgn != null && string.CompareOrdinal((string)lro["ts"], (string)lgn["ts"]) <= 0, "goodnight finishes after the raid_out run (raid_out " + (lro == null ? "-" : (string)lro["ts"]) + ", goodnight " + (lgn == null ? "-" : (string)lgn["ts"]) + ")"); }
             { var od = Auto.Doc(); var oa = (JArray)od["actions"]; foreach (var x in oa.OfType<JObject>().Where(x => ((string)x["id"]).StartsWith("t-")).ToList()) oa.Remove(x); Auto.Save(od); }
+            // stream online / offline tell the Spotify module (reopen requests at go-live, close them at the end), also while a raid holds the goodnight
+            { var mp = new List<string>(); Auto.ModuleLiveTest = pth => mp.Add(pth); Auto.ResetRaidStart();
+              Auto.OnEvent(new Dictionary<string, object> { { "eventType", "StreamOnline" } }); Auto.OnRaidScheduled("t5"); Auto.OnEvent(off); Auto.CancelRaidStart();
+              Check(mp.SequenceEqual(new[] { "/api/live/auto", "/api/live/stop" }), "spotify module: /api/live/auto on stream online, /api/live/stop on offline (" + string.Join(",", mp) + ")"); Auto.ModuleLiveTest = null; Auto.ResetRaidStart(); }
             // an incoming raid too small for a shoutout does not wait the 12 s before the (skipped) shoutout; an older saved action gets the flag once
             { var od = Auto.Doc(); var sr = ((JArray)od["actions"]).OfType<JObject>().First(x => (string)x["id"] == "sb-raid"); foreach (var st in ((JArray)sr["steps"]).OfType<JObject>()) st.Remove("skipSmallRaid");
               foreach (var t in ((JArray)od["seeded"]).Where(x => (string)x == "raidshout1").ToList()) ((JArray)od["seeded"]).Remove(t); sr["enabled"] = true; Auto.Save(od); Auto.SkipSmallRaidWait();
