@@ -1392,6 +1392,25 @@ public static class Harness
             Check("!points with a stale or missing Host lookup says nothing", CPHProxy.Sent.Count == 0, string.Join("|", CPHProxy.Sent));
         }
 
+        // ── YouTube (non-Twitch) viewers: the answer goes through CPH.SendMessage only (the Host routes it back to that platform), never the Twitch dup record / Helix ──
+        {
+            long ts2 = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            Extra.Clear(); Extra["platform"] = "youtube"; CPHProxy.Globals["pinguino.points.yt:ytguy"] = "42|3|50|" + ts2;
+            _cannedReset(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("yt:ytguy", "!points", null, false);
+            Check("youtube: !points answered once through SendMessage", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@yt:ytguy you have 42 points (#3 of 50)", string.Join("|", CPHProxy.Sent));
+            Check("youtube: nothing recorded in the Twitch dup record", !CPHProxy.Globals.ContainsKey("pinguino.said.recent") || ((string)CPHProxy.Globals["pinguino.said.recent"] ?? "") == "");
+            Extra.Clear(); CPHProxy.Globals["pinguino.points.twguy"] = "42|3|50|" + ts2;
+            _cannedReset(false); CPHProxy.Sent.Clear(); Msg("twguy", "!points", null, false);
+            Check("twitch: the same text still goes out (not blocked by the youtube line)", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@twguy you have 42 points (#3 of 50)", string.Join("|", CPHProxy.Sent));
+            Extra["platform"] = "youtube"; nextReply = "{\"reply\":\"hello from the penguin\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("yt:chatter", "@ChattyPinguino hey there what's up", null, false);
+            Check("youtube: an AI reply is sent once, no Twitch dup record", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Contains("hello from the penguin") && !CPHProxy.Globals.ContainsKey("pinguino.said.recent"), string.Join("|", CPHProxy.Sent));
+            Extra.Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("twchatter", "@ChattyPinguino hey there what's up", null, false);
+            Check("twitch: the same AI text still goes out and is recorded", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Contains("hello from the penguin") && CPHProxy.Globals.ContainsKey("pinguino.said.recent"), string.Join("|", CPHProxy.Sent));
+            nextReply = "{\"reply\":\"hey there!\",\"remember\":[]}";
+        }
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " CHAT CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;

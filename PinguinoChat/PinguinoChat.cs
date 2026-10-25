@@ -252,10 +252,15 @@ public class CPHInline
         }
         return c;
     }
+    // The platform the message being answered came from ("twitch" or another, e.g. "youtube"): set on every thread that answers (Handle, Respond, delayed threads).
+    [ThreadStatic] static string _pgPlatform;
+    string PgPlatformNow() { try { if (_pgPlatform != null) return _pgPlatform; object o; return CPH.TryGetArg("platform", out o) && o != null ? Convert.ToString(o) : ""; } catch (Exception) { return ""; } }
+    bool PgOffTwitch() { string pf = PgPlatformNow(); return pf != "" && pf != "twitch"; }
     void PgSay(string role, string text)
     {
         text = PgCleanLine(text);
         if (string.IsNullOrEmpty(text)) return;
+        if (PgOffTwitch()) { CPH.SendMessage(text, true); return; }   // another platform: the Host routes the line back to that platform only (its own dup guard); no Helix, no tag, no Twitch dup record
         var reg = PgReg();
         string speaker = PgSpeaker(role);
         string msg = text;
@@ -644,7 +649,7 @@ public class CPHInline
 
     class Ctx
     {
-        public string Login, Display, UserId, Text, MsgId;   // MsgId: the Twitch message this run answers, captured at OnChat
+        public string Login, Display, UserId, Text, MsgId, Platform = "";   // MsgId: the Twitch message this run answers, captured at OnChat
         public bool Mod, Sub, Vip, Broadcaster, Random, FirstMessage, Defend;   // Defend: the viewer is attacking / calling out the bot itself
         public string Past = "", Lore = "", ChLore = "", Cards = "";   // filled before the prompt is built: log search hits for what the message refers to, and lore entries for its phrases
         public int AdvLevel;                  // romantic / sexual advances in the recent window (0-4), see AdvanceLevel
@@ -995,7 +1000,7 @@ public class CPHInline
         long now = Now(), last; int cool = kind == "raid" ? 120 : kind == "hype" ? 60 : 600;
         lock (_reactAt) { if (_reactAt.TryGetValue(kind, out last) && now - last < cool) return; _reactAt[kind] = now; }
         if (ReactDelayMs <= 0) { using (PgReplyTo("", "")) PgSay("chat", line); return; }   // event lines are never replies
-        var t = new Thread(() => { try { Thread.Sleep(ReactDelayMs); using (PgReplyTo("", "")) PgSay("chat", line); } catch (Exception) { } }); t.IsBackground = true; t.Start();
+        string rpf = _pgPlatform; var t = new Thread(() => { try { _pgPlatform = rpf; Thread.Sleep(ReactDelayMs); using (PgReplyTo("", "")) PgSay("chat", line); } catch (Exception) { } }); t.IsBackground = true; t.Start();
     }
     // ── WELCOME BACK: a regular (4+ earlier messages) who has been away for WelcomeBackDays. Private by design: a fixed pool, only their name, never a remembered fact; a recent
     //    sub / gift / bits event of theirs just changes the thanks to a generic one. Opted-out viewers never get it (the caller checks). ──
@@ -1137,6 +1142,7 @@ public class CPHInline
 
     void Handle()
     {
+        { object po; _pgPlatform = CPH.TryGetArg("platform", out po) && po != null ? Convert.ToString(po) : ""; }
         if (HandleTwitchEvent()) return;
         CPH.TryGetArg("message", out string message);
         if (string.IsNullOrEmpty(message)) CPH.TryGetArg("rawInput", out message);
@@ -1158,7 +1164,7 @@ public class CPHInline
         if (SeenMessage()) return;                                   // the same chat message delivered twice (a replayed trigger): handled once
         var cx = new Ctx
         {
-            Login = login, Display = string.IsNullOrEmpty(display) ? login : display, UserId = userId ?? "", Text = text, MsgId = ArgMsgId(),
+            Login = login, Display = string.IsNullOrEmpty(display) ? login : display, UserId = userId ?? "", Text = text, MsgId = ArgMsgId(), Platform = _pgPlatform ?? "",
             Mod = isMod || role >= 3, Broadcaster = isCaster || role >= 4, Sub = isSub, Vip = isVip, FirstMessage = first
         };
 
@@ -1899,7 +1905,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     string TryTimeout(Ctx c, int secs, string reason)
     {
         if (secs <= 0) return null;
-        if (!_cfg.AllowTimeouts || c.Random) return null;
+        if (!_cfg.AllowTimeouts || c.Random || (c.Platform != "" && c.Platform != "twitch")) return null;   // timeouts are a Twitch thing
         if (c.Mod || c.Broadcaster || c.Vip || IsBot(c.Login)) return null;
         string role;
         lock (_lock)
@@ -1978,6 +1984,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
 
     void Respond(Ctx c)
     {
+        _pgPlatform = c.Platform;
         if (DistressGate(c)) return;
         string prompt, system;
         Viewer v;
@@ -4275,7 +4282,7 @@ Do not predict or advise about health, death, pregnancy, money, legal matters, p
     {
         try
         {
-            string f = Path.Combine(RootDir(), "profiles", login.ToLowerInvariant() + ".json"); if (!File.Exists(f)) return "";
+            string f = Path.Combine(RootDir(), "profiles", login.ToLowerInvariant().Replace(":", "_") + ".json"); if (!File.Exists(f)) return "";
             var r = JObject.Parse(File.ReadAllText(f, Encoding.UTF8))["roles"] as JObject; if (r == null) return "";
             var parts = new List<string>();
             if ((bool?)r["sub"] == true) parts.Add("sub for " + ((int?)r["subMonths"] ?? 0) + " months" + ((bool?)r["founder"] == true ? " (Founder)" : ""));
@@ -4340,7 +4347,7 @@ OUTPUT ONLY JSON: {""opinions"":[{""login"":""..."",""opinion"":""...""}]}";
     {
         try
         {
-            string f = Path.Combine(RootDir(), "profiles", login + ".json"); if (!File.Exists(f)) return "";
+            string f = Path.Combine(RootDir(), "profiles", login.Replace(":", "_") + ".json"); if (!File.Exists(f)) return "";
             var p = JObject.Parse(File.ReadAllText(f, Encoding.UTF8)); var parts = new List<string>();
             var r = p["roles"] as JObject; var a = p["activity"] as JObject;
             if (r != null)
@@ -4359,7 +4366,7 @@ OUTPUT ONLY JSON: {""opinions"":[{""login"":""..."",""opinion"":""...""}]}";
         catch (Exception) { return ""; }
     }
 
-    void RunBg(Action a) { if (_inline) a(); else { var t = new Thread(() => a()); t.IsBackground = true; t.Start(); } }
+    void RunBg(Action a) { if (_inline) a(); else { string bpf = _pgPlatform; var t = new Thread(() => { _pgPlatform = bpf; a(); }); t.IsBackground = true; t.Start(); } }
 
     void MaybeOpinions(bool force, string only)
     {
@@ -4708,6 +4715,7 @@ OUTPUT ONLY JSON: {""viewers"":[{""login"":""..."",""facts"":[""...""],""notes""
     // Called by name so a Streamer.bot build without it can't break the compile.
     bool Whisper(string user, string msg)
     {
+        if (PgOffTwitch()) return false;   // whispers are Twitch only
         try
         {
             foreach (var m in CPH.GetType().GetMethods())
