@@ -56,7 +56,7 @@ try:
     # ---- natural questions ----
     r = ask(host, 'viewer3: what pc does penguin have?'); chk('"what pc does penguin have?" -> specs + streaming pc', r and 'Ryzen 9 7950X3D' in r[0] and r[0].startswith('@viewer3 '), r)
     r = ask(host, 'viewer4: what are his specs'); chk('the same entry is rate limited for 90 s', r == [], r)
-    r = ask(host, 'viewer4: when does he stream?'); chk('"when does he stream?" -> schedule + stream time', r and 'Live every day at 5pm' in r[0] and '11PM' in r[0], r)
+    r = ask(host, 'viewer4: when does he stream?'); chk('"when does he stream?" -> the short schedule line once', r and len(r) == 1 and r[0].endswith('5pm Central | 11pm UK') and r[0].count('11pm') == 1, r)
     r = ask(host, 'viewer5: what is the server ip?'); chk('server ip', r and 'smp.innocentpenguin.com' in r[0], r)
     r = ask(host, 'viewer5: how do I join the customs?'); chk('how to join customs', r and '!join' in r[0], r)
     r = ask(host, 'viewer5: how do i get mod'); chk('how to get mod', r and "Don't beg for mod" in r[0], r)
