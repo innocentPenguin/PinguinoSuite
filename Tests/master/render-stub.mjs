@@ -2,7 +2,7 @@
 // (fixtures-customs-real.json). Fails on any exception thrown while rendering, and checks the Teams / Settings / KOTH buttons get .cur.
 // Usage: node render-stub.mjs [--throw]   (--throw makes setting #cu-act throw inside renderCustoms, to prove the guard shows the banner and the buttons are still highlighted)
 import fs from 'node:fs'; import path from 'node:path'; import vm from 'node:vm'; import { fileURLToPath } from 'node:url';
-const here = path.dirname(fileURLToPath(import.meta.url)), src = path.join(here, '..', '..', 'App', 'src', 'master');
+const here = path.dirname(fileURLToPath(import.meta.url)), src = process.env.MASTER_SRC || path.join(here, '..', '..', 'App', 'src', 'master');
 const fixture = fs.readFileSync(path.join(here, 'fixtures-customs-real.json'), 'utf8');
 const REAL = process.env.REAL_DIR;   // optional: a folder with real GET bodies saved as <path with / ? & = turned into _>.json (kept out of git: they hold viewer names)
 const LIVE = process.argv.includes('--live');   // GET-only against the real Host (127.0.0.1:8770, Origin as the shell sends it); every other method is refused
@@ -47,7 +47,11 @@ const store = new Map(); const ctx = {
     const body = /\/api\/customs\/state/.test(u) ? (fixture) : (!REAL && /wheel.public/.test(u)) ? wheelFx : realBody(u);
     return { ok: true, status: 200, headers: { get: () => 'application/json' }, text: async () => body, json: async () => JSON.parse(body) }; },
 };
-ctx.window = ctx; ctx.parent = ctx; ctx.self = ctx; ctx.globalThis = ctx; vm.createContext(ctx);
+const never = () => new Promise(() => { });
+// --hang: Tauri IPC never answers (an iframe in the shell). --hang-parent: the parent shell's PG.ready / invoke never settle either. Pollers and the event stream must still start.
+if (process.argv.includes('--hang') || process.argv.includes('--hang-parent')) ctx.__TAURI__ = { core: { invoke: never } };
+ctx.window = ctx; ctx.parent = ctx;
+if (process.argv.includes('--hang-parent')) { ctx.parent = { PG: { ready: never(), token: () => '', base: () => 'http://127.0.0.1:8770' }, __TAURI__: { core: { invoke: never } } }; delete ctx.__TAURI__; } ctx.self = ctx; ctx.globalThis = ctx; vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(src, 'master-core.js'), 'utf8'), ctx, { filename: 'master-core.js' });
 if (!ctx.MasterCore) { console.log('FAIL master-core.js did not define MasterCore in the stub'); process.exit(2); }
 try { vm.runInContext(fs.readFileSync(path.join(src, 'master.js'), 'utf8'), ctx, { filename: 'master.js', timeout: 4000 }); } catch (e) { EW(e); process.exit(3); }

@@ -426,7 +426,7 @@ await t('REAL Host customs/state body (fixture from 127.0.0.1:8770): every field
 
 await t('stubbed-DOM render of the REAL customs body: buttons highlight, data line shows, and a throwing section shows the "Customs failed to draw" banner without losing the highlight', async () => {
   const { execFileSync } = await import('node:child_process');
-  for (const a of [[], ['--throw']]) { let out = ''; try { out = execFileSync(process.execPath, [path.join(here, 'render-stub.mjs'), ...a], { encoding: 'utf8', timeout: 30000 }); } catch (e) { assert.fail('render-stub ' + a.join(' ') + ' failed: ' + String(e.stdout || e.message).slice(-600)); } assert.match(out, /PASS/); }
+  for (const a of [[], ['--throw'], ['--hang'], ['--hang-parent']]) { let out = ''; try { out = execFileSync(process.execPath, [path.join(here, 'render-stub.mjs'), ...a], { encoding: 'utf8', timeout: 30000 }); } catch (e) { assert.fail('render-stub ' + a.join(' ') + ' failed: ' + String(e.stdout || e.message).slice(-600)); } assert.match(out, /PASS/); }
 });
 
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
