@@ -57,7 +57,7 @@ namespace PinguinoHost
             var rf = calls.Where(x => x.Key == "/api/alerts/fire").Select(x => x.Value).ToList();
             var rin = rf.FirstOrDefault(f => (string)f["type"] == "raid"); var rout = rf.FirstOrDefault(f => (string)f["type"] == "raid_out");
             Check(rf.Count == 2, "raid + raid_out fire once each (replay and sim dropped): " + rf.Count);
-            Check(rin != null && (string)rin["user"] == "aaronpryan" && (int)rin["amount"] == 2 && (string)rin["id"] == "raid:rd-1", "2-viewer incoming raid alerts: raider + viewers + stable id: " + rin);
+            Check(rin != null && (string)rin["user"] == "aaronpryan" && (int)rin["amount"] == 2 && (string)rin["id"] == "raid:rd-1" && (string)rin["platform"] == "twitch", "2-viewer incoming raid alerts: raider + viewers + stable id: " + rin);
             Check(rout != null && (string)rout["user"] == "evuto_" && (string)rout["target"] == "evuto_" && (int)rout["amount"] == 12 && (string)rout["id"] == "raid_out:ro-1", "outgoing raid alerts with the target + viewers: " + rout);
 
             // 4. real watch celebrations: streak, watchtime, anniversary, comeback; stable ids, never sim

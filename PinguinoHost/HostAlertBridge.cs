@@ -207,7 +207,7 @@ namespace PinguinoHost
                     var set = Settings(); string who = kind == "raid_out" ? target : raider;
                     if ((bool?)set["Enabled"] == false || string.IsNullOrEmpty(who) || Sim.IsSim(who) || string.IsNullOrEmpty(id)) return;
                     lock (L) { var f = (JObject)State()["fired"]; if (f[id] != null) return; f[id] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Dirty(); }
-                    var body = new JObject { { "type", kind }, { "user", who }, { "display", Boards.DisplayName(who) }, { "id", id }, { "amount", viewers }, { "viewers", viewers } };
+                    var body = new JObject { { "type", kind }, { "user", who }, { "display", Boards.DisplayName(who) }, { "id", id }, { "platform", "twitch" }, { "amount", viewers }, { "viewers", viewers } };
                     if (kind == "raid_out") body["target"] = who; else body["raider"] = who;
                     string av = AvatarOf(who); if (av != "") body["avatar"] = av;
                     var r = Post("/api/alerts/fire", body); Clog.Info("alerts", kind + " " + who + " " + viewers + " -> " + ((bool?)r["ok"] == true ? "queued" : "not queued: " + Short((string)r["text"])));
