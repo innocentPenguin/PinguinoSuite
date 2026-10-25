@@ -1,7 +1,7 @@
 /* Master View page (UI). Talks straight to the Host on 127.0.0.1:8770: no website, no core hop. Logic lives in master-core.js (tested in Tests/master). */
 (() => {
   'use strict';
-  const MV_BUILD = '2026-10-23 customs-guard+songify';   // shown in the Help overlay: tells which master.js a shell build shipped (bump when shipping a fix you need to identify)
+  const MV_BUILD = '2026-10-25 customs-diag';   // shown in the Help overlay: tells which master.js a shell build shipped (bump when shipping a fix you need to identify)
   const C = MasterCore;
   const HOST = (new URLSearchParams(location.search).get('host')) || 'http://127.0.0.1:8770';
   const $ = (s, r) => (r || document).querySelector(s), $$ = (s, r) => [...(r || document).querySelectorAll(s)];
@@ -41,7 +41,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
-    drawErr: {}, customsAt: 0, wov: {},
+    drawErr: {}, customsAt: 0, wov: {}, cuPoll: { n: 0, status: null, at: 0, err: '' }, cuPaint: { n: 0, found: 0, hit: 0, at: 0 },
     wq: ls.get('wq') || null, teamsOv: {}, si: Object.assign({ title: '', description: '', tags: '', game: '', plat: { twitch: true, youtube: true, kick: false }, at: '', privacy: 'public' }, ls.get('si') || {}), ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, heads: {}, modsOk: null, pre: null, preOpen: false, introOpen: false, streaksOpen: false, introGone: new Set(), tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
@@ -559,13 +559,15 @@
     cur.streamer = (ui.sim ? c && c.streamer : null) || (c && c.streamer);
     for (const k in cur) if (cur[k] == null && ui.sel[k] != null) cur[k] = ui.sel[k];
     for (const k in ui.ov) if (ui.ov[k].until > Date.now()) cur[k] = ui.ov[k].v;   // just-clicked values win until the Host state catches up   // Host offline: show what was last clicked
+    let found = 0, hit = 0;
     for (const bt of $$('#tab-customs [data-st]')) {
-      const [k, v] = bt.dataset.st.split(':'), on = cur[k] === v;
+      const [k, v] = bt.dataset.st.split(':'), on = cur[k] === v; found++; if (on && k !== 'win') hit++;
       if (k === 'win') { bt.disabled = !live; const tk = TN[v]; bt.textContent = tk.name + ' wins'; bt.style.setProperty('--tc', tk.color); }
       else if (k === 'activity') bt.classList.toggle('is-live', on);
       else if (k === 'queue') bt.classList.toggle('q-on', on);
       else { bt.classList.toggle('cur', on); bt.disabled = on; }
     }
+    ui.cuPaint = { n: ui.cuPaint.n + 1, found, hit, at: Date.now(), mode: cur.mode, format: cur.format };
   }
   function renderCustoms() {
     const c = ui.sim ? ui.simState : S.get('customs'), ok = ui.sim ? true : S.get('customsOk'), note = $('#cu-note');
@@ -906,7 +908,7 @@
       seen(a); const p = {}; if (a.ok) p.obsStatus = a.json; if (b.ok) p.host = b.json; if (c.ok) p.live = c.json; S.set(p);
     }),
     customs: P(() => (sse() ? 4000 : 1000), async () => {
-      const r = await api.get('/api/customs/state'); if (r.status === 404 || r.status === 0) { if (S.get('customsOk') !== false) S.set({ customsOk: false }); return; }
+      const r = await api.get('/api/customs/state'); ui.cuPoll = { n: ui.cuPoll.n + 1, status: r.status, ok: r.ok, at: Date.now(), err: r.ok ? '' : (r.error || 'HTTP ' + r.status) }; if (r.status === 404 || r.status === 0) { if (S.get('customsOk') !== false) S.set({ customsOk: false }); return; }
       if (r.ok) { S.set({ customs: r.json, customsOk: true }); saveCacheSoon(); }
     }),
     wheel: P(() => (sse() ? 4000 : 1500), async () => { const r = await api.get('/api/wheel/public'); if (r.ok) S.set({ wheel: normWheel(r.json) }); }),
@@ -937,8 +939,10 @@
     overlays: P(8000, async () => { const [a, b] = await Promise.all([api.get('/api/overlays'), api.get('/api/overlaychat/status')]); const p = { ovErr: a.ok ? null : (a.error || 'HTTP ' + a.status) }; if (a.ok) p.overlays = a.json; if (b.ok) p.ochat = b.json; S.set(p); }, () => visible() && ui.tab === 'overlays'),
   };
   let cacheT = 0; function saveCacheSoon() { if (!cacheT) cacheT = setTimeout(() => { cacheT = 0; saveCache(); }, 3000); }
-  const customsDataLine = () => { const el = $('#cu-data'); if (!el) return; const c = S.get('customs'), s = ui.customsAt ? Math.max(0, Math.round((Date.now() - ui.customsAt) / 1000)) : null;
-    el.textContent = !c ? 'Customs data: none yet' + (S.get('customsOk') === false ? ' (the Host does not answer it)' : ' (waiting for the first answer)') : 'Customs data: ' + (s == null ? 'from the last session (cached)' : s <= 1 ? 'live' : 'updated ' + s + ' s ago') + (s != null && s > 20 ? ' · STALE' : ''); };
+  const customsDataLine = () => { const el = $('#cu-data'); if (!el) return; const c = S.get('customs'), s = ui.customsAt ? Math.max(0, Math.round((Date.now() - ui.customsAt) / 1000)) : null, P0 = ui.cuPoll, K = ui.cuPaint, pa = P0.at ? Math.round((Date.now() - P0.at) / 1000) : null;
+    const head = !c ? 'Customs data: NONE yet' + (S.get('customsOk') === false ? ' (the Host does not answer it)' : ' (waiting for the first answer)') : 'Customs data: ' + (s == null ? 'from the last session (cached)' : s <= 1 ? 'live' : 'updated ' + s + ' s ago') + (s != null && s > 20 ? ' · STALE' : '');
+    // diagnostics that tell a data problem from a drawing problem at a glance: last poll (HTTP code, age), what the paint found, which build
+    el.textContent = head + ' · poll ' + (P0.n ? 'HTTP ' + P0.status + (P0.ok ? ' ok' : ' FAILED (' + P0.err + ')') + ' ' + pa + ' s ago ×' + P0.n : 'not run yet') + ' · paint ' + (K.n ? K.found + ' buttons, ' + K.hit + ' lit (' + (K.mode || '?') + '/' + (K.format || '?') + ')' : 'not run yet') + ' · ' + MV_BUILD; };
   setInterval(customsDataLine, 1000); customsDataLine();
   setInterval(() => { if (opt.expire().length) { schedule('scenes', 'sources', 'cmds'); } }, 500);   // unconfirmed optimistic changes fall back to what the Host says
 

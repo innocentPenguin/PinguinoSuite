@@ -5,6 +5,8 @@ import fs from 'node:fs'; import path from 'node:path'; import vm from 'node:vm'
 const here = path.dirname(fileURLToPath(import.meta.url)), src = path.join(here, '..', '..', 'App', 'src', 'master');
 const fixture = fs.readFileSync(path.join(here, 'fixtures-customs-real.json'), 'utf8');
 const REAL = process.env.REAL_DIR;   // optional: a folder with real GET bodies saved as <path with / ? & = turned into _>.json (kept out of git: they hold viewer names)
+const LIVE = process.argv.includes('--live');   // GET-only against the real Host (127.0.0.1:8770, Origin as the shell sends it); every other method is refused
+const liveLog = [];
 const wantThrow = process.argv.includes('--throw');
 const errors = []; const EW = e => { try { fs.writeSync(2, String(e && e.stack || e).slice(0, 600) + String.fromCharCode(10)); } catch { } }; process.on('uncaughtException', e => EW(e) || errors.push(String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')));
 process.on('unhandledRejection', e => errors.push('rejection: ' + String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')));
@@ -35,10 +37,12 @@ const getEl = sel => { if (!els.has(sel)) els.set(sel, mk(sel)); return els.get(
 const doc = { querySelector: getEl, querySelectorAll: s => /data-ws/.test(s) ? wsButtons() : /data-st/.test(s) ? buttonsFor() : [], createElement: () => mk('new'), body: mk('body'), documentElement: mk('html'), addEventListener() { }, hidden: false, activeElement: null, getElementById: id => getEl('#' + id), createTextNode: () => mk('t'), title: '' };
 const realBody = u => { if (!REAL) return u.includes('/api/obs/tree') ? '{"connected":false,"scenes":[],"folders":[],"items":[]}' : '{}'; const p = (u.startsWith('http://m/') ? 'm_' : '') + u.replace(/^https?:\/\/[^/]+\/api\//, '').replace(/[/?&=]/g, '_'); try { return fs.readFileSync(path.join(REAL, p + (p.endsWith('.json') ? '' : '.json')), 'utf8'); } catch { return '{}'; } };
 const store = new Map(); const ctx = {
-  document: doc, localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) }, location: { search: '?host=http://h&music=http://m&multi=http://x', hash: '', href: 'http://t/master.html' },
+  document: doc, localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) }, location: { search: LIVE ? '' : '?host=http://h&music=http://m&multi=http://x', hash: '', href: 'http://t/master.html' },
   navigator: { clipboard: {}, userAgent: 'stub' }, console: { log() { }, error: (...a) => errors.push('console.error: ' + a.map(x => (x && x.stack) || x).join(' ').slice(0, 300)), warn() { } }, URLSearchParams, URL, Date, Math, JSON, Promise, setTimeout, clearTimeout, setInterval, clearInterval, Intl, AbortController, TextDecoder, TextEncoder,
   addEventListener() { }, removeEventListener() { }, requestAnimationFrame: f => setTimeout(f, 0), matchMedia: () => ({ matches: false, addEventListener() { } }), getComputedStyle: () => ({}), innerWidth: 900, innerHeight: 800, open() { },
   fetch: async (u, o) => { u = String(u);
+    if (LIVE) { const meth = (o && o.method || 'GET').toUpperCase(); if (meth !== 'GET') return { ok: false, status: 0, headers: { get: () => null }, text: async () => '', json: async () => ({}) };
+      try { const rr = await fetch(u, { headers: Object.assign({ Origin: 'http://tauri.localhost' }, o && o.headers || {}), signal: o && o.signal }); liveLog.push(rr.status + ' ' + new URL(u).pathname); return rr; } catch (e) { liveLog.push('ERR ' + u + ' ' + e.message); throw e; } }
     if (/\/api\/events/.test(u)) return new Promise(() => { });   // the live stream never connects: polling carries the page
     const body = /\/api\/customs\/state/.test(u) ? (fixture) : (!REAL && /wheel.public/.test(u)) ? wheelFx : realBody(u);
     return { ok: true, status: 200, headers: { get: () => 'application/json' }, text: async () => body, json: async () => JSON.parse(body) }; },
@@ -49,6 +53,7 @@ if (!ctx.MasterCore) { console.log('FAIL master-core.js did not define MasterCor
 try { vm.runInContext(fs.readFileSync(path.join(src, 'master.js'), 'utf8'), ctx, { filename: 'master.js', timeout: 4000 }); } catch (e) { EW(e); process.exit(3); }
 fs.writeSync(2, 'init ok\n'); await new Promise(r => setTimeout(r, 3500));
 const cur = [...btns.values()].filter(b => b._cls.has('cur')).map(b => b.dataset.st).sort();
+if (LIVE) console.log('live requests: ' + [...new Set(liveLog)].slice(0, 12).join(' | '));
 console.log('data line: ' + getEl('#cu-data').textContent);
 const note = String(getEl('#cu-note').textContent || ''), shownNote = getEl('#cu-note').hidden === false;
 console.log('buttons with .cur: ' + JSON.stringify(cur) + '   buttons seen: ' + btns.size);
@@ -59,6 +64,7 @@ const wheelBtns = (customsHtml.match(/data-wa="[a-z]+"/g) || []).length;
 console.log('wheel admin buttons in markup: ' + wheelBtns + '   wheel highlights: ' + JSON.stringify(cur.filter(x => x.startsWith('ws:'))));
 if (wheelBtns < 19) { bad = true; console.log('wheel admin controls missing from the Wheel panel'); }
 if (!REAL && !wantThrow) for (const want of ['ws:mode:random', 'ws:size:2']) if (!cur.includes(want)) { bad = true; console.log('MISSING wheel highlight: ' + want); }
+{ const dl = String(getEl('#cu-data').textContent); if (!wantThrow && !REAL && !LIVE && !(/poll HTTP 200 ok/.test(dl) && /paint [0-9]+ buttons, [4-9] lit [(]balanced[/]2v2[)]/.test(dl))) { bad = true; console.log('diagnostic line lacks poll/paint facts: ' + dl); } }
 if (!/Customs data: (live|updated)/.test(String(getEl('#cu-data').textContent))) { bad = true; console.log('data line missing'); }
 const relevant = REAL ? errors : errors.filter(e => /ustoms/.test(e));   // without real bodies the other panes get '{}' and may fail to draw; only Customs errors count then
 if (!wantThrow) { for (const want of ['mode:balanced', 'format:2v2', 'gamemode:standard', 'koth:off']) if (!cur.includes(want)) { bad = true; console.log('MISSING highlight: ' + want); } if (relevant.length) bad = true; }
