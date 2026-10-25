@@ -32,13 +32,26 @@
   const track = src => r => {   // host: 500/501 or junk is that endpoint's own bug (no offline banner) but it is not fresh data either; music/multi have few endpoints, so any 5xx or junk counts against them
     const gone = r.status === 0 || r.status >= (src === 'host' ? 502 : 500) || (src !== 'host' && r.junk);
     if (gone) H.fail(src); else if (r.status >= 500 || r.junk) { /* soft: neither up nor down, lastOk not refreshed */ } else { H.ok(src); lastOk[src] = Date.now(); } };
-  const api = C.createApi({ base: HOST, fetch: F, getToken: () => token, timeoutMs: 4000, onResult: track('host') });
+  // Writes go through the core's proxy (POST /api/modules/<id>/post {path, body}) when this page runs inside the shell: the core holds each
+  // module's own token (per-module tokens since 2d0bc95), while this page only ever has the core token, which the Host refuses for writes (401).
+  // The parent's fetch is bootstrap-wrapped (core base + core token). A pop-out window has no parent: it posts directly, as before.
+  const coreFetch = (() => { try { if (window.parent && window.parent !== window && window.parent.PG && window.parent.fetch !== undefined) return window.parent.fetch.bind(window.parent); } catch (e) { /* cross-origin parent */ } return null; })();
+  const viaCore = (mid, base) => async (url, o) => {
+    if (!coreFetch || !o || !o.method || o.method === 'GET' || !String(url).startsWith(base)) return F(url, o);
+    const path = String(url).slice(base.length); let body = {}; try { body = o.body ? JSON.parse(o.body) : {}; } catch (e) { body = {}; }
+    const r = await coreFetch('/api/modules/' + mid + '/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, body }), cache: 'no-store', signal: o.signal });
+    let out = null; try { out = await r.json(); } catch (e) { out = null; }
+    if (!r.ok || !out) return { ok: false, status: r.status || 0, text: async () => JSON.stringify({ ok: false, error: 'core proxy ' + (r.status || 'unreachable') }) };
+    const payload = out.json != null ? out.json : (() => { try { return JSON.parse(out.detail || ''); } catch (e) { return { ok: out.ok, detail: out.detail }; } })();
+    return { ok: out.status >= 200 && out.status < 300, status: out.status, text: async () => JSON.stringify(payload) };
+  };
+  const api = C.createApi({ base: HOST, fetch: viaCore('host', HOST), getToken: () => token, timeoutMs: 4000, onResult: track('host') });
 
   /* ---------- Spotify strip (the Spotify module, 127.0.0.1:8771) ---------- */
   const MUSIC = (new URLSearchParams(location.search).get('music')) || 'http://127.0.0.1:8771';
-  const mapi = C.createApi({ base: MUSIC, fetch: F, getToken: () => token, timeoutMs: 4000, onResult: track('music') });
+  const mapi = C.createApi({ base: MUSIC, fetch: viaCore('spotify', MUSIC), getToken: () => token, timeoutMs: 4000, onResult: track('music') });
   const MULTI = (new URLSearchParams(location.search).get('multi')) || 'http://127.0.0.1:8766';   // PinguinoMulti: YouTube / Kick stream info
-  const xapi = C.createApi({ base: MULTI, fetch: F, getToken: () => token, timeoutMs: 15000, onResult: track('multi') });
+  const xapi = C.createApi({ base: MULTI, fetch: viaCore('multi', MULTI), getToken: () => token, timeoutMs: 15000, onResult: track('multi') });
 
   /* ---------- state ---------- */
   const cached = ls.get('cache', {});
