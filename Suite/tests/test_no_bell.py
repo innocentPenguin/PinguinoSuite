@@ -18,8 +18,8 @@ def scripts():
             yield p
 
 BINARY = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".icns", ".webm", ".mp4", ".mp3", ".wav", ".ogg", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".exe", ".dll", ".rgba", ".pdf", ".db", ".sqlite", ".gz", ".7z", ".bin", ".wasm", ".node", ".pyc"}
-# Known raw BEL still waiting for its owner to patch (Docs/APP_LOG.md is another session's dirty file); remove once fixed.
-PENDING = {"Docs/APP_LOG.md"}
+# Files with a known raw BEL waiting for their owner to patch (none now); add the path here only as a short-lived exception.
+PENDING = set()
 
 
 def text_files():
