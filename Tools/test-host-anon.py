@@ -26,6 +26,8 @@ try:
     chk('an !optmeout viewer is not named on the points board', 'ecretsam' not in txt.lower() and 'secretsam' not in txt.lower(), r)
     chk('...and shows as Anonymous Penguin', 'Anonymous Penguin' in txt, r)
     r = ask('v2: !points @secretsam', 1.0); chk('asking about an opted-out viewer does not name them', 'ecretsam' not in ' '.join(r).lower(), r)
+    r = ask('v2b: !point @SecretSam', 1.0); chk('!point alias (any case) does not name an opted-out viewer either', 'ecretsam' not in ' '.join(r).lower(), r)
+    r = ask('secretsam: !points', 1.0); chk('an opted-out viewer asking about THEMSELVES still gets their own line', 'points' in ' '.join(r).lower(), r)
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS audit'); sys.exit(1 if fails else 0)

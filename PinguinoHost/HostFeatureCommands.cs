@@ -59,6 +59,7 @@ namespace PinguinoHost
                 if (arg != "" && !Regex.IsMatch(arg, @"^[a-z0-9_]{1,25}$")) arg = "";
                 foreach (string t in arg == "" || arg == me ? new[] { me } : new[] { me, arg })
                 {
+                    if (t != me && Boards.IsAnon(t)) continue;   // an opted-out / anonymous viewer is never named with a balance by somebody else (Chatty then stays silent); asking about yourself works as before
                     var u = Economy.User(t); long of = (long)(int)u["of"], rank = (long)(int)u["pointsRank"]; if (rank < 1) { of++; rank = of; }   // not on the board yet: last place
                     string v = ((long)Math.Floor((double)u["points"])).ToString(CultureInfo.InvariantCulture) + "|" + rank + "|" + of + "|" + DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Program.SetGlobal("pinguino.points." + t, v);
                     if (HostApi.SimMode) Console.WriteLine("[points-lookup] " + t + " = " + v);
