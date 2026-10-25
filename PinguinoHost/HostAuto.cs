@@ -278,7 +278,7 @@ namespace PinguinoHost
         static void ScheduleRaidOut(Dictionary<string, string> ctx)
         {
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidOutAt).TotalMinutes < 3) return; _raidOutAt = DateTime.UtcNow; }
-            Action go = () => { lock (typeof(Auto)) _raidOutTimer = null; RaidOutFires++; Fire("raid_out", ctx); ReleaseOffline(); };
+            Action go = () => { lock (typeof(Auto)) _raidOutTimer = null; RaidOutFires++; _runInline = true; try { Fire("raid_out", ctx); } finally { _runInline = false; } ReleaseOffline(); };   // the raid_out run finishes first (Run is normally a background task), THEN the held goodnight is released
             int delay = RaidDelaySec() + (RaidDelayOverrideSec >= 0 ? 0 : 10); if (delay == 0) { go(); return; }   // +10 s: the raid lands ~90 s after the signal, the stream stops right then
             lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => go(), null, delay * 1000, System.Threading.Timeout.Infinite); }
         }
@@ -413,9 +413,11 @@ namespace PinguinoHost
             return new JObject { { "ok", (bool)entry["ok"] }, { "run", entry } };
         }
 
+        [ThreadStatic] static bool _runInline;   // set only while the raid_out timer fires its automations: they run on that thread, so the caller can wait for them
         static void Run(JObject a, string why, Dictionary<string, string> ctx)
         {
             if (!Lease.MayRun || _paused) return;
+            if (_runInline) { try { RunNow(a, why, ctx, false); } catch (Exception ex) { Clog.Error("automation", (string)a["name"] + ": " + ex.Message); } return; }
             Task.Run(() => { try { RunNow(a, why, ctx, false); } catch (Exception ex) { Clog.Error("automation", (string)a["name"] + ": " + ex.Message); } });
         }
 
@@ -458,7 +460,7 @@ namespace PinguinoHost
                 {
                     case "say": { string t = x("text"); if (t != "") outp.Add(Say((string)st["as"] ?? "core", t, test)); break; }
                     case "random_say": { var arr = (st["texts"] as JArray ?? new JArray()).Select(v => Expand((string)v, ctx)).Where(v => v != "").ToList(); if (arr.Count > 0) outp.Add(Say((string)st["as"] ?? "core", arr[Rnd.Next(arr.Count)], test)); break; }
-                    case "delay": { int ms; if (!int.TryParse(x("ms"), out ms)) ms = 0; ms = Math.Max(0, Math.Min(600000, ms)); Thread.Sleep(test ? Math.Min(ms, 300) : ms); outp.Add("waited " + ms + " ms"); break; }
+                    case "delay": { int ms; if (!int.TryParse(x("ms"), out ms)) ms = 0; int rvs; if ((bool?)st["skipSmallRaid"] == true && ctx.ContainsKey("viewers") && int.TryParse(ctx["viewers"], out rvs) && rvs < ((int?)Latest.Settings()["RaidMinViewers"] ?? 3)) { outp.Add("no wait: this raid is too small for a shoutout"); break; } ms = Math.Max(0, Math.Min(600000, ms)); Thread.Sleep(test ? Math.Min(ms, 300) : ms); outp.Add("waited " + ms + " ms"); break; }   // the wait before the auto shoutout is pointless when no shoutout follows
                     case "obs_scene": { string s = x("scene"); outp.Add(test ? "(dry run) would switch OBS scene to " + s : Obs(() => Program.ObsScene(s), "scene -> " + s)); break; }
                     case "obs_source": { string sc = x("scene"), so = x("source"), v = ((string)st["visible"] ?? "true").ToLowerInvariant(); outp.Add(test ? "(dry run) would set OBS source " + so + " to " + v : Obs(() => Program.ObsSource(sc, so, v), "source " + so + " -> " + v)); break; }
                     case "obs_request": { string rt = (string)st["request"] ?? ""; var data = st["data"] as JObject; var d2 = data == null ? new JObject() : JObject.Parse(Expand(data.ToString(), ctx)); outp.Add(test ? "(dry run) would send OBS request " + rt : Obs(() => Program.ObsRaw(rt, d2), "OBS " + rt)); break; }

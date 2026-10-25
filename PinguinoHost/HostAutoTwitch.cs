@@ -191,6 +191,19 @@ namespace PinguinoHost
         /// Remembered in "seeded", so deleting or editing one sticks.</summary>
         /// <summary>Ivan 10-24: "!pmrules" (everyone, 30 s global cooldown) and the same line once whenever the customs queue opens. One preset, marker "rules1" so deleting or editing it sticks. Speaks as PinguinoB0t (core) through the normal send path (duplicate guard applies).</summary>
         public const string RulesLine = "📖 Private match rules! 1. No toxicity 2. No arguments or drama 3. Only join when you are supposed to 🐧 Breaking these rules can get you banned!";
+        /// <summary>one-time (marker "raidshout1"): the incoming-raid action waited 12 s before its shoutout step even when the raid was too small for a shoutout (a 2-viewer raid took 15.9 s). That wait now skips for small raids.</summary>
+        internal static void SkipSmallRaidWait()
+        {
+            var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray(); if (seeded.Any(v => (string)v == "raidshout1")) return;
+            var steps = ((JArray)doc["actions"]).OfType<JObject>().FirstOrDefault(x => (string)x["id"] == "sb-raid")?["steps"] as JArray;
+            if (steps != null)
+                for (int i = 0; i + 1 < steps.Count; i++)
+                {
+                    var d = steps[i] as JObject; var n = steps[i + 1] as JObject;
+                    if (d != null && n != null && (string)d["type"] == "delay" && (string)n["type"] == "shoutout_queue" && d["skipSmallRaid"] == null) d["skipSmallRaid"] = true;
+                }
+            seeded.Add("raidshout1"); doc["seeded"] = seeded; Save(doc);
+        }
         static void SeedRules()
         {
             var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray();
@@ -312,6 +325,7 @@ namespace PinguinoHost
         {
             MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow();
             try { MakePopupHold(); } catch (Exception ex) { Clog.Warn("automation", "popup hold migration failed: " + ex.Message); }
+            try { SkipSmallRaidWait(); } catch (Exception ex) { Clog.Warn("automation", "small raid wait migration failed: " + ex.Message); }
             try { SeedRules(); } catch (Exception ex) { Clog.Warn("automation", "rules preset failed: " + ex.Message); }
             try { MakePopupAsync(); } catch (Exception ex) { Clog.Warn("automation", "popup migration failed: " + ex.Message); }
             try { AddAlertSoundSteps(); } catch (Exception ex) { Clog.Warn("automation", "alert sound migration failed: " + ex.Message); }
@@ -336,7 +350,7 @@ namespace PinguinoHost
                     Act("sb-raid", "Alert: incoming raid", "from Streamer.bot 'Raided' (it was switched off there): thanks, emotes, welcome, then a queued shoutout.", true, new JArray { Tr("raid") },
                         Step("delay", "ms", 500), SayStep("innoce108Cool {raider} just raided the channel with {viewers} viewers PogChamp"),
                         SayStep("innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid"),
-                        Step("delay", "ms", 2500), SayStep("Welcome everyone! innoce108Hello Thank you so much for the raid {raider}!!! innoce108Gift"), Step("alert_sound", "kind", "raid"), Popup(), Step("delay", "ms", 12000), Step("shoutout_queue", "user", "{raider}", "auto", true)),
+                        Step("delay", "ms", 2500), SayStep("Welcome everyone! innoce108Hello Thank you so much for the raid {raider}!!! innoce108Gift"), Step("alert_sound", "kind", "raid"), Popup(), Step("delay", "ms", 12000, "skipSmallRaid", true), Step("shoutout_queue", "user", "{raider}", "auto", true)),
                     Act("sb-ban", "Alert: ban (Among Us ejected)", "from Streamer.bot 'Add Ban': browser source + eject sound. Needs the ban event (channel:moderate: sign the streamer in again).", true, new JArray { Tr("ban") },
                         Step("obs_request", "request", "SetInputSettings", "data", new JObject { { "inputName", "Ban Alert - Among Us Ejected" }, { "inputSettings", new JObject { { "url", "file:///C:/Users/ivanm/Documents/amongusban/Browser%20Sources/among-uspure-css/index.html?user={user}" } } } }),
                         Step("obs_source", "scene", "Ban Alert", "source", "Ban Alert - Among Us Ejected", "visible", "true"), Step("delay", "ms", 900),

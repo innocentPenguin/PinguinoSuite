@@ -134,6 +134,22 @@ namespace PinguinoHost
             Check(Auto.OfflineFires == q0, "offline held until the raid lands"); System.Threading.Thread.Sleep(3000); Check(Auto.OfflineFires == q0 + 1, "raid_out: the held goodnight runs after the raid"); Auto.RaidDelayOverrideSec = -1; q0 = Auto.OfflineFires;
             Auto.ResetRaidStart(); Auto.HoldMaxSec = 2; Auto.OnRaidScheduled("t3"); Auto.OnEvent(off); Check(Auto.OfflineFires == q0, "offline held (short max)"); System.Threading.Thread.Sleep(3300);
             Check(Auto.OfflineFires == q0 + 1, "the hold runs out: the goodnight runs anyway"); Auto.HoldMaxSec = 180;
+            // the held goodnight runs only AFTER the raid_out run has finished (Run is a background task: the release used to start right behind it and finished first)
+            { var od = Auto.Doc(); var oa = (JArray)od["actions"];
+              oa.Add(new JObject { { "id", "t-ro" }, { "name", "t-ro" }, { "enabled", true }, { "triggers", new JArray(new JObject { { "type", "raid_out" } }) }, { "steps", new JArray(new JObject { { "type", "delay" }, { "ms", 800 } }) } });
+              oa.Add(new JObject { { "id", "t-gn" }, { "name", "t-gn" }, { "enabled", true }, { "triggers", new JArray(new JObject { { "type", "stream_offline" } }) }, { "steps", new JArray(new JObject { { "type", "log" }, { "text", "t-gn" } }) } }); Auto.Save(od); }
+            Auto.ResetRaidStart(); Auto.RaidDelayOverrideSec = 1; Auto.OnRaidScheduled("t4"); Auto.OnEvent(off);
+            Auto.OnEvent(new Dictionary<string, object> { { "eventType", "TwitchRaidOut" }, { "userName", "t4" }, { "viewers", 5 } }); System.Threading.Thread.Sleep(3500);
+            { JObject lro = null, lgn = null; foreach (JObject e in Auto.Log(50)) { if ((string)e["id"] == "t-ro" && lro == null) lro = e; if ((string)e["id"] == "t-gn" && lgn == null) lgn = e; }
+              Check(lro != null && lgn != null && string.CompareOrdinal((string)lro["ts"], (string)lgn["ts"]) <= 0, "goodnight finishes after the raid_out run (raid_out " + (lro == null ? "-" : (string)lro["ts"]) + ", goodnight " + (lgn == null ? "-" : (string)lgn["ts"]) + ")"); }
+            { var od = Auto.Doc(); var oa = (JArray)od["actions"]; foreach (var x in oa.OfType<JObject>().Where(x => ((string)x["id"]).StartsWith("t-")).ToList()) oa.Remove(x); Auto.Save(od); }
+            // an incoming raid too small for a shoutout does not wait the 12 s before the (skipped) shoutout; an older saved action gets the flag once
+            { var od = Auto.Doc(); var sr = ((JArray)od["actions"]).OfType<JObject>().First(x => (string)x["id"] == "sb-raid"); foreach (var st in ((JArray)sr["steps"]).OfType<JObject>()) st.Remove("skipSmallRaid");
+              foreach (var t in ((JArray)od["seeded"]).Where(x => (string)x == "raidshout1").ToList()) ((JArray)od["seeded"]).Remove(t); sr["enabled"] = true; Auto.Save(od); Auto.SkipSmallRaidWait();
+              Check(((JArray)((JArray)Auto.Doc()["actions"]).OfType<JObject>().First(x => (string)x["id"] == "sb-raid")["steps"]).OfType<JObject>().Count(st => (bool?)st["skipSmallRaid"] == true) == 1, "migration: exactly the wait before the shoutout is flagged"); }
+            Auto.OnEvent(new Dictionary<string, object> { { "eventType", "TwitchRaid" }, { "userName", "smallraider" }, { "viewers", 2 } }); System.Threading.Thread.Sleep(9000);
+            { JObject lr = null; foreach (JObject e in Auto.Log(80)) if ((string)e["id"] == "sb-raid") { lr = e; break; }
+              Check(lr != null && (long)lr["ms"] < 7000 && lr["output"].ToString().Contains("too small"), "2-viewer raid: no 12 s wait (took " + (lr == null ? "no run; log ids " + string.Join(",", Auto.Log(30).Select(e => (string)e["id"])) : (string)lr["ms"]) + " ms)"); }
             Auto.ResetRaidStart(); Auto.RaidDelayOverrideSec = 2;
             // raid_out (the 20 s StopStream) must run after the raid landed, once per raid, and be cancellable
             Auto.ResetRaidStart(); int o0 = Auto.RaidOutFires; var ro = new Dictionary<string, object> { { "eventType", "TwitchRaidOut" }, { "userName", "streamer" }, { "viewers", 5 } };
