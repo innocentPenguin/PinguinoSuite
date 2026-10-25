@@ -40,7 +40,7 @@ namespace PinguinoHost
                     new Def("chat_settings.json", "CountdownGoLiveAt", "Daily go-live time (HH:MM, this PC's clock)", "", "empty = no countdown"),
                     new Def("chat_settings.json", "CountdownOverrideAt", "One-off go-live (HH:MM or yyyy-MM-dd HH:mm)", "", "mods can set it in chat: !golive 17:30"),
                     new Def("chat_settings.json", "CountdownTimes", "Countdown at (before start)", "15m,10m,5m,1m,30s", "m = minutes, s = seconds, comma separated"),
-                    new Def("chat_settings.json", "CountdownLine", "Countdown wording", "Stream starts in {left}! Grab a snack and get comfy.", "{left} = 15 minutes, {time} = start time"),
+                    new Def("chat_settings.json", "CountdownLine", "Countdown wording", "", "empty = a random line from the built-in pool; {left} = 15 minutes, {time} = start time"),
                     new Def("chat_settings.json", "CountdownLineNow", "Wording at the start time", "", "empty = nothing") },
             new[] { new Def("helper_settings.json", "LiveOnly", "Only reply while the stream is live"),
                     new Def("helper_settings.json", "UserCooldownSec", "Reply cooldown per viewer (s)", 0, 120, 1, "lower = faster replies"),
