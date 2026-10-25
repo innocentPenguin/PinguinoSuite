@@ -262,10 +262,12 @@ public class CPHInline
         }
         return c;
     }
+    string PgPlatform() { object o; string pf = (CPH.TryGetArg("platform", out o) && o != null) ? (Convert.ToString(o) ?? "").Trim().ToLowerInvariant() : ""; return pf == "" ? "twitch" : pf; }
     void PgSay(string role, string text)
     {
         text = PgCleanLine(text);
         if (string.IsNullOrEmpty(text)) return;
+        if (PgPlatform() != "twitch") { CPH.SendMessage(text, true); return; }   // a YouTube/other-platform chat: the Host routes this to that platform only; no Helix, no tag, no dup record here (the Host guards platform+text)
         var reg = PgReg();
         string speaker = PgSpeaker(role);
         string msg = text;
@@ -1853,6 +1855,7 @@ public class CPHInline
         if (_userCd.TryGetValue(key, out last) && now - last < (cmd == "skip" ? 2 : 5)) return true;   // quiet while it cools down (the chat does not need the same line twice)
         _userCd[key] = now;
         int roleN = 0; bool mod = ArgB("isModerator") || ArgB("isBroadcaster") || (int.TryParse(ArgS("role"), out roleN) && roleN >= 3);
+        if (cmd == "skip" && PgPlatform() != "twitch") { Say("@" + display + " Skip votes are Twitch chat only, they count against the Twitch viewers."); return true; }
         bool vote = cmd == "skip"; if (vote) { mod = false; roleN = 1; }   // everyone votes, nobody force-skips from chat
         var body = new JObject { { "command", cmd }, { "args", cmd == "volume" ? args : "" }, { "user", login }, { "display", display }, { "role", mod ? "mod" : "viewer" }, { "isMod", mod }, { "isSub", !vote && ArgB("isSubscriber") }, { "source", "chat" } };
         if (vote)

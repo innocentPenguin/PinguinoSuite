@@ -25,6 +25,7 @@ public static class Harness
         if (catMissing) { try { File.Delete(f); } catch (Exception) { } return; }
         File.WriteAllText(f, "{\"game\":\"" + (catOk ? catGame : "") + "\",\"at\":" + (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - catAge) + ",\"ok\":" + (catOk ? "true" : "false") + "}");
     }
+    static string plat = null;   // the platform argument the Host sets for non-Twitch chat ("youtube"); null = Twitch (no argument, as before)
     static bool Routed;   // behave as if the router started the helper
     static void Msg(string user, string text, bool mod = false, string reply = null)
     {
@@ -32,6 +33,7 @@ public static class Harness
         a["message"] = text; a["userName"] = user.ToLower(); a["user"] = user; a["userId"] = "id_" + user.ToLower();
         a["isModerator"] = mod; a["role"] = mod ? 3 : 1; a["isBroadcaster"] = false; a["rawInput"] = "orig raw";
         if (Routed) a["pinguinoRouted"] = true;
+        if (plat != null) a["platform"] = plat;
         WriteCategory();
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); CPHProxy.Runs.Clear(); CPHProxy.Globals.Remove("pinguino.result");
         new CPHInline().Execute();
@@ -315,6 +317,15 @@ public static class Harness
             modSay = ""; Msg("Mu12", "!song"); Check("music: module replies off -> nothing said, nobody else answers", Last() == null && !Forwarded(), Last());
             modSay = null; modDown = true; Msg("Mu13", "!song"); Check("music: module not running -> one plain line", Last() != null && Last().Contains("music player") && Last().IndexOf('\n') < 0, Last());
             modDown = false; before = mbodies.Count; Msg("Mu14", "!songs"); Check("music: !songs (not a music command) is not sent to the module", mbodies.Count == before, Last());
+            // YouTube (non-Twitch) viewers: the same answers, said only through the Host's SendMessage (no tag, no dup record, no Helix); skip votes stay Twitch-only
+            plat = "youtube"; CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("yt:Zed", "!song"); Check("youtube: !song answered", Last() != null && Last().Contains("Song X"), Last());
+            Check("youtube: no Twitch dup record, no tag", !CPHProxy.Globals.ContainsKey("pinguino.said.recent") && !Last().StartsWith("["), Last());
+            before = mbodies.Count; Msg("yt:Zed", "!skip"); Check("youtube: skip votes are refused, the module is not asked", Last() != null && Last().Contains("Twitch chat only") && mbodies.Count == before, Last());
+            Msg("yt:Zed2", "how do I join?"); Check("youtube: join answer (category aware) comes through", Last() != null && Last().StartsWith("@") && Last().Contains("!register"), Last());
+            plat = "twitch"; Msg("Zed3", "!song"); Check("twitch (platform arg set): dup record kept as before", CPHProxy.Globals.ContainsKey("pinguino.said.recent"), Last());
+            before = mbodies.Count; Msg("Zed3", "!skip"); Check("twitch: skip vote unchanged", Last() == "Skip vote 1/2." && mbodies.Count == before + 1, Last());
+            plat = null;
         }
         Msg("M1", "what's my mmr"); Check("MMR question points at !mmr", Last() != null && Last().Contains("!mmr"), Last());
 
