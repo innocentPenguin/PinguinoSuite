@@ -39,7 +39,7 @@
     openSite: path => inv('open_site_window', { path: path || null }),   // the website in its own window (own icon, taskbar entry and login profile); optional path like '/customs'
     clearSiteData: () => inv('clear_site_data'),                          // forget the site login (close the site window first)
   };
-  window.PG = { ready, reconfig, ws: () => open() };
+  window.PG = { ready, reconfig, ws: () => open(), token: () => (cfg && cfg.token) || '', base: () => (cfg && cfg.base) || '' };   // token()/base(): read by same-origin iframes (Master View) that cannot reach Tauri IPC themselves
   function open() {
     const proxy = { onmessage: null, onclose: null };
     ready.catch(() => reconfig()).then(() => {

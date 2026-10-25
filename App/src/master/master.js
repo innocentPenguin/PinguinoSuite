@@ -11,13 +11,21 @@
 
   /* ---------- token + api ---------- */
   let token = '';
-  const tokenReady = (async () => {
-    try {
-      const T = window.__TAURI__ || (window.parent && window.parent !== window && window.parent.__TAURI__);
-      if (T && T.core) token = (await T.core.invoke('core_config')).token || '';
-      else { const m = document.querySelector('meta[name="pinguino-token"]'); token = m ? m.content : ''; }
-    } catch (e) { /* GETs work without it; writes will say so */ }
-  })();
+  // Inside the shell this page is an iframe: Tauri IPC does not answer from a frame, so the token comes from the parent's bootstrap (window.parent.PG, same origin).
+  // Own window (pop-out): Tauri directly. Served by the core or a browser: the meta tag. Never wait more than 1.5 s: GETs work without a token, and
+  // the pollers and the event stream must start regardless (this hang left Master View empty for two days: "Customs data: NONE yet, poll not run yet").
+  const readToken = async () => {
+    let P = null; try { P = window.parent && window.parent !== window ? window.parent.PG : null; } catch (e) { P = null; }
+    if (P && typeof P.token === 'function') { try { await Promise.race([P.ready, new Promise(r => setTimeout(r, 1000))]); } catch (e) { /* parent re-reads on its own */ } const t = P.token(); if (t) return t; }
+    const T = window.__TAURI__;
+    if (T && T.core) { const c = await T.core.invoke('core_config'); return (c && c.token) || ''; }
+    const m = document.querySelector('meta[name="pinguino-token"]'); return m ? m.content : '';
+  };
+  const tokenReady = Promise.race([
+    (async () => { try { token = await readToken(); } catch (e) { /* GETs work without it; writes will say so */ } })(),
+    new Promise(r => setTimeout(r, 1500)),
+  ]);
+  (function retryToken(n) { if (token || n > 30) return; setTimeout(async () => { try { token = token || await readToken(); } catch (e) { } retryToken(n + 1); }, 2000); })(0);
   const F = (u, o) => fetch(u, o);   // the one fetch the Host / Spotify / Multi clients and the live-event stream share
   const H = C.createHealth();   // per source (host / music / multi): consecutive failures -> poll back-off + the offline banner
   const lastOk = {};   // when each source last answered (the stale badge)
