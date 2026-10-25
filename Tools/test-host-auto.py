@@ -39,7 +39,7 @@ def ran(name): return sum(1 for r in runs() if r['action'] == name and not r['te
 try:
     until(lambda: api('/api/status')['name'] == 'PinguinoHost', 30, 'host up'); time.sleep(25)   # the bot modules finish loading a little after the API is up (slower when the PC is busy)
     seeded = api('/api/automations')['doc']
-    if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 9: fails.append('spotify presets missing or enabled')
+    if sum(1 for x in seeded['actions'] if x['id'].startswith('spotify-') and x['enabled'] is False) != 5: fails.append('spotify presets missing or enabled (want sr, oops, blocksong, srclear, song-request redeem; music commands belong to the Helper, the Skip Song redeem preset is on)')
     sp = {x['id']: x for x in seeded['actions'] if x['id'].startswith('speak-')}
     if set(sp) != {'speak-chat', 'speak-redeem'} or any(x['enabled'] is not False for x in sp.values()): fails.append('speak presets missing or enabled: ' + str(sp.keys()))
     elif sp['speak-chat']['triggers'][0]['permission'] != 'mod' or sp['speak-redeem']['steps'][0].get('redeem') is not True or '8772' not in sp['speak-chat']['steps'][0]['url']: fails.append('speak presets wrong shape')
