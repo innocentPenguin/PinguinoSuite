@@ -251,8 +251,9 @@ namespace PinguinoHost
             {
                 Func<double, string> fmt = v => metric == "watchtime" ? Economy.Dur(v) : Economy.Num(v);
                 double d = Value(login, metric, "day"), w = Value(login, metric, "week"), m = Value(login, metric, "month");
-                if (d <= 0 && w <= 0 && m <= 0) return "";
-                return " | " + (metric == "points" ? "earned " : "") + "today " + fmt(d) + ", this week " + fmt(w) + ", this month " + fmt(m);
+                if (d <= 0 && w <= 0 && m <= 0 && metric != "watchtime") return "";
+                if (metric == "watchtime") return " | today: " + fmt(d) + ", week: " + fmt(w) + ", month: " + fmt(m);   // compact: "@user 2d 5h watched (#12 of 2402) | today: 1h 10m, week: 6h 2m, month: 20h 4m"
+                return " | earned today " + fmt(d) + ", this week " + fmt(w) + ", this month " + fmt(m);
             }
             catch (Exception) { return ""; }
         }

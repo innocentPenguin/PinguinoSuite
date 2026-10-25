@@ -465,7 +465,7 @@ namespace PinguinoHost
                     var u = User(target); string disp = Boards.DisplayName((string)u["login"]);
                     double p = (double)u["points"], m = (double)u["minutes"];
                     if (cmd == "!watchtime")
-                        say(m < 1 ? (self ? "@" + user + " I have no watch time recorded for you yet." : disp + " has no watch time recorded yet.") : (self ? "@" + user + " you have watched " : disp + " has watched ") + Dur(m) + " (#" + (int)u["watchRank"] + " of " + (int)u["of"] + ")" + Periods.Line(target, "watchtime") + ".");
+                        say(m < 1 ? (self ? "@" + user + " I have no watch time recorded for you yet." : disp + " has no watch time recorded yet.") : (self ? "@" + user : disp) + " " + Dur(m) + " watched (#" + (int)u["watchRank"] + " of " + (int)u["of"] + ")" + Periods.Line(target, "watchtime"));
                     else
                         say(p < 1 && m < 1 ? (self ? "@" + user + " you have 0 " + cur + " yet. You earn them by hanging out while the stream is live." : disp + " has no " + cur + " yet.") : (self ? "@" + user + " you have " : disp + " has ") + Num(p) + " " + cur + " (#" + (int)u["pointsRank"] + " of " + (int)u["of"] + ")" + Periods.Line(target, "points") + ".");
                     return;

@@ -73,7 +73,7 @@ try:
     # !points / !point: the Host only publishes the numbers; Chatty speaks the ONE short line (its own 8 s / 20 s cooldowns apply)
     n_say = len(says()); feed(host, 'viewer1: !points cyfirl', 9); feed(host, 'ana: !points', 31); feed(host, 'viewer2: !point cyfirl', 31)
     chk('!points <name>, !points (own) and !point: one short reply each, in order, nothing else (no tail, no second bot line)', says()[n_say:] == ['cyfirl has 1,250 points (#1 of 3)', '@ana you have 400 points (#2 of 3)', 'cyfirl has 1,250 points (#1 of 3)'], says()[n_say:])
-    feed(host, 'ana: !watchtime'); chk('!watchtime', any('@ana you have watched 1d 1h (#1 of 3)' in m for m in says()[-1:]), says()[-1:])
+    feed(host, 'ana: !watchtime'); chk('!watchtime', any('@ana 1d 1h watched (#1 of 3)' in m for m in says()[-1:]), says()[-1:])
     feed(host, 'viewer1: !toppoints'); chk('!toppoints', any(m.lower().startswith('top points (all time): 1. cyfirl 1,250 | 2. ana 400 | 3. newguy 70') for m in says()[-1:]), says()[-1:])
     feed(host, 'viewer1: !topwatch'); chk('!topwatch', any(m.lower().startswith('most watch time (all time): 1. ana 1d 1h') for m in says()[-1:]), says()[-1:])
     n0 = len(says()); feed(host, 'viewer1: !addpoints @ana 500'); chk('viewers cannot add points', len(says()) == n0 and api('/api/economy/user?login=ana')['points'] == 400)
