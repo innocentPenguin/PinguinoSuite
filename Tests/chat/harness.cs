@@ -1430,6 +1430,27 @@ public static class Harness
             Check("countdown: the old default text is no longer in the file", !File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "PinguinoChat", "PinguinoChat.cs")).Contains("Grab a snack"));
         }
 
+        // ── nightly 10-26: "@PinguinoHelper lie" (a complaint aimed at the helper) got "lol syd, nobody's calling anyone a liar" from Chatty ──
+        {
+            Extra.Clear();
+            string[] bad = { "@PinguinoHelper lie", "@helperpinguino that is wrong", "@PinguinoHelper you are useless", "@helperpinguino not working" };
+            foreach (var b in bad)
+            {
+                CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); int cc = llmCalls;
+                Msg("Syddy", b, null, false);
+                Check("complaint aimed at the helper: Chatty stays out (" + b + ")", CPHProxy.Sent.Count == 0 && llmCalls == cc, string.Join("|", CPHProxy.Sent));
+            }
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); int cg = llmCalls; nextReply = "{\"reply\":\"hi from chatty\",\"remember\":[]}";
+            Msg("Syddy", "@helperpinguino hello there", null, false);
+            Check("control: a greeting for the helper is still answered", llmCalls == cg + 1, string.Join("|", CPHProxy.Sent));
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); cg = llmCalls;
+            Msg("Syddy", "@ChattyPinguino @helperpinguino you are both wrong", null, false);
+            Check("control: naming Chatty itself keeps the normal path", llmCalls == cg + 1, string.Join("|", CPHProxy.Sent));
+            var rx = (System.Text.RegularExpressions.Regex)typeof(CPHInline).GetField("RxToSomeoneElse", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            Check("random chime guard: a leading @name is someone else's line", rx.IsMatch("@Snowyroses_ so your songs are died") && rx.IsMatch("  @PinguinoHelper lie") && !rx.IsMatch("anyone hyped for the weekend") && !rx.IsMatch("hey @Snowyroses_"));
+            nextReply = "{\"reply\":\"hey there!\",\"remember\":[]}";
+        }
+
         Console.WriteLine(fails == 0 ? "ALL " + passes + " CHAT CHECKS PASSED" : fails + " FAILED / " + passes + " passed");
         try { Directory.Delete(dir, true); } catch (Exception) { }
         return fails == 0 ? 0 : 1;

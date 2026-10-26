@@ -1210,6 +1210,7 @@ public class CPHInline
             if (!second) LinkThreads(login, text, replyTo);          // people talking to each other share a thread
 
             bool mention = IsMention(text) || (!string.IsNullOrEmpty(replyTo) && (replyTo.ToLower() == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(replyTo)));
+            if (mention && AimedAtOtherBotOnly(text, replyTo)) { _pgPass = true; return; }   // "@PinguinoHelper lie": a line for another bot is not an opening for the chatter (nightly 10-26)
             if (_cfg.GateEnabled && GateState() == "busy" && (!mention || _cfg.GateBusyBlocksReplies))
             {   // busy chat: completely silent, no AI call; the helper may still take a lobby question
                 lock (_gateLock) { if (mention || _cfg.RandomChance > 0) _gateSkipped++; }
@@ -1242,7 +1243,7 @@ public class CPHInline
                 accept = !quiet && TakeCooldown(login, false);
                 if (!quiet && !accept) Miss(login);                                // pinged but the cooldown / hourly cap dropped it: they are still waiting
             }
-            else if (!welcome && back == null && !optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && !IsHeated() && text.Length >= 12 && _rng.NextDouble() < _cfg.RandomChance
+            else if (!welcome && back == null && !optedOut && _cfg.RandomChance > 0 && ChattyUnlocked() && ActivePartners().Count == 0 && !IsHeated() && text.Length >= 12 && !RxToSomeoneElse.IsMatch(text) && _rng.NextDouble() < _cfg.RandomChance
                      && GateAllowsChime() && Now() - _lastRandom >= _cfg.RandomMinGapSec && TakeCooldown(login, true))
             { cx.Random = true; _lastRandom = Now(); accept = true; }
         }
@@ -1307,6 +1308,22 @@ public class CPHInline
         Say(cx, _cfg.OfflineReply.Replace("{link}", _cfg.OfflineLink ?? "").Trim());
     }
 
+    static readonly Regex RxBotComplaint = new Regex(@"\b(lie|lies|lied|liar|lying|wrong|broken|bug|buggy|useless|stupid|dumb|trash|garbage|sucks?|terrible|awful|fix (it|this|that)|not working|doesn.?t work|didn.?t work|ignored? me|ignoring)\b", RegexOptions.IgnoreCase);
+    /// <summary>the text @-tags another bot (helper / core) and not Chatty itself, and is not a reply to Chatty: the other bot's conversation</summary>
+    bool AimedAtOtherBotOnly(string text, string replyTo)
+    {
+        var roles = PgMentionedRoles(text, _cfg.ReplyWithoutAt);
+        if (roles.Count == 0 || roles.Contains("chat") || !RxBotComplaint.IsMatch(text ?? "")) return false;   // a greeting or a comment for the family is still answered; a complaint / accusation aimed at the other bot is not Chatty's to take
+        if (!string.IsNullOrEmpty(replyTo) && replyTo.ToLower() == (_cfg.BotAccount ?? "").ToLower()) return false;
+        string t = (text ?? "").ToLower();
+        foreach (var n in _cfg.Names ?? new List<string>())
+        {
+            if (string.IsNullOrWhiteSpace(n)) continue;
+            string name = Regex.Escape(n.ToLower());
+            if (Regex.IsMatch(t, "@" + name + @"(?![a-z0-9_])") || (_cfg.ReplyWithoutAt && Regex.IsMatch(t, @"(?<![a-z0-9_])" + name + @"(?![a-z0-9_])"))) return false;
+        }
+        return true;
+    }
     bool IsMention(string text)
     {
         if (PgMentionedRoles(text, _cfg.ReplyWithoutAt).Count > 0) return true;   // any of the three bots, by the names in bots.json
@@ -3442,6 +3459,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
 
     string GateLimitText() { int q, b; GateLimits(out q, out b); return q + "/" + b + (_cfg.GateAuto ? " auto" : ""); }
     // ChattyPinguino only answers when addressed until the hidden shop's buy_chatty unlocks random talk (the Host writes chatty_unlock.json); HelperPinguino is the one that may chime in on its own.
+    // an unprompted chime never lands on a line aimed at somebody else (a leading @name: another viewer, the helper or another bot): that is their conversation, not an opening
+    static readonly Regex RxToSomeoneElse = new Regex(@"^\s*@\w+", RegexOptions.IgnoreCase);
     bool ChattyUnlocked() { try { string f = Path.Combine(_dir ?? "", "chatty_unlock.json"); return File.Exists(f) && File.ReadAllText(f).Replace(" ", "").Contains("\"unlocked\":true"); } catch (Exception) { return false; } }
     bool GateAllowsChime() { return !_cfg.GateEnabled || GateState() == "quiet"; }
 
