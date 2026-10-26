@@ -143,6 +143,7 @@ namespace PinguinoHost
             bool ok = r != null && (bool?)r["ok"] == true;
             via = ok ? "multi:" + pf : "multi refused " + pf + ": " + (((string)r?["text"]) ?? ((string)r?["detail"]) ?? "no answer");
             if (!ok) Clog.Warn("chat", "send to " + pf + " failed (no Twitch fallback): " + via);
+            if (ok) ChatInStats.Reply(); else ChatInStats.SendError();
             return ok;
         }
         /// <summary>true when this name is one of our own bot sender accounts or the channel itself (loop guard for chat-in)</summary>
@@ -225,8 +226,9 @@ namespace PinguinoHost
             }
             if (p == "/api/chat-in" && m == "POST")   // Multi: one chat line from another platform {platform,user,userId,text,msgId,isBot}. Namespaced, viewer role only, Actions & Events commands only: no economy, no moderation, no points
             {
-                if (!HostApi.StrictTokenOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
-                var b = Body(c); var res = Program.DispatchExternal(((string)b["platform"] ?? "").Trim().ToLowerInvariant(), ((string)b["user"] ?? "").Trim(), ((string)b["userId"] ?? "").Trim(), (string)b["text"] ?? "", (string)b["msgId"] ?? "", ((bool?)b["isBot"] == true || (bool?)b["ownBot"] == true));
+                if (!HostApi.StrictTokenOk(c.Request)) { ChatInStats.Unauthorized(c.Request.RemoteEndPoint?.Address?.ToString(), ChatInStats.TokenField(c.Request)); c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"module token required\"}", "application/json"); return true; }
+                var b = Body(c); string ciPlat = ((string)b["platform"] ?? "").Trim().ToLowerInvariant(), ciText = (string)b["text"] ?? ""; var res = Program.DispatchExternal(((string)b["platform"] ?? "").Trim().ToLowerInvariant(), ((string)b["user"] ?? "").Trim(), ((string)b["userId"] ?? "").Trim(), (string)b["text"] ?? "", (string)b["msgId"] ?? "", ((bool?)b["isBot"] == true || (bool?)b["ownBot"] == true));
+                ChatInStats.Result(ciPlat, ciText, res);
                 Write(c, res.ToString(), "application/json"); return true;
             }
             if (p == "/api/say" && m == "POST")   // modules (Multi, Speak): say one line in chat through the Host, so the 30 s duplicate guard and the no-retry-on-timeout rule apply

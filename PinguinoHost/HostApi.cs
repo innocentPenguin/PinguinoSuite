@@ -76,7 +76,7 @@ namespace PinguinoHost
             string p = c.Request.Url.AbsolutePath;
             if (p != "/" && p != "/setup" && p != "/auth" && p != "/automations" && p != "/helper-review" && p != "/overlay/latest" && p != "/overlay/latest.html" && p != "/overlay/credits" && p != "/overlay/goal" && p != "/intro" && p != "/overlay/intro" && !p.StartsWith("/intro/media/") && p != "/overlay/subfooter" && p != "/subfooter" && !p.StartsWith("/api/")) return false;
             if (!LocalOk(c.Request)) { c.Response.StatusCode = 403; return true; }
-            if (c.Request.HttpMethod == "POST" && !WriteOk(c.Request)) { c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"token required\"}", "application/json"); return true; }
+            if (c.Request.HttpMethod == "POST" && !WriteOk(c.Request)) { if (p == "/api/chat-in") ChatInStats.Unauthorized(c.Request.RemoteEndPoint?.Address?.ToString(), ChatInStats.TokenField(c.Request)); c.Response.StatusCode = 401; Write(c, "{\"ok\":false,\"error\":\"token required\"}", "application/json"); return true; }
             try
             {
                 if (c.Request.HttpMethod == "OPTIONS")   // CORS preflight from the Tauri shell
@@ -127,7 +127,7 @@ namespace PinguinoHost
                 { "channel", (string)s["Channel"] ?? "" }, { "chatConnected", IrcConnected }, { "eventSubConnected", EventSubConnected },
                 { "obsConnected", ObsConnected() }, { "canSend", tok && !string.IsNullOrEmpty((string)s["ClientId"]) && !string.IsNullOrEmpty((string)s["SenderId"]) && !string.IsNullOrEmpty((string)s["BroadcasterId"]) },
                 { "messages", Messages }, { "lastMessageAgoSec", LastMessage == DateTime.MinValue ? (int?)null : (int)(DateTime.UtcNow - LastMessage).TotalSeconds },
-                { "overlayPort", Port }, { "dataDir", DataDir }, { "lease", Lease.State() }, { "rank", Rank.HealthJson() } };
+                { "overlayPort", Port }, { "dataDir", DataDir }, { "lease", Lease.State() }, { "rank", Rank.HealthJson() }, { "chatIn", ChatInStats.Json() } };
         }
 
         static JObject Config()

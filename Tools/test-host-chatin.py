@@ -104,6 +104,30 @@ try:
     # same text on twitch is NOT held back by the youtube entry (and never reaches Multi)
     n = len(sends); c, j = post('/api/say', {'text': 'Chatty says hi', 'bot': 'chat'})
     chk('twitch say path never calls Multi /api/send for platform text (key is per platform)', len(sends) == n and 'duplicate' in j and j['duplicate'] is False, (j, sends[n:]))
+    # ---- counters: every line (accepted and rejected) is counted per platform, a plain chat line produces NO send, a command exactly one
+    mode['code'] = 200; time.sleep(31)
+    n = len(sends); cin('Chatter', 'hello everyone, nice stream', mid='yt-plain'); time.sleep(2)
+    chk('plain youtube chat line: accepted, no send to Multi', len(sends) == n, sends[n:])
+    n = len(sends); cin('Chatter', '!hi', mid='yt-hi-2'); time.sleep(2.5)
+    chk('a command from youtube: exactly ONE /api/send, platform youtube', len(sends) == n + 1 and sends[n][1]['platform'] == 'youtube' and sends[n][0] == '/api/send', sends[n:])
+    post('/api/chat-in', {'platform': 'twitch', 'user': 'x', 'text': 'hi'}); post('/api/chat-in', {'platform': 'youtube', 'user': 'x', 'text': ''})
+    st = json.load(urllib.request.urlopen('http://127.0.0.1:%d/api/status' % PORT, timeout=10)).get('chatIn') or {}
+    chk('status.chatIn present with yt/tt counts', st.get('yt', 0) >= 8 and st.get('tt', 0) >= 1, st)
+    chk('status.chatIn commands/replies/sendErrors counted', st.get('commands', 0) >= 6 and st.get('replies', 0) >= 3 and st.get('sendErrors', 0) >= 1, st)
+    rj = st.get('rejects') or {}
+    chk('rejects counted by reason: 401 token, platform, empty, own bot', rj.get('401 token', 0) >= 1 and rj.get('platform', 0) >= 1 and rj.get('empty') == 1 and rj.get('own bot', 0) >= 3, st)
+    chk('lastReject says who and why', 'empty' in st.get('lastReject', ''), st)
+    # a WRONG token (not just a missing one): 401, counted as "401 token", ONE log line with the caller, never the token value, not repeated within a minute
+    hl = lambda: [json.loads(l)['msg'] for l in open(os.path.join(d, 'console', 'host.jsonl'), 'rb').read().decode('utf-8', 'replace').splitlines() if '401 on /api/chat-in' in l]
+    before = len(hl()); b4 = (json.load(urllib.request.urlopen('http://127.0.0.1:%d/api/status' % PORT, timeout=10)).get('chatIn') or {}).get('rejects', {}).get('401 token', 0)
+    c1, _ = post('/api/chat-in', {'platform': 'youtube', 'user': 'x', 'text': '!hi'}, 'wrong-token-xyz'); c2, _ = post('/api/chat-in', {'platform': 'youtube', 'user': 'x', 'text': '!hi'}, 'wrong-token-xyz'); time.sleep(2)
+    af = (json.load(urllib.request.urlopen('http://127.0.0.1:%d/api/status' % PORT, timeout=10)).get('chatIn') or {}).get('rejects', {}).get('401 token', 0)
+    msgs = hl()
+    chk('wrong token: 401 twice, both counted', c1 == 401 and c2 == 401 and af == b4 + 2, (c1, c2, b4, af))
+    chk('wrong token: exactly one log line this minute, with the caller and which header, never the token', len(msgs) - before == 1 and '127.0.0.1' in msgs[-1] and 'Authorization Bearer' in msgs[-1] and 'wrong-token-xyz' not in msgs[-1], msgs[-2:])
+    time.sleep(35)
+    lines = [json.loads(l) for l in open(os.path.join(d, 'console', 'host.jsonl'), 'rb').read().decode('utf-8', 'replace').splitlines() if '"chat-in"' in l and 'chat-in: yt' in l]
+    chk('a one-line minute summary was logged', lines and 'commands' in lines[-1]['msg'] and 'replies' in lines[-1]['msg'] and 'send errors' in lines[-1]['msg'], lines[-2:])
 finally:
     host.kill(); time.sleep(0.5); print(open(outp, 'rb').read().decode('utf-8', 'replace')[-1500:]) if fails else None; shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS chatin'); sys.exit(1 if fails else 0)
