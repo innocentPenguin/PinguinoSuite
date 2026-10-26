@@ -34,7 +34,7 @@ export function log(level, source, msg) {
   recent.set(key, { at: now, n: 0 });
   if (r?.n) msg = `${msg} (repeated ${r.n}x before)`;
   const line = JSON.stringify({ ts: Date.now() / 1000, module: 'link', level, source, msg: String(msg).slice(0, 2000) });
-  if (level !== 'debug') (level === 'info' ? console.log : console.error)(`[${level}] ${source}: ${msg}`);
+  if (level !== 'debug') (level === 'info' ? console.log : console.error)(`${new Date().toISOString().slice(0, 19).replace('T', ' ')}Z [${level}] ${source}: ${msg}`);
   try {
     if (process.env.PINGUINO_NEVER_REAL_OBS && !process.env.PINGUINO_DATA_DIR) return;   // in-process tests must not write to the real Console
     if (!ready) { fs.mkdirSync(DIR, { recursive: true }); ready = true; }
