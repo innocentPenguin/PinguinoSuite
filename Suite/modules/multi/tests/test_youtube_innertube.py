@@ -362,3 +362,13 @@ def test_echo_of_our_own_send_is_dropped_once_but_others_pass(monkeypatch):
     c._put(line("c", "UCamy", "Hello  There"))           # a viewer saying the same words is never dropped
     got = c.inbox.items
     assert [m.id for m in got] == ["youtube:abcdefghijk:b", "youtube:abcdefghijk:c"] and got[0].is_self and got[0].is_bot and not got[1].is_self
+
+
+def test_custom_emoji_carry_https_image_url_only():
+    node = {"runs": [{"text": "a "}, {"emoji": {"emojiId": "UC/xyz-long-custom-id", "isCustomEmoji": True, "shortcuts": [":hi:"],
+                                             "image": {"thumbnails": [{"url": "https://y/s24"}, {"url": "https://y/s48"}]}}},
+                     {"emoji": {"emojiId": "UC/other-long-id", "isCustomEmoji": True, "shortcuts": [":ht:"], "image": {"thumbnails": [{"url": "http://y/a"}]}}},
+                     {"emoji": {"emojiId": "\U0001F600"}}]}
+    text, em = it._runs(node)
+    assert text == "a :hi::ht:\U0001F600"
+    assert em == [{"id": "UC/xyz-long-custom-id", "text": ":hi:", "url": "https://y/s48"}, {"id": "UC/other-long-id", "text": ":ht:"}]

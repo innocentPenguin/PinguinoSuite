@@ -43,6 +43,16 @@ def _txt(node):
     return "".join(str(r.get("text", "")) for r in node.get("runs", []) if isinstance(r, dict))
 
 
+def _emoji_url(e):
+    """Custom emoji image: the last (largest) thumbnail, https only."""
+    try:
+        th = [t for t in (e.get("image") or {}).get("thumbnails", []) if isinstance(t, dict)]
+        u = str(th[-1].get("url") or "") if th else ""
+    except (AttributeError, TypeError):
+        return ""
+    return u if u.startswith("https://") else ""
+
+
 def _runs(node):
     """message runs -> (text, emotes). Unicode emoji stay as characters, custom emoji become their :shortcut: and are listed in emotes."""
     out, emotes = [], []
@@ -57,7 +67,11 @@ def _runs(node):
             if e.get("isCustomEmoji") or not e.get("emojiId") or len(str(e.get("emojiId"))) > 8:
                 label = sc or str(e.get("emojiId", ""))
                 out.append(label)
-                emotes.append({"id": str(e.get("emojiId", ""))[:80], "text": label})
+                em = {"id": str(e.get("emojiId", ""))[:80], "text": label}
+                url = _emoji_url(e)
+                if url:
+                    em["url"] = url
+                emotes.append(em)
             else:
                 out.append(str(e["emojiId"]))
     return "".join(out), emotes

@@ -216,3 +216,12 @@ def test_keep_token_renews_or_ends_session(monkeypatch):
     asyncio.run(t._keep_token(tok))                               # renewed: no exception
     monkeypatch.setattr(t, "validate", lambda tk: (_ for _ in ()).throw(ConnectionError("net down")))
     asyncio.run(t._keep_token(tok))                               # blip: ignored, chat stays up
+
+
+def test_src_ts_is_twitchs_own_time_or_none():
+    from connectors import twitch as tw
+    import time as _t
+    stamp = _t.strftime("%Y-%m-%dT%H:%M:%S", _t.gmtime(_t.time() - 5)) + ".123456789Z"
+    v = tw.src_ts(stamp)
+    assert v is not None and 3 < _t.time() - v < 8
+    assert tw.src_ts("junk") is None and tw.src_ts(None) is None and tw.src_ts("2001-01-01T00:00:00Z") is None

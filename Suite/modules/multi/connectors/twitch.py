@@ -72,6 +72,14 @@ def event_ts(stamp, now=None):
     return min(t, now) if t > now - 86400 else now
 
 
+def src_ts(stamp):
+    """Twitch's own send time (metadata.message_timestamp) in epoch seconds, for latency measuring (meta.src); None when missing or junk.
+    EventSub has no tmi-sent-ts. Junk falls back to 'now', which differs for two different 'now's."""
+    t0 = time.time()
+    a, b = event_ts(stamp, t0), event_ts(stamp, t0 + 1000)
+    return a if a == b else None
+
+
 NOTICE_EVENT = {"sub": "sub", "resub": "resub", "sub_gift": "gift", "community_sub_gift": "gift", "gift_paid_upgrade": "gift",
                 "prime_paid_upgrade": "sub", "raid": "raid", "announcement": "announcement", "bits_badge_tier": "cheer"}
 
@@ -272,6 +280,9 @@ class Twitch(Connector):
         elif t == "notification" and meta.get("subscription_type") == "channel.chat.message":
             msg = normalize_event(payload["event"], event_ts(meta.get("message_timestamp")))
             msg.is_self = msg.user_id == self.user["user_id"]
+            src = src_ts(meta.get("message_timestamp"))
+            if src is not None:
+                msg.meta["src"] = src
             self.state["last_message"] = time.time()
             self.inbox.put(msg)
         elif t == "notification" and meta.get("subscription_type") == "channel.chat.notification":
