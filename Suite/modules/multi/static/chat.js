@@ -31,7 +31,7 @@ const emoteUrl = id => `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURICom
 // the plain-text pieces into links, and never sees the emote <img> markup.
 function bodyHtml(m, link) {
   const map = new Map(); (m.emotes || []).forEach(e => { const s = e && typeof e.text === 'string' && e.text ? emoteSrc(e) : ''; if (s) map.set(e.text, s); });
-  return String(m.text || '').split(/(\s+)/).map(tok => map.has(tok)
+  return String(m.text || '').split(/(\s+)/).flatMap(t => map.has(t) || !t.includes(':') ? [t] : t.split(/(:[^\s:]+:)/).filter(Boolean)).map(tok => map.has(tok)
     ? `<img class="emo" alt="${esc(tok)}" title="${esc(tok)}" src="${esc(map.get(tok))}" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">`
     : link ? link(esc(tok)) : esc(tok)).join('');
 }

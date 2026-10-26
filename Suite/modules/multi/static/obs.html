@@ -76,7 +76,7 @@ function apply() {
 function emoBody(m) {
   const src = e => { const u = String(e.url || e.image || ''); return /^https:\/\/[^\s"'<>]{4,300}$/.test(u) ? u : /^[\w-]{1,64}$/.test(String(e.id)) ? `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(e.id)}/default/dark/2.0` : ''; };
   const map = new Map(); (m.emotes || []).forEach(e => { const s = e && typeof e.text === 'string' && e.text ? src(e) : ''; if (s) map.set(e.text, s); });
-  return String(m.text || '').split(/(\s+)/).map(t => map.has(t) ? `<img class="emo" alt="${esc(t)}" src="${esc(map.get(t))}" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">` : esc(t)).join('');
+  return String(m.text || '').split(/(\s+)/).flatMap(t => map.has(t) || !t.includes(':') ? [t] : t.split(/(:[^\s:]+:)/).filter(Boolean)).map(t => map.has(t) ? `<img class="emo" alt="${esc(t)}" src="${esc(map.get(t))}" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">` : esc(t)).join('');
 }
 function badges(m) {
   if (!S.badges) return '';
