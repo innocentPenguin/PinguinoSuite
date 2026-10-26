@@ -82,8 +82,8 @@ class RaidWindow:
     `window` seconds is the same raid, whichever source came first (the first one wins, amounts may differ). Two different raiders are always both kept.
     seen() answers "is this a copy?" without recording; add() records a raid that is really being shown."""
 
-    def __init__(self, window=60.0, now=time.time):
-        self.window, self.now, self.by_user, self.ids = window, now, {}, {}
+    def __init__(self, window=60.0, now=time.time, kind="raid"):
+        self.window, self.now, self.kind, self.by_user, self.ids = window, now, kind, {}, {}
 
     def _gc(self, t):
         for d in (self.by_user, self.ids):
@@ -106,10 +106,22 @@ class RaidWindow:
     def dup(self, user, rid=""):
         """check + record in one step; True = a copy of a raid already seen (log it once, no secrets)"""
         if self.seen(user, rid):
-            console_log.info("raid", "second copy of the same raid ignored (EventSub and Host both reported it)", dedupe_s=60)
+            console_log.info(self.kind, f"second copy of the same {self.kind} ignored (EventSub and Host both reported it)", dedupe_s=60)
             return True
         self.add(user, rid)
         return False
+
+
+FOLLOW_WINDOW = 20.0        # a follow reported twice (EventSub + Host feed); short, because unfollow + refollow can really repeat within a minute
+
+
+def window_key(kind, platform, user):
+    """What a window compares: raids by the raider / target, follows by platform + user (a missing platform means Twitch, the only follow source)."""
+    return f"{platform or 'twitch'}:{user}" if kind == "follow" else user
+
+
+def new_windows():
+    return {"raid": RaidWindow(), "raid_out": RaidWindow(), "follow": RaidWindow(FOLLOW_WINDOW, kind="follow")}
 
 
 STATE = {"up": None, "last_ok": 0.0, "error": ""}      # reachability of the Host as last seen by any GET (None = not tried yet)

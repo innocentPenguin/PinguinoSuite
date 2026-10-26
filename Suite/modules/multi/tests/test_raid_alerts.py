@@ -203,3 +203,69 @@ def test_every_default_profile_has_raids_on_with_chime():
         for t in ("raid", "raid_out"):
             d = p["types"][t]
             assert d["enabled"] and not d["silent"] and d["sound"]["enabled"] and d["sound"]["url"] == ""      # empty url = the page's built-in chime
+
+
+# ---- follows: EventSub + Host copy inside 20 s collapse; receive stamp -------------------------------------------------------------------
+def _follow(mid, user="Fan", platform="twitch"):
+    return ChatMessage(id=mid, platform=platform, channel="me", user_id=user.lower(), user=user.lower(), display=user, text=f"{user} followed",
+                       ts=_time.time(), event="follow")
+
+
+def test_follow_copy_dropped_other_users_kept_replay_by_id(tmp_path):
+    pl, got = _pl(tmp_path)
+    assert pl.ingest(_follow("host:443", "jbager")) is not None
+    assert pl.ingest(_follow("eventsub-9", "JBager")) is None          # same follower, other source, case-insensitive
+    assert pl.ingest(_follow("host:443", "jbager")) is None            # replay by id
+    assert pl.ingest(_follow("host:444", "other")) is not None         # different user always kept
+    assert pl.ingest(_follow("yt:1", "jbager", platform="youtube")) is not None      # another platform is another follower
+    assert [m.id for m in got] == ["host:443", "host:444", "yt:1"]
+
+
+def test_follow_window_is_20s_and_refollow_after_it_counts():
+    clock = [1000.0]
+    w = host_feed.RaidWindow(host_feed.FOLLOW_WINDOW, now=lambda: clock[0], kind="follow")
+    k = host_feed.window_key("follow", "", "Jbager")
+    assert k == "twitch:Jbager" and not w.dup(k, "h:1")
+    clock[0] += 19
+    assert w.dup(k, "h:2")
+    clock[0] += 2                                                      # 21 s after the first copy: a real re-follow
+    assert not w.dup(k, "h:3")
+
+
+def test_engine_collapses_follow_copy_and_test_path_untouched(tmp_path):
+    eng = _eng(tmp_path)
+    assert eng.submit({"id": "eventsub-f1", "type": "follow", "user": "Jbager"})[0]
+    ok, why = eng.submit({"id": "host:50", "type": "follow", "user": "jbager", "platform": "twitch"})
+    assert not ok and why == "same follow just fired" and eng.log[0]["status"] == "duplicate"
+    assert eng.submit({"type": "follow", "user": "Someone"})[0]
+    assert eng.submit(alerts.test_event("follow", user="Jbager"))[0]   # tests are never swallowed
+
+
+def test_ingest_stamps_recv_once(tmp_path):
+    pl, got = _pl(tmp_path)
+    a = _raid("e:1")
+    t0 = _time.time()
+    pl.ingest(a)
+    assert t0 <= a.meta["recv"] <= _time.time()
+    b = _raid("e:2", "Other")
+    b.meta = {"recv": 5.0}
+    pl.ingest(b)
+    assert b.meta["recv"] == 5.0                                       # an earlier stamp (connector) is kept
+
+
+def test_latency_report_reads_a_db_copy(tmp_path):
+    import sys
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent / "scripts"))
+    import latency_report
+    pl, got = _pl(tmp_path)
+    m = _raid("e:77")
+    m.ts = _time.time() - 3                                             # source time 3 s ago (YouTube style)
+    pl.ingest(m)
+    import sqlite3
+    pl.store.db.commit()
+    copy = tmp_path / "copy.db"
+    dst = sqlite3.connect(copy)
+    pl.store.db.backup(dst)
+    dst.close()
+    r = latency_report.report(str(copy))
+    assert r["twitch"]["n"] == 1 and 2.5 <= r["twitch"]["median_s"] <= 4
