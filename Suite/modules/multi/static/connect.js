@@ -7,6 +7,18 @@
     kick: 'kick.com &rarr; Settings &rarr; Developer: create an app, set its redirect address to the one below, paste its client id and secret here. Lets Multi send chat, set the title and (later) receive Kick events.',
     youtube: 'Google Cloud: enable "YouTube Data API v3", publish the consent screen to <b>production</b> (otherwise the sign-in expires after 7 days), create an OAuth client of type <b>Desktop app</b>, paste its client id and secret here. <b>Reading chat needs no sign-in:</b> once the channel below is set, messages arrive in about 1-3 seconds. <b>The sign-in is the account that SENDS</b> (replies, moderation): sign in with the bot account (PinguinoB0t, a second Google account), not your own. It never changes which channel is read. Tip: do it in a private/incognito window while logged in as the bot.'
   };
+  // Inside the Suite app the webview swallows window.open / target=_blank: hand the link to the shell (same message the Spotify module uses).
+  function openExternal(url) {
+    try {
+      if (window.parent && window.parent !== window) { window.parent.postMessage({pinguino: 'window', op: 'external', url}, '*'); return true; }
+      const w = window.open(url, '_blank', 'noopener');
+      return !!w;
+    } catch (x) { return false; }
+  }
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); return true; } catch (x) { /* fall through */ }
+    try { return document.execCommand('copy'); } catch (x) { return false; }
+  }
   const j = (u, o) => fetch(u, o).then(r => r.json());
   const post = (u, b) => j(u, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(b || {})});
 
@@ -78,11 +90,26 @@
         msg.textContent = 'Saved.';
         const st = await j('/auth/' + p + '/status'); box.querySelector('small').textContent = state(st);
         const go = box.querySelector('.c42-go'); go.disabled = !ready(st); go.title = ready(st) ? '' : 'Save the client id and secret first';
+      } else if (e.target.classList.contains('c42-copy')) {
+        const inp = box.querySelector('.c42-url');
+        if (inp) { inp.focus(); inp.select(); copyText(inp.value).then(ok => { box.querySelector('.c42-copied').textContent = ok ? ' Copied.' : ' Press Ctrl+C to copy.'; }); }
       } else if (e.target.classList.contains('c42-go')) {
-        const r = await post('/auth/' + p + '/start');
-        if (!r.ok) { msg.textContent = r.error || 'Could not start.'; return; }
-        msg.innerHTML = 'Opening ' + NAMES[p] + ' in a new tab. Approve there, then come back and reopen this page. <a target="_blank" rel="noopener" href="' + esc(r.url) + '">Open again</a>';
-        window.open(r.url, '_blank', 'noopener');
+        msg.textContent = 'Starting...';
+        let r = null, why = '';
+        try {
+          const resp = await fetch('/auth/' + p + '/start', {method: 'POST', headers: {'content-type': 'application/json'}, body: '{}'});
+          const txt = await resp.text();
+          try { r = JSON.parse(txt); } catch (x) { r = null; }
+          if (!resp.ok || !r || !r.url) {
+            why = (r && (r.error || r.detail)) ? String(r.error || (typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail))) : (resp.ok ? 'no sign-in link came back' : 'the server answered ' + resp.status + (resp.status === 401 ? ' (not authorised: reload this page from the Multi window)' : ''));
+            msg.textContent = 'Could not start the ' + NAMES[p] + ' sign-in: ' + why + (resp.ok ? '' : ' [HTTP ' + resp.status + ']');
+            return;
+          }
+        } catch (x) { msg.textContent = 'Could not start the ' + NAMES[p] + ' sign-in: ' + (x && x.message || x); return; }
+        const opened = openExternal(r.url);
+        msg.innerHTML = (opened ? 'Opening ' + NAMES[p] + ' in your browser. ' : '') + 'If nothing opened, copy this link into a browser where you are signed in as the <b>' + (p === 'youtube' ? 'BOT' : NAMES[p]) + ' account</b> (a private/incognito window is best), approve there, then come back and reopen this page.'
+          + '<div><input class="c42-url" readonly aria-label="Sign-in link" size="60" value="' + esc(r.url) + '"> <button type="button" class="c42-copy">Copy link</button><span class="c42-copied"></span></div>';
+        const inp = box.querySelector('.c42-url'); if (inp) { inp.focus(); inp.select(); }
       }
     });
   }
