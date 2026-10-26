@@ -238,6 +238,10 @@
       else { const why = r.status === 404 ? 'the Spotify module has no /api/preset yet (restart needed)' : ((r.json && (r.json.error || r.json.code)) || r.error || 'HTTP ' + r.status); res.textContent = 'Songify: ' + why; toast('Songify: ' + why, true); }
     } finally { b.disabled = false; renderSongify(); }
   }
+  function paintRateLimit() {
+    const v = C.rateLimitView(S.get('mstate'));
+    for (const sel of ['#pl-rl', '#sg-rl']) { const e = $(sel); if (!e) continue; e.hidden = !v.limited; e.textContent = v.text; }
+  }
   function renderMusic() {
     renderSongify();
     const ok = S.get('nowOk'), box = $('#player'), v = plView();
@@ -245,6 +249,7 @@
     $('#pl-title').textContent = ok === false ? 'Spotify module not reachable' : v.title || 'Nothing playing';
     $('#pl-artist').textContent = v.artist || ''; $('#pl-album').textContent = v.album || '';
     $('#pl-req').textContent = v.req ? 'req ' + v.req : '';
+    paintRateLimit();
     const art = $('#pl-art'), cur = art.querySelector('img');
     if (v.art && (!cur || cur.dataset.u !== v.art)) { const im = h('img'); im.dataset.u = v.art; im.alt = ''; im.onerror = () => im.remove(); im.src = v.art; art.prepend(im); if (cur) cur.remove(); }
     else if (!v.art && cur) cur.remove();
@@ -639,6 +644,7 @@
     $('#tab-stream').innerHTML = `<div class="si">
       <h4 class="si-h" style="margin-top:0">Music: Songify</h4>
       <div class="row"><button class="sm rd warn" id="sg-btn" title="Turns the bot's own player off so another app (Songify) can run the music, or takes it back. Two clicks.">Hand off to Songify</button><span class="faint sm" id="sg-state" role="status"></span></div>
+      <span id="sg-rl" class="rl-chip" hidden></span>
       <div id="sg-res" class="si-res"></div>
       <div class="note sm">Edit once, push to the platforms you tick. This only changes text (and can schedule a YouTube broadcast). It never starts a stream.</div>
       <label class="lbl" for="si-title">Title</label><input type="text" id="si-title" maxlength="140" autocomplete="off" placeholder="Stream title">

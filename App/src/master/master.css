@@ -241,3 +241,6 @@ button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible,
 .tn{grid-template-columns:minmax(0,1fr)}.tn-name{width:100%}
 .tn{gap:4px;margin-bottom:6px}.tn-det summary{cursor:pointer;font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px;list-style:none}.tn-det summary::-webkit-details-marker{display:none}.tn-det summary::before{content:'▸'}.tn-det[open] summary::before{content:'▾'}.tn-det .tn-sw{margin-top:6px}
 .tn-chip{display:inline-block;padding:0 7px;border-radius:9px;border:1px solid var(--line);font-size:11px;line-height:16px;color:#111;text-shadow:0 0 2px #fff8}
+
+.rl-chip{display:inline-block;padding:1px 8px;border-radius:999px;background:#7a1620;border:1px solid #ff5a66;color:#ffd9dc;font-size:11px;font-weight:600;white-space:nowrap}
+.rl-chip[hidden]{display:none}

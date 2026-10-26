@@ -447,5 +447,12 @@
     return { known, on, name: on ? 'takeback' : 'songify', label: on ? 'Take back' : 'Hand off to Songify', armLabel: on ? 'Sure? Take the music back' : 'Sure? Hand the music to Songify',
       text: on == null ? 'State unknown (the player is not answering)' : (on ? 'Songify has the music' : 'The bot runs the music') + (known ? '' : ' (last action, not confirmed)') };
   }
-  return { wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  /* Spotify rate limit chip: the module's /api/state reports rate_limited:true plus rate_limited_until (epoch s) and rate_limited_until_hhmm; anything else (false, missing, an old module) shows nothing */
+  function rateLimitView(st) {
+    if (!st || st.rate_limited !== true) return { limited: false, until: '', text: '' };
+    let t = typeof st.rate_limited_until_hhmm === 'string' ? st.rate_limited_until_hhmm.trim() : '';
+    if (!t && Number.isFinite(Number(st.rate_limited_until)) && Number(st.rate_limited_until) > 0) { const d = new Date(Number(st.rate_limited_until) * 1000); t = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+    return { limited: true, until: t, text: t ? 'Spotify rate limited until ' + t : 'Spotify rate limited' };
+  }
+  return { rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

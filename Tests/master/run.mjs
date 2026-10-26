@@ -410,6 +410,17 @@ await t('keyboard: no positive tabindex, every control is a real button/input, s
   assert.ok(html.indexOf('id="b-last"') < html.indexOf('id="scenes"') && html.indexOf('id="scenes"') < html.indexOf('id="sources"') && html.indexOf('id="sources"') < html.indexOf('id="tab-customs"'));
 });
 
+await t('Spotify rate-limit chip: true shows "until HH:MM" (hhmm, else from the epoch), false/missing/old module shows nothing; served through the mock /api/state; markup has both chips', async () => {
+  const hhmm = new Date(1790000000 * 1000); const want = String(hhmm.getHours()).padStart(2, '0') + ':' + String(hhmm.getMinutes()).padStart(2, '0');
+  delete st.rl; let s = (await api.get('/api/state')).json; assert.equal(s.rate_limited, undefined); let v = C.rateLimitView(s); assert.equal(v.limited, false); assert.equal(v.text, '');
+  st.rl = { rate_limited: false, rate_limited_until: 0, rate_limited_until_hhmm: '' }; assert.equal(C.rateLimitView((await api.get('/api/state')).json).limited, false);
+  st.rl = { rate_limited: true, rate_limited_until: 1790000000, rate_limited_until_hhmm: '14:07', rate_limit_raw_s: 600 }; v = C.rateLimitView((await api.get('/api/state')).json); assert.equal(v.limited, true); assert.equal(v.text, 'Spotify rate limited until 14:07');
+  st.rl = { rate_limited: true, rate_limited_until: 1790000000 }; assert.equal(C.rateLimitView((await api.get('/api/state')).json).text, 'Spotify rate limited until ' + want);
+  assert.equal(C.rateLimitView({ rate_limited: true }).text, 'Spotify rate limited'); assert.equal(C.rateLimitView({ rate_limited: 'yes' }).limited, false); assert.equal(C.rateLimitView(null).limited, false); delete st.rl;
+  const dir = path.join(here, '..', '..', 'App', 'src', 'master'), html = fs.readFileSync(path.join(dir, 'master.html'), 'utf8'), js = fs.readFileSync(path.join(dir, 'master.js'), 'utf8');
+  assert.match(html, /id="pl-rl"[^>]*hidden/); assert.match(js, /id="sg-rl"[^>]*hidden/); assert.match(js, /#pl-rl.*#sg-rl/);
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);
