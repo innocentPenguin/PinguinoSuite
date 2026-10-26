@@ -438,6 +438,23 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(st["rate_limit_raw_s"], 40310)
         self.assertRegex(st["rate_limited_until_hhmm"], r"^\d\d:\d\d$")
         self.assertGreater(st["rate_limited_until"], self.clock.t)
+        self.assertRegex(st["rate_limit_ban_until_hhmm"], r"^\d\d:\d\d$")
+
+    def test_wait_ends_and_next_poll_retries_then_clears(self):
+        self._limit(40310)
+        self.clock.t += 70                                    # the capped wait is over: the next tick must poll again
+        calls = []
+        def again():
+            calls.append(1)
+            raise spotify_api.RateLimited(40240)
+        self.api.playback = again
+        self.e.tick()
+        self.assertEqual(len(calls), 1)
+        self.assertGreater(self.e.rate_limit_state()["rate_limited_until"], self.clock.t)    # 'until' moved forward
+        self.clock.t += 70
+        self.api.playback = lambda: None
+        self.e.tick()
+        self.assertFalse(self.e.rate_limit_state()["rate_limited"])
 
     def test_backoff_grows_then_clears_on_success(self):
         self._limit(1)

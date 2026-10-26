@@ -90,6 +90,7 @@ class Engine:
         self.backoff_until = 0.0
         self._rl_n = 0                    # consecutive 429s (grows the wait up to RL_MAX_WAIT)
         self._rl_until = 0.0              # when the current 429 wait ends (0 = not rate limited)
+        self._rl_ban = 0.0                # when Spotify says the ban really ends (now + its Retry-After)
         self._rl_raw = 0                  # what Spotify's Retry-After said
         self.last_error = ""
         self.last_verify = 0.0
@@ -292,7 +293,7 @@ class Engine:
         raw = int(getattr(e, "retry_after", 0) or 0)
         self._rl_n = min(self._rl_n + 1, 10)
         wait = min(RL_MAX_WAIT, max(min(raw, RL_MAX_WAIT), 5 * 2 ** (self._rl_n - 1))) + random.uniform(0, 3)
-        self._rl_raw = raw
+        self._rl_raw, self._rl_ban = raw, now + raw
         self.backoff_until = self._rl_until = now + wait
         if raw > RL_TRUST:
             console_log.warn("api", f"Spotify asked for a {raw}s wait; not obeying it, retrying in about {int(wait)}s", dedupe_s=3600)
@@ -304,7 +305,8 @@ class Engine:
         now = self.clock()
         on = now < self._rl_until and now < self.backoff_until
         return {"rate_limited": on, "rate_limited_until": int(self._rl_until) if on else 0,
-                "rate_limited_until_hhmm": time.strftime("%H:%M", time.localtime(self._rl_until)) if on else "", "rate_limit_raw_s": self._rl_raw if on else 0}
+                "rate_limited_until_hhmm": time.strftime("%H:%M", time.localtime(self._rl_until)) if on else "", "rate_limit_raw_s": self._rl_raw if on else 0,
+                "rate_limit_ban_until_hhmm": time.strftime("%H:%M", time.localtime(self._rl_ban)) if on and self._rl_raw > RL_TRUST else ""}
 
     def poll_interval(self):
         """Seconds until the next Spotify poll: quick only around the end of a song or while songs wait, slow otherwise (the old 1-2 s poll got us 429'd)."""
