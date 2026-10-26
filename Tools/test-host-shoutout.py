@@ -24,7 +24,7 @@ class H(http.server.BaseHTTPRequestHandler):
         else: self._send({'data': []})
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
-        if u.path.endswith('/chats/shoutouts'):
+        if u.path.endswith('/chat/shoutouts'):
             q = urllib.parse.parse_qs(u.query); posts.append((time.time() - t0, q.get('to_broadcaster_id', [''])[0], q.get('moderator_id', [''])[0], q.get('from_broadcaster_id', [''])[0])); self._send(None, 204)
         elif u.path.endswith('/chat/messages'):
             n = int(self.headers.get('Content-Length', 0)); b = json.loads(self.rfile.read(n) or b'{}'); chats.append((time.time() - t0, b.get('message', ''))); self._send({'data': [{'is_sent': True}]})

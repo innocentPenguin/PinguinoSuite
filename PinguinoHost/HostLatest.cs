@@ -321,8 +321,8 @@ namespace PinguinoHost
                     int lo = Math.Max(0, (int?)s["NativeDelayMinSec"] ?? 1), hi = Math.Max(lo, (int?)s["NativeDelayMaxSec"] ?? 5);
                     int jitter = Rng.Next(lo * 1000, hi * 1000 + 1); Thread.Sleep(jitter);
                     JToken d; string err;
-                    string code = TwitchApi.Call(HttpMethod.Post, "/chats/shoutouts?from_broadcaster_id={bid}&to_broadcaster_id=" + uid + "&moderator_id=" + TwitchApi.BroadcasterId(), null, out d, out err);
-                    if (code == "429") { Thread.Sleep(30000); code = TwitchApi.Call(HttpMethod.Post, "/chats/shoutouts?from_broadcaster_id={bid}&to_broadcaster_id=" + uid + "&moderator_id=" + TwitchApi.BroadcasterId(), null, out d, out err); }
+                    string code = TwitchApi.Call(HttpMethod.Post, "/chat/shoutouts?from_broadcaster_id={bid}&to_broadcaster_id=" + uid + "&moderator_id=" + TwitchApi.BroadcasterId(), null, out d, out err);
+                    if (code == "429") { Thread.Sleep(30000); code = TwitchApi.Call(HttpMethod.Post, "/chat/shoutouts?from_broadcaster_id={bid}&to_broadcaster_id=" + uid + "&moderator_id=" + TwitchApi.BroadcasterId(), null, out d, out err); }
                     _lastNative = DateTime.UtcNow; cardSent = code == "204";
                     if (cardSent) lock (L) NativeRecent[login] = DateTime.UtcNow;
                     note = cardSent ? "native shoutout sent after " + jitter + " ms" : "native shoutout refused (HTTP " + code + (err != "" ? ": " + err : "") + ")";
