@@ -37,6 +37,7 @@ namespace PinguinoHost
                 if (e != null && (string)e["name"] == display && (string)e["platform"] == platform) return;
                 m[login] = new JObject { { "platform", platform }, { "name", display }, { "id", id ?? "" }, { "seen", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 try { File.WriteAllText(P, m.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
+                Publish(m);
             }
         }
         /// <summary>the name to show for a key: the remembered display name for other platforms, the Twitch display name otherwise; never empty</summary>
@@ -52,6 +53,13 @@ namespace PinguinoHost
         {
             o["platform"] = PlatformOf(login); if (o["name"] == null) o["name"] = Display(login);
         }
+        /// <summary>the names go to the bots (Core resolves "!kick Tik Toker" to tt:7001): one "login TAB name" line per viewer in the global var pinguino.platform.users</summary>
+        static void Publish(JObject m)
+        {
+            try { var sb = new StringBuilder(); foreach (var p in m.Properties()) { string n = ((string)(p.Value as JObject)?["name"] ?? "").Replace("\t", " ").Replace("\n", " "); if (n != "") sb.Append(p.Name).Append('\t').Append(n).Append('\n'); } Program.SetGlobal("pinguino.platform.users", sb.ToString()); } catch (Exception) { }
+        }
+        /// <summary>publish what is stored (Host start)</summary>
+        public static void PublishAll() { lock (L) { Publish(M()); } }
         public static void TestReset() { lock (L) { _m = null; } }
     }
 }

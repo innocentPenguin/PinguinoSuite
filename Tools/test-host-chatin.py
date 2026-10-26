@@ -70,6 +70,17 @@ try:
     q = [e for e in cstate().get('queue', []) if e.get('platform') == 'youtube']
     chk('youtube viewer joins with the channel id as key, display name kept', len(q) == 1 and q[0]['username'] == 'yt:ucabc-1_x' and q[0]['name'] == 'Yt Fan', cstate().get('queue'))
     chk('youtube replies go to youtube only, with the display name and no yt: key', sends[n:] and all(x[1]['platform'] == 'youtube' and 'yt:' not in x[1]['text'] for x in sends[n:]), sends[n:])
+    # mods remove them by display name (any case) or by key; two players with the same name are refused
+    host.stdin.write(b'#trial: !kick tik toker' + bytes([10])); host.stdin.flush(); time.sleep(2)
+    chk('!kick by display name removes the tiktok player', not [e for e in cstate().get('queue', []) if e['username'] == 'tt:7001'], cstate().get('queue'))
+    cin('Tik Toker', '!join', plat='tiktok', mid='tt-j2', userId='7001'); time.sleep(2)
+    host.stdin.write(b'#trial: !kick tt:7001' + bytes([10])); host.stdin.flush(); time.sleep(2)
+    chk('!kick by key still works', not [e for e in cstate().get('queue', []) if e['username'] == 'tt:7001'], cstate().get('queue'))
+    cin('Tik Toker', '!register OtherEpic', plat='tiktok', mid='tt-r3', userId='7002'); time.sleep(1.5); cin('Tik Toker', '!join', plat='tiktok', mid='tt-j3', userId='7002'); cin('tik toker', '!register Epic3', plat='tiktok', mid='tt-r4', userId='7001'); time.sleep(1.5); cin('Tik Toker', '!join', plat='tiktok', mid='tt-j4', userId='7001'); time.sleep(2)
+    n2 = len(cstate().get('queue', [])); host.stdin.write(b'#trial: !kick Tik Toker' + bytes([10])); host.stdin.flush(); time.sleep(2)
+    chk('two players called Tik Toker: refused, nobody removed', len(cstate().get('queue', [])) == n2, cstate().get('queue'))
+    rc, r = post('/api/customs/mod', {'action': 'kick', 'value': 'tt:7002'}); time.sleep(1.5)
+    chk('Master View kick by key', r.get('ok') and not [e for e in cstate().get('queue', []) if e['username'] == 'tt:7002'], r)
     chk('twitch queue entries carry platform twitch too', all(e.get('platform') for e in cstate().get('queue', [])), cstate().get('queue'))
     c, j = cin('Viewer', '!hi', plat='nonsense'); chk('unknown platform refused', j.get('ok') is False, j)
     # Chatty / Helper / B0t answer YouTube viewers too, on YouTube only

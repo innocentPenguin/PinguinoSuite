@@ -4928,12 +4928,31 @@ public class CPHInline
             Say("@" + user + " Usage: !kick <username>");
             return true;
         }
+        string shown = target;
+        // viewers from YouTube / TikTok are keyed yt:<id> / tt:<id>: a mod can also use their chat display name (case-insensitive, may contain spaces)
+        if (GetEntry(target) == null)
+        {
+            string full = input.Trim().TrimStart('@').ToLower();
+            var hits = new List<string>();
+            try
+            {
+                foreach (string row in (CPH.GetGlobalVar<string>("pinguino.platform.users", false) ?? "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    int tab = row.IndexOf('\t'); if (tab < 1) continue;
+                    string key = row.Substring(0, tab), nm = row.Substring(tab + 1).Trim().ToLower();
+                    if ((nm == full || nm == target) && _queue.Any(e => e.Username == key) && !hits.Contains(key)) hits.Add(key);
+                }
+            }
+            catch (Exception) { }
+            if (hits.Count > 1) { Say("@" + user + " More than one queued player is called " + full + ": use their key, one of " + string.Join(", ", hits) + "."); return true; }
+            if (hits.Count == 1) { target = hits[0]; shown = input.Trim().TrimStart('@'); }
+        }
 
         if (RemoveFromQueue(target))
         {
             bool inLobby = _lastBalance != null && _lastBalance.Players != null &&
                            _lastBalance.Players.Any(p => p.Username == target);
-            Say(target + " has been removed from the queue." +
+            Say(shown + " has been removed from the queue." +
                 (inLobby ? " Use !reroll to refill the lobby." : ""));
             PublishState("queue_update", target + " kicked");
         }
