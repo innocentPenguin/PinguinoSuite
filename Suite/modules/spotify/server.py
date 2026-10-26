@@ -25,7 +25,7 @@ from pathlib import Path
 import console_log
 import store
 from connect import Connect
-from engine import Engine
+from engine import CALL_BUDGET, Engine
 from site_bridge import Bridge
 from queue_core import QueueError
 from spotify_api import ApiError, Auth, Client, NotConnected
@@ -202,6 +202,10 @@ def g_state(h, q):
     return engine.public_state()
 
 
+def g_selfcheck(h, q):
+    return engine.selfcheck()
+
+
 def g_overlay(h, q):
     return engine.overlay()
 
@@ -295,7 +299,7 @@ def g_queue_public(h, q):
     return engine.public_queue()
 
 
-GET = {"/api/queue.json": g_queue_public, "/api/status": g_status, "/api/state": g_state, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
+GET = {"/api/queue.json": g_queue_public, "/api/status": g_status, "/api/state": g_state, "/api/selfcheck": g_selfcheck, "/api/overlay.json": g_overlay, "/api/prestream": g_prestream,
        "/api/search": g_search, "/api/now": lambda h, q: engine.now_info(), "/api/site": lambda h, q: bridge.status(), "/api/devices": g_devices, "/api/stats": lambda h, q: engine.stats(), "/api/playlists": lambda h, q: {"playlists": engine.playlists(), "channel": engine.channel_playlist()}, "/api/logs": lambda h, q: {"entries": console_log.tail(float(q.get("since") or 0), min(int(q.get("limit") or 300), 1000))}, "/api/lyrics": lambda h, q: engine.lyrics(), "/api/leaderboard": lambda h, q: engine.leaderboard(int(q.get("limit") or 10), str(q.get("period") or "all")), "/api/song-log": lambda h, q: engine.song_log(int(q.get("limit") or 50), int(q.get("minutes") or 60)), "/api/announcements": lambda h, q: engine.announcements(int(q.get("since") or 0)), "/api/refunds": lambda h, q: engine.pending_refunds(int(q.get("since") or 0)), "/api/setup": g_setup, "/api/player": lambda h, q: engine.player_info(), "/api/connect": g_connect, "/api/connect/outputs": g_connect_outputs, "/api/player-token": g_player_token, "/callback": g_callback, "/auth/login": g_login}
 
 
@@ -581,7 +585,7 @@ POST = {"/api/connect/start": lambda h, b: p_connect(h, b, "start"), "/api/conne
 
 
 def loop():
-    last_ready = 0
+    last_ready = last_hb = 0
     while True:
         try:
             engine.tick()
@@ -589,6 +593,10 @@ def loop():
             if time.time() - last_ready > 600 and auth.connected():
                 last_ready = time.time()
                 engine.prestream()          # refreshes `me` and keeps the token warm
+            if time.time() - last_hb > 600:                  # heartbeat: how hard are we hitting Spotify
+                last_hb = time.time()
+                n = engine.api_calls_hour()
+                (console_log.warn if n > CALL_BUDGET else console_log.info)("api", f"heartbeat: {n} Spotify calls in the last hour (budget {CALL_BUDGET})", dedupe_s=300)
         except Exception as e:
             console_log.error("engine", f"tick crashed: {type(e).__name__}: {e}", dedupe_s=30)
         time.sleep(FAST_TICK or engine.poll_interval())

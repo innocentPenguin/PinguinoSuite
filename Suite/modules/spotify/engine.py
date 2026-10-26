@@ -12,6 +12,7 @@ Related: rules.py, queue_core.py, config_schema.py, spotify_api.py, server.py, t
 import copy
 import datetime
 import math
+import os
 import random
 import re
 import threading
@@ -37,7 +38,8 @@ def local_day(ts):
 
 VERIFY_EVERY_S = 20
 MAX_REPUSH = 2                   # a song that vanishes from Spotify's queue is pushed again twice, then given up
-RL_MAX_WAIT = 60          # seconds: never wait longer than this after a 429 (Spotify once asked for 11 hours)
+CALL_BUDGET = 1800        # Spotify API calls per hour we allow ourselves (about one per 2 s); above it the poll stretches to 8 s. Normal use is ~900/h
+RL_MAX_WAIT = float(os.environ.get("SPOTIFY_RL_MAX_WAIT", "60"))          # seconds: never wait longer than this after a 429 (Spotify once asked for 11 hours)
 RL_TRUST = 300            # a Retry-After above this is logged (raw value) and not believed
 NO_REFUND = {"blocked", "user_blocked", "dup_recent", "dup_skipped"}   # troll codes: never refunded
 SKIP_EARLY_MS = 20000     # cut off with more than this left = counted as skipped
@@ -90,6 +92,7 @@ class Engine:
         self.backoff_until = 0.0
         self._rl_n = 0                    # consecutive 429s (grows the wait up to RL_MAX_WAIT)
         self._rl_until = 0.0              # when the current 429 wait ends (0 = not rate limited)
+        self.last_push_ms = None          # how long the last add-to-queue took (ms)
         self._rl_ban = 0.0                # when Spotify says the ban really ends (now + its Retry-After)
         self._rl_raw = 0                  # what Spotify's Retry-After said
         self.last_error = ""
@@ -313,8 +316,55 @@ class Engine:
         pb = self.pb
         if pb and pb["track"]:
             left = pb["track"]["duration_ms"] - pb["progress_ms"] - int((self.clock() - self.pb_at) * 1000 if pb["is_playing"] else 0)
-            return 1.5 if left < self.settings["jit_ms"] + 10000 else 4.0
-        return 2.0 if self.queue.items else 6.0
+            if self.queue.items:
+                iv = 1.5 if left < self.settings["jit_ms"] + 10000 else 4.0
+            else:                                       # nothing to push: only watch closely for the song change in the last 10 s
+                iv = min(8.0, max(1.5, left / 1000.0 - 9)) if pb["is_playing"] else 8.0
+        else:
+            iv = 2.0 if self.queue.items else 6.0
+        return max(iv, 8.0) if self.api_calls_hour() > CALL_BUDGET else iv
+
+    def api_calls_hour(self):
+        calls = getattr(self.api, "calls", None)
+        if calls is None:
+            return 0
+        cut = time.time() - 3600
+        return sum(1 for t in list(calls) if t >= cut)
+
+    def selfcheck(self):
+        """Cheap pre-stream check (no Spotify call): {ok, checks:[{id, label, ok, reason}]}. For the Host / Master View chip."""
+        now, s = self.clock(), self._own_settings()
+        rl = self.rate_limit_state()
+        checks = []
+
+        def add(i, label, ok, reason=""):
+            checks.append({"id": i, "label": label, "ok": bool(ok), "reason": "" if ok else reason})
+        if rl["rate_limited"]:
+            add("api", "Spotify API answers", False, "rate limited until " + rl["rate_limited_until_hhmm"] + (f" (Spotify says about {rl['rate_limit_ban_until_hhmm']})" if rl["rate_limit_ban_until_hhmm"] else ""))
+        elif not self.auth.connected():
+            add("api", "Spotify API answers", False, "not signed in to Spotify")
+        elif self.last_error:
+            add("api", "Spotify API answers", False, self.last_error[:100])
+        elif not self.pb_at or now - self.pb_at > 60:
+            add("api", "Spotify API answers", False, "no answer from Spotify for over a minute")
+        else:
+            add("api", "Spotify API answers", True)
+        try:
+            self.auth.access_token()
+            add("token", "Spotify login valid", True)
+        except Exception as e:                       # noqa: BLE001 - ApiError / NotConnected
+            add("token", "Spotify login valid", False, (str(getattr(e, "message", "") or e) or "token not valid")[:100])
+        dev = bool(self.player_live() or ((self.pb or {}).get("device") or {}).get("id"))
+        add("device", "Playback device present", dev, "no Spotify device is up (Connect device not ready and nothing playing)")
+        songify = self.songify_active()
+        add("requests", "Song requests open", s["requests_open"] and not songify, "Songify hand-off is on" if songify else "requests are closed")
+        lat = self.last_push_ms
+        add("push", "Queue push is quick", lat is None or lat < 10000, f"last push to Spotify took {int((lat or 0) / 1000)} s")
+        stuck = [it for it in self.queue.items[:1] if self.pb and self.pb["track"] and self.pb["is_playing"] and not it["pushed"]
+                 and self.pb["track"]["duration_ms"] - self.pb["progress_ms"] < 3000 and not rl["rate_limited"]]
+        add("queue", "Queue not stuck", not stuck, "the next song is not on Spotify's queue seconds before the end")
+        return {"ok": all(c["ok"] for c in checks), "checks": checks, "api_calls_hour": self.api_calls_hour(), "api_call_budget": CALL_BUDGET,
+                "last_push_ms": lat}
 
     def tick(self):
         self.connect_tick()
@@ -612,11 +662,13 @@ class Engine:
                 self._bump()
 
     def _push(self, item):
+        t0 = time.monotonic()
         q = self.api.queue() or {}
         already = any(t and t.get("uri") == item["uri"] for t in (q.get("queue") or [])[:3])
         if not already:
             dev = ((self.pb or {}).get("device") or {}).get("id")
             self.api.add_to_queue(item["uri"], dev)
+        self.last_push_ms = int((time.monotonic() - t0) * 1000)
         with self.lock:
             if self.queue.items and self.queue.items[0]["id"] == item["id"]:
                 item["pushed"] = True
@@ -633,7 +685,7 @@ class Engine:
                 pb["progress_ms"] += int((now - self.pb_at) * 1000)
             return {"connected": self.auth.connected(), "client_id_set": bool(self.auth.client_id), "playback": pb,
                     "now_item": copy.deepcopy(self.now_item), "queue": self.queue.view(), "etas": [self.eta_ms(i) for i in range(len(self.queue.items))], "inbox": [i for i in self.inbox if i["status"] == "pending"],
-                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "songify": self.songify_active(), **self.rate_limit_state(), "skip_votes": len(self.skip_votes),
+                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "songify": self.songify_active(), **self.rate_limit_state(), "selfcheck": self.selfcheck(), "api_calls_hour": self.api_calls_hour(), "api_call_budget": CALL_BUDGET, "skip_votes": len(self.skip_votes),
                     "error": self.last_error or self.auth.last_error, "me": self.me, "version": self.version}
 
     def public_queue(self):

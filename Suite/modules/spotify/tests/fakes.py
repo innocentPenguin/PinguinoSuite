@@ -119,7 +119,7 @@ class _H(BaseHTTPRequestHandler):
                 return self._send(401, {"error": {"status": 401, "message": "The access token expired"}})
             if S.fault and S.fault[0] in path and S.fault[3] > 0:
                 S.fault = (S.fault[0], S.fault[1], S.fault[2], S.fault[3] - 1)
-                hd = {"Retry-After": "2"} if S.fault[1] == 429 else {}
+                hd = {"Retry-After": str(getattr(S, "fault_retry", "2"))} if S.fault[1] == 429 else {}
                 return self._send(S.fault[1], {"error": {"status": S.fault[1], "message": "fault", "reason": S.fault[2]}}, hd)
             p = path[3:]
             body = json.loads(raw) if raw else {}
@@ -195,6 +195,7 @@ class _H(BaseHTTPRequestHandler):
             S.advance(int(q["ms"]))
         elif what == "fault":
             S.fault = (q["path"], int(q["status"]), q.get("reason", ""), int(q.get("n", 1)))
+            S.fault_retry = q.get("retry", "2")
         elif what == "product":
             S.product = q["p"]
         elif what == "nodevice":

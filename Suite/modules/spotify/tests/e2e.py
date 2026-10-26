@@ -106,7 +106,7 @@ def qnames():
 
 def start_server():
     global proc
-    env = {**os.environ, "SPOTIFY_CONNECT_BIN": os.path.join(HERE, "fake_librespot.py"), "PINGUINO_DATA_DIR": DATA, "SPOTIFY_PORT": str(PORT), "SPOTIFY_TICK_S": "0.2", "SPOTIFY_NO_BROWSER": "1",
+    env = {**os.environ, "SPOTIFY_CONNECT_BIN": os.path.join(HERE, "fake_librespot.py"), "PINGUINO_DATA_DIR": DATA, "SPOTIFY_PORT": str(PORT), "SPOTIFY_TICK_S": "0.2", "SPOTIFY_RL_MAX_WAIT": "4", "SPOTIFY_NO_BROWSER": "1",
            "SPOTIFY_API_BASE": f"http://127.0.0.1:{SP_PORT}/v1", "SPOTIFY_ACCOUNTS_BASE": f"http://127.0.0.1:{SP_PORT}",
            "SPOTIFY_YT_OEMBED": f"http://127.0.0.1:{SP_PORT}/oembed", "SPOTIFY_LRCLIB": f"http://127.0.0.1:{SP_PORT}/lrclib/get"}
     env.pop("PINGUINO_API_TOKEN", None)
@@ -388,6 +388,21 @@ def main():
     T("rate limit recovers", wait(lambda: not state()["error"], 8), state()["error"])
     T("state carries the rate-limit fields", all(k in state() for k in ("rate_limited", "rate_limited_until", "rate_limited_until_hhmm")))
     T("rate-limit clears after recovery", wait(lambda: state()["rate_limited"] is False, 45), str(state().get("rate_limited_until")))
+    sc = get("/api/selfcheck")[1]
+    T("selfcheck shape + calls/hour in state", isinstance(sc.get("ok"), bool) and {c["id"] for c in sc["checks"]} >= {"api", "token", "device", "requests", "push", "queue"}
+      and all({"id", "label", "ok", "reason"} <= set(c) for c in sc["checks"]) and state()["api_calls_hour"] > 0 and state()["api_call_budget"] == 1800, str(sc)[:200])
+    # 6-hour ban: capped wait, flag + selfcheck show it, a request made meanwhile is kept with a note and sent after it lifts
+    post("/api/settings", {"requests_open": True, "cooldown_s": 0, "per_user_limit": 0})
+    sim("fault", path="/me/player", status=429, reason="", n=1, retry=21600)
+    T("6 h ban: flag + raw value", wait(lambda: state()["rate_limited"] is True, 8) and state()["rate_limit_raw_s"] == 21600, str({k: state().get(k) for k in ("rate_limited", "rate_limit_raw_s")}))
+    T("6 h ban: wait is capped", state()["rate_limited_until"] - time.time() < 10)
+    scb = get("/api/selfcheck")[1]
+    T("6 h ban: selfcheck red with a reason", scb["ok"] is False and any(c["id"] == "api" and not c["ok"] and "rate limited" in c["reason"] for c in scb["checks"]), str(scb)[:200])
+    rb = chat("bn", "!sr song 39")
+    T("6 h ban: request kept, viewer told once", rb.get("ok") is True and "rate-limited" in rb.get("reply", "") and rb["reply"].count("rate-limited") == 1, str(rb)[:150])
+    T("6 h ban: flag clears when the ban lifts", wait(lambda: state()["rate_limited"] is False, 15))
+    T("6 h ban: kept request still queued", "Song 39" in qnames())
+    post("/api/queue/remove", {"id": next((i["id"] for i in state()["queue"]["items"] if i["name"] == "Song 39"), "")})
     sim("expire")
     T("expired access token refreshed transparently", wait(lambda: post("/api/control", {"action": "volume", "value": 40})[0] == 200) and sim("state")["volume"] == 40)
     T("refresh logged without secrets", "R-1" not in open(os.path.join(DATA, "console", "spotify.jsonl"), encoding="utf8").read())

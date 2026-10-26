@@ -490,6 +490,35 @@ class EngineTests(unittest.TestCase):
         r = self.e.chat("v", "!sr nothing cached zzz", [], redeem=True)
         self.assertEqual((r["ok"], r["code"], r["refund"]), (False, "rate_limited", True))
 
+    def test_selfcheck_all_green_and_red_reasons(self):
+        self.api.playing, self.api.progress = "spotify:track:t1", 5000
+        self.e.save_settings({"requests_open": True})
+        self.e.tick()
+        sc = self.e.selfcheck()
+        self.assertEqual({c["id"] for c in sc["checks"]}, {"api", "token", "device", "requests", "push", "queue"})
+        red = [c for c in sc["checks"] if not c["ok"]]
+        self.assertTrue(all(c["reason"] for c in red))
+        self.e.save_settings({"requests_open": False})
+        sc = self.e.selfcheck()
+        self.assertFalse(sc["ok"])
+        self.assertTrue(any(c["id"] == "requests" and "closed" in c["reason"] for c in sc["checks"]))
+        self.e.last_push_ms = 12000
+        self.assertTrue(any(c["id"] == "push" and not c["ok"] for c in self.e.selfcheck()["checks"]))
+        self._limit(300)
+        c = [c for c in self.e.selfcheck()["checks"] if c["id"] == "api"][0]
+        self.assertFalse(c["ok"])
+        self.assertIn("rate limited", c["reason"])
+        self.assertIn("selfcheck", self.e.public_state())
+
+    def test_call_budget_stretches_the_poll(self):
+        self.api.playing, self.api.progress = "spotify:track:t1", 5000
+        self.e.tick()
+        self.e.add_track(T(2))
+        self.assertLess(self.e.poll_interval(), 8.0)
+        self.api.calls = __import__("collections").deque([time.time()] * 2000)
+        self.assertEqual(self.e.api_calls_hour(), 2000)
+        self.assertGreaterEqual(self.e.poll_interval(), 8.0)
+
     def test_poll_interval_is_slow_when_nothing_is_close(self):
         self.api.playing, self.api.progress = "spotify:track:t1", 5000
         self.e.tick()

@@ -4,6 +4,7 @@
 Tokens live in <DATA>/spotify/tokens.json; access tokens refresh automatically.
 """
 import base64
+import collections
 import hashlib
 import json
 import os
@@ -155,6 +156,7 @@ class Auth:
 class Client:
     def __init__(self, auth, http=default_http):
         self.auth, self.http = auth, http
+        self.calls = collections.deque(maxlen=20000)       # epoch of every Web API call (the hourly budget in the engine counts these)
 
     def connected(self):
         return self.auth.connected()
@@ -165,6 +167,7 @@ class Client:
         headers = {"Authorization": "Bearer " + self.auth.access_token()}
         if data is not None:
             headers["Content-Type"] = "application/json"
+        self.calls.append(time.time())
         st, hd, js = self.http(method, url, headers, data)
         if st == 401 and retry:
             self.auth.force_refresh()
