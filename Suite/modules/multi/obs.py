@@ -21,7 +21,11 @@ CHAT_DEFAULT = {
     "style_type": "simple", "entrance_animation_type": "fade", "themes": [], "custom_css": "",
     # ours (ignored by Synchra on export)
     "max_messages": 30, "accent_color": "#ff8a1f", "name_color_mode": "platform",
+    # chat look sliders: every default is the look the overlay always had (font_px 0 = use the `size` step)
+    "font_px": 0, "line_height": 1.25, "row_padding": 2, "row_gap": 2, "name_size": 100, "badge_size": 100, "width": 100, "show_bots": False,
 }
+CHAT_SLIDERS = {"font_px": (0, 140), "line_height": (1.0, 2.5), "row_padding": (0, 30), "row_gap": (0, 40), "name_size": (50, 200), "badge_size": (50, 250), "width": (20, 100)}
+CHAT_OURS = ("max_messages", "accent_color", "name_color_mode", *CHAT_SLIDERS, "show_bots")      # not part of a Synchra export
 ACTIVITY_DEFAULT = {
     "canvas_scale": 1, "size": "l", "text_color": "#ffffff", "text_shadow_color": "#000000", "background_color": "#14110d", "background_opacity": 0.85,
     "border_width": 0, "border_color": "", "border_radius": 8, "font_family_id": "nunito", "message_fade_duration_seconds": 12,
@@ -147,6 +151,12 @@ def sanitize(kind, src):
         d["themes"] = s.get("themes") if isinstance(s.get("themes"), list) else []
         d["provider_logo_display"] = s.get("provider_logo_display") if isinstance(s.get("provider_logo_display"), str) else None
         d["name_color_mode"] = s.get("name_color_mode") if s.get("name_color_mode") in ("platform", "own", "none") else "platform"
+        for k, (lo, hi) in CHAT_SLIDERS.items():
+            x = _num(s.get(k, d[k]), lo, hi, d[k])
+            d[k] = round(x, 2) if k == "line_height" else int(round(x))
+            if k == "font_px" and 0 < d[k] < 10:
+                d[k] = 10
+        d["show_bots"] = s.get("show_bots") is True
     elif kind == "activity":
         ty = [t for t in (s.get("types") if isinstance(s.get("types"), list) else d["types"]) if t in ACT_TYPES]
         d["types"] = ty
@@ -170,7 +180,7 @@ def from_synchra(doc):
 
 
 def to_synchra(kind, settings, name="Chat"):
-    keys = [k for k in CHAT_DEFAULT if k not in ("max_messages", "accent_color", "name_color_mode")] if kind == "chat" else list(settings)
+    keys = [k for k in CHAT_DEFAULT if k not in CHAT_OURS] if kind == "chat" else list(settings)
     return {"kind": "synchra.widget", "version": 1, "type": {"chat": "chat_widget", "activity": "activity_widget", "follow": "follow_alert_widget"}[kind], "name": name,
             "settings": {k: settings[k] for k in keys if k in settings}}
 
@@ -180,7 +190,8 @@ def hidden(kind, settings, m, muted=()):
     user = (m.get("user") or "").lower()
     disp = (m.get("display") or "").lower()
     ig = {n.lower() for n in settings["ignore_names"]}
-    if user in ig or disp in ig or user in muted or m.get("raw_type") == "dev":
+    bot_ok = kind == "chat" and settings.get("show_bots") and m.get("is_bot")       # show-bots lifts the name filter for bot lines only
+    if ((user in ig or disp in ig) and not bot_ok) or user in muted or m.get("raw_type") == "dev":
         return True
     if "all" not in settings["providers"] and m.get("platform") not in settings["providers"]:
         return True

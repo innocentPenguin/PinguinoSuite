@@ -38,6 +38,12 @@ function obsDraw() {
   const SEC = {
     theme: `<h4>Theme</h4><div class="act">${c.presets.map((p, i) => `<button data-ob-act="preset" data-i="${i}" title="${esc(p.desc)}">${esc(p.name)}</button>`).join('')}<button data-ob-act="reset">Reset to defaults</button></div>
       ${sel('style_type', [['simple', 'Simple (no box per message)'], ['bubble', 'Bubble'], ['boxed', 'Boxed']], 'Style')}<small class="mut">A preset replaces every setting below; you can still change anything afterwards.</small>`,
+    look: `<h4>Chat look</h4><small class="mut">Drag a slider: the preview updates at once and OBS follows within a few seconds. Nothing here adds anything new on screen.</small>
+      ${rng('font_px', 'Font size (0 = use the Size step)', 0, 140, 1, ' px')}${rng('line_height', 'Line spacing', 1, 2.5, 0.05, 'x')}${rng('row_padding', 'Row padding', 0, 30, 1, ' px')}${rng('row_gap', 'Gap between rows', 0, 40, 1, ' px')}
+      ${rng('name_size', 'Name size', 50, 200, 5, ' %')}${rng('badge_size', 'Badge size', 50, 250, 5, ' %')}${rng('width', 'Width of the chat', 20, 100, 1, ' %')}
+      ${rng('max_messages', 'Max lines', 1, 100, 1)}${rng('message_fade_duration_seconds', 'Fade out after (0 = never)', 0, 300, 1, ' s')}${rng('background_opacity', 'Background opacity', 0, 1, 0.05)}
+      ${chk('provider_logo', 'Platform logo (off = none on stream)')}${chk('badges', 'Badges')}${chk('show_bots', 'Show bots (lifts the ignore list for bot messages)')}
+      <div class="act"><button data-ob-act="resetlook">Reset to defaults</button></div>`,
     general: k === 'follow' ? followGeneral : `${sel('size', Object.keys(c.sizes).map(s => [s, s.toUpperCase() + ' (' + c.sizes[s] + 'px)']), 'Size')}${rng('canvas_scale', 'Canvas scale', 0.25, 3, 0.05, 'x')}
       <div class="cf">Platforms ${['all', ...OBS_PLATS].map(p => `<label class="chk"><input type="checkbox" data-obp="${p}" ${S.providers.includes(p) ? 'checked' : ''}> ${p}</label>`).join(' ')}</div>
       ${k === 'activity' ? `<div class="cf">Types ${OBS_ACT.map(t => `<label class="chk"><input type="checkbox" data-obt="${t}" ${S.types.includes(t) ? 'checked' : ''}> ${t}</label>`).join(' ')}</div>` : ''}
@@ -54,7 +60,7 @@ function obsDraw() {
       <small class="mut">Classes: .chat-message-container .chat-username .chat-text .chat-badge .chat-provider ${k === 'activity' ? '.activity-row .act-pill .act-user .act-chip .act-age' : '.chat-notice'}. @import works for web fonts.</small>
       <h4>Paste a Synchra export</h4><textarea id="ob-paste" rows="3" style="width:100%" placeholder="Paste a Synchra chat widget export here"></textarea><div class="act"><button data-ob-act="import-paste">Import pasted text</button></div>`,
   };
-  const TABS = [['theme', 'Theme'], ['general', 'General'], ['appearance', 'Appearance'], ['timing', 'Timing'], ['css', 'Custom CSS']].filter(t => !(k === 'follow' && t[0] === 'timing'));
+  const TABS = [['theme', 'Theme'], ...(k === 'chat' ? [['look', 'Look']] : []), ['general', 'General'], ['appearance', 'Appearance'], ['timing', 'Timing'], ['css', 'Custom CSS']].filter(t => !(k === 'follow' && t[0] === 'timing'));
   const left = head + `<div class="act" style="margin-top:8px">${TABS.map(([id, t]) => `<button class="${OBS.tab === id ? 'p' : ''}" data-ob-act="tab" data-t="${id}">${t}</button>`).join('')}</div><div style="margin-top:8px">${SEC[OBS.tab] || SEC.theme}</div>`;
   const prev = `<div style="position:sticky;top:8px"><b>Live preview</b> <small class="mut">test messages only</small>
     <div style="height:620px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:repeating-conic-gradient(#2a2622 0% 25%,#1d1a17 0% 50%) 0 0/24px 24px"><iframe id="ob-prev" src="/obs/${k}?preview=1" style="width:100%;height:100%;border:0;background:transparent"></iframe></div></div>`;
@@ -100,6 +106,7 @@ document.addEventListener('click', async e => {
   else if (a === 'ptest') { const f = $('#ob-prev'); if (f && f.contentWindow) f.contentWindow.postMessage({obsTest: b.dataset.t}, '*'); }
   else if (a === 'copy') { try { await navigator.clipboard.writeText(obsUrl()); } catch (x) { $('#ob-url').select(); document.execCommand('copy'); } $('#ob-state').textContent = 'address copied'; }
   else if (a === 'preset') { OBS.S = Object.assign({}, OBS.cfg.defaults, OBS.cfg.presets[+b.dataset.i].settings); obsChanged(true); }
+  else if (a === 'resetlook') { for (const key of ['font_px', 'line_height', 'row_padding', 'row_gap', 'name_size', 'badge_size', 'width', 'show_bots', 'max_messages', 'message_fade_duration_seconds', 'background_opacity', 'provider_logo', 'badges']) OBS.S[key] = OBS.cfg.defaults[key]; obsChanged(true); }
   else if (a === 'reset') { if (confirm('Reset this widget to its defaults?')) { OBS.S = JSON.parse(JSON.stringify(OBS.cfg.defaults)); obsChanged(true); } }
   else if (a === 'export') {
     const doc = await fetch('/api/obs/' + OBS.kind + '/export').then(r => r.json());

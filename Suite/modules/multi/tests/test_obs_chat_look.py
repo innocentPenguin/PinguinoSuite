@@ -1,0 +1,54 @@
+"""OBS chat overlay look options: defaults keep the current look, sanitize clamps, Synchra round trip, show-bots, page hooks."""
+import pathlib
+
+import obs
+
+NEW = ("font_px", "line_height", "row_padding", "row_gap", "name_size", "badge_size", "width", "show_bots")
+HTML = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text("utf-8")
+
+
+def test_defaults_are_the_current_look():
+    d = obs.sanitize("chat", {})
+    assert (d["font_px"], d["line_height"], d["row_padding"], d["row_gap"]) == (0, 1.25, 2, 2)
+    assert (d["name_size"], d["badge_size"], d["width"], d["show_bots"], d["provider_logo"]) == (100, 100, 100, False, False)
+    old = obs.sanitize("chat", obs.IVAN_CHAT)                     # a preset saved before these keys existed
+    assert all(old[k] == obs.CHAT_DEFAULT[k] for k in NEW) and old["size"] == "xxl"
+    for name, p in obs.PRESETS["chat"].items():
+        s = obs.sanitize("chat", p["settings"])
+        assert s["font_px"] == 0 and s["show_bots"] is False, name
+
+
+def test_sanitize_clamps_and_falls_back():
+    s = obs.sanitize("chat", {"font_px": 999, "line_height": 9, "row_padding": -5, "row_gap": 500, "name_size": 1, "badge_size": 9999, "width": 0, "show_bots": "yes"})
+    assert (s["font_px"], s["line_height"], s["row_padding"], s["row_gap"]) == (140, 2.5, 0, 40)
+    assert (s["name_size"], s["badge_size"], s["width"], s["show_bots"]) == (50, 250, 20, False)
+    bad = obs.sanitize("chat", {k: "junk" for k in NEW})
+    assert all(bad[k] == obs.CHAT_DEFAULT[k] for k in NEW)
+    assert obs.sanitize("chat", {"font_px": 4})["font_px"] == 10          # a px size below 10 would be unreadable
+    assert obs.sanitize("chat", {"font_px": 30.4, "show_bots": True}) ["font_px"] == 30
+    assert obs.sanitize("chat", {"show_bots": True})["show_bots"] is True
+    assert not any(k in obs.sanitize("activity", {"font_px": 50}) for k in NEW)
+
+
+def test_synchra_round_trip_ignores_our_keys():
+    st = obs.sanitize("chat", {"font_px": 40, "width": 60, "show_bots": True, "max_messages": 12, "size": "l"})
+    doc = obs.to_synchra("chat", st)
+    assert not any(k in doc["settings"] for k in NEW) and "max_messages" not in doc["settings"]
+    back, err = obs.from_synchra(doc)
+    assert not err and back["size"] == "l" and all(back[k] == obs.CHAT_DEFAULT[k] for k in NEW)
+
+
+def test_show_bots_lifts_ignore_list_for_bots_only():
+    m = {"user": "nightbot", "display": "Nightbot", "platform": "twitch", "event": "", "is_bot": True}
+    off = obs.sanitize("chat", {"ignore_names": ["nightbot"]})
+    on = obs.sanitize("chat", {"ignore_names": ["nightbot"], "show_bots": True})
+    assert obs.hidden("chat", off, m) and not obs.hidden("chat", on, m)
+    human = dict(m, is_bot=False)
+    assert obs.hidden("chat", on, human) and obs.hidden("chat", on, m, muted=("nightbot",))
+
+
+def test_page_renders_new_keys_without_new_elements():
+    for hook in ("--lh", "--rp", "--rg", "--ns", "--bs", "--wd", "S.font_px", "S.show_bots"):
+        assert hook in HTML, hook
+    assert "S.provider_logo ?" in HTML and "api/obs/' + KIND" in HTML          # logo stays opt-in; settings poll as a safety net
+    assert "var(--lh,1.25)" in HTML and "var(--rg,2px)" in HTML                 # fallbacks equal the old fixed values
