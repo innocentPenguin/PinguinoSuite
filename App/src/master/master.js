@@ -241,6 +241,8 @@
   function paintRateLimit() {
     const v = C.rateLimitView(S.get('mstate'));
     for (const sel of ['#pl-rl', '#sg-rl']) { const e = $(sel); if (!e) continue; e.hidden = !v.limited; e.textContent = v.text; }
+    const sc = C.selfcheckView(S.get('mstate'));
+    for (const sel of ['#hd-sc', '#pl-sc', '#sg-sc']) { const e = $(sel); if (!e) continue; e.hidden = !sc.bad; e.textContent = sc.text; e.title = sc.title; }
   }
   function renderMusic() {
     renderSongify();
@@ -644,7 +646,7 @@
     $('#tab-stream').innerHTML = `<div class="si">
       <h4 class="si-h" style="margin-top:0">Music: Songify</h4>
       <div class="row"><button class="sm rd warn" id="sg-btn" title="Turns the bot's own player off so another app (Songify) can run the music, or takes it back. Two clicks.">Hand off to Songify</button><span class="faint sm" id="sg-state" role="status"></span></div>
-      <span id="sg-rl" class="rl-chip" hidden></span>
+      <span id="sg-rl" class="rl-chip" hidden></span><span id="sg-sc" class="rl-chip" hidden></span>
       <div id="sg-res" class="si-res"></div>
       <div class="note sm">Edit once, push to the platforms you tick. This only changes text (and can schedule a YouTube broadcast). It never starts a stream.</div>
       <label class="lbl" for="si-title">Title</label><input type="text" id="si-title" maxlength="140" autocomplete="off" placeholder="Stream title">

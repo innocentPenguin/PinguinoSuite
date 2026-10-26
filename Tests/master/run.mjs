@@ -421,6 +421,17 @@ await t('Spotify rate-limit chip: true shows "until HH:MM" (hhmm, else from the 
   assert.match(html, /id="pl-rl"[^>]*hidden/); assert.match(js, /id="sg-rl"[^>]*hidden/); assert.match(js, /#pl-rl.*#sg-rl/);
 });
 
+await t('Spotify self-check chip: ok false shows failed labels with reasons on hover, ok true / missing / old module hides it; markup has header, strip and Stream chips', async () => {
+  delete st.sc; let v = C.selfcheckView((await api.get('/api/state')).json); assert.equal(v.bad, false); assert.equal(v.text, '');
+  st.sc = { ok: true, checks: [{ id: 'api', label: 'API', ok: true, reason: '' }], api_calls_hour: 10, api_call_budget: 100 }; assert.equal(C.selfcheckView((await api.get('/api/state')).json).bad, false);
+  st.sc = { ok: false, checks: [{ id: 'api', label: 'API', ok: true, reason: '' }, { id: 'token', label: 'Token', ok: false, reason: 'refresh failed' }, { id: 'device', label: 'Device', ok: false, reason: 'no active device' }], api_calls_hour: 90, api_call_budget: 100 };
+  v = C.selfcheckView((await api.get('/api/state')).json); assert.equal(v.bad, true); assert.equal(v.text, 'Spotify: Token, Device'); assert.match(v.title, /Token: refresh failed/); assert.match(v.title, /Device: no active device/); assert.match(v.title, /90 of 100/); assert.doesNotMatch(v.title, /API:/);
+  st.sc = { ok: false, checks: [{ id: 'push', ok: false }], api_calls_hour: 5, api_call_budget: 100 }; v = C.selfcheckView((await api.get('/api/state')).json); assert.equal(v.text, 'Spotify: push'); assert.doesNotMatch(v.title, /of 100/);
+  assert.equal(C.selfcheckView({ selfcheck: { ok: false } }).text, 'Spotify: self-check failing'); assert.equal(C.selfcheckView({ selfcheck: 'x' }).bad, false); assert.equal(C.selfcheckView(null).bad, false); delete st.sc;
+  const dir = path.join(here, '..', '..', 'App', 'src', 'master'), html = fs.readFileSync(path.join(dir, 'master.html'), 'utf8'), js = fs.readFileSync(path.join(dir, 'master.js'), 'utf8');
+  assert.match(html, /id="hd-sc"[^>]*hidden/); assert.match(html, /id="pl-sc"[^>]*hidden/); assert.match(js, /id="sg-sc"[^>]*hidden/); assert.match(js, /#hd-sc.*#pl-sc.*#sg-sc/);
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);

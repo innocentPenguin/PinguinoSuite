@@ -454,5 +454,14 @@
     if (!t && Number.isFinite(Number(st.rate_limited_until)) && Number(st.rate_limited_until) > 0) { const d = new Date(Number(st.rate_limited_until) * 1000); t = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
     return { limited: true, until: t, text: t ? 'Spotify rate limited until ' + t : 'Spotify rate limited' };
   }
-  return { rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  /* Spotify self-check chip: /api/state.selfcheck = {ok, checks:[{id,label,ok,reason}], api_calls_hour, api_call_budget}; shown only when ok === false (missing or old module = nothing) */
+  function selfcheckView(st) {
+    const sc = st && st.selfcheck; if (!sc || typeof sc !== 'object' || sc.ok !== false) return { bad: false, text: '', title: '' };
+    const failed = (Array.isArray(sc.checks) ? sc.checks : []).filter(x => x && x.ok === false), name = x => String(x.label || x.id || 'check');
+    const lines = failed.map(x => name(x) + (x.reason ? ': ' + x.reason : ''));
+    const used = Number(sc.api_calls_hour), budget = Number(sc.api_call_budget);
+    if (used > 0 && budget > 0 && used / budget > 0.8) lines.push('API calls this hour: ' + used + ' of ' + budget);
+    return { bad: true, text: 'Spotify: ' + (failed.length ? failed.map(name).join(', ') : 'self-check failing'), title: lines.join(String.fromCharCode(10)) };
+  }
+  return { selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });
