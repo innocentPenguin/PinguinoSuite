@@ -12,6 +12,7 @@ Related: rules.py, queue_core.py, config_schema.py, spotify_api.py, server.py, t
 import copy
 import datetime
 import math
+import random
 import re
 import threading
 import time
@@ -36,6 +37,8 @@ def local_day(ts):
 
 VERIFY_EVERY_S = 20
 MAX_REPUSH = 2                   # a song that vanishes from Spotify's queue is pushed again twice, then given up
+RL_MAX_WAIT = 60          # seconds: never wait longer than this after a 429 (Spotify once asked for 11 hours)
+RL_TRUST = 300            # a Retry-After above this is logged (raw value) and not believed
 NO_REFUND = {"blocked", "user_blocked", "dup_recent", "dup_skipped"}   # troll codes: never refunded
 SKIP_EARLY_MS = 20000     # cut off with more than this left = counted as skipped
 IDLE_UNPUSH_S = 8
@@ -85,6 +88,9 @@ class Engine:
         self.last_uri = None
         self.skip_votes = set()
         self.backoff_until = 0.0
+        self._rl_n = 0                    # consecutive 429s (grows the wait up to RL_MAX_WAIT)
+        self._rl_until = 0.0              # when the current 429 wait ends (0 = not rate limited)
+        self._rl_raw = 0                  # what Spotify's Retry-After said
         self.last_error = ""
         self.last_verify = 0.0
         self.idle_since = None
@@ -278,6 +284,36 @@ class Engine:
         except Exception as e:
             console_log.error("connect", f"connect tick: {type(e).__name__}: {e}", dedupe_s=30)
 
+    def _rate_limited(self, e):
+        """A 429: wait min(Retry-After, 60 s) with a growing floor and jitter; a huge Retry-After is logged once, never obeyed."""
+        now = self.clock()
+        if now < self._rl_until:
+            return
+        raw = int(getattr(e, "retry_after", 0) or 0)
+        self._rl_n = min(self._rl_n + 1, 10)
+        wait = min(RL_MAX_WAIT, max(min(raw, RL_MAX_WAIT), 5 * 2 ** (self._rl_n - 1))) + random.uniform(0, 3)
+        self._rl_raw = raw
+        self.backoff_until = self._rl_until = now + wait
+        if raw > RL_TRUST:
+            console_log.warn("api", f"Spotify asked for a {raw}s wait; not obeying it, retrying in about {int(wait)}s", dedupe_s=3600)
+        else:
+            console_log.warn("api", f"rate limited (Spotify said {raw}s), retrying in about {int(wait)}s", dedupe_s=30)
+        self._bump()
+
+    def rate_limit_state(self):
+        now = self.clock()
+        on = now < self._rl_until and now < self.backoff_until
+        return {"rate_limited": on, "rate_limited_until": int(self._rl_until) if on else 0,
+                "rate_limited_until_hhmm": time.strftime("%H:%M", time.localtime(self._rl_until)) if on else "", "rate_limit_raw_s": self._rl_raw if on else 0}
+
+    def poll_interval(self):
+        """Seconds until the next Spotify poll: quick only around the end of a song or while songs wait, slow otherwise (the old 1-2 s poll got us 429'd)."""
+        pb = self.pb
+        if pb and pb["track"]:
+            left = pb["track"]["duration_ms"] - pb["progress_ms"] - int((self.clock() - self.pb_at) * 1000 if pb["is_playing"] else 0)
+            return 1.5 if left < self.settings["jit_ms"] + 10000 else 4.0
+        return 2.0 if self.queue.items else 6.0
+
     def tick(self):
         self.connect_tick()
         if not self.auth.connected():
@@ -290,21 +326,21 @@ class Engine:
             pb = norm_playback(self.api.playback())
             self.last_error = ""
         except RateLimited as e:
-            self.backoff_until = self.clock() + e.retry_after + 1
-            console_log.warn("api", f"rate limited, backing off {e.retry_after}s", dedupe_s=30)
+            self._rate_limited(e)
             return
         except ApiError as e:
             self.last_error = str(e)
             self.backoff_until = self.clock() + (10 if e.status in (0, 401) else 3)
             console_log.warn("api", f"playback poll failed: {e}", dedupe_s=60)
             return
+        self._rl_n, self._rl_until = 0, 0.0
         with self.lock:
             self._apply(pb)
         self._player_tick()
         try:
             self._jit()
         except RateLimited as e:
-            self.backoff_until = self.clock() + e.retry_after + 1
+            self._rate_limited(e)
         except ApiError as e:
             console_log.warn("queue", f"could not push next track: {e}", dedupe_s=30)
             self.last_error = str(e)
@@ -595,7 +631,7 @@ class Engine:
                 pb["progress_ms"] += int((now - self.pb_at) * 1000)
             return {"connected": self.auth.connected(), "client_id_set": bool(self.auth.client_id), "playback": pb,
                     "now_item": copy.deepcopy(self.now_item), "queue": self.queue.view(), "etas": [self.eta_ms(i) for i in range(len(self.queue.items))], "inbox": [i for i in self.inbox if i["status"] == "pending"],
-                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "songify": self.songify_active(), "skip_votes": len(self.skip_votes),
+                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "songify": self.songify_active(), **self.rate_limit_state(), "skip_votes": len(self.skip_votes),
                     "error": self.last_error or self.auth.last_error, "me": self.me, "version": self.version}
 
     def public_queue(self):
@@ -688,7 +724,7 @@ class Engine:
         if not redeem and track is None and not s["chat_requests"] and not rules.is_staff(roles):
             return {**self._r(False, "reward_only", user=user), "refund": False}
         r = self._request(user, query, roles, redeem, track)
-        r["refund"] = bool(redeem and not r["ok"] and r["code"] in s["refund_on"] and r["code"] not in NO_REFUND)
+        r["refund"] = bool(redeem and not r["ok"] and (r["code"] in s["refund_on"] or r["code"] == "rate_limited") and r["code"] not in NO_REFUND)
         if r["refund"] and s["msgs"].get("refunded"):
             r["reply"] = (r["reply"] + self.say("refunded")[len(s["reply_prefix"]):])[:400] if r["reply"] else r["reply"]
         return r
@@ -708,6 +744,9 @@ class Engine:
                 return self._r(False, "no_search", user=user)
         try:
             cands = [track] if track else self.resolve(query)
+        except RateLimited as e:
+            self._rate_limited(e)
+            return self._r(False, "rate_limited", user=user)
         except ApiError as e:
             console_log.warn("request", f"lookup failed for {user}: {e}", dedupe_s=30)
             return self._r(False, "lookup", user=user)
@@ -778,6 +817,8 @@ class Engine:
             self._announce("announce_request", user=user, song=label, title=t["name"], artist=base["artist"])
         r = self._r(True, "added", **base, pos=idx + 1, eta=f", plays in ~{mins} min" if mins >= 2 else "")
         r["item"] = item["id"]
+        if r["reply"] and self.rate_limit_state()["rate_limited"]:        # accepted into OUR queue; it is pushed when Spotify lets us again
+            r["reply"] = (r["reply"] + self.say("rate_limited_note")[len(s["reply_prefix"]):])[:400]
         return r
 
     def _to_playlist(self, t):

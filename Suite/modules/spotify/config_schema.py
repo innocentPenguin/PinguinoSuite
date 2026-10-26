@@ -31,6 +31,8 @@ MSGS = {
     "none": ("No result", "@{user} no song found for that.", "Search found nothing."),
     "usage": ("Usage hint", "@{user} usage: !sr <song name or Spotify link>", "Empty !sr."),
     "offline": ("Spotify offline", "Song requests aren't available right now.", "Not connected to Spotify."),
+    "rate_limited": ("Spotify rate-limited", "@{user} Spotify is rate-limiting us right now, try again in a minute.", "A lookup hit Spotify's rate limit (a channel-point redeem is refunded)."),
+    "rate_limited_note": ("Rate-limited note", " (Spotify is rate-limited: your request is queued and will be sent when it clears.)", "Added to an accepted request's reply while Spotify is rate-limiting us."),
     "lookup": ("Lookup failed", "@{user} couldn't reach Spotify, try again.", "Spotify error during search."),
     "song": ("!song", "Now playing: {song}{by} {link}", "Current song ({by} is ' (requested by X)' or empty)."),
     "song_idle": ("!song idle", "Nothing is playing right now.", "Nothing playing."),

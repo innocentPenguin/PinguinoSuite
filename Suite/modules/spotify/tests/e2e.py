@@ -386,6 +386,8 @@ def main():
     time.sleep(1.2)
     T("rate limit: server survives and stays responsive", get("/api/status")[0] == 200)
     T("rate limit recovers", wait(lambda: not state()["error"], 8), state()["error"])
+    T("state carries the rate-limit fields", all(k in state() for k in ("rate_limited", "rate_limited_until", "rate_limited_until_hhmm")))
+    T("rate-limit clears after recovery", wait(lambda: state()["rate_limited"] is False, 45), str(state().get("rate_limited_until")))
     sim("expire")
     T("expired access token refreshed transparently", wait(lambda: post("/api/control", {"action": "volume", "value": 40})[0] == 200) and sim("state")["volume"] == 40)
     T("refresh logged without secrets", "R-1" not in open(os.path.join(DATA, "console", "spotify.jsonl"), encoding="utf8").read())

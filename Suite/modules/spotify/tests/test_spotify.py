@@ -422,6 +422,61 @@ class EngineTests(unittest.TestCase):
         self.api.playback = boom
         self.e.tick()
         self.assertGreaterEqual(self.e.backoff_until, self.clock.t + 7)
+        self.assertLess(self.e.backoff_until, self.clock.t + 11)
+
+    def _limit(self, raw):
+        def boom(*a, **k):
+            raise spotify_api.RateLimited(raw)
+        self.api.playback = boom
+        self.e.tick()
+
+    def test_huge_retry_after_is_capped_and_logged_raw(self):
+        self._limit(40310)
+        self.assertLessEqual(self.e.backoff_until - self.clock.t, 64)
+        st = self.e.public_state()
+        self.assertTrue(st["rate_limited"])
+        self.assertEqual(st["rate_limit_raw_s"], 40310)
+        self.assertRegex(st["rate_limited_until_hhmm"], r"^\d\d:\d\d$")
+        self.assertGreater(st["rate_limited_until"], self.clock.t)
+
+    def test_backoff_grows_then_clears_on_success(self):
+        self._limit(1)
+        w1 = self.e.backoff_until - self.clock.t
+        self.clock.t += 100
+        self._limit(1)
+        w2 = self.e.backoff_until - self.clock.t
+        self.assertGreater(w2, w1)
+        self.clock.t += 100
+        self.api.playback = lambda: None
+        self.e.tick()
+        self.assertFalse(self.e.public_state()["rate_limited"])
+        self.assertEqual(self.e.rate_limit_state()["rate_limited_until"], 0)
+
+    def test_requests_during_backoff_are_queued_with_a_note_and_pushed_after(self):
+        self.e.save_settings({"requests_open": True})
+        self._limit(300)
+        r = self.e.chat("v", "!sr song 5", [])
+        self.assertTrue(r["ok"], r)
+        self.assertIn("rate-limited", r["reply"])
+        self.assertEqual(len(self.e.queue.items), 1)
+        self.api.playback = lambda: None
+        self.clock.t += 80
+        self.e.tick()
+        self.assertFalse(self.e.rate_limit_state()["rate_limited"])
+        self.assertEqual(len(self.e.queue.items), 1)          # still ours, ready for the normal push
+
+    def test_lookup_rate_limited_is_refused_and_refunded(self):
+        self.e.save_settings({"requests_open": True})
+        def boom(*a, **k):
+            raise spotify_api.RateLimited(5)
+        self.api.search = boom
+        r = self.e.chat("v", "!sr nothing cached zzz", [], redeem=True)
+        self.assertEqual((r["ok"], r["code"], r["refund"]), (False, "rate_limited", True))
+
+    def test_poll_interval_is_slow_when_nothing_is_close(self):
+        self.api.playing, self.api.progress = "spotify:track:t1", 5000
+        self.e.tick()
+        self.assertGreaterEqual(self.e.poll_interval(), 4.0)
 
     def test_overlay_and_state_shape(self):
         self.api.playing, self.api.progress = "spotify:track:t1", 5000

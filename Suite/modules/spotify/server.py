@@ -586,15 +586,12 @@ def loop():
         try:
             engine.tick()
             engine.automation_tick()
-            pb = engine.pb
-            near = pb and pb["track"] and (pb["track"]["duration_ms"] - pb["progress_ms"]) < 45000
             if time.time() - last_ready > 600 and auth.connected():
                 last_ready = time.time()
                 engine.prestream()          # refreshes `me` and keeps the token warm
         except Exception as e:
             console_log.error("engine", f"tick crashed: {type(e).__name__}: {e}", dedupe_s=30)
-            near = False
-        time.sleep(FAST_TICK or (1.0 if near else 2.0))
+        time.sleep(FAST_TICK or engine.poll_interval())
 
 
 def main():
