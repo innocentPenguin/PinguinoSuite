@@ -46,7 +46,7 @@ namespace PinguinoHost
         }
         static JObject Mk(string id, string name, int every, int minMsgs, params string[] msgs)
         {   // the samples start DISABLED: Ivan switches on the ones he wants
-            return new JObject { { "id", id }, { "name", name }, { "enabled", false }, { "everySec", every }, { "minChatMessages", minMsgs }, { "onlineOnly", true }, { "mode", "rotate" }, { "messages", new JArray(msgs) }, { "automation", "" }, { "lastRun", 0 }, { "nextIndex", 0 } };
+            return new JObject { { "id", id }, { "name", name }, { "enabled", false }, { "everySec", every }, { "minChatMessages", minMsgs }, { "onlineOnly", true }, { "mode", "rotate" }, { "messages", new JArray(msgs) }, { "platforms", new JArray("twitch", "youtube") }, { "automation", "" }, { "lastRun", 0 }, { "nextIndex", 0 } };
         }
         static void Save() { try { string tmp = PathF + ".tmp"; File.WriteAllText(tmp, _doc.ToString(), new UTF8Encoding(false)); if (File.Exists(PathF)) File.Delete(PathF); File.Move(tmp, PathF); } catch (Exception ex) { Clog.Warn("timers", "could not save timers.json: " + ex.Message); } }
         static IEnumerable<JObject> All() { return ((JArray)Doc()["timers"]).OfType<JObject>(); }
@@ -103,6 +103,35 @@ namespace PinguinoHost
             if (due != null) Fire(due, false);
         }
 
+        /// <summary>which platforms a timer goes to; missing = twitch + youtube. Only twitch and youtube are honoured (TikTok is read-only, never sent)</summary>
+        static bool PlatformOn(JObject t, string name)
+        {
+            var a = t["platforms"] as JArray; if (a == null) return true;
+            return a.Select(x => ((string)x ?? "").Trim().ToLowerInvariant()).Contains(name);
+        }
+        static DateTime _ytSkipLog = DateTime.MinValue;
+        static void YtSkip(string why)
+        {
+            if ((DateTime.UtcNow - _ytSkipLog).TotalSeconds < 60) return; _ytSkipLog = DateTime.UtcNow;
+            Clog.Info("timers", "timer line not sent to YouTube: " + why);
+        }
+        /// <summary>true when the stream is live and Multi reports its YouTube connector connected (else logs why, once a minute)</summary>
+        static bool YoutubeUp()
+        {
+            if (!IsLive()) { YtSkip("stream is not live"); return false; }
+            JObject st = null; try { st = AlertBridge.GetJson("/api/status"); } catch (Exception) { }
+            if (st == null) { YtSkip("Multi is not reachable"); return false; }
+            var c = (st["connectors"] as JArray)?.OfType<JObject>().FirstOrDefault(x => ((string)x["platform"] ?? "").ToLowerInvariant() == "youtube");
+            if (c == null || ((string)c["status"] ?? "").ToLowerInvariant() != "connected") { YtSkip("YouTube is not connected in Multi"); return false; }
+            return true;
+        }
+        /// <summary>the one YouTube send for a timer line (no reply_to); the platform+text duplicate guard in SendForeign still applies</summary>
+        static void SendYoutube(string text)
+        {
+            string via; ReplyCtx.BeginForeign("youtube", "", "");
+            try { HostApi.SendAs("core", text, out via); } finally { ReplyCtx.End(); }
+        }
+
         // sends the timer's message(s) / runs its automation, then records the run
         static string Fire(JObject t, bool manual)
         {
@@ -121,6 +150,7 @@ namespace PinguinoHost
                 t["lastRun"] = Now(); MsgAt[(string)t["id"]] = HostApi.Messages; _lastAny = Now(); Save();
             }
             var ctx = new Dictionary<string, string> { { "channel", ((string)HostApi.StreamerCreds()["Channel"] ?? "") }, { "timer", (string)t["name"] } };
+            bool toTwitch, toYt; lock (L) { toTwitch = PlatformOn(t, "twitch"); toYt = PlatformOn(t, "youtube"); }
             var thr = new Thread(() =>
             {
                 try
@@ -128,7 +158,8 @@ namespace PinguinoHost
                     for (int i = 0; i < parts.Count; i++)
                     {
                         string text = Auto.Expand(parts[i], ctx).Trim(); if (text == "") continue;
-                        string via; HostApi.SendAs("core", text, out via);
+                        string via; if (toTwitch) HostApi.SendAs("core", text, out via);
+                        if (toYt && YoutubeUp()) SendYoutube(text);
                         if (i + 1 < parts.Count) Thread.Sleep(Fast ? 100 : 2500);
                     }
                     if (automation != "") Auto.Test(automation, null, false);
@@ -157,7 +188,7 @@ namespace PinguinoHost
             }
         }
 
-        /// <summary>{timer:{id?,name,enabled,everySec,minChatMessages,onlineOnly,mode,messages[],automation}} to add/update | {id,enabled} | {delete:id} | {now:id} | {globalGapSec:n}</summary>
+        /// <summary>{timer:{id?,name,enabled,everySec,minChatMessages,onlineOnly,mode,messages[],platforms[twitch,youtube],automation}} to add/update | {id,enabled} | {delete:id} | {now:id} | {globalGapSec:n}</summary>
         public static JObject Post(JObject b)
         {
             lock (L)
@@ -179,6 +210,7 @@ namespace PinguinoHost
                     if (tj["onlineOnly"] != null) t["onlineOnly"] = (bool)tj["onlineOnly"];
                     if (tj["mode"] != null) { string m = ((string)tj["mode"]).ToLowerInvariant(); t["mode"] = m == "random" || m == "all" ? m : "rotate"; }
                     if (tj["messages"] is JArray ms) { t["messages"] = new JArray(ms.Select(x => ((string)x ?? "").Trim()).Where(x => x != "").Select(x => x.Length > 450 ? x.Substring(0, 450) : x)); t["nextIndex"] = 0; }
+                    if (tj["platforms"] is JArray pl) t["platforms"] = new JArray(pl.Select(x => ((string)x ?? "").Trim().ToLowerInvariant()).Where(x => x == "twitch" || x == "youtube").Distinct());
                     if (tj["automation"] != null) t["automation"] = ((string)tj["automation"] ?? "").Trim();
                     Save(); return Api();
                 }
