@@ -1333,6 +1333,7 @@ pages.timers=()=>{
     <div class="row wrap" style="margin-top:8px;gap:12px"><label class="sm">Every <input data-tf="everyMin" type="number" min="${Math.ceil(min/60)}" step="1" style="width:70px" value="${Math.round((t.everySec||900)/60)}"> min</label>
       <label class="sm">After <input data-tf="minChatMessages" type="number" min="0" style="width:70px" value="${t.minChatMessages|0}"> chat lines</label>
       <label class="sm"><input type="checkbox" data-tf="onlineOnly"${t.onlineOnly?' checked':''}> only while live</label>
+      <label class="sm"><input type="checkbox" data-tf="ptwitch"${!t.platforms||t.platforms.includes('twitch')?' checked':''}> Twitch</label><label class="sm"><input type="checkbox" data-tf="pyoutube"${!t.platforms||t.platforms.includes('youtube')?' checked':''}> YouTube</label>
       <label class="sm">Order <select data-tf="mode">${['rotate','random','all'].map(m=>`<option${m===(t.mode||'rotate')?' selected':''}>${m}</option>`).join('')}</select></label></div>
     <textarea data-tf="messages" rows="${Math.max(2,Math.min(8,(t.messages||[]).length+1))}" style="width:100%;margin-top:8px" placeholder="One message per line">${esc((t.messages||[]).join('\n'))}</textarea>
     <div class="row wrap" style="margin-top:6px"><label class="sm" style="flex:1">Also run action <input data-tf="automation" style="width:70%" value="${esc(t.automation||'')}" placeholder="optional action name"></label><button class="sm" data-tact="save">Save this timer</button></div></div>`;
@@ -1370,7 +1371,7 @@ function bindTimers(){
       TM.last[id]=Date.now();return run({now:id},'Sent').then(ok=>{if(!ok)delete TM.last[id]})}
     if(a==='del')return armBtn(b,'Click again to delete',()=>run({delete:id},'Timer deleted',id));
     const msgs=f('messages').value.split('\n').map(x=>x.trim()).filter(Boolean);
-    const doSave=()=>run({timer:{id,enabled:f('enabled').checked,everySec:Math.max(TM.d.minEverySec||60,Math.round((+f('everyMin').value||15)*60)),minChatMessages:+f('minChatMessages').value||0,onlineOnly:f('onlineOnly').checked,mode:f('mode').value,messages:msgs,automation:f('automation').value.trim()}},'Timer saved',id);
+    const doSave=()=>run({timer:{id,enabled:f('enabled').checked,everySec:Math.max(TM.d.minEverySec||60,Math.round((+f('everyMin').value||15)*60)),minChatMessages:+f('minChatMessages').value||0,onlineOnly:f('onlineOnly').checked,platforms:[f('ptwitch').checked&&'twitch',f('pyoutube').checked&&'youtube'].filter(Boolean),mode:f('mode').value,messages:msgs,automation:f('automation').value.trim()}},'Timer saved',id);
     if(!msgs.length)return armBtn(b,'No messages: click again to save',doSave);
     doSave()})}
 
