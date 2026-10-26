@@ -40,6 +40,19 @@ def _user(ev):
     return str(getattr(u, "id", "") or getattr(u, "user_id", "") or handle_), handle_, str(getattr(u, "nickname", "") or handle_)
 
 
+def _badges(ev):
+    """TikTok 7.x comment -> badge list. user_identity.is_subscriber_of_anchor = super fan / subscriber ("subscriber" so role "sub" works), is_moderator_of_anchor = "moderator", is_anchor = "owner"."""
+    ui = getattr(ev, "user_identity", None)
+    out = []
+    if getattr(ui, "is_subscriber_of_anchor", False) is True or getattr(ev, "user_is_super_fan", False) is True:
+        out.append("subscriber")
+    if getattr(ui, "is_moderator_of_anchor", False) is True:
+        out.append("moderator")
+    if getattr(ui, "is_anchor", False) is True:
+        out.append("owner")
+    return out
+
+
 def map_event(kind, ev, handle_):
     """TikTokLive event-like object -> ChatMessage | None. kind: comment | gift | follow | share | like | subscribe. Pure."""
     uid, login, nick = _user(ev)
@@ -47,7 +60,7 @@ def map_event(kind, ev, handle_):
         text = str(getattr(ev, "content", "") or getattr(ev, "comment", "") or "")
         if not (uid or login) or not text.strip():
             return None
-        badges = ["subscriber"] if getattr(ev, "user_is_super_fan", False) is True else []
+        badges = _badges(ev)
         return ChatMessage(id=f"tiktok:{handle_}:{xplat._msg_id(ev) or uid + str(int(time.time() * 1000))}", platform="tiktok", channel=handle_,
                            user_id=uid, user=login.lower(), display=nick, text=text[:500], ts=time.time(), badges=badges, raw_type="text", is_self=bool(login) and login.lower() == str(handle_).lower())
     if kind == "share":

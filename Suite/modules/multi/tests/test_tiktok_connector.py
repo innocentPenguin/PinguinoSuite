@@ -171,3 +171,26 @@ def test_tiktok_chat_reaches_first_chatter_ding(tmp_path, monkeypatch):
     assert d.observe(m) == "first"
     st["tiktok_enabled"] = False
     assert d.observe(tl.map_event("comment", tev.CommentEvent(content="hi", user=ExtendedUser(id=9, display_id="zed")), "host")) is False
+
+
+def test_non_json_answer_backs_off_from_60s_and_logs_body_once(monkeypatch):
+    import json
+    try:
+        json.loads("<html>Access denied token=SECRET</html>")
+    except json.JSONDecodeError as je:
+        err = je
+    assert tk.classify(err)[0] == "badjson" and tk.body_of(err).startswith("<html>Access denied")
+    c, ev = _conn(monkeypatch)
+    FakeClient.script = [err, err, err, err, err]
+    sl = _run(c, 5)
+    assert sl == [60, 120, 240, 480, 600] and c.state["status"] == "reconnecting" and c.state["reconnects"] == 5
+    assert "not data" in c.state["detail"] and "<html>" not in c.state["detail"]       # body shown only the first time
+    assert "tiktok_sign_key" in c.state["detail"]
+    assert tk.backoff_badjson(0) == 60 and tk.backoff_badjson(20) == 600
+
+
+def test_comment_badges_from_user_identity():
+    from TikTokLive.proto import UserIdentity
+    sub = tev.CommentEvent(content="hi", user=U, user_identity=UserIdentity(is_subscriber_of_anchor=True, is_moderator_of_anchor=True))
+    assert tl.map_event("comment", sub, "host").badges == ["subscriber", "moderator"]
+    assert tl.map_event("comment", tev.CommentEvent(content="hi", user=U), "host").badges == []

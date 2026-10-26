@@ -32,9 +32,16 @@ def backoff(n, offline=False):
     return min(300, 10 * 2 ** max(0, n))
 
 
+def backoff_badjson(n):
+    """Blocked/empty answers from TikTok: 60 s doubling, cap 600 s (never hammer an endpoint that is refusing us)."""
+    return min(600, 60 * 2 ** max(0, n))
+
+
 def classify(e):
     """connect exception -> (kind, detail). kinds: offline | notfound | ratelimit | error. By class name so a library drift never breaks the guard."""
     name = type(e).__name__
+    if name == "JSONDecodeError" or isinstance(e, ValueError) and "Expecting value" in str(e):
+        return "badjson", "TikTok answered with a page that is not data (empty or a block/captcha page), so the live lookup failed before connecting"
     if name == "UserOfflineError":
         return "offline", ""
     if name == "UserNotFoundError":
@@ -44,6 +51,14 @@ def classify(e):
     if name.startswith("Sign") or "sign" in str(e).lower():
         return "error", "TikTok sign server problem: " + str(e)[:80]
     return "error", (name + ": " + str(e))[:120]
+
+
+def body_of(e):
+    """First 200 characters of the non-JSON body a JSONDecodeError was parsing (json puts the text in .doc). Body only: never headers, cookies or tokens."""
+    doc = getattr(e, "doc", None)
+    if not isinstance(doc, str):
+        return ""
+    return " ".join(doc[:200].split())
 
 
 def make_client(user, s):
@@ -63,7 +78,7 @@ def make_client(user, s):
 
 class TikTok(Connector):
     platform, label, official = "tiktok", "TikTok (unofficial)", False
-    capabilities = {"read": True, "send": False, "reply": False, "badges": False, "history": False}
+    capabilities = {"read": True, "send": False, "reply": False, "badges": True, "history": False}
 
     def __init__(self, inbox, emit):
         super().__init__(inbox, emit)
@@ -71,6 +86,7 @@ class TikTok(Connector):
         self.client = None
         self.fails = 0
         self.live_since = None
+        self._bodies = set()                       # distinct non-JSON bodies already logged (log each kind once)
 
     def _wire(self, client, tev, user):
         tiktok_live.attach(client, tev, user, self.inbox.put, self.state)
@@ -148,6 +164,17 @@ class TikTok(Connector):
                 elif kind == "notfound":
                     self.set_status("needs_setup", detail)
                     wait = 60
+                elif kind == "badjson":
+                    self.state["reconnects"] += 1
+                    body = body_of(e)
+                    if body not in self._bodies:
+                        self._bodies.add(body)
+                        detail += f" (first 200 characters: {body!r})" if body else " (empty body)"
+                    if not secrets_store.get("tiktok_sign_key"):
+                        detail += ". No tiktok_sign_key set: a free Euler Stream key may help"
+                    self.set_status("reconnecting", detail)
+                    wait = backoff_badjson(self.fails)                  # starts at 60 s, not 10: this does not fix itself in seconds
+                    self.fails += 1
                 else:
                     self.state["reconnects"] += 1
                     self.set_status("reconnecting", detail)
