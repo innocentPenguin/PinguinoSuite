@@ -6,7 +6,7 @@ overlay-options.js tag, /api/overlay-options/schema (profiles), /api/overlay-opt
 the commits since the Host build added (git diff of PinguinoHost/*.cs: must answer anything but 404). /api/clips-pick and anything that reserves,
 fires, polls or spins is never hit. --lenient (sim tests only: pre-stream fails count as WARN, a sim Host has no Twitch/OBS). Prints a summary table. Exit 0 = no FAIL (WARN does not fail), 1 = at least one FAIL.
 Test it against a sim Host: python Tools/post-restart-check.py --base http://127.0.0.1:<port> (see Tools/test-host-postrestart.py)."""
-import json, os, re, subprocess, sys, time, urllib.request, urllib.error
+import glob, json, os, re, subprocess, sys, time, urllib.request, urllib.error
 
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 argv = sys.argv[1:]
@@ -32,6 +32,16 @@ def fetch(p, timeout=15):
         return e.code, b
     except Exception as e:
         return 0, str(e)
+
+def post_only(route):
+    """True when a PinguinoHost source line names this route together with a POST/PUT/DELETE test (GET 404 is then expected)."""
+    pat = re.compile(r'(?:m|HttpMethod)\s*==\s*"(?:POST|PUT|DELETE)"')
+    try:
+        for fn in glob.glob(os.path.join(suite, 'PinguinoHost', '*.cs')):
+            for ln in open(fn, encoding='utf-8', errors='replace'):
+                if ('"' + route + '"') in ln and pat.search(ln): return True
+    except Exception: pass
+    return False
 
 def jget(p):
     c, b = fetch(p)
@@ -117,12 +127,15 @@ if '--no-routes' not in argv:
             if not ln.startswith('+') or ln.startswith('+++'): continue
             for m in re.finditer(r'\b(?:p|path)\s*==\s*"(/[A-Za-z0-9_\-./]+)"', ln):
                 r = m.group(1)
-                if 'm == "POST"' in ln or 'm == "PUT"' in ln or 'm == "DELETE"' in ln: continue
+                if re.search(r'(?:m|HttpMethod)\s*==\s*"(?:POST|PUT|DELETE)"', ln): continue
                 routes[r] = 1
         todo = [r for r in sorted(routes) if not NEVER.search(r)]
         skipped = [r for r in sorted(routes) if NEVER.search(r)]
         for r in todo:
             c, b = fetch(r, 10)
+            if c == 404 and post_only(r):
+                add('WARN', 'new route ' + r, 'HTTP 404 on GET; the source serves it for POST/PUT/DELETE only (never probed, read-only check)')
+                continue
             add('PASS' if c not in (0, 404) else 'FAIL', 'new route ' + r, 'HTTP %s' % c)
         add('PASS', 'new routes since %s' % base[:8], '%d probed, %d skipped on purpose (%s)' % (len(todo), len(skipped), ', '.join(skipped)[:120]))
     except Exception as e:
