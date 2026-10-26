@@ -8,11 +8,12 @@
 #                                              file, then release + start. On any failure the hold is released (the module stays stopped, nothing relaunches
 #                                              a half-copied folder) and the message says what to do.
 #
+#   -Force                                     if the module still answers after the core accepted the stop, end the process that listens on its port
 # Talks to the core through the control folder (Data\runtime\control), so no API token is needed. Nothing here prompts, beeps or needs a visible console.
 # HOLD needs a core built with the hold feature (control files hold-<id> / release-<id>; the core confirms in Data\runtime\holds.json). With an OLDER core
 # the hold is not confirmed: the script warns and falls back to "stop, then copy at once" - a module killed from outside (not through the core) can be
 # relaunched by an old core within ~2 s, which is exactly the race the hold removes.
-param([Parameter(Mandatory)][string]$Id, [switch]$NoBuild, [switch]$StopOnly, [switch]$Start, [string]$InstallFrom, [int]$HoldMinutes = 10)
+param([Parameter(Mandatory)][string]$Id, [switch]$NoBuild, [switch]$StopOnly, [switch]$Start, [switch]$Force, [string]$InstallFrom, [int]$HoldMinutes = 10)
 $ErrorActionPreference = 'Stop'
 $suite = Join-Path $PSScriptRoot '..\Suite'
 # PS 5.1 ConvertFrom-Json returns a JSON array as ONE object; ForEach-Object unrolls it into separate specs
@@ -42,7 +43,27 @@ function Release { Send 'release'; Start-Sleep -Milliseconds 800 }
 function Stop-Module {
   if (Up) {
     Send 'stop'
-    if (-not (Wait-For $false 30)) { Write-Host "[update] FAILED: $Id still answers after 30s (is the core running? it consumes $ctl)"; Release; exit 1 }
+    # 1. does the core pick the request up? It deletes the control file within ~1-5 s (a slow health pass can delay it). A file that stays means the core is down, too old, or not watching this Data folder.
+    $f = Join-Path $ctl "stop-$Id"
+    for ($i = 0; $i -lt 16 -and (Test-Path $f); $i++) { Start-Sleep -Milliseconds 750 }
+    if (Test-Path $f) {
+      Remove-Item $f -ErrorAction SilentlyContinue
+      Write-Host "[update] FAILED: the core did not consume the stop request ($f stayed for 12 s): it is not running, is not watching $ctl, or is too old for control files."
+      Release; exit 1
+    }
+    # 2. the core took it; wait for the module to go
+    if (-not (Wait-For $false 30)) {
+      $own = try { (Get-NetTCPConnection -LocalPort ([uri]$m.url).Port -State Listen -ErrorAction Stop | Select-Object -First 1).OwningProcess } catch { 0 }
+      $h = Held
+      Write-Host "[update] $Id still answers 30 s after the core accepted the stop (listening pid: $own; held: $h)."
+      if ($h) { Write-Host "[update] It is held, so the core is not relaunching it: the core could not end that process (not its child, or a stranger owns the port)." }
+      else { Write-Host "[update] It is NOT held: either an older core relaunched it at once (no hold support), or the core never tracked this copy. Rebuild the core (hold + untracked-stop fix), or rerun with -Force." }
+      if ($Force -and $own) {
+        Write-Host "[update] -Force: ending pid $own (the process listening on $($m.url))"
+        Stop-Process -Id $own -Force -ErrorAction SilentlyContinue; taskkill /F /T /PID $own 2>$null | Out-Null
+        if (-not (Wait-For $false 15)) { Write-Host "[update] FAILED: still answering after -Force"; Release; exit 1 }
+      } else { Release; exit 1 }
+    }
     Start-Sleep 2  # let the OS release file locks (dll)
   }
 }

@@ -694,6 +694,11 @@ class Module:
                 kill_pid_tree(owner)
             elif owner:
                 console_log.log("warn", "supervisor", f"{self.id}: port {self.port()} is owned by pid {owner}, not the adopted pid {self.adopt_pid}; not killing it", module=self.id)
+        elif self.port() and self._ping():   # answers on this module's own health URL but the core neither launched nor adopted it (it came back after a hung start was skipped, or a restart of the core lost track): a stop must still end it
+            owner = listening_pid(self.port())
+            if owner:
+                console_log.log("warn", "supervisor", f"{self.id}: stopping an untracked copy answering on port {self.port()} (pid {owner})", module=self.id)
+                kill_pid_tree(owner)
         self.proc, self.healthy, self.adopted, self.adopt_pid = None, False, False, 0
         try:
             self._pidfile().unlink()
@@ -765,6 +770,8 @@ class Module:
         was = self.healthy
         if self._ping():
             self._miss, self.healthy = 0, True
+            if self.wanted and self.proc is None and not self.adopted and not self.held_left() and not SHUTDOWN.is_set():
+                self.adopt()   # wanted and answering, but not ours yet (a hung start was skipped and the old copy recovered): track it so Stop and the supervisor see it
         else:
             # a busy module (transcribing, loading a model) can miss one 1.5 s ping; the shell swaps its page for a "starting" card the moment
             # it is not "running", which threw the user back to the module's home page. Call it down only after several misses in a row, or when its process is gone.
