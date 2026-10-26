@@ -98,7 +98,7 @@ def test_drop_oldest_when_full():
     assert [b["msgId"] for b in sent] == ["youtube:3", "youtube:4", "youtube:5"] and c.stats["dropped"] == 2
 
 
-@pytest.mark.parametrize("code", [0, 404])
+@pytest.mark.parametrize("code", [0, 401, 403, 404])
 def test_backoff_60s_then_continue(code):
     c, sent, clock = mk([code])
     offer(c, clock, i=1)
@@ -109,7 +109,7 @@ def test_backoff_60s_then_continue(code):
     clock[0] += 61
     offer(c, clock, i=3)
     c.step()
-    assert [b["msgId"] for b in sent] == ["youtube:1", "youtube:3"] and c.stats["sent"] == 1
+    assert [b["msgId"] for b in sent] == ["youtube:1", "youtube:3"] and c.stats["sent"] == 2 and c.stats["ok"] == 1 and c.stats["last_code"] == 200
 
 
 def test_server_error_not_retried_no_backoff():
@@ -189,3 +189,123 @@ def test_tiktok_has_no_reply_path(monkeypatch):
     c = TestClient(server.app, base_url="http://127.0.0.1:8766")
     r = c.post("/api/send", json={"platform": "tiktok", "text": "hi"}, headers={"origin": "http://127.0.0.1:8766"})
     assert r.status_code == 400 and "read-only" in r.text
+
+
+# ---- recovery, auth, heartbeat, status (worker 41) ---------------------------------------------------------------------------------------
+@pytest.fixture
+def logged(monkeypatch):
+    out = []
+    monkeypatch.setattr(hf.console_log, "log", lambda level, src, msg, dedupe_s=0: out.append((level, src, msg)))
+    monkeypatch.setattr(hf.console_log, "info", lambda s, m, **k: out.append(("info", s, m)))
+    monkeypatch.setattr(hf.console_log, "warn", lambda s, m, **k: out.append(("warn", s, m)))
+    return out
+
+
+def test_401_is_an_auth_failure_with_backoff_and_a_probe_after_it(logged):
+    c, sent, clock = mk([401, 200, 200])
+    offer(c, clock, i=1)
+    c.step()
+    assert c.stats["auth_failed"] == 1 and c.stats["last_code"] == 401
+    assert any("REFUSED" in m and "401" in m for _, _, m in logged)
+    offer(c, clock, i=2)
+    c.step()                                               # inside the back-off: dropped, never sent
+    assert [b["msgId"] for b in sent] == ["youtube:1"]
+    clock[0] += 61
+    offer(c, clock, i=3)
+    c.step()                                               # the probe goes out; message 1 is never sent again
+    offer(c, clock, i=4)
+    c.step()
+    assert [b["msgId"] for b in sent] == ["youtube:1", "youtube:3", "youtube:4"] and c.stats["ok"] == 2 and c.backoff_until < clock[0]
+
+
+def test_host_down_then_back_next_line_after_a_minute_is_tried(logged):
+    c, sent, clock = mk([0, 200])
+    offer(c, clock, i=1, platform="tiktok")
+    c.step()
+    clock[0] += 59
+    offer(c, clock, i=2)
+    c.step()
+    assert len(sent) == 1                                   # 59 s: still backing off
+    clock[0] += 2
+    offer(c, clock, i=3)
+    c.step()
+    assert [b["msgId"] for b in sent] == ["tiktok:1", "youtube:3"] and c.stats["last_code"] == 200
+    assert c.snapshot()["backoff_until"] == 0.0
+
+
+def test_heartbeat_once_a_minute_only_with_activity(logged):
+    c, sent, clock = mk([200, 500])
+    c.step()
+    clock[0] += 61
+    c.step()                                                # idle: nothing to say
+    assert not [m for _, _, m in logged if m.startswith("chat-in:")]
+    c.beat_at = clock[0]                                    # a heartbeat was just due; the minute starts now
+    offer(c, clock, i=1)
+    offer(c, clock, i=2)
+    c.step()
+    c.step()                                                # inside one minute: no line yet
+    assert not [m for _, _, m in logged if m.startswith("chat-in:")]
+    clock[0] += 61
+    c._beat()
+    beats = [(lv, m) for lv, _, m in logged if m.startswith("chat-in:")]
+    assert len(beats) == 1 and "sent 2, ok 1, failed 1 (last: 500)" in beats[0][1] and beats[0][0] == "warn" and "backoff until none" in beats[0][1]
+    clock[0] += 61
+    c._beat()
+    assert len([1 for _, _, m in logged if m.startswith("chat-in:")]) == 1      # nothing new since: silent
+
+
+def test_host_bearer_uses_the_hosts_token_not_multis_own(monkeypatch, tmp_path):
+    import alerts
+    (tmp_path / "module_secret").write_text("k" * 64)
+    monkeypatch.delenv("PINGUINO_MODULE_TOKEN", raising=False)
+    monkeypatch.setenv("PINGUINO_API_TOKEN", "multi-own-token")
+    monkeypatch.setenv("PINGUINO_DATA_DIR", str(tmp_path))
+    assert hf.host_bearer() == alerts.host_token(str(tmp_path), "host") and hf.host_bearer() != "multi-own-token"
+    monkeypatch.setenv("PINGUINO_DATA_DIR", str(tmp_path / "none"))
+    assert hf.host_bearer() == "multi-own-token"            # no shared key: standalone fallback
+    monkeypatch.setenv("PINGUINO_MODULE_TOKEN", "explicit")
+    assert hf.host_bearer() == "explicit"
+
+
+def test_fake_host_status_codes_end_to_end(monkeypatch):
+    codes = iter([401, 404, 200])
+    seen = []
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            seen.append(self.headers.get("Authorization"))
+            self.send_response(next(codes))
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *a):
+            pass
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(hf, "HOST", f"http://127.0.0.1:{srv.server_port}")
+    monkeypatch.setenv("PINGUINO_MODULE_TOKEN", "t")
+    try:
+        assert [hf._chat_in_post({}) for _ in range(3)] == [401, 404, 200]
+    finally:
+        srv.shutdown()
+
+
+def test_timeout_counts_as_unreachable(monkeypatch):
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    s.listen(1)                                            # accepts the connection, never answers: the 2 s timeout
+    monkeypatch.setattr(hf, "HOST", f"http://127.0.0.1:{s.getsockname()[1]}")
+    monkeypatch.setenv("PINGUINO_MODULE_TOKEN", "t")
+    try:
+        assert hf._chat_in_post({}) == 0
+    finally:
+        s.close()
+
+
+def test_host_status_endpoint_carries_the_counters():
+    import server
+    from fastapi.testclient import TestClient
+    r = TestClient(server.app, base_url="http://127.0.0.1:8766").get("/api/host-status", headers={"origin": "http://127.0.0.1:8766"}).json()
+    assert {"up", "chat_in"} <= set(r) and {"sent", "ok", "failed", "dropped", "auth_failed", "last_code", "queued", "backoff_until"} <= set(r["chat_in"])

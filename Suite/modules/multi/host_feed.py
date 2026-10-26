@@ -145,10 +145,20 @@ def _get(path):
     return d
 
 
+def host_bearer():
+    """The token the HOST accepts. The Suite hands Multi only ITS OWN module token (PINGUINO_API_TOKEN = module:multi), which the Host rejects (401);
+    the Host's token (module:host) is derived read-only from the shared module key. An explicit PINGUINO_MODULE_TOKEN still wins; the own token is the last resort."""
+    tok = os.environ.get("PINGUINO_MODULE_TOKEN")
+    if not tok:
+        import alerts
+        tok = alerts.host_token(os.environ.get("PINGUINO_DATA_DIR"), "host") or os.environ.get("PINGUINO_API_TOKEN") or ""
+    return tok
+
+
 def _say_sync(text):
     if send_disabled():
         return {"ok": False, "via": "sending is switched off (MULTI_NO_SEND)"}
-    tok = os.environ.get("PINGUINO_MODULE_TOKEN") or os.environ.get("PINGUINO_API_TOKEN") or ""
+    tok = host_bearer()
     req = urllib.request.Request(HOST + "/api/say", data=json.dumps({"text": text, "bot": "core"}).encode(), method="POST",
                                  headers={"content-type": "application/json", "Authorization": "Bearer " + tok})
     try:
@@ -250,10 +260,7 @@ def _chat_in_post(body):
     url = _chat_in_url()
     if not url:
         return 0
-    tok = os.environ.get("PINGUINO_MODULE_TOKEN") or os.environ.get("PINGUINO_API_TOKEN") or ""
-    if not tok:
-        import alerts
-        tok = alerts.host_token(os.environ.get("PINGUINO_DATA_DIR"), "host")
+    tok = host_bearer()
     req = urllib.request.Request(url + "/api/chat-in", data=json.dumps(body).encode(), method="POST",
                                  headers={"content-type": "application/json", "Authorization": "Bearer " + tok})
     try:
@@ -275,7 +282,26 @@ class ChatIn:
         self.cv = threading.Condition()
         self.thread = None
         self.backoff_until = 0.0
-        self.stats = {"sent": 0, "dropped": 0, "failed": 0}
+        self.stats = {"sent": 0, "ok": 0, "failed": 0, "dropped": 0, "auth_failed": 0, "last_code": None, "last_ok_at": 0.0}
+        self.beat_at, self.beat_seen = self.now(), None
+
+    def snapshot(self):
+        return dict(self.stats, queued=len(self.q), backoff_until=self.backoff_until if self.backoff_until > self.now() else 0.0)
+
+    def _beat(self, force=False):
+        """One heartbeat line a minute, only when something happened (a push, a failure or a drop) since the last one."""
+        t = self.now()
+        key = (self.stats["sent"], self.stats["failed"], self.stats["dropped"])
+        if (t - self.beat_at < 60 and not force) or key == self.beat_seen:
+            return
+        self.beat_at = t
+        if self.beat_seen is None and key == (0, 0, 0):
+            return
+        self.beat_seen = key
+        s = self.stats
+        until = time.strftime("%H:%M", time.localtime(self.backoff_until)) if self.backoff_until > t else "none"
+        (console_log.warn if s["failed"] and s["last_code"] not in (None, 200) else console_log.info)(
+            "host-chat-in", f"chat-in: sent {s['sent']}, ok {s['ok']}, failed {s['failed']} (last: {s['last_code']}), dropped {s['dropped']}, backoff until {until}")
 
     def offer(self, m):
         """Queue one stored message if it qualifies. Returns True when queued."""
@@ -310,23 +336,36 @@ class ChatIn:
             ts, body = self.q.popleft()
         if self.now() < self.backoff_until or self.now() - float(ts or 0) > CHAT_IN_MAX_AGE:
             self.stats["dropped"] += 1                    # Host asleep or the line went stale while waiting: not sent, not retried
+            self._beat()
             return True
         code = self.post(body)
+        self.stats["sent"] += 1
+        self.stats["last_code"] = code
         if 200 <= code < 300:
-            self.stats["sent"] += 1
+            self.stats["ok"] += 1
+            self.stats["last_ok_at"] = self.now()
         else:
             self.stats["failed"] += 1
-            if code in (0, 404):
-                self.backoff_until = self.now() + CHAT_IN_BACKOFF
-                console_log.warn("host-chat-in", "the Host is not taking YouTube chat yet (not running or no /api/chat-in); trying again in 60 s", dedupe_s=3600)
+            if code in (401, 403):                         # a wrong token must never look like "Host asleep"
+                self.stats["auth_failed"] += 1
+                console_log.warn("host-chat-in", f"the Host REFUSED the chat-in token ({code}): chat is not reaching the bots; check the module token. Retrying in 60 s", dedupe_s=60)
+            elif code in (0, 404):
+                console_log.warn("host-chat-in", "the Host is not taking chat yet (not running or no /api/chat-in); the next line after 60 s probes again", dedupe_s=60)
+            if code in (0, 401, 403, 404):
+                self.backoff_until = self.now() + CHAT_IN_BACKOFF      # the next line AFTER the back-off is the probe; this one is never sent twice
+        self._beat()
         return True
 
     def _loop(self):
         while True:
             with self.cv:
                 while not self.q:
-                    self.cv.wait()
+                    if not self.cv.wait(30):                 # idle: still flush a pending heartbeat
+                        break
             try:
+                if not self.q:
+                    self._beat()
+                    continue
                 self.step()
             except Exception as e:
                 console_log.warn("host-chat-in", f"push failed: {type(e).__name__}", dedupe_s=600)

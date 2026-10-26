@@ -321,7 +321,7 @@ def obs_alerts():
 @app.get("/api/host-status")
 def host_status():
     """is the bot Host reachable (as last seen by the activity feed / live-state polls)"""
-    return host_feed.status()
+    return dict(host_feed.status(), chat_in=host_feed.CHAT_IN.snapshot())
 
 
 @app.get("/api/alerts")
