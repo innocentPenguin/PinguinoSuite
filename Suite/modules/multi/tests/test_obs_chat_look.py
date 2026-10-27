@@ -59,7 +59,7 @@ OLD_SAVED = {"size": "xxl", "font_family_id": "nunito", "ignore_names": ["nightb
 
 def test_migration_unpins_the_old_big_look_and_keeps_the_rest():
     st = obs.sanitize("chat", obs.migrate_chat(OLD_SAVED))
-    assert st["font_px"] == 23 and st["custom_css"] == "" and st["look"] == "synchra" and st["font_family_id"] == "rubik"
+    assert st["font_px"] == 23 and st["custom_css"] == "" and st["look"] == "synchra" and st["font_family_id"] == "inter"
     assert st["text_color"] == "#ffcc00" and st["ignore_names"] == ["nightbot"]
     assert obs.migrate_chat(dict(OLD_SAVED, font_px=33))["font_px"] == 33        # a hand-set size survives
     once = obs.migrate_chat(OLD_SAVED)
@@ -102,3 +102,14 @@ def test_twitch_badges_parse_and_cache():
     assert len(calls) == 4                                                          # 2 calls once, second read from the cache
     tb._cache.update(at=0.0, ttl=0.0, data={})
     assert tb.badges(None) == {}
+
+
+def test_font_default_is_inter_and_hand_picked_fonts_survive():
+    assert obs.sanitize("chat", {})["font_family_id"] == "inter" and "inter" in obs.FONTS
+    assert obs.sanitize("chat", obs.IVAN_CHAT)["font_family_id"] == "inter"
+    assert obs.migrate_chat({"look": "synchra", "font_family_id": "rubik"})["font_family_id"] == "inter"   # the interim default
+    assert obs.migrate_chat({"look": "synchra", "font_family_id": "georgia"})["font_family_id"] == "georgia"
+    assert obs.migrate_chat({"font_family_id": "impact"})["font_family_id"] == "impact"
+    assert obs.migrate_chat({"font_family_id": "nunito"})["font_family_id"] == "inter"
+    html = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text("utf-8")
+    assert "font-family:Inter" in html and "-webkit-text-stroke:.045em" in html and "letter-spacing:0" in html

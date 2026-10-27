@@ -13,10 +13,12 @@ body.top #feed{justify-content:flex-start}
 .bubble .chat-message-container,.bubble .activity-row{width:fit-content;max-width:100%;border-radius:calc(var(--br,0) + 14px)}
 .has-bg.simple #feed{background:var(--bg);border:var(--bw,0) solid var(--bc,transparent);border-radius:var(--br,0)}
 /* Synchra look (default): no box, soft shadow, pill badges first, bold outlined name + text */
-.synchra .chat-message-container{font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.55),0 0 8px rgba(0,0,0,.35)}
-.synchra .chat-username,.synchra .chat-colon,.synchra .chat-text{font-weight:800;-webkit-text-stroke:.1em #14110e;paint-order:stroke fill;stroke-linejoin:round}
+@font-face{font-family:Inter;font-weight:100 900;src:local('Inter'),local('Inter Variable'),url(/assets/fonts/Inter.woff2) format('woff2')}
+.synchra .chat-message-container{font-weight:700;letter-spacing:0;text-shadow:0 1px 3px rgba(0,0,0,.6),0 0 6px rgba(0,0,0,.35)}
+.synchra .chat-username{font-weight:800}.synchra .chat-text,.synchra .chat-colon{font-weight:700}
+.synchra .chat-username,.synchra .chat-colon,.synchra .chat-text{-webkit-text-stroke:.045em #14110e;paint-order:stroke fill;stroke-linejoin:round}
 .synchra .chat-text,.synchra .chat-colon{color:var(--tc,#fff)}
-.pill{display:inline-block;vertical-align:.14em;margin-right:.2em;padding:.12em .5em .1em;border-radius:999px;font-weight:900;font-size:max(calc(.62em * var(--bs,1)),7.5px);line-height:1.15;letter-spacing:.03em;color:#fff;text-shadow:none;-webkit-text-stroke:0;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.pill{display:inline-block;vertical-align:.14em;margin-right:.2em;padding:.12em .5em .1em;border-radius:999px;font-weight:800;font-size:max(calc(.62em * var(--bs,1)),7.5px);line-height:1.15;letter-spacing:.03em;color:#fff;text-shadow:none;-webkit-text-stroke:0;box-shadow:0 1px 3px rgba(0,0,0,.45)}
 .pill.live{background:#e63946}.pill.sub{background:#9147ff}.pill.mod{background:#1fa24a}.pill.vip{background:#e0399a}.pill.mem{background:#2ba640}.pill.sf{background:#ff2d55}.pill.bot{background:#777}
 .pill.pf-twitch{background:#6441a5}.pill.pf-youtube{background:#ff2a2a}.pill.pf-tiktok{background:#111;box-shadow:0 0 0 1px #25f4ee,1px 1px 0 1px #fe2c55}.pill.pf-kick{background:#1b8f1b}.pill.pf-discord{background:#5865f2}
 .bimg{height:calc(1em * var(--bs,1));width:auto;vertical-align:-.12em;margin-right:.2em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
@@ -51,7 +53,7 @@ body.top #feed{justify-content:flex-start}
 <div id="scale"><div id="feed"></div></div>
 <script>
 const KIND = '__KIND__', Q = new URLSearchParams(location.search), PREVIEW = Q.get('preview') === '1';
-const FONTS = {rubik: "Rubik,'Segoe UI',Arial,sans-serif", nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: "Roboto,Arial,sans-serif", arial: 'Arial,sans-serif', georgia: 'Georgia,serif', consolas: 'Consolas,monospace', comic: "'Comic Sans MS',cursive", impact: 'Impact,sans-serif', trebuchet: "'Trebuchet MS',sans-serif", verdana: 'Verdana,sans-serif'};
+const FONTS = {inter: "Inter,'Segoe UI',Roboto,Arial,sans-serif", rubik: "Rubik,'Segoe UI',Arial,sans-serif", nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: "Roboto,Arial,sans-serif", arial: 'Arial,sans-serif', georgia: 'Georgia,serif', consolas: 'Consolas,monospace', comic: "'Comic Sans MS',cursive", impact: 'Impact,sans-serif', trebuchet: "'Trebuchet MS',sans-serif", verdana: 'Verdana,sans-serif'};
 const SIZES = {xs: 16, s: 20, m: 24, l: 30, xl: 36, xxl: 44};
 const PCOL = {twitch: '#9146ff', youtube: '#ff4e45', kick: '#53fc18', discord: '#7983f5', tiktok: '#ff2d55'};
 const PLET = {twitch: 'T', youtube: 'Y', kick: 'K', discord: 'D', tiktok: '♪'};

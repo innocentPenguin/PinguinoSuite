@@ -11,11 +11,11 @@ FOLLOW_ANIM = ("fade", "slide", "pop", "bounce")
 ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement", "shoutout", "ban", "timeout", "unban", "mod", "unmod", "raid_out", "poll", "prediction", "hype", "streak")
 FONTS = {"nunito": "Nunito, 'Segoe UI', sans-serif", "system": "'Segoe UI', Arial, sans-serif", "roboto": "Roboto, Arial, sans-serif",
          "arial": "Arial, sans-serif", "georgia": "Georgia, serif", "consolas": "Consolas, monospace", "comic": "'Comic Sans MS', cursive",
-         "impact": "Impact, sans-serif", "rubik": "Rubik, 'Segoe UI', Arial, sans-serif", "trebuchet": "'Trebuchet MS', sans-serif", "verdana": "Verdana, sans-serif"}
+         "impact": "Impact, sans-serif", "inter": "Inter, 'Segoe UI', Roboto, Arial, sans-serif", "rubik": "Rubik, 'Segoe UI', Arial, sans-serif", "trebuchet": "'Trebuchet MS', sans-serif", "verdana": "Verdana, sans-serif"}
 
 CHAT_DEFAULT = {
     "canvas_scale": 1, "size": "xl", "text_color": "#ffffff", "text_shadow_color": "#000000", "background_color": "", "background_opacity": 1,
-    "border_width": 0, "border_color": "", "border_radius": 0, "font_family_id": "nunito", "message_fade_duration_seconds": 0,
+    "border_width": 0, "border_color": "", "border_radius": 0, "font_family_id": "inter", "message_fade_duration_seconds": 0,
     "message_delay_seconds": 0, "ignore_names": [], "provider_logo": False, "provider_logo_display": None, "badges": True,
     "username_colon": True, "notices": True, "message_order": "bottom", "message_alignment": "left", "providers": ["all"],
     "style_type": "simple", "entrance_animation_type": "fade", "themes": [], "custom_css": "",
@@ -51,7 +51,7 @@ IVAN_CHAT = {
     "message_delay_seconds": 0,
     "ignore_names": ["nightbot", "StreamElements", "PinguinoB0t", "SoundAlerts", "potatbotat", "sery_bot", "synchrabot", "PinguinoHelper", "ChattyPinguino"],
     "provider_logo": False, "badges": True, "username_colon": True, "notices": True, "message_order": "bottom", "message_alignment": "left",
-    "providers": ["all"], "style_type": "simple", "entrance_animation_type": "fade", "font_family_id": "rubik",
+    "providers": ["all"], "style_type": "simple", "entrance_animation_type": "fade", "font_family_id": "inter",
     "custom_css": "",
 }
 OLD_IVAN_CSS_MARK = "use.typekit.net/inf0cul"      # Ivan's imported Synchra CSS (Unkempt font, !important margins/line-height): it pinned the look and defeated the sliders
@@ -60,13 +60,15 @@ OLD_IVAN_CSS_MARK = "use.typekit.net/inf0cul"      # Ivan's imported Synchra CSS
 def migrate_chat(saved):
     """A chat look saved before the Synchra look: drop Ivan's imported CSS (it forced the font, margins and line height over the sliders),
     take the new 23 px size when the old big one was never changed by hand, and switch to the Synchra look. Idempotent; other keys are kept."""
-    if not isinstance(saved, dict) or "look" in saved:
+    if not isinstance(saved, dict):
         return saved
+    if "look" in saved:
+        return dict(saved, font_family_id="inter") if saved.get("font_family_id") == "rubik" else saved       # rubik was only ever the interim default
     d = dict(saved, look="synchra")
     if OLD_IVAN_CSS_MARK in str(d.get("custom_css", "")):
         d["custom_css"] = ""
-        if d.get("font_family_id") in (None, "nunito"):
-            d["font_family_id"] = "rubik"
+    if d.get("font_family_id") in (None, "nunito", "rubik"):       # nunito was the old default; a hand-picked other font is kept
+        d["font_family_id"] = "inter"
     if not d.get("font_px"):
         d["font_px"] = 23
     for k, old in (("line_height", 1.25), ("row_padding", 2), ("row_gap", 2)):
