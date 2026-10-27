@@ -372,7 +372,7 @@ namespace PinguinoHost
                     Act("sb-offline", "Stream offline", "from 'Stream Status (Offline)'", false, new JArray { Tr("stream_offline") }, SayStep("Stream offline. Goodnight everybody. Thanks for tuning in!")),
                     Act("sb-raidstart", "Raid scheduled", "fires the moment the raid is picked (!confirm raid started the Twitch countdown): shoutout of the target, emotes line, then the Discord invite (from the site's links).", false, new JArray { Tr("raid_start") },
                         Step("shoutout_queue", "user", "{target}", "by", "raid", "auto", true),
-                        SayStep("Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Danceydance innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Hype innoce108Hello innoce108W"),
+                        SayStep("Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Pinguinoraid innoce108Hype"),
                         Step("delay", "ms", 700), SayStep(DiscordLine)),
                     Act("sb-raidout", "Raid out", "from 'Raid Out Start/End': the raid has landed (the Host waits for it). Says the Discord invite once, then WARNING: stops the stream right then.", false, new JArray { Tr("raid_out") },
                         SayStep(DiscordLine), Step("delay", "ms", 1500), Step("obs_request", "request", "StopStream")),
