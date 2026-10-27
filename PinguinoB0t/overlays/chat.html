@@ -2,15 +2,15 @@
 <!--
   PinguinoB0t - CHAT FEED widget (scene HUD). Last chat lines, newest at the bottom. Data: Host GET /api/chat/recent (polled every 2 s).
   Params: max=8 (lines shown) | fade=0 (seconds until a line fades out, 0 = never) | host=http://127.0.0.1:8770 | preview=1 (sample lines, no Host needed) | bots=1 (show bot lines, default hidden) | cmds=1 (show !command lines, default hidden) | badges=0 (no badge images)
-  Badges: images before the name (the url the Host sends per badge, else Twitch's fixed global image for broadcaster / moderator / vip). Name colour: the message's color field (#rrggbb), else the orange default.
+  Badges: images before the name (the url the Host sends per badge, else Twitch's fixed global image for broadcaster / moderator / vip). Name colour: the message's color field (#rrggbb), else a stable colour from a hash of the name. Plain lines (no box), normal weight.
   Design size 460 x 520. Orange/dark Penguino look.
 -->
 <html><head><meta charset="utf-8"><title>Chat Feed</title>
 <style>
   html,body{margin:0;width:460px;height:520px;overflow:hidden;background:transparent;font-family:Rubik,"Segoe UI",Arial,sans-serif}
-  #box{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:6px}
-  .m{background:rgba(18,16,14,.82);border-left:4px solid #ff7a00;border-radius:8px;padding:6px 10px;color:#f4efe8;font-size:24px;line-height:1.25;word-wrap:break-word;overflow-wrap:anywhere;transition:opacity .8s}
-  .m b{color:#ff9d3c;font-weight:800;margin-right:6px}
+  #box{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:2px;padding:6px}
+  .m{padding:1px 6px;color:#fff;font-size:24px;line-height:1.25;word-wrap:break-word;overflow-wrap:anywhere;transition:opacity .8s;text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 2px rgba(0,0,0,.8)}
+  .m .n{color:#ff9d3c;font-weight:400}
   .m img.bd{height:1em;width:1em;vertical-align:-.15em;margin-right:4px}
   .m.out{opacity:0}
 </style></head><body><div id="box"></div>
@@ -22,15 +22,22 @@
   // same rule as the Host's Boards.IsBot: name ends in bot / b0t, or a known bot (the Host's own extra-bot list is not visible here)
   var BOTS=/^(nightbot|streamelements|soundalerts|streamlabs|moobot|fossabot|synchrabot|pinguinob0t|chattypinguino|pinguinohelper|potatbotat|rocketrankbot|sery_bot|wizebot|commanderroot|anotherttvviewer)$/;
   function isBot(m){var u=String(m.user||m.display||"").toLowerCase(); return /(bot|b0t)$/.test(u)||BOTS.test(u);}
+  // the viewer's Twitch colour when the Host sends it (#rrggbb), else a stable colour from a hash of the name, so names are never all the same
+  var PAL=["#FF4D4D","#4DA3FF","#3DDC84","#FF8A50","#B9D93A","#FF5CA8","#A66BFF","#2EC4B6","#E8B923","#E0763A","#5FB3C2","#7FA8FF"];
+  function nameColor(m){
+    if(m.color&&/^#[0-9a-f]{6}$/i.test(m.color)) return m.color;
+    var n=String(m.user||m.display||"?").toLowerCase(), h=0; for(var k=0;k<n.length;k++) h=(h*31+n.charCodeAt(k))>>>0;
+    return PAL[h%PAL.length];
+  }
   function add(m){
     if(!SHOWBOTS&&isBot(m)) return;
     if(!SHOWCMDS&&/^\s*!/.test(m.text||"")) return;
-    var d=document.createElement("div"); d.className="m"; if(m.color&&/^#[0-9a-f]{6}$/i.test(m.color)) d.style.borderLeftColor=m.color;
+    var d=document.createElement("div"); d.className="m";
     if(SHOWB) (m.badges||[]).forEach(function(x){
-      var set=String(typeof x==="string"?x:(x&&x.set)||"").toLowerCase(), u=x&&x.url&&/^https:[/][/]/.test(x.url)?x.url:(GLOBAL[set]?"https://static-cdn.jtvnw.net/badges/v1/"+GLOBAL[set]+"/2":""); if(!u) return;
+      var set=String(typeof x==="string"?x:(x&&(x.set||x.set_id))||"").toLowerCase(), u=x&&x.url&&/^https:[/][/]/.test(x.url)?x.url:(GLOBAL[set]?"https://static-cdn.jtvnw.net/badges/v1/"+GLOBAL[set]+"/2":""); if(!u) return;
       var i=document.createElement("img"); i.className="bd"; i.src=u; i.alt=""; i.onerror=function(){if(i.parentNode)i.parentNode.removeChild(i);}; d.appendChild(i);
     });
-    var b=document.createElement("b"); b.textContent=m.display||m.user||"?"; if(m.color&&/^#[0-9a-f]{6}$/i.test(m.color)) b.style.color=m.color; d.appendChild(b); d.appendChild(document.createTextNode(m.text||""));
+    var b=document.createElement("span"); b.className="n"; b.textContent=(m.display||m.user||"?")+": "; b.style.color=nameColor(m); d.appendChild(b); d.appendChild(document.createTextNode(m.text||""));
     box.appendChild(d); while(box.children.length>MAX) box.removeChild(box.firstChild);
     if(FADE>0) setTimeout(function(){d.classList.add("out");setTimeout(function(){if(d.parentNode)d.parentNode.removeChild(d);},900);},FADE*1000);
   }
