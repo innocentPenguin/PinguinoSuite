@@ -283,6 +283,28 @@ namespace PinguinoHost
             catch (Exception ex) { Clog.Warn("automation", "raid flow migration failed: " + ex.Message); }
         }
 
+        /// <summary>!leftbehind: the link of the channel we raided; answers nothing when there is no raid target</summary>
+        static JObject LeftBehindAct()
+        {
+            return Act("sb-leftbehind", "Command: !leftbehind", "the link of the channel we raided (https://twitch.tv/<target>), for anyone who was not taken along. Answers nothing before a raid / after the next stream starts.", true, new JArray { Tr("command", "names", new JArray("!leftbehind"), "cooldownSec", 3, "userCooldownSec", 30) },
+                Step("raid_target"), new JObject { { "type", "if" }, { "left", "{raid.line}" }, { "op", "notempty" }, { "right", "" }, { "then", new JArray { SayStep("{raid.line}") } }, { "else", new JArray() } });
+        }
+        /// <summary>one-time (marker "leftbehind1"): a file that was seeded before !leftbehind existed gets the action (enabled, as seeded). Deleting it afterwards sticks. The old sb-session-cmd / sb-goal-cmd / sb-recap seeds are NOT re-added.</summary>
+        internal static void MigrateLeftBehind()
+        {
+            try
+            {
+                var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray(); if (seeded.Any(v => (string)v == "leftbehind1")) return;
+                var acts = (JArray)doc["actions"];
+                if (!acts.OfType<JObject>().Any(o => (string)o["id"] == "sb-leftbehind"))
+                {
+                    try { File.Copy(Path.Combine(HostApi.DataDir, "automations.json"), Path.Combine(HostApi.DataDir, "automations.json.before-leftbehind-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak"), true); } catch (Exception) { }
+                    acts.Add(LeftBehindAct());
+                }
+                seeded.Add("leftbehind1"); doc["seeded"] = seeded; Save(doc);
+            }
+            catch (Exception ex) { Clog.Warn("automation", "leftbehind migration failed: " + ex.Message); }
+        }
         /// <summary>one-time (Ivan 10-27): 'Raid scheduled' = emotes line, Discord, THEN the shoutout (it was first, so the chat lines came late); 'Raid out' = only StopStream (the Discord line already went out at the start, the goodnight is said by the Host before it). Dated backup first.</summary>
         internal static void MigrateRaidOrder()
         {
@@ -353,7 +375,7 @@ namespace PinguinoHost
 
         public static void SeedStreamerBotPresets()
         {
-            MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow(); MigrateRaidOrder();
+            MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow(); MigrateRaidOrder(); MigrateLeftBehind();
             try { MakePopupHold(); } catch (Exception ex) { Clog.Warn("automation", "popup hold migration failed: " + ex.Message); }
             try { SkipSmallRaidWait(); } catch (Exception ex) { Clog.Warn("automation", "small raid wait migration failed: " + ex.Message); }
             try { SeedRules(); } catch (Exception ex) { Clog.Warn("automation", "rules preset failed: " + ex.Message); }
@@ -405,8 +427,7 @@ namespace PinguinoHost
                         Step("delay", "ms", 700), SayStep(DiscordLine)),
                     Act("sb-raidout", "Raid out", "the raid has landed (viewers sent: the chat emptied, or Twitch's 90 s countdown ran out). The Host says the goodnight first, then this runs: a second chat line about !leftbehind (no link), then WARNING: stops the stream.", false, new JArray { Tr("raid_out") },
                         SayStep(LeftBehindLine), Step("delay", "ms", 1500), Step("obs_request", "request", "StopStream")),
-                    Act("sb-leftbehind", "Command: !leftbehind", "the link of the channel we raided (https://twitch.tv/<target>), for anyone who was not taken along. Answers nothing before a raid / after the next stream starts.", true, new JArray { Tr("command", "names", new JArray("!leftbehind"), "cooldownSec", 3, "userCooldownSec", 30) },
-                        Step("raid_target"), new JObject { { "type", "if" }, { "left", "{raid.line}" }, { "op", "notempty" }, { "right", "" }, { "then", new JArray { SayStep("{raid.line}") } }, { "else", new JArray() } }),
+                    LeftBehindAct(),
                     Act("sb-endstream", "Reward: Instantly End Stream", "from the 'Instantly End Stream' reward (2,500,000 points). Needs channel:read:redemptions.", false, new JArray { Tr("redeem", "title", "Instantly End Stream") },
                         SayStep("{user} ended the stream. Goodbye! 🐧"), Step("delay", "ms", 5000), Step("obs_request", "request", "StopStream")),
                     Act("sb-suggest", "Reward: Suggestion Box", "from the 'Suggestion' reward: saves each suggestion to Data\\runtime\\files\\suggestions.txt.", false, new JArray { Tr("redeem", "title", "Suggestion") },
