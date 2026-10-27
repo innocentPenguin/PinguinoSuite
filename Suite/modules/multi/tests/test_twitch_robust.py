@@ -225,3 +225,13 @@ def test_src_ts_is_twitchs_own_time_or_none():
     v = tw.src_ts(stamp)
     assert v is not None and 3 < _t.time() - v < 8
     assert tw.src_ts("junk") is None and tw.src_ts(None) is None and tw.src_ts("2001-01-01T00:00:00Z") is None
+
+
+def test_badge_versions_in_meta():
+    from connectors import twitch as tw
+    ev = {"broadcaster_user_login": "c", "message_id": "1", "chatter_user_id": "2", "chatter_user_login": "u", "message": {"text": "hi", "fragments": []},
+          "badges": [{"set_id": "subscriber", "id": "12", "info": "12"}, {"set_id": "bits", "id": "1000"}]}
+    m = tw.normalize_event(ev)
+    assert m.meta["badge_ver"] == {"subscriber": "12", "bits": "1000"} and m.badges == ["subscriber", "bits"]
+    assert tw.badge_versions({"badges": ["junk", {"id": "x"}]}) == {}
+    assert tw.badge_versions(dict(ev, badges=None)) == {}

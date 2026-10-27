@@ -105,6 +105,15 @@ def normalize_notice(ev, ts=None):
         event=NOTICE_EVENT.get(nt, "announcement"), amount=amount)
 
 
+def badge_versions(ev):
+    """{set_id: version id} from the event's badges (sub months, bits tier ...); odd or missing lists give {}."""
+    out = {}
+    for b in ev.get("badges") or []:
+        if isinstance(b, dict) and b.get("set_id"):
+            out[str(b["set_id"])] = str(b.get("id", ""))
+    return out
+
+
 def normalize_event(ev, ts=None):
     """Twitch channel.chat.message event -> ChatMessage. Pure, unit-tested."""
     chan = ev["broadcaster_user_login"]
@@ -120,7 +129,7 @@ def normalize_event(ev, ts=None):
         first_time=ev.get("message_type") == "user_intro",
         raw_type=ev.get("message_type", "text"), color=ev.get("color") or "",
         event="cheer" if (ev.get("cheer") or {}).get("bits") else ("highlighted" if ev.get("message_type") == "channel_points_highlighted" else ""),
-        amount=int((ev.get("cheer") or {}).get("bits") or 0),
+        amount=int((ev.get("cheer") or {}).get("bits") or 0), meta={"badge_ver": badge_versions(ev)},
         emotes=[{"id": f["emote"]["id"], "text": f.get("text", "")} for f in (ev.get("message") or {}).get("fragments", [])
                 if f.get("type") == "emote" and f.get("emote")])
 
