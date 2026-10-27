@@ -1873,6 +1873,15 @@ public class CPHInline
         }
         catch (Exception) { say = "The music player isn't running right now."; }
         if (say == "") return true;   // the module has chat replies off (or nothing to say): nothing is said, and no other bot answers either
+        if (cmd == "queue")
+        {   // top 3 only and each title cut short, so the line stays well under two chat lines
+            int ni = say.IndexOf("Next:", StringComparison.Ordinal);
+            if (ni >= 0)
+            {
+                var items = say.Substring(ni + 5).Split(new[] { " | " }, StringSplitOptions.RemoveEmptyEntries).Take(3).Select(x => { x = x.Trim(); return x.Length > 36 ? x.Substring(0, 33).TrimEnd() + "..." : x; });
+                say = say.Substring(0, ni + 5) + " " + string.Join(" | ", items);
+            }
+        }
         if (say.Length > 220) say = say.Substring(0, 217).TrimEnd() + "...";
         _revIntent = "music_" + cmd;
         Say(say); return true;

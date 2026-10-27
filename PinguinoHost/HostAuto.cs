@@ -135,6 +135,17 @@ namespace PinguinoHost
                     Clog.Info("automation", "song presets now say as helper: " + moved);
                     seeded.Add("songhelper1"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
                 }
+                if (!seeded.Any(x => (string)x == "raidshort1"))
+                {
+                    // one-time (Ivan 10-27): the raid emote line was 188 characters, now four emotes (under 100); dated backup first
+                    try { File.Copy(Path.Combine(HostApi.DataDir, "automations.json"), Path.Combine(HostApi.DataDir, "automations.json.before-raidshort-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak"), true); } catch (Exception) { }
+                    int cut = 0;
+                    foreach (var act in ((JArray)doc["actions"]).OfType<JObject>())
+                        foreach (var st in (act["steps"] as JArray ?? new JArray()).OfType<JObject>())
+                        { string tx = (string)st["text"] ?? ""; if (tx.StartsWith("Raid started! Prepare your emotes!") && tx.Length > 100) { st["text"] = "Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Pinguinoraid innoce108Hype"; cut++; } }
+                    if (cut > 0) Clog.Info("automation", "raid emote line shortened in " + cut + " step(s)");
+                    seeded.Add("raidshort1"); doc["seeded"] = seeded; Save(doc); doc = Doc(); seeded = doc["seeded"] as JArray ?? new JArray();
+                }
                 if (seeded.Any(x => (string)x == "spotify")) return;
                 const string url = "http://127.0.0.1:8771/api/chat-command";
                 Func<string, string, string[], string, int, int, JObject> mk = (id, cmd, names, perm, cd, ucd) => new JObject {

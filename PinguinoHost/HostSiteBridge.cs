@@ -303,10 +303,9 @@ namespace PinguinoHost
             if (args == null || args.Length == 0)
             {
                 var items = new List<string>();
-                if (ChatOn(c, "guess_chatter")) items.Add(ChatName(c, "guess_chatter", "Guess the Chatter") + " (stake " + min + "-" + max + " " + cur + ", right answer pays 2x): !shop guess <stake>");
-                { string sl = SubTickets.ShopLine(); if (sl != null) items.Add(sl); }
-                var soon = new List<string>(); foreach (var p in (c["ChatItems"] as JObject ?? new JObject()).Properties()) if (p.Name != "guess_chatter" && (bool?)p.Value["enabled"] != true) soon.Add((string)p.Value["name"] ?? p.Name);
-                say("@" + user + " Shop: " + (items.Count == 0 ? "nothing open right now." : string.Join(" | ", items)) + (soon.Count > 0 ? " Coming soon: " + string.Join(", ", soon) + "." : "")); return;
+                if (ChatOn(c, "guess_chatter")) items.Add(ChatName(c, "guess_chatter", "Guess the Chatter") + " (stake " + min + "-" + max + ", win 2x): !shop guess <stake>");   // short: two items, no "coming soon" tail, no sub explainer
+                { string sl = SubTickets.ShopLine(); if (sl != null) { int gi = sl.IndexOf(", a mod gifts", StringComparison.Ordinal); items.Add(gi > 0 ? sl.Substring(0, gi) + "): !shop sub" : sl); } }
+                say("@" + user + " Shop: " + (items.Count == 0 ? "nothing open right now." : string.Join(" | ", items))); return;
             }
             string item = NormItem(args[0]);
             if (item == "get_sub") { SubTickets.HandleBuy(user, say); return; }

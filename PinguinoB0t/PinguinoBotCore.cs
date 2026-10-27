@@ -251,10 +251,12 @@ public class CPHInline
         }
         return c;
     }
+    bool PgOffTwitch() { try { object o; string pf = CPH.TryGetArg("platform", out o) && o != null ? (Convert.ToString(o) ?? "").Trim().ToLowerInvariant() : ""; return pf != "" && pf != "twitch"; } catch (Exception) { return false; } }
     void PgSay(string role, string text)
     {
         text = PgCleanLine(text);
         if (string.IsNullOrEmpty(text)) return;
+        if (PgOffTwitch()) { CPH.SendMessage(text, true); return; }   // a YouTube/TikTok chat line: the Host routes the answer to that platform only (Multi; TikTok is read-only), never the Twitch sender
         var reg = PgReg();
         string speaker = PgSpeaker(role);
         string msg = text;
@@ -383,7 +385,7 @@ public class CPHInline
             string body = bj.ToString(Newtonsoft.Json.Formatting.None);
             if (_pgTestHttp != null) return _pgTestHttp("https://api.twitch.tv/helix/chat/messages", "Bearer " + tok + "|" + cid, body) != null;
             System.Net.ServicePointManager.SecurityProtocol |= System.Net.SecurityProtocolType.Tls12;
-            var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("https://api.twitch.tv/helix/chat/messages");
+            var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create((Environment.GetEnvironmentVariable("PINGUINO_HELIX_BASE") ?? "https://api.twitch.tv/helix") + "/chat/messages");   // PINGUINO_HELIX_BASE: tests only (fake Helix)
             req.Method = "POST"; req.ContentType = "application/json"; req.Timeout = 8000;
             req.Headers["Authorization"] = "Bearer " + tok; req.Headers["Client-Id"] = cid;
             byte[] bytes = System.Text.Encoding.UTF8.GetBytes(body); req.ContentLength = bytes.Length;
@@ -2280,6 +2282,7 @@ public class CPHInline
         }
     }
 
+    static readonly Dictionary<string, DateTime> _alreadyTold = new Dictionary<string, DateTime>();   // "already in the queue" is said once per 5 minutes per user
     static bool _silentTune;   // true while !tune runs a setting: the Suite changes it, chat hears nothing
     void Say(string message)
     {
@@ -3356,7 +3359,10 @@ public class CPHInline
         {
             int idx = GetWaitingQueue().FindIndex(e => e.Username == user);
             if (idx >= 0)
-                Say("@" + user + " You're already in the queue at position #" + (idx + 1) + ".");
+            {   // said once per 5 minutes per user (a repeat !join is not answered again)
+                DateTime lastTold; string tk = (user ?? "").ToLowerInvariant();
+                if (!_alreadyTold.TryGetValue(tk, out lastTold) || (DateTime.UtcNow - lastTold).TotalMinutes >= 5) { _alreadyTold[tk] = DateTime.UtcNow; Say("@" + user + " You're already in the queue at position #" + (idx + 1) + "."); }
+            }
             else
                 Say("@" + user + " You're in the current match!");
             return true;

@@ -41,6 +41,13 @@ namespace PinguinoHost
             catch (Exception) { }
         }
 
+        static readonly System.Text.RegularExpressions.Regex RxKey = new System.Text.RegularExpressions.Regex(@"(?<![\w:])(yt|tt|kk|fb):[\w\-]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        /// <summary>replaces platform keys (yt:..., tt:...) by the remembered display name</summary>
+        public static string ShowNames(string text)
+        {
+            if (string.IsNullOrEmpty(text) || text.IndexOf(':') < 0) return text;
+            try { return RxKey.Replace(text, m => { string n = PlatformUsers.Display(m.Value.ToLowerInvariant()); return string.IsNullOrEmpty(n) ? m.Value : n; }); } catch (Exception) { return text; }
+        }
         static bool SendAsCore(string role, string text, out string via)
         {
             via = "";
@@ -48,6 +55,7 @@ namespace PinguinoHost
             text = CleanLine(text, "chat send as " + role);
             if (text == "") { via = "nothing to say (empty line)"; return false; }
             { string pf = ReplyCtx.Platform; if (pf != "twitch") return SendForeign(pf, text, out via); }   // chat from YouTube etc.: the answer goes to that platform only, through Multi, never to Twitch
+            text = ShowNames(text);   // Twitch lines never carry a raw "yt:UC..." key: the viewer's display name instead
             if (SaidRecently(text)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent, same line said moments ago: " + (text.Length > 60 ? text.Substring(0, 60) : text)); return true; }
             role = string.IsNullOrWhiteSpace(role) ? "core" : role.Trim().ToLowerInvariant();
             var reg = LoadFile("bots.json"); var sec = BotSecretsV();
@@ -136,6 +144,7 @@ namespace PinguinoHost
             string parent, login; ReplyCtx.Current(out parent, out login);
             string line = ReplyCtx.Prepare(text, out parent);
             if (login != "" && login.IndexOf(':') > 0) { string shown = PlatformUsers.Display(login); line = System.Text.RegularExpressions.Regex.Replace(line, System.Text.RegularExpressions.Regex.Escape(login), m => shown, System.Text.RegularExpressions.RegexOptions.IgnoreCase); }   // "yt:id" is only our internal key: say the display name
+            line = ShowNames(line);   // other viewers named in the line: display names, never keys
             if (pf == "tiktok") { via = "tiktok is read-only"; ReplyCtx.NoteSilent(line); return true; }   // no reply anywhere (never Twitch, never Multi); one log line per handled command from ReplyCtx.LogSilent
             if (SaidRecently(pf, line)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent to " + pf + ", same line said moments ago"); return true; }
             var body = new JObject { { "platform", pf }, { "text", line } }; if (!string.IsNullOrEmpty(parent)) body["reply_to"] = parent;
