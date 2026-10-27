@@ -176,7 +176,8 @@ namespace PinguinoHost
         }
         /// <summary>Ending a customs activity hides the customs overlays (players, queue/leaderboards, customs HUD parts); starting one shows them again. Visibility only: the flag lives in scene_layouts.json
         /// and is applied to whatever layout is served, so a layout is never edited. It follows the activity in the Core state (any way it was started or ended), seen on the next read or at once through CustomsSync.</summary>
-        static readonly string[] CustomsGroup = { "players", "players_vertical", "players_teams", "players_header", "queue", "queue_list", "queue_idle", "customs", "customs_status", "customs_info" };
+        static readonly string[] CustomsPages = { "players.html", "players_vertical.html", "queue.html", "customs.html" };   // every page that shows who is in the match / the queue / the customs state, whatever its ?part=
+        static bool InCustomsGroup(string id) { var w = Find(id); if (w == null || string.IsNullOrEmpty(w.Src)) return false; string pg = w.Src.Split('?')[0]; return CustomsPages.Contains(pg); }   // the wheel stays: a tournament runs after the customs ended
         static string ActivityNow() { try { var a = (string)CustomsView.State()["activity"]; return string.IsNullOrEmpty(a) ? "none" : a; } catch (Exception) { return "none"; } }
         static bool SyncCustoms(JObject all)
         {
@@ -200,7 +201,7 @@ namespace PinguinoHost
                 }
                 var lay = (JObject)ls[name];
                 bool chide = SyncCustoms(all);
-                if (chide) { lay = (JObject)lay.DeepClone(); foreach (var w in (lay["widgets"] as JArray ?? new JArray()).OfType<JObject>()) if (CustomsGroup.Contains((string)w["id"])) w["visible"] = false; }
+                if (chide) { lay = (JObject)lay.DeepClone(); foreach (var w in (lay["widgets"] as JArray ?? new JArray()).OfType<JObject>()) if (InCustomsGroup((string)w["id"])) w["visible"] = false; }
                 return new JObject { { "ok", true }, { "profile", profile }, { "width", Profiles[profile][0] }, { "height", Profiles[profile][1] }, { "active", (string)p["active"] }, { "name", name },
                     { "names", new JArray(ls.Properties().Select(x => x.Name)) }, { "tags", new JObject(ls.Properties().Select(x => new JProperty(x.Name, (string)x.Value["game"] ?? ""))) }, { "game", (string)lay["game"] ?? "" }, { "autoSwitch", auto }, { "currentGame", cg }, { "resolvedBy", by }, { "games", new JArray(Games) }, { "layout", lay }, { "customsHidden", chide }, { "registry", Widgets()["widgets"] } };
             }

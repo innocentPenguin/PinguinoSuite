@@ -17,9 +17,9 @@ def api(path, body=None):
     rq = urllib.request.Request(B + path, data=None if body is None else json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
     return json.load(urllib.request.urlopen(rq, timeout=20))
 def feed(l, w=1.5): host.stdin.write((l + '\n').encode()); host.stdin.flush(); time.sleep(w)
-GROUP = ['players', 'players_vertical', 'players_teams', 'players_header', 'queue', 'queue_list', 'queue_idle', 'customs', 'customs_status', 'customs_info']
 def lay(profile='h'): return api('/api/scene-layouts?profile=' + profile)
 def vis(l): return {w['id']: w.get('visible') for w in l['layout']['widgets']}
+PAGES = ('players.html', 'players_vertical.html', 'queue.html', 'customs.html')
 try:
     for _ in range(80):
         try: api('/api/status'); break
@@ -34,8 +34,11 @@ try:
     chk('running: overlays shown', vis(lay())['players'] and vis(lay())['queue'] and not lay().get('customsHidden'))
     r = api('/api/customs/mod', {'action': 'activity', 'value': 'rl end'}); st = r['customs']
     chk('end: activity none, queue closed and empty, match cleared', r['ok'] and st['activity'] == 'none' and not st['open'] and len(st['queue']) == 0 and not (st.get('match') and st['match'].get('players')), st)
-    l1 = lay(); v1 = vis(l1)
-    chk('end: customs overlays served hidden at once', l1.get('customsHidden') is True and all(v1.get(i) is False for i in GROUP if i in v1), v1)
+    l1 = lay(); v1 = vis(l1); reg = {w['id']: w['src'] for w in l1['registry']}
+    GROUP = [i for i, src in reg.items() if src.split('?')[0] in PAGES]
+    chk('every registry widget on a customs page is in the hidden group (players/queue/customs incl. all ?part= parts)', len(GROUP) >= 10 and all(i in GROUP for i in ('players_teams', 'players_header', 'queue_list', 'queue_idle', 'customs_status', 'customs_info')), GROUP)
+    chk('the wheel is not in it (a tournament runs after customs ended)', not any(i.startswith('wheel') for i in GROUP))
+    chk('end: customs overlays served hidden at once', l1.get('customsHidden') is True and all(v1.get(i) is False for i in GROUP), v1)
     chk('end: other widgets keep their state', all(v1[k] == v0[k] for k in v0 if k not in GROUP), (v0, v1))
     chk('end: the saved layout is untouched (names, widget count)', [w['id'] for w in l1['layout']['widgets']] == [w['id'] for w in l0['layout']['widgets']] and lay('v').get('customsHidden') is True)
     api('/api/customs/mod', {'action': 'activity', 'value': 'rl end'})   # a second End when already none is harmless
