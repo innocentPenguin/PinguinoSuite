@@ -39,7 +39,8 @@ public static class Harness
         new CPHInline().Execute();
     }
 
-    static string Last() { return CPHProxy.Sent.Count == 0 ? null : CPHProxy.Sent[CPHProxy.Sent.Count - 1]; }
+    static string Last() { return CPHProxy.Sent.Count == 0 ? null : string.Join(" ", CPHProxy.Sent); }
+    static bool TwoLines() { return CPHProxy.Sent.Count <= 2 && CPHProxy.Sent.All(x => x.Length <= 160); }
     static bool Forwarded() { return CPHProxy.Runs.Any(r => (string)r["_action"] == "PinguinoChat"); }
     static Dictionary<string, object> CoreRun() { return CPHProxy.Runs.FirstOrDefault(r => (string)r["_action"] == "PinguinoBot"); }
 
@@ -83,6 +84,10 @@ public static class Harness
         Check("how register: example", Last().Contains("!register YourEpicName") && Last().Contains("no < > brackets"), Last());
         Msg("Ana", "how do i join");
         Check("registered viewer skips the register step", Last().Contains("registered as AnaEpic") && !Last().Contains("1) Register"), Last());
+        Msg("Newbie", "how do I join?"); Check("how join (unregistered): at most 2 short messages, no password", TwoLines() && !Last().ToLower().Contains("password"), string.Join(" | ", CPHProxy.Sent));
+        Msg("Ana", "how do i join"); Check("how join (registered): at most 2 short messages", TwoLines(), string.Join(" | ", CPHProxy.Sent));
+        Msg("Newbie", "how do i register"); Check("how register: at most 2 short messages", TwoLines(), string.Join(" | ", CPHProxy.Sent));
+        Msg("Newbie", "\u00bfC\u00f3mo me uno a la cola?"); Check("how join (Spanish): at most 2 short messages", TwoLines() && Last().Contains("!register"), string.Join(" | ", CPHProxy.Sent));
         Msg("Ana", "how do i register");
         Check("already registered says so", Last().Contains("already registered as AnaEpic"), Last());
 

@@ -1052,7 +1052,7 @@ public class CPHInline
                 else Say(who + "\u00a1Gracias por preguntar! Escribe !leave y sales de la cola.");
                 return true;
             case "position": Say(who + "\u00a1Con gusto! Escribe !pos para ver tu lugar en la cola, y !queue para ver la fila completa."); return true;
-            case "schedule": Say(who + "Ivan transmite todos los d\u00edas a las 5:00 PM (hora del centro de EE. UU.). Primero Rocket League con la banda un par de horas y luego otros juegos. El horario completo: " + "https://twitch.tv/innocentpenguin_/schedule"); return true;
+            case "schedule": Say(who + "Ivan transmite todos los d\u00edas a las 5:00 PM (hora del centro de EE. UU.). Rocket League primero. Horario: " + "https://twitch.tv/innocentpenguin_/schedule"); return true;
             case "mmr_info": Say(who + "Escribe !mmr para ver tu MMR, o !stats para tus victorias y puntos."); return true;
             case "points_earn": Say(who + "Los puntos vienen de ver el stream en vivo (los subs ganan m\u00e1s), chatear, jugar partidas, seguir, cheers y regalos, as\u00ed que llegar a 100k toma tiempo. !points muestra los tuyos: " + SiteUrl("/help")); return true;
             case "song_request": Say(who + "Canjea la recompensa de puntos de canal Song Request y escribe el nombre de la canci\u00f3n o un link de Spotify/YouTube. Si no se puede poner, te devuelven tus puntos."); return true;
@@ -1724,7 +1724,7 @@ public class CPHInline
             case "how_register":
                 Say(who + (registered != ""
                     ? "You're already registered as " + registered + ". Wrong name? Ask a mod to fix it. Next: say 'add me to the queue' when the queue is open."
-                    : "2 steps: 1) !register YourEpicName (your exact Epic Games name, no < > brackets), 2) !join when the queue is open. Or tell me \"register me as YourEpicName\" and I'll do it."));
+                    : "2 steps: 1) !register YourEpicName (exact Epic name, no < > brackets) 2) !join when the queue is open. Or tell me \"register me as YourEpicName\"."));
                 return true;
             case "do_register":
             {
@@ -1949,8 +1949,8 @@ public class CPHInline
     string HowJoinText(string registered)
     {
         string steps = registered == ""
-            ? "1) Register once: !register YourEpicName (or tell me \"register me as YourEpicName\"). 2) When the queue is open, say \"add me to the queue\" (or !join), once is enough, in chat or on the site. 3) When you're picked, search the private match name in Rocket League. "
-            : "You're registered as " + registered + ". 1) When the queue is open, say \"add me to the queue\" (or !join), once is enough, in chat or on the site. 2) When you're picked, search the private match name in Rocket League. ";
+            ? "1) Register: !register YourEpicName. 2) When the queue is open, say \"add me to the queue\" (or !join). 3) When picked, search the private match in Rocket League. "
+            : "You're registered as " + registered + ". When the queue is open, say \"add me to the queue\" (or !join). When picked, search the private match in Rocket League. ";
         return steps + LobbyLine().TrimEnd();
     }
 
@@ -2005,10 +2005,34 @@ public class CPHInline
     }
 
     // The helper speaks as HelperPinguino (through its fallback while it has no account of its own) and the viewer stays "in conversation" with it for a while.
+    // Ivan 10-26: nothing over two chat lines. A long reply goes out as at most two messages, cut at a sentence / step boundary; links are never cut.
+    static List<string> SplitLong(string m)
+    {
+        var one = new List<string> { m };
+        if (m == null || m.Length <= 150 || m.Contains("http")) return one;
+        string pat = @"(?<=[.!?;:])\s+(?=\S)|\s+(?=\d\)\s)";
+        int best = -1, bestScore = int.MaxValue;
+        foreach (Match x in Regex.Matches(m, pat))
+        {
+            int a = x.Index, b = m.Length - x.Index;
+            if (a < 40) continue;
+            int score = (a > 150 ? (a - 150) * 4 : 0) + (b > 150 ? (b - 150) * 2 : 0) + Math.Abs(a - b) / 8;
+            if (score < bestScore) { bestScore = score; best = x.Index; }
+        }
+        if (best < 0) return one;
+        string p1 = m.Substring(0, best).TrimEnd(), p2 = m.Substring(best).TrimStart();
+        if (p2.Length > 150)
+        {
+            int lastCut = -1;
+            foreach (Match x in Regex.Matches(p2, pat)) if (x.Index <= 150) lastCut = x.Index;
+            if (lastCut > 0) p2 = p2.Substring(0, lastCut).TrimEnd();
+        }
+        return new List<string> { p1, p2 };
+    }
+
     void Say(string msg)
     {
-        _said.Add(msg);
-        PgSay("helper", msg);
+        foreach (string part in SplitLong(msg)) { _said.Add(part); PgSay("helper", part); }
         PgSetHelperContext(_curLogin);
     }
 }
