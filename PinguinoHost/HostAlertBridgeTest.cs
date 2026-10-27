@@ -182,6 +182,11 @@ namespace PinguinoHost
             Auto.OnEvent(ro); Auto.OnEvent(ro); Check(Auto.RaidOutFires == o0, "raid_out: not run when the countdown starts");
             System.Threading.Thread.Sleep(3000); Check(Auto.RaidOutFires == o0 + 1, "raid_out: run once after the delay (the second signal of the same raid is ignored)");
             Auto.ResetRaidStart(); Auto.OnEvent(ro); Auto.CancelRaidStart(); System.Threading.Thread.Sleep(3000); Check(Auto.RaidOutFires == o0 + 1, "raid_out: !unraid / stream offline cancels it");
+            // the stream going offline while the raid is pending is the landing: raid_out then the goodnight run at once, not after the 80+10 s timer
+            Auto.ResetRaidStart(); Auto.RaidDelayOverrideSec = 60; int o1 = Auto.RaidOutFires, q1 = Auto.OfflineFires; Auto.OnRaidScheduled("landed"); Auto.OnEvent(ro);
+            Auto.OnEvent(off); System.Threading.Thread.Sleep(1500);
+            Check(Auto.RaidOutFires == o1 + 1 && Auto.OfflineFires == q1 + 1, "offline while the raid is pending: raid_out and the goodnight ran within 1.5 s, not after the timer (" + (Auto.RaidOutFires - o1) + "/" + (Auto.OfflineFires - q1) + ")");
+            Auto.ResetRaidStart();
             Auto.RaidDelayOverrideSec = -1;
             AlertBridge.TestPost = null;
             Console.WriteLine(fails == 0 ? "[alerttest] ALL PASS" : "[alerttest] " + fails + " FAILED");

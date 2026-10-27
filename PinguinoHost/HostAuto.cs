@@ -285,12 +285,13 @@ namespace PinguinoHost
             Fire(kind, ctx);
         }
         static int RaidDelaySec() { return RaidDelayOverrideSec >= 0 ? RaidDelayOverrideSec : (int)Math.Max(0, Math.Min(88, (int?)Latest.Settings()["RaidStartDelaySec"] ?? 80)); }
-        static System.Threading.Timer _raidOutTimer; static DateTime _raidOutAt = DateTime.MinValue; internal static int RaidOutFires;
+        static System.Threading.Timer _raidOutTimer; static Action _raidOutGo; static DateTime _raidOutAt = DateTime.MinValue; internal static int RaidOutFires;
         /// <summary>raid_out automations (raid landed: StopStream) run RaidStartDelaySec + 10 s after Twitch's signal, once per raid; !unraid / stream_offline cancels them</summary>
         static void ScheduleRaidOut(Dictionary<string, string> ctx)
         {
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidOutAt).TotalMinutes < 3) return; _raidOutAt = DateTime.UtcNow; }
             Action go = () => { lock (typeof(Auto)) _raidOutTimer = null; RaidOutFires++; _runInline = true; try { Fire("raid_out", ctx); } finally { _runInline = false; } ReleaseOffline(); };   // the raid_out run finishes first (Run is normally a background task), THEN the held goodnight is released
+            lock (typeof(Auto)) _raidOutGo = go;   // the stream going offline while the raid is pending IS the landing (Raid Now / the 90 s ran out): HoldOffline runs this at once instead of waiting for the timer
             int delay = RaidDelaySec() + (RaidDelayOverrideSec >= 0 ? 0 : 10); if (delay == 0) { go(); return; }   // +10 s: the raid lands ~90 s after the signal, the stream stops right then
             lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => go(), null, delay * 1000, System.Threading.Timeout.Infinite); }
         }
@@ -345,6 +346,8 @@ namespace PinguinoHost
                 _heldTimer = new System.Threading.Timer(_ => { ClearPending(); ReleaseOffline(); }, null, left * 1000, System.Threading.Timeout.Infinite);
             }
             try { File.WriteAllText(HeldP, new JObject { { "at", DateTime.UtcNow.ToString("o") }, { "ctx", JObject.FromObject(ctx) } }.ToString()); } catch (Exception) { }   // survives a crash / restart during the hold
+            Action landed = null; lock (typeof(Auto)) { if (_raidOutTimer != null && _raidOutGo != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; landed = _raidOutGo; } }
+            if (landed != null) { Clog.Info("automation", "stream went offline with the raid pending: the raid has landed, raid out and goodnight run now"); System.Threading.Tasks.Task.Run(landed); return true; }   // go() fires raid_out, THEN releases this held goodnight
             Clog.Info("automation", "stream offline held: a raid is on its way"); return true;
         }
         /// <summary>the raid landed or was cancelled (or the hold ran out): the held goodnight runs now</summary>
