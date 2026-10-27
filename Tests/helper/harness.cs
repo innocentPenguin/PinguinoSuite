@@ -88,6 +88,9 @@ public static class Harness
         Msg("Ana", "how do i join"); Check("how join (registered): at most 2 short messages", TwoLines(), string.Join(" | ", CPHProxy.Sent));
         Msg("Newbie", "how do i register"); Check("how register: at most 2 short messages", TwoLines(), string.Join(" | ", CPHProxy.Sent));
         Msg("Newbie", "\u00bfC\u00f3mo me uno a la cola?"); Check("how join (Spanish): at most 2 short messages", TwoLines() && Last().Contains("!register"), string.Join(" | ", CPHProxy.Sent));
+        foreach (var q in new[] { "code plz", "how i get code", "Code pls" })
+        { Msg("Cq" + q.Length + q[0], q); Check("lobby ask: " + q, Last() != null && Last().Contains("Name: peng3") && !Last().ToLower().Contains("password") && TwoLines(), Last()); }
+        Msg("Magm", "do I have to keep doing !join?"); Check("join once: answered short", Last() != null && Last().Contains("Once is enough") && TwoLines(), Last());
         Msg("Ana", "how do i register");
         Check("already registered says so", Last().Contains("already registered as AnaEpic"), Last());
 

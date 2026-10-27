@@ -546,7 +546,8 @@ public class CPHInline
     //  PATTERNS (the free pass)
     // ══════════════════════════════════════════════════════════════
     const RegexOptions RX = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
-    static readonly Regex RxLobby = new Regex(@"\b(what'?s|whats|what\s+is|wats|gimme|give\s+me|drop|send|tell\s+me|share|need|where'?s|wheres)\b.{0,25}\b(code|pass(word|wd|w)?|pw|lobby|private\s*match|custom\s*(game|match|lobby)?|pm)\b|\b(name\s*(and|&|\+|n|/)\s*(pass|pw|password))\b|\b(lobby|private\s*match|custom)\s*(name|code|pass(word)?|pw)\b|\bpass(word)?\s*(for\s+)?(the\s+)?(lobby|game|match|custom|private)|^\s*(code|pass(word)?|pw|lobby)\s*\??\s*$", RX);
+    static readonly Regex RxLobby = new Regex(@"\b(what'?s|whats|what\s+is|wats|gimme|give\s+me|drop|send|tell\s+me|share|need|where'?s|wheres)\b.{0,25}\b(code|pass(word|wd|w)?|pw|lobby|private\s*match|custom\s*(game|match|lobby)?|pm)\b|\b(name\s*(and|&|\+|n|/)\s*(pass|pw|password))\b|\b(lobby|private\s*match|custom)\s*(name|code|pass(word)?|pw)\b|\bpass(word)?\s*(for\s+)?(the\s+)?(lobby|game|match|custom|private)|^\s*(code|pass(word)?|pw|lobby)\s*\??\s*$|^\s*(the\s+)?(code|pass(word)?|pw)\s*(plz|pls|please|pleas)\b|\bhow\s+(do\s+)?(i|we|u|you)\s+(get|find|have|see)\s+(the\s+)?(code|pass(word)?|pw|lobby\s*(name|code)?|private\s*match)\b", RX);
+    static readonly Regex RxJoinOnce = new Regex(@"\b(do|should|must|need)\s+(i|we)\s+(have|got|need)?\s*(to\s+)?(keep|kee?p|continue)\s+(doing|typing|saying|using|sending)\b.{0,12}(!?join|que|queue)|\bhow\s+(often|many\s+times)\b.{0,25}!?join|\b(do|should)\s+(i|we)\s+(re-?\s*)?(join|!join)\s+(again|more\s+than\s+once|every\s+(game|match|time|round))", RX);
     static readonly Regex RxHowJoin = new Regex(@"\bhow\s+(do|can|to|does|would|should)\b.{0,20}\b(join|play|get\s+in|enter|queue|participate|get\s+into|be\s+in)\b|\b(can|could)\s+(i|we|someone|anyone)\s+(play|join)\b|\b(wanna|want\s+to|like\s+to|trying\s+to)\s+(play|join)\b.{0,25}\b(game|customs?|match|lobby|queue|you|stream|viewer|with)\b|\bhow\s+(does|do)\s+(this|it|the\s+(queue|game|lobby))\s+work\b|\bhow\s+(to|do\s+i)\s+(get\s+)?(in\s+)?the\s+(queue|game|lobby)\b|\bviewer\s+games?\b.{0,15}\bhow\b", RX);
     static readonly Regex RxHowReg = new Regex(@"\bhow\b.{0,25}\b(register|sign\s*up|link)\b|\bwhat('?s|\s+is)\b.{0,12}\bregister\b|\b(register|registration)\b.{0,20}\b(work|how|help|not\s+working|doesn'?t|wont|won'?t|fail|error)|\bhow\b.{0,15}\b(epic|link\s+my)\b", RX);
     static readonly Regex RxDoReg = new Regex(@"^\s*(please\s+|pls\s+|plz\s+)?(register|sign)\s+me\s+(up\s+)?(as|with|under|using)\s+(?<n>.+?)\s*[.!?]*\s*$|\bmy\s+(epic|epic\s+games|epic\s+name|epic\s+id|game\s*id|rl\s+name|username\s+is)\s*(name\s*|id\s*)?(is|=|:)\s*(?<n>.+?)\s*[.!?]*\s*$|^\s*(please\s+)?register\s+me\s*[:\-]\s*(?<n>.+?)\s*$", RX);
@@ -1262,7 +1263,7 @@ public class CPHInline
         }
     }
     // an explicit ask: a question, "how do I", "can I join", "I wanna play", "what's the ip", "is the server up", new here ...
-    static readonly Regex RxStrongAsk = new Regex(@"\?|\b(how\s+(do|can|to|does|would|should)\b|can\s+(i|we|someone|anyone|me)\b|could\s+(i|we|someone)\b|where('?s|\s+is|\s+do|\s+can)\b|what'?s\b|whats\b|what\s+is\b|is\s+(the|there|it)\b|i\s+(wanna|want\s+to|need|would\s+like|'?d\s+like)\b|wanna\s+(join|play)\b|let\s+me\b|lemme\b|add\s+me\b|put\s+me\b|gimme\b|give\s+me\b|tell\s+me\b|anyone\b|someone\b|help\b|new\s+here\b|first\s+time\b|how\s+does\b)|\b(pls|plz|please)\b", RegexOptions.IgnoreCase);
+    static readonly Regex RxStrongAsk = new Regex(@"\?|\b(how\s+(do|can|to|does|would|should)\b|how\s+(i|we|u)\s+(get|find|see|join)\b|can\s+(i|we|someone|anyone|me)\b|could\s+(i|we|someone)\b|where('?s|\s+is|\s+do|\s+can)\b|what'?s\b|whats\b|what\s+is\b|is\s+(the|there|it)\b|i\s+(wanna|want\s+to|need|would\s+like|'?d\s+like)\b|wanna\s+(join|play)\b|let\s+me\b|lemme\b|add\s+me\b|put\s+me\b|gimme\b|give\s+me\b|tell\s+me\b|anyone\b|someone\b|help\b|new\s+here\b|first\s+time\b|how\s+does\b)|\b(pls|plz|please)\b", RegexOptions.IgnoreCase);
     // a statement, a negation or a "why" rant is not a request for help
     static readonly Regex RxNotAsk = new Regex(@"\b(i'?m|im)\s+not\b|\b(not|never|n'?t)\s+(even\s+)?(trying|going|gonna)\b|\bi\s+(don'?t|dont|didn'?t|haven'?t|havent|lwky|literally)\b|\bwhy\s+(would|do|does|did)\b|\bup\s+to\s+the\s+people\b", RegexOptions.IgnoreCase);
     static readonly Regex RxAnswerish = new Regex(@"smp\.innocentpenguin|hc\.innocentpenguin|\bpeng\d\b|lobby\s*(name|code)|\b!(ip|mc|lobby|discord|register|join|queue)\b|\bbedrock\b|\bjava\b|\bport\b|\bpassword\b", RegexOptions.IgnoreCase);
@@ -1587,6 +1588,7 @@ public class CPHInline
         if (RxPos.IsMatch(text)) { intent = "position"; return; }
         if (RxHowReg.IsMatch(text)) { intent = "how_register"; return; }
         if (RxLobby.IsMatch(text)) { intent = "lobby_info"; return; }
+        if (RxJoinOnce.IsMatch(text)) { intent = "join_once"; return; }
         if (RxHowJoin.IsMatch(text)) { intent = "how_join"; return; }
         if (RxDoJoin.IsMatch(text)) { intent = "do_join"; return; }
         if (RxSiteCmds.IsMatch(text)) { intent = "site_commands"; return; }
@@ -1700,7 +1702,7 @@ public class CPHInline
         }
         string cdKey = login + "|" + intent;
         long last;
-        bool info = intent == "schedule" || intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "song" || intent == "mmr_info" || intent == "points_earn" || intent == "song_request" || IsSite(intent);
+        bool info = intent == "schedule" || intent == "lobby_info" || intent == "how_join" || intent == "how_register" || intent == "join_once" || intent == "song" || intent == "mmr_info" || intent == "points_earn" || intent == "song_request" || IsSite(intent);
         if (_userCd.TryGetValue(cdKey, out last) && now - last < _cfg.UserCooldownSec) { _gateWhy = "cooldown: told this viewer the same a moment ago"; return true; }   // already told them a moment ago: stay quiet, and keep the chatbot out of it
         if (info && now - _infoCd < _cfg.InfoCooldownSec) { _gateWhy = "cooldown: another info answer just went out"; return true; }
         _userCd[cdKey] = now;
@@ -1754,6 +1756,7 @@ public class CPHInline
             case "site_profile": Say(who + "Your profile, stats and what the bot knows about you: " + SiteUrl("/members")); return true;
             case "site_faq": Say(who + "Rules and answers to common questions: " + SiteUrl("/faq")); return true;
             case "site_emotes": Say(who + "The channel's 7TV emotes, searchable: " + SiteUrl("/emotes")); return true;
+            case "join_once": Say(who + "Once is enough: say !join one time and you stay in the queue until you're picked. Use !leave to step out."); return true;
             case "mmr_info": Say(who + "Type !mmr to see your MMR, or !stats for your wins and points."); return true;
             case "points_earn": Say(who + "Points come from watching live (subs earn more), chatting, playing matches, follows, cheers and gifts, so 100k is a long grind. !points shows yours: " + SiteUrl("/help")); return true;
             case "song_request": Say(who + "Redeem the Song Request channel point reward and type the song name or a Spotify/YouTube link. If it can't be played you get your points back."); return true;
