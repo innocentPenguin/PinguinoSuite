@@ -490,6 +490,19 @@ class EngineTests(unittest.TestCase):
         r = self.e.chat("v", "!sr nothing cached zzz", [], redeem=True)
         self.assertEqual((r["ok"], r["code"], r["refund"]), (False, "rate_limited", True))
 
+    def test_no_spotify_link_in_any_chat_reply(self):
+        self.api.playing, self.api.progress = "spotify:track:t1", 5000
+        self.e.save_settings({"requests_open": True, "msgs": {"song": "Now playing: {song}{by} {link} https://open.spotify.com/track/zzz spotify:track:abc", "queue": "{count} in queue. Next: {next} {link}"}})
+        self.e.tick()
+        self.e.add_track(T(2), "end", "ann", "viewer")
+        for text in ("!song", "!queue", "!sr song 3", "!pos", "!next"):
+            r = self.e.chat("bob", text, [])
+            self.assertNotIn("spotify.com", r["reply"], text)
+            self.assertNotIn("spotify:track", r["reply"], text)
+            self.assertNotIn(chr(10), r["reply"])
+        self.assertIn("Song 1", self.e.chat("bob", "!song", [])["reply"])
+        self.assertLessEqual(self.e.chat("bob", "!queue", [])["reply"].count("|"), 2)     # top 3 only
+
     def test_selfcheck_all_green_and_red_reasons(self):
         self.api.playing, self.api.progress = "spotify:track:t1", 5000
         self.e.save_settings({"requests_open": True})

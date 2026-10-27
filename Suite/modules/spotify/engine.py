@@ -535,7 +535,7 @@ class Engine:
             tier = self._announce_tier()
             key = "announce_track_" + tier if tier in ("sub", "redeem") and self.settings["msgs"].get("announce_track_" + tier) else "announce_track"
             self._announce(key, kind="track", tier=tier, uri=cur["uri"], tier_name=tier, song=f"{cur['name']} - {', '.join(cur['artists'])}", title=cur["name"], artist=", ".join(cur["artists"]),
-                           by=f" (requested by {who})" if who else "", requester=who or "", link=f"https://open.spotify.com/track/{cur['id']}")
+                           by=f" (requested by {who})" if who else "", requester=who or "", link="")        # chat lines never carry a link (Ivan 10-27); the page/overlay/site have it
         self.persist()
         if self.now_item and self.now_item["skip_on_play"]:
             threading.Thread(target=self._safe, args=(self.skip,), daemon=True).start()   # skip() sends our next song first
@@ -765,6 +765,8 @@ class Engine:
         if not tpl:
             return ""
         text = tpl.format_map(_Blank(v))
+        text = re.sub(r"\s*(?:https?://)?(?:open|play)\.spotify\.com/\S*|\s*spotify:(?:track|album|artist|playlist):\S+", "", text)     # no Spotify links in chat, whatever the template says
+        text = re.sub(r"[\r\n]+", " ", text).strip()                          # one chat line
         return (s["reply_prefix"] + text)[:400]
 
     def _r(self, ok, code, key=None, **v):
@@ -780,7 +782,7 @@ class Engine:
         r = self._request(user, query, roles, redeem, track)
         r["refund"] = bool(redeem and not r["ok"] and (r["code"] in s["refund_on"] or r["code"] == "rate_limited") and r["code"] not in NO_REFUND)
         if r["refund"] and s["msgs"].get("refunded"):
-            r["reply"] = (r["reply"] + self.say("refunded")[len(s["reply_prefix"]):])[:400] if r["reply"] else r["reply"]
+            r["reply"] = (r["reply"] + " " + self.say("refunded")[len(s["reply_prefix"]):])[:400] if r["reply"] else r["reply"]
         return r
 
     def _request(self, user, query, roles, redeem=False, track=None):
@@ -872,7 +874,7 @@ class Engine:
         r = self._r(True, "added", **base, pos=idx + 1, eta=f", plays in ~{mins} min" if mins >= 2 else "")
         r["item"] = item["id"]
         if r["reply"] and self.rate_limit_state()["rate_limited"]:        # accepted into OUR queue; it is pushed when Spotify lets us again
-            r["reply"] = (r["reply"] + self.say("rate_limited_note")[len(s["reply_prefix"]):])[:400]
+            r["reply"] = (r["reply"] + " " + self.say("rate_limited_note")[len(s["reply_prefix"]):])[:400]
         return r
 
     def _to_playlist(self, t):
@@ -1308,7 +1310,7 @@ class Engine:
             return self._r(True, "song", "song_idle", user=user)
         who = (self.now_item or {}).get("requester")
         return self._r(True, "song", user=user, song=f"{t['name']} - {', '.join(t['artists'])}", title=t["name"], artist=", ".join(t["artists"]),
-                       by=f" (requested by {who})" if who else "", requester=who or "", link=f"https://open.spotify.com/track/{t['id']}")
+                       by=f" (requested by {who})" if who else "", requester=who or "", link="")
 
     def queue_reply(self, user=""):
         items = self.queue.items
