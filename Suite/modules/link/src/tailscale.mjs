@@ -1,12 +1,22 @@
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 import fs from 'node:fs';
+import { log } from './log.mjs';
+
+let lastWarn = 0;
+const warnOnce = m => { if (Date.now() - lastWarn > 600000) { lastWarn = Date.now(); log('warn', 'tailscale', m); } };
 
 export function run(cmd, args = [], { timeout = 30000 } = {}) {
   return new Promise(resolve => {
-    execFile(cmd, args, { timeout, windowsHide: true }, (err, stdout, stderr) => {
-      resolve({ ok: !err, code: err?.code ?? 0, stdout: String(stdout || ''), stderr: String(stderr || err?.message || '') });
-    });
+    try {
+      execFile(cmd, args, { timeout, windowsHide: true }, (err, stdout, stderr) => {
+        resolve({ ok: !err, code: err?.code ?? 0, stdout: String(stdout || ''), stderr: String(stderr || err?.message || '') });
+      });
+    } catch (e) {   // Windows can throw synchronously (spawn UNKNOWN: file not runnable, blocked, out of handles); that must not crash Link
+      const name = String(cmd).split(/[\/]/).pop();
+      warnOnce(`could not start ${name}: ${e.code || e.message} (is Tailscale installed and runnable?)`);
+      resolve({ ok: false, code: e.code || 'ESPAWN', stdout: '', stderr: `could not start ${name}: ${e.code || e.message}` });
+    }
   });
 }
 

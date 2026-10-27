@@ -71,6 +71,13 @@ const { warnLimited } = await import('./server.mjs');
 let wl = 0; for (let i = 0; i < 100; i++) if (warnLimited('http', 'POST /api/peer/broadcast: bad peer token (401)', t0 + i * 500)) wl++;
 check('repeated client-error lines (mesh 401, bad Host, foreign Origin) are limited too', wl === 1, String(wl));
 
+// 4c. a command that cannot even be started (spawn UNKNOWN on Windows throws synchronously) must resolve, not crash
+const tsm = await import('./tailscale.mjs');
+const bogus = await tsm.run('x'.repeat(40000), ['version'], { timeout: 2000 });   // absurdly long path: spawn fails at once
+check('a command that cannot be started gives ok:false instead of throwing', bogus.ok === false && typeof bogus.stderr === 'string');
+const nope = await tsm.run(path.join(tmp, 'no', 'such', 'tailscale.exe'), ['status'], { timeout: 2000 });
+check('a missing binary gives ok:false', nope.ok === false);
+
 // 5. spawned Link: token page behind a proxy, prestream, headers
 const dir = path.join(tmp, 'run'); fs.mkdirSync(path.join(dir, 'link'), { recursive: true });
 const port = 9200 + Math.floor(Math.random() * 90), TOKEN = 'module-token-5-module-token-0005';

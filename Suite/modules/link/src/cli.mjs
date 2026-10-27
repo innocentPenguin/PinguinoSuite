@@ -5,6 +5,7 @@ import * as cfgm from './config.mjs';
 import * as ts from './tailscale.mjs';
 import { serve, runMacro } from './server.mjs';
 import { doctor } from './doctor.mjs';
+import { log } from './log.mjs';
 
 const cfg = cfgm.load();
 const [cmd, ...args] = process.argv.slice(2);
@@ -49,7 +50,10 @@ switch (cmd) {
     for (const p of s.peers) console.log(`  ${p.online ? (p.direct ? '🟢 direct ' : '🟡 relayed') : '⚫ offline '} ${p.name} ${p.ip}`);
     break;
   }
-  case 'serve': await serve(cfg); break;
+  case 'serve':
+    // A stray rejected promise (a failed child process, a dropped socket) is logged as one line instead of killing the service.
+    process.on('unhandledRejection', e => log('error', 'process', `unhandled error kept Link running: ${String(e?.message || e).slice(0, 200)}`));
+    await serve(cfg); break;
   case 'macro':
     if (!args[0]) { console.log(`macros: ${Object.keys(cfg.macros).join(', ')}
 usage: pinguinolink macro <name>`); break; }
