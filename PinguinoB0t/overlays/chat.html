@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   PinguinoB0t - CHAT FEED widget (scene HUD). Last chat lines, newest at the bottom. Data: Host GET /api/chat/recent (polled every 2 s).
-  Params: max=8 (lines shown) | fade=0 (seconds until a line fades out, 0 = never) | host=http://127.0.0.1:8770 | preview=1 (sample lines, no Host needed) | bots=1 (show bot lines, default hidden) | badges=0 (no badge images)
+  Params: max=8 (lines shown) | fade=0 (seconds until a line fades out, 0 = never) | host=http://127.0.0.1:8770 | preview=1 (sample lines, no Host needed) | bots=1 (show bot lines, default hidden) | cmds=1 (show !command lines, default hidden) | badges=0 (no badge images)
   Badges: images before the name (the url the Host sends per badge, else Twitch's fixed global image for broadcaster / moderator / vip). Name colour: the message's color field (#rrggbb), else the orange default.
   Design size 460 x 520. Orange/dark Penguino look.
 -->
@@ -9,14 +9,14 @@
 <style>
   html,body{margin:0;width:460px;height:520px;overflow:hidden;background:transparent;font-family:Rubik,"Segoe UI",Arial,sans-serif}
   #box{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px;padding:6px}
-  .m{background:rgba(18,16,14,.82);border-left:4px solid #ff7a00;border-radius:8px;padding:6px 10px;color:#f4efe8;font-size:20px;line-height:1.25;word-wrap:break-word;overflow-wrap:anywhere;transition:opacity .8s}
+  .m{background:rgba(18,16,14,.82);border-left:4px solid #ff7a00;border-radius:8px;padding:6px 10px;color:#f4efe8;font-size:24px;line-height:1.25;word-wrap:break-word;overflow-wrap:anywhere;transition:opacity .8s}
   .m b{color:#ff9d3c;font-weight:800;margin-right:6px}
   .m img.bd{height:1em;width:1em;vertical-align:-.15em;margin-right:4px}
   .m.out{opacity:0}
 </style></head><body><div id="box"></div>
 <script>
 (function(){
-  var Q=new URLSearchParams(location.search), MAX=Math.max(1,Math.min(20,+Q.get("max")||8)), FADE=Math.max(0,+Q.get("fade")||0), SHOWBOTS=Q.get("bots")==="1", SHOWB=Q.get("badges")!=="0";
+  var Q=new URLSearchParams(location.search), MAX=Math.max(1,Math.min(20,+Q.get("max")||8)), FADE=Math.max(0,+Q.get("fade")||0), SHOWBOTS=Q.get("bots")==="1", SHOWCMDS=Q.get("cmds")==="1", SHOWB=Q.get("badges")!=="0";
   var HOST=Q.get("host")||(location.protocol.indexOf("http")===0?location.origin:"http://127.0.0.1:8770"), box=document.getElementById("box"), seq=0;
   var GLOBAL={broadcaster:"5527c58c-fb7d-422d-b71b-f309dcb85cc1",moderator:"3267646d-33f0-4b17-b3df-f923a41db1d0",vip:"b817aba4-fad8-49e2-b88a-7cc744dfa6ec"};
   // same rule as the Host's Boards.IsBot: name ends in bot / b0t, or a known bot (the Host's own extra-bot list is not visible here)
@@ -24,6 +24,7 @@
   function isBot(m){var u=String(m.user||m.display||"").toLowerCase(); return /(bot|b0t)$/.test(u)||BOTS.test(u);}
   function add(m){
     if(!SHOWBOTS&&isBot(m)) return;
+    if(!SHOWCMDS&&/^\s*!/.test(m.text||"")) return;
     var d=document.createElement("div"); d.className="m"; if(m.color&&/^#[0-9a-f]{6}$/i.test(m.color)) d.style.borderLeftColor=m.color;
     if(SHOWB) (m.badges||[]).forEach(function(x){
       var set=String(typeof x==="string"?x:(x&&x.set)||"").toLowerCase(), u=x&&x.url&&/^https:[/][/]/.test(x.url)?x.url:(GLOBAL[set]?"https://static-cdn.jtvnw.net/badges/v1/"+GLOBAL[set]+"/2":""); if(!u) return;
@@ -35,7 +36,7 @@
   }
   function poll(){
     fetch(HOST+"/api/chat/recent?since="+seq+"&limit="+(MAX*4)).then(function(r){return r.json();}).then(function(j){
-      if(!j||!j.messages)return; var first=seq===0; var ms=SHOWBOTS?j.messages:j.messages.filter(function(m){return !isBot(m);}); if(first) ms=ms.slice(-MAX);   // bots are dropped before the cut so the box still fills
+      if(!j||!j.messages)return; var first=seq===0; var ms=j.messages.filter(function(m){return (SHOWBOTS||!isBot(m))&&(SHOWCMDS||!/^\s*!/.test(m.text||""));}); if(first) ms=ms.slice(-MAX);   // bots are dropped before the cut so the box still fills
       ms.forEach(function(m){add(m);}); if(j.seq!==undefined) seq=j.seq;
     }).catch(function(){});
   }
