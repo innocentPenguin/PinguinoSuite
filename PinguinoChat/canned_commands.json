@@ -400,6 +400,10 @@
    "name": "games",
    "aliases": ["game"],
    "text": "🎰 Games in chat: $(games). Bet only what you can lose 🐧"
+  },
+  {
+    "name": "epic",
+    "text": "Add InnocentPenguin on Epic to join Fortnite customs!"
   }
  ]
 }
