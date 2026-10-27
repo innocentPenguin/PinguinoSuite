@@ -91,6 +91,8 @@ public static class Harness
         foreach (var q in new[] { "code plz", "how i get code", "Code pls" })
         { Msg("Cq" + q.Length + q[0], q); Check("lobby ask: " + q, Last() != null && Last().Contains("Name: peng3") && !Last().ToLower().Contains("password") && TwoLines(), Last()); }
         Msg("Magm", "do I have to keep doing !join?"); Check("join once: answered short", Last() != null && Last().Contains("Once is enough") && TwoLines(), Last());
+        Msg("Lvl", "im ina party with phil if i went to join a pm itd drag phil no?"); Check("party: everyone joins themselves", Last() != null && Last().Contains("No parties") && TwoLines() && Last().Length < 150, Last());
+        Msg("Lvl2", "happy birthday, we had a party yesterday lol"); Check("party chatter ignored", Last() == null, Last());
         Msg("Ana", "how do i register");
         Check("already registered says so", Last().Contains("already registered as AnaEpic"), Last());
 
