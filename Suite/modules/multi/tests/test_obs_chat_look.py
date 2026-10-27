@@ -9,7 +9,7 @@ HTML = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").
 
 def test_defaults_are_the_current_look():
     d = obs.sanitize("chat", {})
-    assert (d["font_px"], d["line_height"], d["row_padding"], d["row_gap"]) == (23, 1.3, 1, 3)       # ~half of the old 44 px
+    assert (d["font_px"], d["line_height"], d["row_padding"], d["row_gap"]) == (23, 1.3, 0, 11)       # ~half of the old 44 px
     assert (d["name_size"], d["badge_size"], d["width"], d["show_bots"], d["provider_logo"]) == (100, 100, 100, False, False)
     old = obs.sanitize("chat", obs.IVAN_CHAT)
     assert all(old[k] == obs.CHAT_DEFAULT[k] for k in NEW) and old["custom_css"] == "" and old["look"] == "synchra"
@@ -112,4 +112,4 @@ def test_font_default_is_inter_and_hand_picked_fonts_survive():
     assert obs.migrate_chat({"font_family_id": "impact"})["font_family_id"] == "impact"
     assert obs.migrate_chat({"font_family_id": "nunito"})["font_family_id"] == "inter"
     html = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text("utf-8")
-    assert "font-family:Inter" in html and "-webkit-text-stroke:.045em" in html and "letter-spacing:0" in html
+    assert "font-family:Inter" in html and "letter-spacing:.05em" in html and "1px 1px 1px" in html

@@ -22,7 +22,7 @@ CHAT_DEFAULT = {
     # ours (ignored by Synchra on export)
     "max_messages": 30, "accent_color": "#ff8a1f", "name_color_mode": "platform",
     # chat look sliders: every default is the look the overlay always had (font_px 0 = use the `size` step)
-    "font_px": 23, "line_height": 1.3, "row_padding": 1, "row_gap": 3, "name_size": 100, "badge_size": 100, "width": 100, "show_bots": False,
+    "font_px": 23, "line_height": 1.3, "row_padding": 0, "row_gap": 11, "name_size": 100, "badge_size": 100, "width": 100, "show_bots": False,
     # Synchra look: no box, outlined bold text, pill badges first; "classic" keeps the older flat look
     "look": "synchra", "platform_pill": True, "badge_style": "image", "hide_commands": True,
 }

@@ -14,14 +14,14 @@ body.top #feed{justify-content:flex-start}
 .has-bg.simple #feed{background:var(--bg);border:var(--bw,0) solid var(--bc,transparent);border-radius:var(--br,0)}
 /* Synchra look (default): no box, soft shadow, pill badges first, bold outlined name + text */
 @font-face{font-family:Inter;font-weight:100 900;src:local('Inter'),local('Inter Variable'),url(/assets/fonts/Inter.woff2) format('woff2')}
-.synchra .chat-message-container{font-weight:700;letter-spacing:0;text-shadow:0 1px 3px rgba(0,0,0,.6),0 0 6px rgba(0,0,0,.35)}
-.synchra .chat-username{font-weight:800}.synchra .chat-text,.synchra .chat-colon{font-weight:700}
-.synchra .chat-username,.synchra .chat-colon,.synchra .chat-text{-webkit-text-stroke:.045em #14110e;paint-order:stroke fill;stroke-linejoin:round}
+/* measured from Synchra's own widget CSS: weight 700 everywhere, letter-spacing .05em, 1px four-way shadow as the outline, .3em between pieces */
+.synchra .chat-message-container{font-weight:700;letter-spacing:.05em;text-shadow:-1px -1px 1px var(--sh,#000),1px -1px 1px var(--sh,#000),-1px 1px 1px var(--sh,#000),1px 1px 1px var(--sh,#000)}
+.synchra .chat-message-container *{font-weight:inherit}
 .synchra .chat-text,.synchra .chat-colon{color:var(--tc,#fff)}
-.pill{display:inline-block;vertical-align:.14em;margin-right:.2em;padding:.12em .5em .1em;border-radius:999px;font-weight:800;font-size:max(calc(.62em * var(--bs,1)),7.5px);line-height:1.15;letter-spacing:.03em;color:#fff;text-shadow:none;-webkit-text-stroke:0;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.pill{display:inline-block;vertical-align:.14em;margin-right:.3em;letter-spacing:.03em;padding:.12em .5em .1em;border-radius:999px;font-weight:800;font-size:max(calc(.62em * var(--bs,1)),7.5px);line-height:1.15;letter-spacing:.03em;color:#fff;text-shadow:none;-webkit-text-stroke:0;box-shadow:0 1px 3px rgba(0,0,0,.45)}
 .pill.live{background:#e63946}.pill.sub{background:#9147ff}.pill.mod{background:#1fa24a}.pill.vip{background:#e0399a}.pill.mem{background:#2ba640}.pill.sf{background:#ff2d55}.pill.bot{background:#777}
 .pill.pf-twitch{background:#6441a5}.pill.pf-youtube{background:#ff2a2a}.pill.pf-tiktok{background:#111;box-shadow:0 0 0 1px #25f4ee,1px 1px 0 1px #fe2c55}.pill.pf-kick{background:#1b8f1b}.pill.pf-discord{background:#5865f2}
-.bimg{height:calc(1em * var(--bs,1));width:auto;vertical-align:-.12em;margin-right:.2em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.bimg{height:calc(max(20px,1.125em) * var(--bs,1));width:auto;vertical-align:-.3em;margin-right:.3em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .chat-badges{display:inline-flex;gap:3px;margin-right:6px;vertical-align:middle}
 .chat-badge{display:inline-block;font:700 calc(.45em * var(--bs,1))/1.5 'Segoe UI',sans-serif;padding:0 .5em;border-radius:.4em;color:#111;background:#ff8a1f;text-shadow:none;vertical-align:middle}
 .b-moderator{background:#00ad03}.b-vip{background:#e005b9;color:#fff}.b-subscriber{background:#8f5bff;color:#fff}.b-broadcaster{background:#e91916;color:#fff}.b-bot{background:#777;color:#fff}.b-member{background:#2ba640;color:#fff}.b-superfan{background:#ff2d55;color:#fff}
