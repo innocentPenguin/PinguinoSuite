@@ -9,6 +9,7 @@ namespace PinguinoHost
         /// <summary>Master View routes: GET /api/chat/recent?since=&limit=, GET /api/customs/state, POST /api/customs/mod {action,value}, GET /api/wheel/state (GET /api/events is served by Events from the listener loop).</summary>
         static bool EventRoutes(HttpListenerContext c, string p, string m)
         {
+            if (p == "/api/chat/badges" && m == "GET") { Write(c, ChatMeta.Api().ToString(), "application/json"); return true; }
             if (p == "/api/chat/recent" && m == "GET")
             {
                 long since = 0; long.TryParse(c.Request.QueryString["since"], out since); int lim = 50; int.TryParse(c.Request.QueryString["limit"], out lim);

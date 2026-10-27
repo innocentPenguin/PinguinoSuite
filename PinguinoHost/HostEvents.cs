@@ -14,11 +14,15 @@ namespace PinguinoHost
     public static class ChatFeed
     {
         static readonly object L = new object(); static readonly List<JObject> _items = new List<JObject>(); static long _seq;
-        public static void Add(string user, string text, int role, bool sub, int subTier)
+        public static void Add(string user, string text, int role, bool sub, int subTier, string colorTag = "", string badgeTag = "", string userId = "")
         {
             if (string.IsNullOrEmpty(user) || text == null) return;
             var badges = new JArray(); if (role >= 4) badges.Add("broadcaster"); else if (role == 3) badges.Add("moderator"); else if (role == 2) badges.Add("vip"); if (sub || subTier > 0) badges.Add("subscriber");
-            JObject o; lock (L) { o = new JObject { { "seq", ++_seq }, { "user", user.ToLowerInvariant() }, { "display", user }, { "text", text }, { "color", "" }, { "badges", badges }, { "ts", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() } }; _items.Add(o); if (_items.Count > 200) _items.RemoveAt(0); }
+            try { ChatMeta.WarmBadges(); } catch (Exception) { }
+            JObject o = null; string color = "";
+            try { color = ChatMeta.Color(colorTag, userId, 800, late => { lock (L) { if (o != null) o["color"] = late; } }); } catch (Exception) { }   // the IRC tag, else Helix /chat/color (cached); a slow first lookup patches the stored line later
+            JArray bsets = new JArray(); try { bsets = ChatMeta.BadgeSets(badgeTag); } catch (Exception) { }
+            lock (L) { o = new JObject { { "seq", ++_seq }, { "user", user.ToLowerInvariant() }, { "display", user }, { "text", text }, { "color", color }, { "badges", badges }, { "badgeSets", bsets }, { "ts", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() } }; _items.Add(o); if (_items.Count > 200) _items.RemoveAt(0); }
             Events.Publish("chat", o);
         }
         public static JArray Recent(long since, int limit) { lock (L) { limit = limit <= 0 ? 50 : Math.Min(limit, 200); var r = _items.Where(x => (long)x["seq"] > since).ToList(); if (r.Count > limit) r = r.Skip(r.Count - limit).ToList(); return new JArray(r.Select(x => x.DeepClone())); } }

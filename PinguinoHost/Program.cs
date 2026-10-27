@@ -184,7 +184,7 @@ namespace PinguinoHost
         }
 
         // ---------------- dispatch: exactly the Streamer.bot trigger ownership in Docs\TRIGGERS.md ----------------
-        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false, int subTier = 0, string platform = "twitch")
+        public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false, int subTier = 0, string platform = "twitch", string colorTag = "", string badgeTag = "")
         {
             if (!Lease.MayRun) return;
             bool fx = platform != "twitch";   // chat from YouTube etc. (HostApi /api/chat-in): own namespaced identity, viewer role, answers go to that platform only; Twitch-only machinery below is skipped
@@ -197,7 +197,7 @@ namespace PinguinoHost
             try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
             try { Economy.OnChat(user, text, s => ChannelLore.Say(s)); } catch (Exception) { }
             try { if (!Control.Synthetic) { Periods.AddBuffered(user, "messages", 1); if (text.TrimStart().StartsWith("!")) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
-            try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier); } catch (Exception) { }
+            try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier, colorTag, badgeTag, userId); } catch (Exception) { }
             try { EventLog.OnChat(user, text, role); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
             try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
             }
@@ -340,6 +340,7 @@ namespace PinguinoHost
             while ((line = Console.ReadLine()) != null)
             {
                 if (line.StartsWith("@") && line.Contains(" USERNOTICE #")) { Streaks.OnUserNotice(line); continue; }   // sim: a raw IRC USERNOTICE line
+                if (line.StartsWith("@") && line.Contains(" PRIVMSG #")) { HandleIrc(line); continue; }   // sim: a raw IRC PRIVMSG line with its tags (color=, badges=, user-id=)
                 if (line.StartsWith("eventsub ")) { var q = line.Split(new[] { ' ' }, 3); try { EventSub.Simulate(q[1], q[2], x => DispatchEvent(x)); } catch (Exception ex) { Console.WriteLine("ERROR eventsub: " + ex.Message); } continue; }
                 if (line.StartsWith("timeoutredeem ")) { var q = line.Split(new[] { ' ' }, 3); DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRedeem" }, { "userName", q[1] }, { "title", "Timeout" }, { "input", q.Length > 2 ? q[2] : "" }, { "redemptionId", "red-t" }, { "rewardId", "rw-t" } }); continue; }   // sim: timeoutredeem alice marsh
                 if (line == "periods-size") { try { Console.WriteLine("[periods] bytes " + Periods.ForSite().ToString(Newtonsoft.Json.Formatting.None).Length); } catch (Exception ex) { Console.WriteLine("[periods] error " + ex); } continue; }
@@ -454,7 +455,7 @@ namespace PinguinoHost
             int role = T("badges").Contains("broadcaster/") ? 4 : T("mod") == "1" ? 3 : T("badges").Contains("vip/") ? 2 : 1;
             string display = T("display-name") != "" ? T("display-name") : m.Groups["nick"].Value;
             string reply = T("reply-parent-user-login");
-            Task.Run(() => Dispatch(display, msg, T("id"), role, T("user-id"), T("first-msg") == "1", reply, T("subscriber") == "1", Intro.TierFromBadges(T("badges"))));
+            Task.Run(() => Dispatch(display, msg, T("id"), role, T("user-id"), T("first-msg") == "1", reply, T("subscriber") == "1", Intro.TierFromBadges(T("badges")), "twitch", T("color"), T("badges")));
         }
     }
 }
