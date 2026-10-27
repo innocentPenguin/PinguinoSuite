@@ -22,7 +22,7 @@ CHAT_DEFAULT = {
     # ours (ignored by Synchra on export)
     "max_messages": 30, "accent_color": "#ff8a1f", "name_color_mode": "platform",
     # chat look sliders: every default is the look the overlay always had (font_px 0 = use the `size` step)
-    "font_px": 21, "line_height": 1.3, "row_padding": 1, "row_gap": 3, "name_size": 100, "badge_size": 100, "width": 100, "show_bots": False,
+    "font_px": 23, "line_height": 1.3, "row_padding": 1, "row_gap": 3, "name_size": 100, "badge_size": 100, "width": 100, "show_bots": False,
     # Synchra look: no box, outlined bold text, pill badges first; "classic" keeps the older flat look
     "look": "synchra", "platform_pill": True, "badge_style": "image", "hide_commands": True,
 }
@@ -59,7 +59,7 @@ OLD_IVAN_CSS_MARK = "use.typekit.net/inf0cul"      # Ivan's imported Synchra CSS
 
 def migrate_chat(saved):
     """A chat look saved before the Synchra look: drop Ivan's imported CSS (it forced the font, margins and line height over the sliders),
-    take the new ~21 px size when the old big one was never changed by hand, and switch to the Synchra look. Idempotent; other keys are kept."""
+    take the new 23 px size when the old big one was never changed by hand, and switch to the Synchra look. Idempotent; other keys are kept."""
     if not isinstance(saved, dict) or "look" in saved:
         return saved
     d = dict(saved, look="synchra")
@@ -68,7 +68,7 @@ def migrate_chat(saved):
         if d.get("font_family_id") in (None, "nunito"):
             d["font_family_id"] = "rubik"
     if not d.get("font_px"):
-        d["font_px"] = 21
+        d["font_px"] = 23
     for k, old in (("line_height", 1.25), ("row_padding", 2), ("row_gap", 2)):
         if d.get(k) == old:
             d.pop(k)

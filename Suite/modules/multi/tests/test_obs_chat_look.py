@@ -9,7 +9,7 @@ HTML = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").
 
 def test_defaults_are_the_current_look():
     d = obs.sanitize("chat", {})
-    assert (d["font_px"], d["line_height"], d["row_padding"], d["row_gap"]) == (21, 1.3, 1, 3)       # ~half of the old 44 px
+    assert (d["font_px"], d["line_height"], d["row_padding"], d["row_gap"]) == (23, 1.3, 1, 3)       # ~half of the old 44 px
     assert (d["name_size"], d["badge_size"], d["width"], d["show_bots"], d["provider_logo"]) == (100, 100, 100, False, False)
     old = obs.sanitize("chat", obs.IVAN_CHAT)
     assert all(old[k] == obs.CHAT_DEFAULT[k] for k in NEW) and old["custom_css"] == "" and old["look"] == "synchra"
@@ -59,7 +59,7 @@ OLD_SAVED = {"size": "xxl", "font_family_id": "nunito", "ignore_names": ["nightb
 
 def test_migration_unpins_the_old_big_look_and_keeps_the_rest():
     st = obs.sanitize("chat", obs.migrate_chat(OLD_SAVED))
-    assert st["font_px"] == 21 and st["custom_css"] == "" and st["look"] == "synchra" and st["font_family_id"] == "rubik"
+    assert st["font_px"] == 23 and st["custom_css"] == "" and st["look"] == "synchra" and st["font_family_id"] == "rubik"
     assert st["text_color"] == "#ffcc00" and st["ignore_names"] == ["nightbot"]
     assert obs.migrate_chat(dict(OLD_SAVED, font_px=33))["font_px"] == 33        # a hand-set size survives
     once = obs.migrate_chat(OLD_SAVED)
