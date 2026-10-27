@@ -1164,9 +1164,9 @@ public static class Harness
             Game(new Dictionary<string, object> { { "kind", "give" }, { "outcome", "win" }, { "user", "stefan" }, { "display", "Stefan" }, { "opponent", "Bobby" }, { "amount", 15 }, { "gameId", "g7" } });
             Check("games: a gift is one short line (no thank-you fluff, Ivan 10-24)", Last() != null && Last().Contains("15") && Last().Contains("Bobby") && Last().Length < 60, Last());
             Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "broke" }, { "user", "stefan" }, { "display", "Stefan" }, { "gameId", "g8" } });
-            Check("games: no balance says 'you have no points'", Last() != null && Last().Contains("you have no points"), Last());
+            Check("games: a broke bet gets NO line", Last() == null || CPHProxy.Sent.Count == 0, Last());
             Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "invalid" }, { "user", "stefan" }, { "display", "Stefan" }, { "reason", "the minimum is 5 points." }, { "gameId", "g9" } });
-            Check("games: a refusal passes the Host's reason along", Last() == "@Stefan the minimum is 5 points.", Last());
+            Check("games: a refused bet gets NO line", Last() == null || CPHProxy.Sent.Count == 0, Last());
             Game(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "lose" }, { "user", "quiet1" }, { "display", "Quiet1" }, { "amount", 5 }, { "payout", 0 }, { "balance", 5 }, { "optout", "1" }, { "gameId", "g10" } });
             Check("games: an opted-out viewer gets the plain result (no banter)", Last() == "@Quiet1 you lost 5 points. Now at 5.", Last());
             Game(new Dictionary<string, object> { { "kind", "shop" }, { "outcome", "bought" }, { "item", "get_sub" }, { "user", "stefan" }, { "display", "Stefan" }, { "amount", 500 }, { "balance", 40 }, { "gameId", "st1" } });

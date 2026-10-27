@@ -864,6 +864,8 @@ public class CPHInline
     string GameLine(string kind, string outcome, string d, long amt, long pay, long bal, string opp, string reel, string reason, string cur, int timeout, bool plain, int tries = 0)
     {
         string at = "@" + d + " "; long net = pay - amt; string sr = reel != "" ? reel + " " : "";
+        // a refused / invalid / broke / expired BET gets no line at all (Ivan 10-26 "gamble spam"): only real results speak
+        if ((kind == "gamble" || kind == "slots" || kind == "duel") && (outcome == "broke" || outcome == "invalid" || outcome == "expired")) return null;
         if (outcome == "broke") return at + (plain ? "you have no " + cur + "." : Pick("you have no " + cur + " right now \U0001F427", "you have no " + cur + " at the moment."));
         if (outcome == "invalid" || (outcome == "expired" && kind != "guess") || outcome == "declined")
         {
