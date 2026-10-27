@@ -9,13 +9,12 @@ HTML = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").
 
 def test_defaults_are_the_current_look():
     d = obs.sanitize("chat", {})
-    assert (d["font_px"], d["line_height"], d["row_padding"], d["row_gap"]) == (0, 1.25, 2, 2)
+    assert (d["font_px"], d["line_height"], d["row_padding"], d["row_gap"]) == (21, 1.3, 1, 3)       # ~half of the old 44 px
     assert (d["name_size"], d["badge_size"], d["width"], d["show_bots"], d["provider_logo"]) == (100, 100, 100, False, False)
-    old = obs.sanitize("chat", obs.IVAN_CHAT)                     # a preset saved before these keys existed
-    assert all(old[k] == obs.CHAT_DEFAULT[k] for k in NEW) and old["size"] == "xxl"
+    old = obs.sanitize("chat", obs.IVAN_CHAT)
+    assert all(old[k] == obs.CHAT_DEFAULT[k] for k in NEW) and old["custom_css"] == "" and old["look"] == "synchra"
     for name, p in obs.PRESETS["chat"].items():
-        s = obs.sanitize("chat", p["settings"])
-        assert s["font_px"] == 0 and s["show_bots"] is False, name
+        assert obs.sanitize("chat", p["settings"])["show_bots"] is False, name
 
 
 def test_sanitize_clamps_and_falls_back():
@@ -52,3 +51,54 @@ def test_page_renders_new_keys_without_new_elements():
         assert hook in HTML, hook
     assert "S.provider_logo ?" in HTML and "api/obs/' + KIND" in HTML          # logo stays opt-in; settings poll as a safety net
     assert "var(--lh,1.25)" in HTML and "var(--rg,2px)" in HTML                 # fallbacks equal the old fixed values
+
+
+OLD_SAVED = {"size": "xxl", "font_family_id": "nunito", "ignore_names": ["nightbot"], "text_color": "#ffcc00",
+             "custom_css": "@import url('https://use.typekit.net/inf0cul.css'); .chat-message-container{margin:0 !important}"}
+
+
+def test_migration_unpins_the_old_big_look_and_keeps_the_rest():
+    st = obs.sanitize("chat", obs.migrate_chat(OLD_SAVED))
+    assert st["font_px"] == 21 and st["custom_css"] == "" and st["look"] == "synchra" and st["font_family_id"] == "rubik"
+    assert st["text_color"] == "#ffcc00" and st["ignore_names"] == ["nightbot"]
+    assert obs.migrate_chat(dict(OLD_SAVED, font_px=33))["font_px"] == 33        # a hand-set size survives
+    once = obs.migrate_chat(OLD_SAVED)
+    assert obs.migrate_chat(once) == once                                          # idempotent
+    mine = dict(OLD_SAVED, custom_css=".x{color:red}")
+    assert obs.migrate_chat(mine)["custom_css"] == ".x{color:red}"                 # own CSS is never dropped
+
+
+def test_look_keys_and_commands():
+    s = obs.sanitize("chat", {"look": "x", "badge_style": "y", "platform_pill": "no", "hide_commands": 3})
+    assert (s["look"], s["badge_style"], s["platform_pill"], s["hide_commands"]) == ("synchra", "image", True, True)
+    assert obs.sanitize("chat", {"look": "classic", "badge_style": "pill"})["look"] == "classic"
+    cmd = {"user": "x", "platform": "twitch", "event": "", "text": "!lurk"}
+    assert obs.hidden("chat", s, cmd) and not obs.hidden("chat", s, dict(cmd, text="hi !lurk"))
+    assert not obs.hidden("chat", obs.sanitize("chat", {"hide_commands": False}), cmd)
+    doc = obs.to_synchra("chat", s)["settings"]
+    assert not any(k in doc for k in ("look", "badge_style", "platform_pill", "hide_commands"))
+
+
+def test_twitch_badges_parse_and_cache():
+    import twitch_badges as tb
+    class R:
+        def __init__(s, j, c=200): s.j, s.status_code = j, c
+        def json(s): return s.j
+    calls = []
+    def get(url, **kw):
+        calls.append(url)
+        if url.endswith("/global"):
+            return R({"data": [{"set_id": "moderator", "versions": [{"id": "1", "image_url_2x": "https://x/mod.png"}]},
+                               {"set_id": "subscriber", "versions": [{"id": "0", "image_url_2x": "https://x/g.png"}]}]})
+        return R({"data": [{"set_id": "subscriber", "versions": [{"id": "0", "image_url_2x": "https://x/s0.png"}, {"id": "3", "image_url_2x": "http://bad"}]}]})
+    d = tb.fetch({}, "42", get)
+    assert d == {"moderator": {"1": "https://x/mod.png"}, "subscriber": {"0": "https://x/s0.png"}}
+    class C:
+        def tokens(s): return {"access_token": "t"}
+        def _headers(s, t): return {}
+        broadcaster_id = "42"
+    tb._cache.update(at=0.0, ttl=0.0, data={})
+    assert tb.badges(C(), now=lambda: 100.0, get=get) == d and tb.badges(C(), now=lambda: 200.0, get=get) == d
+    assert len(calls) == 4                                                          # 2 calls once, second read from the cache
+    tb._cache.update(at=0.0, ttl=0.0, data={})
+    assert tb.badges(None) == {}

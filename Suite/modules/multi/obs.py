@@ -11,7 +11,7 @@ FOLLOW_ANIM = ("fade", "slide", "pop", "bounce")
 ACT_TYPES = ("follow", "redeem", "sub", "resub", "gift", "cheer", "raid", "announcement", "shoutout", "ban", "timeout", "unban", "mod", "unmod", "raid_out", "poll", "prediction", "hype", "streak")
 FONTS = {"nunito": "Nunito, 'Segoe UI', sans-serif", "system": "'Segoe UI', Arial, sans-serif", "roboto": "Roboto, Arial, sans-serif",
          "arial": "Arial, sans-serif", "georgia": "Georgia, serif", "consolas": "Consolas, monospace", "comic": "'Comic Sans MS', cursive",
-         "impact": "Impact, sans-serif", "trebuchet": "'Trebuchet MS', sans-serif", "verdana": "Verdana, sans-serif"}
+         "impact": "Impact, sans-serif", "rubik": "Rubik, 'Segoe UI', Arial, sans-serif", "trebuchet": "'Trebuchet MS', sans-serif", "verdana": "Verdana, sans-serif"}
 
 CHAT_DEFAULT = {
     "canvas_scale": 1, "size": "xl", "text_color": "#ffffff", "text_shadow_color": "#000000", "background_color": "", "background_opacity": 1,
@@ -22,10 +22,12 @@ CHAT_DEFAULT = {
     # ours (ignored by Synchra on export)
     "max_messages": 30, "accent_color": "#ff8a1f", "name_color_mode": "platform",
     # chat look sliders: every default is the look the overlay always had (font_px 0 = use the `size` step)
-    "font_px": 0, "line_height": 1.25, "row_padding": 2, "row_gap": 2, "name_size": 100, "badge_size": 100, "width": 100, "show_bots": False,
+    "font_px": 21, "line_height": 1.3, "row_padding": 1, "row_gap": 3, "name_size": 100, "badge_size": 100, "width": 100, "show_bots": False,
+    # Synchra look: no box, outlined bold text, pill badges first; "classic" keeps the older flat look
+    "look": "synchra", "platform_pill": True, "badge_style": "image", "hide_commands": True,
 }
 CHAT_SLIDERS = {"font_px": (0, 140), "line_height": (1.0, 2.5), "row_padding": (0, 30), "row_gap": (0, 40), "name_size": (50, 200), "badge_size": (50, 250), "width": (20, 100)}
-CHAT_OURS = ("max_messages", "accent_color", "name_color_mode", *CHAT_SLIDERS, "show_bots")      # not part of a Synchra export
+CHAT_OURS = ("max_messages", "accent_color", "name_color_mode", *CHAT_SLIDERS, "show_bots", "look", "platform_pill", "badge_style", "hide_commands")      # not part of a Synchra export
 ACTIVITY_DEFAULT = {
     "canvas_scale": 1, "size": "l", "text_color": "#ffffff", "text_shadow_color": "#000000", "background_color": "#14110d", "background_opacity": 0.85,
     "border_width": 0, "border_color": "", "border_radius": 8, "font_family_id": "nunito", "message_fade_duration_seconds": 12,
@@ -45,15 +47,34 @@ DEFAULTS = {"chat": CHAT_DEFAULT, "activity": ACTIVITY_DEFAULT, "follow": FOLLOW
 
 IVAN_CHAT = {
     "canvas_scale": 1, "size": "xxl", "text_color": "#ffffff", "text_shadow_color": "#000000", "background_color": "", "background_opacity": 1,
-    "border_width": 0, "border_color": "", "border_radius": 0, "font_family_id": "nunito", "message_fade_duration_seconds": 0,
+    "border_width": 0, "border_color": "", "border_radius": 0, "message_fade_duration_seconds": 0,
     "message_delay_seconds": 0,
     "ignore_names": ["nightbot", "StreamElements", "PinguinoB0t", "SoundAlerts", "potatbotat", "sery_bot", "synchrabot", "PinguinoHelper", "ChattyPinguino"],
     "provider_logo": False, "badges": True, "username_colon": True, "notices": True, "message_order": "bottom", "message_alignment": "left",
-    "providers": ["all"], "style_type": "simple", "entrance_animation_type": "fade",
-    "custom_css": "@import url('https://use.typekit.net/inf0cul.css');\n\n.chat-message-container {\n    margin: 0 !important;\n    padding: 0px 4px !important;\n}\n\n"
-                  ".chat-message-container,\n.chat-message-container * {\n    font-family: \"Unkempt\", cursive !important;\n    font-weight: 400;\n"
-                  "    font-style: normal;\n    line-height: 1.35 !important;\n    margin-top: -4px !important;\n    margin-bottom: -4px !important;\n}",
+    "providers": ["all"], "style_type": "simple", "entrance_animation_type": "fade", "font_family_id": "rubik",
+    "custom_css": "",
 }
+OLD_IVAN_CSS_MARK = "use.typekit.net/inf0cul"      # Ivan's imported Synchra CSS (Unkempt font, !important margins/line-height): it pinned the look and defeated the sliders
+
+
+def migrate_chat(saved):
+    """A chat look saved before the Synchra look: drop Ivan's imported CSS (it forced the font, margins and line height over the sliders),
+    take the new ~21 px size when the old big one was never changed by hand, and switch to the Synchra look. Idempotent; other keys are kept."""
+    if not isinstance(saved, dict) or "look" in saved:
+        return saved
+    d = dict(saved, look="synchra")
+    if OLD_IVAN_CSS_MARK in str(d.get("custom_css", "")):
+        d["custom_css"] = ""
+        if d.get("font_family_id") in (None, "nunito"):
+            d["font_family_id"] = "rubik"
+    if not d.get("font_px"):
+        d["font_px"] = 21
+    for k, old in (("line_height", 1.25), ("row_padding", 2), ("row_gap", 2)):
+        if d.get(k) == old:
+            d.pop(k)
+    return d
+
+
 PRESETS = {
     "chat": {
         "Ivan (saved Synchra look)": {"desc": "Your Synchra settings and the Unkempt font CSS, with the bot ignore list.", "settings": IVAN_CHAT},
@@ -157,6 +178,10 @@ def sanitize(kind, src):
             if k == "font_px" and 0 < d[k] < 10:
                 d[k] = 10
         d["show_bots"] = s.get("show_bots") is True
+        d["look"] = s.get("look") if s.get("look") in ("synchra", "classic") else "synchra"
+        d["badge_style"] = s.get("badge_style") if s.get("badge_style") in ("image", "pill") else "image"
+        for k in ("platform_pill", "hide_commands"):
+            d[k] = s[k] if isinstance(s.get(k), bool) else CHAT_DEFAULT[k]
     elif kind == "activity":
         ty = [t for t in (s.get("types") if isinstance(s.get("types"), list) else d["types"]) if t in ACT_TYPES]
         d["types"] = ty
@@ -197,6 +222,8 @@ def hidden(kind, settings, m, muted=()):
         return True
     ev = m.get("event") or ""
     if kind == "chat":
+        if settings.get("hide_commands") and not ev and (m.get("text") or "").lstrip().startswith("!"):
+            return True
         return bool(ev) and not settings["notices"]
     if kind == "follow":
         if ev == "gift":

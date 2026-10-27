@@ -12,6 +12,14 @@ body.top #feed{justify-content:flex-start}
 .boxed .chat-message-container,.boxed .activity-row,.bubble .chat-message-container,.bubble .activity-row{background:var(--bg,transparent);border:var(--bw,0) solid var(--bc,transparent);border-radius:var(--br,0);padding:calc(var(--rp,2px) + 2px) 10px}
 .bubble .chat-message-container,.bubble .activity-row{width:fit-content;max-width:100%;border-radius:calc(var(--br,0) + 14px)}
 .has-bg.simple #feed{background:var(--bg);border:var(--bw,0) solid var(--bc,transparent);border-radius:var(--br,0)}
+/* Synchra look (default): no box, soft shadow, pill badges first, bold outlined name + text */
+.synchra .chat-message-container{font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.55),0 0 8px rgba(0,0,0,.35)}
+.synchra .chat-username,.synchra .chat-colon,.synchra .chat-text{font-weight:800;-webkit-text-stroke:.1em #14110e;paint-order:stroke fill;stroke-linejoin:round}
+.synchra .chat-text,.synchra .chat-colon{color:var(--tc,#fff)}
+.pill{display:inline-block;vertical-align:.14em;margin-right:.2em;padding:.12em .5em .1em;border-radius:999px;font-weight:900;font-size:max(calc(.62em * var(--bs,1)),7.5px);line-height:1.15;letter-spacing:.03em;color:#fff;text-shadow:none;-webkit-text-stroke:0;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.pill.live{background:#e63946}.pill.sub{background:#9147ff}.pill.mod{background:#1fa24a}.pill.vip{background:#e0399a}.pill.mem{background:#2ba640}.pill.sf{background:#ff2d55}.pill.bot{background:#777}
+.pill.pf-twitch{background:#6441a5}.pill.pf-youtube{background:#ff2a2a}.pill.pf-tiktok{background:#111;box-shadow:0 0 0 1px #25f4ee,1px 1px 0 1px #fe2c55}.pill.pf-kick{background:#1b8f1b}.pill.pf-discord{background:#5865f2}
+.bimg{height:calc(1em * var(--bs,1));width:auto;vertical-align:-.12em;margin-right:.2em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .chat-badges{display:inline-flex;gap:3px;margin-right:6px;vertical-align:middle}
 .chat-badge{display:inline-block;font:700 calc(.45em * var(--bs,1))/1.5 'Segoe UI',sans-serif;padding:0 .5em;border-radius:.4em;color:#111;background:#ff8a1f;text-shadow:none;vertical-align:middle}
 .b-moderator{background:#00ad03}.b-vip{background:#e005b9;color:#fff}.b-subscriber{background:#8f5bff;color:#fff}.b-broadcaster{background:#e91916;color:#fff}.b-bot{background:#777;color:#fff}.b-member{background:#2ba640;color:#fff}.b-superfan{background:#ff2d55;color:#fff}
@@ -43,7 +51,7 @@ body.top #feed{justify-content:flex-start}
 <div id="scale"><div id="feed"></div></div>
 <script>
 const KIND = '__KIND__', Q = new URLSearchParams(location.search), PREVIEW = Q.get('preview') === '1';
-const FONTS = {nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: "Roboto,Arial,sans-serif", arial: 'Arial,sans-serif', georgia: 'Georgia,serif', consolas: 'Consolas,monospace', comic: "'Comic Sans MS',cursive", impact: 'Impact,sans-serif', trebuchet: "'Trebuchet MS',sans-serif", verdana: 'Verdana,sans-serif'};
+const FONTS = {rubik: "Rubik,'Segoe UI',Arial,sans-serif", nunito: "Nunito,'Segoe UI',sans-serif", system: "'Segoe UI',Arial,sans-serif", roboto: "Roboto,Arial,sans-serif", arial: 'Arial,sans-serif', georgia: 'Georgia,serif', consolas: 'Consolas,monospace', comic: "'Comic Sans MS',cursive", impact: 'Impact,sans-serif', trebuchet: "'Trebuchet MS',sans-serif", verdana: 'Verdana,sans-serif'};
 const SIZES = {xs: 16, s: 20, m: 24, l: 30, xl: 36, xxl: 44};
 const PCOL = {twitch: '#9146ff', youtube: '#ff4e45', kick: '#53fc18', discord: '#7983f5', tiktok: '#ff2d55'};
 const PLET = {twitch: 'T', youtube: 'Y', kick: 'K', discord: 'D', tiktok: '♪'};
@@ -58,7 +66,7 @@ function hidden(m) {
   const u = (m.user || '').toLowerCase(), d = (m.display || '').toLowerCase(), ig = S.ignore_names.map(x => x.toLowerCase());
   if (((ig.includes(u) || ig.includes(d)) && !(S.show_bots && m.is_bot)) || MUTED.has(u) || m.raw_type === 'dev') return true;
   if (!S.providers.includes('all') && !S.providers.includes(m.platform)) return true;
-  if (KIND === 'chat') return !!m.event && !S.notices;
+  if (KIND === 'chat') return (S.hide_commands && !m.event && /^\s*!/.test(m.text || '')) || (!!m.event && !S.notices);
   if (KIND === 'follow') return !(m.event === 'follow' || (m.event === 'gift' && S.show_gifts) || (m.event === 'streak' && S.show_streaks));
   return !(S.types || []).includes(m.event || '');
 }
@@ -71,7 +79,7 @@ function apply() {
   r.setProperty('--ff', FONTS[S.font_family_id] || FONTS.nunito); r.setProperty('--al', S.message_alignment);
   r.setProperty('--bg', hex(S.background_color, S.background_opacity)); r.setProperty('--bw', S.border_width + 'px'); r.setProperty('--bc', S.border_color || 'transparent');
   r.setProperty('--br', S.border_radius + 'px'); r.setProperty('--ac', S.accent_color);
-  document.body.className = (S.message_order === 'top' ? 'top ' : '') + S.style_type + (S.background_color ? ' has-bg' : '');
+  document.body.className = (S.message_order === 'top' ? 'top ' : '') + (KIND === 'chat' && S.look !== 'classic' ? 'synchra ' : '') + S.style_type + (S.background_color ? ' has-bg' : '');
   $('#feed').style.alignItems = S.message_alignment === 'right' ? 'flex-end' : S.message_alignment === 'center' ? 'center' : 'flex-start';
   $('#cust').textContent = S.custom_css || '';
   items.filter(i => hidden(i.m)).forEach(drop);
@@ -81,12 +89,34 @@ function emoBody(m) {
   const map = new Map(); (m.emotes || []).forEach(e => { const s = e && typeof e.text === 'string' && e.text ? src(e) : ''; if (s) map.set(e.text, s); });
   return String(m.text || '').split(/(\s+)/).flatMap(t => map.has(t) || !t.includes(':') ? [t] : t.split(/(:[^\s:]+:)/).filter(Boolean)).map(t => map.has(t) ? `<img class="emo" alt="${esc(t)}" src="${esc(map.get(t))}" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode(this.alt))">` : esc(t)).join('');
 }
+let TBADGES = {};
+async function loadBadges() { try { TBADGES = await fetch('/api/obs/badges').then(r => r.json()); } catch (e) { } }
+function twBadgeUrl(set, m) {
+  const vers = TBADGES[set]; if (!vers) return '';
+  const want = ((m.meta || {}).badge_ver || {})[set];                                    // exact version when the connector sent it
+  if (want != null && vers[want]) return vers[want];
+  const ks = Object.keys(vers).sort((x, y) => x - y);                                    // else the lowest tier: sub month 0, bits 1, ...
+  return vers[ks[0]] || '';
+}
 function badges(m) {
-  if (!S.badges) return '';
   const AL = {owner: 'broadcaster', sponsor: 'member', super_fan: 'superfan'};      // YouTube / TikTok badge names -> the shared set
-  const b = [...new Set((m.badges || []).map(x => String(x).replace(/\/.*/, '').toLowerCase()).map(x => AL[x] || x).filter(x => ['broadcaster', 'moderator', 'vip', 'subscriber', 'member', 'superfan'].includes(x)))];
-  if (m.is_bot) b.push('bot');
-  return b.length ? `<span class="chat-badges">${b.map(x => `<span class="chat-badge b-${x}">${{broadcaster: 'LIVE', moderator: 'MOD', vip: 'VIP', subscriber: 'SUB', member: 'MEM', superfan: 'SF', bot: 'BOT'}[x]}</span>`).join('')}</span>` : '';
+  const PL = {broadcaster: ['live', 'LIVE'], moderator: ['mod', 'MOD'], vip: ['vip', 'VIP'], subscriber: ['sub', 'SUB'], member: ['mem', 'MEM'], superfan: ['sf', 'SF'], bot: ['bot', 'BOT']};
+  const syn = S.look !== 'classic', out = [];
+  if (syn && S.platform_pill) out.push(`<span class="pill pf-${esc(m.platform)}">${{twitch: 'TW', youtube: 'YT', tiktok: 'TT', kick: 'KICK', discord: 'DC'}[m.platform] || esc(String(m.platform || '?').toUpperCase())}</span>`);
+  if (S.badges) {
+    const raw = (m.badges || []).map(x => String(x).replace(/\/.*/, '').toLowerCase());
+    const b = [...new Set(raw.map(x => AL[x] || x).filter(x => ['broadcaster', 'moderator', 'vip', 'subscriber', 'member', 'superfan'].includes(x)))];
+    if (m.is_bot) b.push('bot');
+    if (syn) {
+      const ORDER = ['broadcaster', 'moderator', 'vip', 'subscriber', 'member', 'superfan', 'bot'];
+      b.sort((x, y) => ORDER.indexOf(x) - ORDER.indexOf(y));
+      for (const x of b) {
+        const img = m.platform === 'twitch' && S.badge_style === 'image' ? twBadgeUrl(x, m) : '';
+        out.push(img ? `<img class="bimg" alt="${esc(x)}" src="${esc(img)}" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;pill ${PL[x][0]}&quot;>${PL[x][1]}</span>'">` : `<span class="pill ${PL[x][0]}">${PL[x][1]}</span>`);
+      }
+    } else if (b.length) return `<span class="chat-badges">${b.map(x => `<span class="chat-badge b-${x}">${PL[x][1]}</span>`).join('')}</span>`;
+  }
+  return out.join('');
 }
 function logo(m) { return S.provider_logo ? `<span class="chat-provider p-${esc(m.platform)}" title="${esc(m.platform)}">${PLET[m.platform] || '?'}</span>` : ''; }
 function chatHtml(m) {
@@ -202,6 +232,7 @@ async function boot() {
   if (KIND !== 'follow') hist.sort((a, b) => a.ts - b.ts).filter(m => Date.now() / 1000 - m.ts < 600 && (KIND === 'chat' || m.event)).forEach(m => add(m, true));
   hist.forEach(m => { lastTs = Math.max(lastTs, m.ts || 0); });
   connect();
+  loadBadges(); setInterval(loadBadges, 3600000);
   if (!PREVIEW) setInterval(async () => {          // safety net if a WebSocket event is missed: settings saved in the panel show up within 4 s
     const j = await fetch('/api/obs/' + KIND).then(r => r.json()).catch(() => null);
     if (j && j.settings && JSON.stringify(j.settings) !== JSON.stringify(S)) { S = j.settings; apply(); redraw(items.map(i => i.m)); }

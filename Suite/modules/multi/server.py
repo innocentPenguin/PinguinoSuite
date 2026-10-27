@@ -293,6 +293,8 @@ def _obs_get(kind):
     saved = store.kv_get("obs:" + kind, None)
     if saved is None and kind == "chat":
         saved = obs_mod.IVAN_CHAT       # first run: the look Ivan already had in Synchra
+    elif kind == "chat":
+        saved = obs_mod.migrate_chat(saved)
     return obs_mod.sanitize(kind, saved)
 
 
@@ -618,6 +620,13 @@ def obs_page(kind: str):
     if kind not in obs_mod.KINDS:
         return HTMLResponse("not found", status_code=404)
     return HTMLResponse((STATIC / "obs.html").read_text("utf-8").replace("__KIND__", kind))
+
+
+@app.get("/api/obs/badges")
+def obs_badges():
+    """Real Twitch badge images {set: {version: url}} for the chat overlay (cached; {} when Twitch is not connected)."""
+    import twitch_badges
+    return twitch_badges.badges(connectors.get("twitch"))
 
 
 @app.get("/api/obs/{kind}")

@@ -42,7 +42,8 @@ function obsDraw() {
       ${rng('font_px', 'Font size (0 = use the Size step)', 0, 140, 1, ' px')}${rng('line_height', 'Line spacing', 1, 2.5, 0.05, 'x')}${rng('row_padding', 'Row padding', 0, 30, 1, ' px')}${rng('row_gap', 'Gap between rows', 0, 40, 1, ' px')}
       ${rng('name_size', 'Name size', 50, 200, 5, ' %')}${rng('badge_size', 'Badge size', 50, 250, 5, ' %')}${rng('width', 'Width of the chat', 20, 100, 1, ' %')}
       ${rng('max_messages', 'Max lines', 1, 100, 1)}${rng('message_fade_duration_seconds', 'Fade out after (0 = never)', 0, 300, 1, ' s')}${rng('background_opacity', 'Background opacity', 0, 1, 0.05)}
-      ${chk('provider_logo', 'Platform logo (off = none on stream)')}${chk('badges', 'Badges')}${chk('show_bots', 'Show bots (lifts the ignore list for bot messages)')}
+      ${sel('look', [['synchra', 'Synchra (no box, outlined text, pill badges)'], ['classic', 'Classic (older flat look)']], 'Look')}${sel('badge_style', [['image', 'Real Twitch badge images (pill when none)'], ['pill', 'Text pills (LIVE, MOD, SUB...)']], 'Badges')}
+      ${chk('platform_pill', 'Platform pill (TW / YT / TT) before the name')}${chk('hide_commands', 'Hide !commands')}${chk('provider_logo', 'Platform logo (off = none on stream)')}${chk('badges', 'Badges')}${chk('show_bots', 'Show bots (lifts the ignore list for bot messages)')}
       <div class="act"><button data-ob-act="resetlook">Reset to defaults</button></div>`,
     general: k === 'follow' ? followGeneral : `${sel('size', Object.keys(c.sizes).map(s => [s, s.toUpperCase() + ' (' + c.sizes[s] + 'px)']), 'Size')}${rng('canvas_scale', 'Canvas scale', 0.25, 3, 0.05, 'x')}
       <div class="cf">Platforms ${['all', ...OBS_PLATS].map(p => `<label class="chk"><input type="checkbox" data-obp="${p}" ${S.providers.includes(p) ? 'checked' : ''}> ${p}</label>`).join(' ')}</div>
@@ -106,7 +107,7 @@ document.addEventListener('click', async e => {
   else if (a === 'ptest') { const f = $('#ob-prev'); if (f && f.contentWindow) f.contentWindow.postMessage({obsTest: b.dataset.t}, '*'); }
   else if (a === 'copy') { try { await navigator.clipboard.writeText(obsUrl()); } catch (x) { $('#ob-url').select(); document.execCommand('copy'); } $('#ob-state').textContent = 'address copied'; }
   else if (a === 'preset') { OBS.S = Object.assign({}, OBS.cfg.defaults, OBS.cfg.presets[+b.dataset.i].settings); obsChanged(true); }
-  else if (a === 'resetlook') { for (const key of ['font_px', 'line_height', 'row_padding', 'row_gap', 'name_size', 'badge_size', 'width', 'show_bots', 'max_messages', 'message_fade_duration_seconds', 'background_opacity', 'provider_logo', 'badges']) OBS.S[key] = OBS.cfg.defaults[key]; obsChanged(true); }
+  else if (a === 'resetlook') { for (const key of ['font_px', 'line_height', 'row_padding', 'row_gap', 'name_size', 'badge_size', 'width', 'show_bots', 'look', 'badge_style', 'platform_pill', 'hide_commands', 'max_messages', 'message_fade_duration_seconds', 'background_opacity', 'provider_logo', 'badges']) OBS.S[key] = OBS.cfg.defaults[key]; obsChanged(true); }
   else if (a === 'reset') { if (confirm('Reset this widget to its defaults?')) { OBS.S = JSON.parse(JSON.stringify(OBS.cfg.defaults)); obsChanged(true); } }
   else if (a === 'export') {
     const doc = await fetch('/api/obs/' + OBS.kind + '/export').then(r => r.json());
