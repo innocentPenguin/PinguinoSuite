@@ -43,6 +43,7 @@ namespace PinguinoHost
             cph.SetGlobalVar("firstChatterPlace", 1, true); cph.SetGlobalVar("firstChatterClaimedUserIds", "[]", true); cph.SetGlobalVar("firstChatterWinners", "{}", true);
             Clog.Info("firsts", "First 5 game reset for the new stream");
         }
+        public static bool? ObsStreamingNow() { try { return cph?.ObsStreaming(); } catch (Exception) { return null; } }   // null = OBS not connected / no answer
         public static JObject ObsData(string type, JObject data) { try { return cph?.Obs?.Data(type, data); } catch (Exception) { return null; } }
         public static bool TimeoutUser(string user, int secs, string why) { return cph != null && cph.TwitchTimeoutUser(user, secs, why, false); }
         public static List<string> CoreCommandList() { return coreCommands.OrderBy(x => x).ToList(); }
@@ -354,6 +355,8 @@ namespace PinguinoHost
                 if (line.StartsWith("emojitest ")) { Console.WriteLine("[emojitest] " + string.Join(" ", WheelEmoji.Interests(line.Substring(10).Trim().ToLowerInvariant()))); continue; }
                 if (line.StartsWith("simsay ")) { try { Console.WriteLine("[simsay] " + SimSay.Say(JObject.Parse(line.Substring(7))).ToString(Newtonsoft.Json.Formatting.None)); } catch (Exception ex) { Console.WriteLine("[simsay] error " + ex.Message); } continue; }
                 if (line.StartsWith("selfredeem ")) { var q = line.Split(new[] { ' ' }, 3); DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRedeem" }, { "userName", q[1] }, { "title", "Self Timeout" }, { "input", q.Length > 2 ? q[2] : "" }, { "redemptionId", "red-s" }, { "rewardId", "rw-s" } }); continue; }   // sim: selfredeem alice 2m
+                if (line.StartsWith("raidpick "))   // sim: raidpick target viewers = what the outgoing channel.raid event does (raid pending, then raid_out)
+                { var p = line.Split(' '); string tg = p[1]; try { Auto.OnRaidScheduled(tg); } catch (Exception) { } DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRaidOut" }, { "userName", tg }, { "target", tg }, { "viewers", p.Length > 2 ? p[2] : "5" } }); continue; }
                 if (line.StartsWith("event "))   // sim: event TwitchSub alice 2   (3rd word = tier / bits / viewers)
                 { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v }, { "moderator", p.Length > 4 ? p[4] : "" }, { "title", "Song Request" }, { "input", v }, { "redemptionId", "red-" + v }, { "rewardId", "rw1" } }); continue; }   // TwitchRedeem: 3rd word = the song text
                 int c = line.IndexOf(':'); if (c < 1) continue;

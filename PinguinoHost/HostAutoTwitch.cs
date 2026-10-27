@@ -143,6 +143,7 @@ namespace PinguinoHost
                 case "session_say": ctx["session.line"] = Session.Line(); try { var rc = Recap.Build(true); ctx["session.line"] = (string)rc["line"]; var cp = rc["clip"] as JObject; ctx["session.clip"] = cp == null ? "" : " Best clip: " + (string)cp["url"]; } catch (Exception) { ctx["session.clip"] = ""; } return "session: " + ctx["session.line"];
                 case "goal_say": ctx["goal.line"] = Session.GoalLine(x("id")); return "goal: " + ctx["goal.line"];
                 case "press_key": return test ? "(dry run) would press " + x("key") : PressKey(x("key"));
+                case "raid_target": { string tg = Auto.RaidTargetNow(); ctx["raid.target"] = tg; ctx["raid.line"] = tg == "" ? "" : "https://twitch.tv/" + tg; return "raid target: " + (tg == "" ? "none" : tg); }
                 case "latest_say":   // sets {latest.line}: the newest follower / sub / cheer / raid
                     ctx["latest.line"] = "Latest " + Latest.Summary(); return "latest: " + ctx["latest.line"];
                 case "append_file":
@@ -253,6 +254,7 @@ namespace PinguinoHost
         }
 
         const string DiscordLine = "Don't forget to join the community Discord! Hang out, chat, share media, receive updates → {link:discord}";
+        const string LeftBehindLine = "Didn't get raided along? Type !leftbehind for the link.";
         const string StaleInvite = "https://discord.gg/be6bus4GKh";
         /// <summary>one-time: (1) every saved text with the expired invite reads {link:discord} (the site's links); (2) 'Raid scheduled' fires at once: shoutout, emotes, Discord;
         /// (3) 'Raid out' says the Discord line once before it stops the stream.</summary>
@@ -279,6 +281,34 @@ namespace PinguinoHost
                 seeded.Add("raidflow2"); doc["seeded"] = seeded; Save(doc);
             }
             catch (Exception ex) { Clog.Warn("automation", "raid flow migration failed: " + ex.Message); }
+        }
+
+        /// <summary>one-time (Ivan 10-27): 'Raid scheduled' = emotes line, Discord, THEN the shoutout (it was first, so the chat lines came late); 'Raid out' = only StopStream (the Discord line already went out at the start, the goodnight is said by the Host before it). Dated backup first.</summary>
+        internal static void MigrateRaidOrder()
+        {
+            try
+            {
+                var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray(); if (seeded.Any(v => (string)v == "raidorder1")) return;
+                try { File.Copy(Path.Combine(HostApi.DataDir, "automations.json"), Path.Combine(HostApi.DataDir, "automations.json.before-raidorder-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak"), true); } catch (Exception) { }
+                var acts = (JArray)doc["actions"];
+                var rs = acts.OfType<JObject>().FirstOrDefault(o => (string)o["id"] == "sb-raidstart");
+                if (rs != null)
+                {
+                    var steps = (JArray)rs["steps"]; foreach (var s in steps.OfType<JObject>().Where(o => (string)o["type"] == "shoutout_queue").ToList()) s.Remove();   // no shoutout of the raid target (Ivan 10-27)
+                    while (steps.Count > 0 && (string)steps.Last["type"] == "delay") steps.Last.Remove();
+                    rs["importNotes"] = "fires the moment the raid is picked: emotes line, Discord invite.";
+                }
+                var ro = acts.OfType<JObject>().FirstOrDefault(o => (string)o["id"] == "sb-raidout");
+                if (ro != null)
+                {
+                    var steps = (JArray)ro["steps"];
+                    foreach (var s in steps.OfType<JObject>().Where(o => (string)o["type"] == "say" || (string)o["type"] == "delay").ToList()) s.Remove();
+                    steps.Insert(0, SayStep(LeftBehindLine)); steps.Insert(1, Step("delay", "ms", 1500));
+                    if (!steps.OfType<JObject>().Any(o => (string)o["type"] == "obs_request")) steps.Add(Step("obs_request", "request", "StopStream"));
+                }
+                seeded.Add("raidorder1"); doc["seeded"] = seeded; Save(doc);
+            }
+            catch (Exception ex) { Clog.Warn("automation", "raid order migration failed: " + ex.Message); }
         }
 
         /// <summary>one-time: the "Prepare your emotes" line moves from raid_out (the raid landing) to raid_start (the raid being scheduled). Keeps the enabled flag Ivan chose.</summary>
@@ -323,7 +353,7 @@ namespace PinguinoHost
 
         public static void SeedStreamerBotPresets()
         {
-            MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow();
+            MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow(); MigrateRaidOrder();
             try { MakePopupHold(); } catch (Exception ex) { Clog.Warn("automation", "popup hold migration failed: " + ex.Message); }
             try { SkipSmallRaidWait(); } catch (Exception ex) { Clog.Warn("automation", "small raid wait migration failed: " + ex.Message); }
             try { SeedRules(); } catch (Exception ex) { Clog.Warn("automation", "rules preset failed: " + ex.Message); }
@@ -370,12 +400,13 @@ namespace PinguinoHost
                     // off until Ivan reviews them
                     Act("sb-online", "Stream online", "from 'Stream Status (Online)' (the First 5 game restarts by itself)", false, new JArray { Tr("stream_online") }, Step("channel_info"), SayStep("Stream is live! Today we are streaming {game}.")),
                     Act("sb-offline", "Stream offline", "from 'Stream Status (Offline)'", false, new JArray { Tr("stream_offline") }, SayStep("Stream offline. Goodnight everybody. Thanks for tuning in!")),
-                    Act("sb-raidstart", "Raid scheduled", "fires the moment the raid is picked (!confirm raid started the Twitch countdown): shoutout of the target, emotes line, then the Discord invite (from the site's links).", false, new JArray { Tr("raid_start") },
-                        Step("shoutout_queue", "user", "{target}", "by", "raid", "auto", true),
+                    Act("sb-raidstart", "Raid scheduled", "fires the moment the raid is picked (the Twitch countdown began): emotes line, then the Discord invite (from the site's links). No shoutout of the raid target (we go there anyway). The Multi raid card goes out with the event itself.", false, new JArray { Tr("raid_start") },
                         SayStep("Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Pinguinoraid innoce108Hype"),
                         Step("delay", "ms", 700), SayStep(DiscordLine)),
-                    Act("sb-raidout", "Raid out", "from 'Raid Out Start/End': the raid has landed (the Host waits for it). Says the Discord invite once, then WARNING: stops the stream right then.", false, new JArray { Tr("raid_out") },
-                        SayStep(DiscordLine), Step("delay", "ms", 1500), Step("obs_request", "request", "StopStream")),
+                    Act("sb-raidout", "Raid out", "the raid has landed (viewers sent: the chat emptied, or Twitch's 90 s countdown ran out). The Host says the goodnight first, then this runs: a second chat line about !leftbehind (no link), then WARNING: stops the stream.", false, new JArray { Tr("raid_out") },
+                        SayStep(LeftBehindLine), Step("delay", "ms", 1500), Step("obs_request", "request", "StopStream")),
+                    Act("sb-leftbehind", "Command: !leftbehind", "the link of the channel we raided (https://twitch.tv/<target>), for anyone who was not taken along. Answers nothing before a raid / after the next stream starts.", true, new JArray { Tr("command", "names", new JArray("!leftbehind"), "cooldownSec", 3, "userCooldownSec", 30) },
+                        Step("raid_target"), new JObject { { "type", "if" }, { "left", "{raid.line}" }, { "op", "notempty" }, { "right", "" }, { "then", new JArray { SayStep("{raid.line}") } }, { "else", new JArray() } }),
                     Act("sb-endstream", "Reward: Instantly End Stream", "from the 'Instantly End Stream' reward (2,500,000 points). Needs channel:read:redemptions.", false, new JArray { Tr("redeem", "title", "Instantly End Stream") },
                         SayStep("{user} ended the stream. Goodbye! 🐧"), Step("delay", "ms", 5000), Step("obs_request", "request", "StopStream")),
                     Act("sb-suggest", "Reward: Suggestion Box", "from the 'Suggestion' reward: saves each suggestion to Data\\runtime\\files\\suggestions.txt.", false, new JArray { Tr("redeem", "title", "Suggestion") },

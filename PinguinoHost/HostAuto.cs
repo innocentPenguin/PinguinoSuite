@@ -280,20 +280,86 @@ namespace PinguinoHost
             if (kind == "stream_online") { try { Program.ResetFirsts(); Session.Begin(); Roster.Reset(); } catch (Exception) { } }
             try { Latest.Record(kind, ctx); } catch (Exception ex) { Clog.Warn("latest", "could not record the event: " + ex.Message); }
             try { Economy.PointsEvent(args, kind == "follow" && Latest.LastRefollow); } catch (Exception) { }
+            if (kind == "stream_online") { lock (typeof(Auto)) _landedAt = DateTime.MinValue; try { SetVar("raid.target", "", true); } catch (Exception) { } }   // !leftbehind works from the raid until the next stream starts
+            if (kind == "stream_offline" && JustLanded()) { Clog.Info("automation", "stream offline after the raid landing: the goodnight was already said"); return; }
             if (kind == "stream_offline") { if (HoldOffline(ctx)) return; OfflineFires++; }   // a raid is on its way: the goodnight waits for it (see HoldOffline)
-            if (kind == "raid_out") { ScheduleRaidOut(ctx); return; }   // Twitch sends this when the countdown starts: the 20 s stop-stream step must run after the raid has landed
+            if (kind == "raid_out") { ScheduleRaidOut(ctx); return; }   // Twitch sends this when the countdown starts: the landing (goodnight, then StopStream) happens when the chat empties or the countdown runs out
             Fire(kind, ctx);
         }
         static int RaidDelaySec() { return RaidDelayOverrideSec >= 0 ? RaidDelayOverrideSec : (int)Math.Max(0, Math.Min(88, (int?)Latest.Settings()["RaidStartDelaySec"] ?? 80)); }
-        static System.Threading.Timer _raidOutTimer; static Action _raidOutGo; static DateTime _raidOutAt = DateTime.MinValue; internal static int RaidOutFires;
-        /// <summary>raid_out automations (raid landed: StopStream) run RaidStartDelaySec + 10 s after Twitch's signal, once per raid; !unraid / stream_offline cancels them</summary>
+        static System.Threading.Timer _raidOutTimer, _watchTimer; static DateTime _raidOutAt = DateTime.MinValue, _landedAt = DateTime.MinValue; internal static int RaidOutFires; internal static int ChatWatchSec = 4;
+        /// <summary>chatters in the channel right now (Helix), null = not known.</summary>
+        internal static Func<int?> ChatterCount = () =>
+        {
+            try
+            {
+                JToken dtok; string err; string code = TwitchApi.Call(HttpMethod.Get, "/chat/chatters?broadcaster_id={bid}&moderator_id={bid}&first=1000", null, out dtok, out err);
+                return code == "200" && dtok is JArray ? ((JArray)dtok).Count : (int?)null;
+            }
+            catch (Exception) { return null; }
+        };
+        /// <summary>login of the channel we raided, "" before a raid / after the next stream started (!leftbehind)</summary>
+        public static string RaidTargetNow() { return GetVar("raid.target"); }
+        static bool JustLanded() { lock (typeof(Auto)) return _landedAt != DateTime.MinValue && (DateTime.UtcNow - _landedAt).TotalMinutes < 10; }
+        /// <summary>raid_out arrives with the countdown: the raid lands (goodnight, then StopStream) the moment the chat empties (Raid Now clicked), or when Twitch's 90 s countdown runs out, once per raid</summary>
         static void ScheduleRaidOut(Dictionary<string, string> ctx)
         {
-            lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidOutAt).TotalMinutes < 3) return; _raidOutAt = DateTime.UtcNow; }
-            Action go = () => { lock (typeof(Auto)) _raidOutTimer = null; RaidOutFires++; _runInline = true; try { Fire("raid_out", ctx); } finally { _runInline = false; } ReleaseOffline(); };   // the raid_out run finishes first (Run is normally a background task), THEN the held goodnight is released
-            lock (typeof(Auto)) _raidOutGo = go;   // the stream going offline while the raid is pending IS the landing (Raid Now / the 90 s ran out): HoldOffline runs this at once instead of waiting for the timer
-            int delay = RaidDelaySec() + (RaidDelayOverrideSec >= 0 ? 0 : 10); if (delay == 0) { go(); return; }   // +10 s: the raid lands ~90 s after the signal, the stream stops right then
-            lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => go(), null, delay * 1000, System.Threading.Timeout.Infinite); }
+            lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidOutAt).TotalMinutes < 3) return; _raidOutAt = DateTime.UtcNow; _landedAt = DateTime.MinValue; }
+            int delay = RaidDelaySec() + (RaidDelayOverrideSec >= 0 ? 0 : 10); if (delay == 0) { LandRaid(ctx, "no delay"); return; }
+            lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => LandRaid(ctx, "Twitch's countdown ran out"), null, delay * 1000, System.Threading.Timeout.Infinite); }
+            StartChatWatch(ctx, delay);
+        }
+        /// <summary>best effort: Raid Now empties the chat; two polls in a row at at or under 20% of the crowd seen before = landed. If Twitch gives no list, the countdown timer above does it.</summary>
+        static void StartChatWatch(Dictionary<string, string> ctx, int maxSec)
+        {
+            int peak = 0, low = 0; DateTime t0 = DateTime.UtcNow; bool busy = false;
+            lock (typeof(Auto)) { if (_watchTimer != null) _watchTimer.Dispose(); }
+            System.Threading.Timer tm = null;
+            tm = new System.Threading.Timer(_ =>
+            {
+                if (busy) return; busy = true;
+                try
+                {
+                    if ((DateTime.UtcNow - t0).TotalSeconds > maxSec) { tm.Dispose(); return; }
+                    int? n = ChatterCount(); if (n == null) return;
+                    if (n.Value > peak) peak = n.Value;
+                    if (peak >= 3 && n.Value * 5 <= peak && (DateTime.UtcNow - t0).TotalSeconds >= 6) low++; else low = 0;
+                    if (low >= 2) { tm.Dispose(); LandRaid(ctx, "the chat emptied (" + n.Value + " of " + peak + ")"); }
+                }
+                catch (Exception ex) { Clog.Warn("automation", "raid chat watch: " + ex.Message); }
+                finally { busy = false; }
+            }, null, 0, ChatWatchSec * 1000);   // the first poll is at once: it is the pre-raid crowd
+            lock (typeof(Auto)) _watchTimer = tm;
+        }
+        static bool RaidOutStops() { return Actions().Any(a => (bool?)a["enabled"] != false && (a["triggers"] as JArray ?? new JArray()).OfType<JObject>().Any(tr => (string)tr["type"] == "raid_out") && (a["steps"] as JArray ?? new JArray()).OfType<JObject>().Any(s => (string)s["type"] == "obs_request" && string.Equals((string)s["request"], "StopStream", StringComparison.OrdinalIgnoreCase))); }
+        /// <summary>the raid landed: the goodnight first (the held one when Ivan already ended the stream by hand, else a fresh one), THEN raid_out (StopStream), once. The StopStream is checked: OBS must say the stream is off, one retry, a failure is logged loudly.</summary>
+        internal static void LandRaid(Dictionary<string, string> ctx, string why)
+        {
+            Dictionary<string, string> held;
+            lock (typeof(Auto))
+            {
+                if (JustLanded()) return; _landedAt = DateTime.UtcNow;
+                if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; }
+                if (_watchTimer != null) { _watchTimer.Dispose(); _watchTimer = null; }
+                _raidPendingAt = DateTime.MinValue; held = _heldOffline; _heldOffline = null; if (_heldTimer != null) { _heldTimer.Dispose(); _heldTimer = null; }
+            }
+            try { if (File.Exists(HeldP)) File.Delete(HeldP); } catch (Exception) { }
+            Clog.Info("automation", "raid landed (" + why + "): goodnight, then StopStream");
+            var gc = new Dictionary<string, string>(held ?? ctx); gc["event"] = "stream_offline";
+            _runInline = true;
+            try { OfflineFires++; Fire("stream_offline", gc); RaidOutFires++; Fire("raid_out", ctx); } finally { _runInline = false; }
+            if (RaidOutStops()) VerifyStopped();
+        }
+        static void VerifyStopped()
+        {
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                bool? on = null; for (int i = 0; i < 6; i++) { on = Program.ObsStreamingNow(); if (on != true) break; System.Threading.Thread.Sleep(1000); }
+                if (on == false) { Clog.Info("obs", "StopStream checked: OBS reports the stream is off"); return; }
+                if (on == null) { Clog.Error("obs", "RAID LANDED BUT THE STREAM WAS NOT STOPPED BY THE HOST: OBS is not connected (or did not answer) - end the stream by hand"); return; }
+                if (attempt == 0) { bool r = false; try { r = Program.ObsRaw("StopStream", new JObject()); } catch (Exception) { } Clog.Warn("obs", "OBS still streaming after StopStream: sent it again (" + (r ? "accepted" : "refused") + ")"); }
+            }
+            Clog.Error("obs", "RAID LANDED BUT OBS IS STILL STREAMING after two StopStream requests - end the stream by hand");
         }
 
         static void Fire(string kind, Dictionary<string, string> ctx)
@@ -325,12 +391,13 @@ namespace PinguinoHost
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidStartAt).TotalMinutes < 3) return false; _raidStartAt = DateTime.UtcNow; }
             // Ivan, like Streamer.bot had it: the moment the raid is picked (Twitch's countdown starts) the shoutout, the emotes line and the Discord line go out at once; no hold any more
             lock (typeof(Auto)) { _raidPendingAt = DateTime.UtcNow; }
+            if (Regex.IsMatch(target ?? "", "^[A-Za-z0-9_]{1,25}$")) { try { SetVar("raid.target", target.ToLowerInvariant(), true); } catch (Exception) { } }
             FireRaidStart(target); return true;
         }
         static System.Threading.Timer _raidTimer; internal static int RaidDelayOverrideSec = -1; internal static int RaidStartFires;
         /// <summary>!unraid or the stream going offline before the line was due: nothing is said and a new raid can start the line again</summary>
-        public static void CancelRaidStart() { ClearPending(); ReleaseOffline(); lock (typeof(Auto)) { if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; _raidStartAt = DateTime.MinValue; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; _raidOutAt = DateTime.MinValue; } } }
-        internal static void ResetRaidStart() { ClearPending(); _heldOffline = null; lock (typeof(Auto)) { _raidStartAt = DateTime.MinValue; _raidOutAt = DateTime.MinValue; if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; } } }
+        public static void CancelRaidStart() { ClearPending(); ReleaseOffline(); lock (typeof(Auto)) { if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; _raidStartAt = DateTime.MinValue; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; _raidOutAt = DateTime.MinValue; } if (_watchTimer != null) { _watchTimer.Dispose(); _watchTimer = null; } } }
+        internal static void ResetRaidStart() { ClearPending(); _heldOffline = null; lock (typeof(Auto)) { _raidStartAt = DateTime.MinValue; _raidOutAt = DateTime.MinValue; _landedAt = DateTime.MinValue; if (_watchTimer != null) { _watchTimer.Dispose(); _watchTimer = null; } if (_raidTimer != null) { _raidTimer.Dispose(); _raidTimer = null; } if (_raidOutTimer != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; } } }
         // ---- a goodnight must not be said while the raid is still on its way ----
         static DateTime _raidPendingAt = DateTime.MinValue; static Dictionary<string, string> _heldOffline; static System.Threading.Timer _heldTimer; internal static int HoldMaxSec = 180; internal static int OfflineFires;
         static void ClearPending() { lock (typeof(Auto)) _raidPendingAt = DateTime.MinValue; }
@@ -346,8 +413,6 @@ namespace PinguinoHost
                 _heldTimer = new System.Threading.Timer(_ => { ClearPending(); ReleaseOffline(); }, null, left * 1000, System.Threading.Timeout.Infinite);
             }
             try { File.WriteAllText(HeldP, new JObject { { "at", DateTime.UtcNow.ToString("o") }, { "ctx", JObject.FromObject(ctx) } }.ToString()); } catch (Exception) { }   // survives a crash / restart during the hold
-            Action landed = null; lock (typeof(Auto)) { if (_raidOutTimer != null && _raidOutGo != null) { _raidOutTimer.Dispose(); _raidOutTimer = null; landed = _raidOutGo; } }
-            if (landed != null) { Clog.Info("automation", "stream went offline with the raid pending: the raid has landed, raid out and goodnight run now"); System.Threading.Tasks.Task.Run(landed); return true; }   // go() fires raid_out, THEN releases this held goodnight
             Clog.Info("automation", "stream offline held: a raid is on its way"); return true;
         }
         /// <summary>the raid landed or was cancelled (or the hold ran out): the held goodnight runs now</summary>
@@ -479,7 +544,7 @@ namespace PinguinoHost
                     case "delay": { int ms; if (!int.TryParse(x("ms"), out ms)) ms = 0; int rvs; if ((bool?)st["skipSmallRaid"] == true && ctx.ContainsKey("viewers") && int.TryParse(ctx["viewers"], out rvs) && rvs < ((int?)Latest.Settings()["RaidMinViewers"] ?? 3)) { outp.Add("no wait: this raid is too small for a shoutout"); break; } ms = Math.Max(0, Math.Min(600000, ms)); Thread.Sleep(test ? Math.Min(ms, 300) : ms); outp.Add("waited " + ms + " ms"); break; }   // the wait before the auto shoutout is pointless when no shoutout follows
                     case "obs_scene": { string s = x("scene"); outp.Add(test ? "(dry run) would switch OBS scene to " + s : Obs(() => Program.ObsScene(s), "scene -> " + s)); break; }
                     case "obs_source": { string sc = x("scene"), so = x("source"), v = ((string)st["visible"] ?? "true").ToLowerInvariant(); outp.Add(test ? "(dry run) would set OBS source " + so + " to " + v : Obs(() => Program.ObsSource(sc, so, v), "source " + so + " -> " + v)); break; }
-                    case "obs_request": { string rt = (string)st["request"] ?? ""; var data = st["data"] as JObject; var d2 = data == null ? new JObject() : JObject.Parse(Expand(data.ToString(), ctx)); outp.Add(test ? "(dry run) would send OBS request " + rt : Obs(() => Program.ObsRaw(rt, d2), "OBS " + rt)); break; }
+                    case "obs_request": { string rt = (string)st["request"] ?? ""; var data = st["data"] as JObject; var d2 = data == null ? new JObject() : JObject.Parse(Expand(data.ToString(), ctx)); outp.Add(test ? "(dry run) would send OBS request " + rt : rt == "StopStream" && Program.ObsStreamingNow() == false ? StopSkipped() : Obs(() => Program.ObsRaw(rt, d2), "OBS " + rt)); break; }
                     case "sound": outp.Add(Sound(x("file"), (double?)st["volume"] ?? 1.0, test)); break;
                     case "http": outp.Add(test ? "(dry run) would call " + x("url") : Http(st, ctx, test)); break;
                     case "module_command": outp.Add(test ? "(dry run) would call module " + x("url") : ModuleCommand(st, ctx, test)); break;
@@ -504,7 +569,8 @@ namespace PinguinoHost
             string via; bool ok = HostApi.SendAs(role, text, out via);
             return (ok ? "said as " + via + ": " : "NOT sent (" + via + "): ") + text;
         }
-        static string Obs(Func<bool> f, string what) { try { return f() ? "OBS " + what : "OBS not connected or refused: " + what; } catch (Exception ex) { return "OBS error: " + ex.Message; } }
+        static string StopSkipped() { Clog.Info("obs", "StopStream skipped: OBS says the stream is already off"); return "OBS stream already off: StopStream skipped"; }
+        static string Obs(Func<bool> f, string what) { try { if (f()) return "OBS " + what; Clog.Warn("obs", "automation OBS step failed (not connected or refused): " + what); return "OBS not connected or refused: " + what; } catch (Exception ex) { Clog.Warn("obs", "automation OBS step error: " + what + ": " + ex.Message); return "OBS error: " + ex.Message; } }
 
         internal static string Sound(string file, double vol, bool test)
         {

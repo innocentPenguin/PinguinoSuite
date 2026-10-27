@@ -147,14 +147,14 @@ namespace PinguinoHost
             Check(Auto.OfflineFires == q0, "offline held until the raid lands"); System.Threading.Thread.Sleep(3000); Check(Auto.OfflineFires == q0 + 1, "raid_out: the held goodnight runs after the raid"); Auto.RaidDelayOverrideSec = -1; q0 = Auto.OfflineFires;
             Auto.ResetRaidStart(); Auto.HoldMaxSec = 2; Auto.OnRaidScheduled("t3"); Auto.OnEvent(off); Check(Auto.OfflineFires == q0, "offline held (short max)"); System.Threading.Thread.Sleep(3300);
             Check(Auto.OfflineFires == q0 + 1, "the hold runs out: the goodnight runs anyway"); Auto.HoldMaxSec = 180;
-            // the held goodnight runs only AFTER the raid_out run has finished (Run is a background task: the release used to start right behind it and finished first)
+            // the landing says the goodnight FIRST, then runs raid_out (StopStream)
             { var od = Auto.Doc(); var oa = (JArray)od["actions"];
               oa.Add(new JObject { { "id", "t-ro" }, { "name", "t-ro" }, { "enabled", true }, { "triggers", new JArray(new JObject { { "type", "raid_out" } }) }, { "steps", new JArray(new JObject { { "type", "delay" }, { "ms", 800 } }) } });
               oa.Add(new JObject { { "id", "t-gn" }, { "name", "t-gn" }, { "enabled", true }, { "triggers", new JArray(new JObject { { "type", "stream_offline" } }) }, { "steps", new JArray(new JObject { { "type", "log" }, { "text", "t-gn" } }) } }); Auto.Save(od); }
             Auto.ResetRaidStart(); Auto.RaidDelayOverrideSec = 1; Auto.OnRaidScheduled("t4"); Auto.OnEvent(off);
             Auto.OnEvent(new Dictionary<string, object> { { "eventType", "TwitchRaidOut" }, { "userName", "t4" }, { "viewers", 5 } }); System.Threading.Thread.Sleep(3500);
             { JObject lro = null, lgn = null; foreach (JObject e in Auto.Log(50)) { if ((string)e["id"] == "t-ro" && lro == null) lro = e; if ((string)e["id"] == "t-gn" && lgn == null) lgn = e; }
-              Check(lro != null && lgn != null && string.CompareOrdinal((string)lro["ts"], (string)lgn["ts"]) <= 0, "goodnight finishes after the raid_out run (raid_out " + (lro == null ? "-" : (string)lro["ts"]) + ", goodnight " + (lgn == null ? "-" : (string)lgn["ts"]) + ")"); }
+              Check(lro != null && lgn != null && string.CompareOrdinal((string)lgn["ts"], (string)lro["ts"]) <= 0, "goodnight is said BEFORE the raid_out run (StopStream) finishes (raid_out " + (lro == null ? "-" : (string)lro["ts"]) + ", goodnight " + (lgn == null ? "-" : (string)lgn["ts"]) + ")"); }
             { var od = Auto.Doc(); var oa = (JArray)od["actions"]; foreach (var x in oa.OfType<JObject>().Where(x => ((string)x["id"]).StartsWith("t-")).ToList()) oa.Remove(x); Auto.Save(od); }
             // stream online / offline tell the Spotify module (reopen requests at go-live, close them at the end), also while a raid holds the goodnight
             { var mp = new List<string>(); Auto.ModuleLiveTest = pth => mp.Add(pth); Auto.ResetRaidStart();
@@ -182,11 +182,6 @@ namespace PinguinoHost
             Auto.OnEvent(ro); Auto.OnEvent(ro); Check(Auto.RaidOutFires == o0, "raid_out: not run when the countdown starts");
             System.Threading.Thread.Sleep(3000); Check(Auto.RaidOutFires == o0 + 1, "raid_out: run once after the delay (the second signal of the same raid is ignored)");
             Auto.ResetRaidStart(); Auto.OnEvent(ro); Auto.CancelRaidStart(); System.Threading.Thread.Sleep(3000); Check(Auto.RaidOutFires == o0 + 1, "raid_out: !unraid / stream offline cancels it");
-            // the stream going offline while the raid is pending is the landing: raid_out then the goodnight run at once, not after the 80+10 s timer
-            Auto.ResetRaidStart(); Auto.RaidDelayOverrideSec = 60; int o1 = Auto.RaidOutFires, q1 = Auto.OfflineFires; Auto.OnRaidScheduled("landed"); Auto.OnEvent(ro);
-            Auto.OnEvent(off); System.Threading.Thread.Sleep(1500);
-            Check(Auto.RaidOutFires == o1 + 1 && Auto.OfflineFires == q1 + 1, "offline while the raid is pending: raid_out and the goodnight ran within 1.5 s, not after the timer (" + (Auto.RaidOutFires - o1) + "/" + (Auto.OfflineFires - q1) + ")");
-            Auto.ResetRaidStart();
             Auto.RaidDelayOverrideSec = -1;
             AlertBridge.TestPost = null;
             Console.WriteLine(fails == 0 ? "[alerttest] ALL PASS" : "[alerttest] " + fails + " FAILED");

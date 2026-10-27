@@ -58,9 +58,9 @@ try:
     mine = [a for a in acts if a['id'] == 'mine'][0]
     chk('the user action now reads {link:discord}', mine['steps'][0]['text'] == 'join {link:discord}', mine['steps'])
     rs = [a for a in acts if a['id'] == 'sb-raidstart'][0]['steps']
-    chk('raid scheduled: shoutout first, emotes, then the discord token', rs[0]['type'] == 'shoutout_queue' and 'Prepare your emotes' in rs[1]['text'] and rs[-1]['text'].endswith('{link:discord}'), [s.get('type') for s in rs])
+    chk('raid scheduled: emotes, then the discord token, no shoutout of the target', all(s.get('type') != 'shoutout_queue' for s in rs) and 'Prepare your emotes' in rs[0]['text'] and rs[-1]['text'].endswith('{link:discord}'), [s.get('type') for s in rs])
     ro = [a for a in acts if a['id'] == 'sb-raidout'][0]['steps']
-    chk('raid out: discord line once, then stop stream', ro[0]['text'].endswith('{link:discord}') and ro[-1].get('request') == 'StopStream', ro)
+    chk('raid out: the !leftbehind line (no link), then stop stream', '!leftbehind' in ro[0]['text'] and 'http' not in ro[0]['text'] and 'link:discord' not in json.dumps(ro) and ro[-1].get('request') == 'StopStream', ro)
     chk('hidden flags cleared with a dated backup', not os.path.exists(os.path.join(d, 'economy', 'hidden_pages.json')) and glob.glob(os.path.join(d, 'economy', 'hidden_pages.json.before-unhide-*.bak')))
     bk = glob.glob(os.path.join(d, 'economy', 'hidden_pages.json.before-unhide-*.bak')); chk('the backup holds the 2 cleared flags', bk and len(json.load(open(bk[0]))) == 2, bk)
     def recovered(): return not os.path.exists(os.path.join(d, 'held_offline.json')) and any('held goodnight recovered' in open(f, encoding='utf-8', errors='replace').read() for f in glob.glob(os.path.join(d, '**', 'host.jsonl'), recursive=True))
