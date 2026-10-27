@@ -14,7 +14,7 @@ def chatty(on):   # GameVoice on: the Host sends PgGame events to Chatty instead
 chatty.n = 1
 chatty(False)
 def setcfg(**kw):
-    c = {'cooldownSec': 0, 'giveDailyPct': 100}; c.update(kw); json.dump(c, open(cfgp, 'w')); os.utime(cfgp, (time.time() + len(kw) + setcfg.n, time.time() + setcfg.n)); setcfg.n += 1
+    c = {'cooldownSec': 0, 'giveDailyPct': 100, 'duelEnabled': True}; c.update(kw); json.dump(c, open(cfgp, 'w')); os.utime(cfgp, (time.time() + len(kw) + setcfg.n, time.time() + setcfg.n)); setcfg.n += 1
 setcfg.n = 0
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': '8997'})
 setcfg(gambleWinChance=1.0, gamblePayout=2.0)
@@ -60,6 +60,15 @@ try:
     r = ask('dina: !accept'); chk('duel settles', 'wins the duel' in r[0] and sorted([bal('carl'), bal('dina')]) == [150, 350], (r, bal('carl'), bal('dina')))
     r = ask('dina: !accept'); chk('no second accept', r == [], r)
     r = ask('eve: !duel @bob 80'); r = ask('bob: !decline'); chk('decline', 'passed' in r[0], r)
+    # duels switched off (duelEnabled false, the default): no challenge, nothing pending, one short line per person per minute, no events
+    setcfg(duelEnabled=False); time.sleep(2.0); n9 = len(events()); b0 = (bal('carl'), bal('dina'))
+    r = ask('carl: !duel @dina 100'); chk('duel off: one short line', len(r) == 1 and 'off' in r[0] and '!accept' not in r[0], r)
+    r = ask('carl: !duel @dina 100'); chk('duel off: second try inside 60 s is silent', r == [], r)
+    r = ask('dina: !accept'); chk('duel off: accept answers nothing (nothing pending)', r == [] or len(r) == 1 and 'off' in r[0], r)
+    r = ask('dina: !accept'); chk('duel off: accept repeat silent', r == [], r)
+    chk('duel off: no event, no balance moved', len(events()) == n9 and (bal('carl'), bal('dina')) == b0, (len(events()) - n9, b0))
+    setcfg(duelEnabled=True); time.sleep(2.0)
+    r = ask('dina: !accept'); chk('duel back on: nothing was left pending', r == [], r)
     setcfg(cooldownSec=30, gambleWinChance=0.0); time.sleep(2.0)
     ask('eve: !gamble 1'); r = ask('eve: !gamble 1'); chk('cooldown silent', r == [], r)
     setcfg(enabled=False); time.sleep(2.0)

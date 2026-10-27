@@ -22,7 +22,7 @@ namespace PinguinoHost
                 { "gambleWinChance", 0.45 }, { "gamblePayout", 2.0 },
                 { "slotsEnabled", true }, { "slotsSymbols", new JArray("🍒", "🐟", "⭐", "⚽", "🐧") }, { "slotsPairPayout", 1.5 }, { "slotsTriplePayout", 5.0 }, { "slotsJackpotSymbol", "🐧" }, { "slotsJackpotPayout", 10.0 },
                 { "slotsSymbolPayouts", new JObject { { "🍒", 2.0 }, { "🐟", 3.0 }, { "⭐", 4.0 }, { "⚽", 6.0 }, { "🐧", 11.0 } } },   // three of a kind pays this x the bet, per symbol (Docs/SLOTS_TABLE.md, about 92.8% back); {} = use slotsTriplePayout / slotsJackpotPayout for every symbol
-                { "duelEnabled", true }, { "duelTimeoutSec", 60 }, { "duelHouseCutPercent", 0 },
+                { "duelEnabled", false }, { "duelTimeoutSec", 60 }, { "duelHouseCutPercent", 0 },
                 { "giveEnabled", true }, { "giveMin", 1 }, { "giveDailyPct", 10 }, { "giveDailyMin", 0 }, { "giveDailyMax", 0 } };
         }
         public static JObject Config()
@@ -171,6 +171,13 @@ namespace PinguinoHost
                 if (!B("enabled")) return;
                 if (cmd == "!bet") cmd = "!gamble";
                 string kd = cmd == "!slots" ? "slots" : cmd == "!give" ? "give" : cmd == "!duel" || cmd == "!accept" || cmd == "!decline" ? "duel" : "gamble";
+                if (kd == "duel" && !B("duelEnabled"))   // duels are OFF (gambling.json duelEnabled, live: the file is re-read when it changes): nothing starts, nothing is pending, at most one short line per person per minute
+                {
+                    lock (Duels) Duels.Clear();
+                    bool again; lock (Cool) { DateTime t; again = Cool.TryGetValue("duelsoff|" + me, out t) && (DateTime.UtcNow - t).TotalSeconds < 60; if (!again) Cool["duelsoff|" + me] = DateTime.UtcNow; }
+                    if (!again) say("@" + user + " duels are off for now.");
+                    return;
+                }
                 if (cmd == "!decline") { Duel d; lock (Duels) { if (Duels.TryGetValue(me, out d)) Duels.Remove(me); } if (d != null) Out(say, "@" + d.From + " " + user + " passed on the duel.", "duel", "declined", user, d.Amount, 0, Economy.Balance(me), d.From); return; }
                 if (cmd == "!accept") { Accept(user, say); return; }
                 if (Cooling(me)) return;
@@ -198,7 +205,6 @@ namespace PinguinoHost
                 }
                 if (cmd == "!duel")
                 {
-                    if (!B("duelEnabled")) return;
                     if (args.Length < 2) { Uncool(me); bad("usage: !duel @user <amount>"); return; }
                     string to = Canon(args[0]); var a = Amount(args[1], bal);
                     if (to == "" || to == me) { Uncool(me); bad("pick someone else to duel."); return; }
