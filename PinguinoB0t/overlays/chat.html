@@ -2,7 +2,7 @@
 <!--
   PinguinoB0t - CHAT FEED widget (scene HUD). Last chat lines, newest at the bottom. Data: Host GET /api/chat/recent (polled every 2 s).
   Params: max=8 (lines shown) | fade=0 (seconds until a line fades out, 0 = never) | host=http://127.0.0.1:8770 | preview=1 (sample lines, no Host needed) | bots=1 (show bot lines, default hidden) | cmds=1 (show !command lines, default hidden) | badges=0 (no badge images)
-  Badges: images before the name (the url the Host sends per badge, else Twitch's fixed global image for broadcaster / moderator / vip). Name colour: the message's color field (#rrggbb), else a stable colour from a hash of the name. Plain lines (no box), normal weight.
+  Badges: images before the name (msg.badgeSets url, else /api/chat/badges by set + version, else Twitch's fixed global image for broadcaster / moderator / vip; old msg.badges name strings still work). Name colour: the message's color field (#rrggbb), else a stable colour from a hash of the name. Plain lines (no box), normal weight.
   Design size 460 x 520. Orange/dark Penguino look.
 -->
 <html><head><meta charset="utf-8"><title>Chat Feed</title>
@@ -29,13 +29,26 @@
     var n=String(m.user||m.display||"?").toLowerCase(), h=0; for(var k=0;k<n.length;k++) h=(h*31+n.charCodeAt(k))>>>0;
     return PAL[h%PAL.length];
   }
+  // badge images: /api/chat/badges (global + channel sets, fetched once and refreshed hourly; 2x preferred), else Twitch's fixed global image for broadcaster / moderator / vip; none found = no badge
+  var BADGES={sets:{},loaded:false};
+  function badgeUrl(set,ver){
+    var v=BADGES.sets[set]; if(v){var e=v[ver]||v[Object.keys(v)[0]]; var u=e&&(e["2x"]||e["4x"]||e["1x"]); if(u&&/^https:[/][/]/.test(u)) return u;}
+    return GLOBAL[set]?"https://static-cdn.jtvnw.net/badges/v1/"+GLOBAL[set]+"/2":"";
+  }
+  function loadBadges(){
+    fetch(HOST+"/api/chat/badges").then(function(r){return r.json();}).then(function(j){if(j&&j.sets) BADGES.sets=j.sets;}).catch(function(){}).then(function(){
+      BADGES.loaded=true;
+      [].slice.call(document.querySelectorAll("img.bd[data-set]")).forEach(function(i){var u=badgeUrl(i.getAttribute("data-set"),i.getAttribute("data-ver")); if(u){i.removeAttribute("data-set"); i.style.display=""; i.src=u;} else if(i.parentNode) i.parentNode.removeChild(i);});
+    });
+  }
   function add(m){
     if(!SHOWBOTS&&isBot(m)) return;
     if(!SHOWCMDS&&/^\s*!/.test(m.text||"")) return;
     var d=document.createElement("div"); d.className="m";
-    if(SHOWB) (m.badges||[]).forEach(function(x){
-      var set=String(typeof x==="string"?x:(x&&(x.set||x.set_id))||"").toLowerCase(), u=x&&x.url&&/^https:[/][/]/.test(x.url)?x.url:(GLOBAL[set]?"https://static-cdn.jtvnw.net/badges/v1/"+GLOBAL[set]+"/2":""); if(!u) return;
-      var i=document.createElement("img"); i.className="bd"; i.src=u; i.alt=""; i.onerror=function(){if(i.parentNode)i.parentNode.removeChild(i);}; d.appendChild(i);
+    if(SHOWB) ((m.badgeSets&&m.badgeSets.length?m.badgeSets:m.badges)||[]).forEach(function(x){
+      var set=String(typeof x==="string"?x:(x&&(x.set_id||x.set))||"").toLowerCase(), ver=typeof x==="string"?"":String((x&&x.version)||""), u=x&&x.url&&/^https:[/][/]/.test(x.url)?x.url:badgeUrl(set,ver);
+      var i=document.createElement("img"); i.className="bd"; i.alt=""; i.onerror=function(){if(i.parentNode)i.parentNode.removeChild(i);};
+      if(u){i.src=u; d.appendChild(i);} else if(!BADGES.loaded){i.setAttribute("data-set",set); i.setAttribute("data-ver",ver); i.style.display="none"; d.appendChild(i);}   // resolved when /api/chat/badges arrives
     });
     var b=document.createElement("span"); b.className="n"; b.textContent=(m.display||m.user||"?")+": "; b.style.color=nameColor(m); d.appendChild(b); d.appendChild(document.createTextNode(m.text||""));
     box.appendChild(d); while(box.children.length>MAX) box.removeChild(box.firstChild);
@@ -48,7 +61,7 @@
     }).catch(function(){});
   }
   if(Q.get("preview")==="1"){["hello chat!","!join","nice one","gg","who is up next?"].forEach(function(t,i){add({display:"Viewer"+(i+1),text:t,color:["#1E90FF","#FF69B4","#00FF7F","","#FFD700"][i],badges:i===0?["broadcaster"]:i===1?["moderator"]:i===2?["vip"]:[]});}); add({display:"PinguinoB0t",text:"hidden bot line"});}
-  else{poll();setInterval(poll,2000);}
+  else{loadBadges();setInterval(loadBadges,3600000);poll();setInterval(poll,2000);}
 })();
 </script>
 <script src="overlay-options.js"></script>
