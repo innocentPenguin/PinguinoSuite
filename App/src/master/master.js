@@ -94,7 +94,7 @@
   }
 
   /* customs button -> POST /api/customs/mod {action,value} (answers with the new state); old Host (404) or gamemode -> /api/run chat command */
-  const HOSTMOD = new Set(['queue', 'next', 'match', 'win', 'finish', 'balance', 'reroll', 'kick', 'mode', 'format', 'koth', 'casual']);
+  const HOSTMOD = new Set(['activity', 'queue', 'next', 'match', 'win', 'finish', 'balance', 'reroll', 'kick', 'mode', 'format', 'koth', 'casual']);
   /* ---------- player simulator: a local fake customs state, nothing leaves the app ---------- */
   const SIMNAMES = ['spywobbles', 'salman201223', 'SkyRLTN', 'LvLMarshmello', 'pineyapplie', 'gonkilluagg', 'yoohoo15', 'FrostByte', 'NovaKick', 'AeroLily', 'TurboToast', 'WaffleRL', 'DemoDan', 'BumpBoi', 'CeilingCat', 'FlipReset'];
   const simFresh = () => ({ waiting: true, open: true, queue: [], match: null, mode: 'balanced', format: '2v2', gameMode: 'standard', koth: false, activity: 'competitive', streamer: 'in', teams: JSON.parse(JSON.stringify(C.TEAM_DEFAULTS)), wheel: { status: 'none', entrants: [], round: 0, teamSize: 2, teams: [] }, _n: 0, _id: 0 });
@@ -196,7 +196,7 @@
   async function sendCustom(action, value, btn, raw) {
     if (action === 'activity' && !ui.sim && !raw) {   // the Host's !activity does not set KOTH/team size/mode: send those too (defaults in master-core)
       const parts = String(value || '').split(' '), sub = parts.pop(), pre = parts.pop(), c = S.get('customs') || {}, d = C.ACTIVITY_DEFAULTS[sub] || {};
-      const steps = C.activityPlan(sub, { koth: !!c.koth, format: c.format, mode: c.mode });
+      const steps = sub === 'end' ? [] : C.activityPlan(sub, { koth: !!c.koth, format: c.format, mode: c.mode });   // End closes, clears and turns KOTH off by itself: no extra commands after it
       setOv({ activity: sub === 'end' ? 'none' : sub, koth: d.koth == null ? null : d.koth ? 'on' : 'off', format: d.format, mode: d.mode });
       const ok = await sendCustom(action, value, btn, true); if (ok) { for (const [a, v2] of steps) await sendCustom(a, v2, null, true); setOverlayGame(sub, pre); } return ok;
     }
@@ -209,6 +209,7 @@
     if (HOSTMOD.has(action.startsWith('queue-') ? 'queue' : action) && S.get('customsMod') !== false) {
       r = await api.post('/api/customs/mod', action.startsWith('queue-') ? { action: 'queue', value: action.slice(6) } : { action, value: value || '' });
       if (r.status === 404) { S.set({ customsMod: false }); r = null; }
+      else if (action === 'activity' && r.json && r.json.ok === false && /must be one of/.test(r.json.error || '')) r = null;   // a Host from before the synchronous activity route: use the chat command
     }
     if (!r) r = await api.post('/api/run', { text, user: 'broadcaster' });
     if (r.ok) { toast('Sent ' + text); if (r.json && r.json.customs) S.set({ customs: r.json.customs, customsOk: true }); else pollers.customs.kick(); }
@@ -548,8 +549,9 @@
     const a = ui.ask; if (!a) return; ui.ask = null; renderAsk();
     if (choice === 'cancel') return;
     const n = playersNow();
-    if (choice === 'remove') { if (n.live) await sendCustom('match', 'clear', null, true); if (playersNow().q) await sendCustom('queue-clear', null, null, true); }
-    else if (choice === 'back') { if (n.live) await sendCustom('match', 'queue', null, true); }   // game players return ahead of everyone who joined later (the bot's !match queue / the sim do exactly that)
+    const ending = a.action === 'activity' && String(a.value || '').split(' ').pop() === 'end';   // End already closes and clears the queue and the match: no extra clear commands
+    if (choice === 'remove') { if (!ending && n.live) await sendCustom('match', 'clear', null, true); if (!ending && playersNow().q) await sendCustom('queue-clear', null, null, true); }
+    else if (choice === 'back') { if (!ending && n.live) await sendCustom('match', 'queue', null, true); }   // game players return ahead of everyone who joined later (the bot's !match queue / the sim do exactly that)
     await sendCustom(a.action, a.value, null);
   }
   const holderName = c => { const x = c && c.controlHolder; return !x ? '' : typeof x === 'string' ? x : (x.name || x.display || x.user || x.id || ''); };

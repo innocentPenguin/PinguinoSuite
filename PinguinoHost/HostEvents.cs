@@ -28,7 +28,7 @@ namespace PinguinoHost
     /// <summary>The customs queue as the Master View needs it (read from Core's live_state.json) + one mod-action endpoint that runs the chat command as the streamer and answers with the new state.</summary>
     public static class CustomsView
     {
-        static readonly Dictionary<string, string> Actions = new Dictionary<string, string> { { "queue", "!queue" }, { "next", "!next" }, { "match", "!match" }, { "win", "!win" }, { "finish", "!finish" }, { "balance", "!balance" }, { "reroll", "!reroll" }, { "kick", "!kick" }, { "mode", "!mode" }, { "format", "!format" }, { "koth", "!koth" }, { "casual", "!casual" }, { "streamer", "!streamer" } };
+        static readonly Dictionary<string, string> Actions = new Dictionary<string, string> { { "queue", "!queue" }, { "next", "!next" }, { "match", "!match" }, { "win", "!win" }, { "finish", "!finish" }, { "balance", "!balance" }, { "reroll", "!reroll" }, { "kick", "!kick" }, { "mode", "!mode" }, { "format", "!format" }, { "koth", "!koth" }, { "casual", "!casual" }, { "activity", "!activity" }, { "streamer", "!streamer" } };
         static string StateFile()
         {
             foreach (var f in new[] { Path.Combine(HostApi.DataDir, "live_state.json"), Path.Combine(HostApi.DataDir, "runtime", "live_state.json") }) if (File.Exists(f)) return f;
@@ -81,16 +81,18 @@ namespace PinguinoHost
             Thread.Sleep(350); Events.Kick(); var st = State();
             return new JObject { { "ok", true }, { "ran", new JArray(plan) }, { "teams", st["teams"] } };
         }
-        /// <summary>{action, value}: queue open|close|clear, next [blue|orange], match clear|fill|queue, win blue|orange, finish, balance, reroll, kick &lt;name&gt;, mode/format/koth/casual &lt;value&gt;.</summary>
+        /// <summary>{action, value}: activity [rl|fn] <name>|end (synchronous, answers with the new state), queue open|close|clear, next [blue|orange], match clear|fill|queue, win blue|orange, finish, balance, reroll, kick &lt;name&gt;, mode/format/koth/casual &lt;value&gt;.</summary>
         public static JObject Mod(JObject b)
         {
             string a = ((string)b["action"] ?? "").Trim().ToLowerInvariant(), v = ((string)b["value"] ?? "").Trim(); string cmd;
             if (!Actions.TryGetValue(a, out cmd)) return new JObject { { "ok", false }, { "error", "action must be one of " + string.Join("|", Actions.Keys) } };
             if (v.Length > 40 || v.Any(ch => !(char.IsLetterOrDigit(ch) || ch == '_' || ch == ' ' || ch == '.' || ch == ':' || ch == '-' || ch == '/'))) return new JObject { { "ok", false }, { "error", "value has characters that are not allowed" } };
+            if (a == "activity" && !System.Text.RegularExpressions.Regex.IsMatch(v.ToLowerInvariant(), @"^((rl|fn) )?(competitive|comp|casual|koth|viewers|boxfights|zonewars|fnviewers|end|none)$")) return new JObject { { "ok", false }, { "error", "activity must be [rl|fn] competitive|casual|koth|viewers|boxfights|zonewars|end" } };
             string who = "innocentpenguin_"; try { var ch = (string)HostApi.StreamerCreds()["Channel"]; if (!string.IsNullOrEmpty(ch)) who = ch; } catch (Exception) { }
             string text = cmd + (v != "" ? " " + v : "");
             try { Control.Synthetic = true; Program.Dispatch(who, text, null, 4, "deck", false, null); } finally { Control.Synthetic = false; }
             Thread.Sleep(350); Events.Kick();
+            if (a == "activity") { try { Scenes.CustomsSync(); } catch (Exception) { } }   // hide/show the customs overlays at once, not on the next layout read
             return new JObject { { "ok", true }, { "ran", text }, { "customs", State() } };
         }
     }
