@@ -24,7 +24,7 @@ try:
     until(lambda: len(api('/api/automations')['doc']['actions']) >= 29, 30, 'presets seeded')
     doc = api('/api/automations')['doc']; sb = [a for a in doc['actions'] if a['id'].startswith('sb-')]
     if len(sb) < 21: fails.append('expected 21 sb- presets, got %d' % len(sb))
-    safe_on = {'sb-latest-popup', 'sb-shout', 'sb-latest-cmd', 'sb-session-cmd', 'sb-goal-cmd'}
+    safe_on = {'sb-latest-popup', 'sb-shout', 'sb-latest-cmd', 'sb-session-cmd', 'sb-goal-cmd', 'sb-leftbehind'}
     dups = {'sb-follow', 'sb-sub', 'sb-resub', 'sb-gift', 'sb-cheer', 'sb-raid', 'sb-ban', 'sb-clip', 'sb-preroll', 'sb-whyad'}
     if {a['id'] for a in sb if a['enabled']} != safe_on: fails.append('before cutover only the non-duplicating presets may be ON: ' + str(sorted({a['id'] for a in sb if a['enabled']} ^ safe_on)))
     if {a['id'] for a in sb if a.get('cutover')} != dups: fails.append('cutover flags wrong')

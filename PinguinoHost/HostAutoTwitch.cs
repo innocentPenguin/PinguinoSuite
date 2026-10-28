@@ -255,6 +255,7 @@ namespace PinguinoHost
 
         const string DiscordLine = "Don't forget to join the community Discord! Hang out, chat, share media, receive updates → {link:discord}";
         const string RaidStartLine = "Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Pinguinoraid innoce108Hype | Join the Discord: {link:discord}";   // ONE chat message (Ivan 10-27: one answer, one message)
+        const string RaidInLine = "innoce108Cool {raider} just raided the channel with {viewers} viewers PogChamp innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid Welcome everyone! innoce108Hello Thank you so much for the raid {raider}!!! innoce108Gift";   // ONE chat message (Ivan 10-27)
         const string LeftBehindLine = "Didn't get raided along? Type !leftbehind for the link.";
         const string StaleInvite = "https://discord.gg/be6bus4GKh";
         /// <summary>one-time: (1) every saved text with the expired invite reads {link:discord} (the site's links); (2) 'Raid scheduled' fires at once: shoutout, emotes, Discord;
@@ -313,6 +314,32 @@ namespace PinguinoHost
                 seeded.Add("raidmerge1"); doc["seeded"] = seeded; Save(doc);
             }
             catch (Exception ex) { Clog.Warn("automation", "raid merge migration failed: " + ex.Message); }
+        }
+        /// <summary>one-time (Ivan 10-27, marker raidinmerge1): the incoming-raid action said thanks, the emote row and the welcome as three chat messages; they are ONE message now. The saved texts are joined in order (a dated backup first); the delay between them goes, the one before the first line and everything after stay.</summary>
+        internal static void MigrateRaidInMerge()
+        {
+            try
+            {
+                var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray(); if (seeded.Any(v => (string)v == "raidinmerge1")) return;
+                var ra = ((JArray)doc["actions"]).OfType<JObject>().FirstOrDefault(o => (string)o["id"] == "sb-raid");
+                if (ra != null)
+                {
+                    var steps = (JArray)ra["steps"]; var says = steps.OfType<JObject>().Where(s => (string)s["type"] == "say").ToList();
+                    if (says.Count >= 2)
+                    {
+                        string merged = string.Join(" ", says.Select(s => ((string)s["text"] ?? "").Trim()).Where(x => x != ""));
+                        if (merged.Length <= 500)
+                        {
+                            try { File.Copy(Path.Combine(HostApi.DataDir, "automations.json"), Path.Combine(HostApi.DataDir, "automations.json.before-raidinmerge-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak"), true); } catch (Exception) { }
+                            int a = steps.IndexOf(says[0]), z = steps.IndexOf(says[says.Count - 1]);
+                            says[0]["text"] = merged;
+                            for (int i = z; i > a; i--) { var s = steps[i] as JObject; if (s != null && ((string)s["type"] == "say" || (string)s["type"] == "delay")) steps.RemoveAt(i); }
+                        }
+                    }
+                }
+                seeded.Add("raidinmerge1"); doc["seeded"] = seeded; Save(doc);
+            }
+            catch (Exception ex) { Clog.Warn("automation", "incoming raid merge migration failed: " + ex.Message); }
         }
         internal static void MigrateLeftBehind()
         {
@@ -399,7 +426,7 @@ namespace PinguinoHost
 
         public static void SeedStreamerBotPresets()
         {
-            MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow(); MigrateRaidOrder(); MigrateLeftBehind(); MigrateRaidMerge();
+            MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow(); MigrateRaidOrder(); MigrateLeftBehind(); MigrateRaidMerge(); MigrateRaidInMerge();
             try { MakePopupHold(); } catch (Exception ex) { Clog.Warn("automation", "popup hold migration failed: " + ex.Message); }
             try { SkipSmallRaidWait(); } catch (Exception ex) { Clog.Warn("automation", "small raid wait migration failed: " + ex.Message); }
             try { SeedRules(); } catch (Exception ex) { Clog.Warn("automation", "rules preset failed: " + ex.Message); }
@@ -424,9 +451,8 @@ namespace PinguinoHost
                     Act("sb-gift", "Alert: gifted subs", "from Streamer.bot 'Gifted' (Twitch sends one event per gift bomb)", true, new JArray { Tr("gift") }, SayStep("🎁 {user} gifted {total} sub(s)! innoce108Cool"), Step("alert_sound", "kind", "gift"), Popup()),
                     Act("sb-cheer", "Alert: cheer", "from Streamer.bot 'Cheers'", true, new JArray { Tr("cheer") }, SayStep("{user} cheered {bits} bits!"), Step("alert_sound", "kind", "cheer"), Popup()),
                     Act("sb-raid", "Alert: incoming raid", "from Streamer.bot 'Raided' (it was switched off there): thanks, emotes, welcome, then a queued shoutout.", true, new JArray { Tr("raid") },
-                        Step("delay", "ms", 500), SayStep("innoce108Cool {raider} just raided the channel with {viewers} viewers PogChamp"),
-                        SayStep("innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid innoce108Pinguinoraid"),
-                        Step("delay", "ms", 2500), SayStep("Welcome everyone! innoce108Hello Thank you so much for the raid {raider}!!! innoce108Gift"), Step("alert_sound", "kind", "raid"), Popup(), Step("delay", "ms", 12000, "skipSmallRaid", true), Step("shoutout_queue", "user", "{raider}", "auto", true)),
+                        Step("delay", "ms", 500), SayStep(RaidInLine),
+                        Step("alert_sound", "kind", "raid"), Popup(), Step("delay", "ms", 12000, "skipSmallRaid", true), Step("shoutout_queue", "user", "{raider}", "auto", true)),
                     Act("sb-ban", "Alert: ban (Among Us ejected)", "from Streamer.bot 'Add Ban': browser source + eject sound. Needs the ban event (channel:moderate: sign the streamer in again).", true, new JArray { Tr("ban") },
                         Step("obs_request", "request", "SetInputSettings", "data", new JObject { { "inputName", "Ban Alert - Among Us Ejected" }, { "inputSettings", new JObject { { "url", "file:///C:/Users/ivanm/Documents/amongusban/Browser%20Sources/among-uspure-css/index.html?user={user}" } } } }),
                         Step("obs_source", "scene", "Ban Alert", "source", "Ban Alert - Among Us Ejected", "visible", "true"), Step("delay", "ms", 900),

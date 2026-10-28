@@ -97,7 +97,7 @@ class H:
         json.dump({'core': {'UserToken': 't', 'ClientId': 'c', 'SenderId': 'bot1', 'BroadcasterId': 'streamer1'}}, open(os.path.join(d, 'bots_secrets.json'), 'w'))
         json.dump({'Url': 'http://127.0.0.1:%d' % MX, 'Token': 'multi-test'}, open(os.path.join(d, 'alert_bridge.json'), 'w'))
         delay_sec is None or json.dump({'RaidStartDelaySec': delay_sec}, open(os.path.join(d, 'latest_settings.json'), 'w'))
-        json.dump({'seeded': ['spotify', 'spotify2', 'musicoff1', 'songhelper1', 'raidshort1', 'raidflow2'], 'actions': OLD_ACTIONS}, open(os.path.join(d, 'automations.json'), 'w'))
+        json.dump({'seeded': ['spotify', 'spotify2', 'musicoff1', 'songhelper1', 'raidshort1', 'raidflow2', 'raidmerge1', 'raidinmerge1'], 'actions': OLD_ACTIONS}, open(os.path.join(d, 'automations.json'), 'w'))
         env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
         env.update({'PINGUINO_COMPAT_WS_PORT': str(WSP), 'PINGUINO_DUP_SECONDS': '0', 'PINGUINO_OBS': '1', 'PINGUINO_HELIX_BASE': 'http://127.0.0.1:%d' % HX, 'PINGUINO_MODULE_TOKEN': TOK, 'PINGUINO_LIVE': LIVEV['v']})
         self.p = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(self.out, 'wb'), stderr=subprocess.STDOUT)
