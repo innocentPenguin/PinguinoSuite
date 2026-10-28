@@ -117,6 +117,7 @@
     move: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (\d{1,3})$/.exec(String(v || '').trim()); return m && +m[2] >= 1 ? '!move ' + m[1] + ' ' + m[2] : null; },
     in: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (blue|grey|orange)$/.exec(String(v || '').trim()); return m ? '!in ' + m[1] + ' ' + m[2] : null; },
     out: v => { const m = /^@?([A-Za-z0-9_]{2,25})$/.exec(String(v || '').trim()); return m ? '!out ' + m[1] : null; },
+    pm: v => { const p = pmName(v); return p.ok ? PM_CMD + ' ' + p.name : null; },
     wheel: v => (v === 'open' ? '!wheel open' : null),
     kick: v => { v = String(v || '').trim().replace(/^@/, ''); return /^[A-Za-z0-9_]{2,25}$/.test(v) ? '!kick ' + v : null; },
   };
@@ -508,6 +509,26 @@
     if (j.fired) return { kind: 'good', text: 'Raid line sent for ' + target };
     return { kind: 'bad', text: 'Raid prep: the Host answered but fired nothing' + (j.reason ? ' (' + j.reason + ')' : '') };
   }
+  /* Private match name (Customs panel): the chat command !pm <name> through /api/run as the broadcaster. 1-40 printable characters, never a command (! or /), no control characters. */
+  const PM_CMD = '!pm';
+  function pmName(v) {
+    const s = String(v == null ? '' : v).replace(/[ -]/g, ' ').replace(/s+/g, ' ').trim();
+    if (!s) return { ok: false, name: '', error: 'Type the private match name first' };
+    if (s.length > 40) return { ok: false, name: s, error: 'Private match name: 40 characters at most' };
+    if (/^[!/.]/.test(s)) return { ok: false, name: s, error: 'Private match name cannot start with ! / or .' };
+    return { ok: true, name: s, error: '' };
+  }
+  /* what the panel shows: a just-set name wins for 12 s, then the Host's pmName; '' means the Host reports none, null means this Host does not report it at all */
+  function pmView(c, ov, now) {
+    const has = !!c && typeof c.pmName === 'string', cur = has ? c.pmName.trim() : null, live = ov && ov.until > (now == null ? Date.now() : now);
+    const pending = !!live && cur !== ov.name;
+    return { known: has, cur, shown: live ? ov.name : cur, pending, text: live ? ov.name : has ? (cur || '(not set)') : '(the Host does not report it yet)' };
+  }
+  function pmResult(r, name, errText) {
+    const j = r && r.json && typeof r.json === 'object' ? r.json : {};
+    if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || (j.error ? 'PM name: ' + j.error : 'PM name was not set') };
+    return { kind: 'good', text: 'Private match name sent: ' + name };
+  }
   /* One raid prep request at a time; the same target is not sent again for 10 s after a send that the Host accepted or that is still unknown; a failed send frees it */
   function createRaidGuard(clock) {
     const now = clock || Date.now; let busy = false, last = null;
@@ -517,5 +538,5 @@
       get busy() { return busy; },
     };
   }
-  return { teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { PM_CMD, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

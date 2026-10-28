@@ -499,6 +499,20 @@ await t('teams are Grey and Orange: names/colours come from the state, a Host th
   assert.ok(!/Blue wins|who goes Blue|'Blue: '|\bBlue team\b/.test(js), 'no hardcoded Blue label'); assert.match(js, /Grey wins/); assert.match(js, /t\[k\]\.name \+ ' wins'/); assert.match(js, /C\.teamWord\(curCustoms\(\), 'blue'\)/);
 });
 
+await t('PM name: current value from the state, Set posts !pm <name> as the broadcaster, empty/bad names are blocked, errors come back, the overlay shows the new name until the Host does', async () => {
+  const c0 = (await api.get('/api/customs/state')).json; delete c0.pmName;
+  assert.deepEqual([C.pmView(c0, null).known, C.pmView(c0, null).text], [false, '(the Host does not report it yet)']); assert.equal(C.pmView({ pmName: '' }, null).text, '(not set)'); assert.equal(C.pmView({ pmName: ' peng123 ' }, null).text, 'peng123');
+  assert.equal(C.pmName('').ok, false); assert.equal(C.pmName('   ').ok, false); assert.match(C.pmName('').error, /Type the private match name/); assert.equal(C.pmName('!queue open').ok, false); assert.equal(C.pmName('x'.repeat(41)).ok, false); assert.equal(C.pmName('a\u0007b\nc').name, 'a b c');
+  assert.equal(C.customsText('pm', 'peng 77'), '!pm peng 77'); assert.equal(C.customsText('pm', ''), null); assert.equal(C.customsText('pm', '/me hi'), null);
+  st.runs = []; delete st.customs.pmName; st.pmFail = false;
+  let r = await api.post('/api/run', { text: C.customsText('pm', 'pengABC'), user: 'broadcaster' }, { timeoutMs: 15000 }); let v = C.pmResult(r, 'pengABC'); assert.deepEqual([v.kind, v.text], ['good', 'Private match name sent: pengABC']); assert.deepEqual(st.runs, ['!pm pengABC']);
+  const c1 = (await api.get('/api/customs/state')).json; assert.equal(C.pmView(c1, null).text, 'pengABC');
+  const ov = { name: 'pengNEW', until: 1000 + 12000 }; let w = C.pmView(c1, ov, 2000); assert.deepEqual([w.shown, w.pending], ['pengNEW', true]); w = C.pmView({ pmName: 'pengNEW' }, ov, 2000); assert.equal(w.pending, false); w = C.pmView(c1, ov, 20000); assert.deepEqual([w.shown, w.pending], ['pengABC', false], 'after 12 s the Host value wins again');
+  st.pmFail = true; r = await api.post('/api/run', { text: '!pm nope', user: 'broadcaster' }); v = C.pmResult(r, 'nope'); assert.equal(v.kind, 'bad'); assert.match(v.text, /mods only/); assert.equal(C.pmResult({ ok: false, status: 0, json: {} }, 'x', 'Host not reachable').text, 'Host not reachable'); st.pmFail = false;
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8'); assert.match(js, /id="pm-go"/); assert.match(js, /C\.pmName\(\$\('#pm-in'\)\.value\)\.ok \|\| armed\(b\)/); assert.match(js, /timeoutMs: 15000 \}\), v = C\.pmResult/);
+  delete st.customs.pmName;
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);

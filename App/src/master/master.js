@@ -420,6 +420,7 @@
         ${sec('c-m', 'Match', `<div class="btns">${b('Fill', 'match', 'fill', 'g')}${b('Move all → Queue', 'match', 'queue')}${b('Clear match', 'match', 'clear', 'rd warn')}${b('Orange wins', 'finish', 'orange', 'or', 'win:orange')}${b('Grey wins', 'finish', 'blue', 'bl', 'win:blue')}</div><div class="teams" id="cu-teams"></div>`, ' <span class="faint" id="cu-match"></span>')}
         ${sec('c-t', 'Teams', `${seg('mode', [['Balanced', 'balanced'], ['Random', 'random'], ['Manual', 'picks']])}<div class="btns" style="margin-top:6px">${b('Reroll', 'reroll')}${b('Balance', 'balance')}</div><div class="row" id="cu-manual" style="margin-top:6px" hidden><input type="text" id="cu-pick" placeholder="who goes Grey" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="sm bl" id="cu-pickgo">Set Blue</button>${b('Auto', 'pick', 'auto')}</div>`)}
         ${sec('c-tn', 'Team names & colours', ['orange', 'blue'].map(k => `<div class="tn" data-side="${k}"><div class="row"><span class="tn-dot"></span><input type="text" class="tn-name" maxlength="20" autocomplete="off" spellcheck="false" aria-label="${k} team name"><input type="color" class="tn-pick" title="Custom colour"><button class="sm ghost tn-reset" title="Back to the default name and colour">Reset</button></div><details class="tn-det"><summary>Colours <span class="tn-chip" title="Current colour"></span></summary><div class="tn-sw">${C.TEAM_PRESETS.map(([n, hx]) => `<button class="swc" data-c="${hx}" style="background:${hx}" title="${n}" aria-label="${n}"></button>`).join('')}</div></details></div>`).join('') + '<div class="faint sm">Used in the match lines, overlays and the site. Customs chat lines keep the emoji before the name (🔶 Orange, 🔷 Blue, e.g. “🔷 Frost wins”); the colour only tints the panels and overlays.</div>')}
+        ${sec('c-pm', 'Private match name', `<div class="row"><span class="faint sm">Now:</span> <b id="pm-cur" class="ell">–</b></div><div class="row" style="margin-top:4px"><input type="text" id="pm-in" maxlength="40" autocomplete="off" spellcheck="false" placeholder="new private match name" style="flex:1;min-width:0"><button class="sm rd warn" id="pm-go" title="Runs !pm <name> as the broadcaster (two clicks)">Set</button></div><div id="pm-res" class="si-res"></div>`)}
         ${sec('c-s', 'Settings', `<div class="lbl">Team size <span class="faint" id="cu-fmt"></span></div><div id="cu-rlsz">${seg('format', ['2v2', '3v3', '4v4'].map(x => [x, x]))}</div><div id="cu-fnsz" hidden><div class="seg">${['1', '2', '3'].map(n => b(n, 'format', n + 'v' + n, '', 'format:' + n + 'v' + n, 'Fortnite viewers: ' + n + ' per team')).join('')}</div><div class="row" style="margin-top:6px"><input type="number" id="cu-fnn" min="1" max="16" placeholder="other size" style="width:96px"><button class="sm" id="cu-fnset" title="Any other team size, 1 to 16">Set</button></div></div><div class="lbl">Game mode</div>${seg('gamemode', [['Standard', 'standard'], ['Dropshot', 'dropshot'], ['Rumble', 'rumble']])}`)}
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
         ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div>`)}
@@ -571,6 +572,27 @@
     }
     return out;
   };
+  /* ---------- private match name: the current value from /api/customs/state (pmName) + Set = !pm <name> ---------- */
+  function renderPm() {
+    const e = $('#pm-cur'); if (!e) return; const v = C.pmView(curCustoms(), ui.pmOv); e.textContent = v.text + (v.pending ? ' (sent, waiting for the Host)' : ''); e.dataset.known = v.known ? '1' : '';
+  }
+  async function pmSet(btn) {   // armed by the caller; one request at a time, 15 s timeout, no automatic retry
+    const inp = $('#pm-in'), res = $('#pm-res'), p = C.pmName(inp ? inp.value : ''), show = v => { if (res) res.replaceChildren(h('div', 'sir ' + v.kind, v.text)); };
+    if (!p.ok) { show({ kind: 'bad', text: p.error }); toast(p.error, true); return; }
+    if (ui.pmBusy) { toast('The private match name is already being sent'); return; }
+    const before = C.pmView(curCustoms(), null).cur; ui.pmBusy = true; btn.disabled = true; show({ kind: 'warn', text: 'Sending…' });
+    ui.pmOv = { name: p.name, until: Date.now() + 12000 }; renderPm();
+    let ok = false;
+    try {
+      flash(btn); if (ui.sim) { const c = ui.simState; c.pmName = p.name; ok = true; show({ kind: 'good', text: 'Private match name set (practice mode): ' + p.name }); }
+      else {
+        await tokenReady; ui.tookControl = true;
+        const r = await api.post('/api/run', { text: C.customsText('pm', p.name), user: 'broadcaster' }, { timeoutMs: 15000 }), v = C.pmResult(r, p.name, hostRes(r, 'PM name', '/api/run'));
+        ok = v.kind !== 'bad'; show(v); toast(v.text, !ok); if (ok) { if (inp) inp.value = ''; pollers.customs.kick(); }
+      }
+    } catch (err) { show({ kind: 'bad', text: 'PM name failed: ' + (err && err.message || err) }); }
+    finally { ui.pmBusy = false; btn.disabled = false; if (!ok) { ui.pmOv = null; } renderPm(); }
+  }
   async function setTeam(side, patch) {
     const p = {}; if (patch.name != null) { const n = C.teamName(patch.name); if (!n) { toast('Team name: 1 to 20 characters, not starting with ! / .', true); schedule('customs'); return; } p.name = n; }
     if (patch.color != null) { const k = C.teamColor(patch.color); if (!k) { toast('Colour must look like #ff7a00', true); return; } p.color = k; }
@@ -635,7 +657,7 @@
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
     const TN = teamsNow(), tv = JSON.stringify([TN, C.teamPlayers(m, 'orange'), C.teamPlayers(m, 'blue'), [...C.teamPlayers(m, 'orange'), ...C.teamPlayers(m, 'blue')].map(n => [strikesFor(who(n).key), strikesKnown(who(n).key), who(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
     if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = C.teamPlayers(m, k); names.forEach(n => col.append(playerRow(who(n).key.toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
-    renderPop(); renderAsk(); renderTeamsEditor();
+    renderPop(); renderAsk(); renderTeamsEditor(); renderPm();
     const isFn = !!c && /^(boxfights|zonewars|fnviewers)$/.test(c.activity || ''); $('#cu-rlsz').hidden = isFn; $('#cu-fnsz').hidden = !isFn; $('#cu-fmt').textContent = c && c.format ? '· ' + c.format : '';
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
       const empty = live ? C.fmtSize(c && c.format) * 2 - C.teamPlayers(m, 'orange').length - C.teamPlayers(m, 'blue').length : 0;
@@ -1050,6 +1072,7 @@
     if (b && b.dataset.cu) { if (b.disabled) return; if (b.dataset.st && !ui.sim) { const [k, v] = b.dataset.st.split(':'); if (k !== 'win') { ui.sel[k] = v; schedule('customs'); } } if (b.classList.contains('warn') && !armed(b)) return; if (wantsAsk(b.dataset.cu, b.dataset.v)) { ui.ask = { action: b.dataset.cu, value: b.dataset.v }; renderAsk(); return; } sendCustom(b.dataset.cu, b.dataset.v, b); }
     else if (b && b.dataset.wh && ui.sim) { if (b.classList.contains('warn') && !armed(b)) return; const W = simWheel(), k = b.dataset.wh; if (k === 'reset') { W.entrants = []; W.teams = []; W.status = 'open'; setWq(null); } else if (k === 'new') { W.round++; W.teams = []; W.status = 'open'; } else if (W.entrants.length >= W.teamSize * 2) { W.status = 'drawing'; toast('Sim wheel: spin (draw not simulated)'); } else toast('Not enough entrants', true); schedule('customs'); }
     else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); ui.tookControl = true; tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
+    else if (b && b.id === 'pm-go') { if (!C.pmName($('#pm-in').value).ok || armed(b)) pmSet(b); }
     else if (b && b.id === 'cu-pickgo') { const v = $('#cu-pick').value.trim().replace(/\s+/g, ' '); C.customsText('pick', v) ? (sendCustom('pick', v, b), $('#cu-pick').value = '') : toast('Type 1 to 4 Twitch names first', true); }
     else if (b && b.id === 'cu-kickgo') { C.customsText('kick', $('#cu-kick').value) ? (sendCustom('kick', $('#cu-kick').value, b), $('#cu-kick').value = '') : toast('Type a Twitch name first', true); }
   });
