@@ -47,6 +47,7 @@ export function startMock(port = 8798, opts = {}) {
       if (p === '/api/commands/profile') { const c = st.cmds.commands.find(x => x.id === b.id); if (!c) return send(res, 200, { ok: false, error: 'unknown command' }); c.enabled = b.enabled; return send(res, 200, { ok: true }); }
       if (p === '/api/customs/mod') {
         const a = b.action, v = b.value; let ran = null;
+        if (a === 'pm') { if (st.pmFail) return send(res, 200, { ok: false, error: 'mods only' }); if (/^[!/]/.test(String(v)) || String(v).length > 20) return send(res, 200, { ok: false, error: 'bad pm name' }); st.pms = (st.pms || []).concat([b]); if (!st.pmNoop) st.customs.pmName = String(v); return send(res, 200, { ok: true, pmName: st.customs.pmName || '' }); }
         if (a === 'queue') { st.customs.open = v === 'open' ? true : v === 'close' ? false : st.customs.open; if (v === 'clear') st.customs.queue = []; ran = '!queue ' + v; }
         else if (a === 'next') { st.customs.queue.shift(); ran = '!next'; }
         else if (a === 'kick') { st.customs.queue = st.customs.queue.filter(q => q.username !== v); ran = '!kick ' + v; }
