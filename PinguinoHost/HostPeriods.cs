@@ -259,7 +259,7 @@ namespace PinguinoHost
         }
 
         /// <summary>THE rank line every leaderboard-style command uses (Host commands, and Chatty/Helper can copy the wording):
-        /// "18h 39m watched this month (#9 of 412) | today: 40m, week: 4h 38m, alltime: 20d 12h". Monthly value first, then today / week / all time.
+        /// "18h 39m this month (#9 of 412) | today: 40m, week: 4h 38m, alltime: 20d 12h". Monthly value first, then today / week / all time.
         /// allTime: pass a number to use it instead of the period log's own all-time figure (-1 = use the log).</summary>
         public static bool RankLineWeek = false;
         public static string RankText(string login, string metric, double allTime = -1)
@@ -270,10 +270,10 @@ namespace PinguinoHost
                 string who = Boards.CanonLogin(login ?? "");
                 var q = Query(metric, "month", "", who, 1); var me = q["me"] as JObject;
                 double mv = me != null ? (double)me["value"] : 0; int total = (int)q["total"];
-                string unit = metric == "watchtime" ? "watched" : metric == "points" ? Economy.CurrencyName + " earned" : metric == "messages" ? "chat messages" : metric == "gifts" ? "gifted subs" : metric == "bits" ? "bits" : metric;
+                string unit = metric == "watchtime" ? "" : metric == "points" ? Economy.CurrencyName + " earned" : metric == "messages" ? "chat messages" : metric == "gifts" ? "gifted subs" : metric == "bits" ? "bits" : metric;
                 string rank = me != null ? " (#" + (int)me["rank"] + " of " + total + ")" : " (not ranked yet)";
                 double d = Value(who, metric, "day"), w = Value(who, metric, "week"), a = allTime >= 0 ? allTime : Value(who, metric, "all");
-                return fmt(mv) + " " + unit + " this month" + rank + " | today: " + fmt(d) + (RankLineWeek ? ", week: " + fmt(w) : "") + ", alltime: " + fmt(a);
+                return fmt(mv) + (unit == "" ? "" : " " + unit) + " this month" + rank + " | today: " + fmt(d) + (RankLineWeek ? ", week: " + fmt(w) : "") + ", alltime: " + fmt(a);
             }
             catch (Exception) { return ""; }
         }

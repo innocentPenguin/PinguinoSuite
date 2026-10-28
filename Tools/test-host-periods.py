@@ -99,7 +99,7 @@ try:
     say('viewer1: !top messages day'); say('viewer2: !watchtime amy'); say('viewer3: !points amy')
     txt = open(out, 'rb').read().decode('utf-8', 'replace')
     chk('!top says the day board once', txt.count('Most chat messages today: 1. amy') == 1, txt[-600:])
-    chk('!watchtime: monthly value, rank, today, alltime', 'amy 1h 30m watched this month (#2 of 2) | today: 1h 30m, alltime: 2h 0m' in txt, txt[-600:])
+    chk('!watchtime: monthly value, rank, today, alltime', 'amy 1h 30m this month (#2 of 2) | today: 1h 30m, alltime: 2h 0m' in txt, txt[-600:])
     chk('!points: Host says nothing (Chatty answers the short line), no "earned today" tail anywhere', 'earned today' not in txt and len(re.findall(r'amy: \d+ points earned this month \(#1 of \d+\) \| today: \d+, alltime: \d+ \| balance', txt)) == 1 and 'week:' not in txt, txt[-600:])
     # ---- Tools/rebuild-buckets.py: backfill from the old stores, twice, then a reload
     os.makedirs(os.path.join(d, 'boards'), exist_ok=True); os.makedirs(os.path.join(d, 'profiles'), exist_ok=True)
