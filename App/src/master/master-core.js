@@ -490,5 +490,28 @@
   /* Text for toasts and confirm lines: any "yt:UC…" / "tt:name" / "tw:login" key inside it becomes the person's display name */
   function cleanKeys(text, dir) { return String(text == null ? '' : text).replace(/\b(?:tw|twitch|yt|youtube|tt|tiktok|kk|kick|fb|facebook):[^\s,;()]+/gi, m => personInfo(m, dir).name); }
   function personText(x, dir) { const i = personInfo(x, dir); return i.name + (i.epic ? ' (' + i.epic + ')' : ''); }
-  return { cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  /* Raid prep: POST /api/raid/prep {target, now:false} -> {ok, fired, duplicate}. The target is required (it is stored for !leftbehind); a Twitch login: letters, digits, underscore, 1-25 */
+  function raidTarget(s) {
+    const t = String(s == null ? '' : s).trim().replace(/^@/, '');
+    if (!t) return { ok: false, target: '', error: 'Type the raid target first' };
+    if (!/^[A-Za-z0-9_]{1,25}$/.test(t)) return { ok: false, target: t, error: 'Raid target: a Twitch name (letters, numbers, underscore, up to 25)' };
+    return { ok: true, target: t.toLowerCase(), error: '' };
+  }
+  function raidPrepView(r, target, errText) {
+    const j = r && r.json && typeof r.json === 'object' ? r.json : {};
+    if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || (j.error ? 'Raid prep: ' + j.error : 'Raid prep failed') };
+    if (j.duplicate) return { kind: 'warn', text: 'Already fired for this raid (3 min window)' };
+    if (j.fired) return { kind: 'good', text: 'Raid line sent for ' + target };
+    return { kind: 'bad', text: 'Raid prep: the Host answered but fired nothing' + (j.reason ? ' (' + j.reason + ')' : '') };
+  }
+  /* One raid prep request at a time; the same target is not sent again for 10 s after a send that the Host accepted or that is still unknown; a failed send frees it */
+  function createRaidGuard(clock) {
+    const now = clock || Date.now; let busy = false, last = null;
+    return {
+      begin(target) { if (busy) return { ok: false, why: 'Raid prep is already being sent' }; if (last && last.target === target && now() - last.at < 10000) return { ok: false, why: 'Raid prep for ' + target + ' was just sent' }; busy = true; last = { target, at: now() }; return { ok: true, why: '' }; },
+      end(failed) { busy = false; if (failed) last = null; },
+      get busy() { return busy; },
+    };
+  }
+  return { createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

@@ -250,3 +250,5 @@ button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible,
 .epic{margin-left:6px;font-size:10px;color:var(--faint,#9a9a9a)}
 .wpeople{margin-top:4px;font-size:12px}.wprow{margin-top:2px}.wp{display:inline-block;margin-right:8px;white-space:nowrap}
 .plat-kick{background:#53fc18;color:#0b1a04}.plat-facebook{background:#1877f2}
+
+.sir.good{border-color:#3ecf6a;color:#7ee29b}.sir.warn{border-color:#ffb300;color:#ffc94d}

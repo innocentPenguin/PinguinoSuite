@@ -678,7 +678,7 @@
       <pre id="rc-out" class="si-res" style="white-space:pre-wrap"></pre>
       <h4 class="si-h">Raid prep</h4>
       <div class="faint sm">Runs the raid_start automation once (for raids started on the Twitch site). Does not start a raid.</div>
-      <div class="row" style="margin-top:6px"><input type="text" id="rd-target" maxlength="25" autocomplete="off" placeholder="target channel (optional)" style="width:190px"><button class="sm rd warn" id="rd-go">Raid prep</button></div>
+      <div class="row" style="margin-top:6px"><input type="text" id="rd-target" maxlength="25" autocomplete="off" placeholder="target channel (required)" style="width:190px"><button class="sm rd warn" id="rd-go">Raid prep</button></div>
       <div id="rd-res" class="si-res"></div>
       <h4 class="si-h">TikTok (manual)</h4>
       <textarea id="si-tt" rows="5" readonly></textarea><div class="btns" style="margin-top:6px"><button class="sm" id="si-copy">Copy for TikTok</button></div>
@@ -749,11 +749,22 @@
     const v = C.recapView(r.json); $('#lc-text').textContent = v.text || '(no recap yet)';
     if (v.hasClip) { const a = h('a', '', 'Best clip: ' + (v.clipTitle || v.clipUrl) + (v.views != null ? ' (' + v.views + ' views)' : '')); a.href = v.clipUrl; a.target = '_blank'; a.rel = 'noopener'; $('#lc-clip').append(a); } else $('#lc-clip').textContent = '(no clip found)';
   }
-  async function raidPrep(btn) {
-    flash(btn); await tokenReady; ui.tookControl = true; const t = $('#rd-target').value.trim().replace(/^@/, '');
-    const r = await api.post('/api/raid/prep', t ? { target: t } : {}), ok = r.ok && r.json && r.json.ok !== false, j = r.json || {};
-    siShow($('#rd-res'), [[ok, ok ? (j.duplicate ? 'Already fired for this raid (3 min guard)' : j.fired ? 'Raid prep fired' : 'Nothing fired') : hostRes(r, 'Raid prep', '/api/raid/prep')]]);
-    if (ok) toast(j.fired ? 'Raid prep fired' : 'Raid prep: ' + (j.duplicate ? 'duplicate' : 'nothing fired'), !j.fired && !j.duplicate);
+  const raidGuard = C.createRaidGuard();
+  const raidReady = () => { const inp = $('#rd-target'); return C.raidTarget(inp && inp.value.trim() ? inp.value : ui.raidTarget || '').ok; };   // an empty or bad target never arms the button: it just says why
+  async function raidPrep(btn) {   // armed by the caller (two clicks: it posts a chat line). One request at a time, never retried, never replayed for the same target within 10 s
+    const inp = $('#rd-target'), tv = C.raidTarget(inp && inp.value.trim() ? inp.value : ui.raidTarget || ''), res = $('#rd-res');
+    const show = v => { if (res) res.replaceChildren(h('div', 'sir ' + v.kind, v.text)); };
+    if (!tv.ok) { show({ kind: 'bad', text: tv.error }); toast(tv.error, true); if (inp) { setTab('stream'); inp.focus(); } return; }
+    const gate = raidGuard.begin(tv.target); if (!gate.ok) { toast(gate.why, true); return; }
+    ui.raidTarget = tv.target; if (inp) inp.value = tv.target; let failed = true;
+    const goes = [$('#b-raid'), $('#rd-go')].filter(Boolean); goes.forEach(x => { x.disabled = true; }); show({ kind: 'warn', text: 'Sending…' });
+    try {
+      flash(btn); await tokenReady; ui.tookControl = true;
+      const r = await api.post('/api/raid/prep', { target: tv.target, now: false }, { timeoutMs: 15000 });
+      const v = C.raidPrepView(r, tv.target, hostRes(r, 'Raid prep', '/api/raid/prep')); failed = v.kind === 'bad';
+      show(v); toast(v.text, v.kind === 'bad');
+    } catch (err) { show({ kind: 'bad', text: 'Raid prep failed: ' + (err && err.message || err) }); }
+    finally { raidGuard.end(failed); goes.forEach(x => { x.disabled = false; }); }
   }
   $('#tab-stream').addEventListener('input', e => {
     const map = { 'si-title': 'title', 'si-game': 'game', 'si-desc': 'description', 'si-tags': 'tags', 'si-at': 'at', 'si-priv': 'privacy' }, k = map[e.target.id]; if (!k) return;
@@ -764,7 +775,7 @@
     if (b.dataset.plat) { ui.si.plat[b.dataset.plat] = !ui.si.plat[b.dataset.plat]; siSave(); return; }
     if (b.id === 'sg-btn') { if (b.disabled) return; if (!b._armT) b.dataset.pend = b.dataset.name; if (!armed(b)) { b.textContent = b.dataset.arm || 'Sure?'; return; } songifyDo(b, b.dataset.pend); return; }
     if (b.id === 'si-push') siPush(b); else if (b.id === 'si-load') siLoad();
-    else if (b.id === 'rc-prev') recapDo(false, b); else if (b.id === 'rc-say') { if (armed(b)) recapDo(true, b); } else if (b.id === 'rd-go') { if (armed(b)) raidPrep(b); }
+    else if (b.id === 'rc-prev') recapDo(false, b); else if (b.id === 'rc-say') { if (armed(b)) recapDo(true, b); } else if (b.id === 'rd-go') { if (!raidReady() || armed(b)) raidPrep(b); }
     else if (b.id === 'si-sched') { if (!armed(b)) return; siSchedule(b); }
     else if (b.id === 'si-copy') { const t = $('#si-tt').value; try { await navigator.clipboard.writeText(t); toast('Copied for TikTok'); } catch (err) { $('#si-tt').select(); toast('Select and copy it (Ctrl+C)'); } }
   });
@@ -1136,7 +1147,7 @@
   setInterval(() => schedule('bar'), 2000);   // the stale badge needs a repaint even when nothing arrives
   $('#b-last').addEventListener('click', () => lastCard($('#lastcard').hidden ? true : false));
   $('#lc-refresh').addEventListener('click', () => lastCard(true));
-  $('#b-raid').addEventListener('click', e => { if (armed(e.currentTarget)) raidPrep(e.currentTarget); });
+  $('#b-raid').addEventListener('click', e => { if (!raidReady() || armed(e.currentTarget)) raidPrep(e.currentTarget); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Object.values(pollers).forEach(p => p.kick()); });
   window.addEventListener('focus', () => Object.values(pollers).forEach(p => p.kick()));
 

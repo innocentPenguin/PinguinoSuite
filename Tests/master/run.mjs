@@ -464,6 +464,22 @@ await t('platform display names, REAL Host shape: queue row {username key, displ
   assert.doesNotMatch(C.cleanKeys('kick kk:k1 and yt:uc1abc', dir), /(yt|kk):/);
 });
 
+await t('Raid prep: target check, fired / duplicate / error views, double click and replay send once (mock host only)', async () => {
+  assert.equal(C.raidTarget('').ok, false); assert.equal(C.raidTarget('   ').ok, false); assert.match(C.raidTarget('').error, /Type the raid target/); assert.equal(C.raidTarget('bad name!').ok, false); assert.equal(C.raidTarget('a'.repeat(26)).ok, false);
+  assert.deepEqual([C.raidTarget('@SomeStreamer').ok, C.raidTarget('@SomeStreamer').target], [true, 'somestreamer']);
+  const go = async (guard, target) => { const g = guard.begin(target); if (!g.ok) return { blocked: g.why }; let failed = true; try { const r = await api.post('/api/raid/prep', { target, now: false }, { timeoutMs: 15000 }); const v = C.raidPrepView(r, target, 'host said no'); failed = v.kind === 'bad'; return v; } finally { guard.end(failed); } };
+  st.rcalls = []; delete st.raidMode;
+  let v = await go(C.createRaidGuard(), 'somestreamer'); assert.deepEqual([v.kind, v.text], ['good', 'Raid line sent for somestreamer']); assert.deepEqual(st.rcalls, [{ target: 'somestreamer', now: false }]);
+  st.raidMode = 'dup'; v = await go(C.createRaidGuard(), 'somestreamer'); assert.deepEqual([v.kind, v.text], ['warn', 'Already fired for this raid (3 min window)']);
+  st.raidMode = 'err'; v = await go(C.createRaidGuard(), 'somestreamer'); assert.equal(v.kind, 'bad'); assert.match(v.text, /chat is offline|host said no/);
+  st.raidMode = 'slow'; st.rcalls = []; const gd = C.createRaidGuard(); const [a, b2, c2] = await Promise.all([go(gd, 'x1'), go(gd, 'x1'), go(gd, 'other')]);
+  assert.equal(a.kind, 'good'); assert.match(b2.blocked, /already being sent/); assert.match(c2.blocked, /already being sent/); assert.equal(st.rcalls.length, 1, 'a double click sends once');
+  assert.match((await go(gd, 'x1')).blocked, /just sent/, 'a replay of the same target within 10 s is blocked'); assert.equal((await go(gd, 'x2')).kind, 'good'); assert.equal(st.rcalls.length, 2);
+  st.raidMode = 'err'; const g2 = C.createRaidGuard(); assert.equal((await go(g2, 'y1')).kind, 'bad'); st.raidMode = undefined; assert.equal((await go(g2, 'y1')).kind, 'good', 'a failed send frees the target for a manual retry');
+  assert.equal(C.raidPrepView({ ok: false, status: 0, json: {} }, 't', 'Host not reachable').text, 'Host not reachable'); assert.equal(C.raidPrepView({ ok: true, json: { ok: true, fired: false, duplicate: false } }, 't').kind, 'bad'); delete st.raidMode;
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8'); assert.match(js, /api\.post\('\/api\/raid\/prep', \{ target: tv\.target, now: false \}, \{ timeoutMs: 15000 \}\)/); assert.match(js, /raidReady\(\) \|\| armed\(e\.currentTarget\)/);
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);
