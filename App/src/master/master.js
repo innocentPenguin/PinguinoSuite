@@ -618,7 +618,7 @@
     $('#cu-ctl').className = 'ctl ' + (ui.sim ? 'mine' : holder ? 'other' : mine ? 'mine' : 'free');
     $('#cu-who').textContent = ui.sim ? '🧪 Simulator: fake players, nothing is sent' : holder ? '🎮 In control: ' + holder : mine ? '🎮 In control: you (app)' : '🎮 In control: nobody · any click takes it';
     const q = (c && Array.isArray(c.queue)) ? c.queue : [];
-    ui.dir = C.personDir([q, ui.wdir, c && c.match && c.match._p, c && c.match && c.match.players]);
+    ui.dir = C.personDir([q, ui.wdir, c && c.match && c.match._p, c && c.match && c.match.players, c && c.match && c.match.blueP, c && c.match && c.match.orangeP]);
     $('#cu-badge').textContent = c ? (c.open === true ? 'queue open' : c.open === false ? 'queue closed' : '') + (c.format ? ' · ' + c.format : '') + (c.gameMode && c.gameMode !== 'standard' ? ' · ' + c.gameMode : '') : '';
     $('#cu-act').textContent = c && c.activity && c.activity !== 'none' ? '· ' + c.activity : '';
     $('#cu-qn').textContent = c ? '· ' + q.length + ' waiting' + (c.strikeGame ? ' · ' + (c.strikeGame === 'fn' ? 'Fortnite' : 'Rocket') + ' strikes' : '') : '';
@@ -630,7 +630,7 @@
     const m = c && c.match, live = !!(m && m.status !== 'finished');
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
     const TN = teamsNow(), tv = JSON.stringify([TN, m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(who(n).key), strikesKnown(who(n).key), who(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
-    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(who(n).key.toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
+    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const tagged = m && Array.isArray(m[k + 'P']) && m[k + 'P'].length ? m[k + 'P'] : null, names = tagged || (m && m[k]) || []; names.forEach(n => col.append(playerRow(who(n).key.toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
     renderPop(); renderAsk(); renderTeamsEditor();
     const isFn = !!c && /^(boxfights|zonewars|fnviewers)$/.test(c.activity || ''); $('#cu-rlsz').hidden = isFn; $('#cu-fnsz').hidden = !isFn; $('#cu-fmt').textContent = c && c.format ? '· ' + c.format : '';
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
@@ -645,8 +645,8 @@
     $('#wh-badge').textContent = w ? '· ' + (w.status || '?') : '';
     const kv = [['Entrants', w ? (w.entrantCount ?? (w.names || []).length) : '–'], ['Mode', w ? [w.label || w.mode, w.teamSize ? w.teamSize + 'v' + w.teamSize : ''].filter(Boolean).join(' · ') : '–'], ['Teams', w ? (w.teams || []).length : '–'], ['Waitlist', w ? (w.waitlist || []).length : '–']];
     const box = $('#wh-kv'), sigv = C.sig(kv); if (box._s !== sigv) { box._s = sigv; box.textContent = ''; kv.forEach(([a, b2]) => box.append(h('b', '', a), h('span', '', String(b2)))); }
-    ui.wdir = C.personDir([w && w.names, w && w.pool, w && w.waitlist]);   // lets the Customs side resolve the same people
-    const wp = $('#wh-people'), lists = [['Entrants', w && Array.isArray(w.names) ? w.names : []], ['Waitlist', w && Array.isArray(w.waitlist) ? w.waitlist : []]].filter(l => l[1].length), wsig = C.sig(lists.map(([a, l]) => [a, l.slice(0, 12).map(x => who(x))]));
+    ui.wdir = C.personDir([w && w.names, w && w.pool, w && w.waitlist, w && w.entrantsP, w && w.waitlistP, w && w.picksP]);   // lets the Customs side resolve the same people
+    const wp = $('#wh-people'), lists = [['Entrants', w && Array.isArray(w.entrantsP) && w.entrantsP.length ? w.entrantsP : w && Array.isArray(w.names) ? w.names : []], ['Waitlist', w && Array.isArray(w.waitlistP) && w.waitlistP.length ? w.waitlistP : w && Array.isArray(w.waitlist) ? w.waitlist : []]].filter(l => l[1].length), wsig = C.sig(lists.map(([a, l]) => [a, l.slice(0, 12).map(x => who(x))]));
     if (wp._s !== wsig) { wp._s = wsig; wp.textContent = ''; for (const [a, l] of lists) { const row = h('div', 'wprow'); row.append(h('b', '', a + ': ')); l.slice(0, 12).forEach(x => { const s = h('span', 'wp'); paintWho(s, x); row.append(s); }); if (l.length > 12) row.append(h('span', 'faint', ' +' + (l.length - 12) + ' more')); wp.append(row); } }
   }
 

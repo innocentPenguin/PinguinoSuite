@@ -480,6 +480,14 @@ await t('Raid prep: target check, fired / duplicate / error views, double click 
   const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8'); assert.match(js, /api\.post\('\/api\/raid\/prep', \{ target: tv\.target, now: false \}, \{ timeoutMs: 15000 \}\)/); assert.match(js, /raidReady\(\) \|\| armed\(e\.currentTarget\)/);
 });
 
+await t('tagged Host lists (blueP/orangeP, entrantsP/waitlistP) are used when present and read as name + platform + Epic; the plain lists stay the fallback', () => {
+  const P = [{ username: 'yt:uc1abc', name: 'Tanja', display: 'petar1211', platform: 'youtube' }, { username: 'phil', name: 'Phil_Flock', display: 'Phil_Flock', platform: 'twitch' }];
+  let i = C.personInfo(P[0], C.personDir([P])); assert.deepEqual([i.name, i.tag, i.epic, i.key], ['Tanja', 'YT', 'petar1211', 'yt:uc1abc']);
+  i = C.personInfo(P[1], null); assert.deepEqual([i.name, i.tag, i.epic], ['Phil_Flock', 'T', '']);
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
+  for (const f of ["m[k + 'P']", 'w.entrantsP', 'w.waitlistP', 'c.match.blueP', 'c.match.orangeP', 'w.picksP']) assert.ok(js.includes(f), f);
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);
