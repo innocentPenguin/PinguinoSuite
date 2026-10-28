@@ -315,6 +315,8 @@ public static class Harness
             Msg("Mu3", "!currentsong"); Check("music: !currentsong is !song", Last() != null && Last().Contains("Song X"), Last());
             Msg("Mu4", "!songqueue"); Check("music: !songqueue", Last() != null && Last().StartsWith("Up next") && (string)mbodies[mbodies.Count - 1]["command"] == "queue", Last());
             Msg("Mu5", "!srqueue"); Check("music: !srqueue is !songqueue", Last() != null && Last().StartsWith("Up next"), Last());
+            Msg("Mu6a", "!song queue"); Check("music: !song queue is !songqueue", (string)mbodies[mbodies.Count - 1]["command"] == "queue", Last());
+            Msg("Mu7a", "!vol50", true); Check("music: joined !vol50 = !vol 50", (string)mbodies[mbodies.Count - 1]["command"] == "volume" && (string)mbodies[mbodies.Count - 1]["args"] == "50", Last());
             Msg("Mu6", "!vol"); Check("music: !vol", Last() == "Volume is 60%." && (string)mbodies[mbodies.Count - 1]["command"] == "volume" && (string)mbodies[mbodies.Count - 1]["args"] == "", Last());
             Msg("Mu7", "!volume 30", true); Check("music: a mod's !volume 30 passes the number and the mod role", (string)mbodies[mbodies.Count - 1]["args"] == "30" && (bool)mbodies[mbodies.Count - 1]["isMod"], mbodies[mbodies.Count - 1].ToString());
             Msg("Mu8", "!voteskip"); Check("music: !voteskip is a vote", Last() == "Skip vote 1/2." && (string)mbodies[mbodies.Count - 1]["command"] == "skip", Last());

@@ -779,8 +779,8 @@ public class CPHInline
                 var lcm = Regex.Match(text, @"^!(lobbyname|lobbypass|lobbypassword)(?:\s+(?<v>.*))?$", RegexOptions.IgnoreCase);
                 if (lcm.Success) return LobbyCommand(lcm.Groups[1].Value.ToLower(), lcm.Groups["v"].Value, display);
                 if (RxDiscordCmd.IsMatch(text)) return Respond(login, display, "discord", "");
-                var musm = RxMusicCmd.Match(text); if (_cfg.MusicOn && musm.Success) return MusicCommand(login, display, musm.Groups["c"].Value.ToLowerInvariant(), musm.Groups["a"].Value.Trim());
-                var hpm = Regex.Match(text, @"^!helperpack(?:\s+(?<v>\w+))?\s*$", RegexOptions.IgnoreCase);
+                var musm = RxMusicCmd.Match(Regex.Replace(text, @"^!(vol|volume)(?=[+\-]?\d)", "!$1 ", RegexOptions.IgnoreCase)); if (_cfg.MusicOn && musm.Success) return MusicCommand(login, display, musm.Groups["c"].Value.ToLowerInvariant(), musm.Groups["a"].Value.Trim());
+                var hpm = Regex.Match(text, @"^!helperpack(?:\s*(?<v>\w+))?\s*$", RegexOptions.IgnoreCase);
                 if (hpm.Success) return HelperPackCommand(display, hpm.Groups["v"].Value);
                 var bm = RxBadReg.Match(text);
                 if (bm.Success) return BadRegister(login, display, bm.Groups["a"].Value.Trim());
@@ -1856,6 +1856,7 @@ public class CPHInline
     static readonly Regex RxMusicCmd = new Regex(@"^!(?<c>song|currentsong|np|vol|volume|songqueue|srqueue|voteskip|skip)(?:\s+(?<a>.*))?$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
     bool MusicCommand(string login, string display, string c, string args)
     {
+        if ((c == "song" || c == "currentsong" || c == "np") && Regex.IsMatch(args ?? "", @"^(queue|list|next)\b", RegexOptions.IgnoreCase)) c = "songqueue";   // "!song queue" = "!songqueue"
         string cmd = (c == "song" || c == "currentsong" || c == "np") ? "song" : (c == "vol" || c == "volume") ? "volume" : (c == "songqueue" || c == "srqueue") ? "queue" : "skip";
         long now = Now(), last; string key = login + "|music|" + cmd;
         if (_userCd.TryGetValue(key, out last) && now - last < (cmd == "skip" ? 2 : 5)) return true;   // quiet while it cools down (the chat does not need the same line twice)
