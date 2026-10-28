@@ -17,7 +17,7 @@
 <title>Players Overlay</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap" rel="stylesheet">
 <style>
-  :root { --blue:#2f8cff; --blue2:#0c3b82; --orange:#ff8a1f; --orange2:#8a3a00; --text:#fff; --muted:rgba(255,255,255,.75); }
+  :root { --blue:#8e959f; --blue2:#3a3f47; --orange:#ff8a1f; --orange2:#8a3a00; --text:#fff; --muted:rgba(255,255,255,.75); }
   html, body { margin:0; width:1920px; height:1080px; overflow:hidden; background:transparent;
                font-family:Rubik, Segoe UI, sans-serif; color:var(--text); }
 
@@ -222,6 +222,7 @@
     var t = s && s.teams; if (!t) return;
     [["blue", t.blue], ["orange", t.orange]].forEach(function (p) {
       var c = p[1] && p[1].color; if (!/^#[0-9a-f]{6}$/i.test(c || "")) return;
+      if (p[0] === "blue" && /^#(1e8fff|2f8cff)$/i.test(c)) return;   // the old default blue: keep Grey (a colour picked in the Master View still applies)
       var r = parseInt(c.substr(1, 2), 16), g = parseInt(c.substr(3, 2), 16), b = parseInt(c.substr(5, 2), 16);
       var dark = "#" + [r, g, b].map(function (v) { return ("0" + Math.round(v * 0.45).toString(16)).slice(-2); }).join("");
       document.documentElement.style.setProperty("--" + p[0], c); document.documentElement.style.setProperty("--" + p[0] + "2", dark);
