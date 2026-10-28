@@ -84,7 +84,7 @@ const tick=()=>beep(1500,.03,.16,'square'),chime=()=>{beep(660,.35,.08);setTimeo
 if(sound)addEventListener('click',()=>{try{(actx=actx||new AudioContext()).resume()}catch{}});
 const $=id=>document.getElementById(id);
 // What the pick pill says: the name just picked, or the WHOLE team ('A + B') when this pick completes it.
-function pickText(steps,upto,sizes){const cur=steps[upto-1],mem=steps.slice(0,upto).filter(s=>s.team===cur.team).map(s=>s.name),sz=sizes&&sizes[cur.team];return mem.length>1&&mem.length>=sz?mem.join(' + '):cur.name}
+function pickText(steps,upto,sizes){const cur=steps[upto-1],mem=steps.slice(0,upto).filter(s=>s.team===cur.team).map(s=>s.name),sz=sizes&&sizes[cur.team];return mem.length>1&&mem.length>=sz?mem.map(dn).join(' + '):dn(cur.name)}
 const TAU=Math.PI*2,SPIN=.78; // timed fallback: the first 78% of a pick is the spin. Manual: SPINF of the spin time is movement, the rest shows the landed name
 let SPINF=.66,K=6.5,NM=true;   // K = how long the slow-down tail is (from the Suite setting, or ?tail=0..100); NM = near-miss landing
 const setLook=m=>{let t=q.get('tail')!=null&&q.get('tail')!==''?+q.get('tail'):(m&&m.tail!=null?+m.tail:50);t=Math.max(0,Math.min(100,isFinite(t)?t:50))/100;K=3+t*7;SPINF=.66+.2*t;NM=q.get('nearmiss')!=null?q.get('nearmiss')!=='0':!(m&&m.nearMiss===false)};
@@ -136,7 +136,7 @@ function drawWheel(order,rot){
   if(n===1){ctx.beginPath();ctx.arc(0,0,Rr,0,TAU);ctx.fillStyle=col.bg;ctx.fill()}
   else{ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,Rr,st,st+a);ctx.closePath();ctx.fillStyle=col.bg;ctx.fill();ctx.lineWidth=Math.max(1,s*.005);ctx.strokeStyle=GREY;ctx.stroke()}
   if(text){ctx.save();ctx.rotate(st+a/2);ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillStyle='#ffffff';ctx.lineJoin='round';ctx.strokeStyle='#000';ctx.lineWidth=4*(s/Math.max(1,cv.getBoundingClientRect().width));ctx.font='800 '+Math.max(s*.028,fs)+'px '+fam;
-   let t=order[j];const w0=ctx.measureText(t).width;if(w0>maxW)ctx.font='800 '+Math.max(s*.02,Math.max(s*.028,fs)*maxW/w0)+'px '+fam;
+   let t=dn(order[j]);const w0=ctx.measureText(t).width;if(w0>maxW)ctx.font='800 '+Math.max(s*.02,Math.max(s*.028,fs)*maxW/w0)+'px '+fam;
    while(ctx.measureText(t).width>maxW&&t.length>2)t=t.slice(0,-2)+'\u2026';
    ctx.strokeText(t,Rr*.95,0);ctx.fillText(t,Rr*.95,0);ctx.restore()}
  }
@@ -153,6 +153,22 @@ function planFor(order,name,key){
  const n=order.length,a=TAU/n,k=Math.max(0,order.indexOf(name)),r=rng(hashStr(key)),jr=r(),jit=NM?(jr<.5?-1:1)*(.34+r()*.1):(jr-.5)*.6,turns=5+Math.floor(r()*3);
  return {n,a,k,total:turns*TAU-(k+.5+jit)*a};
 }
+  // Platform people: the Host/bot sends a YouTube / TikTok viewer as a key (yt:uc... / tt:...). Show the viewer's display name instead: /api/customs/state queue[] + match.players[] (name, platform), else the key with its prefix stripped.
+  var HOSTURL = location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770", IDX = {};
+  var PFTAG = { twitch:"TV", youtube:"YT", tiktok:"TT" };
+  function keyPf(k) { k = String(k || "").toLowerCase(); return /^(yt:|youtube[-:])/.test(k) ? "youtube" : /^(tt:|tiktok[-:])/.test(k) ? "tiktok" : "twitch"; }
+  function keyName(k) { return String(k || "").replace(/^(yt|tt|youtube|tiktok)[-:]/i, ""); }
+  function dn(k) { var ix = IDX[String(k || "").toLowerCase()]; return (ix && ix.name) || keyName(k); }
+  function pfOf(k) { var ix = IDX[String(k || "").toLowerCase()], pf = String((ix && ix.platform) || keyPf(k)).toLowerCase(); return PFTAG[pf] ? pf : keyPf(k); }
+  function loadIdx() {
+    fetch(HOSTURL + "/api/customs/state").then(function (r) { return r.json(); }).then(function (j) {
+      var ix = {}; function put(k, name, pf) { if (k) ix[String(k).toLowerCase()] = { name: name, platform: pf }; }
+      ((j && j.queue) || []).forEach(function (q) { put(q.username, q.name, q.platform); });
+      (((j && j.match) || {}).players || []).forEach(function (q) { put(q.username, q.name, q.platform); });
+      IDX = ix;
+    }).catch(function () {});
+  }
+  loadIdx(); setInterval(loadIdx, 5000);
 const IDLE_DELAY=1800,IDLE_V=.045,IDLE_RAMP=2;let idleSince=0;
 const idleRot=ms=>{const t=ms/1000;return t<IDLE_RAMP?IDLE_V*t*t/(2*IDLE_RAMP):IDLE_V*(t-IDLE_RAMP/2)};   // starts from standstill, eases up to a slow turn
 let off=0,w=null,lastKey='',lastCount=-1,lastSlice='',landedFor='',lastDraw='';
@@ -166,7 +182,7 @@ function renderTeams(steps,sizes,fresh,done,partial,pending){
  if(!steps.length&&!pending)return;
  const card=(tm,mem,sz,wip,small,newest)=>{const c=document.createElement('div');c.className='team'+(small?' sm':'')+(wip?' wip':'')+(fresh&&!wip&&!small?' fresh':'');
   const h=document.createElement('h3');h.textContent='Team '+tm;c.append(h);
-  mem.forEach((m,i)=>{const x=document.createElement('div');x.textContent=m;if(newest&&i===mem.length-1)x.className='new';c.append(x)});
+  mem.forEach((m,i)=>{const x=document.createElement('div');x.textContent=dn(m);if(newest&&i===mem.length-1)x.className='new';c.append(x)});
   for(let k=mem.length;k<sz;k++){const x=document.createElement('div');if(pending&&k===mem.length){x.className='spinning';x.textContent='???'}else{x.className='empty';x.textContent='?'}c.append(x)}
   c.style.setProperty('--rows',Math.max(2,sz||mem.length));
   return c};
@@ -216,8 +232,8 @@ function paintManual(now){
   }
  }else{
   pick.hidden=true;
-  fin.textContent=(w.teams||[]).map(x=>x.members.join(' & ')).join('  |  ');
-  wait.textContent=(w.waitlist||[]).length?'Waitlist: '+w.waitlist.join(', '):'';
+  fin.textContent=(w.teams||[]).map(x=>x.members.map(dn).join(' & ')).join('  |  ');
+  wait.textContent=(w.waitlist||[]).length?'Waitlist: '+w.waitlist.map(dn).join(', '):'';
  }
  // cards: the pick joins its team once the wheel has landed on it
  // cards: ONE team at a time (the team of the latest pick: it builds up, shows complete, then the next team starts); at the end every team is listed
@@ -244,7 +260,7 @@ function paintAuto(now){
  $('final').textContent='';
  const step=dur||d.stepMs,len=d.steps.length,t=now-d.startedAt,done=t>=len*step;
  let count;
- if(done){count=len;wb.classList.add('off');pick.hidden=true;big.textContent='';wait.textContent=(w.waitlist||[]).length?'Waitlist: '+w.waitlist.join(', '):''}
+ if(done){count=len;wb.classList.add('off');pick.hidden=true;big.textContent='';wait.textContent=(w.waitlist||[]).length?'Waitlist: '+w.waitlist.map(dn).join(', '):''}
  else{
   const i=Math.min(len-1,Math.max(0,Math.floor(t/step))),ph=t<0?0:Math.min(1,(t-i*step)/step),landed=ph>=SPIN,p=planAuto(d,i);
   wb.classList.remove('off');wait.textContent='';big.textContent=t<0?'Get ready...':'';
@@ -279,7 +295,7 @@ poll();paint();
 const box=document.createElement('div');box.style.cssText='position:fixed;left:8px;top:8px;font:600 13px system-ui,Segoe UI,Arial,sans-serif;color:#fff;opacity:.85;pointer-events:none;z-index:9';document.body.appendChild(box);
 async function tick(){try{const j=await (await fetch('/api/wheel/public',{cache:'no-store'})).json(),now=Date.now(),ms=j.feedMs||2000;
  box.textContent='';if(j.showSignedUp!==false&&j.signedUp){const s=document.createElement('div');s.textContent=j.signedUp+' signed up';box.append(s)}
- for(const f of (j.feed||[])){if(now-f.at>ms)continue;const d=document.createElement('div');d.style.cssText='margin-top:3px;font-size:12px;opacity:.9';d.textContent=(f.kind==='leave'?'- ':'+ ')+f.name;box.append(d)}}catch(e){}
+ for(const f of (j.feed||[])){if(now-f.at>ms)continue;const d=document.createElement('div');d.style.cssText='margin-top:3px;font-size:12px;opacity:.9';d.textContent=(f.kind==='leave'?'- ':'+ ')+dn(f.name);box.append(d)}}catch(e){}
  setTimeout(tick,500)}tick()})();</script>
 <script src="overlay-options.js"></script>
 </body></html>

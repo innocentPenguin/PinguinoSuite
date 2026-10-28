@@ -109,6 +109,7 @@
   @keyframes shine { to { left:130%; } } @keyframes twinkle { 0%,100% { opacity:0; transform:scale(.5); } 50% { opacity:1; transform:scale(1.15); } }
 /* ?part=list: the queue card only (never the idle leaderboards) | ?part=idle: the idle leaderboards only (never the queue card) */
 .part-list #idle{display:none!important}.part-idle #card{display:none!important}
+  .pf { flex:none; align-self:center; font-size:.55em; font-weight:800; line-height:1; letter-spacing:.06em; padding:.28em .42em; margin-right:.5em; border-radius:.45em; background:rgba(20,16,12,.78); color:#ff9d3c; box-shadow:inset 0 0 0 .08em rgba(255,157,60,.55); }
 </style><script>(function(){var p=(new URLSearchParams(location.search).get("part")||"").replace(/[^a-z]/g,"");if(p)document.documentElement.classList.add("part-"+p)})();</script>
 </head>
 <body>
@@ -149,6 +150,22 @@
               koth:"King of the Hill", boxfights:"Fortnite Boxfights", zonewars:"Fortnite Zone Wars", fnviewers:"Fortnite: Playing with Viewers" };
   var MODE = { dropshot:"Dropshot", rumble:"Rumble" };
 
+  // Platform people: the Host/bot sends a YouTube / TikTok viewer as a key (yt:uc... / tt:...). Show the viewer's display name instead: /api/customs/state queue[] + match.players[] (name, platform), else the key with its prefix stripped.
+  var HOSTURL = location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770", IDX = {};
+  var PFTAG = { twitch:"TV", youtube:"YT", tiktok:"TT" };
+  function keyPf(k) { k = String(k || "").toLowerCase(); return /^(yt:|youtube[-:])/.test(k) ? "youtube" : /^(tt:|tiktok[-:])/.test(k) ? "tiktok" : "twitch"; }
+  function keyName(k) { return String(k || "").replace(/^(yt|tt|youtube|tiktok)[-:]/i, ""); }
+  function dn(k) { var ix = IDX[String(k || "").toLowerCase()]; return (ix && ix.name) || keyName(k); }
+  function pfOf(k) { var ix = IDX[String(k || "").toLowerCase()], pf = String((ix && ix.platform) || keyPf(k)).toLowerCase(); return PFTAG[pf] ? pf : keyPf(k); }
+  function loadIdx() {
+    fetch(HOSTURL + "/api/customs/state").then(function (r) { return r.json(); }).then(function (j) {
+      var ix = {}; function put(k, name, pf) { if (k) ix[String(k).toLowerCase()] = { name: name, platform: pf }; }
+      ((j && j.queue) || []).forEach(function (q) { put(q.username, q.name, q.platform); });
+      (((j && j.match) || {}).players || []).forEach(function (q) { put(q.username, q.name, q.platform); });
+      IDX = ix;
+    }).catch(function () {});
+  }
+  loadIdx(); setInterval(loadIdx, 5000);
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
 
   // Is the players overlay (teams / in-game group) on screen? During a match, and for a while after the result.
@@ -198,7 +215,7 @@
       else cls = "streamer";
       if (cls === "next") tag = '<span class="tag next">NEXT</span>'; else if (cls === "backup") tag = '<span class="tag backup">BACKUP</span>';
       else if (isStreamer) tag = '<span class="tag you">STREAMER</span>';
-      return '<li class="' + cls + '"><span class="pos">#' + e.pos + '</span><span class="name">' + esc(e.user) + '</span>' +
+      return '<li class="' + cls + '"><span class="pos">#' + e.pos + '</span><span class="pf pf-' + pfOf(e.user) + '">' + PFTAG[pfOf(e.user)] + '</span><span class="name">' + esc(dn(e.user)) + '</span>' +
              (e.mmr != null ? '<span class="rating" title="' + (fn ? "SR" : "MMR") + '">' + e.mmr + '</span>' : '') +
              (e.epic ? '<span class="epic">' + esc(e.epic) + '</span>' : '') + tag + '</li>';
     }).join("");
