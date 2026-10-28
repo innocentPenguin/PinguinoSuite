@@ -195,9 +195,10 @@ namespace PinguinoHost
                 var body = new JObject { { "type", s[0] }, { "version", s[1] }, { "condition", cond }, { "transport", new JObject { { "method", "websocket" }, { "session_id", session } } } };
                 var resp = await http.PostAsync(HostApi.Helix + "/eventsub/subscriptions", new StringContent(body.ToString(), Encoding.UTF8, "application/json"));
                 if ((int)resp.StatusCode == 409) continue;   // 409 = this subscription already exists on the session: that is what we wanted, not a refusal
-                if (!resp.IsSuccessStatusCode) { if (s.Length < 4) HostApi.EventSubRefused++; Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes"); Clog.Warn("eventsub", "subscription " + s[0] + " refused (HTTP " + (int)resp.StatusCode + (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : ", check token scopes") + ")"); }
+                if (!resp.IsSuccessStatusCode) { if (s.Length < 4) HostApi.EventSubRefused++; Console.WriteLine("EventSub " + s[0] + " refused (" + (int)resp.StatusCode + "); check token scopes"); Clog.Warn("eventsub", "subscription " + s[0] + " refused (HTTP " + (int)resp.StatusCode + (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized ? ", token rejected - sign in again" : ", check token scopes") + ")" + Body(resp)); }
             }
         }
+        static string Body(HttpResponseMessage r) { try { string b = r.Content.ReadAsStringAsync().Result ?? ""; b = b.Replace("\r", " ").Replace("\n", " "); return b == "" ? "" : ": " + (b.Length > 300 ? b.Substring(0, 300) : b); } catch (Exception) { return ""; } }
         static string _bid = "";
         /// <summary>sim mode: "eventsub channel.poll.end {json event}" runs the same mapping as a real EventSub notification</summary>
         public static void Simulate(string type, string json, Action<Dictionary<string, object>> raise)
