@@ -40,7 +40,7 @@ public static class Harness
     }
 
     static string Last() { return CPHProxy.Sent.Count == 0 ? null : string.Join(" ", CPHProxy.Sent); }
-    static bool TwoLines() { return CPHProxy.Sent.Count <= 2 && CPHProxy.Sent.All(x => x.Length <= 160); }
+    static bool TwoLines() { return CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].StartsWith("@") && CPHProxy.Sent[0].Length <= 450; }   // one message, starts with @name
     static bool Forwarded() { return CPHProxy.Runs.Any(r => (string)r["_action"] == "PinguinoChat"); }
     static Dictionary<string, object> CoreRun() { return CPHProxy.Runs.FirstOrDefault(r => (string)r["_action"] == "PinguinoBot"); }
 
@@ -313,19 +313,19 @@ public static class Harness
             Check("music: !song asked the module for song as the viewer", mbodies.Count == 1 && (string)mbodies[0]["command"] == "song" && (string)mbodies[0]["user"] == "mu1", mbodies.Count + "");
             Msg("Mu2", "!np"); Check("music: !np is !song", Last() != null && Last().Contains("Song X") && (string)mbodies[mbodies.Count - 1]["command"] == "song", Last());
             Msg("Mu3", "!currentsong"); Check("music: !currentsong is !song", Last() != null && Last().Contains("Song X"), Last());
-            Msg("Mu4", "!songqueue"); Check("music: !songqueue", Last() != null && Last().StartsWith("Up next") && (string)mbodies[mbodies.Count - 1]["command"] == "queue", Last());
-            Msg("Mu5", "!srqueue"); Check("music: !srqueue is !songqueue", Last() != null && Last().StartsWith("Up next"), Last());
+            Msg("Mu4", "!songqueue"); Check("music: !songqueue", Last() != null && Last().Contains("Up next") && (string)mbodies[mbodies.Count - 1]["command"] == "queue", Last());
+            Msg("Mu5", "!srqueue"); Check("music: !srqueue is !songqueue", Last() != null && Last().Contains("Up next"), Last());
             Msg("Mu6a", "!song queue"); Check("music: !song queue is !songqueue", (string)mbodies[mbodies.Count - 1]["command"] == "queue", Last());
             Msg("Mu7a", "!vol50", true); Check("music: joined !vol50 = !vol 50", (string)mbodies[mbodies.Count - 1]["command"] == "volume" && (string)mbodies[mbodies.Count - 1]["args"] == "50", Last());
-            Msg("Mu6", "!vol"); Check("music: !vol", Last() == "Volume is 60%." && (string)mbodies[mbodies.Count - 1]["command"] == "volume" && (string)mbodies[mbodies.Count - 1]["args"] == "", Last());
+            Msg("Mu6", "!vol"); Check("music: !vol", Last().EndsWith("Volume is 60%.") && (string)mbodies[mbodies.Count - 1]["command"] == "volume" && (string)mbodies[mbodies.Count - 1]["args"] == "", Last());
             Msg("Mu7", "!volume 30", true); Check("music: a mod's !volume 30 passes the number and the mod role", (string)mbodies[mbodies.Count - 1]["args"] == "30" && (bool)mbodies[mbodies.Count - 1]["isMod"], mbodies[mbodies.Count - 1].ToString());
-            Msg("Mu8", "!voteskip"); Check("music: !voteskip is a vote", Last() == "Skip vote 1/2." && (string)mbodies[mbodies.Count - 1]["command"] == "skip", Last());
-            Msg("Mu9", "!skip"); Check("music: !skip is the same vote for a viewer", Last() == "Skip vote 1/2." && (string)mbodies[mbodies.Count - 1]["command"] == "skip", Last());
+            Msg("Mu8", "!voteskip"); Check("music: !voteskip is a vote", Last().EndsWith("Skip vote 1/2.") && (string)mbodies[mbodies.Count - 1]["command"] == "skip", Last());
+            Msg("Mu9", "!skip"); Check("music: !skip is the same vote for a viewer", Last().EndsWith("Skip vote 1/2.") && (string)mbodies[mbodies.Count - 1]["command"] == "skip", Last());
             Msg("Mu10", "!skip", true); var skb = mbodies[mbodies.Count - 1];
             Check("music: a mod's !skip is only a vote (no mod rights sent, no hard skip)", (string)skb["command"] == "skip" && !(bool)skb["isMod"] && (string)skb["role"] == "viewer", skb.ToString());
             Check("music: the vote carries the chatters counted lately and the votes needed", skb["activeChatters"] != null && (int)skb["skipNeed"] >= 2 && (int)skb["skipNeed"] <= (int)skb["activeChatters"], skb.ToString());
             int before = mbodies.Count; Msg("Mu10", "!skip", true); Check("music: the same viewer typing it again at once is ignored (no second line)", Last() == null && mbodies.Count == before, Last());
-            modSay = "line one" + "\n" + "line two"; Msg("Mu11", "!song"); Check("music: a multi-line module answer becomes ONE line", Last() == "line one line two", Last());
+            modSay = "line one" + "\n" + "line two"; Msg("Mu11", "!song"); Check("music: a multi-line module answer becomes ONE line", Last().EndsWith("line one line two"), Last());
             modSay = ""; Msg("Mu12", "!song"); Check("music: module replies off -> nothing said, nobody else answers", Last() == null && !Forwarded(), Last());
             modSay = null; modDown = true; Msg("Mu13", "!song"); Check("music: module not running -> one plain line", Last() != null && Last().Contains("music player") && Last().IndexOf('\n') < 0, Last());
             modDown = false; before = mbodies.Count; Msg("Mu14", "!songs"); Check("music: !songs (not a music command) is not sent to the module", mbodies.Count == before, Last());
@@ -335,12 +335,12 @@ public static class Harness
             Check("youtube: no Twitch dup record, no tag", !CPHProxy.Globals.ContainsKey("pinguino.said.recent") && !Last().StartsWith("["), Last());
             before = mbodies.Count; Msg("yt:Zed", "!skip"); Check("youtube: skip votes are refused, the module is not asked", Last() != null && Last().Contains("Twitch chat only") && mbodies.Count == before, Last());
             Msg("yt:Zed2", "how do I join?"); Check("youtube: join answer (category aware) comes through", Last() != null && Last().StartsWith("@") && Last().Contains("!register"), Last());
-            Check("youtube: the one registration wording, one message", CPHProxy.Sent.Count == 1 && Last() == "@yt:Zed2 Type !register <YourEpicName> once, then !join.", Last());
+            Check("youtube: the one registration wording, one message", CPHProxy.Sent.Count == 1 && Last() == "@Zed2 Type !register <YourEpicName> once, then !join.", Last());
             Msg("yt:Zed4", "how do i register?"); Check("youtube: how register = same line", CPHProxy.Sent.Count == 1 && Last().EndsWith("Type !register <YourEpicName> once, then !join."), Last());
             Msg("yt:Zed5", "whats the code"); Check("youtube: lobby answer is one line with the one wording", CPHProxy.Sent.Count == 1 && Last().Contains("Name: ") && Last().Contains("Type !register <YourEpicName> once, then !join."), Last());
             Msg("yt:Zed6", "how do i join innoce108Wave"); Check("youtube: no Twitch emote tokens", CPHProxy.Sent.Count <= 1 && !(Last() ?? "").Contains("innoce108"), Last());
             plat = "twitch"; Msg("Zed3", "!song"); Check("twitch (platform arg set): dup record kept as before", CPHProxy.Globals.ContainsKey("pinguino.said.recent"), Last());
-            before = mbodies.Count; Msg("Zed3", "!skip"); Check("twitch: skip vote unchanged", Last() == "Skip vote 1/2." && mbodies.Count == before + 1, Last());
+            before = mbodies.Count; Msg("Zed3", "!skip"); Check("twitch: skip vote unchanged", Last().EndsWith("Skip vote 1/2.") && mbodies.Count == before + 1, Last());
             plat = null;
         }
         Msg("M1", "what's my mmr"); Check("MMR question points at !mmr", Last() != null && Last().Contains("!mmr"), Last());

@@ -714,7 +714,7 @@ public class CPHInline
         if (!_cfg.Enabled) return false;
         string text = ArgS("message");
         string login = (ArgS("userName") != "" ? ArgS("userName") : ArgS("user")).ToLower().Trim();
-        string display = ArgS("user") != "" ? ArgS("user") : login;
+        string display = Regex.Replace(ArgS("user") != "" ? ArgS("user") : login, @"^(yt|tt):", "", RegexOptions.IgnoreCase);   // the name shown in chat, never the yt:/tt: key
         if (text == "" || login == "") return false;
         if (login == (_cfg.BotAccount ?? "").ToLower() || PgIsBotAccount(login) || IsOtherBot(login)) return false;
         _curLogin = login; _curDisplay = display; _curText = text;
@@ -1892,7 +1892,7 @@ public class CPHInline
         }
         if (say.Length > 220) say = say.Substring(0, 217).TrimEnd() + "...";
         _revIntent = "music_" + cmd;
-        Say(say); return true;
+        Say(say.StartsWith("@") ? say : "@" + display + " " + say); return true;
     }
 
     // what is playing right now, from the Spotify module on this PC
@@ -2029,42 +2029,27 @@ public class CPHInline
     }
 
     // The helper speaks as HelperPinguino (through its fallback while it has no account of its own) and the viewer stays "in conversation" with it for a while.
-    // Ivan 10-26: nothing over two chat lines. A long reply goes out as at most two messages, cut at a sentence / step boundary; links are never cut.
-    static List<string> SplitLong(string m)
+    // Ivan 10-27: every reply is ONE message on every platform. Only a reply over the platform limit (Twitch 450 here, chat-ins 190) is split, at a word, and that is the exception.
+    static List<string> ChunkAt(string m, int limit)
     {
-        var one = new List<string> { m };
-        if (m == null || m.Length <= 150 || m.Contains("http")) return one;
-        string pat = @"(?<=[.!?;:])\s+(?=\S)|\s+(?=\d\)\s)";
-        int best = -1, bestScore = int.MaxValue;
-        foreach (Match x in Regex.Matches(m, pat))
+        var res = new List<string>();
+        m = (m ?? "").Trim();
+        while (m.Length > limit)
         {
-            int a = x.Index, b = m.Length - x.Index;
-            if (a < 40) continue;
-            int score = (a > 150 ? (a - 150) * 4 : 0) + (b > 150 ? (b - 150) * 2 : 0) + Math.Abs(a - b) / 8;
-            if (score < bestScore) { bestScore = score; best = x.Index; }
+            int sp = m.LastIndexOf(' ', limit - 1);
+            if (sp < limit / 2) sp = limit;
+            res.Add(m.Substring(0, sp).TrimEnd());
+            m = m.Substring(sp).TrimStart();
         }
-        if (best < 0) return one;
-        string p1 = m.Substring(0, best).TrimEnd(), p2 = m.Substring(best).TrimStart();
-        if (p2.Length > 150)
-        {
-            int lastCut = -1;
-            foreach (Match x in Regex.Matches(p2, pat)) if (x.Index <= 150) lastCut = x.Index;
-            if (lastCut > 0) p2 = p2.Substring(0, lastCut).TrimEnd();
-        }
-        return new List<string> { p1, p2 };
+        if (m.Length > 0) res.Add(m);
+        return res;
     }
 
     void Say(string msg)
     {
-        if (PgPlatform() != "twitch")
-        {   // chat-in viewers (yt:/tt:): no Twitch emote tokens and exactly one line (YouTube 403s a second line within about a second)
-            msg = Regex.Replace(msg ?? "", @"\binnoce108\w*\*?", "").Replace("  ", " ").Trim();
-            msg = SplitLong(msg)[0];
-            if (msg.Length > 190) { int sp = msg.LastIndexOf(' ', 187); msg = msg.Substring(0, sp > 60 ? sp : 187).TrimEnd() + "..."; }
-            if (msg.Length > 0) { _said.Add(msg); PgSay("helper", msg); }
-        }
-        else
-        foreach (string part in SplitLong(msg)) { _said.Add(part); PgSay("helper", part); }
+        bool tw = PgPlatform() == "twitch";
+        if (!tw) msg = Regex.Replace(msg ?? "", @"\binnoce108\w*\*?", "").Replace("  ", " ").Trim();   // chat-in viewers (yt:/tt:) never see Twitch emote tokens
+        foreach (string part in ChunkAt(msg, tw ? 450 : 190)) { _said.Add(part); PgSay("helper", part); }
         PgSetHelperContext(_curLogin);
     }
 }
