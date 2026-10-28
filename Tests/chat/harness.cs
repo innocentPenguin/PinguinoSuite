@@ -207,8 +207,8 @@ public static class Harness
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
         nextReply = "{\"reply\":\"" + string.Concat(Enumerable.Repeat("This is a full sentence about the game. ", 25)).Trim() + "\",\"remember\":[]}";
         Msg("Clean3b", "@pinguinob0t explain everything");
-        Check("an answer longer than Twitch allows is split at sentence ends", CPHProxy.Sent.Count == 3 || CPHProxy.Sent.Count == 2, CPHProxy.Sent.Count.ToString());
-        Check("every part fits Twitch", CPHProxy.Sent.All(m => m.Length <= 450), string.Join(",", CPHProxy.Sent.Select(m => m.Length)));
+        Check("a reply over the limit is still ONE message, cut at a sentence end", CPHProxy.Sent.Count == 1 && Last().EndsWith("."), CPHProxy.Sent.Count.ToString());
+        Check("the message fits Twitch (500)", CPHProxy.Sent.All(m => m.Length <= 500), string.Join(",", CPHProxy.Sent.Select(m => m.Length)));
         nextReply = "{\"skip\":true}";
         CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Clean4", "@pinguinob0t skip");
         Check("skip sends nothing", Last() == null);
@@ -1409,7 +1409,7 @@ public static class Harness
             long ts2 = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             Extra.Clear(); Extra["platform"] = "youtube"; CPHProxy.Globals["pinguino.points.yt:ytguy"] = "42|3|50|" + ts2;
             _cannedReset(false); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("yt:ytguy", "!points", null, false);
-            Check("youtube: !points answered once through SendMessage", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@yt:ytguy you have 42 points (#3 of 50)", string.Join("|", CPHProxy.Sent));
+            Check("youtube: !points answered once through SendMessage", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@ytguy you have 42 points (#3 of 50)", string.Join("|", CPHProxy.Sent));
             Check("youtube: nothing recorded in the Twitch dup record", !CPHProxy.Globals.ContainsKey("pinguino.said.recent") || ((string)CPHProxy.Globals["pinguino.said.recent"] ?? "") == "");
             Extra.Clear(); CPHProxy.Globals["pinguino.points.twguy"] = "42|3|50|" + ts2;
             _cannedReset(false); CPHProxy.Sent.Clear(); Msg("twguy", "!points", null, false);
@@ -1419,14 +1419,14 @@ public static class Harness
             Check("youtube: an AI reply is sent once, no Twitch dup record", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Contains("hello from the penguin") && !CPHProxy.Globals.ContainsKey("pinguino.said.recent"), string.Join("|", CPHProxy.Sent));
             Extra["platform"] = "youtube"; nextReply = "{\"reply\":\"Hi Freestyleteamfrost innoce108Hello welcome innoce108Love\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
             Msg("yt:emoter", "@ChattyPinguino hey there what's up", null, false);
-            Check("youtube: no Twitch emote tokens, one line, carries the @name", CPHProxy.Sent.Count == 1 && !CPHProxy.Sent[0].ToLower().Contains("innoce108") && CPHProxy.Sent[0].StartsWith("@yt:emoter ") && !CPHProxy.Sent[0].Contains(string.Empty + (char)10), string.Join("|", CPHProxy.Sent));
+            Check("youtube: no Twitch emote tokens, one line, carries the @name", CPHProxy.Sent.Count == 1 && !CPHProxy.Sent[0].ToLower().Contains("innoce108") && CPHProxy.Sent[0].StartsWith("@emoter ") && !CPHProxy.Sent[0].Contains(string.Empty + (char)10), string.Join("|", CPHProxy.Sent));
             nextReply = "{\"reply\":\"" + string.Join(" ", Enumerable.Repeat("This is a long sentence about penguins.", 20)) + "\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
             Msg("yt:longy", "@ChattyPinguino tell me everything about penguins please", null, false);
-            Check("youtube: a long reply is still ONE line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Length <= 440, string.Join("|", CPHProxy.Sent.Select(x => x.Length.ToString())));
+            Check("youtube: a long reply is still ONE line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Length <= 500, string.Join("|", CPHProxy.Sent.Select(x => x.Length.ToString())));
             File.WriteAllText(Path.Combine(dir, "live_state.json"), "{\"activity\":\"competitive\",\"queueOpen\":true,\"queue\":[],\"obs\":{\"twitchGame\":\"Rocket League\"},\"currentMatch\":null}");
             nextReply = "{\"reply\":\"Sure! Register with !register YourEpicName then join the queue when it opens\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
             Msg("yt:joiner", "@ChattyPinguino can i play with you lol", null, false);
-            Check("youtube: the registration instruction is exactly the one line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@yt:joiner Type !register <YourEpicName> once, then !join.", string.Join("|", CPHProxy.Sent));
+            Check("youtube: the registration instruction is exactly the one line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@joiner Type !register <YourEpicName> once, then !join.", string.Join("|", CPHProxy.Sent));
             Extra["platform"] = "twitch"; nextReply = "{\"reply\":\"you can sign up with !register and your epic name, easy\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
             Msg("twreg", "@ChattyPinguino what do i type to sign up", null, false);
             Check("twitch: an AI reply with registration wording is replaced by the exact line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@twreg Type !register <YourEpicName> once, then !join.", string.Join("|", CPHProxy.Sent));

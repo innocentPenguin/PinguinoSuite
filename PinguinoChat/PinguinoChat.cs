@@ -254,6 +254,8 @@ public class CPHInline
     }
     // The platform the message being answered came from ("twitch" or another, e.g. "youtube"): set on every thread that answers (Handle, Respond, delayed threads).
     [ThreadStatic] static string _pgPlatform;
+    // viewers from other platforms are "yt:<name>" / "tt:<name>" keys: the name a viewer is addressed by never carries the key prefix
+    static string PlainName(string n) { return Regex.Replace(n ?? "", @"^(yt|tt|tw):", "", RegexOptions.IgnoreCase); }
     string PgPlatformNow() { try { if (_pgPlatform != null) return _pgPlatform; object o; return CPH.TryGetArg("platform", out o) && o != null ? Convert.ToString(o) : ""; } catch (Exception) { return ""; } }
     bool PgOffTwitch() { string pf = PgPlatformNow(); return pf != "" && pf != "twitch"; }
     // Twitch emote tokens (this channel's innoce108* set) mean nothing on YouTube / TikTok: they would show as plain text there
@@ -1170,7 +1172,7 @@ public class CPHInline
         if (SeenMessage()) return;                                   // the same chat message delivered twice (a replayed trigger): handled once
         var cx = new Ctx
         {
-            Login = login, Display = string.IsNullOrEmpty(display) ? login : display, UserId = userId ?? "", Text = text, MsgId = ArgMsgId(), Platform = _pgPlatform ?? "",
+            Login = login, Display = PlainName(string.IsNullOrEmpty(display) ? login : display), UserId = userId ?? "", Text = text, MsgId = ArgMsgId(), Platform = _pgPlatform ?? "",
             Mod = isMod || role >= 3, Broadcaster = isCaster || role >= 4, Sub = isSub, Vip = isVip, FirstMessage = first
         };
 
@@ -3336,25 +3338,23 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     {
         if (!c.Random && !PaceTurn()) { Miss(c.Login); return; }
         if (!c.Random) lock (_lock) { NoteReply(c.Login); }
-        bool off = PgOffTwitch();   // YouTube / TikTok: always "@name ", ONE line (a second line within about a second gets a 403), no Twitch emotes
+        bool off = PgOffTwitch();   // YouTube / TikTok: always "@name ", no Twitch emotes
         if (off) reply = StripChannelEmotes(reply);
         string prefix = c.Random && !off ? "" : "@" + c.Display + " ";
-        int limit = 440 - prefix.Length;
-        var parts = new List<string>();
-        string rest = reply ?? "";
-        if (off && rest.Length > limit) { int oc = -1; foreach (Match m in Regex.Matches(rest.Substring(0, limit), @"[.!?](\s|$)")) oc = m.Index + 1; if (oc < limit / 3) oc = rest.LastIndexOf(' ', limit - 1); if (oc < limit / 3) oc = limit; rest = rest.Substring(0, oc).Trim(); }
-        while (rest.Length > limit && parts.Count < 2)
+        // ONE message on every platform (Ivan 10-27: no second lines, they fail). Anything the reply says is merged into this one line; only a reply that is
+        // truly over the 500 character limit is cut, at a sentence end where there is one, and the rest is dropped rather than sent as a second message.
+        int limit = 500 - prefix.Length;
+        string rest = Regex.Replace(reply ?? "", @"\s+", " ").Trim();
+        if (rest.Length > limit)
         {
-            int cut = -1;
-            foreach (Match m in Regex.Matches(rest.Substring(0, limit), @"[.!?](\s|$)")) cut = m.Index + 1;
+            int cut = -1; foreach (Match m in Regex.Matches(rest.Substring(0, limit), @"[.!?](\s|$)")) cut = m.Index + 1;
             if (cut < limit / 3) cut = rest.LastIndexOf(' ', limit - 1);
             if (cut < limit / 3) cut = limit;
-            parts.Add(rest.Substring(0, cut).Trim());
-            rest = rest.Substring(cut).Trim();
+            rest = rest.Substring(0, cut).Trim();
         }
-        if (rest.Length > 0) parts.Add(rest.Length > limit ? rest.Substring(0, limit) : rest);
+        if (rest.Length == 0) return;
         using (PgReplyTo(c.MsgId ?? "", c.Login))   // pinned here: PaceTurn above can sleep for seconds while the Host refills the shared args with the next chat message
-            for (int i = 0; i < parts.Count; i++) PgSay("chat", (i == 0 ? prefix : "") + parts[i]);
+            PgSay("chat", prefix + rest);
     }
 
     // Mods: !chatbot status
