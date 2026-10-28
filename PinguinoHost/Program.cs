@@ -453,6 +453,7 @@ namespace PinguinoHost
             ChatStats.Note(m.Groups["nick"].Value, T("badges").Contains("broadcaster/") ? 4 : T("mod") == "1" ? 3 : T("badges").Contains("vip/") ? 2 : 1);
             string msg = m.Groups["msg"].Value; if (msg.StartsWith("\u0001ACTION ")) msg = msg.Substring(8).TrimEnd('\u0001');
             int role = T("badges").Contains("broadcaster/") ? 4 : T("mod") == "1" ? 3 : T("badges").Contains("vip/") ? 2 : 1;
+            if (Lease.MayRun) { try { Auto.OnChatSignal(m.Groups["nick"].Value, msg); } catch (Exception) { } }   // the raid-picked signal (Sery_Bot's goodbye line)
             string display = T("display-name") != "" ? T("display-name") : m.Groups["nick"].Value;
             string reply = T("reply-parent-user-login");
             Task.Run(() => Dispatch(display, msg, T("id"), role, T("user-id"), T("first-msg") == "1", reply, T("subscriber") == "1", Intro.TierFromBadges(T("badges")), "twitch", T("color"), T("badges")));

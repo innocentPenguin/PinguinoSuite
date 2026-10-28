@@ -287,7 +287,7 @@ namespace PinguinoHost
             Fire(kind, ctx);
         }
         static int RaidDelaySec() { return RaidDelayOverrideSec >= 0 ? RaidDelayOverrideSec : (int)Math.Max(0, Math.Min(88, (int?)Latest.Settings()["RaidStartDelaySec"] ?? 80)); }
-        static System.Threading.Timer _raidOutTimer, _watchTimer; static DateTime _raidOutAt = DateTime.MinValue, _landedAt = DateTime.MinValue; internal static int RaidOutFires; internal static int ChatWatchSec = 4;
+        static System.Threading.Timer _raidOutTimer, _watchTimer; static DateTime _raidOutAt = DateTime.MinValue, _landedAt = DateTime.MinValue; internal static int RaidOutFires; internal static int ChatWatchSec = 4; internal static int RaidLandGraceSec = 4;
         /// <summary>chatters in the channel right now (Helix), null = not known.</summary>
         internal static Func<int?> ChatterCount = () =>
         {
@@ -305,6 +305,15 @@ namespace PinguinoHost
         static void ScheduleRaidOut(Dictionary<string, string> ctx)
         {
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidOutAt).TotalMinutes < 3) return; _raidOutAt = DateTime.UtcNow; _landedAt = DateTime.MinValue; }
+            // 10-28: Twitch sends channel.raid when the raid EXECUTES (Raid Now / countdown over), 48-137 s after the raid was picked; the stream goes offline ~20 s later. So the event IS the landing:
+            // by default the goodnight + StopStream go out a few seconds after it (after the emotes + Discord lines). RaidStartDelaySec in latest_settings.json (or the test override) keeps the old chat-watch / countdown timing.
+            if (RaidDelayOverrideSec < 0 && Latest.Settings()["RaidStartDelaySec"] == null)
+            {
+                double since; lock (typeof(Auto)) since = (DateTime.UtcNow - _raidStartAt).TotalSeconds;
+                int wait = (int)Math.Max(1, Math.Ceiling(RaidLandGraceSec - since));
+                lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => LandRaid(ctx, "the raid event: Twitch moved the viewers"), null, wait * 1000, System.Threading.Timeout.Infinite); }
+                return;
+            }
             int delay = RaidDelaySec() + (RaidDelayOverrideSec >= 0 ? 0 : 10); if (delay == 0) { LandRaid(ctx, "no delay"); return; }
             lock (typeof(Auto)) { if (_raidOutTimer != null) _raidOutTimer.Dispose(); _raidOutTimer = new System.Threading.Timer(_ => LandRaid(ctx, "Twitch's countdown ran out"), null, delay * 1000, System.Threading.Timeout.Infinite); }
             StartChatWatch(ctx, delay);
@@ -388,11 +397,22 @@ namespace PinguinoHost
         /// <summary>Fires raid_start ("prepare your emotes") once per raid: !confirm raid (the countdown began), the Master View Raid prep button, or the outgoing channel.raid event when the raid was started on twitch.tv (Twitch only tells us when it goes). Returns false when it already fired in the last 3 minutes.</summary>
         public static bool OnRaidScheduled(string target, bool now = false)
         {
+            if (Regex.IsMatch(target ?? "", "^[A-Za-z0-9_]{1,25}$")) { try { SetVar("raid.target", target.ToLowerInvariant(), true); } catch (Exception) { } }   // also when the line already went out (Sery's signal has no target; the channel.raid event brings it)
             lock (typeof(Auto)) { if ((DateTime.UtcNow - _raidStartAt).TotalMinutes < 3) return false; _raidStartAt = DateTime.UtcNow; }
             // Ivan, like Streamer.bot had it: the moment the raid is picked (Twitch's countdown starts) the shoutout, the emotes line and the Discord line go out at once; no hold any more
             lock (typeof(Auto)) { _raidPendingAt = DateTime.UtcNow; }
-            if (Regex.IsMatch(target ?? "", "^[A-Za-z0-9_]{1,25}$")) { try { SetVar("raid.target", target.ToLowerInvariant(), true); } catch (Exception) { } }
             FireRaidStart(target); return true;
+        }
+        /// <summary>Sery_Bot says its goodbye line the moment a raid is picked (48-137 s before Twitch's channel.raid event, which only comes when the raid executes): that line is our earliest signal.
+        /// Settings (latest_settings.json): RaidSignalBot (default sery_bot), RaidSignalText (default "Have a great rest of your day"); "" in either turns this off.</summary>
+        public static bool OnChatSignal(string nick, string text)
+        {
+            var st = Latest.Settings(); string bot = ((string)st["RaidSignalBot"] ?? "sery_bot").Trim().ToLowerInvariant(), key = ((string)st["RaidSignalText"] ?? "Have a great rest of your day").Trim();
+            if (bot == "" || key == "" || (nick ?? "").ToLowerInvariant() != bot || (text ?? "").IndexOf(key, StringComparison.OrdinalIgnoreCase) < 0) return false;
+            if (LiveState.Live == false) return false;   // not streaming: a goodbye line is not a raid
+            bool fired = OnRaidScheduled("");
+            if (fired) Clog.Info("automation", "raid start signal: " + bot + " said its goodbye line");
+            return fired;
         }
         static System.Threading.Timer _raidTimer; internal static int RaidDelayOverrideSec = -1; internal static int RaidStartFires;
         /// <summary>!unraid or the stream going offline before the line was due: nothing is said and a new raid can start the line again</summary>
