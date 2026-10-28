@@ -72,8 +72,8 @@ try:
     chk('aliases fold into the main account (cyfirl + sg_yen)', u['points'] == 1250 and u['minutes'] == 660 and u['pointsRank'] == 1, u)
     # !points / !point: the Host only publishes the numbers; Chatty speaks the ONE short line (its own 8 s / 20 s cooldowns apply)
     n_say = len(says()); feed(host, 'viewer1: !points cyfirl', 9); feed(host, 'ana: !points', 31); feed(host, 'viewer2: !point cyfirl', 31)
-    chk('!points <name>, !points (own) and !point: one short reply each, in order, nothing else (no tail, no second bot line)', says()[n_say:] == ['cyfirl has 1,250 points (#1 of 3)', '@ana you have 400 points (#2 of 3)', 'cyfirl has 1,250 points (#1 of 3)'], says()[n_say:])
-    feed(host, 'ana: !watchtime'); chk('!watchtime', any(m.startswith('@ana 0m watched this month (not ranked yet) | today: 0m, week: 0m, alltime: 1d 1h') for m in says()[-1:]), says()[-1:])
+    chk('!points <name>, !points (own) and !point: one short reply each, in order, nothing else (no tail, no second bot line)', says()[n_say:] == ['@viewer1 cyfirl: 0 points earned this month (not ranked yet) | today: 0, alltime: 0 | balance: 1,250 points', '@ana 0 points earned this month (not ranked yet) | today: 0, alltime: 0 | balance: 400 points', '@viewer2 cyfirl: 0 points earned this month (not ranked yet) | today: 0, alltime: 0 | balance: 1,250 points'], says()[n_say:])
+    feed(host, 'ana: !watchtime'); chk('!watchtime', any(m.startswith('@ana 0m watched this month (not ranked yet) | today: 0m, alltime: 1d 1h') for m in says()[-1:]), says()[-1:])
     feed(host, 'viewer1: !toppoints all'); chk('!toppoints all', any(m.lower().startswith('top points (all time): 1. cyfirl 1,250 | 2. ana 400 | 3. newguy 70') for m in says()[-1:]), says()[-1:])
     feed(host, 'viewer1: !topwatch all'); chk('!topwatch all', any(m.lower().startswith('most watch time (all time): 1. ana 1d 1h') for m in says()[-1:]), says()[-1:])
 

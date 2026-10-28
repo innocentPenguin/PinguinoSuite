@@ -261,7 +261,7 @@ namespace PinguinoHost
         /// <summary>THE rank line every leaderboard-style command uses (Host commands, and Chatty/Helper can copy the wording):
         /// "18h 39m watched this month (#9 of 412) | today: 40m, week: 4h 38m, alltime: 20d 12h". Monthly value first, then today / week / all time.
         /// allTime: pass a number to use it instead of the period log's own all-time figure (-1 = use the log).</summary>
-        public static bool RankLineWeek = true;
+        public static bool RankLineWeek = false;
         public static string RankText(string login, string metric, double allTime = -1)
         {
             try
