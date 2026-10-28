@@ -1417,6 +1417,16 @@ public static class Harness
             Extra["platform"] = "youtube"; nextReply = "{\"reply\":\"hello from the penguin\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
             Msg("yt:chatter", "@ChattyPinguino hey there what's up", null, false);
             Check("youtube: an AI reply is sent once, no Twitch dup record", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Contains("hello from the penguin") && !CPHProxy.Globals.ContainsKey("pinguino.said.recent"), string.Join("|", CPHProxy.Sent));
+            Action<Dictionary<string, object>> Game2 = (args) => { var A = CPHProxy.Args; A.Clear(); A["eventType"] = "PgGame"; foreach (var kv in args) A[kv.Key] = kv.Value; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); new CPHInline().Execute(); };
+            CPHProxy.Globals["pinguino.platform.users"] = "yt:ucprobeyt01xyzabc" + (char)9 + "Yt Viewer" + (char)10 + "tt:7001" + (char)9 + "Tik Toker";
+            Extra["platform"] = "youtube"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Game2(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "win" }, { "user", "yt:ucprobeyt01xyzabc" }, { "display", "yt:ucprobeyt01xyzabc" }, { "amount", 10 }, { "payout", 20 }, { "balance", 30 }, { "gameId", "yg1" }, { "optout", "1" } });
+            Check("game line to a yt: user uses the real display name", Last() != null && Last().StartsWith("@Yt Viewer ") && !Last().ToLower().Contains("ucprobe"), Last());
+            Game2(new Dictionary<string, object> { { "kind", "gamble" }, { "outcome", "win" }, { "user", "yt:ucunknown0123456789abcdef" }, { "display", "yt:ucunknown0123456789abcdef" }, { "amount", 10 }, { "payout", 20 }, { "balance", 30 }, { "gameId", "yg2" }, { "optout", "1" } });
+            Check("an unknown yt: id is never printed raw", Last() != null && Last().StartsWith("@friend ") && !Last().ToLower().Contains("ucunknown"), Last());
+            Game2(new Dictionary<string, object> { { "kind", "give" }, { "outcome", "win" }, { "user", "Bobby" }, { "display", "Bobby" }, { "opponent", "tt:7001" }, { "amount", 5 }, { "gameId", "yg3" } });
+            Check("a give line names a tt: recipient by display name", Last() != null && Last().Contains("Tik Toker") && !Last().Contains("tt:"), Last());
+            CPHProxy.Globals.Remove("pinguino.platform.users");
             Extra["platform"] = "youtube"; nextReply = "{\"reply\":\"Hi Freestyleteamfrost innoce108Hello welcome innoce108Love\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
             Msg("yt:emoter", "@ChattyPinguino hey there what's up", null, false);
             Check("youtube: no Twitch emote tokens, one line, carries the @name", CPHProxy.Sent.Count == 1 && !CPHProxy.Sent[0].ToLower().Contains("innoce108") && CPHProxy.Sent[0].StartsWith("@emoter ") && !CPHProxy.Sent[0].Contains(string.Empty + (char)10), string.Join("|", CPHProxy.Sent));

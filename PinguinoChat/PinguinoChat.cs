@@ -254,8 +254,26 @@ public class CPHInline
     }
     // The platform the message being answered came from ("twitch" or another, e.g. "youtube"): set on every thread that answers (Handle, Respond, delayed threads).
     [ThreadStatic] static string _pgPlatform;
-    // viewers from other platforms are "yt:<name>" / "tt:<name>" keys: the name a viewer is addressed by never carries the key prefix
-    static string PlainName(string n) { return Regex.Replace(n ?? "", @"^(yt|tt|tw):", "", RegexOptions.IgnoreCase); }
+    // viewers from other platforms are "yt:<id>" / "tt:<id>" keys. The name a viewer is addressed by is their real display name: the Host publishes
+    // pinguino.platform.users ("key TAB name" lines). Unknown key: the prefix is stripped, and a bare channel id is never printed (that reads "friend").
+    string PlainName(string n)
+    {
+        n = (n ?? "").Trim().TrimStart('@');
+        var m = Regex.Match(n, @"^(yt|tt):(.*)$", RegexOptions.IgnoreCase);
+        if (!m.Success) return n;
+        string key = n.ToLowerInvariant(), rest = m.Groups[2].Value;
+        try
+        {
+            foreach (string row in (CPH.GetGlobalVar<string>("pinguino.platform.users", false) ?? "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                int tab = row.IndexOf('\t'); if (tab < 1) continue;
+                if (string.Equals(row.Substring(0, tab).Trim(), key, StringComparison.OrdinalIgnoreCase)) { string nm = row.Substring(tab + 1).Trim(); if (nm != "") return nm; }
+            }
+        }
+        catch (Exception) { }
+        if (rest == "" || Regex.IsMatch(rest, @"^(uc[A-Za-z0-9_-]{16,}|[0-9]{6,})$", RegexOptions.IgnoreCase)) return "friend";
+        return rest;
+    }
     string PgPlatformNow() { try { if (_pgPlatform != null) return _pgPlatform; object o; return CPH.TryGetArg("platform", out o) && o != null ? Convert.ToString(o) : ""; } catch (Exception) { return ""; } }
     bool PgOffTwitch() { string pf = PgPlatformNow(); return pf != "" && pf != "twitch"; }
     // Twitch emote tokens (this channel's innoce108* set) mean nothing on YouTube / TikTok: they would show as plain text there
@@ -845,10 +863,10 @@ public class CPHInline
             long now = Now(); foreach (string k in _gameSeen.Where(kv => now - kv.Value > 300).Select(kv => kv.Key).ToList()) _gameSeen.Remove(k);
             if (id != "") { if (_gameSeen.ContainsKey(id)) { GameDone(id); return; } _gameSeen[id] = now; }
         }
-        string disp = ArgS("display") != "" ? ArgS("display") : login;
+        string disp = PlainName(ArgS("display") != "" ? ArgS("display") : login);
         bool plain = ArgS("optout") == "1" || ArgS("optout").ToLower() == "true";
         lock (_lock) { if (!plain && IsHeated()) plain = true; }
-        string line = GameLine(ArgS("kind").ToLower(), ArgS("outcome").ToLower(), disp, ArgL("amount"), ArgL("payout"), ArgL("balance"), ArgS("opponent"), ArgS("reel"), ArgS("reason"), ArgS("currency") != "" ? ArgS("currency") : "points", (int)ArgL("timeoutSec"), plain, (int)ArgL("tries"));
+        string line = GameLine(ArgS("kind").ToLower(), ArgS("outcome").ToLower(), disp, ArgL("amount"), ArgL("payout"), ArgL("balance"), PlainName(ArgS("opponent")), ArgS("reel"), ArgS("reason"), ArgS("currency") != "" ? ArgS("currency") : "points", (int)ArgL("timeoutSec"), plain, (int)ArgL("tries"));
         if (!string.IsNullOrWhiteSpace(line)) { string mid = ArgS("msgId"), mu = ArgS("msgUser"); using (PgReplyTo(mid, mu != "" ? mu : login)) PgSay("chat", line); }   // an answer to the viewer's command is a reply to it (the Host leaves msgId empty for duel / expiry lines)
         GameDone(id);
     }
