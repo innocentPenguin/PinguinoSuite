@@ -716,9 +716,12 @@ public class CPHInline
         public string BlueColor { get; set; } = "blue";
         public string OrangeColor { get; set; } = "orange";
         // [NEW][TEAMS] customs team names + colours (Master View: !teamname). Chat lines, results, live_state.teams and the overlays follow them.
-        public string BlueName { get; set; } = "Blue";
+        public string BlueName { get; set; } = "Grey";   // Ivan 10-28: the "blue" side is shown as Grey (ids stay blue)
         public string OrangeName { get; set; } = "Orange";
-        public string BlueHex { get; set; } = "#1e8fff";
+        public string BlueHex { get; set; } = "#9aa0a6";
+        public bool TeamsGreyDone { get; set; }   // one-time: a saved default Blue / #1e8fff becomes Grey / #9aa0a6 (a custom name or colour is left alone)
+        public string PmName { get; set; } = "";   // the current private match name (!pm, set by a mod; cleared when the activity ends)
+        public string AlwaysOrange { get; set; } = "innocentpenguin_";   // comma list: these logins are never put on the blue/Grey side by any automatic assignment (a manual !in / !pick still can)
         public string OrangeHex { get; set; } = "#ff7a00";
 
         public int NextMatchId { get; set; } = 1;
@@ -852,6 +855,12 @@ public class CPHInline
                     ?? new Dictionary<string, MmrCacheEntry>();
         _settings = LoadJson<BvqSettings>("settings.json")
                     ?? new BvqSettings();
+        if (!_settings.TeamsGreyDone)
+        {
+            if ((_settings.BlueName ?? "") == "Blue") _settings.BlueName = "Grey";
+            if (string.Equals(_settings.BlueHex ?? "", "#1e8fff", StringComparison.OrdinalIgnoreCase)) _settings.BlueHex = "#9aa0a6";
+            _settings.TeamsGreyDone = true; SaveSettings();
+        }
         // [FIX] The current lobby used to live only in memory, so a Streamer.bot
         // restart mid-match made !lobby / !reroll / !next blue forget the teams.
         _lastBalance = LoadJson<LastBalanceData>("current_match.json");
@@ -2092,7 +2101,9 @@ public class CPHInline
             timedOut = _settings.TimedOut && !_settings.QueueOpen, timedOutAt = (_settings.TimedOut && !_settings.QueueOpen) ? (long?)_settings.TimedOutAt : null,
             recyclerEnabled = _settings.RecyclerEnabled, inactivityMinutes = _settings.InactivityMinutes, strikeLimit = MaxStrikes, strikeGame = StrikeGame(),
             strikes = StrikeMap(waiting.Select(e => e.Username)),   // [NEW] strike chips in the Master View: {login:{temp,half,perma}} for the queue and the live match
-            teams = new { orange = new { name = TeamName("orange"), color = _settings.OrangeHex }, blue = new { name = TeamName("blue"), color = _settings.BlueHex } },   // [NEW][TEAMS] read by the Master View, the overlays and the site
+            teams = new { orange = new { name = TeamName("orange"), color = _settings.OrangeHex }, blue = new { name = TeamName("blue"), color = _settings.BlueHex } },
+            teamNames = new { blue = TeamName("blue"), orange = TeamName("orange") },   // plain labels (ids stay blue / orange)
+            pmName = _settings.PmName ?? "",   // the private match name ("" = none)   // [NEW][TEAMS] read by the Master View, the overlays and the site
             overlay = new { altSeconds = _settings.OverlayAltSeconds, fadeMs = _settings.OverlayFadeMs },   // read by players.html / players_vertical.html
             activity = _settings.Activity,            currentMatch = match,
             liveMatch = hold ? live : null,   // [NEW][KOTH] only while the public view is being held
@@ -2251,6 +2262,7 @@ public class CPHInline
             case "!out":      return HandleOut(userLower, input, isPrivileged);      // [NEW][WEB] drag a player out of the match
             case "!in":       return HandleIn(userLower, input, isPrivileged);       // [NEW][WEB] drag a player into a team slot
             case "!teamname": return HandleTeamName(userLower, input, isPrivileged);
+            case "!pm":       return HandlePm(userLower, input, isPrivileged);
             case "!match":    return HandleMatch(userLower, input, isPrivileged);    // [NEW][WEB] clear | fill | queue (buttons under the teams)
             case "!mmr":      return HandleMmrLookup(userLower, input, isPrivileged);
             case "!setmmr":   return HandleSetMmr(userLower, input, isPrivileged);
@@ -2890,6 +2902,20 @@ public class CPHInline
         // [NOTE] Randomly swap sides so the best player isn't always Blue.
         if (_rng.Next(2) == 0) { var t = blue; blue = orange; orange = t; }
 
+        return MakeResultOrange(blue, orange);
+    }
+
+    // Ivan 10-28: the AlwaysOrange logins (innocentpenguin_) are never on the blue / Grey side of an AUTOMATIC assignment (balance, random, reroll, king-of-the-hill rotation, match fill).
+    // Swapping the two sides keeps the split exactly as fair as it was; manual moves (!in, !pick <names>) are not touched.
+    bool IsAlwaysOrange(string user)
+    {
+        if (string.IsNullOrEmpty(user)) return false;
+        foreach (var x in (_settings.AlwaysOrange ?? "").Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries)) if (string.Equals(x.Trim().TrimStart('@'), user, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+    BalanceResult MakeResultOrange(List<TeamPlayer> blue, List<TeamPlayer> orange)
+    {
+        if (blue.Any(p => IsAlwaysOrange(p.Username)) && !orange.Any(p => IsAlwaysOrange(p.Username))) { var t = blue; blue = orange; orange = t; }
         return MakeResult(blue, orange);
     }
 
@@ -4025,6 +4051,7 @@ public class CPHInline
         {
             ClearQueue();
             _settings.Activity = "none";
+            _settings.PmName = "";
             SetKothFlag(false);
             SaveSettings();
             Say("Customs are over. The queue is closed and cleared.");
@@ -4505,6 +4532,7 @@ public class CPHInline
                 var tp = new TeamPlayer { Username = e.Username, Mmr = ResolveMmr(e.Username, _lastBalance.Format) };
                 bool blue = r.Blue.Count < r.Orange.Count ||
                             (r.Blue.Count == r.Orange.Count && (r.Blue.Count == 0 ? 0 : r.Blue.Average(p => p.Mmr)) <= (r.Orange.Count == 0 ? 0 : r.Orange.Average(p => p.Mmr)));
+                if (blue && IsAlwaysOrange(e.Username)) blue = false;   // AlwaysOrange: never auto-filled onto blue
                 (blue ? r.Blue : r.Orange).Add(tp);
             }
             Say("Filled " + fresh.Count + " slot" + (fresh.Count == 1 ? "" : "s") + ": " + string.Join(", ", fresh.Select(e => e.Username)) +
@@ -4777,7 +4805,7 @@ public class CPHInline
             // [NEW] True king-of-the-hill: winners stay as one team on their colour.
             var champs = ToTeamPlayers(staying);
             var chall = ToTeamPlayers(challengers);
-            var result = winnerTeam == "blue" ? MakeResult(champs, chall) : MakeResult(chall, champs);
+            var result = winnerTeam == "blue" ? MakeResultOrange(champs, chall) : MakeResultOrange(chall, champs);
             StartMatch(champs.Concat(chall).ToList(), result, format);
         }
         else
@@ -4873,7 +4901,7 @@ public class CPHInline
         _pendingPicks = usernames;
         _pendingPicksFormat = format;
         Say("Streamer picks! Players: " + string.Join(", ", usernames) +
-            " — use !pick <" + GetTeamSize(format) + " names for Blue> or !pick auto");
+            " — use !pick <" + GetTeamSize(format) + " names for " + TeamName("blue") + "> or !pick auto");
         PublishState("picks_pending", string.Join(",", usernames));
     }
 
@@ -5311,10 +5339,28 @@ public class CPHInline
         SayColored(_settings.OrangeColor, TeamLabel("orange") + " [avg " + result.OrangeAvgMmr + "]: " + string.Join(", ", orangeNames) + " | Diff: " + result.MmrDiff);
     }
 
-    string TeamName(string team) { return team == "blue" ? (string.IsNullOrWhiteSpace(_settings.BlueName) ? "Blue" : _settings.BlueName) : (string.IsNullOrWhiteSpace(_settings.OrangeName) ? "Orange" : _settings.OrangeName); }
+    string TeamName(string team) { return team == "blue" ? (string.IsNullOrWhiteSpace(_settings.BlueName) ? "Grey" : _settings.BlueName) : (string.IsNullOrWhiteSpace(_settings.OrangeName) ? "Orange" : _settings.OrangeName); }
     string TeamLabel(string team) { return (team == "blue" ? "🔷 " : "🔶 ") + TeamName(team); }
     static readonly System.Text.RegularExpressions.Regex HexRx = new System.Text.RegularExpressions.Regex("^#[0-9a-fA-F]{6}$");
     // !teamname <orange|blue> <#rrggbb|-> [name...]   (mods) name 1-20 chars, no leading ! or /; "-" keeps the colour; "reset" restores Orange/#ff7a00 or Blue/#1e8fff
+    // !pm <name> (mods): the current private-match name (e.g. peng472), one token, kept as typed, max 20 chars; "!pm clear" empties it. Anyone else (and a mod without a name) just reads it.
+    bool HandlePm(string user, string input, bool isPrivileged)
+    {
+        string arg = (input ?? "").Trim();
+        if (isPrivileged && arg != "")
+        {
+            string n = arg.Split(' ')[0];
+            if (n.ToLowerInvariant() == "clear" || n == "-") { _settings.PmName = ""; SaveSettings(); Say("@" + user + " Private match name cleared."); PublishState("pm", ""); return true; }
+            if (n.Length > 20 || n.StartsWith("!") || n.StartsWith("/") || n.Any(ch => char.IsControl(ch))) { Say("@" + user + " The private match name must be one word of up to 20 characters and cannot start with ! or /."); return true; }
+            _settings.PmName = n; SaveSettings();
+            Say("@" + user + " Private match: " + n);
+            PublishState("pm", n);
+            return true;
+        }
+        Say("@" + user + (string.IsNullOrEmpty(_settings.PmName) ? " No private match name set yet." : " Private match: " + _settings.PmName));
+        return true;
+    }
+
     bool HandleTeamName(string user, string input, bool isPrivileged)
     {
         if (!isPrivileged) { Say("@" + user + " Only mods can rename the teams."); return true; }
@@ -5322,7 +5368,7 @@ public class CPHInline
         string team = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
         if (team != "orange" && team != "blue") { Say("@" + user + " Usage: !teamname <orange|blue> <#rrggbb|-> [name]  (or: !teamname <orange|blue> reset). Now: " + TeamName("orange") + " " + _settings.OrangeHex + " / " + TeamName("blue") + " " + _settings.BlueHex); return true; }
         string hex = team == "blue" ? _settings.BlueHex : _settings.OrangeHex, name = team == "blue" ? _settings.BlueName : _settings.OrangeName;
-        if (parts.Length > 1 && parts[1].ToLowerInvariant() == "reset") { name = team == "blue" ? "Blue" : "Orange"; hex = team == "blue" ? "#1e8fff" : "#ff7a00"; }
+        if (parts.Length > 1 && parts[1].ToLowerInvariant() == "reset") { name = team == "blue" ? "Grey" : "Orange"; hex = team == "blue" ? "#9aa0a6" : "#ff7a00"; }
         else
         {
             if (parts.Length > 1 && parts[1] != "-") { if (!HexRx.IsMatch(parts[1])) { Say("@" + user + " The colour must look like #ff7a00."); return true; } hex = parts[1].ToLowerInvariant(); }

@@ -23,11 +23,11 @@
     {
       "command": "!pm",
       "aliases": [],
-      "action": "PinguinoHost",
+      "action": "PinguinoBotCore",
       "category": "Community Games",
       "who": "everyone",
-      "usage": "!pm",
-      "description": "The current private match name and password (one shared setting; mods change it with !lobbyname / !lobbypass).",
+      "usage": "!pm [name]",
+      "description": "The current private match name. Mods: !pm <name> sets it for this customs session (one word; !pm clear removes it; it clears when the activity ends).",
       "examples": [
         "!pm"
       ],

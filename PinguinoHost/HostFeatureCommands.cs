@@ -87,6 +87,7 @@ namespace PinguinoHost
             string b = BoardOf(cmd);
             bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!command" || cmd == "!cmds" || cmd == "!cmd" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || cmd == "!uptime" || cmd == "!downtime" || Economy.IsViewerCommand(cmd) || Gamble.IsCommand(cmd);
             bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd);
+            if (cmd == "!pm" && mod && args.Length > 0) return false;   // a mod naming the private match: the Core stores it (no read cooldown on that)
             if (!viewer && !modOnly) return false;
             if (modOnly && mod) ModAudit.Log(user, "mod", cmd, string.Join(" ", args));   // every mod command is on the audit log
             if (modOnly && !mod) return false;                                            // mods only: everybody else gets nothing (the word may belong to another bot)
@@ -110,7 +111,7 @@ namespace PinguinoHost
                 if (Emotes.IsCommand(cmd)) { Emotes.Handle(user, cmd, args, say, ParseMonth, MonthLabel); return true; }
                 switch (cmd)
                 {
-                    case "!pm": say(HostApi.PrivateMatchLine()); return true;
+                    case "!pm": say("@" + user + " " + HostApi.PrivateMatchLine()); return true;
                     case "!commands": case "!command": case "!cmds": case "!cmd": say("All my commands, by category and importance: https://innocentpenguin.com/commands" + CannedEditor.CustomListLine()); return true;
                     case "!leaderboards": case "!leaderboard": say("Leaderboards (top gifters, bitters, yappers and watch streaks, all time or by month): " + Link); return true;
                     case "!gifted": Mine("gifters", me, args, say, user); return true;

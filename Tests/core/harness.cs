@@ -115,7 +115,7 @@ public static class Harness
         foreach (var n in new[] { "p1", "p2", "p3", "p4", "p5" }) Run(n, "!join");
         Run("mod1", "!balance", "", true);
         Check(!(bool)State()["currentMatch"]["group"], "casual makes teams now (the group style is retired)");
-        Check(CPHProxy.Sent.Any(m => m.Contains("Blue [avg")), "casual announces Blue / Orange teams");
+        Check(CPHProxy.Sent.Any(m => m.Contains("Grey [avg")), "casual announces Blue / Orange teams");
         Run("mod1", "!win", "orange", true);
         Check(CPHProxy.Sent.Any(m => m.Contains("casual: no points")), "casual result says no points");
         Check(Players()["p1"]["Points"].ToString() == pointsBefore && Players()["p1"]["Wins"].ToString() == winsBefore, "casual does not change stats");
@@ -238,11 +238,11 @@ public static class Harness
         Run("mod1", "!teamname", "orange #ff4400 Lava", true);
         Check((string)State()["teams"]["orange"]["name"] == "Lava" && (string)State()["teams"]["orange"]["color"] == "#ff4400", "team name and colour are in the state");
         Run("mod1", "!teamname", "blue nothex Ice", true);
-        Check((string)State()["teams"]["blue"]["name"] == "Blue" && (string)State()["teams"]["blue"]["color"] == "#1e8fff", "a bad colour changes nothing");
+        Check((string)State()["teams"]["blue"]["name"] == "Grey" && (string)State()["teams"]["blue"]["color"] == "#9aa0a6", "a bad colour changes nothing");
         Run("mod1", "!teamname", "blue - /Ice", true);
-        Check((string)State()["teams"]["blue"]["name"] == "Blue", "a name starting with / is refused");
+        Check((string)State()["teams"]["blue"]["name"] == "Grey", "a name starting with / is refused");
         Run("p3", "!teamname", "blue - Sneaky", false);
-        Check((string)State()["teams"]["blue"]["name"] == "Blue", "non-mods cannot rename a team");
+        Check((string)State()["teams"]["blue"]["name"] == "Grey", "non-mods cannot rename a team");
         Run("mod1", "!teamname", "orange reset", true);
         Check((string)State()["teams"]["orange"]["name"] == "Orange" && (string)State()["teams"]["orange"]["color"] == "#ff7a00", "reset restores the defaults");
 
@@ -332,15 +332,15 @@ public static class Harness
         CPHProxy.Sent.Clear();
         Run("mod1", "!balance", "", true);
         Check(!(bool)State()["currentMatch"]["group"], "a casual TEAMS match is not a group");
-        Check(CPHProxy.Sent.Any(m => m.Contains("Blue [avg")), "casual teams announce Blue / Orange");
+        Check(CPHProxy.Sent.Any(m => m.Contains("Grey [avg")), "casual teams announce Blue / Orange");
         {
             var s = CPHProxy.Sent;
-            int ib = s.FindIndex(m => m.StartsWith("#") && m.Contains("Blue [avg"));
+            int ib = s.FindIndex(m => m.StartsWith("#") && m.Contains("Grey [avg"));
             int io = s.FindIndex(m => m.StartsWith("🔶 Orange [avg"));
             Check(ib >= 0 && ib < io, "teams are two plain messages, Blue then Orange: " + string.Join(" | ", s));
             Check(!s.Any(m => m.StartsWith("[announce")), "no announcements");
             Check(!s.Any(m => m.StartsWith("/color")), "no /color text is ever posted in chat");
-            Check(!s.Any(m => m.Contains("Blue [avg") && m.Contains("Orange [avg")), "Blue and Orange are separate messages");
+            Check(!s.Any(m => m.Contains("Grey [avg") && m.Contains("Orange [avg")), "Grey and Orange are separate messages");
         }
         Run("mod1", "!casual", "group", true);
         Check((string)State()["casualStyle"] == "teams", "!casual group is ignored: casual stays on teams");
@@ -827,7 +827,7 @@ public static class Harness
             string firstId = MatchId();
             foreach (var n in new[] { "p7", "p8", "p9", "p10" }) Run(n, "!join");
             Run("mod1", "!win", "blue", true);
-            Check(MatchId() != "" && MatchId() != firstId && CPHProxy.Sent.Any(m => m.Contains("Blue wins")) && CPHProxy.Sent.Any(m => m.Contains("Blue [avg")), "autonext: after the win the next game starts at once when 4 can play: " + string.Join(" | ", CPHProxy.Sent));
+            Check(MatchId() != "" && MatchId() != firstId && CPHProxy.Sent.Any(m => m.Contains("Grey wins")) && CPHProxy.Sent.Any(m => m.Contains("Grey [avg")), "autonext: after the win the next game starts at once when 4 can play: " + string.Join(" | ", CPHProxy.Sent));
             string secondId = MatchId();
             // not enough waiting: announce once, then start by itself when the queue fills
             Run("mod1", "!win", "orange", true);
@@ -837,7 +837,7 @@ public static class Harness
             Check(CPHProxy.Sent.Count == 0, "autonext: waiting is announced only once");
             foreach (var n in new[] { "p11", "p2", "p4", "p5" }) Run(n, "!join");
             CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
-            Check(MatchId() != "" && MatchId() != secondId && CPHProxy.Sent.Any(m => m.Contains("Blue [avg")), "autonext: starts by itself once the queue is full: " + string.Join(" | ", CPHProxy.Sent));
+            Check(MatchId() != "" && MatchId() != secondId && CPHProxy.Sent.Any(m => m.Contains("Grey [avg")), "autonext: starts by itself once the queue is full: " + string.Join(" | ", CPHProxy.Sent));
             // off: manual flow
             Run("mod1", "!autonext", "off", true);
             string thirdId = MatchId();
@@ -875,7 +875,7 @@ public static class Harness
             Run("p2", "!join"); CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
             Check(CPHProxy.Sent.Count == 0, "koth: 1 player is not enough, no repeat");
             Run("p4", "!join"); CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
-            Check(CPHProxy.Sent.Any(m => m.Contains("Blue [avg")), "koth: starts by itself when the 2nd player joins: " + string.Join(" | ", CPHProxy.Sent));
+            Check(CPHProxy.Sent.Any(m => m.Contains("Grey [avg")), "koth: starts by itself when the 2nd player joins: " + string.Join(" | ", CPHProxy.Sent));
             CPHProxy.Sent.Clear(); Run("mod1", "!koth", "off", true);
             Check(CPHProxy.Sent.Any(m => m.Contains("KOTH is now OFF") && m.Contains("3v3")), "koth: off restores 3v3: " + string.Join(" | ", CPHProxy.Sent));
             Run("mod1", "!autonext", "off", true); Run("mod1", "!match", "clear", true);

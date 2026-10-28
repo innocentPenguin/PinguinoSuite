@@ -47,7 +47,7 @@ namespace PinguinoHost
         public static JObject State()
         {
             JObject s = null; try { var f = StateFile(); if (f != null) s = JObject.Parse(File.ReadAllText(f).TrimStart((char)0xFEFF)); } catch (Exception) { }
-            if (s == null) return new JObject { { "ok", false }, { "streamer", "in" }, { "open", false }, { "queue", new JArray() }, { "match", null } };
+            if (s == null) return new JObject { { "ok", false }, { "streamer", "in" }, { "open", false }, { "queue", new JArray() }, { "match", null }, { "teams", Teams(null) }, { "teamNames", new JObject { { "blue", "Grey" }, { "orange", "Orange" } } }, { "pmName", "" } };
             var q = new JArray(); foreach (var e in (s["queue"] as JArray ?? new JArray()).OfType<JObject>())
             { var o = new JObject { { "username", (string)e["user"] ?? "" }, { "display", (string)e["epic"] ?? (string)e["user"] ?? "" }, { "mmr", e["mmr"] ?? 0 }, { "joinedAt", e["joinedAt"] ?? 0 } }; if ((bool?)e["practice"] == true) o["practice"] = true; if ((bool?)e["sim"] == true) o["sim"] = true; PlatformUsers.Tag(o, (string)e["user"] ?? ""); q.Add(o); }   // platform + name for every entry (yt: / tt: viewers show their display name)
             JObject match = null; var cm = s["liveMatch"] as JObject ?? s["currentMatch"] as JObject;
@@ -59,19 +59,19 @@ namespace PinguinoHost
                 match = new JObject { { "id", cm["id"] }, { "players", pl }, { "orange", orange }, { "blue", blue }, { "blueP", new JArray(blue.Select(n => PlatformUsers.TaggedEntry((string)n))) }, { "orangeP", new JArray(orange.Select(n => PlatformUsers.TaggedEntry((string)n))) }, { "status", cm["status"] } };   // blueP / orangeP: additive tagged lists, the old string arrays stay
             }
             return new JObject { { "ok", true }, { "streamer", ((bool?)s["streamerPlaying"] ?? true) ? "in" : "out" }, { "open", (bool?)s["queueOpen"] ?? false }, { "activity", s["activity"] }, { "mode", s["mode"] }, { "gameMode", s["gameMode"] }, { "format", s["format"] }, { "koth", (bool?)s["koth"] ?? false }, { "casualStyle", s["casualStyle"] },
- { "teams", Teams(s) }, { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 }, { "strikeGame", s["strikeGame"] ?? "rl" },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
+ { "teams", Teams(s) }, { "teamNames", new JObject { { "blue", (string)Teams(s)["blue"]["name"] }, { "orange", (string)Teams(s)["orange"]["name"] } } }, { "pmName", (string)s["pmName"] ?? "" }, { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 }, { "strikeGame", s["strikeGame"] ?? "rl" },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
         }
         static JObject Tagged(JObject o) { PlatformUsers.Tag(o, (string)o["username"] ?? ""); return o; }
         static readonly System.Text.RegularExpressions.Regex Hex = new System.Text.RegularExpressions.Regex("^#[0-9a-fA-F]{6}$");
         public static JObject Teams(JObject s)
         {
             Func<string, string, string, JObject> one = (k, dn, dc) => { var t = s == null ? null : s["teams"]?[k] as JObject; return new JObject { { "name", (string)t?["name"] ?? dn }, { "color", (string)t?["color"] ?? dc } }; };
-            return new JObject { { "orange", one("orange", "Orange", "#ff7a00") }, { "blue", one("blue", "Blue", "#1e8fff") } };
+            return new JObject { { "orange", one("orange", "Orange", "#ff7a00") }, { "blue", one("blue", "Grey", "#9aa0a6") } };
         }
         public static string TeamName(string team)
         {
             try { var f = StateFile(); if (f != null) return (string)Teams(JObject.Parse(File.ReadAllText(f).TrimStart((char)0xFEFF)))[team]["name"]; } catch (Exception) { }
-            return team == "blue" ? "Blue" : "Orange";
+            return team == "blue" ? "Grey" : "Orange";
         }
         /// <summary>POST /api/customs/teams {orange:{name?,color?}, blue:{name?,color?}} -> {ok, teams}. Validated here (name 1-20 chars, no leading ! or /, color #rrggbb), applied through !teamname.</summary>
         public static JObject SetTeams(JObject b)

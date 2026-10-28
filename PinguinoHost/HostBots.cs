@@ -65,8 +65,10 @@ namespace PinguinoHost
         /// <summary>The ONE private-match name: helper_settings.json (HelperPinguino reads it, mods change it with !lobbyname, !pm shows the NAME only; a stored password is never printed).</summary>
         public static string PrivateMatchLine()
         {
+            string pm = ""; try { pm = ((string)CustomsView.State()["pmName"] ?? "").Trim(); } catch (Exception) { }   // set with "!pm <name>" (customs state, cleared when the activity ends)
+            if (pm != "") return "Private match: " + pm;
             var j = LoadFile("helper_settings.json"); string n = ((string)j["LobbyName"] ?? "").Trim();   // the bots never keep or say a lobby password: name only
-            if (n == "") return "No private match is set right now. Ask a mod.";
+            if (n == "") return "No private match name set yet.";
             return "Private match -> Name: " + n + ".";
         }
         public static JObject BotsRegistry() { return LoadFile("bots.json"); }
