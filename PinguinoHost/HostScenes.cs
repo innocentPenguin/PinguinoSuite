@@ -41,6 +41,8 @@ namespace PinguinoHost
                 Def = new Dictionary<string, int[]> { { "h", new[] { 0, 960, 1920, 120, 8, 0 } }, { "v", new[] { 0, 1800, 1080, 120, 8, 0 } } } },
             new W { Id = "chat", Label = "Chat feed", Src = "chat.html", Dw = 460, Dh = 520, Help = "Last chat messages (Host /api/chat/recent). params: max=8 (messages shown), fade=0 (seconds before a line fades, 0 = never).",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 40, 780, 460, 260, 8, 0 } }, { "v", new[] { 40, 1240, 460, 520, 8, 0 } } } },
+            new W { Id = "pm", Label = "PM name", Src = "pm.html", Dw = 420, Dh = 56, Help = "Small \"name: pengXXX\" line for under the Rocket League scoreboard (Host /api/customs/state key pmName). Hidden while no name is set or customs are not running.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 750, 96, 420, 56, 8, 1 } }, { "v", new[] { 330, 150, 420, 56, 8, 1 } } } },
             new W { Id = "customs", Label = "Customs HUD", Src = "customs.html", Dw = 420, Dh = 160, Help = "Customs status: queue open/closed, how many are waiting, mode/format, activity (Host /api/customs/state).",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 40, 780, 420, 160, 8, 0 } }, { "v", new[] { 330, 1000, 420, 160, 8, 0 } } } },
             new W { Id = "nowplaying", Label = "Now playing", Src = "http://127.0.0.1:8771/overlay", Dw = 640, Dh = 200, Help = "The Spotify module's own now-playing overlay (port 8771, themes via its settings; ?next=0 hides up-next). Blank when the module is not running.",
@@ -176,7 +178,7 @@ namespace PinguinoHost
         }
         /// <summary>Ending a customs activity hides the customs overlays (players, queue/leaderboards, customs HUD parts); starting one shows them again. Visibility only: the flag lives in scene_layouts.json
         /// and is applied to whatever layout is served, so a layout is never edited. It follows the activity in the Core state (any way it was started or ended), seen on the next read or at once through CustomsSync.</summary>
-        static readonly string[] CustomsPages = { "players.html", "players_vertical.html", "queue.html", "customs.html" };   // every page that shows who is in the match / the queue / the customs state, whatever its ?part=
+        static readonly string[] CustomsPages = { "players.html", "players_vertical.html", "queue.html", "customs.html", "pm.html" };   // every page that shows who is in the match / the queue / the customs state, whatever its ?part=
         static bool InCustomsGroup(string id) { var w = Find(id); if (w == null || string.IsNullOrEmpty(w.Src)) return false; string pg = w.Src.Split('?')[0]; return CustomsPages.Contains(pg); }   // the wheel stays: a tournament runs after the customs ended
         static string ActivityNow() { try { var a = (string)CustomsView.State()["activity"]; return string.IsNullOrEmpty(a) ? "none" : a; } catch (Exception) { return "none"; } }
         static bool SyncCustoms(JObject all)
