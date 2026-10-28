@@ -256,9 +256,13 @@ public class CPHInline
     [ThreadStatic] static string _pgPlatform;
     string PgPlatformNow() { try { if (_pgPlatform != null) return _pgPlatform; object o; return CPH.TryGetArg("platform", out o) && o != null ? Convert.ToString(o) : ""; } catch (Exception) { return ""; } }
     bool PgOffTwitch() { string pf = PgPlatformNow(); return pf != "" && pf != "twitch"; }
+    // Twitch emote tokens (this channel's innoce108* set) mean nothing on YouTube / TikTok: they would show as plain text there
+    static readonly Regex RxChannelEmote = new Regex(@"\binnoce108\w*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static string StripChannelEmotes(string t) { return Regex.Replace(RxChannelEmote.Replace(t ?? "", ""), @"\s{2,}", " ").Trim(); }
     void PgSay(string role, string text)
     {
         text = PgCleanLine(text);
+        if (!string.IsNullOrEmpty(text) && PgOffTwitch()) text = StripChannelEmotes(text);
         if (string.IsNullOrEmpty(text)) return;
         if (PgOffTwitch()) { CPH.SendMessage(text, true); return; }   // another platform: the Host routes the line back to that platform only (its own dup guard); no Helix, no tag, no Twitch dup record
         var reg = PgReg();
@@ -2572,7 +2576,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     }
     static string JoinLineFor(string key)
     {
-        if (key == "rl") return "!register YourEpicName, then !join when the queue is open!";
+        if (key == "rl") return "Type !register <YourEpicName> once, then !join.";   // the ONE registration instruction, on every platform (SendReply adds "@name ")
         if (key == "fortnite") return "FN customs are always open! !epic";
         if (key == "roblox") return "Of course! !roblox";
         return "Ask in !discord, that's where the join info lives!";
@@ -2585,6 +2589,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         string key = GameKey();
         if (RxJoinAsk.IsMatch(viewerText ?? "") || PgHelperTopic(viewerText)) return JoinLineFor(key);
         if (key != "rl" && RxRlText.IsMatch(reply ?? "")) return null;
+        if (key == "rl" && Regex.IsMatch(reply ?? "", @"\bregister\b", RegexOptions.IgnoreCase)) return JoinLineFor("rl");   // never a differently worded registration instruction
         return reply;
     }
 
@@ -3331,10 +3336,13 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
     {
         if (!c.Random && !PaceTurn()) { Miss(c.Login); return; }
         if (!c.Random) lock (_lock) { NoteReply(c.Login); }
-        string prefix = c.Random ? "" : "@" + c.Display + " ";
+        bool off = PgOffTwitch();   // YouTube / TikTok: always "@name ", ONE line (a second line within about a second gets a 403), no Twitch emotes
+        if (off) reply = StripChannelEmotes(reply);
+        string prefix = c.Random && !off ? "" : "@" + c.Display + " ";
         int limit = 440 - prefix.Length;
         var parts = new List<string>();
         string rest = reply ?? "";
+        if (off && rest.Length > limit) { int oc = -1; foreach (Match m in Regex.Matches(rest.Substring(0, limit), @"[.!?](\s|$)")) oc = m.Index + 1; if (oc < limit / 3) oc = rest.LastIndexOf(' ', limit - 1); if (oc < limit / 3) oc = limit; rest = rest.Substring(0, oc).Trim(); }
         while (rest.Length > limit && parts.Count < 2)
         {
             int cut = -1;

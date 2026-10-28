@@ -1359,7 +1359,7 @@ public static class Harness
         {
             Action<string> cat = g => File.WriteAllText(Path.Combine(dir, "live_state.json"), "{\"activity\":\"competitive\",\"queueOpen\":true,\"queue\":[],\"obs\":{\"twitchGame\":\"" + g + "\"},\"currentMatch\":null}");
             string longRl = "{\"reply\":\"Sure! Register with !register YourEpicName then join the queue in Rocket League when it opens and wait for a private match lobby\",\"remember\":[]}";
-            string[,] want = { { "Rocket League", "!register YourEpicName, then !join when the queue is open!" }, { "Fortnite", "FN customs are always open! !epic" }, { "Roblox", "Of course! !roblox" }, { "Just Chatting", "Ask in !discord, that's where the join info lives!" }, { "", "Ask in !discord, that's where the join info lives!" } };
+            string[,] want = { { "Rocket League", "Type !register <YourEpicName> once, then !join." }, { "Fortnite", "FN customs are always open! !epic" }, { "Roblox", "Of course! !roblox" }, { "Just Chatting", "Ask in !discord, that's where the join info lives!" }, { "", "Ask in !discord, that's where the join info lives!" } };
             for (int i = 0; i < want.GetLength(0); i++)
             {
                 cat(want[i, 0]); nextReply = longRl; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
@@ -1376,7 +1376,7 @@ public static class Harness
             nextReply = "{\"reply\":\"hey there!\",\"remember\":[]}";
             string tcp = Path.Combine(dir, "twitch_category.json"); long nowU = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             Action<string, bool, long> tcw = (g, ok, at) => File.WriteAllText(tcp, "{\"game\":\"" + g + "\",\"at\":" + at + ",\"ok\":" + (ok ? "true" : "false") + "}");
-            string[,] tw = { { "Fortnite", "t", "FN customs are always open! !epic" }, { "Roblox", "t", "Of course! !roblox" }, { "Rocket League", "t", "!register YourEpicName, then !join when the queue is open!" }, { "Fortnite", "stale", "Ask in !discord, that's where the join info lives!" }, { "", "bad", "Ask in !discord, that's where the join info lives!" } };
+            string[,] tw = { { "Fortnite", "t", "FN customs are always open! !epic" }, { "Roblox", "t", "Of course! !roblox" }, { "Rocket League", "t", "Type !register <YourEpicName> once, then !join." }, { "Fortnite", "stale", "Ask in !discord, that's where the join info lives!" }, { "", "bad", "Ask in !discord, that's where the join info lives!" } };
             for (int i = 0; i < tw.GetLength(0); i++)
             {
                 cat("Rocket League");   // live_state says RL: the shared file wins
@@ -1417,6 +1417,20 @@ public static class Harness
             Extra["platform"] = "youtube"; nextReply = "{\"reply\":\"hello from the penguin\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
             Msg("yt:chatter", "@ChattyPinguino hey there what's up", null, false);
             Check("youtube: an AI reply is sent once, no Twitch dup record", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Contains("hello from the penguin") && !CPHProxy.Globals.ContainsKey("pinguino.said.recent"), string.Join("|", CPHProxy.Sent));
+            Extra["platform"] = "youtube"; nextReply = "{\"reply\":\"Hi Freestyleteamfrost innoce108Hello welcome innoce108Love\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("yt:emoter", "@ChattyPinguino hey there what's up", null, false);
+            Check("youtube: no Twitch emote tokens, one line, carries the @name", CPHProxy.Sent.Count == 1 && !CPHProxy.Sent[0].ToLower().Contains("innoce108") && CPHProxy.Sent[0].StartsWith("@yt:emoter ") && !CPHProxy.Sent[0].Contains(string.Empty + (char)10), string.Join("|", CPHProxy.Sent));
+            nextReply = "{\"reply\":\"" + string.Join(" ", Enumerable.Repeat("This is a long sentence about penguins.", 20)) + "\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("yt:longy", "@ChattyPinguino tell me everything about penguins please", null, false);
+            Check("youtube: a long reply is still ONE line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Length <= 440, string.Join("|", CPHProxy.Sent.Select(x => x.Length.ToString())));
+            File.WriteAllText(Path.Combine(dir, "live_state.json"), "{\"activity\":\"competitive\",\"queueOpen\":true,\"queue\":[],\"obs\":{\"twitchGame\":\"Rocket League\"},\"currentMatch\":null}");
+            nextReply = "{\"reply\":\"Sure! Register with !register YourEpicName then join the queue when it opens\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("yt:joiner", "@ChattyPinguino can i play with you lol", null, false);
+            Check("youtube: the registration instruction is exactly the one line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@yt:joiner Type !register <YourEpicName> once, then !join.", string.Join("|", CPHProxy.Sent));
+            Extra["platform"] = "twitch"; nextReply = "{\"reply\":\"you can sign up with !register and your epic name, easy\",\"remember\":[]}"; CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
+            Msg("twreg", "@ChattyPinguino what do i type to sign up", null, false);
+            Check("twitch: an AI reply with registration wording is replaced by the exact line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@twreg Type !register <YourEpicName> once, then !join.", string.Join("|", CPHProxy.Sent));
+            nextReply = "{\"reply\":\"hello from the penguin\",\"remember\":[]}";
             Extra.Clear(); CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent");
             Msg("twchatter", "@ChattyPinguino hey there what's up", null, false);
             Check("twitch: the same AI text still goes out and is recorded", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Contains("hello from the penguin") && CPHProxy.Globals.ContainsKey("pinguino.said.recent"), string.Join("|", CPHProxy.Sent));
