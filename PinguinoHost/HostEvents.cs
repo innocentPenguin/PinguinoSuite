@@ -14,9 +14,15 @@ namespace PinguinoHost
     public static class ChatFeed
     {
         static readonly object L = new object(); static readonly List<JObject> _items = new List<JObject>(); static long _seq;
-        public static void Add(string user, string text, int role, bool sub, int subTier, string colorTag = "", string badgeTag = "", string userId = "")
+        public static void Add(string user, string text, int role, bool sub, int subTier, string colorTag = "", string badgeTag = "", string userId = "", string platform = "twitch", string shown = "")
         {
             if (string.IsNullOrEmpty(user) || text == null) return;
+            if (platform != "twitch")   // YouTube / TikTok: a plain Twitch-style line {user key, display, name, platform}, no colour, no badges
+            {
+                string nm = string.IsNullOrEmpty(shown) ? user : shown; JObject f;
+                lock (L) { f = new JObject { { "seq", ++_seq }, { "user", user.ToLowerInvariant() }, { "display", nm }, { "name", nm }, { "platform", platform }, { "text", text }, { "color", "" }, { "badges", new JArray() }, { "badgeSets", new JArray() }, { "ts", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() } }; _items.Add(f); if (_items.Count > 200) _items.RemoveAt(0); }
+                Events.Publish("chat", f); return;
+            }
             var badges = new JArray(); if (role >= 4) badges.Add("broadcaster"); else if (role == 3) badges.Add("moderator"); else if (role == 2) badges.Add("vip"); if (sub || subTier > 0) badges.Add("subscriber");
             try { ChatMeta.WarmBadges(); } catch (Exception) { }
             JObject o = null; string color = "";

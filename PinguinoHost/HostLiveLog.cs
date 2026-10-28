@@ -19,13 +19,13 @@ namespace PinguinoHost
         public static string LiveDir { get { return Path.Combine(Root, "chat_logs", "live"); } }
         static string HiddenP { get { return Path.Combine(Root, "chat_logs", "hidden_sources.json"); } }
 
-        public static void Record(string user, string userId, string text, bool command)
+        public static void Record(string user, string userId, string text, bool command, string platform = "twitch", string shown = "")
         {
             try
             {
                 if (string.IsNullOrEmpty(user) || text == null) return;
                 long t = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                string line = new JObject { { "t", t }, { "u", user.ToLowerInvariant() }, { "i", userId ?? "" }, { "m", text.Length > 500 ? text.Substring(0, 500) : text }, { "c", command ? 1 : 0 } }.ToString(Newtonsoft.Json.Formatting.None) + "\n";
+                var jo = new JObject { { "t", t }, { "u", user.ToLowerInvariant() }, { "i", userId ?? "" }, { "m", text.Length > 500 ? text.Substring(0, 500) : text }, { "c", command ? 1 : 0 } }; if (platform != "twitch") { jo["p"] = platform; jo["n"] = shown ?? ""; } string line = jo.ToString(Newtonsoft.Json.Formatting.None) + "\n";
                 lock (L) { Directory.CreateDirectory(LiveDir); Append(Path.Combine(LiveDir, DateTime.UtcNow.ToString("yyyy-MM-dd") + ".jsonl"), line); }
             }
             catch (Exception ex) { Clog.Warn("livelog", "could not record chat: " + ex.Message); }

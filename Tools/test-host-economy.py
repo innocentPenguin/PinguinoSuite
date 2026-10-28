@@ -97,12 +97,14 @@ try:
     chk('re-running replaces the baseline and keeps a backup', ap2['ok'] and ap2['backup'].startswith('points-') and os.path.exists(os.path.join(d, 'economy', 'backups', ap2['backup'])), ap2)
     chk('adjustments survive a re-run (ana 410 + 450)', api('/api/economy/user?login=ana')['points'] == 860, api('/api/economy/user?login=ana'))
     # earning: restart live
-    host.kill(); time.sleep(1.0); host = start({'PINGUINO_ECONOMY_LIVE': '1'}); before = {k: api('/api/economy/user?login=' + k) for k in ('ana', 'cyfirl')}
+    host.kill(); time.sleep(1.0); host = start({'PINGUINO_ECONOMY_LIVE': '1', 'PINGUINO_MODULE_TOKEN': 'econ-tok'}); before = {k: api('/api/economy/user?login=' + k) for k in ('ana', 'cyfirl')}
+    urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:%d/api/chat-in' % PORT, data=json.dumps({'platform': 'youtube', 'user': 'ViewerYT', 'userId': 'UCecon1', 'text': 'hello there', 'msgId': 'm1'}).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer econ-tok'}), timeout=10)
     time.sleep(4.5); after = {k: api('/api/economy/user?login=' + k) for k in ('ana', 'cyfirl')}
     ga = after['ana']['points'] - before['ana']['points']; gc = after['cyfirl']['points'] - before['cyfirl']['points']
     chk('live: chatters earn points and minutes every minute', gc >= 2 and after['cyfirl']['minutes'] > before['cyfirl']['minutes'], (before, after))
     chk('a subscriber earns double', ga >= 2 * gc - 2 and ga > gc, (ga, gc))
     chk('bots, the streamer and strangers without a profile: bots/streamer get nothing', api('/api/economy/user?login=helperbot')['points'] == 0 and api('/api/economy/user?login=innocentpenguin_')['points'] == 0)
+    chk('a YouTube viewer who chatted is present and earns points like a Twitch chatter', api('/api/economy/user?login=yt:ucecon1')['points'] > 0, api('/api/economy/user?login=yt:ucecon1'))
     chk('someone in the chatroom with no history starts earning too', api('/api/economy/user?login=nobody1')['points'] > 0)
     e = api('/api/economy'); chk('status says where the chatters came from', 'Helix' in e['earning']['source'], e['earning'])
     mo = api('/api/boards')['months']; cur = sorted(mo.keys())[-1]

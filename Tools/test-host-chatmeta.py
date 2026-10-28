@@ -1,6 +1,6 @@
 """Chat feed colours + badges (sim Host, fake Helix): a raw IRC PRIVMSG with color=#FF4500 and badges=subscriber/12,moderator/1 shows both in /api/chat/recent
 (color "#FF4500", badges names kept, badgeSets [{set_id,version,url}]); an empty colour tag uses the Helix /chat/color fallback (fake) once per user (cached);
-both failing leaves color empty; non-Twitch lines (YouTube via /api/chat-in) are not in the feed; /api/chat/badges serves global + channel badge images (channel overrides global).
+both failing leaves color empty; YouTube lines (via /api/chat-in) are in the feed as plain lines (platform, name, empty colour and badges) and never ask Helix; /api/chat/badges serves global + channel badge images (channel overrides global).
 Usage: python Tools/test-host-chatmeta.py [dll]"""
 import http.server, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
@@ -71,7 +71,8 @@ try:
     chk('badgeSets get the image url once the cache is warm', f and f[-1]['badgeSets'][0].get('url') == 'https://c/sub12b', f)
     rq = urllib.request.Request(B + '/api/chat-in', data=json.dumps({'platform': 'youtube', 'user': 'Yt Viewer', 'userId': 'UCyt1', 'text': 'hi from youtube', 'msgId': 'y1'}).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOK})
     urllib.request.urlopen(rq, timeout=20); time.sleep(2)
-    chk('non-Twitch lines are not in the Twitch feed and never ask Helix', not [m for m in msgs() if 'youtube' in m['text']] and 'UCyt1' not in colour_calls)
+    yl = [m for m in msgs() if 'youtube' in m['text']]
+    chk('YouTube lines are in the feed as plain lines (platform, name, no colour, no badges) and never ask Helix', len(yl) == 1 and yl[0].get('platform') == 'youtube' and yl[0].get('name') == 'Yt Viewer' and yl[0]['color'] == '' and yl[0]['badges'] == [] and 'UCyt1' not in colour_calls, yl)
     sim = [m for m in msgs() if m['user'] == 'zed']; host.stdin.write(b'zed: plain sim line\n'); host.stdin.flush(); time.sleep(1.5)
     z = by('zed'); chk('plain sim chat line: unchanged shape (color empty, badgeSets empty)', z and z[-1]['color'] == '' and z[-1]['badgeSets'] == [], z)
 finally:

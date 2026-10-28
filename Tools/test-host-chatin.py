@@ -43,6 +43,11 @@ try:
     chk('chat-in ok', c == 200 and j.get('ok'), j)
     chk('exactly one send, to youtube, with reply_to, @sender dropped, no yt: key leaked', len(sends) == 1 and sends[0][0] == '/api/send' and sends[0][1] == {'platform': 'youtube', 'text': '@Viewer hello from the Host', 'reply_to': 'yt-msg-1'}, sends)
     chk('Multi called with the bearer token', sends and sends[0][2] == 'Bearer multi-test', sends[:1])
+    rc = json.load(urllib.request.urlopen('http://127.0.0.1:%d/api/chat/recent?limit=20' % PORT, timeout=10))['messages']
+    yl = [m for m in rc if m.get('platform') == 'youtube' and m.get('text') == '!hi']
+    chk('yt chat is a plain Twitch-style line in /api/chat/recent: platform, name, empty colour and badges', yl and yl[0]['name'] == 'Viewer' and yl[0]['display'] == 'Viewer' and yl[0]['color'] == '' and yl[0]['badges'] == [], rc[-3:])
+    ll = [json.loads(l) for f in os.listdir(os.path.join(d, 'chat_logs', 'live')) for l in open(os.path.join(d, 'chat_logs', 'live', f), 'rb').read().decode('utf-8').splitlines()] if os.path.isdir(os.path.join(d, 'chat_logs', 'live')) else []
+    chk('yt chat is in the live chat log with platform and display name', any(x.get('p') == 'youtube' and x.get('n') == 'Viewer' for x in ll), ll[-2:])
     n = len(sends); cin('Viewer2', '!hi', mid='yt-msg-2'); time.sleep(2)
     chk('another viewer gets their own @name line (a different line, so no duplicate hold-back)', len(sends) == n + 1 and sends[n][1]['text'] == '@Viewer2 hello from the Host', sends[n:])
     cin('Viewer3', '!bc', mid='yt-msg-3'); time.sleep(2)

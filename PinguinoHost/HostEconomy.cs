@@ -45,7 +45,7 @@ namespace PinguinoHost
                 _set = null;
             }
             var d = new JObject { { "CurrencyName", "points" }, { "PointsPerMinute", 1.0 }, { "SubMultiplier", 2.0 }, { "VipMultiplier", 1.5 }, { "ModMultiplier", 1.0 }, { "OnlyWhileLive", true }, { "Earning", true },
-                { "WelcomeBonus", 100 }, { "FallbackActiveMinutes", 30 }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
+                { "WelcomeBonus", 100 }, { "FallbackActiveMinutes", 30 }, { "ForeignPresenceMinutes", 10 }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
             Phase2Defaults(d); PointsDefaults(d);
             try
             {
@@ -224,7 +224,24 @@ namespace PinguinoHost
             return LiveState.Active;
         }
 
+        // YouTube / TikTok viewers have no chatters list: someone counts as watching for ForeignPresenceMinutes (default 10) after each of their chat lines
+        static readonly Dictionary<string, DateTime> ForeignSeen = new Dictionary<string, DateTime>();
+        public static void NoteForeign(string key)
+        {
+            key = Norm(key); if (key == "" || key.IndexOf(':') < 0) return;
+            lock (ForeignSeen) { ForeignSeen[key] = DateTime.UtcNow; if (ForeignSeen.Count > 5000) { var old = ForeignSeen.Where(kv => (DateTime.UtcNow - kv.Value).TotalHours > 3).Select(kv => kv.Key).ToList(); foreach (var k in old) ForeignSeen.Remove(k); } }
+        }
+        public static List<string> ForeignPresent()
+        {
+            double win = 10; try { win = Math.Max(1, (double?)Settings()["ForeignPresenceMinutes"] ?? 10); } catch (Exception) { }
+            lock (ForeignSeen) { var now = DateTime.UtcNow; return ForeignSeen.Where(kv => (now - kv.Value).TotalMinutes <= win).Select(kv => kv.Key).ToList(); }
+        }
         static List<string> Chatters()
+        {
+            var l = ChattersTwitch(); var f = ForeignPresent(); if (f.Count == 0) return l;
+            l.AddRange(f); return l.Distinct().ToList();
+        }
+        static List<string> ChattersTwitch()
         {
             var list = new List<string>(); string cursor = ""; bool ok = true;
             for (int guard = 0; guard < 20; guard++)
@@ -273,7 +290,7 @@ namespace PinguinoHost
                     double p; paid.TryGetValue(c, out p); paid[c] = p + give;
                 }
             }
-            if (IsLive()) { try { AlertBridge.OnPresent(paid.Keys.ToList()); } catch (Exception ax) { Clog.Warn("alerts", "presence hook failed: " + ax.Message); } }
+            if (IsLive()) { try { AlertBridge.OnPresent(paid.Keys.Where(k => k.IndexOf(':') < 0).ToList()); } catch (Exception ax) { Clog.Warn("alerts", "presence hook failed: " + ax.Message); } }
             if (v2) { try { string sid = CurSid(); if (sid == "off") { StartStream(); sid = CurSid(); } WatchStep(DateTimeOffset.UtcNow.ToUnixTimeSeconds(), paid.Keys.ToList(), sid); } catch (Exception wx) { Clog.Warn("economy", "watch step failed: " + wx.Message); } }
             string month = DateTime.UtcNow.ToString("yyyy-MM"); bool announce = false;
             lock (L)
@@ -299,7 +316,7 @@ namespace PinguinoHost
         {
             lock (RoleCache) { KeyValuePair<DateTime, string> c; if (RoleCache.TryGetValue(login, out c) && (DateTime.UtcNow - c.Key).TotalMinutes < 30) return c.Value; }
             string role = "";
-            try { string f = System.IO.Path.Combine(Root, "profiles", login + ".json"); if (File.Exists(f)) { var r = SubsImport.ParseJ(File.ReadAllText(f))["roles"] as JObject; if (r != null) role = (bool?)r["mod"] == true ? "mod" : (bool?)r["vip"] == true ? "vip" : ""; } } catch (Exception) { }
+            try { if (login.IndexOf(':') >= 0) return ""; string f = System.IO.Path.Combine(Root, "profiles", login + ".json"); if (File.Exists(f)) { var r = SubsImport.ParseJ(File.ReadAllText(f))["roles"] as JObject; if (r != null) role = (bool?)r["mod"] == true ? "mod" : (bool?)r["vip"] == true ? "vip" : ""; } } catch (Exception) { }
             lock (RoleCache) { RoleCache[login] = new KeyValuePair<DateTime, string>(DateTime.UtcNow, role); if (RoleCache.Count > 3000) RoleCache.Clear(); }
             return role;
         }

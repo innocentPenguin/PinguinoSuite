@@ -201,6 +201,16 @@ namespace PinguinoHost
             try { EventLog.OnChat(user, text, role); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
             try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
             }
+            else   // YouTube / TikTok are full citizens: same points, boards, chat feed and logs as Twitch (key = "yt:id", display name beside it)
+            {
+                bool synth = false; try { synth = Control.Synthetic; } catch (Exception) { }
+                string shown = PlatformUsers.Display(user); bool isCmd = (text ?? "").TrimStart().StartsWith("!");
+                try { Economy.NoteForeign(user); ChatStats.Note(user, 1); } catch (Exception) { }
+                try { if (!synth) { Periods.AddBuffered(user, "messages", 1); if (isCmd) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
+                try { if (!synth) ChatFeed.Add(user, text, 1, false, 0, "", "", userId, platform, shown); } catch (Exception) { }
+                try { EventLog.OnChat(user, text, 1); } catch (Exception) { }
+                try { LiveLog.Record(user, userId, text, isCmd, platform, shown); } catch (Exception) { }
+            }
             try { if (CmdProfiles.Gate(user, text, role, isSub, subTier)) return; } catch (Exception ex) { Clog.Warn("cmdprofiles", "command gate failed: " + ex.Message); }   // edited tier / disabled / archived / cooldown: silent
             try { bool swallowed; text = CmdFix.Fix(user, text, m => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + m); else { string via; HostApi.SendAs("core", m, out via); } }, out swallowed); if (swallowed) return; } catch (Exception ex) { Clog.Warn("cmdfix", "typo check failed: " + ex.Message); }   // "! join", "!jon", "!rejoin" -> !join; near misses answer once
             try { if (FeatureCommands.Handle(user, text, role, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("commands", "leaderboard command failed: " + ex.Message); }
