@@ -26,7 +26,7 @@
            transition:left .8s cubic-bezier(.6,0,.2,1), top .8s cubic-bezier(.6,0,.2,1), transform .8s cubic-bezier(.6,0,.2,1), opacity .5s; opacity:0; }
   #stage.show { opacity:1; }
   /* Mini bar: teams sit on EITHER SIDE of the Rocket League scoreboard. --mini-gap = the hole left for the scoreboard (in unscaled px; x0.42 on screen). */
-  #stage { --mini-gap:500px; }
+  #stage { --mini-gap:470px; }
   /* Same spot as always (62px), unless the roster is tall enough that the bar would be cut off at the top: setMini() then lowers it just enough (--mini-top). */
   #stage.mini { left:50%; top:var(--mini-top, 62px); transform:translate(-50%,-50%) scale(.42); }
   #stage.mini .header { opacity:0; max-height:0; margin:0; }
