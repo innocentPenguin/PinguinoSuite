@@ -29,6 +29,9 @@ body.top #feed{justify-content:flex-start}
 .p-twitch{background:#9146ff}.p-youtube{background:#e62117}.p-kick{background:#53fc18;color:#111}.p-discord{background:#5865f2}.p-tiktok{background:#111;box-shadow:0 0 0 1px #fff6}
 .chat-username,.chat-text{unicode-bidi:isolate}.chat-username{font-weight:800;font-size:calc(1em * var(--ns,1))}.chat-colon{margin-right:.3em}.chat-text{font-weight:600}
 .chat-text img.emo{height:1.35em;vertical-align:middle;margin:-2px 1px}
+.synchra .chat-notice{font-style:normal;opacity:1}.synchra .chat-notice .chat-username{color:var(--tc,#fff)}
+.synchra .nchip{display:inline-block;background:rgba(24,24,27,.82);border-radius:.3em;padding:0 .35em;margin-right:.3em;-webkit-text-stroke:0}
+.pill.ev{background:#fcc419;color:#1a1306;font-size:max(.8em,8px);padding:.1em .55em;border-radius:.35em;font-weight:800;letter-spacing:.02em}
 .chat-notice{font-style:italic;opacity:.92}.chat-notice .chat-username{color:var(--ac,#ff8a1f)}
 .act-age{opacity:.6;font-size:.6em;margin-right:8px;display:inline-block;min-width:2.2em}
 .act-pill{display:inline-block;font:800 .55em/1.6 'Segoe UI',sans-serif;padding:0 .7em;border-radius:1em;background:var(--ac,#ff8a1f);color:#111;text-shadow:none;margin-right:8px;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
@@ -124,6 +127,10 @@ function logo(m) { return S.provider_logo ? `<span class="chat-provider p-${esc(
 function chatHtml(m) {
   const name = esc(m.display || m.user);
   const own = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '', col = S.name_color_mode === 'none' ? S.text_color : own || (S.name_color_mode === 'own' ? S.text_color : PCOL[m.platform] || '#ff8a1f');
+  if (m.event && S.look !== 'classic') {          // Synchra notice: orange event pill, dark name chip, then the text
+    const rest = esc((m.text || '').replace(new RegExp('^' + (m.display || m.user).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), ''));
+    return `<div class="chat-message-container chat-notice"><span class="chat-message">${logo(m)}<span class="pill ev">${esc(LABEL[m.event] || m.event)}</span><span class="nchip"><span class="chat-username">${name}</span></span><span class="chat-text">${rest}</span></span></div>`;
+  }
   if (m.event) return `<div class="chat-message-container chat-notice"><span class="chat-message">${logo(m)}<span class="chat-username" style="color:${col}">${name}</span> <span class="chat-text">${esc((m.text || '').replace(new RegExp('^' + (m.display || m.user).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), ''))}</span></span></div>`;
   return `<div class="chat-message-container"><span class="chat-message">${logo(m)}${badges(m)}<span class="chat-username" style="color:${col}">${name}</span>${S.username_colon ? '<span class="chat-colon">:</span>' : ' '}<span class="chat-text">${emoBody(m)}</span></span></div>`;
 }

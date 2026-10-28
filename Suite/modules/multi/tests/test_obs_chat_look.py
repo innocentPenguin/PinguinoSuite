@@ -115,3 +115,8 @@ def test_font_default_is_nunito_bundled_and_hand_picked_fonts_survive():
     assert (root / "fonts" / "Nunito.woff2").read_bytes()[:4] == b"wOF2" and (root / "fonts" / "OFL.txt").stat().st_size > 1000
     html = (root / "obs.html").read_text("utf-8")
     assert "url(/assets/fonts/Nunito.woff2)" in html and "letter-spacing:.05em" in html and "1px 1px 1px" in html and "http" not in html.split("@font-face")[1].split(chr(10))[0]
+
+
+def test_page_has_synchra_notice_markup():
+    html = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text(encoding="utf-8")
+    assert "pill ev" in html and "nchip" in html
