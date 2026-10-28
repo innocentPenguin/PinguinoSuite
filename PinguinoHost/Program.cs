@@ -177,7 +177,7 @@ namespace PinguinoHost
                 HostApi.Messages++;
                 Console.WriteLine("[chat-in " + platform + "] " + user + ": " + (text.Length > 80 ? text.Substring(0, 80) : text));
                 string uid = login;
-                Task.Run(() => { try { Dispatch(login, text, msgId, 1, uid, false, null, false, 0, platform); if (platform == "tiktok") ReplyCtx.LogSilent(user, text); } catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); } finally { ReplyCtx.End(); } });
+                Task.Run(() => { try { Dispatch(login, text, msgId, 1, uid, false, null, false, 0, platform); HostApi.FlushForeign(); if (text.StartsWith("!")) { string cmd = text.Split(' ')[0]; if (cmd.Length > 30) cmd = cmd.Substring(0, 30); Clog.Info("chat-in", platform + " " + user + " (" + login + ") " + cmd + " -> " + ReplyCtx.OutSummary()); } if (platform == "tiktok") ReplyCtx.LogSilent(user, text); } catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); } finally { ReplyCtx.End(); } });
                 return new JObject { { "ok", true } };
             }
             catch (Exception ex) { Clog.Warn("chat-in", platform + " chat line failed: " + ex.Message); return new JObject { { "ok", false }, { "error", "failed" } }; }
@@ -188,7 +188,7 @@ namespace PinguinoHost
         {
             if (!Lease.MayRun) return;
             bool fx = platform != "twitch";   // chat from YouTube etc. (HostApi /api/chat-in): own namespaced identity, viewer role, answers go to that platform only; Twitch-only machinery below is skipped
-            if (fx) ReplyCtx.BeginForeign(platform, msgId, user); else ReplyCtx.Begin(msgId, user);   // every reply made while handling this message is a native Twitch reply to it
+            if (fx) ReplyCtx.BeginForeign(platform, msgId, user, true); else ReplyCtx.Begin(msgId, user);   // every reply made while handling this message is a native Twitch reply to it
             bool spamCand = false;
             if (!fx) {
             try { if (SpamFirst.OnChat(user, text, role, isSub, subTier, firstMsg, out spamCand)) return; } catch (Exception ex) { Clog.Warn("spam", "first-message check failed: " + ex.Message); }   // link spam in a brand-new chatter's first line: dropped before any bot or bonus (off by default, Data\config\spam_first.json)

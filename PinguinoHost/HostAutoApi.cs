@@ -139,13 +139,38 @@ namespace PinguinoHost
         }
         /// <summary>a reply to chat from another platform: one explicit platform through Multi /api/send (reply_to = that platform's message id), NO Twitch fallback; tiktok is read-only: logged and skipped quietly</summary>
         public static Func<string, JObject, JObject> TestMultiSend;   // test hook (path, body) -> Multi answer
+        static readonly System.Text.RegularExpressions.Regex RxTwitchEmote = new System.Text.RegularExpressions.Regex(@"\binnoce108\w*\*?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         static bool SendForeign(string pf, string text, out string via)
         {
             string parent, login; ReplyCtx.Current(out parent, out login);
             string line = ReplyCtx.Prepare(text, out parent);
             if (login != "" && login.IndexOf(':') > 0) { string shown = PlatformUsers.Display(login); line = System.Text.RegularExpressions.Regex.Replace(line, System.Text.RegularExpressions.Regex.Escape(login), m => shown, System.Text.RegularExpressions.RegexOptions.IgnoreCase); }   // "yt:id" is only our internal key: say the display name
             line = ShowNames(line);   // other viewers named in the line: display names, never keys
+            line = RxTwitchEmote.Replace(line, "").Replace("  ", " ").Trim();   // Twitch emote tokens (innoce108*) are plain text on YouTube / TikTok
+            if (line == "") { via = "nothing left to say"; return true; }
             if (pf == "tiktok") { via = "tiktok is read-only"; ReplyCtx.NoteSilent(line); return true; }   // no reply anywhere (never Twitch, never Multi); one log line per handled command from ReplyCtx.LogSilent
+            // YouTube has no native reply: the answer to a viewer says who it is for
+            if (PlatformUsers.IsForeign(login) && !line.StartsWith("@")) line = "@" + PlatformUsers.Display(login) + " " + line;
+            if (ReplyCtx.Hold(line)) { via = "held: goes out with the rest of this answer as one message"; return true; }
+            return SendOut(pf, line, out via);
+        }
+        /// <summary>the held lines of one handled chat-in message go out as one message (split only when over YouTube's 200 characters)</summary>
+        public static void FlushForeign()
+        {
+            string pf = ReplyCtx.Platform; var held = ReplyCtx.TakeHeld(); if (held.Count == 0 || pf == "twitch") return;
+            string at = held[0].StartsWith("@") && held[0].IndexOf(' ') > 0 ? held[0].Substring(0, held[0].IndexOf(' ') + 1) : "";
+            var sb = new System.Text.StringBuilder(held[0]);
+            for (int i = 1; i < held.Count; i++) sb.Append(' ').Append(at != "" && held[i].StartsWith(at, StringComparison.OrdinalIgnoreCase) ? held[i].Substring(at.Length) : held[i]);
+            string all = sb.ToString(); int lim = pf == "youtube" ? 195 : 450;
+            while (all.Length > 0)
+            {
+                string part = all; if (part.Length > lim) { int cut = part.LastIndexOf(' ', lim); if (cut < lim / 2) cut = lim; part = part.Substring(0, cut); }
+                all = all.Substring(part.Length).TrimStart(); string v; SendOut(pf, part.TrimEnd(), out v);
+            }
+        }
+        static bool SendOut(string pf, string line, out string via)
+        {
+            string parent, login; ReplyCtx.Current(out parent, out login);
             if (SaidRecently(pf, line)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent to " + pf + ", same line said moments ago"); return true; }
             var body = new JObject { { "platform", pf }, { "text", line } }; if (!string.IsNullOrEmpty(parent)) body["reply_to"] = parent;
             JObject r = TestMultiSend != null ? TestMultiSend("/api/send", body) : AlertBridge.Post("/api/send", body);
@@ -153,6 +178,7 @@ namespace PinguinoHost
             via = ok ? "multi:" + pf : "multi refused " + pf + ": " + (((string)r?["text"]) ?? ((string)r?["detail"]) ?? "no answer");
             if (!ok) Clog.Warn("chat", "send to " + pf + " failed (no Twitch fallback): " + via);
             if (ok) ChatInStats.Reply(); else ChatInStats.SendError();
+            ReplyCtx.NoteOut(ok, line);
             return ok;
         }
         /// <summary>true when this name is one of our own bot sender accounts or the channel itself (loop guard for chat-in)</summary>

@@ -41,12 +41,12 @@ try:
     chk('no token -> 401', c == 401, c)
     c, j = cin('Viewer', '!hi'); time.sleep(2.5)
     chk('chat-in ok', c == 200 and j.get('ok'), j)
-    chk('exactly one send, to youtube, with reply_to, @sender dropped, no yt: key leaked', len(sends) == 1 and sends[0][0] == '/api/send' and sends[0][1] == {'platform': 'youtube', 'text': 'hello from the Host', 'reply_to': 'yt-msg-1'}, sends)
+    chk('exactly one send, to youtube, with reply_to, @sender dropped, no yt: key leaked', len(sends) == 1 and sends[0][0] == '/api/send' and sends[0][1] == {'platform': 'youtube', 'text': '@Viewer hello from the Host', 'reply_to': 'yt-msg-1'}, sends)
     chk('Multi called with the bearer token', sends and sends[0][2] == 'Bearer multi-test', sends[:1])
     n = len(sends); cin('Viewer2', '!hi', mid='yt-msg-2'); time.sleep(2)
-    chk('same text again for another viewer within 30 s: duplicate guard (platform+text) holds it back', len(sends) == n, sends[n:])
+    chk('another viewer gets their own @name line (a different line, so no duplicate hold-back)', len(sends) == n + 1 and sends[n][1]['text'] == '@Viewer2 hello from the Host', sends[n:])
     cin('Viewer3', '!bc', mid='yt-msg-3'); time.sleep(2)
-    chk('text with the viewer name shows the plain name, not yt:viewer3', sends[-1][1]['text'] == 'Viewer3 uses bc' or sends[-1][1]['text'].lower() == 'viewer3 uses bc', sends[-1:])
+    chk('text with the viewer name shows the plain name, not yt:viewer3', sends[-1][1]['text'].lower() in ('viewer3 uses bc', '@viewer3 viewer3 uses bc'), sends[-1:])
     n = len(sends); cin('Viewer', '!modonly', mid='yt-msg-4'); time.sleep(1.5)
     chk('role is forced to viewer: mod-only command stays silent even if the body claims mod', len(sends) == n, sends[n:])
     post('/api/chat-in', {'platform': 'youtube', 'user': 'Mod', 'text': '!modonly', 'msgId': 'x', 'role': 4, 'isMod': True}); time.sleep(1.5)
@@ -70,6 +70,12 @@ try:
     q = [e for e in cstate().get('queue', []) if e.get('platform') == 'youtube']
     chk('youtube viewer joins with the channel id as key, display name kept', len(q) == 1 and q[0]['username'] == 'yt:ucabc-1_x' and q[0]['name'] == 'Yt Fan', cstate().get('queue'))
     chk('youtube replies go to youtube only, with the display name and no yt: key', sends[n:] and all(x[1]['platform'] == 'youtube' and 'yt:' not in x[1]['text'] for x in sends[n:]), sends[n:])
+    # "!register <epic> !join" in one line: the epic name stops at the " !", the join runs, ONE message goes back
+    n = len(sends); cin('Petar', '!register petar1211 !join', userId='UCpetar', mid='yt-p1'); time.sleep(3)
+    q = [e for e in cstate().get('queue', []) if e.get('username') == 'yt:ucpetar']
+    chk('register+join in one line: queued', len(q) == 1, cstate().get('queue'))
+    chk('register+join: ONE message, @Petar, registered + joined, no second line', len(sends) - n == 1 and sends[n][1]['text'].startswith('@Petar ') and 'Registered as petar1211' in sends[n][1]['text'] and 'joined the queue' in sends[n][1]['text'], sends[n:])
+    pl = json.load(open(os.path.join(d, 'players.json'))); chk('the epic name is petar1211 only', pl.get('yt:ucpetar', {}).get('GameId') == 'petar1211', pl.get('yt:ucpetar'))
     # mods remove them by display name (any case) or by key; two players with the same name are refused
     host.stdin.write(b'#trial: !kick tik toker' + bytes([10])); host.stdin.flush(); time.sleep(2)
     chk('!kick by display name removes the tiktok player', not [e for e in cstate().get('queue', []) if e['username'] == 'tt:7001'], cstate().get('queue'))

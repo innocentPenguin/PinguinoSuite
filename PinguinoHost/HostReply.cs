@@ -11,7 +11,7 @@ namespace PinguinoHost
     /// The duplicate-line guard (HostApi.SaidRecently) still sees the original text, so the same line is never said twice.</summary>
     public static class ReplyCtx
     {
-        sealed class C { public string Id, Login, Platform = "twitch", FirstSilent; public int Silent; public DateTime At; }
+        sealed class C { public string Id, Login, Platform = "twitch", FirstSilent, FirstOut; public int Silent, Sent, Errs; public DateTime At; public System.Collections.Generic.List<string> Buf; }
         static readonly AsyncLocal<C> Cur = new AsyncLocal<C>();
         static readonly Regex RxId = new Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", RegexOptions.Compiled);
         internal static bool AllowAnyId;   // test switch: accept simulated ids too
@@ -21,7 +21,12 @@ namespace PinguinoHost
         public static void Begin(string msgId, string login) { Cur.Value = Real(msgId) ? new C { Id = msgId, Login = (login ?? "").TrimStart('@'), At = DateTime.UtcNow } : null; }
         public static void End() { Cur.Value = null; }
         /// <summary>chat that came from another platform (YouTube ...): replies to it go to THAT platform only, never to Twitch. msgId = the platform's own message id (may be empty), login = the namespaced viewer ("yt:name")</summary>
-        public static void BeginForeign(string platform, string msgId, string login) { Cur.Value = new C { Id = msgId ?? "", Login = (login ?? "").TrimStart('@'), Platform = (platform ?? "twitch").ToLowerInvariant(), At = DateTime.UtcNow }; }
+        public static void BeginForeign(string platform, string msgId, string login, bool collect = false) { Cur.Value = new C { Id = msgId ?? "", Login = (login ?? "").TrimStart('@'), Platform = (platform ?? "twitch").ToLowerInvariant(), At = DateTime.UtcNow, Buf = collect ? new System.Collections.Generic.List<string>() : null }; }
+        /// <summary>chat-in answers: the lines one handled message makes are collected and go out as ONE message (YouTube allows ~1 message/second and 200 characters; Ivan wants one message per answer on every platform)</summary>
+        public static bool Hold(string line) { var c = Cur.Value; if (c == null || c.Buf == null) return false; lock (c.Buf) c.Buf.Add(line); return true; }
+        public static System.Collections.Generic.List<string> TakeHeld() { var c = Cur.Value; if (c == null || c.Buf == null) return new System.Collections.Generic.List<string>(); lock (c.Buf) { var l = c.Buf; c.Buf = null; return l; } }
+        public static void NoteOut(bool ok, string line) { var c = Cur.Value; if (c == null) return; if (ok) c.Sent++; else c.Errs++; if (c.FirstOut == null) c.FirstOut = line; }
+        public static string OutSummary() { var c = Cur.Value; if (c == null) return ""; string f = c.FirstOut ?? ""; if (f.Length > 80) f = f.Substring(0, 80); return "replies sent " + c.Sent + ", send errors " + c.Errs + (c.Silent > 0 ? ", unsendable " + c.Silent : "") + (f != "" ? ", first: " + f : ""); }
         /// <summary>a reply that cannot be sent (TikTok is read-only): counted on the context; ONE log line per handled command comes from LogSilent</summary>
         public static void NoteSilent(string text) { var c = Cur.Value; if (c == null) return; c.Silent++; if (c.FirstSilent == null) c.FirstSilent = text; }
         public static void LogSilent(string user, string cmd)
