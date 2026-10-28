@@ -46,6 +46,7 @@
 
   /* One name at a time: the stream name and the Epic name crossfade (html.alt = showing the Epic name). Timing: ALT_SECONDS / FADE_MS below. */
   :root { --fade:.4s; }
+  .pf { flex:none; align-self:center; font-size:.38em; font-weight:800; line-height:1; letter-spacing:.06em; padding:.28em .42em; border-radius:.45em; background:rgba(20,16,12,.78); color:#ff9d3c; box-shadow:inset 0 0 0 .08em rgba(255,157,60,.55); }
   .nm { position:relative; flex:1 1 auto; min-width:0; display:block; overflow:hidden; white-space:nowrap; }
   .nm > span { display:block; unicode-bidi:plaintext; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:opacity var(--fade) ease, transform var(--fade) ease; }
   .nm .n2 { position:absolute; left:0; right:0; top:0; opacity:0; transform:translateY(40%); }
@@ -100,11 +101,38 @@
   // Alternating names: one name per seat at full size, crossfading between the stream name and the Epic name.
   var ALT_SECONDS = 4;      // how long each name stays (0 = never alternate, stream name only)
   var FADE_MS = 400;        // crossfade time. Both can be overridden by ?alt=4&fade=400 or by LIVE_STATE.overlay {altSeconds, fadeMs} (Host JSON)
+  function f(p, k) { return p[k] != null ? p[k] : p[k.charAt(0).toLowerCase() + k.slice(1)]; }
+  // ── Platform people: a YouTube / TikTok viewer shows their platform name + a small platform marker, never the raw yt:/tt: key ──
+  // Rows may be plain key strings or {Username|username, name, display (Epic), platform}. Names/platforms the row lacks are looked up from the Host's /api/customs/state (queue rows + match.players), else the prefix is stripped and the platform read from it.
+  var HOSTURL = location.protocol.indexOf("http") === 0 ? location.origin : "http://127.0.0.1:8770", IDX = {};
+  var PFTAG = { twitch:"TV", youtube:"YT", tiktok:"TT" };
+  function keyPf(k) { k = String(k || "").toLowerCase(); return /^(yt:|youtube[-:])/.test(k) ? "youtube" : /^(tt:|tiktok[-:])/.test(k) ? "tiktok" : "twitch"; }
+  function keyName(k) { return String(k || "").replace(/^(yt|tt|youtube|tiktok)[-:]/i, ""); }
+  function normRow(p) {
+    var o = typeof p === "string" ? { Username: p } : p, k = String(f(o, "Username") || ""), ix = IDX[k.toLowerCase()] || {};
+    var pf = String(o.platform || o.Platform || ix.platform || keyPf(k)).toLowerCase(); if (!PFTAG[pf]) pf = keyPf(k);
+    var nm = o.name || o.Name || ix.name || "";
+    var ep = f(o, "Epic") || o.display || ix.display || "";
+    var r = {}; for (var x in o) r[x] = o[x];
+    r.Username = nm || keyName(k); r.Epic = ep; r.Platform = pf; r.Key = k;
+    return r;
+  }
+  function normMatch(m) { var c = {}; for (var x in m) c[x] = m[x]; c.blue = (m.blue || []).map(normRow); c.orange = (m.orange || []).map(normRow); return c; }
+  function loadIdx() {
+    fetch(HOSTURL + "/api/customs/state").then(function (r) { return r.json(); }).then(function (j) {
+      var ix = {}; function put(k, name, pf, ep) { if (k) ix[String(k).toLowerCase()] = { name: name, platform: pf, display: ep }; }
+      ((j && j.queue) || []).forEach(function (q) { put(q.username, q.name, q.platform, q.display); });
+      (((j && j.match) || {}).players || []).forEach(function (q) { var o = ix[String(q.username || "").toLowerCase()] || {}; put(q.username, q.name || o.name, q.platform || o.platform, o.display); });
+      IDX = ix;
+    }).catch(function () {});
+  }
+  loadIdx(); setInterval(loadIdx, 5000);
+  function pfChip(p) { var pf = p.Platform || "twitch"; return '<span class="pf pf-' + pf + '">' + PFTAG[pf] + '</span>'; }
   function norm(s) { return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, ""); }
   function nameHtml(p) {
-    var u = f(p, "Username"), e = f(p, "Epic");
-    if (!SHOW_EPIC || !e || !u || norm(e) === norm(u)) return '<span class="nm one"><span class="n1">' + esc(u || e) + '</span></span>';
-    return '<span class="nm"><span class="n1">' + esc(u) + '</span><span class="n2">' + esc(e) + '</span></span>';
+    var u = f(p, "Username"), e = f(p, "Epic"); p = p.Platform ? p : normRow(p); u = f(p, "Username"); e = f(p, "Epic");
+    if (!SHOW_EPIC || !e || !u || norm(e) === norm(u)) return pfChip(p) + '<span class="nm one"><span class="n1">' + esc(u || e) + '</span></span>';
+    return pfChip(p) + '<span class="nm"><span class="n1">' + esc(u) + '</span><span class="n2">' + esc(e) + '</span></span>';
   }
   var altTimer = null, altKey = "";
   function applyAlt(s) {
@@ -130,8 +158,6 @@
   var stage = document.getElementById("stage");
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
-  // The bot writes Username/Mmr/Epic; accept lowercase too in case that changes.
-  function f(p, k) { return p[k] != null ? p[k] : p[k.charAt(0).toLowerCase() + k.slice(1)]; }
 
   function playersHtml(list) {
     return (list || []).map(function (p, i) {
@@ -141,8 +167,8 @@
 
 
   // ── Keyed diff: same match, teams edited -> animate only what changed (no reveal, no flicker) ──
-  function pkey(p) { return norm(f(p, "Username") || f(p, "Epic")); }
-  function nameSig(p) { return (f(p, "Username") || "") + "|" + (f(p, "Epic") || ""); }
+  function pkey(p) { return norm(p.Key || f(p, "Username") || f(p, "Epic")); }
+  function nameSig(p) { return (f(p, "Username") || "") + "|" + (f(p, "Epic") || "") + "|" + (p.Platform || ""); }
   function stageScale() { var w = stage.offsetWidth; return w ? stage.getBoundingClientRect().width / w : 1; }
   function syncRows(containers, lists) {
     var old = {}, firstRect = {}, k, i, c;
@@ -204,7 +230,7 @@
   function render(s) {
     applyAlt(s);
     applyTeams(s);
-    var m = s && s.currentMatch;
+    var m = s && s.currentMatch; if (m) m = normMatch(m);
     if (!m) { stage.classList.remove("show"); lastTeamsKey = ""; lastRosterKey = ""; return; }
 
     var teamsKey = JSON.stringify([m.id, m.group, s.activity]), rosterKey = JSON.stringify([m.blue, m.orange, m.format]);
