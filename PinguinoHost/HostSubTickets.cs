@@ -56,7 +56,7 @@ namespace PinguinoHost
         /// <summary>buy a ticket. Returns null on success (ticket id in `id`), otherwise the reason (short, safe to say in chat). `reqId` makes a retry idempotent (site request id).</summary>
         public static string Buy(string login, string reqId, out string id)
         {
-            login = (login ?? "").Trim().TrimStart('@').ToLowerInvariant(); id = null;
+            login = PlatformUsers.Target(login); id = null;
             lock (L)
             {
                 var d = Doc(); var s = (JObject)d["settings"]; var tk = (JArray)d["tickets"]; long now = Now(); long price = N(s, "price");
@@ -82,7 +82,7 @@ namespace PinguinoHost
 
         static JObject Find(JArray tk, string idOrLogin, string status)
         {
-            idOrLogin = (idOrLogin ?? "").Trim().TrimStart('@').ToLowerInvariant();
+            idOrLogin = PlatformUsers.Target(idOrLogin);
             return tk.OfType<JObject>().Where(t => (status == null || (string)t["status"] == status) && ((string)t["id"] == idOrLogin || (string)t["buyer"] == idOrLogin)).OrderBy(t => (long)t["at"]).FirstOrDefault();
         }
 

@@ -70,7 +70,7 @@ namespace PinguinoHost
             return null;
         }
         static string Id(string kind, string who) { return kind + "-" + who + "-" + Guid.NewGuid().ToString("N").Substring(0, 12); }
-        static string Canon(string s) { return (s ?? "").Trim().TrimStart('@').ToLowerInvariant(); }
+        static string Canon(string s) { return PlatformUsers.Target(s); }
 
         // ---- one door for every result line: Chatty speaks it (PgGame event) when it can post, otherwise the plain Host line. Never both. ----
         static long _csStamp = -1; static bool _csOk = true;

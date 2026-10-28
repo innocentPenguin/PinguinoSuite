@@ -51,6 +51,9 @@ try:
     cin('Viewer', '!gamble 10', mid='yt-g1'); time.sleep(2.5)
     pg = [l for l in open(outp, 'rb').read().decode('utf-8', 'replace').splitlines() if l.startswith('[pggame]')]
     chk('PgGame event for a YouTube viewer says the display name, never the yt: key', pg and '"display":"Viewer"' in pg[-1] and '"display":"yt:' not in pg[-1], pg[-1:])
+    host.stdin.write(('#ivan: !removepoints Viewer 1' + chr(10)).encode()); host.stdin.flush(); time.sleep(2)
+    o2 = open(outp, 'rb').read().decode('utf-8', 'replace')
+    chk('a mod can name a YouTube viewer by display name (!removepoints Viewer 1 acts on the yt: key)', 'yt:uc123 now has' in o2, o2[-400:])
     n = len(sends); cin('Viewer2', '!hi', mid='yt-msg-2'); time.sleep(2)
     chk('another viewer gets their own @name line (a different line, so no duplicate hold-back)', len(sends) == n + 1 and sends[n][1]['text'] == '@Viewer2 hello from the Host', sends[n:])
     cin('Viewer3', '!bc', mid='yt-msg-3'); time.sleep(2)

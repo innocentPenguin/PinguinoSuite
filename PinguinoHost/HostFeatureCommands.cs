@@ -226,7 +226,7 @@ namespace PinguinoHost
         static void Lookup(string[] a, Action<string> say)
         {
             if (a.Length == 0) { say("Usage: !lookup <user>"); return; }
-            string who = a[0].TrimStart('@').ToLowerInvariant(); string main = Boards.CanonLogin(who); var d = Data(); var u = ((JObject)d["users"])[main] as JObject; var sub = SubsImport.UserInfo(main);
+            string who = PlatformUsers.Target(a[0]); string main = Boards.CanonLogin(who); var d = Data(); var u = ((JObject)d["users"])[main] as JObject; var sub = SubsImport.UserInfo(main);
             if (u == null && sub == null) { say("Nothing on record for " + who + "."); return; }
             var aka = u?["aka"] as JArray; string head = (u != null ? (string)u["name"] : main) + " (" + main + (who != main ? ", you typed an alias" : "") + (aka != null && aka.Count > 0 ? "; also " + string.Join(", ", aka.Select(x => (string)x)) : "") + ")";
             string s = sub == null ? "no sub on record" : "T" + (int?)sub["tier"] + " " + (int?)sub["tenure"] + "mo" + ((bool?)sub["founder"] == true ? " founder" : "") + ((bool?)sub["lapsed"] == true ? " lapsed" : "");

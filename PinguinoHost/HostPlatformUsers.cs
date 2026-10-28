@@ -64,6 +64,19 @@ namespace PinguinoHost
             }
         }
         /// <summary>the name to show for a key: the remembered display name for other platforms, the Twitch display name otherwise; never empty</summary>
+        /// <summary>a typed target ("@name", a display name, or a yt:/tt: key) -> the login/key to act on. A name that matches exactly ONE YouTube/TikTok viewer's display name and is not a known Twitch viewer resolves to that viewer's key; everything else is just lower-cased.</summary>
+        public static string Target(string s)
+        {
+            string l = (s ?? "").Trim().TrimStart('@').ToLowerInvariant(); if (l == "" || l.IndexOf(':') > 0) return l;
+            try
+            {
+                if (System.IO.File.Exists(System.IO.Path.Combine(HostApi.DataDir, "profiles", l + ".json"))) return l;   // a Twitch viewer with that name wins
+                string hit = null; int n = 0;
+                lock (L) { foreach (var p in M().Properties()) { var e = p.Value as JObject; if (e != null && string.Equals((string)e["name"] ?? "", l, StringComparison.OrdinalIgnoreCase) && IsForeign(p.Name)) { hit = p.Name; n++; } } }
+                return n == 1 ? hit : l;
+            }
+            catch (Exception) { return l; }
+        }
         /// <summary>a yt:/tt: key becomes the viewer's name; anything else stays exactly as given</summary>
         public static string Shown(string login) { return string.IsNullOrEmpty(login) || login.IndexOf(':') < 1 || !IsForeign(login) ? login ?? "" : Display(login); }
         public static string Display(string login)

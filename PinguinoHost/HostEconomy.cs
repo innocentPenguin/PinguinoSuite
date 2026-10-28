@@ -325,7 +325,7 @@ namespace PinguinoHost
         public static string Adjust(string login, double delta, string by)
         {
             if (Sim.IsSim(login)) { Sim.Credit(login, (long)delta); return "(sim)"; }
-            login = Canon(Boards.AliasMap(), login); if (login == "") return "Which user?";
+            login = Canon(Boards.AliasMap(), PlatformUsers.Target(login)); if (login == "") return "Which user?";
             lock (L)
             {
                 if (delta < 0) { double have = Math.Floor(Me(login).Points); delta = -Math.Min(-delta, Math.Max(0, have)); }   // a take never goes below 0
