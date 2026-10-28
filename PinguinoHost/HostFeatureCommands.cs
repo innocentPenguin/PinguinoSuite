@@ -61,7 +61,7 @@ namespace PinguinoHost
                 {
                     if (t != me && Boards.IsAnon(t)) continue;   // an opted-out / anonymous viewer is never named with a balance by somebody else (Chatty then stays silent); asking about yourself works as before
                     var u = Economy.User(t); long of = (long)(int)u["of"], rank = (long)(int)u["pointsRank"]; if (rank < 1) { of++; rank = of; }   // not on the board yet: last place
-                    string v = ((long)Math.Floor((double)u["points"])).ToString(CultureInfo.InvariantCulture) + "|" + rank + "|" + of + "|" + DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Program.SetGlobal("pinguino.points." + t, v);
+                    string v = ((long)Math.Floor((double)u["points"])).ToString(CultureInfo.InvariantCulture) + "|" + rank + "|" + of + "|" + DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Program.SetGlobal("pinguino.points." + t, v); Program.SetGlobal("pinguino.pointsline." + t, Periods.RankText(t, "points") + " | balance: " + Economy.Num(Math.Floor((double)u["points"])) + " " + Economy.CurrencyName);
                     if (HostApi.SimMode) Console.WriteLine("[points-lookup] " + t + " = " + v);
                 }
             }
@@ -72,6 +72,7 @@ namespace PinguinoHost
         {
             var parts = (text ?? "").Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries); if (parts.Length == 0 || !parts[0].StartsWith("!")) return false;
             string cmd = parts[0].ToLowerInvariant(); string[] args = parts.Skip(1).ToArray(); string me = user.ToLowerInvariant();
+            Economy.CanonTop(ref cmd, ref args);   // "!top points", "!toppoints", "!top watch", "!points top" ... one spelling each
             bool mod = role >= 3;
             if (Economy.IsHiddenCommand(cmd)) { if (role >= 4) Economy.HandleHidden(user, cmd, args); return true; }   // broadcaster only, silent for everyone else (not even the lore bot answers)
             if (cmd == "!offlinemode") { OfflineMode.Handle(user, args, role, say); return true; }
@@ -133,12 +134,13 @@ namespace PinguinoHost
         // ---- viewers ----
         static void Top(string board, string[] args, Action<string> say)
         {
-            var d = Data(); var def = Boards_[board]; string month = "";
+            var d = Data(); var def = Boards_[board]; string month = ""; bool allTime = args.Any(a => { string x = a.ToLowerInvariant(); return x == "all" || x == "alltime" || x == "lifetime" || x == "ever"; });
             foreach (var a in args) { month = ParseMonth(a); if (month != "") break; }
+            if (month == "" && !allTime && board != "streaks") month = ParseMonth("this");   // boards default to the current month; "all" asks for all time
             JArray list;
             if (month == "") list = (JArray)d["top"][def[0] == "streakBest" ? "streaks" : def[0] == "gifts" ? "gifts" : def[0]];
             else list = ((d["months"] as JObject)?[month]?[def[1]] as JArray) ?? new JArray();
-            string when = month == "" ? "all time" : MonthLabel(month);
+            string when = month == "" ? "all time" : month == ParseMonth("this") ? "this month" : MonthLabel(month);
             if (month == "" && board == "streaks") when = "all time";
             string baseTitle = def[2].Replace(" (best shared)", "");
             string title = board == "streaks" ? (month == "" ? def[2] : baseTitle + " (" + when + ")") : baseTitle + " (" + when + ", " + def[4] + ")";
@@ -159,7 +161,7 @@ namespace PinguinoHost
             var u = ((JObject)d["users"])[who] as JObject; string nm = Boards.IsAnon(who) ? Boards.AnonName : u != null ? (string)u["name"] : who;
             if (pos < 0) { say(self ? "@" + display + " I have no " + (board == "gifters" ? "gifted subs" : "bits") + " recorded for you yet. " + Link + "#" + def[3] : "No " + (board == "gifters" ? "gifted subs" : "bits") + " recorded for " + who + " yet."); return; }
             string extra = board == "bits" && (int)u["bitsBadge"] > 0 ? ", bits badge " + Num((int)u["bitsBadge"]) : "";
-            say((self ? "@" + display + " you have " : nm + " has ") + (board == "gifters" ? "gifted " + Num((int)u["gifts"]) + " sub" + ((int)u["gifts"] == 1 ? "" : "s") : "cheered " + Num((int)u["bits"]) + " bits") + extra + " - rank #" + (pos + 1) + " of " + rank.Count + ". " + Link + "#" + def[3]);
+            say((self ? "@" + display : nm) + " " + Periods.RankText(who, board == "gifters" ? "gifts" : "bits", board == "gifters" ? (int)u["gifts"] : (int)u["bits"]) + extra);
         }
         static void SubInfo(string me, string[] args, Action<string> say, string display)
         {

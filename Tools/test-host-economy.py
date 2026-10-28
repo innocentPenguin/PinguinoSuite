@@ -73,9 +73,16 @@ try:
     # !points / !point: the Host only publishes the numbers; Chatty speaks the ONE short line (its own 8 s / 20 s cooldowns apply)
     n_say = len(says()); feed(host, 'viewer1: !points cyfirl', 9); feed(host, 'ana: !points', 31); feed(host, 'viewer2: !point cyfirl', 31)
     chk('!points <name>, !points (own) and !point: one short reply each, in order, nothing else (no tail, no second bot line)', says()[n_say:] == ['cyfirl has 1,250 points (#1 of 3)', '@ana you have 400 points (#2 of 3)', 'cyfirl has 1,250 points (#1 of 3)'], says()[n_say:])
-    feed(host, 'ana: !watchtime'); chk('!watchtime', any('@ana 1d 1h watched (#1 of 3)' in m for m in says()[-1:]), says()[-1:])
-    feed(host, 'viewer1: !toppoints'); chk('!toppoints', any(m.lower().startswith('top points (all time): 1. cyfirl 1,250 | 2. ana 400 | 3. newguy 70') for m in says()[-1:]), says()[-1:])
-    feed(host, 'viewer1: !topwatch'); chk('!topwatch', any(m.lower().startswith('most watch time (all time): 1. ana 1d 1h') for m in says()[-1:]), says()[-1:])
+    feed(host, 'ana: !watchtime'); chk('!watchtime', any(m.startswith('@ana 0m watched this month (not ranked yet) | today: 0m, week: 0m, alltime: 1d 1h') for m in says()[-1:]), says()[-1:])
+    feed(host, 'viewer1: !toppoints all'); chk('!toppoints all', any(m.lower().startswith('top points (all time): 1. cyfirl 1,250 | 2. ana 400 | 3. newguy 70') for m in says()[-1:]), says()[-1:])
+    feed(host, 'viewer1: !topwatch all'); chk('!topwatch all', any(m.lower().startswith('most watch time (all time): 1. ana 1d 1h') for m in says()[-1:]), says()[-1:])
+
+    for i, (a, b2) in enumerate([('!top', '!toppoints'), ('!top points', '!toppoints'), ('!top watch', '!topwatch'), ('!top watchtime', '!topwatch'), ('!topwatchtime', '!topwatch'), ('!points top', '!toppoints'), ('!watchtime top', '!topwatch')]):
+        time.sleep(0.4); feed(host, 'v%d: %s' % (i + 10, a)); x = says()[-1:]; time.sleep(0.4); feed(host, 'w%d: %s' % (i + 10, b2)); y = says()[-1:]
+        chk('%s answers like %s' % (a, b2), x == y and len(x) == 1, (x, y))
+    feed(host, 'viewer7: !top all'); chk('!top all = points all time', any(m.lower().startswith('top points (all time): 1. cyfirl') for m in says()[-1:]), says()[-1:])
+    feed(host, 'viewer8: !top watch all'); chk('!top watch all', any(m.lower().startswith('most watch time (all time): 1. ana') for m in says()[-1:]), says()[-1:])
+    feed(host, 'ana: !watchtime week'); chk('!watchtime week = myself', any(m.startswith('@ana 0m watched this month') for m in says()[-1:]), says()[-1:])
     n0 = len(says()); feed(host, 'viewer1: !addpoints @ana 500'); chk('viewers cannot add points', len(says()) == n0 and api('/api/economy/user?login=ana')['points'] == 400)
     feed(host, '*mod1: !addpoints @ana 500'); chk('mods can NOT add points (broadcaster only)', api('/api/economy/user?login=ana')['points'] == 400, says()[-1:])
     n1 = len(says()); feed(host, '#ivan: !addpoints @ana 500'); chk('the broadcaster can, silently', api('/api/economy/user?login=ana')['points'] == 900 and len(says()) == n1, says()[-1:])

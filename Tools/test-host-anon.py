@@ -21,7 +21,7 @@ try:
     for _ in range(120):
         try: urllib.request.urlopen(B + '/api/status', timeout=2); break
         except Exception: time.sleep(0.5)
-    r = ask('v1: !toppoints', 1.2); txt = ' '.join(r)
+    r = ask('v1: !toppoints all', 1.2); txt = ' '.join(r)
     chk('top points still lists people', 'lice' in txt, r)
     chk('an !optmeout viewer is not named on the points board', 'ecretsam' not in txt.lower() and 'secretsam' not in txt.lower(), r)
     chk('...and shows as Anonymous Penguin', 'Anonymous Penguin' in txt, r)

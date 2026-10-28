@@ -258,9 +258,29 @@ namespace PinguinoHost
             catch (Exception) { return ""; }
         }
 
+        /// <summary>THE rank line every leaderboard-style command uses (Host commands, and Chatty/Helper can copy the wording):
+        /// "18h 39m watched this month (#9 of 412) | today: 40m, week: 4h 38m, alltime: 20d 12h". Monthly value first, then today / week / all time.
+        /// allTime: pass a number to use it instead of the period log's own all-time figure (-1 = use the log).</summary>
+        public static bool RankLineWeek = true;
+        public static string RankText(string login, string metric, double allTime = -1)
+        {
+            try
+            {
+                metric = Mapped(metric); Func<double, string> fmt = v => metric == "watchtime" ? Economy.Dur(v) : Economy.Num(v);
+                string who = Boards.CanonLogin(login ?? "");
+                var q = Query(metric, "month", "", who, 1); var me = q["me"] as JObject;
+                double mv = me != null ? (double)me["value"] : 0; int total = (int)q["total"];
+                string unit = metric == "watchtime" ? "watched" : metric == "points" ? Economy.CurrencyName + " earned" : metric == "messages" ? "chat messages" : metric == "gifts" ? "gifted subs" : metric == "bits" ? "bits" : metric;
+                string rank = me != null ? " (#" + (int)me["rank"] + " of " + total + ")" : " (not ranked yet)";
+                double d = Value(who, metric, "day"), w = Value(who, metric, "week"), a = allTime >= 0 ? allTime : Value(who, metric, "all");
+                return fmt(mv) + " " + unit + " this month" + rank + " | today: " + fmt(d) + (RankLineWeek ? ", week: " + fmt(w) : "") + ", alltime: " + fmt(a);
+            }
+            catch (Exception) { return ""; }
+        }
+
         static string PeriodWord(string p) { return p == "day" ? "today" : p == "week" ? "this week" : p == "month" ? "this month" : p == "year" ? "this year" : "all time"; }
         /// <summary>!top / !leaders &lt;metric&gt; [day|week|month|year|all]</summary>
-        public static void ChatTop(string[] args, Action<string> say, string link)
+        public static void ChatTop(string[] args, Action<string> say, string link, string key = "", string keyLabel = "")
         {
             string metric = "", period = "";
             foreach (var a in args)
@@ -269,13 +289,14 @@ namespace PinguinoHost
                 switch (x) { case "day": case "today": case "daily": period = "day"; continue; case "week": case "weekly": period = "week"; continue; case "month": case "monthly": period = "month"; continue; case "year": case "yearly": period = "year"; continue; case "all": case "alltime": case "lifetime": period = "all"; continue; }
                 string m = Mapped(x); if (m != "" && metric == "") metric = m;
             }
-            if (metric == "") { say("Usage: !top <watchtime|points|messages|level|gifts|bits> [day|week|month|year|all]"); return; }
-            if (period == "") period = "week";
-            var q = Query(metric, period, "", null, 5); var rows = (JArray)q["rows"];
+            if (metric == "") metric = "points";   // no word = the points board
+            if (period == "") period = "month";   // boards default to the current month
+            var q = Query(metric, period, key, null, 5); var rows = (JArray)q["rows"];
+            string word = key != "" && keyLabel != "" ? "in " + keyLabel : PeriodWord(period);
             string title = metric == "watchtime" ? "Most watch time" : metric == "points" ? "Most " + Economy.CurrencyName + " earned" : metric == "messages" ? "Most chat messages" : metric == "level" ? "Top levels" : metric == "gifts" ? "Most gifted subs" : metric == "bits" ? "Most bits" : "Top " + metric;
-            if (rows.Count == 0) { say("Nobody on the " + metric + " board " + PeriodWord(period) + " yet. " + link); return; }
+            if (rows.Count == 0) { say("Nobody on the " + metric + " board " + word + " yet. " + link); return; }
             Func<JObject, string> fmt = r => metric == "watchtime" ? Economy.Dur((double)r["value"]) : metric == "level" ? "lvl " + (int)r["value"] : Economy.Num((double)r["value"]);
-            say(title + " " + PeriodWord(period) + ": " + string.Join(" | ", rows.OfType<JObject>().Select(r => (int)r["rank"] + ". " + (string)r["name"] + " " + fmt(r))) + " - " + link);
+            say(title + " " + word + ": " + string.Join(" | ", rows.OfType<JObject>().Select(r => (int)r["rank"] + ". " + (string)r["name"] + " " + fmt(r))) + " - " + link);
         }
 
         /// <summary>what the site push carries: for the main metrics the top rows of the current and recent periods, every month and year, and all time (old periods stay browsable)</summary>

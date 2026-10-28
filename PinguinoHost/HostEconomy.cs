@@ -435,12 +435,78 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("economy", "hidden command failed: " + ex.Message); }
         }
-        public static bool IsViewerCommand(string c) { return c == "!top" || c == "!leaders" || c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch" || IsBankCommand(c); }
+        public static bool IsViewerCommand(string c)
+        {
+            c = (c ?? "").ToLowerInvariant();
+            return c == "!top" || c == "!tops" || c == "!leaders" || c == "!leader" || c == "!points" || c == "!watchtime" || c == "!toppoints" || c == "!topwatch" || c == "!toplevel" || c == "!topmessages" || TopJoined.ContainsKey(c) || c == "!top" + CurrencyName.ToLowerInvariant() || IsBankCommand(c);
+        }
+
+        // ---- every "top" spelling goes to one place: "!top" alone = points; "!top points" / "!toppoints" / "!top watch" / "!topwatch" / "!top gifters" ... all work
+        static readonly Dictionary<string, string> TopWord = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+            { "points", "!toppoints" }, { "point", "!toppoints" }, { "pts", "!toppoints" }, { "currency", "!toppoints" }, { "earned", "!toppoints" },
+            { "watch", "!topwatch" }, { "watchtime", "!topwatch" }, { "time", "!topwatch" }, { "hours", "!topwatch" }, { "watching", "!topwatch" },
+            { "level", "!toplevel" }, { "levels", "!toplevel" }, { "lvl", "!toplevel" }, { "xp", "!toplevel" },
+            { "gifters", "!topgifters" }, { "gifter", "!topgifters" }, { "gifts", "!topgifters" }, { "gifted", "!topgifters" }, { "subs", "!topgifters" },
+            { "bits", "!topbits" }, { "bitters", "!topbits" }, { "cheers", "!topbits" },
+            { "yappers", "!topyappers" }, { "yapper", "!topyappers" }, { "yap", "!topyappers" }, { "messages", "!topmessages" }, { "chat", "!topmessages" },
+            { "streak", "!topstreak" }, { "streaks", "!topstreak" },
+            { "emotes", "!topemotes" }, { "emote", "!topemotes" } };
+        static readonly Dictionary<string, string> TopJoined = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+            { "!topwatchtime", "!topwatch" }, { "!toptime", "!topwatch" }, { "!topwatching", "!topwatch" }, { "!toppoint", "!toppoints" }, { "!toppts", "!toppoints" }, { "!topcurrency", "!toppoints" }, { "!topearned", "!toppoints" },
+            { "!toplevels", "!toplevel" }, { "!toplvl", "!toplevel" }, { "!topxp", "!toplevel" }, { "!topgifts", "!topgifters" }, { "!topsubs", "!topgifters" }, { "!topgifted", "!topgifters" },
+            { "!topcheers", "!topbits" }, { "!topchat", "!topmessages" }, { "!topyap", "!topyappers" } };
+        static readonly string[] AskTop = { "top", "leaders", "leaderboard", "leaderboards", "board", "lb", "best", "ranking", "ranks" };
+        static readonly string[] PeriodWords = { "day", "today", "daily", "week", "weekly", "month", "monthly", "year", "yearly", "all", "alltime", "lifetime", "ever" };
+        /// <summary>rewrites the viewer's spelling to the one command that serves it (idempotent). "!points top" / "!watchtime top" / "!gifted top" are the top boards; "!watchtime week" is just yourself.</summary>
+        public static void CanonTop(ref string cmd, ref string[] args)
+        {
+            string c = (cmd ?? "").ToLowerInvariant(); string j;
+            if (TopJoined.TryGetValue(c, out j)) { cmd = j; return; }
+            if (c == "!top" + CurrencyName.ToLowerInvariant()) { cmd = "!toppoints"; return; }
+            if (c == "!top" || c == "!tops" || c == "!leaders" || c == "!leader")
+            {
+                string w; string a0 = args.Length > 0 ? args[0] : "";
+                if (a0 != "" && (TopWord.TryGetValue(a0, out w) || (a0.ToLowerInvariant() == CurrencyName.ToLowerInvariant() && (w = "!toppoints") != null))) { cmd = w; args = args.Skip(1).ToArray(); }
+                else cmd = "!toppoints";   // no word (or just a period / month) = the points board
+                return;
+            }
+            if (args.Length > 0 && (c == "!points" || c == "!point" || c == "!watchtime" || c == "!gifted" || c == "!bits"))
+            {
+                string a0 = args[0].ToLowerInvariant();
+                if (AskTop.Contains(a0)) { cmd = c == "!watchtime" ? "!topwatch" : c == "!gifted" ? "!topgifters" : c == "!bits" ? "!topbits" : "!toppoints"; args = args.Skip(1).ToArray(); }
+                else if (PeriodWords.Contains(a0)) args = args.Skip(1).ToArray();   // "!watchtime week" = my own watch time, not a user called week
+            }
+        }
+        static void TopBoard(string cmd, string[] args, Action<string> say, Func<string, string> parseMonth, Func<string, string> monthLabel)
+        {
+            string metric = cmd == "!topwatch" ? "watchtime" : cmd == "!toplevel" ? "level" : cmd == "!topmessages" ? "messages" : "points"; string period = "month", month = "";
+            foreach (var a in args)
+            {
+                switch (a.ToLowerInvariant())
+                {
+                    case "day": case "today": case "daily": period = "day"; continue; case "week": case "weekly": period = "week"; continue;
+                    case "year": case "yearly": period = "year"; continue; case "month": case "monthly": period = "month"; month = ""; continue;
+                    case "all": case "alltime": case "lifetime": case "ever": period = "all"; continue;
+                }
+                string mo = parseMonth(a); if (mo != "") { month = mo; period = "month"; }
+            }
+            if (period == "all" && (metric == "points" || metric == "watchtime"))
+            {
+                bool pts = metric == "points"; string cur = CurrencyName;
+                var al = Boards.AliasMap(); var s = Snapshot(al); string streamer = Norm((string)HostApi.StreamerCreds()["Channel"]);
+                var top = s.Users.Where(k => !Boards.IsBot(k.Key) && k.Key != streamer).OrderByDescending(k => pts ? k.Value.Points : k.Value.Minutes).Take(5).Where(k => (pts ? k.Value.Points : k.Value.Minutes) >= 1).ToList();
+                if (top.Count == 0) { say("Nobody on the " + (pts ? cur : "watch time") + " board for all time yet. " + Link + (pts ? "#points" : "#watchtime")); return; }
+                say((pts ? "Top " + cur : "Most watch time") + " (all time): " + string.Join(" | ", top.Select((k, i) => (i + 1) + ". " + Boards.DisplayName(k.Key) + " " + (pts ? Num(k.Value.Points) : Dur(k.Value.Minutes)))) + " - full list: " + Link + (pts ? "#points" : "#watchtime"));
+                return;
+            }
+            if (period == "month" && month != "" && month == parseMonth("this")) month = "";   // the current month is just "this month"
+            Periods.ChatTop(new[] { metric, period }, say, Link, month, month == "" ? "" : monthLabel(month));
+        }
         public static bool IsModCommand(string c) { return c == "!removepoints" || c == "!economy" || c == "!tip" || c == "!tipped"; }
 
         public static void Handle(string user, string cmd, string[] args, bool mod, Action<string> say, Func<string, string> parseMonth, Func<string, string> monthLabel)
         {
-            string me = user.ToLowerInvariant();
+            string me = user.ToLowerInvariant(); CanonTop(ref cmd, ref args);
             try
             {
                 if (IsBankCommand(cmd)) { HandleBank(user, cmd, args, say); return; }
@@ -448,26 +514,14 @@ namespace PinguinoHost
                 {
                     if (Cooling("g|" + cmd, CoolSec("PINGUINO_STREAK_COOL_GLOBAL", 8)) || Cooling("u|" + cmd + "|" + me, CoolSec("PINGUINO_STREAK_COOL_USER", 20))) return;
                     string cur = CurrencyName;
-                    if (cmd == "!top" || cmd == "!leaders") { Periods.ChatTop(args, say, Link); return; }
-                    if (cmd == "!toppoints" || cmd == "!topwatch")
-                    {
-                        bool pts = cmd == "!toppoints"; string month = ""; foreach (var a in args) { month = parseMonth(a); if (month != "") break; }
-                        var al = Boards.AliasMap(); var s = Snapshot(al);
-                        var src = month == "" ? s.Users : (s.Months.ContainsKey(month) ? s.Months[month] : new Dictionary<string, Row>());
-                        string streamer = Norm((string)HostApi.StreamerCreds()["Channel"]);
-                        var top = src.Where(k => !Boards.IsBot(k.Key) && k.Key != streamer).OrderByDescending(k => pts ? k.Value.Points : k.Value.Minutes).Take(5).Where(k => (pts ? k.Value.Points : k.Value.Minutes) >= 1).ToList();
-                        string when = month == "" ? "all time" : monthLabel(month);
-                        if (top.Count == 0) { say("Nobody on the " + (pts ? cur : "watch time") + " board for " + when + " yet. " + Link + (pts ? "#points" : "#watchtime")); return; }
-                        say((pts ? "Top " + cur : "Most watch time") + " (" + when + "): " + string.Join(" | ", top.Select((k, i) => (i + 1) + ". " + Boards.DisplayName(k.Key) + " " + (pts ? Num(k.Value.Points) : Dur(k.Value.Minutes)))) + " - full list: " + Link + (pts ? "#points" : "#watchtime"));
-                        return;
-                    }
+                    if (cmd == "!top" || cmd == "!leaders" || cmd == "!toppoints" || cmd == "!topwatch" || cmd == "!toplevel" || cmd == "!topmessages") { TopBoard(cmd, args, say, parseMonth, monthLabel); return; }
                     string target = args.Length > 0 ? args[0].TrimStart('@').ToLowerInvariant() : me; bool self = target == me;
                     var u = User(target); string disp = Boards.DisplayName((string)u["login"]);
                     double p = (double)u["points"], m = (double)u["minutes"];
                     if (cmd == "!watchtime")
-                        say(m < 1 ? (self ? "@" + user + " I have no watch time recorded for you yet." : disp + " has no watch time recorded yet.") : (self ? "@" + user : disp) + " " + Dur(m) + " watched (#" + (int)u["watchRank"] + " of " + (int)u["of"] + ")" + Periods.Line(target, "watchtime"));
+                        say(m < 1 ? (self ? "@" + user + " I have no watch time recorded for you yet." : disp + " has no watch time recorded yet.") : (self ? "@" + user : disp) + " " + Periods.RankText(target, "watchtime", m));
                     else
-                        say(p < 1 && m < 1 ? (self ? "@" + user + " you have 0 " + cur + " yet. You earn them by hanging out while the stream is live." : disp + " has no " + cur + " yet.") : (self ? "@" + user + " you have " : disp + " has ") + Num(p) + " " + cur + " (#" + (int)u["pointsRank"] + " of " + (int)u["of"] + ")" + Periods.Line(target, "points") + ".");
+                        say(p < 1 && m < 1 ? (self ? "@" + user + " you have 0 " + cur + " yet. You earn them by hanging out while the stream is live." : disp + " has no " + cur + " yet.") : (self ? "@" + user : disp) + " " + Periods.RankText(target, "points") + " | balance: " + Num(p) + " " + cur);
                     return;
                 }
                 if (!mod) return;   // the rest is mods only, silent for everyone else

@@ -235,10 +235,9 @@ namespace PinguinoHost
             try
             {
                 lock (L) { LoadSet(); if (((JArray)_set["emotes"]).Count == 0 || _usage == null) { Scan(false); } }
-                if (cmd == "!emote")
+                if (cmd == "!emote" && args.Length > 0)
                 {
-                    string name = args.Length > 0 ? args[0] : "";
-                    if (name == "") { say("Usage: !emote <name> - how often an emote of the channel's 7TV set is used. Search them all: " + Link); return true; }
+                    string name = args[0];
                     var all = Api("", "", 0); var arr = (JArray)all["emotes"];
                     var hit = arr.FirstOrDefault(e => (string)e["name"] == name) ?? arr.FirstOrDefault(e => string.Equals((string)e["name"], name, StringComparison.OrdinalIgnoreCase));
                     if (hit == null)
@@ -253,8 +252,10 @@ namespace PinguinoHost
                     return true;
                 }
                 string month = ""; foreach (var a in args) { month = parseMonth(a); if (month != "") break; }
+                bool allTime = args.Any(a => { string x = a.ToLowerInvariant(); return x == "all" || x == "alltime" || x == "lifetime" || x == "ever"; });
+                if (month == "" && !allTime) month = parseMonth("this");   // monthly by default; "!topemotes all" for all time (a bare "!emote" shows the same list)
                 var d = Api("", month, 0); var list = ((JArray)d["emotes"]).Where(e => (int)e["uses"] > 0 && (bool)e["ambiguous"] == false).Take(8).ToList();
-                string when = month == "" ? "all time" : monthLabel(month);
+                string when = month == "" ? "all time" : month == parseMonth("this") ? "this month" : monthLabel(month);
                 if (list.Count == 0) { say("No 7TV emote uses recorded for " + when + " yet. " + Link); return true; }
                 say("Top emotes (" + when + "): " + string.Join(" | ", list.Select((e, i) => (i + 1) + ". " + (string)e["name"] + " " + ((int)e["uses"]).ToString("N0", CultureInfo.InvariantCulture))) + " - search all: " + Link);
             }
