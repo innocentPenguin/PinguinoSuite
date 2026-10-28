@@ -45,7 +45,7 @@ namespace PinguinoHost
                 _set = null;
             }
             var d = new JObject { { "CurrencyName", "points" }, { "PointsPerMinute", 1.0 }, { "SubMultiplier", 2.0 }, { "VipMultiplier", 1.5 }, { "ModMultiplier", 1.0 }, { "OnlyWhileLive", true }, { "Earning", true },
-                { "WelcomeBonus", 100 }, { "FallbackActiveMinutes", 30 }, { "ForeignPresenceMinutes", 10 }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
+                { "WelcomeBonus", 100 }, { "FallbackActiveMinutes", 30 }, { "ForeignPresenceMinutes", 10 }, { "ForeignGreeting", true }, { "ActivityBonus", true }, { "ActivityLinesPerPoint", 5 }, { "ActivityCapPer10Min", 2 }, { "Exclude", new JArray() } };
             Phase2Defaults(d); PointsDefaults(d);
             try
             {

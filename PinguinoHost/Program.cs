@@ -206,6 +206,7 @@ namespace PinguinoHost
                 bool synth = false; try { synth = Control.Synthetic; } catch (Exception) { }
                 string shown = PlatformUsers.Display(user); bool isCmd = (text ?? "").TrimStart().StartsWith("!");
                 try { Economy.NoteForeign(user); ChatStats.Note(user, 1); } catch (Exception) { }
+                try { if (PlatformUsers.TakeFresh(user)) Welcome.OnForeign(user, platform, text, s => { string via; HostApi.SendAs("core", s, out via); }); } catch (Exception ex) { Clog.Warn("welcome", "newcomer greeting failed: " + ex.Message); }   // new YouTube viewer: welcome + bonus in the same message as the answer to their line
                 try { if (!synth) { Periods.AddBuffered(user, "messages", 1); if (isCmd) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
                 try { if (!synth) ChatFeed.Add(user, text, 1, false, 0, "", "", userId, platform, shown); } catch (Exception) { }
                 try { EventLog.OnChat(user, text, 1); } catch (Exception) { }

@@ -31,6 +31,34 @@ namespace PinguinoHost
                 catch (Exception ex) { Clog.Warn("welcome", "welcome bonus failed: " + ex.Message); }
             });
         }
+        /// <summary>a brand-new YouTube / TikTok viewer (first line ever seen, see PlatformUsers.TakeFresh): welcomed once, a few seconds AFTER the answer to their first line (so it never rides along with it: YouTube takes about one message a second),
+        /// with the WelcomeBonus paid at that moment (ledger "welcome:key", so never twice). Setting ForeignGreeting (default on) turns it off; TikTok has no reply path, so there the bonus is paid silently.
+        /// PINGUINO_FOREIGN_WELCOME_DELAY_MS changes the 3 s wait (tests).</summary>
+        public static void OnForeign(string key, string platform, string text, Action<string> say)
+        {
+            try
+            {
+                if (Control.Synthetic || string.IsNullOrEmpty(key)) return;
+                try { var g = Economy.SettingsView()["ForeignGreeting"]; if (g != null && !(bool)g) return; } catch (Exception) { }
+                if (WelcomeBack.IsSpamText(text, true) || WelcomeBack.IsSpamLogin(PlatformUsers.Display(key))) { Clog.Info("welcome", key + " looks like spam: no greeting, no bonus"); return; }
+                if (Economy.Applied("welcome:" + key)) return;
+                int ms; if (!int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_FOREIGN_WELCOME_DELAY_MS"), out ms) || ms < 0) ms = 3000;
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(ms);
+                        long amount = Amount(); string id = "welcome:" + key; if (Economy.Applied(id)) return;
+                        bool paid = amount > 0 && Economy.Credit(id, key, amount, "welcome bonus");
+                        Clog.Info("welcome", platform + " newcomer " + PlatformUsers.Display(key) + " (" + key + ")" + (paid ? ": " + amount + " " + Economy.CurrencyName + " paid" : ""));
+                        ReplyCtx.BeginForeign(platform, "", key, false);
+                        try { say("Welcome to the stream! 🐧" + (paid ? " +" + amount + " " + Economy.CurrencyName + " to gamble or spend in !shop." : "")); } finally { ReplyCtx.End(); }
+                    }
+                    catch (Exception ex) { Clog.Warn("welcome", "foreign welcome failed: " + ex.Message); }
+                });
+            }
+            catch (Exception ex) { Clog.Warn("welcome", "foreign welcome failed: " + ex.Message); }
+        }
         static long Amount() { try { var v = Economy.SettingsView()["WelcomeBonus"]; return v == null ? 100 : (long)v; } catch (Exception) { return 100; } }
     }
 }

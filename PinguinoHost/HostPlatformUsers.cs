@@ -51,12 +51,16 @@ namespace PinguinoHost
             raw = Regex.Replace(raw, @"[^\w\-]", "_"); if (raw.Length > 40) raw = raw.Substring(0, 40); if (raw == "") raw = "unknown";
             return prefix + ":" + raw.ToLowerInvariant();
         }
+        static readonly HashSet<string> Fresh = new HashSet<string>();
+        /// <summary>true once for a viewer that was not in platform_users.json before this chat line (the greeting asks)</summary>
+        public static bool TakeFresh(string login) { lock (Fresh) return Fresh.Remove(login ?? ""); }
         public static void Remember(string login, string platform, string display, string id)
         {
             display = (display ?? "").Trim(); if (display.Length > 60) display = display.Substring(0, 60); if (login == "" || display == "") return;
             lock (L)
             {
                 var m = M(); var e = m[login] as JObject;
+                if (e == null) lock (Fresh) Fresh.Add(login);   // first time this viewer is ever seen: greeted once (TakeFresh)
                 if (e != null && (string)e["name"] == display && (string)e["platform"] == platform) return;
                 m[login] = new JObject { { "platform", platform }, { "name", display }, { "id", id ?? "" }, { "seen", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
                 Save(m);
