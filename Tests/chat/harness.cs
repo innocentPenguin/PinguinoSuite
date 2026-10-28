@@ -1402,6 +1402,17 @@ public static class Harness
             CPHProxy.Globals["pinguino.points.oldguy"] = "5|1|2|" + (ts - 120);
             CPHProxy.Sent.Clear(); Msg("OldGuy", "!points", null, false);
             Check("!points with a stale or missing Host lookup says nothing", CPHProxy.Sent.Count == 0, string.Join("|", CPHProxy.Sent));
+            string rl = "340 pinguinos earned this month (#4 of 210) | today: 20, alltime: 5,430 | balance: 1,250 pinguinos";
+            CPHProxy.Globals["pinguino.pointsline.pointsguy"] = rl; CPHProxy.Globals["pinguino.points.pointsguy"] = "3654|12|400|" + ts;
+            SF("_cannedAt").GetValue(null).GetType().GetMethod("Clear").Invoke(SF("_cannedAt").GetValue(null), null);
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("PointsGuy", "!points", null, false);
+            Check("!points: the Host's ready-made line, prefixed with @name, one message", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@PointsGuy " + rl, string.Join("|", CPHProxy.Sent));
+            SF("_cannedAt").GetValue(null).GetType().GetMethod("Clear").Invoke(SF("_cannedAt").GetValue(null), null);
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("PointsGuy", "!points week", null, false);
+            Check("!points week: the period word is ignored, own line", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@PointsGuy " + rl, string.Join("|", CPHProxy.Sent));
+            CPHProxy.Globals.Remove("pinguino.pointsline.pointsguy"); SF("_cannedAt").GetValue(null).GetType().GetMethod("Clear").Invoke(SF("_cannedAt").GetValue(null), null);
+            CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("PointsGuy", "!points", null, false);
+            Check("!points: no ready-made line falls back to the old one", CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0] == "@PointsGuy you have 3,654 points (#12 of 400)", string.Join("|", CPHProxy.Sent));
         }
 
         // ── YouTube (non-Twitch) viewers: the answer goes through CPH.SendMessage only (the Host routes it back to that platform), never the Twitch dup record / Helix ──

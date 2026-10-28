@@ -3159,6 +3159,7 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         if (_cannedAt.TryGetValue("u|!points|" + c.Login, out lu) && now - lu < 20) return true;
         if (_cannedAt.TryGetValue("g|!points", out lg) && now - lg < 8) return true;
         string arg = (text ?? "").Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim().Split(' ')[0].TrimStart('@') : "";
+        if (Regex.IsMatch(arg, @"^(week|today|month|monthly|all|alltime|top)$", RegexOptions.IgnoreCase)) arg = "";   // period words: the Host owns them ('top' is rerouted there); Chatty answers with the one ready-made line
         bool self = arg == "" || !Regex.IsMatch(arg, @"^[A-Za-z0-9_]{1,25}$") || arg.ToLower() == c.Login;
         string target = self ? c.Login : arg.ToLower();
         string raw = ""; try { raw = CPH.GetGlobalVar<string>("pinguino.points." + target, false) ?? ""; } catch (Exception) { }
@@ -3167,6 +3168,8 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         { CPH.LogWarn("[Chatty] !points: no fresh Host lookup for " + target); return true; }
         string num = pts.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
         string line = (self ? "@" + c.Display + " you have " : (arg) + " has ") + num + " points (#" + rank + " of " + of + ")";
+        string ready = ""; try { ready = (CPH.GetGlobalVar<string>("pinguino.pointsline." + target, false) ?? "").Replace("\r", " ").Replace("\n", " ").Trim(); } catch (Exception) { }
+        if (ready != "") line = "@" + c.Display + " " + (self ? "" : PlainName(arg) + ": ") + ready;   // the Host's ready-made line ("340 pinguinos earned this month (#4 of 210) | today: 20, alltime: 5,430 | balance: ...")
         _cannedAt["u|!points|" + c.Login] = now; _cannedAt["g|!points"] = now;
         using (PgReplyTo(c.MsgId ?? "", c.Login)) PgSay("chat", line);
         return true;
