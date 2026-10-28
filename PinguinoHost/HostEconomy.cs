@@ -290,7 +290,7 @@ namespace PinguinoHost
                     double p; paid.TryGetValue(c, out p); paid[c] = p + give;
                 }
             }
-            if (IsLive()) { try { AlertBridge.OnPresent(paid.Keys.Where(k => k.IndexOf(':') < 0).ToList()); } catch (Exception ax) { Clog.Warn("alerts", "presence hook failed: " + ax.Message); } }
+            if (IsLive()) { try { AlertBridge.OnPresent(paid.Keys.ToList()); } catch (Exception ax) { Clog.Warn("alerts", "presence hook failed: " + ax.Message); } }
             if (v2) { try { string sid = CurSid(); if (sid == "off") { StartStream(); sid = CurSid(); } WatchStep(DateTimeOffset.UtcNow.ToUnixTimeSeconds(), paid.Keys.ToList(), sid); } catch (Exception wx) { Clog.Warn("economy", "watch step failed: " + wx.Message); } }
             string month = DateTime.UtcNow.ToString("yyyy-MM"); bool announce = false;
             lock (L)

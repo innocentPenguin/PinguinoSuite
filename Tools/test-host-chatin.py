@@ -48,6 +48,9 @@ try:
     chk('yt chat is a plain Twitch-style line in /api/chat/recent: platform, name, empty colour and badges', yl and yl[0]['name'] == 'Viewer' and yl[0]['display'] == 'Viewer' and yl[0]['color'] == '' and yl[0]['badges'] == [], rc[-3:])
     ll = [json.loads(l) for f in os.listdir(os.path.join(d, 'chat_logs', 'live')) for l in open(os.path.join(d, 'chat_logs', 'live', f), 'rb').read().decode('utf-8').splitlines()] if os.path.isdir(os.path.join(d, 'chat_logs', 'live')) else []
     chk('yt chat is in the live chat log with platform and display name', any(x.get('p') == 'youtube' and x.get('n') == 'Viewer' for x in ll), ll[-2:])
+    cin('Viewer', '!gamble 10', mid='yt-g1'); time.sleep(2.5)
+    pg = [l for l in open(outp, 'rb').read().decode('utf-8', 'replace').splitlines() if l.startswith('[pggame]')]
+    chk('PgGame event for a YouTube viewer says the display name, never the yt: key', pg and '"display":"Viewer"' in pg[-1] and '"display":"yt:' not in pg[-1], pg[-1:])
     n = len(sends); cin('Viewer2', '!hi', mid='yt-msg-2'); time.sleep(2)
     chk('another viewer gets their own @name line (a different line, so no duplicate hold-back)', len(sends) == n + 1 and sends[n][1]['text'] == '@Viewer2 hello from the Host', sends[n:])
     cin('Viewer3', '!bc', mid='yt-msg-3'); time.sleep(2)

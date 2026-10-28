@@ -214,6 +214,7 @@ namespace PinguinoHost
         public static string DisplayName(string login)
         {
             if (IsAnon(login)) return AnonName;
+            if ((login ?? "").IndexOf(':') > 0 && PlatformUsers.IsForeign(login)) return PlatformUsers.Display(login);   // yt:/tt: keys show the viewer's name
             lock (L) { var e = Names()[login] as JObject; string dn = e == null ? "" : (string)e["name"] ?? ""; if (dn != "") return dn; var u = (_cache?["users"] as JObject)?[login] as JObject; return u != null ? (string)u["name"] : login; }
         }
 
