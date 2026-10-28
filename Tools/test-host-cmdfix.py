@@ -27,7 +27,7 @@ try:
     for i, (w, to) in enumerate((('!jon', '!join'), ('!joi', '!join'), ('!jpin', '!join'), ('!joinm', '!join'), ('!rejoin', '!join'), ('!unjoin', '!leave'), ('!quit', '!leave'))):
         u = 'q%d' % i
         r = ask(u + ': ' + w, 0.4); chk(w + ' asks', len(r) == 1 and ('did you mean %s?' % to) in r[0] and r[0].startswith('@' + u + ' ') and 'yes' in r[0], r)
-        r = ask(u + ': yes', 0.4); chk(w + ' runs only after the yes', len(r) == 1 and ('Register first' in r[0] or "not in the queue" in r[0]), (to, r))
+        r = ask(u + ': yes', 0.4); chk(w + ' runs only after the yes', len(r) == 1 and ('Type !register' in r[0] or "not in the queue" in r[0]), (to, r))
     r = ask('n1: !jon', 0.4); r2 = ask('n1: no', 0.4); r3 = ask('n1: yes', 0.4); chk('no cancels, a later yes does nothing', len(r) == 1 and r2 == [] and r3 == [], (r, r2, r3))
     r = ask('n2: !jon', 0.4); r2 = ask('n2: !jon', 0.4); chk('asks once while waiting', len(r) == 1 and r2 == [], (r, r2))
     r = ask('n3: yes', 0.4); chk('a yes with nothing pending is ignored', r == [], r)
