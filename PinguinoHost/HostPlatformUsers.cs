@@ -73,6 +73,28 @@ namespace PinguinoHost
             string d = ""; try { d = Boards.DisplayName(l); } catch (Exception) { }
             return string.IsNullOrEmpty(d) ? l : d;
         }
+        // ---- tagged arrays for overlays: {username KEY, name, display (Epic / shown name), platform}; the key is found through Core's players.json (user -> GameId) ----
+        static DateTime _plMt = DateTime.MinValue; static Dictionary<string, string> _byEpic = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), _epicOf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        static void LoadPlayers()
+        {
+            try
+            {
+                string f = System.IO.Path.Combine(HostApi.DataDir, "runtime", "players.json"); if (!System.IO.File.Exists(f)) return;
+                var mt = System.IO.File.GetLastWriteTimeUtc(f); lock (L) { if (mt == _plMt) return; }
+                var j = JObject.Parse(System.IO.File.ReadAllText(f).TrimStart((char)0xFEFF)); var be = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); var eo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var p in j.Properties()) { string g = (string)(p.Value as JObject)?["GameId"] ?? ""; if (g != "") { be[g] = p.Name; eo[p.Name] = g; } }
+                lock (L) { _byEpic = be; _epicOf = eo; _plMt = mt; }
+            }
+            catch (Exception) { }
+        }
+        /// <summary>one tagged entry for an overlay list: `nameOrKey` is a player key (yt:..., twitch login) or the Epic / shown name a list carries</summary>
+        public static JObject TaggedEntry(string nameOrKey, string extraKey = null, string extraVal = null)
+        {
+            LoadPlayers(); string key = (nameOrKey ?? "").Trim(), epic = ""; string k2;
+            lock (L) { if (_epicOf.TryGetValue(key, out epic)) { } else { epic = ""; if (_byEpic.TryGetValue(key, out k2)) { epic = key; key = k2; } } }
+            var o = new JObject { { "username", key.ToLowerInvariant() }, { "display", epic != "" ? epic : (string)nameOrKey ?? "" } }; Tag(o, key.ToLowerInvariant());
+            if (extraKey != null) o[extraKey] = extraVal; return o;
+        }
         /// <summary>{login, platform, name} for pushes; Twitch logins stay as they were</summary>
         public static void Tag(JObject o, string login)
         {

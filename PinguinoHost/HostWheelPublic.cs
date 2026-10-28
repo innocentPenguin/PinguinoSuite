@@ -54,6 +54,13 @@ namespace PinguinoHost
                 { "serverNow", now }, { "botOnline", true },
                 { "signedUp", j["signedUp"] ?? 0 }, { "feed", j["feed"] ?? new JArray() }, { "feedMs", j["feedMs"] ?? 2000 }, { "showSignedUp", j["showSignedUp"] ?? true }
             };
+            try   // additive tagged lists beside the plain string ones: [{username KEY, name, display, platform}]
+            {
+                o["entrantsP"] = new JArray(names.Select(n => PlatformUsers.TaggedEntry(n)));
+                o["waitlistP"] = new JArray((o["waitlist"] as JArray ?? new JArray()).Select(x => PlatformUsers.TaggedEntry(x.Type == JTokenType.String ? (string)x : (string)x["name"] ?? (string)x["user"] ?? "")));
+                o["picksP"] = new JArray(picks.Select(p => PlatformUsers.TaggedEntry((string)p["name"], "team", p["team"] == null ? "" : p["team"].ToString())));
+            }
+            catch (Exception) { }
             o["draw"] = R > 0 ? new JObject { { "id", ((string)j["id"] ?? "w") + ":" + ((int?)j["round"] ?? 0) }, { "startedAt", 0 }, { "stepMs", 0 }, { "steps", steps } } : null;
             return o;
         }

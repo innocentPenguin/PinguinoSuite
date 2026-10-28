@@ -21,6 +21,7 @@ try:
     feed('#ivan: !wheel open')
     for u in ['ana', 'bo', 'cy', 'dee']: feed(u + ': !me')
     w = get('/api/wheel/public'); chk('lobby', w['status'] == 'open' and sorted(w['names']) == ['ana', 'bo', 'cy', 'dee'] and w['draw'] is None and w['signedUp'] == 4, w)
+    chk('tagged lists beside the plain ones: entrantsP / waitlistP / picksP', sorted(e['username'] for e in w['entrantsP']) == ['ana', 'bo', 'cy', 'dee'] and all(e['platform'] == 'twitch' and e['name'] and e['display'] for e in w['entrantsP']) and w['waitlistP'] == [] and w['picksP'] == [], w.get('entrantsP'))
     feed('#ivan: !wheel spin', 1.5); w = get('/api/wheel/public'); st = w['draw']['steps']
     chk('one pick, still in pool while spinning', w['status'] == 'drawing' and len(st) == 1 and st[0]['name'] in w['pool'] and w['manual']['revealed'] == 1 and w['manual']['total'] == 4 and not w['manual']['last'], w)
     chk('look fields', w['manual']['tail'] == 50 and w['manual']['nearMiss'] is True, w['manual'])

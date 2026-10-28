@@ -56,7 +56,7 @@ namespace PinguinoHost
                 Func<JToken, JArray> names = t => new JArray((t as JArray ?? new JArray()).OfType<JObject>().Select(x => (string)x["Username"] ?? (string)x["user"] ?? (string)x["username"] ?? "").Where(x => x != ""));
                 var blue = names(cm["blue"]); var orange = names(cm["orange"]); var pl = new JArray();
                 foreach (var n in blue) pl.Add(Tagged(new JObject { { "username", n }, { "team", "blue" } })); foreach (var n in orange) pl.Add(Tagged(new JObject { { "username", n }, { "team", "orange" } }));
-                match = new JObject { { "id", cm["id"] }, { "players", pl }, { "orange", orange }, { "blue", blue }, { "status", cm["status"] } };
+                match = new JObject { { "id", cm["id"] }, { "players", pl }, { "orange", orange }, { "blue", blue }, { "blueP", new JArray(blue.Select(n => PlatformUsers.TaggedEntry((string)n))) }, { "orangeP", new JArray(orange.Select(n => PlatformUsers.TaggedEntry((string)n))) }, { "status", cm["status"] } };   // blueP / orangeP: additive tagged lists, the old string arrays stay
             }
             return new JObject { { "ok", true }, { "streamer", ((bool?)s["streamerPlaying"] ?? true) ? "in" : "out" }, { "open", (bool?)s["queueOpen"] ?? false }, { "activity", s["activity"] }, { "mode", s["mode"] }, { "gameMode", s["gameMode"] }, { "format", s["format"] }, { "koth", (bool?)s["koth"] ?? false }, { "casualStyle", s["casualStyle"] },
  { "teams", Teams(s) }, { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 }, { "strikeGame", s["strikeGame"] ?? "rl" },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
