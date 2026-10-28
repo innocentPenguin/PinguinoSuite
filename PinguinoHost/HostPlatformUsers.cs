@@ -14,7 +14,30 @@ namespace PinguinoHost
         static readonly object L = new object(); static JObject _m;
         static string P { get { return Path.Combine(HostApi.DataDir, "platform_users.json"); } }
         static readonly Dictionary<string, string> Prefix = new Dictionary<string, string> { { "yt", "youtube" }, { "tt", "tiktok" }, { "kk", "kick" }, { "fb", "facebook" } };
-        static JObject M() { if (_m == null) { try { _m = File.Exists(P) ? JObject.Parse(File.ReadAllText(P, Encoding.UTF8)) : new JObject(); } catch (Exception) { _m = new JObject(); } } return _m; }
+        static JObject Parse(string f) { return JObject.Parse(File.ReadAllText(f, Encoding.UTF8).TrimStart((char)0xFEFF)); }
+        /// <summary>never starts blank over a good file: a file that fails to parse is moved aside (platform_users.json.corrupt-*), the .bak is tried next, and only then it starts empty (the corrupt copy is kept, never overwritten)</summary>
+        static JObject M()
+        {
+            if (_m != null) return _m;
+            try { if (File.Exists(P)) { _m = Parse(P); return _m; } }
+            catch (Exception ex)
+            {
+                try { File.Move(P, P + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")); } catch (Exception) { }
+                Clog.Warn("platform", "platform_users.json could not be read (" + ex.Message + "): kept as .corrupt-*, trying the .bak");
+            }
+            try { if (File.Exists(P + ".bak")) { _m = Parse(P + ".bak"); Clog.Warn("platform", "restored platform users from platform_users.json.bak"); return _m; } } catch (Exception) { }
+            _m = new JObject(); return _m;
+        }
+        /// <summary>temp file + replace, the previous version kept as .bak</summary>
+        static void Save(JObject m)
+        {
+            try
+            {
+                string tmp = P + ".tmp"; File.WriteAllText(tmp, m.ToString(), new UTF8Encoding(false));
+                if (File.Exists(P)) File.Replace(tmp, P, P + ".bak"); else File.Move(tmp, P);
+            }
+            catch (Exception ex) { Clog.Warn("platform", "could not save platform_users.json: " + ex.Message); }
+        }
         /// <summary>"twitch" for an unprefixed login, else the platform behind the prefix</summary>
         public static string PlatformOf(string login)
         {
@@ -36,7 +59,7 @@ namespace PinguinoHost
                 var m = M(); var e = m[login] as JObject;
                 if (e != null && (string)e["name"] == display && (string)e["platform"] == platform) return;
                 m[login] = new JObject { { "platform", platform }, { "name", display }, { "id", id ?? "" }, { "seen", DateTimeOffset.UtcNow.ToUnixTimeSeconds() } };
-                try { File.WriteAllText(P, m.ToString(), new UTF8Encoding(false)); } catch (Exception) { }
+                Save(m);
                 Publish(m);
             }
         }
