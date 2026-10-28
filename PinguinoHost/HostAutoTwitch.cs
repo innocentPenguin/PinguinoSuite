@@ -254,6 +254,7 @@ namespace PinguinoHost
         }
 
         const string DiscordLine = "Don't forget to join the community Discord! Hang out, chat, share media, receive updates → {link:discord}";
+        const string RaidStartLine = "Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Pinguinoraid innoce108Hype | Join the Discord: {link:discord}";   // ONE chat message (Ivan 10-27: one answer, one message)
         const string LeftBehindLine = "Didn't get raided along? Type !leftbehind for the link.";
         const string StaleInvite = "https://discord.gg/be6bus4GKh";
         /// <summary>one-time: (1) every saved text with the expired invite reads {link:discord} (the site's links); (2) 'Raid scheduled' fires at once: shoutout, emotes, Discord;
@@ -290,6 +291,29 @@ namespace PinguinoHost
                 Step("raid_target"), new JObject { { "type", "if" }, { "left", "{raid.line}" }, { "op", "notempty" }, { "right", "" }, { "then", new JArray { SayStep("{raid.line}") } }, { "else", new JArray() } });
         }
         /// <summary>one-time (marker "leftbehind1"): a file that was seeded before !leftbehind existed gets the action (enabled, as seeded). Deleting it afterwards sticks. The old sb-session-cmd / sb-goal-cmd / sb-recap seeds are NOT re-added.</summary>
+        /// <summary>one-time (Ivan 10-27): the emotes line and the Discord invite were two chat messages 0.9 s apart; they are ONE message now. Keeps the saved emotes text, dated backup first.</summary>
+        internal static void MigrateRaidMerge()
+        {
+            try
+            {
+                var doc = Doc(); var seeded = doc["seeded"] as JArray ?? new JArray(); if (seeded.Any(v => (string)v == "raidmerge1")) return;
+                var rs = ((JArray)doc["actions"]).OfType<JObject>().FirstOrDefault(o => (string)o["id"] == "sb-raidstart");
+                if (rs != null)
+                {
+                    var steps = (JArray)rs["steps"]; var says = steps.OfType<JObject>().Where(s => (string)s["type"] == "say").ToList();
+                    JObject dis = says.Skip(1).FirstOrDefault(s => ((string)s["text"] ?? "").IndexOf("Discord", StringComparison.OrdinalIgnoreCase) >= 0);
+                    if (says.Count >= 2 && dis != null)
+                    {
+                        try { File.Copy(Path.Combine(HostApi.DataDir, "automations.json"), Path.Combine(HostApi.DataDir, "automations.json.before-raidmerge-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak"), true); } catch (Exception) { }
+                        string link = ((string)dis["text"] ?? "").Contains("{link:discord}") ? "{link:discord}" : ((string)dis["text"] ?? "");
+                        var first = says[0]; string merged = ((string)first["text"] ?? "").TrimEnd() + " | Join the Discord: " + link;
+                        if (merged.Length <= 500) { first["text"] = merged; foreach (var s in steps.OfType<JObject>().Where(s => (string)s["type"] == "delay").ToList()) s.Remove(); dis.Remove(); }
+                    }
+                }
+                seeded.Add("raidmerge1"); doc["seeded"] = seeded; Save(doc);
+            }
+            catch (Exception ex) { Clog.Warn("automation", "raid merge migration failed: " + ex.Message); }
+        }
         internal static void MigrateLeftBehind()
         {
             try
@@ -375,7 +399,7 @@ namespace PinguinoHost
 
         public static void SeedStreamerBotPresets()
         {
-            MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow(); MigrateRaidOrder(); MigrateLeftBehind();
+            MigrateRaidStart(); MigrateRaidOutNoWait(); MigrateRaidFlow(); MigrateRaidOrder(); MigrateLeftBehind(); MigrateRaidMerge();
             try { MakePopupHold(); } catch (Exception ex) { Clog.Warn("automation", "popup hold migration failed: " + ex.Message); }
             try { SkipSmallRaidWait(); } catch (Exception ex) { Clog.Warn("automation", "small raid wait migration failed: " + ex.Message); }
             try { SeedRules(); } catch (Exception ex) { Clog.Warn("automation", "rules preset failed: " + ex.Message); }
@@ -423,8 +447,7 @@ namespace PinguinoHost
                     Act("sb-online", "Stream online", "from 'Stream Status (Online)' (the First 5 game restarts by itself)", false, new JArray { Tr("stream_online") }, Step("channel_info"), SayStep("Stream is live! Today we are streaming {game}.")),
                     Act("sb-offline", "Stream offline", "from 'Stream Status (Offline)'", false, new JArray { Tr("stream_offline") }, SayStep("Stream offline. Goodnight everybody. Thanks for tuning in!")),
                     Act("sb-raidstart", "Raid scheduled", "fires the moment the raid is picked (the Twitch countdown began): emotes line, then the Discord invite (from the site's links). No shoutout of the raid target (we go there anyway). The Multi raid card goes out with the event itself.", false, new JArray { Tr("raid_start") },
-                        SayStep("Raid started! Prepare your emotes! innoce108Arrive innoce108W innoce108Pinguinoraid innoce108Hype"),
-                        Step("delay", "ms", 700), SayStep(DiscordLine)),
+                        SayStep(RaidStartLine)),
                     Act("sb-raidout", "Raid out", "the raid has landed (viewers sent: the chat emptied, or Twitch's 90 s countdown ran out). The Host says the goodnight first, then this runs: a second chat line about !leftbehind (no link), then WARNING: stops the stream.", false, new JArray { Tr("raid_out") },
                         SayStep(LeftBehindLine), Step("delay", "ms", 1500), Step("obs_request", "request", "StopStream")),
                     LeftBehindAct(),

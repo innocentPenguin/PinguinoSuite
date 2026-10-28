@@ -1,6 +1,6 @@
 """Outgoing raid chain (sim Host + FAKE Twitch Helix + FAKE Multi + FAKE obs-websocket; the real OBS is never touched):
  - stored 'Raid scheduled' (shoutout first) and 'Raid out' (Discord + StopStream) are migrated: no shoutout of the raid target, raid out = !leftbehind line + StopStream (dated backup, marker)
- - the raid pick says the emotes line then the Discord line at once, no shoutout
+ - the raid pick says the emotes line and the Discord invite as ONE chat message, no shoutout (a stored two-line Raid scheduled is merged once: raidmerge1, dated backup)
  - the raid lands when the chatters list (fake Helix) falls to <=20% on two polls: goodnight, THEN the !leftbehind line, THEN StopStream reaches OBS - each exactly once
  - a second landing signal, Twitch's countdown and Ivan ending the stream by hand afterwards repeat nothing (no 2nd Discord / goodnight / leftbehind line / StopStream)
  - a dip to 30% does not land early (the countdown does); Ivan ending by hand before the landing: goodnight once at the landing, StopStream skipped (OBS says it is off)
@@ -131,7 +131,7 @@ reset(); h = H(OBSP, 5)
 try:
     a = json.load(open(os.path.join(h.d, 'automations.json'), encoding='utf-8'))
     rs = [x for x in a['actions'] if x['id'] == 'sb-raidstart'][0]['steps']; ro = [x for x in a['actions'] if x['id'] == 'sb-raidout'][0]['steps']
-    chk('migrated: no shoutout step left in Raid scheduled', [s['type'] for s in rs] == ['say', 'delay', 'say'], [s['type'] for s in rs])
+    chk('migrated: no shoutout step left in Raid scheduled', [s['type'] for s in rs] == ['say'], [s['type'] for s in rs])
     chk('migrated: Raid out = leftbehind line, delay, StopStream (no Discord)', [s['type'] for s in ro] == ['say', 'delay', 'obs_request'] and 'leftbehind' in ro[0]['text'] and 'http' not in ro[0]['text'] and 'DISCORD' not in json.dumps(ro), ro)
     chk('migration marked + dated backup', 'raidorder1' in a['seeded'] and any(f.startswith('automations.json.before-raidorder-') for f in os.listdir(h.d)))
     cmds = json.dumps(get('/api/commands/all'))
@@ -141,7 +141,7 @@ try:
     chk('!leftbehind before any raid answers nothing', n_of('twitch.tv') == 0, texts())
     h.feed('raidpick evuto_ 12'); time.sleep(3)
     t = texts()
-    chk('pick: emotes line then Discord line, nothing else (no shoutout)', len(t) == 2 and 'EMOTES' in t[0] and 'DISCORD' in t[1], t)
+    chk('pick: ONE chat message with the emotes line and the Discord invite (no shoutout)', len(t) == 1 and 'EMOTES' in t[0] and 'Join the Discord: https://' in t[0], t)
     chatters['n'] = 3; t0 = time.time()   # Raid Now: the chat empties
     chk('chat emptied: StopStream reached the (fake) OBS', waitfor(lambda: len(stops()) >= 1, 30), OBS['reqs'][-6:])
     time.sleep(1); t = texts()
@@ -152,7 +152,7 @@ try:
     chk('landed on the chat-empty signal, not the countdown', 'raid landed (the chat emptied' in h.log(), [l for l in h.log().splitlines() if 'raid landed' in l])
     h.feed('raidpick evuto_ 12'); h.feed('event StreamOffline streamer'); time.sleep(14)   # a second landing signal, Twitch's countdown (5+10 s), Ivan ending by hand
     t = texts()
-    chk('once per raid: one Discord, one goodnight, one leftbehind line, one StopStream', n_of('DISCORD') == 1 and n_of('GOODNIGHT') == 1 and n_of('Type !leftbehind') == 1 and len(stops()) == 1, (t, len(stops())))
+    chk('once per raid: one Discord, one goodnight, one leftbehind line, one StopStream', n_of('Join the Discord') == 1 and n_of('GOODNIGHT') == 1 and n_of('Type !leftbehind') == 1 and len(stops()) == 1, (t, len(stops())))
     n0 = len(chats); h.feed('viewer3: !leftbehind'); time.sleep(2)
     chk('!leftbehind after the raid: the target link', texts()[n0:] == ['https://twitch.tv/evuto_'], texts()[n0:])
     n0 = len(chats); h.feed('viewer3: !leftbehind'); time.sleep(2)
