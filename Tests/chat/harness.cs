@@ -837,6 +837,18 @@ public static class Harness
           Check("canned audit: a link given as the target never goes out", Last() != null && !Last().Contains("http") && !Last().Contains("evil"), Last());
           _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Hugger2", "!hug /ban victim", null, false);
           Check("canned audit: a /command given as the target never goes out", Last() != null && !Last().Contains("/ban"), Last());
+          _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Hugger3", "!hug", null, false);
+          Check("defaults: a bare !hug says how to use it (one line, no 'X hugs X')", Last() == "@Hugger3 tag someone, like !hug @name", Last());
+          _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Hugger4", "!attack", null, false);
+          Check("defaults: a bare !attack gets the hint with its own name", Last() == "@Hugger4 tag someone, like !attack @name", Last());
+          _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Hugger5", "!hug Bobby", null, false);
+          Check("defaults: a name without @ still works", Last() != null && Last().Contains("Bobby") && !Last().Contains("tag someone"), Last());
+          _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Luckk", "!luck", null, false);
+          Check("defaults: a command with no target needs none (no hint)", Last() != null && !Last().Contains("tag someone"), Last());
+          CPHProxy.Sent.Clear(); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Priv9", "!remember I like cats");
+          Check("defaults: '!remember <text>' explains !rememberme / !forgetme in one line", Last() != null && Last().Contains("!rememberme") && Last().Contains("!forgetme") && CPHProxy.Sent.Count == 1, Last());
+          Msg("Priv9", "!forget me");
+          Check("defaults: '!forget me' (spaced) works like !forgetme", Memory().ContainsKey("id_priv9") ? (string)Memory()["id_priv9"]["Privacy"] == "forget" : true, "");
           _cannedReset(false); CPHProxy.Globals.Remove("pinguino.said.recent"); Msg("Cycler", "!shadow", null, false); int n1 = CPHProxy.Sent.Count;
           Msg("Cycler", "!luck", null, false);
           Check("canned audit: one canned line per person per 6 s (cycling through the list)", CPHProxy.Sent.Count == n1, Last());

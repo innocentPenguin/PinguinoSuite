@@ -1177,6 +1177,8 @@ public class CPHInline
             string arg = text.Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim().ToLower() : "";
 
             // ── privacy + admin commands: always work, never go to the AI ──
+            if (cmd == "!forget" && (arg == "me" || arg == "")) cmd = "!forgetme";                       // spaced and joined: "!forget me" = "!forgetme"
+            if (cmd == "!remember" && arg != "" && arg != "me") { Say(cx, "say !rememberme and I will remember you, or !forgetme and I will not"); return; }   // "!remember <something>": how it works, one line
             if (cmd == "!forgetme" || cmd == "!rememberme" || cmd == "!memory" || (cmd == "!remember" && (arg == "me" || arg == "")))
             { PrivacyCommand(cx, cmd == "!remember" ? "!rememberme" : cmd); return; }
             if (cmd == "!opinion") { if (cx.Mod || cx.Broadcaster) OpinionCommand(cx, arg); return; }   // mods only; everyone else is ignored
@@ -3158,7 +3160,13 @@ OUTPUT: reply with ONLY a JSON object: {""reply"": ""..."", ""remember"": [""...
         var ch = o["choices"] as JArray; if (ch != null && ch.Count > 0) reply = (string)ch[_rng.Next(ch.Count)];
         if (string.IsNullOrWhiteSpace(reply)) return true;
         string arg = text.Contains(" ") ? text.Substring(text.IndexOf(' ') + 1).Trim() : "";
-        string to = arg.Split(' ')[0].TrimStart('@'); if (!Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$")) to = c.Display;   // a name only: never a link, a /command or a pasted line
+        string to = arg.Split(' ')[0].TrimStart('@'); bool noTarget = !Regex.IsMatch(to, @"^[A-Za-z0-9_]{1,25}$"); if (noTarget) to = c.Display;   // a name only: never a link, a /command or a pasted line
+        if (noTarget && reply.IndexOf("$(touser)", StringComparison.Ordinal) >= 0)
+        {   // a command that needs a name, used bare: say how to use it (the default used to be "X hugs X"); same gates as any canned line
+            _cannedAt[ck] = now; _cannedAt["u|" + c.Login] = now; _cannedAny = now;
+            using (PgReplyTo(c.MsgId ?? "", c.Login)) PgSay("chat", "@" + c.Display + " tag someone, like " + cmd + " @name");
+            return true;
+        }
         if (reply.IndexOf("$(link:", StringComparison.Ordinal) >= 0)
         {   // the Host publishes the site links as a global; a link we cannot resolve means no line at all (never a half-filled placeholder in chat)
             JObject lk = null; try { string lj = CPH.GetGlobalVar<string>("pinguino.links", true); if (!string.IsNullOrEmpty(lj)) lk = JObject.Parse(lj); } catch (Exception) { }
