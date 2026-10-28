@@ -62,7 +62,7 @@
   });
   const opt = C.createOptimistic(2500);
   const ui = {
-    drawErr: {}, customsAt: 0, wov: {}, cuPoll: { n: 0, status: null, at: 0, err: '' }, cuPaint: { n: 0, found: 0, hit: 0, at: 0 },
+    drawErr: {}, dir: new Map(), customsAt: 0, wov: {}, cuPoll: { n: 0, status: null, at: 0, err: '' }, cuPaint: { n: 0, found: 0, hit: 0, at: 0 },
     wq: ls.get('wq') || null, teamsOv: {}, si: Object.assign({ title: '', description: '', tags: '', game: '', plat: { twitch: true, youtube: true, kick: false }, at: '', privacy: 'public' }, ls.get('si') || {}), ov: {}, simChat: ls.get('simchat') !== '0', strikeOv: {}, pop: null, drag: null, view: null, query: '', sim: false, simState: null, sel: {}, tab: ls.get('tab', 'customs'), pane: 'scenes',
     folders: new Set(ls.get('folders', [])), groups: new Set(ls.get('groups', [])), kb: { scenes: null, sources: null },
     itemsBy: {}, heads: {}, modsOk: null, pre: null, preOpen: false, introOpen: false, streaksOpen: false, introGone: new Set(), tookControl: false, logCat: ls.get('logcat') || 'all', logTs: {}, logsOk: null, openGroups: new Set(), prevCustoms: null, feed: [], chat: [], chatSeq: 0, actSeq: 0, chatOk: null, sent: new Map(), renaming: null, ochatLog: [],
@@ -70,7 +70,13 @@
   const saveCache = () => ls.set('cache', { tree: S.get('tree'), customs: S.get('customs') });
 
   /* ---------- toasts, arming, command sending ---------- */
+  const who = x => C.personInfo(x, ui.dir);
+  function paintWho(el, x) {   // [T|YT|TT] display name, Epic name smaller; the Host key stays in data-u for commands
+    const i = who(x); el.textContent = ''; el.append(h('span', 'plat plat-' + i.platform, i.tag), document.createTextNode(i.name)); if (i.epic) el.append(h('span', 'epic', i.epic));
+    el.title = i.name + ' · ' + ({ twitch: 'Twitch', youtube: 'YouTube', tiktok: 'TikTok' })[i.platform] + (i.epic ? ' · Epic: ' + i.epic : '');
+  }
   function toast(msg, bad) {
+    msg = C.cleanKeys(msg, ui.dir);
     const old = [...$('#toasts').children].find(x => x.dataset.m === msg);
     if (old) { clearTimeout(old._t); old._t = setTimeout(() => old.remove(), bad ? 5000 : 2200); return; }
     const t = h('div', 'toast' + (bad ? ' bad' : ''), msg); t.dataset.m = msg; $('#toasts').append(t); t._t = setTimeout(() => t.remove(), bad ? 5000 : 2200);
@@ -417,7 +423,7 @@
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
         ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div>`)}
         ${sec('c-sim', 'Player simulator', `<div class="btns">${b('+ Player', 'sim', 'add')}${b('+ 4', 'sim', 'add4')}${b('+ 8', 'sim', 'add8')}${b('Remove one', 'sim', 'rm')}${b('Reset sim', 'sim', 'reset', 'rd')}</div><div class="row" style="margin-top:6px"><button class="sm" id="cu-simchat" title="Speak the simulator's events in the real Twitch chat (Chatty), so you can judge the wording">Chat: ON</button><span class="faint sm" id="cu-simnote"></span></div>`)}
-        ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="btns" style="margin-top:6px"><button class="sm" id="wh-q" data-wq="queue">Queue</button><button class="sm" id="wh-t" data-wq="tourney" title="Open the wheel for tournament sign-ups (!wheel open)">Tourney</button></div>${wheelAdminHtml()}<div class="kv" style="margin-top:6px" id="wh-kv"></div>`, ' <span class="faint" id="wh-badge"></span>')}
+        ${sec('c-w', 'Wheel', `<div class="btns"><button class="sm pri" data-wh="spin">Spin</button><button class="sm" data-wh="new">New round</button><button class="sm rd warn" data-wh="reset">Reset</button></div><div class="btns" style="margin-top:6px"><button class="sm" id="wh-q" data-wq="queue">Queue</button><button class="sm" id="wh-t" data-wq="tourney" title="Open the wheel for tournament sign-ups (!wheel open)">Tourney</button></div>${wheelAdminHtml()}<div class="kv" style="margin-top:6px" id="wh-kv"></div><div id="wh-people" class="wpeople"></div>`, ' <span class="faint" id="wh-badge"></span>')}
       </div>`;
   }
   /* Wheel admin = the chat command !wheel (the website has no wheel admin page; the Host runs it through POST /api/run). Click-path: CAUTION, every button here is a real stream effect. */
@@ -470,12 +476,12 @@
   function playerRow(u, label, from) {
     const d = h('div', 'pr'); d.draggable = true; d.dataset.u = u; d.dataset.from = from;
     const sb = strikeBtn(), x = h('button', 'x ghost sm', '✕'); x.title = 'Remove from the game (back out, then off the queue)';
-    d.append(h('span', 't ell', label), sb, x); fillStrike(sb, u); return d;
+    const lb = h('span', 't ell'); paintWho(lb, label); d.append(lb, sb, x); fillStrike(sb, u); return d;
   }
   function renderPop() {
     const pop = $('#strikepop'), u = ui.pop, btn = u && $$('#tab-customs .sbtn').find(b => b.dataset.su === u);
     if (!btn) { ui.pop = null; pop.hidden = true; return; }
-    const s = strikesFor(u); pop.hidden = false; pop.dataset.u = u; pop.querySelector('.pu').textContent = u;
+    const s = strikesFor(u); pop.hidden = false; pop.dataset.u = u; paintWho(pop.querySelector('.pu'), u);
     pop.querySelector('[data-sa="rm"]').disabled = strikesKnown(u) && !s.temp && !s.half && !s.perma;
     const r = btn.getBoundingClientRect(); pop.style.left = Math.max(4, Math.min(innerWidth - pop.offsetWidth - 4, r.left - 20)) + 'px'; pop.style.top = Math.max(4, Math.min(innerHeight - pop.offsetHeight - 4, r.bottom + 4)) + 'px';
   }
@@ -612,18 +618,19 @@
     $('#cu-ctl').className = 'ctl ' + (ui.sim ? 'mine' : holder ? 'other' : mine ? 'mine' : 'free');
     $('#cu-who').textContent = ui.sim ? '🧪 Simulator: fake players, nothing is sent' : holder ? '🎮 In control: ' + holder : mine ? '🎮 In control: you (app)' : '🎮 In control: nobody · any click takes it';
     const q = (c && Array.isArray(c.queue)) ? c.queue : [];
+    ui.dir = C.personDir([q, ui.wdir, c && c.match && c.match._p, c && c.match && c.match.players]);
     $('#cu-badge').textContent = c ? (c.open === true ? 'queue open' : c.open === false ? 'queue closed' : '') + (c.format ? ' · ' + c.format : '') + (c.gameMode && c.gameMode !== 'standard' ? ' · ' + c.gameMode : '') : '';
     $('#cu-act').textContent = c && c.activity && c.activity !== 'none' ? '· ' + c.activity : '';
     $('#cu-qn').textContent = c ? '· ' + q.length + ' waiting' + (c.strikeGame ? ' · ' + (c.strikeGame === 'fn' ? 'Fortnite' : 'Rocket') + ' strikes' : '') : '';
     const seats = C.fmtSize(c && c.format) * 2, isStr = p => !!(p.streamer || p.isStreamer || String(p.username || p.user || '').toLowerCase() === 'innocentpenguin');
     const strIn = q.some(isStr) || !!(c && c.match && c.match.status !== 'finished' && (ui.sim ? (c.match._p || []).some(isStr) : (c.streamer === 'in'))), gold = Math.max(1, seats - (strIn ? 1 : 0));
     let ng = 0; const kinds = q.map(p => { if (isStr(p)) return 's'; ng++; return ng <= gold ? 'n' : ng <= gold + 2 ? 'b' : ''; });
-    C.reconcile($('#cu-queue'), q.map((p, i) => ({ k: kinds[i], u: String(p.username || p.user || p.name || '?').toLowerCase(), d: p.display || p.username || p.name || '?', n: i + 1, m: p.mmr, sk: JSON.stringify([strikesFor(String(p.username || p.user || p.name || '?')), strikesKnown(String(p.username || p.user || p.name || '?')), c.strikeLimit, c.strikeGame]) })), r => r.u, () => { const li = h('li'); li.draggable = true; li.dataset.from = 'queue'; li.append(h('span', 'num'), h('span', 't'), h('span', 'mmr'), h('span', 'qtag'), strikeBtn(), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
-      (li, r) => { li.dataset.u = r.u; li.className = r.k === 'n' ? 'next-up' : r.k === 'b' ? 'backup' : r.k === 's' ? 'is-streamer' : ''; li.children[0].textContent = '#' + r.n; li.children[1].textContent = r.d; li.children[2].textContent = r.m || ''; li.children[3].textContent = r.k === 'n' ? 'NEXT' : r.k === 'b' ? 'BACKUP' : r.k === 's' ? 'STREAMER' : ''; fillStrike(li.children[4], r.u); });
+    C.reconcile($('#cu-queue'), q.map((p, i) => ({ k: kinds[i], u: String(p.username || p.user || p.name || '?').toLowerCase(), p, n: i + 1, m: p.mmr, sk: JSON.stringify([strikesFor(String(p.username || p.user || p.name || '?')), strikesKnown(String(p.username || p.user || p.name || '?')), c.strikeLimit, c.strikeGame]) })), r => r.u, () => { const li = h('li'); li.draggable = true; li.dataset.from = 'queue'; li.append(h('span', 'num'), h('span', 't'), h('span', 'mmr'), h('span', 'qtag'), strikeBtn(), h('button', 'x ghost sm', '✕')); li.lastChild.title = 'Kick'; return li; },
+      (li, r) => { li.dataset.u = r.u; li.className = r.k === 'n' ? 'next-up' : r.k === 'b' ? 'backup' : r.k === 's' ? 'is-streamer' : ''; li.children[0].textContent = '#' + r.n; paintWho(li.children[1], r.p); li.children[2].textContent = r.m || ''; li.children[3].textContent = r.k === 'n' ? 'NEXT' : r.k === 'b' ? 'BACKUP' : r.k === 's' ? 'STREAMER' : ''; fillStrike(li.children[4], r.u); });
     const m = c && c.match, live = !!(m && m.status !== 'finished');
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
-    const TN = teamsNow(), tv = JSON.stringify([TN, m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(n), strikesKnown(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
-    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(String(n).toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
+    const TN = teamsNow(), tv = JSON.stringify([TN, m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(who(n).key), strikesKnown(who(n).key), who(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
+    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = (m && m[k]) || []; names.forEach(n => col.append(playerRow(who(n).key.toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
     renderPop(); renderAsk(); renderTeamsEditor();
     const isFn = !!c && /^(boxfights|zonewars|fnviewers)$/.test(c.activity || ''); $('#cu-rlsz').hidden = isFn; $('#cu-fnsz').hidden = !isFn; $('#cu-fmt').textContent = c && c.format ? '· ' + c.format : '';
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
@@ -638,6 +645,9 @@
     $('#wh-badge').textContent = w ? '· ' + (w.status || '?') : '';
     const kv = [['Entrants', w ? (w.entrantCount ?? (w.names || []).length) : '–'], ['Mode', w ? [w.label || w.mode, w.teamSize ? w.teamSize + 'v' + w.teamSize : ''].filter(Boolean).join(' · ') : '–'], ['Teams', w ? (w.teams || []).length : '–'], ['Waitlist', w ? (w.waitlist || []).length : '–']];
     const box = $('#wh-kv'), sigv = C.sig(kv); if (box._s !== sigv) { box._s = sigv; box.textContent = ''; kv.forEach(([a, b2]) => box.append(h('b', '', a), h('span', '', String(b2)))); }
+    ui.wdir = C.personDir([w && w.names, w && w.pool, w && w.waitlist]);   // lets the Customs side resolve the same people
+    const wp = $('#wh-people'), lists = [['Entrants', w && Array.isArray(w.names) ? w.names : []], ['Waitlist', w && Array.isArray(w.waitlist) ? w.waitlist : []]].filter(l => l[1].length), wsig = C.sig(lists.map(([a, l]) => [a, l.slice(0, 12).map(x => who(x))]));
+    if (wp._s !== wsig) { wp._s = wsig; wp.textContent = ''; for (const [a, l] of lists) { const row = h('div', 'wprow'); row.append(h('b', '', a + ': ')); l.slice(0, 12).forEach(x => { const s = h('span', 'wp'); paintWho(s, x); row.append(s); }); if (l.length > 12) row.append(h('span', 'faint', ' +' + (l.length - 12) + ' more')); wp.append(row); } }
   }
 
   const normWheel = w => (w && w.public && typeof w.public === 'object' ? Object.assign({}, w.public, { status: w.status || w.public.status, round: w.round, teamSize: w.teamSize || w.public.teamSize, mode: w.mode || w.public.mode, oddPolicy: w.oddPolicy || w.public.oddPolicy, eligibility: w.eligibility || w.public.eligibility }) : w);

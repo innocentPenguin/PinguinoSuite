@@ -163,3 +163,9 @@ The website has **no wheel admin page**: `rl-tournament.html` is the public view
 ## Layout change (2026-10-25)
 - Team names & colours: swatches moved into a closed `<details>` ("Colours" + chip with the current colour); name field, colour dot, picker and Reset stay visible. Armed Reset and optimistic overlays unchanged.
 - The media player is no longer a floating card bottom-right: it is one compact row above the grid (always visible, wraps when narrow); same buttons, ids and Songify (Stream tab) unchanged.
+
+## Platform display names (Customs queue, teams, strike popup, wheel Entrants/Waitlist, toasts)
+Every person is shown as `[T|YT|TT] display name` plus a smaller Epic name, never a raw `yt:UC…` / `tt:…` key. One helper, `MasterCore.personInfo(x, dir)`, decides:
+name = `display` > `displayName`/`display_name` > `handle` > `login` > `name` > the queue/wheel directory entry for the same key > the key with its `yt:`/`tt:`/`tw:` prefix stripped (a bare YouTube channel id shows as "YouTube viewer …abcd");
+platform = `platform` / `source` / `provider` (twitch|youtube|tiktok or tw|yt|tt) > the key prefix > a `UC…` channel id or an `@` handle means YouTube > Twitch;
+epic = `epic` / `epicName` / `epic_name`. The Host key stays in `data-u` and in every command; only the label changes. Match teams carry plain keys, so they are resolved through a directory built from the queue and the wheel lists (`personDir`). Toasts pass through `cleanKeys`. If the Host sends no display/platform fields yet, the prefix and Twitch fallbacks apply.

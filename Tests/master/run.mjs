@@ -432,6 +432,25 @@ await t('Spotify self-check chip: ok false shows failed labels with reasons on h
   assert.match(html, /id="hd-sc"[^>]*hidden/); assert.match(html, /id="pl-sc"[^>]*hidden/); assert.match(js, /id="sg-sc"[^>]*hidden/); assert.match(js, /#hd-sc.*#pl-sc.*#sg-sc/);
 });
 
+await t('platform display names: Twitch / YouTube / TikTok people show display + T/YT/TT marker + Epic, never a raw yt:UC… / tt:… key, with every field missing too', () => {
+  const YT = 'yt:UCabcdefghijklmnopqrstuv', raw = /(^|[^a-z])(yt|tt|tw):|^UC[A-Za-z0-9_-]{20,}/i;
+  const rows = [{ username: 'phil_flock', display: 'Phil_Flock', platform: 'twitch', epic: 'PhilRL' }, { username: YT, display: '@tanjakvrgic4947', platform: 'youtube' }, { username: 'tt:dancer9', display: 'Dancer 9', platform: 'tiktok', epic: 'D9' },
+    { username: YT.replace('abc', 'xyz') }, { username: 'tt:onlykey' }, { username: 'tw:SomeLogin' }, { username: 'plainlogin' }, YT, 'tt:bare', 'tw:bare', {}, null, 42];
+  const dir = C.personDir([rows]);
+  let i = C.personInfo(rows[0], dir); assert.deepEqual([i.name, i.tag, i.epic, i.key], ['Phil_Flock', 'T', 'PhilRL', 'phil_flock']);
+  i = C.personInfo(rows[1], dir); assert.deepEqual([i.name, i.tag, i.key], ['@tanjakvrgic4947', 'YT', YT]);
+  i = C.personInfo(rows[2], dir); assert.deepEqual([i.name, i.tag, i.epic], ['Dancer 9', 'TT', 'D9']);
+  i = C.personInfo(YT, dir); assert.equal(i.name, '@tanjakvrgic4947', 'a bare key resolves through the directory (match teams carry plain keys)'); assert.equal(i.tag, 'YT');
+  assert.equal(C.personInfo('tt:onlykey').name, 'onlykey'); assert.equal(C.personInfo('tt:onlykey').tag, 'TT'); assert.equal(C.personInfo({ username: 'tw:SomeLogin' }).name, 'SomeLogin'); assert.equal(C.personInfo('plainlogin').tag, 'T');
+  assert.equal(C.personInfo({ id: 'yt:UCqqqqqqqqqqqqqqqqqqqqqq', platform: 'yt' }).tag, 'YT'); assert.equal(C.personInfo({ username: 'x', source: 'tiktok' }).tag, 'TT');
+  for (const r of rows) { const p = C.personInfo(r, dir); assert.doesNotMatch(p.name, raw, JSON.stringify(r)); assert.ok(p.name.length > 0 && ['T', 'YT', 'TT'].includes(p.tag)); }
+  assert.doesNotMatch(C.personInfo(YT.replace('abc', 'xyz')).name, raw); assert.equal(C.personInfo(null).name, '?');
+  assert.equal(C.cleanKeys('Sent !kick ' + YT + ' and tt:dancer9, ok', dir), 'Sent !kick @tanjakvrgic4947 and Dancer 9, ok'); assert.doesNotMatch(C.cleanKeys('x tw:foo yt:UCabcdefghijklmnopqrstuv', null), raw);
+  assert.equal(C.personText(rows[2], dir), 'Dancer 9 (D9)');
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');   // the screens go through paintWho, not the raw key
+  assert.match(js, /paintWho\(li\.children\[1\], r\.p\)/); assert.match(js, /paintWho\(lb, label\)/); assert.match(js, /paintWho\(pop\.querySelector\('\.pu'\), u\)/); assert.match(js, /msg = C\.cleanKeys\(msg, ui\.dir\)/); assert.match(js, /id="wh-people"/);
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);

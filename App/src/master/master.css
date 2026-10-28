@@ -244,3 +244,8 @@ button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible,
 
 .rl-chip{display:inline-block;padding:1px 8px;border-radius:999px;background:#7a1620;border:1px solid #ff5a66;color:#ffd9dc;font-size:11px;font-weight:600;white-space:nowrap}
 .rl-chip[hidden]{display:none}
+
+.plat{display:inline-block;margin-right:5px;padding:0 4px;border-radius:4px;font-size:9px;font-weight:700;line-height:14px;vertical-align:1px;color:#fff;background:#6441a5}
+.plat-youtube{background:#c4302b}.plat-tiktok{background:#111;color:#25f4ee;box-shadow:inset -1px 0 #fe2c55}
+.epic{margin-left:6px;font-size:10px;color:var(--faint,#9a9a9a)}
+.wpeople{margin-top:4px;font-size:12px}.wprow{margin-top:2px}.wp{display:inline-block;margin-right:8px;white-space:nowrap}
