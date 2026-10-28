@@ -335,6 +335,10 @@ public static class Harness
             Check("youtube: no Twitch dup record, no tag", !CPHProxy.Globals.ContainsKey("pinguino.said.recent") && !Last().StartsWith("["), Last());
             before = mbodies.Count; Msg("yt:Zed", "!skip"); Check("youtube: skip votes are refused, the module is not asked", Last() != null && Last().Contains("Twitch chat only") && mbodies.Count == before, Last());
             Msg("yt:Zed2", "how do I join?"); Check("youtube: join answer (category aware) comes through", Last() != null && Last().StartsWith("@") && Last().Contains("!register"), Last());
+            Check("youtube: the one registration wording, one message", CPHProxy.Sent.Count == 1 && Last() == "@yt:Zed2 Type !register <YourEpicName> once, then !join.", Last());
+            Msg("yt:Zed4", "how do i register?"); Check("youtube: how register = same line", CPHProxy.Sent.Count == 1 && Last().EndsWith("Type !register <YourEpicName> once, then !join."), Last());
+            Msg("yt:Zed5", "whats the code"); Check("youtube: lobby answer is one line with the one wording", CPHProxy.Sent.Count == 1 && Last().Contains("Name: ") && Last().Contains("Type !register <YourEpicName> once, then !join."), Last());
+            Msg("yt:Zed6", "how do i join innoce108Wave"); Check("youtube: no Twitch emote tokens", CPHProxy.Sent.Count <= 1 && !(Last() ?? "").Contains("innoce108"), Last());
             plat = "twitch"; Msg("Zed3", "!song"); Check("twitch (platform arg set): dup record kept as before", CPHProxy.Globals.ContainsKey("pinguino.said.recent"), Last());
             before = mbodies.Count; Msg("Zed3", "!skip"); Check("twitch: skip vote unchanged", Last() == "Skip vote 1/2." && mbodies.Count == before + 1, Last());
             plat = null;

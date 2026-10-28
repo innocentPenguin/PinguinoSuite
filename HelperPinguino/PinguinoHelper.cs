@@ -1723,9 +1723,10 @@ public class CPHInline
                 Say(who + LobbyLine() + QueueHint(registered));
                 return true;
             case "how_join":
-                Say(who + HowJoinText(registered));
+                Say(who + (PgPlatform() != "twitch" ? RegJoinOneLine(registered) : HowJoinText(registered)));
                 return true;
             case "how_register":
+                if (PgPlatform() != "twitch") { Say(who + RegJoinOneLine(registered)); return true; }
                 Say(who + (registered != ""
                     ? "You're already registered as " + registered + ". Wrong name? Ask a mod to fix it. Next: say 'add me to the queue' when the queue is open."
                     : "2 steps: 1) !register YourEpicName (exact Epic name, no < > brackets) 2) !join when the queue is open. Or tell me \"register me as YourEpicName\"."));
@@ -1936,6 +1937,7 @@ public class CPHInline
 
     string QueueHint(string registered)
     {
+        if (PgPlatform() != "twitch") return RegJoinOneLine(registered);
         if (registered == "") return "To get a spot: register with !register YourEpicName, or tell me \"register me as YourEpicName\".";
         return QueueOpen() ? "You're registered, say \"add me to the queue\" to join." : "The queue is closed right now.";
     }
@@ -1960,6 +1962,12 @@ public class CPHInline
     {
         if (es) return cat == "fn" ? "\u00a1Las customs de FN siempre est\u00e1n abiertas! !epic" : cat == "rb" ? "\u00a1Claro! !roblox" : "No estoy seguro de qu\u00e9 estamos jugando ahora, mira !discord para unirte.";
         return cat == "fn" ? "FN customs are always open! !epic" : cat == "rb" ? "Of course! !roblox" : "Ask in !discord, that's where the join info lives!";
+    }
+
+    // YouTube / TikTok chat-ins: ONE wording for how to register and join (Ivan 10-27)
+    string RegJoinOneLine(string registered)
+    {
+        return registered == "" ? "Type !register <YourEpicName> once, then !join." : "You're registered, type !join when the queue is open.";
     }
 
     string HowJoinText(string registered)
@@ -2048,6 +2056,14 @@ public class CPHInline
 
     void Say(string msg)
     {
+        if (PgPlatform() != "twitch")
+        {   // chat-in viewers (yt:/tt:): no Twitch emote tokens and exactly one line (YouTube 403s a second line within about a second)
+            msg = Regex.Replace(msg ?? "", @"\binnoce108\w*\*?", "").Replace("  ", " ").Trim();
+            msg = SplitLong(msg)[0];
+            if (msg.Length > 190) { int sp = msg.LastIndexOf(' ', 187); msg = msg.Substring(0, sp > 60 ? sp : 187).TrimEnd() + "..."; }
+            if (msg.Length > 0) { _said.Add(msg); PgSay("helper", msg); }
+        }
+        else
         foreach (string part in SplitLong(msg)) { _said.Add(part); PgSay("helper", part); }
         PgSetHelperContext(_curLogin);
     }
