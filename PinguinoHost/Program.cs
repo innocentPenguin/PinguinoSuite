@@ -238,7 +238,7 @@ namespace PinguinoHost
                         try
                         {
                             int before = cph.GetGlobalVar<int>("firstChatterPlace", true); cph.Args.Remove("command"); cph.RunAction("PinguinoFirsts"); int after = cph.GetGlobalVar<int>("firstChatterPlace", true);
-                            if (before >= 1 && after != before) Latest.Record("first5", new Dictionary<string, string> { { "user", user }, { "place", (after == 0 ? 5 : before).ToString() } });
+                            if (before >= 1 && after != before) Latest.Record("first5", new Dictionary<string, string> { { "user", PlatformUsers.Shown(user) }, { "place", (after == 0 ? 5 : before).ToString() } });
                         }
                         catch (Exception ex) { Clog.Warn("firsts", "First 5 claim failed: " + ex.Message); }
                     }
