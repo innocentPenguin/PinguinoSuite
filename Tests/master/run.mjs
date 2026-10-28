@@ -485,7 +485,18 @@ await t('tagged Host lists (blueP/orangeP, entrantsP/waitlistP) are used when pr
   let i = C.personInfo(P[0], C.personDir([P])); assert.deepEqual([i.name, i.tag, i.epic, i.key], ['Tanja', 'YT', 'petar1211', 'yt:uc1abc']);
   i = C.personInfo(P[1], null); assert.deepEqual([i.name, i.tag, i.epic], ['Phil_Flock', 'T', '']);
   const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
-  for (const f of ["m[k + 'P']", 'w.entrantsP', 'w.waitlistP', 'c.match.blueP', 'c.match.orangeP', 'w.picksP']) assert.ok(js.includes(f), f);
+  for (const f of ['C.teamPlayers(m, k)', 'w.entrantsP', 'w.waitlistP', 'c.match.blueP', 'c.match.orangeP', 'w.picksP']) assert.ok(js.includes(f), f);
+});
+
+await t('teams are Grey and Orange: names/colours come from the state, a Host that still says Blue keeps Blue, grey key + commands map, no hardcoded Blue label left', () => {
+  assert.deepEqual([C.TEAM_DEFAULTS.orange.name, C.TEAM_DEFAULTS.blue.name, C.TEAM_DEFAULTS.blue.color], ['Orange', 'Grey', '#9aa0a6']);
+  const grey = { teams: { orange: { name: 'Orange', color: '#ff7a00' }, grey: { name: 'Grey', color: '#9aa0a6' } } }, blue = { teams: { orange: { name: 'Orange' }, blue: { name: 'Blue', color: '#1e8fff' } } };
+  assert.equal(C.teamEntry(grey, 'blue').name, 'Grey'); assert.equal(C.teamEntry(blue, 'blue').name, 'Blue'); assert.equal(C.teamEntry({}, 'blue'), null); assert.equal(C.teamEntry(null, 'orange'), null);
+  assert.equal(C.teamWord(grey, 'blue'), 'grey'); assert.equal(C.teamWord(blue, 'blue'), 'blue'); assert.equal(C.teamWord(grey, 'orange'), 'orange'); assert.equal(C.teamWord(null, 'blue'), 'blue');
+  assert.deepEqual(C.teamPlayers({ grey: ['a'] }, 'blue'), ['a']); assert.deepEqual(C.teamPlayers({ blue: ['b'], blueP: [{ username: 'b', name: 'B' }] }, 'blue'), [{ username: 'b', name: 'B' }]); assert.deepEqual(C.teamPlayers({ greyP: [{ username: 'g' }], grey: ['g'] }, 'blue'), [{ username: 'g' }]); assert.deepEqual(C.teamPlayers(null, 'orange'), []);
+  assert.equal(C.customsText('finish', 'grey'), '!finish grey'); assert.equal(C.customsText('win', 'blue'), '!win blue'); assert.equal(C.customsText('in', 'bob grey'), '!in bob grey'); assert.equal(C.customsText('finish', 'green'), null);
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
+  assert.ok(!/Blue wins|who goes Blue|'Blue: '|\bBlue team\b/.test(js), 'no hardcoded Blue label'); assert.match(js, /Grey wins/); assert.match(js, /t\[k\]\.name \+ ' wins'/); assert.match(js, /C\.teamWord\(curCustoms\(\), 'blue'\)/);
 });
 
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {

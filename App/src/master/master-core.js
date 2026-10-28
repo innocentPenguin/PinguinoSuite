@@ -102,8 +102,8 @@
     balance: () => '!balance', reroll: () => '!reroll',
     next: v => '!next' + (v ? ' ' + v : ''),
     match: v => (['clear', 'fill', 'queue'].includes(v) ? '!match ' + v : null),
-    win: v => (['blue', 'orange'].includes(v) ? '!win ' + v : null),
-    finish: v => (['blue', 'orange'].includes(v) ? '!finish ' + v : null),
+    win: v => (['blue', 'grey', 'orange'].includes(v) ? '!win ' + v : null),
+    finish: v => (['blue', 'grey', 'orange'].includes(v) ? '!finish ' + v : null),
     koth: v => (['on', 'off'].includes(v) ? '!koth ' + v : null),
     mode: v => (['balanced', 'random', 'picks'].includes(v) ? '!mode ' + v : null),
     format: v => (/^([1-9]|1[0-6])v\1$/.test(v) ? '!format ' + v : null),   // customs 2v2-4v4, Fortnite viewers any size 1-16 (Host must accept NvN)
@@ -115,7 +115,7 @@
     strike: v => { const m = /^@?([A-Za-z0-9_]{2,25})( perma)?$/.exec(String(v || '').trim()); return m ? '!strike @' + m[1] + (m[2] ? ' perma' : '') : null; },
     unstrike: v => { const m = /^@?([A-Za-z0-9_]{2,25})( perma)?$/.exec(String(v || '').trim()); return m ? '!unstrike @' + m[1] + (m[2] ? ' perma' : '') : null; },
     move: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (\d{1,3})$/.exec(String(v || '').trim()); return m && +m[2] >= 1 ? '!move ' + m[1] + ' ' + m[2] : null; },
-    in: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (blue|orange)$/.exec(String(v || '').trim()); return m ? '!in ' + m[1] + ' ' + m[2] : null; },
+    in: v => { const m = /^@?([A-Za-z0-9_]{2,25}) (blue|grey|orange)$/.exec(String(v || '').trim()); return m ? '!in ' + m[1] + ' ' + m[2] : null; },
     out: v => { const m = /^@?([A-Za-z0-9_]{2,25})$/.exec(String(v || '').trim()); return m ? '!out ' + m[1] : null; },
     wheel: v => (v === 'open' ? '!wheel open' : null),
     kick: v => { v = String(v || '').trim().replace(/^@/, ''); return /^[A-Za-z0-9_]{2,25}$/.test(v) ? '!kick ' + v : null; },
@@ -146,7 +146,11 @@
   // Team size from a format like "3v3" (2 when unknown). Works for 10v10 too.
   const fmtSize = f => { const m = /^(\d{1,2})v\d{1,2}$/.exec(String(f || '')); return m ? +m[1] || 2 : 2; };
   // Team name + colour (customs only; the emoji team lines are for tourneys). Colour = #rrggbb.
-  const TEAM_DEFAULTS = { orange: { name: 'Orange', color: '#ff7a00' }, blue: { name: 'Blue', color: '#1e8fff' } };
+  const TEAM_DEFAULTS = { orange: { name: 'Orange', color: '#ff7a00' }, blue: { name: 'Grey', color: '#9aa0a6' } };   // the second team is Grey now; a Host that still says Blue keeps showing Blue (its name and colour win)
+  /* The second team's state key is 'blue' (old) or 'grey' (new); the UI side key stays 'blue'. teamEntry reads the team from /api/customs/state, teamWord is the word the Host commands take. */
+  const teamEntry = (c, side) => { const t = c && c.teams; return t ? (t[side] || (side === 'blue' ? t.grey : null) || null) : null; };
+  const teamWord = (c, side) => (side === 'blue' && c && c.teams && c.teams.grey && !c.teams.blue ? 'grey' : side);
+  const teamPlayers = (m, side) => { if (!m) return []; const p = side === 'blue' ? (m.blueP || m.greyP) : m[side + 'P']; if (Array.isArray(p) && p.length) return p; const l = side === 'blue' ? (m.blue || m.grey) : m[side]; return Array.isArray(l) ? l : []; };
   const TEAM_PRESETS = [['Penguin orange', '#ff7a00'], ['Amber', '#ffb347'], ['Ember', '#ff4d00'], ['Gold', '#ffc833'], ['Cream', '#f3e3c3'], ['Red', '#e74c3c'], ['Pink', '#ff5fa2'], ['Purple', '#9b59b6'],
     ['Blue', '#1e8fff'], ['Sky', '#5aaeff'], ['Teal', '#1abc9c'], ['Green', '#2ecc71'], ['Lime', '#a4e000'], ['White', '#ffffff'], ['Grey', '#9aa0a6']];
   function teamName(v) { const s = String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, '').trim(); return s && s.length <= 20 && !/^[!\/.]/.test(s) ? s : null; }
@@ -513,5 +517,5 @@
       get busy() { return busy; },
     };
   }
-  return { createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

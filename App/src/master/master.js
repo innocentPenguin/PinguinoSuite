@@ -207,6 +207,7 @@
       const ok = await sendCustom(action, value, btn, true); if (ok) { for (const [a, v2] of steps) await sendCustom(a, v2, null, true); setOverlayGame(sub, pre); } return ok;
     }
     if (ui.sim) { flash(btn); const m = simApply(action, value); if (m) toast(m); return !/no empty slot|not waiting|No game/.test(m || ''); }
+    if (action === 'win' || action === 'finish' || action === 'in') value = String(value == null ? '' : value).replace(/(blue|grey)$/, () => C.teamWord(curCustoms(), 'blue'));   // the second team is "grey" on a Host that renamed the key
     const text = C.customsText(action, value); if (!text) { toast('Not allowed: ' + action, true); return false; }
     const now = Date.now(), last = ui.sent.get(text) || 0;
     if (now - last < 1200) { toast('Already sent ' + text); return false; }
@@ -416,8 +417,8 @@
         <section class="cs c-ask" id="cu-ask" hidden><b id="cu-ask-t"></b><div class="faint sm" id="cu-ask-s"></div><div class="btns" style="margin-top:6px"><button class="sm rd" data-ask="remove" title="Cancel the game and take everyone out of the queue">Remove them</button><button class="sm pri" data-ask="back" title="Cancel the game; players go back to the front of the queue in their old order, ahead of anyone who joined later">Put back in queue</button><button class="sm" data-ask="keep" title="Change it and leave everyone as they are">Leave as is</button><button class="sm ghost" data-ask="cancel" title="Do not change anything">✕</button></div></section>
         <section class="cs c-st"><div class="row"><span class="faint sm">Streamer</span><div class="seg" style="flex:1">${b('In', 'streamer', 'in', '', 'streamer:in')}${b('Out', 'streamer', 'out', '', 'streamer:out')}</div></div></section>
         ${sec('c-q', 'Queue', `<div class="btns">${b('Open', 'queue-open', null, 'g', 'queue:open')}${b('Close', 'queue-close', null, 'rd', 'queue:close')}${b('Clear', 'queue-clear', null, 'og warn', 'queue:clear')}</div><ul class="qlist" id="cu-queue"></ul>`, ' <span class="faint" id="cu-qn"></span>')}
-        ${sec('c-m', 'Match', `<div class="btns">${b('Fill', 'match', 'fill', 'g')}${b('Move all → Queue', 'match', 'queue')}${b('Clear match', 'match', 'clear', 'rd warn')}${b('Orange wins', 'finish', 'orange', 'or', 'win:orange')}${b('Blue wins', 'finish', 'blue', 'bl', 'win:blue')}</div><div class="teams" id="cu-teams"></div>`, ' <span class="faint" id="cu-match"></span>')}
-        ${sec('c-t', 'Teams', `${seg('mode', [['Balanced', 'balanced'], ['Random', 'random'], ['Manual', 'picks']])}<div class="btns" style="margin-top:6px">${b('Reroll', 'reroll')}${b('Balance', 'balance')}</div><div class="row" id="cu-manual" style="margin-top:6px" hidden><input type="text" id="cu-pick" placeholder="who goes Blue" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="sm bl" id="cu-pickgo">Set Blue</button>${b('Auto', 'pick', 'auto')}</div>`)}
+        ${sec('c-m', 'Match', `<div class="btns">${b('Fill', 'match', 'fill', 'g')}${b('Move all → Queue', 'match', 'queue')}${b('Clear match', 'match', 'clear', 'rd warn')}${b('Orange wins', 'finish', 'orange', 'or', 'win:orange')}${b('Grey wins', 'finish', 'blue', 'bl', 'win:blue')}</div><div class="teams" id="cu-teams"></div>`, ' <span class="faint" id="cu-match"></span>')}
+        ${sec('c-t', 'Teams', `${seg('mode', [['Balanced', 'balanced'], ['Random', 'random'], ['Manual', 'picks']])}<div class="btns" style="margin-top:6px">${b('Reroll', 'reroll')}${b('Balance', 'balance')}</div><div class="row" id="cu-manual" style="margin-top:6px" hidden><input type="text" id="cu-pick" placeholder="who goes Grey" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="sm bl" id="cu-pickgo">Set Blue</button>${b('Auto', 'pick', 'auto')}</div>`)}
         ${sec('c-tn', 'Team names & colours', ['orange', 'blue'].map(k => `<div class="tn" data-side="${k}"><div class="row"><span class="tn-dot"></span><input type="text" class="tn-name" maxlength="20" autocomplete="off" spellcheck="false" aria-label="${k} team name"><input type="color" class="tn-pick" title="Custom colour"><button class="sm ghost tn-reset" title="Back to the default name and colour">Reset</button></div><details class="tn-det"><summary>Colours <span class="tn-chip" title="Current colour"></span></summary><div class="tn-sw">${C.TEAM_PRESETS.map(([n, hx]) => `<button class="swc" data-c="${hx}" style="background:${hx}" title="${n}" aria-label="${n}"></button>`).join('')}</div></details></div>`).join('') + '<div class="faint sm">Used in the match lines, overlays and the site. Customs chat lines keep the emoji before the name (🔶 Orange, 🔷 Blue, e.g. “🔷 Frost wins”); the colour only tints the panels and overlays.</div>')}
         ${sec('c-s', 'Settings', `<div class="lbl">Team size <span class="faint" id="cu-fmt"></span></div><div id="cu-rlsz">${seg('format', ['2v2', '3v3', '4v4'].map(x => [x, x]))}</div><div id="cu-fnsz" hidden><div class="seg">${['1', '2', '3'].map(n => b(n, 'format', n + 'v' + n, '', 'format:' + n + 'v' + n, 'Fortnite viewers: ' + n + ' per team')).join('')}</div><div class="row" style="margin-top:6px"><input type="number" id="cu-fnn" min="1" max="16" placeholder="other size" style="width:96px"><button class="sm" id="cu-fnset" title="Any other team size, 1 to 16">Set</button></div></div><div class="lbl">Game mode</div>${seg('gamemode', [['Standard', 'standard'], ['Dropshot', 'dropshot'], ['Rumble', 'rumble']])}`)}
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
@@ -538,7 +539,7 @@
   /* ---------- changing the activity (or the sim streamer) while people wait or play: ask what happens to them ---------- */
   const playersNow = () => {
     const c = curCustoms() || {}, m = c.match, live = !!(m && m.status !== 'finished');
-    return { q: (c.queue || []).length, g: live ? (ui.sim ? (m._p || []).length : (m.orange || []).length + (m.blue || []).length) : 0, live };
+    return { q: (c.queue || []).length, g: live ? (ui.sim ? (m._p || []).length : C.teamPlayers(m, 'orange').length + C.teamPlayers(m, 'blue').length) : 0, live };
   };
   function wantsAsk(action, value) {
     if (action === 'activity') { const sub = String(value || '').split(' ').pop(), c = curCustoms() || {}; if ((sub === 'end' ? 'none' : sub) === c.activity) return false; }
@@ -565,7 +566,7 @@
   const teamsNow = () => {
     const c = curCustoms() || {}, loc = ls.get('teams') || {}, out = {};
     for (const k of ['orange', 'blue']) {
-      const d = C.TEAM_DEFAULTS[k], hs = (c.teams && c.teams[k]) || (ui.sim ? null : loc[k]) || {}, ov = ui.teamsOv[k], live = ov && ov.until > Date.now() ? ov : {};
+      const d = C.TEAM_DEFAULTS[k], hs = C.teamEntry(c, k) || (ui.sim ? null : loc[k]) || {}, ov = ui.teamsOv[k], live = ov && ov.until > Date.now() ? ov : {};
       out[k] = { name: live.name || C.teamName(hs.name) || d.name, color: live.color || C.teamColor(hs.color) || d.color };
     }
     return out;
@@ -577,7 +578,7 @@
     if (ui.sim) { Object.assign(ui.simState.teams[side], p); schedule('customs'); return; }
     const all = ls.get('teams') || {}; all[side] = Object.assign({}, all[side], p); ls.set('teams', all);
     await tokenReady; ui.tookControl = true; const r = await api.post('/api/customs/teams', { [side]: { name: p.name, color: p.color } });
-    if (r.ok && !(r.json && r.json.ok === false)) toast(side + ' team: ' + ((p.name || '') + ' ' + (p.color || '')).trim()); else if (r.status === 404) toast('Team names/colours need the Host /api/customs/teams (Host restart needed)', true); else toast('Team: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
+    if (r.ok && !(r.json && r.json.ok === false)) toast(teamsNow()[side].name + ' team: ' + ((p.name || '') + ' ' + (p.color || '')).trim()); else if (r.status === 404) toast('Team names/colours need the Host /api/customs/teams (Host restart needed)', true); else toast('Team: ' + ((r.json && r.json.error) || r.error || 'HTTP ' + r.status), true);
   }
   function renderTeamsEditor() {
     const t = teamsNow();
@@ -587,7 +588,10 @@
       if (pk.value !== t[k].color) pk.value = t[k].color; row.querySelector('.tn-dot').style.background = t[k].color;
       { const ch = row.querySelector('.tn-chip'), pn = (C.TEAM_PRESETS.find(p => p[1].toLowerCase() === String(t[k].color).toLowerCase()) || [])[0]; if (ch) { ch.style.background = t[k].color; ch.textContent = pn || t[k].color; ch.dataset.c = t[k].color; } }
       row.querySelectorAll('.swc').forEach(s => s.classList.toggle('cur', s.dataset.c === t[k].color));
+      inp.setAttribute('aria-label', t[k].name + ' team name');
+      const wb = $('#tab-customs [data-cu="finish"][data-v="' + k + '"]'); if (wb && !wb._armT) { wb.textContent = t[k].name + ' wins'; wb.style.borderColor = t[k].color; wb.style.color = t[k].color; }
     }
+    { const pk = $('#cu-pick'); if (pk) pk.placeholder = 'who goes ' + t.blue.name; }
   }
   /* The .cur/is-live/q-on highlighting of the Customs buttons. Runs first and on its own (own try/catch in renderCustoms), so a failure in any other section cannot leave every button un-highlighted. */
   function paintCustomsButtons(c) {
@@ -618,7 +622,7 @@
     $('#cu-ctl').className = 'ctl ' + (ui.sim ? 'mine' : holder ? 'other' : mine ? 'mine' : 'free');
     $('#cu-who').textContent = ui.sim ? '🧪 Simulator: fake players, nothing is sent' : holder ? '🎮 In control: ' + holder : mine ? '🎮 In control: you (app)' : '🎮 In control: nobody · any click takes it';
     const q = (c && Array.isArray(c.queue)) ? c.queue : [];
-    ui.dir = C.personDir([q, ui.wdir, c && c.match && c.match._p, c && c.match && c.match.players, c && c.match && c.match.blueP, c && c.match && c.match.orangeP]);
+    ui.dir = C.personDir([q, ui.wdir, c && c.match && c.match._p, c && c.match && c.match.players, c && c.match && c.match.blueP, c && c.match && c.match.greyP, c && c.match && c.match.orangeP]);
     $('#cu-badge').textContent = c ? (c.open === true ? 'queue open' : c.open === false ? 'queue closed' : '') + (c.format ? ' · ' + c.format : '') + (c.gameMode && c.gameMode !== 'standard' ? ' · ' + c.gameMode : '') : '';
     $('#cu-act').textContent = c && c.activity && c.activity !== 'none' ? '· ' + c.activity : '';
     $('#cu-qn').textContent = c ? '· ' + q.length + ' waiting' + (c.strikeGame ? ' · ' + (c.strikeGame === 'fn' ? 'Fortnite' : 'Rocket') + ' strikes' : '') : '';
@@ -629,12 +633,12 @@
       (li, r) => { li.dataset.u = r.u; li.className = r.k === 'n' ? 'next-up' : r.k === 'b' ? 'backup' : r.k === 's' ? 'is-streamer' : ''; li.children[0].textContent = '#' + r.n; paintWho(li.children[1], r.p); li.children[2].textContent = r.m || ''; li.children[3].textContent = r.k === 'n' ? 'NEXT' : r.k === 'b' ? 'BACKUP' : r.k === 's' ? 'STREAMER' : ''; fillStrike(li.children[4], r.u); });
     const m = c && c.match, live = !!(m && m.status !== 'finished');
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
-    const TN = teamsNow(), tv = JSON.stringify([TN, m && m.orange, m && m.blue, [...(m && m.orange || []), ...(m && m.blue || [])].map(n => [strikesFor(who(n).key), strikesKnown(who(n).key), who(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
-    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const tagged = m && Array.isArray(m[k + 'P']) && m[k + 'P'].length ? m[k + 'P'] : null, names = tagged || (m && m[k]) || []; names.forEach(n => col.append(playerRow(who(n).key.toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
+    const TN = teamsNow(), tv = JSON.stringify([TN, C.teamPlayers(m, 'orange'), C.teamPlayers(m, 'blue'), [...C.teamPlayers(m, 'orange'), ...C.teamPlayers(m, 'blue')].map(n => [strikesFor(who(n).key), strikesKnown(who(n).key), who(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
+    if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = C.teamPlayers(m, k); names.forEach(n => col.append(playerRow(who(n).key.toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
     renderPop(); renderAsk(); renderTeamsEditor();
     const isFn = !!c && /^(boxfights|zonewars|fnviewers)$/.test(c.activity || ''); $('#cu-rlsz').hidden = isFn; $('#cu-fnsz').hidden = !isFn; $('#cu-fmt').textContent = c && c.format ? '· ' + c.format : '';
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
-      const empty = live ? C.fmtSize(c && c.format) * 2 - (m.orange || []).length - (m.blue || []).length : 0;
+      const empty = live ? C.fmtSize(c && c.format) * 2 - C.teamPlayers(m, 'orange').length - C.teamPlayers(m, 'blue').length : 0;
       fb.textContent = !live ? '▶ Start' : 'Fill empty slots' + (empty > 0 ? ' (' + empty + ')' : ''); fb.disabled = live && (empty <= 0 || !q.length);
       fb.title = live ? 'Bring the next players from the queue into every empty slot of this game' : 'Start a game from the queue';
     }
@@ -797,7 +801,7 @@
         d.className = 'feeditem ' + (x.lvl === 'error' ? 'lvl-error ' : '') + (x.kind === 'sub' ? 'sub ' : '') + 'k-' + (x.t || (x.kind === 'group' ? 'p' : '')) + (x.t === 'e' ? ' ev' : ''); d.dataset.k = x.key;
         d.children[0].textContent = fmtT(x.ts); const t = d.children[1]; t.textContent = '';
         if (x.kind === 'group') { const a = h('a', 'grp', x.label); a.title = x.names; a.dataset.g = x.key; t.append(a, document.createTextNode(' ' + x.text + (x.open ? '' : ' (click to show)'))); }
-        else if (x.kind === 'teams') { t.append(h('span', 'who', x.text + ': '), h('span', 'tb', 'Blue: ' + (x.blue.join(', ') || '–')), document.createTextNode('  '), h('span', 'to', 'Orange: ' + (x.orange.join(', ') || '–'))); }
+        else if (x.kind === 'teams') { t.append(h('span', 'who', x.text + ': '), h('span', 'tb', teamsNow().blue.name + ': ' + (x.blue.join(', ') || '–')), document.createTextNode('  '), h('span', 'to', teamsNow().orange.name + ': ' + (x.orange.join(', ') || '–'))); }
         else if (x.t === 'c') t.append(h('span', 'who', x.user), document.createTextNode(': ' + x.text));
         else t.append(h('span', x.t === 'e' ? 'who' : 'lg lg-' + (x.lvl === 'error' ? 'error' : (x.type || 'x')), x.text));
       });
