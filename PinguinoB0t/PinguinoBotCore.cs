@@ -2287,6 +2287,7 @@ public class CPHInline
     void Say(string message)
     {
         if (_silentTune) return;
+        if (_merge != null) { _merge.Add(message); return; }
         // [NEW][WEB] Status updates always reach the stream, even when the change
         // came from the website. For website-only players (no Twitch, IDs like
         // "kick-penguinkick") the "@kick-penguinkick" is swapped for their site
@@ -3231,11 +3232,51 @@ public class CPHInline
     // set only while a SITE command registers the name: the linked-account flag and the typed name the site also holds
     bool _siteEpicLinked; string _siteEpicTyped = "";
 
+    // Several replies of one command go out as ONE chat message (Ivan: no second lines): while _merge is set Say only collects
+    List<string> _merge;
+    void SayMerged(Action act)
+    {
+        if (_merge != null) { act(); return; }
+        _merge = new List<string>();
+        try { act(); }
+        finally
+        {
+            var parts = _merge; _merge = null;
+            if (parts.Count > 0)
+            {
+                string first = parts[0], at = first.StartsWith("@") && first.IndexOf(' ') > 0 ? first.Substring(0, first.IndexOf(' ') + 1) : "";
+                var sb = new System.Text.StringBuilder(first);
+                for (int i = 1; i < parts.Count; i++) sb.Append(' ').Append(at != "" && parts[i].StartsWith(at) ? parts[i].Substring(at.Length) : parts[i]);
+                Say(sb.ToString());
+            }
+        }
+    }
+
+    // "!register petar1211 !join": the Epic name stops at the next " !" (names with spaces stay whole); the command after it is handed back
+    static string CutAtCommand(string s, out string rest)
+    {
+        rest = ""; s = (s ?? "").Trim(); int i = s.IndexOf(" !");
+        if (s.StartsWith("!")) { rest = s; return ""; }
+        if (i < 0) return s;
+        rest = s.Substring(i + 1).Trim(); return s.Substring(0, i).Trim();
+    }
+
     bool HandleRegister(string user, string input, bool isPrivileged)
+    {
+        string trailing; input = CutAtCommand(input, out trailing);
+        if (trailing.StartsWith("!join", StringComparison.OrdinalIgnoreCase) && !isPrivileged)
+        {
+            bool ok = false; SayMerged(() => { ok = HandleRegister(user, input, isPrivileged, true); if (_players.ContainsKey(user) && PlayerNameOk(user)) HandleJoin(user); }); return true;
+        }
+        return HandleRegister(user, input, isPrivileged, false);
+    }
+    bool PlayerNameOk(string user) { Player p; return _players.TryGetValue(user, out p) && !string.IsNullOrEmpty(p.GameId) && p.GameId.IndexOf('!') < 0; }
+
+    bool HandleRegister(string user, string input, bool isPrivileged, bool inner)
     {
         if (string.IsNullOrEmpty(input))
         {
-            Say("@" + user + " Usage: !register <EpicID> — Use your Epic Games display name.");
+            Say("@" + user + " Type !register <YourEpicName> once, then !join.");
             return true;
         }
 
@@ -3259,7 +3300,7 @@ public class CPHInline
         }
         else
         {
-            if (_players.ContainsKey(user) && !isPrivileged)
+            if (_players.ContainsKey(user) && !isPrivileged && !(_players[user].GameId ?? "").Contains("!"))   // a stored name with a "!" is garbage from a mis-typed line: the person may fix it
             {
                 Say("@" + user + " You're already registered as " +
                     _players[user].GameId + ". Ask a mod to update your Epic ID if needed.");
@@ -3338,7 +3379,7 @@ public class CPHInline
     {
         if (!_players.ContainsKey(user))
         {
-            Say("@" + user + " Register first: type !register YourEpicName (your exact Epic name, no < >), then !join.");
+            Say("@" + user + " Type !register <YourEpicName> once, then !join.");
             return true;
         }
 
