@@ -465,29 +465,30 @@
   }
   /* Platform display names. A person is a string key ("yt:UC…", "tt:name", "tw:login", a plain Twitch login) or an object from the Host. Returns {key, name, platform:'twitch'|'youtube'|'tiktok', tag:'T'|'YT'|'TT', epic}.
      Name order: display > displayName/display_name > handle/login > name > (directory entry for the same key) > the key with its prefix stripped. A raw "yt:UC…" / "tt:…" is never returned as a name. key stays the Host key for commands. */
-  const PLAT_TAG = { twitch: 'T', youtube: 'YT', tiktok: 'TT' };
-  function platOf(s) { const v = String(s == null ? '' : s).toLowerCase().trim(); return /^(tw|twitch)$/.test(v) ? 'twitch' : /^(yt|youtube)$/.test(v) ? 'youtube' : /^(tt|tiktok)$/.test(v) ? 'tiktok' : ''; }
-  const KEYPRE = /^(tw|twitch|yt|youtube|tt|tiktok)[:]/i, YTID = /^UC[A-Za-z0-9_-]{20,}$/;
+  const PLAT_TAG = { twitch: 'T', youtube: 'YT', tiktok: 'TT', kick: 'KK', facebook: 'FB' };
+  function platOf(s) { const v = String(s == null ? '' : s).toLowerCase().trim(); return /^(tw|twitch)$/.test(v) ? 'twitch' : /^(yt|youtube)$/.test(v) ? 'youtube' : /^(tt|tiktok)$/.test(v) ? 'tiktok' : /^(kk|kick)$/.test(v) ? 'kick' : /^(fb|facebook)$/.test(v) ? 'facebook' : ''; }
+  const KEYPRE = /^(tw|twitch|yt|youtube|tt|tiktok|kk|kick|fb|facebook)[:]/i, YTID = /^UC[A-Za-z0-9_-]{20,}$/;
   function personInfo(x, dir) {
     const o = x && typeof x === 'object' ? x : null, s = f => (o && typeof o[f] === 'string' ? o[f].trim() : '');
     const key = String(o ? (s('key') || s('username') || s('user') || s('id') || s('login') || s('name') || s('display')) : (x == null ? '' : x)).trim();
     const dk = dir && typeof dir.get === 'function' ? dir.get(key.toLowerCase()) : null, d = dk && dk !== o ? dk : null;
     const pre = KEYPRE.exec(key), stripped = key.replace(KEYPRE, '');
-    let name = s('display') || s('displayName') || s('display_name') || s('handle') || s('login') || s('name') || (d ? (d.name || '') : '');
+    const hostShape = !!s('name') && !!s('display') && s('name') !== s('display');   // Host queue rows: name = viewer display name, display = Epic name
+    let name = hostShape ? s('name') : (s('display') || s('displayName') || s('display_name') || s('handle') || s('login') || s('name') || (d ? (d.name || '') : ''));
     if (KEYPRE.test(name)) name = name.replace(KEYPRE, '');
     if (!name || name === key && pre) name = stripped;
     let platform = platOf(s('platform')) || platOf(s('source')) || platOf(s('provider')) || (pre ? platOf(pre[1]) : '') || (d ? d.platform : '') || (YTID.test(stripped) || /^@/.test(name) ? 'youtube' : 'twitch');
     if (YTID.test(name)) name = 'YouTube viewer …' + name.slice(-4);
     if (!name) name = '?';
-    return { key, name, platform, tag: PLAT_TAG[platform], epic: s('epic') || s('epicName') || s('epic_name') || (d ? d.epic : '') };
+    return { key: d && d.key && !o ? d.key : key, name, platform, tag: PLAT_TAG[platform], epic: s('epic') || s('epicName') || s('epic_name') || (hostShape && s('display') !== key ? s('display') : '') || (d ? d.epic : '') };
   }
   function personDir(lists) {
     const m = new Map();
-    for (const l of lists) for (const x of Array.isArray(l) ? l : []) { if (!x || typeof x !== 'object') continue; const i = personInfo(x); if (i.key) m.set(i.key.toLowerCase(), i); }
+    for (const l of lists) for (const x of Array.isArray(l) ? l : []) { if (!x || typeof x !== 'object') continue; const i = personInfo(x); if (!i.key) continue; m.set(i.key.toLowerCase(), i); for (const alt of [x.display, x.name, i.name, i.epic]) if (typeof alt === 'string' && alt && !m.has(alt.toLowerCase())) m.set(alt.toLowerCase(), i); }
     return m;
   }
   /* Text for toasts and confirm lines: any "yt:UC…" / "tt:name" / "tw:login" key inside it becomes the person's display name */
-  function cleanKeys(text, dir) { return String(text == null ? '' : text).replace(/\b(?:tw|twitch|yt|youtube|tt|tiktok):[^\s,;()]+/gi, m => personInfo(m, dir).name); }
+  function cleanKeys(text, dir) { return String(text == null ? '' : text).replace(/\b(?:tw|twitch|yt|youtube|tt|tiktok|kk|kick|fb|facebook):[^\s,;()]+/gi, m => personInfo(m, dir).name); }
   function personText(x, dir) { const i = personInfo(x, dir); return i.name + (i.epic ? ' (' + i.epic + ')' : ''); }
   return { cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

@@ -451,6 +451,19 @@ await t('platform display names: Twitch / YouTube / TikTok people show display +
   assert.match(js, /paintWho\(li\.children\[1\], r\.p\)/); assert.match(js, /paintWho\(lb, label\)/); assert.match(js, /paintWho\(pop\.querySelector\('\.pu'\), u\)/); assert.match(js, /msg = C\.cleanKeys\(msg, ui\.dir\)/); assert.match(js, /id="wh-people"/);
 });
 
+await t('platform display names, REAL Host shape: queue row {username key, display = Epic, name = viewer name, platform}; match.players; plain wheel strings resolve through the directory', () => {
+  const q = [{ username: 'yt:uc1abc', display: 'petar1211', name: 'Tanja', platform: 'youtube', mmr: 0 }, { username: 'tt:t9', display: 'tt:t9', name: 'Dancer', platform: 'tiktok' }, { username: 'phil_flock', display: 'PhilRL', name: 'Phil_Flock', platform: 'twitch' }, { username: 'kk:k1', display: 'kk:k1', name: 'KickGuy', platform: 'kick' }, { username: 'plainnoname', display: 'plainnoname', platform: 'twitch' }];
+  const pl = [{ username: 'yt:uc9zzz', team: 'blue', platform: 'youtube', name: 'Marko' }], dir = C.personDir([q, pl]);
+  let i = C.personInfo(q[0], dir); assert.deepEqual([i.name, i.tag, i.epic, i.key], ['Tanja', 'YT', 'petar1211', 'yt:uc1abc']);
+  i = C.personInfo(q[1], dir); assert.deepEqual([i.name, i.tag, i.epic], ['Dancer', 'TT', '']);
+  i = C.personInfo(q[2], dir); assert.deepEqual([i.name, i.tag, i.epic], ['Phil_Flock', 'T', 'PhilRL']);
+  assert.equal(C.personInfo(q[3], dir).tag, 'KK'); assert.equal(C.personInfo(q[4], dir).name, 'plainnoname'); assert.equal(C.personInfo(q[4], dir).epic, '');
+  i = C.personInfo('yt:uc9zzz', dir); assert.deepEqual([i.name, i.tag], ['Marko', 'YT']);   // match.blue/orange are plain keys
+  i = C.personInfo('petar1211', dir); assert.deepEqual([i.name, i.tag, i.key], ['Tanja', 'YT', 'yt:uc1abc']);   // a wheel string that is an Epic name
+  i = C.personInfo('PhilRL', dir); assert.equal(i.name, 'Phil_Flock'); assert.equal(C.personInfo('Unknown_Person', dir).name, 'Unknown_Person'); assert.equal(C.personInfo('fb:abc', dir).tag, 'FB');
+  assert.doesNotMatch(C.cleanKeys('kick kk:k1 and yt:uc1abc', dir), /(yt|kk):/);
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);
