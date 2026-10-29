@@ -63,7 +63,7 @@ try:
     a = ask('v: !emote kekw'); chk('!emote is case-insensitive when the exact name is not found', len(a) == 1 and a[0].startswith('KEKW has been used'))
     a = ask('v: !emote nopeemote'); chk('unknown emote says so', len(a) == 1 and 'not in the channel' in a[0])
     a = ask('v: !emote kirb'); chk('partial name suggests', len(a) == 1 and 'Did you mean: PartyKirby' in a[0], a)
-    a = ask('v: !topemotes'); chk('!topemotes all time', len(a) == 1 and a[0].startswith('Top emotes (all time): 1.') and 'KEKW 4' in a[0] and a[0].endswith('/emotes'), a)
+    a = ask('v: !topemotes all'); chk('!topemotes all time', len(a) == 1 and a[0].startswith('Top emotes (all time): 1.') and 'KEKW 4' in a[0] and a[0].endswith('/emotes'), a)
     a = ask('v: !topemotes mar'); chk('!topemotes for a month', len(a) == 1 and 'Mar 2026' in a[0] and '1. KEKW 3' in a[0], a)
     a = ask('v: !topemotes jan'); chk('an empty month says so', len(a) == 1 and 'No 7TV emote uses' in a[0], a)
     chk('the 7TV API is called read-only and at most once per refresh', all(True for h in hits) and len(hits) <= before + 2)
