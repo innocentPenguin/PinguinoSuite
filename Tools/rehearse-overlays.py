@@ -3,7 +3,7 @@ Replays a scripted evening: idle -> queue open -> joins -> match + team picks ->
 subroll -> queue close, and after EVERY step asserts that each overlay's data endpoint still answers with a sane payload
 (live_state.js, /api/queue-idle, /api/customs/state, /api/wheel/public, /api/subroll, /overlay/latest|goal|subfooter, /api/scene-layouts, /api/scene-health)
 and that no overlay page is missing. Usage: python Tools/rehearse-overlays.py [dll] [--keep] [--hold SECONDS]   (the dll is a Release build of PinguinoHost, run from a temp copy, never from bin\\Release of the live app).
-Then a RAID rehearsal on a second sim Host (mock Helix + mock Multi): goodnight with no raid fires at once; raid_start = shoutout (the clip goes to Multi once), "Prepare your emotes", Discord line, in that order within seconds; the same raid never starts twice; stream.offline with a raid pending is held; raid_out (10 s after the signal in the test) says Discord once, then stop-stream, and releases the held goodnight; overlays stay sane after every step.
+Then a RAID rehearsal on a second sim Host (mock Helix + mock Multi): goodnight with no raid fires at once; raid_start = ONE chat message ("Prepare your emotes" + the Discord invite), no shoutout clip (Ivan 10-27) within seconds; the same raid never starts twice; stream.offline with a raid pending is held; raid_out (a few seconds after the signal in the test) says the !leftbehind line, then stop-stream, and releases the held goodnight; overlays stay sane after every step.
 Exit 0 = every step sane. Registered for run-all-tests through Tools/test-host-rehearsal.py."""
 import json, os, re, shutil, subprocess, sys, tempfile, time, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
@@ -242,12 +242,11 @@ def raid_rehearsal():
         rs = runs('sb-raidstart'); chk('raid start ran once', len(rs) == 1 and rs[0]['ok'], rs)
         if rs:
             o = rs[0]['output']
-            chk('order: shoutout first, then the emotes line, then the Discord line', len(o) >= 3 and 'shoutout' in o[0].lower() and 'Prepare your emotes' in o[1] and 'iscord' in o[-1], o)
+            chk('one message: the emotes line with the Discord invite, no shoutout step', len(o) == 1 and 'Prepare your emotes' in o[0] and 'iscord' in o[0], o)
             chk('raid start finished within a few seconds', rs[0]['ms'] < 5000, rs[0]['ms'])
-        want = [m for m in texts() if 'Prepare your emotes' in m or 'ommunity Discord' in m]
-        chk('chat got the emotes line before the Discord line', len(want) == 2 and 'Prepare your emotes' in want[0] and 'Discord' in want[1], texts())
-        chk('the shoutout clip went to Multi once, for the target', len(fires) == 1 and fires[0][2].get('user') == 'raidtarget', fires)
-        if fires: chk('clip fired within seconds of the countdown', fires[0][0] - tp < 6, (fires[0][0], tp))
+        want = [m for m in texts() if 'Prepare your emotes' in m]
+        chk('chat got the emotes line with the Discord invite once', len(want) == 1 and 'Discord' in want[0], texts())
+        chk('no shoutout clip is sent for the raid target', len(fires) == 0, fires)
         sane()
         r2 = post('/api/raid/prep', {'target': 'raidtarget'}); chk('the same raid does not start twice', r2.get('fired') is False, r2)
 
@@ -264,10 +263,10 @@ def raid_rehearsal():
             time.sleep(1)
         ro = runs('sb-raidout'); chk('raid out ran once after the delay', len(ro) == 1, len(ro))
         if ro:
-            o = ro[0]['output']; chk('Discord line once, then the stop-stream step last', sum(1 for x in o if 'iscord' in x) == 1 and 'iscord' in o[0] and 'OBS' in o[-1], o)
+            o = ro[0]['output']; chk('the !leftbehind line first, then the stop-stream step last', 'leftbehind' in o[0] and 'OBS' in o[-1], o)
         time.sleep(1.5)
         chk('the held goodnight was said after the raid landed', len(runs('sb-offline')) == 2, len(runs('sb-offline')))
-        chk('only one shoutout clip for the whole raid', len(fires) == 1, len(fires))
+        chk('no shoutout clip for the whole raid', len(fires) == 0, len(fires))
         sane()
 
         step[0] = 'raid: host log'
