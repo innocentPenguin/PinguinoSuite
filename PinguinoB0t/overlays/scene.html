@@ -22,6 +22,7 @@
   #stage { position:absolute; left:0; top:0; transform-origin:0 0; overflow:hidden; }
   .w { position:absolute; overflow:hidden; box-sizing:border-box; transition:opacity .6s; }
   .w.away { opacity:0 !important; pointer-events:none; }
+  .w.hid { opacity:0 !important; pointer-events:none; }
   .w iframe { position:absolute; left:0; top:0; border:0; background:transparent; transform-origin:0 0; }
   body.preview { background:#12141a; }
   body.preview #stage { outline:2px dashed #ff3b30; }
@@ -100,7 +101,7 @@
     var seen = {};
     ((j.layout && j.layout.widgets) || []).forEach(function (w) {
       var id = w.id, r = reg[id]; seen[id] = 1;
-      if (w.visible === false) { if (nodes[id]) { nodes[id].div.remove(); delete nodes[id]; } return; }   // hidden widgets are not loaded at all
+      if (w.visible === false) { if (nodes[id]) nodes[id].div.classList.add("hid"); return; }   // hidden: faded out but the iframe stays mounted, so its page state (wheel angle ...) survives; a widget never shown is not loaded at all
       var url = srcOf(w, r); if (!url) return;
       if (w.takeover) tkIds[id] = 1;
       var n = nodes[id];
@@ -112,7 +113,7 @@
         stage.appendChild(div); n = nodes[id] = { div: div, frame: fr, tag: tag, url: url };
       n.pinned = !!(r && r.pinned);
       }
-      place(n, w, r);
+      n.div.classList.remove("hid"); place(n, w, r);
     });
     Object.keys(nodes).forEach(function (id) { if (!seen[id]) { nodes[id].div.remove(); delete nodes[id]; } });
     applyTakeover(); pollWheel();
