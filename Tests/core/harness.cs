@@ -834,9 +834,9 @@ public static class Harness
             // not enough waiting: announce once, then start by itself when the queue fills
             Run("mod1", "!win", "orange", true);
             int wait1 = CPHProxy.Sent.Count(m => m.StartsWith("Waiting for players"));
-            Check(wait1 == 1, "autonext: not enough players: announced once (" + wait1 + "): " + string.Join(" | ", CPHProxy.Sent));
+            Check(wait1 == 0, "autonext: not enough players: nothing is announced (Core no longer says \"Waiting for players\", Ivan 10-25) (" + wait1 + "): " + string.Join(" | ", CPHProxy.Sent));
             CPHProxy.Sent.Clear(); tick.Invoke(bot, null); tick.Invoke(bot, null);
-            Check(CPHProxy.Sent.Count == 0, "autonext: waiting is announced only once");
+            Check(CPHProxy.Sent.Count == 0, "autonext: waiting stays silent on later ticks");
             foreach (var n in new[] { "p11", "p2", "p4", "p5" }) Run(n, "!join");
             CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
             Check(MatchId() != "" && MatchId() != secondId && CPHProxy.Sent.Any(m => m.Contains("Grey [avg")), "autonext: starts by itself once the queue is full: " + string.Join(" | ", CPHProxy.Sent));
@@ -873,7 +873,7 @@ public static class Harness
             Run("mod1", "!autonext", "on", true); Run("mod1", "!format", "3v3", true);
             CPHProxy.Sent.Clear(); Run("mod1", "!koth", "on", true);
             Check(CPHProxy.Sent.Any(m => m.Contains("KOTH is now ON") && m.Contains("1v1")), "koth: on switches to 1v1: " + string.Join(" | ", CPHProxy.Sent));
-            Check(CPHProxy.Sent.Any(m => m.StartsWith("Waiting for players: need 2 for 1v1")), "koth: waits for 2 players");
+            Check(!CPHProxy.Sent.Any(m => m.StartsWith("Waiting for players")), "koth: waits for 2 players silently (no \"Waiting for players\" line)");
             Run("p2", "!join"); CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
             Check(CPHProxy.Sent.Count == 0, "koth: 1 player is not enough, no repeat");
             Run("p4", "!join"); CPHProxy.Sent.Clear(); tick.Invoke(bot, null);
