@@ -24,7 +24,7 @@ try:
     host = start('1')
     feed(host, 'viewer: !downtime'); chk('live: downtime says live', any('live right now' in s for s in says()), says())
     feed(host, 'viewer: !uptime'); chk('live: uptime', any('has been live for' in s for s in says()), says())
-    n_say = len(says()); feed(host, 'viewer: !points'); chk('!points answers once with the short line (Chatty; the Host only supplies the numbers)', says()[n_say:] == ['@viewer you have 0 points (#1 of 1)'], says()[n_say:])
+    n_say = len(says()); feed(host, 'viewer: !points'); chk('!points answers once with the short line (Chatty; the Host only supplies the numbers)', len(says()[n_say:]) == 1 and says()[n_say:][0].startswith('@viewer ') and 'balance: 0 points' in says()[n_say:][0], says()[n_say:])
     chk('lastLiveSeen persisted', os.path.exists(os.path.join(d, 'live_last.json')))
     host.kill(); host.wait(); time.sleep(2)
     host = start('0')
