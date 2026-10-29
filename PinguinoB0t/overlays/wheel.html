@@ -9,6 +9,8 @@
 <style>
 :root{--bg:#141414;--face:#2c2f35;--grey:#1d1d1d;--down:0vh;--sw:calc(100vw - var(--l) - var(--r));--fg:#fff;--accent:#ff9900;--card:#1b1610;--font:system-ui,Segoe UI,Arial,sans-serif;--l:0vw;--r:32vw}
 *{box-sizing:border-box}
+html.inactive body{opacity:0}
+body{transition:opacity .4s}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--font);overflow:hidden}
 body.clear{background:transparent}
 #stage{position:fixed;top:var(--down);bottom:0;left:calc(var(--l) + 1vw);right:calc(var(--r) + 1vw);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1.2vmin;padding:1.2vmin 2vmin 0}
@@ -123,7 +125,11 @@ function arcText(s,txt,r,fs,mid){ // text curved along the top of a circle, cent
  for(let i=0;i<txt.length;i++){ctx.save();ctx.rotate(start+i*step+Math.PI/2);ctx.translate(0,-r);ctx.fillText(txt[i],0,0);ctx.restore()}
  ctx.restore();
 }
+// the wheel's current angle lives in JS state (and sessionStorage, so a re-mounted iframe carries on from it): a spin starts from it, the idle turn continues from it, nothing resets to 0
+let ang=0,angSave=0,spinFrom={k:'',a:0},idleBase=0,lobSince=0,lobBase=0;
+try{ang=parseFloat(sessionStorage.getItem('wheelAng'))||0}catch(e){}
 function drawWheel(order,rot){
+ ang=rot;if(performance.now()-angSave>250){angSave=performance.now();try{sessionStorage.setItem('wheelAng',String(((rot%TAU)+TAU)%TAU))}catch(e){}}
  fit();const s=size,c=s/2,Rr=s*.43,hub=s*.12,n=order.length,a=TAU/Math.max(1,n);ctx.clearRect(0,0,s,s);
  ctx.save();ctx.translate(c,c);
  // white rim with a soft shadow
@@ -216,10 +222,12 @@ function paintManual(now){
  if(!finished){
   const order=orderOf(shown,salt);
   if(moving){
-   const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv),ph=t/(m.spinMs*SPINF),rot=p.total*ease(Math.min(1,ph));
+   const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv),ph=t/(m.spinMs*SPINF),sk0=d.id+':'+Rv;
+   if(spinFrom.k!==sk0)spinFrom={k:sk0,a:((ang%TAU)+TAU)%TAU};   // this pick spins on from wherever the wheel stands
+   const dl=((((p.total-spinFrom.a)%TAU)+TAU)%TAU)+4*TAU,rot=spinFrom.a+dl*ease(Math.min(1,ph));
    const under=Math.floor((((-rot)%TAU)+TAU)%TAU/p.a),sk=Rv+':'+under;
    if(sk!==lastSlice){tick();kick=Math.min(1,kick+.7)}lastSlice=sk;
-   idleSince=0;drawWheel(full,rot);pick.hidden=true;
+   idleSince=0;lobSince=0;drawWheel(full,rot);pick.hidden=true;
   }else if(landed&&spinning){
    idleSince=0;const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv);drawWheel(full,p.total);
    if(landedFor!==d.id+':'+Rv){landedFor=d.id+':'+Rv;chime();pick.hidden=false;pick.textContent=pickText(d.steps,Rv,w.teamSizes);pick.style.animation='none';void pick.offsetWidth;pick.style.animation='';wb.classList.remove('landed');void wb.offsetWidth;wb.classList.add('landed')}
@@ -227,7 +235,7 @@ function paintManual(now){
    idleSince=0;pick.hidden=true;const full=orderOf(pool,salt),p=planFor(full,cur.name,d.id+':'+Rv);drawWheel(full,p.total);
   }else{
    pick.hidden=true;landedFor=d.id+':'+Rv;
-   if(!idleSince)idleSince=performance.now();drawWheel(order,idleRot(performance.now()-idleSince));   // idle: the wheel turns slowly while it waits for the next spin
+   lobSince=0;if(!idleSince){idleSince=performance.now();idleBase=ang}drawWheel(order,idleBase+idleRot(performance.now()-idleSince));   // idle: the wheel turns slowly while it waits for the next spin
    big.textContent='';
   }
  }else{
@@ -277,12 +285,12 @@ function paintLobby(){
  const wb=$('wheelbox'),pick=$('pick');
  lastDraw='';lastKey='';lastCount=-1;lastSlice='';landedFor='';$('teams').textContent='';$('final').textContent='';$('wait').textContent='';pick.hidden=true;wb.classList.remove('off');
  const names=w.names||[];
- drawWheel(orderOf(names,'lobby'),performance.now()/1000*.07);
+ if(!lobSince){lobSince=performance.now();lobBase=ang}idleSince=0;drawWheel(orderOf(names,'lobby'),lobBase+(performance.now()-lobSince)/1000*.07);
  $('big').textContent='';   // no head count on stream
 }
 function paint(){
  if(w){
-  const d=w.draw,now=Date.now()+off;setTop();colorMap(w.names||[],w.colors);
+  const d=w.draw,now=Date.now()+off;document.documentElement.classList.toggle('inactive',(w.status==='none'||w.status==='idle')&&!(w.names||[]).length);setTop();colorMap(w.names||[],w.colors);
   if(d&&d.steps&&(w.status==='drawing'||w.status==='drawn')&&w.manual&&w.manual.on)paintManual(now);
   else if(d&&d.steps.length&&(w.status==='drawing'||w.status==='drawn'))paintAuto(now);
   else paintLobby();
