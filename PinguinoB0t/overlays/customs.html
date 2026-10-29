@@ -21,6 +21,7 @@
   var t=document.getElementById("t"), s=document.getElementById("s"), d=document.getElementById("d");
   function show(j){
     var n=(j.queue||[]).length, open=!!j.open, live=j.match&&j.match.status!==undefined&&j.match.status!=="done";
+    c.style.visibility=(!j.activity||j.activity==="none")?"hidden":"";   // visible only while an activity is running
     t.textContent=(j.activity||"CUSTOMS").toString().toUpperCase();
     s.className=open?"open":"closed"; s.textContent=live?"MATCH IN PROGRESS":(open?"QUEUE OPEN":"QUEUE CLOSED");
     var bits=[n+" waiting"]; if(j.gameMode) bits.push(j.gameMode); if(j.format) bits.push(j.format); if(j.mode) bits.push(j.mode);

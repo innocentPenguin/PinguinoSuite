@@ -201,7 +201,7 @@
     applyAlt(s);
     applyTeams(s);
     var m = s && s.currentMatch; if (m) m = normMatch(m);
-    if (!m) { stage.classList.remove("show"); lastKey = ""; lastId = ""; return; }
+    if (!m || !s.activity || s.activity === "none") { stage.classList.remove("show"); lastKey = ""; lastId = ""; return; }
     var idKey = JSON.stringify([m.id, m.format, s.game]), key = JSON.stringify([m.blue, m.orange]);
     var size = { "1v1":1, "2v2":2, "3v3":3, "4v4":4 }[m.format] || Math.max((m.blue || []).length, (m.orange || []).length, 1);
     if (idKey === lastId && key !== lastKey) {                 // same match, roster edited: diff + animate

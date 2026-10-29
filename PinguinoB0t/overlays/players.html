@@ -232,7 +232,7 @@
     applyAlt(s);
     applyTeams(s);
     var m = s && s.currentMatch; if (m) m = normMatch(m);
-    if (!m) { stage.classList.remove("show"); lastTeamsKey = ""; lastRosterKey = ""; return; }
+    if (!m || !s.activity || s.activity === "none") { stage.classList.remove("show"); lastTeamsKey = ""; lastRosterKey = ""; return; }
 
     var teamsKey = JSON.stringify([m.id, m.group, s.activity]), rosterKey = JSON.stringify([m.blue, m.orange, m.format]);
     if (teamsKey === lastTeamsKey && rosterKey !== lastRosterKey) {
