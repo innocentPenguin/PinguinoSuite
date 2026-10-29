@@ -287,7 +287,7 @@ namespace PinguinoHost
             Fire(kind, ctx);
         }
         static int RaidDelaySec() { return RaidDelayOverrideSec >= 0 ? RaidDelayOverrideSec : (int)Math.Max(0, Math.Min(88, (int?)Latest.Settings()["RaidStartDelaySec"] ?? 80)); }
-        static System.Threading.Timer _raidOutTimer, _watchTimer; static DateTime _raidOutAt = DateTime.MinValue, _landedAt = DateTime.MinValue; internal static int RaidOutFires; internal static int ChatWatchSec = 4; internal static int RaidLandGraceSec = 4;
+        static System.Threading.Timer _raidOutTimer, _watchTimer; static DateTime _raidOutAt = DateTime.MinValue, _landedAt = DateTime.MinValue; internal static int RaidOutFires; internal static int ChatWatchSec = 4; internal static int RaidLandGraceSec = 3;
         /// <summary>chatters in the channel right now (Helix), null = not known.</summary>
         internal static Func<int?> ChatterCount = () =>
         {
