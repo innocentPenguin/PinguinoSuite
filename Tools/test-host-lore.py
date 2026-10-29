@@ -51,7 +51,7 @@ try:
     chk('!bits stays ours (the bits board), not the clip', not any('clip' in x for x in ask(host, 'viewer1: !bits')))
     r = ask(host, 'viewer1: !gay'); chk('!gay is enabled (Ivan) so the exact command answers when Chatty does not own it', r != [], r)
     r = ask(host, 'viewer1: !goon'); chk('held commands (!goon, !weiner: disabled in Chatty canned_commands.json) stay silent everywhere until Ivan decides', r == [] and ask(host, 'viewer1: !weiner') == [], r)
-    r = ask(host, 'viewer1: !pm'); chk('!pm reads the one shared private-match setting', r == ['Private match -> Name: peng7.'], r)
+    r = ask(host, 'viewer1: !pm'); chk('!pm reads the one shared private-match setting', r == ['@viewer1 Private match -> Name: peng7.'], r)
     chk('!pm never prints a stored lobby password', not any('SeCr3tPw9' in x for x in r), r)
     # ---- natural questions ----
     r = ask(host, 'viewer3: what pc does penguin have?'); chk('"what pc does penguin have?" -> specs + streaming pc', r and 'Ryzen 9 7950X3D' in r[0] and r[0].startswith('@viewer3 '), r)

@@ -811,6 +811,8 @@ public static class Harness
         Check(!(bool)State()["queueOpen"] && (bool)State()["timedOut"] && (long)State()["timedOutAt"] > 0 && CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].Contains("15 minutes"), "timeout: idle customs close after 15 minutes with ONE chat line: " + string.Join("|", CPHProxy.Sent));
         Run("mod1", "!queue", "open", true);
         Check((bool)State()["queueOpen"] && !(bool)State()["timedOut"], "timeout: opening the queue clears the timed-out flag");
+        Run("curious", "!join"); CPHProxy.Sent.Clear(); Run("mod1", "!queue", "clear", true);
+        Check((bool)State()["queueOpen"] && Q().Length == 0, "!queue clear empties the queue and KEEPS it open (only !queue close closes it)");
         Run("mod1", "!streamer", "in", true);
         { var qBefore = Q(); Run("curious", "!next");
           Check(CPHProxy.Sent.Count == 1 && CPHProxy.Sent[0].StartsWith("@curious ") && !CPHProxy.Sent[0].Contains("Only mods") && (CPHProxy.Sent[0].Contains("Next up") || CPHProxy.Sent[0].Contains("queue is empty")) && Q().SequenceEqual(qBefore), "a viewer's !next is a short read-only 'who is next' line and never advances the queue: " + string.Join("|", CPHProxy.Sent)); }

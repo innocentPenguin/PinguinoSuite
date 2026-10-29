@@ -38,7 +38,7 @@ namespace PinguinoHost
     /// <summary>The customs queue as the Master View needs it (read from Core's live_state.json) + one mod-action endpoint that runs the chat command as the streamer and answers with the new state.</summary>
     public static class CustomsView
     {
-        static readonly Dictionary<string, string> Actions = new Dictionary<string, string> { { "queue", "!queue" }, { "next", "!next" }, { "match", "!match" }, { "win", "!win" }, { "finish", "!finish" }, { "balance", "!balance" }, { "reroll", "!reroll" }, { "kick", "!kick" }, { "mode", "!mode" }, { "format", "!format" }, { "koth", "!koth" }, { "casual", "!casual" }, { "activity", "!activity" }, { "streamer", "!streamer" } };
+        static readonly Dictionary<string, string> Actions = new Dictionary<string, string> { { "queue", "!queue" }, { "next", "!next" }, { "match", "!match" }, { "win", "!win" }, { "finish", "!finish" }, { "balance", "!balance" }, { "reroll", "!reroll" }, { "kick", "!kick" }, { "mode", "!mode" }, { "format", "!format" }, { "koth", "!koth" }, { "casual", "!casual" }, { "activity", "!activity" }, { "streamer", "!streamer" }, { "pm", "!pm" } };
         static string StateFile()
         {
             foreach (var f in new[] { Path.Combine(HostApi.DataDir, "live_state.json"), Path.Combine(HostApi.DataDir, "runtime", "live_state.json") }) if (File.Exists(f)) return f;
@@ -99,9 +99,16 @@ namespace PinguinoHost
             if (v.Length > 40 || v.Any(ch => !(char.IsLetterOrDigit(ch) || ch == '_' || ch == ' ' || ch == '.' || ch == ':' || ch == '-' || ch == '/'))) return new JObject { { "ok", false }, { "error", "value has characters that are not allowed" } };
             if (a == "activity" && !System.Text.RegularExpressions.Regex.IsMatch(v.ToLowerInvariant(), @"^((rl|fn) )?(competitive|comp|casual|koth|viewers|boxfights|zonewars|fnviewers|end|none)$")) return new JObject { { "ok", false }, { "error", "activity must be [rl|fn] competitive|casual|koth|viewers|boxfights|zonewars|end" } };
             string who = "innocentpenguin_"; try { var ch = (string)HostApi.StreamerCreds()["Channel"]; if (!string.IsNullOrEmpty(ch)) who = ch; } catch (Exception) { }
+            if (a == "pm")   // the private match name: one token of 1-20 characters, no leading ! or /; "" clears it (answers {ok, pmName})
+            {
+                if (v.Contains(" ") || v.Length > 20 || v.StartsWith("!") || v.StartsWith("/")) return new JObject { { "ok", false }, { "error", "pm value must be one word of 1-20 characters (no leading ! or /), or empty to clear" } };
+                if (v == "") v = "clear";
+                else if (v.ToLowerInvariant() == "clear" || v == "-") return new JObject { { "ok", false }, { "error", "that word clears the name: send an empty value to clear" } };
+            }
             string text = cmd + (v != "" ? " " + v : "");
             try { Control.Synthetic = true; Program.Dispatch(who, text, null, 4, "deck", false, null); } finally { Control.Synthetic = false; }
             Thread.Sleep(350); Events.Kick();
+            if (a == "pm") { var ps = State(); return new JObject { { "ok", true }, { "ran", text }, { "pmName", (string)ps["pmName"] ?? "" }, { "customs", ps } }; }
             if (a == "activity") { try { Scenes.CustomsSync(); } catch (Exception) { } }   // hide/show the customs overlays at once, not on the next layout read
             return new JObject { { "ok", true }, { "ran", text }, { "customs", State() } };
         }
