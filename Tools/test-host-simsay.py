@@ -17,9 +17,9 @@ p = subprocess.run(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite',
 out = p.stdout
 def has(t):
     assert t in out, "missing: " + t + "\n" + out[-2500:]
-has('[say] #13 🔷 Blue [avg 1000]: c(900), d(1100)')
+has('[say] #13 🔷 Grey [avg 1000]: c(900), d(1100)')
 has('[say] 🔶 Orange [avg 1100]: a(1000), b(1200) | Diff: 100')
-has('[say] 🔷 Blue wins match #13! (+3 pts winners, +1 pts losers)')
+has('[say] 🔷 Grey wins match #13! (+3 pts winners, +1 pts losers)')
 has('[say] 🔶 Orange wins match #14! (+1 win on the King of the Hill leaderboard)')
 has('[say] Starting customs! The queue is open!')
 has('[say] The queue is now CLOSED. No new joins accepted.')
@@ -27,7 +27,7 @@ has('[say] The queue has been cleared and closed.')
 has('[say] @zed You joined the queue at position #3!')
 has('[say] @zed You left the queue.')
 has('[say] zed has been removed from the queue.')
-has('[say] 🔷 Blue stays on! Rotating in new challengers...')
+has('[say] 🔷 Grey stays on! Rotating in new challengers...')
 has("[say] KOTH: 🔶 Orange stays on, but there aren't enough challengers (need 4, have 2). The winners wait at the front of the queue.")
 assert 'Waiting for players' not in out
 assert out.count('"spoke":false') == 1 and 'unknown event' in out, out[-1500:]
