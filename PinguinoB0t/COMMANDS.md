@@ -97,6 +97,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!uptime` | `!uptime` | How long the stream has been live. |
 | `!downtime` | `!downtime` | How long ago the last stream ended. |
 | `!vanish` | `!vanish` | Poof! Times you out for 1 second, which clears your messages from chat. Free, once every 10 seconds, and it does not work on mods or the broadcaster. |
+| `!pushup` | `!pushup  \|  mods: !pushup +N \| -N \| N \| set N \| reset \| on \| off` | Shows the pushup counters: all-time (the number on the overlay) and today. Mods add or remove pushups on both counters, set the all-time number, or reset today only (all-time keeps its total). |
 
 ### Subscribers
 

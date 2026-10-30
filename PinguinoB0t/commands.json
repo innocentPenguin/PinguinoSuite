@@ -1956,6 +1956,27 @@
       ],
       "section": "Chat commands",
       "importance": 16
+    },
+    {
+      "command": "!pushup",
+      "aliases": [
+        "!pushups",
+        "!pu"
+      ],
+      "action": "PinguinoHost",
+      "category": "Stream",
+      "who": "everyone / mods",
+      "usage": "!pushup  |  mods: !pushup +N | -N | N | set N | reset | on | off",
+      "description": "Shows the pushup counters: all-time (the number on the overlay) and today. Mods add or remove pushups on both counters, set the all-time number, or reset today only (all-time keeps its total).",
+      "examples": [
+        "!pushup",
+        "!pushup +5",
+        "!pushup -1",
+        "!pushup set 900",
+        "!pushup reset"
+      ],
+      "section": "Stream info",
+      "importance": 20
     }
   ]
 }
