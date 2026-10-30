@@ -288,7 +288,7 @@ for (const [u, a] of U) {
   let notes = ''; try { notes = JSON.parse(readFileSync(file, 'utf8')).notes || ''; } catch { /* new */ }
   const p = {
     login: u, name: r.name || u, built: buildDate,
-    roles: { mod: !!r.mod, vip: !!r.vip, sub: !!r.sub, subMonths: r.subMonths || 0, ...subRoles(u), ...streakRoles(u), ...bitsRoles(u) },
+    roles: { mod: !!r.mod, vip: !!r.vip, sub: false, subMonths: r.subMonths || 0, ...(r.subSeenAt ? { subSeenAt: ISO(r.subSeenAt) } : {}), ...subRoles(u), ...streakRoles(u), ...bitsRoles(u) },
     nicknames: (nicks[u] || []).map(x => x.nick),
     seen,
     birthday: a.birthday ? { text: a.birthday.text, note: 'month and day only (said on ' + a.birthday.said + '); the year is never stored', example: a.birthday.example } : undefined,

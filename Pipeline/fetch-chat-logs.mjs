@@ -172,7 +172,7 @@ const noticeText = p => {
       for (const [u, p] of Object.entries(dayProf)) {
         const g = prof.users[u] || (prof.users[u] = { name: p.name, msgs: 0, activeDays: 0, first: p.first, last: p.last, mod: false, vip: false, sub: false, subMonths: 0, bits: 0, bot: BOTS.has(u), talks: {} });
         g.name = p.name; g.msgs += p.msgs; g.activeDays++; g.first = Math.min(g.first, p.first); g.last = Math.max(g.last, p.last);
-        g.mod = g.mod || p.mod; g.vip = g.vip || p.vip; g.sub = g.sub || p.sub; g.subMonths = Math.max(g.subMonths, p.subMonths); g.bits += p.bits;
+        g.mod = g.mod || p.mod; g.vip = g.vip || p.vip; if (p.sub) g.subSeenAt = Math.max(g.subSeenAt || 0, p.last); g.sub = false;   // a subscriber badge in a log only says "was seen subbed": the sticky sub flag is gone, Twitch's list (Host) decides who is subbed now g.subMonths = Math.max(g.subMonths, p.subMonths); g.bits += p.bits;
         for (const [o, n] of Object.entries(p.talks)) g.talks[o] = (g.talks[o] || 0) + n;
       }
       done.add(day);

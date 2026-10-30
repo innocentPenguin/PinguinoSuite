@@ -225,6 +225,48 @@ namespace PinguinoHost
             return changed;
         }
 
+        /// <summary>Twitch is the truth for who is subbed NOW. `live` is the Helix /subscriptions pull {login: {tier,isGift,gifter,prime,name}}. Every listed login gets an active master row (tier, subType, giftedBy; new rows are created and, when
+        /// the viewer has no profile yet, a small profile file), every master row Twitch does not list is lapsed, and the profiles follow. Tenure/streak/founder of existing rows are kept (Helix has none).
+        /// Nothing is touched when the list is empty (a bad pull must never lapse everyone). Dated .bak copies of the master and the profiles folder are the caller's job before the first real run. Returns {active, created, profilesCreated, lapsed, reactivated, profilesUpdated}.</summary>
+        public static JObject ApplyTruth(JObject live)
+        {
+            if (live == null || live.Count == 0) return new JObject { { "ok", false }, { "error", "empty Twitch list: nothing changed" } };
+            lock (L)
+            {
+                var master = LoadMaster(); var users = (JObject)master["users"]; int created = 0, lapsed = 0, reactivated = 0, pcreated = 0;
+                string stamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+                foreach (var kv in live.Properties())
+                {
+                    string lg = kv.Name; var x = (JObject)kv.Value; bool gift = (bool?)x["isGift"] == true, prime = (bool?)x["prime"] == true;
+                    string type = prime ? "prime" : gift ? "gift" : "recurring"; var u = users[lg] as JObject;
+                    if (u == null) { u = new JObject { { "login", lg }, { "tier", 1 }, { "tenure", 1 }, { "streak", 1 }, { "subscribed", stamp }, { "founder", false }, { "firstImportedAt", stamp }, { "source", "helix" } }; users[lg] = u; created++; }
+                    else if ((bool?)u["lapsed"] == true) reactivated++;
+                    u["tier"] = Math.Max(1, (int?)x["tier"] ?? 1); u["subType"] = type; u["lapsed"] = false; u["importedAt"] = stamp;
+                    string gifter = ((string)x["gifter"] ?? "").ToLowerInvariant(); if (gift && gifter != "") u["giftedBy"] = gifter; else u.Remove("giftedBy");
+                    if (!string.IsNullOrEmpty(ProfilesDir) && Directory.Exists(ProfilesDir))
+                    {
+                        string f = Path.Combine(ProfilesDir, lg + ".json");
+                        if (!File.Exists(f)) { try { File.WriteAllText(f, new JObject { { "login", lg }, { "name", (string)x["name"] ?? lg }, { "built", stamp }, { "roles", new JObject() }, { "source", "helix-subs" } }.ToString()); pcreated++; } catch (Exception ex) { Clog.Warn("subs", "profile " + lg + ": " + ex.Message); } }
+                    }
+                }
+                foreach (var p in users.Properties()) { var u = (JObject)p.Value; if (live[p.Name] == null && (bool?)u["lapsed"] != true) { u["lapsed"] = true; u["lapsedAt"] = stamp; lapsed++; } }
+                try { Directory.CreateDirectory(SubsDir); File.WriteAllText(MasterP, master.ToString()); } catch (Exception ex) { Clog.Warn("subs", "truth master: " + ex.Message); return new JObject { { "ok", false }, { "error", ex.Message } }; }
+                int profs = ApplyToProfiles(master), plapsed = 0;
+                if (Directory.Exists(ProfilesDir))   // profiles with a sticky sub flag from the old log scraper (no master row): Twitch does not list them, so they are not subbed
+                    foreach (var f in Directory.GetFiles(ProfilesDir, "*.json"))
+                    {
+                        string lg = Path.GetFileNameWithoutExtension(f).ToLowerInvariant(); if (lg == "index" || live[lg] != null) continue;
+                        try
+                        {
+                            var prof = ParseJ(File.ReadAllText(f)); var roles = prof["roles"] as JObject; if (roles == null || (bool?)roles["sub"] != true) continue;
+                            roles["sub"] = false; roles["lapsed"] = true; roles.Remove("giftedBy"); File.WriteAllText(f, prof.ToString()); plapsed++;
+                        }
+                        catch (Exception ex) { Clog.Warn("subs", "profile " + lg + ": " + ex.Message); }
+                    }
+                return new JObject { { "ok", true }, { "active", live.Count }, { "created", created }, { "profilesCreated", pcreated }, { "lapsed", lapsed }, { "reactivated", reactivated }, { "profilesUpdated", profs }, { "profilesLapsed", plapsed } };
+            }
+        }
+
         /// <summary>write the master into the profile files (only files that exist; a chatter without a profile is only in the master). Idempotent.</summary>
         public static int ApplyToProfiles(JObject master)
         {
@@ -235,8 +277,9 @@ namespace PinguinoHost
                 try
                 {
                     var prof = ParseJ(File.ReadAllText(f)); var roles = prof["roles"] as JObject ?? new JObject(); var u = (JObject)kv.Value; bool lapsed = (bool?)u["lapsed"] == true;
-                    var want = new JObject { { "sub", !lapsed }, { "subTier", (int?)u["tier"] ?? 1 }, { "subMonths", (int?)u["tenure"] ?? 0 }, { "subStreak", (int?)u["streak"] ?? 0 }, { "founder", (bool?)u["founder"] == true }, { "subType", (string)u["subType"] ?? "" }, { "lapsed", lapsed } };
-                    bool diff = false; foreach (var p in want.Properties()) if (roles[p.Name] == null || !JToken.DeepEquals(roles[p.Name], p.Value)) { roles[p.Name] = p.Value; diff = true; }
+                    bool rm = false; var want = new JObject { { "sub", !lapsed }, { "subTier", (int?)u["tier"] ?? 1 }, { "subMonths", (int?)u["tenure"] ?? 0 }, { "subStreak", (int?)u["streak"] ?? 0 }, { "founder", (bool?)u["founder"] == true }, { "subType", (string)u["subType"] ?? "" }, { "lapsed", lapsed } };
+                    if (!lapsed && !string.IsNullOrEmpty((string)u["giftedBy"])) want["giftedBy"] = (string)u["giftedBy"]; else if (roles["giftedBy"] != null) { roles.Remove("giftedBy"); rm = true; }
+                    bool diff = rm; foreach (var p in want.Properties()) if (roles[p.Name] == null || !JToken.DeepEquals(roles[p.Name], p.Value)) { roles[p.Name] = p.Value; diff = true; }
                     if (diff) { prof["roles"] = roles; File.WriteAllText(f, prof.ToString()); changed++; }
                 }
                 catch (Exception ex) { Clog.Warn("subs", "profile " + kv.Name + ": " + ex.Message); }

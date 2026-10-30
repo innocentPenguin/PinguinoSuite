@@ -116,9 +116,11 @@ namespace PinguinoHost
             long now = Now();
             SaveJson(LiveP, new JObject { { "version", 1 }, { "at", now }, { "count", live.Count }, { "users", live } });
             SaveJson(AuditP, new JObject { { "at", now }, { "twitch", live.Count }, { "profiles", profSub }, { "missing", missing }, { "missingLogins", mismatches }, { "profilesSubbedButNotOnTwitch", stale } });
+            JObject truth = null; try { truth = SubsImport.ApplyTruth(live); } catch (Exception ex) { Clog.Warn("profilesync", "sub truth: " + ex.Message); }
             LastSubNote = "active subs per Twitch " + live.Count + ", per profiles " + profSub + ", missing " + missing;
+            if (truth != null) Clog.Info("profilesync", "sub truth applied: " + truth.ToString(Newtonsoft.Json.Formatting.None));
             Clog.Info("profilesync", LastSubNote + (stale.Count > 0 ? "; " + stale.Count + " profiles still say subbed but Twitch has no active sub" : ""));
-            return new JObject { { "ok", true }, { "twitch", live.Count }, { "profiles", profSub }, { "missing", missing } };
+            return new JObject { { "ok", true }, { "twitch", live.Count }, { "profiles", profSub }, { "missing", missing }, { "truth", truth } };
         }
 
         // ---- avatars ----
