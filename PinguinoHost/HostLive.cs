@@ -10,6 +10,10 @@ namespace PinguinoHost
     {
         static DateTime? _startedAt; static bool? _live; static string _source = "unknown"; static DateTime _at = DateTime.MinValue; static bool _started;
         public static bool? Live { get { return _live; } }
+        /// <summary>the Twitch /streams object of the current stream (id, title, game_name, game_id, started_at ...), null when offline or when the live check did not come from Twitch. Read by the Discord go-live announcer (170).</summary>
+        public static JObject Stream { get { return _stream; } }
+        public static string StreamId { get { var st = _stream; return st == null ? "" : (string)st["id"] ?? ""; } }
+        static JObject _stream;
         /// <summary>true when the stream is live OR Offline mode is on: what timers, chimes, intros and the economy gate on (the real state in Live stays honest).</summary>
         public static bool Active { get { return OfflineMode.Enabled || _live == true || RecordingActsLive; } }
         /// <summary>what the chat bots (Helper/Chatty/B0t) follow: offline mode OR a recording that counts as live. The real Twitch state (pinguino.live) is never faked.</summary>
@@ -58,7 +62,7 @@ namespace PinguinoHost
 
         public static void Start(HostCPH cph, int periodSec = 20)
         {
-            if (_started) return; _started = true; OfflineMode.Attach(cph);
+            if (_started) return; _started = true; OfflineMode.Attach(cph); DiscordAnnounce.Start(HostApi.SimMode);   // the Discord go-live post follows this live state
             Task.Run(async () => { await Task.Delay(6000); while (true) { try { Tick(cph); } catch (Exception ex) { Clog.Warn("live", "live check failed: " + ex.Message); } await Task.Delay(periodSec * 1000); } });
         }
         public static void Tick(HostCPH cph)
@@ -69,7 +73,7 @@ namespace PinguinoHost
             else
             {
                 JToken d; string err; string code = TwitchApi.Call(HttpMethod.Get, "/streams?user_id={bid}", null, out d, out err);
-                if (code == "200" && d is JArray a) { v = a.Count > 0; src = "twitch"; DateTime st; _startedAt = a.Count > 0 && DateTime.TryParse((string)a[0]["started_at"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out st) ? st : (DateTime?)null; }
+                if (code == "200" && d is JArray a) { v = a.Count > 0; src = "twitch"; _stream = a.Count > 0 ? a[0] as JObject : null; DateTime st; _startedAt = a.Count > 0 && DateTime.TryParse((string)a[0]["started_at"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out st) ? st : (DateTime?)null; }
                 else { bool? o = cph.ObsStreaming(); if (o != null) { v = o; src = "obs"; } }
             }
             try { bool? rc = cph.ObsRecording(); if (rc != null) OnRecording(rc.Value); } catch (Exception) { }
@@ -78,7 +82,7 @@ namespace PinguinoHost
             if (_live != true && v == true) SubBoard.ResetChat();
             if (_live != v) Clog.Info("live", "stream is " + (v.Value ? "LIVE" : "offline") + " (" + src + ")");
             if (v == true && _startedAt == null) _startedAt = DateTime.UtcNow;   // OBS / forced: since the Host noticed
-            if (v == false) _startedAt = null;
+            if (v == false) { _startedAt = null; _stream = null; }
             if (v == true) NoteSeen(); else LoadSeen();
             _live = v; _source = src; _at = DateTime.UtcNow;
             cph.SetGlobalVar("pinguino.live", v.Value ? "1" : "0", false);
