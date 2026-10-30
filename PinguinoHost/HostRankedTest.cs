@@ -68,6 +68,7 @@ namespace PinguinoHost
             Check(Say("viewer", "!ranked resume", 1) == "" && (bool)RankedActivity.State()["break"]["active"], "a viewer cannot resume");
             Say("m", "!ranked stop", 3); Check(!(bool)RankedActivity.State()["break"]["active"], "stop ends the break");
             var pp = RankedActivity.PushPayload(); Check(pp["days"].Count() >= 2 && pp["weeks"].Count() >= 1 && pp["months"].Count() >= 1 && (string)pp["generatedAt"] != null && pp["settings"]["breakAfter"] != null, "push payload shape");
+            var k1 = RankedPush.Key(pp); pp["generatedAt"] = "2000-01-01T00:00:00Z"; Check(k1 == RankedPush.Key(pp), "push key ignores generatedAt"); RankedActivity.Apply("start", null); RankedActivity.Apply("win", null); Check(k1 != RankedPush.Key(RankedActivity.PushPayload()), "push key changes with a game");
             Say("m", "!ranked start", 3);
             string f = Path.Combine(HostApi.DataDir, "ranked.json"); var j = JObject.Parse(File.ReadAllText(f));
             Check((bool)j["active"] && j["days"]["2026-10-28"] != null && File.Exists(f), "state file written");
