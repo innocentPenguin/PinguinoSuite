@@ -49,6 +49,25 @@ try:
     txt = ' '.join(x.get('text', '') for x in sends)
     chk('!lobby from YouTube: one reply, names, no key', len(sends) >= 1 and not re.search(r'(yt|tt):', txt, re.I) and 'YtEpicTwo' in txt, sends)
     chk('the handle with a space is stripped whole (no stray "Two" before Orange)', txt.startswith('@Yt Two ') and ' Two Orange' not in txt and txt.count('@Yt') == 1, txt)
+    # one platform per Epic: an Epic already registered on another account (any platform) is refused with the platform named; a mod forces it, !unregister frees it
+    sends[:] = []; yt('@Yt Three', 'UCa3', '!register TwTW1', 2)
+    txt = ' '.join(x.get('text', '') for x in sends)
+    chk('YouTube viewer registering a Twitch-held Epic is refused, platform named', '@Yt Three That Epic is already registered on Twitch. Use that account, or ask a mod.' in txt and 'Registered' not in txt, sends)
+    n0 = len(log()); feed('tw4: !register YtEpicOne', 2); new = log()[n0:]
+    chk('Twitch viewer registering a YouTube-held Epic is refused, platform named', '[say] @tw4 That Epic is already registered on YouTube. Use that account, or ask a mod.' in new and 'Registered as' not in new, new[-400:])
+    n0 = len(log()); feed('tw5: !register twtw1', 2); new = log()[n0:]
+    chk('the check ignores case and also covers another Twitch account', '[say] @tw5 That Epic is already registered on Twitch.' in new, new[-400:])
+    n0 = len(log()); feed('*mod1: !register @tw4 YtEpicOne', 2); new = log()[n0:]
+    chk('a mod can force it with the @ form', 'Registered tw4 as YtEpicOne' in new, new[-400:])
+    n0 = len(log()); feed('*mod1: !unregister tw4', 2); new = log()[n0:]
+    chk('!unregister frees it', 'Unregistered tw4' in new, new[-400:])
+    n0 = len(log()); feed('tw4: !unregister tw1', 1.5); new = log()[n0:]
+    chk('a viewer cannot unregister anyone', 'Ask a mod' in new, new[-400:])
+    n0 = len(log()); feed('*mod1: !unregister YtEpicTwo', 2); new = log()[n0:]
+    chk('!unregister also takes the Epic name', 'Unregistered Yt Two (YtEpicTwo)' in new, new[-400:])
+    sends[:] = []; yt('@Yt Three', 'UCa3', '!register YtEpicTwo', 2)
+    txt = ' '.join(x.get('text', '') for x in sends)
+    chk('a freed Epic can be registered on another platform', 'Registered as YtEpicTwo' in txt, sends)
 finally:
     host.kill(); time.sleep(0.5); print(log()[-1800:]) if fails else None; shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS customsyt'); sys.exit(1 if fails else 0)

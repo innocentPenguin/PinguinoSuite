@@ -2238,6 +2238,7 @@ public class CPHInline
             case "!register": return HandleRegister(userLower, input, isPrivileged);
             case "!join":     _lastCustomsActivity = NowMs(); return HandleJoin(userLower);
             case "!leave":    _lastCustomsActivity = NowMs(); return HandleLeave(userLower);
+            case "!unregister": return HandleUnregister(userLower, input, isPrivileged);
             case "!pos":      return HandlePos(userLower);
             case "!myrank":   return HandleRank(userLower);                        // renamed from !rank (clashed with another bot)
             case "!queue":    if (isPrivileged) _lastCustomsActivity = NowMs(); return HandleQueue(userLower, input, isPrivileged);
@@ -3376,6 +3377,19 @@ public class CPHInline
             return true;
         }
 
+        // One platform per Epic: an Epic already registered by another account (any platform) is refused; a mod forces it with !register @viewer <Epic> (the privileged form) or frees it with !unregister
+        if (!(isPrivileged && input.StartsWith("@")))
+        {
+            foreach (var kv in _players)
+            {
+                if (string.Equals(kv.Key, targetUser, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.Equals((kv.Value.GameId ?? "").Trim(), gameId.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
+                string pfn = kv.Key.StartsWith("yt:") ? "YouTube" : kv.Key.StartsWith("tt:") ? "TikTok" : kv.Key.StartsWith("kk:") ? "Kick" : kv.Key.StartsWith("fb:") ? "Facebook" : "Twitch";
+                Say("@" + user + " That Epic is already registered on " + pfn + ". Use that account, or ask a mod.");
+                return true;
+            }
+        }
+
         TrnResult result = (_settings.TrackerLookupEnabled && DateTime.UtcNow >= _trnPausedUntil)
             ? LookupEpicProfile(gameId, _settings.DefaultFormat)
             : new TrnResult { ProfileFound = null };
@@ -3484,6 +3498,26 @@ public class CPHInline
         {
             Say("@" + user + " You're not in the queue.");
         }
+        return true;
+    }
+
+    // Mods: !unregister <viewer or Epic name> frees an Epic (one platform per Epic): the registration is deleted and the player leaves the queue
+    bool HandleUnregister(string user, string input, bool isPrivileged)
+    {
+        if (!isPrivileged) { Say("@" + user + " Ask a mod to unregister you."); return true; }
+        string full = (input ?? "").Trim().TrimStart('@');
+        if (full == "") { Say("@" + user + " Usage: !unregister <viewer or Epic name>"); return true; }
+        string key = full.Split(' ')[0].ToLower();
+        if (!_players.ContainsKey(key))
+        {
+            key = null;
+            foreach (var kv in _players) if (string.Equals((kv.Value.GameId ?? "").Trim(), full, StringComparison.OrdinalIgnoreCase)) { key = kv.Key; break; }
+        }
+        if (key == null) { Say("@" + user + " No registered player or Epic called \"" + full + "\"."); return true; }
+        string epic = _players[key].GameId;
+        RemoveFromQueue(key); _players.Remove(key); SavePlayers();
+        PublishState("queue_update", key + " unregistered");
+        Say("@" + user + " Unregistered " + key + " (" + epic + "). That Epic is free again.");
         return true;
     }
 
