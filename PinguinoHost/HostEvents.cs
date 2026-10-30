@@ -108,11 +108,12 @@ namespace PinguinoHost
                 if (v == "") v = "clear";
                 else if (v.ToLowerInvariant() == "clear" || v == "-") return new JObject { { "ok", false }, { "error", "that word clears the name: send an empty value to clear" } };
             }
+            try { Scenes.CustomsSync(); } catch (Exception) { }   // note what is running BEFORE the action, so an End can tell "was active, now none" without any layout read in between
             string text = cmd + (v != "" ? " " + v : "");
             try { Control.Synthetic = true; Program.Dispatch(who, text, null, 4, "deck", false, null); } finally { Control.Synthetic = false; }
             Thread.Sleep(350); Events.Kick();
             if (a == "pm") { var ps = State(); return new JObject { { "ok", true }, { "ran", text }, { "pmName", (string)ps["pmName"] ?? "" }, { "customs", ps } }; }
-            if (a == "activity") { try { Scenes.CustomsSync(); } catch (Exception) { } }   // hide/show the customs overlays at once, not on the next layout read
+            try { Scenes.CustomsSync(); } catch (Exception) { }   // hide/show the customs overlays at once (after any action, End included), not on the next layout read
             return new JObject { { "ok", true }, { "ran", text }, { "customs", State() } };
         }
     }

@@ -56,6 +56,11 @@ try:
     chk('queue opened without an activity: overlays shown', lay().get('customsHidden') is False and vis(lay())['players'] is True and api('/api/customs/state')['open'], lay().get('customsHidden'))
     api('/api/customs/mod', {'action': 'activity', 'value': 'rl end'})
     chk('End after !queue open: hidden', api('/api/customs/state')['open'] is False and lay().get('customsHidden') is True and vis(lay())['players'] is False, vis(lay()))
+    # no layout read between the start and the End (the OBS overlay is not polling yet): End alone must set the flag, checked in the saved file
+    feed('#trial: !queue open', 2); feed('yt1: !register YtOne', 1); feed('yt1: !join', 1)
+    api('/api/customs/mod', {'action': 'activity', 'value': 'rl end'}); time.sleep(1)
+    sv = json.load(open(os.path.join(d, 'scene_layouts.json')))
+    chk('End without any layout read: customsHidden is set in the saved file', sv.get('customsHidden') is True and api('/api/customs/state')['open'] is False, sv.get('customsHidden'))
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)
