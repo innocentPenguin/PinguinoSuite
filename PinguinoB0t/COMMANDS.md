@@ -87,7 +87,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
-| `!rank` | `!rank <player> [1s\|2s\|3s\|4s\|hoops\|rumble\|dropshot\|snowday\|heatseeker]` | The saved Rocket League ranks of a registered player (1v1, 2v2, 3v3), with the date they were saved; add a playlist (2s, dropshot, hoops...) for just that one. Ranks are saved once when someone registers and updated by a mod, not refreshed by themselves. The streamer's own !rank is RocketRankBot's. |
+| `!rank` | `!rank  \|  !rank <player> [1s\|2s\|3s\|4s\|hoops\|rumble\|dropshot\|snowday\|heatseeker]  \|  !rank lookup <Twitch or Epic name> [playlist]` | Rocket League ranks. Bare !rank is the streamer's rank (RocketRankBot answers it, once). !rank <player> shows the rank saved for a registered player with the date it was saved (add 2s, dropshot, hoops... for one playlist). !rank lookup <name> is a focused live search by Twitch or Epic name; until a live source is switched on it says so and shows the saved rank. |
 | `!ranked` | `!ranked [week]` | While a ranked session runs: today's wins and losses with the net, e.g. 'Ranked today: 3-1 (+2)'. '!ranked week' gives this week's total. Mods also use !ranked start\|stop\|win\|loss\|undo\|limit N\|reset\|break\|resume\|breakafter N\|lossstreak M. |
 
 ### Stream
