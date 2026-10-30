@@ -520,6 +520,7 @@ namespace PinguinoHost
             if (p == "/api/subroll/state" && m == "GET") { c.Response.Headers["Cache-Control"] = "no-store"; string j = SubRoll.State().ToString(Newtonsoft.Json.Formatting.None); Write(c, c.Request.QueryString["js"] != null ? "window.SUBROLL_STATE=" + j + ";" : j, c.Request.QueryString["js"] != null ? "application/javascript; charset=utf-8" : "application/json"); return true; }
             if (p == "/api/subroll/start" && m == "POST") { Write(c, SubRoll.Start(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/subroll/stop" && m == "POST") { Write(c, SubRoll.Stop().ToString(), "application/json"); return true; }
+            if (p == "/api/boards/twitch-bits" && m == "GET") { int n; if (!int.TryParse(c.Request.QueryString["count"], out n)) n = 100; Write(c, TwitchBits.Get(c.Request.QueryString["period"], n).ToString(), "application/json"); return true; }
             if (p == "/api/boards/reload" && m == "POST") { Write(c, Periods.Reload().ToString(), "application/json"); return true; }
             if (p == "/api/boards/event" && m == "POST") { Write(c, Periods.TestEvent(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/boards" && m == "GET") { Write(c, Boards.Api().ToString(), "application/json"); return true; }
