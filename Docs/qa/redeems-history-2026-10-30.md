@@ -15,7 +15,7 @@ So: **161 verified, about 170 to 175 likely since 2026-02-04, plus an unknown nu
 
 Validation that one line = one redemption: Host's own redemption feed (`Data/runtime/runtime/site_activity.json`, EventSub) overlaps the chat logs for 2026-10-28 00:10 to 10-30 01:50. In that window the feed has 9 "Pushups" redemptions and the chat has 9 "DO PUSHUPS" lines, same users, 2 to 8 seconds apart. Same check for Hydrate 7/7, Hello There 1/1, Posture Check 3/3, Crab Rave 2/2, yippeeee 4/4. A viewer's own count on 2026-04-08 06:37 ("3 push ups") also matches the 3 lines that day.
 
-Pushups per month (viewer lines only): 2026-02 14, 03 25, 04 38, 05 25, 06 14, 07 10, 08 8, 09 1, 10 26. Top redeemers: karebearr_ 24, lvlmarshmello 19, timothyokongo 9, devv0ps 9, zylorocketleague 6 (63 different people).
+Pushups per month (viewer lines only, Chicago stream days): 2026-02 15, 03 26, 04 36, 05 25, 06 14, 07 10, 08 8, 09 1, 10 26. Top redeemers: karebearr_ 24, lvlmarshmello 19, timothyokongo 9, devv0ps 9, zylorocketleague 6 (63 different people).
 
 The 7 broadcaster lines are tests, not viewer spend: 2026-02-25 21:24:55, 2026-03-17 08:31:53/08:32:00/08:32:07/08:32:15 (a sound-setup session, same minutes as 20 other broadcaster test plays of Mimimimi/Hydrate/Crab Rave/cat), 2026-07-29 11:27:44 and 11:28:18 (the day SoundAlerts changed its chat templates). Add them back if Ivan wants every play counted (168).
 
@@ -41,6 +41,8 @@ The 7 broadcaster lines are tests, not viewer spend: 2026-02-25 21:24:55, 2026-0
 
 ## Method and double-count risk
 
+**Month basis (updated):** all per-month figures in this doc are by America/Chicago stream day, the same day definition as the Host's `Periods` helper (HostPeriods.cs, no day shift). They were first built on UTC months; moving to Chicago shifted a few counts across month edges (totals unchanged). The machine-readable seed (`Tools/redeem-seed.py`) carries the per-day series these months are summed from.
+
 1. Parsed every `soundalerts` line from the public text logs (exact duplicate lines inside a file: 0). That is 2,730 lines.
 2. Parsed the live jsonl and the `_original-downloads` files the same way, converted live timestamps to UTC, and merged any line with the same text within 5 seconds. Result: all 99 live lines and all 68 original-download lines are already in the public logs, so they add nothing. 2,730 events remain.
 3. Classified each line into a reward group by its text template (all 2,730 classified, 0 left over).
@@ -65,7 +67,7 @@ Grouping rule: same Twitch reward id first (Streamer.bot snapshots give id, titl
 | all titles / ids seen | `b618f97f` "Pushups" 250 (12-10), 350 (12-24), 550 (12-30), last seen in the 2025-12-30 backup, gone by 2026-01-12. `5567e401` "Do Pushups Now!" 550, SoundAlerts template, first seen 2026-01-12, still in the Streamer.bot list on 10-19, NOT in the Host's current Twitch list. `09c78a1c` "Pushups" 550 (01-19), 200 (02-05), 175 (02-08), 215 (02-20), 700 (03-15), 900 (06-03), 1350 (06-21). SoundAlerts chat text is always "X says DO PUSHUPS!!!". Chat nicknames: "push ups", "push-ups", "10 pushups", "pushup redeem" (viewer wording, not Twitch titles). |
 | grouping evidence | Same title "Pushups" re-created: `b618f97f` disappears between 12-30 and 01-12, `09c78a1c` appears 01-19, `5567e401` is the SoundAlerts "Do Pushups Now!" template created 01-12 alongside the other SoundAlerts templates. One SoundAlerts sound/message ("DO PUSHUPS!!!") from the first log day to the last, so one purpose. NOT included: "Pullups" (`0323a52e`, different reward and cost 1500, no SoundAlerts line). |
 | total redemptions on record | **161** (168 raw incl. 7 broadcaster test plays) |
-| per month | 2026-02 14, 03 25, 04 38, 05 25, 06 14, 07 10, 08 8, 09 1, 10 26 |
+| per month | 2026-02 15, 03 26, 04 36, 05 25, 06 14, 07 10, 08 8, 09 1, 10 26 |
 | first / last | 2026-02-16 04:02:09 (AustinMcNeill1234) / 2026-10-30 00:35:52 (deluxeoctopus5) |
 | source coverage gaps | No per-event record 2025-12-10 to 2026-02-03 (Streamer.bot logs have no chat lines before 02-04, public logs start 02-15). 2026-02-04 to 02-15 03:53: SoundAlerts posted 134 lines (Streamer.bot count) but their text was never saved, estimate about 10 pushups. Up to ~2 lines possibly missing from the public logs on 07-19/07-30/08-25/08-30/09-08 (see method). Redemptions made while SoundAlerts was paused would leave no line (one "currently paused" notice, 2026-03-03). |
 | double-count risk | none after dedupe. Adding the Host feed on top would double count 2026-10-28 to 10-30. |
@@ -77,7 +79,7 @@ Grouping rule: same Twitch reward id first (Streamer.bot snapshots give id, titl
 | canonical title | Hydrate (`4ef5ade3-983a-48de-a9e3-c1bd3f6a28bc`, 325 today) |
 | titles / ids | `7d9b5951` "Hydrate!" 150, 100, 75 (12-10 to 12-30, gone by 2026-01-12); `4627369b` "Hydrate" 75 (SoundAlerts template, 01-12); `4ef5ade3` "Hydrate" 75 (01-19), 50 (02-08), 175 (02-20), 325 (03-24), 350 (06-03). Chat text: `redeemed "Hydrate" for N pinguino points` (N = 50, 175, 325, 350, matching the price history) until 2026-07-29 11:23, then `wants everyone to hydrate!`. |
 | total | **924** viewer (938 raw, 14 broadcaster) |
-| per month | 02 107, 03 150, 04 75, 05 129, 06 95, 07 89, 08 70, 09 107, 10 102 |
+| per month | 2026-02 109, 03 153, 04 70, 05 131, 06 94, 07 88, 08 71, 09 106, 10 102 |
 | first / last | 2026-02-15 / 2026-10-30 |
 | gaps | none before 02-15 recorded (Dec-Jan "Hydrate!" redemptions unknown); same 02-04..02-15 and missing-line caveats as Pushups. |
 
@@ -88,7 +90,7 @@ Grouping rule: same Twitch reward id first (Streamer.bot snapshots give id, titl
 | canonical title | Mimimimi (`9f5b9098-b047-49ff-9f1a-8bf992aba4e8`, 255) |
 | titles / ids | `306cb8f8` "Mimimimi - Sound" 100 (template 01-12); `9f5b9098` "Mimimimi" 100 (01-19), 150 (02-04), 175 (02-05), 125 (02-28), 250 (06-03), 255 (07-30). Chat: `redeemed "Mimimimi" for 125/150/250 pinguino points`, then plain `redeemed "Mimimimi"` after 07-29. |
 | total | **391** viewer (411 raw, 20 broadcaster) |
-| per month | 02 39, 03 91, 04 86, 05 54, 06 22, 07 30, 08 37, 09 23, 10 9 |
+| per month | 2026-02 42, 03 90, 04 85, 05 53, 06 22, 07 30, 08 37, 09 23, 10 9 |
 | first / last | 2026-02-16 / 2026-10-16 (no line since 10-16 although the reward is still enabled) |
 | gaps | same as Hydrate |
 
@@ -99,7 +101,7 @@ Grouping rule: same Twitch reward id first (Streamer.bot snapshots give id, titl
 | canonical title | Hello There (`fc9d5c74-...`, Host list shows "Hello There " with a trailing space) |
 | titles / ids | `fc9d5c74` "Hello There" 100 (01-19), 75 (02-08), 215 (03-15), 150 (03-18), 175 (07-30). Eleven SoundAlerts templates of 2026-01-12 ("Hello There - Sound Alert" x8, "Hello There - Sound", "Hello SoundAlert" x2, 55) are unused duplicates, not counted. Chat text "X says hi!" (never changed). |
 | total | **350** viewer (358 raw, 8 broadcaster) |
-| per month | 02 12, 03 29, 04 51, 05 72, 06 49, 07 43, 08 37, 09 29, 10 28 |
+| per month | 2026-02 14, 03 28, 04 52, 05 71, 06 48, 07 43, 08 37, 09 29, 10 28 |
 | first / last | 2026-02-17 / 2026-10-30 |
 | gaps | same as Hydrate. Mapping of the text "says hi!" to this reward is by title only (no id on the line). |
 
@@ -110,7 +112,7 @@ Grouping rule: same Twitch reward id first (Streamer.bot snapshots give id, titl
 | canonical title | Crab Rave (`51774805-...`, 625) |
 | titles / ids | `0b6a9b59` "Crab Rave - Sound" 475 (template 01-12); `51774805` "Crab Rave" 475 (01-19), 625 (02-05). Chat: `redeemed "Crab Rave" for 625 pinguino points`, then `is crab ravin'` / `crab ravin'` after 07-29. |
 | total | **285** viewer (294 raw, 9 broadcaster) |
-| per month | 03 46, 04 98, 05 38, 07 9, 08 33, 09 19, 10 42 (none counted in June) |
+| per month | 2026-03 47, 04 97, 05 38, 07 9, 08 33, 09 19, 10 42 (none counted in June) |
 | first / last | 2026-03-16 / 2026-10-29 |
 | gaps | no line before 2026-03-16 although the reward existed from January (unused or not announced, unknown); none in June. |
 
@@ -122,7 +124,7 @@ Grouping rule: same Twitch reward id first (Streamer.bot snapshots give id, titl
 | titles / ids | `bcfdab37` "Posture Fix!" 100 (12-10), 50 (12-29), 25 (02-08), 75 (03-15), last seen in the 2026-07-27 backup; `7843108f` "Posture Check" 75 first seen 2026-07-30. Chat: `redeemed "Posture Check"` (4 lines 07-29), then `wants you to check your posture` / `posture check`. |
 | grouping evidence | same purpose, same cost 75, old id vanishes the week the new one appears. |
 | total | **168** viewer (174 raw, 6 broadcaster) since 2026-07-29 |
-| per month | 07 13, 08 58, 09 51, 10 46 |
+| per month | 2026-07 13, 08 59, 09 50, 10 46 |
 | gaps | **Posture Fix! redemptions before 2026-07-29 have no record** (no SoundAlerts line existed for that reward). |
 
 ### GROUP 7. Lizard
@@ -132,7 +134,7 @@ Grouping rule: same Twitch reward id first (Streamer.bot snapshots give id, titl
 | canonical title | Lizard (`f4aed617-...`, 400, currently disabled) |
 | titles / ids | `f4aed617` "Lizard" 400, first seen 2026-07-30. Chat text `LIZARD` (and one `redeemed "Lizard"`). |
 | total | **135** viewer (136 raw) |
-| per month | 07 16, 08 68, 09 41, 10 10 |
+| per month | 2026-07 16, 08 68, 09 41, 10 10 |
 | first / last | 2026-07-29 / 2026-10-17 |
 
 ### GROUP 8. yippeeee
@@ -152,7 +154,7 @@ Grouping rule: same Twitch reward id first (Streamer.bot snapshots give id, titl
 | titles / ids | `0d3c25b6` "Video Share" 1250 (01-19), 800 (02-05), 500 (02-08) -> "Long Video Share" 500 (02-16) -> "Short Video Share" 500 (04-28 backup), last seen in the 2026-07-27 backup. Five "Video Share" templates of 01-12 (1200/1250) are unused duplicates. |
 | chat | `redeemed "Long Video Share" for 500 pinguino points` 28 lines (2026-03-02 to 05-09) and `redeemed "Short Video Share"` 21 lines (05-17 to 07-24). The chat label lags the Twitch title (the SoundAlerts name was not renamed with it), so I treat Long and Short as ONE reward renamed, not two. |
 | total | **49** redeemed lines (28 Long + 21 Short), plus 28 "requested video could not be sent, points refunded" notices that are NOT redemptions |
-| per month | 03 15, 04 12, 05 3, 06 9, 07 10 |
+| per month | 2026-03 17, 04 10, 05 3, 06 9, 07 10 |
 | gaps | none before 2026-03-02; refunds make the true figure up to 28 lower if every refund matches a counted line |
 
 ### GROUP 10. Text-to-Speech

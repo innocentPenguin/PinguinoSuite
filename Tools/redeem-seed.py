@@ -34,6 +34,20 @@ def epoch(ts):
 def keep(ts):
     return CUT is None or epoch(ts) <= CUT.timestamp()
 
+
+# ---- stream day = America/Chicago calendar date (same as PinguinoHost/HostPeriods.cs: Tz Chicago, DayShiftHours 0)
+# No tzdata on this box, so the US DST rule is coded: CDT (UTC-5) from the 2nd Sunday of March 08:00 UTC to the
+# 1st Sunday of November 07:00 UTC, else CST (UTC-6).
+def _nth_sunday(y, mo, n):
+    d = dt.datetime(y, mo, 1, tzinfo=UTC)
+    d += dt.timedelta(days=(6 - d.weekday()) % 7 + 7 * (n - 1))
+    return d
+def chicago_day(utc_ts):
+    u = dt.datetime.strptime(utc_ts[:19].replace('T', ' '), '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
+    start = _nth_sunday(u.year, 3, 2).replace(hour=8); end = _nth_sunday(u.year, 11, 1).replace(hour=7)
+    off = -5 if start <= u < end else -6
+    return (u + dt.timedelta(hours=off)).strftime('%Y-%m-%d')
+
 # ---- 1. SoundAlerts chat lines, three overlapping sources, deduped ------------------------
 LINE = re.compile(r'^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] #\S+ soundalerts: (.*)$')
 def parse_txt(f):
@@ -93,7 +107,7 @@ groups = collections.OrderedDict()
 def grp(gid, title, source, note=''):
     return groups.setdefault(gid, {'id': gid, 'title': title, 'source': source, 'note': note,
                                    'raw': 0, 'baseline': 0, 'broadcasterTests': 0,
-                                   'perMonth': collections.Counter(), 'ev': [], 'first': None, 'last': None})
+                                   'days': collections.Counter(), 'local': False, 'ev': [], 'first': None, 'last': None})
 def add(g, ts, viewer=True, user=''):
     g['ev'].append((ts, user))
     g['raw'] += 1
@@ -101,7 +115,7 @@ def add(g, ts, viewer=True, user=''):
         g['broadcasterTests'] += 1
     else:
         g['baseline'] += 1
-        g['perMonth'][ts[:7]] += 1
+        g['days'][g['local'] and ts[:10] or chicago_day(ts)] += 1
     g['first'] = ts if g['first'] is None or ts < g['first'] else g['first']
     g['last'] = ts if g['last'] is None or ts > g['last'] else g['last']
 
@@ -129,6 +143,7 @@ for name in sorted(z.namelist()):
             continue
         m = pat.match(raw.decode('utf-8', 'replace'))
         if m and m.group(2) in SB and keep(m.group(1)):
+            groups[SB[m.group(2)][0]]['local'] = True
             add(groups[SB[m.group(2)][0]], m.group(1))
 
 # ---- 3. Host era: song request / skip song from the Host console --------------------------
@@ -193,9 +208,16 @@ if not a.no_feed:
             viewer = True
         gap[gid] += 1
         if viewer:
-            g['baseline'] += 1; g['perMonth'][ts[:7]] += 1
+            g['baseline'] += 1; g['days'][chicago_day(ts)] += 1
         g['raw'] += 1
         g['last'] = ts if not g['last'] or ts > g['last'] else g['last']
+
+def permonth(g):
+    pm = collections.Counter()
+    for d, n in g['days'].items():
+        pm[d[:7]] += n
+    return dict(sorted(pm.items()))
+RECORD_START = {'soundalerts-chat': chicago_day(allv[0][0]), 'host-console': '2026-10-19', 'streamerbot-logs': '2026-02-04'}
 
 # ---- output --------------------------------------------------------------------------------
 newest = max((g['last'] for g in groups.values() if g['last'] and g['source'] != 'streamerbot-logs'), default=None)
@@ -206,7 +228,11 @@ out = {
     'baselineThroughNote': 'newest UTC event time across chat/console sources (or the --cutoff). Host live counter must count only redeems AFTER this.',
     'sourcesNewest': {src: max((g['last'] for g in groups.values() if g['source'] == src and g['last']), default=None)
                       for src in ('soundalerts-chat', 'host-console', 'streamerbot-logs')},
-    'estimated': {'pushups': {'count': 10, 'range': [5, 16], 'window': '2026-02-04..2026-02-15',
+    'recordStart': min(RECORD_START.values()),
+    'recordStartNote': 'No per-event record before this stream day (2026-02-04, Streamer.bot logs; SoundAlerts chat text starts per group recordStart). Dec 2025-Feb 3 is unknown, not zero.',
+    'dayDefinition': 'Stream day = America/Chicago calendar date of the event (PinguinoHost/HostPeriods.cs: Tz America/Chicago, DayShiftHours 0). UTC chat/console/feed times are converted with the US DST rule; Streamer.bot log times are already Chicago local. baseline = sum(days); perMonth = sum of days by Chicago month.',
+    'estimatedDays': {'pushups': {'2026-02-04..2026-02-14': 10}},
+    'estimated': {'pushups': {'count': 10, 'range': [5, 16], 'window': '2026-02-04..2026-02-14',
                               'note': 'NOT in baseline. Keep separate; shown as "~N before 2026-02-16". Dec 2025-Feb 3 unknown.'}},
     'feedGapNote': 'baseline INCLUDES feedGapAdded: Host site_activity redemptions the logs lacked (chat groups: no same-user chat line within 20 s; console groups: newer than the console). Do not --add these again. Feed only reaches back to its rolling 100 events; unmapped feed titles are in feedUnmapped.',
     'feedUnmapped': dict(gap_unmapped),
@@ -216,7 +242,7 @@ for g in groups.values():
     out['groups'].append({
         'id': g['id'], 'title': g['title'], 'source': g['source'], 'note': g['note'],
         'baseline': g['baseline'], 'feedGapAdded': gap.get(g['id'], 0), 'baselineRaw': g['raw'], 'broadcasterTests': g['broadcasterTests'],
-        'perMonth': dict(sorted(g['perMonth'].items())), 'firstAt': g['first'], 'lastAt': g['last'],
+        'days': dict(sorted(g['days'].items())), 'perMonth': permonth(g), 'recordStart': RECORD_START[g['source']], 'firstAt': g['first'], 'lastAt': g['last'],
     })
 txt = json.dumps(out, indent=2)
 if a.out:
