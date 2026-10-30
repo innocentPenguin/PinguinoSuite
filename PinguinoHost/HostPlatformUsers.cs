@@ -96,7 +96,8 @@ namespace PinguinoHost
         {
             try
             {
-                string f = System.IO.Path.Combine(HostApi.DataDir, "runtime", "players.json"); if (!System.IO.File.Exists(f)) return;
+                string f = System.IO.Path.Combine(HostApi.DataDir, "runtime", "players.json"), f2 = System.IO.Path.Combine(HostApi.DataDir, "players.json");   // the newer of the two (a data dir that is itself the runtime folder keeps it flat)
+                if (!System.IO.File.Exists(f) || (System.IO.File.Exists(f2) && System.IO.File.GetLastWriteTimeUtc(f2) > System.IO.File.GetLastWriteTimeUtc(f))) f = f2; if (!System.IO.File.Exists(f)) return;
                 var mt = System.IO.File.GetLastWriteTimeUtc(f); lock (L) { if (mt == _plMt) return; }
                 var j = JObject.Parse(System.IO.File.ReadAllText(f).TrimStart((char)0xFEFF)); var be = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); var eo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var p in j.Properties()) { string g = (string)(p.Value as JObject)?["GameId"] ?? ""; if (g != "") { be[g] = p.Name; eo[p.Name] = g; } }
@@ -109,7 +110,8 @@ namespace PinguinoHost
         {
             LoadPlayers(); string key = (nameOrKey ?? "").Trim(), epic = ""; string k2;
             lock (L) { if (_epicOf.TryGetValue(key, out epic)) { } else { epic = ""; if (_byEpic.TryGetValue(key, out k2)) { epic = key; key = k2; } } }
-            var o = new JObject { { "username", key.ToLowerInvariant() }, { "display", epic != "" ? epic : (string)nameOrKey ?? "" } }; Tag(o, key.ToLowerInvariant());
+            string shown = epic != "" ? epic : IsForeign(key) ? Display(key) : (string)nameOrKey ?? "";   // the Epic name, else the platform name; never a yt: / tt: key
+            var o = new JObject { { "username", key.ToLowerInvariant() }, { "display", shown }, { "epic", epic } }; Tag(o, key.ToLowerInvariant());
             if (extraKey != null) o[extraKey] = extraVal; return o;
         }
         /// <summary>{login, platform, name} for pushes; Twitch logins stay as they were</summary>
