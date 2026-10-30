@@ -533,6 +533,26 @@ await t('YouTube shop orders: pending list with platform names, empty/404 are qu
   st.yt.orders.find(o => o.id === 7).status = 'pending'; st.yt.orders.find(o => o.id === 8).status = 'pending';
 });
 
+await t('Ranked controls: idle, active with games, win/loss/undo, limit validation, double click sends once, rollback, 404 quiet', async () => {
+  const rk = st.rk; rk.posts = []; rk.fail = false; rk.missing = false; Object.assign(rk.s, { active: false, limit: 5, games: [], net: 0, inProgress: 0, wins: 0, losses: 0 }); rk.s.week = { wins: 5, losses: 2, net: 3 };
+  let v = C.rankedView(await api.get('/api/ranked')); assert.deepEqual([v.state, v.text, v.limit], ['idle', 'Not running', 5]);
+  let r = await api.post('/api/ranked', { action: 'start' }, { timeoutMs: 15000 }); assert.equal(C.rankedResult(r, 'start').text, 'Ranked started'); v = C.rankedView(r); assert.deepEqual([v.state, v.text, v.record], ['active', 'Game 1 in progress', '0-0 (0)']);
+  await api.post('/api/ranked', { action: 'win' }); await api.post('/api/ranked', { action: 'win' }); r = await api.post('/api/ranked', { action: 'loss' }); v = C.rankedView(r);
+  assert.deepEqual([v.games, v.gameN, v.record, v.week, v.text], [['W', 'W', 'L'], 4, '2-1 (+1)', 'Week 7-3 (+4)', 'Game 4 in progress']);
+  r = await api.post('/api/ranked', { action: 'undo' }); v = C.rankedView(r); assert.deepEqual([v.games, v.record], [['W', 'W'], '2-0 (+2)']); assert.equal(C.rankedResult(r, 'undo').text, 'Last game undone');
+  assert.equal(C.rankedView({ ok: true, status: 200, json: { active: true, games: ['L', 'L'], net: -2, wins: 0, losses: 2, week: { wins: 0, losses: 0, net: 0 } } }).record, '0-2 (-2)');
+  assert.equal(C.rankedView({ ok: true, status: 200, json: { active: true, games: ['W'], inProgress: false } }).text, 'Between games, next is game 2');
+  const g = C.rankedGuess(v.json, 'win'); assert.deepEqual([g.games.join(''), g.net, g.wins, g.week.net], ['WWW', 3, 3, 6]); assert.equal(C.rankedGuess(v.json, 'undo').games.join(''), 'W'); assert.equal(C.rankedGuess(v.json, 'limit', 7).limit, 7); assert.equal(C.rankedGuess(v.json, 'stop').active, false); assert.equal(C.rankedGuess(null, 'win'), null);
+  for (const bad of ['', '0', '100', '-1', '2.5', 'abc', ' ']) assert.equal(C.rankedLimit(bad).ok, false, 'limit ' + JSON.stringify(bad)); assert.deepEqual([C.rankedLimit('1').value, C.rankedLimit(' 99 ').value, C.rankedLimit('12').ok], [1, 99, true]);
+  r = await api.post('/api/ranked', { action: 'limit', value: 8 }); assert.equal(C.rankedView(r).limit, 8); assert.deepEqual(rk.posts[rk.posts.length - 1], { action: 'limit', value: 8 });
+  const n = rk.posts.length; rk.fail = true; r = await api.post('/api/ranked', { action: 'win' }); const bad = C.rankedResult(r, 'win'); assert.equal(bad.kind, 'bad'); assert.match(bad.text, /mods only/); assert.equal(rk.posts.length, n + 1, 'one refused request'); rk.fail = false;
+  assert.equal(C.rankedView(await api.get('/api/ranked')).games.join(''), 'WW', 'the refused win changed nothing');
+  rk.missing = true; v = C.rankedView(await api.get('/api/ranked')); assert.deepEqual([v.state, v.text], ['none', 'Host does not offer ranked yet']); assert.equal(C.rankedView({ ok: false, status: 0, json: null }).state, 'none'); assert.equal(C.rankedView({ ok: false, status: 500, json: null, error: 'boom' }).state, 'error'); rk.missing = false;
+  const b = C.createBusy(); assert.deepEqual([b.begin('rk'), b.begin('rk')], [true, false], 'a second click while one is in flight sends nothing');
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8'); for (const frag of ["api.post('/api/ranked', value == null", 'timeoutMs: 15000', 'if (armed(b)) rkAct(a, undefined, b)', "rkS.ov = null; rkS.busy.end('rk')", "ui.tab === 'customs'", 'data-rk=\"reset\"']) assert.ok(js.includes(frag), 'master.js has ' + frag);
+  Object.assign(rk.s, { active: false, games: [], wins: 0, losses: 0, net: 0 }); rk.s.week = { wins: 5, losses: 2, net: 3 };
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);

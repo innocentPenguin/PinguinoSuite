@@ -252,3 +252,6 @@ button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible,
 .plat-kick{background:#53fc18;color:#0b1a04}.plat-facebook{background:#1877f2}
 
 .sir.good{border-color:#3ecf6a;color:#7ee29b}.sir.warn{border-color:#ffb300;color:#ffc94d}
+
+.rk-dots{display:inline-flex;gap:3px;flex-wrap:wrap}.rk-g{display:inline-block;min-width:16px;text-align:center;border-radius:4px;font-size:11px;font-weight:700;line-height:16px}.rk-g.w{background:#1f6b3a;color:#bff0cf}.rk-g.l{background:#7a2a22;color:#ffc4bb}
+button.rk-w{border-color:#3ecf6a;color:#7ee29b}button.rk-l{border-color:#e74c3c;color:#ff8a7a}

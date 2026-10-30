@@ -414,6 +414,7 @@
       <div id="cu-data" class="faint sm" role="status"></div>
       <div class="cgrid">
         ${sec('c-act', 'Activity', `<div class="btns">${[['Competitive', 'competitive'], ['Casual', 'casual'], ['KOTH', 'koth'], ['Viewers', 'viewers']].map(([l, v]) => b(l, 'activity', 'rl ' + v, 'rd warn', 'activity:' + v)).join('')}${b('End activity', 'activity', 'end', 'rd warn')}</div><div class="btns" style="margin-top:6px"><span class="faint sm" title="Fortnite activities">Fortnite</span>${[['Box fights', 'boxfights'], ['Zone wars', 'zonewars'], ['Viewers', 'fnviewers']].map(([l, v]) => b(l, 'activity', 'fn ' + v, 'rd warn', 'activity:' + v)).join('')}${b('KOTH', 'activity', 'fn koth', 'rd warn', null, 'Fortnite King of the Hill: 1v1, winners stay')}</div>`, ' <span class="faint" id="cu-act"></span>')}
+        ${sec('c-rk', 'Ranked', `<div class="row" id="rk-top" style="gap:4px"><span class="faint sm ell" id="rk-state" style="flex:1;min-width:0">–</span><button class="sm rd warn" id="rk-go" data-rk="start" title="Start a ranked session (two clicks)">Start Ranked</button><button class="sm rd warn" id="rk-stop" data-rk="stop" hidden title="Stop the ranked session (two clicks)">Stop Ranked</button></div><div id="rk-on" hidden><div class="row" style="margin-top:4px;gap:6px"><span id="rk-dots" class="rk-dots"></span><b id="rk-rec"></b><span class="faint sm" id="rk-week"></span></div><div class="btns" style="margin-top:4px"><button class="sm rk-w warn" data-rk="win" title="Record a win (two clicks)">Win</button><button class="sm rk-l warn" data-rk="loss" title="Record a loss (two clicks)">Loss</button><button class="sm warn" data-rk="undo" title="Undo the last game (two clicks)">Undo</button></div></div><div class="row" id="rk-lrow" style="margin-top:4px;gap:4px" hidden><span class="faint sm">Games:</span><input type="text" id="rk-lim" inputmode="numeric" maxlength="2" autocomplete="off" style="width:48px" aria-label="games per ranked session"><button class="sm" data-rk="limit">Set</button><button class="sm ghost" data-rk="more" title="More" aria-label="More">…</button><button class="sm rd warn" data-rk="reset" id="rk-reset" hidden title="Wipe this ranked session's games (two clicks)">Reset</button></div><div id="rk-res" class="si-res"></div>`)}
         <section class="cs c-ask" id="cu-ask" hidden><b id="cu-ask-t"></b><div class="faint sm" id="cu-ask-s"></div><div class="btns" style="margin-top:6px"><button class="sm rd" data-ask="remove" title="Cancel the game and take everyone out of the queue">Remove them</button><button class="sm pri" data-ask="back" title="Cancel the game; players go back to the front of the queue in their old order, ahead of anyone who joined later">Put back in queue</button><button class="sm" data-ask="keep" title="Change it and leave everyone as they are">Leave as is</button><button class="sm ghost" data-ask="cancel" title="Do not change anything">✕</button></div></section>
         <section class="cs c-st"><div class="row"><span class="faint sm">Streamer</span><div class="seg" style="flex:1">${b('In', 'streamer', 'in', '', 'streamer:in')}${b('Out', 'streamer', 'out', '', 'streamer:out')}</div></div></section>
         ${sec('c-q', 'Queue', `<div class="btns">${b('Open', 'queue-open', null, 'g', 'queue:open')}${b('Close', 'queue-close', null, 'rd', 'queue:close')}${b('Clear', 'queue-clear', null, 'og warn', 'queue:clear')}</div><ul class="qlist" id="cu-queue"></ul>`, ' <span class="faint" id="cu-qn"></span>')}
@@ -624,6 +625,36 @@
     } catch (err) { ytS.msg = { kind: 'bad', text: 'Order #' + id + ' failed: ' + (err && err.message || err), until: Date.now() + 8000 }; }
     finally { ytS.busy.end(id); if (bad) ytS.gone.delete(id); renderYt(); pollers.yt.kick(); }
   }
+  /* Ranked: GET /api/ranked every ~5 s (30 s after a 404) while the Customs tab is visible; clicks are armed, one request at a time, shown at once (guess) and replaced by the Host's answer, rolled back on refusal */
+  const rkS = { last: null, ov: null, busy: C.createBusy(), msg: null, more: false };
+  function renderRk() {
+    const top = $('#rk-state'); if (!top) return; const v = C.rankedView(rkS.last, rkS.ov), on = v.state === 'active', ok = v.state === 'active' || v.state === 'idle', busy = rkS.busy.has('rk');
+    top.textContent = !rkS.last ? 'Loading…' : v.text; $('#rk-go').hidden = !ok || on; $('#rk-stop').hidden = !on; $('#rk-on').hidden = !on; $('#rk-lrow').hidden = !ok;
+    $$('#tab-customs [data-rk]').forEach(b => { b.disabled = busy; }); $('#rk-reset').hidden = !rkS.more;
+    if (ok) {
+      const dots = $('#rk-dots'), sig = v.games.join('') + '|' + on; if (dots._s !== sig) { dots._s = sig; dots.replaceChildren(...v.games.map((g, i) => { const e = h('span', 'rk-g ' + (g === 'W' ? 'w' : 'l'), g === 'W' ? '✓' : '✗'); e.title = 'Game ' + (i + 1) + (g === 'W' ? ' won' : ' lost'); return e; })); }
+      $('#rk-rec').textContent = v.record; $('#rk-week').textContent = v.week; const lim = $('#rk-lim'); if (document.activeElement !== lim) lim.value = String(v.limit);
+    }
+    const res = $('#rk-res'); if (res) { const m = rkS.msg && rkS.msg.until > Date.now() ? rkS.msg : null; res.replaceChildren(...(m ? [h('div', 'sir ' + m.kind, m.text)] : [])); }
+  }
+  async function rkAct(action, value, btn) {
+    if (!rkS.busy.begin('rk')) return;
+    const cur = C.rankedView(rkS.last, null).json; rkS.ov = cur ? C.rankedGuess(cur, action, value) : null; flash(btn); ui.tookControl = true; rkS.msg = { kind: 'warn', text: 'Sending…', until: Date.now() + 20000 }; renderRk();
+    let bad = true;
+    try {
+      await tokenReady;
+      const r = await api.post('/api/ranked', value == null ? { action } : { action, value }, { timeoutMs: 15000 }), v = C.rankedResult(r, action, r.status === 404 ? 'Ranked: the Host does not offer it yet' : null);
+      bad = v.kind === 'bad'; rkS.msg = { kind: v.kind, text: v.text, until: Date.now() + 6000 }; toast(v.text, bad);
+      if (!bad) { if (C.normRanked(r.json)) rkS.last = { ok: true, status: 200, json: r.json }; else pollers.rk.kick(); }
+    } catch (err) { rkS.msg = { kind: 'bad', text: 'Ranked failed: ' + (err && err.message || err), until: Date.now() + 6000 }; }
+    finally { rkS.ov = null; rkS.busy.end('rk'); renderRk(); }
+  }
+  function rkClick(b) {
+    const a = b.dataset.rk; if (b.disabled) return;
+    if (a === 'more') { rkS.more = !rkS.more; renderRk(); return; }
+    if (a === 'limit') { const p = C.rankedLimit($('#rk-lim').value); if (!p.ok) { rkS.msg = { kind: 'bad', text: p.error, until: Date.now() + 6000 }; renderRk(); toast(p.error, true); return; } rkAct('limit', p.value, b); return; }
+    if (armed(b)) rkAct(a, undefined, b);
+  }
   async function setTeam(side, patch) {
     const p = {}; if (patch.name != null) { const n = C.teamName(patch.name); if (!n) { toast('Team name: 1 to 20 characters, not starting with ! / .', true); schedule('customs'); return; } p.name = n; }
     if (patch.color != null) { const k = C.teamColor(patch.color); if (!k) { toast('Colour must look like #ff7a00', true); return; } p.color = k; }
@@ -688,7 +719,7 @@
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
     const TN = teamsNow(), tv = JSON.stringify([TN, C.teamPlayers(m, 'orange'), C.teamPlayers(m, 'blue'), [...C.teamPlayers(m, 'orange'), ...C.teamPlayers(m, 'blue')].map(n => [strikesFor(who(n).key), strikesKnown(who(n).key), who(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
     if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = C.teamPlayers(m, k); names.forEach(n => col.append(playerRow(who(n).key.toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
-    renderPop(); renderAsk(); renderTeamsEditor(); renderPm(); renderYt();
+    renderPop(); renderAsk(); renderTeamsEditor(); renderPm(); renderYt(); renderRk();
     const isFn = !!c && /^(boxfights|zonewars|fnviewers)$/.test(c.activity || ''); $('#cu-rlsz').hidden = isFn; $('#cu-fnsz').hidden = !isFn; $('#cu-fmt').textContent = c && c.format ? '· ' + c.format : '';
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
       const empty = live ? C.fmtSize(c && c.format) * 2 - C.teamPlayers(m, 'orange').length - C.teamPlayers(m, 'blue').length : 0;
@@ -1043,6 +1074,7 @@
       if (r.ok && r.json && Array.isArray(r.json.orders)) { const live = new Set(r.json.orders.map(o => String(o.id))); for (const id of [...ytS.gone]) if (!live.has(id) && !ytS.busy.has(id)) ytS.gone.delete(id); }
       renderYt();
     }, () => visible() && ui.tab === 'customs'),
+    rk: P(() => (rkS.last && (rkS.last.status === 404 || rkS.last.status === 0) ? 30000 : 5000), async () => { const r = await api.get('/api/ranked'); if (!rkS.busy.has('rk')) rkS.last = r; renderRk(); }, () => visible() && ui.tab === 'customs'),
     pre: P(30000, async () => { const r = await api.get('/api/prestream'); if (r.ok) { ui.pre = r.json; renderPre(); } }),
     streaks: P(60000, async () => { const r = await api.get('/api/streaks'); if (r.ok) { ui.heads.streaks = r.json; renderHeads(); } }, () => visible() && ui.tab === 'feed'),
     multi: P(10000, async () => { await xapi.get('/api/stream/info'); }, () => visible() && (ui.tab === 'stream' || H.fails('multi') > 0), 'multi'),   // read-only ping while the Stream tab is open or Multi is failing: the banner appears and clears without a reload
@@ -1108,6 +1140,7 @@
     if (b && b.dataset.cu) { if (b.disabled) return; if (b.dataset.st && !ui.sim) { const [k, v] = b.dataset.st.split(':'); if (k !== 'win') { ui.sel[k] = v; schedule('customs'); } } if (b.classList.contains('warn') && !armed(b)) return; if (wantsAsk(b.dataset.cu, b.dataset.v)) { ui.ask = { action: b.dataset.cu, value: b.dataset.v }; renderAsk(); return; } sendCustom(b.dataset.cu, b.dataset.v, b); }
     else if (b && b.dataset.wh && ui.sim) { if (b.classList.contains('warn') && !armed(b)) return; const W = simWheel(), k = b.dataset.wh; if (k === 'reset') { W.entrants = []; W.teams = []; W.status = 'open'; setWq(null); } else if (k === 'new') { W.round++; W.teams = []; W.status = 'open'; } else if (W.entrants.length >= W.teamSize * 2) { W.status = 'drawing'; toast('Sim wheel: spin (draw not simulated)'); } else toast('Not enough entrants', true); schedule('customs'); }
     else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); ui.tookControl = true; tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
+    else if (b && b.dataset.rk) rkClick(b);
     else if (b && b.dataset.ytAct) { if (!b.disabled && armed(b)) ytAct(b); }
     else if (b && b.id === 'pm-go') { if (!C.pmName($('#pm-in').value).ok || armed(b)) pmSet(b); }
     else if (b && b.id === 'cu-pickgo') { const v = $('#cu-pick').value.trim().replace(/\s+/g, ' '); C.customsText('pick', v) ? (sendCustom('pick', v, b), $('#cu-pick').value = '') : toast('Type 1 to 4 Twitch names first', true); }
@@ -1169,7 +1202,7 @@
   function setTab(t) {
     ui.tab = t; ls.set('tab', t); $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $$('.tabbody').forEach(d => d.hidden = d.id !== 'tab-' + t);
     if (t === 'stream') siLoad();
-    if (t === 'customs') pollers.yt.kick();
+    if (t === 'customs') { pollers.yt.kick(); pollers.rk.kick(); }
     if (t === 'cmds') { pollers.cmds.kick(); renderCmds(); } if (t === 'overlays') { pollers.overlays.kick(); renderOverlays(); } if (t === 'feed') { pollers.mods.kick(); pollers.heads.kick(); pollers.streaks.kick(); renderFeed(); const fb = $('#tab-feed'); fb.scrollTop = fb.scrollHeight; }   // a hidden tab forgets its scroll: open on the newest line
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });

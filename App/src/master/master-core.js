@@ -528,6 +528,42 @@
     if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || (j.error ? 'PM name: ' + j.error : 'PM name was not set') };
     return { kind: 'good', text: 'Private match name set: ' + (typeof j.pmName === 'string' && j.pmName ? j.pmName : name) };
   }
+  /* Ranked sessions (GET/POST /api/ranked): comp games as W/L, record with sign, week record; guess() predicts a click before the Host answers */
+  function normRanked(j) {
+    if (!j || typeof j !== 'object' || !('active' in j || Array.isArray(j.games))) return null;
+    const games = (Array.isArray(j.games) ? j.games : []).map(g => String(g).toUpperCase()).filter(g => g === 'W' || g === 'L');
+    const n = v => (typeof v === 'number' && isFinite(v) ? v : null), w = j.week && typeof j.week === 'object' ? j.week : {};
+    const wins = n(j.wins) != null ? j.wins : games.filter(g => g === 'W').length, losses = n(j.losses) != null ? j.losses : games.filter(g => g === 'L').length;
+    return { active: !!j.active, limit: n(j.limit) != null ? j.limit : 5, games, net: n(j.net) != null ? j.net : wins - losses, inProgress: j.inProgress, wins, losses, day: j.day == null ? '' : String(j.day), week: { wins: n(w.wins) || 0, losses: n(w.losses) || 0, net: n(w.net) != null ? w.net : (n(w.wins) || 0) - (n(w.losses) || 0) } };
+  }
+  const signed = x => (x > 0 ? '+' : '') + x;
+  function rankedView(r, ov) {
+    if (!r || r.status === 404 || r.status === 0) return { state: 'none', text: 'Host does not offer ranked yet' };
+    const j = normRanked(ov || (r.ok && r.json && r.json.ok !== false ? r.json : null));
+    if (!j) return { state: 'error', text: 'Ranked: ' + ((r.json && r.json.error) || r.error || 'no answer') };
+    const nextN = typeof j.inProgress === 'number' && j.inProgress > 0 ? j.inProgress : j.games.length + 1;
+    return { state: j.active ? 'active' : 'idle', active: j.active, games: j.games, limit: j.limit, gameN: nextN, between: j.inProgress === false, record: j.wins + '-' + j.losses + ' (' + signed(j.net) + ')', week: 'Week ' + j.week.wins + '-' + j.week.losses + ' (' + signed(j.week.net) + ')', day: j.day, text: j.active ? (j.inProgress === false ? 'Between games, next is game ' + nextN : 'Game ' + nextN + ' in progress') : 'Not running', json: j };
+  }
+  function rankedLimit(v) {
+    const s = String(v == null ? '' : v).trim();
+    if (!/^[0-9]{1,3}$/.test(s) || +s < 1 || +s > 99) return { ok: false, value: 0, error: 'Games per session: a whole number from 1 to 99' };
+    return { ok: true, value: +s, error: '' };
+  }
+  function rankedGuess(j, action, value) {
+    const o = normRanked(j); if (!o) return null; const g = o.games.slice(), bump = (d, w) => { if (w) { o.wins += d; } else { o.losses += d; } o.net += w ? d : -d; o.week.net += w ? d : -d; if (w) o.week.wins += d; else o.week.losses += d; };
+    if (action === 'start') { if (!o.active) { o.active = true; o.games = []; o.wins = 0; o.losses = 0; o.net = 0; o.inProgress = true; } }
+    else if (action === 'stop') o.active = false;
+    else if (action === 'win' || action === 'loss') { g.push(action === 'win' ? 'W' : 'L'); o.games = g; bump(1, action === 'win'); }
+    else if (action === 'undo') { const last = g.pop(); if (last) { o.games = g; bump(-1, last === 'W'); } }
+    else if (action === 'reset') { o.games = []; o.wins = 0; o.losses = 0; o.net = 0; }
+    else if (action === 'limit') o.limit = +value;
+    return o;
+  }
+  function rankedResult(r, action, errText) {
+    const j = r && r.json && typeof r.json === 'object' ? r.json : {};
+    if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || ('Ranked ' + action + ': ' + (j.error || (r && r.error) || 'not changed')) };
+    return { kind: 'good', text: ({ start: 'Ranked started', stop: 'Ranked stopped', win: 'Win recorded', loss: 'Loss recorded', undo: 'Last game undone', reset: 'Ranked session reset', limit: 'Games per session set' })[action] || 'Ranked updated' };
+  }
   /* YouTube shop orders (GET /api/ytorders): who ordered what, how long they wait; ids in "gone" are hidden at once (optimistic) */
   function ytOrdersView(r, gone, now) {
     if (!r || r.status === 404 || r.status === 0) return { state: 'none', rows: [], text: 'Host does not offer shop orders yet' };
@@ -559,5 +595,5 @@
       get busy() { return busy; },
     };
   }
-  return { createBusy, ytOrdersView, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { normRanked, rankedView, rankedLimit, rankedGuess, rankedResult, createBusy, ytOrdersView, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });
