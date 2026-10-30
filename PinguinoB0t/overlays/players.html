@@ -114,7 +114,7 @@
     var nm = o.name || o.Name || ix.name || "";
     var ep = f(o, "Epic") || o.display || ix.display || "";
     var r = {}; for (var x in o) r[x] = o[x];
-    r.Username = nm || keyName(k); r.Epic = ep; r.Platform = pf; r.Key = k;
+    var base = nm || keyName(k); r.Username = pf !== "twitch" ? "@" + String(base).replace(/^@/, "") : base;   // YouTube / TikTok viewers read as @handle (the Host stores the handle without its @) r.Epic = ep; r.Platform = pf; r.Key = k;
     return r;
   }
   function normMatch(m) { var c = {}; for (var x in m) c[x] = m[x]; c.blue = (m.blue || []).map(normRow); c.orange = (m.orange || []).map(normRow); return c; }
@@ -127,7 +127,7 @@
     }).catch(function () {});
   }
   loadIdx(); setInterval(loadIdx, 5000);
-  function pfChip(p) { var pf = p.Platform || "twitch"; return '<span class="pf pf-' + pf + '">' + PFTAG[pf] + '</span>'; }
+  function pfChip(p) { return ""; }   // no platform chip: Twitch plain, YouTube / TikTok as @handle
   function norm(s) { return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, ""); }
   function nameHtml(p) {
     var u = f(p, "Username"), e = f(p, "Epic"); p = p.Platform ? p : normRow(p); u = f(p, "Username"); e = f(p, "Epic");

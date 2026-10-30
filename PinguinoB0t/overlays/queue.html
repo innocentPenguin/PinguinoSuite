@@ -155,7 +155,7 @@
   var PFTAG = { twitch:"TV", youtube:"YT", tiktok:"TT" };
   function keyPf(k) { k = String(k || "").toLowerCase(); return /^(yt:|youtube[-:])/.test(k) ? "youtube" : /^(tt:|tiktok[-:])/.test(k) ? "tiktok" : "twitch"; }
   function keyName(k) { return String(k || "").replace(/^(yt|tt|youtube|tiktok)[-:]/i, ""); }
-  function dn(k) { var ix = IDX[String(k || "").toLowerCase()]; return (ix && ix.name) || keyName(k); }
+  function dn(k) { var ix = IDX[String(k || "").toLowerCase()], b = (ix && ix.name) || keyName(k); return pfOf(k) !== "twitch" ? "@" + String(b).replace(/^@/, "") : b; }   // YouTube / TikTok viewers read as @handle
   function pfOf(k) { var ix = IDX[String(k || "").toLowerCase()], pf = String((ix && ix.platform) || keyPf(k)).toLowerCase(); return PFTAG[pf] ? pf : keyPf(k); }
   function loadIdx() {
     fetch(HOSTURL + "/api/customs/state").then(function (r) { return r.json(); }).then(function (j) {
@@ -215,7 +215,7 @@
       else cls = "streamer";
       if (cls === "next") tag = '<span class="tag next">NEXT</span>'; else if (cls === "backup") tag = '<span class="tag backup">BACKUP</span>';
       else if (isStreamer) tag = '<span class="tag you">STREAMER</span>';
-      return '<li class="' + cls + '"><span class="pos">#' + e.pos + '</span><span class="pf pf-' + pfOf(e.user) + '">' + PFTAG[pfOf(e.user)] + '</span><span class="name">' + esc(dn(e.user)) + '</span>' +
+      return '<li class="' + cls + '"><span class="pos">#' + e.pos + '</span><span class="name">' + esc(dn(e.user)) + '</span>' +
              (e.mmr != null ? '<span class="rating" title="' + (fn ? "SR" : "MMR") + '">' + e.mmr + '</span>' : '') +
              (e.epic ? '<span class="epic">' + esc(e.epic) + '</span>' : '') + tag + '</li>';
     }).join("");

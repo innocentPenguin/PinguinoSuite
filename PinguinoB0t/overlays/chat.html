@@ -54,7 +54,7 @@
       var i=document.createElement("img"); i.className="bd"; i.alt=""; i.onerror=function(){if(i.parentNode)i.parentNode.removeChild(i);};
       if(u){i.src=u; d.appendChild(i);} else if(!BADGES.loaded){i.setAttribute("data-set",set); i.setAttribute("data-ver",ver); i.style.display="none"; d.appendChild(i);}   // resolved when /api/chat/badges arrives
     });
-    var b=document.createElement("span"); b.className="n"; b.textContent=((pf==="twitch"?(m.display||m.user):(m.name||stripKey(m.display||m.user)))||"?")+": "; b.style.color=nameColor(m); d.appendChild(b); d.appendChild(document.createTextNode(m.text||""));
+    var b=document.createElement("span"); b.className="n"; b.textContent=((pf==="twitch"?(m.display||m.user):"@"+String(m.name||stripKey(m.display||m.user)).replace(/^@/,""))||"?")+": "; b.style.color=nameColor(m); d.appendChild(b); d.appendChild(document.createTextNode(m.text||""));
     box.appendChild(d); while(box.children.length>MAX) box.removeChild(box.firstChild);
     if(FADE>0) setTimeout(function(){d.classList.add("out");setTimeout(function(){if(d.parentNode)d.parentNode.removeChild(d);},900);},FADE*1000);
   }
