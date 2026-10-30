@@ -49,6 +49,8 @@ namespace PinguinoHost
                 Def = new Dictionary<string, int[]> { { "h", new[] { 750, 160, 420, 80, 8, 0 } }, { "v", new[] { 330, 230, 420, 80, 8, 0 } } } },
             new W { Id = "creatorcode", Label = "Creator code banner", Src = "creatorcode.html", Dw = 860, Dh = 340, Help = "Looping PengRL creator-code banner (transparent muted webm, creatorcode.html). OFF by default. Default: bottom right, clear of the scoreboard.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 1040, 620, 860, 340, 8, 0 } }, { "v", new[] { 110, 740, 860, 340, 8, 0 } } } },
+            new W { Id = "ranked", Label = "Ranked win/loss", Src = "ranked.html", Dw = 520, Dh = 150, Help = "Ranked session tracker: a row of W/L slots, the net and the \"Game N in progress\" line (Host /api/ranked, polled). Shows only while the Ranked activity runs (!activity ranked / !ranked start); End hides it. Not part of customs.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 700, 248, 520, 150, 8, 1 } }, { "v", new[] { 280, 320, 520, 150, 8, 1 } } } },
             new W { Id = "nowplaying", Label = "Now playing", Src = "http://127.0.0.1:8771/overlay", Dw = 640, Dh = 200, Help = "The Spotify module's own now-playing overlay (port 8771, themes via its settings; ?next=0 hides up-next). Blank when the module is not running.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 40, 860, 640, 200, 8, 0 } }, { "v", new[] { 220, 1700, 640, 200, 8, 0 } } } },
             // ---- sub-part widgets (?part= modes of the standalone pages): all OFF by default ----

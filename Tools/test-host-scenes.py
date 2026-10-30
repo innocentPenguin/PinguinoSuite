@@ -80,6 +80,7 @@ try:
     chk('HUD widgets are off by default (both profiles)', all(not wid(h1, i)['visible'] and not wid(v1, i)['visible'] for i in hud))
     chk('wheel keeps takeover, others do not', wid(h1, 'wheel')['takeover'] is True and wid(h1, 'chat')['takeover'] is False)
     chk('chat.html and customs.html exist with the options tag', all(os.path.exists(os.path.join(suite, 'PinguinoB0t', 'overlays', n)) and 'overlay-options.js' in open(os.path.join(suite, 'PinguinoB0t', 'overlays', n), encoding='utf-8').read() for n in ('chat.html', 'customs.html')))
+    rk = [w for w in reg['widgets'] if w['id'] == 'ranked']; chk('ranked widget registered, available, 520x150, on by default like pm (its page hides itself unless the activity runs)', len(rk) == 1 and rk[0]['available'] and rk[0]['src'] == 'ranked.html' and wid(h1, 'ranked')['visible'] and (wid(h1, 'ranked')['w'], wid(h1, 'ranked')['h']) == (520, 150), rk)
     chk('alerts are off by default (they stay a standalone source)', not wid(h1, 'alerts')['visible'])
     chk('profiles are independent (v untouched)', json.loads(get('/api/scene-layouts?profile=v'))['names'] == ['default'])
     chk('unknown action refused', post('/api/scene-layouts', {'action': 'zap', 'profile': 'h'}).get('ok') is False)
