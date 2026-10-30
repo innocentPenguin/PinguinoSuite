@@ -24,7 +24,7 @@ try:
         try: get('/api/status'); break
         except Exception: time.sleep(0.5)
     time.sleep(2)
-    chk('real file has the new lines', al.get('zylorocketleague') == 'zylo_road2gc_' and al.get('zylorants') == 'zylo_road2gc_' and al.get('zylorantstv') == 'zylo_road2gc_' and al.get('krispychicken721') == 'krispy721' and al.get('krispymoldychicken8768') == 'krispy721' and al.get('luffy0q1') == 'ytabdul' and 'zylo_bot_' not in al, al)
+    chk('real file has the new lines', al.get('zylorocketleague') == 'cosmicryozen' and al.get('zylorants') == 'cosmicryozen' and al.get('zylorantstv') == 'cosmicryozen' and al.get('zylo_road2gc_') == 'cosmicryozen' and al.get('krispychicken721') == 'krispy721' and al.get('krispymoldychicken8768') == 'krispy721' and al.get('luffy0q1') == 'ytabdul' and 'zylo_bot_' not in al, al)
     feed('#trial: !addpoints zylo_road2gc_ 1000'); feed('#trial: !addpoints krispy721 400'); feed('#trial: !addpoints ytabdul 50')
     chk('main balances', bal('zylo_road2gc_') == 1000 and bal('krispy721') == 400 and bal('ytabdul') == 50, (bal('zylo_road2gc_'), bal('krispy721'), bal('ytabdul')))
     for a, m, v in (('zylorocketleague', 'zylo_road2gc_', 1000), ('zylorants', 'zylo_road2gc_', 1000), ('zylorantstv', 'zylo_road2gc_', 1000), ('krispychicken721', 'krispy721', 400), ('krispymoldychicken8768', 'krispy721', 400), ('luffy0q1', 'ytabdul', 50)):
