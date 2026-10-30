@@ -195,7 +195,17 @@ namespace PinguinoHost
         sealed class YtItem { public string Line, Parent; public int Tries; public DateTime Queued = DateTime.UtcNow; }
         static readonly Queue<YtItem> _ytQ = new Queue<YtItem>(); static readonly object _ytL = new object(); static Thread _ytT; static DateTime _ytLast = DateTime.MinValue; static DateTime _ytSlowUntil = DateTime.MinValue;
         public static bool YtQueueOn = true; public const int YtQueueMax = 30;
-        static int YtSpacingMs { get { int v; string e = Environment.GetEnvironmentVariable("PINGUINO_YT_SPACING_MS"); if (e != null && int.TryParse(e, out v)) return Math.Max(0, v); return SimMode ? 0 : 4500; } }
+        static int YtSpacingMs { get { int v; string e = Environment.GetEnvironmentVariable("PINGUINO_YT_SPACING_MS"); if (e != null && int.TryParse(e, out v)) return Math.Max(0, v); int? s = SettingSpacing(); return s ?? (SimMode ? 0 : 6000); } }
+        static int? _spacing; static DateTime _spacingAt = DateTime.MinValue;
+        /// <summary>YouTubeSendSpacingMs from settings.json (null when not set: default 6000), re-read at most every 5 s; clamped to 1000..60000</summary>
+        static int? SettingSpacing()
+        {
+            if ((DateTime.UtcNow - _spacingAt).TotalSeconds < 5) return _spacing;
+            _spacingAt = DateTime.UtcNow;
+            try { string f = System.IO.Path.Combine(DataDir, "settings.json"); if (System.IO.File.Exists(f)) { var j = JObject.Parse(System.IO.File.ReadAllText(f).TrimStart((char)0xFEFF)); int? v = (int?)j["YouTubeSendSpacingMs"]; _spacing = v == null ? (int?)null : Math.Max(1000, Math.Min(60000, v.Value)); } else _spacing = null; }
+            catch (Exception) { }
+            return _spacing;
+        }
         static int YtBackoffMs { get { int v; string e = Environment.GetEnvironmentVariable("PINGUINO_YT_BACKOFF_MS"); if (e != null && int.TryParse(e, out v)) return Math.Max(0, v); return SimMode ? 300 : 15000; } }
         public static int YtQueueLength() { lock (_ytL) return _ytQ.Count; }
         static bool YtEnqueue(string line, string parent, out string via)

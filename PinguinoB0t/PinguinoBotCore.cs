@@ -623,6 +623,7 @@ public class CPHInline
         // 2+ s per player on a request that always fails. Set true only if you get
         // official access (see CHANGES.md "Tracker MMR").
         public bool TrackerLookupEnabled { get; set; } = false;
+        public int YouTubeSendSpacingMs { get; set; } = 6000;   // minimum gap between two messages the Host sends to YouTube chat (its slow mode is 3 s, may go to 5 s); read by the Host's YouTube send queue
 
         // [NEW][CIRCUIT] Priority #1: "Random / Streamer Picks" team modes.
         public string TeamMode { get; set; } = "balanced"; // balanced | random | picks
