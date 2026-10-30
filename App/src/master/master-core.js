@@ -534,15 +534,16 @@
     const games = (Array.isArray(j.games) ? j.games : []).map(g => String(g).toUpperCase()).filter(g => g === 'W' || g === 'L');
     const n = v => (typeof v === 'number' && isFinite(v) ? v : null), w = j.week && typeof j.week === 'object' ? j.week : {};
     const wins = n(j.wins) != null ? j.wins : games.filter(g => g === 'W').length, losses = n(j.losses) != null ? j.losses : games.filter(g => g === 'L').length;
-    return { active: !!j.active, limit: n(j.limit) != null ? j.limit : 5, games, net: n(j.net) != null ? j.net : wins - losses, inProgress: j.inProgress, wins, losses, day: j.day == null ? '' : String(j.day), week: { wins: n(w.wins) || 0, losses: n(w.losses) || 0, net: n(w.net) != null ? w.net : (n(w.wins) || 0) - (n(w.losses) || 0) } };
+    const limit = n(j.limit) != null ? j.limit : 5, vis = Array.isArray(j.visible) ? j.visible.map(g => String(g).toUpperCase()).filter(g => g === 'W' || g === 'L') : games.slice(-limit);
+    return { active: !!j.active, limit, games, visible: vis, net: n(j.net) != null ? j.net : wins - losses, inProgress: j.inProgress, wins, losses, day: j.day == null ? '' : String(j.day), week: { wins: n(w.wins) || 0, losses: n(w.losses) || 0, net: n(w.net) != null ? w.net : (n(w.wins) || 0) - (n(w.losses) || 0) } };
   }
   const signed = x => (x > 0 ? '+' : '') + x;
   function rankedView(r, ov) {
     if (!r || r.status === 404 || r.status === 0) return { state: 'none', text: 'Host does not offer ranked yet' };
-    const j = normRanked(ov || (r.ok && r.json && r.json.ok !== false ? r.json : null));
+    const j = normRanked(ov || (r.json && typeof r.json === 'object' ? r.json : null))   /* a refusal (ok:false) still carries the state: take it as truth */;
     if (!j) return { state: 'error', text: 'Ranked: ' + ((r.json && r.json.error) || r.error || 'no answer') };
-    const nextN = typeof j.inProgress === 'number' && j.inProgress > 0 ? j.inProgress : j.games.length + 1;
-    return { state: j.active ? 'active' : 'idle', active: j.active, games: j.games, limit: j.limit, gameN: nextN, between: j.inProgress === false, record: j.wins + '-' + j.losses + ' (' + signed(j.net) + ')', week: 'Week ' + j.week.wins + '-' + j.week.losses + ' (' + signed(j.week.net) + ')', day: j.day, text: j.active ? (j.inProgress === false ? 'Between games, next is game ' + nextN : 'Game ' + nextN + ' in progress') : 'Not running', json: j };
+    const nextN = typeof j.inProgress === 'number' && j.inProgress > 0 ? j.inProgress : j.games.length + 1;   /* inProgress is always a number (games + 1) */
+    return { state: j.active ? 'active' : 'idle', active: j.active, games: j.visible, all: j.games, limit: j.limit, gameN: nextN, record: j.wins + '-' + j.losses + ' (' + signed(j.net) + ')', week: 'Week ' + j.week.wins + '-' + j.week.losses + ' (' + signed(j.week.net) + ')', day: j.day, text: j.active ? 'Game ' + nextN + ' in progress' : 'Not running', json: j };
   }
   function rankedLimit(v) {
     const s = String(v == null ? '' : v).trim();
@@ -551,12 +552,13 @@
   }
   function rankedGuess(j, action, value) {
     const o = normRanked(j); if (!o) return null; const g = o.games.slice(), bump = (d, w) => { if (w) { o.wins += d; } else { o.losses += d; } o.net += w ? d : -d; o.week.net += w ? d : -d; if (w) o.week.wins += d; else o.week.losses += d; };
-    if (action === 'start') { if (!o.active) { o.active = true; o.games = []; o.wins = 0; o.losses = 0; o.net = 0; o.inProgress = true; } }
+    if (action === 'start') { if (!o.active) { o.active = true; o.games = []; o.wins = 0; o.losses = 0; o.net = 0; } }
     else if (action === 'stop') o.active = false;
     else if (action === 'win' || action === 'loss') { g.push(action === 'win' ? 'W' : 'L'); o.games = g; bump(1, action === 'win'); }
     else if (action === 'undo') { const last = g.pop(); if (last) { o.games = g; bump(-1, last === 'W'); } }
     else if (action === 'reset') { o.games = []; o.wins = 0; o.losses = 0; o.net = 0; }
     else if (action === 'limit') o.limit = +value;
+    o.visible = o.games.slice(-o.limit); o.inProgress = o.games.length + 1;
     return o;
   }
   function rankedResult(r, action, errText) {

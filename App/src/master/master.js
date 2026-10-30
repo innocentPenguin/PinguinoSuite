@@ -645,7 +645,8 @@
       await tokenReady;
       const r = await api.post('/api/ranked', value == null ? { action } : { action, value }, { timeoutMs: 15000 }), v = C.rankedResult(r, action, r.status === 404 ? 'Ranked: the Host does not offer it yet' : null);
       bad = v.kind === 'bad'; rkS.msg = { kind: v.kind, text: v.text, until: Date.now() + 6000 }; toast(v.text, bad);
-      if (!bad) { if (C.normRanked(r.json)) rkS.last = { ok: true, status: 200, json: r.json }; else pollers.rk.kick(); }
+      if (C.normRanked(r.json) && r.status !== 404) rkS.last = { ok: true, status: 200, json: r.json };   // the Host's answer is the truth, also on a refusal (ok:false still carries the state)
+      else if (!bad) pollers.rk.kick();
     } catch (err) { rkS.msg = { kind: 'bad', text: 'Ranked failed: ' + (err && err.message || err), until: Date.now() + 6000 }; }
     finally { rkS.ov = null; rkS.busy.end('rk'); renderRk(); }
   }
