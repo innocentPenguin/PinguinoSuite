@@ -22,14 +22,15 @@ def msg(i=1, platform="youtube", badges=(), user="Ann", text="hi", ts=None, **kw
 
 
 def mk(codes=None):
-    sent, clock = [], [1000.0]
+    sent, clock, naps = [], [1000.0], []
     seq = iter(codes or [])
 
     def post(body):
         sent.append(body)
         return next(seq, 200)
-    c = hf.ChatIn(post=post, now=lambda: clock[0])
+    c = hf.ChatIn(post=post, now=lambda: clock[0], sleep=lambda x: naps.append(x))
     c.thread = object()                                  # no worker thread: tests drive step() themselves
+    c.naps = naps
     return c, sent, clock
 
 
@@ -83,9 +84,12 @@ def test_dedupe_and_age():
     assert not c.offer(msg(i=2, ts=clock[0] - 31))        # history backfill
     assert c.offer(msg(i=3, ts=clock[0] - 5))
     c.step()
-    clock[0] += 40                                        # went stale while queued: dropped, not sent
+    clock[0] += 40                                        # 40 s in the queue is fine now (only 10 min is stale)
     c.step()
-    assert len(sent) == 1 and c.stats["dropped"] == 1
+    assert len(sent) == 2 and c.stats["dropped"] == 0
+    assert offer(c, clock, i=9)
+    clock[0] += 601                                       # went stale while buffered: counted, not sent
+    assert c.step() and c.stats["dropped"] == 1 and c.stats["stale"] == 1 and len(sent) == 2
 
 
 def test_drop_oldest_when_full():
@@ -98,18 +102,89 @@ def test_drop_oldest_when_full():
     assert [b["msgId"] for b in sent] == ["youtube:3", "youtube:4", "youtube:5"] and c.stats["dropped"] == 2
 
 
-@pytest.mark.parametrize("code", [0, 401, 403, 404])
-def test_backoff_60s_then_continue(code):
-    c, sent, clock = mk([code])
+@pytest.mark.parametrize("codes", [[0, 0], [404, 404], [401], [403]])
+def test_backoff_buffers_then_flushes_in_order(codes):
+    c, sent, clock = mk(codes)
     offer(c, clock, i=1)
-    c.step()                                              # fails: back off, never retried
     offer(c, clock, i=2)
-    c.step()                                              # inside the back-off: dropped, not even tried
-    assert len(sent) == 1 and c.stats["failed"] == 1
-    clock[0] += 61
+    c.step()                                              # fails (after one retry for 0/404): back off, line 1 stays buffered
+    assert c.stats["failed"] == 1 and len(c.q) == 2
+    assert not c.step() and len(c.q) == 2                 # inside the back-off: nothing sent, nothing dropped
     offer(c, clock, i=3)
+    assert not c.step() and c.stats["dropped"] == 0
+    n = len(sent)
+    clock[0] += 61
+    while c.step():
+        pass
+    assert [b["msgId"] for b in sent[n:]] == ["youtube:1", "youtube:2", "youtube:3"] and c.stats["ok"] == 3 and not c.q
+
+
+def test_timeout_then_ok_is_retried_once_with_the_same_msgid():
+    c, sent, clock = mk([0, 200])
+    offer(c, clock, i=1)
     c.step()
-    assert [b["msgId"] for b in sent] == ["youtube:1", "youtube:3"] and c.stats["sent"] == 2 and c.stats["ok"] == 1 and c.stats["last_code"] == 200
+    assert [b["msgId"] for b in sent] == ["youtube:1", "youtube:1"] and sent[0] == sent[1]
+    assert c.stats["retried"] == 1 and c.stats["ok"] == 1 and c.stats["failed"] == 0 and c.backoff_until == 0.0 and c.naps == [hf.CHAT_IN_RETRY_DELAY]
+
+
+def test_auth_failure_is_not_retried():
+    c, sent, clock = mk([401])
+    offer(c, clock, i=1)
+    c.step()
+    assert len(sent) == 1 and c.stats["retried"] == 0 and c.stats["auth_failed"] == 1
+
+
+def test_buffer_overflow_drops_oldest_and_counts_it():
+    c, sent, clock = mk([0, 0])
+    c.q = type(c.q)(maxlen=3)
+    offer(c, clock, i=1)
+    c.step()                                              # fails twice: line 1 back in the buffer
+    for i in range(2, 6):
+        offer(c, clock, i=i)                              # 2,3,4 fit beside... 1,2,3 then 4 pushes out 1, 5 pushes out 2
+    assert [b["msgId"] for _, b in c.q] == ["youtube:3", "youtube:4", "youtube:5"] and c.stats["dropped"] == 2
+    clock[0] += 61
+    n = len(sent)
+    while c.step():
+        pass
+    assert [b["msgId"] for b in sent[n:]] == ["youtube:3", "youtube:4", "youtube:5"]
+
+
+def test_full_buffer_when_requeueing_drops_that_oldest_line():
+    c, sent, clock = mk([0, 0])
+    c.q = type(c.q)(maxlen=2)
+    offer(c, clock, i=1)
+    offer(c, clock, i=2)
+    c.step()                                              # 1 was taken out, 2 is queued: room to put 1 back
+    assert [b["msgId"] for _, b in c.q] == ["youtube:1", "youtube:2"]
+    c2, _, clock2 = mk([0, 0])
+    c2.q = type(c2.q)(maxlen=1)
+    offer(c2, clock2, i=1)
+    c2.step()
+    offer(c2, clock2, i=2)
+    assert [b["msgId"] for _, b in c2.q] == ["youtube:2"] and c2.stats["dropped"] == 1
+
+
+def test_stale_buffered_lines_are_not_replayed():
+    c, sent, clock = mk([0, 0])
+    offer(c, clock, i=1)
+    c.step()
+    clock[0] += 400
+    offer(c, clock, i=2)
+    clock[0] += 250                                       # line 1 is now 650 s old, line 2 is 250 s
+    n = len(sent)
+    while c.step():
+        pass
+    assert [b["msgId"] for b in sent[n:]] == ["youtube:2"] and c.stats["stale"] == 1 and c.stats["dropped"] == 1
+
+
+def test_heartbeat_carries_buffered_and_retried(logged):
+    c, sent, clock = mk([0, 0])
+    offer(c, clock, i=1)
+    c.step()
+    clock[0] += 5
+    c._beat(force=True)
+    beats = [m for _, _, m in logged if m.startswith("chat-in:")]
+    assert beats and "buffered 1, retried 1" in beats[-1]
 
 
 def test_server_error_not_retried_no_backoff():
@@ -202,34 +277,32 @@ def logged(monkeypatch):
 
 
 def test_401_is_an_auth_failure_with_backoff_and_a_probe_after_it(logged):
-    c, sent, clock = mk([401, 200, 200])
+    c, sent, clock = mk([401, 200, 200, 200])
     offer(c, clock, i=1)
     c.step()
     assert c.stats["auth_failed"] == 1 and c.stats["last_code"] == 401
     assert any("REFUSED" in m and "401" in m for _, _, m in logged)
     offer(c, clock, i=2)
-    c.step()                                               # inside the back-off: dropped, never sent
+    assert not c.step()                                    # inside the back-off: buffered, never sent
     assert [b["msgId"] for b in sent] == ["youtube:1"]
     clock[0] += 61
-    offer(c, clock, i=3)
-    c.step()                                               # the probe goes out; message 1 is never sent again
-    offer(c, clock, i=4)
+    c.step()                                               # the probe is the oldest buffered line, with its original msgId
     c.step()
-    assert [b["msgId"] for b in sent] == ["youtube:1", "youtube:3", "youtube:4"] and c.stats["ok"] == 2 and c.backoff_until < clock[0]
+    assert [b["msgId"] for b in sent] == ["youtube:1", "youtube:1", "youtube:2"] and c.stats["ok"] == 2 and c.backoff_until < clock[0]
 
 
-def test_host_down_then_back_next_line_after_a_minute_is_tried(logged):
-    c, sent, clock = mk([0, 200])
+def test_host_down_then_back_buffered_line_goes_after_a_minute(logged):
+    c, sent, clock = mk([0, 0, 200, 200])
     offer(c, clock, i=1, platform="tiktok")
     c.step()
     clock[0] += 59
     offer(c, clock, i=2)
-    c.step()
-    assert len(sent) == 1                                   # 59 s: still backing off
+    assert not c.step()
+    assert len(sent) == 2                                   # 59 s: still backing off (the 2 posts are the line and its one retry)
     clock[0] += 2
-    offer(c, clock, i=3)
     c.step()
-    assert [b["msgId"] for b in sent] == ["tiktok:1", "youtube:3"] and c.stats["last_code"] == 200
+    c.step()
+    assert [b["msgId"] for b in sent[2:]] == ["tiktok:1", "youtube:2"] and c.stats["last_code"] == 200
     assert c.snapshot()["backoff_until"] == 0.0
 
 

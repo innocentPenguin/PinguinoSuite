@@ -222,9 +222,12 @@ async def run(inbox, twitch_connected, base=None):
 
 # ---- YouTube chat -> Host -------------------------------------------------------------------------------------------------------------
 # The Host cannot read YouTube chat, so Multi hands every NEW youtube chat line to it (POST /api/chat-in). Best effort: it never blocks
-# ingestion, a line is tried once (never repeated), and a Host that is down or does not have the endpoint yet is left alone for 60 s.
+# ingestion. A line that times out (or gets 404) is retried once after ~1 s with the SAME msgId (the Host dedupes on it); if that fails too the Host is
+# left alone for 60 s and the lines wait in a bounded buffer (200, oldest dropped first), then flush in order once a probe succeeds.
 CHAT_IN_MAX_AGE = 30.0                                  # older lines are history backfill, never pushed
 CHAT_IN_BACKOFF = 60.0
+CHAT_IN_BUFFER_AGE = 600.0                              # a buffered line older than this is stale when the Host comes back: counted, never replayed
+CHAT_IN_RETRY_DELAY = 1.0                               # one quick retry of a line that timed out / got 404 before the back-off starts
 
 
 SUB_BADGES = {"member", "sponsor", "subscriber", "superfan", "super_fan"}       # YouTube members, TikTok super fans / subscribers
@@ -273,16 +276,16 @@ def _chat_in_post(body):
 
 
 class ChatIn:
-    def __init__(self, post=None, now=time.time, cap=200):
+    def __init__(self, post=None, now=time.time, cap=200, sleep=time.sleep):
         import collections
         import threading
-        self.post, self.now = post or _chat_in_post, now
+        self.post, self.now, self.sleep = post or _chat_in_post, now, sleep
         self.q = collections.deque(maxlen=cap)           # full: the oldest line makes room
         self.seen = collections.OrderedDict()
         self.cv = threading.Condition()
         self.thread = None
         self.backoff_until = 0.0
-        self.stats = {"sent": 0, "ok": 0, "failed": 0, "dropped": 0, "auth_failed": 0, "last_code": None, "last_ok_at": 0.0}
+        self.stats = {"sent": 0, "ok": 0, "failed": 0, "dropped": 0, "stale": 0, "retried": 0, "auth_failed": 0, "last_code": None, "last_ok_at": 0.0}
         self.beat_at, self.beat_seen = self.now(), None
 
     def snapshot(self):
@@ -291,17 +294,17 @@ class ChatIn:
     def _beat(self, force=False):
         """One heartbeat line a minute, only when something happened (a push, a failure or a drop) since the last one."""
         t = self.now()
-        key = (self.stats["sent"], self.stats["failed"], self.stats["dropped"])
+        key = (self.stats["sent"], self.stats["failed"], self.stats["dropped"], self.stats["retried"])
         if (t - self.beat_at < 60 and not force) or key == self.beat_seen:
             return
         self.beat_at = t
-        if self.beat_seen is None and key == (0, 0, 0):
+        if self.beat_seen is None and key == (0, 0, 0, 0):
             return
         self.beat_seen = key
         s = self.stats
         until = time.strftime("%H:%M", time.localtime(self.backoff_until)) if self.backoff_until > t else "none"
         (console_log.warn if s["failed"] and s["last_code"] not in (None, 200) else console_log.info)(
-            "host-chat-in", f"chat-in: sent {s['sent']}, ok {s['ok']}, failed {s['failed']} (last: {s['last_code']}), dropped {s['dropped']}, backoff until {until}")
+            "host-chat-in", f"chat-in: sent {s['sent']}, ok {s['ok']}, failed {s['failed']} (last: {s['last_code']}), dropped {s['dropped']}, buffered {len(self.q)}, retried {s['retried']}, backoff until {until}")
 
     def offer(self, m):
         """Queue one stored message if it qualifies. Returns True when queued."""
@@ -329,17 +332,26 @@ class ChatIn:
         return True
 
     def step(self):
-        """Send the oldest queued line once. Returns False when the queue is empty."""
+        """Send the oldest queued line. Returns False when there is nothing to send now (queue empty, or the Host is in back-off and the lines wait)."""
         with self.cv:
             if not self.q:
                 return False
-            ts, body = self.q.popleft()
-        if self.now() < self.backoff_until or self.now() - float(ts or 0) > CHAT_IN_MAX_AGE:
-            self.stats["dropped"] += 1                    # Host asleep or the line went stale while waiting: not sent, not retried
-            self._beat()
-            return True
+            ts, body = self.q[0]
+            if self.now() - float(ts or 0) > CHAT_IN_BUFFER_AGE:
+                self.q.popleft()                          # waited too long in the buffer: not replayed
+                self.stats["dropped"] += 1
+                self.stats["stale"] += 1
+                self._beat()
+                return True
+            if self.now() < self.backoff_until:
+                return False                              # Host asleep: the line stays buffered, in order
+            self.q.popleft()
         code = self.post(body)
         self.stats["sent"] += 1
+        if code in (0, 404):                              # timeout / not there: one quick retry, same msgId (the Host dedupes on it)
+            self.stats["retried"] += 1
+            self.sleep(CHAT_IN_RETRY_DELAY)
+            code = self.post(body)
         self.stats["last_code"] = code
         if 200 <= code < 300:
             self.stats["ok"] += 1
@@ -350,21 +362,32 @@ class ChatIn:
                 self.stats["auth_failed"] += 1
                 console_log.warn("host-chat-in", f"the Host REFUSED the chat-in token ({code}): chat is not reaching the bots; check the module token. Retrying in 60 s", dedupe_s=60)
             elif code in (0, 404):
-                console_log.warn("host-chat-in", "the Host is not taking chat yet (not running or no /api/chat-in); the next line after 60 s probes again", dedupe_s=60)
+                console_log.warn("host-chat-in", "the Host is not taking chat yet (not running or no /api/chat-in); lines are buffered and the next probe is in 60 s", dedupe_s=60)
             if code in (0, 401, 403, 404):
-                self.backoff_until = self.now() + CHAT_IN_BACKOFF      # the next line AFTER the back-off is the probe; this one is never sent twice
+                self.backoff_until = self.now() + CHAT_IN_BACKOFF
+                with self.cv:
+                    if len(self.q) < self.q.maxlen:       # keep it, first in line for the probe; a full buffer drops this oldest line
+                        self.q.appendleft((ts, body))
+                    else:
+                        self.stats["dropped"] += 1
         self._beat()
         return True
 
     def _loop(self):
         while True:
+            wait = 0.0
             with self.cv:
                 while not self.q:
                     if not self.cv.wait(30):                 # idle: still flush a pending heartbeat
                         break
+                if self.q and self.backoff_until > self.now():
+                    wait = min(self.backoff_until - self.now(), 30.0)
+                    self.cv.wait(wait)                       # buffered until the probe is due (a new line only wakes us to re-check)
             try:
                 if not self.q:
                     self._beat()
+                    continue
+                if wait:
                     continue
                 self.step()
             except Exception as e:
