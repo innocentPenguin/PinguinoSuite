@@ -300,8 +300,11 @@ namespace PinguinoHost
             var c = Cfg(); if ((bool?)c["ShopOpen"] == false) return;
             string cur = Economy.CurrencyName, me = (user ?? "").ToLowerInvariant();
             long min = I(c, "MinStake"), max = I(c, "MaxStake"); int tries = (int)I(c, "MaxGuesses");
+            bool yt = PlatformUsers.IsForeign(user);   // YouTube / TikTok viewer (key "yt:id"): one short line that says how to buy, and no Twitch-only items (a sub gift is a Twitch sub)
+            if (yt && args != null && args.Length > 0 && NormItem(args[0]) == "get_sub") { say("@" + user + " the sub gift is for Twitch viewers. Here you can play Guess the Chatter: !shop guess <stake> (" + min + "-" + max + " " + cur + ", win 2x)."); return; }
             if (args == null || args.Length == 0)
             {
+                if (yt) { say("@" + user + " Shop: to buy, type !shop <item>. Open now: guess (Guess the Chatter, " + min + "-" + max + " " + cur + ", win 2x), so !shop guess <stake>, e.g. !shop guess " + min + ". More items soon!"); return; }
                 var items = new List<string>();
                 if (ChatOn(c, "guess_chatter")) items.Add(ChatName(c, "guess_chatter", "Guess the Chatter") + " (stake " + min + "-" + max + ", win 2x): !shop guess <stake>");   // short: two items, no "coming soon" tail, no sub explainer
                 { string sl = SubTickets.ShopLine(); if (sl != null) { int gi = sl.IndexOf(", a mod gifts", StringComparison.Ordinal); items.Add(gi > 0 ? sl.Substring(0, gi) + "): !shop sub" : sl); } }
