@@ -238,8 +238,9 @@ namespace PinguinoHost
         }
         static List<string> Chatters()
         {
-            var l = ChattersTwitch(); var f = ForeignPresent(); if (f.Count == 0) return l;
-            l.AddRange(f); return l.Distinct().ToList();
+            var l = ChattersTwitch(); var f = ForeignPresent();
+            if (f.Count > 0) { l.AddRange(f); l = l.Distinct().ToList(); }
+            return l.Where(x => !BotAccounts.Is(x)).ToList();   // bots (BotRix, Nightbot ...) earn no watch points
         }
         static List<string> ChattersTwitch()
         {

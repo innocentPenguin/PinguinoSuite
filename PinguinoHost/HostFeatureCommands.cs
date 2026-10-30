@@ -86,7 +86,7 @@ namespace PinguinoHost
             if (SubTickets.IsModCommand(cmd)) { if (!mod) return false; ModAudit.Log(user, "mod", cmd, string.Join(" ", args)); SubTickets.HandleMod(user, cmd, args, say); return true; }
             string b = BoardOf(cmd);
             bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!command" || cmd == "!cmds" || cmd == "!cmd" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || cmd == "!uptime" || cmd == "!downtime" || Economy.IsViewerCommand(cmd) || Gamble.IsCommand(cmd);
-            bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd);
+            bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!botaccount" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd);
             if (cmd == "!pm" && mod && args.Length > 0) return false;   // a mod naming the private match: the Core stores it (no read cooldown on that)
             if (!viewer && !modOnly) return false;
             if (modOnly && mod) ModAudit.Log(user, "mod", cmd, string.Join(" ", args));   // every mod command is on the audit log
@@ -119,6 +119,7 @@ namespace PinguinoHost
                     case "!sub": SubInfo(me, args, say, user); return true;
                     case "!founders": Founders(say); return true;
                     case "!alias": Alias(args, say); return true;
+                    case "!botaccount": say(args.Length == 0 || args[0].ToLowerInvariant() == "list" ? BotAccounts.ListText() : args.Length >= 2 && args[0].ToLowerInvariant() == "add" ? BotAccounts.Add(args[1]) : args.Length >= 2 && (args[0].ToLowerInvariant() == "remove" || args[0].ToLowerInvariant() == "del") ? BotAccounts.Remove(args[1]) : "Usage: !botaccount list | add <name or yt:id> | remove <name>"); return true;
                     case "!boards": BoardsCmd(args, say); return true;
                     case "!subs": SubsCmd(args, say); return true;
                     case "!streaks": StreaksCmd(args, say); return true;

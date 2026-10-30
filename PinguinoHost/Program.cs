@@ -190,14 +190,15 @@ namespace PinguinoHost
             bool fx = platform != "twitch";   // chat from YouTube etc. (HostApi /api/chat-in): own namespaced identity, viewer role, answers go to that platform only; Twitch-only machinery below is skipped
             if (fx) ReplyCtx.BeginForeign(platform, msgId, user, true); else ReplyCtx.Begin(msgId, user);   // every reply made while handling this message is a native Twitch reply to it
             bool spamCand = false;
+            bool botAcct = false; try { botAcct = BotAccounts.Is(user); } catch (Exception) { }   // a known bot account: counted as chat for logs and the Actions & Events triggers, but never as a viewer (points, welcome, First 5, boards)
             if (!fx) {
             try { if (SpamFirst.OnChat(user, text, role, isSub, subTier, firstMsg, out spamCand)) return; } catch (Exception ex) { Clog.Warn("spam", "first-message check failed: " + ex.Message); }   // link spam in a brand-new chatter's first line: dropped before any bot or bonus (off by default, Data\config\spam_first.json)
             try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
-            try { Roster.Note(user, role, isSub); } catch (Exception) { }
-            try { Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
-            try { Economy.OnChat(user, text, s => ChannelLore.Say(s)); } catch (Exception) { }
-            try { if (!Control.Synthetic) { Periods.AddBuffered(user, "messages", 1); if (text.TrimStart().StartsWith("!")) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
-            try { if (!Control.Synthetic) ChatFeed.Add(user, text, role, isSub, subTier, colorTag, badgeTag, userId); } catch (Exception) { }
+            try { if (!botAcct) Roster.Note(user, role, isSub); } catch (Exception) { }
+            try { if (!botAcct) Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
+            try { if (!botAcct) Economy.OnChat(user, text, s => ChannelLore.Say(s)); } catch (Exception) { }
+            try { if (!Control.Synthetic && !botAcct) { Periods.AddBuffered(user, "messages", 1); if (text.TrimStart().StartsWith("!")) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
+            try { if (!Control.Synthetic && !botAcct) ChatFeed.Add(user, text, role, isSub, subTier, colorTag, badgeTag, userId); } catch (Exception) { }
             try { EventLog.OnChat(user, text, role); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
             try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
             }
@@ -205,10 +206,10 @@ namespace PinguinoHost
             {
                 bool synth = false; try { synth = Control.Synthetic; } catch (Exception) { }
                 string shown = PlatformUsers.Display(user); bool isCmd = (text ?? "").TrimStart().StartsWith("!");
-                try { Economy.NoteForeign(user); ChatStats.Note(user, 1); } catch (Exception) { }
-                try { if (PlatformUsers.TakeFresh(user)) Welcome.OnForeign(user, platform, text, s => { string via; HostApi.SendAs("core", s, out via); }); } catch (Exception ex) { Clog.Warn("welcome", "newcomer greeting failed: " + ex.Message); }   // new YouTube viewer: welcome + bonus in the same message as the answer to their line
-                try { if (!synth) { Periods.AddBuffered(user, "messages", 1); if (isCmd) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
-                try { if (!synth) ChatFeed.Add(user, text, 1, false, 0, "", "", userId, platform, shown); } catch (Exception) { }
+                try { if (!botAcct) { Economy.NoteForeign(user); ChatStats.Note(user, 1); } } catch (Exception) { }
+                try { if (PlatformUsers.TakeFresh(user) && !botAcct) Welcome.OnForeign(user, platform, text, s => { string via; HostApi.SendAs("core", s, out via); }); } catch (Exception ex) { Clog.Warn("welcome", "newcomer greeting failed: " + ex.Message); }   // new YouTube viewer: welcome + bonus in the same message as the answer to their line
+                try { if (!synth && !botAcct) { Periods.AddBuffered(user, "messages", 1); if (isCmd) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
+                try { if (!synth && !botAcct) ChatFeed.Add(user, text, 1, false, 0, "", "", userId, platform, shown); } catch (Exception) { }
                 try { EventLog.OnChat(user, text, 1); } catch (Exception) { }
                 try { LiveLog.Record(user, userId, text, isCmd, platform, shown); } catch (Exception) { }
             }
@@ -233,7 +234,7 @@ namespace PinguinoHost
                 {
                     string trimmed = text.Trim();
                     string first = trimmed.Split(' ')[0];
-                    if (Cutover.On)   // the First 5 game pays points: only once Streamer.bot is retired, or both would pay
+                    if (Cutover.On && !botAcct)   // the First 5 game pays points: only once Streamer.bot is retired, or both would pay
                     {
                         if (first.ToLowerInvariant() == "!first" || first.ToLowerInvariant() == "!firsts") { cph.Args["command"] = first.ToLowerInvariant(); cph.RunAction("PinguinoFirsts"); return; }
                         try
