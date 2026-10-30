@@ -28,7 +28,7 @@ try:
         time.sleep(0.5)   # the Host answers /api/status a moment before the scene routes are ready
     ids = [w['id'] for w in reg['widgets']]
     chk('registry lists every overlay + alerts', {'queue', 'players', 'players_vertical', 'subroll', 'wheel', 'alerts'} <= set(ids), ids)
-    hud = ['goal', 'latest', 'subfooter', 'chat', 'customs', 'nowplaying']
+    hud = ['goal', 'latest', 'subfooter', 'chat', 'customs', 'nowplaying', 'creatorcode']
     chk('HUD widgets registered and available', set(hud) <= set(ids) and all(w['available'] for w in reg['widgets'] if w['id'] in hud), [(w['id'], w['available']) for w in reg['widgets']])
     chk('registry says which pages exist on disk (queue yes)', [w['available'] for w in reg['widgets'] if w['id'] == 'queue'] == [True], reg)
     h1 = json.loads(get('/api/scene-layouts?profile=h')); v1 = json.loads(get('/api/scene-layouts?profile=v'))
