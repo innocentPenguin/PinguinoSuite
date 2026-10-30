@@ -237,7 +237,7 @@
     var bl = [{Username:"penguinfan",Epic:"Penguin Fan"},{Username:"xx",Epic:"xx"},{Username:"youtube-tankjakvcgic4947",Epic:"tankjakvcgic4947_epicname"},{Username:"short",Epic:"ShortEpic"}];
     var og = [{Username:"flipreset",Epic:"FlipReset99"},{Username:"innocentpenguin_",Epic:"InnocentPenguin"},{Username:"boostgoblin"},{Username:"innocentpenguin_",Epic:"InnocentPenguin"}];
     var n = parseInt(params.get("n") || "", 10) || (four ? 4 : 3);
-    render({ game:"rocket-league", currentMatch:{ id:7, format:n + "v" + n, status: params.get("win") ? "finished" : "live", blueAvg:1120, orangeAvg:1105, blue:bl.slice(0, n), orange:og.slice(0, n) } });
+    render({ game:"rocket-league", activity:"competitive", currentMatch:{ id:7, format:n + "v" + n, status: params.get("win") ? "finished" : "live", blueAvg:1120, orangeAvg:1105, blue:bl.slice(0, n), orange:og.slice(0, n) } });
   } else {
     poll();
     setInterval(poll, 400);

@@ -312,9 +312,9 @@
   if (DEMO) {
     // ?demo  3v3 | ?demo&n=1|2|3  team size | &mini  start in the slim top bar | the 2nd/3rd seats show the odd cases (same name / very long name)
     var q = new URLSearchParams(location.search), n = parseInt(q.get("n") || "3", 10) || 3;
-    var bl = [{Username:"penguinfan",Epic:"Penguin Fan"},{Username:"xx",Epic:"xx"},{Username:"youtube-tankjakvcgic4947",Epic:"tankjakvcgic4947_epicname"}];
-    var og = [{Username:"flipreset",Epic:"FlipReset99"},{Username:"innocentpenguin_",Epic:"InnocentPenguin"},{Username:"boostgoblin"}];
-    var demo = { currentMatch: { id:7, format:n + "v" + n, status:"live", blueAvg:1120, orangeAvg:1105, blue:bl.slice(0, n), orange:og.slice(0, n) } };
+    var bl = [{Username:"penguinfan",Epic:"Penguin Fan"},{Username:"xx",Epic:"xx"},{Username:"yt:ucdemo1",name:"tankjak4947",platform:"youtube",Epic:"tankjak_epic"}];
+    var og = [{Username:"flipreset",Epic:"FlipReset99"},{Username:"innocentpenguin_",Epic:"InnocentPenguin"},{Username:"tt:99",name:"boostgoblin",platform:"tiktok"}];
+    var demo = { activity:"competitive", currentMatch: { id:7, format:n + "v" + n, status:"live", blueAvg:1120, orangeAvg:1105, blue:bl.slice(0, n), orange:og.slice(0, n) } };
     render(demo);
     if (q.has("mini")) { clearTimeout(shrinkTimer); setMini(); }
     else setTimeout(function () { demo.currentMatch.status = "finished"; demo.lastEvent = { Type:"match_result", Detail:"orange" }; render(demo); }, 6000);   // winner after 6s

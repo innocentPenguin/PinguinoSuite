@@ -174,11 +174,24 @@ function planFor(order,name,key){
       IDX = ix;
     }).catch(function () {});
   }
-  loadIdx(); setInterval(loadIdx, 5000);
+  if(!new URLSearchParams(location.search).get('sim')){loadIdx(); setInterval(loadIdx, 5000);}
 const IDLE_DELAY=1800,IDLE_V=.045,IDLE_RAMP=2;let idleSince=0;
 const idleRot=ms=>{const t=ms/1000;return t<IDLE_RAMP?IDLE_V*t*t/(2*IDLE_RAMP):IDLE_V*(t-IDLE_RAMP/2)};   // starts from standstill, eases up to a slow turn
 let off=0,w=null,lastKey='',lastCount=-1,lastSlice='',landedFor='',lastDraw='';
+// ?sim=lobby|spin|teams : synthetic state for the Sources > Simulation tab (no Host needed). Includes YouTube / TikTok viewers.
+const SIM=q.get('sim');
+function simState(kind){
+ const names=['penguinfan','yt:ucdemo','tt:99','rlwizard','icecube','snowdrift','frostbyte','glacier'],now=Date.now(),t=now/1000;
+ IDX['yt:ucdemo']={name:'tankjak4947',platform:'youtube'};IDX['tt:99']={name:'boostgoblin',platform:'tiktok'};
+ const order=['rlwizard','yt:ucdemo','icecube','tt:99'],steps=order.map((n,i)=>({name:n,team:i<2?1:2})),base={serverNow:now,teamSize:2,teamSizes:{1:2,2:2},colors:{},waitlist:[],names};
+ if(kind==='lobby')return Object.assign(base,{status:'open',pool:[],draw:null,teams:[]});
+ const teams=[{n:1,members:[order[0],order[1]]},{n:2,members:[order[2],order[3]]}];
+ if(kind==='teams')return Object.assign(base,{status:'drawn',pool:[],teams,draw:{id:'SIMT',steps,stepMs:3000,startedAt:now-60000},manual:{on:true,revealed:4,total:4,spunAt:now-60000,spinMs:3000,last:false}});
+ const cyc=8,k=Math.floor(t/cyc)%4+1,ph=(t%cyc)*1000,run=Math.floor(t/(cyc*4));
+ return Object.assign(base,{status:'drawing',pool:names.filter(n=>order.indexOf(n)<0||order.indexOf(n)>=k-1),teams:[],draw:{id:'SIM'+run,steps,stepMs:3000,startedAt:now},manual:{on:true,revealed:k,total:4,spunAt:now-ph,spinMs:3000,last:false}});
+}
 async function poll(){
+ if(SIM){off=0;w=simState(SIM);setTimeout(poll,500);return}
  try{const t0=Date.now();const r=await fetch('/api/wheel/public',{cache:'no-store'});const j=await r.json();const t1=Date.now();off=j.serverNow-(t0+t1)/2;w=j}catch{}
  setTimeout(poll,2000);
 }
