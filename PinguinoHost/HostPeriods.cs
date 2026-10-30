@@ -77,10 +77,50 @@ namespace PinguinoHost
             t.Start();
         }
 
-        static void EnsureLoaded() { if (!_loaded) { _loaded = true; LoadFile(); } }
+        static void EnsureLoaded() { if (!_loaded) { _loaded = true; LoadFile(); } else if (!_baseApplied) ApplyBaseline(); }
+
+        // ---------- lifetime baseline ----------
+        // The event log only starts 2026-10-15, so "all" (and the year 2026) would equal the month. Data/boards/totals.json holds the lifetime figures (watchMinutes, messages, points, gifts, bits).
+        // ONCE, the first time both exist, Data/boards/period_baseline.json is written: per metric and user, lifetime total minus what the buckets already hold for "all" (so nothing is counted twice).
+        // After that "all" = baseline + events, and the year it was made in (2026) gets the same baseline. The file is the snapshot: a rebuild / reload re-applies it, never recomputes it.
+        static readonly Dictionary<string, string> BaseFields = new Dictionary<string, string> { { "watchMinutes", "watchtime" }, { "messages", "messages" }, { "points", "points" }, { "gifts", "gifts" }, { "bits", "bits" } };
+        static bool _baseApplied;
+        static string BaseP { get { return Path.Combine(Boards.RootDir, "boards", "period_baseline.json"); } }
+        static string TotalsFileP { get { return Path.Combine(Boards.RootDir, "boards", "totals.json"); } }
+        static void ApplyBaseline()
+        {
+            try
+            {
+                JObject bs = null;
+                if (File.Exists(BaseP)) bs = JObject.Parse(File.ReadAllText(BaseP, System.Text.Encoding.UTF8).TrimStart((char)0xFEFF));
+                else if (File.Exists(TotalsFileP))
+                {
+                    var users = JObject.Parse(File.ReadAllText(TotalsFileP, System.Text.Encoding.UTF8).TrimStart((char)0xFEFF))["users"] as JObject; if (users == null || !users.HasValues) return;
+                    long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(); bs = new JObject { { "year", YearKey(now) }, { "madeAt", now }, { "note", "lifetime total at that moment minus what the period buckets already held for all time" }, { "metrics", new JObject() } };
+                    foreach (var f in BaseFields)
+                    {
+                        var have = Folded(f.Value, "all"); var mo = new JObject();
+                        foreach (var u in users.Properties())
+                        {
+                            double tot = 0; try { tot = (double?)u.Value[f.Key] ?? 0; } catch (Exception) { }
+                            double h; have.TryGetValue(Boards.CanonLogin(u.Name), out h); double b0 = Math.Floor(tot - h); if (b0 >= 1) mo[Boards.CanonLogin(u.Name)] = b0;
+                        }
+                        ((JObject)bs["metrics"])[f.Value] = mo;
+                    }
+                    Directory.CreateDirectory(Path.GetDirectoryName(BaseP)); File.WriteAllText(BaseP, bs.ToString(Newtonsoft.Json.Formatting.None), new System.Text.UTF8Encoding(false));
+                    Clog.Info("boards", "lifetime baseline for all time / " + (string)bs["year"] + " saved from totals.json");
+                }
+                else return;
+                string yk = (string)bs["year"] ?? "";
+                foreach (var m in ((JObject)bs["metrics"]).Properties())
+                    foreach (var u in ((JObject)m.Value).Properties()) { double v = (double)u.Value; Bump(m.Name, "all", u.Name, v); if (yk != "") Bump(m.Name, yk, u.Name, v); }
+                _baseApplied = true;
+            }
+            catch (Exception ex) { Clog.Warn("boards", "lifetime baseline: " + ex.Message); _baseApplied = true; }
+        }
         static void LoadFile()
         {
-            B.Clear(); XpCum.Clear(); Ids.Clear(); int bad = 0;
+            B.Clear(); XpCum.Clear(); Ids.Clear(); int bad = 0; _baseApplied = false;
             try
             {
                 if (File.Exists(FileP))
@@ -92,6 +132,7 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("boards", "metric_events.jsonl unreadable: " + ex.Message); }
             if (bad > 0) Clog.Warn("boards", bad + " unreadable lines in metric_events.jsonl were skipped");
+            ApplyBaseline();
         }
 
         static void Bump(string metric, string key, string user, double amount)
