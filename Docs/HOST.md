@@ -70,3 +70,11 @@ Sign in as the bot in a private window or log out of Twitch first (the flow uses
 
 ## Quick control from chat: `!pg` (mods and the streamer)
 `!pg status` (bots on/off + login, chat/EventSub/OBS state, EventSub delay) · `!pg core|chat|helper on|off` (switch a bot off for a while, same as the card toggle) · `!pg test` (each bot says hi from its own account, so you see who really speaks) · `!pg cutover` (is the Streamer.bot cutover on). Viewers get no reply. If chat cannot be reached the answer is printed in the Host console instead. Pre-stream now also checks the streamer's permissions (what is missing for events/clips/ads/shoutouts), Twitch event delay, and whether the OBS replay buffer runs (!clip needs it).
+
+## Counter convention: every counter keeps day history (standing rule from Ivan, 2026-10-30)
+Every counter or stat the Host keeps (pushups, redeems, anything new) stores a per stream-day history (`days`: YYYY-MM-DD -> n) and answers **today / this week / this month / all-time** separately.
+- Use `DayCounts` (`PinguinoHost/HostDayCounts.cs`), which takes its keys from `Periods` (Chicago stream day, ISO week, month): a counter and a board always agree on what "today" means. Never roll your own date maths.
+- Seeded baselines (a restart's reconstructed history) count toward **all-time**, and toward the days they name; they never write today or this week. A seed with only months fills the month history.
+- Expose `today`, `week`, `month`, `all` (+ `days`) in the counter's API, and accept `[today|week|month|all]` in its chat command. A period before the counter's `recordStart` answers "No record before <Mon YYYY>".
+- Estimates live in their own field (`estimatedDays`) and never enter a total or a period.
+- Examples: `Pushups` (`HostPushups.cs`, `!pushup week`), `RedeemCounts` (`HostRedeems.cs`, `!hydrate week`, `/api/redeems`). Tests: `Tools/test-host-redeemdays.py`, `Tools/test-host-pushups.py`.
