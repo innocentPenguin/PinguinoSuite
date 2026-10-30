@@ -160,6 +160,7 @@ namespace PinguinoHost
         {
             string pf = ReplyCtx.Platform; var held = ReplyCtx.TakeHeld(); if (held.Count == 0 || pf == "twitch") return;
             string at = held[0].StartsWith("@") && held[0].IndexOf(' ') > 0 ? held[0].Substring(0, held[0].IndexOf(' ') + 1) : "";
+            string par0, lg; ReplyCtx.Current(out par0, out lg); if (lg != "" && lg.IndexOf(':') > 0) { string full = "@" + PlatformUsers.Display(lg) + " "; if (held[0].StartsWith(full, StringComparison.OrdinalIgnoreCase)) at = held[0].Substring(0, full.Length); }   // a handle with a space ("@Yt Two") is stripped whole, never cut at its first space
             var sb = new System.Text.StringBuilder(held[0]);
             for (int i = 1; i < held.Count; i++) sb.Append(' ').Append(at != "" && held[i].StartsWith(at, StringComparison.OrdinalIgnoreCase) ? held[i].Substring(at.Length) : held[i]);
             string all = sb.ToString(); int lim = pf == "youtube" ? 195 : 450;
