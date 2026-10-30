@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   PinguinoB0t - PM NAME widget (scene HUD). Tiny line for under the Rocket League scoreboard: "name: pengXXX" (the viewers' private-match name).
-  Data: Host GET /api/customs/state key pmName (polled every 3 s). Hidden while pmName is empty, while no customs activity is running, or while the Host is unreachable.
+  Data: Host GET /api/customs/state key pmName (polled every 3 s). Visible only while pmName is set AND a customs activity runs (not none/end/idle...) AND the queue is open, someone waits or a match is live; else hidden (also when the Host is unreachable).
   Params: host=http://127.0.0.1:8770 | preview=1 (sample, no Host needed) | label=name (text before the colon). Design size 420 x 56.
 -->
 <html><head><meta charset="utf-8"><title>PM Name</title>
@@ -18,14 +18,17 @@
   var Q=new URLSearchParams(location.search), HOST=Q.get("host")||(location.protocol.indexOf("http")===0?location.origin:"http://127.0.0.1:8770");
   var p=document.getElementById("p"), l=document.getElementById("l"), v=document.getElementById("v"), fails=0;
   l.textContent=(Q.get("label")||"name")+":";
+  var DEAD={"":1,none:1,end:1,ended:1,idle:1,off:1,stop:1,stopped:1,closed:1};
   function show(j){
-    var n=String((j&&j.pmName)||"").trim(), act=String((j&&j.activity)||"").trim();
-    if(!n||!act||act.toLowerCase()==="none"){p.className="off";return;}   // empty name, or the customs activity ended: hidden like the other customs overlays
+    var n=String((j&&j.pmName)||"").trim(), act=String((j&&j.activity)||"").trim().toLowerCase().replace(/^(rl|fn)\s+/,"");
+    var m=j&&j.match, live=!!(m&&m.status!==undefined&&m.status!==null&&String(m.status).toLowerCase()!=="done"&&String(m.status).toLowerCase()!=="ended");
+    var busy=!!(j&&j.open)||((j&&j.queue)||[]).length>0||live;   // a private match is only "on" while the queue is open / people wait / a match runs
+    if(!n||DEAD[act]||!busy){p.className="off";return;}   // empty/stale name, activity ended (none/end/idle...), or nothing in progress: hidden
     v.textContent=n; p.className="";
   }
   function bad(){ if(++fails>=3) p.className="off"; }   // Host unreachable for ~9 s: hide
   function poll(){fetch(HOST+"/api/customs/state").then(function(r){return r.json();}).then(function(j){if(j&&j.ok!==false){fails=0;show(j);}else bad();}).catch(bad);}
-  if(Q.get("preview")==="1") show({pmName:"pengDEMO",activity:"competitive"});
+  if(Q.get("preview")==="1") show({pmName:"pengDEMO",activity:"competitive",open:true});
   else{poll();setInterval(poll,3000);}
 })();
 </script>
