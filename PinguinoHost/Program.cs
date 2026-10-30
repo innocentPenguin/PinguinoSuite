@@ -316,6 +316,7 @@ namespace PinguinoHost
             if (!Lease.MayRun) return;
             try { Boards.OnEvent(args); } catch (Exception) { }
             try { SiteActivity.Note(args); } catch (Exception) { }
+            try { RedeemCounts.Note(args); } catch (Exception) { }
             try { Periods.OnEvent(args); } catch (Exception) { }
             try { Control.OnEvent(args); } catch (Exception) { }
             try { StreamTimers.OnEvent(args); } catch (Exception) { }
@@ -372,6 +373,8 @@ namespace PinguinoHost
                 if (line.StartsWith("selfredeem ")) { var q = line.Split(new[] { ' ' }, 3); DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRedeem" }, { "userName", q[1] }, { "title", "Self Timeout" }, { "input", q.Length > 2 ? q[2] : "" }, { "redemptionId", "red-s" }, { "rewardId", "rw-s" } }); continue; }   // sim: selfredeem alice 2m
                 if (line.StartsWith("raidpick "))   // sim: raidpick target viewers = what the outgoing channel.raid event does (raid pending, then raid_out)
                 { var p = line.Split(' '); string tg = p[1]; try { Auto.OnRaidScheduled(tg); } catch (Exception) { } DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRaidOut" }, { "userName", tg }, { "target", tg }, { "viewers", p.Length > 2 ? p[2] : "5" } }); continue; }
+                if (line.StartsWith("redeem "))   // sim: redeem <user> <redemptionId> <rewardId|-> <redeemedAt ISO|-> <title...> = a channel point redemption with full detail
+                { var q = line.Split(new[] { ' ' }, 6); if (q.Length >= 6) DispatchEvent(new Dictionary<string, object> { { "eventType", "TwitchRedeem" }, { "userName", q[1] }, { "title", q[5] }, { "redemptionId", q[2] }, { "rewardId", q[3] == "-" ? "" : q[3] }, { "redeemedAt", q[4] == "-" ? "" : q[4] }, { "cost", 100 } }); continue; }
                 if (line.StartsWith("event "))   // sim: event TwitchSub alice 2   (3rd word = tier / bits / viewers)
                 { var p = line.Split(' '); string v = p.Length > 3 ? p[3] : "1"; DispatchEvent(new Dictionary<string, object> { { "eventType", p[1] }, { "userName", p.Length > 2 ? p[2] : "x" }, { "tier", v }, { "total", v }, { "bits", v }, { "viewers", v }, { "moderator", p.Length > 4 ? p[4] : "" }, { "title", "Song Request" }, { "input", v }, { "redemptionId", "red-" + v }, { "rewardId", "rw1" } }); continue; }   // TwitchRedeem: 3rd word = the song text
                 int c = line.IndexOf(':'); if (c < 1) continue;

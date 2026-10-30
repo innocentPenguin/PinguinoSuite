@@ -179,6 +179,7 @@ namespace PinguinoHost
             {
                 string k = m.Groups[1].Value; string v;
                 if (k.StartsWith("var:")) return GetVar(k.Substring(4));
+                if (k.StartsWith("redeem.")) return RedeemCounts.Var(k.Substring(7));   // {redeem.pushups}: baseline + live redemptions of the group
                 if (k.StartsWith("link:")) return Links.Get(k.Substring(5)) ?? "";   // {link:discord}: the site's canonical links (see Links)
                 if (k == "discord" && !ctx.ContainsKey("discord")) return Links.Get("discord") ?? "";
                 if (k.StartsWith("random:")) { var mm = Regex.Match(k, @"^random:(-?\d+)-(-?\d+)$"); if (mm.Success) { int a = int.Parse(mm.Groups[1].Value), b = int.Parse(mm.Groups[2].Value); if (b < a) { var x = a; a = b; b = x; } return Rnd.Next(a, b + 1).ToString(); } return m.Value; }

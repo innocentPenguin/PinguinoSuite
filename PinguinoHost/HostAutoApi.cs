@@ -308,6 +308,7 @@ namespace PinguinoHost
                 var b = Body(c); string tg = ((string)b["target"] ?? "").Trim().TrimStart('@').ToLowerInvariant(); bool fired = Auto.OnRaidScheduled(tg, (bool?)b["now"] == true);
                 ChannelControl.Audit("app", "raid/prep", "target=" + tg + " fired=" + fired); Write(c, new JObject { { "ok", true }, { "fired", fired }, { "duplicate", !fired } }.ToString(), "application/json"); return true;
             }
+            if (p == "/api/redeems" && m == "GET") { Write(c, RedeemCounts.Api().ToString(), "application/json"); return true; }   // redeem counters per group: baseline (seeded history) + live, per month
             if (p == "/api/rewards" && m == "GET") { Write(c, Rewards.List().ToString(), "application/json"); return true; }   // every channel point reward and whether the Host owns it (refunds only work on those)
             if (p == "/api/rewards/use" && m == "POST") { Write(c, Rewards.Use(Body(c)).ToString(), "application/json"); return true; }   // {rewardId, automation?}: point an automation at a reward the Host owns
             if (p == "/api/rewards/takeover" && m == "POST") { Write(c, Rewards.Takeover(Body(c)).ToString(), "application/json"); return true; }   // {rewardId, automation?}: the Host's own copy of another app's reward; old one renamed "(old)" + disabled when Twitch allows
