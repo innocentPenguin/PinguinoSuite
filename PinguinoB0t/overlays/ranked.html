@@ -4,8 +4,9 @@
   Data: Host GET /api/ranked -> {active, limit, games:["W"|"L",...], net, inProgress, wins, losses, day, week:{wins,losses,net}} (polled every 2 s).
   Shows "Game N in progress", a row of numbered slots (green check = W, red X = L, the running game outlined yellow) and the net (wins - losses) at the right.
   Starts with only the running slot; each finished game adds one (pop-in). More games than `limit`: shows the latest `limit` slots, and once a minute scrolls from game 1 back down to the newest.
+  break:{active,reason,afterGames,lossStreak} (optional): top line becomes "Break" + small reason, the running slot is not highlighted, net stays.
   Hidden while active is false (or the Host is unreachable for ~6 s).
-  Params: host=http://127.0.0.1:8770 | sim=0|1|3|5|8|neg|12 (sample state, no Host) | simgrow=1 (sim grows one game every 3 s) | scroll=60 (seconds between scrolls, 0 = never) | limit=5 (sim/override)
+  Params: host=http://127.0.0.1:8770 | sim=0|1|3|4|5|8|12|neg|break|breakloss (sample state, no Host) | simgrow=1 (sim grows one game every 3 s) | scroll=60 (seconds between scrolls, 0 = never) | limit=5 (sim/override)
 -->
 <html><head><meta charset="utf-8"><title>Ranked</title>
 <style>
@@ -16,6 +17,8 @@
   #card.off{opacity:0}
   #top{font-weight:800;font-size:23px;letter-spacing:.02em;color:#ff9d3c;white-space:nowrap}
   #top span{color:#fff}
+  #top .brk{color:#ff9d3c;text-transform:uppercase;letter-spacing:.12em}
+  #top em{font-style:normal;font-weight:700;font-size:15px;color:#ffd9ae;letter-spacing:.02em}
   #row{position:absolute;left:16px;right:16px;top:50px;bottom:12px;display:flex;align-items:stretch}
   #vp{position:relative;overflow:hidden;width:var(--sw);transition:width .45s ease;flex:none}
   #track{position:absolute;left:0;top:0;bottom:0;display:flex;transition:transform .5s ease}
@@ -45,16 +48,26 @@
   var CHECK='<svg viewBox="0 0 34 34"><path d="M5 18l8 8L29 8" fill="none" stroke="#3ddc6a" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var CROSS='<svg viewBox="0 0 34 34"><path d="M7 7l20 20M27 7L7 27" fill="none" stroke="#ff4d4d" stroke-width="5.5" stroke-linecap="round"/></svg>';
   function mk(i){ var d=document.createElement("div"); d.className="s in"; d.innerHTML='<div class="n">'+i+'</div><div class="m"></div>'; return d; }
+  function esc(x){ return String(x).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function breakWhy(b){                              // break:{active, reason, afterGames, lossStreak}; every field optional
+    var r=String(b.reason||"").trim(), lc=r.toLowerCase();
+    if(/^(manual|streamer|mod)$/.test(lc)) return "manual";
+    if(b.afterGames>0&&(!r||/game/.test(lc))) return b.afterGames+" games";
+    if(b.lossStreak>0&&(!r||/loss/.test(lc))) return b.lossStreak+" losses in a row";
+    return r?esc(r):"";
+  }
   function atEnd(){ return Math.max(0,total-limit)*SW; }
   function setX(x,anim){ track.style.transition=anim?"transform "+anim+"ms linear":"transform .5s ease"; track.style.transform="translateX("+(-x)+"px)"; }
   function render(j){
     var g=(j.games||[]).map(function(x){return String(x).toUpperCase()==="W"?"W":"L";});
     limit=Math.max(1,Math.min(12,parseInt(j.limit,10)||5)); total=g.length+1;
-    var inprog=j.inProgress||total; top_.innerHTML='Game <span>'+inprog+'</span> in progress';
+    var br=j.break&&j.break.active===true?j.break:null, inprog=j.inProgress||total;
+    if(br){ var why=breakWhy(br); top_.innerHTML='<b class="brk">Break</b>'+(why?' <em>'+why+'</em>':''); }
+    else top_.innerHTML='Game <span>'+inprog+'</span> in progress';
     for(var i=0;i<total;i++){                       // slot i+1: games[i] if finished, else the running one
       var s=slots[i]; if(!s){ s=slots[i]=mk(i+1); track.appendChild(s); }
       var res=i<g.length?g[i]:"", run=i===g.length;
-      s.classList.toggle("run",run);
+      s.classList.toggle("run",run&&!br);
       if(s.dataset.r!==res){ s.dataset.r=res; var m=s.querySelector(".m"); m.innerHTML=res==="W"?CHECK:res==="L"?CROSS:""; s.classList.toggle("mk",!!res); }
     }
     while(slots.length>total){ var x=slots.pop(); x.remove(); }   // the Host reset the session
@@ -72,14 +85,14 @@
   }
   window.__rankedScroll=scrollAll;
   if(SCROLL_S>0) scrollTimer=setInterval(scrollAll,SCROLL_S*1000);
-  var SIMS={"0":[],"1":["W"],"3":["W","L","W"],"4":["W","L","W","W"],"5":["W","L","W","W","L"],"8":["W","L","W","W","L","L","W","W"],"12":["W","L","W","W","L","L","W","W","L","L","L","W"],"neg":["L","L","W","L"]};
+  var SIMS={"0":[],"1":["W"],"3":["W","L","W"],"4":["W","L","W","W"],"5":["W","L","W","W","L"],"8":["W","L","W","W","L","L","W","W"],"12":["W","L","W","W","L","L","W","W","L","L","L","W"],"neg":["L","L","W","L"],"break":["W","L","W"],"breakloss":["W","L","L","L"]};
   function bad(){ if(++fails>=3) card.className="off"; }
   function poll(){fetch(HOST+"/api/ranked").then(function(r){return r.json();}).then(function(j){if(j&&j.ok!==false){fails=0;render(j);}else bad();}).catch(bad);}
   var sim=Q.get("sim");
   if(sim!==null){
     var base=SIMS[sim]||SIMS["5"], n=Q.get("simgrow")==="1"?0:base.length;
     var full=base.length?base:["W","L","W","W","L","L","W","W"];
-    (function tick(){ var g=Q.get("simgrow")==="1"?full.slice(0,n):base; render({active:true,limit:parseInt(Q.get("limit"),10)||5,games:g,inProgress:g.length+1}); if(Q.get("simgrow")==="1"){ n=(n+1)%(full.length+1); setTimeout(tick,3000);} })();
+    (function tick(){ var g=Q.get("simgrow")==="1"?full.slice(0,n):base; render({active:true,limit:parseInt(Q.get("limit"),10)||5,games:g,inProgress:g.length+1,break:sim==='break'?{active:true,reason:'games',afterGames:3}:sim==='breakloss'?{active:true,reason:'losses',lossStreak:3}:undefined}); if(Q.get("simgrow")==="1"){ n=(n+1)%(full.length+1); setTimeout(tick,3000);} })();
   } else { poll(); setInterval(poll,2000); }
 })();
 </script>
