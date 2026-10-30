@@ -55,7 +55,7 @@
   .name { unicode-bidi:plaintext; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .rating { color:#8b8d82; font-size:14px; font-weight:600; flex:none; }
   .epic { unicode-bidi:plaintext; color:var(--muted); font-weight:500; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-  .epic::before { content:"| "; color:#6d6f63; }
+  .epic .epl { height:.95em; width:auto; vertical-align:-.12em; margin-right:.3em; opacity:.85; }
   .tag { margin-left:auto; flex:none; font-size:11px; font-weight:800; letter-spacing:1px; padding:3px 8px; border-radius:6px; }
   .tag.next { background:var(--gold); color:#3a2a00; } .tag.backup { background:var(--tan); color:#3a2a00; } .tag.you { background:#e91916; color:#fff; }
   .empty { padding:14px 4px 10px; color:var(--muted); font-size:17px; }
@@ -217,7 +217,7 @@
       else if (isStreamer) tag = '<span class="tag you">STREAMER</span>';
       return '<li class="' + cls + '"><span class="pos">#' + e.pos + '</span><span class="name">' + esc(dn(e.user)) + '</span>' +
              (e.mmr != null ? '<span class="rating" title="' + (fn ? "SR" : "MMR") + '">' + e.mmr + '</span>' : '') +
-             (e.epic ? '<span class="epic">' + esc(e.epic) + '</span>' : '') + tag + '</li>';
+             (e.epic ? '<span class="epic"><img class="epl" src="images/epic-logo-light.svg" alt="">' + esc(e.epic) + '</span>' : '') + tag + '</li>';
     }).join("");
     document.getElementById("list").innerHTML = html || '<div class="empty">Nobody yet — be first!</div>';
     document.getElementById("more").textContent = q.length > MAX_ROWS ? "+" + (q.length - MAX_ROWS) + " more in line" : "";

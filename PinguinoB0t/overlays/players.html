@@ -50,6 +50,7 @@
   .nm { position:relative; flex:1 1 auto; min-width:0; display:block; overflow:hidden; white-space:nowrap; }
   .nm > span { display:block; unicode-bidi:plaintext; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:opacity var(--fade) ease, transform var(--fade) ease; }
   .nm .n2 { position:absolute; left:0; right:0; top:0; opacity:0; transform:translateY(40%); }
+  .nm .n2 { display:flex; align-items:center; gap:.3em; } .nm .n2 .epl { flex:none; height:.78em; width:auto; }
   html.alt .nm:not(.one) .n1 { opacity:0; transform:translateY(-40%); }
   html.alt .nm .n2 { opacity:1; transform:none; }
   .team h2 { margin:0 0 6px; font-size:46px; font-weight:800; letter-spacing:4px; display:flex; justify-content:space-between; align-items:baseline; }  /* only the casual IN-GAME panel still has a heading */
@@ -114,7 +115,7 @@
     var nm = o.name || o.Name || ix.name || "";
     var ep = f(o, "Epic") || o.display || ix.display || "";
     var r = {}; for (var x in o) r[x] = o[x];
-    var base = nm || keyName(k); r.Username = pf !== "twitch" ? "@" + String(base).replace(/^@/, "") : base;   // YouTube / TikTok viewers read as @handle (the Host stores the handle without its @) r.Epic = ep; r.Platform = pf; r.Key = k;
+    var base = nm || keyName(k); r.Username = pf !== "twitch" ? "@" + String(base).replace(/^@/, "") : base; r.Epic = ep; r.Platform = pf; r.Key = k;   // YouTube / TikTok viewers read as @handle (the Host stores the handle without its @)
     return r;
   }
   function normMatch(m) { var c = {}; for (var x in m) c[x] = m[x]; c.blue = (m.blue || []).map(normRow); c.orange = (m.orange || []).map(normRow); return c; }
@@ -132,7 +133,7 @@
   function nameHtml(p) {
     var u = f(p, "Username"), e = f(p, "Epic"); p = p.Platform ? p : normRow(p); u = f(p, "Username"); e = f(p, "Epic");
     if (!SHOW_EPIC || !e || !u || norm(e) === norm(u)) return pfChip(p) + '<span class="nm one"><span class="n1">' + esc(u || e) + '</span></span>';
-    return pfChip(p) + '<span class="nm"><span class="n1">' + esc(u) + '</span><span class="n2">' + esc(e) + '</span></span>';
+    return pfChip(p) + '<span class="nm"><span class="n1">' + esc(u) + '</span><span class="n2">' + (e ? '<img class="epl" src="images/epic-logo-light.svg" alt="">' : '') + esc(e) + '</span></span>';
   }
   var altTimer = null, altKey = "";
   function applyAlt(s) {
