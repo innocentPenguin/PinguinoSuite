@@ -374,7 +374,7 @@ const SRC=[
   {id:'nowplaying',g:'Spotify',mod:'spotify',name:'Now playing',path:'/overlay',w:1920,h:1080},
   {id:'spqueue',g:'Spotify',mod:'spotify',name:'Song queue',path:'/overlay/queue',w:1920,h:1080},
   {id:'player',g:'Spotify',mod:'spotify',name:'Player',path:'/player',w:1920,h:1080}];
-const SRCS={filter:'all',extra:null,paused:false,down:{}};
+const SRCS={filter:'all',extra:null,paused:false,down:{},view:'sources',sim:'match',simbg:'rl'};
 const srcUrl=x=>(SRC_BASE[x.mod]||SRC_BASE.host)+x.path;
 const srcAll=()=>SRC.concat(SRCS.extra||[]);
 // other .html files in the Host overlay folder show up here without a code change
@@ -396,8 +396,29 @@ const srcOpts=x=>x.mod==='host'?(SRC_OPT[String(x.path).replace(/^\//,'')]||[]):
 const srcTestUrl=(x,vals)=>{const q=[];srcOpts(x).forEach(o=>{const v=vals[o.k];if(v!==undefined&&v!=='')q.push(encodeURIComponent(o.k)+'='+encodeURIComponent(v))});
   return srcUrl(x)+(q.length?'?'+q.join('&'):'')};
 const srcTestVals=c=>{const v={};c.querySelectorAll('[data-topt]').forEach(i=>{v[i.dataset.topt]=i.type==='checkbox'?(i.checked?i.dataset.on:''):i.value});return v};
-pages.sources=()=>{srcLoadExtra();const all=srcAll(),groups=[...new Set(all.map(x=>x.g))],list=all.filter(x=>SRCS.filter==='all'||x.g===SRCS.filter);
+// Simulation: put the real overlays on a stage and see what viewers get when something happens. Every scenario is a set of overlay pages in their sample/demo/sim modes (no Host state is touched).
+const SIM_BG={rl:'linear-gradient(180deg,#1b3a6b 0%,#2f6fb5 38%,#2d8a46 39%,#1f6b34 100%)',checker:SRC_BG.checker,dark:'#111',green:SRC_BG.green,light:SRC_BG.light};
+const SIM_SC=[
+  {id:'match',n:'Match starts',d:'Grey vs Orange scoreboard with a Twitch, YouTube and TikTok player, plus the private-match name.',L:[{p:'/players.html?demo',x:0,y:0,w:1920,h:1080},{p:'/pm.html?preview=1',x:750,y:96,w:420,h:56}]},
+  {id:'queue',n:'Queue opens',d:'The queue board with eight people waiting.',L:[{p:'/queue.html?demo',x:0,y:0,w:1920,h:1080}]},
+  {id:'lobby',n:'Wheel: people join',d:'The wheel before the draw, with Twitch, YouTube and TikTok names.',L:[{p:'/wheel.html?sim=lobby',x:0,y:0,w:1920,h:1080}]},
+  {id:'spin',n:'Wheel spins and picks',d:'Picks cycle every 8 seconds: spin, landing, team card filling up.',L:[{p:'/wheel.html?sim=spin',x:0,y:0,w:1920,h:1080}]},
+  {id:'teams',n:'Teams revealed',d:'The finished draw.',L:[{p:'/wheel.html?sim=teams',x:0,y:0,w:1920,h:1080}]},
+  {id:'chat',n:'Chat is busy',d:'Sample lines: Twitch with badges, YouTube and TikTok as @handles.',L:[{p:'/chat.html?preview=1',x:0,y:180,w:500,h:900}]},
+  {id:'pushup',n:'Pushup count',d:'The pushup counter with a sample count.',L:[{p:'/pushup.html?preview=1',x:750,y:160,w:420,h:80}]},
+  {id:'subs',n:'Sub roll',d:'Credits-style subscriber roll with sample subs.',L:[{p:'/subroll.html?preview=1&mock=1',x:0,y:0,w:1920,h:1080}]},
+  {id:'customs',n:'Customs card',d:'The small customs status card.',L:[{p:'/customs.html?preview=1',x:40,y:40,w:420,h:120}]},
+  {id:'all',n:'Everything at once',d:'Scoreboard, private-match name, pushups and chat together, as on a real scene.',L:[{p:'/players.html?demo',x:0,y:0,w:1920,h:1080},{p:'/pm.html?preview=1',x:750,y:96,w:420,h:56},{p:'/pushup.html?preview=1',x:750,y:160,w:420,h:80},{p:'/chat.html?preview=1',x:0,y:180,w:500,h:900}]}];
+const simPage=()=>{const sc=SIM_SC.find(x=>x.id===SRCS.sim)||SIM_SC[0],B=SRC_BASE.host;
+  return `<div class="row wrap" style="gap:8px;margin-bottom:8px"><span class="chips">${SIM_SC.map(x=>`<span class="chip ${x.id===sc.id?'on':''}" data-simsc="${x.id}">${esc(x.n)}</span>`).join('')}</span></div>
+   <div class="row wrap sm" style="gap:10px;margin-bottom:8px"><label>Backdrop <select id="sim-bg">${Object.keys(SIM_BG).map(k=>`<option value="${k}"${k===SRCS.simbg?' selected':''}>${k==='rl'?'game field':k}</option>`).join('')}</select></label><button class="sm" id="sim-reload">Restart scenario</button><span class="faint">${esc(sc.d)}</span></div>
+   <div class="srcbox" id="sim-stage" style="aspect-ratio:16/9;background:${SIM_BG[SRCS.simbg]};max-width:1100px" data-w="1920" data-h="1080"><div id="sim-inner" style="position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0">${sc.L.map(l=>`<iframe src="${esc(B+l.p)}" tabindex="-1" style="position:absolute;left:${l.x}px;top:${l.y}px;width:${l.w}px;height:${l.h}px;border:0;background:transparent;pointer-events:none"></iframe>`).join('')}</div></div>
+   <div class="sm faint">Uses the overlays' own sample modes, so the Host does not need a live match. ${esc(sc.L.map(l=>l.p).join('  '))}</div>`};
+function simScale(){const st=$('#sim-stage'),i=$('#sim-inner');if(st&&i){const k=st.clientWidth/1920;if(k>0)i.style.transform=`scale(${k})`}}
+pages.sources=()=>{if(SRCS.view==='sim')return `<div style="max-width:1500px"><div class="row" style="margin-bottom:10px"><span class="chips"><span class="chip" data-sview="sources">Sources</span><span class="chip on" data-sview="sim">Simulation</span></span></div>${simPage()}</div>`;
+  srcLoadExtra();const all=srcAll(),groups=[...new Set(all.map(x=>x.g))],list=all.filter(x=>SRCS.filter==='all'||x.g===SRCS.filter);
   return `<div style="max-width:1500px"><div class="pnote">Every browser source the Suite serves. In OBS: Sources &gt; + &gt; Browser, paste the URL and set the size shown. Nothing here controls OBS or your stream. Link has no browser source (it only runs OBS macros).</div>
+   <div class="row" style="margin-bottom:10px"><span class="chips"><span class="chip on" data-sview="sources">Sources</span><span class="chip" data-sview="sim">Simulation</span></span></div>
    <div class="row wrap" style="margin-bottom:10px;gap:8px"><span class="chips"><span class="chip ${SRCS.filter==='all'?'on':''}" data-sf="all">All</span>${groups.map(g=>`<span class="chip ${SRCS.filter===g?'on':''}" data-sf="${esc(g)}">${esc(g)}</span>`).join('')}</span><span class="sp"></span><label class="sm"><input type="checkbox" id="src-pause"${SRCS.paused?' checked':''}> Pause previews</label><button class="sm" data-go="master">Open Master View</button></div>
    <div class="srcg" id="src-grid">${list.map(x=>{const u=srcUrl(x);return `<div class="card srct" data-sid="${esc(x.id)}"><div class="row"><span class="dot ${esc(srcState(x))}" data-sdot style="margin:0"></span><b>${esc(x.name)}</b><span class="pill">${esc(x.g)}</span><span class="sp"></span><span class="sm faint" data-sst>${esc(srcState(x))}</span></div>
      <details class="srcprev" data-sprev><summary>Preview</summary>
@@ -415,7 +436,11 @@ function srcScale(){$$('#src-grid .srcbox').forEach(b=>{const f=b.querySelector(
 function srcLoadFrame(card){const f=card.querySelector('iframe');if(!f||SRCS.paused||!f.dataset.src)return;if(!f.src||f.src==='about:blank'||f.dataset.stale){f.dataset.stale='';f.src=f.dataset.src}}
 function srcUpdate(){$$('#src-grid .srct').forEach(c=>{const x=srcAll().find(y=>y.id===c.dataset.sid);if(!x)return;const st=srcState(x),d=c.querySelector('[data-sdot]'),l=c.querySelector('[data-sst]');
   if(d)d.className='dot '+st;if(l)l.textContent=st;c.classList.toggle('down',!!SRCS.down[x.id]||st==='stopped')})}
-function bindSources(){if(!$('#src-grid'))return;
+function bindSources(){$$('[data-sview]').forEach(c=>c.onclick=()=>{SRCS.view=c.dataset.sview;draw(true)});
+  if($('#sim-stage')){$$('[data-simsc]').forEach(c=>c.onclick=()=>{SRCS.sim=c.dataset.simsc;draw(true)});
+    $('#sim-bg').onchange=e=>{SRCS.simbg=e.target.value;$('#sim-stage').style.background=SIM_BG[SRCS.simbg]};
+    $('#sim-reload').onclick=()=>draw(true);simScale();if(window.ResizeObserver){if(SRCS.ro)SRCS.ro.disconnect();SRCS.ro=new ResizeObserver(simScale);SRCS.ro.observe($('#sim-stage'))}return}
+  if(!$('#src-grid'))return;
   $$('[data-sf]').forEach(c=>c.onclick=()=>{SRCS.filter=c.dataset.sf;draw(true)});
   $('#src-pause').onchange=e=>{SRCS.paused=e.target.checked;if(SRCS.paused)$$('#src-grid iframe').forEach(f=>{f.src='about:blank'});else draw(true)};
   $$('[data-sopen]').forEach(b=>b.onclick=()=>openExternal(b.dataset.sopen,true));   // true: the user's default browser, not a Suite pop-up
