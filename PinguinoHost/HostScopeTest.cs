@@ -13,6 +13,10 @@ namespace PinguinoHost
             var all = HostApi.ScopeInfo.Select(i => i[0]).ToList();
             Check(all.Count == all.Distinct().Count(), "no scope listed twice");
             Check(HostApi.ScopeInfo.All(i => i.Length == 3 && i[1].Length > 3), "every scope names the feature that uses it");
+            Check(all.Count >= 70 && all.All(x => System.Text.RegularExpressions.Regex.IsMatch(x, "^[a-z_]+(:[a-z_]+){1,2}$")), "the widest valid set (" + all.Count + " scopes), every name well formed");
+            Check(new[] { "channel:read:stream_key", "user:read:email", "channel:manage:videos", "user:edit", "whispers:read" }.All(x => !all.Contains(x)), "the stream key, email, VOD deletion, legacy and PubSub-only scopes stay out");
+            Check(new[] { "channel:manage:moderators", "channel:read:vips", "moderator:manage:blocked_terms", "user:bot", "channel:bot", "channel:manage:ads", "user:read:follows" }.All(all.Contains), "the 23 removed scopes are back");
+            Check(HostApi.ScopeInfo.Where(i => i[2] == "1").Count() == 12 && HostApi.ScopeInfo.Where(i => i[1].StartsWith("reserved:")).All(i => i[2] == "0"), "restored scopes are never 'needed' (the stream does not break without them)");
             Check(HostApi.Scopes.Split(' ').SequenceEqual(all), "the sign-in string is the list, in order");
             Check(HostApi.MissingScopes(all).Count == 0 && HostApi.MissingScopesText(all) == "", "full token: nothing missing, no text");
             var old = all.Where(s => s != "clips:edit" && s != "channel:manage:raids").ToList();

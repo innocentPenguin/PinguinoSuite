@@ -5,7 +5,7 @@ using System.Linq;
 namespace PinguinoHost
 {
     /// <summary>The ONE list of Twitch permissions the streamer sign-in asks for (bot accounts keep their own tokens and lists). Every row names the feature that
-    /// calls it; a permission nobody calls does not belong here. Adding a Twitch call = add its scope here, then Ivan re-signs in once (the Host page and the
+    /// calls it; a row that starts "reserved:" is asked for now, called by nothing yet (Ivan: widest sign-in Twitch allows, so no new approval later). Adding a Twitch call = add its scope here, then Ivan re-signs in once (the Host page and the
     /// prestream check list what is missing).</summary>
     public static partial class HostApi
     {
@@ -41,7 +41,54 @@ namespace PinguinoHost
             new[] { "channel:manage:predictions", "!predict / !lock / !resolve / !cancel", "0" },
             new[] { "channel:read:predictions", "prediction EventSub events and results", "0" },
             new[] { "channel:manage:raids", "!raid (Ivan only, trusted list, confirmed)", "0" },
-            new[] { "channel:manage:vips", "!vip / !unvip", "0" } };
+            new[] { "channel:manage:vips", "!vip / !unvip", "0" },
+            // Reserved: nothing calls these yet. Ivan asked for the widest sign-in Twitch allows so a new feature never means another approval.
+            // Left out on purpose: channel:read:stream_key (the stream key), user:read:email, channel:manage:videos (deletes VODs), user:edit (legacy), whispers:read (PubSub only, which no longer exists).
+            new[] { "channel:manage:moderators", "reserved: adding and removing moderators (Ivan only)", "0" },
+            new[] { "channel:read:vips", "reserved: !vips list", "0" },
+            new[] { "moderator:manage:blocked_terms", "reserved: blocked terms list", "0" },
+            new[] { "moderator:manage:warnings", "reserved: chat warnings", "0" },
+            new[] { "moderator:manage:unban_requests", "reserved: unban requests queue", "0" },
+            new[] { "moderator:read:automod_settings", "reserved: reading AutoMod settings", "0" },
+            new[] { "moderator:read:suspicious_users", "reserved: suspicious user list", "0" },
+            new[] { "moderator:read:shield_mode", "reserved: shield mode state", "0" },
+            new[] { "user:manage:whispers", "reserved: opt-in whisper reminders", "0" },
+            new[] { "channel:manage:schedule", "reserved: stream schedule edits", "0" },
+            new[] { "channel:read:charity", "reserved: charity campaign alerts", "0" },
+            new[] { "channel:read:guest_star", "reserved: Guest Star state", "0" },
+            new[] { "channel:manage:guest_star", "reserved: Guest Star control", "0" },
+            new[] { "channel:read:editors", "reserved: channel editors list", "0" },
+            new[] { "user:read:follows", "reserved: followed channels", "0" },
+            new[] { "user:read:subscriptions", "reserved: subscription checks", "0" },
+            new[] { "user:read:emotes", "reserved: emote lists", "0" },
+            new[] { "user:bot", "reserved: bot accounts in chat (EventSub)", "0" },
+            new[] { "channel:bot", "reserved: bot accounts in chat (EventSub)", "0" },
+            new[] { "analytics:read:games", "reserved: game analytics", "0" },
+            new[] { "moderator:read:moderators", "reserved: moderator list", "0" },
+            new[] { "moderator:read:vips", "reserved: VIP list", "0" },
+            new[] { "channel:manage:ads", "reserved: ad schedule snooze", "0" },
+            new[] { "analytics:read:extensions", "reserved: extension analytics", "0" },
+            new[] { "channel:manage:clips", "reserved: managing clips", "0" },
+            new[] { "channel:manage:extensions", "reserved: extension configuration", "0" },
+            new[] { "editor:manage:clips", "reserved: clips as an editor", "0" },
+            new[] { "moderator:manage:automod_settings", "reserved: AutoMod settings", "0" },
+            new[] { "moderator:read:banned_users", "reserved: ban list", "0" },
+            new[] { "moderator:read:blocked_terms", "reserved: blocked terms list (read)", "0" },
+            new[] { "moderator:read:chat_messages", "reserved: reading chat messages through EventSub", "0" },
+            new[] { "moderator:read:chat_settings", "reserved: reading chat settings (slow, followers-only...)", "0" },
+            new[] { "moderator:read:guest_star", "reserved: Guest Star (moderator view)", "0" },
+            new[] { "moderator:manage:guest_star", "reserved: Guest Star (moderator control)", "0" },
+            new[] { "moderator:read:shoutouts", "reserved: shoutout events", "0" },
+            new[] { "moderator:manage:suspicious_users", "reserved: suspicious user handling", "0" },
+            new[] { "moderator:read:unban_requests", "reserved: unban requests (read)", "0" },
+            new[] { "moderator:read:warnings", "reserved: chat warnings (read)", "0" },
+            new[] { "user:edit:broadcast", "reserved: broadcast configuration", "0" },
+            new[] { "user:read:broadcast", "reserved: broadcast configuration (read)", "0" },
+            new[] { "user:read:blocked_users", "reserved: blocked users list", "0" },
+            new[] { "user:manage:blocked_users", "reserved: blocking and unblocking users", "0" },
+            new[] { "user:manage:chat_color", "reserved: chat colour", "0" },
+            new[] { "user:read:moderated_channels", "reserved: channels the account moderates", "0" },
+            new[] { "user:read:whispers", "reserved: reading whispers", "0" } };
 
         /// <summary>Space-separated list sent to Twitch's authorize page.</summary>
         public static readonly string Scopes = string.Join(" ", ScopeInfo.Select(i => i[0]));
