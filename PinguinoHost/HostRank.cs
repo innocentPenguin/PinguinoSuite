@@ -10,6 +10,8 @@ using Newtonsoft.Json.Linq;
 namespace PinguinoHost
 {
     /// <summary>Stored Rocket League ranks of registered viewers. The streamer's own !rank is RocketRankBot's job (a third-party Twitch bot): a bare "!rank" gets NO answer from us, and nothing here looks up the streamer or any site by itself.
+    /// The three forms: bare !rank = the streamer's rank, RocketRankBot's single reply (we stay silent so there is never a second line); !rank &lt;player&gt; = the stored rank (below);
+    /// !rank lookup &lt;twitch name | Epic name&gt; [playlist] = a focused live search through <see cref="Fetcher"/> (nothing is stored from it; 30 s per person, mods exempt). Without a live source it says so in one line and shows the stored rank.
     /// !rank &lt;player&gt; [1s|2s|3s|4s|hoops|rumble|dropshot|snowday|heatseeker|tournament] answers from the stored value with its date; no automatic refresh. Ranks are fetched ONCE when someone registers (!register by the viewer, or by a mod for them)
     /// through <see cref="Fetcher"/> (empty until a live source is switched on) and a mod refreshes one player with !refreshrank &lt;player&gt;. Mods can always write a rank by hand: !setrank &lt;player&gt; 2v2 Champion I Div II (1400).
     /// Store: Data\runtime\rank_players.json {players:{login:{epic, plat, ranks:{"1v1":"Champion I Div II (999)"}, at, src(register|fetch|setrank), registeredAt}}}. The epic name comes from Core's players.json after the !register went through.</summary>
@@ -185,6 +187,7 @@ namespace PinguinoHost
         {
             if (cmd == "!setrank") { if (mod) Set(args, say); return; }
             if (cmd == "!refreshrank") { if (mod) Refresh(args, say); return; }
+            if (args.Length > 0 && args[0].ToLowerInvariant() == "lookup") { Lookup(user, args.Skip(1).ToArray(), mod, say); return; }
             string only = "", who = "";
             foreach (var a in args) { string l = ListOf(a); if (l != "") only = l; else if (who == "") who = a.TrimStart('@'); }
             if (who == "" || IsOwnerName(who)) return;   // the streamer's own rank is RocketRankBot's: no second line from us
@@ -197,14 +200,54 @@ namespace PinguinoHost
                 else say(who + " has no saved rank. They can type !register <EpicName>; a mod can set one with !setrank " + who + " 2v2 Champion I Div II (1400).");
                 return;
             }
+            string name = (string)r["epic"] ?? login;
+            if (!(r["ranks"] as JObject ?? new JObject()).HasValues) { say(name + " is registered but has no saved rank yet. A mod can set it with !setrank " + login + " 2v2 Champion I Div II (1400)."); return; }
+            say(StoredLine(r, login, only));
+        }
+
+        /// <summary>"Epic - Ranked 1v1: ... | Ranked 2v2: ... (as of Oct 30)" of a stored record</summary>
+        static string StoredLine(JObject r, string login, string only)
+        {
             var ranks = r["ranks"] as JObject ?? new JObject(); string name = (string)r["epic"] ?? login;
-            if (!ranks.HasValues) { say(name + " is registered but has no saved rank yet. A mod can set it with !setrank " + login + " 2v2 Champion I Div II (1400)."); return; }
             var keys = only != "" ? new[] { only } : Lists;
             var parts = keys.Select(k => new { k, v = (string)ranks[k] ?? "" }).Where(x => x.v != "").Select(x => Label(x.k) + ": " + x.v).ToList();
             if (parts.Count == 0 && only == "") parts = AllLists.Select(k => new { k, v = (string)ranks[k] ?? "" }).Where(x => x.v != "").Select(x => Label(x.k) + ": " + x.v).ToList();
-            if (parts.Count == 0) { say(name + ": no " + Label(only) + " rank saved."); return; }
+            if (parts.Count == 0) return name + ": no " + Label(only) + " rank saved.";
             long at = (long?)r["at"] ?? 0;
-            say(name + " - " + string.Join(" | ", parts) + (at > 0 ? " (as of " + Date(at) + ")" : ""));
+            return name + " - " + string.Join(" | ", parts) + (at > 0 ? " (as of " + Date(at) + ")" : "");
+        }
+
+        static readonly Dictionary<string, DateTime> LookupCool = new Dictionary<string, DateTime>();
+        static bool LookupCooling(string user, bool mod)
+        {
+            if (mod) return false; int sec; if (!int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_RANK_LOOKUP_COOL"), out sec)) sec = 30; if (sec <= 0) return false;
+            lock (LookupCool) { DateTime t; if (LookupCool.TryGetValue(user, out t) && (DateTime.UtcNow - t).TotalSeconds < sec) return true; LookupCool[user] = DateTime.UtcNow; return false; }
+        }
+
+        /// <summary>!rank lookup &lt;twitch name | Epic name&gt; [playlist]: a focused live search. Nothing is saved from it. With no live source: one honest line plus the stored rank.</summary>
+        static void Lookup(string user, string[] args, bool mod, Action<string> say)
+        {
+            string only = "", name = "";
+            foreach (var a in args) { string l = ListOf(a); if (l != "" && only == "") only = l; else name += (name == "" ? "" : " ") + a.TrimStart('@'); }
+            name = name.Trim();
+            if (name == "") { say("Usage: !rank lookup <Twitch name or Epic name> [1s|2s|3s|hoops|rumble|dropshot|snowday|heatseeker]"); return; }
+            if (IsOwnerName(name)) { say("That is the streamer: a bare !rank shows his rank."); return; }
+            if (LookupCooling((user ?? "").ToLowerInvariant(), mod)) return;
+            JObject d; lock (L) d = Load(); string login; var r = Find(d, name, out login);
+            string plat = "epic", epic = name; bool hasStored = r != null && (r["ranks"] as JObject)?.HasValues == true;
+            if (r != null) { plat = (string)r["plat"] ?? "epic"; epic = (string)r["epic"] ?? login; } else { string p2, e2; if (Registered(login, out p2, out e2)) { plat = p2; epic = e2; } }
+            string stored = hasStored ? StoredLine(r, login, only) : "";
+            var f = Fetcher;
+            if (f == null) { say("Live lookup isn't available yet; " + (hasStored ? "stored rank: " + stored : "no stored rank for " + name + ".")); return; }
+            if (!Regex.IsMatch(epic, @"^[A-Za-z0-9_.\- ]{2,32}$")) { say("That name does not look like a Twitch or Epic name."); return; }
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                JObject got = null; try { got = f(plat, epic); } catch (Exception ex) { Clog.Warn("rank", "lookup for " + epic + " failed: " + ex.Message); }
+                var live = new JObject(); if (got != null) foreach (var k in AllLists) { string v = Clean((string)got[k] ?? ""); if (v != "") live[k] = v; }
+                if (!live.HasValues) { say("Could not read " + epic + "'s rank right now" + (hasStored ? "; stored rank: " + stored : ".")); return; }
+                var rec = new JObject { { "epic", epic }, { "ranks", live }, { "at", Now() } };
+                say(StoredLine(rec, login, only).Replace(" (as of " + Date(Now()) + ")", "") + " (live)");
+            });
         }
 
         static void Refresh(string[] args, Action<string> say)

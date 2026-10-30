@@ -41,6 +41,23 @@ namespace PinguinoHost
             r = Say("v", "!rank", false, "nobodyhere"); Check(r.Contains("has no saved rank"), "unknown player: " + r);
             Rank.Fetcher = (p, e) => null; r = Say("m", "!refreshrank", true, "amy"); Check(r.Contains("Could not read") && Say("v", "!rank", false, "amy").Contains("Gold I"), "failed refresh keeps the old rank: " + r);
             Rank.Fetcher = null;
+            // 6. !rank lookup <user|epic>: no live source = one honest line plus the stored rank; nothing is fetched or stored
+            r = Say("v1", "!rank", false, "lookup", "amy"); Check(r.StartsWith("Live lookup isn't available yet; stored rank: AmyRL - Ranked 1v1: Gold I Div I (500)"), "lookup without a source shows the stored rank: " + r);
+            r = Say("v2", "!rank", false, "lookup", "AmyRL", "hoops"); Check(r.StartsWith("Live lookup isn't available yet; stored rank: AmyRL - Hoops: Silver II Div I (400)"), "lookup by Epic name, one playlist: " + r);
+            r = Say("v3", "!rank", false, "lookup", "zedd"); Check(r == "Live lookup isn't available yet; no stored rank for zedd.", "lookup of an unknown name: " + r);
+            r = Say("v4", "!rank", false, "lookup"); Check(r.StartsWith("Usage: !rank lookup <Twitch name or Epic name>"), "lookup without a name: " + r);
+            r = Say("v5", "!rank", false, "lookup", "innocentpenguin_"); Check(r == "That is the streamer: a bare !rank shows his rank.", "lookup of the streamer: " + r);
+            Check(Say("v6", "!rank", false) == "", "bare !rank is still silent (RocketRankBot's one reply)");
+            // 7. with a live source: a focused search by Epic name, nothing stored, per-person cooldown (mods exempt)
+            calls.Clear(); Rank.Fetcher = (p, e) => { calls.Add(p + ":" + e); return e == "SomeEpic" ? new JObject { { "1v1", "Platinum I Div I (700)" }, { "2v2", "Diamond I Div II (900)" } } : null; };
+            string lr = null; Rank.Handle("v7", "!rank", new[] { "lookup", "SomeEpic" }, false, m => lr = m); System.Threading.Thread.Sleep(300);
+            Check(lr == "SomeEpic - Ranked 1v1: Platinum I Div I (700) | Ranked 2v2: Diamond I Div II (900) (live)" && calls.Count == 1 && calls[0] == "epic:SomeEpic", "live lookup by Epic name: " + lr + " | " + string.Join(",", calls));
+            Check(Say("v8", "!rank", false, "someepic").Contains("has no saved rank"), "a lookup stores nothing");
+            string cd = null; Rank.Handle("v7", "!rank", new[] { "lookup", "SomeEpic" }, false, m => cd = m); System.Threading.Thread.Sleep(200); Check(cd == null && calls.Count == 1, "30 s cooldown per person: no second answer, no second fetch");
+            string md = null; Rank.Handle("m1", "!rank", new[] { "lookup", "SomeEpic" }, true, m => md = m); Rank.Handle("m1", "!rank", new[] { "lookup", "SomeEpic" }, true, m => md = m); System.Threading.Thread.Sleep(300); Check(calls.Count == 3 && md != null, "mods are not rate limited");
+            string nf = null; Rank.Handle("v9", "!rank", new[] { "lookup", "amy" }, false, m => nf = m); System.Threading.Thread.Sleep(300);
+            Check(nf != null && nf.StartsWith("Could not read AmyRL's rank right now; stored rank: AmyRL - Ranked 1v1: Gold I Div I (500)"), "a failed live read still shows the stored rank: " + nf);
+            Rank.Fetcher = null;
             Console.WriteLine(fails == 0 ? "[ranktest] ALL PASS" : "[ranktest] " + fails + " FAILED");
         }
     }

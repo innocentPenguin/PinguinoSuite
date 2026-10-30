@@ -60,6 +60,8 @@ try:
     r = say('*modguy: !setrank newbie 3v3 Gold I Div I (500)'); chk('mod can write a rank for someone not registered yet', r and r.startswith('Saved newbie'), r)
     r = say('viewer: !rank newbie 3s'); chk('and it answers', r and r.startswith('newbie - Ranked 3v3: Gold I Div I (500)'), r)
     sys.path.insert(0, here)
+    r = say('viewer: !rank lookup nobodyhere'); chk('!rank lookup through chat (fixture source: nothing found, nothing stored)', r is not None and r.startswith('Could not read nobodyhere') or (r or '').startswith("Live lookup isn't available"), r)
+    r = say('viewer2: !rank lookup'); chk('!rank lookup needs a name', r is not None and r.startswith('Usage: !rank lookup'), r)
 finally:
     h.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 print('FAIL ' + '; '.join(fails) if fails else 'PASS stored ranks')
