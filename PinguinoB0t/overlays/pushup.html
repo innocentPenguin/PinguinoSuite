@@ -1,0 +1,38 @@
+<!doctype html>
+<!--
+  PinguinoB0t - PUSHUP widget (scene HUD). A penguin doing a pushup next to "Pushups: N".
+  Data: Host GET /api/pushup -> {enabled:bool, count:int}, polled every 2 s. Visible only while enabled === true (hidden while the key is missing or the Host is unreachable). The number bumps when it changes.
+  Params: host=http://127.0.0.1:8770 | preview=1 (shows 7, no Host needed). Design size 420 x 80.
+-->
+<html><head><meta charset="utf-8"><title>Pushups</title>
+<style>
+  @font-face{font-family:"Nunito";src:url("fonts/nunito-latin-wght-normal.woff2") format("woff2");font-weight:200 1000;font-style:normal;font-display:block}
+  html,body{margin:0;width:420px;height:80px;overflow:hidden;background:transparent;font-family:"Nunito",Rubik,"Segoe UI",Arial,sans-serif}
+  #p{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:10px;box-sizing:border-box;height:66px;padding:0 22px 0 8px;border-radius:999px;background:rgba(18,16,14,.86);border:2px solid #ff7a00;box-shadow:0 0 12px #ff7a0066;color:#fff;font-size:32px;font-weight:700;line-height:1;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.85);transition:opacity .4s}
+  #p.off{opacity:0}
+  #img{height:52px;width:auto;display:block;animation:up 1.4s ease-in-out infinite;transform-origin:50% 100%}
+  @keyframes up{0%,100%{transform:translateY(3px) scaleY(.94)}50%{transform:translateY(-3px) scaleY(1.02)}}
+  #p b{color:#ff9d3c;font-weight:700}
+  #n{display:inline-block;min-width:1ch}
+  #n.bump{animation:bump .5s ease-out}
+  @keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.5);color:#ff9d3c}100%{transform:scale(1)}}
+</style></head><body>
+<div id="p" class="off"><img id="img" src="images/pushup-penguin.png" alt=""><span><b>Pushups:</b> <span id="n">0</span></span></div>
+<script>
+(function(){
+  var Q=new URLSearchParams(location.search), HOST=Q.get("host")||(location.protocol.indexOf("http")===0?location.origin:"http://127.0.0.1:8770");
+  var p=document.getElementById("p"), n=document.getElementById("n"), last=null, fails=0;
+  function show(j){
+    if(!j||j.enabled!==true){p.className="off";return;}
+    var c=parseInt(j.count,10)||0;
+    if(last!==null&&c!==last){n.classList.remove("bump");void n.offsetWidth;n.classList.add("bump");}
+    last=c;n.textContent=c;p.className="";
+  }
+  function bad(){ if(++fails>=3) p.className="off"; }
+  function poll(){fetch(HOST+"/api/pushup").then(function(r){return r.json();}).then(function(j){fails=0;show(j);}).catch(bad);}
+  if(Q.get("preview")==="1") show({enabled:true,count:7});
+  else{poll();setInterval(poll,2000);}
+})();
+</script>
+<script src="overlay-options.js"></script>
+</body></html>
