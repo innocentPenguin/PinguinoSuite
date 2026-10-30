@@ -75,6 +75,7 @@ namespace PinguinoHost
             Economy.CanonTop(ref cmd, ref args);   // "!top points", "!toppoints", "!top watch", "!points top" ... one spelling each
             bool mod = role >= 3;
             if (Economy.IsHiddenCommand(cmd)) { if (role >= 4) Economy.HandleHidden(user, cmd, args); return true; }   // broadcaster only, silent for everyone else (not even the lore bot answers)
+            if (RankedActivity.Intercept(user, cmd, args, role, say)) return true;   // !win/!loss/!undo/!ranked and "!activity ranked|end" for the ranked activity (customs keeps !win while it runs)
             if (Pushups.IsCommand(cmd)) { if (args.Length == 0 && role < 3 && Cooling("u|!pushup|" + me, 5)) return true; Pushups.Handle(user, args, role, say); return true; }   // !pushup / !pushups / !pu: everyone reads, mods change
             if (cmd == "!offlinemode") { OfflineMode.Handle(user, args, role, say); return true; }
             if (Control.IsCommand(cmd)) { Control.Handle(user, cmd, args, role, say); return true; }

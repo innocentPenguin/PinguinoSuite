@@ -634,7 +634,9 @@
       "who": "mods",
       "usage": "!subdone <user>",
       "description": "Marks a bought sub as gifted (you gifted it on Twitch).",
-      "examples": ["!subdone cyfirl"],
+      "examples": [
+        "!subdone cyfirl"
+      ],
       "section": "Viewers",
       "importance": 3
     },
@@ -646,7 +648,9 @@
       "who": "mods",
       "usage": "!subrefund <user>",
       "description": "Cancels a bought sub and gives the points back.",
-      "examples": ["!subrefund cyfirl"],
+      "examples": [
+        "!subrefund cyfirl"
+      ],
       "section": "Viewers",
       "importance": 3
     },
@@ -1823,6 +1827,62 @@
       ],
       "section": "Music",
       "importance": 2
+    },
+    {
+      "command": "!ranked",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Rocket League",
+      "who": "everyone",
+      "usage": "!ranked [week]",
+      "description": "While a ranked session runs: today's wins and losses with the net, e.g. 'Ranked today: 3-1 (+2)'. '!ranked week' gives this week's total. Mods also use !ranked start|stop|win|loss|undo|limit N|reset.",
+      "examples": [
+        "!ranked",
+        "!ranked week"
+      ],
+      "section": "Stream info",
+      "importance": 14
+    },
+    {
+      "command": "!loss",
+      "aliases": [
+        "!l"
+      ],
+      "action": "PinguinoHost",
+      "category": "Rocket League",
+      "who": "mods",
+      "usage": "!win | !loss | !undo",
+      "description": "While the Ranked activity is on (and customs is not), !win (or !w) and !loss (or !l) record the game just played and !undo takes the last mark back; the answer is one line like 'Ranked today: 3-1 (+2)'. While customs run, !win keeps its customs meaning; '!ranked win' and '!ranked loss' always mean ranked.",
+      "examples": [
+        "!win",
+        "!loss",
+        "!undo",
+        "!ranked win"
+      ],
+      "section": "Chat commands",
+      "importance": 14
+    },
+    {
+      "command": "!ranked start",
+      "aliases": [
+        "!ranked stop",
+        "!ranked limit",
+        "!ranked reset",
+        "!activity ranked"
+      ],
+      "action": "PinguinoHost",
+      "category": "Rocket League",
+      "who": "mods",
+      "usage": "!ranked start|stop|limit <1-20>|reset",
+      "description": "Starts or ends the Ranked win/loss tracker (also '!activity ranked' and '!activity end'), sets how many games the overlay shows (default 5) or clears today's games. The tracker keeps each day, so '!ranked week' can answer.",
+      "examples": [
+        "!ranked start",
+        "!ranked limit 6",
+        "!ranked reset",
+        "!ranked stop"
+      ],
+      "section": "Chat commands",
+      "importance": 14
     }
   ]
 }

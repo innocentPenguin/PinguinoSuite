@@ -365,6 +365,7 @@ namespace PinguinoHost
                 if (line == "strikechecktest") { try { StrikeCheckInTest.Run(); } catch (Exception ex) { Console.WriteLine("[strikechecktest] error " + ex); } continue; }
                 if (line == "alerttest") { try { AlertBridgeTest.Run(); } catch (Exception ex) { Console.WriteLine("[alerttest] error " + ex); } continue; }
                 if (line == "scopetest") { try { ScopeTest.Run(); } catch (Exception ex) { Console.WriteLine("[scopetest] error " + ex); } continue; }
+                if (line == "rankedtest") { try { RankedTest.Run(); } catch (Exception ex) { Console.WriteLine("[rankedtest] error " + ex); } continue; }
                 if (line == "ranktest") { try { RankTest.Run(); } catch (Exception ex) { Console.WriteLine("[ranktest] error " + ex); } continue; }
                 if (line.StartsWith("emojitest ")) { Console.WriteLine("[emojitest] " + string.Join(" ", WheelEmoji.Interests(line.Substring(10).Trim().ToLowerInvariant()))); continue; }
                 if (line.StartsWith("simsay ")) { try { Console.WriteLine("[simsay] " + SimSay.Say(JObject.Parse(line.Substring(7))).ToString(Newtonsoft.Json.Formatting.None)); } catch (Exception ex) { Console.WriteLine("[simsay] error " + ex.Message); } continue; }

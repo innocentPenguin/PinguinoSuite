@@ -87,6 +87,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | Command | Usage | What it does |
 |---|---|---|
 | `!rank` | `!rank <player> [1s\|2s\|3s\|4s\|hoops\|rumble\|dropshot\|snowday\|heatseeker]` | The saved Rocket League ranks of a registered player (1v1, 2v2, 3v3), with the date they were saved; add a playlist (2s, dropshot, hoops...) for just that one. Ranks are saved once when someone registers and updated by a mod, not refreshed by themselves. The streamer's own !rank is RocketRankBot's. |
+| `!ranked` | `!ranked [week]` | While a ranked session runs: today's wins and losses with the net, e.g. 'Ranked today: 3-1 (+2)'. '!ranked week' gives this week's total. Mods also use !ranked start\|stop\|win\|loss\|undo\|limit N\|reset. |
 
 ### Stream
 
@@ -248,6 +249,8 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 |---|---|---|
 | `!setrank` | `!setrank <player> 1v1\|2v2\|3v3 <rank text>` | Mods write a player's rank by hand. You can also paste a whole 'Ranked 1v1: ... \| Ranked 2v2: ...' line after the name. |
 | `!refreshrank` | `!refreshrank <player>` | Looks one player's ranks up again (one lookup) and saves them with today's date. Does nothing but say so while the live lookup is switched off; use !setrank then. |
+| `!loss` | `!win \| !loss \| !undo` | While the Ranked activity is on (and customs is not), !win (or !w) and !loss (or !l) record the game just played and !undo takes the last mark back; the answer is one line like 'Ranked today: 3-1 (+2)'. While customs run, !win keeps its customs meaning; '!ranked win' and '!ranked loss' always mean ranked. |
+| `!ranked start` | `!ranked start\|stop\|limit <1-20>\|reset` | Starts or ends the Ranked win/loss tracker (also '!activity ranked' and '!activity end'), sets how many games the overlay shows (default 5) or clears today's games. The tracker keeps each day, so '!ranked week' can answer. |
 
 ### Timers
 
