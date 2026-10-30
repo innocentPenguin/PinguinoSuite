@@ -24,10 +24,10 @@ CHAT_DEFAULT = {
     # chat look sliders: every default is the look the overlay always had (font_px 0 = use the `size` step)
     "font_px": 23, "line_height": 1.3, "row_padding": 0, "row_gap": 11, "name_size": 100, "badge_size": 100, "width": 100, "show_bots": False,
     # Synchra look: no box, outlined bold text, pill badges first; "classic" keeps the older flat look
-    "look": "synchra", "platform_pill": True, "badge_style": "image", "hide_commands": True,
+    "look": "synchra", "platform_pill": False, "names_v": 1, "badge_style": "image", "hide_commands": True,
 }
 CHAT_SLIDERS = {"font_px": (0, 140), "line_height": (1.0, 2.5), "row_padding": (0, 30), "row_gap": (0, 40), "name_size": (50, 200), "badge_size": (50, 250), "width": (20, 100)}
-CHAT_OURS = ("max_messages", "accent_color", "name_color_mode", *CHAT_SLIDERS, "show_bots", "look", "platform_pill", "badge_style", "hide_commands")      # not part of a Synchra export
+CHAT_OURS = ("max_messages", "accent_color", "name_color_mode", *CHAT_SLIDERS, "show_bots", "look", "platform_pill", "names_v", "badge_style", "hide_commands")      # not part of a Synchra export
 ACTIVITY_DEFAULT = {
     "canvas_scale": 1, "size": "l", "text_color": "#ffffff", "text_shadow_color": "#000000", "background_color": "#14110d", "background_opacity": 0.85,
     "border_width": 0, "border_color": "", "border_radius": 8, "font_family_id": "nunito", "message_fade_duration_seconds": 12,
@@ -62,6 +62,13 @@ def migrate_chat(saved):
     take the new 23 px size when the old big one was never changed by hand, and switch to the Synchra look. Idempotent; other keys are kept."""
     if not isinstance(saved, dict):
         return saved
+    d = _migrate_look(saved)
+    if "names_v" not in d:                                # @handle names identify YouTube/TikTok now: the text TW/YT/TT pill goes off once for older rows
+        d = dict(d, names_v=1, platform_pill=False)
+    return d
+
+
+def _migrate_look(saved):
     if "look" in saved:
         return dict(saved, font_family_id="nunito") if saved.get("font_family_id") in ("rubik", "inter") else saved   # interim defaults; Synchra's own font is Nunito
     d = dict(saved, look="synchra")
@@ -184,6 +191,7 @@ def sanitize(kind, src):
         d["badge_style"] = s.get("badge_style") if s.get("badge_style") in ("image", "pill") else "image"
         for k in ("platform_pill", "hide_commands"):
             d[k] = s[k] if isinstance(s.get(k), bool) else CHAT_DEFAULT[k]
+        d["names_v"] = 1                                   # every save is the current model: a hand-set platform_pill is kept from here on
     elif kind == "activity":
         ty = [t for t in (s.get("types") if isinstance(s.get("types"), list) else d["types"]) if t in ACT_TYPES]
         d["types"] = ty

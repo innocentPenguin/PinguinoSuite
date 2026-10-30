@@ -1,6 +1,7 @@
 """OBS chat overlay look options: defaults keep the current look, sanitize clamps, Synchra round trip, show-bots, page hooks."""
 import pathlib
 
+import pytest
 import obs
 
 NEW = ("font_px", "line_height", "row_padding", "row_gap", "name_size", "badge_size", "width", "show_bots")
@@ -70,7 +71,7 @@ def test_migration_unpins_the_old_big_look_and_keeps_the_rest():
 
 def test_look_keys_and_commands():
     s = obs.sanitize("chat", {"look": "x", "badge_style": "y", "platform_pill": "no", "hide_commands": 3})
-    assert (s["look"], s["badge_style"], s["platform_pill"], s["hide_commands"]) == ("synchra", "image", True, True)
+    assert (s["look"], s["badge_style"], s["platform_pill"], s["hide_commands"]) == ("synchra", "image", False, True)
     assert obs.sanitize("chat", {"look": "classic", "badge_style": "pill"})["look"] == "classic"
     cmd = {"user": "x", "platform": "twitch", "event": "", "text": "!lurk"}
     assert obs.hidden("chat", s, cmd) and not obs.hidden("chat", s, dict(cmd, text="hi !lurk"))
@@ -120,3 +121,38 @@ def test_font_default_is_nunito_bundled_and_hand_picked_fonts_survive():
 def test_page_has_synchra_notice_markup():
     html = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text(encoding="utf-8")
     assert "pill ev" in html and "nchip" in html
+
+
+def test_platform_pill_off_by_default_and_migrated_once():
+    assert obs.CHAT_DEFAULT["platform_pill"] is False
+    old = obs.migrate_chat({"look": "synchra", "platform_pill": True, "font_family_id": "nunito"})
+    assert old["platform_pill"] is False and old["names_v"] == 1
+    assert obs.migrate_chat(old) == old                                         # idempotent
+    hand = obs.sanitize("chat", dict(old, platform_pill=True))                  # a save after the migration is kept as set
+    assert hand["platform_pill"] is True and obs.migrate_chat(hand)["platform_pill"] is True
+    assert obs.migrate_chat({"font_px": 40})["platform_pill"] is False
+
+
+def test_page_has_handle_names():
+    html = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text(encoding="utf-8")
+    assert "function shownName" in html and "hashCol" in html and "'@' +" in html
+
+
+def test_shown_names_three_platforms_and_fallbacks():
+    import json
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    html = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text(encoding="utf-8")
+    fn = re.search(r"function shownName\(m\) \{.*?\n\}\n", html, re.S).group(0)
+    cases = [({"platform": "youtube", "user": "@ann_yt", "display": "Ann Channel"}, "@ann_yt"),
+             ({"platform": "youtube", "user": "ann channel", "display": "Ann Channel"}, "@AnnChannel"),
+             ({"platform": "tiktok", "user": "bob.tt", "display": "Bob Nick"}, "@bob.tt"),
+             ({"platform": "tiktok", "user": "", "display": "Bob"}, "@Bob"),
+             ({"platform": "twitch", "user": "cy", "display": "Cy"}, "Cy")]
+    js = fn + "const S={look:'synchra'};console.log(JSON.stringify(" + json.dumps([c for c, _ in cases]) + ".map(shownName)));"
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == [w for _, w in cases]

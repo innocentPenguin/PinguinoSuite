@@ -124,9 +124,18 @@ function badges(m) {
   return out.join('');
 }
 function logo(m) { return S.provider_logo ? `<span class="chat-provider p-${esc(m.platform)}" title="${esc(m.platform)}">${PLET[m.platform] || '?'}</span>` : ''; }
+function shownName(m) {       // YouTube "@handle", TikTok "@uniqueId", Twitch the display name (classic look keeps the plain name)
+  const plain = m.display || m.user;
+  if (S.look === 'classic') return plain;
+  if (m.platform === 'youtube') return /^@\S/.test(m.user || '') ? m.user : '@' + String(m.display || m.user || '').replace(/\s+/g, '').replace(/^@/, '');
+  if (m.platform === 'tiktok') return '@' + String(m.user || m.display || '').replace(/\s+/g, '').replace(/^@/, '');
+  return plain;
+}
+function hashCol(n) { let h = 0; for (const c of String(n).toLowerCase()) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `hsl(${h % 360},72%,66%)`; }
 function chatHtml(m) {
-  const name = esc(m.display || m.user);
-  const own = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '', col = S.name_color_mode === 'none' ? S.text_color : own || (S.name_color_mode === 'own' ? S.text_color : PCOL[m.platform] || '#ff8a1f');
+  const name = esc(shownName(m));
+  const own = /^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '', stable = S.look !== 'classic' && (m.platform === 'youtube' || m.platform === 'tiktok') ? hashCol(m.user || m.display) : '';
+  const col = S.name_color_mode === 'none' ? S.text_color : own || (S.name_color_mode === 'own' ? S.text_color : stable || PCOL[m.platform] || '#ff8a1f');
   if (m.event && S.look !== 'classic') {          // Synchra notice: orange event pill, dark name chip, then the text
     const rest = esc((m.text || '').replace(new RegExp('^' + (m.display || m.user).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), ''));
     return `<div class="chat-message-container chat-notice"><span class="chat-message">${logo(m)}<span class="pill ev">${esc(LABEL[m.event] || m.event)}</span><span class="nchip"><span class="chat-username">${name}</span></span><span class="chat-text">${rest}</span></span></div>`;
