@@ -528,6 +528,28 @@
     if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || (j.error ? 'PM name: ' + j.error : 'PM name was not set') };
     return { kind: 'good', text: 'Private match name set: ' + (typeof j.pmName === 'string' && j.pmName ? j.pmName : name) };
   }
+  /* YouTube shop orders (GET /api/ytorders): who ordered what, how long they wait; ids in "gone" are hidden at once (optimistic) */
+  function ytOrdersView(r, gone, now) {
+    if (!r || r.status === 404 || r.status === 0) return { state: 'none', rows: [], text: 'Host does not offer shop orders yet' };
+    const j = r.json && typeof r.json === 'object' ? r.json : null;
+    if (!r.ok || !j || j.ok === false || !Array.isArray(j.orders)) return { state: 'error', rows: [], text: 'Shop orders: ' + ((j && j.error) || r.error || 'no answer') };
+    const t = now == null ? Date.now() : now, skip = gone || new Set(), rows = [];
+    for (const o of j.orders) {
+      if (!o || o.id == null || (o.status && o.status !== 'pending') || skip.has(String(o.id))) continue;
+      const p = personInfo({ username: o.login, display: o.display, platform: o.platform || 'youtube' }), who = p.name || String(o.display || '').trim() || 'Someone';
+      const label = String(o.label || o.item || 'Order').trim(), price = o.price == null || o.price === '' ? '' : String(o.price);
+      const mins = typeof o.createdAt === 'number' && o.createdAt > 0 ? Math.max(0, Math.floor((t - o.createdAt * 1000) / 60000)) : null;
+      rows.push({ id: String(o.id), who, tag: p.tag || 'YT', label, price, mins, text: '#' + o.id + ' ' + who + ' - ' + label + (price ? ' (' + price + ')' : '') + (mins == null ? '' : ' - waiting ' + mins + ' min') });
+    }
+    return rows.length ? { state: 'list', rows, text: '' } : { state: 'empty', rows, text: 'No pending orders' };
+  }
+  /* per-key in-flight guard: begin() is true once until end(); a second click while the first is running sends nothing */
+  function createBusy() { const s = new Set(); return { begin: k => (s.has(String(k)) ? false : (s.add(String(k)), true)), end: k => { s.delete(String(k)); }, has: k => s.has(String(k)) }; }
+  function ytOrderResult(r, action, id, errText) {
+    const j = r && r.json && typeof r.json === 'object' ? r.json : {};
+    if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || ('Order #' + id + ': ' + (j.error || (r && r.error) || 'not changed')) };
+    return { kind: 'good', text: action === 'cancel' ? 'Order #' + id + ' cancelled, points refunded' : 'Order #' + id + ' marked done' };
+  }
   /* One raid prep request at a time; the same target is not sent again for 10 s after a send that the Host accepted or that is still unknown; a failed send frees it */
   function createRaidGuard(clock) {
     const now = clock || Date.now; let busy = false, last = null;
@@ -537,5 +559,5 @@
       get busy() { return busy; },
     };
   }
-  return { pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { createBusy, ytOrdersView, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

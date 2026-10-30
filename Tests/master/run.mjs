@@ -513,6 +513,26 @@ await t('PM name: current value from the state, Set posts /api/customs/mod pm, o
   delete st.customs.pmName;
 });
 
+await t('YouTube shop orders: pending list with platform names, empty/404 are quiet, Done and Cancel post once, errors roll back', async () => {
+  const mk = () => ({ ok: true, status: 200, json: { ok: true, orders: [{ id: 7, login: 'yt:UCabc123', display: 'Anna', platform: 'youtube', label: '1v1 vs Peng', price: 500, status: 'pending', createdAt: 1000 }] } });
+  let v = C.ytOrdersView(mk(), new Set(), 1000 * 1000 + 5 * 60000); assert.equal(v.state, 'list'); assert.equal(v.rows[0].text, '#7 Anna - 1v1 vs Peng (500) - waiting 5 min'); assert.equal(v.rows[0].tag, 'YT'); assert.ok(!/yt:UC/.test(JSON.stringify(v)), 'no raw channel id');
+  const r0 = await api.get('/api/ytorders'); v = C.ytOrdersView(r0, new Set(), 1500 * 1000); assert.deepEqual(v.rows.map(x => x.id), ['7', '8'], 'done orders are not listed'); assert.equal(v.rows[1].mins, 3);
+  assert.equal(C.ytOrdersView(r0, new Set(['7']), 1500 * 1000).rows.length, 1, 'optimistic removal');
+  assert.deepEqual([C.ytOrdersView({ ok: true, status: 200, json: { ok: true, orders: [] } }).state, C.ytOrdersView({ ok: true, status: 200, json: { ok: true, orders: [] } }).text], ['empty', 'No pending orders']);
+  const q = C.ytOrdersView({ ok: false, status: 404, json: {} }); assert.deepEqual([q.state, q.text], ['none', 'Host does not offer shop orders yet']); assert.equal(C.ytOrdersView({ ok: false, status: 0, json: null }).state, 'none');
+  assert.equal(C.ytOrdersView({ ok: false, status: 500, json: null, error: 'boom' }).state, 'error'); assert.equal(C.ytOrdersView(mk(), new Set(), 0).rows[0].mins, 0, 'a future time never shows a negative wait');
+  st.yt.posts = [];
+  let r = await api.post('/api/ytorders', { action: 'done', id: 7, by: 'master-view' }, { timeoutMs: 15000 }); let res = C.ytOrderResult(r, 'done', '7'); assert.deepEqual([res.kind, res.text], ['good', 'Order #7 marked done']); assert.deepEqual(st.yt.posts, [{ action: 'done', id: 7, by: 'master-view' }]);
+  r = await api.post('/api/ytorders', { action: 'cancel', id: 8, by: 'master-view' }); res = C.ytOrderResult(r, 'cancel', '8'); assert.equal(res.text, 'Order #8 cancelled, points refunded');
+  assert.equal(C.ytOrdersView(await api.get('/api/ytorders')).state, 'empty');
+  r = await api.post('/api/ytorders', { action: 'done', id: 7 }); res = C.ytOrderResult(r, 'done', '7'); assert.equal(res.kind, 'bad'); assert.match(res.text, /already done/);
+  st.yt.orders.find(o => o.id === 7).status = 'pending'; st.yt.fail = true; r = await api.post('/api/ytorders', { action: 'cancel', id: 7 }); res = C.ytOrderResult(r, 'cancel', '7'); assert.equal(res.kind, 'bad'); assert.match(res.text, /mods only/); st.yt.fail = false;
+  st.yt.missing = true; assert.equal(C.ytOrdersView(await api.get('/api/ytorders')).state, 'none'); r = await api.post('/api/ytorders', { action: 'done', id: 7 }); assert.equal(r.status, 404); assert.match(C.ytOrderResult(r, 'done', '7', 'Orders: the Host has no shop orders yet').text, /no shop orders/); st.yt.missing = false;
+  const b = C.createBusy(); assert.deepEqual([b.begin(7), b.begin('7'), b.begin(8)], [true, false, true], 'a second click on a row in flight sends nothing'); b.end(7); assert.equal(b.begin(7), true);
+  const js = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8'); for (const frag of ["api.post('/api/ytorders', { action, id: ", 'timeoutMs: 15000', 'if (!b.disabled && armed(b)) ytAct(b)', 'if (bad) ytS.gone.delete(id)', "ui.tab === 'customs'"]) assert.ok(js.includes(frag), 'master.js has ' + frag);
+  st.yt.orders.find(o => o.id === 7).status = 'pending'; st.yt.orders.find(o => o.id === 8).status = 'pending';
+});
+
 await t('Songify button: view follows the module state, falls back to the last action (marked), unknown when nothing is known', () => {
   let v = C.songifyView({ songify: false }, null); assert.equal(v.name, 'songify'); assert.equal(v.label, 'Hand off to Songify'); assert.equal(v.known, true); assert.doesNotMatch(v.text, /last action/);
   v = C.songifyView({ songify: true }, null); assert.equal(v.name, 'takeback'); assert.equal(v.label, 'Take back'); assert.match(v.text, /Songify has the music/);
