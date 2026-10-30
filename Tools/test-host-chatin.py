@@ -114,7 +114,7 @@ try:
     chk('Multi 502: one attempt only (no retry)', len(sends) == n + 1, sends[n:])
     mode['code'] = 200
     # /api/say with platform (Chatty / Helper answering a YouTube viewer)
-    n = len(sends); c, j = post('/api/say', {'text': 'Chatty says hi', 'bot': 'chat', 'platform': 'youtube', 'reply_to': 'yt-msg-7'})
+    n = len(sends); c, j = post('/api/say', {'text': 'Chatty says hi', 'bot': 'chat', 'platform': 'youtube', 'reply_to': 'yt-msg-7'}); time.sleep(0.6)   # YouTube sends go through the paced queue (thread)
     chk('/api/say platform=youtube -> Multi youtube reply, ok', c == 200 and j.get('ok') and sends[n:] and sends[n][1] == {'platform': 'youtube', 'text': 'Chatty says hi', 'reply_to': 'yt-msg-7'}, (j, sends[n:]))
     n = len(sends); c, j = post('/api/say', {'text': 'Chatty says hi', 'bot': 'chat', 'platform': 'youtube', 'reply_to': 'yt-msg-8'})
     chk('/api/say same text again on youtube: duplicate', j.get('duplicate') is True and len(sends) == n, j)

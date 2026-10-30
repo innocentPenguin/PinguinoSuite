@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -172,14 +173,58 @@ namespace PinguinoHost
         {
             string parent, login; ReplyCtx.Current(out parent, out login);
             if (SaidRecently(pf, line)) { via = "duplicate: the same line was said moments ago"; Clog.Info("chat", "not sent to " + pf + ", same line said moments ago"); return true; }
+            if (pf == "youtube" && YtQueueOn) { bool q = YtEnqueue(line, parent, out via); ReplyCtx.NoteOut(q, line); return q; }
+            return PostToMulti(pf, line, parent, out via, true);
+        }
+        static bool PostToMulti(string pf, string line, string parent, out string via, bool note)
+        {
             var body = new JObject { { "platform", pf }, { "text", line } }; if (!string.IsNullOrEmpty(parent)) body["reply_to"] = parent;
             JObject r = TestMultiSend != null ? TestMultiSend("/api/send", body) : AlertBridge.Post("/api/send", body);
             bool ok = r != null && (bool?)r["ok"] == true;
             via = ok ? "multi:" + pf : "multi refused " + pf + ": " + (((string)r?["text"]) ?? ((string)r?["detail"]) ?? "no answer");
             if (!ok) Clog.Warn("chat", "send to " + pf + " failed (no Twitch fallback): " + via);
             if (ok) ChatInStats.Reply(); else ChatInStats.SendError();
-            ReplyCtx.NoteOut(ok, line);
+            if (note) ReplyCtx.NoteOut(ok, line);
             return ok;
+        }
+
+        // ---- YouTube outbound queue: YouTube answers 403 "posted too many chat messages" when two lines go out within a couple of seconds (10-29: two newcomers 2 s apart, the second welcome died).
+        // One FIFO for the platform, minimum spacing between sends, one retry after a 403 (with a backoff, in order), bounded; Twitch sends never wait for it. The same line is never queued twice (SaidRecently ran before).
+        // In the sim / tests the spacing is 0 unless PINGUINO_YT_SPACING_MS says otherwise.
+        sealed class YtItem { public string Line, Parent; public int Tries; public DateTime Queued = DateTime.UtcNow; }
+        static readonly Queue<YtItem> _ytQ = new Queue<YtItem>(); static readonly object _ytL = new object(); static Thread _ytT; static DateTime _ytLast = DateTime.MinValue; static DateTime _ytSlowUntil = DateTime.MinValue;
+        public static bool YtQueueOn = true; public const int YtQueueMax = 30;
+        static int YtSpacingMs { get { int v; string e = Environment.GetEnvironmentVariable("PINGUINO_YT_SPACING_MS"); if (e != null && int.TryParse(e, out v)) return Math.Max(0, v); return SimMode ? 0 : 4500; } }
+        static int YtBackoffMs { get { int v; string e = Environment.GetEnvironmentVariable("PINGUINO_YT_BACKOFF_MS"); if (e != null && int.TryParse(e, out v)) return Math.Max(0, v); return SimMode ? 300 : 15000; } }
+        public static int YtQueueLength() { lock (_ytL) return _ytQ.Count; }
+        static bool YtEnqueue(string line, string parent, out string via)
+        {
+            lock (_ytL)
+            {
+                if (_ytQ.Count >= YtQueueMax) { via = "youtube queue full (" + YtQueueMax + "): line dropped"; Clog.Warn("chat", via + ": " + (line.Length > 60 ? line.Substring(0, 60) : line)); ChatInStats.SendError(); return false; }
+                _ytQ.Enqueue(new YtItem { Line = line, Parent = parent });
+                if (_ytT == null || !_ytT.IsAlive) { _ytT = new Thread(YtLoop) { IsBackground = true, Name = "yt-send" }; _ytT.Start(); }
+                Monitor.PulseAll(_ytL);
+            }
+            via = "queued for youtube"; return true;
+        }
+        static void YtLoop()
+        {
+            while (true)
+            {
+                YtItem it;
+                lock (_ytL) { while (_ytQ.Count == 0) { if (!Monitor.Wait(_ytL, 60000) && _ytQ.Count == 0) { _ytT = null; return; } } it = _ytQ.Peek(); }
+                int space = YtSpacingMs; if (DateTime.UtcNow < _ytSlowUntil) space = Math.Max(space, SimMode ? 0 : 8000);
+                double wait = space - (DateTime.UtcNow - _ytLast).TotalMilliseconds; if (wait > 0) Thread.Sleep((int)wait);
+                string via; bool ok;
+                try { ok = PostToMulti("youtube", it.Line, it.Parent, out via, false); } catch (Exception ex) { ok = false; via = "exception: " + ex.Message; }
+                _ytLast = DateTime.UtcNow;
+                bool rate = !ok && (via.IndexOf("too many", StringComparison.OrdinalIgnoreCase) >= 0 || via.IndexOf("403", StringComparison.Ordinal) >= 0 || via.IndexOf("rate", StringComparison.OrdinalIgnoreCase) >= 0);
+                if (rate) _ytSlowUntil = DateTime.UtcNow.AddMinutes(2);
+                if (!ok && rate && it.Tries == 0) { it.Tries++; Clog.Info("chat", "youtube said too many messages: one retry in " + YtBackoffMs + " ms, the queue waits"); Thread.Sleep(YtBackoffMs); continue; }   // the item stays at the head: order kept
+                lock (_ytL) { if (_ytQ.Count > 0) _ytQ.Dequeue(); }
+                if (!ok) Clog.Warn("chat", "youtube line dropped after " + (it.Tries + 1) + " try(ies): " + via);
+            }
         }
         /// <summary>true when this name is one of our own bot sender accounts or the channel itself (loop guard for chat-in)</summary>
         public static bool IsOwnBotName(string name)

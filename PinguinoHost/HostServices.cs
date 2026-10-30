@@ -265,11 +265,18 @@ namespace PinguinoHost
             {
                 while (true)
                 {
-                    var c = await l.GetContextAsync(); bool keepOpen = false;
+                    var c = await l.GetContextAsync();
+                    Task.Run(() => Serve(c, roots));   // one request must never hold up the others: a slow handler once blocked /api/chat-in past Multi's 2 s timeout (10-29 18:36, one YouTube line dropped)
+                }
+            });
+        }
+        static void Serve(HttpListenerContext c, string[] roots)
+        {
+            bool keepOpen = false;
                     try
                     {
-                        if (c.Request.HttpMethod == "GET" && c.Request.Url.AbsolutePath == "/api/events" && HostApi.EventsOk(c.Request)) { keepOpen = Events.Accept(c); continue; }   // SSE: a long-lived response owned by Events
-                        if (HostApi.Handle(c)) continue;
+                        if (c.Request.HttpMethod == "GET" && c.Request.Url.AbsolutePath == "/api/events" && HostApi.EventsOk(c.Request)) { keepOpen = Events.Accept(c); return; }   // SSE: a long-lived response owned by Events
+                        if (HostApi.Handle(c)) return;
                         string rel = Uri.UnescapeDataString(c.Request.Url.AbsolutePath.TrimStart('/')); if (rel == "") rel = "queue.html";
                         string file = null;
                         foreach (var r in roots.Where(x => !string.IsNullOrEmpty(x) && Directory.Exists(x)))
@@ -289,8 +296,6 @@ namespace PinguinoHost
                     }
                     catch (Exception) { try { c.Response.StatusCode = 500; } catch (Exception) { } }
                     finally { if (!keepOpen) { try { c.Response.Close(); } catch (Exception) { } } }
-                }
-            });
         }
     }
 }
