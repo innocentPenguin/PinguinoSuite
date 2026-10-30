@@ -1,59 +1,46 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace PinguinoHost
 {
-    /// <summary>sim line "ranktest": runs the !rank source chain against a fake fetcher (all fail / partial fail / stale / backoff / prefix / fuzzy) and prints PASS/FAIL lines</summary>
+    /// <summary>sim line "ranktest": stored ranks with a fake live source (register fetches once, !rank answers from the store with its date, !refreshrank fetches once, no source = by hand) and prints PASS/FAIL lines</summary>
     public static class RankTest
     {
-        const string Body = "{\"data\":{\"platformInfo\":{\"platformUserHandle\":\"Alice\"},\"segments\":[{\"type\":\"playlist\",\"attributes\":{\"playlistId\":11},\"metadata\":{\"name\":\"Ranked Doubles 2v2\"},\"stats\":{\"tier\":{\"metadata\":{\"name\":\"Champion I\"}},\"division\":{\"metadata\":{\"name\":\"Division II\"}},\"rating\":{\"value\":\"1400\"}}}]}}";
         static int fails;
         static void Check(bool ok, string what) { Console.WriteLine((ok ? "PASS " : "FAIL ") + what); if (!ok) fails++; }
-        static string Ask(string who, params string[] extra)
-        {
-            string said = ""; Rank.Handle("viewer", "!rank", new[] { who }.Concat(extra).Where(x => x != "").ToArray(), false, m => said += (said == "" ? "" : " || ") + m); return said;
-        }
+        static string Say(string user, string cmd, bool mod, params string[] args) { string said = ""; Rank.Handle(user, cmd, args, mod, m => said += (said == "" ? "" : " || ") + m); return said; }
         public static void Run()
         {
-            var calls = new List<string>(); string dir = HostApi.DataDir;
-            // 1. every source fails and nothing is cached: a plain "no data", never "paused"
-            Rank.TestFetch = (s, p, n) => { calls.Add(s + "/" + p + "/" + n); return null; };
-            string r = Ask("zoe123");
-            Check(r != "" && !r.ToLowerInvariant().Contains("paused") && r.Contains("No rank data"), "all sources fail, no cache: '" + r + "'");
-            // 2. partial failure: tracker-api fails, the next source works -> answered, becomes the first choice next time
-            Rank.TestClearBackoff(); calls.Clear(); Rank.TestFetch = (s, p, n) => { calls.Add(s); return s == "tracker-api-alt" ? Body : null; };
-            r = Ask("bob2000");
-            Check(r.Contains("Ranked 2v2: Champion I Div II (1400)") && calls.SequenceEqual(new[] { "tracker-api", "tracker-api-alt" }), "partial failure answered by the 2nd source: " + r + " | " + string.Join(",", calls));
-            Rank.TestAge("epic:bob2000", 4000);
-            calls.Clear(); r = Ask("bob2000");
-            Check(calls.FirstOrDefault() == "tracker-api-alt" && r.Contains("1400"), "the source that worked last time is asked first: " + string.Join(",", calls));
-            // 3. per-source backoff: a failing source is not retried at once for another player
-            calls.Clear(); Ask("carl9999");
-            Check(!calls.Contains("tracker-api"), "tracker-api is in backoff, only the others are tried: " + string.Join(",", calls));
-            // 4. stale: cache 5 h old, every source fails -> old values with the age
-            Rank.TestFetch = (s, p, n) => Body; Rank.TestReset(); Ask("dave4444");
-            Rank.TestAge("epic:dave4444", 5 * 3600); Rank.TestFetch = (s, p, n) => null; Rank.TestClearBackoff();
-            r = Ask("dave4444");
-            Check(r.Contains("1400") && r.Contains("(as of 5h ago)"), "stale cache answers with its age: " + r);
-            // 5. platform prefix reaches the fetcher
-            string seen = ""; Rank.TestFetch = (s, p, n) => { seen = p + "/" + n; return Body; }; Rank.TestClearBackoff();
-            r = Ask("steam:SomeGuy");
-            Check(seen.ToLowerInvariant() == "steam/someguy" && r.Contains("1400"), "steam: prefix: " + seen);
-            // 6. fuzzy match against a known chatter (players.json) and the learned map
-            File.WriteAllText(Path.Combine(dir, "players.json"), "{\"flipreset\":{\"Username\":\"flipreset\",\"Platform\":\"epic\",\"GameId\":\"FlipReset99\"}}");
-            seen = ""; Rank.TestClearBackoff(); r = Ask("flipresett");
-            Check(seen == "epic/flipreset99", "fuzzy chatter name -> epic name: " + seen);
-            // 7. notfound is definitive, not a failure of the chain
-            Rank.TestFetch = (s, p, n) => "{\"errors\":[{\"code\":\"CollectorResultStatus::NotFound\"}]}"; Rank.TestClearBackoff();
-            r = Ask("nobodyhere1");
-            Check(r.Contains("Could not find"), "not found: " + r);
-            // 8. health is exposed per source
-            var h = Rank.HealthJson();
-            Check(h["sources"]["tracker-api"] != null && (string)h["lastGoodSource"] != null, "health lists every source: " + h["sources"].Count());
-            Rank.TestFetch = null;
+            string dir = HostApi.DataDir; var calls = new System.Collections.Generic.List<string>(); Rank.RegisterDelayMs = 50;
+            File.WriteAllText(Path.Combine(dir, "players.json"), "{\"bob\":{\"Username\":\"bob\",\"Platform\":\"epic\",\"GameId\":\"BobRL\"}}");
+            // 1. no live source: register saves the name only, !rank says so, a mod writes it by hand
+            Rank.Fetcher = null; Rank.OnRegister("bob", new[] { "BobRL" }, false); System.Threading.Thread.Sleep(400);
+            string r = Say("v", "!rank", false, "bob");
+            Check(r.Contains("BobRL is registered but has no saved rank yet"), "registered, no rank: " + r);
+            r = Say("m", "!refreshrank", true, "bob"); Check(r.Contains("Live rank lookup is off"), "refresh without a source: " + r);
+            r = Say("m", "!setrank", true, "bob", "2v2", "Champion", "I", "Div", "II", "(1400)"); Check(r.StartsWith("Saved BobRL's rank (as of "), "setrank: " + r);
+            r = Say("v", "!rank", false, "bob"); Check(r.StartsWith("BobRL - Ranked 2v2: Champion I Div II (1400) (as of "), "answers from the store: " + r);
+            // 2. the streamer is RocketRankBot's: nothing from us
+            Check(Say("v", "!rank", false) == "" && Say("v", "!rank", false, "innocentpenguin_") == "" && Say("v", "!rank", false, "2s") == "", "bare !rank and the streamer's name stay silent");
+            // 3. a live source: one fetch at register, none at !rank, one at !refreshrank
+            File.WriteAllText(Path.Combine(dir, "players.json"), "{\"bob\":{\"Username\":\"bob\",\"Platform\":\"epic\",\"GameId\":\"BobRL\"},\"amy\":{\"Username\":\"amy\",\"Platform\":\"epic\",\"GameId\":\"AmyRL\"}}");
+            Rank.Fetcher = (p, e) => { calls.Add(p + ":" + e); return new JObject { { "1v1", "Gold I Div I (500)" }, { "2v2", "Platinum II Div III (800)" }, { "3v3", "Diamond I Div II (900)" }, { "hoops", "Silver II Div I (400)" } }; };
+            Rank.OnRegister("amy", new[] { "AmyRL" }, false); System.Threading.Thread.Sleep(400);
+            r = Say("v", "!rank", false, "amy"); Check(calls.Count == 1 && r.StartsWith("AmyRL - Ranked 1v1: Gold I Div I (500) | Ranked 2v2: Platinum II Div III (800) | Ranked 3v3: Diamond I Div II (900) (as of "), "register fetched once: " + r + " | " + string.Join(",", calls));
+            Say("v", "!rank", false, "amy"); Say("v", "!rank", false, "amy", "hoops"); Check(calls.Count == 1, "!rank never fetches");
+            r = Say("v", "!rank", false, "amy", "hoops"); Check(r.StartsWith("AmyRL - Ranked hoops") == false && r.Contains("Hoops: Silver II Div I (400)"), "one playlist: " + r);
+            Rank.OnRegister("amy", new[] { "AmyRL" }, false); System.Threading.Thread.Sleep(400); Check(calls.Count == 1, "registering the same name again does not fetch again");
+            r = Say("m", "!refreshrank", true, "amy"); Check(calls.Count == 2 && r.StartsWith("Refreshed AmyRL"), "!refreshrank fetches once: " + r);
+            Check(Say("v", "!refreshrank", false, "amy") == "" && calls.Count == 2, "viewers cannot refresh");
+            // 4. a mod registering someone else
+            File.WriteAllText(Path.Combine(dir, "players.json"), "{\"cat\":{\"Username\":\"cat\",\"Platform\":\"epic\",\"GameId\":\"CatRL\"}}");
+            Rank.OnRegister("modguy", new[] { "@cat", "CatRL" }, true); System.Threading.Thread.Sleep(400); Check(calls.Count == 3 && calls.Last() == "epic:CatRL", "mod !register @viewer fetches for the viewer: " + string.Join(",", calls));
+            // 5. unknown / failing
+            r = Say("v", "!rank", false, "nobodyhere"); Check(r.Contains("has no saved rank"), "unknown player: " + r);
+            Rank.Fetcher = (p, e) => null; r = Say("m", "!refreshrank", true, "amy"); Check(r.Contains("Could not read") && Say("v", "!rank", false, "amy").Contains("Gold I"), "failed refresh keeps the old rank: " + r);
+            Rank.Fetcher = null;
             Console.WriteLine(fails == 0 ? "[ranktest] ALL PASS" : "[ranktest] " + fails + " FAILED");
         }
     }

@@ -1348,13 +1348,12 @@
       "action": "PinguinoHost",
       "category": "Rocket League",
       "who": "everyone",
-      "usage": "!rank [epic name] [1s|2s|3s|4s|hoops|rumble|dropshot|snowday|heatseeker]",
-      "description": "Rocket League ranks. With no name it shows Innocentpenguin_'s 1v1, 2v2 and 3v3; add a playlist (2s, 2v2, dropshot, heatseek, rumble, hoops...) for just that one. Every playlist is pulled in one tracker call per Epic account and cached for 15 minutes, so extra lookups cost nothing.",
+      "usage": "!rank <player> [1s|2s|3s|4s|hoops|rumble|dropshot|snowday|heatseeker]",
+      "description": "The saved Rocket League ranks of a registered player (1v1, 2v2, 3v3), with the date they were saved; add a playlist (2s, dropshot, hoops...) for just that one. Ranks are saved once when someone registers and updated by a mod, not refreshed by themselves. The streamer's own !rank is RocketRankBot's.",
       "examples": [
-        "!rank",
-        "!rank 2s",
-        "!rank dropshot",
-        "!rank someEpicName 3v3"
+        "!rank someViewer",
+        "!rank someViewer 2s",
+        "!rank someEpicName dropshot"
       ],
       "section": "Stream info",
       "importance": 1
@@ -1365,13 +1364,27 @@
       "action": "PinguinoHost",
       "category": "Rocket League",
       "who": "mods",
-      "usage": "!setrank 1v1|2v2|3v3|peak <rank text>",
-      "description": "Mods update the rank !rank shows. You can also paste a whole 'Ranked 1v1: ... | Ranked 2v2: ...' line.",
+      "usage": "!setrank <player> 1v1|2v2|3v3 <rank text>",
+      "description": "Mods write a player's rank by hand. You can also paste a whole 'Ranked 1v1: ... | Ranked 2v2: ...' line after the name.",
       "examples": [
-        "!setrank 2v2 Grand Champion I Div III (1532)"
+        "!setrank someViewer 2v2 Grand Champion I Div III (1532)"
       ],
       "section": "Chat commands",
       "importance": 12
+    },
+    {
+      "command": "!refreshrank",
+      "aliases": [],
+      "action": "PinguinoHost",
+      "category": "Rocket League",
+      "who": "mods",
+      "usage": "!refreshrank <player>",
+      "description": "Looks one player's ranks up again (one lookup) and saves them with today's date. Does nothing but say so while the live lookup is switched off; use !setrank then.",
+      "examples": [
+        "!refreshrank someViewer"
+      ],
+      "section": "Chat commands",
+      "importance": 13
     },
     {
       "command": "!helper",

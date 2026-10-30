@@ -85,9 +85,10 @@ namespace PinguinoHost
             if (cmd == "!guess") { SiteShop.HandleGuess(user, args, say); return true; }
             if (cmd == "!shop") { if (args.Length > 0 || !Cooling("u|!shop|" + me, 10)) SiteShop.HandleShop(user, args, say); return true; }   // the chat shop: lists the items, starts Guess the Chatter
             if (SubTickets.IsModCommand(cmd)) { if (!mod) return false; ModAudit.Log(user, "mod", cmd, string.Join(" ", args)); SubTickets.HandleMod(user, cmd, args, say); return true; }
+            if (cmd == "!register") { try { Rank.OnRegister(user, args, mod); } catch (Exception) { } return false; }   // the Core registers; the Host then saves the player's ranks once
             string b = BoardOf(cmd);
             bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!command" || cmd == "!cmds" || cmd == "!cmd" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || cmd == "!uptime" || cmd == "!downtime" || Economy.IsViewerCommand(cmd) || Gamble.IsCommand(cmd);
-            bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!botaccount" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd) || YtShop.IsCommand(cmd) || DiscordAnnounce.IsCommand(cmd);
+            bool modOnly = cmd == "!setrank" || cmd == "!refreshrank" || cmd == "!alias" || cmd == "!botaccount" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd) || YtShop.IsCommand(cmd) || DiscordAnnounce.IsCommand(cmd);
             if (cmd == "!pm" && mod && args.Length > 0) return false;   // a mod naming the private match: the Core stores it (no read cooldown on that)
             if (!viewer && !modOnly) return false;
             if (modOnly && mod) ModAudit.Log(user, "mod", cmd, string.Join(" ", args));   // every mod command is on the audit log

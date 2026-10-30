@@ -1,4 +1,4 @@
-"""Sim test for the !rank source chain (fake fetcher: all fail, partial fail, stale, backoff, prefix, fuzzy). Usage: python Tools/test-host-ranktest.py [dll]"""
+"""Sim test for the !rank stored ranks (register fetch once, refresh, silent streamer, by hand). Usage: python Tools/test-host-ranktest.py [dll]"""
 import os, sys, subprocess, tempfile
 suite = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')

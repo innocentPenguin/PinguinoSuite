@@ -17,7 +17,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
-| `!pm` | `!pm` | The current private match name and password (one shared setting; mods change it with !lobbyname / !lobbypass). |
+| `!pm` | `!pm [name]` | The current private match name. Mods: !pm <name> sets it for this customs session (one word; !pm clear removes it; it clears when the activity ends). |
 | `!register` | `!register <EpicID>  \|  mods: !register @viewer <EpicID>` | Link your Twitch name to your Epic Games name. Mods can register or fix someone else's. |
 | `!join` | `!join` | Join the queue (must be registered, queue must be open). |
 | `!leave` | `!leave` | Leave the queue. |
@@ -29,6 +29,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!queue` | `!queue  \|  !queue list  \|  mods: !queue open \| close \| clear` | Queue status. Mods open, close, or clear (clear also closes and ends the lobby). |
 | `!mmr` | `!mmr [@user]` | Your own MMR (mods can look up anybody). |
 | `!strikes` | `!strikes` | How many strikes you have (3 = cannot join customs), split into permanent (red, never expire) and temporary (orange, one wears off per day). |
+| `!pmrules` | `!pmrules` | The private match rules (also posted once whenever the customs queue opens). 30 second cooldown. |
 
 ### Emotes
 
@@ -85,7 +86,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
-| `!rank` | `!rank [epic name] [1s\|2s\|3s\|4s\|hoops\|rumble\|dropshot\|snowday\|heatseeker]` | Rocket League ranks. With no name it shows Innocentpenguin_'s 1v1, 2v2 and 3v3; add a playlist (2s, 2v2, dropshot, heatseek, rumble, hoops...) for just that one. Every playlist is pulled in one tracker call per Epic account and cached for 15 minutes, so extra lookups cost nothing. |
+| `!rank` | `!rank <player> [1s\|2s\|3s\|4s\|hoops\|rumble\|dropshot\|snowday\|heatseeker]` | The saved Rocket League ranks of a registered player (1v1, 2v2, 3v3), with the date they were saved; add a playlist (2s, dropshot, hoops...) for just that one. Ranks are saved once when someone registers and updated by a mod, not refreshed by themselves. The streamer's own !rank is RocketRankBot's. |
 
 ### Stream
 
@@ -245,7 +246,8 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 
 | Command | Usage | What it does |
 |---|---|---|
-| `!setrank` | `!setrank 1v1\|2v2\|3v3\|peak <rank text>` | Mods update the rank !rank shows. You can also paste a whole 'Ranked 1v1: ... \| Ranked 2v2: ...' line. |
+| `!setrank` | `!setrank <player> 1v1\|2v2\|3v3 <rank text>` | Mods write a player's rank by hand. You can also paste a whole 'Ranked 1v1: ... \| Ranked 2v2: ...' line after the name. |
+| `!refreshrank` | `!refreshrank <player>` | Looks one player's ranks up again (one lookup) and saves them with today's date. Does nothing but say so while the live lookup is switched off; use !setrank then. |
 
 ### Timers
 
