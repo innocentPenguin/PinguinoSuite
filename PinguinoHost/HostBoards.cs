@@ -49,6 +49,11 @@ namespace PinguinoHost
             try { if (File.Exists(LedgerP)) foreach (var o in SubsImport.ParseJ("{\"a\":" + File.ReadAllText(LedgerP) + "}")["a"].OfType<JObject>()) _ledger.Add(o); } catch (Exception ex) { Clog.Warn("boards", "ledger unreadable: " + ex.Message); }
             return _ledger;
         }
+        static IEnumerable<JObject> AdjustRows()
+        {
+            try { string f = Path.Combine(Root, "boards", "adjust.json"); if (File.Exists(f)) return SubsImport.ParseJ(File.ReadAllText(f))["adjust"]?.OfType<JObject>().ToList() ?? new List<JObject>(); } catch (Exception ex) { Clog.Warn("boards", "adjust.json unreadable: " + ex.Message); }
+            return new List<JObject>();
+        }
         static bool Has(List<JObject> l, string type, string user, string to, int amount, long at)
         {
             foreach (var x in l) if ((string)x["type"] == type && (string)x["user"] == user && (string)x["to"] == to && (int)x["amount"] == amount && Math.Abs((long)x["at"] - at) < 20) return true;
@@ -313,6 +318,14 @@ namespace PinguinoHost
                     total += ind.Count - used.Count;
                     for (int i = 0; i < ind.Count; i++) if (!used.Contains(i)) addM(mGifts, monthOf((long)ind[i]["at"]), grp.Key, 1, false);
                     if (total > 0) U(grp.Key)["gifts"] = total;
+                }
+                // one-off corrections Twitch's own counter proved (announcements that never reached chat): Dataoardsdjust.json {adjust:[{user, type:"gifts", amount, at:"yyyy-MM-dd", why}]}; counted here so a rebuild keeps them
+                foreach (var ad in AdjustRows())
+                {
+                    string au = Canon(al, (string)ad["user"]); int an = (int)ad["amount"]; long at = DateTimeOffset.Parse((string)ad["at"] + "T12:00:00Z").ToUnixTimeSeconds();
+                    if ((string)ad["type"] != "gifts" || an <= 0) continue;
+                    var uo = U(au); uo["gifts"] = (int)uo["gifts"] + an; addM(mGifts, monthOf(at), au, an, false);
+                    string aid = "adjust:gifts:" + au + ":" + (string)ad["at"]; System.Threading.Tasks.Task.Run(() => Periods.Add(au, "gifts", an, at, aid));
                 }
                 foreach (var grp in led.Where(x => (string)x["type"] == "cheer").GroupBy(x => (string)x["user"])) { U(grp.Key)["bits"] = grp.Sum(x => (int)x["amount"]); foreach (var x in grp) addM(mBits, monthOf((long)x["at"]), grp.Key, (int)x["amount"], false); }
                 // messages (+ display names) from the viewer profiles
