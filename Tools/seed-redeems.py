@@ -11,7 +11,9 @@ to C and the Host counts only redemptions after it. Run it only when the stream 
   python Tools/seed-redeems.py --data ... --seed-json seed.json --write
   python Tools/seed-redeems.py --data ... --through 2026-10-30T14:00:00Z --write   # values from the doc
 
---seed-json is the output of Tools/redeem-seed.py (14); groups it does not know (or maps differently) keep the doc values.
+--seed-json is the output of Tools/redeem-seed.py (14); groups it does not know (or maps differently) keep the doc values. It also carries the per stream-day history
+(group "days" {YYYY-MM-DD: n}, Chicago day), the group's "recordStart" and the separate "estimatedDays" series: the Host stores them per group (days, recordStart, estimatedDays), answers today / week / month / all
+from them and never lets the estimate into a total. Seeded days only ever count toward the days they name (a seed never writes today or this week by itself: it holds nothing newer than its cut-off).
 --classified is 14's groups.json (group name -> ["YYYY-MM-DD HH:MM:SS|chat text"]); lines after --through are left out and broadcaster lines
 (innocentpenguin_) are not counted. Groups that come from Streamer.bot logs (suggestion, max_volume, add_crossbar_sound, timeout_someone) always keep the doc values;
 --add group=N adds N to a group (e.g. timeout_someone=3 for the Host-era redemptions the logs never counted). The Pushups estimate for Feb 4-15 is stored apart ("estimated") and never enters a total.
@@ -80,26 +82,38 @@ def from_classified(path, through):
 
 
 def from_seed_json(path):
-    j = json.load(open(path, encoding='utf-8')); out = {}
+    j = json.load(open(path, encoding='utf-8')); out = {}; hist = {}
     for g in j.get('groups', []):
         k = SEED_IDS.get(g['id'], g['id'])
-        if k in GROUPS: out[k] = dict(g.get('perMonth') or {})
-    return out, j.get('baselineThrough')
+        if k not in GROUPS: continue
+        days = {d: int(n) for d, n in (g.get('days') or {}).items() if int(n) > 0}
+        pm = dict(g.get('perMonth') or {})
+        if days:
+            pm = {}
+            for d, n in days.items(): pm[d[:7]] = pm.get(d[:7], 0) + n
+            hist[k] = {'days': dict(sorted(days.items())), 'recordStart': g.get('recordStart')}
+        out[k] = pm
+    est = j.get('estimatedDays') or {}
+    for k, v in est.items():
+        if k in GROUPS: hist.setdefault(k, {})['estimatedDays'] = v
+    return out, j.get('baselineThrough'), hist
 
 
 def build(a):
     through = dt.datetime.strptime(a.through, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=dt.timezone.utc) if a.through else None
     base = {k: dict(v) for k, v in DOC.items()}
+    a.hist = {}
     if a.seed_json:
-        sj, thr = from_seed_json(a.seed_json); base.update(sj)
+        sj, thr, a.hist = from_seed_json(a.seed_json); base.update(sj)
         if not a.through and thr:
             a.through = thr; through = dt.datetime.strptime(thr, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=dt.timezone.utc)
     if a.classified:
-        for k, pm in from_classified(a.classified, through).items(): base[k] = pm
+        for k, pm in from_classified(a.classified, through).items(): base[k] = pm; a.hist.pop(k, None)   # a re-extraction by month replaces the day series of that group
     for x in a.add or []:
         k, n = x.split('=', 1)
         if k not in GROUPS: sys.exit('unknown group ' + k)
         cur = base.setdefault(k, {}); m = (through or dt.datetime.now(dt.timezone.utc)).strftime('%Y-%m'); cur[m] = cur.get(m, 0) + int(n)
+        a.hist.pop(k, None)   # a manual add has no day: the group falls back to its months
     return base, through
 
 
@@ -115,8 +129,12 @@ def main():
     a = ap.parse_args()
     base, through = build(a)
     rt = os.path.join(a.data, 'runtime'); gp = os.path.join(rt, 'redeem_groups.json'); cp = os.path.join(rt, 'redeem_counts.json')
-    print('%-20s %9s  %s' % ('group', 'baseline', 'per month'))
-    for k in GROUPS: print('%-20s %9d  %s' % (k, sum(base.get(k, {}).values()), json.dumps(base.get(k, {}), sort_keys=True)))
+    print('%-20s %9s  %-10s %s' % ('group', 'baseline', 'days', 'per month'))
+    for k in GROUPS:
+        h = a.hist.get(k, {}); dsum = sum((h.get('days') or {}).values()); b = sum(base.get(k, {}).values())
+        ds = ('%d%s' % (len(h['days']), '' if dsum == b else ' MISMATCH')) if h.get('days') else '-'
+        print('%-20s %9d  %-10s %s' % (k, b, ds, json.dumps(base.get(k, {}), sort_keys=True)))
+        if h.get('days') and dsum != b: sys.exit('group %s: sum of days %d != baseline %d' % (k, dsum, b))
     print('cut-off C: %s   (estimated, not in totals: %s)' % (a.through or 'NOT SET', json.dumps(ESTIMATED)))
     old = json.load(open(cp, encoding='utf-8')) if os.path.exists(cp) else {}
     live = sum((g.get('live') or 0) for g in (old.get('groups') or {}).values())
@@ -136,6 +154,10 @@ def main():
         e.update({'title': title, 'baseline': sum(base.get(k, {}).values()), 'baselineThrough': a.through, 'perMonth': dict(sorted(base.get(k, {}).items()))})
         e.setdefault('live', 0); e.setdefault('livePerMonth', {}); e.setdefault('lastRedeemAt', None)
         if k in ESTIMATED: e['estimated'] = ESTIMATED[k]
+        h = a.hist.get(k, {})
+        if h.get('days'): e['days'] = h['days']; e['recordStart'] = h.get('recordStart')
+        else: e.pop('days', None)
+        if h.get('estimatedDays'): e['estimatedDays'] = h['estimatedDays']
         counts['groups'][k] = e
     json.dump(groups, open(gp, 'w', encoding='utf-8'), indent=2); json.dump(counts, open(cp, 'w', encoding='utf-8'), indent=2)
     print('written:', gp, cp)
