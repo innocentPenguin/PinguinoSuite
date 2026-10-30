@@ -11,6 +11,7 @@ PORT, WS = freeport(), freeport()
 d = tempfile.mkdtemp(prefix='pgpr_')
 json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 od = os.path.join(d, 'overlays_out'); os.makedirs(od); json.dump({'OverlayDir': od}, open(os.path.join(d, 'settings.json'), 'w'))
+open(os.path.join(od, 'live_state.js'), 'w').write('window.LIVE_STATE = {};')   # a fresh sim data dir has no live_state yet: seed the minimal file so the /live_state.js asset check has something to serve
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env['PINGUINO_COMPAT_WS_PORT'] = str(WS)
 h = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(os.path.join(d, 'out.txt'), 'ab'), stderr=subprocess.STDOUT)
 rc = 1; out = ''
