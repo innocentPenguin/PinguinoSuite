@@ -1,0 +1,87 @@
+<!doctype html>
+<!--
+  PinguinoB0t - RANKED win/loss tracker (scene HUD), under the Rocket League scoreboard. Design size 520 x 150.
+  Data: Host GET /api/ranked -> {active, limit, games:["W"|"L",...], net, inProgress, wins, losses, day, week:{wins,losses,net}} (polled every 2 s).
+  Shows "Game N in progress", a row of numbered slots (green check = W, red X = L, the running game outlined yellow) and the net (wins - losses) at the right.
+  Starts with only the running slot; each finished game adds one (pop-in). More games than `limit`: shows the latest `limit` slots, and once a minute scrolls from game 1 back down to the newest.
+  Hidden while active is false (or the Host is unreachable for ~6 s).
+  Params: host=http://127.0.0.1:8770 | sim=0|1|3|5|8|neg|12 (sample state, no Host) | simgrow=1 (sim grows one game every 3 s) | scroll=60 (seconds between scrolls, 0 = never) | limit=5 (sim/override)
+-->
+<html><head><meta charset="utf-8"><title>Ranked</title>
+<style>
+  @font-face{font-family:"Nunito";src:url("fonts/nunito-latin-wght-normal.woff2") format("woff2");font-weight:200 1000;font-style:normal;font-display:block}
+  :root{--sw:78px}
+  html,body{margin:0;width:520px;height:150px;overflow:hidden;background:transparent;font-family:"Nunito",Rubik,"Segoe UI",Arial,sans-serif;color:#fff}
+  #card{position:absolute;left:0;top:0;width:520px;height:150px;box-sizing:border-box;padding:10px 16px 12px;border-radius:18px;background:rgba(18,16,14,.86);border:2px solid #ff7a00;box-shadow:0 0 14px rgba(255,122,0,.35);transition:opacity .5s ease}
+  #card.off{opacity:0}
+  #top{font-weight:800;font-size:23px;letter-spacing:.02em;color:#ff9d3c;white-space:nowrap}
+  #top span{color:#fff}
+  #row{position:absolute;left:16px;right:16px;top:50px;bottom:12px;display:flex;align-items:stretch}
+  #vp{position:relative;overflow:hidden;width:var(--sw);transition:width .45s ease;flex:none}
+  #track{position:absolute;left:0;top:0;bottom:0;display:flex;transition:transform .5s ease}
+  .s{flex:none;width:var(--sw);box-sizing:border-box;position:relative;display:flex;flex-direction:column;align-items:center;padding-top:2px;border-left:2px solid rgba(255,157,60,.45)}
+  .s:first-child{border-left-color:transparent}
+  .s .n{font-weight:800;font-size:24px;line-height:28px;color:#ffd9ae;height:28px}
+  .s .m{height:44px;width:100%;display:flex;align-items:center;justify-content:center;border-top:3px solid #ff9d3c}
+  .s svg{width:34px;height:34px}
+  .s.run::after{content:"";position:absolute;left:5px;right:5px;top:0;bottom:0;border:3px solid #ffd23f;border-radius:14px;box-shadow:0 0 10px rgba(255,210,63,.6);pointer-events:none}
+  .s.run .n{color:#ffd23f}
+  .s.in{animation:pop .5s cubic-bezier(.2,1.4,.4,1) both}
+  .s.mk svg{animation:stamp .4s cubic-bezier(.2,1.6,.4,1) both}
+  @keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:none}}
+  @keyframes stamp{from{opacity:0;transform:scale(2.2) rotate(-12deg)}to{opacity:1;transform:none}}
+  #net{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;border-left:2px solid #ff7a00;margin-left:6px;min-width:80px}
+  #net small{font-weight:800;font-size:13px;letter-spacing:.14em;color:#ffb066;line-height:22px;margin-top:2px}
+  #nv{font-weight:900;font-size:46px;line-height:52px;color:#ddd}
+  #nv.pos{color:#3ddc6a} #nv.neg{color:#ff4d4d}
+</style></head><body>
+<div id="card" class="off"><div id="top"></div>
+<div id="row"><div id="vp"><div id="track"></div></div><div id="net"><small>NET</small><div id="nv">0</div></div></div></div>
+<script>
+(function(){
+  var Q=new URLSearchParams(location.search), HOST=Q.get("host")||(location.protocol.indexOf("http")===0?location.origin:"http://127.0.0.1:8770");
+  var card=document.getElementById("card"), top_=document.getElementById("top"), vp=document.getElementById("vp"), track=document.getElementById("track"), nv=document.getElementById("nv");
+  var SW=78, SCROLL_S=Q.has("scroll")?parseFloat(Q.get("scroll")):60, fails=0, slots=[], limit=5, total=0, scrolling=false, scrollTimer=0;
+  var CHECK='<svg viewBox="0 0 34 34"><path d="M5 18l8 8L29 8" fill="none" stroke="#3ddc6a" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CROSS='<svg viewBox="0 0 34 34"><path d="M7 7l20 20M27 7L7 27" fill="none" stroke="#ff4d4d" stroke-width="5.5" stroke-linecap="round"/></svg>';
+  function mk(i){ var d=document.createElement("div"); d.className="s in"; d.innerHTML='<div class="n">'+i+'</div><div class="m"></div>'; return d; }
+  function atEnd(){ return Math.max(0,total-limit)*SW; }
+  function setX(x,anim){ track.style.transition=anim?"transform "+anim+"ms linear":"transform .5s ease"; track.style.transform="translateX("+(-x)+"px)"; }
+  function render(j){
+    var g=(j.games||[]).map(function(x){return String(x).toUpperCase()==="W"?"W":"L";});
+    limit=Math.max(1,Math.min(12,parseInt(j.limit,10)||5)); total=g.length+1;
+    var inprog=j.inProgress||total; top_.innerHTML='Game <span>'+inprog+'</span> in progress';
+    for(var i=0;i<total;i++){                       // slot i+1: games[i] if finished, else the running one
+      var s=slots[i]; if(!s){ s=slots[i]=mk(i+1); track.appendChild(s); }
+      var res=i<g.length?g[i]:"", run=i===g.length;
+      s.classList.toggle("run",run);
+      if(s.dataset.r!==res){ s.dataset.r=res; var m=s.querySelector(".m"); m.innerHTML=res==="W"?CHECK:res==="L"?CROSS:""; s.classList.toggle("mk",!!res); }
+    }
+    while(slots.length>total){ var x=slots.pop(); x.remove(); }   // the Host reset the session
+    vp.style.width=Math.min(total,limit)*SW+"px";
+    if(!scrolling) setX(atEnd());
+    var net=(typeof j.net==="number")?j.net:g.filter(function(x){return x==="W";}).length-g.filter(function(x){return x==="L";}).length;
+    nv.textContent=net>0?"+"+net:String(net); nv.className=net>0?"pos":net<0?"neg":"";
+    card.className=(j.active===false)?"off":"";
+  }
+  function scrollAll(){                              // from game 1 down through every game to the newest, then rest at the newest
+    if(scrolling||total<=limit)return; scrolling=true;
+    track.style.transition="none"; track.style.transform="translateX(0px)"; void track.offsetWidth;
+    var dur=Math.max(1200,(total-limit)*650); setX(atEnd(),dur);
+    setTimeout(function(){ scrolling=false; setX(atEnd()); },dur+900);
+  }
+  window.__rankedScroll=scrollAll;
+  if(SCROLL_S>0) scrollTimer=setInterval(scrollAll,SCROLL_S*1000);
+  var SIMS={"0":[],"1":["W"],"3":["W","L","W"],"4":["W","L","W","W"],"5":["W","L","W","W","L"],"8":["W","L","W","W","L","L","W","W"],"12":["W","L","W","W","L","L","W","W","L","L","L","W"],"neg":["L","L","W","L"]};
+  function bad(){ if(++fails>=3) card.className="off"; }
+  function poll(){fetch(HOST+"/api/ranked").then(function(r){return r.json();}).then(function(j){if(j&&j.ok!==false){fails=0;render(j);}else bad();}).catch(bad);}
+  var sim=Q.get("sim");
+  if(sim!==null){
+    var base=SIMS[sim]||SIMS["5"], n=Q.get("simgrow")==="1"?0:base.length;
+    var full=base.length?base:["W","L","W","W","L","L","W","W"];
+    (function tick(){ var g=Q.get("simgrow")==="1"?full.slice(0,n):base; render({active:true,limit:parseInt(Q.get("limit"),10)||5,games:g,inProgress:g.length+1}); if(Q.get("simgrow")==="1"){ n=(n+1)%(full.length+1); setTimeout(tick,3000);} })();
+  } else { poll(); setInterval(poll,2000); }
+})();
+</script>
+<script src="overlay-options.js"></script>
+</body></html>
