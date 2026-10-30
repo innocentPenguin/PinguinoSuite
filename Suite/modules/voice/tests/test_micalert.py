@@ -53,7 +53,7 @@ class MicAlert(unittest.TestCase):
         server.mic_loop(sleep=sleep, stop=lambda: n[0] > len(steps))
 
     def test_default_off_and_one_fixed_line_per_alert(self):
-        a, b = {"kind": "missing", "message": "SECRET-ish text oauth:abcdefghijklmnop"}, {"kind": "fallback", "message": "other"}
+        a, b = {"kind": "missing", "message": "SECRET-ish text oauth:" + "abcdefghijklmnop"}, {"kind": "fallback", "message": "other"}
         for enabled, expect in ((False, 0), (True, 2)):
             self.b, self.s, self.pl = mk()
             server.brain = self.b

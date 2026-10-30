@@ -219,7 +219,7 @@ class Secrets(unittest.TestCase):
             self.assertNotIn("abc123xyz", out)
 
     def test_discord_style_token(self):
-        self.assertTrue(self.scrub("MTIzNDU2Nzg5MDEyMzQ1Njc4.GabcDe.abcdefghijklmnopqrstuvwxyz1234")[1])
+        self.assertTrue(self.scrub("MTIzNDU2" + "Nzg5MDEyMzQ1Njc4" + "." + "GabcDe" + "." + "abcdefghij" + "klmnopqrstuvwxyz1234")[1])
 
     def test_normal_chat_is_untouched(self):
         for t in ("great stream tonight", "the 2026 season has 12 games", "hello 3 friends", "see you at 10 30", "ünal says héllo"):

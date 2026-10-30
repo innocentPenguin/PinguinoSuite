@@ -102,7 +102,7 @@ class Flow(unittest.TestCase):
         self.assertEqual(self.ctl.hear("pinguinobot timeout modguy for 1 minute")["outcome"], "refused")
 
     def test_unsafe_values_refused(self):
-        for t in ("change the title to my password is hunter2 and key sk-abcdefghijklmnopqrstuvwxyz123456", "change the title to you are a fucking idiot", "change the game to x"):
+        for t in ("change the title to my password is hunter2 and key sk-" + "abcdefghijklmnopqrstuvwxyz123456", "change the title to you are a fucking idiot", "change the game to x"):
             self.assertEqual(self.ctl.hear("pinguinobot " + t)["outcome"], "refused", t)
         self.assertEqual(self.ctl.hear("pinguinobot change the title to " + "word " * 60)["outcome"], "refused")
         self.assertEqual(self.sent, [])

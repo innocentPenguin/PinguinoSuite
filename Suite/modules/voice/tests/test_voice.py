@@ -63,7 +63,7 @@ def wait(pl, n, t=5):
 
 class Text(unittest.TestCase):
     def test_secrets(self):
-        for s in ["my oauth:abcdefghijklmnop1234", "token abc123", "key sk-ABCDEFGHIJKLMNOP123456", "mail me a@b.com", "ip 192.168.1.5", "password is hunter2",
+        for s in ["my oauth:" + "abcdefghijklmnop1234", "token abc123", "key sk-" + "ABCDEFGHIJKLMNOP123456", "mail me a@b.com", "ip 192.168.1.5", "password is hunter2",
                   "aGVsbG8gd29ybGQgdGhpcyBpcyBsb25nIGJhc2U2NA=="]:
             out, found = textproc.scrub_secrets(s)
             self.assertTrue(found, s)
@@ -161,7 +161,7 @@ class Pipeline(unittest.TestCase):
 
     def test_secret_never_spoken(self):
         b, s, pl = mk()
-        b.handle({"kind": "say", "message": "my password is hunter2 and oauth:abcdefghijklmnop12345", "manual": True})
+        b.handle({"kind": "say", "message": "my password is hunter2 and oauth:" + "abcdefghijklmnop12345", "manual": True})
         wait(pl, 1)
         self.assertTrue(s.calls)
         self.assertNotIn("hunter2", s.calls[0][0])

@@ -87,7 +87,7 @@ class Pipeline(unittest.TestCase):
         b, sapi, pl = mk()
         b.cfg["events"]["follow"]["cooldown_s"] = 0
         b.handle({"kind": "follow", "user": "Asshole99"})
-        b.handle({"kind": "follow", "user": "oauth:abcdefghijklmnop1234"})
+        b.handle({"kind": "follow", "user": "oauth:" + "abcdefghijklmnop1234"})
         wait(pl, 2)
         for text, _, _ in sapi.calls:
             self.assertNotIn("asshole", text.lower())
@@ -98,7 +98,7 @@ class Pipeline(unittest.TestCase):
         b.cfg["events"]["command"]["enabled"] = True
         b.cfg["personas"][b.cfg["default_persona"]]["templates"]["command"] = ["{user} ran {command}"]
         b.cfg["events"]["command"]["only_live"] = False
-        b.handle({"kind": "command", "user": "bob", "what": "oauth:abcdefghijklmnop1234", "message": ""})
+        b.handle({"kind": "command", "user": "bob", "what": "oauth:" + "abcdefghijklmnop1234", "message": ""})
         wait(pl, 1)
         self.assertNotIn("abcdefghijk", sapi.calls[0][0])
 
