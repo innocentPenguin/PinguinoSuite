@@ -74,7 +74,7 @@ namespace PinguinoHost
             else items.Add(Item("streamer", "Streamer account signed in", "fail", "not signed in (Host page > Sign in as streamer)"));
             if (vres.TryGetValue("streamer", out var sv0) && sv0.Value<bool>("ok"))
             {
-                var have = new HashSet<string>(((sv0["scopes"] as JArray) ?? new JArray()).Select(x => (string)x)); var lack = Scopes.Split(' ').Where(x => !have.Contains(x)).ToList();
+                var have = new HashSet<string>(((sv0["scopes"] as JArray) ?? new JArray()).Select(x => (string)x)); var lack = MissingScopes(have);
                 var sci = Item("scopes", "Streamer permissions complete (events, clips, ads, shoutouts)", lack.Count == 0 ? "pass" : "warn", lack.Count == 0 ? "" : "missing: " + string.Join(", ", lack) + " (sign the streamer in again)");
                 if (lack.Count > 0) sci["fix"] = new JObject { { "label", "Re-sign Twitch" }, { "route", "accounts" } };
                 items.Add(sci);
