@@ -419,6 +419,7 @@
         <section class="cs c-st"><div class="row"><span class="faint sm">Streamer</span><div class="seg" style="flex:1">${b('In', 'streamer', 'in', '', 'streamer:in')}${b('Out', 'streamer', 'out', '', 'streamer:out')}</div></div></section>
         ${sec('c-q', 'Queue', `<div class="btns">${b('Open', 'queue-open', null, 'g', 'queue:open')}${b('Close', 'queue-close', null, 'rd', 'queue:close')}${b('Clear', 'queue-clear', null, 'og warn', 'queue:clear')}</div><ul class="qlist" id="cu-queue"></ul>`, ' <span class="faint" id="cu-qn"></span>')}
         ${sec('c-m', 'Match', `<div class="btns">${b('Fill', 'match', 'fill', 'g')}${b('Move all → Queue', 'match', 'queue')}${b('Clear match', 'match', 'clear', 'rd warn')}${b('Orange wins', 'finish', 'orange', 'or', 'win:orange')}${b('Grey wins', 'finish', 'blue', 'bl', 'win:blue')}</div><div class="teams" id="cu-teams"></div>`, ' <span class="faint" id="cu-match"></span>')}
+        ${sec('c-pl', 'Planned matches', `<div class="row" id="pl-plan" style="gap:4px" hidden><button class="sm" data-pl="-1" aria-label="One fewer" title="One fewer match">▼</button><input type="text" id="pl-in" inputmode="numeric" maxlength="9" autocomplete="off" style="width:84px;text-align:center" aria-label="planned matches"><button class="sm" data-pl="1" aria-label="One more" title="One more match">▲</button><button class="sm" data-pl="set" title="Set the number typed (0 = unlimited)">Set</button><span class="faint sm ell" id="pl-played" style="flex:1;min-width:0"></span></div><div class="row" id="pl-shuf" style="margin-top:4px;gap:4px" hidden><button class="sm warn" data-pl="shuffle" title="Reorders the whole queue at random (two clicks)">Shuffle queue</button><button class="sm" data-pl="undoshuffle" id="pl-undo">Undo shuffle</button></div><div id="pl-res" class="si-res"></div>`)}
         ${sec('c-t', 'Teams', `${seg('mode', [['Balanced', 'balanced'], ['Random', 'random'], ['Manual', 'picks']])}<div class="btns" style="margin-top:6px">${b('Reroll', 'reroll')}${b('Balance', 'balance')}</div><div class="row" id="cu-manual" style="margin-top:6px" hidden><input type="text" id="cu-pick" placeholder="who goes Grey" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="sm bl" id="cu-pickgo">Set Blue</button>${b('Auto', 'pick', 'auto')}</div>`)}
         ${sec('c-tn', 'Team names & colours', ['orange', 'blue'].map(k => `<div class="tn" data-side="${k}"><div class="row"><span class="tn-dot"></span><input type="text" class="tn-name" maxlength="20" autocomplete="off" spellcheck="false" aria-label="${k} team name"><input type="color" class="tn-pick" title="Custom colour"><button class="sm ghost tn-reset" title="Back to the default name and colour">Reset</button></div><details class="tn-det"><summary>Colours <span class="tn-chip" title="Current colour"></span></summary><div class="tn-sw">${C.TEAM_PRESETS.map(([n, hx]) => `<button class="swc" data-c="${hx}" style="background:${hx}" title="${n}" aria-label="${n}"></button>`).join('')}</div></details></div>`).join('') + '<div class="faint sm">Used in the match lines, overlays and the site. Customs chat lines keep the emoji before the name (🔶 Orange, 🔷 Blue, e.g. “🔷 Frost wins”); the colour only tints the panels and overlays.</div>')}
         ${sec('c-pm', 'Private match name', `<div class="row"><span class="faint sm">Now:</span> <b id="pm-cur" class="ell">–</b></div><div class="row" style="margin-top:4px"><input type="text" id="pm-in" maxlength="20" autocomplete="off" spellcheck="false" placeholder="one word, up to 20 characters" style="flex:1;min-width:0"><button class="sm rd warn" id="pm-go" title="Sets the private match name through the Host (two clicks)">Set</button></div><div id="pm-res" class="si-res"></div>`)}
@@ -661,6 +662,40 @@
     if (armed(b)) rkAct(a, undefined, b);
   }
   document.addEventListener('input', e => { if (e.target && /^rk-(lim|ba|ls)$/.test(e.target.id || '')) e.target._dirty = true; });
+  /* Planned matches + shuffle: POST /api/customs/mod plan|shuffle|undoshuffle; arrows are debounced 400 ms so rapid clicks send one request; the box is never overwritten while typing */
+  const plS = { ov: null, busy: C.createBusy(), msg: null, target: null };
+  const plSend = C.createDebounce(() => { if (plS.target != null) plAct('plan', plS.target, null); }, 400);
+  function renderPl() {
+    const sec = $('.c-pl'); if (!sec) return; const v = C.planView(curCustoms(), plS.ov), busy = plS.busy.has('pl');
+    sec.hidden = !(v.plan || v.shuffle); $('#pl-plan').hidden = !v.plan; $('#pl-shuf').hidden = !v.shuffle;
+    const inp = $('#pl-in'); if (inp && document.activeElement !== inp && !inp._dirty) inp.value = v.box;
+    $('#pl-played').textContent = v.played + (v.pending ? ' (sent, waiting for the Host)' : '');
+    $$('#pl-plan [data-pl], #pl-shuf [data-pl]').forEach(b => { b.disabled = busy && b.dataset.pl !== '-1' && b.dataset.pl !== '1' ? true : false; });
+    const u = $('#pl-undo'); if (u) { u.disabled = !v.canUndo || busy; u.title = v.canUndo ? 'Put the queue back the way it was before the last shuffle' : 'Nothing to undo: the queue has not been shuffled'; }
+    const res = $('#pl-res'); if (res) { const m = plS.msg && plS.msg.until > Date.now() ? plS.msg : null; res.replaceChildren(...(m ? [h('div', 'sir ' + m.kind, m.text)] : [])); }
+  }
+  async function plAct(action, value, btn) {
+    if (!plS.busy.begin('pl')) { if (action === 'plan') plSend(); return; }   // one request at a time: a newer plan number goes out right after
+    if (btn) flash(btn); ui.tookControl = true; const sent = value; plS.msg = { kind: 'warn', text: 'Sending…', until: Date.now() + 20000 }; renderPl();
+    let bad = true;
+    try {
+      await tokenReady;
+      const r = await api.post('/api/customs/mod', { action, value: value == null ? '' : value }, { timeoutMs: 15000 }), v = C.planResult(r, action, sent, r.status === 404 ? 'Customs: the Host does not offer this yet' : null);
+      bad = v.kind === 'bad'; plS.msg = { kind: v.kind, text: v.text, until: Date.now() + 6000 }; toast(v.text, bad);
+      const next = r.status === 404 ? null : C.customsFromAnswer(r.json, curCustoms()); if (next) S.set({ customs: next, customsOk: true }); else if (!bad) pollers.customs.kick();   // the answer's state is the truth, also on a refusal
+      if (action === 'plan' && plS.target === sent) { plS.target = null; plS.ov = null; }
+    } catch (err) { plS.msg = { kind: 'bad', text: 'Customs ' + action + ' failed: ' + (err && err.message || err), until: Date.now() + 6000 }; }
+    finally { plS.busy.end('pl'); if (action === 'plan' && bad) { plS.target = null; plS.ov = null; } renderPl(); if (action === 'plan' && plS.target != null && plS.target !== sent) plSend(); }
+  }
+  function plClick(b) {
+    const a = b.dataset.pl; if (b.disabled) return; const inp = $('#pl-in');
+    if (a === '1' || a === '-1') { const cur = plS.target != null ? plS.target : C.planView(curCustoms(), plS.ov).n; plS.target = C.planStep(cur, +a); plS.ov = { n: plS.target, until: Date.now() + 12000 }; inp._dirty = false; inp.value = plS.target ? String(plS.target) : 'unlimited'; renderPl(); plSend(); return; }
+    if (a === 'set') { const p = C.planParse(inp.value); if (!p.ok) { plS.msg = { kind: 'bad', text: p.error, until: Date.now() + 6000 }; renderPl(); toast(p.error, true); return; } plSend.cancel(); inp._dirty = false; plS.target = p.value; plS.ov = { n: p.value, until: Date.now() + 12000 }; renderPl(); plAct('plan', p.value, b); return; }
+    if (a === 'shuffle') { if (armed(b)) plAct('shuffle', null, b); return; }
+    if (a === 'undoshuffle') plAct('undoshuffle', null, b);
+  }
+  document.addEventListener('input', e => { if (e.target && e.target.id === 'pl-in') e.target._dirty = true; });
+  document.addEventListener('keydown', e => { if (e.target && e.target.id === 'pl-in' && e.key === 'Enter') { e.preventDefault(); const b = $('#pl-plan [data-pl="set"]'); b && plClick(b); } });
   async function setTeam(side, patch) {
     const p = {}; if (patch.name != null) { const n = C.teamName(patch.name); if (!n) { toast('Team name: 1 to 20 characters, not starting with ! / .', true); schedule('customs'); return; } p.name = n; }
     if (patch.color != null) { const k = C.teamColor(patch.color); if (!k) { toast('Colour must look like #ff7a00', true); return; } p.color = k; }
@@ -725,7 +760,7 @@
     $('#cu-match').textContent = m ? '· ' + (m.status || 'on') + (m.id != null ? ' #' + m.id : '') : '· none';
     const TN = teamsNow(), tv = JSON.stringify([TN, C.teamPlayers(m, 'orange'), C.teamPlayers(m, 'blue'), [...C.teamPlayers(m, 'orange'), ...C.teamPlayers(m, 'blue')].map(n => [strikesFor(who(n).key), strikesKnown(who(n).key), who(n)]), c && c.strikeLimit, c && c.strikeGame]), tb = $('#cu-teams');
     if (tb._s !== tv) { tb._s = tv; tb.textContent = ''; for (const [k, lbl] of [['orange', 'Orange'], ['blue', 'Blue']]) { const col = h('div', 'tm ' + k); col.dataset.team = k; col.style.setProperty('--tc', TN[k].color); col.append(h('b', '', TN[k].name)); const names = C.teamPlayers(m, k); names.forEach(n => col.append(playerRow(who(n).key.toLowerCase(), n, k))); if (!names.length) col.append(h('span', 'faint', '–')); tb.append(col); } }
-    renderPop(); renderAsk(); renderTeamsEditor(); renderPm(); renderYt(); renderRk();
+    renderPop(); renderAsk(); renderTeamsEditor(); renderPm(); renderYt(); renderRk(); renderPl();
     const isFn = !!c && /^(boxfights|zonewars|fnviewers)$/.test(c.activity || ''); $('#cu-rlsz').hidden = isFn; $('#cu-fnsz').hidden = !isFn; $('#cu-fmt').textContent = c && c.format ? '· ' + c.format : '';
     const fb = $('#tab-customs [data-cu="match"][data-v="fill"]'); if (fb) {   // no game: Start; a running game: Fill empty slots (greyed when full or nobody waits)
       const empty = live ? C.fmtSize(c && c.format) * 2 - C.teamPlayers(m, 'orange').length - C.teamPlayers(m, 'blue').length : 0;
@@ -1146,6 +1181,7 @@
     if (b && b.dataset.cu) { if (b.disabled) return; if (b.dataset.st && !ui.sim) { const [k, v] = b.dataset.st.split(':'); if (k !== 'win') { ui.sel[k] = v; schedule('customs'); } } if (b.classList.contains('warn') && !armed(b)) return; if (wantsAsk(b.dataset.cu, b.dataset.v)) { ui.ask = { action: b.dataset.cu, value: b.dataset.v }; renderAsk(); return; } sendCustom(b.dataset.cu, b.dataset.v, b); }
     else if (b && b.dataset.wh && ui.sim) { if (b.classList.contains('warn') && !armed(b)) return; const W = simWheel(), k = b.dataset.wh; if (k === 'reset') { W.entrants = []; W.teams = []; W.status = 'open'; setWq(null); } else if (k === 'new') { W.round++; W.teams = []; W.status = 'open'; } else if (W.entrants.length >= W.teamSize * 2) { W.status = 'drawing'; toast('Sim wheel: spin (draw not simulated)'); } else toast('Not enough entrants', true); schedule('customs'); }
     else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); ui.tookControl = true; tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
+    else if (b && b.dataset.pl) plClick(b);
     else if (b && b.dataset.rk) rkClick(b);
     else if (b && b.dataset.ytAct) { if (!b.disabled && armed(b)) ytAct(b); }
     else if (b && b.id === 'pm-go') { if (!C.pmName($('#pm-in').value).ok || armed(b)) pmSet(b); }

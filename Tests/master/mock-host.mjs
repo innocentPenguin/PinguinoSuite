@@ -52,6 +52,12 @@ export function startMock(port = 8798, opts = {}) {
       if (p === '/api/customs/mod') {
         const a = b.action, v = b.value; let ran = null;
         if (a === 'pm') { if (st.pmFail) return send(res, 200, { ok: false, error: 'mods only' }); if (/^[!/]/.test(String(v)) || String(v).length > 20) return send(res, 200, { ok: false, error: 'bad pm name' }); st.pms = (st.pms || []).concat([b]); if (!st.pmNoop) st.customs.pmName = String(v); return send(res, 200, { ok: true, pmName: st.customs.pmName || '' }); }
+        if (a === 'plan' || a === 'shuffle' || a === 'undoshuffle') { st.planCalls = st.planCalls || []; st.planCalls.push({ a, v }); const c = st.customs, fail = e => send(res, 200, { ok: false, error: e, customs: c });
+          if (st.planFail) return fail('mods only');
+          if (a === 'plan') { const n = Number(v); if (!Number.isInteger(n) || n < 0 || n > 50) return fail('plan 0-50'); c.plannedMatches = n; }
+          else if (a === 'shuffle') { st.bs = c.queue.slice(); c.queue = c.queue.slice().reverse(); c.canUndoShuffle = true; }
+          else { if (!c.canUndoShuffle) return fail('nothing to undo'); c.queue = st.bs || c.queue; c.canUndoShuffle = false; }
+          return send(res, 200, { ok: true, customs: c }); }
         if (a === 'queue') { st.customs.open = v === 'open' ? true : v === 'close' ? false : st.customs.open; if (v === 'clear') st.customs.queue = []; ran = '!queue ' + v; }
         else if (a === 'next') { st.customs.queue.shift(); ran = '!next'; }
         else if (a === 'kick') { st.customs.queue = st.customs.queue.filter(q => q.username !== v); ran = '!kick ' + v; }

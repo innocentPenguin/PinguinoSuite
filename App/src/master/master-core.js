@@ -528,6 +528,33 @@
     if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || (j.error ? 'PM name: ' + j.error : 'PM name was not set') };
     return { kind: 'good', text: 'Private match name set: ' + (typeof j.pmName === 'string' && j.pmName ? j.pmName : name) };
   }
+  /* Planned matches + queue shuffle (Customs): fields missing on an old Host hide the controls quietly */
+  function planView(c, ov, now) {
+    const t = now == null ? Date.now() : now, num = typeof (c && c.plannedMatches) === 'number' && isFinite(c.plannedMatches);
+    const used = ov && ov.until > t && typeof ov.n === 'number', n = used ? ov.n : (num ? c.plannedMatches : 0), played = typeof (c && c.playedMatches) === 'number' ? c.playedMatches : null;
+    return { plan: num, shuffle: typeof (c && c.canUndoShuffle) === 'boolean', canUndo: !!(c && c.canUndoShuffle === true), n, pending: !!used && (!num || c.plannedMatches !== ov.n), box: n === 0 ? 'unlimited' : String(n),
+      played: played == null ? '' : (n > 0 ? 'played ' + played + ' of ' + n : 'played ' + played) };
+  }
+  function planParse(v) {
+    const s = String(v == null ? '' : v).trim().toLowerCase();
+    if (s === 'unlimited') return { ok: true, value: 0, error: '' };
+    if (!/^[0-9]{1,2}$/.test(s) || +s > 50) return { ok: false, value: 0, error: 'Planned matches: a whole number from 0 (unlimited) to 50' };
+    return { ok: true, value: +s, error: '' };
+  }
+  const planStep = (cur, dir) => Math.max(0, Math.min(50, (typeof cur === 'number' && isFinite(cur) ? Math.round(cur) : 0) + (dir < 0 ? -1 : 1)));
+  /* the answer's own state is the truth (also on ok:false): customs object, or just the new fields merged into what we have */
+  function customsFromAnswer(j, cur) {
+    if (!j || typeof j !== 'object') return null; if (j.customs && typeof j.customs === 'object') return j.customs;
+    const keys = ['plannedMatches', 'playedMatches', 'canUndoShuffle'].filter(k => k in j); if (!keys.length || !cur) return null;
+    const o = Object.assign({}, cur); keys.forEach(k => { o[k] = j[k]; }); return o;
+  }
+  function planResult(r, action, n, errText) {
+    const j = r && r.json && typeof r.json === 'object' ? r.json : {};
+    if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || ('Customs ' + action + ': ' + (j.error || (r && r.error) || 'not changed')) };
+    return { kind: 'good', text: action === 'plan' ? 'Planned matches: ' + (n ? n : 'unlimited') : action === 'shuffle' ? 'Queue shuffled' : 'Shuffle undone' };
+  }
+  /* many calls inside ms -> one run of fn after the last one */
+  function createDebounce(fn, ms) { let t = null; const d = () => { clearTimeout(t); t = setTimeout(() => { t = null; fn(); }, ms); }; d.cancel = () => { clearTimeout(t); t = null; }; d.pending = () => t != null; return d; }
   /* Ranked sessions (GET/POST /api/ranked): comp games as W/L, record with sign, week record; guess() predicts a click before the Host answers */
   function normRanked(j) {
     if (!j || typeof j !== 'object' || !('active' in j || Array.isArray(j.games))) return null;
@@ -613,5 +640,5 @@
       get busy() { return busy; },
     };
   }
-  return { hhmm, rankedRule, normRanked, rankedView, rankedLimit, rankedGuess, rankedResult, createBusy, ytOrdersView, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { planView, planParse, planStep, customsFromAnswer, planResult, createDebounce, hhmm, rankedRule, normRanked, rankedView, rankedLimit, rankedGuess, rankedResult, createBusy, ytOrdersView, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });
