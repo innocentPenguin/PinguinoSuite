@@ -19,7 +19,7 @@ def api(path, body=None):
 def feed(l, w=1.5): host.stdin.write((l + '\n').encode()); host.stdin.flush(); time.sleep(w)
 def lay(profile='h'): return api('/api/scene-layouts?profile=' + profile)
 def vis(l): return {w['id']: w.get('visible') for w in l['layout']['widgets']}
-PAGES = ('players.html', 'players_vertical.html', 'queue.html', 'customs.html')
+PAGES = ('players.html', 'players_vertical.html', 'queue.html', 'customs.html', 'pm.html')   # pm.html is in the group too (it also hides itself while no private match is active)
 try:
     for _ in range(80):
         try: api('/api/status'); break
@@ -51,6 +51,11 @@ try:
     chk('end typed in chat: hidden on the next read', api('/api/customs/state')['activity'] == 'none' and l3.get('customsHidden') is True and vis(l3)['players'] is False, vis(l3))
     feed('#trial: !activity koth', 3)
     chk('chat start shows them again', lay().get('customsHidden') is False and vis(lay())['players'] is True)
+    # a queue opened with !queue open (no activity chosen) is customs too: End hides the overlays whichever way it started
+    feed('#trial: !activity end', 3); feed('#trial: !queue open', 3)
+    chk('queue opened without an activity: overlays shown', lay().get('customsHidden') is False and vis(lay())['players'] is True and api('/api/customs/state')['open'], lay().get('customsHidden'))
+    api('/api/customs/mod', {'action': 'activity', 'value': 'rl end'})
+    chk('End after !queue open: hidden', api('/api/customs/state')['open'] is False and lay().get('customsHidden') is True and vis(lay())['players'] is False, vis(lay()))
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)

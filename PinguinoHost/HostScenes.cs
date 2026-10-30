@@ -182,7 +182,17 @@ namespace PinguinoHost
         /// and is applied to whatever layout is served, so a layout is never edited. It follows the activity in the Core state (any way it was started or ended), seen on the next read or at once through CustomsSync.</summary>
         static readonly string[] CustomsPages = { "players.html", "players_vertical.html", "queue.html", "customs.html", "pm.html" };   // every page that shows who is in the match / the queue / the customs state, whatever its ?part=
         static bool InCustomsGroup(string id) { var w = Find(id); if (w == null || string.IsNullOrEmpty(w.Src)) return false; string pg = w.Src.Split('?')[0]; return CustomsPages.Contains(pg); }   // the wheel stays: a tournament runs after the customs ended
-        static string ActivityNow() { try { var a = (string)CustomsView.State()["activity"]; return string.IsNullOrEmpty(a) ? "none" : a; } catch (Exception) { return "none"; } }
+        /// <summary>the activity, or "queue" when customs run without one (the queue was opened with !queue open: it is open, someone waits or a match is live), else "none"</summary>
+        static string ActivityNow()
+        {
+            try
+            {
+                var s = CustomsView.State(); var a = (string)s["activity"]; if (!string.IsNullOrEmpty(a) && a != "none") return a;
+                bool running = (bool?)s["open"] == true || (s["match"] != null && s["match"].Type != JTokenType.Null) || ((s["queue"] as JArray)?.Count ?? 0) > 0;
+                return running ? "queue" : "none";
+            }
+            catch (Exception) { return "none"; }
+        }
         static bool SyncCustoms(JObject all)
         {
             string act = ActivityNow(), last = (string)all["lastActivity"] ?? "none"; bool hid = (bool?)all["customsHidden"] ?? false, nh = act != "none" ? false : last != "none" ? true : hid;
