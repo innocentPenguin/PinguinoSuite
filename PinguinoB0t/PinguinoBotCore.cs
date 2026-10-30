@@ -2297,9 +2297,33 @@ public class CPHInline
 
     static readonly Dictionary<string, DateTime> _alreadyTold = new Dictionary<string, DateTime>();   // "already in the queue" is said once per 5 minutes per user
     static bool _silentTune;   // true while !tune runs a setting: the Suite changes it, chat hears nothing
+    // A YouTube / TikTok viewer is keyed yt:<id> / tt:<id>: chat never shows that key (an "@key" mention is left for the Host, which turns it into the @display name). Epic name first, then the platform display name the Host publishes (pinguino.platform.users), else a neutral word.
+    static readonly System.Text.RegularExpressions.Regex RxPlatKey = new System.Text.RegularExpressions.Regex(@"(?<![A-Za-z0-9_:@])(?:yt|tt):[A-Za-z0-9_\-]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    string ShownName(string username)
+    {
+        if (string.IsNullOrEmpty(username) || username.IndexOf(':') < 1) return username;
+        try
+        {
+            Player p; if (_players.TryGetValue(username, out p) && !string.IsNullOrEmpty(p.GameId)) return p.GameId;
+            foreach (string row in (CPH.GetGlobalVar<string>("pinguino.platform.users", false) ?? "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                int tab = row.IndexOf('\t'); if (tab < 1) continue;
+                if (string.Equals(row.Substring(0, tab), username, StringComparison.OrdinalIgnoreCase)) { string nm = row.Substring(tab + 1).Trim(); if (nm != "") return nm; }
+            }
+        }
+        catch (Exception) { }
+        return "a viewer";
+    }
+    string ShowKeys(string message)
+    {
+        if (string.IsNullOrEmpty(message) || message.IndexOf(':') < 0 || message.IndexOf("use their key", StringComparison.Ordinal) >= 0) return message;
+        return RxPlatKey.Replace(message, m => ShownName(m.Value.ToLowerInvariant()));
+    }
+
     void Say(string message)
     {
         if (_silentTune) return;
+        message = ShowKeys(message);   // safety net for every chat line: no yt: / tt: key ever reaches chat
         if (_merge != null) { _merge.Add(message); return; }
         // [NEW][WEB] Status updates always reach the stream, even when the change
         // came from the website. For website-only players (no Twitch, IDs like
@@ -4541,7 +4565,7 @@ public class CPHInline
                 if (!blue && IsAlwaysGrey(e.Username)) blue = true;   // AlwaysGrey: never auto-filled onto orange
                 (blue ? r.Blue : r.Orange).Add(tp);
             }
-            Say("Filled " + fresh.Count + " slot" + (fresh.Count == 1 ? "" : "s") + ": " + string.Join(", ", fresh.Select(e => e.Username)) +
+            Say("Filled " + fresh.Count + " slot" + (fresh.Count == 1 ? "" : "s") + ": " + string.Join(", ", fresh.Select(e => ShownName(e.Username))) +
                 (fresh.Count < empty ? " (still " + (empty - fresh.Count) + " empty)" : "") + ".");
             RefreshMatch("fill");
             return true;
@@ -5329,8 +5353,8 @@ public class CPHInline
 
     void PostTeams(BalanceResult result)
     {
-        var blueNames = result.Blue.Select(p => p.Username + "(" + p.Mmr + ")");
-        var orangeNames = result.Orange.Select(p => p.Username + "(" + p.Mmr + ")");
+        var blueNames = result.Blue.Select(p => ShownName(p.Username) + "(" + p.Mmr + ")");
+        var orangeNames = result.Orange.Select(p => ShownName(p.Username) + "(" + p.Mmr + ")");
 
         string id = _lastBalance != null ? "#" + _lastBalance.MatchId + " " : "";
         if (_settings.Activity == "casual" && false /* casual group style retired: casual = teams, like competitive */)
