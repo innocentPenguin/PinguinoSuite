@@ -38,7 +38,7 @@ namespace PinguinoHost
     /// <summary>The customs queue as the Master View needs it (read from Core's live_state.json) + one mod-action endpoint that runs the chat command as the streamer and answers with the new state.</summary>
     public static class CustomsView
     {
-        static readonly Dictionary<string, string> Actions = new Dictionary<string, string> { { "queue", "!queue" }, { "next", "!next" }, { "match", "!match" }, { "win", "!win" }, { "finish", "!finish" }, { "balance", "!balance" }, { "reroll", "!reroll" }, { "kick", "!kick" }, { "mode", "!mode" }, { "format", "!format" }, { "koth", "!koth" }, { "casual", "!casual" }, { "activity", "!activity" }, { "streamer", "!streamer" }, { "pm", "!pm" } };
+        static readonly Dictionary<string, string> Actions = new Dictionary<string, string> { { "queue", "!queue" }, { "next", "!next" }, { "match", "!match" }, { "win", "!win" }, { "finish", "!finish" }, { "balance", "!balance" }, { "reroll", "!reroll" }, { "kick", "!kick" }, { "mode", "!mode" }, { "format", "!format" }, { "koth", "!koth" }, { "casual", "!casual" }, { "activity", "!activity" }, { "streamer", "!streamer" }, { "pm", "!pm" }, { "plan", "!customs plan" }, { "shuffle", "!queue shuffle" }, { "undoshuffle", "!queue undo" } };
         static string StateFile()
         {
             foreach (var f in new[] { Path.Combine(HostApi.DataDir, "live_state.json"), Path.Combine(HostApi.DataDir, "runtime", "live_state.json") }) if (File.Exists(f)) return f;
@@ -62,7 +62,7 @@ namespace PinguinoHost
                 match = new JObject { { "id", cm["id"] }, { "players", pl }, { "orange", orange }, { "blue", blue }, { "blueP", new JArray(blue.Select(n => one(n, null))) }, { "orangeP", new JArray(orange.Select(n => one(n, null))) }, { "status", cm["status"] } };   // blueP / orangeP: additive tagged lists, the old string arrays stay
             }
             return new JObject { { "ok", true }, { "streamer", ((bool?)s["streamerPlaying"] ?? true) ? "in" : "out" }, { "open", (bool?)s["queueOpen"] ?? false }, { "activity", s["activity"] }, { "mode", s["mode"] }, { "gameMode", s["gameMode"] }, { "format", s["format"] }, { "koth", (bool?)s["koth"] ?? false }, { "casualStyle", s["casualStyle"] },
- { "teams", Teams(s) }, { "teamNames", new JObject { { "blue", (string)Teams(s)["blue"]["name"] }, { "orange", (string)Teams(s)["orange"]["name"] } } }, { "pmName", (string)s["pmName"] ?? "" }, { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 }, { "strikeGame", s["strikeGame"] ?? "rl" },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
+ { "teams", Teams(s) }, { "teamNames", new JObject { { "blue", (string)Teams(s)["blue"]["name"] }, { "orange", (string)Teams(s)["orange"]["name"] } } }, { "pmName", (string)s["pmName"] ?? "" }, { "strikes", s["strikes"] ?? new JObject() }, { "strikeLimit", s["strikeLimit"] ?? 3 }, { "strikeGame", s["strikeGame"] ?? "rl" }, { "plannedMatches", s["plannedMatches"] ?? 0 }, { "playedMatches", s["playedMatches"] ?? 0 }, { "canUndoShuffle", s["canUndoShuffle"] ?? false },                { "queue", q }, { "match", match }, { "controlHolder", s["controlHolder"] }, { "sim", (bool?)s["sim"] ?? false }, { "updatedAt", s["updatedAt"] } };
         }
         static JObject Tagged(JObject o) { PlatformUsers.Tag(o, (string)o["username"] ?? ""); return o; }
         static readonly System.Text.RegularExpressions.Regex Hex = new System.Text.RegularExpressions.Regex("^#[0-9a-fA-F]{6}$");
@@ -101,6 +101,8 @@ namespace PinguinoHost
             if (!Actions.TryGetValue(a, out cmd)) return new JObject { { "ok", false }, { "error", "action must be one of " + string.Join("|", Actions.Keys) } };
             if (v.Length > 40 || v.Any(ch => !(char.IsLetterOrDigit(ch) || ch == '_' || ch == ' ' || ch == '.' || ch == ':' || ch == '-' || ch == '/'))) return new JObject { { "ok", false }, { "error", "value has characters that are not allowed" } };
             if (a == "activity" && !System.Text.RegularExpressions.Regex.IsMatch(v.ToLowerInvariant(), @"^((rl|fn) )?(competitive|comp|casual|koth|viewers|boxfights|zonewars|fnviewers|end|none)$")) return new JObject { { "ok", false }, { "error", "activity must be [rl|fn] competitive|casual|koth|viewers|boxfights|zonewars|end" } };
+            if (a == "plan" && !System.Text.RegularExpressions.Regex.IsMatch(v, @"^([0-9]|[1-4][0-9]|50)$")) return new JObject { { "ok", false }, { "error", "plan value must be a number from 0 (unlimited) to 50" } };
+            if ((a == "shuffle" || a == "undoshuffle") && v != "") v = "";
             string who = "innocentpenguin_"; try { var ch = (string)HostApi.StreamerCreds()["Channel"]; if (!string.IsNullOrEmpty(ch)) who = ch; } catch (Exception) { }
             if (a == "pm")   // the private match name: one token of 1-20 characters, no leading ! or /; "" clears it (answers {ok, pmName})
             {

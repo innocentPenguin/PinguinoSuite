@@ -636,6 +636,14 @@ public class CPHInline
         // (team size x 2). Not enough: it says so once and starts when the queue fills up. KOTH keeps its winners-stay refill. Off = mods start the next game (!next / !balance).
         public bool AutoNextMatch { get; set; } = true;
 
+        // [NEW][ROUND] Planned customs matches per round (0 = unlimited). When PlayedMatches reaches it the round ends by itself: everyone picked in the round (RoundOrder, first pick first)
+        // goes back to the END of the queue, except the players of the match that just ended. PlayedMatches then restarts; the plan stays.
+        public int PlannedMatches { get; set; } = 0;
+        public int PlayedMatches { get; set; } = 0;
+        public List<string> RoundOrder { get; set; } = new List<string>();
+        // [NEW][SHUFFLE] one level of undo for !queue shuffle: the waiting order before the shuffle (null = nothing to undo)
+        public List<string> ShuffleBefore { get; set; } = null;
+
         // [NEW] !reroll picks randomly among splits within this many avg MMR
         // of the best split, so rerolls actually produce different teams.
         public int RerollToleranceMmr { get; set; } = 50;
@@ -2106,6 +2114,7 @@ public class CPHInline
             teamNames = new { blue = TeamName("blue"), orange = TeamName("orange") },   // plain labels (ids stay blue / orange)
             pmName = _settings.PmName ?? "",   // the private match name ("" = none)   // [NEW][TEAMS] read by the Master View, the overlays and the site
             overlay = new { altSeconds = _settings.OverlayAltSeconds, fadeMs = _settings.OverlayFadeMs },   // read by players.html / players_vertical.html
+            plannedMatches = _settings.PlannedMatches, playedMatches = _settings.PlayedMatches, canUndoShuffle = _settings.ShuffleBefore != null && _settings.ShuffleBefore.Count > 0,
             activity = _settings.Activity,            currentMatch = match,
             liveMatch = hold ? live : null,   // [NEW][KOTH] only while the public view is being held
             hold = hold,
@@ -2241,6 +2250,7 @@ public class CPHInline
             case "!unregister": return HandleUnregister(userLower, input, isPrivileged);
             case "!pos":      return HandlePos(userLower);
             case "!myrank":   return HandleRank(userLower);                        // renamed from !rank (clashed with another bot)
+            case "!customs":  return HandleCustomsCmd(userLower, input, isPrivileged);
             case "!queue":    if (isPrivileged) _lastCustomsActivity = NowMs(); return HandleQueue(userLower, input, isPrivileged);
             case "!balance":  if (isPrivileged) _lastCustomsActivity = NowMs(); return HandleBalance(userLower, isPrivileged);
             case "!next":     if (isPrivileged) _lastCustomsActivity = NowMs(); return HandleNext(userLower, input, isPrivileged);
@@ -2717,11 +2727,102 @@ public class CPHInline
         return true;
     }
 
+    // [NEW][ROUND] planned matches per round, auto round end, and the queue shuffle with one undo
+    void NoteRoundPlayer(string login)
+    {
+        if (string.IsNullOrEmpty(login) || IsStreamer(login) || IsPractice(login)) return;
+        if (_settings.RoundOrder == null) _settings.RoundOrder = new List<string>();
+        if (!_settings.RoundOrder.Contains(login)) _settings.RoundOrder.Add(login);
+    }
+
+    // A match result is in (stats, points and SendToBack done). Counts it and, when the plan is reached, ends the round:
+    // the round's players go to the END of the waiting queue in the order they were first picked; the players of the match that just ended
+    // are NOT re-queued (they just played; the existing rules still apply to them: streamer to the front, recyclers to the back). Anyone already waiting stays where they are.
+    void CountRoundMatch(BalanceResult res, bool practice)
+    {
+        if (practice || res == null) return;
+        foreach (var tp in res.Blue.Concat(res.Orange)) NoteRoundPlayer(tp.Username);
+        _settings.PlayedMatches++;
+        if (_settings.PlannedMatches > 0 && _settings.PlayedMatches >= _settings.PlannedMatches && !IsKothMode())
+        {
+            var last = new HashSet<string>(res.Blue.Concat(res.Orange).Select(tp => tp.Username));
+            int n = 0;
+            foreach (var login in (_settings.RoundOrder ?? new List<string>()).ToList())
+            {
+                if (last.Contains(login) || IsStreamer(login) || IsPractice(login) || !_players.ContainsKey(login)) continue;
+                if (AddToQueue(login)) n++;
+            }
+            Say("Customs round done: " + _settings.PlayedMatches + " match" + (_settings.PlayedMatches == 1 ? "" : "es") + (n > 0 ? ", players re-queued" : ""));
+            _settings.PlayedMatches = 0; _settings.RoundOrder = new List<string>();
+            SaveQueue();
+        }
+        SaveSettings();
+    }
+
+    // !customs plan [N]  (mods; N = 0 means unlimited)
+    bool HandleCustomsCmd(string user, string input, bool isPrivileged)
+    {
+        var parts = string.IsNullOrWhiteSpace(input) ? new string[0] : input.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        string sub = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        if (sub != "plan") return false;   // "!customs win|loss <team>" is the Host's
+        if (parts.Length < 2)
+        {
+            Say("@" + user + " Customs round: " + (_settings.PlannedMatches == 0 ? "no plan (unlimited)" : _settings.PlannedMatches + " matches planned") + ", " + _settings.PlayedMatches + " played.");
+            return true;
+        }
+        if (!isPrivileged) { Say("@" + user + " Only mods can set the round plan."); return true; }
+        int n;
+        if (!int.TryParse(parts[1], out n) || n < 0 || n > 50) { Say("@" + user + " Usage: !customs plan <0-50> (0 = unlimited)"); return true; }
+        _settings.PlannedMatches = n; SaveSettings();
+        Say(n == 0 ? "Customs round: unlimited matches." : "Customs round: " + n + " match" + (n == 1 ? "" : "es") + " planned (" + _settings.PlayedMatches + " played).");
+        PublishState("queue_update", "plan");
+        return true;
+    }
+
+    static Random _shuffleRng;
+    static Random ShuffleRng() { if (_shuffleRng == null) { int seed; _shuffleRng = int.TryParse(Environment.GetEnvironmentVariable("PINGUINO_SHUFFLE_SEED"), out seed) ? new Random(seed) : _rng; } return _shuffleRng; }
+
+    // !queue shuffle: randomises the WAITING entries (not the current match; the streamer keeps his front place). One undo level in the settings.
+    bool DoQueueShuffle(string user)
+    {
+        var w = GetWaitingQueue();
+        var movable = w.Where(e => !IsStreamer(e.Username)).ToList();
+        if (movable.Count < 2) { Say("@" + user + " Not enough players waiting to shuffle."); return true; }
+        _settings.ShuffleBefore = w.Select(e => e.Username).ToList();
+        var slots = movable.Select(e => e.Position).OrderBy(x => x).ToList();
+        var rng = ShuffleRng(); var order = movable.ToList();
+        for (int i = order.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); var t = order[i]; order[i] = order[j]; order[j] = t; }
+        for (int i = 0; i < order.Count; i++) order[i].Position = slots[i];
+        CompactPositions(); SaveQueue(); SaveSettings();
+        Say("Queue shuffled (" + order.Count + " players). !queue undo puts the old order back.");
+        PublishState("queue_update", "shuffled");
+        return true;
+    }
+
+    // !queue undo: back to the pre-shuffle order. Merge rule: players still waiting go back in their old order; players who joined after the shuffle stay at the end
+    // (in their current order); players who left or were picked since are dropped from the snapshot. The undo level is used up.
+    bool DoQueueUndoShuffle(string user)
+    {
+        var before = _settings.ShuffleBefore;
+        if (before == null || before.Count == 0) { Say("@" + user + " Nothing to undo."); return true; }
+        var w = GetWaitingQueue();
+        var byName = w.ToDictionary(e => e.Username, e => e);
+        var restored = before.Where(n => byName.ContainsKey(n)).ToList();
+        var rest = w.Where(e => !before.Contains(e.Username)).Select(e => e.Username).ToList();
+        int pos = w.Count > 0 ? w.Min(e => e.Position) : 1;
+        foreach (var n in restored.Concat(rest)) byName[n].Position = pos++;
+        _settings.ShuffleBefore = null;
+        CompactPositions(); SaveQueue(); SaveSettings();
+        Say("Queue order restored" + (rest.Count > 0 ? " (" + rest.Count + " who joined since " + (rest.Count == 1 ? "is" : "are") + " at the end)" : "") + ".");
+        PublishState("queue_update", "unshuffled");
+        return true;
+    }
+
     List<QueueEntry> PullNextBatch(int count)
     {
         // Entries are references into _queue, so setting Status here updates the list.
         var batch = GetWaitingQueue().Take(count).ToList();
-        foreach (var entry in batch) { entry.Status = "active"; entry.Recycle = false; }
+        foreach (var entry in batch) { entry.Status = "active"; entry.Recycle = false; NoteRoundPlayer(entry.Username); }
         SaveQueue();
         return batch;
     }
@@ -2861,7 +2962,7 @@ public class CPHInline
 
     void ClearQueue()
     {
-        _queue.Clear();
+        _queue.Clear(); _settings.ShuffleBefore = null;
         _settings.QueueOpen = false;
         _autoFirstDone = false;
         _lastBalance = null;            // [FIX] clearing the queue also ends the stale lobby
@@ -3613,7 +3714,7 @@ public class CPHInline
     {
         string sub = string.IsNullOrEmpty(input) ? "" : input.Split(' ')[0].ToLower();
 
-        if ((sub == "open" || sub == "close" || sub == "clear") && !isPrivileged)
+        if ((sub == "open" || sub == "close" || sub == "clear" || sub == "shuffle" || sub == "undo") && !isPrivileged)
         {
             Say("@" + user + " Only mods and the broadcaster can manage the queue.");
             return true;
@@ -3645,6 +3746,9 @@ public class CPHInline
                 else { Say("The queue has been cleared."); PublishState("queue_close", "cleared"); }
                 break;
             }
+
+            case "shuffle": return DoQueueShuffle(user);
+            case "undo": return DoQueueUndoShuffle(user);
 
             case "list":
             {
@@ -4115,7 +4219,7 @@ public class CPHInline
         if (sub == "end" || sub == "none")
         {
             ClearQueue();
-            _settings.Activity = "none";
+            _settings.Activity = "none"; _settings.PlayedMatches = 0; _settings.RoundOrder = new List<string>();
             _settings.PmName = ""; MirrorLobbyName("");
             SetKothFlag(false);
             SaveSettings();
@@ -4733,6 +4837,7 @@ public class CPHInline
             : counts
             ? " (+" + _settings.PointsWin + " pts winners, +" + _settings.PointsLoss + " pts losers)"
             : " (casual: no points)"));
+        try { CountRoundMatch(res, prac); } catch (Exception ex) { CPH.LogInfo("[BVQ] round count failed: " + ex.Message); }
         PublishState("match_result", winnerTeam);
     }
 
@@ -5289,7 +5394,7 @@ public class CPHInline
             if (!string.IsNullOrEmpty(_settings.Activity) && _settings.Activity != "none")
             {
                 ClearQueue();
-                _settings.Activity = "none";
+                _settings.Activity = "none"; _settings.PlayedMatches = 0; _settings.RoundOrder = new List<string>();
                 CPH.LogInfo("[BVQ] Stream went offline: the activity was ended.");
                 PublishState("activity", "none");
             }
