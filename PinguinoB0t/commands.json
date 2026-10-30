@@ -154,13 +154,15 @@
       "action": "PinguinoBotCore",
       "category": "Community Games",
       "who": "everyone / mods",
-      "usage": "!queue  |  !queue list  |  mods: !queue open | close | clear",
-      "description": "Queue status. Mods open, close, or clear (clear also closes and ends the lobby).",
+      "usage": "!queue  |  !queue list  |  mods: !queue open | close | clear | shuffle | undo",
+      "description": "Queue status. Mods open, close, or clear (clear also closes and ends the lobby), shuffle the waiting players (the streamer keeps the front), or undo the last shuffle.",
       "examples": [
         "!queue",
         "!queue list",
         "!queue open",
-        "!queue clear"
+        "!queue clear",
+        "!queue shuffle",
+        "!queue undo"
       ],
       "section": "Essentials",
       "importance": 5,
@@ -1921,6 +1923,39 @@
       ],
       "section": "Chat commands",
       "importance": 14
+    },
+    {
+      "command": "!customs plan",
+      "aliases": [],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "everyone / mods",
+      "usage": "!customs plan  |  mods: !customs plan <0-50>",
+      "description": "Customs round plan. Mods set how many matches a round has (0 = unlimited). When that many are played the round ends by itself: everyone who played this round goes back to the end of the queue in pick order, except the players of the last match. Anyone can read the plan.",
+      "examples": [
+        "!customs plan",
+        "!customs plan 3",
+        "!customs plan 0"
+      ],
+      "section": "Chat commands",
+      "importance": 15
+    },
+    {
+      "command": "!queue shuffle",
+      "aliases": [
+        "!queue undo"
+      ],
+      "action": "PinguinoBotCore",
+      "category": "Community Games",
+      "who": "mods",
+      "usage": "!queue shuffle  |  !queue undo",
+      "description": "Shuffles the waiting players (the streamer keeps the front). !queue undo puts the old order back once; players who joined since stay at the end, players who left are dropped.",
+      "examples": [
+        "!queue shuffle",
+        "!queue undo"
+      ],
+      "section": "Chat commands",
+      "importance": 16
     }
   ]
 }

@@ -26,10 +26,11 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!lobby` | `!lobby` | Show the current Blue and Orange teams. |
 | `!stats` | `!stats [user]` | Wins, losses and points for you or another player. |
 | `!topwins` | `!topwins` | Top 5 community-games players by wins (ties broken by points). |
-| `!queue` | `!queue  \|  !queue list  \|  mods: !queue open \| close \| clear` | Queue status. Mods open, close, or clear (clear also closes and ends the lobby). |
+| `!queue` | `!queue  \|  !queue list  \|  mods: !queue open \| close \| clear \| shuffle \| undo` | Queue status. Mods open, close, or clear (clear also closes and ends the lobby), shuffle the waiting players (the streamer keeps the front), or undo the last shuffle. |
 | `!mmr` | `!mmr [@user]` | Your own MMR (mods can look up anybody). |
 | `!strikes` | `!strikes` | How many strikes you have (3 = cannot join customs), split into permanent (red, never expire) and temporary (orange, one wears off per day). |
 | `!pmrules` | `!pmrules` | The private match rules (also posted once whenever the customs queue opens). 30 second cooldown. |
+| `!customs plan` | `!customs plan  \|  mods: !customs plan <0-50>` | Customs round plan. Mods set how many matches a round has (0 = unlimited). When that many are played the round ends by itself: everyone who played this round goes back to the end of the queue in pick order, except the players of the last match. Anyone can read the plan. |
 
 ### Emotes
 
@@ -198,6 +199,7 @@ The website reads `commands.json`, which is the source of truth (the Host also s
 | `!move` | `!move <user> <position>` | Move someone in the queue. |
 | `!out` | `!out <user>` | Take a player out of the current match. |
 | `!in` | `!in <user> <blue\|orange>` | Put a player into a team. |
+| `!queue shuffle` | `!queue shuffle  \|  !queue undo` | Shuffles the waiting players (the streamer keeps the front). !queue undo puts the old order back once; players who joined since stay at the end, players who left are dropped. |
 
 ### Economy (mods)
 
