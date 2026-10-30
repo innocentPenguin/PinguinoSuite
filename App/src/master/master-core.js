@@ -535,19 +535,33 @@
     const n = v => (typeof v === 'number' && isFinite(v) ? v : null), w = j.week && typeof j.week === 'object' ? j.week : {};
     const wins = n(j.wins) != null ? j.wins : games.filter(g => g === 'W').length, losses = n(j.losses) != null ? j.losses : games.filter(g => g === 'L').length;
     const limit = n(j.limit) != null ? j.limit : 5, vis = Array.isArray(j.visible) ? j.visible.map(g => String(g).toUpperCase()).filter(g => g === 'W' || g === 'L') : games.slice(-limit);
-    return { active: !!j.active, limit, games, visible: vis, net: n(j.net) != null ? j.net : wins - losses, inProgress: j.inProgress, wins, losses, day: j.day == null ? '' : String(j.day), week: { wins: n(w.wins) || 0, losses: n(w.losses) || 0, net: n(w.net) != null ? w.net : (n(w.wins) || 0) - (n(w.losses) || 0) } };
+    const bk = j.break && typeof j.break === 'object' ? j.break : {}, mo = j.month && typeof j.month === 'object' ? j.month : null, ruleN = v => (typeof v === 'number' && isFinite(v) && v >= 0 ? v : null);
+    return { brk: { active: !!bk.active, reason: String(bk.reason || ''), since: bk.since ? String(bk.since) : '' }, breakAfter: ruleN(j.breakAfter) != null ? j.breakAfter : ruleN(bk.afterGames) != null ? bk.afterGames : 3, lossStreak: ruleN(j.lossStreak) != null ? j.lossStreak : ruleN(bk.lossStreak) != null ? bk.lossStreak : 2,
+      breaks: (Array.isArray(j.breaks) ? j.breaks : []).filter(x => x && typeof x === 'object').map(x => ({ at: x.at == null ? '' : x.at, reason: String(x.reason || (x.afterGames ? x.afterGames + ' games' : 'break')) })), startedAt: j.startedAt == null ? '' : j.startedAt, endedAt: j.endedAt == null ? '' : j.endedAt,
+      month: mo ? { wins: n(mo.wins) || 0, losses: n(mo.losses) || 0, net: n(mo.net) != null ? mo.net : (n(mo.wins) || 0) - (n(mo.losses) || 0) } : null,
+      active: !!j.active, limit, games, visible: vis, net: n(j.net) != null ? j.net : wins - losses, inProgress: j.inProgress, wins, losses, day: j.day == null ? '' : String(j.day), week: { wins: n(w.wins) || 0, losses: n(w.losses) || 0, net: n(w.net) != null ? w.net : (n(w.wins) || 0) - (n(w.losses) || 0) } };
   }
   const signed = x => (x > 0 ? '+' : '') + x;
+  function hhmm(v) {   /* ISO text, unix seconds or ms -> local HH:MM; '' when it is not a time */
+    if (v == null || v === '') return ''; const d = new Date(typeof v === 'number' ? (v < 1e12 ? v * 1000 : v) : (/^[0-9]+$/.test(String(v)) ? +v * (String(v).length <= 10 ? 1000 : 1) : String(v)));
+    return isNaN(d.getTime()) ? '' : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
   function rankedView(r, ov) {
     if (!r || r.status === 404 || r.status === 0) return { state: 'none', text: 'Host does not offer ranked yet' };
     const j = normRanked(ov || (r.json && typeof r.json === 'object' ? r.json : null))   /* a refusal (ok:false) still carries the state: take it as truth */;
     if (!j) return { state: 'error', text: 'Ranked: ' + ((r.json && r.json.error) || r.error || 'no answer') };
     const nextN = typeof j.inProgress === 'number' && j.inProgress > 0 ? j.inProgress : j.games.length + 1;   /* inProgress is always a number (games + 1) */
-    return { state: j.active ? 'active' : 'idle', active: j.active, games: j.visible, all: j.games, limit: j.limit, gameN: nextN, record: j.wins + '-' + j.losses + ' (' + signed(j.net) + ')', week: 'Week ' + j.week.wins + '-' + j.week.losses + ' (' + signed(j.week.net) + ')', day: j.day, text: j.active ? 'Game ' + nextN + ' in progress' : 'Not running', json: j };
+    return { state: j.active ? 'active' : 'idle', active: j.active, games: j.visible, all: j.games, limit: j.limit, gameN: nextN, record: j.wins + '-' + j.losses + ' (' + signed(j.net) + ')', week: 'Week ' + j.week.wins + '-' + j.week.losses + ' (' + signed(j.week.net) + ')' + (j.month ? ' · Month ' + j.month.wins + '-' + j.month.losses + ' (' + signed(j.month.net) + ')' : ''), onBreak: j.active && j.brk.active, breakText: 'On break: ' + (j.brk.reason || 'manual') + (hhmm(j.brk.since) ? ' since ' + hhmm(j.brk.since) : ''), breakAfter: j.breakAfter, lossStreak: j.lossStreak, breaks: j.breaks,
+      info: [hhmm(j.startedAt) ? 'Started ' + hhmm(j.startedAt) : '', !j.active && hhmm(j.endedAt) ? 'ended ' + hhmm(j.endedAt) : '', j.breaks.length ? j.breaks.length + (j.breaks.length === 1 ? ' break: ' : ' breaks: ') + j.breaks.map(b => (hhmm(b.at) ? hhmm(b.at) + ' ' : '') + b.reason).join(', ') : ''].filter(Boolean).join(' · '), day: j.day, text: j.active ? 'Game ' + nextN + ' in progress' : 'Not running', json: j };
   }
   function rankedLimit(v) {
     const s = String(v == null ? '' : v).trim();
-    if (!/^[0-9]{1,3}$/.test(s) || +s < 1 || +s > 99) return { ok: false, value: 0, error: 'Games per session: a whole number from 1 to 99' };
+    if (!/^[0-9]{1,2}$/.test(s) || +s < 1 || +s > 20) return { ok: false, value: 0, error: 'Games per session: a whole number from 1 to 20' };
+    return { ok: true, value: +s, error: '' };
+  }
+  function rankedRule(v, what) {   /* break rules: 0 = off, up to 20 */
+    const s = String(v == null ? '' : v).trim();
+    if (!/^[0-9]{1,2}$/.test(s) || +s > 20) return { ok: false, value: 0, error: (what || 'Break rule') + ': a whole number from 0 (off) to 20' };
     return { ok: true, value: +s, error: '' };
   }
   function rankedGuess(j, action, value) {
@@ -558,13 +572,15 @@
     else if (action === 'undo') { const last = g.pop(); if (last) { o.games = g; bump(-1, last === 'W'); } }
     else if (action === 'reset') { o.games = []; o.wins = 0; o.losses = 0; o.net = 0; }
     else if (action === 'limit') o.limit = +value;
+    else if (action === 'break') { if (o.active) o.brk = { active: true, reason: 'manual', since: '' }; } else if (action === 'resume') o.brk = Object.assign({}, o.brk, { active: false });
+    else if (action === 'breakafter') o.breakAfter = +value; else if (action === 'lossstreak') o.lossStreak = +value;
     o.visible = o.games.slice(-o.limit); o.inProgress = o.games.length + 1;
     return o;
   }
   function rankedResult(r, action, errText) {
     const j = r && r.json && typeof r.json === 'object' ? r.json : {};
     if (!r || !r.ok || j.ok === false) return { kind: 'bad', text: errText || ('Ranked ' + action + ': ' + (j.error || (r && r.error) || 'not changed')) };
-    return { kind: 'good', text: ({ start: 'Ranked started', stop: 'Ranked stopped', win: 'Win recorded', loss: 'Loss recorded', undo: 'Last game undone', reset: 'Ranked session reset', limit: 'Games per session set' })[action] || 'Ranked updated' };
+    return { kind: 'good', text: ({ start: 'Ranked started', stop: 'Ranked stopped', win: 'Win recorded', loss: 'Loss recorded', undo: 'Last game undone', reset: 'Ranked session reset', limit: 'Games per session set', break: 'Break started', resume: 'Back from the break', breakafter: 'Break after games saved', lossstreak: 'Losses in a row rule saved' })[action] || 'Ranked updated' };
   }
   /* YouTube shop orders (GET /api/ytorders): who ordered what, how long they wait; ids in "gone" are hidden at once (optimistic) */
   function ytOrdersView(r, gone, now) {
@@ -597,5 +613,5 @@
       get busy() { return busy; },
     };
   }
-  return { normRanked, rankedView, rankedLimit, rankedGuess, rankedResult, createBusy, ytOrdersView, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { hhmm, rankedRule, normRanked, rankedView, rankedLimit, rankedGuess, rankedResult, createBusy, ytOrdersView, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });
