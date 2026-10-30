@@ -112,7 +112,7 @@ namespace PinguinoHost
                 foreach (var p in Days.Reverse().Take(30).Reverse())
                 {
                     Meta m; Metas.TryGetValue(p.Key, out m); int w = Count(p.Value, 'W'), l = Count(p.Value, 'L');
-                    days.Add(new JObject { { "day", p.Key }, { "games", new JArray(p.Value.Select(c => (JToken)c.ToString())) }, { "wins", w }, { "losses", l }, { "net", w - l },
+                    days.Add(new JObject { { "day", p.Key }, { "games", new JArray((p.Value.Length > 50 ? p.Value.Substring(p.Value.Length - 50) : p.Value).Select(c => (JToken)c.ToString())) }, { "wins", w }, { "losses", l }, { "net", w - l },
                         { "startedAt", m == null ? "" : m.StartedAt }, { "endedAt", m == null ? "" : m.EndedAt },
                         { "breaks", new JArray((m == null ? new List<Tuple<string, string, int>>() : m.Breaks).Select(b => (JToken)new JObject { { "at", b.Item1 }, { "reason", b.Item2 }, { "afterGames", b.Item3 } })) } });
                 }
