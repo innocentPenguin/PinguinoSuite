@@ -59,7 +59,7 @@ namespace PinguinoHost
             {
                 if (S(a, "eventType") != "TwitchRedeem") return;
                 if (S(a, "sim") != "" && Environment.GetEnvironmentVariable("PINGUINO_ACTIVITY_SIM") != "1") return;
-                string title = S(a, "title"), user = S(a, "userName"); var at = AtOf(a);
+                string title = S(a, "title"), user = S(a, "userName"), announce = null; var at = AtOf(a);
                 string id = S(a, "redemptionId"); if (id == "") id = S(a, "eventId"); if (id == "") id = "t:" + user + ":" + Norm(title) + ":" + at.ToUnixTimeSeconds();
                 lock (L)
                 {
@@ -72,12 +72,13 @@ namespace PinguinoHost
                     if (e == null) { e = new JObject { { "title", (string)Groups()[key]["title"] ?? key }, { "baseline", 0 }, { "baselineThrough", at.AddSeconds(-1).ToString("o") }, { "perMonth", new JObject() }, { "live", 0 }, { "livePerMonth", new JObject() } }; grp[key] = e; }   // never seeded: counts from its first sight
                     var cut = Through(e["baselineThrough"]);
                     if (cut.HasValue && at <= cut.Value) { Save(c); return; }   // already inside the baseline
-                    e["live"] = ((int?)e["live"] ?? 0) + 1;
+                    e["live"] = ((int?)e["live"] ?? 0) + 1; if (key == "hydrate") announce = "Penguin has hydrated " + Total(e) + " times";
                     var lm = e["livePerMonth"] as JObject; if (lm == null) { lm = new JObject(); e["livePerMonth"] = lm; }
                     string mk = at.ToString("yyyy-MM", CultureInfo.InvariantCulture); lm[mk] = ((int?)lm[mk] ?? 0) + 1;
                     var prev = Through(e["lastRedeemAt"]); if (!prev.HasValue || at > prev.Value) e["lastRedeemAt"] = at.ToString("o");
                     Save(c);
                 }
+                if (announce != null) ChannelLore.SayCore(announce);   // one line per counted Hydrate redemption id (a repeated id returned above)
             }
             catch (Exception) { }
         }

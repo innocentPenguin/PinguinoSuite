@@ -58,9 +58,13 @@ try:
     feed('redeem eve r5 09c78a1c-767e-4f07 2026-10-30T00:59:59Z Pushups'); feed('redeem eve r6 09c78a1c-767e-4f07 2026-10-30T01:00:00Z Pushups')
     chk('redemptions at or before the cut-off are not counted', G()['pushups']['live'] == 4, G()['pushups'])
     feed('redeem eve r7 09c78a1c-767e-4f07 2026-10-30T01:00:01Z Pushups'); chk('one second after the cut-off is counted', G()['pushups']['live'] == 5 and G()['pushups']['lastRedeemAt'].startswith('2026-11-01'), G()['pushups'])
-    feed('redeem fay r8 4ef5ade3-aaaa 2026-10-30T05:00:00Z Hydrate'); feed('redeem fay r9 - 2026-10-30T05:01:00Z hydrate!')
+    o0 = len(out()); feed('redeem fay r8 4ef5ade3-aaaa 2026-10-30T05:00:00Z Hydrate'); feed('redeem fay r9 - 2026-10-30T05:01:00Z hydrate!')
+    feed('redeem fay r8 4ef5ade3-aaaa 2026-10-30T05:00:00Z Hydrate'); feed('redeem fay r0 4ef5ade3-aaaa 2026-10-30T00:30:00Z Hydrate')
+    hl = [l for l in out()[o0:].splitlines() if l.startswith('[say] Penguin has hydrated')]
+    chk('one hydrate line per counted redemption id (none for a repeat or a pre-cut-off one)', hl == ['[say] Penguin has hydrated 925 times', '[say] Penguin has hydrated 926 times'], hl)
+    feed('redeem hal r11 fc9d5c74-aaaa 2026-10-30T05:05:00Z Hello There'); chk('no hydrate line for another group', 'hydrated 927' not in out())
     chk('hydrate folds on id and on an alias', G()['hydrate']['live'] == 2 and G()['hydrate']['total'] == 926, G()['hydrate'])
-    feed('redeem gus r10 aaaaaaaa-no-group 2026-10-30T05:02:00Z Brand New Reward'); chk('an unknown reward joins no group', all(v['live'] == 0 for k, v in G().items() if k not in ('pushups', 'hydrate')), {k: v['live'] for k, v in G().items()})
+    feed('redeem gus r10 aaaaaaaa-no-group 2026-10-30T05:02:00Z Brand New Reward'); chk('an unknown reward joins no group', all(v['live'] == 0 for k, v in G().items() if k not in ('pushups', 'hydrate', 'hello_there')), {k: v['live'] for k, v in G().items()})
     # chat variable
     acts = [{'id': 'cnt', 'name': 'Counter', 'enabled': True, 'triggers': [{'type': 'command', 'names': ['!zzcount']}], 'steps': [{'type': 'say', 'text': 'pushups so far: {redeem.pushups} hydrate: {redeem.hydrate} none: {redeem.nope}'}]}]
     chk('automation saved', api('/api/automations', {'doc': {'version': 1, 'actions': acts}}).get('ok'))
