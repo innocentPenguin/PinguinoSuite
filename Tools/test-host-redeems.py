@@ -49,7 +49,7 @@ try:
     feed('redeem cara r3 - 2026-10-30T02:10:00Z  pushups ')
     feed('redeem dan r4 b618f97f-1111 2026-11-01T03:00:00Z Whatever The Old Name Was')
     g = G(); chk('4 renamed/re-created pushups reward ids and titles fold into one group', g['pushups']['live'] == 4 and g['pushups']['total'] == 165, g['pushups'])
-    chk('per month adds live to baseline', g['pushups']['perMonth']['2026-10'] == 29 and g['pushups']['perMonth']['2026-11'] == 1, g['pushups']['perMonth'])
+    chk('per month adds live to baseline (on the Chicago day: 03:00Z on Nov 1 is still Oct 31)', g['pushups']['perMonth']['2026-10'] == 30 and '2026-11' not in g['pushups']['perMonth'], g['pushups']['perMonth'])
     chk('estimated stays out of the total', g['pushups']['total'] == g['pushups']['baseline'] + g['pushups']['live'])
     # dedupe: the same redemption id again (EventSub redelivery), also with another title
     feed('redeem alice r1 09c78a1c-767e-4f07-a4ae-2f4a4935fc10 2026-10-30T02:00:00Z Pushups'); feed('redeem alice r1 - - Pushups')

@@ -11,7 +11,10 @@ namespace PinguinoHost
     /// <summary>Channel point redeem counters. Data\runtime\redeem_groups.json maps a group key (pushups, hydrate...) to reward ids (prefix match, 8+ chars) and title aliases, so a renamed or re-created reward
     /// still folds into one group (id first, normalised title second). Data\runtime\redeem_counts.json holds per group {title, baseline, baselineThrough, perMonth, live, livePerMonth, lastRedeemAt}
     /// (+ "estimated" notes that never enter a total). Total = baseline + live. Live counts one redemption id once and only when it happened AFTER baselineThrough (the seed's cut-off), so the history that is
-    /// already inside the baseline is never added twice. Read with GET /api/redeems and the chat variable {redeem.&lt;group&gt;}. Seeded by Tools\seed-redeems.py.</summary>
+    /// already inside the baseline is never added twice. Read with GET /api/redeems and the chat variable {redeem.&lt;group&gt;}. Seeded by Tools\seed-redeems.py.
+    /// Per stream-day history (DayCounts, the Periods helper): "days" = the seeded reconstruction (YYYY-MM-DD -> n, inside the baseline), "liveDays" = redemptions counted by the Host; today / week / month answer from both,
+    /// all-time = baseline + live. "recordStart" = first day the group's source has records (nothing is known before it); "estimatedDays" is a separate series that never enters a total or a period.
+    /// Chat: !hydrate [today|week|month|all] (and !mimimimi, !hellothere ... = the group key without underscores; pushups are !pushup).</summary>
     public static class RedeemCounts
     {
         static readonly object L = new object(); static JObject _groups, _counts; static DateTime _groupsStamp;
@@ -72,7 +75,7 @@ namespace PinguinoHost
                     if (e == null) { e = new JObject { { "title", (string)Groups()[key]["title"] ?? key }, { "baseline", 0 }, { "baselineThrough", at.AddSeconds(-1).ToString("o") }, { "perMonth", new JObject() }, { "live", 0 }, { "livePerMonth", new JObject() } }; grp[key] = e; }   // never seeded: counts from its first sight
                     var cut = Through(e["baselineThrough"]);
                     if (cut.HasValue && at <= cut.Value) { Save(c); return; }   // already inside the baseline
-                    e["live"] = ((int?)e["live"] ?? 0) + 1; if (key == "hydrate") announce = "Penguin has hydrated " + Total(e) + " times";
+                    e["live"] = ((int?)e["live"] ?? 0) + 1; var ld = e["liveDays"] as JObject; if (ld == null) { ld = new JObject(); e["liveDays"] = ld; } DayCounts.Add(ld, DayCounts.DayOf(at.ToUnixTimeSeconds()), 1); if (key == "hydrate") announce = "Penguin has hydrated " + Total(e) + " times";
                     var lm = e["livePerMonth"] as JObject; if (lm == null) { lm = new JObject(); e["livePerMonth"] = lm; }
                     string mk = at.ToString("yyyy-MM", CultureInfo.InvariantCulture); lm[mk] = ((int?)lm[mk] ?? 0) + 1;
                     var prev = Through(e["lastRedeemAt"]); if (!prev.HasValue || at > prev.Value) e["lastRedeemAt"] = at.ToString("o");
@@ -92,7 +95,31 @@ namespace PinguinoHost
             catch (Exception) { return "0"; }
         }
 
-        /// <summary>GET /api/redeems: {ok, groups:{key:{title, total, baseline, baselineThrough, live, perMonth (baseline + live), lastRedeemAt, estimated?}}}</summary>
+        /// <summary>every day of a group: seeded days + live days (an old seed with only perMonth has none)</summary>
+        static JObject MergedDays(JObject e)
+        {
+            var m = new JObject(); foreach (var src in new[] { e["days"] as JObject, e["liveDays"] as JObject }) if (src != null) foreach (var p in src.Properties()) m[p.Name] = ((int?)m[p.Name] ?? 0) + ((int?)p.Value ?? 0);
+            return m;
+        }
+        /// <summary>per-month totals: from the seeded days when the group has them, else the seeded perMonth; plus the live months</summary>
+        static JObject PerMonthOf(JObject e)
+        {
+            var seeded = e["days"] as JObject; var pm = seeded != null && seeded.Count > 0 ? DayCounts.PerMonth(seeded) : new JObject();
+            if (pm.Count == 0) foreach (var m in (e["perMonth"] as JObject ?? new JObject()).Properties()) pm[m.Name] = (int)m.Value;
+            var live = DayCounts.PerMonth(e["liveDays"] as JObject);
+            if (live.Count == 0) live = e["livePerMonth"] as JObject ?? new JObject();   // counted before liveDays existed
+            foreach (var m in live.Properties()) pm[m.Name] = ((int?)pm[m.Name] ?? 0) + (int)m.Value;
+            return new JObject(pm.Properties().OrderBy(q => q.Name, StringComparer.Ordinal));
+        }
+        /// <summary>today | week | month | all of one group</summary>
+        public static int PeriodTotal(JObject e, string period, long ts)
+        {
+            if (period == "all") return Total(e);
+            if (period == "month") return (int?)PerMonthOf(e)[Periods.MonthKey(ts)] ?? 0;
+            return DayCounts.Sum(MergedDays(e), period, ts);
+        }
+
+        /// <summary>GET /api/redeems: {ok, groups:{key:{title, total, all(=total), today, week, month, baseline, baselineThrough, live, perMonth (baseline + live), days, recordStart, lastRedeemAt, estimated?, estimatedDays?}}}</summary>
         public static JObject Api()
         {
             lock (L)
@@ -100,15 +127,58 @@ namespace PinguinoHost
                 var groups = new JObject(); var g = Counts()["groups"] as JObject ?? new JObject(); var defs = Groups();
                 foreach (var kv in g.Properties())
                 {
-                    var e = (JObject)kv.Value; var pm = new JObject();
-                    foreach (var m in (e["perMonth"] as JObject ?? new JObject()).Properties()) pm[m.Name] = (int)m.Value;
-                    foreach (var m in (e["livePerMonth"] as JObject ?? new JObject()).Properties()) pm[m.Name] = ((int?)pm[m.Name] ?? 0) + (int)m.Value;
-                    var o = new JObject { { "title", (string)e["title"] ?? kv.Name }, { "total", Total(e) }, { "baseline", (int?)e["baseline"] ?? 0 }, { "baselineThrough", e["baselineThrough"] ?? JValue.CreateNull() }, { "live", (int?)e["live"] ?? 0 }, { "perMonth", new JObject(pm.Properties().OrderBy(p => p.Name, StringComparer.Ordinal)) }, { "lastRedeemAt", e["lastRedeemAt"] ?? JValue.CreateNull() } };
+                    var e = (JObject)kv.Value;
+                    var o = new JObject { { "title", (string)e["title"] ?? kv.Name }, { "total", Total(e) }, { "baseline", (int?)e["baseline"] ?? 0 }, { "baselineThrough", e["baselineThrough"] ?? JValue.CreateNull() }, { "live", (int?)e["live"] ?? 0 }, { "perMonth", PerMonthOf(e) }, { "lastRedeemAt", e["lastRedeemAt"] ?? JValue.CreateNull() } };
+                    long ts = DayCounts.Now(); o["all"] = Total(e); o["today"] = PeriodTotal(e, "today", ts); o["week"] = PeriodTotal(e, "week", ts); o["month"] = PeriodTotal(e, "month", ts);
+                    o["days"] = MergedDays(e); o["recordStart"] = e["recordStart"] ?? JValue.CreateNull();
                     if (e["estimated"] != null) o["estimated"] = e["estimated"].DeepClone();
+                    if (e["estimatedDays"] != null) o["estimatedDays"] = e["estimatedDays"].DeepClone();
                     groups[kv.Name] = o;
                 }
-                foreach (var d in defs.Properties()) if (groups[d.Name] == null) groups[d.Name] = new JObject { { "title", (string)d.Value["title"] ?? d.Name }, { "total", 0 }, { "baseline", 0 }, { "baselineThrough", JValue.CreateNull() }, { "live", 0 }, { "perMonth", new JObject() }, { "lastRedeemAt", JValue.CreateNull() } };
+                foreach (var d in defs.Properties()) if (groups[d.Name] == null) groups[d.Name] = new JObject { { "title", (string)d.Value["title"] ?? d.Name }, { "total", 0 }, { "all", 0 }, { "today", 0 }, { "week", 0 }, { "month", 0 }, { "baseline", 0 }, { "baselineThrough", JValue.CreateNull() }, { "live", 0 }, { "perMonth", new JObject() }, { "days", new JObject() }, { "recordStart", JValue.CreateNull() }, { "lastRedeemAt", JValue.CreateNull() } };
                 return new JObject { { "ok", true }, { "groups", groups } };
+            }
+        }
+
+        /// <summary>the group whose chat command is cmd (the key without underscores: !hydrate, !hellothere), "" when none. Pushups are the Pushups counter's.</summary>
+        public static string GroupOfCommand(string cmd)
+        {
+            string c = (cmd ?? "").TrimStart('!').ToLowerInvariant(); if (c == "" || c == "pushups") return "";
+            lock (L) { foreach (var kv in Groups().Properties()) if (kv.Name.Replace("_", "") == c) return kv.Name; }
+            return "";
+        }
+        static bool IsDayOrMonth(string a, out bool isDay)
+        {
+            DateTime d; isDay = DateTime.TryParseExact(a, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out d);
+            return isDay || DateTime.TryParseExact(a, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out d);
+        }
+        /// <summary>the chat answer for a group command; args[0] may be today | week | month | all | YYYY-MM-DD | YYYY-MM. A period that lies before the group's recordStart answers "No record before Feb 2026."</summary>
+        public static string Answer(string key, string[] args)
+        {
+            lock (L)
+            {
+                var g = Counts()["groups"] as JObject; var e = g == null ? null : g[key] as JObject; var def = Groups()[key];
+                string title = (def == null ? null : (string)def["title"]) ?? key;
+                if (e == null) e = new JObject { { "baseline", 0 }, { "live", 0 } };
+                long ts = DayCounts.Now(); string rs = (string)e["recordStart"]; string a = args.Length > 0 ? args[0] : "", per = DayCounts.ParsePeriod(a);
+                bool hy = key == "hydrate";
+                Func<int, string, string> one = (n, label) => hy ? "Penguin has hydrated " + n + " times " + label : title + ": " + n + " " + label;
+                string nr = string.IsNullOrEmpty(rs) ? null : "No record before " + DayCounts.MonthYear(rs) + ".";
+                if (a != "" && per == "")
+                {
+                    bool isDay;
+                    if (!IsDayOrMonth(a, out isDay)) return "Usage: !" + key.Replace("_", "") + " [today | week | month | all | YYYY-MM-DD]";
+                    if (nr != null && string.CompareOrdinal(isDay ? a : a + "-31", rs) < 0) return nr;
+                    int n = isDay ? (int?)MergedDays(e)[a] ?? 0 : (int?)PerMonthOf(e)[a] ?? 0;
+                    return one(n, "on " + a);
+                }
+                if (per == "")
+                {
+                    int t = PeriodTotal(e, "today", ts), all = Total(e);
+                    return hy ? "Penguin has hydrated " + t + " times today, " + all + " all-time" : title + ": " + t + " today, " + PeriodTotal(e, "week", ts) + " this week, " + PeriodTotal(e, "month", ts) + " this month, " + all + " all-time";
+                }
+                if (per != "all" && nr != null && string.CompareOrdinal(per == "month" ? Periods.MonthKey(ts) + "-31" : Periods.DayKey(ts), rs) < 0) return nr;
+                return one(PeriodTotal(e, per, ts), per == "all" ? "all-time" : DayCounts.Label(per));
             }
         }
 
