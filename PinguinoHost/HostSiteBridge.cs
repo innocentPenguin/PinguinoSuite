@@ -304,13 +304,14 @@ namespace PinguinoHost
             if (yt && args != null && args.Length > 0 && NormItem(args[0]) == "get_sub") { say("@" + user + " the sub gift is for Twitch viewers. Here you can play Guess the Chatter: !shop guess <stake> (" + min + "-" + max + " " + cur + ", win 2x)."); return; }
             if (args == null || args.Length == 0)
             {
-                if (yt) { say("@" + user + " Shop: to buy, type !shop <item>. Open now: guess (Guess the Chatter, " + min + "-" + max + " " + cur + ", win 2x), so !shop guess <stake>, e.g. !shop guess " + min + ". More items soon!"); return; }
+                if (yt) { say("@" + user + " Shop: to buy, type !shop <item>. guess (Guess the Chatter, " + min + "-" + max + " " + cur + ", win 2x): !shop guess <stake> | " + YtShop.ShopLine()); return; }
                 var items = new List<string>();
                 if (ChatOn(c, "guess_chatter")) items.Add(ChatName(c, "guess_chatter", "Guess the Chatter") + " (stake " + min + "-" + max + ", win 2x): !shop guess <stake>");   // short: two items, no "coming soon" tail, no sub explainer
                 { string sl = SubTickets.ShopLine(); if (sl != null) { int gi = sl.IndexOf(", a mod gifts", StringComparison.Ordinal); items.Add(gi > 0 ? sl.Substring(0, gi) + "): !shop sub" : sl); } }
                 say("@" + user + " Shop: " + (items.Count == 0 ? "nothing open right now." : string.Join(" | ", items))); return;
             }
             string item = NormItem(args[0]);
+            if (yt && YtShop.IsItem(args[0])) { YtShop.Buy(user, args[0], say); return; }   // 1v1 / casual: YouTube viewers only, Twitch never gets here (no such item)
             if (item == "get_sub") { SubTickets.HandleBuy(user, say); return; }
             if (item != "guess_chatter") { string m0 = (item == "buy_chatty" || (c["ChatItems"] as JObject)?[item] != null ? "that one is not open yet." : "no such item. Type !shop to see what is for sale."); Gamble.GameOut(say, "@" + user + " " + m0, "guess", "invalid", user, 0, 0, Economy.Balance(me), "", "", m0, "", 0, "", 0); return; }
             if (!ChatOn(c, "guess_chatter")) { Gamble.GameOut(say, "@" + user + " " + "that one is not open yet.", "guess", "invalid", user, 0, 0, Economy.Balance(me), "", "", "that one is not open yet.", "", 0, "", 0); return; }

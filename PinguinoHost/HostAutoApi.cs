@@ -170,6 +170,12 @@ namespace PinguinoHost
                 all = all.Substring(part.Length).TrimStart(); string v; SendOut(pf, part.TrimEnd(), out v);
             }
         }
+        /// <summary>a line to the YouTube chat from anywhere (a mod resolving an order in Twitch chat or Master View): same duplicate guard and paced queue as every YouTube send</summary>
+        public static void SayYouTube(string line)
+        {
+            string via; if (SaidRecently("youtube", line)) return;
+            if (YtQueueOn) YtEnqueue(line, null, out via); else PostToMulti("youtube", line, null, out via, false);
+        }
         static bool SendOut(string pf, string line, out string via)
         {
             string parent, login; ReplyCtx.Current(out parent, out login);

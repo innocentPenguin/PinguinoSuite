@@ -82,7 +82,7 @@ namespace PinguinoHost
 
                 // ---- mod-made plain commands (!addcom / !editcom / !delcom): stored in the SAME canned_commands.json as entries with "custom": true, served by Chatty's canned path ----
         static readonly HashSet<string> CustomExtraReserved = new HashSet<string> { "addcom", "editcom", "delcom", "song", "vol", "songqueue", "voteskip", "skip", "help", "helper", "emote", "topemotes", "remindme", "reminders", "notme", "alias", "boards", "lookup", "names", "streaks", "subs",
-            "leaderboards", "leaderboard", "gifted", "bits", "sub", "founders", "pm", "pmrules", "lore", "rules", "discord", "guess", "confirm", "raid", "vanish", "disappear", "countdown", "stopwatch", "timer", "timers", "remind", "alert", "alerts", "top", "leaders", "watchtime", "tip", "pushup", "pushups", "pu" };
+            "leaderboards", "leaderboard", "gifted", "bits", "sub", "founders", "pm", "pmrules", "lore", "rules", "discord", "guess", "confirm", "raid", "vanish", "disappear", "countdown", "stopwatch", "timer", "timers", "remind", "alert", "alerts", "top", "leaders", "watchtime", "tip", "pushup", "pushups", "pu", "ytorder", "ytorders" };
         public static bool IsCustomCommand(string cmd) { return cmd == "!addcom" || cmd == "!editcom" || cmd == "!delcom"; }
         /// <summary>true when a real command already answers to this name: the fixed lists, the Host's modules, every non-canned entry of the command registry (built-ins, Helper, Host)</summary>
         static bool CustomCollides(string n)

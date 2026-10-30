@@ -87,7 +87,7 @@ namespace PinguinoHost
             if (SubTickets.IsModCommand(cmd)) { if (!mod) return false; ModAudit.Log(user, "mod", cmd, string.Join(" ", args)); SubTickets.HandleMod(user, cmd, args, say); return true; }
             string b = BoardOf(cmd);
             bool viewer = b != "" || cmd == "!rank" || cmd == "!leaderboards" || cmd == "!leaderboard" || cmd == "!gifted" || cmd == "!bits" || cmd == "!sub" || cmd == "!founders" || cmd == "!commands" || cmd == "!command" || cmd == "!cmds" || cmd == "!cmd" || cmd == "!pm" || Emotes.IsCommand(cmd) || ChannelLore.IsCommand(cmd) || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder" || cmd == "!uptime" || cmd == "!downtime" || Economy.IsViewerCommand(cmd) || Gamble.IsCommand(cmd);
-            bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!botaccount" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd);
+            bool modOnly = cmd == "!setrank" || cmd == "!alias" || cmd == "!botaccount" || cmd == "!boards" || cmd == "!subs" || cmd == "!streaks" || cmd == "!names" || cmd == "!lookup" || Timers.IsCommand(cmd) || StreamTimers.IsCommand(cmd) || cmd == "!remind" || Economy.IsModCommand(cmd) || AlertBridge.IsCommand(cmd) || YtShop.IsCommand(cmd);
             if (cmd == "!pm" && mod && args.Length > 0) return false;   // a mod naming the private match: the Core stores it (no read cooldown on that)
             if (!viewer && !modOnly) return false;
             if (modOnly && mod) ModAudit.Log(user, "mod", cmd, string.Join(" ", args));   // every mod command is on the audit log
@@ -105,6 +105,7 @@ namespace PinguinoHost
                 if (cmd == "!uptime") { say(LiveState.UptimeLine()); return true; }
                 if (cmd == "!downtime") { say(LiveState.DowntimeLine()); return true; }
                 if (Rank.IsCommand(cmd)) { Rank.Handle(user, cmd, args, mod, say); return true; }
+                if (YtShop.IsCommand(cmd)) { YtShop.Handle(user, cmd, args, say); return true; }
                 if (Timers.IsCommand(cmd)) { Timers.Handle(args, say); return true; }
                 if (StreamTimers.IsCommand(cmd)) { StreamTimers.Handle(cmd, args, say); return true; }
                 if (cmd == "!remind" || cmd == "!remindme" || cmd == "!reminders" || cmd == "!cancelreminder") { Reminders.Handle(user, cmd, args, mod, say); return true; }

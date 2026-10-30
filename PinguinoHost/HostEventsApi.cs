@@ -22,6 +22,8 @@ namespace PinguinoHost
             if (p == "/api/replays/apply" && m == "POST") { Write(c, Replays.Apply(Body(c)).ToString(), "application/json"); return true; }
             if (p.StartsWith("/api/replays/") && m == "GET") { Write(c, Replays.One(p.Substring("/api/replays/".Length)).ToString(), "application/json"); return true; }
             if (p == "/api/eventlog" && m == "GET") { Write(c, EventLog.Query(c.Request.QueryString).ToString(), "application/json"); return true; }
+            if (p == "/api/ytorders" && m == "GET") { Write(c, YtShop.List(c.Request.QueryString["status"] == "all").ToString(), "application/json"); return true; }
+            if (p == "/api/ytorders" && m == "POST") { Write(c, YtShop.Mod(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/pushup" && m == "GET") { Write(c, Pushups.State().ToString(), "application/json"); return true; }
             if (p == "/api/pushup" && m == "POST") { Write(c, Pushups.Mod(Body(c)).ToString(), "application/json"); return true; }
             if (p == "/api/customs/state" && m == "GET") { Write(c, CustomsView.State().ToString(), "application/json"); return true; }
