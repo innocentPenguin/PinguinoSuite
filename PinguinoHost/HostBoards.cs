@@ -319,7 +319,7 @@ namespace PinguinoHost
                     for (int i = 0; i < ind.Count; i++) if (!used.Contains(i)) addM(mGifts, monthOf((long)ind[i]["at"]), grp.Key, 1, false);
                     if (total > 0) U(grp.Key)["gifts"] = total;
                 }
-                // one-off corrections Twitch's own counter proved (announcements that never reached chat): Dataoardsdjust.json {adjust:[{user, type:"gifts", amount, at:"yyyy-MM-dd", why}]}; counted here so a rebuild keeps them
+                // one-off corrections Twitch's own counter proved (announcements that never reached chat): Data/boards/adjust.json {adjust:[{user, type:"gifts", amount, at:"yyyy-MM-dd", why}]}; counted here so a rebuild keeps them
                 foreach (var ad in AdjustRows())
                 {
                     string au = Canon(al, (string)ad["user"]); int an = (int)ad["amount"]; long at = DateTimeOffset.Parse((string)ad["at"] + "T12:00:00Z").ToUnixTimeSeconds();
