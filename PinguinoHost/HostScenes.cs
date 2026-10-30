@@ -45,8 +45,8 @@ namespace PinguinoHost
                 Def = new Dictionary<string, int[]> { { "h", new[] { 750, 96, 420, 56, 8, 1 } }, { "v", new[] { 330, 150, 420, 56, 8, 1 } } } },
             new W { Id = "customs", Label = "Customs HUD", Src = "customs.html", Dw = 420, Dh = 160, Help = "Customs status: queue open/closed, how many are waiting, mode/format, activity (Host /api/customs/state).",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 40, 780, 420, 160, 8, 0 } }, { "v", new[] { 330, 1000, 420, 160, 8, 0 } } } },
-            new W { Id = "pushup", Label = "Pushup counter", Src = "pushup.html", Dw = 360, Dh = 100, Help = "Pushup counter (Host /api/pushup). Hidden while the counter is off (!pushup off).",
-                Def = new Dictionary<string, int[]> { { "h", new[] { 40, 700, 360, 100, 8, 0 } }, { "v", new[] { 330, 900, 360, 100, 8, 0 } } } },
+            new W { Id = "pushup", Label = "Pushup counter", Src = "pushup.html", Dw = 420, Dh = 80, Help = "Pushup counter (Host /api/pushup, polled every 2 s). Hidden unless the counter is on (!pushup on / off); independent of customs.",
+                Def = new Dictionary<string, int[]> { { "h", new[] { 750, 160, 420, 80, 8, 0 } }, { "v", new[] { 330, 230, 420, 80, 8, 0 } } } },
             new W { Id = "nowplaying", Label = "Now playing", Src = "http://127.0.0.1:8771/overlay", Dw = 640, Dh = 200, Help = "The Spotify module's own now-playing overlay (port 8771, themes via its settings; ?next=0 hides up-next). Blank when the module is not running.",
                 Def = new Dictionary<string, int[]> { { "h", new[] { 40, 860, 640, 200, 8, 0 } }, { "v", new[] { 220, 1700, 640, 200, 8, 0 } } } },
             // ---- sub-part widgets (?part= modes of the standalone pages): all OFF by default ----
