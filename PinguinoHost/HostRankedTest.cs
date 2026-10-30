@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace PinguinoHost
@@ -44,8 +45,30 @@ namespace PinguinoHost
             w = (JObject)RankedActivity.State()["week"]; Check((int)w["wins"] == 3 && (int)w["losses"] == 3, "reset keeps the other days: " + w);
             Check(Say("m", "!undo", 3).Contains("nothing to undo"), "undo on an empty day says so");
             Check(Say("m", "!ranked stop", 3) == "@m Ranked is off." && !(bool)RankedActivity.State()["active"], "stop");
-            RankedActivity.Apply("start", null); Check(Say("m", "!activity end", 3) == "" && !(bool)RankedActivity.State()["active"], "!activity end stops ranked and leaves the Core's own answer alone");
+            RankedActivity.Apply("start", null); Check(Say("m", "!activity end", 3) == "" && (bool)RankedActivity.State()["active"], "!activity end (customs) leaves ranked running");
+            Check(Say("m", "!win blue", 3) == "" && G(RankedActivity.State()) == "", "!win <team> is customs', not ranked");
+            Check(Say("m", "!customs win", 3).Contains("!customs win|loss") && Say("viewer", "!customs win blue", 1) == "" && G(RankedActivity.State()) == "", "!customs needs a team; viewers get nothing");
             Check(Say("m", "!activity ranked", 3).StartsWith("@m Ranked is on.") && (bool)RankedActivity.State()["active"], "!activity ranked starts it");
+            // breaks: defaults 3 games / 2 losses in a row
+            RankedActivity.Apply("reset", null); RankedActivity.Apply("resume", null); s = RankedActivity.State(); var b = (JObject)s["break"];
+            Check(!(bool)b["active"] && (int)b["afterGames"] == 3 && (int)b["lossStreak"] == 2 && (int)s["breakAfter"] == 3, "break off, defaults 3 / 2: " + b);
+            Say("m", "!win", 3); Say("m", "!loss", 3); Check(!(bool)RankedActivity.State()["break"]["active"], "no break after 2 mixed games");
+            Say("m", "!win", 3); b = (JObject)RankedActivity.State()["break"]; Check((bool)b["active"] && (string)b["reason"] == "3 games" && ((JArray)RankedActivity.State()["breaks"]).Count == 1, "break after 3 games: " + b);
+            Check(Say("m", "!ranked break", 3).Contains("already on a break"), "a second break is refused");
+            Say("m", "!win", 3); Check(((JArray)RankedActivity.State()["breaks"]).Count == 1 && (int)RankedActivity.State()["wins"] == 3, "marks during a break count, no second break");
+            Check(Say("m", "!ranked resume", 3) == "@m Ranked is back. Ranked today: 3-1 (+2)" && !(bool)RankedActivity.State()["break"]["active"] && (int)RankedActivity.State()["sinceBreak"] == 0, "resume: counters restart, day record continues");
+            Say("m", "!loss", 3); Check(!(bool)RankedActivity.State()["break"]["active"], "one loss is not a streak");
+            Say("m", "!loss", 3); b = (JObject)RankedActivity.State()["break"]; Check((bool)b["active"] && (string)b["reason"] == "2 losses in a row", "break after 2 losses in a row: " + b);
+            Say("m", "!undo", 3); Check(!(bool)RankedActivity.State()["break"]["active"] && ((JArray)RankedActivity.State()["breaks"]).Count == 1, "undo of the triggering game cancels the break");
+            Check(Say("m", "!ranked breakafter 0", 3) == "@m Break after games: off." && Say("m", "!ranked lossstreak 0", 3) == "@m Break after losses in a row: off.", "rules off");
+            Say("m", "!win", 3); Say("m", "!win", 3); Say("m", "!loss", 3); Say("m", "!loss", 3); Check(!(bool)RankedActivity.State()["break"]["active"], "with both rules off no break comes");
+            Check(Say("m", "!ranked breakafter 4", 3) == "@m Break after 4 games." && Say("m", "!ranked lossstreak 3", 3) == "@m Break after 3 losses in a row." && (int)RankedActivity.State()["lossStreak"] == 3, "rules set");
+            Check(Say("m", "!ranked breakafter x", 3).Contains("<0-") && Say("m", "!ranked lossstreak 99", 3).Contains("0 (off)"), "bad rule values refused");
+            Check(Say("m", "!ranked break", 3) == "" && (string)RankedActivity.State()["break"]["reason"] == "manual", "manual break (the one announcement line is the answer)");
+            Check(Say("viewer", "!ranked resume", 1) == "" && (bool)RankedActivity.State()["break"]["active"], "a viewer cannot resume");
+            Say("m", "!ranked stop", 3); Check(!(bool)RankedActivity.State()["break"]["active"], "stop ends the break");
+            var pp = RankedActivity.PushPayload(); Check(pp["days"].Count() >= 2 && pp["weeks"].Count() >= 1 && pp["months"].Count() >= 1 && (string)pp["generatedAt"] != null && pp["settings"]["breakAfter"] != null, "push payload shape");
+            Say("m", "!ranked start", 3);
             string f = Path.Combine(HostApi.DataDir, "ranked.json"); var j = JObject.Parse(File.ReadAllText(f));
             Check((bool)j["active"] && j["days"]["2026-10-28"] != null && File.Exists(f), "state file written");
             RankedActivity.NowFn = () => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
