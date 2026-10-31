@@ -160,6 +160,11 @@ namespace PinguinoHost
             { var mp = new List<string>(); Auto.ModuleLiveTest = pth => mp.Add(pth); Auto.ResetRaidStart();
               Auto.OnEvent(new Dictionary<string, object> { { "eventType", "StreamOnline" } }); Auto.OnRaidScheduled("t5"); Auto.OnEvent(off); Auto.CancelRaidStart();
               Check(mp.SequenceEqual(new[] { "/api/live/auto", "/api/live/stop" }), "spotify module: /api/live/auto on stream online, /api/live/stop on offline (" + string.Join(",", mp) + ")"); Auto.ModuleLiveTest = null; Auto.ResetRaidStart(); }
+            // every viewer reply starts with @name; Spotify down + the same viewer redeeming: 2 module lines, then one pause line, then silence (the refund itself is untouched)
+            { Check(Auto.AtName("Bob", "Nothing is playing.") == "@Bob Nothing is playing." && Auto.AtName("Bob", "@Bob hi") == "@Bob hi" && Auto.AtName("", "x") == "x", "@name added only when missing");
+              var t0 = DateTime.UtcNow; string a1 = Auto.SpotifyDownQuiet("snow", "L", t0), a2 = Auto.SpotifyDownQuiet("snow", "L", t0.AddSeconds(30)), a3 = Auto.SpotifyDownQuiet("snow", "L", t0.AddSeconds(60)), a4 = Auto.SpotifyDownQuiet("snow", "L", t0.AddSeconds(90));
+              Check(a1 == "L" && a2 == "L" && a3.StartsWith("@snow Spotify is down") && a4 == "", "spotify down: 2 lines, 1 pause line, then quiet");
+              Check(Auto.SpotifyDownQuiet("snow", "L", t0.AddMinutes(10)) == "L" && Auto.SpotifyDownQuiet("other", "L", t0) == "L", "quiet window ends after 5 min and is per viewer"); }
             // Songify owns the song-request redeems while the module says songify:true: the preset does not run at all; false / failed call = runs as before
             { var od = Auto.Doc(); var oa = (JArray)od["actions"]; foreach (var x in oa.OfType<JObject>().Where(x => (string)x["id"] == "spotify-redeem").ToList()) oa.Remove(x);
               oa.Add(new JObject { { "id", "spotify-redeem" }, { "name", "t-sr" }, { "enabled", true }, { "triggers", new JArray(new JObject { { "type", "redeem" }, { "title", "*" } }) }, { "steps", new JArray(new JObject { { "type", "log" }, { "text", "t-sr" } }) } }); Auto.Save(od);

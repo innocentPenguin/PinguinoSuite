@@ -677,6 +677,27 @@ namespace PinguinoHost
             }
             catch (Exception ex) { Clog.Warn("automation", "go-live: Spotify selfcheck not reached: " + (ex.InnerException != null ? ex.InnerException.Message : ex.Message)); }
         }
+        /// <summary>every reply to a viewer starts with @name (the module has a few lines without one, e.g. "Nothing is playing.")</summary>
+        internal static string AtName(string user, string say)
+        {
+            if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(say) || say.StartsWith("@")) return say;
+            return "@" + user.TrimStart('@') + " " + say;
+        }
+        static readonly Dictionary<string, List<DateTime>> _spDown = new Dictionary<string, List<DateTime>>();
+        /// <summary>Spotify is down and the same viewer keeps redeeming: the points are refunded every time, but the chat hears it from the module twice, then once from us ("requests are paused"), then nothing for that viewer until 5 quiet minutes pass.</summary>
+        internal static string SpotifyDownQuiet(string user, string say, DateTime now)
+        {
+            int n;
+            lock (_spDown)
+            {
+                List<DateTime> l; string k = (user ?? "").ToLowerInvariant();
+                if (!_spDown.TryGetValue(k, out l)) _spDown[k] = l = new List<DateTime>();
+                l.RemoveAll(t => (now - t).TotalMinutes >= 5); l.Add(now); n = l.Count;
+            }
+            if (n <= 2) return say;
+            if (n == 3) return "@" + (user ?? "").TrimStart('@') + " Spotify is down right now, so song requests are paused. Your points are refunded each time; I will stay quiet about it for a few minutes.";
+            return "";
+        }
         internal static Action<string> ModuleLiveTest;
         static void SpotifyLive(bool online)
         {
@@ -715,10 +736,12 @@ namespace PinguinoHost
                     if ((bool?)st["redeem"] == true && ctx.ContainsKey("redemptionId") && ctx["redemptionId"] != "")
                     {
                         string rid = ctx["redemptionId"], rw = ctx.ContainsKey("rewardId") ? ctx["rewardId"] : "";
-                        if ((bool?)j["refund"] == true) Redeems.Cancel(rid, rw);   // the module turned the song down: give the points back
+                        if ((bool?)j["refund"] == true) Redeems.Cancel(rid, rw, ctx.ContainsKey("display") && ctx["display"] != "" ? ctx["display"] : ctx.ContainsKey("userName") ? ctx["userName"] : "");   // the module turned the song down: give the points back
                         else if ((bool?)j["ok"] != false) Redeems.Record(ctx.ContainsKey("userName") ? ctx["userName"] : "", rid, rw, ctx.ContainsKey("title") ? ctx["title"] : "");
                     }
-                    string say = (string)j["say"] ?? ""; if (say == "" && (bool?)j["ok"] == false) say = (string)j["error"] != null && (bool?)st["sayErrors"] == true ? (string)j["error"] : "";
+                    string say = (string)j["say"] ?? ""; string disp = ctx.ContainsKey("display") && ctx["display"] != "" ? ctx["display"] : ctx.ContainsKey("userName") ? ctx["userName"] : ""; if (say == "" && (bool?)j["ok"] == false) say = (string)j["error"] != null && (bool?)st["sayErrors"] == true ? (string)j["error"] : "";
+                    if (say != "" && (bool?)j["refund"] == true && ((string)j["code"] == "lookup" || (string)j["code"] == "offline")) say = SpotifyDownQuiet(disp, say, DateTime.UtcNow);
+                    say = AtName(disp, say);
                     return "module " + cmd + " -> " + (int)r.StatusCode + (say != "" ? " | " + Say(SongSender.Role((string)cmd, (string)st["as"]), say, false) : "");
                 }
             }
