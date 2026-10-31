@@ -138,3 +138,24 @@ def test_follow_overlay_skips_stale_events():
     import pathlib
     html = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text(encoding="utf-8")
     assert "m.meta.stale" in html
+
+
+def test_disabled_tiktok_is_silent_everywhere_i_own(monkeypatch):
+    """TikTok is off by default: no viewer-count warning, no outage/chat-in line or per-platform counter mentions it."""
+    import asyncio
+    import viewers
+    from connectors.tiktok import TikTok
+    out = []
+    monkeypatch.setattr(viewers.console_log, "warn", lambda *a, **k: out.append(a))
+    monkeypatch.setattr(hf.console_log, "warn", lambda *a, **k: out.append(a))
+    monkeypatch.setattr(hf.console_log, "info", lambda *a, **k: out.append(a))
+    monkeypatch.setattr(hf.config, "settings", lambda: {"host_chat_in": True, "bot_accounts": [], "tiktok_enabled": False})
+    tt = TikTok(None, lambda e: None)
+    assert tt.state.get("status") != "connected" and viewers._tiktok(tt) is None
+    c = hf.ChatIn(post=lambda b: 200, now=lambda: 1000.0)
+    c.thread = object()
+    c.beat_at = 0.0
+    c.stats["sent"] = 1
+    c._beat(force=True)                                    # a heartbeat with only YouTube traffic
+    assert out and all("tiktok" not in str(x).lower() and "tt " not in str(x).lower() for x in out)
+    assert not any("tiktok" in k or k == "tt" for k in hf.status()) and not any("tiktok" in k for k in c.snapshot())
