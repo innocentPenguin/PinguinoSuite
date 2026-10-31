@@ -542,6 +542,9 @@ class Module:
         self.port_warned = 0.0
         self.last_try = 0.0
         self._miss = 0        # health pings missed in a row (4 = called down)
+        self.starts = 0       # start() launches since the core came up (status.json)
+        self.misses_total = 0 # every missed ping since the core came up
+        self.downs = 0        # times the module was called down (healthy -> not healthy)
         self.last_ok = 0.0    # when a health ping last answered OK
         self.last_err = ""    # why the latest ping failed ("" while it answers)
         self.last_ms = None   # how long the latest answered ping took
@@ -637,6 +640,7 @@ class Module:
         if self._ping():
             self.adopt()
             return
+        self.starts += 1
         if self.singleton and not devices.is_master():  # only the master device runs bots/Host/Spotify: never two instances
             self.deferred = True
             console_log.log("info", "device", f"{self.id} not started: this device is not the master ({devices.state()['master_name']} is)", module=self.id)
@@ -776,8 +780,11 @@ class Module:
             # a busy module (transcribing, loading a model) can miss one 1.5 s ping; the shell swaps its page for a "starting" card the moment
             # it is not "running", which threw the user back to the module's home page. Call it down only after several misses in a row, or when its process is gone.
             self._miss += 1
+            self.misses_total += 1
             if self._miss >= 4 or (self.proc is not None and not self.running):
                 self.healthy = False
+        if was and not self.healthy:
+            self.downs += 1
         if self.healthy != was:
             st = "running" if self.healthy else ("starting" if self.running else "stopped")
             reason = (f"health answered in {self.last_ms} ms" if self.healthy else
@@ -888,6 +895,7 @@ def twitch_loop():
         time.sleep(max(10, s["poll_secs"]))
 
 
+CORE_STARTED = time.time()
 CONTROL_DIR = Path(DATA_DIR) / "control"
 
 
@@ -1057,6 +1065,21 @@ def device_sync_loop():
             pass
 
 
+def write_status():
+    """Data/runtime/status.json: per-module restart and health-miss counts since the core came up, readable without the API token (no secrets in it)."""
+    now = time.time()
+    mods = {}
+    for m in list(modules.values()):
+        mods[m.id] = {"state": m.public()["state"], "healthy": m.healthy, "held_s": round(m.held_left()), "starts": m.starts, "downs": m.downs,
+                      "misses_total": m.misses_total, "miss_now": m._miss, "crashes_5min": len([t for t in m.crashes if now - t < 300]), "last_ok_age": round(now - m.last_ok, 1) if m.last_ok else None}
+    try:
+        tmp = Path(DATA_DIR) / "status.json.tmp"
+        tmp.write_text(json.dumps({"updated": now, "core_since": CORE_STARTED, "modules": mods}), encoding="utf-8")
+        os.replace(tmp, Path(DATA_DIR) / "status.json")
+    except OSError:
+        pass
+
+
 def refresh_all():
     """One health pass. A failure in one module's refresh must not skip the others (or end the loop): states would freeze at their last value, e.g. 'starting' forever."""
     def one(m):
@@ -1090,6 +1113,7 @@ def health_loop():
                     print(f"[Pinguino] health loop step {i} failed: {e}", file=sys.stderr)
         if tick % 4 == 0:  # health every ~4s, control files every second
             refresh_all()
+            write_status()
         if tick % 600 == 599:   # every ~10 min
             try:
                 log_watch()

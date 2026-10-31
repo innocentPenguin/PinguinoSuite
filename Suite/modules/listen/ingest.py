@@ -25,6 +25,16 @@ class _YtLog:
     def error(self, msg): print("yt-dlp:", str(msg)[:200], flush=True)
 
 
+NON_HLS_FORMAT = "bestaudio[protocol!*=m3u8]/best[protocol!*=m3u8]"
+_FFMPEG_MARKERS = ("ffmpeg could not be found", "Initialization fragment found after media fragments")
+
+
+def needs_ffmpeg(err) -> bool:
+    """True when yt-dlp failed because the stream is HLS that only ffmpeg can fetch."""
+    t = str(err)
+    return any(m in t for m in _FFMPEG_MARKERS)
+
+
 def src_stem(source_id: str) -> str:
     """Stable file stem per source, so a retry finds the copy already downloaded instead of fetching it again."""
     return "src-" + hashlib.sha1(source_id.encode()).hexdigest()[:12]
@@ -197,8 +207,21 @@ class Jobs:
 
         opts = {"format": "bestaudio/audio_only/worst", "outtmpl": str(out) + ".%(ext)s", "noplaylist": True, "quiet": True,
                 "no_warnings": True, "noprogress": True, "logger": _YtLog(), "progress_hooks": [hook], "concurrent_fragment_downloads": 4}
-        with yt_dlp.YoutubeDL(opts) as y:
-            y.download([url])
+        try:
+            with yt_dlp.YoutubeDL(opts) as y:
+                y.download([url])
+        except Exception as e:  # noqa: BLE001
+            if not needs_ffmpeg(e):
+                raise
+            # HLS audio needs ffmpeg to merge; ask once for a progressive file instead. No loop: if that fails too, the VOD is logged and stays undownloadable.
+            print("ingest: HLS needs ffmpeg for", url, "- retrying once with a non-HLS format", flush=True)
+            opts["format"] = NON_HLS_FORMAT
+            try:
+                with yt_dlp.YoutubeDL(opts) as y:
+                    y.download([url])
+            except Exception as e2:  # noqa: BLE001
+                print("ingest: undownloadable without ffmpeg:", url, str(e2)[:150], flush=True)
+                raise RuntimeError("this VOD only comes as HLS and needs ffmpeg, which is not installed") from e2
         got = finished_source(stem)
         if not got:
             raise RuntimeError("download finished but no file was produced")

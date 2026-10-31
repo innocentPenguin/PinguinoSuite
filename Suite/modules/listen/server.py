@@ -107,6 +107,7 @@ import learn
 import live as live_mod
 import oggfix
 import safetext
+import stamp
 import twitch
 import voice
 
@@ -644,6 +645,7 @@ def _port_busy() -> bool:
 
 if __name__ == "__main__":
     safetext.install()   # no bell or other control character ever reaches a console (chat text can contain one)
+    stamp.install()      # time on every line of listen.log
     if _port_busy():  # one clear line instead of a bind traceback every restart (an older Listen or another program owns the port)
         print(f"PenguinComm Listen: port {cfg.PORT} is already in use by another process; not starting a second copy.", flush=True)
         raise SystemExit(3)
