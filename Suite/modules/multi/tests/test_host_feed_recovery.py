@@ -105,3 +105,36 @@ def test_run_keeps_the_cursor_across_a_failure(monkeypatch, logs):
 
 def test_status_carries_the_feed_counters():
     assert {"up", "feed_down_s", "feed_last_down_s", "feed_outages", "feed_replayed", "feed_missed"} <= set(hf.status())
+
+
+def test_old_replayed_events_are_marked_stale_recent_ones_are_not():
+    now = 10_000.0
+    old = hf.to_message({"seq": 1, "type": "follow", "user": "a", "ts": now - 601}, "c")
+    new = hf.to_message({"seq": 2, "type": "follow", "user": "b", "ts": now - 30}, "c")
+    raid = hf.to_message({"seq": 3, "type": "raid_out", "user": "t", "ts": now - 3600, "amount": 5}, "c")
+    for m, item_ts in ((old, now - 601), (new, now - 30), (raid, now - 3600)):
+        hf.mark_stale(m, {"ts": item_ts}, now=lambda: now)
+    assert old.meta["stale"] is True and raid.meta["stale"] is True and "stale" not in (new.meta or {})
+    assert hf.mark_stale(None, {"ts": 1}) is None
+
+
+def test_stale_event_is_stored_but_gets_no_alert(monkeypatch):
+    import server
+    fired, goals = [], []
+    monkeypatch.setattr(server.alert_engine, "submit", lambda ev: fired.append(ev))
+    monkeypatch.setattr(server.goal, "observe", lambda *a: goals.append(a))
+    monkeypatch.setattr(server.hub, "loop", type("L", (), {"call_soon_threadsafe": staticmethod(lambda f, *a: f(*a))})())
+    import time
+    m = hf.to_message({"seq": 9, "type": "follow", "user": "late", "ts": time.time() - 4000}, "c")
+    hf.mark_stale(m, {"ts": time.time() - 4000})
+    server._alert_from_message(m)
+    assert fired == [] and len(goals) == 1                 # counters still see it, the alert engine does not
+    fresh = hf.to_message({"seq": 10, "type": "follow", "user": "now", "ts": time.time()}, "c")
+    server._alert_from_message(fresh)
+    assert len(fired) == 1
+
+
+def test_follow_overlay_skips_stale_events():
+    import pathlib
+    html = (pathlib.Path(__file__).resolve().parent.parent / "static" / "obs.html").read_text(encoding="utf-8")
+    assert "m.meta.stale" in html

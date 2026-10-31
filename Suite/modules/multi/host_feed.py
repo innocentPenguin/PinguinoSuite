@@ -112,6 +112,19 @@ class RaidWindow:
         return False
 
 
+STALE_EVENT_AGE = 600.0     # a Host event older than this (replayed after an outage) is recorded but never played: no alert, sound or follow overlay
+
+
+def mark_stale(m, item, now=time.time):
+    """Flag a replayed old event (meta.stale): it is still stored and counted, the alert engine and the follow overlay skip it."""
+    ts = float(item.get("ts") or 0)
+    if m is not None and ts and now() - ts > STALE_EVENT_AGE:
+        if m.meta is None:
+            m.meta = {}
+        m.meta["stale"] = True
+    return m
+
+
 FOLLOW_WINDOW = 20.0        # a follow reported twice (EventSub + Host feed); short, because unfollow + refollow can really repeat within a minute
 
 
@@ -258,7 +271,7 @@ async def run(inbox, twitch_connected, base=None):
             for item in data.get("items", []):
                 seq = max(seq, int(item.get("seq", seq)))
                 if item.get("type") in types:
-                    m = to_message(item, st["channel"])
+                    m = mark_stale(to_message(item, st["channel"]), item)
                     if m:
                         inbox.put(m)
             await asyncio.sleep(2.5)

@@ -153,7 +153,7 @@ function actHtml(m) {
 }
 function drop(i) { items = items.filter(x => x !== i); i.el.classList.add('out'); setTimeout(() => i.el.remove(), 850); }
 function add(m, immediate) {
-  if (KIND === 'follow') { if (S && (m.event === 'follow' || m.event === 'gift' || m.event === 'streak') && !hidden(m)) followAdd(m); return; }
+  if (KIND === 'follow') { if (S && !(m.meta && m.meta.stale) && (m.event === 'follow' || m.event === 'gift' || m.event === 'streak') && !hidden(m)) followAdd(m); return; }
   if (!S || hidden(m) || (KIND === 'activity' && !m.event) || (KIND === 'activity' && S.paused && !immediate)) return;
   if (items.some(i => i.m.id === m.id)) return;
   const show = () => {
