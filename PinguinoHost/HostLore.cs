@@ -104,7 +104,7 @@ namespace PinguinoHost
             t = Regex.Replace(t, @"\$\((user|touser|channel|time[^)]*|random[^)]*|count[^)]*)\)", m =>
             {
                 string v = m.Groups[1].Value;
-                if (v == "user") return user;
+                if (v == "user") return PlatformUsers.Shown(user);   // a YouTube / TikTok viewer is a yt:<id> key: say their name
                 if (v == "touser") return touser ?? (touser = Touser(user, args));
                 if (v == "channel") return S("channelName", "InnocentPenguin");
                 if (v.StartsWith("time")) { var n = TimeZoneInfo.ConvertTime(DateTime.UtcNow, Central()); return (n.Hour % 12 == 0 ? 12 : n.Hour % 12) + ":" + n.Minute.ToString("D2") + " " + (n.Hour >= 12 ? "PM" : "AM"); }
@@ -205,7 +205,7 @@ namespace PinguinoHost
                     LastGlobal = now; LastEntry[key] = now; LastUser[uk] = now;
                 }
                 string r = Full(e, user, new string[0]); if (r == "") return false;
-                bool bare = (string)e["bare"] != null; if (!bare && r.Length < 400) r = "@" + user + " " + r;
+                string at = "@" + PlatformUsers.Shown(user) + " "; if (r.Length < 400 && !r.StartsWith(at, StringComparison.OrdinalIgnoreCase)) r = at + r;   // every public lore answer, bare words included, starts with @name (the display name, never a yt:/tt: key)
                 (IsFun(e) ? say : (Action<string>)SayCore)(r); return true;
             }
             catch (Exception ex) { Clog.Warn("lore", "chat match failed: " + ex.Message); return false; }

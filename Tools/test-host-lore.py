@@ -9,14 +9,14 @@ json.dump({'Channel': 'innocentpenguin_', 'OverlayPort': PORT}, open(os.path.joi
 json.dump({'CannedFile': os.path.join(d, 'no_canned.json')}, open(os.path.join(d, 'chat_settings.json'), 'w'))   # Chatty owns no terms here, so the Host answers them all
 def start():
     env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}
-    env.update({'PINGUINO_COMPAT_WS_PORT': '8994', 'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0'})
+    env.update({'PINGUINO_MODULE_TOKEN': 'lore-tok', 'PINGUINO_COMPAT_WS_PORT': '8994', 'PINGUINO_STREAK_COOL_GLOBAL': '0', 'PINGUINO_STREAK_COOL_USER': '0'})
     h = subprocess.Popen(['dotnet', dll, '--sim', '--no-sync', '--data', d, '--suite', suite], env=env, stdin=subprocess.PIPE, stdout=open(outf, 'ab'), stderr=subprocess.STDOUT)
     for _ in range(80):
         try: api('/api/status'); break
         except Exception: time.sleep(0.5)
     return h
 def api(path, body=None):
-    rq = urllib.request.Request(B + path, data=None if body is None else json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
+    rq = urllib.request.Request(B + path, data=None if body is None else json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer lore-tok'})
     return json.load(urllib.request.urlopen(rq, timeout=30))
 def says(): return [l[6:] for l in open(outf, encoding='utf-8', errors='replace').read().splitlines() if l.startswith('[say] ')]
 def ask(h, line, wait=0.7):
@@ -68,7 +68,16 @@ try:
     r = ask(host, 'viewer6: what pc should i buy?'); chk('buying advice is not the streamer\'s specs', r == [], r)
     r = ask(host, 'viewer6: is there a discord?'); chk('is there a discord?', r and 'discord.gg' in r[0], r)
     r = ask(host, 'viewer6: who is gay?'); chk('unsafe entries never answer a question', r == [], r)
-    r = ask(host, 'viewer7: goodnight'); chk('a bare "goodnight" gets the old Nightbot reply', r and r[0].startswith('Goodnight viewer7'), r)
+    r = ask(host, 'viewer7: goodnight'); chk('a bare "goodnight" gets the old Nightbot reply, starting with @name', r and r[0].startswith('@viewer7 Goodnight viewer7'), r)
+    r = ask(host, 'viewer7: w'); chk('an exact-match bare word ("w") answers with @name first', r and r[0].startswith('@viewer7 W '), r)
+    # a YouTube viewer is the key yt:<id>: lore answers name the viewer by display name, never the key
+    def cin(text, mid):
+        n = len(says()); rq = urllib.request.Request(B + '/api/chat-in', data=json.dumps({'platform': 'youtube', 'user': 'Yt Fan', 'userId': 'UC0qimciufabcdefghijklmn', 'text': text, 'msgId': mid}).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer lore-tok'})
+        urllib.request.urlopen(rq, timeout=20).read(); time.sleep(1.2); return says()[n:]
+    api('/api/lore', {'action': 'settings', 'settings': {'entryCooldownSec': 0}}); cin('hello there', 'y1')
+    r = cin('when does he stream?', 'y2'); chk('lore answer to a YouTube viewer says @DisplayName, not @yt:<id>', any(x.startswith('@Yt Fan ') and x.endswith('11pm UK') for x in r) and not any('yt:' in x for x in r), r)
+    r = cin('w', 'y3'); chk('a bare word to a YouTube viewer says @DisplayName too', any(x.startswith('@Yt Fan W ') for x in r) and not any('yt:' in x for x in r), r)
+    api('/api/lore', {'action': 'settings', 'settings': {'entryCooldownSec': 90}})
     r = ask(host, 'viewer7: goodnight everyone'); chk('"goodnight everyone" is not a keyword hit', r == [], r)
     r = ask(host, 'viewer7: !lore off sydney')
     r = ask(host, '*mod1: !lore off sydney'); r = ask(host, 'viewer7: !sydney'); chk('a mod can turn an entry off', r == [], r)
