@@ -11,7 +11,8 @@ d = tempfile.mkdtemp(prefix='pgpb_'); out = os.path.join(d, 'out.txt'); os.maked
 json.dump({'Channel': 'streamer1', 'OverlayPort': PORT}, open(os.path.join(d, 'host_secrets.json'), 'w'))
 json.dump({'Earning': False, 'WelcomeBonus': 0}, open(os.path.join(d, 'economy', 'settings.json'), 'w'))
 def U(n, w, m, g, b, p): return {'name': n, 'gifts': g, 'bits': b, 'messages': m, 'points': p, 'watchMinutes': w}
-TOT = {'ok': True, 'users': {'amy': U('amy', 5000, 900, 4, 100, 300), 'bob': U('bob', 200, 50, 0, 0, 10), 'cy': U('cy', 30, 0, 0, 0, 0)}}
+TOT = {'ok': True, 'users': {'amy': U('amy', 5000, 900, 4, 100, 300), 'bob': U('bob', 200, 50, 0, 0, 10), 'cy': U('cy', 30, 0, 0, 0, 0), 'dee': U('dee', 100, 10, 0, 0, 5), 'deeold': U('deeold', 40, 7, 0, 0, 3)}}
+json.dump({'aliases': {'deeold': 'dee'}}, open(os.path.join(d, 'boards', 'aliases.json'), 'w'))   # two raw rows of one person in the snapshot
 json.dump(TOT, open(os.path.join(d, 'boards', 'totals.json'), 'w'))
 open(os.path.join(d, 'boards', 'metric_events.jsonl'), 'w').write(json.dumps({'ts': int(time.time()) - 60, 'user': 'cy', 'metric': 'watchtime', 'amount': 10, 'id': 'old1'}) + chr(10))   # already in the log (and in cy's total) when the baseline is made
 env = {k: v for k, v in os.environ.items() if not k.startswith('PINGUINO_')}; env.update({'PINGUINO_COMPAT_WS_PORT': str(WSPORT), 'PINGUINO_ECONOMY_TESTHOOK': '1', 'PINGUINO_ECONOMY_NO_ANNOUNCE': '1'})
@@ -43,6 +44,8 @@ try:
         if os.path.exists(bp): break
         get('/api/boards?metric=watchtime&period=all'); time.sleep(0.5)
     chk('baseline file written', os.path.exists(bp))
+    bm = json.load(open(bp))['metrics']
+    chk('two raw alias rows of one person SUM in the baseline (watchtime 100+40, messages 10+7, points 5+3), not last-row-wins', bm['watchtime'].get('dee') == 140 and bm['messages'].get('dee') == 17 and bm['points'].get('dee') == 8 and 'deeold' not in bm['watchtime'], bm['watchtime'])
     tot = json.load(open(os.path.join(d, 'boards', 'totals.json')))['users']
     a, m = val('watchtime', 'all', 'amy'), val('watchtime', 'month', 'amy')
     chk('month is events only, all time is far above it', m == 100 and a > m, (a, m))
@@ -53,7 +56,7 @@ try:
     chk('messages baseline', val('messages', 'all', 'amy') == 910 and val('messages', 'month', 'amy') == 10, (val('messages', 'all', 'amy'), tot['amy']['messages']))
     chk('gifts and bits baseline', val('gifts', 'all', 'amy') == 4 and val('bits', 'all', 'amy') == 100, (val('gifts', 'all', 'amy'), val('bits', 'all', 'amy')))
     rows = get('/api/boards?metric=watchtime&period=all&login=bob')
-    chk('ranking and the me row use the lifetime figures', rows['rows'][0]['login'] == 'amy' and rows['me']['rank'] == 2 and rows['me']['value'] == 220 and rows['total'] == 3, rows)
+    chk('ranking and the me row use the lifetime figures', rows['rows'][0]['login'] == 'amy' and rows['me']['rank'] == 2 and rows['me']['value'] == 220 and rows['total'] == 4, rows)
     post('/api/boards/event', {'user': 'amy', 'metric': 'watchtime', 'amount': 5, 'ts': now, 'id': 'e4'}); a2 = val('watchtime', 'all', 'amy')
     chk('a later event adds on top, once', a2 == a + 5, (a, a2))
     post('/api/boards/event', {'user': 'amy', 'metric': 'watchtime', 'amount': 5, 'ts': now, 'id': 'e4'}); chk('same id counts once', val('watchtime', 'all', 'amy') == a2)

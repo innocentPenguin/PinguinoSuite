@@ -100,11 +100,13 @@ namespace PinguinoHost
                     foreach (var f in BaseFields)
                     {
                         var have = Folded(f.Value, "all"); var mo = new JObject();
+                        var sums = new Dictionary<string, double>();   // the raw rows of one person (old accounts still listed in totals.json) ADD UP under the canonical login
                         foreach (var u in users.Properties())
                         {
                             double tot = 0; try { tot = (double?)u.Value[f.Key] ?? 0; } catch (Exception) { }
-                            double h; have.TryGetValue(Boards.CanonLogin(u.Name), out h); double b0 = Math.Floor(tot - h); if (b0 >= 1) mo[Boards.CanonLogin(u.Name)] = b0;
+                            string cl = Boards.CanonLogin(u.Name); double sv; sums.TryGetValue(cl, out sv); sums[cl] = sv + tot;
                         }
+                        foreach (var kv in sums) { double h; have.TryGetValue(kv.Key, out h); double b0 = Math.Floor(kv.Value - h); if (b0 >= 1) mo[kv.Key] = b0; }
                         ((JObject)bs["metrics"])[f.Value] = mo;
                     }
                     Directory.CreateDirectory(Path.GetDirectoryName(BaseP)); File.WriteAllText(BaseP, bs.ToString(Newtonsoft.Json.Formatting.None), new System.Text.UTF8Encoding(false));
