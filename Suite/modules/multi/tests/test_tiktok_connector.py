@@ -194,3 +194,19 @@ def test_comment_badges_from_user_identity():
     sub = tev.CommentEvent(content="hi", user=U, user_identity=UserIdentity(is_subscriber_of_anchor=True, is_moderator_of_anchor=True))
     assert tl.map_event("comment", sub, "host").badges == ["subscriber", "moderator"]
     assert tl.map_event("comment", tev.CommentEvent(content="hi", user=U), "host").badges == []
+
+
+def test_disabled_tiktok_is_quiet(monkeypatch):
+    """Ivan never streams on TikTok: disabled (the default) = one quiet 'disabled' state, no client, no log lines, no readiness warning."""
+    import prestream
+    from connectors import base
+    logged = []
+    monkeypatch.setattr(base.console_log, "log", lambda *a, **k: logged.append(a))
+    monkeypatch.setattr(base.console_log, "warn", lambda *a, **k: logged.append(a))
+    made = []
+    c, _ = _conn(monkeypatch, tiktok_enabled=False, tiktok_user="")
+    monkeypatch.setattr(tk, "make_client", lambda *a: made.append(a))
+    _run(c, 4)
+    assert c.state["status"] == "disabled" and c.state["reconnects"] == 0 and made == [] and logged == []
+    assert prestream._conn(c.describe())[0] == "pass"
+    assert config.DEFAULTS["tiktok_enabled"] is False
