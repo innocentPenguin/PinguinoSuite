@@ -49,6 +49,7 @@ namespace PinguinoHost
         public static List<string> CoreCommandList() { return coreCommands.OrderBy(x => x).ToList(); }
         static HashSet<string> coreCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         static readonly object dispatchLock = new object();
+        internal static object DispatchLockForTest { get { return dispatchLock; } }
         static readonly Dictionary<string, string> sources = new Dictionary<string, string>
         {
             { "PinguinoBot", @"PinguinoB0t\PinguinoBotCore.cs" }, { "PinguinoChat", @"PinguinoChat\PinguinoChat.cs" },
@@ -78,6 +79,7 @@ namespace PinguinoHost
             Lease.Start(); Lease.StartStreamingReporter(() => cph.ObsStreaming()); if (!sim) Auto.StartTimers(); Links.Start(sim); Auto.SeedDefaults(); Task.Run(async () => { await Task.Delay(sim ? 2500 : 15000); Auto.RecoverHeldOffline(); }); Auto.SeedStreamerBotPresets(); SiteFeed.Start(); WheelEmoji.Start(); SiteTeach.Start(); LobbyPush.Start(); RankedPush.Start(); Redeems.Start(); SiteCommands.Start(); EventLog.Start(); Replays.Start(); SiteShop.Start(); Periods.Start(); SiteEconomy.Start(); ModAudit.Start(); StrikeCheckIn.Start(); GiftTags.Start(); SiteActivity.Start(); OverlayChat.Start(); CompatWs.Start(); SpotifyAnnounce.Start(); StartChatTicker(sim); LiveState.Start(cph, sim ? 2 : 20); SubBoard.Start(); SubsImport.Start(); Streaks.Start(); Boards.Start(); Emotes.Start(); Timers.Start(); StreamTimers.Start(); Reminders.Start(); Economy.Start(); ProfileSync.Start();
 
             Console.WriteLine("PinguinoHost ready. data=" + dataDir + (sim ? "  [SIM: type  user: text ]" : "  channel=#" + channel));
+            Watchdog.Start();
             if (!argv.Contains("--no-sync")) StartSyncTimer();
             if (sim) { SimLoop(); return 0; }
             if (channel == "") { Console.WriteLine("No channel yet: open http://127.0.0.1:" + HostApi.Port + "/setup to configure."); Thread.Sleep(Timeout.Infinite); }
@@ -187,42 +189,49 @@ namespace PinguinoHost
         public static void Dispatch(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub = false, int subTier = 0, string platform = "twitch", string colorTag = "", string badgeTag = "")
         {
             if (!Lease.MayRun) return;
+            Watchdog.Begin("chat dispatch (" + platform + ", " + Watchdog.CmdWord(text) + ")");
+            try { DispatchInner(user, text, msgId, role, userId, firstMsg, replyTo, isSub, subTier, platform, colorTag, badgeTag); } finally { Watchdog.End(); }
+        }
+        static void DispatchInner(string user, string text, string msgId, int role, string userId, bool firstMsg, string replyTo, bool isSub, int subTier, string platform, string colorTag, string badgeTag)
+        {
             bool fx = platform != "twitch";   // chat from YouTube etc. (HostApi /api/chat-in): own namespaced identity, viewer role, answers go to that platform only; Twitch-only machinery below is skipped
             if (fx) ReplyCtx.BeginForeign(platform, msgId, user, true); else ReplyCtx.Begin(msgId, user);   // every reply made while handling this message is a native Twitch reply to it
             bool spamCand = false;
             bool botAcct = false; try { botAcct = BotAccounts.Is(user); } catch (Exception) { }   // a known bot account: counted as chat for logs and the Actions & Events triggers, but never as a viewer (points, welcome, First 5, boards)
             if (!fx) {
-            try { if (SpamFirst.OnChat(user, text, role, isSub, subTier, firstMsg, out spamCand)) return; } catch (Exception ex) { Clog.Warn("spam", "first-message check failed: " + ex.Message); }   // link spam in a brand-new chatter's first line: dropped before any bot or bonus (off by default, Data\config\spam_first.json)
-            try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
-            try { if (!botAcct) Roster.Note(user, role, isSub); } catch (Exception) { }
-            try { if (!botAcct) Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
-            try { if (!botAcct) Economy.OnChat(user, text, s => ChannelLore.Say(s)); } catch (Exception) { }
-            try { if (!Control.Synthetic && !botAcct) { Periods.AddBuffered(user, "messages", 1); if (text.TrimStart().StartsWith("!")) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
-            try { if (!Control.Synthetic && !botAcct) ChatFeed.Add(user, text, role, isSub, subTier, colorTag, badgeTag, userId); } catch (Exception) { }
-            try { EventLog.OnChat(user, text, role); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
-            try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
+            Watchdog.Step("SpamFirst"); try { if (SpamFirst.OnChat(user, text, role, isSub, subTier, firstMsg, out spamCand)) return; } catch (Exception ex) { Clog.Warn("spam", "first-message check failed: " + ex.Message); }   // link spam in a brand-new chatter's first line: dropped before any bot or bonus (off by default, Data\config\spam_first.json)
+            Watchdog.Step("SubBoard/Intro"); try { if (subTier > 0) { SubBoard.Note(user, subTier); Intro.OnChat(user, subTier); } } catch (Exception ex) { Clog.Warn("intro", "intro check failed: " + ex.Message); }   // not the master Host (or lease lost): never run the bots
+            Watchdog.Step("Roster"); try { if (!botAcct) Roster.Note(user, role, isSub); } catch (Exception) { }
+            Watchdog.Step("Welcome"); try { if (!botAcct) Welcome.OnChat(user, firstMsg, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } }); } catch (Exception ex) { Clog.Warn("welcome", "welcome check failed: " + ex.Message); }   // delayed welcome bonus for a first-ever chatter
+            Watchdog.Step("Economy.OnChat"); try { if (!botAcct) Economy.OnChat(user, text, s => ChannelLore.Say(s)); } catch (Exception) { }
+            Watchdog.Step("Periods"); try { if (!Control.Synthetic && !botAcct) { Periods.AddBuffered(user, "messages", 1); if (text.TrimStart().StartsWith("!")) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
+            Watchdog.Step("ChatFeed"); try { if (!Control.Synthetic && !botAcct) ChatFeed.Add(user, text, role, isSub, subTier, colorTag, badgeTag, userId); } catch (Exception) { }
+            Watchdog.Step("EventLog"); try { EventLog.OnChat(user, text, role); } catch (Exception) { }   // Master View chat panel (last 200 lines in memory)
+            Watchdog.Step("LiveLog"); try { LiveLog.Record(user, userId, text, (text ?? "").TrimStart().StartsWith("!")); } catch (Exception) { }   // every line, every user, always (Data\chat_logs\live)
             }
             else   // YouTube / TikTok are full citizens: same points, boards, chat feed and logs as Twitch (key = "yt:id", display name beside it)
             {
                 bool synth = false; try { synth = Control.Synthetic; } catch (Exception) { }
                 string shown = PlatformUsers.Display(user); bool isCmd = (text ?? "").TrimStart().StartsWith("!");
-                try { if (!botAcct) { Economy.NoteForeign(user); ChatStats.Note(user, 1); } } catch (Exception) { }
-                try { if (PlatformUsers.TakeFresh(user) && !botAcct) Welcome.OnForeign(user, platform, text, s => { string via; HostApi.SendAs("core", s, out via); }); } catch (Exception ex) { Clog.Warn("welcome", "newcomer greeting failed: " + ex.Message); }   // new YouTube viewer: welcome + bonus in the same message as the answer to their line
-                try { if (!synth && !botAcct) { Periods.AddBuffered(user, "messages", 1); if (isCmd) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
-                try { if (!synth && !botAcct) ChatFeed.Add(user, text, 1, false, 0, "", "", userId, platform, shown); } catch (Exception) { }
-                try { EventLog.OnChat(user, text, 1); } catch (Exception) { }
-                try { LiveLog.Record(user, userId, text, isCmd, platform, shown); } catch (Exception) { }
+                Watchdog.Step("Economy.NoteForeign"); try { if (!botAcct) { Economy.NoteForeign(user); ChatStats.Note(user, 1); } } catch (Exception) { }
+                Watchdog.Step("PlatformUsers/Welcome"); try { if (PlatformUsers.TakeFresh(user) && !botAcct) Welcome.OnForeign(user, platform, text, s => { string via; HostApi.SendAs("core", s, out via); }); } catch (Exception ex) { Clog.Warn("welcome", "newcomer greeting failed: " + ex.Message); }   // new YouTube viewer: welcome + bonus in the same message as the answer to their line
+                Watchdog.Step("Periods"); try { if (!synth && !botAcct) { Periods.AddBuffered(user, "messages", 1); if (isCmd) Periods.AddBuffered(user, "commands", 1); } } catch (Exception) { }
+                Watchdog.Step("ChatFeed"); try { if (!synth && !botAcct) ChatFeed.Add(user, text, 1, false, 0, "", "", userId, platform, shown); } catch (Exception) { }
+                Watchdog.Step("EventLog"); try { EventLog.OnChat(user, text, 1); } catch (Exception) { }
+                Watchdog.Step("LiveLog"); try { LiveLog.Record(user, userId, text, isCmd, platform, shown); } catch (Exception) { }
             }
-            try { if (CmdProfiles.Gate(user, text, role, isSub, subTier)) return; } catch (Exception ex) { Clog.Warn("cmdprofiles", "command gate failed: " + ex.Message); }   // edited tier / disabled / archived / cooldown: silent
-            try { bool swallowed; text = CmdFix.Fix(user, text, m => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + m); else { string via; HostApi.SendAs("core", m, out via); } }, out swallowed); if (swallowed) return; } catch (Exception ex) { Clog.Warn("cmdfix", "typo check failed: " + ex.Message); }   // "! join", "!jon", "!rejoin" -> !join; near misses answer once
-            try { if (FeatureCommands.Handle(user, text, role, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("commands", "leaderboard command failed: " + ex.Message); }
-            try { if (!fx && Streaks.Handle(user, text, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("streaks", "streak command failed: " + ex.Message); }
-            try { if (!fx && PgCommand.Handle(user, text, role)) return; } catch (Exception ex) { Clog.Warn("pg", "!pg failed: " + ex.Message); }
-            try { if (Auto.OnChat(user, text, role, isSub, firstMsg, msgId, replyTo, subTier)) return; } catch (Exception ex) { Clog.Warn("automation", "chat trigger failed: " + ex.Message); }   // an Actions & Events command took it
-            try { if (ChannelLore.OnChat(user, text, role, ChannelLore.Say)) return; } catch (Exception ex) { Clog.Warn("lore", "channel lore failed: " + ex.Message); }   // a clear question the channel's own commands answer
-            try { if (BotMention.OnChat(user, text, role, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("mention", "mention reply failed: " + ex.Message); }   // @PinguinoB0t about the stream or a moderation situation
+            Watchdog.Step("CmdProfiles"); try { if (CmdProfiles.Gate(user, text, role, isSub, subTier)) return; } catch (Exception ex) { Clog.Warn("cmdprofiles", "command gate failed: " + ex.Message); }   // edited tier / disabled / archived / cooldown: silent
+            Watchdog.Step("CmdFix"); try { bool swallowed; text = CmdFix.Fix(user, text, m => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + m); else { string via; HostApi.SendAs("core", m, out via); } }, out swallowed); if (swallowed) return; } catch (Exception ex) { Clog.Warn("cmdfix", "typo check failed: " + ex.Message); }   // "! join", "!jon", "!rejoin" -> !join; near misses answer once
+            Watchdog.Step("FeatureCommands"); try { if (FeatureCommands.Handle(user, text, role, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("commands", "leaderboard command failed: " + ex.Message); }
+            Watchdog.Step("Streaks"); try { if (!fx && Streaks.Handle(user, text, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("streaks", "streak command failed: " + ex.Message); }
+            Watchdog.Step("PgCommand"); try { if (!fx && PgCommand.Handle(user, text, role)) return; } catch (Exception ex) { Clog.Warn("pg", "!pg failed: " + ex.Message); }
+            Watchdog.Step("Auto.OnChat"); try { if (Auto.OnChat(user, text, role, isSub, firstMsg, msgId, replyTo, subTier)) return; } catch (Exception ex) { Clog.Warn("automation", "chat trigger failed: " + ex.Message); }   // an Actions & Events command took it
+            Watchdog.Step("ChannelLore"); try { if (ChannelLore.OnChat(user, text, role, ChannelLore.Say)) return; } catch (Exception ex) { Clog.Warn("lore", "channel lore failed: " + ex.Message); }   // a clear question the channel's own commands answer
+            Watchdog.Step("BotMention"); try { if (BotMention.OnChat(user, text, role, s => { if (HostApi.SimMode && !fx) Console.WriteLine("[say] " + s); else { string via; HostApi.SendAs("core", s, out via); } })) return; } catch (Exception ex) { Clog.Warn("mention", "mention reply failed: " + ex.Message); }   // @PinguinoB0t about the stream or a moderation situation
+            Watchdog.Step("waiting for dispatchLock");
             lock (dispatchLock)   // one message at a time: arguments are shared state, so no two chats can mix
             {
+                Watchdog.Hold("chat " + Watchdog.CmdWord(text));
                 cph.Args.Clear();
                 string login = user.ToLowerInvariant();
                 cph.Args["user"] = user; cph.Args["userName"] = login; cph.Args["userId"] = userId ?? "";
@@ -253,6 +262,7 @@ namespace PinguinoHost
                     else cph.RunAction("PinguinoRouter");
                 }
                 catch (Exception ex) { Console.WriteLine("ERROR dispatch: " + ex); }
+                finally { Watchdog.Release(); }
             }
         }
 
@@ -314,22 +324,32 @@ namespace PinguinoHost
         public static void DispatchEvent(Dictionary<string, object> args)
         {
             if (!Lease.MayRun) return;
-            try { Boards.OnEvent(args); } catch (Exception) { }
-            try { SiteActivity.Note(args); } catch (Exception) { }
-            try { RedeemCounts.Note(args); } catch (Exception) { }
-            try { Periods.OnEvent(args); } catch (Exception) { }
-            try { Control.OnEvent(args); } catch (Exception) { }
-            try { StreamTimers.OnEvent(args); } catch (Exception) { }
-            try { Announce.OnEvent(args); } catch (Exception) { }
-            try { ProfileSync.OnEvent(args); } catch (Exception) { }
-            try { if (Convert.ToString(args.ContainsKey("eventType") ? args["eventType"] : "") == "TwitchRedeem") TimeoutReward.OnRedeem(args); } catch (Exception ex) { Clog.Warn("timeout-reward", "redeem failed: " + ex.Message); }
-            try { Auto.OnEvent(args); } catch (Exception ex) { Clog.Warn("automation", "event trigger failed: " + ex.Message); }
+            string evName = args.ContainsKey("eventType") ? Convert.ToString(args["eventType"]) : "event";
+            Watchdog.Begin("event " + evName);
+            try { DispatchEventInner(args); } finally { Watchdog.End(); }
+        }
+        static void DispatchEventInner(Dictionary<string, object> args)
+        {
+            Watchdog.Step("Boards"); try { Boards.OnEvent(args); } catch (Exception) { }
+            Watchdog.Step("SiteActivity"); try { SiteActivity.Note(args); } catch (Exception) { }
+            Watchdog.Step("RedeemCounts"); try { RedeemCounts.Note(args); } catch (Exception) { }
+            Watchdog.Step("Periods"); try { Periods.OnEvent(args); } catch (Exception) { }
+            Watchdog.Step("Control"); try { Control.OnEvent(args); } catch (Exception) { }
+            Watchdog.Step("StreamTimers"); try { StreamTimers.OnEvent(args); } catch (Exception) { }
+            Watchdog.Step("Announce"); try { Announce.OnEvent(args); } catch (Exception) { }
+            Watchdog.Step("ProfileSync"); try { ProfileSync.OnEvent(args); } catch (Exception) { }
+            Watchdog.Step("TimeoutReward"); try { if (Convert.ToString(args.ContainsKey("eventType") ? args["eventType"] : "") == "TwitchRedeem") TimeoutReward.OnRedeem(args); } catch (Exception ex) { Clog.Warn("timeout-reward", "redeem failed: " + ex.Message); }
+            Watchdog.Step("Auto.OnEvent"); try { Auto.OnEvent(args); } catch (Exception ex) { Clog.Warn("automation", "event trigger failed: " + ex.Message); }
             object et0; if (args.TryGetValue("eventType", out et0) && !new[] { "TwitchSub", "TwitchReSub", "TwitchGiftBomb", "TwitchCheer", "TwitchRaid", "TwitchFollow", "TwitchHype", "PgGame", "StreamOnline", "StreamOffline" }.Contains(Convert.ToString(et0))) return;   // automation-only events
+            { Watchdog.Step("waiting for dispatchLock");
             lock (dispatchLock)
             {
+                Watchdog.Hold("event " + Convert.ToString(et0));
                 cph.Args.Clear(); foreach (var kv in args) cph.Args[kv.Key] = kv.Value;
                 if (args.ContainsKey("userName")) cph.Args["user"] = args["userName"];
                 try { cph.RunAction("PinguinoChat"); } catch (Exception ex) { Console.WriteLine("ERROR event: " + ex); }
+                finally { Watchdog.Release(); }
+            }
             }
         }
 
@@ -338,10 +358,11 @@ namespace PinguinoHost
         {
             _syncTimer = new Timer(_ =>
             {
-                if (!Monitor.TryEnter(dispatchLock)) return;
+                if (!Monitor.TryEnter(dispatchLock)) { Watchdog.NoteSkippedTick("web sync tick"); return; }
+                Watchdog.Hold("web sync tick");
                 try { cph.Args.Clear(); cph.Args["timerName"] = "PinguinoBot Web Sync"; cph.RunAction("PinguinoBot"); }
                 catch (Exception ex) { Clog.Warn("sync", "web sync tick failed: " + ex.Message); }
-                finally { Monitor.Exit(dispatchLock); }
+                finally { Watchdog.Release(); Monitor.Exit(dispatchLock); }
             }, null, 3000, 3000);
 
         }
@@ -367,6 +388,7 @@ namespace PinguinoHost
                 if (line == "alerttest") { try { AlertBridgeTest.Run(); } catch (Exception ex) { Console.WriteLine("[alerttest] error " + ex); } continue; }
                 if (line == "scopetest") { try { ScopeTest.Run(); } catch (Exception ex) { Console.WriteLine("[scopetest] error " + ex); } continue; }
                 if (line == "rankedtest") { try { RankedTest.Run(); } catch (Exception ex) { Console.WriteLine("[rankedtest] error " + ex); } continue; }
+                if (line == "watchdogtest") { try { WatchdogTest.Run(); } catch (Exception ex) { Console.WriteLine("[watchdogtest] error " + ex); } continue; }
                 if (line == "ranktest") { try { RankTest.Run(); } catch (Exception ex) { Console.WriteLine("[ranktest] error " + ex); } continue; }
                 if (line.StartsWith("emojitest ")) { Console.WriteLine("[emojitest] " + string.Join(" ", WheelEmoji.Interests(line.Substring(10).Trim().ToLowerInvariant()))); continue; }
                 if (line.StartsWith("simsay ")) { try { Console.WriteLine("[simsay] " + SimSay.Say(JObject.Parse(line.Substring(7))).ToString(Newtonsoft.Json.Formatting.None)); } catch (Exception ex) { Console.WriteLine("[simsay] error " + ex.Message); } continue; }
@@ -393,7 +415,7 @@ namespace PinguinoHost
         {
             string tok = s.Value<string>("UserToken"), cid = s.Value<string>("ClientId"), sid = s.Value<string>("SenderId"), bid = s.Value<string>("BroadcasterId");
             if (string.IsNullOrEmpty(tok) || string.IsNullOrEmpty(cid) || string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(bid)) { Console.WriteLine("(no Twitch send credentials: replies are printed only)"); return; }
-            var http = new HttpClient();
+            var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };   // was the 100 s default, held under dispatchLock
             HttpRequestMessage Req(HttpMethod m, string url, JObject body)
             {
                 var r = new HttpRequestMessage(m, url);
