@@ -330,7 +330,10 @@ public static class Harness
             int before = mbodies.Count; Msg("Mu10", "!skip", true); Check("music: the same viewer typing it again at once is ignored (no second line)", Last() == null && mbodies.Count == before, Last());
             modSay = "line one" + "\n" + "line two"; Msg("Mu11", "!song"); Check("music: a multi-line module answer becomes ONE line", Last().EndsWith("line one line two"), Last());
             modSay = ""; Msg("Mu12", "!song"); Check("music: module replies off -> nothing said, nobody else answers", Last() == null && !Forwarded(), Last());
-            modSay = null; modDown = true; Msg("Mu13", "!song"); Check("music: module not running -> one plain line", Last() != null && Last().Contains("music player") && Last().IndexOf('\n') < 0, Last());
+            modSay = null; modDown = true; Msg("Mu13", "!song"); Check("music: module not running -> one plain line", Last() != null && Last().Contains("what's playing") && Last().IndexOf('\n') < 0, Last());
+            Msg("Mu13b", "!songqueue"); Check("music down: queue text", Last().Contains("queue isn't available"), Last());
+            Msg("Mu13c", "!vol"); Check("music down: volume text", Last().Contains("Volume unknown, no Spotify player"), Last());
+            Msg("Mu13d", "!skip"); Check("music down: skip text", Last().Contains("Skip votes aren't available"), Last());
             modDown = false; before = mbodies.Count; Msg("Mu14", "!songs"); Check("music: !songs (not a music command) is not sent to the module", mbodies.Count == before, Last());
             // YouTube (non-Twitch) viewers: the same answers, said only through the Host's SendMessage (no tag, no dup record, no Helix); skip votes stay Twitch-only
             plat = "youtube"; CPHProxy.Globals.Remove("pinguino.said.recent");
