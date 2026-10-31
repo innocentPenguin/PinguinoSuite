@@ -10,7 +10,7 @@ namespace PinguinoHost
     /// step name and who holds dispatchLock, and writes a heartbeat with the thread-pool state every HeartbeatSec so starvation shows in host.jsonl.</summary>
     public static class Watchdog
     {
-        class Op { public string Name, Step = ""; public DateTime Start = DateTime.UtcNow, Reported = DateTime.MinValue; public int Thread = Environment.CurrentManagedThreadId; }
+        class Op { public Op Parent; public string Name, Step = ""; public DateTime Start = DateTime.UtcNow, Reported = DateTime.MinValue; public int Thread = Environment.CurrentManagedThreadId; }
         static readonly ConcurrentDictionary<int, Op> ops = new ConcurrentDictionary<int, Op>();
         public static int StallSec = 20, HeartbeatSec = 60, ScanMs = 5000;
         public static Action<string, string> Sink;   // tests: (level, text); null = Clog
@@ -23,8 +23,9 @@ namespace PinguinoHost
             string t = (text ?? "").TrimStart(); if (!t.StartsWith("!")) return "line";
             string w = t.Split(' ')[0]; return w.Length > 30 ? w.Substring(0, 30) : w;
         }
-        public static void Begin(string name) { ops[Environment.CurrentManagedThreadId] = new Op { Name = name }; }
-        public static void End() { Op o; ops.TryRemove(Environment.CurrentManagedThreadId, out o); }
+        /// <summary>A Begin inside a Begin on the same thread keeps the outer one: End brings it back (it keeps its own start time, so a stall in the outer op is still reported).</summary>
+        public static void Begin(string name) { int t = Environment.CurrentManagedThreadId; Op o; ops.TryGetValue(t, out o); ops[t] = new Op { Name = name, Parent = o }; }
+        public static void End() { int t = Environment.CurrentManagedThreadId; Op o; if (!ops.TryRemove(t, out o)) return; if (o.Parent != null) ops[t] = o.Parent; }
         public static void Step(string step) { Op o; if (ops.TryGetValue(Environment.CurrentManagedThreadId, out o)) o.Step = step; }
         /// <summary>This thread just got dispatchLock (what = what it will run); Release when it gives it back.</summary>
         public static void Hold(string what) { _holder = what ?? ""; _holderAt = DateTime.UtcNow; Step("running " + what); }

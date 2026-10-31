@@ -29,14 +29,19 @@ namespace PinguinoHost
             var release = new ManualResetEventSlim(false); var holding = new ManualResetEventSlim(false);
             var holder = new Thread(() => { lock (Program.DispatchLockForTest) { Watchdog.Hold("chat !gamble"); holding.Set(); release.Wait(8000); Watchdog.Release(); } }); holder.Start(); holding.Wait(2000);
             bool done = false; var chat = Task.Run(() => { Program.Dispatch("wdviewer", "just saying hello to everyone", "wd-1", 1, "id-wd", false, null); done = true; });
-            Thread.Sleep(600);
-            Watchdog.Scan(DateTime.UtcNow.AddSeconds(30));
+            for (int i = 0; i < 20 && !has("waiting for dispatchLock"); i++) { Thread.Sleep(300); Watchdog.Scan(DateTime.UtcNow.AddSeconds(30 + 61 * i)); }   // the chat's earlier steps can take a moment on a slow start: scan (a stall is reported once a minute per op) until it waits on the lock
             Check(has("waiting for dispatchLock") && has("held by chat !gamble"), "chat waiting on the lock is named with the holder: " + string.Join(" // ", lines.Where(l => l.Contains("stalled"))));
             Check(!done, "the chat waits (not dropped) while the lock is held");
             Watchdog.NoteSkippedTick("web sync tick"); Watchdog.NoteSkippedTick("web sync tick");
             Check(lines.Count(l => l.Contains("web sync tick skipped")) == 1 && has("held") && has("by chat !gamble"), "a skipped tick is logged once with the holder");
             release.Set(); holder.Join(); Check(chat.Wait(8000) && done, "the waiting chat ran as soon as the lock was free");
             Check(Watchdog.Holder == "", "holder cleared after the chat");
+            // a Begin/End nested on one thread (an inner op) must not clear the outer op or its step marker
+            lines.Clear(); var nestedOk = new ManualResetEventSlim(false); var nestedGo = new ManualResetEventSlim(false);
+            var nt = new Thread(() => { Watchdog.Begin("outer op"); Watchdog.Step("outer step"); Watchdog.Begin("inner op"); Watchdog.Step("inner step"); Watchdog.End(); nestedOk.Set(); nestedGo.Wait(5000); Watchdog.End(); }); nt.Start(); nestedOk.Wait(5000);
+            Watchdog.Scan(DateTime.UtcNow.AddSeconds(300));
+            Check(has("stalled") && has("outer op") && has("step 'outer step'") && !has("inner op"), "after the inner op ends the outer op and its step are still tracked and named: " + string.Join(" // ", lines.Where(l => l.Contains("stalled"))));
+            nestedGo.Set(); nt.Join(); lines.Clear(); Watchdog.Scan(DateTime.UtcNow.AddSeconds(600)); Check(!has("stalled"), "both ends done: nothing left tracked");
             Watchdog.Sink = null; Console.WriteLine(fails == 0 ? "[watchdogtest] ALL PASS" : "[watchdogtest] FAILS " + fails);
         }
     }
