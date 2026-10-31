@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -56,9 +57,48 @@ namespace PinguinoHost
             using (var r = new Newtonsoft.Json.JsonTextReader(new StringReader(json)) { DateParseHandling = Newtonsoft.Json.DateParseHandling.None }) return JObject.Load(r);
         }
 
+        /// <summary>Read a text file without ever blocking its writer or a rename (FileShare ReadWrite+Delete); a sharing violation is retried 3x at 200 ms before it throws. Strips a BOM.</summary>
+        public static string ReadShared(string path)
+        {
+            int gap = 0;
+            for (int i = 0; ; i++)
+            {
+                try { using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) using (var sr = new StreamReader(fs, new System.Text.UTF8Encoding(false), true)) return sr.ReadToEnd().TrimStart((char)0xFEFF); }
+                catch (FileNotFoundException) when (Volatile.Read(ref writing) > 0 && gap++ < 100) { System.Threading.Thread.Sleep(10); i--; }   // File.Replace has a moment where the file is not there: a writer in flight means it will be back in milliseconds
+                catch (IOException) when (i < 3 && File.Exists(path)) { System.Threading.Thread.Sleep(200); }
+            }
+        }
+
+        /// <summary>Write temp + atomic replace, so a reader sees the old file or the new one, never half; one lock for every writer; a sharing violation (an outside reader without FileShare.Delete, antivirus) is retried 3x at 200 ms before it throws.</summary>
+        public static void WriteAtomic(string path, string text)
+        {
+            lock (WriteL)
+            {
+                Interlocked.Increment(ref writing);
+                try
+                {
+                string tmp = path + ".tmp";
+                for (int i = 0; ; i++)
+                {
+                    try
+                    {
+                        File.WriteAllText(tmp, text);
+                        if (File.Exists(path)) File.Replace(tmp, path, null); else File.Move(tmp, path);   // Replace works while readers hold the file open (a plain overwrite-move is refused then)
+                        return;
+                    }
+                    catch (IOException) when (i < 3) { System.Threading.Thread.Sleep(200); }
+                    catch (UnauthorizedAccessException) when (i < 3) { System.Threading.Thread.Sleep(200); }
+                }
+                }
+                finally { Interlocked.Decrement(ref writing); }
+            }
+        }
+        static readonly object WriteL = new object();
+        static int writing;
+
         static JObject LoadMaster()
         {
-            try { if (File.Exists(MasterP)) { var m = ParseJ(File.ReadAllText(MasterP)); if (m["users"] == null) m["users"] = new JObject(); if (m["processed"] == null) m["processed"] = new JObject(); return m; } } catch (Exception ex) { Clog.Warn("subs", "master unreadable: " + ex.Message); }
+            try { if (File.Exists(MasterP)) { var m = ParseJ(ReadShared(MasterP)); if (m["users"] == null) m["users"] = new JObject(); if (m["processed"] == null) m["processed"] = new JObject(); return m; } } catch (Exception ex) { Clog.Warn("subs", "master unreadable: " + ex.Message); }
             return new JObject { { "version", 1 }, { "lastExportAt", "" }, { "users", new JObject() }, { "processed", new JObject() } };
         }
 
@@ -250,7 +290,7 @@ namespace PinguinoHost
                     }
                 }
                 foreach (var p in users.Properties()) { var u = (JObject)p.Value; if (live[p.Name] == null && (bool?)u["lapsed"] != true) { u["lapsed"] = true; u["lapsedAt"] = stamp; lapsed++; } }
-                try { Directory.CreateDirectory(SubsDir); File.WriteAllText(MasterP, master.ToString()); } catch (Exception ex) { Clog.Warn("subs", "truth master: " + ex.Message); return new JObject { { "ok", false }, { "error", ex.Message } }; }
+                try { Directory.CreateDirectory(SubsDir); WriteAtomic(MasterP, master.ToString()); } catch (Exception ex) { Clog.Warn("subs", "truth master: " + ex.Message); return new JObject { { "ok", false }, { "error", ex.Message } }; }
                 int profs = ApplyToProfiles(master), plapsed = 0;
                 if (Directory.Exists(ProfilesDir))   // profiles with a sticky sub flag from the old log scraper (no master row): Twitch does not list them, so they are not subbed
                     foreach (var f in Directory.GetFiles(ProfilesDir, "*.json"))
@@ -300,7 +340,7 @@ namespace PinguinoHost
                 var users = (JObject)master["users"]; var u = users[login] as JObject;
                 if (u == null) { u = new JObject { { "login", login }, { "tier", Math.Max(1, tier) }, { "tenure", 0 }, { "streak", 0 }, { "subscribed", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") }, { "founder", false }, { "subType", "paid" }, { "lapsed", false } }; users[login] = u; }
                 u["tenure"] = Math.Max((int?)u["tenure"] ?? 0, months); if (streak > 0) u["streak"] = streak; u["tier"] = Math.Max((int?)u["tier"] ?? 1, Math.Max(1, tier)); u["lapsed"] = false;
-                try { Directory.CreateDirectory(SubsDir); File.WriteAllText(MasterP, master.ToString()); } catch (Exception ex) { Clog.Warn("subs", "resub master: " + ex.Message); return false; }
+                try { Directory.CreateDirectory(SubsDir); WriteAtomic(MasterP, master.ToString()); } catch (Exception ex) { Clog.Warn("subs", "resub master: " + ex.Message); return false; }
                 try { ApplyToProfiles(new JObject { { "users", new JObject { { login, u } } } }); } catch (Exception ex) { Clog.Warn("subs", "resub profile: " + ex.Message); }
                 return true;
             }
@@ -336,7 +376,7 @@ namespace PinguinoHost
                 }
                 int profiles = 0;
                 if (RefreshFounders(master)) dirty = true;
-                if (dirty) { Directory.CreateDirectory(SubsDir); File.WriteAllText(MasterP, master.ToString()); }
+                if (dirty) { Directory.CreateDirectory(SubsDir); WriteAtomic(MasterP, master.ToString()); }
                 profiles = ApplyToProfiles(master) + ApplyFoundersToProfiles(master);   // also catches profiles rebuilt since the last pass
                 return new JObject { { "ok", true }, { "imported", results }, { "profilesUpdated", profiles }, { "users", ((JObject)master["users"]).Count } };
             }

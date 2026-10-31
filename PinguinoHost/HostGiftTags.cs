@@ -115,7 +115,7 @@ namespace PinguinoHost
             try
             {
                 string mp = Path.Combine(HostApi.DataDir, "subs", "subscribers_master.json");
-                var users = (SubsImport.ParseJ(File.ReadAllText(mp).TrimStart((char)0xFEFF))["users"] as JObject) ?? new JObject();
+                var users = (SubsImport.ParseJ(SubsImport.ReadShared(mp))["users"] as JObject) ?? new JObject();
                 foreach (var p in users.Properties())
                 {
                     var u = p.Value as JObject; if (u == null || (bool?)u["lapsed"] == true) continue;

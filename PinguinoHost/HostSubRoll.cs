@@ -41,7 +41,7 @@ namespace PinguinoHost
             }
             catch (Exception) { return def; }
         }
-        static JObject Read(string rel) { try { string p = Path.Combine(Root, rel); return File.Exists(p) ? SubsImport.ParseJ(File.ReadAllText(p).TrimStart((char)0xFEFF)) : new JObject(); } catch (Exception) { return new JObject(); } }
+        static JObject Read(string rel) { try { string p = Path.Combine(Root, rel); return File.Exists(p) ? SubsImport.ParseJ(SubsImport.ReadShared(p)) : new JObject(); } catch (Exception) { return new JObject(); } }
 
         /// <summary>one viewer's sub facts for the profile: {months (total months subscribed), streak (current consecutive months), tier 1-3, active (subscribed right now)}. Zeros when never subscribed.</summary>
         public static JObject ViewOf(string login)

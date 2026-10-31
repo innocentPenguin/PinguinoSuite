@@ -386,6 +386,7 @@ namespace PinguinoHost
                 if (line == "replytest") { try { ReplyTest.Run(); } catch (Exception ex) { Console.WriteLine("[replytest] error " + ex); } continue; }
                 if (line == "strikechecktest") { try { StrikeCheckInTest.Run(); } catch (Exception ex) { Console.WriteLine("[strikechecktest] error " + ex); } continue; }
                 if (line == "alerttest") { try { AlertBridgeTest.Run(); } catch (Exception ex) { Console.WriteLine("[alerttest] error " + ex); } continue; }
+                if (line == "subfiletest") { try { SubFileTest.Run(); } catch (Exception ex) { Console.WriteLine("[subfiletest] error " + ex); } continue; }
                 if (line == "scopetest") { try { ScopeTest.Run(); } catch (Exception ex) { Console.WriteLine("[scopetest] error " + ex); } continue; }
                 if (line == "rankedtest") { try { RankedTest.Run(); } catch (Exception ex) { Console.WriteLine("[rankedtest] error " + ex); } continue; }
                 if (line == "watchdogtest") { try { WatchdogTest.Run(); } catch (Exception ex) { Console.WriteLine("[watchdogtest] error " + ex); } continue; }
