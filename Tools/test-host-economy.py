@@ -3,7 +3,7 @@ Usage: python Tools/test-host-economy.py [dll]"""
 import http.server, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.parse, urllib.request
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
-PORT = 8961; SE = 8962; HX = 8963; B = 'http://127.0.0.1:%d' % PORT
+PORT = 18961; SE = 18962; HX = 18963; B = 'http://127.0.0.1:%d' % PORT
 JWT = 'sekret-jwt-value-123'
 state = {'chatters': ['ana', 'cyfirl', 'helperbot', 'innocentpenguin_', 'nobody1'], 'chatters_code': 200, 'points_bonus': 0}
 se_log = []
