@@ -198,6 +198,7 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).parent))
 import livedetect  # noqa: E402
 import consolelog  # noqa: E402
+import shell_log  # noqa: E402
 import safetext  # noqa: E402
 import prestream  # noqa: E402
 import device  # noqa: E402
@@ -1323,6 +1324,23 @@ def feedback_save(b: Report, request: Request):
         raise HTTPException(400, str(e))
     console_log.log("info", "feedback", "problem report saved: " + meta["id"])
     return {"ok": True, "id": meta["id"], "dir": str(FEEDBACK_DIR)}
+
+
+class ShellLogBody(BaseModel):
+    entries: list[dict] = []
+
+
+SHELL_LOG = shell_log.ShellLog(Path(os.environ.get("PINGUINO_SHELL_LOG_DIR") or ROOT.parent / "Data" / "logs"))
+
+
+@app.post("/api/shell-log")
+def shell_log_post(b: ShellLogBody):
+    """Webview errors/warnings from the shell (console-capture.js): redacted, one line each, into Data/logs/shell.log; errors also reach the console log."""
+    lines = SHELL_LOG.add(b.entries)
+    for level, text in lines:
+        if level == "error":
+            console_log.log("error", "shell", text.split("] ", 1)[-1][:300], module="shell")
+    return {"ok": True, "written": len(lines)}
 
 
 @app.get("/api/feedback")
