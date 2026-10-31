@@ -1879,7 +1879,7 @@ public class CPHInline
             string resp = _pgTestHttp != null ? _pgTestHttp("POST " + url, "", body.ToString(Formatting.None)) : HttpPost(url, new Dictionary<string, string>(), body.ToString(Formatting.None));
             say = ((string)JObject.Parse(resp)["say"] ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
         }
-        catch (Exception) { say = "The music player isn't running right now."; }
+        catch (Exception) { say = "Volume unknown, no Spotify player is answering."; }
         if (say == "") return true;   // the module has chat replies off (or nothing to say): nothing is said, and no other bot answers either
         if (cmd == "queue")
         {   // top 3 only and each title cut short, so the line stays well under two chat lines
