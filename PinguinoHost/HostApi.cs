@@ -153,7 +153,7 @@ namespace PinguinoHost
             string ch = ((string)s["Channel"] ?? "").Trim().ToLowerInvariant();
             if (string.IsNullOrEmpty(tok) || string.IsNullOrEmpty(cid)) return new JObject { { "ok", false }, { "error", "missing token or ClientId" } };
             if (ch == "") return new JObject { { "ok", false }, { "error", "set the Channel first (setup card), then sign the bot in" } };
-            using (var http = new HttpClient())
+            using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
             {
                 JArray Get(string path)
                 {
@@ -182,7 +182,7 @@ namespace PinguinoHost
             if (role == "core" || role == "chat" || role == "helper") return BotTokenIn(b, role);
             string tok = (string)b["token"]; var s = Load(); string cid = (string)s["ClientId"];
             if (string.IsNullOrEmpty(tok) || string.IsNullOrEmpty(cid)) return new JObject { { "ok", false }, { "error", "missing token or ClientId" } };
-            using (var http = new HttpClient())
+            using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
             {
                 var rq = new HttpRequestMessage(HttpMethod.Get, Helix + "/users");
                 rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("Client-Id", cid);
