@@ -104,7 +104,9 @@ namespace PinguinoHost
         public static string MissingScopesText(IEnumerable<string> have)
         {
             var m = MissingScopes(have);
-            return m.Count == 0 ? "" : "missing scopes: " + string.Join(", ", m) + " (sign the streamer in again, once)";
+            if (m.Count == 0) return "";
+            // a short line for the Host page: how many and the first 3; the whole list stays in the "missing" array
+            return "missing scopes: " + (m.Count <= 3 ? string.Join(", ", m) : m.Count + " (" + string.Join(", ", m.Take(3)) + ", ...)") + " (sign the streamer in again, once)";
         }
     }
 }

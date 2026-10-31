@@ -23,7 +23,9 @@ namespace PinguinoHost
             var m = HostApi.MissingScopes(old);
             Check(m.Count == 2 && m[0] == "clips:edit" && m[1] == "channel:manage:raids", "two lacking: " + string.Join(",", m));
             Check(HostApi.MissingScopesText(old).StartsWith("missing scopes: clips:edit, channel:manage:raids"), "text names them: " + HostApi.MissingScopesText(old));
-            Check(HostApi.MissingScopes(new string[0]).Count == all.Count, "empty token: all missing");
+            string t23 = HostApi.MissingScopesText(new string[0]);
+            Check(t23.StartsWith("missing scopes: " + all.Count + " (" + all[0] + ", " + all[1] + ", " + all[2] + ", ...)") && t23.Length < 140 && t23.IndexOf(all[3]) < 0, "many missing: the count and the first 3 only: " + t23);
+            Check(HostApi.MissingScopes(new string[0]).Count == all.Count, "empty token: all missing, the full list stays in the array");
             Check(HostApi.MissingScopes(null).Count == all.Count, "null (not validated) is all missing, no crash");
             Check(HostApi.MissingScopes(all.Concat(new[] { "channel:read:editors" })).Count == 0, "extra scopes on the token are fine");
             Console.WriteLine(fails == 0 ? "[scopetest] ALL PASS" : "[scopetest] FAIL " + fails);
