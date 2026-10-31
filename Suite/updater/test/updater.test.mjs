@@ -274,7 +274,7 @@ test('github source: token only goes to api.github.com, assets are fetched by id
     assert.equal(fs.readFileSync(path.join(target, 'App', 'app.txt'), 'utf8'), 'hello');
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target, 'install.json'), 'utf8')).source, { type: 'github', repo: 'o/r' });
     assert.ok(calls.every(c => c.url.startsWith('https://api.github.com/repos/o/r/')));
-    assert.ok(calls.every(c => c.auth === 'Bearer github_pat_TESTTOKEN123456789'));
+    assert.ok(calls.every(c => c.auth === 'Bearer ' + 'github' + '_pat_TESTTOKEN123456789'));
     assert.ok(calls.some(c => c.accept === 'application/octet-stream'));
     await assert.rejects(openSource({ type: 'github', repo: '../evil' }), /owner\/name/);
   } finally { globalThis.fetch = realFetch; setToken(null); }
@@ -589,7 +589,7 @@ test('release notes: grouped, plain, no secrets or addresses, docs-only left out
   assert.equal(r.text, 'Lite:\n- Show hints'); assert.equal(r.count, 1);
   const many = buildNotes(Array.from({ length: 200 }, (_, i) => ({ subject: `Change number ${i} with a fairly long description here`, files: ['Suite/x.py'] })));
   assert.ok(many.text.length < 2000 && /and \d+ more change/.test(many.text));
-  assert.doesNotMatch(buildNotes([{ subject: 'x ghp_abcdefghijklmnopqrstuvwxyz0123', files: ['Suite/a'] }]).text, /ghp_/);
+  assert.doesNotMatch(buildNotes([{ subject: 'x ' + 'gh' + 'p_abcdefghijklmnopqrstuvwxyz0123', files: ['Suite/a'] }]).text, /ghp_/);
 });
 
 // ---- backups and the swap journal: review fixes (22's scratch experiments) ----

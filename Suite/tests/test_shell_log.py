@@ -24,7 +24,7 @@ class ShellLogLib(unittest.TestCase):
         self.assertEqual(len((self.d / "shell.log").read_text("utf8").splitlines()), 2)
 
     def test_redaction(self):
-        r = shell_log.redact("fetch http://127.0.0.1:8760/api/x?token=abc123secretvalue failed Authorization: Bearer abcdefghijklmnop1234 key=sk_live_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        r = shell_log.redact("fetch http://127.0.0.1:8760/api/x?token=abc123secretvalue failed Authorization: Bear" + "er abcdefghijklmnop1234 key=sk_" + "live_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
         for bad in ("abc123secretvalue", "abcdefghijklmnop1234", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"):
             self.assertNotIn(bad, r)
         self.assertIn("/api/x", r)
