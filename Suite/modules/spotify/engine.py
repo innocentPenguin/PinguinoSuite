@@ -70,6 +70,7 @@ def _fmt_duration(secs):
 class Engine:
     def __init__(self, api, auth, clock=time.time):
         self.api, self.auth, self.clock = api, auth, clock
+        self.api_refused = None            # {status, since, count, msg}: Spotify keeps answering 403 to our calls (not a rate limit)
         self.lock = threading.RLock()
         cfg = store.load("config.json", {})
         self.cfg = cfg
@@ -331,6 +332,23 @@ class Engine:
         cut = time.time() - 3600
         return sum(1 for t in list(calls) if t >= cut)
 
+    def _note_refused(self, e):
+        """Remember a run of 403s (account/app refused, proxy filter...) so chat, selfcheck and the log can say so instead of "couldn't reach Spotify"."""
+        if getattr(e, "status", 0) != 403:
+            return
+        now = self.clock()
+        ar = self.api_refused
+        if ar is None:
+            ar = self.api_refused = {"status": 403, "since": now, "count": 0, "msg": ""}
+        ar["count"] += 1
+        ar["msg"] = (getattr(e, "message", "") or str(e))[:120]
+        if ar["count"] == 3:
+            console_log.error("api", f"Spotify answered HTTP 403 to {ar['count']} calls in a row: {ar['msg']}", dedupe_s=600)
+
+    def refused_streak(self):
+        ar = self.api_refused
+        return bool(ar and ar["count"] >= 3)
+
     def selfcheck(self):
         """Cheap pre-stream check (no Spotify call): {ok, checks:[{id, label, ok, reason}]}. For the Host / Master View chip."""
         now, s = self.clock(), self._own_settings()
@@ -343,6 +361,9 @@ class Engine:
             add("api", "Spotify API answers", False, "rate limited until " + rl["rate_limited_until_hhmm"] + (f" (Spotify says about {rl['rate_limit_ban_until_hhmm']})" if rl["rate_limit_ban_until_hhmm"] else ""))
         elif not self.auth.connected():
             add("api", "Spotify API answers", False, "not signed in to Spotify")
+        elif self.refused_streak():
+            ar = self.api_refused
+            add("api", "Spotify API answers", False, f"Spotify refuses our calls (HTTP {ar['status']} since {time.strftime('%H:%M', time.localtime(ar['since']))}, {ar['count']} in a row): {ar['msg']}"[:160])
         elif self.last_error:
             add("api", "Spotify API answers", False, self.last_error[:100])
         elif not self.pb_at or now - self.pb_at > 60:
@@ -383,8 +404,10 @@ class Engine:
         except ApiError as e:
             self.last_error = str(e)
             self.backoff_until = self.clock() + (10 if e.status in (0, 401) else 3)
+            self._note_refused(e)
             console_log.warn("api", f"playback poll failed: {e}", dedupe_s=60)
             return
+        self.api_refused = None
         self._rl_n, self._rl_until = 0, 0.0
         with self.lock:
             self._apply(pb)
@@ -685,7 +708,7 @@ class Engine:
                 pb["progress_ms"] += int((now - self.pb_at) * 1000)
             return {"connected": self.auth.connected(), "client_id_set": bool(self.auth.client_id), "playback": pb,
                     "now_item": copy.deepcopy(self.now_item), "queue": self.queue.view(), "etas": [self.eta_ms(i) for i in range(len(self.queue.items))], "inbox": [i for i in self.inbox if i["status"] == "pending"],
-                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "songify": self.songify_active(), **self.rate_limit_state(), "selfcheck": self.selfcheck(), "api_calls_hour": self.api_calls_hour(), "api_call_budget": CALL_BUDGET, "skip_votes": len(self.skip_votes),
+                    "log": self.log[-40:][::-1], "settings": self._own_settings(), "songify": self.songify_active(), **self.rate_limit_state(), "selfcheck": self.selfcheck(), "api_refused": dict(self.api_refused) if self.refused_streak() else None, "api_calls_hour": self.api_calls_hour(), "api_call_budget": CALL_BUDGET, "skip_votes": len(self.skip_votes),
                     "error": self.last_error or self.auth.last_error, "me": self.me, "version": self.version}
 
     def public_queue(self):
@@ -804,8 +827,9 @@ class Engine:
             self._rate_limited(e)
             return self._r(False, "rate_limited", user=user)
         except ApiError as e:
+            self._note_refused(e)
             console_log.warn("request", f"lookup failed for {user}: {e}", dedupe_s=30)
-            return self._r(False, "lookup", user=user)
+            return self._r(False, "lookup", "lookup_blocked" if self.refused_streak() else "lookup", user=user)
         if not cands:
             self._event("reject", user, f"no result: {query}", False)
             return self._r(False, "none", "none", user=user)
@@ -1053,7 +1077,9 @@ class Engine:
                 v = self.clamp_volume(v if not arg.strip()[0] in "+-" else (cur.get("volume") or 0) + v)
                 self._set_volume(v)
                 return self._r(True, "volume", "volume_set", user=user, vol=v)
-            return self._r(True, "volume", user=user, vol=cur.get("volume") if cur.get("volume") is not None else "?")
+            if cur.get("volume") is None:
+                return self._r(True, "volume", "volume_unknown", user=user)
+            return self._r(True, "volume", user=user, vol=cur.get("volume"))
         if cmd == "playnext" and staff:
             if not arg:
                 return self._r(False, "usage", user=user)

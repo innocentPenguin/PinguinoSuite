@@ -503,6 +503,42 @@ class EngineTests(unittest.TestCase):
         self.assertIn("Song 1", self.e.chat("bob", "!song", [])["reply"])
         self.assertLessEqual(self.e.chat("bob", "!queue", [])["reply"].count("|"), 2)     # top 3 only
 
+    def test_403_run_is_named_in_selfcheck_chat_and_state(self):
+        self.e.save_settings({"requests_open": True})
+
+        def refused(*a, **k):
+            raise spotify_api.ApiError(403, "no reason given (empty body)")
+        self.api.playback = refused
+        self.api.search = refused
+        for _ in range(3):
+            self.e.tick()
+            self.clock.t += 4
+        sc = self.e.selfcheck()
+        api = [c for c in sc["checks"] if c["id"] == "api"][0]
+        self.assertFalse(api["ok"])
+        self.assertIn("refuses our calls", api["reason"])
+        self.assertIn("403", api["reason"])
+        self.assertEqual(self.e.public_state()["api_refused"]["status"], 403)
+        r = self.e.chat("ann", "!sr some song title", [])
+        self.assertEqual(r["code"], "lookup")
+        self.assertIn("refusing", r["reply"])
+        self.assertNotIn("couldn't reach", r["reply"])
+        self.assertEqual(self.e.chat("bob", "!volume", [])["ok"], True)
+        self.assertNotIn("?", self.e.chat("bob", "!volume", [])["reply"])
+        self.api.playback = lambda: {"is_playing": False, "item": None, "device": None}       # Spotify answers again
+        self.clock.t += 4
+        self.e.tick()
+        self.assertIsNone(self.e.public_state()["api_refused"])
+
+    def test_empty_403_body_gets_a_reason_from_what_answered(self):
+        http = lambda m, u, h, b: (403, {"Server": "envoy", "Content-Type": "text/html"}, {"_raw": "<html>Forbidden</html>"})
+        cl = spotify_api.Client(type("A", (), {"access_token": lambda self: "t", "connected": lambda self: True})(), http=http)
+        with self.assertRaises(spotify_api.ApiError) as cm:
+            cl.me()
+        self.assertEqual(cm.exception.status, 403)
+        self.assertIn("Forbidden", str(cm.exception))
+        self.assertIn("envoy", str(cm.exception))
+
     def test_selfcheck_all_green_and_red_reasons(self):
         self.api.playing, self.api.progress = "spotify:track:t1", 5000
         self.e.save_settings({"requests_open": True})

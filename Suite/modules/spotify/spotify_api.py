@@ -61,7 +61,7 @@ def default_http(method, url, headers, body):
         try:
             parsed = json.loads(raw) if raw else None
         except ValueError:
-            parsed = None
+            parsed = {"_raw": raw[:160].decode("utf-8", "replace")}      # not Spotify's JSON error (proxy / filter page): keep a snippet for the log
         return e.code, dict(e.headers), parsed
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise ApiError(0, f"network error: {e}", "NETWORK")
@@ -177,7 +177,14 @@ class Client:
             raise RateLimited(int(float(ra)) if str(ra).replace(".", "").isdigit() else 5)
         if st >= 400:
             err = (js or {}).get("error", {}) if isinstance(js, dict) else {}
-            raise ApiError(st, err.get("message", "") if isinstance(err, dict) else str(err), err.get("reason", "") if isinstance(err, dict) else "")
+            msg = err.get("message", "") if isinstance(err, dict) else str(err)
+            reason = err.get("reason", "") if isinstance(err, dict) else ""
+            if not (msg or reason):                  # Spotify gave no reason: say what did answer, so the log is not just "403"
+                low = {k.lower(): v for k, v in hd.items()}
+                bits = [f"{k}={str(low[k])[:40]}" for k in ("server", "via", "content-type") if low.get(k)]
+                raw = (js or {}).get("_raw") if isinstance(js, dict) else ""
+                msg = "no reason given (" + ("body: " + " ".join(str(raw).split())[:80] if raw else "empty body") + ("; " + ", ".join(bits) if bits else "") + ")"
+            raise ApiError(st, msg, reason)
         return js
 
     # reads

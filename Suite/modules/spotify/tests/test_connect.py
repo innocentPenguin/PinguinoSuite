@@ -453,3 +453,32 @@ class ConfigAndBinaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveHookAuthTests(unittest.TestCase):
+    """The Host pings /api/live/auto + /api/live/stop with no Origin; a token mismatch (401 at every go-live) must not stop it."""
+
+    def _guard(self, path, headers):
+        import server
+        sent = []
+        h = type("H", (), {"headers": headers, "_send": lambda self, *a, **k: sent.append(a[0])})()
+        old = os.environ.get("PINGUINO_API_TOKEN")
+        os.environ["PINGUINO_API_TOKEN"] = "x" * 8
+        try:
+            ok = server.H._guard(h, "POST", path)
+        finally:
+            if old is None:
+                os.environ.pop("PINGUINO_API_TOKEN", None)
+            else:
+                os.environ["PINGUINO_API_TOKEN"] = old
+        return ok, sent
+
+    def test_live_hooks_open_to_local_no_origin_callers_only(self):
+        for path in ("/api/live/auto", "/api/live/stop"):
+            self.assertTrue(self._guard(path, {"host": "127.0.0.1:8771"})[0], path)
+            ok, sent = self._guard(path, {"host": "127.0.0.1:8771", "origin": "http://evil.com"})
+            self.assertFalse(ok)
+            self.assertEqual(sent, [403])
+        ok, sent = self._guard("/api/settings", {"host": "127.0.0.1:8771"})        # other writes still need the token
+        self.assertFalse(ok)
+        self.assertEqual(sent, [401])

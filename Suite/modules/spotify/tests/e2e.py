@@ -391,6 +391,7 @@ def main():
     post("/api/settings", {"msgs": {"song": "Now playing: {song}{by} {link}"}})
     T("no Spotify link in !song/!queue/!pos chat replies", all("spotify.com" not in (cmd(c, user="ln")["say"] or "") for c in ("song", "queue", "pos", "next")))
     post("/api/settings", {"msgs": {"song": "Now playing: {song}{by}"}})
+    T("state reports no Spotify refusal while the API answers", "api_refused" in state() and state()["api_refused"] is None)
     sc = get("/api/selfcheck")[1]
     T("selfcheck shape + calls/hour in state", isinstance(sc.get("ok"), bool) and {c["id"] for c in sc["checks"]} >= {"api", "token", "device", "requests", "push", "queue"}
       and all({"id", "label", "ok", "reason"} <= set(c) for c in sc["checks"]) and state()["api_calls_hour"] > 0 and state()["api_call_budget"] == 1800, str(sc)[:200])

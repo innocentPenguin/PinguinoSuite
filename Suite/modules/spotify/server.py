@@ -130,7 +130,7 @@ class H(BaseHTTPRequestHandler):
             same = bool(origin) and origin.split("://", 1)[-1] == self.headers.get("host")
             # /api/chat is a low-privilege viewer-command endpoint for local bots (Host/Streamer.bot): a local
             # process with no Origin header (not a web page) may call it without the module token.
-            local_bot = path in ("/api/chat", "/api/chat-command") and not origin
+            local_bot = path in ("/api/chat", "/api/chat-command", "/api/live/auto", "/api/live/stop") and not origin      # live/*: the Host's go-live / stream-end ping; only opens/closes requests
             # the Master view button strip lives in the Suite app (tauri origin) and has no module token
             app_ui = path in ("/api/mod-action", "/api/control") and origin in TAURI_ORIGINS
             if not (same or local_bot or app_ui or token_ok(self.headers)):
