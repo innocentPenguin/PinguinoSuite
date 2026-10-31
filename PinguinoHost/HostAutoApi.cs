@@ -44,10 +44,11 @@ namespace PinguinoHost
 
         static readonly System.Text.RegularExpressions.Regex RxKey = new System.Text.RegularExpressions.Regex(@"(?<![\w:])(yt|tt|kk|fb):[\w\-]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         /// <summary>replaces platform keys (yt:..., tt:...) by the remembered display name</summary>
+        static readonly System.Text.RegularExpressions.Regex RxBareId = new System.Text.RegularExpressions.Regex(@"^(uc[\w\-]{16,}|[0-9]{6,})$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         public static string ShowNames(string text)
         {
             if (string.IsNullOrEmpty(text) || text.IndexOf(':') < 0) return text;
-            try { return RxKey.Replace(text, m => { string n = PlatformUsers.Display(m.Value.ToLowerInvariant()); return string.IsNullOrEmpty(n) ? m.Value : n; }); } catch (Exception) { return text; }
+            try { return RxKey.Replace(text, m => { string n = PlatformUsers.Display(m.Value.ToLowerInvariant()); return string.IsNullOrEmpty(n) ? m.Value : RxBareId.IsMatch(n) ? "friend" : n; }); } catch (Exception) { return text; }   // a viewer with no remembered name is "friend", never their bare channel id
         }
         static bool SendAsCore(string role, string text, out string via)
         {

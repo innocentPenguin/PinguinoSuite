@@ -188,6 +188,9 @@ namespace PinguinoHost
             System.Threading.Thread.Sleep(3000); Check(Auto.RaidOutFires == o0 + 1, "raid_out: run once after the delay (the second signal of the same raid is ignored)");
             Auto.ResetRaidStart(); Auto.OnEvent(ro); Auto.CancelRaidStart(); System.Threading.Thread.Sleep(3000); Check(Auto.RaidOutFires == o0 + 1, "raid_out: !unraid / stream offline cancels it");
             Auto.RaidDelayOverrideSec = -1;
+            Check(HostApi.ShowNames("@yt:ucp6jh-ns_ifvfqg2o6mr4cg Silver 2 Div 3") == "@friend Silver 2 Div 3", "ShowNames: a YouTube viewer with no remembered name is @friend, never the yt: key or their bare channel id");
+            PlatformUsers.Remember("yt:ucknownviewer0000000001", "youtube", "Yt Fan", "UCknownviewer0000000001");
+            Check(HostApi.ShowNames("@yt:ucknownviewer0000000001 5pm Central | 11pm UK") == "@Yt Fan 5pm Central | 11pm UK", "ShowNames: a remembered YouTube viewer is @DisplayName");
             AlertBridge.TestPost = null;
             Console.WriteLine(fails == 0 ? "[alerttest] ALL PASS" : "[alerttest] " + fails + " FAILED");
         }
