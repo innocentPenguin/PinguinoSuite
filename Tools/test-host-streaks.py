@@ -53,6 +53,17 @@ try:
     chk('!streakrecord shows the best with a date', "best shared watch streak: 195" in t and 'Oct 16, 2026' in t)
     chk('unknown user: nobody has shared one yet', 'Nobody has shared a watch streak for nobodyhere yet' in t)
     chk('!topstreaks lists the best first', 'Top watch streaks (best shared): 1. ash_wagawaga 195 | 2.' in t)
+    # a display name that is not a login (a Japanese chat name) is keyed by the canonical login through aliases.json: the 100 lands on the person, not on a key nothing else knows
+    os.makedirs(os.path.join(d, 'boards'), exist_ok=True)
+    json.dump({'aliases': {'sn0wmanny_': 'snowyroses_', 'ローズフレーク': 'snowyroses_'}}, open(os.path.join(d, 'boards', 'aliases.json'), 'w', encoding='utf-8'))
+    json.dump({'login': 'snowyroses_', 'roles': {'mod': False, 'sub': False}, 'seen': {'firstSeen': '2026-03-01'}}, open(os.path.join(d, 'profiles', 'snowyroses_.json'), 'w'))
+    os.makedirs(os.path.join(d, 'chat_logs', '2026', '07'), exist_ok=True)
+    open(os.path.join(d, 'chat_logs', '2026', '07', '2026-07-28.txt'), 'w', encoding='utf-8').write(
+     '[2026-07-28 23:37:24] #innocentpenguin_ ローズフレーク: ローズフレーク watched 100 consecutive streams and sparked a watch streak!\n'
+     '[2026-10-21 22:05:15] #innocentpenguin_ snowyroses_: snowyroses_ watched 50 consecutive streams and sparked a watch streak!\n')
+    post('/api/streaks/backfill'); a = get('/api/streaks'); board = {b['login']: b for b in a['board']}
+    chk('a non-ASCII display name aliased to a login lands on that login (best 100, no row under the display name)', board.get('snowyroses_', {}).get('best') == 100 and all(k.isascii() for k in board))
+    chk('the aliased person profile carries the 100', prof('snowyroses_')['roles']['watchStreakBest'] == 100)
 finally:
     host.kill(); time.sleep(0.5); shutil.rmtree(d, True)
 for n, ok in res: print('PASS' if ok else 'FAIL', n)

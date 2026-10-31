@@ -51,7 +51,7 @@ namespace PinguinoHost
         /// <summary>true when it was new. at = ISO UTC text. id = Twitch's msg-param-id (live) or "" (backfill).</summary>
         public static bool Record(string login, string name, int value, string at, string id, string source, string message, bool saveNow = true)
         {
-            login = (login ?? "").Trim().ToLowerInvariant(); if (login == "" || value <= 0) return false;
+            login = Boards.CanonLogin(login); if (login == "" || value <= 0) return false;   // keyed by the canonical login: an old account or a display name (a chat log shows ローズフレーク, not sn0wmanny_) that aliases.json maps lands on the person
             lock (L)
             {
                 var users = (JObject)Doc()["users"]; var u = users[login] as JObject;
@@ -134,7 +134,7 @@ namespace PinguinoHost
                         catch (Exception ex) { Clog.Warn("streaks", f + ": " + ex.Message); }
                     }
                 Doc()["backfilledAt"] = DateTime.UtcNow.ToString("o"); Save();
-                foreach (var p in ((JObject)Doc()["users"]).Properties()) ApplyToProfile(p.Name, (JObject)p.Value);
+                foreach (var p in Folded()) ApplyToProfile(p.Key, p.Value);
             }
             Clog.Info("streaks", "backfill: " + files + " log files, " + lines + " streak lines, " + added + " new (" + dup + " duplicates), " + people.Count + " people");
             return new JObject { { "ok", true }, { "filesScanned", files }, { "streakLines", lines }, { "added", added }, { "duplicates", dup }, { "people", people.Count } };
@@ -154,10 +154,30 @@ namespace PinguinoHost
             catch (Exception ex) { Clog.Warn("streaks", "profile " + login + ": " + ex.Message); }
         }
 
-        /// <summary>every share ever recorded: (login, value, at ISO). For the monthly boards.</summary>
+        /// <summary>the stored people folded by canonical login (aliases.json): one record per person, shares merged (same value+day counted once), best/current recomputed. Stored rows are never changed.</summary>
+        static Dictionary<string, JObject> Folded()
+        {
+            var o = new Dictionary<string, JObject>(); var seen = new HashSet<string>();
+            foreach (var p in ((JObject)Doc()["users"]).Properties())
+            {
+                string c = Boards.CanonLogin(p.Name); JObject u = (JObject)p.Value; JObject f;
+                if (!o.TryGetValue(c, out f)) { f = new JObject { { "login", c }, { "name", u["name"] }, { "current", 0 }, { "best", 0 }, { "bestAt", "" }, { "lastSharedAt", "" }, { "history", new JArray() } }; o[c] = f; }
+                if (p.Name == c) f["name"] = u["name"]; else if ((string)f["name"] == null || (string)f["name"] == c) f["name"] = u["name"];
+                foreach (var e in (JArray)u["history"]) { string at = (string)e["at"] ?? ""; if (!seen.Add(c + "|" + (int)e["value"] + "|" + at.Substring(0, Math.Min(10, at.Length)))) continue; ((JArray)f["history"]).Add(e); }
+            }
+            foreach (var f in o.Values)
+            {
+                var h = ((JArray)f["history"]).OrderBy(e => (string)e["at"], StringComparer.Ordinal).ToList(); if (h.Count == 0) continue;
+                f["current"] = (int)h.Last()["value"]; f["lastSharedAt"] = (string)h.Last()["at"];
+                var top = h.OrderByDescending(e => (int)e["value"]).ThenBy(e => (string)e["at"], StringComparer.Ordinal).First(); f["best"] = (int)top["value"]; f["bestAt"] = (string)top["at"];
+            }
+            return o;
+        }
+
+        /// <summary>every share ever recorded: (login, value, at ISO), by canonical login. For the monthly boards.</summary>
         public static List<Tuple<string, int, string>> AllShares()
         {
-            lock (L) return ((JObject)Doc()["users"]).Properties().SelectMany(p => ((JArray)p.Value["history"]).Select(e => Tuple.Create(p.Name, (int)e["value"], (string)e["at"]))).ToList();
+            lock (L) return Folded().SelectMany(p => ((JArray)p.Value["history"]).Select(e => Tuple.Create(p.Key, (int)e["value"], (string)e["at"]))).ToList();
         }
 
         // ---- API ----
@@ -165,7 +185,7 @@ namespace PinguinoHost
         {
             lock (L)
             {
-                var users = ((JObject)Doc()["users"]).Properties().Select(p => (JObject)p.Value).ToList();
+                var users = Folded().Values.ToList();
                 var board = users.OrderByDescending(u => (int)u["best"]).ThenBy(u => (string)u["bestAt"], StringComparer.Ordinal).Select(u => new JObject { { "login", u["login"] }, { "name", u["name"] }, { "best", u["best"] }, { "bestAt", u["bestAt"] }, { "current", u["current"] }, { "lastSharedAt", u["lastSharedAt"] }, { "shares", ((JArray)u["history"]).Count } }).ToList();
                 return new JObject { { "ok", true }, { "people", users.Count }, { "backfilledAt", Doc()["backfilledAt"] }, { "board", new JArray(top > 0 ? board.Take(top) : board) } };
             }
