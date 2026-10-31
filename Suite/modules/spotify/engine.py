@@ -790,6 +790,9 @@ class Engine:
         text = tpl.format_map(_Blank(v))
         text = re.sub(r"\s*(?:https?://)?(?:open|play)\.spotify\.com/\S*|\s*spotify:(?:track|album|artist|playlist):\S+", "", text)     # no Spotify links in chat, whatever the template says
         text = re.sub(r"[\r\n]+", " ", text).strip()                          # one chat line
+        if re.match(r"@(?=\s|$)", text) or re.search(r"\s@(?=\s|$)", text):       # {user} was empty: no bare "@"
+            text = re.sub(r"(^|\s)@\s*(?=\s|$)\s*", r"\1", text).strip()
+            text = text[:1].upper() + text[1:]
         return (s["reply_prefix"] + text)[:400]
 
     def _r(self, ok, code, key=None, **v):

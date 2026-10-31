@@ -539,6 +539,19 @@ class EngineTests(unittest.TestCase):
         self.assertIn("Forbidden", str(cm.exception))
         self.assertIn("envoy", str(cm.exception))
 
+    def test_idle_song_and_skip_none_address_the_viewer_once(self):
+        self.api.playing = None
+        self.e.tick()
+        r = self.e.chat("ann", "!song", [])["reply"]
+        self.assertEqual(r.count("@ann"), 1)
+        self.assertTrue(r.startswith("@ann "), r)
+        r = self.e.chat("bob", "!skip", [])["reply"]
+        self.assertEqual(r.count("@bob"), 1)
+        self.assertIn("nothing is playing", r)
+        for r in (self.e.song_reply()["reply"], self.e.chat("", "!skip", [])["reply"]):       # no user: no bare "@"
+            self.assertNotIn("@", r)
+            self.assertTrue(r[:1].isupper(), r)
+
     def test_selfcheck_all_green_and_red_reasons(self):
         self.api.playing, self.api.progress = "spotify:track:t1", 5000
         self.e.save_settings({"requests_open": True})
