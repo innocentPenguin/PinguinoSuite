@@ -639,6 +639,30 @@ await t('stubbed-DOM render of the REAL customs body: buttons highlight, data li
   for (const a of [[], ['--throw'], ['--hang'], ['--hang-parent']]) { let out = ''; try { out = execFileSync(process.execPath, [path.join(here, 'render-stub.mjs'), ...a], { encoding: 'utf8', timeout: 30000 }); } catch (e) { assert.fail('render-stub ' + a.join(' ') + ' failed: ' + String(e.stdout || e.message).slice(-600)); } assert.match(out, /PASS/); }
 });
 
+await t('YT order chime: first load silent, new id chimes once, reappear counts, hidden/muted/cooldown silent, 404 re-seeds', () => {
+  const w = C.createYtWatch(); let r = w.update(['1', '2'], true, { now: 0 }); assert.deepEqual([r.fresh, r.chime], [[], false], 'first load is silent');
+  r = w.update(['1', '2'], true, { now: 5000 }); assert.equal(r.chime, false, 'nothing new');
+  r = w.update(['1', '2', '3', '4'], true, { now: 20000 }); assert.deepEqual(r.fresh, ['3', '4']); assert.equal(r.chime, true, 'one chime for two new ids');
+  r = w.update(['1', '2', '3', '4', '5'], true, { now: 25000 }); assert.deepEqual(r.fresh, ['5']); assert.equal(r.chime, false, '10 s cooldown');
+  r = w.update(['1', '2', '3', '4', '5', '6'], true, { now: 31000 }); assert.equal(r.chime, true, 'after the cooldown');
+  r = w.update(['1', '2', '3', '4', '5'], true, { now: 40000 }); assert.deepEqual(r.fresh, [], 'removed is not new');
+  r = w.update(['1', '2', '3', '4', '5', '6'], true, { now: 60000 }); assert.deepEqual(r.fresh, ['6']); assert.equal(r.chime, true, 'removed then back is new');
+  r = w.update(['1', '7'], true, { now: 80000, hidden: true }); assert.deepEqual(r.fresh, ['7']); assert.equal(r.chime, false, 'hidden page: no sound');
+  r = w.update(['1', '7', '8'], true, { now: 99000, muted: true }); assert.deepEqual(r.fresh, ['8']); assert.equal(r.chime, false, 'muted: no sound, still flagged fresh');
+  r = w.update([], false, { now: 120000 }); assert.equal(r.chime, false); r = w.update(['1', '9'], true, { now: 150000 }); assert.deepEqual([r.fresh, r.chime], [[], false], 'after a 404/error the next good poll only re-seeds');
+  const src = fs.readFileSync(path.join(here, '..', '..', 'App', 'src', 'master', 'master.js'), 'utf8');
+  assert.ok(src.includes("localStorage.getItem('mv.ytMute')") && src.includes('AudioContext') && !src.includes('data:audio'), 'mute is remembered, chime is WebAudio');
+});
+await t('Prices get thousands separators, text and decimals kept, non-numbers as is', () => {
+  assert.deepEqual([150000, '150000', 1234567, 500, 0, '12.5', '1234.56', '150000 pts', 'free', 'abc 10000 x 2500'].map(C.groupNum), ['150,000', '150,000', '1,234,567', '500', '0', '12.5', '1,234.56', '150,000 pts', 'free', 'abc 10,000 x 2,500']);
+  const v = C.ytOrdersView({ ok: true, status: 200, json: { ok: true, orders: [{ id: 3, login: 'yt:UC1', display: 'Bo', platform: 'youtube', label: 'Casual', price: 150000, status: 'pending', createdAt: 1000 }] } }, new Set(), 1000000); assert.equal(v.rows[0].text, '#3 Bo - Casual (150,000) - waiting 0 min');
+});
+await t('Ranked strip: sinceBreak shown when a number, hidden when absent', async () => {
+  const j = { ok: true, active: true, limit: 5, games: ['W'], net: 1, inProgress: 2, wins: 1, losses: 0, day: 'd', week: { wins: 1, losses: 0, net: 1 }, visible: ['W'], breakAfter: 3, lossStreak: 2, sinceBreak: 3 };
+  assert.equal(C.rankedView({ ok: true, status: 200, json: j }).sinceText, '3 since break'); assert.equal(C.rankedView({ ok: true, status: 200, json: Object.assign({}, j, { sinceBreak: 0 }) }).sinceText, '0 since break');
+  delete j.sinceBreak; assert.equal(C.rankedView({ ok: true, status: 200, json: j }).sinceText, ''); assert.equal(C.rankedView({ ok: true, status: 200, json: Object.assign({}, j, { sinceBreak: 'x' }) }).sinceText, '');
+});
+
 mock.closeAllConnections && mock.closeAllConnections(); mock.close();
 console.log('\n' + (fail ? 'FAILED ' + fail + ' of ' + (pass + fail) + ': ' + failures.join('; ') : 'PASS ' + pass + ' tests'));
 process.exit(fail ? 1 : 0);

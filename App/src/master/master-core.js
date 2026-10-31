@@ -566,7 +566,7 @@
     return { brk: { active: !!bk.active, reason: String(bk.reason || ''), since: bk.since ? String(bk.since) : '' }, breakAfter: ruleN(j.breakAfter) != null ? j.breakAfter : ruleN(bk.afterGames) != null ? bk.afterGames : 3, lossStreak: ruleN(j.lossStreak) != null ? j.lossStreak : ruleN(bk.lossStreak) != null ? bk.lossStreak : 2,
       breaks: (Array.isArray(j.breaks) ? j.breaks : []).filter(x => x && typeof x === 'object').map(x => ({ at: x.at == null ? '' : x.at, reason: String(x.reason || (x.afterGames ? x.afterGames + ' games' : 'break')) })), startedAt: j.startedAt == null ? '' : j.startedAt, endedAt: j.endedAt == null ? '' : j.endedAt,
       month: mo ? { wins: n(mo.wins) || 0, losses: n(mo.losses) || 0, net: n(mo.net) != null ? mo.net : (n(mo.wins) || 0) - (n(mo.losses) || 0) } : null,
-      active: !!j.active, limit, games, visible: vis, net: n(j.net) != null ? j.net : wins - losses, inProgress: j.inProgress, wins, losses, day: j.day == null ? '' : String(j.day), week: { wins: n(w.wins) || 0, losses: n(w.losses) || 0, net: n(w.net) != null ? w.net : (n(w.wins) || 0) - (n(w.losses) || 0) } };
+      active: !!j.active, sinceBreak: n(j.sinceBreak), limit, games, visible: vis, net: n(j.net) != null ? j.net : wins - losses, inProgress: j.inProgress, wins, losses, day: j.day == null ? '' : String(j.day), week: { wins: n(w.wins) || 0, losses: n(w.losses) || 0, net: n(w.net) != null ? w.net : (n(w.wins) || 0) - (n(w.losses) || 0) } };
   }
   const signed = x => (x > 0 ? '+' : '') + x;
   function hhmm(v) {   /* ISO text, unix seconds or ms -> local HH:MM; '' when it is not a time */
@@ -578,7 +578,7 @@
     const j = normRanked(ov || (r.json && typeof r.json === 'object' ? r.json : null))   /* a refusal (ok:false) still carries the state: take it as truth */;
     if (!j) return { state: 'error', text: 'Ranked: ' + ((r.json && r.json.error) || r.error || 'no answer') };
     const nextN = typeof j.inProgress === 'number' && j.inProgress > 0 ? j.inProgress : j.games.length + 1;   /* inProgress is always a number (games + 1) */
-    return { state: j.active ? 'active' : 'idle', active: j.active, games: j.visible, all: j.games, limit: j.limit, gameN: nextN, record: j.wins + '-' + j.losses + ' (' + signed(j.net) + ')', week: 'Week ' + j.week.wins + '-' + j.week.losses + ' (' + signed(j.week.net) + ')' + (j.month ? ' · Month ' + j.month.wins + '-' + j.month.losses + ' (' + signed(j.month.net) + ')' : ''), onBreak: j.active && j.brk.active, breakText: 'On break: ' + (j.brk.reason || 'manual') + (hhmm(j.brk.since) ? ' since ' + hhmm(j.brk.since) : ''), breakAfter: j.breakAfter, lossStreak: j.lossStreak, breaks: j.breaks,
+    return { state: j.active ? 'active' : 'idle', active: j.active, games: j.visible, all: j.games, limit: j.limit, gameN: nextN, record: j.wins + '-' + j.losses + ' (' + signed(j.net) + ')', week: 'Week ' + j.week.wins + '-' + j.week.losses + ' (' + signed(j.week.net) + ')' + (j.month ? ' · Month ' + j.month.wins + '-' + j.month.losses + ' (' + signed(j.month.net) + ')' : ''), onBreak: j.active && j.brk.active, breakText: 'On break: ' + (j.brk.reason || 'manual') + (hhmm(j.brk.since) ? ' since ' + hhmm(j.brk.since) : ''), breakAfter: j.breakAfter, lossStreak: j.lossStreak, sinceBreak: j.sinceBreak, sinceText: typeof j.sinceBreak === 'number' ? j.sinceBreak + ' since break' : '', breaks: j.breaks,
       info: [hhmm(j.startedAt) ? 'Started ' + hhmm(j.startedAt) : '', !j.active && hhmm(j.endedAt) ? 'ended ' + hhmm(j.endedAt) : '', j.breaks.length ? j.breaks.length + (j.breaks.length === 1 ? ' break: ' : ' breaks: ') + j.breaks.map(b => (hhmm(b.at) ? hhmm(b.at) + ' ' : '') + b.reason).join(', ') : ''].filter(Boolean).join(' · '), day: j.day, text: j.active ? 'Game ' + nextN + ' in progress' : 'Not running', json: j };
   }
   function rankedLimit(v) {
@@ -610,6 +610,20 @@
     return { kind: 'good', text: ({ start: 'Ranked started', stop: 'Ranked stopped', win: 'Win recorded', loss: 'Loss recorded', undo: 'Last game undone', reset: 'Ranked session reset', limit: 'Games per session set', break: 'Break started', resume: 'Back from the break', breakafter: 'Break after games saved', lossstreak: 'Losses in a row rule saved' })[action] || 'Ranked updated' };
   }
   /* YouTube shop orders (GET /api/ytorders): who ordered what, how long they wait; ids in "gone" are hidden at once (optimistic) */
+  function groupNum(v) {   /* 150000 -> 150,000; decimals and surrounding text kept; no number in it = shown as is */
+    return String(v).replace(/[0-9]+([.][0-9]+)?/g, m => { const i = m.indexOf('.'), a = i < 0 ? m : m.slice(0, i); return a.replace(/[0-9](?=([0-9]{3})+$)/g, d => d + ',') + (i < 0 ? '' : m.slice(i)); });
+  }
+  /* New pending orders: the first good poll (and the first after a 404/error) only seeds; later ids not seen in the previous poll are new (an id that left and came back is new again). One chime per poll, 10 s apart, silent when muted or hidden. */
+  function createYtWatch() {
+    let seen = null, lastChime = -1e12;
+    return { update(ids, ok, o) {
+      o = o || {}; if (!ok) { seen = null; return { fresh: [], chime: false }; }
+      const cur = new Set(ids.map(String)); if (!seen) { seen = cur; return { fresh: [], chime: false }; }
+      const fresh = [...cur].filter(x => !seen.has(x)); seen = cur; const t = o.now == null ? Date.now() : o.now;
+      const chime = fresh.length > 0 && !o.muted && !o.hidden && t - lastChime >= 10000; if (chime) lastChime = t;
+      return { fresh, chime };
+    } };
+  }
   function ytOrdersView(r, gone, now) {
     if (!r || r.status === 404 || r.status === 0) return { state: 'none', rows: [], text: 'Host does not offer shop orders yet' };
     const j = r.json && typeof r.json === 'object' ? r.json : null;
@@ -618,7 +632,7 @@
     for (const o of j.orders) {
       if (!o || o.id == null || (o.status && o.status !== 'pending') || skip.has(String(o.id))) continue;
       const p = personInfo({ username: o.login, display: o.display, platform: o.platform || 'youtube' }), who = p.name || String(o.display || '').trim() || 'Someone';
-      const label = String(o.label || o.item || 'Order').trim(), price = o.price == null || o.price === '' ? '' : String(o.price);
+      const label = String(o.label || o.item || 'Order').trim(), price = o.price == null || o.price === '' ? '' : groupNum(o.price);
       const mins = typeof o.createdAt === 'number' && o.createdAt > 0 ? Math.max(0, Math.floor((t - o.createdAt * 1000) / 60000)) : null;
       rows.push({ id: String(o.id), who, tag: p.tag || 'YT', label, price, mins, text: '#' + o.id + ' ' + who + ' - ' + label + (price ? ' (' + price + ')' : '') + (mins == null ? '' : ' - waiting ' + mins + ' min') });
     }
@@ -640,5 +654,5 @@
       get busy() { return busy; },
     };
   }
-  return { planView, planParse, planStep, customsFromAnswer, planResult, createDebounce, hhmm, rankedRule, normRanked, rankedView, rankedLimit, rankedGuess, rankedResult, createBusy, ytOrdersView, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
+  return { planView, planParse, planStep, customsFromAnswer, planResult, createDebounce, hhmm, rankedRule, normRanked, rankedView, rankedLimit, rankedGuess, rankedResult, createBusy, ytOrdersView, groupNum, createYtWatch, ytOrderResult, pmName, pmView, pmResult, teamEntry, teamWord, teamPlayers, createRaidGuard, raidTarget, raidPrepView, cleanKeys, personInfo, personDir, personText, PLAT_TAG, selfcheckView, rateLimitView, wheelCmd, wheelView, WHEEL_OPT, songifyView, prestreamView, healthHint, staleSecs, createHealth, streakRows, introKey, introRows, modText, normMod, headsView, UI_SCALES, normScale, createStore, createOptimistic, buildSceneRows, buildItemRows, findItem, flatIds, customsText, CUSTOMS, fmtSize, TEAM_DEFAULTS, TEAM_PRESETS, teamName, teamColor, parseTags, twitchTags, copyBlock, ACTIVITY_DEFAULTS, activityPlan, gameOf, recapView, normStrike, strikeMarks, dropPos, createSseParser, createApi, createPoller, createEvents, reconcile, mergeFeed, normLog, logRows, logText, diffCustoms, activityLine, sig };
 });

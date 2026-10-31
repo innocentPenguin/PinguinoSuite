@@ -423,7 +423,7 @@
         ${sec('c-t', 'Teams', `${seg('mode', [['Balanced', 'balanced'], ['Random', 'random'], ['Manual', 'picks']])}<div class="btns" style="margin-top:6px">${b('Reroll', 'reroll')}${b('Balance', 'balance')}</div><div class="row" id="cu-manual" style="margin-top:6px" hidden><input type="text" id="cu-pick" placeholder="who goes Grey" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="sm bl" id="cu-pickgo">Set Blue</button>${b('Auto', 'pick', 'auto')}</div>`)}
         ${sec('c-tn', 'Team names & colours', ['orange', 'blue'].map(k => `<div class="tn" data-side="${k}"><div class="row"><span class="tn-dot"></span><input type="text" class="tn-name" maxlength="20" autocomplete="off" spellcheck="false" aria-label="${k} team name"><input type="color" class="tn-pick" title="Custom colour"><button class="sm ghost tn-reset" title="Back to the default name and colour">Reset</button></div><details class="tn-det"><summary>Colours <span class="tn-chip" title="Current colour"></span></summary><div class="tn-sw">${C.TEAM_PRESETS.map(([n, hx]) => `<button class="swc" data-c="${hx}" style="background:${hx}" title="${n}" aria-label="${n}"></button>`).join('')}</div></details></div>`).join('') + '<div class="faint sm">Used in the match lines, overlays and the site. Customs chat lines keep the emoji before the name (🔶 Orange, 🔷 Blue, e.g. “🔷 Frost wins”); the colour only tints the panels and overlays.</div>')}
         ${sec('c-pm', 'Private match name', `<div class="row"><span class="faint sm">Now:</span> <b id="pm-cur" class="ell">–</b></div><div class="row" style="margin-top:4px"><input type="text" id="pm-in" maxlength="20" autocomplete="off" spellcheck="false" placeholder="one word, up to 20 characters" style="flex:1;min-width:0"><button class="sm rd warn" id="pm-go" title="Sets the private match name through the Host (two clicks)">Set</button></div><div id="pm-res" class="si-res"></div>`)}
-        ${sec('c-yt', 'YouTube shop orders', `<div id="yt-list"></div><div id="yt-res" class="si-res"></div>`)}
+        ${sec('c-yt', 'YouTube shop orders', `<div class="row" style="gap:4px"><span class="faint sm" style="flex:1">New orders chime and flash</span><button class="sm" id="yt-mute" title="Chime for new shop orders (remembered in this browser)">Chime on</button></div><div id="yt-list"></div><div id="yt-res" class="si-res"></div>`)}
         ${sec('c-s', 'Settings', `<div class="lbl">Team size <span class="faint" id="cu-fmt"></span></div><div id="cu-rlsz">${seg('format', ['2v2', '3v3', '4v4'].map(x => [x, x]))}</div><div id="cu-fnsz" hidden><div class="seg">${['1', '2', '3'].map(n => b(n, 'format', n + 'v' + n, '', 'format:' + n + 'v' + n, 'Fortnite viewers: ' + n + ' per team')).join('')}</div><div class="row" style="margin-top:6px"><input type="number" id="cu-fnn" min="1" max="16" placeholder="other size" style="width:96px"><button class="sm" id="cu-fnset" title="Any other team size, 1 to 16">Set</button></div></div><div class="lbl">Game mode</div>${seg('gamemode', [['Standard', 'standard'], ['Dropshot', 'dropshot'], ['Rumble', 'rumble']])}`)}
         ${sec('c-k', 'KOTH', `${seg('koth', [['Off', 'off'], ['On', 'on']])}<div class="faint sm" style="margin-top:4px">On: winners stay, challengers come in.</div>`)}
         ${sec('c-p', 'Players', `<div class="row"><input type="text" id="cu-kick" placeholder="Kick by name" style="flex:1;min-width:0" autocomplete="off" spellcheck="false"><button class="sm rd" id="cu-kickgo">Kick</button></div>`)}
@@ -597,16 +597,31 @@
     finally { ui.pmBusy = false; btn.disabled = false; if (!ok) { ui.pmOv = null; } renderPm(); }
   }
   /* YouTube shop orders: polled every ~5 s while the Customs tab is visible; Done / Cancel(refund) are armed, one request per row, hidden at once and put back if the Host refuses */
-  const ytS = { last: null, gone: new Set(), busy: C.createBusy(), msg: null };
+  const ytS = { last: null, gone: new Set(), busy: C.createBusy(), msg: null, watch: C.createYtWatch(), fresh: new Map(), tabUntil: 0 };
+  const ytMuted = () => { try { return localStorage.getItem('mv.ytMute') === '1'; } catch { return false; } };
+  function ytChime() {   // short soft two-note chime, WebAudio only (no file, no network); silent if the browser blocks audio
+    try {
+      const A = window.AudioContext || window.webkitAudioContext; if (!A) return; const ac = ytS.ac || (ytS.ac = new A()); if (ac.resume) ac.resume();
+      [[880, 0], [1175, 0.14]].forEach(([f, d]) => { const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + d; o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.4); });
+    } catch { }
+  }
+  function ytNotice(r) {   // called after each good poll: chime once and flash the new rows plus the Customs tab for ~5 s
+    const ok = !!(r && r.ok && r.json && Array.isArray(r.json.orders));
+    const ids = ok ? r.json.orders.filter(o => o && o.id != null && (!o.status || o.status === 'pending')).map(o => String(o.id)) : [];
+    const w = ytS.watch.update(ids, ok, { muted: ytMuted(), hidden: !visible() }); if (!w.fresh.length) return;
+    const until = Date.now() + 5000; w.fresh.forEach(id => ytS.fresh.set(id, until)); ytS.tabUntil = until; if (w.chime) ytChime();
+    const tb = document.querySelector('[data-tab="customs"]'); if (tb) { tb.classList.add('neword'); setTimeout(() => { if (Date.now() >= ytS.tabUntil) tb.classList.remove('neword'); renderYt(); }, 5100); }
+  }
   function renderYt() {
     const box = $('#yt-list'); if (!box) return;
     const v = ytS.last ? C.ytOrdersView(ytS.last, ytS.gone) : { state: 'wait', rows: [], text: 'Loading…' };
-    const sig = v.state + '|' + v.rows.map(r => r.id + (ytS.busy.has(r.id) ? '*' : '')).join(',') + '|' + v.text;
+    const sig = v.state + '|' + v.rows.map(r => r.id + (ytS.busy.has(r.id) ? '*' : '') + ((ytS.fresh.get(r.id) || 0) > Date.now() ? '!' : '')).join(',') + '|' + v.text;
+    const mb = $('#yt-mute'); if (mb) mb.textContent = ytMuted() ? 'Chime off' : 'Chime on';
     if (box._s !== sig) {
       box._s = sig; box.textContent = '';
       if (!v.rows.length) box.append(h('div', 'faint sm', v.text));
       for (const r of v.rows) {
-        const row = h('div', 'row'); row.dataset.yt = r.id; row.style.gap = '4px';
+        const row = h('div', 'row' + ((ytS.fresh.get(r.id) || 0) > Date.now() ? ' neword' : '')); row.dataset.yt = r.id; row.style.gap = '4px';
         const t = h('span', 'ell'); t.style.flex = '1'; t.style.minWidth = '0'; t.append(h('span', 'plat plat-youtube', r.tag), document.createTextNode(r.text));
         const dn = h('button', 'sm', 'Done'), cn = h('button', 'sm rd warn', 'Cancel (refund)'); dn.dataset.ytAct = 'done'; cn.dataset.ytAct = 'cancel';
         dn.title = 'Tell the buyer it is done (two clicks)'; cn.title = 'Cancel the order, refund the points and tell the buyer (two clicks)';
@@ -636,7 +651,7 @@
       const dots = $('#rk-dots'), sig = v.games.join('') + '|' + on; if (dots._s !== sig) { dots._s = sig; dots.replaceChildren(...v.games.map((g, i) => { const e = h('span', 'rk-g ' + (g === 'W' ? 'w' : 'l'), g === 'W' ? '✓' : '✗'); e.title = 'Game ' + (i + 1) + (g === 'W' ? ' won' : ' lost'); return e; })); }
       $('#rk-rec').textContent = v.record; $('#rk-week').textContent = v.week; $('#rk-brk-t').textContent = v.breakText; $('#rk-info').textContent = v.info;
       for (const [id, val] of [['rk-lim', v.limit], ['rk-ba', v.breakAfter], ['rk-ls', v.lossStreak]]) { const e = $('#' + id); if (e && document.activeElement !== e && !e._dirty) e.value = String(val); }   // never overwrite what the user is typing
-      $('#rk-ba-n').textContent = v.breakAfter ? 'games' : 'off'; $('#rk-ls-n').textContent = v.lossStreak ? '' : 'off';
+      $('#rk-ba-n').textContent = (v.breakAfter ? 'games' : 'off') + (v.sinceText ? ' · ' + v.sinceText : ''); $('#rk-ls-n').textContent = v.lossStreak ? '' : 'off';
     }
     const res = $('#rk-res'); if (res) { const m = rkS.msg && rkS.msg.until > Date.now() ? rkS.msg : null; res.replaceChildren(...(m ? [h('div', 'sir ' + m.kind, m.text)] : [])); }
   }
@@ -1113,8 +1128,8 @@
     yt: P(() => (ytS.last && (ytS.last.status === 404 || ytS.last.status === 0) ? 30000 : 5000), async () => {
       const r = await api.get('/api/ytorders'); ytS.last = r;
       if (r.ok && r.json && Array.isArray(r.json.orders)) { const live = new Set(r.json.orders.map(o => String(o.id))); for (const id of [...ytS.gone]) if (!live.has(id) && !ytS.busy.has(id)) ytS.gone.delete(id); }
-      renderYt();
-    }, () => visible() && ui.tab === 'customs'),
+      ytNotice(r); renderYt();
+    }, () => visible()),
     rk: P(() => (rkS.last && (rkS.last.status === 404 || rkS.last.status === 0) ? 30000 : 5000), async () => { const r = await api.get('/api/ranked'); if (!rkS.busy.has('rk')) rkS.last = r; renderRk(); }, () => visible() && ui.tab === 'customs'),
     pre: P(30000, async () => { const r = await api.get('/api/prestream'); if (r.ok) { ui.pre = r.json; renderPre(); } }),
     streaks: P(60000, async () => { const r = await api.get('/api/streaks'); if (r.ok) { ui.heads.streaks = r.json; renderHeads(); } }, () => visible() && ui.tab === 'feed'),
@@ -1183,7 +1198,8 @@
     else if (b && b.dataset.wh) { if (b.classList.contains('warn') && !armed(b)) return; flash(b); ui.tookControl = true; tokenReady.then(() => api.post('/api/wheel/' + b.dataset.wh)).then(r => { if (r.ok) { toast('Wheel: ' + b.dataset.wh); r.json && r.json.wheel ? S.set({ wheel: normWheel(r.json.wheel) }) : pollers.wheel.kick(); } else toast('Wheel: ' + r.error, true); }); }
     else if (b && b.dataset.pl) plClick(b);
     else if (b && b.dataset.rk) rkClick(b);
-    else if (b && b.dataset.ytAct) { if (!b.disabled && armed(b)) ytAct(b); }
+    else if (b && b.id === 'yt-mute') { try { localStorage.setItem('mv.ytMute', ytMuted() ? '0' : '1'); } catch { } renderYt(); if (!ytMuted()) ytChime(); }
+      else if (b && b.dataset.ytAct) { if (!b.disabled && armed(b)) ytAct(b); }
     else if (b && b.id === 'pm-go') { if (!C.pmName($('#pm-in').value).ok || armed(b)) pmSet(b); }
     else if (b && b.id === 'cu-pickgo') { const v = $('#cu-pick').value.trim().replace(/\s+/g, ' '); C.customsText('pick', v) ? (sendCustom('pick', v, b), $('#cu-pick').value = '') : toast('Type 1 to 4 Twitch names first', true); }
     else if (b && b.id === 'cu-kickgo') { C.customsText('kick', $('#cu-kick').value) ? (sendCustom('kick', $('#cu-kick').value, b), $('#cu-kick').value = '') : toast('Type a Twitch name first', true); }

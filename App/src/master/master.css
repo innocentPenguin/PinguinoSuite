@@ -255,3 +255,6 @@ button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible,
 
 .rk-dots{display:inline-flex;gap:3px;flex-wrap:wrap}.rk-g{display:inline-block;min-width:16px;text-align:center;border-radius:4px;font-size:11px;font-weight:700;line-height:16px}.rk-g.w{background:#1f6b3a;color:#bff0cf}.rk-g.l{background:#7a2a22;color:#ffc4bb}
 button.rk-w{border-color:#3ecf6a;color:#7ee29b}button.rk-l{border-color:#e74c3c;color:#ff8a7a}
+
+.row.neword{background:var(--accent-soft);outline:1px solid var(--accent);border-radius:6px;animation:in .3s}
+button.neword{background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent)}
