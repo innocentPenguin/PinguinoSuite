@@ -518,6 +518,9 @@ class EngineTests(unittest.TestCase):
         self.assertFalse(api["ok"])
         self.assertIn("refuses our calls", api["reason"])
         self.assertIn("403", api["reason"])
+        self.assertIn("empty body", api["reason"])
+        self.assertIn("Premium lapsed", api["reason"])
+        self.assertIn("Premium lapsed", self.e.public_state()["api_refused"]["msg"])
         self.assertEqual(self.e.public_state()["api_refused"]["status"], 403)
         r = self.e.chat("ann", "!sr some song title", [])
         self.assertEqual(r["code"], "lookup")
@@ -529,6 +532,17 @@ class EngineTests(unittest.TestCase):
         self.clock.t += 4
         self.e.tick()
         self.assertIsNone(self.e.public_state()["api_refused"])
+
+    def test_403_with_a_spotify_reason_is_not_called_premium(self):
+        def refused(*a, **k):
+            raise spotify_api.ApiError(403, "Check settings on developer.spotify.com/dashboard", "")
+        self.api.playback = refused
+        for _ in range(3):
+            self.e.tick()
+            self.clock.t += 4
+        reason = [c for c in self.e.selfcheck()["checks"] if c["id"] == "api"][0]["reason"]
+        self.assertIn("developer.spotify.com", reason)
+        self.assertNotIn("Premium", reason)
 
     def test_empty_403_body_gets_a_reason_from_what_answered(self):
         http = lambda m, u, h, b: (403, {"Server": "envoy", "Content-Type": "text/html"}, {"_raw": "<html>Forbidden</html>"})

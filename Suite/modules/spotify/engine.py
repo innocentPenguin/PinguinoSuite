@@ -342,6 +342,9 @@ class Engine:
             ar = self.api_refused = {"status": 403, "since": now, "count": 0, "msg": ""}
         ar["count"] += 1
         ar["msg"] = (getattr(e, "message", "") or str(e))[:120]
+        ar["empty"] = "empty body" in ar["msg"]            # Spotify's own 403 normally explains itself; a silent one is usually the account (Premium lapsed)
+        if ar["empty"]:
+            ar["msg"] = "usually Premium lapsed / account state; check the Spotify account"
         if ar["count"] == 3:
             console_log.error("api", f"Spotify answered HTTP 403 to {ar['count']} calls in a row: {ar['msg']}", dedupe_s=600)
 
@@ -363,7 +366,8 @@ class Engine:
             add("api", "Spotify API answers", False, "not signed in to Spotify")
         elif self.refused_streak():
             ar = self.api_refused
-            add("api", "Spotify API answers", False, f"Spotify refuses our calls (HTTP {ar['status']} since {time.strftime('%H:%M', time.localtime(ar['since']))}, {ar['count']} in a row): {ar['msg']}"[:160])
+            what = "HTTP 403, empty body" if ar.get("empty") else f"HTTP {ar['status']}"
+            add("api", "Spotify API answers", False, f"Spotify refuses our calls ({what}; since {time.strftime('%H:%M', time.localtime(ar['since']))}, {ar['count']} in a row): {ar['msg']}"[:200])
         elif self.last_error:
             add("api", "Spotify API answers", False, self.last_error[:100])
         elif not self.pb_at or now - self.pb_at > 60:
