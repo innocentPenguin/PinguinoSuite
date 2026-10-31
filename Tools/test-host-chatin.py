@@ -5,7 +5,9 @@ Usage: python Tools/test-host-chatin.py [dll]"""
 import http.server, json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request, urllib.error
 here = os.path.dirname(os.path.abspath(__file__)); suite = os.path.dirname(here)
 dll = sys.argv[1] if len(sys.argv) > 1 else os.path.join(suite, 'PinguinoHost', 'bin', 'Release', 'net8.0', 'PinguinoHost.dll')
-PORT, MX, TOK = 8981, 8982, 'test-module-token'
+import socket
+k = socket.socket(); k.bind(('127.0.0.1', 0)); MX = k.getsockname()[1]; k.close()   # a free port for the fake Multi (Windows can reserve fixed ones, e.g. 8982 -> WinError 10013)
+PORT, TOK = 8981, 'test-module-token'
 sends = []; mode = {'code': 200}
 class Mx(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
