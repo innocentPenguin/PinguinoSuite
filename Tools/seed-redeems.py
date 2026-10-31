@@ -4,7 +4,7 @@ DRY RUN by default: prints the baseline per group and writes nothing. --write ap
 <file>.before-seed-YYYYMMDD-HHMMSS.bak. Cut-off C (--through, UTC ISO) = the moment of the Host restart: the baseline must hold everything up
 to C and the Host counts only redemptions after it. Run it only when the stream is off and 100 has said the restart is on.
 
-  python Tools/seed-redeems.py --data D:/PinguinoSuite/Data                       # dry run, values from the 2026-10-30 history doc
+  python Tools/seed-redeems.py --data D:/PinguinoSuite/Data/runtime                       # dry run, values from the 2026-10-30 history doc
   python Tools/seed-redeems.py --data ... --classified groups.json --through 2026-10-30T14:00:00Z   # dry run from 14's fresh extraction
   python -I Tools/redeem-seed.py --cutoff 2026-10-30T14:00:00Z --out seed.json      # 14's extraction (read-only)
   python Tools/seed-redeems.py --data ... --seed-json seed.json                    # dry run from it (cut-off = its baselineThrough)
@@ -122,13 +122,25 @@ def stamp_copy(p):
         b = p + '.before-seed-' + dt.datetime.now().strftime('%Y%m%d-%H%M%S') + '.bak'; shutil.copy2(p, b); return b
 
 
+DEFAULT_DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Data', 'runtime')
+HOST_MARKERS = ('host_secrets.json', 'automations.json', 'bots.json', 'chat_settings.json')   # files only the Host's real data folder has
+def host_data(d):
+    """The Host's real data dir (Data/runtime = HostApi.DataDir) is the default; a folder without any host file is refused (a typo or the parent Data/ folder would seed files the Host never reads)."""
+    d = os.path.abspath(d)
+    if not any(os.path.exists(os.path.join(d, m)) for m in HOST_MARKERS):
+        sys.exit('refused: %s has none of %s, so it is not the Host data folder (the default is %s)' % (d, '/'.join(HOST_MARKERS), DEFAULT_DATA))
+    return d
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--data', default=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Data'))
+    ap.add_argument('--data', default=DEFAULT_DATA)
     ap.add_argument('--through'); ap.add_argument('--classified'); ap.add_argument('--seed-json'); ap.add_argument('--add', action='append'); ap.add_argument('--write', action='store_true')
     a = ap.parse_args()
+    a.data = host_data(a.data)
     base, through = build(a)
     rt = os.path.join(a.data, 'runtime'); gp = os.path.join(rt, 'redeem_groups.json'); cp = os.path.join(rt, 'redeem_counts.json')
+    print('target files:'); print('  ' + gp); print('  ' + cp)
     print('%-20s %9s  %-10s %s' % ('group', 'baseline', 'days', 'per month'))
     for k in GROUPS:
         h = a.hist.get(k, {}); dsum = sum((h.get('days') or {}).values()); b = sum(base.get(k, {}).values())
