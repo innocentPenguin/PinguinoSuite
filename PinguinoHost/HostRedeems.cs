@@ -17,7 +17,7 @@ namespace PinguinoHost
     /// Chat: !hydrate [today|week|month|all] (and !mimimimi, !hellothere ... = the group key without underscores; pushups are !pushup).</summary>
     public static class RedeemCounts
     {
-        static readonly object L = new object(); static JObject _groups, _counts; static DateTime _groupsStamp;
+        static readonly object L = new object(); static JObject _groups, _counts; static DateTime _groupsStamp, _countsStamp;
         static string GroupsP { get { return Path.Combine(HostApi.DataDir, "runtime", "redeem_groups.json"); } }
         static string CountsP { get { return Path.Combine(HostApi.DataDir, "runtime", "redeem_counts.json"); } }
         const int SeenMax = 400;
@@ -32,7 +32,9 @@ namespace PinguinoHost
             if (_groups == null || (File.Exists(GroupsP) && File.GetLastWriteTimeUtc(GroupsP) != _groupsStamp)) { _groups = Read(GroupsP); try { _groupsStamp = File.GetLastWriteTimeUtc(GroupsP); } catch (Exception) { } }
             return _groups;
         }
-        static JObject Counts() { if (_counts == null) _counts = Read(CountsP); return _counts; }
+        static DateTime Mt(string p) { try { return File.Exists(p) ? File.GetLastWriteTimeUtc(p) : DateTime.MinValue; } catch (Exception) { return DateTime.MinValue; } }
+        /// <summary>the counts in memory; a file on disk that is NEWER than the last time this Host read or wrote it (a seed written while the Host runs) is read again, so the next Save never overwrites it</summary>
+        static JObject Counts() { DateTime mt = Mt(CountsP); if (_counts == null || mt > _countsStamp) { _counts = Read(CountsP); _countsStamp = mt; } return _counts; }
 
         /// <summary>the group key a reward belongs to ("" when none): reward id first (prefix of 8+ characters), normalised title second</summary>
         public static string GroupOf(string rewardId, string title)
@@ -85,7 +87,7 @@ namespace PinguinoHost
             }
             catch (Exception) { }
         }
-        static void Save(JObject c) { try { Write(CountsP, c); } catch (Exception) { } }
+        static void Save(JObject c) { try { Write(CountsP, c); _countsStamp = Mt(CountsP); } catch (Exception) { } }
 
         static int Total(JObject e) { return ((int?)e["baseline"] ?? 0) + ((int?)e["live"] ?? 0); }
         /// <summary>{redeem.pushups}: baseline + live ("0" for an unknown group)</summary>
@@ -183,6 +185,6 @@ namespace PinguinoHost
         }
 
         /// <summary>sim/test hook: forget what is cached so a changed file on disk is read again</summary>
-        public static void Reload() { lock (L) { _groups = null; _counts = null; } }
+        public static void Reload() { lock (L) { _groups = null; _counts = null; _countsStamp = DateTime.MinValue; } }
     }
 }

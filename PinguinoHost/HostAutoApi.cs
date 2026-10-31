@@ -309,6 +309,11 @@ namespace PinguinoHost
                 var b = Body(c); string tg = ((string)b["target"] ?? "").Trim().TrimStart('@').ToLowerInvariant(); bool fired = Auto.OnRaidScheduled(tg, (bool?)b["now"] == true);
                 ChannelControl.Audit("app", "raid/prep", "target=" + tg + " fired=" + fired); Write(c, new JObject { { "ok", true }, { "fired", fired }, { "duplicate", !fired } }.ToString(), "application/json"); return true;
             }
+            if (p == "/api/seeds/reload" && m == "POST")   // after Tools\seed-redeems.py / seed-pushups.py --write: the Host reads both files again (no restart); answers the pushup state and the redeem totals it now holds
+            {
+                RedeemCounts.Reload(); var pu = Pushups.Reload(); ChannelControl.Audit("app", "seeds/reload", "pushups allTime=" + (int)pu["allTime"]);
+                Write(c, new JObject { { "ok", true }, { "pushup", pu }, { "redeems", RedeemCounts.Api() } }.ToString(), "application/json"); return true;
+            }
             if (p == "/api/redeems" && m == "GET") { Write(c, RedeemCounts.Api().ToString(), "application/json"); return true; }   // redeem counters per group: baseline (seeded history) + live, per month
             if (p == "/api/rewards" && m == "GET") { Write(c, Rewards.List().ToString(), "application/json"); return true; }   // every channel point reward and whether the Host owns it (refunds only work on those)
             if (p == "/api/rewards/use" && m == "POST") { Write(c, Rewards.Use(Body(c)).ToString(), "application/json"); return true; }   // {rewardId, automation?}: point an automation at a reward the Host owns

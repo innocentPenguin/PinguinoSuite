@@ -12,7 +12,7 @@ namespace PinguinoHost
     public static class Pushups
     {
         static readonly object L = new object();
-        static bool _loaded, _enabled = true; static int _count; static JObject _days = new JObject(); static int _baseline; static string _baselineNote = ""; static bool _baselineApplied;
+        static DateTime _mt; static bool _loaded, _enabled = true; static int _count; static JObject _days = new JObject(); static int _baseline; static string _baselineNote = ""; static bool _baselineApplied;
         const int Max = 100000, MaxStep = 1000;
         static string FilePath { get { return Path.Combine(HostApi.DataDir, "pushups.json"); } }
 
@@ -20,11 +20,12 @@ namespace PinguinoHost
 
         static void Load()
         {
-            if (_loaded) return;
+            if (_loaded && !(File.Exists(FilePath) && File.GetLastWriteTimeUtc(FilePath) > _mt)) return;   // a file NEWER than this Host's last read / write (a seed written while it runs) is read again, so the next Save never overwrites it
             _loaded = true;
             try
             {
                 if (!File.Exists(FilePath)) return;
+                _mt = File.GetLastWriteTimeUtc(FilePath);
                 var o = JObject.Parse(File.ReadAllText(FilePath).TrimStart((char)0xFEFF));
                 _enabled = (bool?)o["enabled"] ?? true;
                 _count = Math.Max(0, Math.Min(Max, (int?)o["allTime"] ?? (int?)o["count"] ?? 0));   // an older file has only "count": that is the all-time number and today's too
@@ -42,6 +43,7 @@ namespace PinguinoHost
                 string f = FilePath, tmp = f + ".tmp"; Directory.CreateDirectory(Path.GetDirectoryName(f));
                 File.WriteAllText(tmp, Json().ToString());
                 if (File.Exists(f)) File.Delete(f); File.Move(tmp, f);
+                _mt = File.GetLastWriteTimeUtc(f);
             }
             catch (Exception ex) { Clog.Warn("pushup", "could not save pushups.json: " + ex.Message); }
         }
@@ -54,6 +56,8 @@ namespace PinguinoHost
             if (_baseline > 0) { o["baseline"] = _baseline; o["baselineNote"] = _baselineNote; o["baselineApplied"] = _baselineApplied; }
             return o;
         }
+        /// <summary>read pushups.json again now (POST /api/seeds/reload): a seed written while the Host runs needs no restart</summary>
+        public static JObject Reload() { lock (L) { _loaded = false; Load(); return Json(); } }
         public static JObject State() { lock (L) { Load(); return Json(); } }
         static string Line(JObject s) { return "Pushups: " + (int)s["today"] + " today, " + (int)s["week"] + " this week, " + (int)s["month"] + " this month, " + (int)s["allTime"] + " all-time"; }
         static string PeriodLine(JObject s, string p) { return "Pushups " + DayCounts.Label(p) + ": " + (int)(p == "all" ? s["allTime"] : s[p == "today" ? "today" : p]); }
