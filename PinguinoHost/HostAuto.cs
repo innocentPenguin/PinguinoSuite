@@ -655,6 +655,28 @@ namespace PinguinoHost
             catch (Exception) { v = false; }
             lock (typeof(Auto)) _sgVal = v; return v;
         }
+        static string _scLast = "";
+        /// <summary>At go-live: ask the Spotify module's /api/selfcheck and name a red "api" item once (log line, same reason never repeated) so song redemptions don't fail silently.</summary>
+        internal static string SpotifySelfcheckReason(string json)
+        {
+            try
+            {
+                foreach (var c in (JArray)JObject.Parse(json)["checks"])
+                    if ((string)c["id"] == "api" && (bool?)c["ok"] == false) return (string)c["reason"] ?? "not answering";
+            }
+            catch (Exception) { }
+            return "";
+        }
+        static void SpotifySelfcheck(HttpClient h)
+        {
+            try
+            {
+                string why = SpotifySelfcheckReason(h.GetStringAsync("http://127.0.0.1:8771/api/selfcheck").Result);
+                lock (typeof(Auto)) { if (why == _scLast) return; _scLast = why; }
+                if (why != "") Clog.Warn("automation", "go-live: Spotify is not answering (" + why + ") - song requests will be refused until it is");
+            }
+            catch (Exception ex) { Clog.Warn("automation", "go-live: Spotify selfcheck not reached: " + (ex.InnerException != null ? ex.InnerException.Message : ex.Message)); }
+        }
         internal static Action<string> ModuleLiveTest;
         static void SpotifyLive(bool online)
         {
@@ -670,6 +692,7 @@ namespace PinguinoHost
                         var rq = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:8771" + path) { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
                         string tok = Environment.GetEnvironmentVariable("PINGUINO_API_TOKEN") ?? ""; if (tok != "") { rq.Headers.Add("Authorization", "Bearer " + tok); rq.Headers.Add("X-Pinguino-Token", tok); }
                         var r = h.SendAsync(rq).Result; Clog.Info("automation", "spotify module " + path + " -> " + (int)r.StatusCode);
+                        if (online) SpotifySelfcheck(h);
                     }
                 }
                 catch (Exception ex) { Clog.Warn("automation", "spotify module " + path + " not reached: " + (ex.InnerException != null ? ex.InnerException.Message : ex.Message)); }
