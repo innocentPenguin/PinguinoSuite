@@ -93,6 +93,9 @@ public static class Harness
         Msg("Magm", "do I have to keep doing !join?"); Check("join once: answered short", Last() != null && Last().Contains("Once is enough") && TwoLines(), Last());
         Msg("Lvl", "im ina party with phil if i went to join a pm itd drag phil no?"); Check("party: everyone joins themselves", Last() != null && Last().Contains("No parties") && TwoLines() && Last().Length < 150, Last());
         Msg("Lvl2", "happy birthday, we had a party yesterday lol"); Check("party chatter ignored", Last() == null, Last());
+        Msg("Shp", "How do I get into the shop"); Check("not a join question: the shop", !(Last() ?? "").Contains("!register") && !(Last() ?? "").Contains("queue"), Last());
+        Msg("Jn1", "how do I get into the queue"); Check("real join question still answered", Last() != null && Last().Contains("!register"), Last());
+        Msg("Jn2", "how can I join the game"); Check("real join question 2 still answered", Last() != null && Last().Contains("!register"), Last());
         Msg("Ana", "how do i register");
         Check("already registered says so", Last().Contains("already registered as AnaEpic"), Last());
 
