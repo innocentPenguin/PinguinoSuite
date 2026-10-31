@@ -13,8 +13,11 @@ BAD = re.compile(r"""\[\s*console\s*\]\s*::\s*beep|\bwinsound\s*\.\s*(Beep|Messa
 
 
 def scripts():
-    for p in REPO.rglob("*"):
-        if p.suffix.lower() in EXT and p.is_file() and not re.match(r"(test[-_.]|check\.)", p.name, re.I) and not (SKIP_DIRS & set(p.relative_to(REPO).parts[:-1])):
+    """Our scripts, from git's file list (walking the tree would crawl node_modules and every target/ folder: minutes)."""
+    out = subprocess.run(["git", "ls-files", "-z", "-c", "-o", "--exclude-standard"], cwd=REPO, capture_output=True).stdout
+    for f in out.decode("utf-8", "replace").split("\0"):
+        p = REPO / f
+        if f and p.suffix.lower() in EXT and p.is_file() and not re.match(r"(test[-_.]|check\.)", p.name, re.I) and not (SKIP_DIRS & set(Path(f).parts[:-1])):
             yield p
 
 BINARY = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".icns", ".webm", ".mp4", ".mp3", ".wav", ".ogg", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".exe", ".dll", ".rgba", ".pdf", ".db", ".sqlite", ".gz", ".7z", ".bin", ".wasm", ".node", ".pyc"}
