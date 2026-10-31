@@ -127,8 +127,56 @@ def new_windows():
 STATE = {"up": None, "last_ok": 0.0, "error": ""}      # reachability of the Host as last seen by any GET (None = not tried yet)
 
 
+class FeedWatch:
+    """Tracks outages of the activity feed. The poll cursor (`seq`) is never reset after a failure, so the first poll after recovery asks the Host for
+    everything since the last id seen: events the Host still has are replayed. If the Host's first returned id is further ahead than seq+1, the
+    difference was no longer there (Host restarted / buffer rolled over) and is counted as missed. The Host cannot say how many it dropped otherwise."""
+    REMIND = 300.0                                         # "still down" reminder every 5 min
+
+    def __init__(self, now=time.time):
+        self.now = now
+        self.down_since, self.last_remind, self.last_down_s = 0.0, 0.0, 0
+        self.missed, self.replayed, self.outages, self.recovering = 0, 0, 0, False
+
+    def failed(self, err):
+        t = self.now()
+        if not self.down_since:
+            self.down_since, self.last_remind = t, t
+            self.outages += 1
+            console_log.warn("host-feed", f"Host activity feed not reachable ({type(err).__name__}); will keep trying and pick up from the last event seen", dedupe_s=0)
+        elif t - self.last_remind >= self.REMIND:
+            self.last_remind = t
+            console_log.warn("host-feed", f"Host activity feed still down after {int(t - self.down_since)} s ({type(err).__name__})", dedupe_s=0)
+
+    def polled(self, items, seq_before):
+        """A successful poll. items = what the Host returned since seq_before. Returns nothing; logs once when an outage ends."""
+        n = len(items)
+        if self.down_since:
+            self.last_down_s = int(self.now() - self.down_since)
+            self.down_since = 0.0
+            self.recovering = True
+            first = min((int(i.get("seq", 0)) for i in items), default=0)
+            gap = max(0, first - seq_before - 1) if items else 0
+            self.missed += gap
+            extra = f"; {gap} more were no longer on the Host and are lost" if gap else ""
+            console_log.info("host-feed", f"Host activity feed back after {self.last_down_s} s: {n} event(s) replayed from the last seen id{extra}"
+                             + (" (more pending)" if n >= 100 else ""), dedupe_s=0)
+            self.replayed += n
+            self.recovering = n >= 100
+        elif self.recovering:                              # later pages of a big backlog
+            self.replayed += n
+            self.recovering = n >= 100
+
+    def snapshot(self):
+        down = int(self.now() - self.down_since) if self.down_since else 0
+        return {"feed_down_s": down, "feed_last_down_s": self.last_down_s, "feed_outages": self.outages, "feed_replayed": self.replayed, "feed_missed": self.missed}
+
+
+WATCH = FeedWatch()
+
+
 def status():
-    return {"up": STATE["up"], "url": HOST, "last_ok": STATE["last_ok"], "error": STATE["error"]}
+    return dict({"up": STATE["up"], "url": HOST, "last_ok": STATE["last_ok"], "error": STATE["error"]}, **WATCH.snapshot())
 
 
 def _get(path):
@@ -194,7 +242,7 @@ async def run(inbox, twitch_connected, base=None):
     global HOST
     if base:
         HOST = base
-    seq, warned = None, False
+    seq = None
     while True:
         st = config.settings()
         if not st.get("host_feed_enabled", True):
@@ -203,7 +251,9 @@ async def run(inbox, twitch_connected, base=None):
         try:
             if seq is None:                               # start from "now": never replay the Host's history
                 seq = int((await asyncio.to_thread(_get, "/api/activity?since=999999999&limit=1")).get("seq", 0))
+            before = seq
             data = await asyncio.to_thread(_get, f"/api/activity?since={seq}&limit=100")
+            WATCH.polled(data.get("items", []), before)
             types = set(ALWAYS) | {ALWAYS_RAID} | (set() if twitch_connected() else set(FALLBACK))
             for item in data.get("items", []):
                 seq = max(seq, int(item.get("seq", seq)))
@@ -211,12 +261,9 @@ async def run(inbox, twitch_connected, base=None):
                     m = to_message(item, st["channel"])
                     if m:
                         inbox.put(m)
-            warned = False
             await asyncio.sleep(2.5)
         except Exception as e:
-            if not warned:
-                console_log.info("host-feed", f"Host activity feed not reachable yet ({type(e).__name__}); will keep trying", dedupe_s=600)
-                warned = True
+            WATCH.failed(e)
             await asyncio.sleep(10)
 
 
