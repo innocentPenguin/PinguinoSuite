@@ -1,6 +1,6 @@
 # Rebuild / restart checklist for 100
 
-Written 2026-10-23 by 21-Lite. Only 100 launches or rebuilds (single-launcher rule). Nothing here was run by me.
+Written 2026-10-23 by 21-Lite; snapshot regenerated 2026-10-30. Only 100 launches or rebuilds (single-launcher rule). Nothing here was run by me.
 
 **This list goes stale. Regenerate it any time:**
 ```
@@ -28,69 +28,43 @@ Traps:
 - Quit the app from the tray first, or the exe / Host DLL / core exe are locked (the 2026-10-23 05:01 rebuild needed three attempts for a Host DLL lock).
 - Never rebuild while live: `GET http://127.0.0.1:8770/api/live` must say false.
 
-## Snapshot (generated 2026-10-23 by `Rebuild-Plan.mjs --md`)
-### Shell rebuild (Tauri app): 2 commits
-- since 2026-10-23T14:34:18.224Z (App/src-tauri/target/release/pinguino-suite.exe)
-- do: App\Build-All.bat --only shell (Build-Shell skips when nothing is newer)
-- `eeaa687` Shell + Listen UI: no native confirm(), in-flight guard on POST buttons, module/device buttons report refusals, long text wraps
-- `3a2cc5c` Master View: per-source outage matrix; 502-504 now means Host offline, junk/500 replies no longer look fresh, Multi pinged while Stream tab is open
+## Snapshot (generated 2026-10-30 by `Rebuild-Plan.mjs --md`; regenerate before relying on it)
+### Shell rebuild (Tauri app): 0 commits
+- since 2026-10-31T01:38:07.660Z (App/src-tauri/target/release/pinguino-suite.exe)
 
-### Core rebuild (frozen Python): 3 commits
-- since 2026-10-23T14:31:19.246Z (App/src-tauri/binaries/pinguino-core.exe)
+### Core rebuild (frozen Python): 1 commit
+- since 2026-10-27T14:49:33.459Z (App/src-tauri/binaries/pinguino-core.exe)
 - do: App\Build-All.bat --only core --force   (Build-All may say "up to date" and skip: Stale.ps1 only compares times, so force it)
-- `b67094a` Fix escape in write_core_pid docstring (lint)
-- `d159946` Listen: opt-in core watchdog (PINGUINO_LISTEN_WATCHDOG=1, default off) + core writes Data/pids/core.json
-- `6931550` Core: cap log growth (gzip archives, running-log warning, 2 GB feedback cap) and clean shutdown (no orphan modules, health loop ends)
+- `2bf7327` Listen: HLS/ffmpeg download falls back once to a progressive format; timestamps in listen.log. Core: Data/runtime/status.json with starts/downs/miss counts. Tests added.
 
-### Host rebuild (dotnet): 1 commit
-- since 2026-10-23T14:45:25.792Z (PinguinoHost/bin/Release/net8.0/PinguinoHost.dll)
+### Host rebuild (dotnet): 5 commits
+- since 2026-10-31T03:34:36.317Z (PinguinoHost/bin/Release/net8.0/PinguinoHost.dll)
 - do: App\Build-All.bat --only host
-- `ea9a8f1` C:/Program Files/Git/api/intro/viewer also answers by login
+- `5ef21d3` Watchdog: nested Begin/End keep the outer op (a stack via Parent), so an inner End no longer clears the outer step marker; test added, lock-wait check made race-free
+- `1e2702a` /api/account/streamer missingText: the count and the first 3 scopes (the full list stays in the missing array)
+- `7f3d6eb` Seeds written while the Host runs: a pushups.json / redeem_counts.json newer than the Host's own last read or write is read again (never overwritten); POST /api/seeds/reload reads both now
+- `1fbc1f5` Chat sends: a YouTube/TikTok viewer with no remembered name is @friend, never the yt: key or their bare channel id
+- `3b1a9d0` Lore answers: @name on every public reply (bare words too), YouTube/TikTok viewers by display name, never the yt:/tt: key
 
-### Module restart (Listen, Multi, Link, Spotify, Voice): 11 commits
-- since 2026-10-23T14:34:18.224Z (App/src-tauri/target/release/pinguino-suite.exe)
+### Module restart (Listen, Multi, Link, Spotify, Voice): 4 commits
+- since 2026-10-31T01:38:07.660Z (App/src-tauri/target/release/pinguino-suite.exe)
 - do: App\Update-Module.bat <id>  (listen first; or restart the whole app)
-- `d159946` Listen: opt-in core watchdog (PINGUINO_LISTEN_WATCHDOG=1, default off) + core writes Data/pids/core.json
-- `6a35d39` Intro viewer route also answers by login
-- `fdd7d93` Multi alerts: OBS chat overlay hardening (zalgo, bidi, backfill after reconnect, boot retry), alerts segs() tolerant
-- `fe9141d` Voice: hand the module token to the page (direct loopback only) and require it for settings/speak/control POSTs
-- `eeaa687` Shell + Listen UI: no native confirm(), in-flight guard on POST buttons, module/device buttons report refusals, long text wraps
-- `daa8289` Multi connectors: Host 5xx never repeated, MULTI_NO_SEND in host_feed, server keeps send key after unknown outcome, dev inject text optional
-- `f4cd06e` Multi connectors: at-most-once chat send guard in every connector (timeouts, 5xx, refresh retry, double click, MULTI_NO_SEND)
-- `25dffd4` Multi alerts: launcher YouTube card points at the sign-in box, Missed count uses missed_total
-- `457ffd9` Voice: harden per 52's review (headers, token fail-closed, sensitive GETs, 413, secret filter, timeout confirm page-only, device-name files, log rotation)
-- `92b3af5` Multi alerts: full-Host rehearsal rig, intro retry after Host outage, Host HTTP errors count as reachable, media upload hardening
-- `0206da9` Multi connectors: Twitch hardening (401 refresh, 429, revocation, replays, timestamps) + PLATFORMS.md
+- `2bf7327` Listen: HLS/ffmpeg download falls back once to a progressive format; timestamps in listen.log. Core: Data/runtime/status.json with starts/downs/miss counts. Tests added.
+- `cf3388b` spotify: address the viewer in !song idle and skip-nothing replies
+- `49636e2` Multi alerts: Host activity feed outage tracking (one warning, recovery line, counters)
+- `53e79d9` spotify: name a run of HTTP 403s (log, selfcheck, chat) and let the Host's live hooks through
 
-### Lite rebuild (PinguinoLite, Tauri): 15 commits
-- since 2026-10-22T11:53:35.742Z (PinguinoLite/src-tauri/target/release/pinguino-lite.exe)
-- do: D: target recipe, see Docs\sessions\012-pinguinolite.md section 8: $env:CARGO_TARGET_DIR='D:\cargo-target\lite'; $env:CARGO_BUILD_JOBS='1'; cargo build --release --
-- `23c64d5` Lite page polish: focus rings on buttons, keyboard nav, dialog Esc/Tab trap/focus return, wrap-anywhere, buttons disabled while a command runs (survives redra
-- `d711c83` Log hygiene: Link rotates link.jsonl itself (2 MB x 3), replay seen-state bounded, support bundles keep newest 5, Windows account name masked in bundles
-- `ac8a011` Lite: compile-by-eye fixes (updater live probe uses HTTP/1.0 so no chunked body; explicit str arg for curl)
-- `692dd64` Lite: first-run hints on Dashboard/Modules/Replays, Open bundle folder button and privacy note
-- `addb524` Lite replays: size cap, parse time cap and panic guard so bad .replay files are skipped and counted unreadable
-- `85ee4de` Lite: support bundle (scrubbed logs, install info, parts check, system numbers) with page button
-- `6a5d9f9` Lite: pure apply_args/updater_argv helpers + tests; node test for the exact Lite command lines
-- `7bb6a31` Lite: missing installed version is not an update; gaming-PC checklist item
-- `af4eba0` Lite: eject waits for Link stopped + port closed (35 s), shows Link's error; tests
-- `d262720` Lite replays: find OneDrive-redirected Documents, friendly platform names, unreadable counter, real-replay + anonymised real-header tests
-- `04776dd` Lite: Modules page follows install.json parts for Not installed (mergeRows + tests)
-- `141a126` Lite: eject waits for Link to report the module stopped, no-source guard on Install, Quit keep-Link option, Dashboard replay card
-- `b41c28e` Lite: use 01's real updater verbs (apply --only to install, eject --part, apply --repair)
-- `ff8c379` Lite: Suite quit parity (watchdog, force kill tree, F11 full screen) and module Verify/Eject/Install with lite-minimal profile
-- `fd20321` Lite: per-part updates via the shared Node updater (Parts card, Link stop/swap/start, staged Lite files, rollback, live guard)
+### Lite rebuild (PinguinoLite, Tauri): 0 commits
+- since 2026-10-24T03:15:10.391Z (PinguinoLite/src-tauri/target/release/pinguino-lite.exe)
 
-### No rebuild (Node, site, docs, tests, installer tools): 396
-Docs 138, Suite 103, App 50, PinguinoHost 46, PinguinoB0t 29, Tools 6, .gitignore 5, PinguinoChat 5, Installer 3, HelperPinguino 3, PinguinoLite 3, Tests 2, PinguinoApp 2
+### No rebuild (Node, site, docs, tests, installer tools): 807
+Docs 203, Suite 179, PinguinoHost 140, App 86, PinguinoB0t 80, Tools 39, PinguinoChat 24, HelperPinguino 22, PinguinoLite 14, Tests 8, .gitignore 5, Installer 4, PinguinoApp 2, Pipeline 1   (--all lists them)
 ### Order
 1. Tell Ivan, and check that the stream is OFFLINE (GET /api/live on 8770 must say false). Never rebuild while live.
 2. Quit the app from the tray (Quit), so the exe, the core and the Host DLL are not locked.
 3. Host: App\Build-All.bat --only host
 4. Core: App\Build-All.bat --only core --force
-5. Shell: App\Build-All.bat --only shell
-6. Launch with PinguinoApp.bat (or Build-All.bat with no flags builds the stale pieces and launches).
-7. Lite (can run beside the above, only the coordinator): the D: target recipe from the Lite line.
+5. Launch with PinguinoApp.bat (or Build-All.bat with no flags builds the stale pieces and launches).
 
 ## Exact order (the full case; skip lines that have no commits above)
 1. Ask Ivan / check offline: `GET http://127.0.0.1:8770/api/live` is false and OBS is not streaming.
@@ -113,7 +87,7 @@ Do it with `curl.exe` or the browser. Ports as in APP_LOG: core 8760, Host 8770,
 4. Modules up: `GET :8765/`, `:8766/`, `:7777/`, `:8771/`, `:8772/` all answer (any 200/401 page is fine; connection refused is a fail). Check `Suite\logs\listen.log`, `multi.log`, `voice.log`, `spotify.log` for the last 2 minutes: no "Traceback" or "unauthorized".
 5. Shell window opens, title and version right; click through Dashboard, Chat, Listen, Master View, Problem reports, Accounts. No red banner, no blank page, Master View shows Host online with the outage matrix filled.
 6. Listen page: the module shows running and the mic (device list) loads. Do not press Test-speak or any send button.
-7. OBS overlays render in a browser (not in OBS): `http://127.0.0.1:8766/obs/alerts` and `/obs/goal` return a page.
+7. OBS overlays: `node Tests\overlay-smoke\overlay-smoke.mjs` (GET only, never touches OBS) must say PASS: it checks every Host overlay page, `/obs/alerts`, `/obs/goal` and the module pages for 200, no undefined/NaN/[object Object]/raw yt:/tt: keys, missing assets and bad state JSON.
 8. Problem reports page: "Run the morning check" (read-only self-check) is all green or explains itself; module states match step 4.
 9. Console: no new error lines in the Console page since the launch time except known ones (compare with the previous APP_LOG entry).
 10. Lite (only if rebuilt): start `pinguino-lite.exe` from its folder: the Dashboard shows the version, Parts card says "Up to date" or lists parts, Replays page opens. Quit it. No scan of a replay folder on this PC (Rocket League is on the gaming PC).
